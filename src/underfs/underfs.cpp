@@ -1,0 +1,256 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+#include "underfs.h"
+#include "bio_log.h"
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <iostream>
+#include <fstream>
+
+namespace ock {
+namespace bio {
+#ifdef _ceph_Integrate
+BResult UnderFs::Init()
+{
+    std::string cfg = "/etc/ceph/ceph.conf";
+    int ret;
+
+    if (mInited) {
+        return BIO_OK;
+    }
+
+    ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
+    if (ret < 0 || mConn == nullptr) {
+        LOG_ERROR("Failed to create, ret:" << ret);
+        return BIO_ERR;
+    }
+
+    ret = rados_conf_read_file(mConn, cfg.c_str());
+    if (ret < 0) {
+        LOG_ERROR("Failed to read config, ret:" << ret);
+        rados_shutdown(mConn);
+        return BIO_ERR;
+    }
+
+    ret = rados_connect(mConn);
+    if (ret < 0) {
+        LOG_ERROR("Failed to connect, ret:" << ret);
+        rados_shutdown(mConn);
+        return BIO_ERR;
+    }
+
+    if (rados_pool_lookup(mConn, mPool.c_str()) < 0) {
+        if (rados_pool_create(mConn, mPool.c_str()) < 0) {
+            LOG_ERROR("Failed to create pool, ret:" << ret);
+            rados_shutdown(mConn);
+            return BIO_ERR;
+        }
+    }
+
+    ret = rados_ioctx_create(mConn, mPool.c_str(), &mIoCtx);
+    if (ret < 0) {
+        LOG_ERROR("Failed to create ioctx, ret:" << ret);
+        rados_shutdown(mConn);
+        return BIO_ERR;
+
+    }
+
+    LOG_INFO("Underfs init succeed");
+    mInited = true;
+    return BIO_OK;
+}
+
+void UnderFs::Stop()
+{
+    if (mIoCtx) {
+        rados_ioctx_destroy(mIoCtx);
+    }
+    rados_shutdown(mConn);
+    mInited = false;
+    return;
+}
+
+BResult UnderFs::Put(const char *key, const char *value, const size_t len)
+{
+    int ret;
+
+    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ret = rados_write(mIoCtx, key, value, len, 0);
+    if (ret < 0) {
+        LOG_ERROR("Failed to write object, ret:" << ret);
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
+{
+    int ret;
+
+    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ret = rados_read(mIoCtx, key, value, len, off);
+    if (ret < 0) {
+        LOG_ERROR("Failed to read object, ret:" << ret);
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult UnderFs::Delete(const char *key)
+{
+    int ret;
+
+    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ret = rados_remove(mIoCtx, key);
+    if (ret < 0) {
+        LOG_ERROR("Failed to remove object, ret:" << ret);
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult UnderFs::Stat(const char *key, ObjStat &stat)
+{
+    int ret;
+
+    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ret = rados_stat(mIoCtx, key, &stat.size, &stat.mTime);
+    if (ret < 0) {
+        LOG_ERROR("Failed to stat object, ret:" << ret);
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+#else
+BResult UnderFs::Init()
+{
+    static std::string cephPath = "./ceph";
+
+    if (mInited) {
+        return BIO_OK;
+    }
+
+    DIR* dir = opendir(cephPath.c_str());
+    if (dir == nullptr) {
+        int status = mkdir(cephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        if (status == 0) {
+            LOG_INFO("Succeed to create directory, " << cephPath.c_str());
+        } else {
+            LOG_ERROR("Failed to create directory, " << cephPath.c_str() << ", status:" << status);
+            return BIO_ERR;
+        }
+    } else {
+        LOG_INFO("Exist to check directory, " << cephPath.c_str());
+        closedir(dir);
+    }
+
+    LOG_INFO("Underfs init succeed");
+    mInited = true;
+    return BIO_OK;
+}
+
+void UnderFs::Stop()
+{
+    mInited = false;
+    return;
+}
+
+BResult UnderFs::Put(const char *key, const char *value, const size_t len)
+{
+    std::string keyPath = "./ceph/";
+    keyPath += key;
+
+    using namespace std;
+
+    LOG_INFO("Put key:" << key);
+
+    fstream file;
+    file.open(keyPath.c_str(), ios::in);
+    if (file.is_open()) {
+        LOG_ERROR("Exist to create file, " << keyPath.c_str());
+        file.close();
+        return BIO_EXISTS;
+    }
+
+    file.open(keyPath.c_str(), ios::out | ios::binary);
+    if (!file.is_open()) {
+        LOG_ERROR("Fail to create file, " << keyPath.c_str());
+        return BIO_ERR;
+    }
+
+    file.write(value, len);
+    file.close();
+    return BIO_OK;
+}
+
+BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
+{
+    std::string keyPath = "./ceph/";
+    keyPath += key;
+
+    using namespace std;
+
+    LOG_INFO("Get key:" << key);
+
+    fstream file;
+    file.open(keyPath.c_str(), ios::in);
+    if (!file.is_open()) {
+        LOG_ERROR("Fail to open file, " << keyPath.c_str());
+        return BIO_NOT_EXISTS;
+    }
+
+    file.seekg(off, ios::beg);
+    file.read(value, len);
+    file.close();
+    return BIO_OK;
+}
+
+BResult UnderFs::Delete(const char *key)
+{
+    std::string keyPath = "./ceph/";
+    keyPath += key;
+
+    using namespace std;
+
+    LOG_INFO("Del key:" << key);
+
+    ifstream infile(keyPath.c_str());
+    if (!infile.good()) {
+        LOG_ERROR("Fail to check file, " << keyPath.c_str());
+        return BIO_NOT_EXISTS;
+    }
+    infile.close();
+
+    //删除文件
+    if (remove(keyPath.c_str()) != 0) {
+        LOG_ERROR("Fail to delete file, " << keyPath.c_str());
+        return BIO_ERR;
+    }
+
+    return BIO_OK;
+}
+
+BResult UnderFs::Stat(const char *key, ObjStat &objStat)
+{
+    std::string keyPath = "./ceph/";
+    keyPath += key;
+
+    using namespace std;
+
+    struct stat file_stat;
+    if (stat(keyPath.c_str(), &file_stat) != 0) {
+        LOG_ERROR("Fail to check file, " << keyPath.c_str());
+        return BIO_NOT_EXISTS;
+    }
+
+    objStat.size = file_stat.st_size;
+    objStat.mTime = file_stat.st_ctime;
+
+    return BIO_OK;
+}
+#endif
+}
+}
