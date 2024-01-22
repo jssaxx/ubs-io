@@ -1,0 +1,266 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+#include "cm.h"
+#include "securec.h"
+
+namespace ock {
+namespace bio {
+BResult Cm::Initialize(const CmOptions &opt)
+{
+    if (mInited) {
+        return BIO_OK;
+    }
+    mOptions = opt;
+    mInited = true;
+    return BIO_OK;
+}
+
+BResult Cm::Start()
+{
+    if (mStarted) {
+        return BIO_OK;
+    }
+    PoolInfo pools;
+    strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
+    pools.poolId = mOptions.groups.groupId;
+    pools.type = DISK_TYPE_DRAM;
+    pools.redundance = (mOptions.groups.replicaNum == 2) ? PT_REP_DOUBLE : PT_REP_TRIPLE;
+    pools.initialNodeNum = mOptions.groups.initialNodeNum;
+    pools.maxNodeNum = mOptions.groups.maxNodeNum;
+    pools.maxPtNum = mOptions.groups.maxPtNum;
+    int ret = CM_Init(CONFIG_ROLE_TOGETHER, &pools, 1, mOptions.zkIpMask.c_str(), mNode.ip.c_str());
+    if (ret != 0) {
+        return BIO_ERR;
+    }
+    mNodeId.groupId = pools.poolId;
+    mNodeId.nodeId = CM_GetLocalNodeId(pools.poolId);
+    mStarted = true;
+    return BIO_OK;
+}
+
+void Cm::Stop()
+{
+    return;
+}
+
+BResult Cm::ReportDiskStatus(uint16_t diskId, CmDiskStatus status)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    DiskState state = (status == CM_DISK_NORMAL) ? DISK_STATE_NORMAL : DISK_STATE_FAULT;
+    int ret = CM_SetDiskStatus(mOptions.groups.groupId, diskId, state);
+    if (ret != 0) {
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    if (ptFinish.size() == 0) {
+        return BIO_ERR;
+    }
+    PtFinish *ptList = new (std::nothrow) PtFinish[ptFinish.size()];
+    if (ptList == nullptr) {
+        LOG_ERROR("Malloc ptList failed:" << ptFinish.size());
+        return BIO_ERR;
+    }
+    for (uint32_t index = 0; index < ptFinish.size(); index++) {
+        ptList[index].birthVersion = ptFinish[index].version;
+        ptList[index].ptId = ptFinish[index].ptId;
+    }
+    int ret = CM_SetPtFinishStatus(mOptions.groups.groupId, ptFinish.size(), ptList);
+    if (ret != 0) {
+        delete [] ptList;
+        return BIO_ERR;
+    }
+    delete [] ptList;
+    return BIO_OK;
+}
+
+BResult Cm::RegisterNode(CmNodeInfo &node)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    mNode = node;
+
+    LocalNodeQueryOpHandle handle;
+    handle.queryLocalNodeInfo = QueryLocalNodeInfo;
+    handle.queryLocalNodeMr = NULL;
+    handle.ctx = reinterpret_cast<void *>(this);
+
+    int ret = CM_RegLocalNodeQueryOpHandle(mOptions.groups.groupId, &handle);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult Cm::RegisterNodeHandler(const CmNodeHandler &nodeHandler)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    mNodeHandler = nodeHandler;
+
+    NodeListChangeOpHandle handle;
+    handle.notifyNodeListChange = NotifyNodeListChange;
+    handle.ctx = reinterpret_cast<void *>(this);
+
+    int ret = CM_RegNodeListChangeNotifyHandle(mOptions.groups.groupId, &handle);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult Cm::RegisterPtHandler(const CmPtHandler &ptHandler)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    mPtHandler = ptHandler;
+
+    PtViewChangeOpHandle handle;
+    handle.notifyPtListChange = NotifyPtListChange;
+    handle.ctx = reinterpret_cast<void *>(this);
+
+    int ret = CM_RegPtViewChangeOpHandle(mOptions.groups.groupId, &handle);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    return BIO_OK;
+}
+
+int32_t Cm::QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx)
+{
+    Cm *cm = reinterpret_cast<Cm *>(ctx);
+    WriteLocker<ReadWriteLock> lock(&cm->mLock);
+
+    nodeInfo->port = cm->mNode.port;
+    nodeInfo->status = NODE_STATUS_OK;
+    strcpy_s(nodeInfo->ipv4AddrStr, IP_ADDR_LEN, cm->mNode.ip.c_str());
+    nodeInfo->diskList.num = cm->mNode.disks.size();
+    nodeInfo->diskList.type = DISK_TYPE_DRAM;
+    for (uint16_t index = 0; index < nodeInfo->diskList.num; index++) {
+        nodeInfo->diskList.list[index].diskId = cm->mNode.disks[index].diskId;
+        nodeInfo->diskList.list[index].state = DISK_STATE_NORMAL;
+    }
+    nodeInfo->netList.num = 0;
+    return 0;
+}
+
+int32_t Cm::NotifyNodeListChange(NodeStateList *nodeList, void *ctx)
+{
+    Cm *cm = reinterpret_cast<Cm *>(ctx);
+    WriteLocker<ReadWriteLock> lock(&cm->mLock);
+
+    for (uint16_t index = 0; index < nodeList->nodeNum; index++) {
+        if (nodeList->nodeList[index].state == NODE_STATE_INVALID) {
+            continue;
+        }
+
+        NodeInfo info;
+        info.nodeId = nodeList->nodeList[index].nodeId;
+        int ret = CM_GetNodeInfo(nodeList->poolId, &info);
+        if (ret != 0) {
+            LOG_ERROR("Impossible, get node failed, nodeId:" << info.nodeId);
+            continue;
+        }
+
+        CmNodeId id;
+        CmNodeInfo node;
+        CmDiskInfo disk;
+
+        id.groupId = nodeList->poolId;
+        id.nodeId = nodeList->nodeList[index].nodeId;
+        node.id = id;
+        node.ip = info.ipv4AddrStr;
+        node.port = info.port;
+        node.status = (nodeList->nodeList[index].state == NODE_STATE_UP) ? CM_NODE_NORMAL : CM_NODE_FAULT;
+
+        for (uint16_t idx = 0; idx < info.diskList.num; idx++) {
+            disk.diskId = info.diskList.list[idx].diskId;
+            disk.diskStatus = (info.diskList.list[idx].state == DISK_STATE_NORMAL) ? CM_DISK_NORMAL : CM_DISK_FAULT;
+            node.disks.push_back(disk);
+        }
+        cm->mNodeInfos[id] = node;
+        LOG_INFO("NodeInfo, index:" << index << ", node " << node.id.ToString());
+    }
+    cm->mNodeHandler(cm->mNodeInfos);
+    return 0;
+}
+
+int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
+{
+    Cm *cm = reinterpret_cast<Cm *>(ctx);
+    WriteLocker<ReadWriteLock> lock(&cm->mLock);
+    cm->mStatus = CM_NORMAL;
+
+    static CmPtState s_ptstate[PT_STATE_BUTT] = {
+        CM_PT_INIT,
+        CM_PT_NORMAL,
+        CM_PT_DEGRADE_LOSS1,
+        CM_PT_DEGRADE_LOSS2,
+        CM_PT_FAULT,
+    };
+
+    static CmCopyState s_copystate[PT_COPY_STATE_BUTT] = {
+        CM_COPY_INIT,
+        CM_COPY_RUNNING,
+        CM_COPY_DOWN,
+        CM_COPY_OUT,
+        CM_COPY_RECOVERY,
+    };
+
+    for (uint16_t index = 0; index < ptList->ptNum; index++) {
+        if (ptList->ptEntryList[index].state == PT_STATE_INIT ||
+            ptList->ptEntryList[index].state == PT_STATE_BUTT) {
+            continue;
+        }
+
+        CmPtInfo pt;
+        CmPtCopy copy;
+
+        pt.version = ptList->ptEntryList[index].birthVersion + ptList->ptEntryList[index].referNum;
+        pt.ptId = ptList->ptEntryList[index].ptId;
+        pt.state = s_ptstate[ptList->ptEntryList[index].state];
+        pt.masterNodeId = ptList->ptEntryList[index].masterNodeId;
+        pt.masterDiskId = ptList->ptEntryList[index].masterDiskId;
+
+        for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
+            uint16_t vIdx = idx;
+            if (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT) {
+                vIdx = idx + ptList->maxCopyNum;
+            }
+            if (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT) {
+                LOG_ERROR("Impossible, ptId:" << ptList->ptEntryList[index].ptId);
+                return -1;
+            }
+
+            copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
+            copy.diskId = ptList->ptEntryList[index].copyList[vIdx].diskId;
+            copy.state = s_copystate[vIdx];
+            pt.copys.push_back(copy);
+        }
+
+        cm->mPtInfos[pt.ptId] = pt;
+    }
+    cm->ScanPtListAffinity();
+    cm->mPtHandler(cm->mPtInfos);
+    return 0;
+}
+
+void Cm::ScanPtListAffinity()
+{
+    mLocals.clear();
+    for (auto it = mPtInfos.begin(); it != mPtInfos.end(); ++it) {
+        for (auto ite = it->second.copys.begin(); ite != it->second.copys.end(); ++ite) {
+            if (ite->nodeId == mNodeId.nodeId) {
+                mLocals.push_back(it->first);
+                break;
+            }
+        }
+    }
+    return;
+}
+}
+}
