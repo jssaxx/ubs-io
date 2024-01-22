@@ -1,0 +1,93 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+#ifndef BIO_TRACE_H
+#define BIO_TRACE_H
+
+#include "htracer.h"
+
+namespace ock {
+namespace bio {
+constexpr int32_t SERVICE_ID  = 0;
+
+enum SdkTracerType {
+    SDK_TRACE_START = htracer::GetTraceId(SERVICE_ID, 0),
+    SDK_TRACE_CREATE_CACHE,
+    SDK_TRACE_DESTROY_CACHE,
+    SDK_TRACE_PUT,
+    SDK_TRACE_PUT_GET_PT,
+    SDK_TRACE_PUT_ALLOC_OFF,
+    SDK_TRACE_PUT_SEND,
+    SDK_TRACE_PUT_PREPARE,
+    SDK_TRACE_GET,
+    SDK_TRACE_GET_SEND,
+    SDK_TRACE_GET_LOCAL,
+    SDK_TRACE_GET_REMOTE,
+    SDK_TRACE_GET_COPY2U,
+    SDK_TRACE_DELETE,
+    SDK_TRACE_LOAD,
+    SDK_TRACE_LISTALL,
+    SDK_TRACE_STAT,
+
+    SDK_TRACE_W_S_1_4K,
+    SDK_TRACE_W_S_4_8K,
+    SDK_TRACE_W_S_8_64K,
+    SDK_TRACE_W_S_64_128K,
+    SDK_TRACE_W_S_128_256K,
+    SDK_TRACE_W_S_256K_1M,
+    SDK_TRACE_W_S_1_2M,
+    SDK_TRACE_W_S_2_4M,
+    SDK_TRACE_W_S_4M,
+    SDK_TRACE_R_S_1_4K,
+    SDK_TRACE_R_S_4_8K,
+    SDK_TRACE_R_S_8_64K,
+    SDK_TRACE_R_S_64_128K,
+    SDK_TRACE_R_S_128_256K,
+    SDK_TRACE_R_S_256K_1M,
+    SDK_TRACE_R_S_1_2M,
+    SDK_TRACE_R_S_2_4M,
+    SDK_TRACE_R_S_4M,
+    SDK_TRACE_END,
+};
+
+enum MirrorTracerType {
+    MIRROR_TRACE_START = SDK_TRACE_END,
+    MIRROR_TRACE_END,
+};
+
+enum WcacheTracerType {
+    WCACHE_TRACE_START = MIRROR_TRACE_END,
+    WCACHE_TRACE_END,
+};
+
+enum RcacheTracerType {
+    RCACHE_TRACE_START = WCACHE_TRACE_END,
+    RCACHE_TRACE_END,
+};
+
+enum FlowTracerType {
+    FLOW_TRACE_START = RCACHE_TRACE_END,
+    FLOW_TRACE_END,
+};
+
+enum BdmTracerType {
+    BDM_TRACE_START = FLOW_TRACE_END,
+    BDM_TRACE_END,
+};
+
+enum UfsTracerType {
+    UFS_TRACE_START = BDM_TRACE_END,
+    UFS_TRACE_END,
+};
+
+enum NetTracerType {
+    NET_TRACE_START = UFS_TRACE_END,
+    NET_TRACE_END,
+};
+
+#define BIO_TRACE_START(TP_ID) TRACE_DELAY_BEGIN(TP_ID)
+#define BIO_TRACE_END(TP_ID, RET_CODE) TRACE_DELAY_END(TP_ID, RET_CODE)
+}
+}
+#endif // BIO_TRACE_H
