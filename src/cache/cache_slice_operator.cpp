@@ -80,6 +80,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         auto &fromAddrs = from->GetAddrs();
         uint64_t offset = 0;
         for (auto fromAddr : fromAddrs) {
+            LOG_INFO("copy:" << ", from off:" << fromAddr.chunkOffset << ", to off:" << offset);
             auto ret =
                 BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset), fromAddr.chunkLen);
             ASSERT_RETURN(ret == BIO_OK, ret);
@@ -96,17 +97,6 @@ bool CacheSliceOperator::Validate(const SlicePtr &from, const SlicePtr &to)
 
     ASSERT_RETURN(from->GetLength() == to->GetLength(), false);
 
-    auto &fromAddrs = from->GetAddrs();
-    auto &toAddrs = to->GetAddrs();
-
-    ASSERT_RETURN(fromAddrs.size() == toAddrs.size(), false);
-
-    for (uint32_t i = 0; i < fromAddrs.size(); ++i) {
-        auto &fromAddr = fromAddrs[i];
-        auto &toAddr = toAddrs[i];
-        ASSERT_RETURN(fromAddr.chunkOffset == toAddr.chunkOffset, false);
-        ASSERT_RETURN(fromAddr.chunkLen == toAddr.chunkLen, false);
-    }
     return true;
 }
 
@@ -127,13 +117,29 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
 {
     auto &fromAddrs = from->GetAddrs();
     auto &toAddrs = to->GetAddrs();
-    for (uint32_t i = 0; i < fromAddrs.size(); ++i) {
-        auto &fromAddr = fromAddrs[i];
-        auto &toAddr = toAddrs[i];
 
-        auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset),
-            fromAddr.chunkLen);
+    auto fromIt = fromAddrs.begin();
+    auto toIt = toAddrs.begin();
+
+    uint64_t fromOffset = 0;
+    uint64_t toOffset = 0;
+
+    uint64_t len;
+    while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
+        len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
+        auto ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
+            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
         ASSERT_RETURN(ret == BIO_OK, ret);
+        fromOffset += len;
+        if (fromOffset == fromIt->chunkLen) {
+            fromOffset = 0;
+            fromIt++;
+        }
+        toOffset += len;
+        if (toOffset == toIt->chunkLen) {
+            toOffset = 0;
+            toIt++;
+        }
     }
     return BIO_OK;
 }
@@ -142,13 +148,31 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
 {
     auto &fromAddrs = from->GetAddrs();
     auto &toAddrs = to->GetAddrs();
-    for (uint32_t i = 0; i < fromAddrs.size(); ++i) {
-        auto &fromAddr = fromAddrs[i];
-        auto &toAddr = toAddrs[i];
 
-        auto ret =
-            BdmWrite(toAddr.chunkId, toAddr.chunkOffset, reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), toAddr.chunkLen);
+    auto fromIt = fromAddrs.begin();
+    auto toIt = toAddrs.begin();
+
+    uint64_t fromOffset = 0;
+    uint64_t toOffset = 0;
+
+    uint64_t len;
+    while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
+        len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
+        auto ret = BdmWrite(toIt->chunkId, toIt->chunkOffset + toOffset,
+            reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
         ASSERT_RETURN(ret == BIO_OK, ret);
+        LOG_INFO("pre:" << "from chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" << toOffset << ", len:" << len);
+        fromOffset += len;
+        if (fromOffset == fromIt->chunkLen) {
+            fromOffset = 0;
+            fromIt++;
+        }
+        toOffset += len;
+        if (toOffset == toIt->chunkLen) {
+            toOffset = 0;
+            toIt++;
+        }
+        LOG_INFO("next:" << ", from off:" << fromOffset << ", to off:" << toOffset);
     }
     return BIO_OK;
 }
@@ -158,6 +182,11 @@ BResult CacheSliceOperator::CopyFromMemoryToMemory(const SlicePtr &from, const S
     // TODO: implement me.
     LOG_ERROR("don't support copy from memory to memory.");
     return BIO_ERR;
+}
+
+uint64_t CacheSliceOperator::MinLen(uint64_t from, uint64_t to)
+{
+    return (from < to) ? from : to;
 }
 }
 }

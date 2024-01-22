@@ -226,24 +226,17 @@ void WCacheManager::RunEvictThread()
             for (const auto &flowIt : mWCacheManager) {
                 auto flow = flowIt.second;
                 totalCapacity += flow->GetCapacity();
-            }
-
-            LOG_INFO("totalCapacity:" << totalCapacity << ", mDiskCapacityThreshold:" << mDiskCapacityThreshold);
-            while (totalCapacity > mDiskCapacityThreshold) {
-                for (const auto &flowIt : mWCacheManager) {
-                    auto flow = flowIt.second;
-                    if (std::find(evictFlows.begin(), evictFlows.end(), flow) != evictFlows.end()) {
-                        continue;
-                    }
+                if (totalCapacity > mDiskCapacityThreshold) {
                     evictFlows.emplace_back(flow);
-                    totalCapacity -= flow->GetCapacity();
                 }
             }
+            LOG_INFO("totalCapacity:" << totalCapacity << ", mDiskCapacityThreshold:" << mDiskCapacityThreshold);
         }
 
         for (const auto &flow : evictFlows) {
             mExeService->Execute([&]() { flow->EvictAllDiskSliceToUnderFs(mRCacheManager); });
         }
+        evictFlows.clear();
         sleep(10);
     }
 }

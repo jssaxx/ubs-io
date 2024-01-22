@@ -50,8 +50,7 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     if (true) {
         // write back.
         // and evict slice from memory to disk asap.
-        WCacheSliceRefPtr sliceRef = destSliceRef;
-        auto success = mExeService->Execute([&]() { EvictFromMemToDisk(sliceRef); });
+        auto success = mExeService->Execute([&, destSliceRef]() { EvictFromMemToDisk(destSliceRef); });
         ASSERT_RETURN(success, BIO_INNER_ERR);
     } else {
         // write through
@@ -61,7 +60,7 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     return BIO_OK;
 }
 
-BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr &sliceRef)
+BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
 {
     auto slice = sliceRef->GetSlice();
     auto indexInFlow = slice->GetIndexInFlow();
