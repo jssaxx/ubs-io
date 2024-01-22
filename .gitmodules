@@ -8,3 +8,16 @@
 [submodule "3rdparty/secure/huawei_secure_c"]
 	path = 3rdparty/secure/huawei_secure_c
 	url = https://codehub-dg-y.huawei.com/hwsecurec_group/huawei_secure_c.git
+	tag = tag_Huawei_Secure_C_V100R001C01SPC013B001_00001
+[submodule "3rdparty/gtest/gtest"]
+	path = 3rdparty/gtest/gtest
+	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/google/googletest.git
+	tag = release-1.8.1
+[submodule "3rdparty/zookeeper/zookeeper"]
+	path = 3rdparty/zookeeper/zookeeper
+	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/zookeeper.git
+	tag = 3.8.1-h1
+[submodule "test/3rdparty/mockcpp"]
+	path = test/3rdparty/mockcpp
+	url = https://codehub-dg-y.huawei.com/OpenSourceCenter/sinojelly/mockcpp.git
+	tag = v2.7
