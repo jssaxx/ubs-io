@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+#ifndef BOOSTIO_BIO_ERR_H
+#define BOOSTIO_BIO_ERR_H
+
+#include <cstdint>
+
+namespace ock {
+namespace bio {
+using BResult = int32_t;
+enum Error : int32_t {
+    BIO_OK = 0,
+    BIO_ERR = 1,
+    BIO_INNER_ERR = 2,
+    BIO_INVALID_PARAM = 3,
+    BIO_NOT_READY = 4,
+    BIO_ALLOC_FAIL = 5,
+    BIO_NOT_INITIALIZED = 6,
+    BIO_NOT_EXISTS = 7,
+    BIO_ALREADY_EXISTS = 8,
+    BIO_ALREADY_DONE = 9,
+    BIO_EXISTS = 10,
+    BIO_CHECK_PT_FAIL = 11,
+    BIO_KEY_CONFLICT = 12,
+    BIO_READ_EXCEED = 13,
+
+    BIO_NEED_WAIT = 12,
+    BIO_NET_RETRY = 100,
+    BIO_NET_ERROR = 101,
+    BIO_MAX,
+};
+}
+}
+
+#endif // BOOSTIO_BIO_ERR_H
