@@ -64,7 +64,7 @@ public:
      * @param[out]: location: location info
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult CalculateLocation(uint64_t objectId, ObjLocation &location);
+    CResult CalculateLocation(uint32_t objectId, ObjLocation &location);
 
     /* *
      * @brief: Put value
