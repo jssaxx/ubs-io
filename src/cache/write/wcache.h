@@ -39,7 +39,7 @@ public:
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
-    BResult EvictFromMemToDisk(WCacheSliceRefPtr &slice);
+    BResult EvictFromMemToDisk(WCacheSliceRefPtr slice);
     BResult EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, const WCacheSliceRefPtr &sliceRef);
 
 private:

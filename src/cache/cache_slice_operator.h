@@ -21,7 +21,7 @@ private:
     static BResult CopyFromDiskToMemory(const SlicePtr &from, const SlicePtr &to);
     static BResult CopyFromMemoryToDisk(const SlicePtr &from, const SlicePtr &to);
     static BResult CopyFromMemoryToMemory(const SlicePtr &from, const SlicePtr &to);
-
+    static uint64_t MinLen(uint64_t from, uint64_t to);
 };
 }
 }
