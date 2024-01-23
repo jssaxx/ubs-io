@@ -144,9 +144,9 @@ std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
     return ans;
 }
 
-uint16_t MirrorClient::SelectingPt(uint32_t objectId, AffinityStrategy affinity)
+uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
 {
-    size_t v = std::hash<std::uint32_t>{}(objectId);
+    size_t v = std::hash<std::uint64_t>{}(objectId);
     uint16_t ptId = UINT16_MAX;
     if (LIKELY(affinity == LOCAL_AFFINITY)) {
         std::vector<uint16_t> ptVec = ListLocalAffinityPt();
