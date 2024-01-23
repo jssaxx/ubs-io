@@ -5,6 +5,7 @@
 #include "flow_id_allocator.h"
 #include "bio_types.h"
 #include "bio_config_instance.h"
+#include "bio_trace.h"
 #include "bdm_core.h"
 
 namespace ock {
@@ -52,16 +53,20 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId)
         if (it != mMemObjManager.end()) {
             return it->second;
         }
+        BIO_TRACE_START(FLOW_TRACE_CREATE_OBJ);
         auto object = MakeRef<Flow>(type, flowId, 0, segment, segment * NO_4);
         mMemObjManager[flowId] = object;
+        BIO_TRACE_END(FLOW_TRACE_CREATE_OBJ, 0);
         return object;
     } else {
         auto it = mDiskObjManager.find(flowId);
         if (it != mDiskObjManager.end()) {
             return it->second;
         }
+        BIO_TRACE_START(FLOW_TRACE_CREATE_OBJ);
         auto object = MakeRef<Flow>(type, flowId, 0, segment, segment * NO_16);
         mDiskObjManager[flowId] = object;
+        BIO_TRACE_END(FLOW_TRACE_CREATE_OBJ, 0);
         return object;
     }
 }
@@ -72,14 +77,18 @@ BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId) {
     if (type == FLOW_MEMORY) {
         auto it = mMemObjManager.find(flowId);
         if (it != mMemObjManager.end()) {
+            BIO_TRACE_START(FLOW_TRACE_DESTROY_OBJ);
             mMemObjManager.erase(flowId);
+            BIO_TRACE_END(FLOW_TRACE_DESTROY_OBJ, 0);
             return BIO_OK;
         }
         return BIO_NOT_EXISTS;
     } else {
         auto it = mDiskObjManager.find(flowId);
         if (it != mDiskObjManager.end()) {
+            BIO_TRACE_START(FLOW_TRACE_DESTROY_OBJ);
             mDiskObjManager.erase(flowId);
+            BIO_TRACE_END(FLOW_TRACE_DESTROY_OBJ, 0);
             return BIO_OK;
         }
         return BIO_NOT_EXISTS;
@@ -90,6 +99,7 @@ BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &ob
 {
     std::lock_guard<std::mutex> lock(mMutex);
     ASSERT_RETURN(mInited == true, BIO_NOT_READY);
+    BIO_TRACE_START(FLOW_TRACE_GETALL_OBJ);
     if (type == FLOW_MEMORY) {
         for (auto it = mMemObjManager.begin(); it != mMemObjManager.end(); ++it) {
             objManager[it->first] = it->second;
@@ -99,6 +109,7 @@ BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &ob
             objManager[it->first] = it->second;
         }
     }
+    BIO_TRACE_END(FLOW_TRACE_GETALL_OBJ, 0);
     return BIO_OK;
 }
 
@@ -106,11 +117,13 @@ BResult FlowManager::PreLoadObject(std::function<void()> handle)
 {
     std::lock_guard<std::mutex> lock(mMutex);
     ASSERT_RETURN(mTaskPool != nullptr, BIO_NOT_READY);
+    BIO_TRACE_START(FLOW_TRACE_PRELOAD_OBJ);
     auto ret = mTaskPool->AddTask(handle);
     if (ret != BIO_OK) {
         LOG_ERROR("Submit task failed:" << ret);
         return ret;
     }
+    BIO_TRACE_END(FLOW_TRACE_PRELOAD_OBJ, 0);
     return BIO_OK;
 }
 

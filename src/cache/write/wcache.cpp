@@ -9,6 +9,7 @@
 #include "securec.h"
 #include "flow_manager.h"
 #include "cache_flow.h"
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {
@@ -67,6 +68,8 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     auto offset = slice->GetOffsetInFlow();
     auto length = slice->GetLength();
 
+    BIO_TRACE_START(WCACHE_TRACE_EVICT2DISK);
+
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     WFlowMetaDataSlice memMetaDataSlice;
     auto ret = memCache->GetMetaDataSlice(indexInFlow, offset, length, memMetaDataSlice);
@@ -98,6 +101,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     };
 
     sliceRef->SetSlice(diskMetaDataSlice.dataSlice, callback);
+    BIO_TRACE_END(WCACHE_TRACE_EVICT2DISK, 0);
     return BIO_OK;
 }
 
@@ -108,6 +112,8 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
     WCacheSlicePtr metaSlice = nullptr;
     auto ret = diskCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
     ASSERT_RETURN(ret == BIO_OK, ret);
+
+    BIO_TRACE_START(WCACHE_TRACE_EVICT2UNDERFS);
 
     LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
 
@@ -163,7 +169,7 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
     };
 
     sliceRef->SetSlice(nullptr, callback);
-
+    BIO_TRACE_END(WCACHE_TRACE_EVICT2UNDERFS, 0);
     return BIO_OK;
 }
 
