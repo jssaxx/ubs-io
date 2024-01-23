@@ -87,7 +87,7 @@ static bool KeyValid(const char* key)
     return true;
 }
 
-CResult Bio::CalculateLocation(uint32_t objectId, ObjLocation &location)
+CResult Bio::CalculateLocation(uint64_t objectId, ObjLocation &location)
 {
     if (UNLIKELY(!gClient->Ready())) {
         LOG_WARN("Boostio cache service not ready, please try again.");
@@ -274,7 +274,7 @@ std::shared_ptr<Bio> BioService::GetCache(uint64_t tenantId)
     return gClient->Query(tenantId);
 }
 
-std::unordered_map<uint32_t, std::shared_ptr<Bio>> BioService::ListCache()
+std::unordered_map<uint64_t, std::shared_ptr<Bio>> BioService::ListCache()
 {
     return gClient->List();
 }

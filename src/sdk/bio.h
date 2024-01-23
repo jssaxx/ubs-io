@@ -64,7 +64,7 @@ public:
      * @param[out]: location: location info
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult CalculateLocation(uint32_t objectId, ObjLocation &location);
+    CResult CalculateLocation(uint64_t objectId, ObjLocation &location);
 
     /* *
      * @brief: Put value
@@ -224,7 +224,7 @@ public:
      *
      * @return: return all caches
      */
-    static std::unordered_map<uint32_t, std::shared_ptr<Bio>> ListCache();
+    static std::unordered_map<uint64_t, std::shared_ptr<Bio>> ListCache();
 
     /* *
      * @brief: Destroy bio instance
