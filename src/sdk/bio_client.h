@@ -40,7 +40,7 @@ public:
         return mStarted;
     }
 
-    inline BResult CalculateLocation(const uint32_t objectId, AffinityStrategy affinity, Bio::ObjLocation &location)
+    inline BResult CalculateLocation(const uint64_t objectId, AffinityStrategy affinity, Bio::ObjLocation &location)
     {
         uint16_t ptId = mMirror->SelectingPt(objectId, affinity);
         if (UNLIKELY(ptId == UINT16_MAX)) {
@@ -166,7 +166,7 @@ public:
         mCacheMap.erase(it);
     }
 
-    inline std::unordered_map<uint32_t, std::shared_ptr<Bio>> List()
+    inline std::unordered_map<uint64_t, std::shared_ptr<Bio>> List()
     {
         return mCacheMap;
     }
@@ -184,7 +184,7 @@ private:
 private:
     bool mStarted{ false };
     std::mutex mStartLock;
-    std::unordered_map<uint32_t, std::shared_ptr<Bio>> mCacheMap;
+    std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
     std::mutex mLock;
     BioConfigPtr mConfig{ nullptr };
     RpcEnginePtr mRpcService{ nullptr };
