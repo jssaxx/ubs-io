@@ -4,6 +4,7 @@
 
 #include "wcache_manager.h"
 #include "bio_log.h"
+#include "bio_trace.h"
 #include "flow_id_allocator.h"
 #include "cache_flow.h"
 
@@ -38,8 +39,10 @@ void WCacheManager::Exit()
 
 BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
 {
+    BIO_TRACE_START(WCACHE_TRACE_ALLOC_ID);
     auto flowIdAllocator = FlowIdAllocator::Instance();
     flowId = flowIdAllocator->GenerateFlowId(((uint64_t)ptId & 0x1FFF) << 11);
+    BIO_TRACE_END(WCACHE_TRACE_ALLOC_ID, 0);
     return BIO_OK;
 }
 
@@ -53,7 +56,9 @@ BResult WCacheManager::CreateWCache(uint64_t flowId)
         return BIO_OK;
     };
 
+    BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
     auto ret = wcache->Init(flowId, mExeService, evictCallback);
+    BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
     ASSERT_RETURN(ret == BIO_OK, ret);
 
     {
@@ -68,6 +73,8 @@ BResult WCacheManager::CreateWCache(uint64_t flowId)
 
 BResult WCacheManager::DeleteWCache(uint64_t ptId)
 {
+    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
+    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, 0);
     return BIO_OK;
 }
 
@@ -80,7 +87,10 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
         return BIO_NOT_EXISTS;
     }
-    return wcache->GetWCacheSlice(sliceKey, slice);
+    BIO_TRACE_START(WCACHE_TRACE_GET_SLICE);
+    auto ret = wcache->GetWCacheSlice(sliceKey, slice);
+    BIO_TRACE_END(WCACHE_TRACE_GET_SLICE, ret);
+    return ret;
 }
 
 BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader)
@@ -92,6 +102,8 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
 
     LOG_INFO("Put key:" << key << ", pt:" << ptId << ", flowId:" << slice->GetFlowId());
+
+    BIO_TRACE_START(WCACHE_TRACE_PUT);
 
     // 1. Check whether the key is duplicate
     auto keySlice = mCacheIndex->Aquire(ptId, key);
@@ -121,6 +133,8 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     if (ret != BIO_OK) {
         LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
     }
+
+    BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
     return ret;
 }
 
@@ -133,6 +147,8 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     uint64_t ptId = slice->GetPtId();
 
     LOG_INFO("Get key:" << key << ", pt:" << ptId);
+
+    BIO_TRACE_START(WCACHE_TRACE_GET);
 
     // 1. Get key slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
@@ -147,12 +163,15 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     if (ret != BIO_OK) {
         LOG_ERROR("Read data from flow failed, key :" << key << ".");
     }
+    BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     return ret;
 }
 
 BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 {
+    BIO_TRACE_START(WCACHE_TRACE_STAT);
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
+    BIO_TRACE_END(WCACHE_TRACE_STAT, 0);
     if (sliceRef != nullptr) {
         cacheObjStat.size = sliceRef->GetSlice()->GetLength();
         cacheObjStat.time = time(nullptr);
@@ -167,6 +186,8 @@ BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheOb
 BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 {
     ASSERT_RETURN(key != nullptr, BIO_INVALID_PARAM);
+
+    BIO_TRACE_START(WCACHE_TRACE_DEL);
 
     // 1. Aquire slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
@@ -186,6 +207,7 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     slice->SetSliceState(1);
 
     mCacheIndex->Release(ptId, sliceRef);
+    BIO_TRACE_END(WCACHE_TRACE_DEL, 0);
     return BIO_OK;
 }
 

@@ -9,6 +9,7 @@
 
 #include "bio_ref.h"
 #include "bio_err.h"
+#include "bio_trace.h"
 
 #include "flow.h"
 #include "flow_task_pool.h"
@@ -62,18 +63,28 @@ public:
     static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t bucketId, uint64_t len, uint64_t *chunkId)
     {
         if (type == FLOW_MEMORY) {
-            return mMemAllocator.alloc(len, chunkId);
+            BIO_TRACE_START(MEM_TRACE_SEG_ALLOC);
+            auto ret = mMemAllocator.alloc(len, chunkId);
+            BIO_TRACE_END(MEM_TRACE_SEG_ALLOC, ret);
+            return ret;
         } else {
-            return mDiskAllocator.alloc(mediaId, bucketId, len, chunkId);
+            BIO_TRACE_START(BDM_TRACE_SEG_ALLOC);
+            auto ret = mDiskAllocator.alloc(mediaId, bucketId, len, chunkId);
+            BIO_TRACE_END(BDM_TRACE_SEG_ALLOC, ret);
+            return ret;
         }
     }
 
     static void MediaFree(FlowType type, uint32_t mediaId, uint64_t len, uint64_t chunkId)
     {
         if (type == FLOW_MEMORY) {
+            BIO_TRACE_START(MEM_TRACE_SEG_FREE);
             mMemAllocator.free(chunkId);
+            BIO_TRACE_END(MEM_TRACE_SEG_FREE, 0);
         } else {
+            BIO_TRACE_START(BDM_TRACE_SEG_FREE);
             mDiskAllocator.free(mediaId, len, chunkId);
+            BIO_TRACE_END(BDM_TRACE_SEG_FREE, 0);
         }
     }
 
