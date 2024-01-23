@@ -78,7 +78,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
     int ret;
 
-    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_PUT);
     ret = rados_write(mIoCtx, key, value, len, 0);
     BIO_TRACE_END(UFS_TRACE_PUT, ret);
@@ -93,7 +93,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 {
     int ret;
 
-    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_GET);
     ret = rados_read(mIoCtx, key, value, len, off);
     BIO_TRACE_END(UFS_TRACE_GET, ret);
@@ -108,7 +108,7 @@ BResult UnderFs::Delete(const char *key)
 {
     int ret;
 
-    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_DEL);
     ret = rados_remove(mIoCtx, key);
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
@@ -123,7 +123,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
 {
     int ret;
 
-    ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_STAT);
     ret = rados_stat(mIoCtx, key, &stat.size, &stat.mTime);
     BIO_TRACE_END(UFS_TRACE_STAT, ret);

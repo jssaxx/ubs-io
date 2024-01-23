@@ -181,7 +181,7 @@ void BioServer::StopDisk()
 BResult BioServer::StartRpcServer()
 {
     mRpcEngine = MakeRef<RpcEngine>();
-    ASSERT_RETURN(mRpcEngine != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(mRpcEngine != nullptr, BIO_ALLOC_FAIL);
     auto &netConfig = mConfig->GetNetConfig();
 
     BioNetOptions netOptions;
@@ -246,7 +246,7 @@ BResult BioServer::StartCm()
 
     // initial.
     auto result = mCm->Initialize(cmOptions);
-    ASSERT_RETURN(result == BIO_OK, result);
+    ChkTrueNot(result == BIO_OK, result);
 
     // register node.
     auto &daemonConfig = mConfig->GetDaemonConfig();

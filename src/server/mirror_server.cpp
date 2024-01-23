@@ -320,10 +320,11 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    ChkTrue(ctx.MessageDataLen() == sizeof(QueryViewRequest), BIO_INVALID_PARAM,
+        "Failed to handleQueryPtView, message length:" << ctx.MessageDataLen() <<
+        " sizeof(QueryViewRequest):" << sizeof(QueryViewRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
     BIO_TRACE_START(MIRROR_TRACE_QUERYPTVIEW_HDL);
-
-    ASSERT_RETURN(ctx.MessageDataLen() == sizeof(QueryViewRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
@@ -345,8 +346,10 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_HDL);
 
-    ASSERT_RETURN(ctx.MessageDataLen() >= sizeof(PutRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(ctx.MessageDataLen() >= sizeof(QueryViewRequest), BIO_INVALID_PARAM,
+        "Failed to handlePut, message length:" << ctx.MessageDataLen() << " sizeof(PutRequest):"
+        << sizeof(PutRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
 
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
@@ -374,8 +377,10 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
 
-    ASSERT_RETURN(ctx.MessageDataLen() == sizeof(GetRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(ctx.MessageDataLen() == sizeof(GetRequest), BIO_INVALID_PARAM,
+        "Failed to handleGet, message length:" << ctx.MessageDataLen() <<
+        " sizeof(GetRequest):" << sizeof(GetRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
 
     auto *req = static_cast<GetRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
@@ -399,8 +404,10 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
 
-    ASSERT_RETURN(ctx.MessageDataLen() == sizeof(DeleteRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(ctx.MessageDataLen() == sizeof(DeleteRequest), BIO_INVALID_PARAM,
+        "Failed to handleDelete, message length:" << ctx.MessageDataLen() <<
+        " sizeof(DeleteRequest):" << sizeof(DeleteRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
 
     auto *req = static_cast<DeleteRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
@@ -424,8 +431,10 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
 
-    ASSERT_RETURN(ctx.MessageDataLen() == sizeof(StatRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(ctx.MessageDataLen() == sizeof(StatRequest), BIO_INVALID_PARAM,
+        "Failed to handleStat, message length:" << ctx.MessageDataLen() <<
+        " sizeof(StatRequest):" << sizeof(StatRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
 
     auto *req = static_cast<StatRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
@@ -444,6 +453,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
     BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, 0);
     return BIO_OK;
 }
+
 int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
@@ -453,8 +463,10 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
 
-    ASSERT_RETURN(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM,
+        "Failed to handleLoad, message length:" << ctx.MessageDataLen() <<
+        " sizeof(CreateFlowRequest):" << sizeof(CreateFlowRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
 
     auto *req = static_cast<LoadRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
@@ -478,8 +490,10 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_CREATEFLOW_HDL);
 
-    ASSERT_RETURN(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM);
-    ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM,
+        "Failed to handleCreateFlow, message length:" << ctx.MessageDataLen() <<
+        " sizeof(CreateFlowRequest):" << sizeof(CreateFlowRequest));
+    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
 
     auto *req = static_cast<CreateFlowRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {

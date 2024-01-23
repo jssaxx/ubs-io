@@ -76,7 +76,7 @@ BResult RpcEngine::Start(const BioNetOptions &opt)
 
     mOptions = opt;
     auto result = ValidateOptions();
-    ASSERT_RETURN(result == BIO_OK, result);
+    ChkTrueNot(result == BIO_OK, result);
 
     result = Initialize();
     if (result != BIO_OK) {
@@ -170,7 +170,7 @@ BResult RpcEngine::InitLocalMrAllocator()
     }
 
     mMrBlockPool = MakeRef<BioNetBlockPool>();
-    ASSERT_RETURN(mMrBlockPool != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(mMrBlockPool != nullptr, BIO_ALLOC_FAIL);
 
     result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.localMrSize / mDataPageBytes);
     if (result != BIO_OK) {
@@ -199,7 +199,7 @@ std::string RpcEngine::GenerateWorkersSetting()
 
 static void RpcEngineLog(int level, const char *msg)
 {
-    ASSERT_RET_VOID(msg != nullptr);
+    ChkTrueExNot(msg != nullptr);
     Logger::gInstance->Log(level + 1U, msg);
 }
 
@@ -338,7 +338,7 @@ void RpcEngine::ChannelBroken(const ChannelPtr &ch)
 
 int32_t RpcEngine::RequestReceived(ServiceContext &ctx)
 {
-    ASSERT_RETURN(mRequestExecutor != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mRequestExecutor != nullptr, BIO_NOT_READY);
 
     if (UNLIKELY(ctx.OpCode() >= MAX_NEW_REQ_HANDLER)) {
         LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode());
@@ -368,7 +368,7 @@ int32_t RpcEngine::OneSideDone(const ServiceContext &ctx)
 BResult RpcEngine::ConnectToPeer(ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
     using namespace hcom;
-    ASSERT_RETURN(mService != nullptr, BIO_ERR);
+    ChkTrueNot(mService != nullptr, BIO_ERR);
 
     /* get connecting options ready */
     NetServiceConnectOptions options{};
