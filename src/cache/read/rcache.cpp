@@ -8,6 +8,7 @@
 #include "cache_slice.h"
 #include "rcache_statistic.h"
 #include "underfs.h"
+#include "bio_trace.h"
 
 using namespace ock::bio;
 
@@ -481,7 +482,7 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
             LOG_ERROR("Alloc chunk for read cache key " << chunk->GetKey() << "failed.");
             return BIO_ALLOC_FAIL;
         }
-
+        BIO_TRACE_START(RCACHE_TRACE_EVICT2DISK);
         ret = GetSliceFromChunk(READ_CACHE_TIER_MEM, chunk, fromSlicePtr);
         if ((ret != BIO_OK) || (fromSlicePtr == nullptr)) {
             LOG_ERROR("Alloc slice for read cache key " << chunk->GetKey() << "failed.");
@@ -509,6 +510,7 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
 
         flow[READ_CACHE_TIER_MEM]->AddDataTruncOffset(chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
+        BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
     }
 
     uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
@@ -534,6 +536,7 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
             break;
         }
+        BIO_TRACE_START(RCACHE_TRACE_EVICT2NULL);
         chunk = truncateQ[READ_CACHE_TIER_DISK].front();
         truncateQ[READ_CACHE_TIER_DISK].pop_front();
         truncateLock[READ_CACHE_TIER_DISK].UnLock();
@@ -548,6 +551,7 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
         flow[READ_CACHE_TIER_DISK]->AddDataTruncOffset(chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
         delete [] chunk->GetKey();
+        BIO_TRACE_END(RCACHE_TRACE_EVICT2NULL, ret);
     }
 
     uint64_t truncateOffset = flow[READ_CACHE_TIER_DISK]->GetDataTruncOffset();

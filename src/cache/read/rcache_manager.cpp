@@ -5,6 +5,7 @@
 #include "bio_log.h"
 #include "rcache_manager.h"
 #include "bio_def.h"
+#include "bio_trace.h"
 
 using namespace ock::bio;
 
@@ -64,47 +65,54 @@ BResult RCacheManager::AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePt
 BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &slice)
 {
     LOG_INFO("Put key:" << key);
-
+    BIO_TRACE_START(RCACHE_TRACE_PUT);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
         return BIO_NOT_EXISTS;
     }
 
-    cachePtr->Put(key, slice);
-    return BIO_OK;
+    auto ret = cachePtr->Put(key, slice);
+    BIO_TRACE_END(RCACHE_TRACE_PUT, ret);
+    return ret;
 };
 
 BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter)
 {
     LOG_INFO("Get key:" << key);
-
+    BIO_TRACE_START(RCACHE_TRACE_GET);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
         return BIO_NOT_EXISTS;
     }
-    return cachePtr->Get(key, offset, slice, sliceWriter);
+    auto ret = cachePtr->Get(key, offset, slice, sliceWriter);
+    BIO_TRACE_END(RCACHE_TRACE_GET, ret);
+    return ret;
 }
 
 BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len)
 {
+    BIO_TRACE_START(RCACHE_TRACE_LOAD);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
         return BIO_NOT_EXISTS;
     }
 
-    cachePtr->Load(key, offset, len);
-    return BIO_OK;
+    auto ret = cachePtr->Load(key, offset, len);
+    BIO_TRACE_END(RCACHE_TRACE_LOAD, ret);
+    return ret;
 }
 
 BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
 {
+    BIO_TRACE_START(RCACHE_TRACE_DEL);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
         return BIO_NOT_EXISTS;
     }
 
-    cachePtr->Delete(key);
-    return BIO_OK;
+    auto ret = cachePtr->Delete(key);
+    BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
+    return ret;
 }
 
 BResult RCacheManager::CreateRCache(uint64_t ptId)
@@ -116,6 +124,8 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
         cacheLock.UnLock();
         return BIO_OK;
     }
+
+    BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
 
     auto cacheObj = MakeRef<RCache>(ptId);
     if (cacheObj == nullptr) {
@@ -147,7 +157,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
-
+    BIO_TRACE_END(RCACHE_TRACE_CREATE_OBJ, ret);
     return BIO_OK;
 }
 
@@ -159,6 +169,8 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
         cacheLock.UnLock();
         return BIO_OK;
     }
+
+    BIO_TRACE_START(RCACHE_TRACE_DESTROY_OBJ);
 
     RCachePtr cachePtr = iter->second;
     auto ret = rCacheEvict->Stop(cachePtr);
@@ -181,6 +193,6 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
 
     cache.erase(iter);
     cacheLock.UnLock();
-
+    BIO_TRACE_END(RCACHE_TRACE_DESTROY_OBJ, 0);
     return BIO_OK;
 }
