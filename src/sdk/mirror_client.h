@@ -53,7 +53,7 @@ public:
     explicit MirrorClient(int32_t type) : mDeployType(type) {}
     ~MirrorClient() = default;
 
-    uint16_t SelectingPt(uint32_t objectId, AffinityStrategy affinity);
+    uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
 
     uint16_t ParseLocation(Bio::ObjLocation location);
 
