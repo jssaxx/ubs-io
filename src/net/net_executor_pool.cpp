@@ -44,7 +44,7 @@ void NetExecutorPool::Stop()
 
 BResult NetExecutorPool::AddTask(NetTaskHandler &handler, ServiceContext &context)
 {
-    ASSERT_RETURN(handler != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(handler != nullptr, BIO_INVALID_PARAM);
 
     auto task = MakeRef<NetTask>(handler);
     if (UNLIKELY(task == nullptr)) {

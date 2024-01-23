@@ -14,7 +14,7 @@ uint32_t WCacheIndex::Hash(const Key &key)
 BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ASSERT_RETURN(table != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
     auto bucket = Hash(key);
     WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     table->sliceIndex[bucket].emplace(key, sliceRef);
@@ -24,7 +24,7 @@ BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefP
 WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ASSERT_RETURN(table != nullptr, nullptr);
+    ChkTrueNot(table != nullptr, nullptr);
     auto bucket = Hash(key);
     ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto sliceMeta = table->sliceIndex[bucket].find(key);
@@ -44,7 +44,7 @@ void WCacheIndex::Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef)
 BResult WCacheIndex::Delete(uint64_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ASSERT_RETURN(table != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
     auto bucket = Hash(key);
     WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     table->sliceIndex[bucket].erase(key);
@@ -68,7 +68,7 @@ WCacheIndexTable *WCacheIndex::GetIndexTable(uint64_t ptId)
             return table->second;
         }
         WCacheIndexTable *inTable = new WCacheIndexTable;
-        ASSERT_RETURN(inTable != nullptr, nullptr);
+        ChkTrueNot(inTable != nullptr, nullptr);
         mTable.insert(std::make_pair(ptId, inTable));
         return mTable[ptId];
     }

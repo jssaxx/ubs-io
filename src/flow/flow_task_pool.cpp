@@ -44,7 +44,7 @@ void FlowTaskPool::Stop()
 
 BResult FlowTaskPool::AddTask(FlowTaskHandler &handler)
 {
-    ASSERT_RETURN(handler != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(handler != nullptr, BIO_INVALID_PARAM);
 
     auto task = MakeRef<FlowTask>(handler);
     if (UNLIKELY(task == nullptr)) {

@@ -53,7 +53,7 @@ public:
 
     inline BResult AllocOne(uintptr_t &address)
     {
-        ASSERT_RETURN(mIsStarted.load() == true, BIO_NOT_READY);
+        ChkTrueNot(mIsStarted.load() == true, BIO_NOT_READY);
         if (!Pop(address)) {
             return BIO_ALLOC_FAIL;
         }
@@ -63,13 +63,13 @@ public:
 
     inline void ReleaseOne(uintptr_t address)
     {
-        ASSERT_RET_VOID(mIsStarted.load() == true);
+        ChkTrueExNot(mIsStarted.load() == true);
         PushFront(address);
     }
 
     inline BResult AllocMany(uint32_t count, std::vector<uintptr_t> &items)
     {
-        ASSERT_RETURN(mIsStarted.load() == true, BIO_NOT_READY);
+        ChkTrueNot(mIsStarted.load() == true, BIO_NOT_READY);
         if (!PopN(count, items)) {
             return BIO_ALLOC_FAIL;
         }
@@ -78,7 +78,7 @@ public:
 
     inline void ReleaseMany(std::vector<uintptr_t> &items)
     {
-        ASSERT_RET_VOID(mIsStarted.load() == true);
+        ChkTrueExNot(mIsStarted.load() == true);
         PushN(items);
     }
 

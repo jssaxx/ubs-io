@@ -88,7 +88,7 @@ BResult RpcConnector::Start(const BioNetOptions &opt)
         return BIO_OK;
     }
 
-    ASSERT_RETURN(mEngine != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(mEngine != nullptr, BIO_INVALID_PARAM);
 
     mName = opt.name;
 
@@ -131,11 +131,11 @@ void RpcConnector::StopInner()
 
 BResult RpcConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler, uintptr_t ctx)
 {
-    ASSERT_RETURN(!info.ip.empty(), BIO_INVALID_PARAM);
-    ASSERT_RETURN(info.peerId != 0, BIO_INVALID_PARAM);
-    ASSERT_RETURN(info.port != 0, BIO_INVALID_PARAM);
-    ASSERT_RETURN(info.retryTimes != 0, BIO_INVALID_PARAM);
-    ASSERT_RETURN(handler != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(!info.ip.empty(), BIO_INVALID_PARAM);
+    ChkTrueNot(info.peerId != 0, BIO_INVALID_PARAM);
+    ChkTrueNot(info.port != 0, BIO_INVALID_PARAM);
+    ChkTrueNot(info.retryTimes != 0, BIO_INVALID_PARAM);
+    ChkTrueNot(handler != nullptr, BIO_INVALID_PARAM);
 
     /* create a connecting task */
     auto task = MakeRef<RpcConnectTask>(mEngine);
@@ -162,9 +162,9 @@ BResult RpcConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler,
 
 BResult RpcConnector::SyncConnect(ConnectInfo &info)
 {
-    ASSERT_RETURN(!info.ip.empty(), BIO_INVALID_PARAM);
-    ASSERT_RETURN(info.port != 0, BIO_INVALID_PARAM);
-    ASSERT_RETURN(info.retryTimes != 0, BIO_INVALID_PARAM);
+    ChkTrueNot(!info.ip.empty(), BIO_INVALID_PARAM);
+    ChkTrueNot(info.port != 0, BIO_INVALID_PARAM);
+    ChkTrueNot(info.retryTimes != 0, BIO_INVALID_PARAM);
 
     /* create a connecting task */
     auto task = MakeRef<RpcConnectTask>(mEngine);
