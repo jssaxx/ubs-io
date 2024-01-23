@@ -39,7 +39,7 @@ public:
     inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
     {
         using namespace ock::hcom;
-        ASSERT_RETURN(mService != nullptr, BIO_ERR);
+        ChkTrueNot(mService != nullptr, BIO_ERR);
         auto ret = mService->RegisterMemoryRegion(size, mr);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to register mr by result " << NetErrStr(ret));
@@ -57,7 +57,7 @@ public:
     inline void DestroyMemoryRegion(MemoryRegionPtr &mr)
     {
         using namespace ock::hcom;
-        ASSERT_RET_VOID(mService != nullptr);
+        ChkTrueExNot(mService != nullptr);
         mService->DestroyMemoryRegion(mr);
     }
 
@@ -85,7 +85,7 @@ public:
 
     inline BResult AllocLocalMrBatch(uint32_t count, std::vector<uintptr_t> &address, uint32_t &outKey)
     {
-        ASSERT_RETURN(mMrBlockPool != nullptr, BIO_NOT_READY);
+        ChkTrueNot(mMrBlockPool != nullptr, BIO_NOT_READY);
 
         outKey = mLocalMr->GetLKey();
         return mMrBlockPool->AllocMany(count, address);
@@ -93,27 +93,27 @@ public:
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
     {
-        ASSERT_RETURN(mMrBlockPool != nullptr, BIO_NOT_READY);
+        ChkTrueNot(mMrBlockPool != nullptr, BIO_NOT_READY);
         outKey = mLocalMr->GetLKey();
         return mMrBlockPool->AllocOne(address);
     }
 
     inline BResult GetLocalMrKey(uint32_t &outKey)
     {
-        ASSERT_RETURN(mMrBlockPool != nullptr, BIO_NOT_READY);
+        ChkTrueNot(mMrBlockPool != nullptr, BIO_NOT_READY);
         outKey = mLocalMr->GetLKey();
         return BIO_OK;
     }
 
     inline void FreeLocalMrBatch(std::vector<uintptr_t> &address)
     {
-        ASSERT_RET_VOID(mMrBlockPool != nullptr);
+        ChkTrueExNot(mMrBlockPool != nullptr);
         mMrBlockPool->ReleaseMany(address);
     }
 
     inline void FreeLocalMrSingle(uintptr_t address)
     {
-        ASSERT_RET_VOID(mMrBlockPool != nullptr);
+        ChkTrueExNot(mMrBlockPool != nullptr);
         mMrBlockPool->ReleaseOne(address);
     }
 
@@ -126,7 +126,7 @@ public:
      */
     BResult SyncConnect(ConnectInfo &info)
     {
-        ASSERT_RETURN(mAsyncConnector.Get() != nullptr, BIO_NOT_INITIALIZED);
+        ChkTrueNot(mAsyncConnector.Get() != nullptr, BIO_NOT_INITIALIZED);
         return mAsyncConnector->SyncConnect(info);
     }
 
@@ -142,7 +142,7 @@ public:
      */
     BResult AsyncConnect(ConnectInfo &info, AsyncConnHandler handler, uintptr_t ctx)
     {
-        ASSERT_RETURN(mAsyncConnector.Get() != nullptr, BIO_NOT_INITIALIZED);
+        ChkTrueNot(mAsyncConnector.Get() != nullptr, BIO_NOT_INITIALIZED);
         return mAsyncConnector->AsyncConnect(info, handler, ctx);
     }
 
@@ -311,7 +311,7 @@ public:
         }
 
         using namespace hcom;
-        ASSERT_RETURN(ch.Get() != nullptr, BIO_NOT_EXISTS);
+        ChkTrueNot(ch.Get() != nullptr, BIO_NOT_EXISTS);
 
         // NetServiceRequest innerRequest(req.lAddress, req.rAddress, req.lKey, req.rKey, req.size);
         auto result = ch->Read(req, nullptr);
@@ -347,8 +347,10 @@ public:
         }
 
         using namespace hcom;
-        ASSERT_RETURN(ch.Get() != nullptr, BIO_NOT_EXISTS);
-        ASSERT_RETURN(reqs.size() <= NET_SGE_MAX_IOV, BIO_INVALID_PARAM);
+        ChkTrueNot(ch.Get() != nullptr, BIO_NOT_EXISTS);
+        ChkTrue(reqs.size() <= NET_SGE_MAX_IOV, BIO_INVALID_PARAM,"Failed to syncReadSgl, reqs.size():"
+            << reqs.size());
+
         NetServiceRequest request[reqs.size()];
         for (uint32_t i = 0; i < reqs.size(); i++) {
             request[i].lAddress = reqs[i].lAddress;
@@ -386,7 +388,7 @@ public:
         }
 
         using namespace hcom;
-        ASSERT_RETURN(ch.Get() != nullptr, BIO_NOT_EXISTS);
+        ChkTrueNot(ch.Get() != nullptr, BIO_NOT_EXISTS);
 
         // NetServiceRequest innerRequest(req.lAddress, req.rAddress, req.lKey, req.rKey, req.size);
         auto result = ch->Write(req, nullptr);
@@ -517,7 +519,7 @@ private:
     BResult SyncCall(uint16_t opCode, TReq &req, TResp &resp, ChannelPtr &ch, bool isCtrlPanel)
     {
         using namespace hcom;
-        ASSERT_RETURN(ch.Get() != nullptr, BIO_ERR);
+        ChkTrueNot(ch.Get() != nullptr, BIO_ERR);
 
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
@@ -554,7 +556,7 @@ private:
     BResult SyncCall(uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen, ChannelPtr &ch, bool isCtrlPanel)
     {
         using namespace hcom;
-        ASSERT_RETURN(ch.Get() != nullptr, BIO_ERR);
+        ChkTrueNot(ch.Get() != nullptr, BIO_ERR);
 
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
@@ -583,7 +585,7 @@ private:
     BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch, bool isCtrlPanel)
     {
         using namespace hcom;
-        ASSERT_RETURN(ch.Get() != nullptr, BIO_ERR);
+        ChkTrueNot(ch.Get() != nullptr, BIO_ERR);
 
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;

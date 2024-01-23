@@ -10,7 +10,7 @@ namespace ock {
 namespace bio {
 BResult CacheSliceOperator::Copy(const SlicePtr &from, const SlicePtr &to)
 {
-    ASSERT_RETURN(Validate(from, to), BIO_INVALID_PARAM);
+    ChkTrueNot(Validate(from, to), BIO_INVALID_PARAM);
 
     // have some address, don't need copy.
     if (from->IsTheSameWith(to)) {
@@ -36,8 +36,8 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, const SlicePtr &to)
 
 BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
 {
-    ASSERT_RETURN(Validate(to), BIO_INVALID_PARAM);
-    ASSERT_RETURN(from != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(Validate(to), BIO_INVALID_PARAM);
+    ChkTrueNot(from != nullptr, BIO_INVALID_PARAM);
 
     if (to->GetFlowType() == FLOW_MEMORY) {
         auto &toAddrs = to->GetAddrs();
@@ -45,7 +45,10 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
         for (auto toAddr : toAddrs) {
             auto ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset), toAddr.chunkLen,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
-            ASSERT_RETURN(ret == BIO_OK, ret);
+            ChkTrueNot(ret == BIO_OK, ret);
+            ChkTrue(ret == BIO_OK, ret,
+                "Failed to copy data from addr:" << from + offset << " to addr:" <<
+                toAddr.chunkId + toAddr.chunkOffset << " by length:" << toAddr.chunkLen);
             offset += toAddr.chunkLen;
         }
         return BIO_OK;
@@ -57,7 +60,9 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
             auto ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
             BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
-            ASSERT_RETURN(ret == BIO_OK, ret);
+            ChkTrue(ret == BIO_OK, ret,
+                "Failed to BdmWrite data from addr:" << from + offset << " to addr:" <<
+                toAddr.chunkId + toAddr.chunkOffset << " by length:" << toAddr.chunkLen);
             offset += toAddr.chunkLen;
         }
         return BIO_OK;
@@ -66,8 +71,8 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
 
 BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
 {
-    ASSERT_RETURN(Validate(from), BIO_INVALID_PARAM);
-    ASSERT_RETURN(to != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(Validate(from), BIO_INVALID_PARAM);
+    ChkTrueNot(to != nullptr, BIO_INVALID_PARAM);
 
     if (from->GetFlowType() == FLOW_MEMORY) {
         auto &fromAddrs = from->GetAddrs();
@@ -75,7 +80,9 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         for (auto fromAddr : fromAddrs) {
             auto ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), fromAddr.chunkLen,
                 reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
-            ASSERT_RETURN(ret == BIO_OK, ret);
+            ChkTrue(ret == BIO_OK, ret,
+                "Failed to copy data from addr:" << fromAddr.chunkId + fromAddr.chunkOffset << " to addr:" <<
+                to + offset << " by length:" << fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
@@ -88,7 +95,11 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
             auto ret =
                 BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset), fromAddr.chunkLen);
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
-            ASSERT_RETURN(ret == BIO_OK, ret);
+            LOG_INFO("copy:"
+                << ", from off:" << fromAddr.chunkOffset << ", to off:" << offset);
+            ChkTrue(ret == BIO_OK, ret,
+                "Failed to BdmRead data from addr:" << fromAddr.chunkId + fromAddr.chunkOffset << " to addr:" <<
+                to + offset << " by length:" << fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
@@ -97,17 +108,18 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
 
 bool CacheSliceOperator::Validate(const SlicePtr &from, const SlicePtr &to)
 {
-    ASSERT_RETURN(from != nullptr, false);
-    ASSERT_RETURN(to != nullptr, false);
+    ChkTrueNot(from != nullptr, false);
+    ChkTrueNot(to != nullptr, false);
 
-    ASSERT_RETURN(from->GetLength() == to->GetLength(), false);
+    ChkTrue(from->GetLength() == to->GetLength(), false,
+        "Failed to validate slices, src slice length:" << from->GetLength() << " dst slice length:" << to->GetLength());
 
     return true;
 }
 
 bool CacheSliceOperator::Validate(const SlicePtr &slice)
 {
-    ASSERT_RETURN(slice != nullptr, false);
+    ChkTrueNot(slice != nullptr, false);
     return true;
 }
 
@@ -136,7 +148,9 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
         auto ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
             reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
         BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
-        ASSERT_RETURN(ret == BIO_OK, ret);
+        ChkTrue(ret == BIO_OK, ret,
+                "Failed to BdmRead data from addr:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset
+                << " to addr:" << toIt->chunkId + toIt->chunkOffset + toOffset << " by length:" << len);
         fromOffset += len;
         if (fromOffset == fromIt->chunkLen) {
             fromOffset = 0;
@@ -169,8 +183,13 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
         auto ret = BdmWrite(toIt->chunkId, toIt->chunkOffset + toOffset,
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
         BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
-        ASSERT_RETURN(ret == BIO_OK, ret);
         LOG_INFO("pre:" << "from chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" << toOffset << ", len:" << len);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to BdmWrite data from addr:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset << " to addr:" <<
+            toIt->chunkId + toIt->chunkOffset + toOffset << " by length:" << len);
+        LOG_INFO("pre:"
+            << "from chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" << toOffset <<
+            ", len:" << len);
         fromOffset += len;
         if (fromOffset == fromIt->chunkLen) {
             fromOffset = 0;

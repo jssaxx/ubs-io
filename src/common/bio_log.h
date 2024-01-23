@@ -47,27 +47,43 @@ namespace bio {
 #define LOG_DEBUG(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_DEBUG, __BIO_LOG_FILENAME__, __LINE__, msg)
 #define LOG_TRACE(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_TRACE, __BIO_LOG_FILENAME__, __LINE__, msg)
 
-#define ASSERT_RETURN(ARGS, RET)                 \
-    do {                                         \
-        if (__builtin_expect(!(ARGS), 0) != 0) { \
-            LOG_ERROR("Assert " << #ARGS);       \
-            return RET;                          \
-        }                                        \
+#define ChkTrueNot(ARGS, RET)                     \
+    do {                                          \
+        if (__builtin_expect(!(ARGS), 0) != 0) {  \
+            LOG_ERROR("Check Failed: " << #ARGS); \
+            return RET;                           \
+        }                                         \
     } while (0)
 
-#define ASSERT_RET_VOID(ARGS)                    \
-    do {                                         \
-        if (__builtin_expect(!(ARGS), 0) != 0) { \
-            LOG_ERROR("Assert " << #ARGS);       \
-            return;                              \
-        }                                        \
+#define ChkTrueExNot(ARGS)                        \
+    do {                                          \
+        if (__builtin_expect(!(ARGS), 0) != 0) {  \
+            LOG_ERROR("Check Failed: " << #ARGS); \
+            return;                               \
+        }                                         \
     } while (0)
 
-#define ASSERT(ARGS)                             \
-    do {                                         \
-        if (__builtin_expect(!(ARGS), 0) != 0) { \
-            LOG_ERROR("Assert " << #ARGS);       \
-        }                                        \
+#define ChkNot(ARGS)                              \
+    do {                                          \
+        if (__builtin_expect(!(ARGS), 0) != 0) {  \
+            LOG_ERROR("Check Failed: " << #ARGS); \
+        }                                         \
+    } while (0)
+
+#define ChkTrue(ARGS, RET, MSG)                                  \
+    do {                                                         \
+        if (__builtin_expect(!(ARGS), 0) != 0) {                 \
+            LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
+            return RET;                                          \
+        }                                                        \
+    } while (0)
+
+#define ChkTrueEx(ARGS, MSG)                                     \
+    do {                                                         \
+        if (__builtin_expect(!(ARGS), 0) != 0) {                 \
+            LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
+            return;                                              \
+        }                                                        \
     } while (0)
 
 struct LoggerOptions {

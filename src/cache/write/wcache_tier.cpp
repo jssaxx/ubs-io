@@ -12,20 +12,22 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId)
 {
     FlowType flowType;
     auto ret = ToFlowType(cacheTier, flowType);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     auto &flowManager = FlowManager::Instance();
 
     uint64_t metaFlowId = flowId | (((uint64_t)((1 << 8) | (cacheTier << 1) | 0) & 0x7FF) << 40) /* meta */;
     mMetaFlow = flowManager->CreateObject(flowType, metaFlowId);
-    ASSERT_RETURN(mMetaFlow != nullptr, BIO_ALLOC_FAIL);
+    ChkTrue(mMetaFlow != nullptr, BIO_ALLOC_FAIL,
+        "Failed to create metaflow, flowType:" << flowType << " metaFlowId" << metaFlowId);
 
     uint64_t dataFlowId = flowId | (((uint64_t)((1 << 8) | (cacheTier << 1) | 1) & 0x7FF) << 40) /* data */;
     mDataFlow = flowManager->CreateObject(flowType, dataFlowId);
-    ASSERT_RETURN(mDataFlow != nullptr, BIO_ALLOC_FAIL);
+    ChkTrue(mDataFlow != nullptr, BIO_ALLOC_FAIL,
+        "Failed to create dataflow, flowType:" << flowType << " dataFlowId" << dataFlowId);
 
     mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>();
-    ASSERT_RETURN(mFlowTruncateCursor != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(mFlowTruncateCursor != nullptr, BIO_ALLOC_FAIL);
 
     return BIO_OK;
 }
@@ -40,15 +42,15 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     sliceMeta.offset = slice->GetOffsetInFlow();
     sliceMeta.length = slice->GetLength();
     auto ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
-    ASSERT_RETURN(ret == BIO_OK, nullptr);
+    ChkTrueNot(ret == BIO_OK, nullptr);
 
     // fill data flow.
     auto dataSlice = GetSlice(mDataFlow, slice->GetOffsetInFlow(), slice->GetIndexInFlow(), slice->GetLength());
     ret = sliceReader(slice.Get(), dataSlice.Get());
-    ASSERT_RETURN(ret == BIO_OK, nullptr);
+    ChkTrueNot(ret == BIO_OK, nullptr);
 
     auto sliceRef = MakeRef<WCacheSliceRef>(dataSlice);
-    ASSERT_RETURN(sliceRef != nullptr, nullptr);
+    ChkTrueNot(sliceRef != nullptr, nullptr);
 
     {
         std::lock_guard<std::mutex> lock(mEvictSliceQueueLock);
@@ -73,15 +75,17 @@ std::list<WCacheSliceRefPtr> WCacheTier::GetEvictSliceQueue()
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
+    mMetaFlow->GetFlowId();
     slice = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta));
-    ASSERT_RETURN(slice != nullptr, BIO_ERR);
+    ChkTrue(slice != nullptr, BIO_ERR, "Failed to get meta slice, flowId" <<
+        slice->GetFlowId() << " indexInFlow:" << indexInFlow);
     return BIO_OK;
 }
 
 BResult WCacheTier::GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
     slice = GetSlice(mDataFlow, sliceKey);
-    ASSERT_RETURN(slice != nullptr, BIO_ERR);
+    ChkTrueNot(slice != nullptr, BIO_ERR);
     return BIO_OK;
 }
 
@@ -89,10 +93,12 @@ BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint
     WFlowMetaDataSlice &metaDataSlice)
 {
     auto metaSlice = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta));
-    ASSERT_RETURN(metaSlice != nullptr, BIO_ERR);
+    ChkTrue(metaSlice != nullptr, BIO_ERR,
+        "Failed to get slice, metaFlow id: " << mMetaFlow->GetFlowId() << "indexInFlow:" << indexInFlow);
 
     auto dataSlice = GetSlice(mDataFlow, offset, indexInFlow, length);
-    ASSERT_RETURN(dataSlice != nullptr, BIO_ERR);
+    ChkTrue(dataSlice != nullptr, BIO_ERR,
+        "Failed to get slice, dataFlow id:" << mDataFlow->GetFlowId() << " offset:" << offset << " length:" << length);
 
     metaDataSlice.metaSlice = metaSlice;
     metaDataSlice.dataSlice = dataSlice;
@@ -115,10 +121,16 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" << truncateSlice->GetLength());
 
     auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * sizeof(WFlowSliceMeta));
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to truncateOffset in metaFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
+        truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<
+        slice->GetIndexInFlow() << ", len:" << truncateSlice->GetLength());
 
     ret = mDataFlow->TruncateOffset(truncateSlice->GetOffsetInFlow() + truncateSlice->GetLength());
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to truncateOffset in dataFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
+        truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<
+        slice->GetIndexInFlow() << ", len:" << truncateSlice->GetLength());
 
     return BIO_OK;
 }
@@ -127,7 +139,7 @@ WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKe
 {
     std::vector<FlowAddr> flowAddrs;
     auto ret = flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
-    ASSERT_RETURN(ret == BIO_OK, nullptr);
+    ChkTrueNot(ret == BIO_OK, nullptr);
 
     return MakeRef<WCacheSlice>(sliceKey.flowId, sliceKey.flowOffset, sliceKey.indexInFlow, sliceKey.length, flowAddrs, flow->GetFlowType());
 }
@@ -136,7 +148,7 @@ WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64
 {
     std::vector<FlowAddr> flowAddrs;
     auto ret = flow->GetAddrByOffset(offset, length, flowAddrs);
-    ASSERT_RETURN(ret == BIO_OK, nullptr);
+    ChkTrueNot(ret == BIO_OK, nullptr);
 
     return MakeRef<WCacheSlice>(flow->GetFlowId(), offset, index, length, flowAddrs, flow->GetFlowType());
 }

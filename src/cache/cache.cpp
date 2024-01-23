@@ -10,14 +10,14 @@ namespace bio {
 BResult Cache::Init()
 {
     mRCacheManager = MakeRef<RCacheManager>();
-    ASSERT_RETURN(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
     auto ret = mRCacheManager->Init();
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     mWCacheManager = MakeRef<WCacheManager>();
-    ASSERT_RETURN(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
     ret = mWCacheManager->Init(mRCacheManager);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     return BIO_OK;
 }
@@ -36,7 +36,8 @@ BResult Cache::RegisterCacheClient(uint64_t &cacheId)
 BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId)
 {
     auto ret = mWCacheManager->CreateWCache(flowId);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, cacheId:"
+        << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
     LOG_DEBUG("Create wcache success, cacheId:" << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
     return BIO_OK;
 }
@@ -44,7 +45,7 @@ BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId)
 BResult Cache::CreateRCache(uint64_t ptId)
 {
     auto ret = mRCacheManager->CreateRCache(ptId);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret, "Failed to create RCache, ptId:" << ptId);
 
     return BIO_OK;
 }

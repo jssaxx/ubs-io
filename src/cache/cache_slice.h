@@ -25,9 +25,9 @@ public:
 
     bool Validate() const
     {
-        ASSERT_RETURN(flowId != NO_MAX_VALUE64, false);
-        ASSERT_RETURN(flowOffset != NO_MAX_VALUE64, false);
-        ASSERT_RETURN(length != NO_MAX_VALUE64, false);
+        ChkTrueNot(flowId != NO_MAX_VALUE64, false);
+        ChkTrueNot(flowOffset != NO_MAX_VALUE64, false);
+        ChkTrueNot(length != NO_MAX_VALUE64, false);
         return true;
     }
 };
@@ -61,7 +61,7 @@ public:
     BResult Serialize(char *data, uint32_t &length) override
     {
         uint32_t pos = 0;
-        ASSERT_RETURN(data != nullptr, BIO_INVALID_PARAM);
+        ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         memcpy_s(data + pos, sizeof(mPtId), &mPtId, sizeof(mPtId));
         pos += sizeof(mPtId);
         auto ret = Slice::Serialize(data + pos, length);
@@ -75,8 +75,9 @@ public:
     BResult Deserialize(char *data, uint32_t length) override
     {
         uint32_t pos = 0;
-        ASSERT_RETURN(data != nullptr, BIO_INVALID_PARAM);
-        ASSERT_RETURN(length >= pos + sizeof(mPtId), BIO_INVALID_PARAM);
+        ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
+        ChkTrue(length >= pos + sizeof(mPtId), BIO_INVALID_PARAM,
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mPtId):" << pos + sizeof(mPtId));
         memcpy_s(&mPtId, sizeof(mPtId), data + pos, sizeof(mPtId));
         pos += sizeof(mPtId);
         auto ret = Slice::Deserialize(data + pos, length - pos);
@@ -152,7 +153,7 @@ public:
     BResult Serialize(char *data, uint32_t &length) override
     {
         uint32_t pos = 0;
-        ASSERT_RETURN(data != nullptr, BIO_INVALID_PARAM);
+        ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         memcpy_s(data + pos, sizeof(mFlowId), &mFlowId, sizeof(mFlowId));
         pos += sizeof(mFlowId);
         memcpy_s(data + pos, sizeof(mOffsetInFlow), &mOffsetInFlow, sizeof(mOffsetInFlow));
@@ -170,14 +171,19 @@ public:
     BResult Deserialize(char *data, uint32_t length) override
     {
         uint32_t pos = 0;
-        ASSERT_RETURN(data != nullptr, BIO_INVALID_PARAM);
-        ASSERT_RETURN(length >= pos + sizeof(mFlowId), BIO_INVALID_PARAM);
+        ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
+        ChkTrue(length >= pos + sizeof(mFlowId), BIO_INVALID_PARAM,
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowId):" << pos + sizeof(mFlowId));
         memcpy_s(&mFlowId, sizeof(mFlowId), data + pos, sizeof(mFlowId));
         pos += sizeof(mFlowId);
-        ASSERT_RETURN(length >= pos + sizeof(mOffsetInFlow), BIO_INVALID_PARAM);
+        ChkTrue(length >= pos + sizeof(mOffsetInFlow), BIO_INVALID_PARAM,
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mOffsetInFlow):" <<
+            pos + sizeof(mOffsetInFlow));
         memcpy_s(&mOffsetInFlow, sizeof(mOffsetInFlow), data + pos, sizeof(mOffsetInFlow));
         pos += sizeof(mOffsetInFlow);
-        ASSERT_RETURN(length >= pos + sizeof(mIndexInFlow), BIO_INVALID_PARAM);
+        ChkTrue(length >= pos + sizeof(mIndexInFlow), BIO_INVALID_PARAM,
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mIndexInFlow):" <<
+            pos + sizeof(mIndexInFlow));
         memcpy_s(&mIndexInFlow, sizeof(mIndexInFlow), data + pos, sizeof(mIndexInFlow));
         pos += sizeof(mIndexInFlow);
         auto ret = Slice::Deserialize(data + pos, length - pos);

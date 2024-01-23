@@ -45,7 +45,7 @@ BResult FlowManager::Exit()
 FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    ASSERT_RETURN(mInited == true, nullptr);
+    ChkTrueNot(mInited == true, nullptr);
     BioConfigPtr config = BioConfig::Instance();
     uint64_t segment = config->GetDaemonConfig().segment;
     if (type == FLOW_MEMORY) {
@@ -73,7 +73,7 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId)
 
 BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId) {
     std::lock_guard<std::mutex> lock(mMutex);
-    ASSERT_RETURN(mInited == true, BIO_NOT_READY);
+    ChkTrueNot(mInited == true, BIO_NOT_READY);
     if (type == FLOW_MEMORY) {
         auto it = mMemObjManager.find(flowId);
         if (it != mMemObjManager.end()) {
@@ -98,7 +98,7 @@ BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId) {
 BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    ASSERT_RETURN(mInited == true, BIO_NOT_READY);
+    ChkTrueNot(mInited == true, BIO_NOT_READY);
     BIO_TRACE_START(FLOW_TRACE_GETALL_OBJ);
     if (type == FLOW_MEMORY) {
         for (auto it = mMemObjManager.begin(); it != mMemObjManager.end(); ++it) {
@@ -116,7 +116,7 @@ BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &ob
 BResult FlowManager::PreLoadObject(std::function<void()> handle)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    ASSERT_RETURN(mTaskPool != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mTaskPool != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(FLOW_TRACE_PRELOAD_OBJ);
     auto ret = mTaskPool->AddTask(handle);
     if (ret != BIO_OK) {
