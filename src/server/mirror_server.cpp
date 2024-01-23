@@ -6,6 +6,7 @@
 #include "bio_config_instance.h"
 #include "bio_client.h"
 #include "bio_server.h"
+#include "bio_trace.h"
 #include "message_op.h"
 #include "mirror_server.h"
 
@@ -147,10 +148,12 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
         return BIO_OK;
     };
 
+    BIO_TRACE_START(MIRROR_TRACE_PUT);
     BResult ret = Cache::Instance().Put(const_cast<char *>(key.c_str()), sliceP, reader);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
     }
+    BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
     return ret;
 }
 
@@ -237,18 +240,21 @@ BResult MirrorServer::Get(GetRequest &req)
     LOG_INFO("Mirror server get, key:" << key << ", srcNid:" << dstNid << ", offset:" << req.offset << ", length:" <<
         req.length << ", mr address:" << req.mr.address << ", mr size:" << req.mr.size << ", mr key:" << req.mr.key <<
         ", slice: " << sliceP->ToString() << ", rFlowSize:" << rFlowAddr.size() << ".");
-
+    BIO_TRACE_START(MIRROR_TRACE_GET);
     BResult ret = Cache::Instance().Get(const_cast<char*>(key.c_str()), req.offset, sliceP, writer);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get from write cache failed, ret:" << ret << ", key:" << key << ".");
     }
+    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     return ret;
 }
 
 BResult MirrorServer::Delete(DeleteRequest &req)
 {
     std::string key = req.Key();
+    BIO_TRACE_START(MIRROR_TRACE_DEL);
     BResult ret = Cache::Instance().Delete(req.ptId, const_cast<char*>(key.c_str()));
+    BIO_TRACE_END(MIRROR_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << key << ", ptId:" << req.ptId << ".");
     } else {
@@ -261,7 +267,9 @@ BResult MirrorServer::Stat(StatRequest &req, Bio::ObjStat &objInfo)
 {
     std::string key = req.Key();
     CacheObjStat objStat{};
+    BIO_TRACE_START(MIRROR_TRACE_STAT);
     BResult ret = Cache::Instance().Stat(req.ptId, const_cast<char*>(key.c_str()), objStat);
+    BIO_TRACE_END(MIRROR_TRACE_STAT, ret);
     if (ret != BIO_OK) {
         LOG_ERROR("Stat key failed, ret:" << ret << ", key:" << key << ".");
     } else {
@@ -276,8 +284,9 @@ BResult MirrorServer::Load(LoadRequest &req)
     std::string key = req.Key();
 
     LOG_INFO("Mirror server load, key:" << key << ", ptId:" << req.ptId << ".");
-
+    BIO_TRACE_START(MIRROR_TRACE_LOAD);
     BResult ret = Cache::Instance().Load(req.ptId, const_cast<char*>(key.c_str()), req.offset, req.length);
+    BIO_TRACE_END(MIRROR_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Load key failed, ret:" << ret << ", key:" << key << ".");
     }
@@ -311,6 +320,8 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    BIO_TRACE_START(MIRROR_TRACE_QUERYPTVIEW_HDL);
+
     ASSERT_RETURN(ctx.MessageDataLen() == sizeof(QueryViewRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
@@ -321,6 +332,7 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
 
     // TODO: response view info
     Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+    BIO_TRACE_END(MIRROR_TRACE_QUERYPTVIEW_HDL, 0);
     return BIO_OK;
 }
 
@@ -330,6 +342,8 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_PUT_HDL);
 
     ASSERT_RETURN(ctx.MessageDataLen() >= sizeof(PutRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
@@ -347,6 +361,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     BResult result = Put(*req, sliceP);
 
     Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
+    BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, 0);
     return BIO_OK;
 }
 
@@ -356,6 +371,8 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
 
     ASSERT_RETURN(ctx.MessageDataLen() == sizeof(GetRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
@@ -369,6 +386,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
     BResult result = Get(*req);
 
     Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
+    BIO_TRACE_END(MIRROR_TRACE_GET_HDL, 0);
     return BIO_OK;
 }
 
@@ -378,6 +396,8 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
 
     ASSERT_RETURN(ctx.MessageDataLen() == sizeof(DeleteRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
@@ -391,6 +411,7 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
     BResult result = Delete(*req);
 
     Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
+    BIO_TRACE_END(MIRROR_TRACE_DEL_HDL, 0);
     return BIO_OK;
 }
 
@@ -400,6 +421,8 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
 
     ASSERT_RETURN(ctx.MessageDataLen() == sizeof(StatRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
@@ -418,6 +441,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
     }
 
     Reply(ctx, BIO_OK, static_cast<void *>(&objInfo), sizeof(Bio::ObjStat));
+    BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, 0);
     return BIO_OK;
 }
 int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
@@ -426,6 +450,8 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
 
     ASSERT_RETURN(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
@@ -439,6 +465,7 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
     BResult ret = Load(*req);
 
     Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
+    BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, 0);
     return BIO_OK;
 }
 
@@ -448,6 +475,8 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_CREATEFLOW_HDL);
 
     ASSERT_RETURN(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM);
     ASSERT_RETURN(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
@@ -479,5 +508,6 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
     }
 
     Reply(ctx, BIO_OK, static_cast<void *>(&flowId), sizeof(uint64_t));
+    BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, 0);
     return BIO_OK;
 }
