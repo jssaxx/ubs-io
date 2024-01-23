@@ -636,7 +636,9 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
     if (restore->masterChange != NULL && masterNodeId != NODE_ID_INVALID) {
         restore->masterChange(changeList->poolId, masterNodeId);
     }
-    restore->stateChange(notifyList);
+    if (notifyList->nodeNum != 0) {
+        restore->stateChange(notifyList);
+    }
     free(notifyList);
     return;
 }

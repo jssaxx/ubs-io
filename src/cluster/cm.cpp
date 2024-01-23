@@ -3,6 +3,7 @@
  */
 #include "cm.h"
 #include "securec.h"
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {
@@ -183,7 +184,9 @@ int32_t Cm::NotifyNodeListChange(NodeStateList *nodeList, void *ctx)
         cm->mNodeInfos[id] = node;
         LOG_INFO("NodeInfo, index:" << index << ", node " << node.id.ToString());
     }
+    BIO_TRACE_START(CM_TRACE_NOTIFY_NODEVIEW);
     cm->mNodeHandler(cm->mNodeInfos);
+    BIO_TRACE_END(CM_TRACE_NOTIFY_NODEVIEW, 0);
     return 0;
 }
 
@@ -245,7 +248,9 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
         cm->mPtInfos[pt.ptId] = pt;
     }
     cm->ScanPtListAffinity();
+    BIO_TRACE_START(CM_TRACE_NOTIFY_PTVIEW);
     cm->mPtHandler(cm->mPtInfos);
+    BIO_TRACE_END(CM_TRACE_NOTIFY_PTVIEW, 0);
     return 0;
 }
 
