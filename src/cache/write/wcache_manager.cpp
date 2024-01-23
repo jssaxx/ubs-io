@@ -13,7 +13,7 @@ namespace bio {
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
     mCacheIndex = MakeRef<WCacheIndex>();
-    ASSERT_RETURN(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
 
     mExeService = ExecutorService::Create(10, NO_8192);
     if (mExeService == nullptr) {
@@ -23,7 +23,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 
     mExeService->SetThreadName("wflow-evict-thread");
     auto result = mExeService->Start();
-    ASSERT_RETURN(result, BIO_INNER_ERR);
+    ChkTrueNot(result, BIO_INNER_ERR);
 
     mExeService->Execute([this]() { RunEvictThread(); });
 
@@ -49,7 +49,7 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
 BResult WCacheManager::CreateWCache(uint64_t flowId)
 {
     auto wcache = MakeRef<WCache>();
-    ASSERT_RETURN(wcache != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(wcache != nullptr, BIO_ALLOC_FAIL);
 
     WCache::EvictCallback evictCallback = [this](uint64_t ptId, const Key &key) -> BResult {
         mCacheIndex->Delete(ptId, key);
@@ -58,8 +58,8 @@ BResult WCacheManager::CreateWCache(uint64_t flowId)
 
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
     auto ret = wcache->Init(flowId, mExeService, evictCallback);
+    ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
-    ASSERT_RETURN(ret == BIO_OK, ret);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -80,7 +80,7 @@ BResult WCacheManager::DeleteWCache(uint64_t ptId)
 
 BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
-    ASSERT_RETURN(sliceKey.Validate(), BIO_INVALID_PARAM);
+    ChkTrueNot(sliceKey.Validate(), BIO_INVALID_PARAM);
 
     auto wcache = GetWCache(sliceKey.flowId);
     if (wcache == nullptr) {
@@ -95,9 +95,9 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
 
 BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader)
 {
-    ASSERT_RETURN(key != nullptr, BIO_INVALID_PARAM);
-    ASSERT_RETURN(slice != nullptr, BIO_INVALID_PARAM);
-    ASSERT_RETURN(sliceReader != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(sliceReader != nullptr, BIO_INVALID_PARAM);
 
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
 
@@ -140,9 +140,9 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
 BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter)
 {
-    ASSERT_RETURN(key != nullptr, BIO_INVALID_PARAM);
-    ASSERT_RETURN(slice != nullptr, BIO_INVALID_PARAM);
-    ASSERT_RETURN(sliceWriter != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(sliceWriter != nullptr, BIO_INVALID_PARAM);
 
     uint64_t ptId = slice->GetPtId();
 
@@ -185,7 +185,7 @@ BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheOb
 
 BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 {
-    ASSERT_RETURN(key != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
 
     BIO_TRACE_START(WCACHE_TRACE_DEL);
 
@@ -233,7 +233,7 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
 
     // write slice to dest slice.
     auto ret = sliceWriter(newSlice, destSlice.Get());
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     return BIO_OK;
 }

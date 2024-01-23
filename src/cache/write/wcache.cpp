@@ -17,9 +17,9 @@ BResult WCache::Init(uint64_t flowId, const ExecutorServicePtr &exeService, Evic
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
-        ASSERT_RETURN(cacheTier != nullptr, BIO_ALLOC_FAIL);
+        ChkTrueNot(cacheTier != nullptr, BIO_ALLOC_FAIL);
         auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), flowId);
-        ASSERT_RETURN(ret == BIO_OK, ret);
+        ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << flowId);
         mCacheTiers[i] = cacheTier;
     }
 
@@ -44,7 +44,7 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     // put it memory tier cache.
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     destSliceRef = memCache->Write(key, srcSlice, sliceReader);
-    ASSERT_RETURN(destSliceRef != nullptr, BIO_INNER_ERR);
+    ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
     // write back or write through?
     // TODO: make it configurable.
@@ -52,7 +52,7 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
         // write back.
         // and evict slice from memory to disk asap.
         auto success = mExeService->Execute([&, destSliceRef]() { EvictFromMemToDisk(destSliceRef); });
-        ASSERT_RETURN(success, BIO_INNER_ERR);
+        ChkTrueNot(success, BIO_INNER_ERR);
     } else {
         // write through
         EvictFromMemToDisk(destSliceRef);
@@ -73,18 +73,20 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     WFlowMetaDataSlice memMetaDataSlice;
     auto ret = memCache->GetMetaDataSlice(indexInFlow, offset, length, memMetaDataSlice);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to get meta data slice in WCACHE_MEMORY, indexInFlow:" << indexInFlow << " offset:"
+        << offset << " length:" << length);
 
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     WFlowMetaDataSlice diskMetaDataSlice;
     ret = diskCache->GetMetaDataSlice(indexInFlow, offset, length, diskMetaDataSlice);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     ret = mSliceOperator.Copy(memMetaDataSlice.dataSlice.Get(), diskMetaDataSlice.dataSlice.Get());
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     ret = mSliceOperator.Copy(memMetaDataSlice.metaSlice.Get(), diskMetaDataSlice.metaSlice.Get());
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     LOG_INFO("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
         offset << ", length:" << length << ".");
@@ -97,7 +99,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
         auto ret = memCache->Evict(oldSlice);
         DecreaseRef();
-        ASSERT_RET_VOID(ret == BIO_OK);
+        ChkTrueExNot(ret == BIO_OK);
     };
 
     sliceRef->SetSlice(diskMetaDataSlice.dataSlice, callback);
@@ -111,21 +113,23 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
     auto slice = sliceRef->GetSlice();
     WCacheSlicePtr metaSlice = nullptr;
     auto ret = diskCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to to evict from dist to underfs, flowId:" << slice->GetFlowId() << ", index:"
+        << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
 
     BIO_TRACE_START(WCACHE_TRACE_EVICT2UNDERFS);
 
     LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
 
     auto sliceMeta = std::make_shared<WFlowSliceMeta>();
-    ASSERT_RETURN(sliceMeta != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(sliceMeta != nullptr, BIO_ALLOC_FAIL);
     ret = mSliceOperator.Copy(metaSlice.Get(), (char *)sliceMeta.get());
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     auto &key = sliceMeta->key;
-    ASSERT_RETURN(sliceMeta->length == slice->GetLength(), BIO_INNER_ERR);
+    ChkTrueNot(sliceMeta->length == slice->GetLength(), BIO_INNER_ERR);
     auto *value = new char[sliceMeta->length];
-    ASSERT_RETURN(value != nullptr, BIO_ALLOC_FAIL);
+    ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
     ret = mSliceOperator.Copy(slice.Get(), value);
     if (ret != BIO_OK) {
@@ -137,7 +141,7 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
     if (slice->GetSliceState() == 0) {
         ret = mUnderFs->Put(key, value, sliceMeta->length);
         delete[] value;
-        ASSERT_RETURN(ret == BIO_OK, ret);
+        ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
 
         LOG_INFO("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
 
@@ -146,9 +150,9 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
         WCacheSlicePtr writeSlice = nullptr;
         rCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
         ret = mSliceOperator.Copy(slice.Get(), writeSlice.Get());
-        ASSERT_RETURN(ret == BIO_OK, ret);
+        ChkTrueNot(ret == BIO_OK, ret);
         ret = rCacheManager->Put(ptId, key, writeSlice);
-        ASSERT_RETURN(ret == BIO_OK, ret);
+        ChkTrue(ret == BIO_OK, ret, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key);
     }
 
     // when update slice finished, then release resource of flow.
@@ -178,7 +182,7 @@ BResult WCache::EvictAllMemSliceToDisk()
     auto evictSliceQueue = mCacheTiers[WCACHE_MEMORY]->GetEvictSliceQueue();
     for (auto &sliceRef : evictSliceQueue) {
         auto ret = EvictFromMemToDisk(sliceRef);
-        ASSERT(ret == BIO_OK);
+        ChkNot(ret == BIO_OK);
     }
     return BIO_OK;
 }
@@ -188,7 +192,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs(const RCacheManagerPtr &rCacheManager
     auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();
     for (auto &sliceRef : evictSliceQueue) {
         auto ret = EvictFromDiskToUnderFs(rCacheManager, sliceRef);
-        ASSERT(ret == BIO_OK);
+        ChkNot(ret == BIO_OK);
     }
     return BIO_OK;
 }

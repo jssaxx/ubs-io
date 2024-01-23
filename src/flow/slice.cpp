@@ -95,7 +95,7 @@ uint32_t Slice::GetSerializeLen()
 BResult Slice::Serialize(char *data, uint32_t &length)
 {
     uint32_t pos = 0;
-    ASSERT_RETURN(data != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
     memcpy_s(data + pos, sizeof(mFlowType), &mFlowType, sizeof(mFlowType));
     pos += sizeof(mFlowType);
     memcpy_s(data + pos, sizeof(mLength), &mLength, sizeof(mLength));
@@ -114,20 +114,24 @@ BResult Slice::Serialize(char *data, uint32_t &length)
 BResult Slice::Deserialize(char *data, uint32_t length)
 {
     uint32_t pos = 0;
-    ASSERT_RETURN(data != nullptr, BIO_INVALID_PARAM);
-    ASSERT_RETURN(length >= pos + sizeof(mFlowType), BIO_INVALID_PARAM);
+    ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(length >= pos + sizeof(mFlowType), BIO_INVALID_PARAM,
+        "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mFlowType));
     memcpy_s(&mFlowType, sizeof(mFlowType), data + pos, sizeof(mFlowType));
     pos += sizeof(mFlowType);
-    ASSERT_RETURN(length >= pos + sizeof(mLength), BIO_INVALID_PARAM);
+    ChkTrue(length >= pos + sizeof(mLength), BIO_INVALID_PARAM,
+        "Failed to deserialize data, length:" << length << "  pos + sizeof(mLength):" << pos + sizeof(mLength));
     memcpy_s(&mLength, sizeof(mLength), data + pos, sizeof(mLength));
     pos += sizeof(mLength);
     size_t vsize = mAddrs.size();
-    ASSERT_RETURN(length >= pos + sizeof(vsize), BIO_INVALID_PARAM);
+    ChkTrue(length >= pos + sizeof(vsize), BIO_INVALID_PARAM,
+        "Failed to deserialize data, length:" << length << "  pos + sizeof(vsize):" << pos + sizeof(vsize));
     memcpy_s(&vsize, sizeof(vsize), data + pos, sizeof(vsize));
     pos += sizeof(vsize);
     for (size_t i = 0; i < vsize; i++) {
         FlowAddr flowAddr;
-        ASSERT_RETURN(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM);
+        ChkTrue(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM,
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(FlowAddr):" << pos + sizeof(FlowAddr));
         memcpy_s(&flowAddr, sizeof(FlowAddr), data + pos, sizeof(FlowAddr));
         mAddrs.push_back(flowAddr);
         pos += sizeof(FlowAddr);

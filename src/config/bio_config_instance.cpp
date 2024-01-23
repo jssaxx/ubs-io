@@ -58,16 +58,16 @@ void BioConfig::LoadDefaultConf()
 BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
 {
     auto ret = AutoConfigNet(conf);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     ret = AutoConfigDaemon(conf);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     ret = AutoConfigCm(conf);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     ret = AutoConfigClient(conf);
-    ASSERT_RETURN(ret == BIO_OK, ret);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     return ret;
 }

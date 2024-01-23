@@ -60,7 +60,9 @@ BResult RpcChannelMgr::AddChannel(uint32_t peerVNodeId, ChannelPtr &ch, bool for
         !__sync_bool_compare_and_swap(&mChannelBits[peerVNodeId], BIO_N_BIT_EMPTY, BIO_N_BIT_ESTABLISHED)) {
         LOG_ERROR("Failed to add channel into channel manager '" << mName << "' as channel with peerVNodeId " <<
             peerVNodeId << " already exists");
-        ASSERT(mChannels[peerVNodeId].Get() != nullptr);
+        if (mChannels[peerVNodeId].Get() == nullptr) {
+            LOG_ERROR("Check Failed: mChannels[peerVNodeId].Get() != nullptr");
+        }
         return BIO_ALREADY_EXISTS;
     }
 
@@ -89,7 +91,7 @@ BResult RpcChannelMgr::RemoveChannel(uint32_t peerVNodeId, ChannelPtr &ch)
     }
 
     if (__sync_bool_compare_and_swap(&mChannelBits[peerVNodeId], BIO_N_BIT_ESTABLISHED, BIO_N_BIT_EMPTY)) {
-        ASSERT(mChannels[peerVNodeId].Get() != nullptr);
+        ChkNot(mChannels[peerVNodeId].Get() != nullptr);
         ch = mChannels[peerVNodeId];
         mChannels[peerVNodeId] = nullptr;
         LOG_INFO("Remove channel with peerVNodeId " << peerVNodeId << " into channel manager '" << mName << "'"
