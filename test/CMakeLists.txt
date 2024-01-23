@@ -33,7 +33,7 @@ endif()
 
 set(MOCKCPP_LIB ${PROJECT_3RDPARTY_BIN_DIR}/mockcpp/lib/libmockcpp.a)
 
-target_link_libraries(bio_test bio_cache bio_common bio_flow bio_bdm bio_conf bio_underfs
+target_link_libraries(bio_test bio_cache bio_common bio_flow bio_bdm bio_conf bio_underfs htracer
         -Wl,--start-group
         pthread dl rt ${GTEST_LIB_DIR}/libgtest.a ${GTEST_LIB_DIR}/libgtest_main.a aio
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/lib/libsecurec.a ${MOCKCPP_LIB}

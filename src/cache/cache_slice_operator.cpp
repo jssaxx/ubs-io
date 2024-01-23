@@ -4,6 +4,7 @@
 
 #include "cache_slice_operator.h"
 #include "bdm_core.h"
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {
@@ -52,8 +53,10 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
         auto &toAddrs = to->GetAddrs();
         uint64_t offset = 0;
         for (auto toAddr : toAddrs) {
+            BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
             auto ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
+            BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
             ASSERT_RETURN(ret == BIO_OK, ret);
             offset += toAddr.chunkLen;
         }
@@ -81,8 +84,10 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         uint64_t offset = 0;
         for (auto fromAddr : fromAddrs) {
             LOG_INFO("copy:" << ", from off:" << fromAddr.chunkOffset << ", to off:" << offset);
+            BIO_TRACE_START(BDM_TRACE_READ_SYNC);
             auto ret =
                 BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset), fromAddr.chunkLen);
+            BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
             ASSERT_RETURN(ret == BIO_OK, ret);
             offset += fromAddr.chunkLen;
         }
@@ -127,8 +132,10 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
     uint64_t len;
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
+        BIO_TRACE_START(BDM_TRACE_READ_SYNC);
         auto ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
             reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
+        BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
         ASSERT_RETURN(ret == BIO_OK, ret);
         fromOffset += len;
         if (fromOffset == fromIt->chunkLen) {
@@ -158,8 +165,10 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
     uint64_t len;
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
+        BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
         auto ret = BdmWrite(toIt->chunkId, toIt->chunkOffset + toOffset,
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
+        BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
         ASSERT_RETURN(ret == BIO_OK, ret);
         LOG_INFO("pre:" << "from chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" << toOffset << ", len:" << len);
         fromOffset += len;

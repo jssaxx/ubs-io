@@ -3,6 +3,7 @@
  */
 #include "underfs.h"
 #include "bio_log.h"
+#include "bio_trace.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -78,7 +79,9 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
     int ret;
 
     ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    BIO_TRACE_START(UFS_TRACE_PUT);
     ret = rados_write(mIoCtx, key, value, len, 0);
+    BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to write object, ret:" << ret);
         return BIO_ERR;
@@ -91,7 +94,9 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     int ret;
 
     ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    BIO_TRACE_START(UFS_TRACE_GET);
     ret = rados_read(mIoCtx, key, value, len, off);
+    BIO_TRACE_END(UFS_TRACE_GET, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to read object, ret:" << ret);
         return BIO_ERR;
@@ -104,7 +109,9 @@ BResult UnderFs::Delete(const char *key)
     int ret;
 
     ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    BIO_TRACE_START(UFS_TRACE_DEL);
     ret = rados_remove(mIoCtx, key);
+    BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to remove object, ret:" << ret);
         return BIO_ERR;
@@ -117,7 +124,9 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
     int ret;
 
     ASSERT_RETURN(mIoCtx != nullptr, BIO_NOT_READY);
+    BIO_TRACE_START(UFS_TRACE_STAT);
     ret = rados_stat(mIoCtx, key, &stat.size, &stat.mTime);
+    BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to stat object, ret:" << ret);
         return BIO_ERR;
@@ -167,6 +176,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
     LOG_INFO("Put key:" << key);
 
+    BIO_TRACE_START(UFS_TRACE_PUT);
     fstream file;
     file.open(keyPath.c_str(), ios::in);
     if (file.is_open()) {
@@ -183,6 +193,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
     file.write(value, len);
     file.close();
+    BIO_TRACE_END(UFS_TRACE_PUT, 0);
     return BIO_OK;
 }
 
@@ -195,6 +206,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
     LOG_INFO("Get key:" << key);
 
+    BIO_TRACE_START(UFS_TRACE_GET);
     fstream file;
     file.open(keyPath.c_str(), ios::in);
     if (!file.is_open()) {
@@ -205,6 +217,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     file.seekg(off, ios::beg);
     file.read(value, len);
     file.close();
+    BIO_TRACE_END(UFS_TRACE_GET, 0);
     return BIO_OK;
 }
 
@@ -217,6 +230,7 @@ BResult UnderFs::Delete(const char *key)
 
     LOG_INFO("Del key:" << key);
 
+    BIO_TRACE_START(UFS_TRACE_DEL);
     ifstream infile(keyPath.c_str());
     if (!infile.good()) {
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
@@ -229,7 +243,7 @@ BResult UnderFs::Delete(const char *key)
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());
         return BIO_ERR;
     }
-
+    BIO_TRACE_END(UFS_TRACE_DEL, 0);
     return BIO_OK;
 }
 
@@ -240,6 +254,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &objStat)
 
     using namespace std;
 
+    BIO_TRACE_START(UFS_TRACE_STAT);
     struct stat file_stat;
     if (stat(keyPath.c_str(), &file_stat) != 0) {
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
@@ -248,7 +263,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &objStat)
 
     objStat.size = file_stat.st_size;
     objStat.mTime = file_stat.st_ctime;
-
+    BIO_TRACE_END(UFS_TRACE_STAT, 0);
     return BIO_OK;
 }
 #endif

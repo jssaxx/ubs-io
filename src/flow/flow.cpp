@@ -4,6 +4,7 @@
 #include "flow.h"
 #include "flow_manager.h"
 #include "bio_types.h"
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {
@@ -30,6 +31,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
         }
     }
 
+    BIO_TRACE_START(FLOW_TRACE_GETADDR);
     mLock.LockRead();
     uint64_t remainLen = len;
     uint64_t curOffset = offset - (mTruncateOffset / mChunkSize * mChunkSize);
@@ -43,6 +45,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
         remainLen -= curLen;
     }
     mLock.UnLock();
+    BIO_TRACE_END(FLOW_TRACE_GETADDR, 0);
 
     PreLoadSchedule();
     return BIO_OK;
@@ -64,6 +67,8 @@ BResult Flow::TruncateOffset(uint64_t offset)
         mLock.UnLock();
         return BIO_OK;
     }
+
+    BIO_TRACE_START(FLOW_TRACE_TRUNCATE);
     uint64_t startOffset = mTruncateOffset / mChunkSize * mChunkSize;
     while (startOffset + mChunkSize <= offset && mChunkList.size() != 0) {
         cleanList.push_back(mChunkList[0]);
@@ -77,11 +82,14 @@ BResult Flow::TruncateOffset(uint64_t offset)
         uint64_t chunkId = cleanList[i];
         FlowManager::MediaFree(mType, mMediaId, mChunkSize, chunkId);
     }
+    BIO_TRACE_END(FLOW_TRACE_TRUNCATE, 0);
     return BIO_OK;
 }
 
 BResult Flow::Seal()
 {
+    BIO_TRACE_START(FLOW_TRACE_SEAL);
+    BIO_TRACE_END(FLOW_TRACE_SEAL, 0);
     return BIO_OK;
 }
 
@@ -165,6 +173,7 @@ BResult Flow::HoldWait(uint64_t needOffset)
 {
     IoHoldCtx ioHoldCtx;
 
+    BIO_TRACE_START(FLOW_TRACE_HOLDWAIT);
     sem_init(&ioHoldCtx.sem, 0, 0);
     ioHoldCtx.needOffset = needOffset;
 
@@ -174,6 +183,7 @@ BResult Flow::HoldWait(uint64_t needOffset)
     }
     if (mPreLoadOffset > needOffset) {
         mLock.UnLock();
+        BIO_TRACE_END(FLOW_TRACE_HOLDWAIT, 0);
         return BIO_OK;
     }
     mHoldList.push_back(&ioHoldCtx);
@@ -183,6 +193,7 @@ BResult Flow::HoldWait(uint64_t needOffset)
 
     sem_wait(&ioHoldCtx.sem);
     sem_destroy(&ioHoldCtx.sem);
+    BIO_TRACE_END(FLOW_TRACE_HOLDWAIT, 0);
 
     return ioHoldCtx.ret;
 }
