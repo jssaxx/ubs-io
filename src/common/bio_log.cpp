@@ -11,6 +11,7 @@ namespace ock {
 namespace bio {
 Logger *Logger::gInstance = nullptr;
 std::mutex Logger::gMutex;
+bool Logger::gInited = false;
 
 constexpr int MIN_LOG_LEVEL_MAX = 5;
 constexpr int SIZE_MB_SHIFT = 20;
@@ -135,6 +136,9 @@ int32_t Logger::ChangeLogLevel(int32_t newLogLevel)
 int32_t Logger::Init()
 {
     std::lock_guard<std::mutex> guard(gMutex);
+    if (gInited) {
+        return 0;
+    }
     try {
         std::string logName = std::string("ns:0").append(";log:normal");
         mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path, mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT,
@@ -154,7 +158,7 @@ int32_t Logger::Init()
         BIO_LOG_STD_ERR("Failed to create log: " << ex.what());
         return -1L;
     }
-
+    gInited = true;
     return 0;
 }
 
