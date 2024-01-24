@@ -17,7 +17,7 @@
 	path = 3rdparty/zookeeper/zookeeper
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/zookeeper.git
 	tag = 3.8.1-h1
-[submodule "test/3rdparty/mockcpp"]
-	path = test/3rdparty/mockcpp
+[submodule "test/llt/3rdparty/mockcpp"]
+	path = test/llt/3rdparty/mockcpp
 	url = https://codehub-dg-y.huawei.com/OpenSourceCenter/sinojelly/mockcpp.git
 	tag = v2.7
