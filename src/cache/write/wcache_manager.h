@@ -44,7 +44,9 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    BResult Flush(uint64_t ptId);
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 private:
     WCachePtr GetWCache(uint64_t flowId);
     BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice, const SliceWriter &sliceWriter);
@@ -65,7 +67,7 @@ private:
     uint64_t mMemCapacityThreshold{ 10 * 1024 };         // 10GB, uint is MB
     uint64_t mDiskCapacityThreshold{ 4 * 1024 * 1024L }; // 4TB, unit is MB
 
-    DEFINE_REF_COUNT_VARIABLE
+    DEFINE_REF_COUNT_VARIABLE;
 };
 using WCacheManagerPtr = Ref<WCacheManager>;
 }
