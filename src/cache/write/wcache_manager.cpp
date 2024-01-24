@@ -211,6 +211,39 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     return BIO_OK;
 }
 
+BResult WCacheManager::Flush(uint64_t ptId)
+{
+    std::list<WCachePtr> evictFlows;
+    std::atomic<uint64_t> evictNum { 0 };
+    BResult evictRet = BIO_OK;
+    while (evictNum != 0) {
+        {
+            WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+            for (const auto &flowIt : mWCacheManager) {
+                if (ptId != NO_MAX_VALUE64 && flowIt.first != ptId) {
+                    continue;
+                }
+                evictFlows.emplace_back(flowIt.second);
+                evictNum++;
+            }
+        }
+
+        for (const auto &flow : evictFlows) {
+            mExeService->Execute([&]() {
+                auto ret = flow->EvictAllDiskSliceToUnderFs(mRCacheManager);
+                if (ret != BIO_OK) {
+                    LOG_ERROR("Evict fail, ret:" << ret);
+                    evictRet = ret;
+                }
+                evictNum--;
+            });
+        }
+        evictFlows.clear();
+        sleep(1);
+    }
+    return evictRet;
+}
+
 WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 {
     ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);

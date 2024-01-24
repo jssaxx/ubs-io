@@ -132,6 +132,7 @@ private:
 
 private:
     static std::mutex gMutex;
+    static bool gInited;
 };
 }
 }

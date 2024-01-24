@@ -13,6 +13,7 @@
 #define DENCODE_CHUNK_ID(chunkId) ((chunkId) & 0xFFFFFFFFFFFF)
 
 uint32_t g_bdmInit = 0UL;
+uint32_t g_bdmStart = 0UL;
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t len, uint64_t *chunkId)
 {
@@ -299,6 +300,11 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize)
 {
     int32_t ret;
 
+    if (g_bdmStart == 1UL) {
+        BDM_LOGINFO(0, "Bdm already start succeed.");
+        return RETURN_OK;
+    }
+
     uint32_t diskId;
     for (diskId = 0; diskId < diskList->num; diskId++) {
         ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, capacity, chunkSize);
@@ -307,6 +313,7 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize)
             return ret;
         }
     }
+    g_bdmStart = 1UL;
     BDM_LOGINFO(0, "Bdm start succeed.");
     return BDM_CODE_OK;
 }
