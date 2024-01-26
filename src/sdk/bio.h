@@ -55,7 +55,7 @@ public:
         uint64_t location[2];
     };
 
-    using LoadCallback = std::function<void(void *context, const ObjLocation &location, CResult result)>;
+    using LoadCallback = std::function<void(void *context, CResult result)>;
 
     /* *
      * @brief: Calculate location information
@@ -88,6 +88,17 @@ public:
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
     CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value);
+
+    /* *
+     * @brief: Get value
+     *
+     * @param[in]: key: object key
+     * @param[in]: location : location info
+     * @param[out]: value : object value
+     * @param[out]: length : max length of the get value
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult Get(const char *key, const ObjLocation &location, char *value, uint64_t &length);
 
     /* *
      * @brief: Delete key

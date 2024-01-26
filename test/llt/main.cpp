@@ -29,11 +29,11 @@ int main(int argc, char *argv[])
     EXPECT_EQ(ret, BIO_OK);
 
     ::testing::InitGoogleTest(&argc, argv);
-    RUN_ALL_TESTS();
+    int runRet = RUN_ALL_TESTS();
 
     (void)system("rm -rf conf");
 
     ock::htracer::HTracerExit();
     WCacheManager::Instance()->Exit();
-    return 0;
+    return runRet;
 }

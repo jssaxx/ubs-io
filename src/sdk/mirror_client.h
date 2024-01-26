@@ -59,7 +59,7 @@ public:
 
     BResult Put(MirrorPut &param);
 
-    BResult Get(MirrorGet &param);
+    BResult Get(MirrorGet &param, uint64_t &realLen);
 
     BResult DeleteKey(const char *key, const Bio::ObjLocation &location);
 
@@ -111,8 +111,8 @@ private:
     void PutLocal(PutRequest *req, uint32_t localIdx, RpcEngine::Callback &callback) const;
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index);
 
-    BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value);
-    BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value);
+    BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
+    BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
 
     void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, RpcEngine::Callback &callback);
     void DeleteLocal(DeleteRequest &req, RpcEngine::Callback &callback) const;

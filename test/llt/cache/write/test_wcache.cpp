@@ -35,7 +35,7 @@ void TestWCache::TearDown()
 }
 
 constexpr uint64_t g_ptId = 1;
-constexpr char *g_key = "123123123";
+constexpr Key g_key = const_cast<char *>("123123123");
 
 static uint64_t g_cacheId = 0;
 static WCacheSlicePtr g_wcacheSlice;
@@ -122,7 +122,8 @@ TEST_F(TestWCache, test_get_case_return_ok) {
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(g_ptId, 1024, addrVec);
 
-    ret = g_wcacheManager->Get(g_key, 0, rcacheSlice, writer);
+    uint64_t realLen = 0;
+    ret = g_wcacheManager->Get(g_key, 0, rcacheSlice, writer, realLen);
     EXPECT_EQ(ret, BIO_OK);
 
     BioServer::Instance()->MemFree(mrInfo.address);
