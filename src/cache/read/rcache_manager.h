@@ -17,11 +17,19 @@
 
 namespace ock {
     namespace bio {
+        class RCacheManager;
+        using RCacheManagerPtr = Ref<RCacheManager>;
         class RCacheManager {
         public:
             RCacheManager();
 
             ~RCacheManager();
+
+            static RCacheManagerPtr &Instance()
+            {
+                static auto instance = MakeRef<RCacheManager>();
+                return instance;
+            }
 
             BResult Init();
 
@@ -54,8 +62,6 @@ namespace ock {
             RCacheGCPtr rCacheGCPtr; // read cache gc service
             DEFINE_REF_COUNT_VARIABLE
         };
-
-        using RCacheManagerPtr = Ref<RCacheManager>;
     }
 }
 

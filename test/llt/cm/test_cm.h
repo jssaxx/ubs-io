@@ -2,12 +2,12 @@
 // Created by root on 12/11/23.
 //
 
-#ifndef BOOSTIO_TEST_WCACHE_H
-#define BOOSTIO_TEST_WCACHE_H
+#ifndef BOOSTIO_TEST_CM_H
+#define BOOSTIO_TEST_CM_H
 
 #include "gtest/gtest.h"
 
-class TestWCache : public testing::Test{
+class TestCm : public testing::Test{
     void SetUp() override;
 
     void TearDown() override;
@@ -17,4 +17,4 @@ private:
     static bool g_setup;
 };
 
-#endif //BOOSTIO_TEST_WCACHE_H
+#endif //BOOSTIO_TEST_CM_H
