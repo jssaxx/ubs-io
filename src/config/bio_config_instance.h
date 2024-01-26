@@ -146,6 +146,7 @@ private:
     CmConfig mCmConfig;
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
+    bool mInited { false };
 };
 }
 }

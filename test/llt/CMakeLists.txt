@@ -1,9 +1,10 @@
 aux_source_directory(cache/read BIO_TEST)
 aux_source_directory(cache/write BIO_TEST)
 aux_source_directory(net/rpc BIO_TEST)
-add_executable(bio_test ${BIO_TEST})
+aux_source_directory(cm BIO_TEST)
+add_executable(bio_test ${BIO_TEST} main.cpp)
 
-set(TEST_DIR ${PROJECT_SOURCE_DIR}/test)
+set(TEST_DIR ${PROJECT_SOURCE_DIR}/test/llt)
 
 target_include_directories(bio_test PUBLIC
         ${SRC_DIR}/common
@@ -16,12 +17,15 @@ target_include_directories(bio_test PUBLIC
         ${SRC_DIR}/disk
         ${SRC_DIR}/htracer
         ${SRC_DIR}/net
+		${SRC_DIR}/net/rpc
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
         ${PROJECT_3RDPARTY_BIN_DIR}/mockcpp/include
         ${TEST_DIR}/mock
+		${TEST_DIR}/cm
+		${TEST_DIR}/net/rpc
         )
 
 if(EXISTS "${PROJECT_3RDPARTY_BIN_DIR}/gtest/lib64")
@@ -40,7 +44,3 @@ target_link_libraries(bio_test bio_server
 
 include_directories(${PROJECT_3RDPARTY_BIN_DIR}/gtest/include)
 include(GoogleTest)
-
-
-gtest_discover_tests(bio_test)
-

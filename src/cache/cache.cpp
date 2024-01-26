@@ -9,12 +9,12 @@ namespace ock {
 namespace bio {
 BResult Cache::Init()
 {
-    mRCacheManager = MakeRef<RCacheManager>();
+    mRCacheManager = RCacheManager::Instance();
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
     auto ret = mRCacheManager->Init();
     ChkTrueNot(ret == BIO_OK, ret);
 
-    mWCacheManager = MakeRef<WCacheManager>();
+    mWCacheManager = WCacheManager::Instance();
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
     ret = mWCacheManager->Init(mRCacheManager);
     ChkTrueNot(ret == BIO_OK, ret);

@@ -2,85 +2,175 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
 
+#include <gtest/gtest.h>
+#include <mockcpp/mokc.h>
+#include <mockcpp/mockcpp.hpp>
+#include <cstdint>
+#include "bio_server.h"
+#include "bio_mock.h"
+#include "bio_config_instance.h"
+#include "cache_slice_operator.h"
+#include "wcache_manager.h"
 #include "test_wcache.h"
-/*
-TEST_F(WCacheTest, allocateFlowId) {
-    uint64_t flowIdTest = 0;
-    int ret = wCacheManager->AllocateFlowId(100, flowIdTest);
-    EXPECT_EQ(ret, 0);
+
+using namespace ock::bio;
+
+static WCacheManagerPtr g_wcacheManager = WCacheManager::Instance();
+
+bool TestWCache::g_setup = false;
+
+void TestWCache::SetUp()
+{
+    if (g_setup) {
+        return;
+    }
+
+    g_setup = true;
+    return;
 }
 
-TEST_F(WCacheTest, createWCache) {
-    uint64_t flowIdTest = 0;
-    int ret = wCacheManager->AllocateFlowId(100, flowIdTest);
-    EXPECT_EQ(ret, 0);
-    ret = wCacheManager->CreateWCache(flowIdTest);
-    EXPECT_EQ(ret, 0);
+void TestWCache::TearDown()
+{
+    return;
 }
 
-TEST_F(WCacheTest, deleteWCache) {
-    int ret = wCacheManager->DeleteWCache(Pt);
-    EXPECT_EQ(ret, 0);
+constexpr uint64_t g_ptId = 1;
+constexpr char *g_key = "123123123";
+
+static uint64_t g_cacheId = 0;
+static WCacheSlicePtr g_wcacheSlice;
+auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    CacheSliceOperator sliceOperator;
+    auto ret = sliceOperator.Copy(from, to);
+    EXPECT_EQ(ret, BIO_OK);
+    return ret;
+};
+
+auto writer = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    CacheSliceOperator sliceOperator;
+    auto ret = sliceOperator.Copy(from, to);
+    EXPECT_EQ(ret, BIO_OK);
+    return ret;
+};
+
+BResult GetSlice(uint64_t g_cacheId, uint64_t flowOffset, uint64_t length) {
+    SliceKey sliceKey{g_cacheId, flowOffset, FLOW_MEMORY, length, 0};
+    return g_wcacheManager->GetWCacheSlice(sliceKey, g_wcacheSlice);
 }
 
-BResult GetSlice(uint64_t flowIdTest, uint64_t flowOffset, uint64_t length) {
-    SliceKey sliceKey{flowIdTest, flowOffset, FLOW_MEMORY, length};
-    std::vector<FlowAddr> newAddrsTest;
-    WCacheSlicePtr sliceTest = MakeRef<WCacheSlice>(0, 0, 0, 0, newAddrsTest);
-    return wCacheManager->GetWCacheSlice(sliceKey, sliceTest);
+TEST_F(TestWCache, test_cacheId_case_return_ok) {
+    auto ret = g_wcacheManager->AllocateFlowId(g_ptId, g_cacheId);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(WCacheTest, getWCacheSliceSuccess) {
-    int ret = GetSlice(flowId, 0, 1024);
-    EXPECT_EQ(ret, 0);
+TEST_F(TestWCache, test_createcache_case_return_ok) {
+    auto ret = g_wcacheManager->CreateWCache(g_cacheId);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(WCacheTest, getWCacheSliceFlowIdInValide) {
-    int ret = GetSlice(NO_MAX_VALUE64, 0, 1024);
-    EXPECT_EQ(ret, 3);
+TEST_F(TestWCache, test_deletecache_case_return_ok) {
+    auto ret = g_wcacheManager->DeleteWCache(g_ptId);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(WCacheTest, getWCacheSliceFlowOffsetInValide) {
-    int ret = GetSlice(flowId, NO_MAX_VALUE64, 1024);
-    EXPECT_EQ(ret, 3);
+TEST_F(TestWCache, test_getslice_case_return_ok) {
+    auto ret = GetSlice(g_cacheId, 0, 1024);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(WCacheTest, getWCacheSliceLengthInValide) {
-    int ret = GetSlice(flowId, 0, NO_MAX_VALUE64);
-    EXPECT_EQ(ret, 3);
+TEST_F(TestWCache, test_getslice_invalidcacheid_case_return_fail) {
+    auto ret = GetSlice(NO_MAX_VALUE64, 0, 1024);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
-TEST_F(WCacheTest, getWCacheSliceFlowIdUnExist) {
-    int ret = GetSlice(30, 0, 1024);
-    EXPECT_EQ(ret, 7);
+TEST_F(TestWCache, test_getslice_invalidoffset_case_return_fail) {
+    auto ret = GetSlice(g_cacheId, NO_MAX_VALUE64, 1024);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
-BResult Put(uint64_t flowIdTest) {
-    WCacheSlicePtr sliceTest = MakeRef<WCacheSlice>(flowIdTest, 0, 0, 1024, newAddrs);
-
-    return wCacheManager->Put(key, sliceTest, reader);
+TEST_F(TestWCache, test_getslice_invalidlength_case_return_fail) {
+    auto ret = GetSlice(g_cacheId, 0, NO_MAX_VALUE64);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
-TEST_F(WCacheTest, putSuccess) {
-    EXPECT_EQ(Put(flowId), 0);
+TEST_F(TestWCache, test_getslice_noexistcacheid_case_return_fail) {
+    auto ret = GetSlice(30, 0, 1024);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
-TEST_F(WCacheTest, putFailFlowIdUnExist) {
-    EXPECT_EQ(Put(30), 7);
+TEST_F(TestWCache, test_put_case_return_ok) {
+    BioMrInfo bioMrInfo;
+    auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
+    EXPECT_EQ(ret, BIO_OK);
+
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 0, 0, 1024, addrVec);
+
+    ret = g_wcacheManager->Put(g_key, wcacheSlice, reader);
+    EXPECT_EQ(ret, BIO_OK);
+
+    BioServer::Instance()->MemFree(mrInfo.address);
 }
 
-TEST_F(WCacheTest, putFailKeyNull) {
-    int ret = wCacheManager->Put(nullptr, slice, reader);
-    EXPECT_EQ(ret, 3);
+TEST_F(TestWCache, test_get_case_return_ok) {
+    BioMrInfo bioMrInfo;
+    auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
+    EXPECT_EQ(ret, BIO_OK);
+
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+    RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(g_ptId, 1024, addrVec);
+
+    ret = g_wcacheManager->Get(g_key, 0, rcacheSlice, writer);
+    EXPECT_EQ(ret, BIO_OK);
+
+    BioServer::Instance()->MemFree(mrInfo.address);
 }
 
-TEST_F(WCacheTest, putFailSliceNull) {
-    int ret = wCacheManager->Put(key, nullptr, reader);
-    EXPECT_EQ(ret, 3);
+TEST_F(TestWCache, test_stat_case_return_ok) {
+    CacheObjStat objState;
+    auto ret = g_wcacheManager->Stat(g_ptId, g_key, objState);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(WCacheTest, putFailReaderNull) {
-    int ret = wCacheManager->Put(key, slice, nullptr);
-    EXPECT_EQ(ret, 3);
+TEST_F(TestWCache, test_delete_case_return_ok) {
+    auto ret = g_wcacheManager->Delete(g_ptId, g_key);
+    EXPECT_EQ(ret, BIO_OK);
 }
-*/
+
+TEST_F(TestWCache, test_put_repeat_case_return_ok) {
+    BioMrInfo bioMrInfo;
+    auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
+    EXPECT_EQ(ret, BIO_OK);
+
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 1024, 1, 1024, addrVec);
+
+    ret = g_wcacheManager->Put(g_key, wcacheSlice, reader);
+    EXPECT_EQ(ret, BIO_OK);
+
+    BioServer::Instance()->MemFree(mrInfo.address);
+}
+
+TEST_F(TestWCache, test_evict_case_return_ok) {
+    auto ret = g_wcacheManager->Flush(g_ptId);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_put_nullkey_case_return_fail) {
+    auto ret = g_wcacheManager->Put(nullptr, g_wcacheSlice, reader);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+}
+
+TEST_F(TestWCache, test_put_nullslice_case_return_fail) {
+    auto ret = g_wcacheManager->Put(g_key, nullptr, reader);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+}
+
+TEST_F(TestWCache, test_put_nullreader_case_return_fail) {
+    auto ret = g_wcacheManager->Put(g_key, g_wcacheSlice, nullptr);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+}
+

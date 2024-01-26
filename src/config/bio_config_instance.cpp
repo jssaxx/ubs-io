@@ -180,6 +180,10 @@ BResult BioConfig::Initialize(const std::string &homePath)
     std::string configurePath = homePath + "/conf/bio.conf";
     LOG_INFO("start to read config file : " << configurePath);
 
+    if (mInited) {
+        return BIO_OK;
+    }
+
     ConfigurationPtr conf = Configuration::GetInstance<BioConfig>();
     if (conf.Get() == nullptr) {
         LOG_INFO("create config object failed");
@@ -215,7 +219,7 @@ BResult BioConfig::Initialize(const std::string &homePath)
     /* validate security setting */
     /* do later */
     std::vector<std::string> moreErrors;
-
+    mInited = true;
     return BIO_OK;
 }
 
