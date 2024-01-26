@@ -60,9 +60,9 @@ public:
         return mMirror->Put(param);
     }
 
-    inline BResult Get(MirrorClient::MirrorGet &param)
+    inline BResult Get(MirrorClient::MirrorGet &param, uint64_t &length)
     {
-        return mMirror->Get(param);
+        return mMirror->Get(param, length);
     }
 
     inline BResult DeleteKey(const char *key, const Bio::ObjLocation &location)
