@@ -85,20 +85,11 @@ public:
      * @param[in]: length : length of the get value
      * @param[in]: location : location info
      * @param[out]: value : object value
+     * @param[out]: realLength : object value realLength
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value);
-
-    /* *
-     * @brief: Get value
-     *
-     * @param[in]: key: object key
-     * @param[in]: location : location info
-     * @param[out]: value : object value
-     * @param[out]: length : max length of the get value
-     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
-     */
-    CResult Get(const char *key, const ObjLocation &location, char *value, uint64_t &length);
+    CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+        char *value, uint64_t &realLength);
 
     /* *
      * @brief: Delete key
