@@ -233,18 +233,24 @@ BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPt
    return BIO_OK;
 }
 
-BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr, uint64_t offset, uint64_t len)
+BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr,
+    uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     RCacheValue value = chunk->GetValue();
     std::vector<FlowAddr> flowAdd;
 
-    if (offset + len > value.length) {
+    if (offset >= value.length) {
         LOG_ERROR("Flow offset:" << value.flowOffset << ", length:" << value.length <<
             ", input offset:" << offset << ", len:" << len);
         return BIO_INVALID_PARAM;
     }
 
-    BResult ret = flow[tier]->GetDataFlow()->GetAddrByOffset(value.flowOffset + offset, len, flowAdd);
+    realLen = value.length - offset;
+    if (realLen > len) {
+        realLen = len;
+    }
+
+    BResult ret = flow[tier]->GetDataFlow()->GetAddrByOffset(value.flowOffset + offset, realLen, flowAdd);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get tier" << tier << "offset" << value.flowOffset << "len" << value.length << "failed.");
         return ret;
@@ -252,7 +258,7 @@ BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &c
 
     uint64_t flowId = flow[tier]->GetDataFlow()->GetFlowId();
     FlowType flowType = GetFlowTypeByTierType(tier);
-    slicePtr = MakeRef<WCacheSlice>(flowId, value.flowOffset + offset, 0ULL, len, flowAdd, flowType);
+    slicePtr = MakeRef<WCacheSlice>(flowId, value.flowOffset + offset, 0ULL, realLen, flowAdd, flowType);
     if (UNLIKELY(slicePtr == nullptr)) {
         LOG_ERROR("Alloc slice ptr for read cache failed.");
         return BIO_ERR;
@@ -333,7 +339,8 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     return BIO_OK;
 }
 
-BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter)
+BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+    uint64_t &realLen)
 {
     uint32_t bucket = GetHashBucketByKey(key);
     WCacheSlicePtr newSlicePtr = nullptr;
@@ -351,7 +358,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     RCacheStatistic::Instance().IncHisCount();
 
     auto tier = chunk->GetTierType();
-    auto ret = GetSliceFromChunkIO(tier, chunk, newSlicePtr, offset, slice->GetLength());
+    auto ret = GetSliceFromChunkIO(tier, chunk, newSlicePtr, offset, slice->GetLength(), realLen);
     if (UNLIKELY(ret != BIO_OK) || UNLIKELY(newSlicePtr == nullptr)) {
         LOG_ERROR("Alloc slice for read cache key " << key << "failed.");
         return BIO_ALLOC_FAIL;
@@ -371,7 +378,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     return BIO_OK;
 }
 
-BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len)
+BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     UnderFsPtr underFsPtr = UnderFs::Instance();
     WCacheSlicePtr toSlicePtr = nullptr;
@@ -379,9 +386,28 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len)
     RCacheChunkPtr chunk = nullptr;
     uint64_t flowOffset;
     uint64_t indexInFlow;
-    flow[READ_CACHE_TIER_MEM]->AllocOffset(len, flowOffset, indexInFlow);
-    RCacheValue chunkValue(indexInFlow, flowOffset, len);
-    auto ret = AllocChunk(key, chunkValue, chunk);
+
+    UnderFs::ObjStat stat;
+    auto ret = underFsPtr->Stat(key, stat);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
+        return ret;
+    }
+    uint64_t totalLen = stat.size;
+
+    if (offset >= totalLen) {
+        LOG_ERROR("Input offset:" << offset << ", len:" << len << ", realLen:" << totalLen);
+        return BIO_INVALID_PARAM;
+    }
+
+    realLen = totalLen - offset;
+    if (realLen > len) {
+        realLen = len;
+    }
+
+    flow[READ_CACHE_TIER_MEM]->AllocOffset(realLen, flowOffset, indexInFlow);
+    RCacheValue chunkValue(indexInFlow, flowOffset, realLen);
+    ret = AllocChunk(key, chunkValue, chunk);
     if (UNLIKELY(ret != BIO_OK) || UNLIKELY(chunk == nullptr)) {
         LOG_ERROR("Alloc chunk for read cache key " << key << "failed.");
         return BIO_ALLOC_FAIL;
@@ -393,13 +419,13 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len)
         return BIO_ALLOC_FAIL;
     }
 
-    char *value = new(std::nothrow) char[len];
+    char *value = new(std::nothrow) char[realLen];
     if (UNLIKELY(value == nullptr)) {
         LOG_ERROR("Alloc memory for key " << key << "failed.");
         return BIO_ALLOC_FAIL;
     }
 
-    ret = underFsPtr->Get(key, value, len, offset); // 先调用桩接口
+    ret = underFsPtr->Get(key, value, realLen, offset); // 先调用桩接口
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read data from under fs key " << key << "failed.");
         delete [] value;

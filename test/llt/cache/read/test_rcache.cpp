@@ -15,7 +15,7 @@
 using namespace ock::bio;
 
 constexpr static uint64_t s_PtId = 1;
-constexpr char *key = "123/123/123";
+constexpr Key key = const_cast<char *>("123/123/123");
 constexpr char *value = "test/read/cache/data";
 
 static RCacheManager rcacheManager;

@@ -157,7 +157,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
     return ret;
 }
 
-BResult MirrorServer::Get(GetRequest &req)
+BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
 {
     std::string key = req.Key();
     uint32_t dstNid = req.comm.srcNid;
@@ -241,7 +241,7 @@ BResult MirrorServer::Get(GetRequest &req)
         req.length << ", mr address:" << req.mr.address << ", mr size:" << req.mr.size << ", mr key:" << req.mr.key <<
         ", slice: " << sliceP->ToString() << ", rFlowSize:" << rFlowAddr.size() << ".");
     BIO_TRACE_START(MIRROR_TRACE_GET);
-    BResult ret = Cache::Instance().Get(const_cast<char*>(key.c_str()), req.offset, sliceP, writer);
+    BResult ret = Cache::Instance().Get(const_cast<char*>(key.c_str()), req.offset, sliceP, writer, realLen);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get from write cache failed, ret:" << ret << ", key:" << key << ".");
     }
@@ -285,7 +285,8 @@ BResult MirrorServer::Load(LoadRequest &req)
 
     LOG_INFO("Mirror server load, key:" << key << ", ptId:" << req.ptId << ".");
     BIO_TRACE_START(MIRROR_TRACE_LOAD);
-    BResult ret = Cache::Instance().Load(req.ptId, const_cast<char*>(key.c_str()), req.offset, req.length);
+    uint64_t realLen = 0;
+    BResult ret = Cache::Instance().Load(req.ptId, const_cast<char*>(key.c_str()), req.offset, req.length, realLen);
     BIO_TRACE_END(MIRROR_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Load key failed, ret:" << ret << ", key:" << key << ".");
@@ -388,9 +389,14 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
         return BIO_CHECK_PT_FAIL;
     }
 
-    BResult result = Get(*req);
+    uint64_t realLen;
+    BResult result = Get(*req, realLen);
+    if (result != BIO_OK) {
+        Reply(ctx, result, nullptr, 0);
+        return BIO_OK;
+    }
 
-    Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
+    Reply(ctx, BIO_OK, static_cast<void *>(&realLen), sizeof(realLen));
     BIO_TRACE_END(MIRROR_TRACE_GET_HDL, 0);
     return BIO_OK;
 }

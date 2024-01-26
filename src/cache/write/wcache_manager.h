@@ -46,7 +46,8 @@ public:
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader);
 
-    BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter);
+    BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+                uint64_t &realLen);
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
@@ -57,7 +58,8 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
     WCachePtr GetWCache(uint64_t flowId);
-    BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice, const SliceWriter &sliceWriter);
+    BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice, const SliceWriter &sliceWriter,
+                 uint64_t &realLen);
     void RunEvictThread();
 
 private:

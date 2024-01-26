@@ -39,7 +39,7 @@ public:
     BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t flowIndex, uint64_t length, WCacheSlicePtr &slice);
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP);
-    BResult Get(GetRequest &req);
+    BResult Get(GetRequest &req, uint64_t &realLen);
     BResult Delete(DeleteRequest &req);
     BResult Stat(StatRequest &req, Bio::ObjStat &objInfo);
     BResult Load(LoadRequest &req);
