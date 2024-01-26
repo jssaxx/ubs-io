@@ -34,7 +34,6 @@ static void usage()
         "\tdestroy cache: destroy [tenantId]\n"
         "\tput value to cache: put [key] [filePath] [length] [sliceId]\n"
         "\tget value from cache: get [key] [offset] [length] [location] [filePath]\n"
-        "\tgetv2 value from cache: get [key] [length] [location] [filePath]\n"
         "\tdelete key: delete [key] [location]\n"
         "\tshow view: show [pt/node/trace] [all/affinity]\n"
         "\tperf test: perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n"
@@ -146,38 +145,13 @@ static void HandleGet(std::vector<std::string> cmds)
     }
     char *value = new char[length];
     Bio::ObjLocation locationInfo{ location, 0 };
-    auto ret = gCurrentCache->Get(key, offset, length, locationInfo, value);
-    if (ret != RET_CACHE_OK) {
-        std::cout << "Failed to get a value. result:" << ret << std::endl;
-    } else {
-        std::cout << "Get value success, key:" << key << ", offset:" << offset << ", length:" << length << ", location:" << locationInfo.location[0] << std::endl;
-        if (fwrite(value, sizeof(char), length, fp) != length) {
-            std::cout << "Write value to file failed, errno:" << errno << std::endl;
-        }
-    }
-    delete[] value;
-    fclose(fp);
-}
-
-static void HandleGetV2(std::vector<std::string> cmds)
-{
-    auto key = cmds[1].c_str();
-    auto length = std::stoull(cmds[2]);
-    auto location = std::stoull(cmds[3]);
-    auto filePath = cmds[4].c_str();
-    FILE *fp = nullptr;
-    if ((fp = fopen(filePath, "w")) == nullptr) {
-        std::cout << "open file failed, file:" << filePath << std::endl;
-        return;
-    }
-    char *value = new char[length];
-    Bio::ObjLocation locationInfo{ location, 0 };
     uint64_t realLen = length;
-    auto ret = gCurrentCache->Get(key, locationInfo, value, realLen);
+    auto ret = gCurrentCache->Get(key, offset, length, locationInfo, value, realLen);
     if (ret != RET_CACHE_OK) {
         std::cout << "Failed to get a value. result:" << ret << std::endl;
     } else {
-        std::cout << "Get value success, key:" << key << ", length:" << realLen << ", location:" << locationInfo.location[0] << std::endl;
+        std::cout << "Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
+            ", realLen:" << realLen <<", location:" << locationInfo.location[0] << std::endl;
         if (fwrite(value, sizeof(char), realLen, fp) != realLen) {
             std::cout << "Write value to file failed, errno:" << errno << std::endl;
         }
@@ -299,7 +273,8 @@ static void *PerfTestGetImpl(void *param)
             getParam->result = BIO_ERR;
             break;
         }
-        auto ret = gCurrentCache->Get(key, 0, getParam->length, iter->second, value);
+        uint64_t realLen = 0;
+        auto ret = gCurrentCache->Get(key, 0, getParam->length, iter->second, value, realLen);
         if (ret != RET_CACHE_OK) {
             getParam->result = ret;
             break;
@@ -464,17 +439,6 @@ int32_t HandleCmd(const std::string &cmd)
             return 0;
         }
         HandleGet(cmds);
-        return 0;
-    } else if (cmdType == "getv2") {
-        if (gCurrentCache == nullptr) {
-            std::cout << "Create and open a cache first!" << std::endl;
-            return 0;
-        }
-        if (cmds.size() != 5) {
-            std::cout << "Input parameters failed!, num:" << cmds.size() << std::endl;
-            return 0;
-        }
-        HandleGetV2(cmds);
         return 0;
     } else if (cmdType == "delete") {
         if (gCurrentCache == nullptr) {
