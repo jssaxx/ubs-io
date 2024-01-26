@@ -125,7 +125,8 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     return ToCResult(ret);
 }
 
-CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value)
+CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+                 char *value, uint64_t &realLength)
 {
     if (UNLIKELY(!gClient->Ready())) {
         LOG_WARN("Boostio cache service not ready, please try again.");
@@ -142,45 +143,15 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
 
     BIO_TRACE_START(SDK_TRACE_GET);
     MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };
-    uint64_t realLen = 0;
-    BResult ret = gClient->Get(param, realLen);
-    BIO_TRACE_END(SDK_TRACE_GET, ret);
-    if (UNLIKELY(ret != BIO_OK || realLen != length)) {
-        ret = BIO_READ_EXCEED;
-        LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
-            length << ", realLen:" << realLen << ", location0:" << location.location[0] <<
-            ", location1:" << location.location[1] << ".");
-    } else {
-        LOG_INFO("Get value success, key:" << key << ", offset:" << offset << ", length:" << length << ", location0:" <<
-            location.location[0] << ", location1:" << location.location[1] << ".");
-    }
-    return ToCResult(ret);
-}
-
-CResult Bio::Get(const char *key, const ObjLocation &location, char *value, uint64_t &length)
-{
-    if (UNLIKELY(!gClient->Ready())) {
-        LOG_WARN("Boostio cache service not ready, please try again.");
-        return RET_CACHE_NOT_READY;
-    }
-
-    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || length > NO_4194304)) {
-        LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, " << "length:" <<
-            length << ", max length:" << (NO_4194304/NO_1024/NO_1024) << "(Mb).");
-        return RET_CACHE_EPERM;
-    }
-
-    StatisticIoSize(length, 1);
-
-    BIO_TRACE_START(SDK_TRACE_GET);
-    MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, 0, length, location };
-    BResult ret = gClient->Get(param, length);
+    BResult ret = gClient->Get(param, realLength);
     BIO_TRACE_END(SDK_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", length:" <<
-            length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+        LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+            length << ", location0:" << location.location[0] <<
+            ", location1:" << location.location[1] << ".");
     } else {
-        LOG_INFO("Get value success, key:" << key << ", length:" << length << ", location0:" <<
+        LOG_INFO("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
+            ", realLen:" << realLength << ", location0:" <<
             location.location[0] << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
