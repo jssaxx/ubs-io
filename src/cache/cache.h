@@ -43,9 +43,10 @@ public:
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader);
 
-    BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter);
+    BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+                uint64_t &realLen);
 
-    BResult Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len);
+    BResult Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 

@@ -138,7 +138,8 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     return ret;
 }
 
-BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter)
+BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+                           uint64_t &realLen)
 {
     ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
     ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
@@ -158,7 +159,7 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     }
 
     // 2. Read data from flow.
-    auto ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter);
+    auto ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
     mCacheIndex->Release(ptId, sliceRef);
     if (ret != BIO_OK) {
         LOG_ERROR("Read data from flow failed, key :" << key << ".");
@@ -255,12 +256,21 @@ WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 }
 
 BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
-    const SliceWriter &sliceWriter)
+    const SliceWriter &sliceWriter, uint64_t &realLen)
 {
+    if (offset >= srcSlice->GetLength()) {
+        LOG_ERROR("failed to split slice. offset:" << offset << ", real length:" << srcSlice->GetLength());
+        return BIO_READ_EXCEED;
+    }
+
+    realLen = srcSlice->GetLength() - offset;
+    if (realLen > destSlice->GetLength()) {
+        realLen = destSlice->GetLength();
+    }
     // split slice, get real range from slice.
-    auto newSlice = srcSlice->Split(offset, destSlice->GetLength());
+    auto newSlice = srcSlice->Split(offset, realLen);
     if (newSlice == nullptr) {
-        LOG_ERROR("failed to split slice. offset:" << offset << ", length:" << destSlice->GetLength());
+        LOG_ERROR("failed to split slice. offset:" << offset << ", length:" << realLen);
         return BIO_READ_EXCEED;
     }
 

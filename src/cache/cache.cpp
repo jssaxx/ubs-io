@@ -67,16 +67,17 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     return mWCacheManager->Put(key, slice, sliceReader);
 }
 
-BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter)
+BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+                   uint64_t &realLen)
 {
-    auto ret = mWCacheManager->Get(key, offset, slice, sliceWriter);
+    auto ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
     if (ret == BIO_OK) {
         LOG_INFO("write cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
         return BIO_OK;
     }
 
     if (ret == BIO_NOT_EXISTS) {
-        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter);
+        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Get key " << key << " read data from read cache failed.");
         } else if (ret == BIO_OK) {
@@ -85,13 +86,13 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     }
 
     if (ret == BIO_NOT_EXISTS) {
-        ret = mRCacheManager->Load(slice->GetPtId(), key, offset, slice->GetLength());
+        ret = mRCacheManager->Load(slice->GetPtId(), key, offset, slice->GetLength(), realLen);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Load key " << key << " read data from under fs failed.");
             return ret;
         }
 
-        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter);
+        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Get key " << key << " read data from read cache failed.");
             return ret;
@@ -101,9 +102,9 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     return ret;
 }
 
-BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len)
+BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
-    auto ret = mRCacheManager->Load(ptId, key, offset, len);
+    auto ret = mRCacheManager->Load(ptId, key, offset, len, realLen);
     if (ret != BIO_OK) {
         LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ", offset:" <<
             offset << ", len:" << len << ".");

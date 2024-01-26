@@ -45,9 +45,10 @@ namespace ock {
 
             BResult Put(const Key &key, const WCacheSlicePtr &slice);
 
-            BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter);
+            BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+                uint64_t &realLen);
 
-            BResult Load(const Key &key, uint64_t offset, uint64_t len);
+            BResult Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
             BResult Delete(const Key &key);
 
@@ -118,7 +119,8 @@ namespace ock {
 
             BResult AllocChunk(const Key key, const RCacheValue value, RCacheChunkPtr &chunk);
             
-            BResult GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr, uint64_t offset, uint64_t len);
+            BResult GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr,
+                uint64_t offset, uint64_t len, uint64_t &realLen);
 
             BResult GetSliceFromChunk(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr);
 

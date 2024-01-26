@@ -76,7 +76,8 @@ BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &
     return ret;
 };
 
-BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter)
+BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+    const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     LOG_INFO("Get key:" << key);
     BIO_TRACE_START(RCACHE_TRACE_GET);
@@ -84,12 +85,12 @@ BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const
     if (UNLIKELY(cachePtr == nullptr)) {
         return BIO_NOT_EXISTS;
     }
-    auto ret = cachePtr->Get(key, offset, slice, sliceWriter);
+    auto ret = cachePtr->Get(key, offset, slice, sliceWriter, realLen);
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
     return ret;
 }
 
-BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len)
+BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     BIO_TRACE_START(RCACHE_TRACE_LOAD);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
@@ -97,7 +98,7 @@ BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint
         return BIO_NOT_EXISTS;
     }
 
-    auto ret = cachePtr->Load(key, offset, len);
+    auto ret = cachePtr->Load(key, offset, len, realLen);
     BIO_TRACE_END(RCACHE_TRACE_LOAD, ret);
     return ret;
 }

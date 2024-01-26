@@ -235,7 +235,7 @@ BResult MirrorClient::Put(MirrorPut &param)
     return ret;
 }
 
-BResult MirrorClient::Get(MirrorGet &param)
+BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
 {
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
@@ -247,7 +247,7 @@ BResult MirrorClient::Get(MirrorGet &param)
 
     BIO_TRACE_START(SDK_TRACE_GET_SEND);
     GetRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), param.key, ptId, param.offset, param.length, BioMrInfo() };
-    ret = SendGetRequest(ptEntry, req, param.value);
+    ret = SendGetRequest(ptEntry, req, param.value, realLen);
     BIO_TRACE_END(SDK_TRACE_GET_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Send get request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
@@ -455,7 +455,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
     return cbCtx.result;
 }
 
-BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value)
+BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
     LOG_INFO("Get value from master, key:" << req.key << ", offset:" << req.offset << ", length:" << req.length <<
         ", masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ".");
@@ -463,7 +463,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
         req.SetMrInfo(value, req.length);
-        BResult ret = MirrorServer::Instance()->Get(req);
+        BResult ret = MirrorServer::Instance()->Get(req, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_LOCAL, ret);
         return ret;
     }
@@ -480,19 +480,19 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
         mrInfo.address << ", size:" << mrInfo.size << ", key:" << mrInfo.key << ", dstNid:" << masterNid << ".");
 
     BIO_TRACE_START(SDK_TRACE_GET_REMOTE);
-    BResult result = BIO_ERR;
-    ret = BioClient::Instance()->SendSync<GetRequest, BResult>(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_GET,
-        req, result, false);
+    uint64_t length;
+    ret = BioClient::Instance()->SendSync<GetRequest, uint64_t>(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_GET,
+        req, length, false);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset <<
             ", length:" << req.length << ", dstNid:" << masterNid << ".");
-    } else if (result != BIO_OK) {
-        ret = result;
+    } else {
+        realLen = length;
     }
     BIO_TRACE_END(SDK_TRACE_GET_REMOTE, ret);
     if (LIKELY(ret == BIO_OK)) {
         BIO_TRACE_START(SDK_TRACE_GET_COPY2U);
-        Copy(reinterpret_cast<void *>(mrInfo.address), value, req.length);
+        Copy(reinterpret_cast<void *>(mrInfo.address), value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, BIO_OK);
     }
 
@@ -500,9 +500,9 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
     return ret;
 }
 
-BResult MirrorClient::SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value)
+BResult MirrorClient::SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen)
 {
-    return GetMaster(req, ptEntry.masterNodeId, value);
+    return GetMaster(req, ptEntry.masterNodeId, value, realLen);
 }
 
 void MirrorClient::DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, RpcEngine::Callback &callback)
@@ -595,9 +595,9 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
         if (UNLIKELY(result != BIO_OK)) {
             LOG_ERROR("Load master return failed, ret:" << result << ".");
         }
-        Bio::ObjLocation location{};
-        location.location[0] = ptId;
-        callback(context, location, ((result == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+        if (callback != nullptr) {
+            callback(context, ((result == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+        }
     };
     RpcEngine::Callback cb(cbFunc, nullptr);
 
