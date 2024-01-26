@@ -207,9 +207,41 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
 
 BResult CacheSliceOperator::CopyFromMemoryToMemory(const SlicePtr &from, const SlicePtr &to)
 {
-    // TODO: implement me.
-    LOG_ERROR("don't support copy from memory to memory.");
-    return BIO_ERR;
+    auto &fromAddrs = from->GetAddrs();
+    auto &toAddrs = to->GetAddrs();
+
+    auto fromIt = fromAddrs.begin();
+    auto toIt = toAddrs.begin();
+
+    uint64_t fromOffset = 0;
+    uint64_t toOffset = 0;
+
+    uint64_t len;
+    while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
+        len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
+        auto ret = memcpy_s(reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len,
+            reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
+        LOG_INFO("pre:" << "from chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset <<
+            ", to off:" << toOffset << ", len:" << len);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to copy data from addr:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset << " to addr:" <<
+            toIt->chunkId + toIt->chunkOffset + toOffset << " by length:" << len);
+        LOG_INFO("pre:"
+            << "from chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" << toOffset <<
+            ", len:" << len);
+        fromOffset += len;
+        if (fromOffset == fromIt->chunkLen) {
+            fromOffset = 0;
+            fromIt++;
+        }
+        toOffset += len;
+        if (toOffset == toIt->chunkLen) {
+            toOffset = 0;
+            toIt++;
+        }
+        LOG_INFO("next:" << ", from off:" << fromOffset << ", to off:" << toOffset);
+    }
+    return BIO_OK;
 }
 
 uint64_t CacheSliceOperator::MinLen(uint64_t from, uint64_t to)
