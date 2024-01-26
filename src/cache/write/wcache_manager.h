@@ -17,11 +17,19 @@
 
 namespace ock {
 namespace bio {
+class WCacheManager;
+using WCacheManagerPtr = Ref<WCacheManager>;
 class WCacheManager {
 public:
     WCacheManager() = default;
 
     ~WCacheManager() = default;
+
+    static WCacheManagerPtr &Instance()
+    {
+        static auto instance = MakeRef<WCacheManager>();
+        return instance;
+    }
 
     BResult Init(const RCacheManagerPtr &rCacheManager);
 
@@ -69,7 +77,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-using WCacheManagerPtr = Ref<WCacheManager>;
 }
 }
 
