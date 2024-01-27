@@ -6,6 +6,7 @@
 #define BOOSTIO_BIO_CACHE_H
 
 #include <atomic>
+#include "bio.h"
 #include "bio_err.h"
 #include "cache_def.h"
 #include "wcache_manager.h"
@@ -41,7 +42,7 @@ public:
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
-    BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader);
+    BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
                 uint64_t &realLen);

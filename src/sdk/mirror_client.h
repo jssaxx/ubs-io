@@ -16,17 +16,12 @@
 #include "flow_instance.h"
 #include "flow.h"
 #include "slice.h"
+#include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
 
 namespace ock {
 namespace bio {
-struct CacheAttr {
-    uint64_t mTenantId;
-    AffinityStrategy affinity;
-    WriteStrategy strategy;
-};
-
 class MirrorClient {
 public:
     struct MirrorPut {

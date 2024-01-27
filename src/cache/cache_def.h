@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <ctime>
+#include "bio.h"
 #include "slice.h"
 
 namespace ock {
@@ -16,6 +17,20 @@ using Key = char *;
 using SliceReader = std::function<BResult(const SlicePtr &from, const SlicePtr &to)>;
 using SliceWriter = std::function<BResult(const SlicePtr &from, const SlicePtr &to)>;
 using FlowEvictSync = std::function<BResult(uint64_t flowId, uint64_t flowOffset)>;
+
+struct CacheAttr {
+    uint64_t mTenantId;
+    AffinityStrategy affinity;
+    WriteStrategy strategy;
+
+    inline CacheAttr &operator = (const CacheAttr &other)
+    {
+        mTenantId = other.mTenantId;
+        affinity = other.affinity;
+        strategy = other.strategy;
+        return *this;
+    }
+};
 
 struct CacheObjStat {
     uint32_t size; // value size
