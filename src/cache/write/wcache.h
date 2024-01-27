@@ -29,7 +29,7 @@ public:
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult EvictAllMemSliceToDisk();
 
