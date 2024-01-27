@@ -338,8 +338,8 @@ void MirrorClient::ConstructPutReq(uint8_t *tmp, CmPtInfo &ptEntry, MirrorPut &p
     WCacheSlicePtr &slice) const
 {
     auto *req = static_cast<PutRequest *>(static_cast<void *>(tmp));
-    req->Fill(RequestComm(ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId()), param.key, param.length, flowId,
-        offset, index, BioClient::Instance()->GetLocalMrKey(), slice->GetSerializeLen());
+    req->Fill(RequestComm(ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId()), param.attr, param.key, param.length,
+        flowId, offset, index, BioClient::Instance()->GetLocalMrKey(), slice->GetSerializeLen());
     uint32_t len = 0;
     char *sliceBuf = static_cast<char *>(static_cast<void *>(tmp)) + sizeof(PutRequest);
     slice->Serialize(sliceBuf, len);

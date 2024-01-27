@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include "cache_def.h"
 
 namespace ock {
 namespace bio {
@@ -60,6 +61,7 @@ struct CreateFlowRequest {
 
 struct PutRequest {
     RequestComm comm;
+    CacheAttr attr;
     char key[KEY_MAX_SIZE];
     uint64_t length;
     uint64_t flowId;
@@ -72,9 +74,11 @@ struct PutRequest {
     DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
     DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
 
-    void Fill(RequestComm reqComm, const char *cKey, uint64_t len, uint64_t fId, uint64_t off, uint64_t idx, uint32_t mKey, uint32_t sLen)
+    void Fill(RequestComm reqComm, CacheAttr &cacheAttr, const char *cKey, uint64_t len, uint64_t fId,
+        uint64_t off, uint64_t idx, uint32_t mKey, uint32_t sLen)
     {
         comm = reqComm;
+        attr = cacheAttr;
         Key(cKey);
         length = len;
         flowId = fId;

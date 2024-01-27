@@ -39,22 +39,21 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 }
 
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-    WCacheSliceRefPtr &destSliceRef)
+    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
     // put it memory tier cache.
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     destSliceRef = memCache->Write(key, srcSlice, sliceReader);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
-    // write back or write through?
-    // TODO: make it configurable.
-    if (true) {
+    if (attr.strategy == WRITE_BACK) {
         // write back.
-        // and evict slice from memory to disk asap.
+        LOG_INFO("Write back, key:" << key);
         auto success = mExeService->Execute([&, destSliceRef]() { EvictFromMemToDisk(destSliceRef); });
         ChkTrueNot(success, BIO_INNER_ERR);
     } else {
         // write through
+        LOG_INFO("Write through, key:" << key);
         EvictFromMemToDisk(destSliceRef);
     }
 
