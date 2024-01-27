@@ -62,9 +62,9 @@ BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
     return mWCacheManager->GetWCacheSlice(sliceKey, slice);
 }
 
-BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader)
+BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
-    return mWCacheManager->Put(key, slice, sliceReader);
+    return mWCacheManager->Put(key, slice, sliceReader, attr);
 }
 
 BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,

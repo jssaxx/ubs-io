@@ -149,7 +149,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
     };
 
     BIO_TRACE_START(MIRROR_TRACE_PUT);
-    BResult ret = Cache::Instance().Put(const_cast<char *>(key.c_str()), sliceP, reader);
+    BResult ret = Cache::Instance().Put(const_cast<char *>(key.c_str()), sliceP, reader, req.attr);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
     }
