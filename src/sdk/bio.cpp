@@ -249,14 +249,14 @@ Bio::ObjStat Bio::Stat(const char *key, const ObjLocation &location)
 
 std::shared_ptr<Bio> BioService::CreateCache(const BioService::Descriptor &desc)
 {
-    if (UNLIKELY(desc.tenantId == 0 || desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT || desc.capacity == 0)) {
+    if (UNLIKELY(desc.tenantId == 0 || desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT)) {
         LOG_ERROR("Invalid cache descriptor, tenantId:" << desc.tenantId << ", affinity:" << desc.affinity <<
-            ", strategy:" << desc.strategy << ", capacity:" << desc.capacity << ".");
+            ", strategy:" << desc.strategy << ".");
         return nullptr;
     }
 
     BIO_TRACE_START(SDK_TRACE_CREATE_CACHE);
-    auto cache = std::make_shared<Bio>(desc.tenantId, desc.affinity, desc.strategy, desc.capacity);
+    auto cache = std::make_shared<Bio>(desc.tenantId, desc.affinity, desc.strategy);
     BResult ret = gClient->Insert(cache);
     BIO_TRACE_END(SDK_TRACE_CREATE_CACHE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -267,8 +267,7 @@ std::shared_ptr<Bio> BioService::CreateCache(const BioService::Descriptor &desc)
     static std::string affinityStr[] = { "INVALID", "LOCAL_AFFINITY", "GLOBAL_BALANCE", "BUTT" };
     static std::string strategyStr[] = { "INVALID", "WRITE_BACK", "WRITE_THROUGH", "BUTT" };
     LOG_INFO("Create cache instance success, tenantId:" << desc.tenantId << ", affinity:" <<
-        affinityStr[desc.affinity] << ", strategy:" << strategyStr[desc.strategy] << ", capacity:" <<
-        desc.capacity << ".");
+        affinityStr[desc.affinity] << ", strategy:" << strategyStr[desc.strategy] << ".");
     return cache;
 }
 

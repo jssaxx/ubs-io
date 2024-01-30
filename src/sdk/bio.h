@@ -159,25 +159,14 @@ public:
         return mStrategy;
     }
 
-    /* *
-     * @brief: Get bio instance capacity
-     *
-     * @return: capacity
-     */
-    inline uint64_t GetCapacity() const
-    {
-        return mCapacity;
-    }
-
-    Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy, uint64_t cap)
-        : mTenantId(id), mAffinity(affinity), mStrategy(strategy), mCapacity(cap){};
+    Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
+        : mTenantId(id), mAffinity(affinity), mStrategy(strategy) {};
     ~Bio() = default;
 
 private:
     uint64_t mTenantId = 0;                     // tenant id
     AffinityStrategy mAffinity = AFFINITY_BUTT; // cache affinity attribute
     WriteStrategy mStrategy = STRATEGY_BUTT;    // cache strategy
-    uint64_t mCapacity = 0;                     // cache capacity
 };
 
 class BioService {
@@ -186,7 +175,6 @@ public:
         uint64_t tenantId;
         AffinityStrategy affinity;
         WriteStrategy strategy;
-        uint64_t capacity;
     };
 
     /* *

@@ -29,7 +29,7 @@ static void usage()
 {
     std::cout << "Invalid command! \n"
         "\tlist: list caches\n"
-        "\tcreate cache: create [tenantId] [affinity] [strategy] [capacity]\n"
+        "\tcreate cache: create [tenantId] [affinity] [strategy]\n"
         "\topen cache: open [tenantId]\n"
         "\tdestroy cache: destroy [tenantId]\n"
         "\tput value to cache: put [key] [filePath] [length] [sliceId]\n"
@@ -53,7 +53,6 @@ static void HandleList()
         std::cout << "\tTenantId:" << cache.second->GetTenantId() << std::endl;
         std::cout << "\tAffinity:" << cache.second->GetAffinityPolicy() << std::endl;
         std::cout << "\tStrategy:" << cache.second->GetWriteStrategy() << std::endl;
-        std::cout << "\tCapacity:" << cache.second->GetCapacity() << std::endl;
     }
 }
 
@@ -62,9 +61,8 @@ static void HandleCreate(std::vector<std::string> cmds)
     auto tenantId = std::stoul(cmds[1]);
     auto affinity = std::stoul(cmds[2]);
     auto strategy = std::stoul(cmds[3]);
-    auto capacity = std::stoull(cmds[4]);
     BioService::Descriptor desc = { tenantId, static_cast<AffinityStrategy>(affinity),
-                                    static_cast<WriteStrategy>(strategy), capacity};
+                                    static_cast<WriteStrategy>(strategy)};
     auto cache = BioService::CreateCache(desc);
     if (cache == nullptr) {
         std::cout << "Create cache failed." << std::endl;
