@@ -51,7 +51,12 @@ void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint3
     NetServiceOpInfo opInfo{};
     opInfo.errorCode = static_cast<int16_t>(retCode);
     NetCallback *callback = NewCallback([](NetServiceContext &context) {}, std::placeholders::_1);
-    int32_t ret = ctx.ReplySend(opInfo, { resp, respSize }, callback);
+    int32_t ret;
+    if (resp != nullptr) {
+        ret = ctx.ReplySend(opInfo, { resp, respSize }, callback);
+    } else {
+        ret = ctx.ReplySend(opInfo, { &retCode, sizeof(retCode) }, callback);
+    }
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Reply Send failed, ret:" << ret << ".");
     }
