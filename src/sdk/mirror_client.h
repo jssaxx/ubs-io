@@ -126,7 +126,7 @@ private:
         if (UNLIKELY(mFlowMap.size() > defaultMaxFlowSize)) {
             return BIO_ERR;
         }
-        auto it = mFlowMap.find(flowId);
+        auto it = mFlowMap.find(ptId);
         if (UNLIKELY(it != mFlowMap.end())) {
             return BIO_OK;
         }
