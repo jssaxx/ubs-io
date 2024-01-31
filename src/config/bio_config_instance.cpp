@@ -47,8 +47,8 @@ void BioConfig::LoadDefaultConf()
     /* load cluster manager config */
     AddBoolConf(CMM_ENABLED);
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 2, NO_256));
-    AddIntConf(CM_NODE_NUM, VIntRange::Create(CM_NODE_NUM.first, 2, NO_256));
-    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, 2, NO_8192));
+    AddIntConf(CM_NODE_NUM, VIntRange::Create(CM_NODE_NUM.first, 3, NO_256));
+    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, 3, NO_8192));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_16, NO_1024));
     AddIntConf(CM_GROUP_ID, VIntRange::Create(CM_GROUP_ID.first, 0, NO_255));
     AddStrConf(CM_ZK_HOST_IP_MASK, VIpv4MaskValidator::Create(CM_ZK_HOST_IP_MASK.first, false));
