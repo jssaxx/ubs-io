@@ -117,7 +117,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length << ", location0:" <<
-            location.location[0] << ", location1:" << location.location[1] << ", value:" << value << ".");
+            location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         LOG_INFO("Put value success, key:" << key << ", length:" << length << ", location0:" << location.location[0] <<
             ", location1:" << location.location[1] << ".");
@@ -205,7 +205,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     return ToCResult(ret);
 }
 
-CResult Bio::ListAll(const char *prefix, const std::vector<std::pair<char *, ObjStat>>& objs)
+CResult Bio::ListAll(const char *prefix, std::vector<std::pair<char *, ObjStat>>& objs)
 {
     if (UNLIKELY(!gClient->Ready())) {
         LOG_WARN("Boostio cache service not ready, please try again.");
