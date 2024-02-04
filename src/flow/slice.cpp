@@ -52,29 +52,23 @@ SlicePtr Slice::Split(uint64_t offset, uint64_t length)
     std::vector<FlowAddr> newAddrs;
     uint64_t rangeStart = 0;
     uint64_t rangeEnd = 0;
+    uint64_t splitStart = offset;
     for (const auto &addr : mAddrs) {
         rangeEnd = rangeStart + addr.chunkLen;
-        // first segment.
-        if (offset >= rangeStart && offset < rangeEnd) {
-            auto chunkOffset = offset - rangeStart + addr.chunkOffset;
-            if (offset + length <= rangeEnd) {
-                // first and last segment.
-                newAddrs.emplace_back(addr.chunkId, chunkOffset, length);
+        if (splitStart >= rangeStart && splitStart < rangeEnd) {
+            uint64_t splitOffset = splitStart - rangeStart;
+            uint64_t splitLen = rangeEnd - splitStart;
+            if (splitLen >= length - (splitStart - offset)) {
+                newAddrs.emplace_back(addr.chunkId, addr.chunkOffset + splitOffset, length - (splitStart - offset));
+                LOG_INFO("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" <<
+                    length - (splitStart - offset));
                 break;
             } else {
-                newAddrs.emplace_back(addr.chunkId, chunkOffset, addr.chunkLen - (offset - rangeStart));
+                LOG_INFO("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" << splitLen);
+                newAddrs.emplace_back(addr.chunkId, addr.chunkOffset + splitOffset, splitLen);
             }
-        } else {
-            if (offset + length >= rangeEnd) {
-                // middle segment.
-                newAddrs.emplace_back(addr);
-            } else {
-                // last segment.
-                newAddrs.emplace_back(addr.chunkId, addr.chunkOffset, length - rangeStart);
-                break;
-            }
+            splitStart += splitLen;
         }
-
         rangeStart += addr.chunkLen;
     }
 
