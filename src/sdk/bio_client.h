@@ -75,7 +75,7 @@ public:
         return mMirror->Load(key, offset, length, location, std::move(callback), context);
     }
 
-    inline BResult ListAll(const char *prefix, const std::vector<std::pair<char *, Bio::ObjStat>>& objs)
+    inline BResult ListAll(const char *prefix, std::vector<std::pair<char *, Bio::ObjStat>>& objs)
     {
         // TODO::Not supported listAll operation
         return BIO_INNER_ERR;
