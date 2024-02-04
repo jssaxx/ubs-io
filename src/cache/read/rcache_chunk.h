@@ -79,6 +79,16 @@ namespace ock {
                 mValue = value;
             }
 
+            uint64_t GetState() const
+            {
+                return mState;
+            }
+            
+            void SetState(uint64_t state)
+            {
+                mState = state;
+            }
+
             DEFINE_REF_COUNT_FUNCTIONS
         private:
             Key mKey;
@@ -86,7 +96,8 @@ namespace ock {
             uint32_t aTime;
             uint8_t  hitCount;
             RCacheTierType tierType;
-            MqType   mMqType;
+            MqType mMqType;
+            uint64_t mState {0};
 
             DEFINE_REF_COUNT_VARIABLE
         };
