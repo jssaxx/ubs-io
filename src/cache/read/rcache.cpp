@@ -125,7 +125,7 @@ BResult RCache::CreateRCacheFlow(RCacheTierType tier, std::vector<uint64_t> flow
         return BIO_ERR;
     }
 
-    int32_t ret = flow[tier]->Initialize(mPtId, FLOW_MEMORY, flowIds);
+    int32_t ret = flow[tier]->Initialize(mPtId, GetFlowTypeByTierType(tier), flowIds);
     if (ret != BIO_OK) {
         LOG_ERROR("Init ptId" << mPtId << " memory meta flow failed, error code " << ret);
         Destroy();
@@ -355,6 +355,11 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     RCacheChunkPtr chunk = iter->second;
     indexLock[bucket].UnLock();
 
+    if (chunk->GetState() != 0) {
+        LOG_ERROR("Already delete, " << key);
+        return BIO_NOT_EXISTS;
+    }
+
     RCacheStatistic::Instance().IncHisCount();
 
     auto tier = chunk->GetTierType();
@@ -469,7 +474,7 @@ BResult RCache::Delete(const Key &key)
         return BIO_OK;
     }
     chunk = iter->second;
-    index[bucket].erase(iter);
+    chunk->SetState(1);
     indexLock[bucket].UnLock();
 
     DelFromEvictList(chunk->GetTierType(), chunk.Get()->GetMqType(), chunk);
@@ -537,9 +542,13 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
         flow[READ_CACHE_TIER_MEM]->AddDataTruncOffset(chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
         BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
+
+        LOG_INFO("Truncate key:" << chunk->GetKey() << ", flowOffset:" <<
+            flowOffset << ", index:" << indexInFlow);
     }
 
     uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
+    LOG_INFO("Truncate offset:" << truncateOffset);
     auto ret = flow[READ_CACHE_TIER_MEM]->GetDataFlow()->TruncateOffset(truncateOffset);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Truncate read cache key "<< chunk->GetKey() << "mem data flow to " << truncateOffset << "failed." << ret);

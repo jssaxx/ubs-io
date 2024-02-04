@@ -169,7 +169,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
     uint32_t localNid = BioServer::Instance()->GetLocalNid().VNodeId();
     uint32_t rKey = req.mr.key;
 
-    auto writer = [dstNid, localNid, rKey, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    auto writer = [dstNid, localNid, rKey, key, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         BResult ret = BIO_ERR;
         if (dstNid == localNid) {
             std::vector<BioMrInfo> rMrVec;
@@ -216,7 +216,12 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
             }
             isAlloc = true;
             lMrVec.emplace_back(bioMr);
-            mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address));
+            ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address));
+            if (UNLIKELY(ret != BIO_OK)) {
+                LOG_ERROR("Slice copy failed, ret:" << ret << ", key:" << key.c_str());
+                BioServer::Instance()->MemFree(bioMr.address);
+                return ret;
+            }
         }
 
         for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
