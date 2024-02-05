@@ -54,6 +54,8 @@ private:
 
     UnderFsPtr mUnderFs;
 
+    std::atomic<uint64_t> mFlyCnt { 0 };
+
     DEFINE_REF_COUNT_VARIABLE;
 };
 using WCachePtr = Ref<WCache>;
