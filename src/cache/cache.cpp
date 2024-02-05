@@ -138,8 +138,9 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Write cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
         return ret;
-    } else {
+    } else if (ret == BIO_OK) {
         LOG_INFO("Write cache delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
+        return ret;
     }
 
     ret = mRCacheManager->Delete(ptId, key);
