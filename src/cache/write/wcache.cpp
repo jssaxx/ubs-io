@@ -48,8 +48,14 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 
     if (attr.strategy == WRITE_BACK) {
         // write back.
-        LOG_INFO("Write back, key:" << key);
-        auto success = mExeService->Execute([&, destSliceRef]() { EvictFromMemToDisk(destSliceRef); });
+        LOG_INFO("Write back, key:" << key << ", FlyCnt:" << mFlyCnt++);
+        bool success = mExeService->Execute([&, destSliceRef]() { EvictFromMemToDisk(destSliceRef); });
+        uint64_t sleepCnt = 0;
+        while (!success && sleepCnt != NO_5) {
+            sleep(1);
+            success = mExeService->Execute([&, destSliceRef]() { EvictFromMemToDisk(destSliceRef); });
+            sleepCnt++;
+        }
         ChkTrueNot(success, BIO_INNER_ERR);
     } else {
         // write through
@@ -88,7 +94,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     ChkTrueNot(ret == BIO_OK, ret);
 
     LOG_INFO("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
-        offset << ", length:" << length << ".");
+        offset << ", length:" << length << ", FlyCnt:" << mFlyCnt--);
 
     diskCache->AddEvictQueue(sliceRef);
 

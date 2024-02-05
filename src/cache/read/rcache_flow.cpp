@@ -58,6 +58,8 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
         return BIO_ERR;
     }
 
+    LOG_INFO("Meta flowId:" << mMetaFlow->GetFlowId() << ", flowType:" << flowType);
+
     mMetaFlowInstance = MakeRef<FlowInstance>(flowIds[0]);
     if (mMetaFlowInstance == nullptr) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "flow instance failed.");
@@ -71,6 +73,8 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
         Destroy();
         return BIO_ERR;
     }
+
+    LOG_INFO("Data flowId:" << mDataFlow->GetFlowId() << ", flowType:" << flowType);
 
     mDataFlowInstance = MakeRef<FlowInstance>(flowIds[1]);
     if (mDataFlowInstance == nullptr) {

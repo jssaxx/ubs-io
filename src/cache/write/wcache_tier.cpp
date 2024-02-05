@@ -16,15 +16,19 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId)
 
     auto &flowManager = FlowManager::Instance();
 
-    uint64_t metaFlowId = flowId | (((uint64_t)((1 << 8) | (cacheTier << 1) | 0) & 0x7FF) << 40) /* meta */;
+    uint64_t metaFlowId = flowId | (((uint64_t)((cacheTier << 1) | 0) & 0x7FF) << 40) /* meta */;
     mMetaFlow = flowManager->CreateObject(flowType, metaFlowId);
     ChkTrue(mMetaFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create metaflow, flowType:" << flowType << " metaFlowId" << metaFlowId);
 
-    uint64_t dataFlowId = flowId | (((uint64_t)((1 << 8) | (cacheTier << 1) | 1) & 0x7FF) << 40) /* data */;
+    LOG_INFO("Meta flowId:" << metaFlowId << ", flowType:" << flowType);
+
+    uint64_t dataFlowId = flowId | (((uint64_t)((cacheTier << 1) | 1) & 0x7FF) << 40) /* data */;
     mDataFlow = flowManager->CreateObject(flowType, dataFlowId);
     ChkTrue(mDataFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create dataflow, flowType:" << flowType << " dataFlowId" << dataFlowId);
+
+    LOG_INFO("Data flowId:" << dataFlowId << ", flowType:" << flowType);
 
     mFlowTruncateCursor = MakeRef<WFlowTruncateCursor>();
     ChkTrueNot(mFlowTruncateCursor != nullptr, BIO_ALLOC_FAIL);
