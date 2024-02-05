@@ -41,7 +41,8 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
 {
     BIO_TRACE_START(WCACHE_TRACE_ALLOC_ID);
     auto flowIdAllocator = FlowIdAllocator::Instance();
-    flowId = flowIdAllocator->GenerateFlowId(((uint64_t)ptId & 0x1FFF) << 11);
+    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
+    flowId = flowIdAllocator->GenerateFlowId(flowPrefix);
     BIO_TRACE_END(WCACHE_TRACE_ALLOC_ID, 0);
     return BIO_OK;
 }
