@@ -27,16 +27,21 @@ public:
 
     uint64_t AllocOffset(uint64_t len, uint64_t &offset)
     {
-        offset = mIndex.fetch_add(1);
-        return mOffset.fetch_add(len);
+        lock.Lock();
+        offset = mIndex++;
+        uint64_t outOffset = mOffset;
+        mOffset +=len;
+        lock.UnLock();
+        return outOffset;
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     uint64_t mFlowId;
-    std::atomic<uint64_t> mIndex { 0 };
-    std::atomic<uint64_t> mOffset { 0 };
+    uint64_t mIndex { 0 };
+    uint64_t mOffset { 0 };
+    SpinLock lock;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
