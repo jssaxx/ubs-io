@@ -46,9 +46,14 @@ namespace ock {
                 return mDataTruncOffset;
             }
 
-            inline void AddDataTruncOffset(uint64_t len)
+            inline void UpdateDataTruncOffset(uint64_t off, uint64_t len)
             {
-                mDataTruncOffset += len;
+                if (mDataTruncOffset == off) {
+                    mDataTruncOffset = off + len;
+                } else {
+                    LOG_ERROR("Update data truncate offset failed, base offset: " << mDataTruncOffset <<
+                        ", input offset:" << off << ", len:" << len);
+                }
             }
 
             inline void AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow)
@@ -58,16 +63,16 @@ namespace ock {
 
             DEFINE_REF_COUNT_FUNCTIONS
         private:
-            uint64_t mPtId;
+            uint64_t mPtId = 0;
 
-            FlowPtr mMetaFlow;
-            FlowInstancePtr mMetaFlowInstance;
-            uint64_t mMetaTruncOffset;
+            FlowPtr mMetaFlow = nullptr;
+            FlowInstancePtr mMetaFlowInstance = nullptr;
+            uint64_t mMetaTruncOffset = 0;
 
-            FlowPtr mDataFlow;
-            FlowInstancePtr mDataFlowInstance;
-            uint64_t mDataTruncOffset;
-            std::atomic<uint64_t> mindexInFlow;
+            FlowPtr mDataFlow = nullptr;
+            FlowInstancePtr mDataFlowInstance = nullptr;
+            uint64_t mDataTruncOffset = 0;
+            std::atomic<uint64_t> mindexInFlow{0};
 
         DEFINE_REF_COUNT_VARIABLE
         };

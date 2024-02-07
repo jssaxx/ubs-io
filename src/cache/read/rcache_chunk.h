@@ -88,7 +88,7 @@ namespace ock {
             {
                 mState = state;
             }
-
+            std::mutex lock;
             DEFINE_REF_COUNT_FUNCTIONS
         private:
             Key mKey;
