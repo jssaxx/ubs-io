@@ -7,6 +7,7 @@
 #include "cache_flow.h"
 #include "flow_id_allocator.h"
 #include "flow_manager.h"
+#include "cm.h"
 
 using namespace ock::bio;
 
@@ -51,7 +52,14 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
         return BIO_ERR;
     }
 
-    mMetaFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[0]);
+    uint16_t diskId;
+    auto ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get local disk fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
+    mMetaFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
     if (mMetaFlow == nullptr) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "meta flow failed.");
         Destroy();
@@ -67,7 +75,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
         return BIO_ERR;
     }
 
-    mDataFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[1]);
+    mDataFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[1], diskId);
     if (mDataFlow == nullptr) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "data flow failed.");
         Destroy();
