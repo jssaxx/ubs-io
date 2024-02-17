@@ -104,8 +104,6 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     LOG_INFO("Put key:" << key << ", pt:" << ptId << ", flowId:" << slice->GetFlowId());
 
-    BIO_TRACE_START(WCACHE_TRACE_PUT);
-
     // 1. Check whether the key is duplicate
     auto keySlice = mCacheIndex->Aquire(ptId, key);
     if (keySlice != nullptr) {
@@ -135,7 +133,6 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
         LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
     }
 
-    BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
     return ret;
 }
 
@@ -150,8 +147,6 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
 
     LOG_INFO("Get key:" << key << ", pt:" << ptId);
 
-    BIO_TRACE_START(WCACHE_TRACE_GET);
-
     // 1. Get key slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
     if (sliceRef == nullptr) {
@@ -165,15 +160,13 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     if (ret != BIO_OK) {
         LOG_ERROR("Read data from flow failed, key :" << key << ".");
     }
-    BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     return ret;
 }
 
 BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 {
-    BIO_TRACE_START(WCACHE_TRACE_STAT);
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
-    BIO_TRACE_END(WCACHE_TRACE_STAT, 0);
+
     if (sliceRef != nullptr) {
         cacheObjStat.size = sliceRef->GetSlice()->GetLength();
         cacheObjStat.time = time(nullptr);
@@ -188,8 +181,6 @@ BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheOb
 BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 {
     ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
-
-    BIO_TRACE_START(WCACHE_TRACE_DEL);
 
     // 1. Aquire slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
@@ -209,7 +200,6 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     slice->SetSliceState(1);
 
     mCacheIndex->Release(ptId, sliceRef);
-    BIO_TRACE_END(WCACHE_TRACE_DEL, 0);
     return BIO_OK;
 }
 
