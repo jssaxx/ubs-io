@@ -10,7 +10,7 @@ namespace ock {
 namespace bio {
 BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr)
 {
-    LOG_INFO("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
+    LOG_DEBUG("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
 
     if (offset < mTruncateOffset) {
         LOG_ERROR("Invalid offset:" << offset << ", flowId:" << mFlowId << ", truncate:" << mTruncateOffset);
@@ -40,7 +40,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
         curLen = mChunkSize - curOffset % mChunkSize;
         curLen = (remainLen > curLen) ? curLen : remainLen;
         flowAddr.push_back(FlowAddr(mChunkList[curOffset / mChunkSize], curOffset % mChunkSize, curLen));
-        LOG_INFO("ChunkId:" << mChunkList[curOffset / mChunkSize] << ", chunkOffset:" << curOffset % mChunkSize << ", curLen:" << curLen);
+        LOG_DEBUG("ChunkId:" << mChunkList[curOffset / mChunkSize] << ", chunkOffset:" << curOffset % mChunkSize << ", curLen:" << curLen);
         curOffset += curLen;
         remainLen -= curLen;
     }
@@ -55,7 +55,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 {
     std::vector<uint64_t> cleanList;
 
-    LOG_INFO("Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
+    LOG_INFO("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
 
     if (offset >= mPreLoadOffset || offset > mWritenOffset) {
         LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", writen:" << mWritenOffset);

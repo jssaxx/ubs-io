@@ -96,12 +96,12 @@ struct GetRequest {
     uint64_t offset;
     uint64_t length;
     bool isMr;
-    BioMrInfo mr;
+    NetMrInfo mr;
 
     DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
     DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
 
-    GetRequest(RequestComm reqComm, const char *cKey, uint16_t pt, uint64_t off, uint64_t len, BioMrInfo info)
+    GetRequest(RequestComm reqComm, const char *cKey, uint16_t pt, uint64_t off, uint64_t len, NetMrInfo info)
         : comm(reqComm), ptId(pt), offset(off), length(len), isMr(false), mr(info)
     {
         Key(cKey);
@@ -114,7 +114,7 @@ struct GetRequest {
         mr.size = len;
     }
 
-    void SetMrInfo(BioMrInfo mrInfo)
+    void SetMrInfo(NetMrInfo mrInfo)
     {
         isMr = true;
         mr = mrInfo;

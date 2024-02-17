@@ -246,7 +246,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
     }
 
     BIO_TRACE_START(SDK_TRACE_GET_SEND);
-    GetRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), param.key, ptId, param.offset, param.length, BioMrInfo() };
+    GetRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), param.key, ptId, param.offset, param.length, NetMrInfo() };
     ret = SendGetRequest(ptEntry, req, param.value, realLen);
     BIO_TRACE_END(SDK_TRACE_GET_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -382,7 +382,7 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flow
 }
 
 void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index,
-    RpcEngine::Callback &callback)
+    NetEngine::Callback &callback)
 {
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
@@ -391,7 +391,7 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
     }
 }
 
-void MirrorClient::PutLocal(PutRequest *req, uint32_t localIdx, RpcEngine::Callback &callback) const
+void MirrorClient::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const
 {
     if (localIdx == UINT32_MAX) {
         return;
@@ -421,7 +421,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
             sem_post(&cbCtx->sem);
         }
     };
-    RpcEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    NetEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
 
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
@@ -468,7 +468,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
         return ret;
     }
 
-    BioMrInfo mrInfo;
+    NetMrInfo mrInfo;
     BResult ret = BioClient::Instance()->Alloc(req.length, mrInfo);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc rdma page failed, ret:" << ret << ", length:" << req.length << ", page size:" <<
@@ -505,14 +505,14 @@ BResult MirrorClient::SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *v
     return GetMaster(req, ptEntry.masterNodeId, value, realLen);
 }
 
-void MirrorClient::DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, RpcEngine::Callback &callback)
+void MirrorClient::DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, NetEngine::Callback &callback)
 {
     uint16_t dstNid = ptEntry.copys[index].nodeId;
     BioClient::Instance()->SendAsync<DeleteRequest>(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_DELETE, req, callback,
         false);
 }
 
-void MirrorClient::DeleteLocal(DeleteRequest &req, RpcEngine::Callback &callback) const
+void MirrorClient::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback) const
 {
     if (mDeployType == 1) {
         BResult ret = MirrorServer::Instance()->Delete(req);
@@ -539,7 +539,7 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
             sem_post(&cbCtx->sem);
         }
     };
-    RpcEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    NetEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
 
     for (uint32_t idx = 0; idx < quota; idx++) {
         if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
@@ -599,7 +599,7 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
             callback(context, ((result == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
         }
     };
-    RpcEngine::Callback cb(cbFunc, nullptr);
+    NetEngine::Callback cb(cbFunc, nullptr);
 
     BioClient::Instance()->SendAsyncBuff(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_LOAD, static_cast<void *>(&req),
         sizeof(LoadRequest), cb, false);

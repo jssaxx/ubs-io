@@ -10,7 +10,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <utility>
-#include "rpc/rpc_engine.h"
+#include "net_engine.h"
 #include "net_common.h"
 #include "bio_ref.h"
 #include "bio.h"
@@ -91,7 +91,7 @@ public:
         return mRpcService->GetDataPage();
     }
 
-    inline BResult Alloc(uint64_t size, BioMrInfo &mr)
+    inline BResult Alloc(uint64_t size, NetMrInfo &mr)
     {
         if (UNLIKELY(mRpcService->GetDataPage() < size)) {
             return BIO_ALLOC_FAIL;
@@ -99,7 +99,7 @@ public:
         uintptr_t address = 0;
         uint32_t key = UINT32_MAX;
         BResult ret = mRpcService->AllocLocalMrSingle(address, key);
-        mr = BioMrInfo(address, size, key);
+        mr = NetMrInfo(address, size, key);
         return ret;
     }
 
@@ -115,12 +115,12 @@ public:
     }
 
     template <typename TReq>
-    inline void SendAsync(const BioNodeId target, uint16_t opcode, TReq &req, RpcEngine::Callback &cb, bool plane)
+    inline void SendAsync(const BioNodeId target, uint16_t opcode, TReq &req, NetEngine::Callback &cb, bool plane)
     {
         mRpcService->AsyncCall(target, opcode, req, cb, plane);
     }
 
-    inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, RpcEngine::Callback &cb, bool plane)
+    inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, NetEngine::Callback &cb, bool plane)
     {
         mRpcService->AsyncCallBuff(target, opcode, req, reqLen, cb, plane);
     }
@@ -187,7 +187,7 @@ private:
     std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
     std::mutex mLock;
     BioConfigPtr mConfig{ nullptr };
-    RpcEnginePtr mRpcService{ nullptr };
+    NetEnginePtr mRpcService{ nullptr };
     MirrorClientPtr mMirror{ nullptr };
     DEFINE_REF_COUNT_VARIABLE;
 };

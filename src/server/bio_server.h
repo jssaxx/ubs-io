@@ -9,7 +9,7 @@
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "bio_config_instance.h"
-#include "rpc/rpc_engine.h"
+#include "net_engine.h"
 #include "cm.h"
 #include "mirror_server.h"
 
@@ -28,9 +28,9 @@ public:
         return instance;
     }
 
-    inline RpcEnginePtr GetRpcEngine()
+    inline NetEnginePtr GetRpcEngine()
     {
-        return mRpcEngine;
+        return mNetEngine;
     }
 
     inline CmPtr GetCm()
@@ -61,13 +61,13 @@ public:
     inline uint32_t GetLocalMrKey()
     {
         uint32_t key = 0;
-        mRpcEngine->GetLocalMrKey(key);
+        mNetEngine->GetLocalMrKey(key);
         return key;
     }
 
-    inline BResult MemAlloc(uint64_t size, BioMrInfo &mr)
+    inline BResult MemAlloc(uint64_t size, NetMrInfo &mr)
     {
-        auto ret = mRpcEngine->AllocLocalMrSingle(mr.address, mr.key);
+        auto ret = mNetEngine->AllocLocalMrSingle(mr.address, mr.key);
         if (UNLIKELY(ret != BIO_OK)) {
             return ret;
         }
@@ -79,7 +79,7 @@ public:
     {
         uintptr_t address;
         uint32_t outKey;
-        auto ret = mRpcEngine->AllocLocalMrSingle(address, outKey);
+        auto ret = mNetEngine->AllocLocalMrSingle(address, outKey);
         if (UNLIKELY(ret != BIO_OK)) {
             return ret;
         }
@@ -89,7 +89,7 @@ public:
 
     inline void MemFree(uint64_t addr)
     {
-        mRpcEngine->FreeLocalMrSingle(addr);
+        mNetEngine->FreeLocalMrSingle(addr);
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
@@ -100,8 +100,8 @@ protected:
     BResult StartDisk();
     void StopDisk();
 
-    BResult StartRpcServer();
-    void StopRpcServer();
+    BResult StartNetService();
+    void StopNetService();
 
     BResult StartCm();
     void StopCm();
@@ -117,7 +117,7 @@ private:
     bool mStarted = false;
     std::mutex mStartLock;
     BioConfigPtr mConfig = nullptr;
-    RpcEnginePtr mRpcEngine = nullptr;
+    NetEnginePtr mNetEngine = nullptr;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
     CmNodeId mLocalNid;
