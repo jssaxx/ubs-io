@@ -21,7 +21,7 @@ struct MemAllocator {
     std::function<void(uint64_t)> free { nullptr };
 };
 struct DiskAllocator {
-    std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t *)> alloc { nullptr };
+    std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *)> alloc { nullptr };
     std::function<void(uint32_t, uint64_t, uint64_t)> free { nullptr };
 };
 class FlowManager;
@@ -60,7 +60,8 @@ public:
         mDiskAllocator.free = diskAllocator.free;
     }
 
-    static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t bucketId, uint64_t len, uint64_t *chunkId)
+    static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset,
+        uint64_t len, uint64_t *chunkId)
     {
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_ALLOC);
@@ -69,7 +70,7 @@ public:
             return ret;
         } else {
             BIO_TRACE_START(BDM_TRACE_SEG_ALLOC);
-            auto ret = mDiskAllocator.alloc(mediaId, bucketId, len, chunkId);
+            auto ret = mDiskAllocator.alloc(mediaId, flowId, flowOffset, len, chunkId);
             BIO_TRACE_END(BDM_TRACE_SEG_ALLOC, ret);
             return ret;
         }
@@ -92,7 +93,7 @@ public:
 
 private:
     BResult Recover();
-    BResult RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t flowId);
+    BResult RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t flowId, uint64_t flowOffset);
 
 private:
     std::map<uint64_t, FlowPtr> mMemObjManager;
