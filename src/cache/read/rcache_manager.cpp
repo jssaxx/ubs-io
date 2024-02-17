@@ -68,6 +68,7 @@ BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &
     BIO_TRACE_START(RCACHE_TRACE_PUT);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
+        BIO_TRACE_END(RCACHE_TRACE_PUT, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
 
@@ -83,6 +84,7 @@ BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const
     BIO_TRACE_START(RCACHE_TRACE_GET);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
+        BIO_TRACE_END(RCACHE_TRACE_GET, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
     auto ret = cachePtr->Get(key, offset, slice, sliceWriter, realLen);
@@ -95,6 +97,7 @@ BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint
     BIO_TRACE_START(RCACHE_TRACE_LOAD);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
+        BIO_TRACE_END(RCACHE_TRACE_LOAD, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
 
@@ -108,6 +111,7 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
     BIO_TRACE_START(RCACHE_TRACE_DEL);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
+        BIO_TRACE_END(RCACHE_TRACE_DEL, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
 
@@ -125,8 +129,6 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
         cacheLock.UnLock();
         return BIO_OK;
     }
-
-    BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
 
     auto cacheObj = MakeRef<RCache>(ptId);
     if (cacheObj == nullptr) {
@@ -158,7 +160,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
-    BIO_TRACE_END(RCACHE_TRACE_CREATE_OBJ, ret);
+
     return BIO_OK;
 }
 
@@ -170,8 +172,6 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
         cacheLock.UnLock();
         return BIO_OK;
     }
-
-    BIO_TRACE_START(RCACHE_TRACE_DESTROY_OBJ);
 
     RCachePtr cachePtr = iter->second;
     auto ret = rCacheEvict->Stop(cachePtr);
@@ -194,6 +194,5 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
 
     cache.erase(iter);
     cacheLock.UnLock();
-    BIO_TRACE_END(RCACHE_TRACE_DESTROY_OBJ, 0);
     return BIO_OK;
 }
