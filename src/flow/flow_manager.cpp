@@ -135,7 +135,8 @@ BResult FlowManager::Recover()
 
     uint64_t chunkId;
     uint64_t chunkSize;
-    uint64_t bucketId;
+    uint64_t flowId;
+    uint64_t flowOffset;
     int ret;
 
     for (uint32_t diskId = 0; diskId < diskNum; diskId++) {
@@ -145,7 +146,7 @@ BResult FlowManager::Recover()
             return BIO_ERR;
         }
         while (true) {
-            ret = BdmGetNextUsedChunkId(diskId, &chunkId, &chunkSize, &bucketId);
+            ret = BdmGetNextUsedChunkId(diskId, &chunkId, &chunkSize, &flowId, &flowOffset);
             if (ret != BDM_CODE_OK && ret != BDM_CODE_SCAN_OFF) {
                 LOG_ERROR("Bdm invalid diskId:" << diskId << ", ret:" << ret);
                 return BIO_ERR;
@@ -157,7 +158,7 @@ BResult FlowManager::Recover()
                 LOG_ERROR("Bdm check chunk fail:" << chunkSize << ", config:" << segment);
                 return BIO_ERR;
             }
-            ret = RecoverChunk(diskId, chunkId, bucketId);
+            ret = RecoverChunk(diskId, chunkId, flowId, flowOffset);
             if (ret != BDM_CODE_OK) {
                 LOG_ERROR("Bdm rebuild chunk diskId:" << diskId << ", ret:" << ret);
                 return BIO_ERR;
@@ -168,7 +169,7 @@ BResult FlowManager::Recover()
     for (auto it = mDiskObjManager.begin(); it != mDiskObjManager.end(); ++it) {
         ret = it->second->RecoverCheck();
         if (ret != BIO_OK) {
-            LOG_ERROR("Check flow fail:" << bucketId << ", ret:" << ret);
+            LOG_ERROR("Check flow fail:" << flowId << ", offset:" << flowOffset << ", ret:" << ret);
             return BIO_ERR;
         }
     }
@@ -176,7 +177,7 @@ BResult FlowManager::Recover()
     return BIO_OK;
 }
 
-BResult FlowManager::RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t flowId)
+BResult FlowManager::RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t flowId, uint64_t flowOffset)
 {
     FlowPtr flow = CreateObject(FLOW_DISK, flowId);
     if (flow == nullptr) {
@@ -184,9 +185,9 @@ BResult FlowManager::RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t f
         return BIO_ERR;
     }
 
-    BResult ret = flow->RecoverChunk(chunkId, chunkId); // 临时打桩OFFSET
+    BResult ret = flow->RecoverChunk(flowOffset, chunkId);
     if (ret != BIO_OK) {
-        LOG_ERROR("Recover flow fail:" << flowId << ", chunk:" << chunkId);
+        LOG_ERROR("Recover flow fail:" << flowId << ", offset:" << flowOffset << ", chunk:" << chunkId);
         return BIO_ERR;
     }
 
