@@ -102,15 +102,15 @@ private:
     void ConstructPutReq(uint8_t *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
         WCacheSlicePtr &slice) const;
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index, PutRequest *&req);
-    void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, RpcEngine::Callback &callback);
-    void PutLocal(PutRequest *req, uint32_t localIdx, RpcEngine::Callback &callback) const;
+    void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
+    void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index);
 
     BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
 
-    void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, RpcEngine::Callback &callback);
-    void DeleteLocal(DeleteRequest &req, RpcEngine::Callback &callback) const;
+    void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, NetEngine::Callback &callback);
+    void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback) const;
     BResult SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req);
 
     BResult StatRemote(uint16_t dstNid, StatRequest &req, Bio::ObjStat &objInfo);

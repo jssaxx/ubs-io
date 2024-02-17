@@ -36,11 +36,18 @@ namespace ock {
             RCacheValue(uint64_t index, uint64_t offset, uint64_t len):indexInFlow(index), flowOffset(offset), length(len)
             {
             }
+
+            inline std::string ToString()
+            {
+                std::ostringstream oss;
+                oss << ", indexInFlow " << indexInFlow << ", flowOffset " << flowOffset << ", length " << length;
+                return oss.str();
+            }
         };
 
         class RCacheChunk {
         public:
-            RCacheChunk (Key key, RCacheValue &value);
+            RCacheChunk(Key key, RCacheValue &value);
 
             ~RCacheChunk();
 
@@ -88,7 +95,17 @@ namespace ock {
             {
                 mState = state;
             }
+            
             std::mutex lock;
+
+            inline std::string ToString()
+            {
+                std::ostringstream oss;
+                oss << "chunk info, key " << mKey << ", tier " << tierType << ", mqType " << mMqType <<
+                    ", hit " << hitCount << mValue.ToString();
+                return oss.str();
+            }
+            
             DEFINE_REF_COUNT_FUNCTIONS
         private:
             Key mKey;

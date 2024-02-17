@@ -12,6 +12,8 @@
 #include <unistd.h>
 #include <vector>
 
+#include "bio_str_util.h"
+
 namespace ock {
 namespace bio {
 constexpr uint32_t CM_IP_SIZE = 32;
