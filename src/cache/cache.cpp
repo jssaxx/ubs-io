@@ -4,6 +4,7 @@
 
 #include "cache.h"
 #include "underfs.h"
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {
@@ -35,7 +36,9 @@ BResult Cache::RegisterCacheClient(uint64_t &cacheId)
 
 BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId)
 {
+    BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
     auto ret = mWCacheManager->CreateWCache(flowId);
+    BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, cacheId:"
         << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
     LOG_DEBUG("Create wcache success, cacheId:" << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
@@ -44,7 +47,9 @@ BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId)
 
 BResult Cache::CreateRCache(uint64_t ptId)
 {
+    BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
     auto ret = mRCacheManager->CreateRCache(ptId);
+    BIO_TRACE_END(RCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create RCache, ptId:" << ptId);
 
     return BIO_OK;
@@ -52,25 +57,36 @@ BResult Cache::CreateRCache(uint64_t ptId)
 
 BResult Cache::DeleteCache(uint64_t ptId)
 {
+    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
     mRCacheManager->DeleteRCache(ptId);
+    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, 0);
+
+    BIO_TRACE_START(RCACHE_TRACE_DESTROY_OBJ);
     mWCacheManager->DeleteWCache(ptId);
+    BIO_TRACE_END(RCACHE_TRACE_DESTROY_OBJ, 0);
     return BIO_OK;
 }
 
 BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
+    BIO_TRACE_START(WCACHE_TRACE_PUT);
     return mWCacheManager->GetWCacheSlice(sliceKey, slice);
 }
 
 BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
-    return mWCacheManager->Put(key, slice, sliceReader, attr);
+    BIO_TRACE_START(WCACHE_TRACE_PUT);
+    auto ret = mWCacheManager->Put(key, slice, sliceReader, attr);
+    BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
+    return ret;
 }
 
 BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
                    uint64_t &realLen)
 {
+    BIO_TRACE_START(WCACHE_TRACE_GET);
     auto ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
+    BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     if (ret == BIO_OK) {
         LOG_INFO("write cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
         return BIO_OK;
@@ -114,7 +130,9 @@ BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len
 
 BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 {
+    BIO_TRACE_START(WCACHE_TRACE_STAT);
     auto ret = mWCacheManager->Stat(ptId, key, cacheObjStat);
+    BIO_TRACE_END(WCACHE_TRACE_STAT, ret);
     if ((ret == BIO_OK) || (ret != BIO_NOT_EXISTS)) {
         return ret;
     }
@@ -134,7 +152,9 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 
 BResult Cache::Delete(uint64_t ptId, const Key &key)
 {
+    BIO_TRACE_START(WCACHE_TRACE_DEL);
     BResult ret = mWCacheManager->Delete(ptId, key);
+    BIO_TRACE_END(WCACHE_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Write cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
         return ret;
