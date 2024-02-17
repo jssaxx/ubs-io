@@ -99,7 +99,7 @@ void Flow::PreLoadHandle()
     uint64_t offset;
     bool isReady;
     do {
-        auto ret = FlowManager::MediaAlloc(mType, mMediaId, mFlowId, mChunkSize, &chunkId);
+        auto ret = FlowManager::MediaAlloc(mType, mMediaId, mFlowId, mPreLoadOffset, mChunkSize, &chunkId);
         if (ret != BIO_OK) {
             LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" <<
                 mMediaId << ", chunkSize:" << mChunkSize);
@@ -209,6 +209,24 @@ BResult Flow::RecoverChunk(uint64_t offset, uint64_t chunkId)
 
 BResult Flow::RecoverCheck()
 {
+    if (mRecoverList.empty()) {
+        return BIO_OK;
+    }
+    bool isFirst = true;
+    for (auto& elem : mRecoverList) {
+        mChunkList.push_back(elem.second);
+        if (isFirst) {
+            mTruncateOffset = elem.first;
+            mPreLoadOffset = elem.first + mChunkSize;
+            isFirst = false;
+            continue;
+        }
+        if (mPreLoadOffset != elem.first) {
+            LOG_ERROR("Recover check fail:" << mPreLoadOffset << ", current:" << elem.first);
+            return BIO_ERR;
+        }
+        mPreLoadOffset = elem.first + mChunkSize;
+    }
     return BIO_OK;
 }
 }

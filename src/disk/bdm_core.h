@@ -69,7 +69,7 @@ int32_t BdmCreate(BdmCreatePara *createPara, uint32_t *bdmId);
 
 int32_t BdmDestory(uint32_t bdmId);
 
-int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t len, uint64_t *chunkId);
+int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId);
 
@@ -85,7 +85,8 @@ int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCa
 
 int32_t BdmResetScanPool(uint32_t bdmId);
 
-int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId);
+int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+    uint64_t *bucketOffset);
 
 int32_t BdmInit(void);
 
