@@ -166,7 +166,6 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
 BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 {
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
-
     if (sliceRef != nullptr) {
         cacheObjStat.size = sliceRef->GetSlice()->GetLength();
         cacheObjStat.time = time(nullptr);
