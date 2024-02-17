@@ -20,10 +20,9 @@ BResult NetExecutorPool::Start(uint32_t coreThreadNum, uint32_t queueSize)
     }
 
     mExeService->SetThreadName(mName);
-    auto result = mExeService->Start();
-    if (!result) {
+    if (!(mExeService->Start())) {
+        LOG_ERROR("Failed to start execution service for " << mName << ".");
         StopInner();
-        LOG_ERROR("Failed to start execution service for " << mName);
         return BIO_ERR;
     }
 
@@ -44,7 +43,7 @@ void NetExecutorPool::Stop()
 
 BResult NetExecutorPool::AddTask(NetTaskHandler &handler, ServiceContext &context)
 {
-    ChkTrueNot(handler != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(handler != nullptr, BIO_INVALID_PARAM, "Handler is nullptr.");
 
     auto task = MakeRef<NetTask>(handler);
     if (UNLIKELY(task == nullptr)) {
@@ -58,8 +57,7 @@ BResult NetExecutorPool::AddTask(NetTaskHandler &handler, ServiceContext &contex
         return BIO_ERR;
     }
 
-    auto ret = mExeService->Execute(task.Get());
-    if (UNLIKELY(!ret)) {
+    if (UNLIKELY(!(mExeService->Execute(task.Get())))) {
         LOG_ERROR("Failed to enqueue event task into " << mName << ", opcode " << context.OpCode());
         return BIO_ERR;
     }

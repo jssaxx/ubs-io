@@ -99,7 +99,7 @@ TEST_F(TestWCache, test_getslice_noexistcacheid_case_return_fail) {
 }
 
 TEST_F(TestWCache, test_put_case_return_ok) {
-    BioMrInfo bioMrInfo;
+    NetMrInfo bioMrInfo;
     auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -115,7 +115,7 @@ TEST_F(TestWCache, test_put_case_return_ok) {
 }
 
 TEST_F(TestWCache, test_get_case_return_ok) {
-    BioMrInfo bioMrInfo;
+    NetMrInfo bioMrInfo;
     auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -142,7 +142,7 @@ TEST_F(TestWCache, test_delete_case_return_ok) {
 }
 
 TEST_F(TestWCache, test_put_repeat_case_return_ok) {
-    BioMrInfo bioMrInfo;
+    NetMrInfo bioMrInfo;
     auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
 

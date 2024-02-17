@@ -67,7 +67,7 @@ BResult BioServer::Start()
     }
 
     // start rpc server
-    ret = StartRpcServer();
+    ret = StartNetService();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to start rpc server, ret:" << ret << ".");
         logger->Exit();
@@ -81,7 +81,7 @@ BResult BioServer::Start()
         LOG_ERROR("Failed to start cm, result:" << ret << ".");
         logger->Exit();
         StopDisk();
-        StopRpcServer();
+        StopNetService();
         return BIO_ERR;
     }
 
@@ -91,7 +91,7 @@ BResult BioServer::Start()
         LOG_ERROR("Failed to start mirror server, ret:" << ret << ".");
         logger->Exit();
         StopDisk();
-        StopRpcServer();
+        StopNetService();
         StopCm();
         return BIO_ERR;
     }
@@ -107,7 +107,7 @@ BResult BioServer::Start()
 void BioServer::Stop()
 {
     StopDisk();
-    StopRpcServer();
+    StopNetService();
     StopCm();
     StopMirrorServer();
     mStarted = false;
@@ -178,29 +178,28 @@ void BioServer::StopDisk()
     LOG_INFO("Stopped disk manager.");
 }
 
-BResult BioServer::StartRpcServer()
+BResult BioServer::StartNetService()
 {
-    mRpcEngine = MakeRef<RpcEngine>();
-    ChkTrueNot(mRpcEngine != nullptr, BIO_ALLOC_FAIL);
-    auto &netConfig = mConfig->GetNetConfig();
+    mNetEngine = MakeRef<NetEngine>();
+    ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
 
-    BioNetOptions netOptions;
+    // bio server create rpc and ipc service
+    auto &netConfig = mConfig->GetNetConfig();
+    NetOptions netOptions;
     netOptions.ipMask = netConfig.dataIpMask;
     netOptions.port = netConfig.dataPort;
     netOptions.isBusyLoop = netConfig.isBusyLoop;
-    netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
+    netOptions.rpcRole = NET_SERVER;
+    netOptions.rpcProtocol = static_cast<ServiceProtocol>(netConfig.protocol);
     netOptions.localMrSize = mConfig->GetDaemonConfig().memCap;
     netOptions.name = "BIO-" + std::to_string(netOptions.port);
-    netOptions.controlPanelConnCount = netConfig.ctrlWorkersCnt;
-    netOptions.controlPanelHandlerCount = netConfig.ctrlWorkersCnt;
     netOptions.dataPanelConnCount = netConfig.dataWorkersCnt;
     netOptions.dataPanelHandlerCount = netConfig.dataWorkersCnt;
     netOptions.handleRequestThreadNum = netConfig.handleRequestThreadNum;
     netOptions.handleRequestQueueSize = netConfig.handleRequestQueueSize;
 
-    mRpcEngine->SetDataPageKb(mConfig->GetDaemonConfig().segment / NO_1024);
-
-    auto result = mRpcEngine->Start(netOptions);
+    mNetEngine->SetDataPageKb(mConfig->GetDaemonConfig().segment / NO_1024);
+    auto result = mNetEngine->Start(netOptions);
     if (UNLIKELY(result != BIO_OK)) {
         LOG_ERROR("Start rpc engine failed, ret:" << result << ".");
         return BIO_ERR;
@@ -211,15 +210,15 @@ BResult BioServer::StartRpcServer()
     memAllocator.free = [this](uint64_t addr) { this->MemFree(addr); };
     FlowManager::RegisterMemAllocator(memAllocator);
 
-    LOG_INFO("Rpc Server Started.");
+    LOG_INFO("Net Server Started.");
     return BIO_OK;
 }
 
-void BioServer::StopRpcServer()
+void BioServer::StopNetService()
 {
-    if (mRpcEngine != nullptr) {
-        mRpcEngine->Stop();
-        mRpcEngine = nullptr;
+    if (mNetEngine != nullptr) {
+        mNetEngine->Stop();
+        mNetEngine = nullptr;
     }
     LOG_INFO("Rpc service stopped.");
 }
@@ -322,7 +321,7 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
     if (static_cast<uint32_t>(mConfig->GetCmConfig().nodeNum) == nodeInfos.size()) {
         mNodeView = nodeInfos;
         mLocalNid = mCm->GetCmLocalNodeId();
-        mRpcEngine->SetMyNodeId(mLocalNid.VNodeId());
+        mNetEngine->SetLocalNodeId(mLocalNid.VNodeId());
         Connection();
         mStarted = true;
     }
@@ -347,7 +346,7 @@ void BioServer::Connection()
         }
         LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" << it->second.port << ".");
         ConnectInfo info(it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
-        BResult ret = mRpcEngine->SyncConnect(info);
+        BResult ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
             LOG_ERROR("Connect to " << it->first.ToString() << " failed, ret: " << ret << ".");
             failCnt++;

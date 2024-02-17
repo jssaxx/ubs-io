@@ -1,18 +1,18 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
-#ifndef RPC_ENGINE_CONNECTOR_H
-#define RPC_ENGINE_CONNECTOR_H
+#ifndef NET_CONNECTOR_H
+#define NET_CONNECTOR_H
 
 #include "net_common.h"
 #include "bio_execution.h"
 
 namespace ock {
 namespace bio {
-class RpcConnectTask : public Runnable {
+class ConnectTask : public Runnable {
 public:
-    explicit RpcConnectTask(RpcEngine *engine);
-    ~RpcConnectTask() override;
+    explicit ConnectTask(NetEngine *engine);
+    ~ConnectTask() override;
 
     void Run() override;
 
@@ -59,8 +59,9 @@ private:
     }
 
 private:
-    RpcEngine *mEngine { nullptr };        /* engine, use raw pointer to avoid include files dead-locks */
-    ConnectInfo mConnectInfo {};              /* connect info */
+    ConnectMode mode = CONNECT_RPC;           /* connect mode */
+    NetEngine *mEngine{ nullptr };            /* engine, use raw pointer to avoid include files dead-locks */
+    ConnectInfo mConnectInfo{};               /* connect info */
     BResult mResult = BIO_OK;                 /* connect result */
     bool mSyncConnect = true;                 /* connect type */
     bool mFinish = false;                     /* for sync connect */
@@ -69,45 +70,39 @@ private:
     AsyncConnHandler mAsyncHandler = nullptr; /* for async connect */
     uintptr_t mUserCtx = 0;                   /* for async connect */
 
-    friend class RpcConnector;
+    friend class NetConnector;
 };
 
-/*
- * Async connector which has a thread to do connection work
- */
-class RpcConnector {
+class NetConnector {
 public:
-    explicit RpcConnector(RpcEngine *engine);
-    ~RpcConnector();
+    explicit NetConnector(NetEngine *engine);
+    ~NetConnector();
 
-    BResult Start(const BioNetOptions &);
+    BResult Start(const NetOptions &opt);
     void Stop();
 
-    void SetMyNodeId(const BioNodeId &myId)
+    inline void SetLocalNodeId(const uint32_t &nodeId)
     {
-        mMyNodeId = myId;
+        mLocalNodeId = nodeId;
     }
 
     BResult AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler, uintptr_t ctx);
     BResult SyncConnect(ConnectInfo &info);
 
     DEFINE_REF_COUNT_FUNCTIONS
-private:
-    void StopInner();
 
 private:
     DEFINE_REF_COUNT_VARIABLE
 
-    ExecutorServicePtr mExeService { nullptr };
-    BioNodeId mMyNodeId;
-    RpcEngine *mEngine { nullptr };
-
+    ExecutorServicePtr mExeService{ nullptr };
+    uint32_t mLocalNodeId{ UINT32_MAX };
+    NetEngine *mEngine{ nullptr };
     std::mutex mMutex;
     bool mStarted = false;
     std::string mName;
 };
-using RpcConnectorPtr = Ref<RpcConnector>;
-}
-}
 
-#endif // RPC_ENGINE_CONNECTOR_H
+using NetConnectorPtr = Ref<NetConnector>;
+}
+}
+#endif // NET_CONNECTOR_H

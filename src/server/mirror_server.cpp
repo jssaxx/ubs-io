@@ -126,24 +126,24 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
         }
 
         std::vector<FlowAddr> rFlowAddr = from->GetAddrs();
-        std::vector<BioMrInfo> rMrVec;
+        std::vector<NetMrInfo> rMrVec;
         for (auto & addr : rFlowAddr) {
             MrInfo mr{};
             addr.ToMrInfo(mr);
-            BioMrInfo bioMr(mr.address, mr.size, rMrKey);
+            NetMrInfo bioMr(mr.address, mr.size, rMrKey);
             rMrVec.emplace_back(bioMr);
         }
         std::vector<FlowAddr> lFlowAddr = to->GetAddrs();
-        std::vector<BioMrInfo> lMrVec;
+        std::vector<NetMrInfo> lMrVec;
         for (auto & addr : lFlowAddr) {
             MrInfo mr{};
             addr.ToMrInfo(mr);
-            BioMrInfo bioMr(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey());
+            NetMrInfo bioMr(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey());
             lMrVec.emplace_back(bioMr);
         }
 
         for (uint32_t idx = 0; idx < rMrVec.size(); idx++) {
-            BioNetRequest readReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
+            NetRequest readReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
             BResult ret = BioServer::Instance()->GetRpcEngine()->SyncRead(static_cast<BioNodeId>(dstNid), readReq);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Sync read failed, ret:" << ret << ", dstNid:" << dstNid << ".");
@@ -172,7 +172,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
     auto writer = [dstNid, localNid, rKey, key, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         BResult ret = BIO_ERR;
         if (dstNid == localNid) {
-            std::vector<BioMrInfo> rMrVec;
+            std::vector<NetMrInfo> rMrVec;
             for (auto addr : to->GetAddrs()) {
                 MrInfo mr{};
                 addr.ToMrInfo(mr);
@@ -191,7 +191,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
         }
 
         uint32_t totalLen = 0;
-        std::vector<BioMrInfo> rMrVec;
+        std::vector<NetMrInfo> rMrVec;
         for (auto addr : to->GetAddrs()) {
             MrInfo mr{};
             addr.ToMrInfo(mr);
@@ -200,7 +200,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
         }
 
         bool isAlloc = false;
-        std::vector<BioMrInfo> lMrVec;
+        std::vector<NetMrInfo> lMrVec;
         if (from->GetFlowType() == FLOW_MEMORY) {
             for (auto addr : from->GetAddrs()) {
                 MrInfo mr{};
@@ -208,7 +208,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
                 lMrVec.emplace_back(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey());
             }
         } else {
-            BioMrInfo bioMr;
+            NetMrInfo bioMr;
             ret = BioServer::Instance()->MemAlloc(totalLen, bioMr);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
@@ -226,7 +226,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
 
         for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
             uint32_t off = 0;
-            BioNetRequest writeReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
+            NetRequest writeReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
             ret = BioServer::Instance()->GetRpcEngine()->SyncWrite(static_cast<BioNodeId>(dstNid), writeReq);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Sync write failed, ret:" << ret << ", dstNid:" << dstNid << ".");
