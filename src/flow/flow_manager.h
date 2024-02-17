@@ -41,7 +41,7 @@ public:
 
     BResult Exit();
 
-    FlowPtr CreateObject(FlowType type, uint64_t flowId);
+    FlowPtr CreateObject(FlowType type, uint64_t flowId, uint32_t mediaId);
 
     BResult DestroyObject(FlowType type, uint64_t flowId);
 

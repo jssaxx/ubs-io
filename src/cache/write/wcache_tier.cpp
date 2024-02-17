@@ -5,6 +5,8 @@
 #include "wcache_tier.h"
 #include "flow_manager.h"
 #include "securec.h"
+#include "cache_flow.h"
+#include "cm.h"
 
 namespace ock {
 namespace bio {
@@ -16,15 +18,21 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId)
 
     auto &flowManager = FlowManager::Instance();
 
+    uint64_t ptId = CacheFlowIdManager::GetPtId(flowId);
+    uint16_t diskId;
+    ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
+    ChkTrue(ret == BIO_OK, ret,
+        "Get local disk fail:" << ret << ", ptId:" << ptId);
+
     uint64_t metaFlowId = flowId | (((uint64_t)((cacheTier << 1) | 0) & 0x7FF) << 40) /* meta */;
-    mMetaFlow = flowManager->CreateObject(flowType, metaFlowId);
+    mMetaFlow = flowManager->CreateObject(flowType, metaFlowId, diskId);
     ChkTrue(mMetaFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create metaflow, flowType:" << flowType << " metaFlowId" << metaFlowId);
 
     LOG_INFO("Meta flowId:" << metaFlowId << ", flowType:" << flowType);
 
     uint64_t dataFlowId = flowId | (((uint64_t)((cacheTier << 1) | 1) & 0x7FF) << 40) /* data */;
-    mDataFlow = flowManager->CreateObject(flowType, dataFlowId);
+    mDataFlow = flowManager->CreateObject(flowType, dataFlowId, diskId);
     ChkTrue(mDataFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create dataflow, flowType:" << flowType << " dataFlowId" << dataFlowId);
 
