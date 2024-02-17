@@ -74,7 +74,7 @@ int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const char 
         g_ptChange.notifyPtListChange == nullptr) {
         return -2;
     }
-    uint16_t nodeNum = 2;
+    uint16_t nodeNum = 3;
     NodeStateList *nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
     if (nodeList == nullptr) {
         return -3;

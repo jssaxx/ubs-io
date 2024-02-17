@@ -46,7 +46,7 @@ auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     return ret;
 };
 
-auto writer = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+auto wwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
     EXPECT_EQ(ret, BIO_OK);
@@ -124,7 +124,7 @@ TEST_F(TestWCache, test_get_case_return_ok) {
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(g_ptId, 1024, addrVec);
 
     uint64_t realLen = 0;
-    ret = g_wcacheManager->Get(g_key, 0, rcacheSlice, writer, realLen);
+    ret = g_wcacheManager->Get(g_key, 0, rcacheSlice, wwriter, realLen);
     EXPECT_EQ(ret, BIO_OK);
 
     BioServer::Instance()->MemFree(mrInfo.address);
