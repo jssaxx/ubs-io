@@ -68,26 +68,26 @@ struct CmDiskInfo {
 
 union CmNodeId {
     struct {
-        uint32_t groupId : NO_8;
-        uint32_t nodeId : NO_24;
+        uint16_t groupId;
+        uint16_t nodeId;
     };
     uint32_t whole = 0;
 
     CmNodeId() = default;
     explicit CmNodeId(uint32_t w) : whole(w) {}
 
-    CmNodeId(uint32_t gId, uint32_t vId)
+    CmNodeId(uint16_t gId, uint16_t vId)
     {
         groupId = gId;
         nodeId = vId;
     }
 
-    inline uint32_t GroupId() const
+    inline uint16_t GroupId() const
     {
         return groupId;
     }
 
-    inline uint32_t VNodeId() const
+    inline uint16_t VNodeId() const
     {
         return nodeId;
     }
@@ -244,6 +244,21 @@ public:
         if (mPtInfos.find(ptId) != mPtInfos.end()) {
             ptInfo = mPtInfos[ptId];
             return BIO_OK;
+        }
+        return BIO_ERR;
+    }
+
+    inline BResult GetLocalDiskId(uint16_t ptId, uint16_t &diskId)
+    {
+        ReadLocker<ReadWriteLock> lock(&mLock);
+        if (mPtInfos.find(ptId) != mPtInfos.end()) {
+            for (auto& elem : mPtInfos[ptId].copys) {
+                if (elem.nodeId == mNodeId.VNodeId()) {
+                    diskId = elem.diskId;
+                    return BIO_OK;
+                }
+            }
+            return BIO_ERR;
         }
         return BIO_ERR;
     }
