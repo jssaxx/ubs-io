@@ -6,153 +6,96 @@
 #include <mockcpp/mokc.h>
 #include <mockcpp/mockcpp.hpp>
 #include <cstdint>
-#include "flow_manager.h"
+#include "underfs.h"
+#include "bio_server.h"
+#include "bio_mock.h"
+#include "bio_config_instance.h"
 #include "cache_slice_operator.h"
 #include "rcache_manager.h"
-#include "underfs.h"
-#include "bdm_core.h"
+#include "test_rcache.h"
 
 using namespace ock::bio;
 
-constexpr static uint64_t s_PtId = 1;
-constexpr Key key = const_cast<char *>("123/123/123");
-constexpr char *value = "test/read/cache/data";
+static RCacheManagerPtr g_rcacheManager = RCacheManager::Instance();
 
-static RCacheManager rcacheManager;
-static CacheSliceOperator mSlicerOperator;
-static bool setup = false;
+bool TestRCache::g_setup = false;
 
-class RCacheTest : public testing::Test {
-public:
-    static BResult SliceCopy(const SlicePtr &from, const SlicePtr &to)
-    {
-        if (from->GetFlowType() == FLOW_MEMORY) {
-            memcpy(reinterpret_cast<void *>(to->GetAddrs()[0].chunkId+ to->GetAddrs()[0].chunkOffset),
-                   reinterpret_cast<void *>(from->GetAddrs()[0].chunkId + from->GetAddrs()[0].chunkOffset),
-                   from->GetLength());
-        }
-        return BIO_OK;
-    }
-
-    static BResult GetStub(const char *k, char *v)
-    {
-        memcpy(v, value, strlen(value) + 1);
-        return BIO_OK; // 打桩接口
-    }
-
-    static BResult DiskAllocStub(uint32_t mediaId, uint64_t bucketId, uint64_t len, uint64_t *chunkId)
-    {
-        return BIO_OK;
-    }
-
-    static void DiskFreeStub(uint32_t mediaId, uint64_t len, uint64_t chunkId)
-    {
+void TestRCache::SetUp()
+{
+    if (g_setup) {
         return;
     }
 
-protected:
-    void SetUp() override
-    {
-        if (setup) {
-            return;
-        }
-        LoggerOptions loggerOptions;
-        loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
-        loggerOptions.path = "./bio.log";
-        auto logger = Logger::Instance(loggerOptions);
-        auto ret = logger->Init();
-        EXPECT_EQ(ret, 0);
+    g_setup = true;
+    return;
+}
 
-        flowManager = FlowManager::Instance();
-        ret = flowManager->Init();
-        EXPECT_EQ(ret, 0);
+void TestRCache::TearDown()
+{
+    return;
+}
 
-        MemAllocator memAllocator;
-        memAllocator.alloc = [](uint64_t size, uint64_t *addr) {
-            *addr = reinterpret_cast<uint64_t>(malloc(size));
-            return 0;
-        };
-        memAllocator.free = [](uint64_t addr) { free(reinterpret_cast<void *>(addr)); };
-        FlowManager::RegisterMemAllocator(memAllocator);
+static CacheSliceOperator g_slicerOperator;
 
-        DiskAllocator diskAllocator;
-        diskAllocator.alloc = DiskAllocStub;
-        diskAllocator.free  = DiskFreeStub;
+constexpr uint64_t g_ptId = 1;
+constexpr Key g_key = const_cast<char *>("123123key");
+constexpr char *g_value = "test/read/cache/data";
 
-        ret = rcacheManager.Init();
-        EXPECT_EQ(ret, 0);
-        ret = rcacheManager.CreateRCache(s_PtId);
-        EXPECT_EQ(ret, 0);
+static RCacheSlicePtr g_rcacheSlice;
 
-        //MOCKER(UnderFs::Instance()).stubs().will(returnValue(underFsMock));
-
-        setup = true;
-    }
-
-    void TearDown() override
-    {
-        /*
-        BResult ret = rcacheManager.DeleteRCache(s_PtId);
-        EXPECT_EQ(ret, 0);
-
-        rcacheManager.Exit();
-
-        flowManager->Exit();
-         */
-    }
-
-private:
-    static FlowManagerPtr flowManager;
-protected:
-    //MockObject<UnderFsPtr> underFsMock;
+auto rwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    CacheSliceOperator sliceOperator;
+    auto ret = g_slicerOperator.Copy(from, to);
+    EXPECT_EQ(ret, BIO_OK);
+    return ret;
 };
 
-FlowManagerPtr RCacheTest::flowManager = nullptr;
+TEST_F(TestRCache, test_rcache_create_ok) {
+    auto ret = g_rcacheManager->CreateRCache(g_ptId);
+    EXPECT_EQ(ret, BIO_OK);
+}
 
-#if 0
-TEST_F(RCacheTest, test_rcache_put_ok)
+TEST_F(TestRCache, test_rcache_put_ok)
 {
-    uint64_t len = strlen(value) + 1;
+    uint64_t len = strlen(g_value) + 1;
     WCacheSlicePtr slicePtr = nullptr;
 
-    auto ret = rcacheManager.AllocResources(s_PtId, len, slicePtr);
+    auto ret = g_rcacheManager->AllocResources(g_ptId, len, slicePtr);
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(slicePtr->GetLength(), len);
 
-    ret = mSlicerOperator.Copy(value, slicePtr.Get());
+    ret = g_slicerOperator.Copy(g_value, slicePtr.Get());
     EXPECT_EQ(ret, 0);
 
-    ret = rcacheManager.Put(s_PtId, key, slicePtr);
+    ret = g_rcacheManager->Put(g_ptId, g_key, slicePtr);
     EXPECT_EQ(ret, 0);
 
-    MOCKER(BdmRead).stubs().will(returnValue(0));
-    MOCKER(BdmWrite).stubs().will(returnValue(0));
     uint64_t needEvictData = len;
     uint64_t haveEvictData;
-    rcacheManager.GetRCacheInstanceByPtId(s_PtId)->EvictMemData(needEvictData, haveEvictData);
+    g_rcacheManager->GetRCacheInstanceByPtId(g_ptId)->EvictMemData(needEvictData, haveEvictData);
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(needEvictData, haveEvictData);
 
-    rcacheManager.GetRCacheInstanceByPtId(s_PtId)->EvictDiskData(needEvictData, haveEvictData);
+    g_rcacheManager->GetRCacheInstanceByPtId(g_ptId)->EvictDiskData(needEvictData, haveEvictData);
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(needEvictData, haveEvictData);
 }
 
-TEST_F(RCacheTest, test_rcache_get_ok)
+TEST_F(TestRCache, test_rcache_get_ok)
 {
-    uint64_t len = strlen(value) + 1;
-    char *key1 = "123/123/key1";
+    uint64_t len = strlen(g_value) + 1;
+    char *key1 = "123123key1";
     WCacheSlicePtr slicePtr = nullptr;
     RCacheSlicePtr readSlicePtr = nullptr;
 
-    auto ret = rcacheManager.AllocResources(s_PtId, len, slicePtr);
+    auto ret = g_rcacheManager->AllocResources(g_ptId, len, slicePtr);
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(slicePtr->GetLength(), len);
 
-    ret = mSlicerOperator.Copy(value, slicePtr.Get());
+    ret = g_slicerOperator.Copy(g_value, slicePtr.Get());
     EXPECT_EQ(ret, 0);
 
-    ret = rcacheManager.Put(s_PtId, key1, slicePtr);
+    ret = g_rcacheManager->Put(g_ptId, key1, slicePtr);
     EXPECT_EQ(ret, 0);
 
     FlowAddr flowAddr;
@@ -161,21 +104,24 @@ TEST_F(RCacheTest, test_rcache_get_ok)
     flowAddr.chunkLen = len;
     std::vector<FlowAddr> addrs;
     addrs.push_back(flowAddr);
-    readSlicePtr = MakeRef<RCacheSlice>(s_PtId, len, addrs, FLOW_MEMORY);
+    readSlicePtr = MakeRef<RCacheSlice>(g_ptId, len, addrs, FLOW_MEMORY);
     EXPECT_NE(readSlicePtr, nullptr);
-    ret = rcacheManager.Get(s_PtId, key1, 0ULL, readSlicePtr, RCacheTest::SliceCopy);
-    ret = memcmp(value, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
+    uint64_t realLen;
+    ret = g_rcacheManager->Get(g_ptId, key1, 0ULL, readSlicePtr, rwriter, realLen);
+    ret = memcmp(g_value, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
     EXPECT_EQ(ret, 0);
 }
 
-TEST_F(RCacheTest, test_rcache_load_ok)
+TEST_F(TestRCache, test_rcache_load_ok)
 {
-    char *key2 = "123/123/key2";
-    uint64_t len = strlen(value) + 1;
+    char *key2 = "123123key2";
+    uint64_t len = strlen(g_value) + 1;
     RCacheSlicePtr readSlicePtr = nullptr;
 
-    //MOCK_METHOD(underFsMock, Get).stubs().will(invoke(GetStub));
-    auto ret = rcacheManager.Load(s_PtId, key2, 0, len);
+    UnderFs::Instance()->Put(key2, g_value, len);
+
+    uint64_t realLen;
+    auto ret = g_rcacheManager->Load(g_ptId, key2, 0, len, realLen);
     EXPECT_EQ(ret, 0);
 
     FlowAddr flowAddr;
@@ -184,30 +130,29 @@ TEST_F(RCacheTest, test_rcache_load_ok)
     flowAddr.chunkLen = len;
     std::vector<FlowAddr> addrs;
     addrs.push_back(flowAddr);
-    readSlicePtr = MakeRef<RCacheSlice>(s_PtId, len, addrs, FLOW_MEMORY);
+    readSlicePtr = MakeRef<RCacheSlice>(g_ptId, len, addrs, FLOW_MEMORY);
     EXPECT_NE(readSlicePtr, nullptr);
-    ret = rcacheManager.Get(s_PtId, key2, 0ULL, readSlicePtr, RCacheTest::SliceCopy);
-    ret = memcmp(value, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
+    ret = g_rcacheManager->Get(g_ptId, key2, 0ULL, readSlicePtr, rwriter, realLen);
+    ret = memcmp(g_value, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
     EXPECT_EQ(ret, 0);
 }
 
-TEST_F(RCacheTest, test_rcache_delete_ok)
+TEST_F(TestRCache, test_rcache_delete_ok)
 {
-    char *key4 = "123/123/key4";
-    uint64_t len = strlen(value) + 1;
+    char *key4 = "123123key3";
+    uint64_t len = strlen(g_value) + 1;
     WCacheSlicePtr slicePtr = nullptr;
 
-    auto ret = rcacheManager.AllocResources(s_PtId, len, slicePtr);
+    auto ret = g_rcacheManager->AllocResources(g_ptId, len, slicePtr);
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(slicePtr->GetLength(), len);
 
-    ret = mSlicerOperator.Copy(value, slicePtr.Get());
+    ret = g_slicerOperator.Copy(g_value, slicePtr.Get());
     EXPECT_EQ(ret, 0);
 
-    ret = rcacheManager.Put(s_PtId, key4, slicePtr);
+    ret = g_rcacheManager->Put(g_ptId, key4, slicePtr);
     EXPECT_EQ(ret, 0);
 
-    ret = rcacheManager.Delete(s_PtId, key4);
+    ret = g_rcacheManager->Delete(g_ptId, key4);
     EXPECT_EQ(ret, 0);
 }
-#endif
