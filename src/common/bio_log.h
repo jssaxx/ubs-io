@@ -88,8 +88,8 @@ namespace bio {
 
 struct LoggerOptions {
     int32_t minLogLevel = 0;
-    uint32_t rotationFileSizeInMB = 20;
-    uint32_t rotationFileCount = 10;
+    uint32_t rotationFileSizeInMB = 50;
+    uint32_t rotationFileCount = 20;
     std::string path;
 };
 

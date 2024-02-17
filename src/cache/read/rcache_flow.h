@@ -48,12 +48,7 @@ namespace ock {
 
             inline void UpdateDataTruncOffset(uint64_t off, uint64_t len)
             {
-                if (mDataTruncOffset == off) {
-                    mDataTruncOffset = off + len;
-                } else {
-                    LOG_ERROR("Update data truncate offset failed, base offset: " << mDataTruncOffset <<
-                        ", input offset:" << off << ", len:" << len);
-                }
+                mDataTruncOffset = off + len;
             }
 
             inline void AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow)

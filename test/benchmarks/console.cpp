@@ -396,7 +396,7 @@ int32_t HandleCmd(const std::string &cmd)
         HandleList();
         return 0;
     }  else if (cmdType == "create") {
-        if (cmds.size() != 5) {
+        if (cmds.size() != 4) {
             std::cout << "Input parameters failed!, num:" << cmds.size() << std::endl;
             return 0;
         }

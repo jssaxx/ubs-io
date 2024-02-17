@@ -20,16 +20,15 @@ namespace bio {
  * The linked node info needs to clean after allocated, since these memory segments
  * are allocated to end user possibly.
  */
-class BioNetBlockPool {
+class NetBlockPool {
 public:
-    BioNetBlockPool() = default;
-    ~BioNetBlockPool() = default;
+    NetBlockPool() = default;
+    ~NetBlockPool() = default;
 
-    BioNetBlockPool(const BioNetBlockPool &) = delete;
-    BioNetBlockPool(BioNetBlockPool &&) = delete;
-    BioNetBlockPool &operator = (const BioNetBlockPool &) = delete;
-    BioNetBlockPool &operator = (BioNetBlockPool &&) = delete;
-
+    NetBlockPool(const NetBlockPool &) = delete;
+    NetBlockPool(NetBlockPool &&) = delete;
+    NetBlockPool &operator = (const NetBlockPool &) = delete;
+    NetBlockPool &operator = (NetBlockPool &&) = delete;
 
     BResult Start(uintptr_t address, uint64_t blockSize, uint64_t count)
     {
@@ -53,23 +52,22 @@ public:
 
     inline BResult AllocOne(uintptr_t &address)
     {
-        ChkTrueNot(mIsStarted.load() == true, BIO_NOT_READY);
+        ChkTrue(mIsStarted.load() == true, BIO_NOT_READY, "Net block pool not ready.");
         if (!Pop(address)) {
             return BIO_ALLOC_FAIL;
         }
-
         return BIO_OK;
     }
 
     inline void ReleaseOne(uintptr_t address)
     {
-        ChkTrueExNot(mIsStarted.load() == true);
+        ChkTrueEx(mIsStarted.load() == true, "Net block pool not ready.");
         PushFront(address);
     }
 
     inline BResult AllocMany(uint32_t count, std::vector<uintptr_t> &items)
     {
-        ChkTrueNot(mIsStarted.load() == true, BIO_NOT_READY);
+        ChkTrue(mIsStarted.load() == true, BIO_NOT_READY, "Net block pool not ready.");
         if (!PopN(count, items)) {
             return BIO_ALLOC_FAIL;
         }
@@ -78,17 +76,12 @@ public:
 
     inline void ReleaseMany(std::vector<uintptr_t> &items)
     {
-        ChkTrueExNot(mIsStarted.load() == true);
+        ChkTrueEx(mIsStarted.load() == true, "Net block pool not ready.");
         PushN(items);
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
-    /*
-     * @brief Push one item to linked list
-     *
-     * @param item         [in] the address of memory to added to list
-     */
     inline void PushFront(uintptr_t item)
     {
         BioBucketLinkedListMeta *buckets = &mBuckets[__sync_fetch_and_add(&mPushRRIdx, 1) % BUCKET_COUNT];
@@ -150,7 +143,7 @@ private:
 
     inline void PushN(std::vector<uintptr_t> &items)
     {
-        if (UNLIKELY(items.size() == 0)) {
+        if (UNLIKELY(items.empty())) {
             return;
         }
 
@@ -185,7 +178,7 @@ private:
     DEFINE_REF_COUNT_VARIABLE;
 };
 
-using BioNetBlockPoolPtr = Ref<BioNetBlockPool>;
+using NetBlockPoolPtr = Ref<NetBlockPool>;
 }
 }
 

@@ -1,8 +1,8 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
-#ifndef BOOSTIO_NET_EXECUTOR_POOL_H
-#define BOOSTIO_NET_EXECUTOR_POOL_H
+#ifndef NET_EXECUTOR_POOL_H
+#define NET_EXECUTOR_POOL_H
 
 #include "bio_execution.h"
 #include "bio_err.h"
@@ -44,7 +44,7 @@ public:
     explicit NetExecutorPool(const std::string &name)
     {
         /* thread name should be less than 16 chars */
-        mName = "Evt" + name;
+        mName = "NetExecutor" + name;
     }
 
     ~NetExecutorPool()
@@ -80,4 +80,4 @@ using NetExecutorPoolPtr = Ref<NetExecutorPool>;
 }
 }
 
-#endif // BOOSTIO_NET_EXECUTOR_POOL_H
+#endif // NET_EXECUTOR_POOL_H

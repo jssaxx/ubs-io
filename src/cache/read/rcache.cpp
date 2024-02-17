@@ -372,8 +372,8 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     auto ret = GetSliceFromChunkIO(tier, chunk, newSlicePtr, offset, slice->GetLength(), realLen);
     if (UNLIKELY(ret != BIO_OK) || UNLIKELY(newSlicePtr == nullptr)) {
         LOG_ERROR("Alloc slice for read cache key:" << key << ", type:" << tier << ", length:"
-        << chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset
-        << ", indexofflow:" << chunk->GetValue().indexInFlow);
+        	<< chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset
+        	<< ", indexofflow:" << chunk->GetValue().indexInFlow);
         chunk->lock.unlock();
         return BIO_ALLOC_FAIL;
     }
@@ -515,44 +515,39 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
         truncateQ[READ_CACHE_TIER_MEM].pop_back();
         truncateLock[READ_CACHE_TIER_MEM].UnLock();
 
+        BIO_TRACE_START(RCACHE_TRACE_EVICT2DISK);
         chunk->lock.lock();
-        LOG_INFO("Update chunk pre, key: " << chunk->GetKey() << ", flowId:" <<
-            flow[READ_CACHE_TIER_MEM]->GetDataFlow()->GetFlowId()
-            << ", type:" << chunk->GetTierType() << ", length:" << chunk->GetValue().length << ", flowOffset:"
-            << chunk->GetValue().flowOffset << ", indexInFlow:" << chunk->GetValue().indexInFlow);
-        uint64_t flowOffset;
-        uint64_t indexInFlow;
+        uint64_t flowOffset = 0;
+        uint64_t indexInFlow = 0;
         flow[READ_CACHE_TIER_DISK]->AllocOffset(chunk->GetValue().length, flowOffset, indexInFlow);
-        if (flowOffset == 0) {
-            LOG_INFO("AllocOffset key:"<<chunk->GetKey() <<"type:" <<chunk->GetTierType()
-            << ",offset:0,len:"<<chunk->GetValue().length<<",indexInFlow:"<<indexInFlow);
-        }
         RCacheValue chunkValue(indexInFlow, flowOffset, chunk->GetValue().length);
         auto ret = AllocChunk(chunk->GetKey(), chunkValue, newChunk);
         if ((ret != BIO_OK) || (chunk == nullptr)) {
             LOG_ERROR("Alloc chunk for read cache key " << chunk->GetKey() << " failed.");
             chunk->lock.unlock();
+            BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
-        BIO_TRACE_START(RCACHE_TRACE_EVICT2DISK);
+
         ret = GetSliceFromChunk(READ_CACHE_TIER_MEM, chunk, fromSlicePtr);
         if ((ret != BIO_OK) || (fromSlicePtr == nullptr)) {
-            LOG_ERROR("Alloc slice for read cache key " << chunk->GetKey() << ", type:" << chunk->GetTierType()
-            << ", length:" << chunk->GetValue().length << ", flowOffset:" << chunk->GetValue().flowOffset
-            << ", index:" << chunk->GetValue().indexInFlow << " failed.");
+            LOG_ERROR("RCache alloc mem tier slice failed, " << chunk->ToString());
             chunk->lock.unlock();
+            BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
 
         ret = GetSliceFromChunk(READ_CACHE_TIER_DISK, newChunk, toSlicePtr);
         if ((ret != BIO_OK) || (toSlicePtr == nullptr)) {
-            LOG_ERROR("Alloc slice for read cache key " << newChunk->GetKey() << " failed.");
+            LOG_ERROR("RCache alloc disk tier slice failed,  " << newChunk->ToString());
+            BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
 
         ret = mSliceOperator.Copy(fromSlicePtr.Get(), toSlicePtr.Get());
         if (ret != BIO_OK) {
-            LOG_ERROR("Copy "<< chunk->GetKey() << "data from memory to disk failed.");
+            LOG_ERROR("RCache copy mem tier slice to disk tier slice failed, " << chunk->ToString());
+            BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
 
@@ -563,12 +558,12 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
         AddToTruncateList(READ_CACHE_TIER_DISK, chunk);
         flow[READ_CACHE_TIER_MEM]->UpdateDataTruncOffset(chunk->GetValue().flowOffset, chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
-        BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
+        LOG_INFO("RCache evict chunk to disk tier success, " << chunk->ToString());
         chunk->lock.unlock();
+        BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, BIO_OK);
     }
 
     uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
-    LOG_INFO("Truncate offset:" << truncateOffset);
     auto ret = flow[READ_CACHE_TIER_MEM]->GetDataFlow()->TruncateOffset(truncateOffset);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Truncate read cache key "<< chunk->GetKey() << "mem data flow to " << truncateOffset << " failed." << ret);

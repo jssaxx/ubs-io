@@ -53,30 +53,68 @@ static CResult ToCResult(const BResult ret)
     }
 }
 
-static void StatisticIoSize(uint64_t length, uint8_t opType)
+static void StatisticPutIoSize(uint64_t length)
 {
-    SdkTracerType type = SDK_TRACE_START;
     if (length <= IO_SIZE_4K) {
-        type = opType == 0 ? SDK_TRACE_W_S_1_4K : SDK_TRACE_R_S_1_4K;
+        BIO_TRACE_START(SDK_TRACE_W_S_1_4K);
+        BIO_TRACE_END(SDK_TRACE_W_S_1_4K, BIO_OK);
     } else if (length <= IO_SIZE_8K) {
-        type = opType == 0 ? SDK_TRACE_W_S_4_8K : SDK_TRACE_R_S_4_8K;
+        BIO_TRACE_START(SDK_TRACE_W_S_4_8K);
+        BIO_TRACE_END(SDK_TRACE_W_S_4_8K, BIO_OK);
     } else if (length <= IO_SIZE_64K) {
-        type = opType == 0 ? SDK_TRACE_W_S_8_64K : SDK_TRACE_R_S_8_64K;
+        BIO_TRACE_START(SDK_TRACE_W_S_8_64K);
+        BIO_TRACE_END(SDK_TRACE_W_S_8_64K, BIO_OK);
     } else if (length <= IO_SIZE_128K) {
-        type = opType == 0 ? SDK_TRACE_W_S_64_128K : SDK_TRACE_R_S_64_128K;
+        BIO_TRACE_START(SDK_TRACE_W_S_64_128K);
+        BIO_TRACE_END(SDK_TRACE_W_S_64_128K, BIO_OK);
     } else if (length <= IO_SIZE_256K) {
-        type = opType == 0 ? SDK_TRACE_W_S_128_256K : SDK_TRACE_R_S_128_256K;
+        BIO_TRACE_START(SDK_TRACE_W_S_128_256K);
+        BIO_TRACE_END(SDK_TRACE_W_S_128_256K, BIO_OK);
     } else if (length <= IO_SIZE_1M) {
-        type = opType == 0 ? SDK_TRACE_W_S_256K_1M : SDK_TRACE_R_S_256K_1M;
+        BIO_TRACE_START(SDK_TRACE_W_S_256K_1M);
+        BIO_TRACE_END(SDK_TRACE_W_S_256K_1M, BIO_OK);
     } else if (length <= IO_SIZE_2M) {
-        type = opType == 0 ? SDK_TRACE_W_S_1_2M : SDK_TRACE_R_S_1_2M;
+        BIO_TRACE_START(SDK_TRACE_W_S_1_2M);
+        BIO_TRACE_END(SDK_TRACE_W_S_1_2M, BIO_OK);
     } else if (length <= IO_SIZE_4M) {
-        type = opType == 0 ? SDK_TRACE_W_S_2_4M : SDK_TRACE_R_S_2_4M;
+        BIO_TRACE_START(SDK_TRACE_W_S_2_4M);
+        BIO_TRACE_END(SDK_TRACE_W_S_2_4M, BIO_OK);
     } else {
-        type = opType == 0 ? SDK_TRACE_W_S_4M : SDK_TRACE_R_S_4M;
+        BIO_TRACE_START(SDK_TRACE_W_S_4M);
+        BIO_TRACE_END(SDK_TRACE_W_S_4M, BIO_OK);
     }
-    BIO_TRACE_START(type);
-    BIO_TRACE_END(type, BIO_OK);
+}
+
+static void StatisticGetIoSize(uint64_t length)
+{
+    if (length <= IO_SIZE_4K) {
+        BIO_TRACE_START(SDK_TRACE_R_S_1_4K);
+        BIO_TRACE_END(SDK_TRACE_R_S_1_4K, BIO_OK);
+    } else if (length <= IO_SIZE_8K) {
+        BIO_TRACE_START(SDK_TRACE_R_S_4_8K);
+        BIO_TRACE_END(SDK_TRACE_R_S_4_8K, BIO_OK);
+    } else if (length <= IO_SIZE_64K) {
+        BIO_TRACE_START(SDK_TRACE_R_S_8_64K);
+        BIO_TRACE_END(SDK_TRACE_R_S_8_64K, BIO_OK);
+    } else if (length <= IO_SIZE_128K) {
+        BIO_TRACE_START(SDK_TRACE_R_S_64_128K);
+        BIO_TRACE_END(SDK_TRACE_R_S_64_128K, BIO_OK);
+    } else if (length <= IO_SIZE_256K) {
+        BIO_TRACE_START(SDK_TRACE_R_S_128_256K);
+        BIO_TRACE_END(SDK_TRACE_R_S_128_256K, BIO_OK);
+    } else if (length <= IO_SIZE_1M) {
+        BIO_TRACE_START(SDK_TRACE_R_S_256K_1M);
+        BIO_TRACE_END(SDK_TRACE_R_S_256K_1M, BIO_OK);
+    } else if (length <= IO_SIZE_2M) {
+        BIO_TRACE_START(SDK_TRACE_R_S_1_2M);
+        BIO_TRACE_END(SDK_TRACE_R_S_1_2M, BIO_OK);
+    } else if (length <= IO_SIZE_4M) {
+        BIO_TRACE_START(SDK_TRACE_R_S_2_4M);
+        BIO_TRACE_END(SDK_TRACE_R_S_2_4M, BIO_OK);
+    } else {
+        BIO_TRACE_START(SDK_TRACE_R_S_4M);
+        BIO_TRACE_END(SDK_TRACE_R_S_4M, BIO_OK);
+    }
 }
 
 static bool KeyValid(const char* key)
@@ -109,7 +147,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
         return RET_CACHE_EPERM;
     }
 
-    StatisticIoSize(length, 0);
+    StatisticPutIoSize(length);
 
     BIO_TRACE_START(SDK_TRACE_PUT);
     MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, key, value, length, location };
@@ -139,7 +177,7 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         return RET_CACHE_EPERM;
     }
 
-    StatisticIoSize(length, 1);
+    StatisticGetIoSize(length);
 
     BIO_TRACE_START(SDK_TRACE_GET);
     MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };

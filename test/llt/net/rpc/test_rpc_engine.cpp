@@ -7,7 +7,7 @@
 #include <mockcpp/mockcpp.hpp>
 #include "bio_mock.h"
 #include "test_rpc_engine.h"
-#include "rpc_engine.h"
+#include "net_engine.h"
 
 using namespace ock::bio;
 
@@ -35,7 +35,7 @@ BResult SyncConnect_Stub(ConnectInfo &info)
 
 void TestRpcEngine::Stub()
 {
-    MOCKER_CPP(&RpcEngine::SyncConnect, BResult (*)(ConnectInfo &info)).stubs().will(invoke(SyncConnect_Stub));
+    MOCKER_CPP(&NetEngine::SyncConnect, BResult (*)(ConnectInfo &info)).stubs().will(invoke(SyncConnect_Stub));
 }
 
 TEST_F(TestRpcEngine, test_rpc_engine_initialize) {}
