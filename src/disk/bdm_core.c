@@ -15,7 +15,7 @@
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;
 
-int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t len, uint64_t *chunkId)
+int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
 {
     BdmObj *bdm = BdmGetBdmObj(bdmId);
     if (bdm == NULL) {
@@ -27,6 +27,8 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t len, uint64_t *chun
         BDM_LOGERROR(0, "Invalid ops, not register.");
         return BDM_CODE_ERR;
     }
+
+    UNREFERENCE_PARAM(bucketOffset); // 新版本BDM替换后适配
 
     int32_t ret = bdm->ops.alloc((uintptr_t)bdm, bucketId, len, chunkId);
     if (ret != BDM_CODE_OK) {
@@ -211,7 +213,8 @@ int32_t BdmResetScanPool(uint32_t bdmId)
     return BDM_CODE_OK;
 }
 
-int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId)
+int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+    uint64_t *bucketOffset)
 {
     BdmObj *bdm = BdmGetBdmObj(bdmId);
     if (bdm == NULL) {
@@ -223,6 +226,8 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
         BDM_LOGERROR(0, "Invalid ops, not register.");
         return BDM_CODE_ERR;
     }
+
+    UNREFERENCE_PARAM(bucketOffset); // 新版本BDM替换后适配
 
     int32_t ret = bdm->ops.nextchunk((uintptr_t)bdm, chunkId, chunkSize, bucketId);
     if (ret == BDM_CODE_SCAN_OFF) {

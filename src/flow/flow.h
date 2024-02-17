@@ -58,6 +58,22 @@ public:
         return mWritenOffset - mTruncateOffset;
     }
 
+    inline uint64_t GetTotalLen()
+    {
+        return mPreLoadOffset - mTruncateOffset;
+    }
+
+    inline uint64_t GetTruncateOffset()
+    {
+        return mTruncateOffset;
+    }
+
+    inline void SetWrittenOffset(uint64_t writtenOffset)
+    {
+        mWritenOffset = writtenOffset;
+        return;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

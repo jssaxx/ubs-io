@@ -155,8 +155,8 @@ BResult BioServer::StartDisk()
     }
 
     DiskAllocator diskAllocator;
-    diskAllocator.alloc = [](uint32_t bdmId, uint64_t bucketId, uint64_t len, uint64_t *chunkId) {
-        int ret = BdmAlloc(bdmId, bucketId, len, chunkId);
+    diskAllocator.alloc = [](uint32_t bdmId, uint64_t flowId, uint64_t flowOffset, uint64_t len, uint64_t *chunkId) {
+        int ret = BdmAlloc(bdmId, flowId, flowOffset, len, chunkId);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
             return BIO_ERR;
         }
