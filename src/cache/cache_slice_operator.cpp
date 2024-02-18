@@ -80,7 +80,8 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
             auto ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), fromAddr.chunkLen,
                 reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
             ChkTrue(ret == BIO_OK, ret, "Failed to copy data from memory address:" << (fromAddr.chunkId +
-                    fromAddr.chunkOffset) << " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
+                    fromAddr.chunkOffset) << " to memory address:" << to + offset << " by length:" <<
+                    fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
