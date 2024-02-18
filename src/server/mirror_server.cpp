@@ -281,7 +281,7 @@ BResult MirrorServer::Stat(StatRequest &req, Bio::ObjStat &objInfo)
     BIO_TRACE_START(MIRROR_TRACE_STAT);
     BResult ret = Cache::Instance().Stat(req.ptId, const_cast<char*>(key.c_str()), objStat);
     BIO_TRACE_END(MIRROR_TRACE_STAT, ret);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Stat key failed, ret:" << ret << ", key:" << key << ".");
     } else {
         objInfo.size = objStat.size;
@@ -332,7 +332,7 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(QueryViewRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(QueryViewRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive query pt message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -358,7 +358,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(PutRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive put message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -389,7 +389,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(GetRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -421,7 +421,7 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(DeleteRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(DeleteRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive delete message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -448,7 +448,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(StatRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(StatRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive delete message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -480,7 +480,7 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(LoadRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(LoadRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive load message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -507,7 +507,7 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if ((ctx.MessageDataLen() != sizeof(CreateFlowRequest)) || (ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CreateFlowRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive create flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
