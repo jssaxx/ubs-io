@@ -596,6 +596,7 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
         if (ret != BIO_OK) {
             LOG_INFO("Get read cache key:" << chunk->GetKey() << "not exist.");
             chunk->lock.unlock();
+            BIO_TRACE_END(RCACHE_TRACE_EVICT2NULL, 0);
             continue;
         }
         
