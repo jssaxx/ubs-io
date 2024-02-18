@@ -42,7 +42,7 @@ BResult FlowManager::Exit()
     return BIO_OK;
 }
 
-FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId)
+FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId, uint32_t mediaId)
 {
     std::lock_guard<std::mutex> lock(mMutex);
     ChkTrueNot(mInited == true, nullptr);
@@ -54,7 +54,7 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId)
             return it->second;
         }
         BIO_TRACE_START(FLOW_TRACE_CREATE_OBJ);
-        auto object = MakeRef<Flow>(type, flowId, 0, segment, segment * NO_4);
+        auto object = MakeRef<Flow>(type, flowId, mediaId, segment, segment * NO_4);
         mMemObjManager[flowId] = object;
         BIO_TRACE_END(FLOW_TRACE_CREATE_OBJ, 0);
         return object;
@@ -64,7 +64,7 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId)
             return it->second;
         }
         BIO_TRACE_START(FLOW_TRACE_CREATE_OBJ);
-        auto object = MakeRef<Flow>(type, flowId, 0, segment, segment * NO_16);
+        auto object = MakeRef<Flow>(type, flowId, mediaId, segment, segment * NO_16);
         mDiskObjManager[flowId] = object;
         BIO_TRACE_END(FLOW_TRACE_CREATE_OBJ, 0);
         return object;
@@ -179,7 +179,7 @@ BResult FlowManager::Recover()
 
 BResult FlowManager::RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t flowId, uint64_t flowOffset)
 {
-    FlowPtr flow = CreateObject(FLOW_DISK, flowId);
+    FlowPtr flow = CreateObject(FLOW_DISK, flowId, mediaId);
     if (flow == nullptr) {
         LOG_ERROR("Get flow fail:" << flowId);
         return BIO_ERR;
