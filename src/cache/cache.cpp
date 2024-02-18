@@ -113,7 +113,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
             LOG_ERROR("Get key " << key << " read data from read cache failed.");
             return ret;
         }
-        LOG_INFO("load and read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
+        LOG_INFO("Load and read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
     }
     return ret;
 }
@@ -121,7 +121,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
 BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     auto ret = mRCacheManager->Load(ptId, key, 0, BIO_IO_MAX_LEN, realLen);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ", offset:" <<
             offset << ", len:" << len << ".");
     }
@@ -179,7 +179,7 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
         LOG_INFO("UnderFS delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
     }
 
-    return BIO_OK;
+    return ret;
 }
 }
 }
