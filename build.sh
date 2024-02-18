@@ -64,4 +64,26 @@ if [ -n "${RUN_DT}" ];then
 fi
 
 cd ${PROJ_DIR}/output
-tar -cvf BoostIO_1.0.0_$(uname -s)-`arch`_${BUILD_TYPE}.tar bio
+rm -rf boostio
+mkdir -p boostio/lib
+mkdir -p boostio/bin
+mkdir -p boostio/include
+mkdir -p boostio/scripts
+mkdir -p boostio/conf
+\cp 3rdparty/zookeeper/lib/* boostio/lib/.
+\cp 3rdparty/spdlog/lib64/libspdlog.a boostio/lib/.
+\cp 3rdparty/hcom/lib/*.so boostio/lib/.
+\cp 3rdparty/hcom/lib/securec/* boostio/lib/.
+\cp 3rdparty/zookeeper/lib/* boostio/lib/.
+\cp 3rdparty/huawei_secure_c/lib/* boostio/lib/.
+\cp bio/conf/*.conf boostio/conf/.
+\cp bio/lib/libbio_sdk.so boostio/lib/.
+\cp bio/lib/libbio_server.so boostio/lib/.
+\cp bio/lib/libsecurec.so boostio/lib/.
+\cp bio/bin/* boostio/bin/.
+\cp ../scripts/* boostio/scripts/.
+\cp bio/include/*.h boostio/include/.
+cd boostio/scripts
+touch host_ip_list
+cd ${PROJ_DIR}/output
+tar -czvf BoostIO_1.0.0_$(uname -s)-`arch`_${BUILD_TYPE}.tar.gz boostio
