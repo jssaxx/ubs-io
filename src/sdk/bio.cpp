@@ -141,9 +141,9 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || length > NO_4194304)) {
+    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || length > BIO_IO_MAX_LEN)) {
         LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length << ", max length:" <<
-            (NO_4194304/NO_1024/NO_1024) << "(Mb).");
+            (BIO_IO_MAX_LEN/NO_1024/NO_1024) << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
@@ -171,9 +171,9 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || (offset + length) > NO_4194304)) {
+    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || (offset + length) > BIO_IO_MAX_LEN)) {
         LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, offset:" << offset << "length:" <<
-            length << ", max length:" << (NO_4194304/NO_1024/NO_1024) << "(Mb).");
+            length << ", max length:" << (BIO_IO_MAX_LEN/NO_1024/NO_1024) << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
@@ -225,7 +225,8 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || context == nullptr)) {
+    if (UNLIKELY(!KeyValid(key) || context == nullptr || offset != 0 || length == 0 ||
+        (offset + length) > BIO_IO_MAX_LEN)) {
         LOG_ERROR("Invalid load parameter, key:" << key << ".");
         return RET_CACHE_EPERM;
     }

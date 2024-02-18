@@ -105,6 +105,13 @@ install_package()
 
 register_systemd()
 {
+  touch $BIN_PATH/executeBio.sh
+  cat > $BIN_PATH/executeBio.sh << EOF
+export LD_LIBRARY_PATH=$LIB_PATH
+cd $BIN_PATH
+./bio_daemon
+EOF
+  chmod 750 $BIN_PATH/executeBio.sh
   service_config=$SYSTEMD_SERVICE_PATH
   cat > $service_config << EOF
 [Unit]
@@ -117,8 +124,7 @@ Type=simple
 NotifyAccess=main
 Environment=LD_LIBRARY_PATH=$LIB_PATH
 AmbientCapabilities=CAP_SETUID CAP_SETGID
-ExecStart=$BIN_PATH/bio_daemon
-ExecStartPre=/bin/cd $BIN_PATH
+ExecStart=su - $RUN_USER -c "bash $BIN_PATH/executeBio.sh"
 Restart=always
 RestartSec=1
 [Install]
