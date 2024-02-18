@@ -6,6 +6,7 @@
 #define BOOSTIO_WCACHE_TIER_H
 
 #include "bio_err.h"
+#include "bio_lock.h"
 #include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
@@ -79,7 +80,7 @@ private:
 
     WFlowTruncateCursorPtr mFlowTruncateCursor;
 
-    std::mutex mEvictSliceQueueLock;
+    SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;
 
     DEFINE_REF_COUNT_VARIABLE;
