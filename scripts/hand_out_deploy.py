@@ -2,8 +2,8 @@
 # coding=utf-8
 
 # ***********************************************************************
-# Copyright: (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
-# script for Huawei hyperio to install pkg
+# Copyright: (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
+# script for Huawei boostio to install pkg
 # version: 1.0.0
 # change log:
 # ***********************************************************************
@@ -138,7 +138,7 @@ def send_files_to_node(node):
             cmd = "bash {0} {1} {2} {3} {4} {5} " \
                 .format(SCP_FILE_SHELL_PATH, node[ip_str], node["user"], node[port_str], sent_file,
                         "/home/{0}".format(node[ip_str]))
-            logging.error("pid:{0} Failed to execute SCP. (cmd:{1})".format(PID, cmd))
+            logging.error("pid:{0} Failed to execute SCP. (cmd:{1}), reason:{2}".format(PID, cmd, stderr))
             return -1
     return 0
 
@@ -360,8 +360,8 @@ def check_package(pkg_path):
         FOLDER_NAME = PACKAGE_NAME.replace(TAR_SUFFIX, "")
         global APP_NAME
         # 安装包名称校验
-        APP_NAME = FOLDER_NAME.split('.')[0]
-        if not APP_NAME.startswith("boostio"):
+        APP_NAME = FOLDER_NAME.split('_')[0]
+        if not APP_NAME.startswith("BoostIO"):
             logging.error("pid:{0} did not get package name as expected. ".format(PID))
             return -1
     else:

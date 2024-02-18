@@ -34,6 +34,7 @@ static void usage()
         "\tdestroy cache: destroy [tenantId]\n"
         "\tput value to cache: put [key] [filePath] [length] [sliceId]\n"
         "\tget value from cache: get [key] [offset] [length] [location] [filePath]\n"
+        "\tget key state from cache: stat [key] [sliceId]\n"
         "\tdelete key: delete [key] [location]\n"
         "\tshow view: show [pt/node/trace] [all/affinity]\n"
         "\tperf test: perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n"
@@ -156,6 +157,22 @@ static void HandleGet(std::vector<std::string> cmds)
     }
     delete[] value;
     fclose(fp);
+}
+
+static void HandleStat(std::vector<std::string> cmds)
+{
+    auto key = cmds[1].c_str();
+    auto location = std::stoull(cmds[2]);
+    Bio::ObjLocation locationInfo{ location, 0 };
+    Bio::ObjStat keyStat = gCurrentCache->Stat(key, locationInfo);
+    if (keyStat.time == 0) {
+        std::cout << "Failed to get key stat. fail." << std::endl;
+    } else {
+        std::cout << "Get key stat success." << std::endl;
+        std::cout << "key:" << key <<", location:" << locationInfo.location[0] << std::endl;
+        std::cout << "size:" << keyStat.size << std::endl;
+        std::cout << "time:" << ctime(&keyStat.time) << std::endl;
+    }
 }
 
 static void HandleDelete(std::vector<std::string> cmds)
@@ -437,6 +454,17 @@ int32_t HandleCmd(const std::string &cmd)
             return 0;
         }
         HandleGet(cmds);
+        return 0;
+    } else if (cmdType == "stat") {
+        if (gCurrentCache == nullptr) {
+            std::cout << "Create and open a cache first!" << std::endl;
+            return 0;
+        }
+        if (cmds.size() != 3) {
+            std::cout << "Input parameters failed!, num:" << cmds.size() << std::endl;
+            return 0;
+        }
+        HandleStat(cmds);
         return 0;
     } else if (cmdType == "delete") {
         if (gCurrentCache == nullptr) {

@@ -4,6 +4,7 @@
 
 #include "cache.h"
 #include "underfs.h"
+#include "bio.h"
 #include "bio_trace.h"
 
 namespace ock {
@@ -101,7 +102,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     }
 
     if (ret == BIO_NOT_EXISTS) {
-        ret = mRCacheManager->Load(slice->GetPtId(), key, offset, slice->GetLength(), realLen);
+        ret = mRCacheManager->Load(slice->GetPtId(), key, 0, BIO_IO_MAX_LEN, realLen);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Load key " << key << " read data from under fs failed.");
             return ret;
@@ -119,7 +120,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
 
 BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
-    auto ret = mRCacheManager->Load(ptId, key, offset, len, realLen);
+    auto ret = mRCacheManager->Load(ptId, key, 0, BIO_IO_MAX_LEN, realLen);
     if (ret != BIO_OK) {
         LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ", offset:" <<
             offset << ", len:" << len << ".");
