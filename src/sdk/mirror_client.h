@@ -7,10 +7,10 @@
 
 #include <semaphore.h>
 #include <atomic>
-#include <mutex>
 #include <unordered_map>
 #include "cm.h"
 #include "bio_ref.h"
+#include "bio_lock.h"
 #include "message.h"
 #include "bio.h"
 #include "flow_instance.h"
@@ -122,42 +122,49 @@ private:
 
     inline BResult Insert(uint16_t ptId, uint64_t flowId)
     {
-        std::lock_guard<std::mutex> guard(mLock);
+        mLock.LockWrite();
         if (UNLIKELY(mFlowMap.size() > defaultMaxFlowSize)) {
+            mLock.UnLock();
             return BIO_ERR;
         }
         auto it = mFlowMap.find(ptId);
         if (UNLIKELY(it != mFlowMap.end())) {
+            mLock.UnLock();
             return BIO_OK;
         }
         mFlowMap[ptId] = new FlowInstance(flowId);
+        mLock.UnLock();
         return BIO_OK;
     }
 
     inline void Delete(uint16_t ptId)
     {
-        std::lock_guard<std::mutex> guard(mLock);
+        mLock.LockWrite();
         auto it = mFlowMap.find(ptId);
         if (UNLIKELY(it == mFlowMap.end())) {
+            mLock.UnLock();
             return;
         }
         delete it->second;
         mFlowMap.erase(it);
+        mLock.UnLock();
     }
 
     inline FlowInstance *Query(uint16_t ptId)
     {
-        std::lock_guard<std::mutex> guard(mLock);
+        mLock.LockRead();
         auto it = mFlowMap.find(ptId);
         if (LIKELY(it != mFlowMap.end())) {
+            mLock.UnLock();
             return it->second;
         }
+        mLock.UnLock();
         return nullptr;
     }
 
 private:
     std::unordered_map<uint16_t, FlowInstance *> mFlowMap;
-    std::mutex mLock;
+    ReadWriteLock mLock;
     int32_t mDeployType = 1;
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
