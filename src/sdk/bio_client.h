@@ -150,6 +150,10 @@ public:
         }
         auto it = mCacheMap.find(instance->GetTenantId());
         if (UNLIKELY(it != mCacheMap.end())) {
+            if (it->second->GetAffinityPolicy() != instance->GetAffinityPolicy() ||
+                it->second->GetWriteStrategy() != instance->GetWriteStrategy()) {
+                return BIO_ERR;
+            }
             return BIO_OK;
         }
         mCacheMap[instance->GetTenantId()] = instance;
