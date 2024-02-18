@@ -81,7 +81,7 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     ChkTrueNot(sliceKey.Validate(), BIO_INVALID_PARAM);
 
     auto wcache = GetWCache(sliceKey.flowId);
-    if (wcache == nullptr) {
+    if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
         return BIO_NOT_EXISTS;
     }
@@ -99,11 +99,11 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
 
-    LOG_INFO("Put key:" << key << ", pt:" << ptId << ", flowId:" << slice->GetFlowId());
+    LOG_DEBUG("Put key:" << key << ", pt:" << ptId << ", flowId:" << slice->GetFlowId());
 
     // 1. Check whether the key is duplicate
     auto keySlice = mCacheIndex->Aquire(ptId, key);
-    if (keySlice != nullptr) {
+    if (UNLIKELY(keySlice != nullptr)) {
         LOG_ERROR("Put key is duplicate, key:" << key);
         // TODO::duplicate key handle
         return BIO_KEY_CONFLICT;
@@ -111,22 +111,22 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     // 2. Get write flow
     auto wcache = GetWCache(slice->GetFlowId());
-    if (wcache == nullptr) {
-        LOG_ERROR("failed to get flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
+    if (UNLIKELY(wcache == nullptr)) {
+        LOG_ERROR("Failed to get flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
     // 3. write slice to flow
     WCacheSliceRefPtr sliceRef = nullptr;
     auto ret = wcache->Put(key, slice, sliceReader, sliceRef, attr);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Write slice to flow failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
 
     // 4. Insert slice to index.
     ret = mCacheIndex->Insert(ptId, key, sliceRef);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
     }
 
@@ -142,11 +142,11 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
 
     uint64_t ptId = slice->GetPtId();
 
-    LOG_INFO("Get key:" << key << ", pt:" << ptId);
+    LOG_DEBUG("Get key:" << key << ", pt:" << ptId);
 
     // 1. Get key slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
-    if (sliceRef == nullptr) {
+    if (UNLIKELY(sliceRef == nullptr)) {
         LOG_WARN("Aquire key :" << key << " slice not exist.");
         return BIO_NOT_EXISTS;
     }
@@ -154,7 +154,7 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     // 2. Read data from flow.
     auto ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
     mCacheIndex->Release(ptId, sliceRef);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read data from flow failed, key :" << key << ".");
     }
     return ret;
@@ -180,14 +180,14 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 
     // 1. Aquire slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
-    if (sliceRef == nullptr) {
+    if (UNLIKELY(sliceRef == nullptr)) {
         LOG_ERROR("Aquire key slice failed, key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
     auto ret = mCacheIndex->Delete(ptId, key);
-    if (ret != BIO_OK) {
-        LOG_ERROR("failed to delete. key:" << key << ", ret:" << ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to delete. key:" << key << ", ret:" << ret);
         mCacheIndex->Release(ptId, sliceRef);
         return ret;
     }
@@ -236,7 +236,7 @@ WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 {
     ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
     auto wflowIt = mWCacheManager.find(flowId);
-    if (wflowIt == mWCacheManager.end()) {
+    if (UNLIKELY(wflowIt == mWCacheManager.end())) {
         return nullptr;
     }
     return wflowIt->second;
@@ -245,8 +245,8 @@ WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
-    if (offset >= srcSlice->GetLength()) {
-        LOG_ERROR("failed to split slice. offset:" << offset << ", real length:" << srcSlice->GetLength());
+    if (UNLIKELY(offset >= srcSlice->GetLength())) {
+        LOG_ERROR("Failed to split slice. offset:" << offset << ", real length:" << srcSlice->GetLength());
         return BIO_READ_EXCEED;
     }
 
@@ -256,8 +256,8 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
     }
     // split slice, get real range from slice.
     auto newSlice = srcSlice->Split(offset, realLen);
-    if (newSlice == nullptr) {
-        LOG_ERROR("failed to split slice. offset:" << offset << ", length:" << realLen);
+    if (UNLIKELY(newSlice == nullptr)) {
+        LOG_ERROR("Failed to split slice. offset:" << offset << ", length:" << realLen);
         return BIO_READ_EXCEED;
     }
 

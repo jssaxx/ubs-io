@@ -43,7 +43,7 @@ bool Slice::IsTheSameWith(const SlicePtr &other)
 
 SlicePtr Slice::Split(uint64_t offset, uint64_t length)
 {
-    if (offset >= mLength || length > mLength || offset + length > mLength) {
+    if (UNLIKELY(offset >= mLength || length > mLength || offset + length > mLength)) {
         return nullptr;
     }
     if (offset == 0 && length == mLength) {
