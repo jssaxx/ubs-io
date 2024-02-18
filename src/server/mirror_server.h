@@ -34,6 +34,7 @@ public:
         return instance;
     }
 
+    BResult CreateFlow(uint64_t procId, uint16_t ptId, uint64_t flowId);
     BResult CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t &flowId);
     BResult CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t flowId);
     BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t flowIndex, uint64_t length, WCacheSlicePtr &slice);

@@ -62,6 +62,24 @@ void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint3
     }
 }
 
+BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t flowId)
+{
+    auto ret = Cache::Instance().CreateWCache(procId, ptId, flowId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
+        return ret;
+    }
+
+    ret = Cache::Instance().CreateRCache(ptId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");
+    } else {
+        LOG_INFO("Master create cache success, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId);
+    }
+
+    return ret;
+}
+
 BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t &flowId)
 {
     auto ret = Cache::Instance().AllocateFlowId(procId, ptId, flowId);
@@ -70,35 +88,18 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
         return ret;
     }
 
-    ret = Cache::Instance().CreateWCache(procId, ptId, flowId);
+    ret = CreateFlow(procId, ptId, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
         return ret;
-    }
-
-    ret = Cache::Instance().CreateRCache(ptId);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");
-    } else {
-        LOG_INFO("Master create cache success, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId);
     }
     return ret;
 }
 
 BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t flowId)
 {
-    auto ret = Cache::Instance().CreateWCache(procId, ptId, flowId);
+    auto ret = CreateFlow(procId, ptId, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
-    } else {
-        LOG_INFO("Slave create cache success, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId);
-    }
-
-    ret = Cache::Instance().CreateRCache(ptId);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");
-    } else {
-        LOG_INFO("Master create cache success, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId);
+        return ret;
     }
     return ret;
 }
@@ -331,10 +332,12 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    ChkTrue(ctx.MessageDataLen() == sizeof(QueryViewRequest), BIO_INVALID_PARAM,
-        "Failed to handleQueryPtView, message length:" << ctx.MessageDataLen() <<
-        " sizeof(QueryViewRequest):" << sizeof(QueryViewRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
+    if ((ctx.MessageDataLen() != sizeof(QueryViewRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive query pt message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_QUERYPTVIEW_HDL);
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
@@ -355,13 +358,13 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if ((ctx.MessageDataLen() != sizeof(PutRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive put message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_PUT_HDL);
-
-    ChkTrue(ctx.MessageDataLen() >= sizeof(QueryViewRequest), BIO_INVALID_PARAM,
-        "Failed to handlePut, message length:" << ctx.MessageDataLen() << " sizeof(PutRequest):"
-        << sizeof(PutRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
-
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
@@ -386,13 +389,13 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if ((ctx.MessageDataLen() != sizeof(GetRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
-
-    ChkTrue(ctx.MessageDataLen() == sizeof(GetRequest), BIO_INVALID_PARAM,
-        "Failed to handleGet, message length:" << ctx.MessageDataLen() <<
-        " sizeof(GetRequest):" << sizeof(GetRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
-
     auto *req = static_cast<GetRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
@@ -418,13 +421,13 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if ((ctx.MessageDataLen() != sizeof(DeleteRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive delete message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
-
-    ChkTrue(ctx.MessageDataLen() == sizeof(DeleteRequest), BIO_INVALID_PARAM,
-        "Failed to handleDelete, message length:" << ctx.MessageDataLen() <<
-        " sizeof(DeleteRequest):" << sizeof(DeleteRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
-
     auto *req = static_cast<DeleteRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
@@ -445,13 +448,13 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if ((ctx.MessageDataLen() != sizeof(StatRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive delete message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
-
-    ChkTrue(ctx.MessageDataLen() == sizeof(StatRequest), BIO_INVALID_PARAM,
-        "Failed to handleStat, message length:" << ctx.MessageDataLen() <<
-        " sizeof(StatRequest):" << sizeof(StatRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
-
     auto *req = static_cast<StatRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
@@ -477,13 +480,13 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if ((ctx.MessageDataLen() != sizeof(LoadRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive load message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
-
-    ChkTrue(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM,
-        "Failed to handleLoad, message length:" << ctx.MessageDataLen() <<
-        " sizeof(CreateFlowRequest):" << sizeof(CreateFlowRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
-
     auto *req = static_cast<LoadRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
@@ -504,13 +507,13 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if ((ctx.MessageDataLen() != sizeof(CreateFlowRequest)) || (ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive create flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_START(MIRROR_TRACE_CREATEFLOW_HDL);
-
-    ChkTrue(ctx.MessageDataLen() == sizeof(CreateFlowRequest), BIO_INVALID_PARAM,
-        "Failed to handleCreateFlow, message length:" << ctx.MessageDataLen() <<
-        " sizeof(CreateFlowRequest):" << sizeof(CreateFlowRequest));
-    ChkTrueNot(ctx.MessageData() != nullptr, BIO_INVALID_PARAM);
-
     auto *req = static_cast<CreateFlowRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
