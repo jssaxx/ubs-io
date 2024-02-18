@@ -17,6 +17,7 @@
 
 namespace ock {
 namespace bio {
+    constexpr uint32_t WRITE_CACHE_FLOW_MEM_META_PREFIX = 0;
 class WCacheManager;
 using WCacheManagerPtr = Ref<WCacheManager>;
 class WCacheManager {
