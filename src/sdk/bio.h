@@ -44,6 +44,8 @@ enum WriteStrategy {
     STRATEGY_BUTT
 };
 
+constexpr uint32_t BIO_IO_MAX_LEN = 4194304;
+
 class Bio {
 public:
     struct ObjStat {
