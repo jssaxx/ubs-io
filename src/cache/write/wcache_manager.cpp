@@ -58,10 +58,8 @@ BResult WCacheManager::CreateWCache(uint64_t flowId)
         return BIO_OK;
     };
 
-    BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
     auto ret = wcache->Init(flowId, mExeService, evictCallback);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
-    BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -75,8 +73,6 @@ BResult WCacheManager::CreateWCache(uint64_t flowId)
 
 BResult WCacheManager::DeleteWCache(uint64_t ptId)
 {
-    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
-    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, 0);
     return BIO_OK;
 }
 
