@@ -79,8 +79,8 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         for (auto fromAddr : fromAddrs) {
             auto ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), fromAddr.chunkLen,
                 reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
-            ChkTrue(ret == BIO_OK, ret, "Failed to copy data from memory address:" << fromAddr.chunkId +
-                    fromAddr.chunkOffset << " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy data from memory address:" << (fromAddr.chunkId +
+                    fromAddr.chunkOffset) << " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
@@ -93,8 +93,8 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
             auto ret =
                 BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset), fromAddr.chunkLen);
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
-            ChkTrue(ret == BIO_OK, ret, "Failed to copy data from disk address:" << fromAddr.chunkId +
-                    fromAddr.chunkOffset << " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy data from disk address:" << (fromAddr.chunkId +
+                    fromAddr.chunkOffset) << " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
