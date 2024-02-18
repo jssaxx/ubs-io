@@ -74,7 +74,7 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t flowId
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");
     } else {
-        LOG_INFO("Master create cache success, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId);
+        LOG_INFO("Create read cache success, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId);
     }
 
     return ret;
@@ -92,6 +92,7 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
+
     return ret;
 }
 
@@ -101,6 +102,7 @@ BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t f
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
+    
     return ret;
 }
 
