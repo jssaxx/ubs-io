@@ -65,8 +65,9 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     ChkTrueNot(sliceRef != nullptr, nullptr);
 
     {
-        std::lock_guard<std::mutex> lock(mEvictSliceQueueLock);
+        mEvictSliceQueueLock.Lock();
         mEvictSliceQueue.emplace_back(sliceRef);
+        mEvictSliceQueueLock.UnLock();
     }
 
     return sliceRef;
@@ -74,14 +75,16 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
 
 void WCacheTier::AddEvictQueue(WCacheSliceRefPtr &sliceRef)
 {
-    std::lock_guard<std::mutex> lock(mEvictSliceQueueLock);
+    mEvictSliceQueueLock.Lock();
     mEvictSliceQueue.emplace_back(sliceRef);
+    mEvictSliceQueueLock.UnLock();
 }
 
 std::list<WCacheSliceRefPtr> WCacheTier::GetEvictSliceQueue()
 {
-    std::lock_guard<std::mutex> lock(mEvictSliceQueueLock);
+    mEvictSliceQueueLock.Lock();
     auto evictSliceQueue = std::move(mEvictSliceQueue);
+    mEvictSliceQueueLock.UnLock();
     return evictSliceQueue;
 }
 

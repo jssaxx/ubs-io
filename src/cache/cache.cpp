@@ -69,7 +69,6 @@ BResult Cache::DeleteCache(uint64_t ptId)
 
 BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
-    BIO_TRACE_START(WCACHE_TRACE_PUT);
     return mWCacheManager->GetWCacheSlice(sliceKey, slice);
 }
 

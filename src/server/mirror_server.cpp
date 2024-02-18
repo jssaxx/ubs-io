@@ -344,6 +344,7 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_QUERYPTVIEW_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -370,6 +371,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     auto *req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -401,6 +403,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
     auto *req = static_cast<GetRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_GET_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -433,6 +436,7 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
     auto *req = static_cast<DeleteRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_DEL_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -460,6 +464,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
     auto *req = static_cast<StatRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -467,6 +472,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
     BResult ret = Stat(*req, objInfo);
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, ret);
         return BIO_OK;
     }
 
@@ -492,6 +498,7 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
     auto *req = static_cast<LoadRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -519,6 +526,7 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
     auto *req = static_cast<CreateFlowRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
