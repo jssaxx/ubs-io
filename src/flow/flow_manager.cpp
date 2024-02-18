@@ -119,11 +119,12 @@ BResult FlowManager::PreLoadObject(std::function<void()> handle)
     ChkTrueNot(mTaskPool != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(FLOW_TRACE_PRELOAD_OBJ);
     auto ret = mTaskPool->AddTask(handle);
+    BIO_TRACE_END(FLOW_TRACE_PRELOAD_OBJ, ret);
     if (ret != BIO_OK) {
         LOG_ERROR("Submit task failed:" << ret);
         return ret;
     }
-    BIO_TRACE_END(FLOW_TRACE_PRELOAD_OBJ, 0);
+
     return BIO_OK;
 }
 
