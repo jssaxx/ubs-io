@@ -395,7 +395,8 @@ static void CmServerViewOnlineUpdateState(NodeInfo *nodeInfo, NodeStateInfo *nod
     uint16_t index;
 
     nodeState->state = NODE_STATE_UP;
-    if (nodeState->clusterState == NODE_CLUSTER_STATE_INVALID) {
+    if (nodeState->clusterState == NODE_CLUSTER_STATE_INVALID ||
+        nodeState->clusterState == NODE_CLUSTER_STATE_OUT) {
         for (index = 0; index < nodeInfo->diskList.num; index++) {
             nodeState->diskList[index].diskId = nodeInfo->diskList.list[index].diskId;
             nodeState->diskList[index].clusterState = DISK_CLUSTER_STATE_IN;
