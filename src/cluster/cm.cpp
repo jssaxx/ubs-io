@@ -30,7 +30,13 @@ BResult Cm::Start()
     pools.initialNodeNum = mOptions.groups.initialNodeNum;
     pools.maxNodeNum = mOptions.groups.maxNodeNum;
     pools.maxPtNum = mOptions.groups.maxPtNum;
-    int ret = CM_Init(CONFIG_ROLE_TOGETHER, &pools, 1, mOptions.zkIpMask.c_str(), mNode.ip.c_str());
+
+    CmCfgInfo cfgInfo;
+    cfgInfo.zkIpMask = const_cast<char *>(mOptions.zkIpMask.c_str());
+    cfgInfo.ipStr = const_cast<char *>(mNode.ip.c_str());
+    cfgInfo.regTimeOut = mOptions.hbTempTimeout;
+    cfgInfo.regPermTimeOut = mOptions.hbPermFaultTime;
+    int ret = CM_Init(CONFIG_ROLE_TOGETHER, &pools, 1, &cfgInfo);
     if (ret != 0) {
         return BIO_ERR;
     }

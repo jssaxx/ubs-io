@@ -64,7 +64,7 @@ int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
     return 0;
 }
 
-int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const char *zkIpMask, const char *ipStr)
+int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
     if (pools == nullptr || num != 1) {
         return -1;
@@ -74,7 +74,7 @@ int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const char 
         g_ptChange.notifyPtListChange == nullptr) {
         return -2;
     }
-    uint16_t nodeNum = 3;
+    uint16_t nodeNum = 2;
     NodeStateList *nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
     if (nodeList == nullptr) {
         return -3;
