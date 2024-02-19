@@ -131,14 +131,14 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
     }
 
     auto cacheObj = MakeRef<RCache>(ptId);
-    if (cacheObj == nullptr) {
+    if (UNLIKELY(cacheObj == nullptr)) {
         LOG_ERROR("Create read cache object memory failed.");
         cacheLock.UnLock();
         return BIO_ALLOC_FAIL;
     }
 
     auto ret = cacheObj->Initialize();
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Initialize read cache object ptId" << ptId <<" failed, error code"<<ret);
         cacheLock.UnLock();
         return ret;
@@ -148,14 +148,14 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
     cacheLock.UnLock();
 
     ret = rCacheEvict->Start(cacheObj);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Start ptId" << ptId << "read cache to evict service failed, error code" << ret);
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
 
     ret = rCacheGCPtr->Start(cacheObj);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Start ptId" << ptId << "read cache to GC service failed, error code" << ret);
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
@@ -175,20 +175,20 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
 
     RCachePtr cachePtr = iter->second;
     auto ret = rCacheEvict->Stop(cachePtr);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         cacheLock.UnLock();
         LOG_ERROR("Stop ptId" << cachePtr->GetPtId() << "read cache evict service failed, error code" << ret);
         return BIO_ALLOC_FAIL;
     }
 
     ret = rCacheGCPtr->Stop(cachePtr);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Stop ptId" << cachePtr->GetPtId() << "read cache GC service failed, error code" << ret);
         return BIO_ALLOC_FAIL;
     }
 
     ret = cachePtr.Get()->Destroy();
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Destroy ptId" << ptId << " read cache object failed, error code " << ret);
     }
 

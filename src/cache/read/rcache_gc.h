@@ -23,14 +23,14 @@ namespace ock {
 
         ~RCacheGC();
 
-        bool GetWorkStatus() noexcept {return workStatus.load();}
+        inline bool GetWorkStatus() noexcept {return workStatus.load();}
 
-        void IncGarbageData(uint64_t len)
+        inline void IncGarbageData(uint64_t len)
         {
             garbageData += len;
         }
 
-        void DecGarbageData(uint64_t len)
+        inline void DecGarbageData(uint64_t len)
         {
             if (garbageData < len) {
                 return;

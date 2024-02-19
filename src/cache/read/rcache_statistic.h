@@ -17,12 +17,12 @@ namespace ock {
             static RCacheStatistic instance;
             return instance;
         }
-        void IncHisCount()
+        inline void IncHisCount()
         {
             hisCount++;
         }
 
-        void IncMisCount()
+        inline void IncMisCount()
         {
             misCount++;
         }

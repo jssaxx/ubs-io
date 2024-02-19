@@ -21,7 +21,7 @@ public:
 
     void Exit();
 
-    static Cache &Instance()
+    inline static Cache &Instance()
     {
         static Cache cacheInstance;
         return cacheInstance;
