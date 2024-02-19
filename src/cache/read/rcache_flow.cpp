@@ -47,20 +47,20 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
 {
     mPtId = ptId;
 
-    if(flowIds.empty()) {
+    if(UNLIKELY(flowIds.empty())) {
         LOG_ERROR("Generate pt id" << ptId << "flow ids failed.");
         return BIO_ERR;
     }
 
     uint16_t diskId;
     auto ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get local disk fail:" << ret << ", ptId:" << ptId);
         return ret;
     }
 
     mMetaFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
-    if (mMetaFlow == nullptr) {
+    if (UNLIKELY(mMetaFlow == nullptr)) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "meta flow failed.");
         Destroy();
         return BIO_ERR;
@@ -69,14 +69,14 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
     LOG_INFO("Meta flowId:" << mMetaFlow->GetFlowId() << ", flowType:" << flowType);
 
     mMetaFlowInstance = MakeRef<FlowInstance>(flowIds[0]);
-    if (mMetaFlowInstance == nullptr) {
+    if (UNLIKELY(mMetaFlowInstance == nullptr)) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "flow instance failed.");
         Destroy();
         return BIO_ERR;
     }
 
     mDataFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[1], diskId);
-    if (mDataFlow == nullptr) {
+    if (UNLIKELY(mDataFlow == nullptr)) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "data flow failed.");
         Destroy();
         return BIO_ERR;
@@ -85,7 +85,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uin
     LOG_INFO("Data flowId:" << mDataFlow->GetFlowId() << ", flowType:" << flowType);
 
     mDataFlowInstance = MakeRef<FlowInstance>(flowIds[1]);
-    if (mDataFlowInstance == nullptr) {
+    if (UNLIKELY(mDataFlowInstance == nullptr)) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "flow instance failed.");
         Destroy();
         return BIO_ERR;

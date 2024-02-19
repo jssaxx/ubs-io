@@ -5,7 +5,7 @@
 #include "wcache_index.h"
 namespace ock {
 namespace bio {
-uint32_t WCacheIndex::Hash(const Key &key)
+inline uint32_t WCacheIndex::Hash(const Key &key)
 {
     // TODO: optimize me.
     return std::hash<std::string>{}(key) % HASH_BUCKET_NUM;
@@ -28,7 +28,7 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     auto bucket = Hash(key);
     ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto sliceMeta = table->sliceIndex[bucket].find(key);
-    if (sliceMeta == table->sliceIndex[bucket].end()) {
+    if (UNLIKELY(sliceMeta == table->sliceIndex[bucket].end())) {
         return nullptr;
     }
     auto sliceRef = sliceMeta->second;

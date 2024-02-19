@@ -27,14 +27,14 @@ namespace ock {
 
             BResult Destroy();
 
-            bool GetWorkStatus() noexcept {return workStatus.load();}
+            inline bool GetWorkStatus() noexcept {return workStatus.load();}
 
-            void IncCacheData(uint64_t len)
+            inline void IncCacheData(uint64_t len)
             {
                 cacheData += len;
             }
 
-            void DecCacheData(uint64_t len)
+            inline void DecCacheData(uint64_t len)
             {
                 if (cacheData < len) {
                     return;

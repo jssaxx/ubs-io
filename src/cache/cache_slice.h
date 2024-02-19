@@ -105,37 +105,37 @@ public:
 
     ~WCacheSlice() override = default;
 
-    FlowType GetFlowType() const
+    inline FlowType GetFlowType() const
     {
         return Slice::GetFlowType();
     }
 
-    uint64_t GetFlowId() const
+    inline uint64_t GetFlowId() const
     {
         return mFlowId;
     }
 
-    uint64_t GetOffsetInFlow() const
+    inline uint64_t GetOffsetInFlow() const
     {
         return mOffsetInFlow;
     }
 
-    uint64_t GetIndexInFlow() const
+    inline uint64_t GetIndexInFlow() const
     {
         return mIndexInFlow;
     }
 
-    uint64_t GetSliceState() const
+    inline uint64_t GetSliceState() const
     {
         return mState;
     }
 
-    void SetSliceState(uint64_t state)
+    inline void SetSliceState(uint64_t state)
     {
         mState = state;
     }
 
-    std::string ToString() override
+    inline std::string ToString() override
     {
         return Slice::ToString();
     }
@@ -187,7 +187,7 @@ public:
         memcpy_s(&mIndexInFlow, sizeof(mIndexInFlow), data + pos, sizeof(mIndexInFlow));
         pos += sizeof(mIndexInFlow);
         auto ret = Slice::Deserialize(data + pos, length - pos);
-        if (ret != BIO_OK) {
+        if (UNLIKELY(ret != BIO_OK)) {
             return ret;
         }
         return BIO_OK;

@@ -25,7 +25,7 @@ constexpr size_t IO_SIZE_1M = 1024 * 1024;
 constexpr size_t IO_SIZE_2M = 2 * 1024 * 1024;
 constexpr size_t IO_SIZE_4M = 4 * 1024 * 1024;
 
-static CResult ToCResult(const BResult ret)
+inline static CResult ToCResult(const BResult ret)
 {
     switch (ret) {
         case BIO_OK:
@@ -53,7 +53,7 @@ static CResult ToCResult(const BResult ret)
     }
 }
 
-static void StatisticPutIoSize(uint64_t length)
+inline static void StatisticPutIoSize(uint64_t length)
 {
     if (length <= IO_SIZE_4K) {
         BIO_TRACE_START(SDK_TRACE_W_S_1_4K);
@@ -85,7 +85,7 @@ static void StatisticPutIoSize(uint64_t length)
     }
 }
 
-static void StatisticGetIoSize(uint64_t length)
+inline static void StatisticGetIoSize(uint64_t length)
 {
     if (length <= IO_SIZE_4K) {
         BIO_TRACE_START(SDK_TRACE_R_S_1_4K);
@@ -117,9 +117,9 @@ static void StatisticGetIoSize(uint64_t length)
     }
 }
 
-static bool KeyValid(const char* key)
+inline static bool KeyValid(const char* key)
 {
-    if (key == nullptr || strlen(key) >= KEY_MAX_SIZE) {
+    if (UNLIKELY(key == nullptr || strlen(key) >= KEY_MAX_SIZE)) {
         return false;
     }
     return true;

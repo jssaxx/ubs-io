@@ -25,7 +25,7 @@ namespace ock {
 
             ~RCacheManager();
 
-            static RCacheManagerPtr &Instance()
+            inline static RCacheManagerPtr &Instance()
             {
                 static auto instance = MakeRef<RCacheManager>();
                 return instance;

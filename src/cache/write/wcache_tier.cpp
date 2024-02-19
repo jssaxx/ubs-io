@@ -150,7 +150,7 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
     return BIO_OK;
 }
 
-WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey)
+inline WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey)
 {
     std::vector<FlowAddr> flowAddrs;
     auto ret = flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
@@ -159,7 +159,7 @@ WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKe
     return MakeRef<WCacheSlice>(sliceKey.flowId, sliceKey.flowOffset, sliceKey.indexInFlow, sliceKey.length, flowAddrs, flow->GetFlowType());
 }
 
-WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length)
+inline WCacheSlicePtr WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length)
 {
     std::vector<FlowAddr> flowAddrs;
     auto ret = flow->GetAddrByOffset(offset, length, flowAddrs);

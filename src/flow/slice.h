@@ -44,17 +44,17 @@ public:
 
     ~Slice() override = default;
 
-    FlowType GetFlowType() const
+    inline FlowType GetFlowType() const
     {
         return mFlowType;
     }
 
-    uint64_t GetLength() const
+    inline uint64_t GetLength() const
     {
         return mLength;
     }
 
-    const std::vector<FlowAddr> &GetAddrs() const
+    inline const std::vector<FlowAddr> &GetAddrs() const
     {
         return mAddrs;
     }

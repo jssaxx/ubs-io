@@ -16,7 +16,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
 
     mExeService = ExecutorService::Create(10, NO_8192);
-    if (mExeService == nullptr) {
+    if (UNLIKELY(mExeService == nullptr)) {
         LOG_ERROR("Failed to start execution service for wflow evict, probably out of memory");
         return BIO_ALLOC_FAIL;
     }
@@ -232,7 +232,7 @@ BResult WCacheManager::Flush(uint64_t ptId)
     return evictRet;
 }
 
-WCachePtr WCacheManager::GetWCache(uint64_t flowId)
+inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 {
     ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
     auto wflowIt = mWCacheManager.find(flowId);
