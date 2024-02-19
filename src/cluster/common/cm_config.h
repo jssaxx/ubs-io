@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-int32_t CmConfigInit(ConfigRole role, PoolInfo *pools, uint16_t num, const char *zkIpMask, const char *ipStr);
+int32_t CmConfigInit(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo);
 
 int32_t CmConfigHasCfgPoolC(void);
 

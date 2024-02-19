@@ -107,7 +107,7 @@ static int32_t CmConfigReset(PoolInfo *pools, uint16_t num)
     return CM_OK;
 }
 
-int32_t CmConfigInit(ConfigRole role, PoolInfo *pools, uint16_t num, const char *zkIpMask, const char *ipStr)
+int32_t CmConfigInit(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
     int32_t ret;
 
@@ -118,15 +118,18 @@ int32_t CmConfigInit(ConfigRole role, PoolInfo *pools, uint16_t num, const char 
         return ret;
     }
 
-    ret = strcpy_s(g_cmConfig.zkServerList, sizeof(g_cmConfig.zkServerList), zkIpMask);
+    g_cmConfig.timeOut = cfgInfo->regTimeOut;
+    g_cmConfig.permFaultTimeOut = cfgInfo->regPermTimeOut;
+
+    ret = strcpy_s(g_cmConfig.zkServerList, sizeof(g_cmConfig.zkServerList), cfgInfo->zkIpMask);
     if (ret != 0) {
-        CM_LOGERROR("Strcpy_s failed, zkIpMask %s.", zkIpMask);
+        CM_LOGERROR("Strcpy_s failed, zkIpMask %s.", cfgInfo->zkIpMask);
         return CM_ERR;
     }
 
-    ret = strcpy_s(g_cmConfig.ipv4AddrStr, sizeof(g_cmConfig.ipv4AddrStr), ipStr);
+    ret = strcpy_s(g_cmConfig.ipv4AddrStr, sizeof(g_cmConfig.ipv4AddrStr), cfgInfo->ipStr);
     if (ret != 0) {
-        CM_LOGERROR("Strcpy_s failed, ipStr %s.", ipStr);
+        CM_LOGERROR("Strcpy_s failed, ipStr %s.", cfgInfo->ipStr);
         return CM_ERR;
     }
 

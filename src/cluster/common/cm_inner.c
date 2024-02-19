@@ -13,11 +13,11 @@ static MODULE_DEFINE_S g_cmModules[] = {
     { "cm_client_init",          CM_ClientInit,             CM_ClientExit    },
 };
 
-int32_t CM_Init(ConfigRole role, PoolInfo *pools, uint16_t num, const char *zkIpMask, const char *ipStr)
+int32_t CM_Init(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
     int32_t ret;
 
-    ret = CmConfigInit(role, pools, num, zkIpMask, ipStr);
+    ret = CmConfigInit(role, pools, num, cfgInfo);
     if (ret != 0) {
         return ret;
     }
