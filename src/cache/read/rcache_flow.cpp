@@ -23,22 +23,22 @@ RCacheFlow::~RCacheFlow()
     mDataFlowInstance = nullptr;
 }
 
-inline FlowPtr &RCacheFlow::GetMetaFlow()
+FlowPtr &RCacheFlow::GetMetaFlow()
 {
     return mMetaFlow;
 }
 
-inline FlowPtr &RCacheFlow::GetDataFlow()
+FlowPtr &RCacheFlow::GetDataFlow()
 {
     return mDataFlow;
 }
 
-inline FlowInstancePtr &RCacheFlow::GetMetaFlowInstance()
+FlowInstancePtr &RCacheFlow::GetMetaFlowInstance()
 {
     return mMetaFlowInstance;
 }
 
-inline FlowInstancePtr &RCacheFlow::GetDataFlowInstance()
+FlowInstancePtr &RCacheFlow::GetDataFlowInstance()
 {
     return mDataFlowInstance;
 }

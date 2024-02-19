@@ -11,7 +11,7 @@ inline uint32_t WCacheIndex::Hash(const Key &key)
     return std::hash<std::string>{}(key) % HASH_BUCKET_NUM;
 }
 
-inline BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
+BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
@@ -36,12 +36,12 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     return sliceRef;
 }
 
-inline void WCacheIndex::Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef)
+void WCacheIndex::Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef)
 {
     sliceRef->Release();
 }
 
-inline BResult WCacheIndex::Delete(uint64_t ptId, const Key &key)
+BResult WCacheIndex::Delete(uint64_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
