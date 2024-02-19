@@ -25,12 +25,12 @@ void CM_Ulog(int logLevel, const char *funcName, int line, const char *fileName,
     va_start(argPtr, format);
     ret = vsnprintf_s(dataBuf, CM_LOG_BUF_LEN, sizeof(dataBuf) - 1, format, argPtr);
     if (ret < 0) {
-        BIO_LOG_INTERNAL(logLevel, fileName, line, "vsnprintf_s failed.");
+        BIO_LOG_INTERNAL(logLevel, fileName, line, funcName, "vsnprintf_s failed.");
         return;
     }
     va_end(argPtr);
 
-    BIO_LOG_INTERNAL(logLevel, fileName, line, dataBuf);
+    BIO_LOG_INTERNAL(logLevel, fileName, line, funcName, dataBuf);
     return;
 }
 
