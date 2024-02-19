@@ -73,7 +73,7 @@ BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
     return mWCacheManager->GetWCacheSlice(sliceKey, slice);
 }
 
-BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
+inline BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
     BIO_TRACE_START(WCACHE_TRACE_PUT);
     auto ret = mWCacheManager->Put(key, slice, sliceReader, attr);

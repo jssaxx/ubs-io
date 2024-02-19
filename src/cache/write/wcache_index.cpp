@@ -5,13 +5,13 @@
 #include "wcache_index.h"
 namespace ock {
 namespace bio {
-uint32_t WCacheIndex::Hash(const Key &key)
+inline uint32_t WCacheIndex::Hash(const Key &key)
 {
     // TODO: optimize me.
     return std::hash<std::string>{}(key) % HASH_BUCKET_NUM;
 }
 
-BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
+inline BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
@@ -28,7 +28,7 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     auto bucket = Hash(key);
     ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto sliceMeta = table->sliceIndex[bucket].find(key);
-    if (sliceMeta == table->sliceIndex[bucket].end()) {
+    if (UNLIKELY(sliceMeta == table->sliceIndex[bucket].end())) {
         return nullptr;
     }
     auto sliceRef = sliceMeta->second;
@@ -36,12 +36,12 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     return sliceRef;
 }
 
-void WCacheIndex::Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef)
+inline void WCacheIndex::Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef)
 {
     sliceRef->Release();
 }
 
-BResult WCacheIndex::Delete(uint64_t ptId, const Key &key)
+inline BResult WCacheIndex::Delete(uint64_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);

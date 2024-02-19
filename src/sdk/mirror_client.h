@@ -82,7 +82,7 @@ public:
     }
 
 private:
-    void Copy(const void *src, void *dst, const uint64_t len)
+    inline void Copy(const void *src, void *dst, const uint64_t len)
     {
         memcpy_s(dst, len, src, len);
     }
