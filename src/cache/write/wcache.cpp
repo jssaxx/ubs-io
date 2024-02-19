@@ -150,6 +150,7 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
 
         LOG_INFO("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
 
+        BIO_TRACE_START(WCACHE_TRACE_PUT_RCACHE);
         // malloc memory from read cache, and copy slice to this slice.
         uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
         WCacheSlicePtr writeSlice = nullptr;
@@ -158,6 +159,7 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
         ChkTrueNot(ret == BIO_OK, ret);
         ret = rCacheManager->Put(ptId, key, writeSlice);
         ChkTrue(ret == BIO_OK, ret, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key);
+        BIO_TRACE_END(WCACHE_TRACE_PUT_RCACHE, 0);
     }
 
     // when update slice finished, then release resource of flow.
