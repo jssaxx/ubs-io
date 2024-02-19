@@ -337,6 +337,27 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
         return CM_OK;
     }
 
+    static const char *nstate[NODE_STATE_BUTT + 1] = {
+        "invalid",
+        "up",
+        "down",
+        "butt",
+    };
+    
+    static const char *cstate[NODE_CLUSTER_STATE_BUTT + 1] = {
+        "invalid",
+        "out",
+        "in",
+        "butt",
+    };
+
+    uint16_t index;
+    for (index = 0; index < changeList->nodeNum; index++) {
+        NodeStateInfo *changeInfo = &changeList->nodeList[index];
+        CM_LOGINFO("NodeChange: poolId(%u) nodeId(%u) state(%s-%s) session(%lu).",
+            poolId, changeInfo->nodeId, nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
+    }
+
     if (g_subNodeChange[poolId].notifyNodeListChange != NULL) {
         g_subNodeChange[poolId].notifyNodeListChange(changeList, g_subNodeChange[poolId].ctx);
     }
@@ -366,8 +387,8 @@ static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
     uint16_t index;
     for (index = 0; index < changeList->ptNum; index++) {
         PtEntry *ptEntry = &changeList->ptEntryList[index];
-        CM_LOGINFO("ptChange: poolId(%u) ptId(%u) state(%s) version(%lu).",
-            poolId, ptEntry->ptId, ptstate[ptEntry->state], ptEntry->birthVersion);
+        CM_LOGINFO("ptChange: poolId(%u) ptId(%u) state(%s) version(%lu) refer(%lu).",
+            poolId, ptEntry->ptId, ptstate[ptEntry->state], ptEntry->birthVersion, ptEntry->referNum);
     }
 
     if (g_subPtChange[poolId].notifyPtListChange != NULL) {

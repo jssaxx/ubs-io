@@ -16,21 +16,23 @@ if [[ "$1" == 'Debug' ]]; then
 elif [[ "$1" == 'Release' ]]; then
   BUILD_TYPE=release
 fi
- 
-CI_BUILD=$2
-if [ -z "${CI_BUILD}" ];then
-    cd $PROJ_DIR && git submodule update --init
-    cd $PROJ_DIR/3rdparty/hcom/hcom && git submodule update --init
+
+CMAKE_FLAGS=""
+if [[ "$2" == 'Ut' ]]; then
+    BUILD_UT=ON
+    CMAKE_FLAGS+="-DDEBUG_UT=ON "
 fi
 
-# build mockcpp for ut
-cd $PROJ_DIR
-sh scripts/build_mockcpp.sh
+if [ -n "${BUILD_UT}" ];then
+    # build mockcpp for ut
+    cd $PROJ_DIR
+    sh scripts/build_mockcpp.sh
+fi
 
 cd $BUILD_DIR
 echo "BUILD_DIR=${BUILD_DIR}"
  
-CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $PROJ_DIR"
+CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 8"
 
 echo $CMAKE_CMD
@@ -47,20 +49,14 @@ $BUILD_CMD || {
 echo
 echo "build boostio successful."
 
-if [ -n "${RUN_DT}" ];then
-    cd ${BUILD_DIR}
-    ./test/bio_test --gtest_output=xml:./
+if [ -n "${BUILD_UT}" ];then
+    cd ${BUILD_DIR}/test/llt
+    ./bio_test --gtest_output=xml:./
 
-    lcov -d ./ -c -o all.info --rc lcov_branch_coverage=1
-    lcov -r all.info '*opt/buildtools*' '*/3rdparty/*' -o new.info --rc lcov_branch_coverage=1
-    genhtml -o result new.info --rc genhtml_branch_coverage=1
-    mv bio_test.xml result/test_detail.xml
-
-    cd result
-    zip -r lcov.zip *
-    artget pull "ock_3rdparty ock3rdparty1.0" -ru software -user p_OckCI -pwd \
-    encryption:ETMsDgAAAYgIefwyABFBRVMvR0NNL05vUGFkZGluZwCAABAAEBKGslaG2E1RnzCAiRGoekcAAAAqIwJz1WwrhJUvE4ohzMKYYtHPTBeTa7LlILcfVZJoOuQOYEmRgSMNt85UABQBhk4+/kX90aleLjjXzrA/G5tcGw== -rp "hdfsutil.jar" -ap "./"
-    java -jar hdfsutil.jar -prod -upload lcov.zip ${upload_path}/lcov.zip
+    lcov -d ../../src -c -o all.info --rc lcov_branch_coverage=1
+    lcov -r all.info '/usr/include/*' '*/3rdparty/*' -o new.info --rc lcov_branch_coverage=1
+	genhtml new.info --output-directory result
+	tar cvf result.tar result
 fi
 
 cd ${PROJ_DIR}/output

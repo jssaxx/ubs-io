@@ -21,6 +21,8 @@ uint32_t CmConfigGetTimeOut(void);
 
 uint32_t CmConfigGetPermFaultTimeOut(void);
 
+uint32_t CmConfigGetDiskPermFaultTimeOut(void);
+
 const char *CmConfigGetIpv4AddrStr(void);
 
 const char *CmConfigGetZkServerList(void);

@@ -7,6 +7,8 @@
 
 namespace ock {
 namespace bio {
+constexpr uint32_t UNIT_SEC2MISEC = 1000;
+
 BResult Cm::Initialize(const CmOptions &opt)
 {
     if (mInited) {
@@ -34,8 +36,8 @@ BResult Cm::Start()
     CmCfgInfo cfgInfo;
     cfgInfo.zkIpMask = const_cast<char *>(mOptions.zkIpMask.c_str());
     cfgInfo.ipStr = const_cast<char *>(mNode.ip.c_str());
-    cfgInfo.regTimeOut = mOptions.hbTempTimeout;
-    cfgInfo.regPermTimeOut = mOptions.hbPermFaultTime;
+    cfgInfo.regTimeOut = mOptions.hbTempTimeout * UNIT_SEC2MISEC;
+    cfgInfo.regPermTimeOut = mOptions.hbPermFaultTime * UNIT_SEC2MISEC;
     int ret = CM_Init(CONFIG_ROLE_TOGETHER, &pools, 1, &cfgInfo);
     if (ret != 0) {
         return BIO_ERR;
