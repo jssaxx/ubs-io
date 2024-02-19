@@ -235,7 +235,7 @@ BResult CacheSliceOperator::CopyFromMemoryToMemory(const SlicePtr &from, const S
     return BIO_OK;
 }
 
-uint64_t CacheSliceOperator::MinLen(uint64_t from, uint64_t to)
+inline uint64_t CacheSliceOperator::MinLen(uint64_t from, uint64_t to)
 {
     return (from < to) ? from : to;
 }
