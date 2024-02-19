@@ -34,23 +34,23 @@ namespace bio {
     } while (0)
 
 /* for default logger */
-#define BIO_LOG_INTERNAL(level, file, line, msg)                                   \
+#define BIO_LOG_INTERNAL(level, file, line, func, msg)                             \
     do {                                                                           \
         if (ock::bio::Logger::gInstance->IsHigherLevel(static_cast<int>(level))) { \
             std::ostringstream oss;                                                \
             oss.str("");                                                           \
             oss.clear();                                                           \
-            oss << "[" << file << ":" << line << "] " << msg;                      \
+            oss << "[" << file << ":" << line << "]" << "[" << func << "] " << msg; \
             ock::bio::Logger::gInstance->Log(level, oss.str());                    \
         }                                                                          \
     } while (0)
 
-#define LOG_CRITICAL(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_CRITICAL, __BIO_LOG_FILENAME__, __LINE__, msg)
-#define LOG_ERROR(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_ERROR, __BIO_LOG_FILENAME__, __LINE__, msg)
-#define LOG_WARN(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_WARN, __BIO_LOG_FILENAME__, __LINE__, msg)
-#define LOG_INFO(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_INFO, __BIO_LOG_FILENAME__, __LINE__, msg)
-#define LOG_DEBUG(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_DEBUG, __BIO_LOG_FILENAME__, __LINE__, msg)
-#define LOG_TRACE(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_TRACE, __BIO_LOG_FILENAME__, __LINE__, msg)
+#define LOG_CRITICAL(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_CRITICAL, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
+#define LOG_ERROR(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_ERROR, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
+#define LOG_WARN(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_WARN, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
+#define LOG_INFO(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_INFO, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
+#define LOG_DEBUG(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_DEBUG, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
+#define LOG_TRACE(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_TRACE, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
 
 #define ChkTrueNot(ARGS, RET)                     \
     do {                                          \
