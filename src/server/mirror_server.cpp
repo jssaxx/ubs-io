@@ -128,6 +128,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
             return BIO_OK;
         }
 
+        BIO_TRACE_START(MIRROR_TRACE_PUT_READ_DATA);
         std::vector<FlowAddr> rFlowAddr = from->GetAddrs();
         std::vector<NetMrInfo> rMrVec;
         for (auto & addr : rFlowAddr) {
@@ -150,9 +151,11 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
             BResult ret = BioServer::Instance()->GetRpcEngine()->SyncRead(static_cast<BioNodeId>(dstNid), readReq);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Sync read failed, ret:" << ret << ", dstNid:" << dstNid << ".");
+                BIO_TRACE_END(MIRROR_TRACE_PUT_READ_DATA, ret);
                 return ret;
             }
         }
+        BIO_TRACE_END(MIRROR_TRACE_PUT_READ_DATA, BIO_OK);
         return BIO_OK;
     };
 
@@ -185,14 +188,17 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
                 LOG_ERROR("Remote slice num failed, num:" << rMrVec.size() << ".");
                 return BIO_INNER_ERR;
             }
+            BIO_TRACE_START(MIRROR_TRACE_GET_COPY_DATA);
             char *rAddr = reinterpret_cast<char *>(rMrVec[0].address);
             ret = mSliceOp.Copy(from, rAddr);
+            BIO_TRACE_END(MIRROR_TRACE_GET_COPY_DATA, ret);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Slice copy failed, ret:" << ret << ".");
             }
             return ret;
         }
 
+        BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
         uint32_t totalLen = 0;
         std::vector<NetMrInfo> rMrVec;
         for (auto addr : to->GetAddrs()) {
@@ -215,6 +221,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
             ret = BioServer::Instance()->MemAlloc(totalLen, bioMr);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
+                BIO_TRACE_END(MIRROR_TRACE_GET_WRITE_DATA, ret);
                 return ret;
             }
             isAlloc = true;
@@ -223,6 +230,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Slice copy failed, ret:" << ret << ", key:" << key.c_str());
                 BioServer::Instance()->MemFree(bioMr.address);
+                BIO_TRACE_END(MIRROR_TRACE_GET_WRITE_DATA, ret);
                 return ret;
             }
         }
@@ -242,6 +250,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
                 BioServer::Instance()->MemFree(mr.address);
             }
         }
+        BIO_TRACE_END(MIRROR_TRACE_GET_WRITE_DATA, ret);
         return ret;
     };
 
