@@ -14,6 +14,7 @@
 #include "net_common.h"
 #include "bio_ref.h"
 #include "bio.h"
+#include "bio_lock.h"
 #include "bio_config_instance.h"
 #include "mirror_client.h"
 
@@ -134,40 +135,48 @@ public:
 
     inline std::shared_ptr<Bio> Query(const uint64_t tenantId)
     {
-        std::lock_guard<std::mutex> guard(mLock);
+        mLock.LockRead();
         auto it = mCacheMap.find(tenantId);
         if (LIKELY(it != mCacheMap.end())) {
+            mLock.UnLock();
             return it->second;
         }
+        mLock.UnLock();
         return nullptr;
     }
 
     inline BResult Insert(const std::shared_ptr<Bio> &instance)
     {
-        std::lock_guard<std::mutex> guard(mLock);
+        mLock.LockWrite();
         if (UNLIKELY(mCacheMap.size() > defaultMaxCacheSize)) {
+            mLock.UnLock();
             return BIO_ERR;
         }
         auto it = mCacheMap.find(instance->GetTenantId());
         if (UNLIKELY(it != mCacheMap.end())) {
             if (it->second->GetAffinityPolicy() != instance->GetAffinityPolicy() ||
                 it->second->GetWriteStrategy() != instance->GetWriteStrategy()) {
+                mLock.UnLock();
                 return BIO_ERR;
             }
+            mLock.UnLock();
             return BIO_OK;
         }
         mCacheMap[instance->GetTenantId()] = instance;
+        mLock.UnLock();
         return BIO_OK;
     }
 
     inline void Delete(const uint64_t tenantId)
     {
-        std::lock_guard<std::mutex> guard(mLock);
+        mLock.LockWrite();
         auto it = mCacheMap.find(tenantId);
         if (UNLIKELY(it == mCacheMap.end())) {
+            mLock.UnLock();
             return;
         }
         mCacheMap.erase(it);
+        mLock.UnLock();
     }
 
     inline std::unordered_map<uint64_t, std::shared_ptr<Bio>> List()
@@ -189,7 +198,7 @@ private:
     bool mStarted{ false };
     std::mutex mStartLock;
     std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
-    std::mutex mLock;
+    ReadWriteLock mLock;
     BioConfigPtr mConfig{ nullptr };
     NetEnginePtr mRpcService{ nullptr };
     MirrorClientPtr mMirror{ nullptr };

@@ -26,7 +26,7 @@ public:
 
     ~WCacheManager() = default;
 
-    static WCacheManagerPtr &Instance()
+    inline static WCacheManagerPtr &Instance()
     {
         static auto instance = MakeRef<WCacheManager>();
         return instance;

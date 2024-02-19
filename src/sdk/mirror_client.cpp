@@ -180,7 +180,7 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     return ret;
 }
 
-uint16_t MirrorClient::ParseLocation(Bio::ObjLocation location)
+inline uint16_t MirrorClient::ParseLocation(Bio::ObjLocation location)
 {
     return static_cast<uint16_t>(location.location[0]);
 }
@@ -370,7 +370,7 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flow
         auto *tmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + sliceLen];
         if (UNLIKELY(tmp == nullptr)) {
             LOG_ERROR("Alloc put request memory failed, len:" << sizeof(PutRequest) + sliceLen << ".");
-            return BIO_INNER_ERR;
+            return BIO_ALLOC_FAIL;
         }
         ConstructPutReq(tmp, ptEntry, param, flowId, offset, index, sliceP);
         req = static_cast<PutRequest *>(static_cast<void *>(tmp));
@@ -606,7 +606,7 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
     return BIO_OK;
 }
 
-BResult MirrorClient::SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context)
+inline BResult MirrorClient::SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context)
 {
     return LoadMaster(req, ptEntry.masterNodeId, callback, context);
 }
