@@ -246,12 +246,19 @@ typedef struct {
     void *ctx;
 } PtViewChangeOpHandle;
 
+typedef struct {
+    char *zkIpMask;
+    char *ipStr;
+    uint16_t regTimeOut;
+    uint16_t regPermTimeOut;
+} CmCfgInfo;
+
 /*
  * 功能描述：CM初始化
  * 参数说明：ockPath，配置文件路径
  * 返回值：0表示成功，非0表示失败
  */
-int32_t CM_Init(ConfigRole role, PoolInfo *pools, uint16_t num, const char *zkIpMask, const char *ipStr);
+int32_t CM_Init(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo);
 
 /*
  * 功能描述：获取指定节点的基本信息

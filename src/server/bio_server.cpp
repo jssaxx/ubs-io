@@ -41,6 +41,9 @@ BResult BioServer::Start()
         return BIO_ERR;
     }
 
+    auto &daemonConfig = mConfig->GetDaemonConfig();
+    BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
+
     // init tracer
     const std::string dumpDir = "/var/log/boostio/trace/";
     ret = ock::htracer::HTracerInit(dumpDir);
@@ -228,14 +231,14 @@ BResult BioServer::StartCm()
     // prepare config.
     CmOptions cmOptions;
     cmOptions.role = ROLE_TOGETHER;
-    std::stringstream ss;
-    ss << mConfig->GetCmConfig().zkHostPort;
-    cmOptions.zkIpMask = mConfig->GetCmConfig().zkHostIp + ":" + ss.str();
+    cmOptions.zkIpMask = mConfig->GetCmConfig().zkHost;
     cmOptions.groups.groupId = static_cast<uint16_t>(mConfig->GetCmConfig().groupId);
     cmOptions.groups.replicaNum = 2;
     cmOptions.groups.initialNodeNum = static_cast<uint16_t>(mConfig->GetCmConfig().initialNodeNum);
     cmOptions.groups.maxNodeNum = static_cast<uint16_t>(mConfig->GetCmConfig().nodeNum);
     cmOptions.groups.maxPtNum = static_cast<uint16_t>(mConfig->GetCmConfig().ptNum);
+    cmOptions.hbTempTimeout = static_cast<uint32_t>(mConfig->GetCmConfig().registeredTimeoutSec);
+    cmOptions.hbPermFaultTime = static_cast<uint32_t>(mConfig->GetCmConfig().registeredPermTimeoutSec);
 
     mCm = Cm::Instance();
     if (UNLIKELY(mCm == nullptr)) {

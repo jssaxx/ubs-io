@@ -191,5 +191,13 @@ void Logger::Flush()
         mSpdLogger->flush();
     }
 }
+
+void Logger::ResetLogLevel(int32_t logLevel)
+{
+    mOptions.minLogLevel = logLevel;
+    if (mSpdLogger != nullptr) {
+        mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
+    }
+}
 }
 }
