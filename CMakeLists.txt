@@ -72,7 +72,7 @@ include_directories(
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
 )
 
-if (${CMAKE_BUILD_TYPE} MATCHES "debug")
+if (${DEBUG_UT} MATCHES "ON")
     add_compile_options(-ftest-coverage -fprofile-arcs)
     link_libraries(gcov)
 endif()
