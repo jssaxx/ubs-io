@@ -1,2 +1,4 @@
 add_subdirectory(benchmarks)
-add_subdirectory(llt)
+if (${DEBUG_UT} MATCHES "ON")
+    add_subdirectory(llt)
+endif()

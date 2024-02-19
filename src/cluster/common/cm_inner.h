@@ -249,8 +249,8 @@ typedef struct {
 typedef struct {
     char *zkIpMask;
     char *ipStr;
-    uint16_t regTimeOut;
-    uint16_t regPermTimeOut;
+    uint32_t regTimeOut; // 毫秒
+    uint32_t regPermTimeOut; // 毫秒
 } CmCfgInfo;
 
 /*
