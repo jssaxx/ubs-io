@@ -28,7 +28,7 @@ public:
         return mStarted;
     }
 
-    static MirrorServerPtr &Instance()
+    inline static MirrorServerPtr &Instance()
     {
         static auto instance = MakeRef<MirrorServer>();
         return instance;

@@ -27,13 +27,13 @@ constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_RCACHE = 1;
 
 class CacheFlowIdManager {
 public:
-    static uint32_t GenerateCacheFlowIdPrefix(uint16_t ptId, uint16_t type, uint16_t innerType)
+    inline static uint32_t GenerateCacheFlowIdPrefix(uint16_t ptId, uint16_t type, uint16_t innerType)
     {
         return CACHE_FLOW_ID_PREFIX_MASK & (((static_cast<uint32_t>(ptId)) << CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT) |
             ((static_cast<uint32_t>(type)) << CACHE_FLOW_ID_PREFIX_TYPE_SHIFT) | (static_cast<uint32_t>(innerType)));
     }
 
-    static uint64_t GetPtId(uint64_t flowId)
+    inline static uint64_t GetPtId(uint64_t flowId)
     {
         return flowId >> (NO_64 - 13);
     }

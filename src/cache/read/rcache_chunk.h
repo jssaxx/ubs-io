@@ -86,12 +86,12 @@ namespace ock {
                 mValue = value;
             }
 
-            uint64_t GetState() const
+            inline uint64_t GetState() const
             {
                 return mState;
             }
-            
-            void SetState(uint64_t state)
+
+            inline void SetState(uint64_t state)
             {
                 mState = state;
             }

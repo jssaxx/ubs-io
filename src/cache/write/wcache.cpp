@@ -137,7 +137,7 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
     ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
     ret = mSliceOperator.Copy(slice.Get(), value);
-    if (ret != BIO_OK) {
+    if (UNLIKELY(ret != BIO_OK)) {
         delete[] value;
         LOG_ERROR("failed to copy slice to value. ret:" << ret << ",slice:" << slice->ToString());
         return ret;
@@ -165,7 +165,7 @@ BResult WCache::EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, co
     WCacheSliceRef::SetSliceCallback callback = [this, sliceMeta](const WCacheSlicePtr &oldSlice) {
         auto &diskCache = mCacheTiers[WCACHE_DISK];
         auto ret = diskCache->Evict(oldSlice);
-        if (ret != BIO_OK) {
+        if (UNLIKELY(ret != BIO_OK)) {
             DecreaseRef();
             LOG_ERROR("failed to evict old slice." << ret << ", slice:" << oldSlice->ToString());
             return;

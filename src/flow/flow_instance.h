@@ -20,12 +20,12 @@ public:
     FlowInstance(const uint64_t flowId) : mFlowId(flowId) {}
     ~FlowInstance() = default;
 
-    uint64_t FlowId() const
+    inline uint64_t FlowId() const
     {
         return mFlowId;
     }
 
-    uint64_t AllocOffset(uint64_t len, uint64_t &offset)
+    inline uint64_t AllocOffset(uint64_t len, uint64_t &offset)
     {
         lock.Lock();
         offset = mIndex++;
