@@ -160,6 +160,7 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
         return ret;
     } else if (ret == BIO_OK) {
         LOG_INFO("Write cache delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
+        return BIO_OK;
     }
 
     ret = mRCacheManager->Delete(ptId, key);
@@ -177,6 +178,7 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
         return ret;
     } else {
         LOG_INFO("UnderFS delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
+        ret = BIO_OK;
     }
 
     return ret;
