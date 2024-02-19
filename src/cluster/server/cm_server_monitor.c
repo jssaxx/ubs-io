@@ -13,6 +13,8 @@
 
 #define MONITOR_PERM_FAULT_TIME (CmConfigGetPermFaultTimeOut() / 1000)
 
+#define MONITOR_DISK_PERM_FAULT_TIME (CmConfigGetDiskPermFaultTimeOut() / 1000)
+
 #define MONITOR_INTERAL_TIME (5000)
 
 typedef enum {
@@ -236,7 +238,7 @@ void CmServerMonitorPoolExpiredUpdate(PoolRecord *record, uint64_t curTimes)
         uint16_t list[DISK_LIST_NUM] = { 0 };
         uint16_t num = 0;
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
-            if (nodeList->list[nodeId].diskList[index].times + MONITOR_PERM_FAULT_TIME <= curTimes) {
+            if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
                 continue;
             }
             list[num++] = index;
@@ -279,7 +281,7 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
             continue;
         }
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
-            if (nodeList->list[nodeId].diskList[index].times + MONITOR_PERM_FAULT_TIME <= curTimes) {
+            if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
                 g_faultMonitor.handle.ExpiredDiskSet(record->pool->poolId, nodeId, nodeList->list[nodeId].diskList[index].id);
                 continue;
             }
@@ -322,7 +324,7 @@ uint16_t CmServerMonitorPoolIsExpired(uint16_t poolId)
         }
         for (index = 0; index <nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].state == RECORD_STATE_FAULT) {
-                if (nodeList->list[nodeId].diskList[index].times + MONITOR_PERM_FAULT_TIME <= curTimes) {
+                if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
                     return TRUE;
                 }
             }
