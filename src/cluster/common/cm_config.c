@@ -25,12 +25,14 @@ typedef struct {
     char zkServerList[ZK_SERVER_LIST_LEN];
     uint64_t timeOut;
     uint64_t permFaultTimeOut;
+    uint64_t diskPermFaultTimeOut;
     CmPoolConfig poolList[MAX_POOL_NUM];
 } CmConfig;
 
 static CmConfig g_cmConfig = {
     .timeOut = 30000,
     .permFaultTimeOut = 120000,
+    .diskPermFaultTimeOut = 0,
 };
 
 int32_t CmConfigHasCfgPoolC(void)
@@ -59,6 +61,11 @@ uint32_t CmConfigGetTimeOut(void)
 uint32_t CmConfigGetPermFaultTimeOut(void)
 {
     return (uint32_t)g_cmConfig.permFaultTimeOut;
+}
+
+uint32_t CmConfigGetDiskPermFaultTimeOut(void)
+{
+    return (uint32_t)g_cmConfig.diskPermFaultTimeOut;
 }
 
 const char *CmConfigGetIpv4AddrStr(void)
