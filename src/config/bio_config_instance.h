@@ -10,29 +10,25 @@
 
 namespace ock {
 namespace bio {
+const auto LOG_LEVEL = std::make_pair("bio.log.level", "info");
+
 const auto NET_DATA_PROTOCOL = std::make_pair("bio.net.data.protocol", "tcp");
 const auto NET_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.data.busy_polling_mode", false);
-const auto NET_DATA_CTRL_WORKERS_COUNT = std::make_pair("bio.net.data.ctrl_workers_count", 4);
-const auto NET_DATA_DATA_WORKERS_COUNT = std::make_pair("bio.net.data.data_workers_count", 4);
+const auto NET_DATA_WORKERS_COUNT = std::make_pair("bio.net.data.workers_count", 4);
 const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/24");
 const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 9898);
-const auto NET_CMM_IP_MASK = std::make_pair("bio.net.cmm.ip_mask", "127.0.0.1/24");
-const auto NET_CMM_PORT = std::make_pair("bio.net.cmm.listen_port", 9899);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("bio.net.request.executor.queue.size", 1024);
 
-const auto CMM_ENABLED = std::make_pair("bio.cmm.enabled", false);
-const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cmc.initial.nodes_count", 2);
-const auto CM_NODE_NUM = std::make_pair("bio.cmc.nodes_count", 2);
-const auto CM_PT_NUM = std::make_pair("bio.cmc.pts_count", 16);
-const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("bio.cmc.register_timeout_sec", 120);
-const auto CM_GROUP_ID = std::make_pair("bio.group.id", 1);
-const auto CM_ZK_HOST_IP_MASK = std::make_pair("bio.zk_host.ip", "127.0.0.1/24");
-const auto CM_ZK_HOST_PORT = std::make_pair("bio.zk_host.port", 2181);
+const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
+const auto CM_NODE_NUM = std::make_pair("bio.cm.nodes_count", 2);
+const auto CM_PT_NUM = std::make_pair("bio.cm.pts_count", 16);
+const auto CM_GROUP_ID = std::make_pair("bio.cm.group.id", 1);
+const auto CM_ZK_HOST = std::make_pair("bio.cm.zk_host", "127.0.0.1:2181");
+const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("bio.cm.register_timeout_sec", 30);
+const auto CM_NODE_REGISTER_PERM_TIMEOUT = std::make_pair("bio.cm.register_perm_timeout_sec", 60);
 
 const auto CLIENT_LOCAL_MR_MB = std::make_pair("bio.client.buffer.size_in_mb", 512);
-
-const auto LOG_LEVEL = std::make_pair("bio.log.level", "info");
 
 const auto SECURITY_ENABLED = std::make_pair("bio.security.enabled", false);
 const auto SECURITY_CONF_PATH = std::make_pair("bio.security.conf", "bio_security.conf");
@@ -52,29 +48,24 @@ class BioConfig : public Configuration {
 public:
     struct NetConfig {
         std::string dataIpMask = "127.0.0.1/24";
-        std::string cmmIpMask = "127.0.0.1/24";
         std::string dataIp = "127.0.0.1";
-        std::string cmmIp = "127.0.0.1";
         uint16_t dataPort = 9998;
-        uint16_t cmmPort = 9999;
         uint16_t protocol = 1;
         bool isBusyLoop = false;
-        uint16_t ctrlWorkersCnt = 4;
         uint16_t dataWorkersCnt = 4;
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
     };
 
     struct CmConfig {
-        bool enableCmm = false;
         int32_t deployType = 1; // 1-Converged deployment, 0-Separated deployment
         int32_t initialNodeNum = 2;
         int32_t nodeNum = 2;
         int32_t ptNum = 2;
-        int32_t registeredTimeoutSec = 120;
+        int32_t registeredTimeoutSec = 30;
+        int32_t registeredPermTimeoutSec = 60;
         int32_t groupId = 0;
-        std::string zkHostIp = "127.0.0.1";
-        uint16_t zkHostPort = 2181;
+        std::string zkHost = "127.0.0.1:2181";
     };
 
     struct DaemonConfig {

@@ -28,6 +28,11 @@ namespace bio {
 #define SPDLOG_LEVEL_CRITICAL 5
 #define SPDLOG_LEVEL_OFF 6
 
+#define BIO_LOG_RESET_LEVEL(level)                                                 \
+    do {                                                                           \
+            ock::bio::Logger::gInstance->ResetLogLevel(level);                     \
+    } while (0)
+
 /* for default logger */
 #define BIO_LOG_INTERNAL(level, file, line, msg)                                   \
     do {                                                                           \
@@ -109,6 +114,7 @@ public:
 
     int32_t Log(int level, const std::string &message) const;
     void Flush();
+    void ResetLogLevel(int32_t logLevel);
 
     inline bool IsHigherLevel(int nowLevel) const
     {
