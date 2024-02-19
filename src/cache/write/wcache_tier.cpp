@@ -120,7 +120,7 @@ BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint
     return BIO_OK;
 }
 
-inline uint64_t WCacheTier::GetDataCapacity()
+uint64_t WCacheTier::GetDataCapacity()
 {
     return mDataFlow->GetValidLen();
 }
