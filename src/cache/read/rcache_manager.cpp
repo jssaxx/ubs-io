@@ -53,13 +53,16 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint64_t ptId)
 
 BResult RCacheManager::AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePtr &slice)
 {
+    BIO_TRACE_START(RCACHE_TRACE_GET_SLICE);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
+        BIO_TRACE_END(RCACHE_TRACE_GET_SLICE, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
 
-    cachePtr->AllocResources(len, slice);
-    return BIO_OK;
+    auto ret = cachePtr->AllocResources(len, slice);
+    BIO_TRACE_END(RCACHE_TRACE_GET_SLICE, ret);
+    return ret;
 }
 
 BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &slice)

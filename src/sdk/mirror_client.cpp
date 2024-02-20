@@ -350,13 +350,17 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flow
 {
     if (mDeployType == 1) {
         WCacheSlicePtr sliceP = nullptr;
+        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
         BResult ret = MirrorServer::Instance()->GetSlice(flowId, offset, index, param.length, sliceP);
+        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_GET_SLICE, ret);
         if (UNLIKELY(ret != BIO_OK || sliceP == nullptr)) {
             LOG_ERROR("Get slice failed, ret:" << ret << ", flowId:" << flowId << ", flowOffset:" << offset <<
                 ", length:" << param.length << ".");
             return ret;
         }
+        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
         ret = mSliceOp.Copy(param.value, sliceP.Get());
+        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<
                 ", flowOffset:" << offset << ", length:" << param.length << ".");
@@ -372,7 +376,9 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flow
             LOG_ERROR("Alloc put request memory failed, len:" << sizeof(PutRequest) + sliceLen << ".");
             return BIO_ALLOC_FAIL;
         }
+        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
         ConstructPutReq(tmp, ptEntry, param, flowId, offset, index, sliceP);
+        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
         req = static_cast<PutRequest *>(static_cast<void *>(tmp));
         return BIO_OK;
     } else {
