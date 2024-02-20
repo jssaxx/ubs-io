@@ -50,7 +50,10 @@ public:
 
     uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
 
-    uint16_t ParseLocation(Bio::ObjLocation location);
+    inline uint16_t ParseLocation(Bio::ObjLocation location)
+    {
+        return static_cast<uint16_t>(location.location[0]);
+    }
 
     BResult Put(MirrorPut &param);
 
