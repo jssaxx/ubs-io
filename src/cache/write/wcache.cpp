@@ -26,6 +26,7 @@ BResult WCache::Init(uint64_t flowId, const ExecutorServicePtr &exeService, Evic
     mFlowId = flowId;
     mExeService = exeService;
     mEvictCallback = std::move(evictCallback);
+    mUnderFs = UnderFs::Instance();
 
     return BIO_OK;
 }
