@@ -249,7 +249,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 
             copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
             copy.diskId = ptList->ptEntryList[index].copyList[vIdx].diskId;
-            copy.state = s_copystate[vIdx];
+            copy.state = s_copystate[ptList->ptEntryList[index].copyList[vIdx].state];
             pt.copys.push_back(copy);
         }
 

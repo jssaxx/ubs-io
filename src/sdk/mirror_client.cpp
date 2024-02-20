@@ -180,11 +180,6 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     return ret;
 }
 
-inline uint16_t MirrorClient::ParseLocation(Bio::ObjLocation location)
-{
-    return static_cast<uint16_t>(location.location[0]);
-}
-
 BResult MirrorClient::Initialize()
 {
     BResult ret = LoadOriginView();
