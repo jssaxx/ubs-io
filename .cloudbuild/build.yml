@@ -26,7 +26,7 @@ steps:
         tag: tag_Huawei_Secure_C_V100R001C01SPC011B003_00001
         path: boostio/3rdparty/hcom/hcom/3rdparty/secure_c/huawei_secure_c
     - gitlab:
-        url: https://codehub-dg-y.huawei.com/OpenSourceCenter/rdma-core.git
+        url: https://szv-open.codehub.huawei.com/OpenSourceCenter/linux-rdma/rdma-core.git
         tag: v42.0
         path: boostio/3rdparty/hcom/hcom/3rdparty/rdma_core/rdma-core
     - codehub:
@@ -35,7 +35,7 @@ steps:
         path: boostio/3rdparty/spdlog/spdlog
     - gitlab:
         url: https://codehub-dg-y.huawei.com/hwsecurec_group/huawei_secure_c.git
-        tag: tag_Huawei_Secure_C_V100R001C01SPC013B001_00001
+        tag: tag_Huawei_Secure_C_V100R001C01SPC011B003_00001
         path: boostio/3rdparty/secure/huawei_secure_c
     - gitlab:
         url: https://szv-open.codehub.huawei.com/OpenSourceCenter/google/googletest.git
@@ -51,7 +51,7 @@ steps:
         path: boostio/test/llt/3rdparty/mockcpp
   BUILD:
     - build_execute:
-        command: sh boostio/build.sh ${BUILD_TYPE} ${CI_BUILD}
+        command: sh boostio/build.sh ${BUILD_TYPE}
         check:
           fail_on_error: true
           mode: sync
