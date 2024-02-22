@@ -282,7 +282,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
     LoadRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), key, ptId, offset, length };
     ret = SendLoadRequest(ptEntry, req, callback, context);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        LOG_ERROR("Send load request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
     }
     return ret;
 }
@@ -591,6 +591,12 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, Bio::
 
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
 {
+    if (masterNid == mLocalNid.VNodeId()) {
+        BResult ret = MirrorServer::Instance()->Load(req);
+        callback(context, ((ret == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+        return BIO_OK;
+    }
+
     uint16_t ptId = req.comm.ptId;
     auto cbFunc = [ptId, callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
         if (UNLIKELY(result != BIO_OK)) {
@@ -601,7 +607,6 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
         }
     };
     NetEngine::Callback cb(cbFunc, nullptr);
-
     BioClient::Instance()->SendAsyncBuff(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_LOAD, static_cast<void *>(&req),
         sizeof(LoadRequest), cb, false);
     return BIO_OK;
