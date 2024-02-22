@@ -34,7 +34,7 @@ static void usage()
         "\tdestroy cache: destroy [tenantId]\n"
         "\tput value to cache: put [key] [filePath] [length] [sliceId]\n"
         "\tget value from cache: get [key] [offset] [length] [location] [filePath]\n"
-        "\tget key state from cache: stat [key] [sliceId]\n"
+        "\tget key state from cache: stat [key] [location]\n"
         "\tload key to cache: load [key] [offset] [length] [location]\n"
         "\tdelete key: delete [key] [location]\n"
         "\tshow view: show [pt/node/trace] [all/affinity]\n"
