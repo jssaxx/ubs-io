@@ -42,8 +42,6 @@ BResult Cm::Start()
     if (ret != 0) {
         return BIO_ERR;
     }
-    mNodeId.groupId = pools.poolId;
-    mNodeId.nodeId = CM_GetLocalNodeId(pools.poolId);
     mStarted = true;
     return BIO_OK;
 }
@@ -75,11 +73,16 @@ BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
         LOG_ERROR("Malloc ptList failed:" << ptFinish.size());
         return BIO_ERR;
     }
+    uint16_t num = 0;
     for (uint32_t index = 0; index < ptFinish.size(); index++) {
-        ptList[index].birthVersion = ptFinish[index].version;
-        ptList[index].ptId = ptFinish[index].ptId;
+        if (mPtInfos.find(ptFinish[index].ptId) == mPtInfos.end()) {
+            continue;
+        }
+        ptList[num].birthVersion = ptFinish[index].version - mPtInfos[ptFinish[index].ptId].referNum;
+        ptList[num].ptId = ptFinish[index].ptId;
+        num++;
     }
-    int ret = CM_SetPtFinishStatus(mOptions.groups.groupId, ptFinish.size(), ptList);
+    int ret = CM_SetPtFinishStatus(mOptions.groups.groupId, num, ptList);
     if (ret != 0) {
         delete [] ptList;
         return BIO_ERR;
@@ -159,6 +162,11 @@ int32_t Cm::NotifyNodeListChange(NodeStateList *nodeList, void *ctx)
 {
     Cm *cm = reinterpret_cast<Cm *>(ctx);
     WriteLocker<ReadWriteLock> lock(&cm->mLock);
+
+    if (cm->mNodeId.whole == NO_MAX_VALUE32) {
+        cm->mNodeId.groupId = cm->mOptions.groups.groupId;
+        cm->mNodeId.nodeId = CM_GetLocalNodeId(cm->mOptions.groups.groupId);
+    }
 
     for (uint16_t index = 0; index < nodeList->nodeNum; index++) {
         if (nodeList->nodeList[index].state == NODE_STATE_INVALID) {
