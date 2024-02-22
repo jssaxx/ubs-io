@@ -69,36 +69,37 @@ BResult RCache::DeleteFromIndex(const Key &key)
 void RCache::AddToEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk)
 {
     evictMqLock[tierType][mType].Lock();
-    evictMq[tierType][mType].push_back(chunk);
+    evictMq[tierType][mType].PushBack(chunk);
     evictMqLock[tierType][mType].UnLock();
 }
 
 void RCache::DelFromEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk)
 {
     evictMqLock[tierType][mType].Lock();
-    evictMq[tierType][mType].remove(chunk);
+    evictMq[tierType][mType].Remove(chunk);
     evictMqLock[tierType][mType].UnLock();
 }
 
 void RCache::AddToTruncateList(RCacheTierType tierType, RCacheChunkPtr &chunk)
 {
     truncateLock[tierType].Lock();
-    if (truncateQ[tierType].empty()) {
-        truncateQ[tierType].push_back(chunk);
+    if (truncateQ[tierType].IsEmpty()) {
+        truncateQ[tierType].PushBack(chunk);
         truncateLock[tierType].UnLock();
         return;
     }
 
-    for (auto iter = truncateQ[tierType].begin(); iter != truncateQ[tierType].end(); iter++) {
-        if (chunk->GetValue().indexInFlow < iter->Get()->GetValue().indexInFlow) {
+    for (auto iter = truncateQ[tierType].Begin(); iter != nullptr;) {
+        if (chunk->GetValue().indexInFlow < iter->GetValue().indexInFlow) {
+            iter = iter->next[tierType];
             continue;
         }
-        truncateQ[tierType].insert((iter), chunk);
+        truncateQ[tierType].InsertAt((iter), chunk);
         truncateLock[tierType].UnLock();
         return;
     }
 
-    truncateQ[tierType].push_back(chunk);
+    truncateQ[tierType].PushBack(chunk);
     truncateLock[tierType].UnLock();
 }
 
@@ -170,6 +171,17 @@ BResult RCache::Initialize()
         Destroy();
         return BIO_ERR;
     }
+
+    for (auto & i : truncateQ) {
+        i.Initialize(RCACHE_TRUNK_LIST_TYPE_TRUNCATE);
+    }
+
+    for (auto & i : evictMq) {
+        for (auto & j : i) {
+            j.Initialize(RCACHE_TRUNK_LIST_TYPE_EVICT);
+        }
+    }
+
     return BIO_OK;
 }
 
@@ -186,15 +198,15 @@ BResult RCache::Destroy()
 
         for (uint32_t i = 0; i < MQ_TYPE_BUTT; i++) {
             evictMqLock[tier][i].Lock();
-            while (!evictMq[tier][i].empty()) {
-                evictMq[tier][i].erase(evictMq[tier][i].begin());
+            while (!evictMq[tier][i].IsEmpty()) {
+                evictMq[tier][i].PopFront();
             }
             evictMqLock[tier][i].UnLock();
         }
 
         truncateLock[tier].Lock();
-        while (!truncateQ[tier].empty()) {
-            truncateQ[tier].erase(truncateQ[tier].begin());
+        while (!truncateQ[tier].IsEmpty()) {
+            truncateQ[tier].PopFront();
         }
         truncateLock[tier].UnLock();
     }
@@ -388,8 +400,8 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
 
     auto mqType = chunk->GetMqType();
     evictMqLock[tier][mqType].Lock();
-    evictMq[tier][mqType].remove(chunk);
-    evictMq[tier][mqType].push_back(chunk);
+    evictMq[tier][mqType].Remove(chunk);
+    evictMq[tier][mqType].PushBack(chunk);
     evictMqLock[tier][mqType].UnLock();
     return BIO_OK;
 }
@@ -507,14 +519,13 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
 
     while (haveEvictData < needEvictData) {
         truncateLock[READ_CACHE_TIER_MEM].Lock();
-        if (truncateQ[READ_CACHE_TIER_MEM].empty()) {
+        if (truncateQ[READ_CACHE_TIER_MEM].IsEmpty()) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
             break;
         }
-        chunk = truncateQ[READ_CACHE_TIER_MEM].back();
-        truncateQ[READ_CACHE_TIER_MEM].pop_back();
+        chunk = truncateQ[READ_CACHE_TIER_MEM].End();
+        truncateQ[READ_CACHE_TIER_MEM].PopBack();
         truncateLock[READ_CACHE_TIER_MEM].UnLock();
-
         BIO_TRACE_START(RCACHE_TRACE_EVICT2DISK);
         chunk->lock.lock();
         uint64_t flowOffset = 0;
@@ -582,15 +593,14 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
     RCacheChunkPtr chunk;
     while (haveEvictData < needEvictData) {
         truncateLock[READ_CACHE_TIER_DISK].Lock();
-        if (truncateQ[READ_CACHE_TIER_DISK].empty()) {
+        if (truncateQ[READ_CACHE_TIER_DISK].IsEmpty()) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
             break;
         }
         BIO_TRACE_START(RCACHE_TRACE_EVICT2NULL);
-        chunk = truncateQ[READ_CACHE_TIER_DISK].back();
-        truncateQ[READ_CACHE_TIER_DISK].pop_back();
+        chunk = truncateQ[READ_CACHE_TIER_DISK].End();
+        truncateQ[READ_CACHE_TIER_DISK].PopBack();
         truncateLock[READ_CACHE_TIER_DISK].UnLock();
-
         chunk->lock.lock();
         auto ret = DeleteFromIndex(chunk->GetKey());
         if (UNLIKELY(ret != BIO_OK)) {
