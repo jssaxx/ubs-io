@@ -59,7 +59,7 @@ enum Role {
 
 struct NetOptions {
     int16_t timeoutCtrlSec = 3;                             /* timeout of ctrl panel */
-    int16_t timeoutDataSec = 1;                             /* timeout of data panel */
+    int16_t timeoutDataSec = 60;                             /* timeout of data panel */
     std::string ipMask;                                     /* ip mask */
     uint16_t port = 0;                                      /* listen port */
     uint16_t controlPanelHandlerCount = 1;                  /* control panel handler count */

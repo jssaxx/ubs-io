@@ -8,6 +8,8 @@
 #include "flow_id_allocator.h"
 #include "cache_flow.h"
 
+#define WCACHE_MANAGER_QUEUE_CAP 100000UL
+
 namespace ock {
 namespace bio {
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
@@ -15,7 +17,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     mCacheIndex = MakeRef<WCacheIndex>();
     ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
 
-    mExeService = ExecutorService::Create(10, NO_8192);
+    mExeService = ExecutorService::Create(10, WCACHE_MANAGER_QUEUE_CAP);
     if (UNLIKELY(mExeService == nullptr)) {
         LOG_ERROR("Failed to start execution service for wflow evict, probably out of memory");
         return BIO_ALLOC_FAIL;
@@ -42,7 +44,7 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
     BIO_TRACE_START(WCACHE_TRACE_ALLOC_ID);
     auto flowIdAllocator = FlowIdAllocator::Instance();
     uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE,
-                                                                        WRITE_CACHE_FLOW_MEM_META_PREFIX);
+        WRITE_CACHE_FLOW_MEM_META_PREFIX);
     flowId = flowIdAllocator->GenerateFlowId(flowPrefix);
     BIO_TRACE_END(WCACHE_TRACE_ALLOC_ID, 0);
     return BIO_OK;
@@ -134,7 +136,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 }
 
 BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-                           uint64_t &realLen)
+    uint64_t &realLen)
 {
     ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
     ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
@@ -202,7 +204,7 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 BResult WCacheManager::Flush(uint64_t ptId, uint64_t version)
 {
     std::list<WCachePtr> evictFlows;
-    std::atomic<uint64_t> evictNum { 0 };
+    std::atomic<uint64_t> evictNum{ 0 };
     BResult evictRet = BIO_OK;
     while (evictNum != 0) {
         {
