@@ -158,7 +158,7 @@ TEST_F(TestWCache, test_put_repeat_case_return_ok) {
 }
 
 TEST_F(TestWCache, test_evict_case_return_ok) {
-    auto ret = g_wcacheManager->Flush(g_ptId);
+    auto ret = g_wcacheManager->Flush(g_ptId, 0);
     EXPECT_EQ(ret, BIO_OK);
 }
 

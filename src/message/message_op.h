@@ -15,6 +15,8 @@ enum BioOpCode : uint16_t {
     BIO_OP_SDK_STAT = 4,
     BIO_OP_SDK_LOAD = 5,
     BIO_OP_SDK_CREATE_FLOW = 6,
+
+    BIO_OP_SERVER_SYNC_DATA,
     BIO_OP_BUTT
 };
 

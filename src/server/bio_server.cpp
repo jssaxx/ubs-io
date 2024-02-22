@@ -78,16 +78,6 @@ BResult BioServer::Start()
         return BIO_ERR;
     }
 
-    // start cm
-    ret = StartCm();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to start cm, result:" << ret << ".");
-        logger->Exit();
-        StopDisk();
-        StopNetService();
-        return BIO_ERR;
-    }
-
     // start mirror server
     ret = StartMirrorServer();
     if (UNLIKELY(ret != BIO_OK)) {
@@ -96,6 +86,16 @@ BResult BioServer::Start()
         StopDisk();
         StopNetService();
         StopCm();
+        return BIO_ERR;
+    }
+
+    // start cm
+    ret = StartCm();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to start cm, result:" << ret << ".");
+        logger->Exit();
+        StopDisk();
+        StopNetService();
         return BIO_ERR;
     }
 
@@ -299,6 +299,18 @@ BResult BioServer::StartMirrorServer()
         return BIO_ERR;
     }
 
+    mMirrorCrb = MirrorServerCrb::Instance();
+    if (UNLIKELY(mMirrorCrb == nullptr)) {
+        LOG_ERROR("Mirror server crb instance is nullptr.");
+        return BIO_ERR;
+    }
+
+    ret = mMirrorCrb->Init();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to init mirror server crb, ret:" << ret << ".");
+        return BIO_ERR;
+    }
+
     auto flowManager = FlowManager::Instance();
     ret = flowManager->Init();
     if (UNLIKELY(ret != BIO_OK)) {
@@ -335,7 +347,13 @@ BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
 {
     mPtView = ptInfos;
     for (auto it = mPtView.begin(); it != mPtView.end(); ++it) {
-        LOG_INFO("Pt:" << it->second.ptId << ", " << it->second.ToString());
+        LOG_INFO("Recv ptId:" << it->second.ptId << ", " << it->second.ToString());
+    }
+
+    auto ret = mMirrorCrb->NotifyPtChangeEvent(ptInfos);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Handle ptevent fail, ret:" << ret);
+        return ret;
     }
     return BIO_OK;
 }
@@ -345,6 +363,9 @@ void BioServer::Connection()
     uint32_t failCnt = 0;
     for (auto it = mNodeView.begin(); it != mNodeView.end(); ++it) {
         if (it->second.id.VNodeId() == mLocalNid.VNodeId()) {
+            continue;
+        }
+        if (it->second.status != CM_NODE_NORMAL) {
             continue;
         }
         LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" << it->second.port << ".");

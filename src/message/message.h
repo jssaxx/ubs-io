@@ -166,6 +166,14 @@ struct LoadRequest {
     }
 };
 
+struct SyncDataRequest {
+    RequestComm comm;
+
+    SyncDataRequest(RequestComm reqComm)
+        : comm(reqComm)
+    {}
+};
+
 struct ClientCallbackCtx {
     int32_t result;
     std::atomic<uint32_t> quota{};

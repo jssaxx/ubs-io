@@ -53,6 +53,10 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
+    BResult Flush(uint64_t ptId, uint64_t version);
+
+    BResult ExpiredClear(uint64_t ptId, uint64_t version);
+
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };

@@ -26,6 +26,8 @@ enum Error : int32_t {
     BIO_KEY_CONFLICT = 12,
     BIO_READ_EXCEED = 13,
 
+    BIO_INNER_RETRY = 14,
+
     BIO_NEED_WAIT = 12,
     BIO_NET_RETRY = 100,
     BIO_NET_ERROR = 101,
