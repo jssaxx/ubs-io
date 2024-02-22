@@ -54,7 +54,9 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
-    BResult Flush(uint64_t ptId);
+    BResult Flush(uint64_t ptId, uint64_t version);
+
+    BResult ExpiredClear(uint64_t ptId, uint64_t version);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:

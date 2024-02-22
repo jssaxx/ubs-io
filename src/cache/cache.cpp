@@ -183,5 +183,29 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
 
     return ret;
 }
+
+BResult Cache::Flush(uint64_t ptId, uint64_t version)
+{
+    BIO_TRACE_START(WCACHE_TRACE_FLUSH);
+    BResult ret = mWCacheManager->Flush(ptId, version);
+    BIO_TRACE_END(WCACHE_TRACE_FLUSH, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << version);
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult Cache::ExpiredClear(uint64_t ptId, uint64_t version)
+{
+    BIO_TRACE_START(WCACHE_TRACE_CLEAR_EXPIRED);
+    BResult ret = mWCacheManager->ExpiredClear(ptId, version);
+    BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << version);
+        return ret;
+    }
+    return BIO_OK;
+}
 }
 }

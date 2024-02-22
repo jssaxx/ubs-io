@@ -199,7 +199,7 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     return BIO_OK;
 }
 
-BResult WCacheManager::Flush(uint64_t ptId)
+BResult WCacheManager::Flush(uint64_t ptId, uint64_t version)
 {
     std::list<WCachePtr> evictFlows;
     std::atomic<uint64_t> evictNum { 0 };
@@ -230,6 +230,12 @@ BResult WCacheManager::Flush(uint64_t ptId)
         sleep(1);
     }
     return evictRet;
+}
+
+BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t version)
+{
+    LOG_INFO("Clear expired:" << "ptId:" << ptId << ", version:" << version);
+    return BIO_OK;
 }
 
 inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
