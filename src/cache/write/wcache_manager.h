@@ -39,7 +39,7 @@ public:
 public:
     BResult AllocateFlowId(uint16_t ptId, uint64_t &flowId);
 
-    BResult CreateWCache(uint64_t flowId);
+    BResult CreateWCache(uint64_t flowId, uint64_t ptv, uint16_t diskId);
 
     BResult DeleteWCache(uint64_t ptId);
 
@@ -54,9 +54,9 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
-    BResult Flush(uint64_t ptId, uint64_t version);
+    BResult Flush(uint64_t ptId, uint64_t ptv);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t version);
+    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:

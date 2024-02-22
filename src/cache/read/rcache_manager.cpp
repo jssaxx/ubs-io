@@ -123,7 +123,7 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
     return ret;
 }
 
-BResult RCacheManager::CreateRCache(uint64_t ptId)
+BResult RCacheManager::CreateRCache(uint64_t ptId, uint16_t diskId)
 {
     cacheLock.LockWrite();
     auto iter = cache.find(ptId);
@@ -133,7 +133,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId)
         return BIO_OK;
     }
 
-    auto cacheObj = MakeRef<RCache>(ptId);
+    auto cacheObj = MakeRef<RCache>(ptId, diskId);
     if (UNLIKELY(cacheObj == nullptr)) {
         LOG_ERROR("Create read cache object memory failed.");
         cacheLock.UnLock();

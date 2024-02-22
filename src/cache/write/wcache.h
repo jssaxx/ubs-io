@@ -22,7 +22,8 @@ namespace bio {
 class WCache {
 public:
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key)>;
-    BResult Init(uint64_t flowId, const ExecutorServicePtr &exeService, EvictCallback evictCallback);
+    BResult Init(uint64_t flowId, uint64_t ptv, uint16_t diskId, const ExecutorServicePtr &exeService,
+        EvictCallback evictCallback);
 
     void Exit();
 
@@ -44,6 +45,7 @@ private:
 
 private:
     uint64_t mFlowId;
+    uint64_t mPtv;
     EvictCallback mEvictCallback;
 
     WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];

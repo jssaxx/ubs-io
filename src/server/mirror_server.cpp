@@ -64,15 +64,20 @@ void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint3
     }
 }
 
-BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t flowId)
+BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
 {
-    auto ret = Cache::Instance().CreateWCache(procId, ptId, flowId);
+    uint16_t diskId;
+    auto ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
+    ChkTrue(ret == BIO_OK, ret,
+        "Get local disk fail:" << ret << ", ptId:" << ptId);
+
+    ret = Cache::Instance().CreateWCache(procId, ptId, ptv, diskId, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
         return ret;
     }
 
-    ret = Cache::Instance().CreateRCache(ptId);
+    ret = Cache::Instance().CreateRCache(ptId, diskId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");
     } else {
@@ -82,7 +87,7 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t flowId
     return ret;
 }
 
-BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t &flowId)
+BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId)
 {
     auto ret = Cache::Instance().AllocateFlowId(procId, ptId, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -90,7 +95,7 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
         return ret;
     }
 
-    ret = CreateFlow(procId, ptId, flowId);
+    ret = CreateFlow(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
@@ -98,9 +103,9 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
     return ret;
 }
 
-BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t flowId)
+BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
 {
-    auto ret = CreateFlow(procId, ptId, flowId);
+    auto ret = CreateFlow(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
@@ -320,7 +325,7 @@ BResult MirrorServer::Load(LoadRequest &req)
 
 BResult MirrorServer::SyncData(SyncDataRequest &req)
 {
-    LOG_INFO("Mirror server sync data, ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
+    LOG_INFO("Master sync data, ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
     BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA);
     BResult ret = Cache::Instance().Flush(req.comm.ptId, req.comm.ptv);
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
@@ -573,13 +578,13 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
     BResult result;
     uint64_t flowId = UINT64_MAX;
     if (req->opType == 0) {
-        result = CreateFlowMaster(req->comm.pid, req->ptId, flowId);
+        result = CreateFlowMaster(req->comm.pid, req->ptId, req->comm.ptv, flowId);
         if (UNLIKELY(result != BIO_OK)) {
             LOG_ERROR("Master create flow failed, ret:" << result << ", ptId:" << req->ptId << ".");
             flowId = UINT64_MAX;
         }
     } else if (req->opType == 1) {
-        result = CreateFlowSlave(req->comm.pid, req->ptId, req->flowId);
+        result = CreateFlowSlave(req->comm.pid, req->ptId, req->comm.ptv, req->flowId);
         if (UNLIKELY(result != BIO_OK)) {
             LOG_ERROR("Slave create flow failed, ret:" << result << ", ptId:" << req->ptId << ".");
             flowId = UINT64_MAX;

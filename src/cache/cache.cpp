@@ -35,10 +35,10 @@ BResult Cache::RegisterCacheClient(uint64_t &cacheId)
     return mWCacheManager->AllocateFlowId(0, cacheId);
 }
 
-BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId)
+BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId)
 {
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
-    auto ret = mWCacheManager->CreateWCache(flowId);
+    auto ret = mWCacheManager->CreateWCache(flowId, ptv, diskId);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, cacheId:"
         << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
@@ -46,10 +46,10 @@ BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId)
     return BIO_OK;
 }
 
-BResult Cache::CreateRCache(uint64_t ptId)
+BResult Cache::CreateRCache(uint64_t ptId, uint16_t diskId)
 {
     BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
-    auto ret = mRCacheManager->CreateRCache(ptId);
+    auto ret = mRCacheManager->CreateRCache(ptId, diskId);
     BIO_TRACE_END(RCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create RCache, ptId:" << ptId);
 
@@ -184,25 +184,25 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     return ret;
 }
 
-BResult Cache::Flush(uint64_t ptId, uint64_t version)
+BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 {
     BIO_TRACE_START(WCACHE_TRACE_FLUSH);
-    BResult ret = mWCacheManager->Flush(ptId, version);
+    BResult ret = mWCacheManager->Flush(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_FLUSH, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << version);
+        LOG_ERROR("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
     }
     return BIO_OK;
 }
 
-BResult Cache::ExpiredClear(uint64_t ptId, uint64_t version)
+BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
     BIO_TRACE_START(WCACHE_TRACE_CLEAR_EXPIRED);
-    BResult ret = mWCacheManager->ExpiredClear(ptId, version);
+    BResult ret = mWCacheManager->ExpiredClear(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << version);
+        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
     }
     return BIO_OK;
