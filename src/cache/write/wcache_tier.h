@@ -47,7 +47,7 @@ using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
 
 class WCacheTier {
 public:
-    BResult Init(WCacheTierType cacheTier, uint64_t flowId);
+    BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
 
     WCacheSliceRefPtr Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader);
 

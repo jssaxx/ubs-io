@@ -13,17 +13,19 @@
 
 namespace ock {
 namespace bio {
-BResult WCache::Init(uint64_t flowId, const ExecutorServicePtr &exeService, EvictCallback evictCallback)
+BResult WCache::Init(uint64_t flowId, uint64_t ptv, uint16_t diskId, const ExecutorServicePtr &exeService,
+    EvictCallback evictCallback)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
         ChkTrueNot(cacheTier != nullptr, BIO_ALLOC_FAIL);
-        auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), flowId);
+        auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), flowId, diskId);
         ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << flowId);
         mCacheTiers[i] = cacheTier;
     }
 
     mFlowId = flowId;
+    mPtv = ptv;
     mExeService = exeService;
     mEvictCallback = std::move(evictCallback);
     mUnderFs = UnderFs::Instance();

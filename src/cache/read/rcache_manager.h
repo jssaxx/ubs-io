@@ -46,7 +46,7 @@ namespace ock {
 
             BResult Delete(uint64_t ptId, const Key &key);
 
-            BResult CreateRCache(uint64_t ptId);
+            BResult CreateRCache(uint64_t ptId, uint16_t diskId);
 
             BResult DeleteRCache(uint64_t ptId);
 

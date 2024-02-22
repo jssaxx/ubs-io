@@ -10,19 +10,13 @@
 
 namespace ock {
 namespace bio {
-BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId)
+BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId)
 {
     FlowType flowType;
     auto ret = ToFlowType(cacheTier, flowType);
     ChkTrueNot(ret == BIO_OK, ret);
 
     auto &flowManager = FlowManager::Instance();
-
-    uint64_t ptId = CacheFlowIdManager::GetPtId(flowId);
-    uint16_t diskId;
-    ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
-    ChkTrue(ret == BIO_OK, ret,
-        "Get local disk fail:" << ret << ", ptId:" << ptId);
 
     uint64_t metaFlowId = flowId | (((uint64_t)((cacheTier << 1) | 0) & 0x7FF) << 40) /* meta */;
     mMetaFlow = flowManager->CreateObject(flowType, metaFlowId, diskId);
