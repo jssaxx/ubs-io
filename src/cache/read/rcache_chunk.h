@@ -28,6 +28,12 @@ namespace ock {
             MQ_TYPE_BUTT
         };
 
+        enum RCacheTrunkListType {
+            RCACHE_TRUNK_LIST_TYPE_TRUNCATE = 0,
+            RCACHE_TRUNK_LIST_TYPE_EVICT  = 1,
+            RCACHE_TRUNK_LIST_TYPE_BUTT
+        };
+
         struct RCacheValue {
             uint64_t indexInFlow;
             uint64_t flowOffset;
@@ -45,11 +51,17 @@ namespace ock {
             }
         };
 
+        class RCacheChunk;
+        using RCacheChunkPtr = Ref<RCacheChunk>;
+
         class RCacheChunk {
         public:
             RCacheChunk(Key key, RCacheValue &value);
 
             ~RCacheChunk();
+
+            RCacheChunkPtr prev[RCACHE_TRUNK_LIST_TYPE_BUTT] = {nullptr};
+            RCacheChunkPtr next[RCACHE_TRUNK_LIST_TYPE_BUTT] = {nullptr};
 
             inline Key GetKey()
             {
@@ -119,7 +131,6 @@ namespace ock {
             DEFINE_REF_COUNT_VARIABLE
         };
 
-        using RCacheChunkPtr = Ref<RCacheChunk>;
     }
 }
 
