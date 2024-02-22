@@ -50,7 +50,7 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
     return BIO_OK;
 }
 
-BResult WCacheManager::CreateWCache(uint64_t flowId)
+BResult WCacheManager::CreateWCache(uint64_t flowId, uint64_t ptv, uint16_t diskId)
 {
     auto wcache = MakeRef<WCache>();
     ChkTrueNot(wcache != nullptr, BIO_ALLOC_FAIL);
@@ -60,7 +60,7 @@ BResult WCacheManager::CreateWCache(uint64_t flowId)
         return BIO_OK;
     };
 
-    auto ret = wcache->Init(flowId, mExeService, evictCallback);
+    auto ret = wcache->Init(flowId, ptv, diskId, mExeService, evictCallback);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
     {
@@ -201,18 +201,23 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     return BIO_OK;
 }
 
-BResult WCacheManager::Flush(uint64_t ptId, uint64_t version)
+BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
 {
     std::list<WCachePtr> evictFlows;
     std::atomic<uint64_t> evictNum{ 0 };
     BResult evictRet = BIO_OK;
-    while (evictNum != 0) {
+
+    LOG_INFO("Master handle:" << "ptId:" << ptId << ", version:" << ptv);
+
+    do {
         {
             WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
             for (const auto &flowIt : mWCacheManager) {
-                if (ptId != NO_MAX_VALUE64 && flowIt.first != ptId) {
+                uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+                if (ptId != flowPtId) {
                     continue;
                 }
+                LOG_INFO("Flow ptId:" << flowPtId << ", flowId:" << flowIt.first);
                 evictFlows.emplace_back(flowIt.second);
                 evictNum++;
             }
@@ -230,13 +235,13 @@ BResult WCacheManager::Flush(uint64_t ptId, uint64_t version)
         }
         evictFlows.clear();
         sleep(1);
-    }
+    } while (evictNum != 0);
     return evictRet;
 }
 
-BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t version)
+BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
-    LOG_INFO("Clear expired:" << "ptId:" << ptId << ", version:" << version);
+    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", version:" << ptv);
     return BIO_OK;
 }
 

@@ -12,7 +12,7 @@
 
 using namespace ock::bio;
 
-RCache::RCache(uint64_t ptId):mPtId(ptId)
+RCache::RCache(uint64_t ptId, uint16_t diskId):mPtId(ptId), mDiskId(diskId)
 {
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         flow[tier] = nullptr;
@@ -125,7 +125,7 @@ BResult RCache::CreateRCacheFlow(RCacheTierType tier, std::vector<uint64_t> flow
         return BIO_ERR;
     }
 
-    int32_t ret = flow[tier]->Initialize(mPtId, GetFlowTypeByTierType(tier), flowIds);
+    int32_t ret = flow[tier]->Initialize(mPtId, mDiskId, GetFlowTypeByTierType(tier), flowIds);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Init ptId" << mPtId << " memory meta flow failed, error code " << ret);
         Destroy();

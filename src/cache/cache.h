@@ -34,9 +34,9 @@ public:
         return mWCacheManager->AllocateFlowId(ptId, flowId);
     }
 
-    BResult CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t flowId);
+    BResult CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId);
 
-    BResult CreateRCache(uint64_t ptId);
+    BResult CreateRCache(uint64_t ptId, uint16_t diskId);
 
     BResult DeleteCache(uint64_t ptId);
 
@@ -53,9 +53,9 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
-    BResult Flush(uint64_t ptId, uint64_t version);
+    BResult Flush(uint64_t ptId, uint64_t ptv);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t version);
+    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
 
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
