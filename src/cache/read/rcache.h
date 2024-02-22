@@ -12,6 +12,7 @@
 #include "bio_err.h"
 #include "bio_lock.h"
 #include "bio_ref.h"
+#include "bio_double_list.h"
 #include "flow_id_allocator.h"
 #include "flow.h"
 #include "rcache_chunk.h"
@@ -136,10 +137,10 @@ namespace ock {
             RCacheFlowPtr flow[READ_CACHE_TIER_BUTT]; // read cache data
 
             SpinLock evictMqLock[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT];
-            std::list<RCacheChunkPtr> evictMq[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT];  // read cache evict list
+            BioDoubleList<RCacheChunkPtr> evictMq[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT];  // read cache evict list
 
             SpinLock truncateLock[READ_CACHE_TIER_BUTT];
-            std::list<RCacheChunkPtr> truncateQ[READ_CACHE_TIER_BUTT]; // truncate cache list
+            BioDoubleList<RCacheChunkPtr> truncateQ[READ_CACHE_TIER_BUTT]; // truncate cache list
 
             CacheSliceOperator mSliceOperator;
             DEFINE_REF_COUNT_VARIABLE

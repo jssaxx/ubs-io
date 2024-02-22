@@ -136,7 +136,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
 #else
 BResult UnderFs::Init()
 {
-    static std::string cephPath = "./ceph";
+    static std::string cephPath = CEPH_PATH;
 
     if (mInited) {
         return BIO_OK;
@@ -169,7 +169,7 @@ void UnderFs::Stop()
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
-    std::string keyPath = "./ceph/";
+    std::string keyPath = CEPH_PATH_EXT;
     keyPath += key;
 
     using namespace std;
@@ -199,7 +199,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
 BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
-    std::string keyPath = "./ceph/";
+    std::string keyPath = CEPH_PATH_EXT;
     keyPath += key;
 
     using namespace std;
@@ -223,7 +223,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
 BResult UnderFs::Delete(const char *key)
 {
-    std::string keyPath = "./ceph/";
+    std::string keyPath = CEPH_PATH_EXT;
     keyPath += key;
 
     using namespace std;
@@ -233,6 +233,7 @@ BResult UnderFs::Delete(const char *key)
     BIO_TRACE_START(UFS_TRACE_DEL);
     ifstream infile(keyPath.c_str());
     if (!infile.good()) {
+        BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
     }
@@ -240,6 +241,7 @@ BResult UnderFs::Delete(const char *key)
 
     //删除文件
     if (remove(keyPath.c_str()) != 0) {
+        BIO_TRACE_END(UFS_TRACE_DEL, BIO_ERR);
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());
         return BIO_ERR;
     }
@@ -249,7 +251,7 @@ BResult UnderFs::Delete(const char *key)
 
 BResult UnderFs::Stat(const char *key, ObjStat &objStat)
 {
-    std::string keyPath = "./ceph/";
+    std::string keyPath = CEPH_PATH_EXT;
     keyPath += key;
 
     using namespace std;
