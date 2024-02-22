@@ -202,7 +202,7 @@ static void HandleLoad(std::vector<std::string> cmds)
     } else {
         std::cout << "Send to load request success." << std::endl;
     }
-    while (loadFlag == 0){};
+    while (loadFlag == 0) {};
 }
 
 static void HandleDelete(std::vector<std::string> cmds)
