@@ -44,6 +44,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleLoad, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CREATE_FLOW,
         std::bind(&MirrorServer::HandleCreateFlow, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_SYNC_DATA,
+        std::bind(&MirrorServer::HandleSyncData, this, std::placeholders::_1));
 }
 
 void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize)
@@ -316,6 +318,35 @@ BResult MirrorServer::Load(LoadRequest &req)
     return ret;
 }
 
+BResult MirrorServer::SyncData(SyncDataRequest &req)
+{
+    LOG_INFO("Mirror server sync data, ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
+    BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA);
+    BResult ret = Cache::Instance().Flush(req.comm.ptId, req.comm.ptv);
+    BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Sync data failed:" << ret << ", ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
+    }
+    return ret;
+}
+
+BResult MirrorServer::SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version)
+{
+    NetEnginePtr rpcEngine = BioServer::Instance()->GetRpcEngine();
+
+    uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
+    BResult rspRet;
+    SyncDataRequest req = { RequestComm(ptId, version, localNodeId) };
+    auto ret = rpcEngine->SyncCall<SyncDataRequest, BResult>(static_cast<BioNodeId>(masterNodeId),
+        BIO_OP_SERVER_SYNC_DATA, req, rspRet, false);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Send sync sync data failed:" << ret << ", ptId:" << ptId <<
+            ", version:" << version);
+        return ret;
+    }
+    return rspRet;
+}
+
 BResult MirrorServer::Initialize(int32_t type)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
@@ -561,5 +592,33 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
 
     Reply(ctx, BIO_OK, static_cast<void *>(&flowId), sizeof(uint64_t));
     BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleSyncData(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(SyncDataRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA_HDL);
+    auto *req = static_cast<SyncDataRequest *>(ctx.MessageData());
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, BIO_CHECK_PT_FAIL);
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    BResult ret = SyncData(*req);
+
+    Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
+    BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, 0);
     return BIO_OK;
 }

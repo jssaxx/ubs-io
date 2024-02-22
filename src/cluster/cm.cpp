@@ -68,7 +68,7 @@ BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
 {
     WriteLocker<ReadWriteLock> lock(&mLock);
     if (ptFinish.size() == 0) {
-        return BIO_ERR;
+        return BIO_OK;
     }
     PtFinish *ptList = new (std::nothrow) PtFinish[ptFinish.size()];
     if (ptList == nullptr) {
@@ -230,6 +230,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
         CmPtCopy copy;
 
         pt.version = ptList->ptEntryList[index].birthVersion + ptList->ptEntryList[index].referNum;
+        pt.referNum = ptList->ptEntryList[index].referNum;
         pt.ptId = ptList->ptEntryList[index].ptId;
         pt.state = s_ptstate[ptList->ptEntryList[index].state];
         pt.masterNodeId = ptList->ptEntryList[index].masterNodeId;
@@ -253,7 +254,8 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
             pt.copys.push_back(copy);
         }
 
-        cm->mPtInfos[pt.ptId] = pt;
+        cm->mPtInfos[pt.ptId] = CmPtInfo();
+        cm->mPtInfos[pt.ptId].Clone(pt);
     }
     cm->ScanPtListAffinity();
     BIO_TRACE_START(CM_TRACE_NOTIFY_PTVIEW);
