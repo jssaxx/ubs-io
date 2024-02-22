@@ -12,6 +12,7 @@
 #include "net_engine.h"
 #include "cm.h"
 #include "mirror_server.h"
+#include "mirror_server_crb.h"
 
 namespace ock {
 namespace bio {
@@ -120,6 +121,7 @@ private:
     NetEnginePtr mNetEngine = nullptr;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
+    MirrorServerCrbPtr mMirrorCrb = nullptr;
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;

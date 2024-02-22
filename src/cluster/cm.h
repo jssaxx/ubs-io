@@ -152,11 +152,27 @@ enum CmPtState : uint16_t {
 
 struct CmPtInfo {
     uint64_t version;
+    uint64_t referNum;
     uint16_t ptId;
     CmPtState state;
     uint16_t masterNodeId;
     uint16_t masterDiskId;
     std::vector<CmPtCopy> copys;
+
+public:
+    void Clone(const CmPtInfo& ptInfo)
+    {
+        version = ptInfo.version;
+        referNum = ptInfo.referNum;
+        ptId = ptInfo.ptId;
+        state = ptInfo.state;
+        masterNodeId = ptInfo.masterNodeId;
+        masterDiskId = ptInfo.masterDiskId;
+        for (auto& elem : ptInfo.copys) {
+            copys.push_back(elem);
+        }
+        return;
+    }
 
     std::string ToString() const
     {
@@ -173,6 +189,10 @@ struct CmPtInfo {
 struct CmPtFinish {
     uint64_t version;
     uint16_t ptId;
+public:
+    CmPtFinish(uint16_t vversion, uint16_t pptId)
+        : version(vversion), ptId(pptId)
+    {}
 };
 
 using CmNodeHandler = std::function<BResult(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)>;
@@ -242,7 +262,7 @@ public:
     {
         ReadLocker<ReadWriteLock> lock(&mLock);
         if (mPtInfos.find(ptId) != mPtInfos.end()) {
-            ptInfo = mPtInfos[ptId];
+            ptInfo.Clone(mPtInfos[ptId]);
             return BIO_OK;
         }
         return BIO_ERR;

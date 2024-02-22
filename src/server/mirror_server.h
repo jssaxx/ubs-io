@@ -44,6 +44,9 @@ public:
     BResult Delete(DeleteRequest &req);
     BResult Stat(StatRequest &req, Bio::ObjStat &objInfo);
     BResult Load(LoadRequest &req);
+    BResult SyncData(SyncDataRequest &req);
+
+    BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
     MirrorServer() = default;
     ~MirrorServer() = default;
@@ -61,6 +64,8 @@ private:
     int32_t HandleStat(ServiceContext &ctx);
     int32_t HandleLoad(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
+
+    int32_t HandleSyncData(ServiceContext &ctx);
 
     void PrintfData(const char *buff)
     {
