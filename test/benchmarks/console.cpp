@@ -35,6 +35,7 @@ static void usage()
         "\tput value to cache: put [key] [filePath] [length] [sliceId]\n"
         "\tget value from cache: get [key] [offset] [length] [location] [filePath]\n"
         "\tget key state from cache: stat [key] [sliceId]\n"
+        "\tload key to cache: load [key] [offset] [length] [location]\n"
         "\tdelete key: delete [key] [location]\n"
         "\tshow view: show [pt/node/trace] [all/affinity]\n"
         "\tperf test: perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n"
@@ -173,6 +174,35 @@ static void HandleStat(std::vector<std::string> cmds)
         std::cout << "size:" << keyStat.size << std::endl;
         std::cout << "time:" << ctime(&keyStat.time) << std::endl;
     }
+}
+
+void TestCallback(void *context, CResult result)
+{
+    int* loadFlag = reinterpret_cast<int*>(context);
+    if (result == RET_CACHE_OK) {
+        std::cout << "load cache success." << std::endl;
+    } else {
+        std::cout << "load cache fail." << std::endl;
+    }
+    *loadFlag = 1;
+}
+
+static void HandleLoad(std::vector<std::string> cmds)
+{
+    auto key = cmds[1].c_str();
+    auto offset = std::stoull(cmds[2]);
+    auto length = std::stoull(cmds[3]);
+    auto location = std::stoull(cmds[4]);
+    int loadFlag = 0;
+
+    Bio::ObjLocation locationInfo{ location, 0 };
+    auto ret = gCurrentCache->Load(key, offset, length, locationInfo, TestCallback, &loadFlag);
+    if (ret != RET_CACHE_OK) {
+        std::cout << "Send to load request fail." << std::endl;
+    } else {
+        std::cout << "Send to load request success." << std::endl;
+    }
+    while (loadFlag == 0){};
 }
 
 static void HandleDelete(std::vector<std::string> cmds)
@@ -465,6 +495,17 @@ int32_t HandleCmd(const std::string &cmd)
             return 0;
         }
         HandleStat(cmds);
+        return 0;
+    } else if (cmdType == "load") {
+        if (gCurrentCache == nullptr) {
+            std::cout << "Create and open a cache first!" << std::endl;
+            return 0;
+        }
+        if (cmds.size() != 5) {
+            std::cout << "Input parameters failed!, num:" << cmds.size() << std::endl;
+            return 0;
+        }
+        HandleLoad(cmds);
         return 0;
     } else if (cmdType == "delete") {
         if (gCurrentCache == nullptr) {
