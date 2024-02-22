@@ -307,7 +307,7 @@ public:
     CmNodeHandler mNodeHandler;
     CmPtHandler mPtHandler;
 
-    CmNodeId mNodeId;
+    CmNodeId mNodeId { NO_MAX_VALUE32 };
 
     std::atomic<CmStatus> mStatus = { CM_INIT };
 

@@ -107,9 +107,7 @@ void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
         auto ret = mJobService->Execute([this, ptTask, elem]() { RunJobThread(ptTask, elem); });
         if (ret == false) {
             LOG_INFO("Delay retry ptId:" <<elem.ptId);
-            ptTask->lock.Lock();
-            ptTask->retryList.push_back(elem);
-            ptTask->lock.UnLock();
+            JobAddRetryList(ptTask, elem);
             ptTask->jobNum++;
             continue;
         }
@@ -161,9 +159,11 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
         }
     }
     if (index == ptInfo.copys.size()) {
-        ret = JobExpiredClear(ptInfo);
-        if (ret == BIO_INNER_RETRY) {
-            JobAddRetryList(ptTask, ptInfo);
+        if (mFisted) {
+            ret = JobExpiredClear(ptInfo);
+            if (ret == BIO_INNER_RETRY) {
+                JobAddRetryList(ptTask, ptInfo);
+            }
         }
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
         return;
