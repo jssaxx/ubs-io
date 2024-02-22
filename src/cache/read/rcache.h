@@ -34,7 +34,7 @@ namespace ock {
 
         class RCache {
         public:
-            RCache(uint64_t ptId);
+            RCache(uint64_t ptId, uint16_t diskId);
 
             ~RCache();
 
@@ -131,6 +131,7 @@ namespace ock {
             std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
 
             uint64_t mPtId;
+            uint16_t mDiskId;
             SpinLock indexLock[READ_CACHE_META_HASH_BUCKET_NUM];
             std::unordered_map<std::string, RCacheChunkPtr> index[READ_CACHE_META_HASH_BUCKET_NUM];  // read cache index
 

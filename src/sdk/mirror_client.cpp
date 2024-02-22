@@ -51,9 +51,9 @@ BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_
     if (nodeId == mLocalNid.VNodeId()) {
         if (mDeployType == 1) {
             if (opType == 0) {
-                return MirrorServer::Instance()->CreateFlowMaster(getpid(), ptId, flowId);
+                return MirrorServer::Instance()->CreateFlowMaster(getpid(), ptId, ptEntry.version, flowId);
             } else {
-                return MirrorServer::Instance()->CreateFlowSlave(getpid(), ptId, flowId);
+                return MirrorServer::Instance()->CreateFlowSlave(getpid(), ptId, ptEntry.version, flowId);
             }
         } else {
             LOG_WARN("Not support get remote flow.");

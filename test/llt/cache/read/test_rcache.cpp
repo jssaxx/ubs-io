@@ -51,7 +51,7 @@ auto rwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
 };
 
 TEST_F(TestRCache, test_rcache_create_ok) {
-    auto ret = g_rcacheManager->CreateRCache(g_ptId);
+    auto ret = g_rcacheManager->CreateRCache(g_ptId, 0);
     EXPECT_EQ(ret, BIO_OK);
 }
 

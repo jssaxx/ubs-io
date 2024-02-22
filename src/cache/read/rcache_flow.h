@@ -19,7 +19,7 @@ namespace ock {
 
             ~RCacheFlow();
 
-            BResult Initialize(uint64_t ptId, FlowType flowType, std::vector<uint64_t> flowIds);
+            BResult Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds);
 
             BResult Destroy();
 
@@ -59,6 +59,7 @@ namespace ock {
             DEFINE_REF_COUNT_FUNCTIONS
         private:
             uint64_t mPtId = 0;
+            uint16_t mDiskId = 0;
 
             FlowPtr mMetaFlow = nullptr;
             FlowInstancePtr mMetaFlowInstance = nullptr;

@@ -43,20 +43,14 @@ FlowInstancePtr &RCacheFlow::GetDataFlowInstance()
     return mDataFlowInstance;
 }
 
-BResult RCacheFlow::Initialize(uint64_t ptId, FlowType flowType, std::vector<uint64_t> flowIds)
+BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds)
 {
     mPtId = ptId;
+    mDiskId = diskId;
 
     if(UNLIKELY(flowIds.empty())) {
         LOG_ERROR("Generate pt id" << ptId << "flow ids failed.");
         return BIO_ERR;
-    }
-
-    uint16_t diskId;
-    auto ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get local disk fail:" << ret << ", ptId:" << ptId);
-        return ret;
     }
 
     mMetaFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
