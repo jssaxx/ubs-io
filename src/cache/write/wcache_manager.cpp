@@ -198,7 +198,7 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     // 1. Aquire slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
     if (UNLIKELY(sliceRef == nullptr)) {
-        LOG_ERROR("Aquire key slice failed, key:" << key << ".");
+        LOG_WARN("Aquire key slice failed, key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -209,8 +209,7 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
         return ret;
     }
 
-    auto slice = sliceRef->GetSlice();
-    slice->SetSliceState(1);
+    sliceRef->SetState(SLICE_INVALID);
 
     mCacheIndex->Release(ptId, sliceRef);
     return BIO_OK;

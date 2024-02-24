@@ -32,8 +32,11 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
         return nullptr;
     }
     auto sliceRef = sliceMeta->second;
-    sliceRef->Aquire();
-    return sliceRef;
+    if (sliceRef->Aquire()) {
+        return sliceRef;
+    } else {
+        return nullptr;
+    }
 }
 
 void WCacheIndex::Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef)
