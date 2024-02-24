@@ -47,7 +47,7 @@ private:
     BResult EvictAllDiskSliceToUnderFs();
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
-    BResult EvictFromDiskToUnderFs(const WCacheSliceRefPtr &sliceRef);
+    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef);
 
 private:
     uint64_t mFlowId;

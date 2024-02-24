@@ -125,16 +125,6 @@ public:
         return mIndexInFlow;
     }
 
-    inline uint64_t GetSliceState() const
-    {
-        return mState;
-    }
-
-    inline void SetSliceState(uint64_t state)
-    {
-        mState = state;
-    }
-
     inline std::string ToString() override
     {
         return Slice::ToString();
@@ -197,7 +187,6 @@ private:
     uint64_t mFlowId {0};
     uint64_t mOffsetInFlow {0}; /* the offset of a slice in the flow. */
     uint64_t mIndexInFlow {0};  /* the index of a slice in the flow, which is unique in a flow. */
-    uint64_t mState {0};
 };
 using WCacheSlicePtr = Ref<WCacheSlice>;
 
