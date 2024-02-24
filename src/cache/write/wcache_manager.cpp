@@ -5,29 +5,44 @@
 #include "wcache_manager.h"
 #include "bio_log.h"
 #include "bio_trace.h"
+#include "bio_monotonic.h"
 #include "flow_id_allocator.h"
 #include "cache_flow.h"
 
-#define WCACHE_MANAGER_QUEUE_CAP 100000UL
-
 namespace ock {
 namespace bio {
+
+constexpr uint16_t MEM_EVICT_THREAD_NUM = 4;
+constexpr uint32_t MEM_EVICT_QUEUE_SIZE = 8192;
+constexpr uint16_t DISK_EVICT_THREAD_NUM = 8;
+constexpr uint32_t DISK_EVICT_QUEUE_SIZE = 8192;
+constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
+constexpr uint32_t FLUSH_INTERAL_TIME = 10000;
+
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
     mCacheIndex = MakeRef<WCacheIndex>();
     ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
 
-    mExeService = ExecutorService::Create(10, WCACHE_MANAGER_QUEUE_CAP);
-    if (UNLIKELY(mExeService == nullptr)) {
+    BResult result;
+
+    mMemEvictService = ExecutorService::Create(MEM_EVICT_THREAD_NUM, MEM_EVICT_QUEUE_SIZE);
+    if (UNLIKELY(mMemEvictService == nullptr)) {
         LOG_ERROR("Failed to start execution service for wflow evict, probably out of memory");
         return BIO_ALLOC_FAIL;
     }
-
-    mExeService->SetThreadName("wflow-evict-thread");
-    auto result = mExeService->Start();
+    mMemEvictService->SetThreadName("wcache-evict-mem");
+    result = mMemEvictService->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
 
-    mExeService->Execute([this]() { RunEvictThread(); });
+    mDiskEvictService = ExecutorService::Create(MEM_EVICT_THREAD_NUM, MEM_EVICT_QUEUE_SIZE);
+    if (UNLIKELY(mDiskEvictService == nullptr)) {
+        LOG_ERROR("Failed to start execution service for wflow evict, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+    mDiskEvictService->SetThreadName("wcache-evict-disk");
+    result = mDiskEvictService->Start();
+    ChkTrueNot(result, BIO_INNER_ERR);
 
     mRCacheManager = rCacheManager;
     return BIO_OK;
@@ -36,7 +51,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 void WCacheManager::Exit()
 {
     mRunning = false;
-    mExeService->Stop();
+    mMemEvictService->Stop();
 }
 
 BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
@@ -50,9 +65,9 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
     return BIO_OK;
 }
 
-BResult WCacheManager::CreateWCache(uint64_t flowId, uint64_t ptv, uint16_t diskId)
+BResult WCacheManager::CreateWCache(uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
 {
-    auto wcache = MakeRef<WCache>();
+    auto wcache = MakeRef<WCache>(flowId, ptId, ptv);
     ChkTrueNot(wcache != nullptr, BIO_ALLOC_FAIL);
 
     WCache::EvictCallback evictCallback = [this](uint64_t ptId, const Key &key) -> BResult {
@@ -60,7 +75,7 @@ BResult WCacheManager::CreateWCache(uint64_t flowId, uint64_t ptv, uint16_t disk
         return BIO_OK;
     };
 
-    auto ret = wcache->Init(flowId, ptv, diskId, mExeService, evictCallback);
+    auto ret = wcache->Init(diskId, mMemEvictService, mDiskEvictService, evictCallback, mRCacheManager);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
     {
@@ -203,46 +218,64 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 
 BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
 {
-    std::list<WCachePtr> evictFlows;
-    std::atomic<uint64_t> evictNum{ 0 };
-    BResult evictRet = BIO_OK;
-
     LOG_INFO("Master handle:" << "ptId:" << ptId << ", version:" << ptv);
 
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeUs();
+    BResult ret;
+
     do {
-        {
-            WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
-            for (const auto &flowIt : mWCacheManager) {
-                uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
-                if (ptId != flowPtId) {
-                    continue;
-                }
-                LOG_INFO("Flow ptId:" << flowPtId << ", flowId:" << flowIt.first);
-                evictFlows.emplace_back(flowIt.second);
-                evictNum++;
+        isRetry = false;
+        ret = FlushImpl(ptId, ptv);
+        if (ret != BIO_OK) {
+            retryTime = Monotonic::TimeUs() - startTime;
+            if (retryTime < FLUSH_RETRY_MAX_TIME) {
+                isRetry = true;
+                usleep(FLUSH_INTERAL_TIME);
             }
         }
+    } while (isRetry);
 
-        for (const auto &flow : evictFlows) {
-            mExeService->Execute([&]() {
-                auto ret = flow->EvictAllDiskSliceToUnderFs(mRCacheManager);
-                if (ret != BIO_OK) {
-                    LOG_ERROR("Evict fail, ret:" << ret);
-                    evictRet = ret;
-                }
-                evictNum--;
-            });
-        }
-        evictFlows.clear();
-        sleep(1);
-    } while (evictNum != 0);
-    return evictRet;
+    return ret;
 }
 
 BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
     LOG_INFO("Standby handle:" << "ptId:" << ptId << ", version:" << ptv);
     return BIO_OK;
+}
+
+BResult WCacheManager::FlushImpl(uint64_t ptId, uint64_t ptv)
+{
+    std::list<WCachePtr> evictFlows;
+
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &flowIt : mWCacheManager) {
+            uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+            if (ptId != flowPtId) {
+                continue;
+            }
+            if (flowIt.second->GetCapacity(WCACHE_MEMORY) == 0 &&
+                flowIt.second->GetCapacity(WCACHE_DISK) == 0) {
+                continue;
+            }
+            LOG_INFO("Flow ptId:" << flowPtId << ", flowId:" << flowIt.first <<
+                ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) <<
+                ", Disk:" << flowIt.second->GetCapacity(WCACHE_DISK));
+            evictFlows.emplace_back(flowIt.second);
+        }
+    }
+    
+    for (const auto &flow : evictFlows) {
+        mMemEvictService->Execute([&]() {
+            flow->StartEvictTask(WCACHE_MEMORY);
+            flow->StartEvictTask(WCACHE_DISK);
+        });
+    }
+
+    return (evictFlows.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
 }
 
 inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
@@ -279,31 +312,6 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
     ChkTrueNot(ret == BIO_OK, ret);
 
     return BIO_OK;
-}
-
-void WCacheManager::RunEvictThread()
-{
-    std::list<WCachePtr> evictFlows;
-    while (mRunning) {
-        {
-            WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
-            uint64_t totalCapacity = 0;
-            for (const auto &flowIt : mWCacheManager) {
-                auto flow = flowIt.second;
-                totalCapacity += flow->GetCapacity();
-                if (totalCapacity > mDiskCapacityThreshold) {
-                    evictFlows.emplace_back(flow);
-                }
-            }
-            LOG_INFO("totalCapacity:" << totalCapacity << ", mDiskCapacityThreshold:" << mDiskCapacityThreshold);
-        }
-
-        for (const auto &flow : evictFlows) {
-            mExeService->Execute([&]() { flow->EvictAllDiskSliceToUnderFs(mRCacheManager); });
-        }
-        evictFlows.clear();
-        sleep(10);
-    }
 }
 }
 }

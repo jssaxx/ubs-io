@@ -51,7 +51,7 @@ public:
 
     WCacheSliceRefPtr Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader);
 
-    void AddEvictQueue(WCacheSliceRefPtr &sliceRef);
+    void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);
 
