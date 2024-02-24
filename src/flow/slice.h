@@ -82,33 +82,56 @@ private:
     std::vector<FlowAddr> mAddrs;
 };
 
+enum SliceState : uint8_t {
+    SLICE_VALID = 1,
+    SLICE_INVALID = 2,
+};
+
 template <typename S> class SliceRef {
 public:
     explicit SliceRef(const S &slice) : mSlice(slice), mRef(0) {}
 
-    inline void Aquire()
+    inline bool Aquire()
     {
-        if (mRef == 0) {
-            std::lock_guard<std::mutex> lock(mSliceLock);
+        bool isSucceed = false;
+        std::lock_guard<std::mutex> lock(mSliceLock);
+        if (mSlice != nullptr && mState == SLICE_VALID) {
             ++mRef;
-        } else {
-            ++mRef;
+            isSucceed = true;
         }
+        return isSucceed;
     }
 
     inline void Release()
     {
-        if (--mRef == 0) {
-            std::lock_guard<std::mutex> lock(mSliceLock);
-            if (mRef == 0 && mNewSlice != nullptr && mSetSliceCallback != nullptr) {
-                auto oldSlice = mSlice;
-                mSlice = mNewSlice;
-                mSetSliceCallback(oldSlice);
+        S execSlice = nullptr;
+        SetSliceCallback execSliceCallback = nullptr;
 
+        {
+            std::lock_guard<std::mutex> lock(mSliceLock);
+            --mRef;
+            if (mRef == 0 && mSetSliceCallback != nullptr) {
+                execSlice = mSlice;
+                mSlice = mNewSlice;
+                execSliceCallback = mSetSliceCallback;
                 mNewSlice = nullptr;
                 mSetSliceCallback = nullptr;
             }
         }
+
+        if (execSliceCallback != nullptr) {
+            execSliceCallback(execSlice);
+        }
+    }
+
+    inline void SetState(SliceState state)
+    {
+        mState = state;
+    }
+
+    inline SliceState GetState() const
+    {
+        return mState;
     }
 
     inline bool Test()
@@ -124,14 +147,23 @@ public:
     using SetSliceCallback = std::function<void(const S &oldSlice)>;
     void SetSlice(const S &newSlice, SetSliceCallback &setSliceCallback)
     {
-        std::lock_guard<std::mutex> lock(mSliceLock);
-        if (mRef == 0) {
-            auto oldSlice = mSlice;
-            mSlice = newSlice;
-            setSliceCallback(oldSlice);
-        } else {
-            mNewSlice = newSlice;
-            mSetSliceCallback = setSliceCallback;
+        S execSlice = nullptr;
+        SetSliceCallback execSliceCallback = nullptr;
+
+        {
+            std::lock_guard<std::mutex> lock(mSliceLock);
+            if (mRef == 0) {
+                execSlice = mSlice;
+                mSlice = newSlice;
+                execSliceCallback = setSliceCallback;
+            } else {
+                mNewSlice = newSlice;
+                mSetSliceCallback = setSliceCallback;
+            }
+        }
+
+        if (execSliceCallback != nullptr) {
+            execSliceCallback(execSlice);
         }
     }
     DEFINE_REF_COUNT_FUNCTIONS;
@@ -140,8 +172,9 @@ private:
     std::mutex mSliceLock;
     S mSlice{ nullptr };
     S mNewSlice{ nullptr };
-    SetSliceCallback mSetSliceCallback{ nullptr };
-    std::atomic<uint64_t> mRef{ 0 };
+    SetSliceCallback mSetSliceCallback { nullptr };
+    std::atomic<uint64_t> mRef { 0 };
+    std::atomic<SliceState> mState { SLICE_VALID };
     DEFINE_REF_COUNT_VARIABLE;
 };
 using SliceRefPtr = Ref<SliceRef<SlicePtr>>;

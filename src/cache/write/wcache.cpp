@@ -132,7 +132,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     return BIO_OK;
 }
 
-BResult WCache::EvictFromDiskToUnderFs(const WCacheSliceRefPtr &sliceRef)
+BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef)
 {
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     auto slice = sliceRef->GetSlice();
@@ -163,7 +163,7 @@ BResult WCache::EvictFromDiskToUnderFs(const WCacheSliceRefPtr &sliceRef)
         return ret;
     }
 
-    if (slice->GetSliceState() == 0) {
+    if (sliceRef->GetState() == SLICE_VALID) {
         ret = mUnderFs->Put(key, value, sliceMeta->length);
         delete[] value;
         ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
@@ -184,7 +184,7 @@ BResult WCache::EvictFromDiskToUnderFs(const WCacheSliceRefPtr &sliceRef)
 
     // when update slice finished, then release resource of flow.
     IncreaseRef();
-    WCacheSliceRef::SetSliceCallback callback = [this, sliceMeta](const WCacheSlicePtr &oldSlice) {
+    WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta](const WCacheSlicePtr &oldSlice) {
         auto &diskCache = mCacheTiers[WCACHE_DISK];
         auto ret = diskCache->Evict(oldSlice);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -192,7 +192,7 @@ BResult WCache::EvictFromDiskToUnderFs(const WCacheSliceRefPtr &sliceRef)
             LOG_ERROR("failed to evict old slice." << ret << ", slice:" << oldSlice->ToString());
             return;
         }
-        if (oldSlice->GetSliceState() == 0) {
+        if (sliceRef->GetState() == SLICE_VALID) {
             uint64_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
             mEvictCallback(ptId, sliceMeta->key);
         }
