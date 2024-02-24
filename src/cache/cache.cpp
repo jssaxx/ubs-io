@@ -38,7 +38,7 @@ BResult Cache::RegisterCacheClient(uint64_t &cacheId)
 BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId)
 {
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
-    auto ret = mWCacheManager->CreateWCache(flowId, ptv, diskId);
+    auto ret = mWCacheManager->CreateWCache(flowId, ptId, ptv, diskId);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, cacheId:"
         << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
