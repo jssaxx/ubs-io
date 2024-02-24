@@ -21,9 +21,14 @@ namespace ock {
 namespace bio {
 class WCache {
 public:
+    WCache(uint64_t flowId, uint64_t ptId, uint64_t ptv)
+        : mFlowId(flowId), mPtId(ptId), mPtv(ptv)
+    {}
+
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key)>;
-    BResult Init(uint64_t flowId, uint64_t ptv, uint16_t diskId, const ExecutorServicePtr &exeService,
-        EvictCallback evictCallback);
+    BResult Init(uint16_t diskId, const ExecutorServicePtr &memEvictService,
+        const ExecutorServicePtr &diskEvictService, EvictCallback evictCallback,
+        const RCacheManagerPtr rCacheManager);
 
     void Exit();
 
@@ -32,19 +37,21 @@ public:
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
-    BResult EvictAllMemSliceToDisk();
+    void StartEvictTask(WCacheTierType type);
 
-    BResult EvictAllDiskSliceToUnderFs(const RCacheManagerPtr &rCacheManager);
-
-    uint64_t GetCapacity();
+    uint64_t GetCapacity(WCacheTierType type);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
-    BResult EvictFromMemToDisk(WCacheSliceRefPtr slice);
-    BResult EvictFromDiskToUnderFs(const RCacheManagerPtr &rCacheManager, const WCacheSliceRefPtr &sliceRef);
+    BResult EvictAllMemSliceToDisk();
+    BResult EvictAllDiskSliceToUnderFs();
+
+    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
+    BResult EvictFromDiskToUnderFs(const WCacheSliceRefPtr &sliceRef);
 
 private:
     uint64_t mFlowId;
+    uint64_t mPtId;
     uint64_t mPtv;
     EvictCallback mEvictCallback;
 
@@ -52,7 +59,10 @@ private:
 
     CacheSliceOperator mSliceOperator;
 
-    ExecutorServicePtr mExeService;
+    ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
+    std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
+
+    RCacheManagerPtr mRCacheManager;
 
     UnderFsPtr mUnderFs;
 

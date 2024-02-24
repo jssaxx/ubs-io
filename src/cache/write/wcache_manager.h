@@ -39,7 +39,7 @@ public:
 public:
     BResult AllocateFlowId(uint16_t ptId, uint64_t &flowId);
 
-    BResult CreateWCache(uint64_t flowId, uint64_t ptv, uint16_t diskId);
+    BResult CreateWCache(uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
     BResult DeleteWCache(uint64_t ptId);
 
@@ -63,7 +63,7 @@ private:
     WCachePtr GetWCache(uint64_t flowId);
     BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice, const SliceWriter &sliceWriter,
                  uint64_t &realLen);
-    void RunEvictThread();
+    BResult FlushImpl(uint64_t ptId, uint64_t ptv);
 
 private:
     ReadWriteLock mWCacheManagerLock;
@@ -72,13 +72,10 @@ private:
     RCacheManagerPtr mRCacheManager;
 
     bool mRunning = true;
-    ExecutorServicePtr mExeService{ nullptr };
+    ExecutorServicePtr mMemEvictService{ nullptr };
+    ExecutorServicePtr mDiskEvictService{ nullptr };
 
     WCacheIndexPtr mCacheIndex;
-
-    // TODO: support memory threshold. Right now memory slice was evicted to disk asap.
-    uint64_t mMemCapacityThreshold{ 10 * 1024 };         // 10GB, uint is MB
-    uint64_t mDiskCapacityThreshold{ 4 * 1024 * 1024L }; // 4TB, unit is MB
 
     DEFINE_REF_COUNT_VARIABLE;
 };
