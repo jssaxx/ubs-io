@@ -67,7 +67,7 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     return sliceRef;
 }
 
-void WCacheTier::AddEvictQueue(WCacheSliceRefPtr &sliceRef)
+void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
 {
     mEvictSliceQueueLock.Lock();
     mEvictSliceQueue.emplace_back(sliceRef);
