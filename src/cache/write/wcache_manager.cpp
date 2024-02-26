@@ -119,7 +119,9 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     LOG_DEBUG("Put key:" << key << ", pt:" << ptId << ", flowId:" << slice->GetFlowId());
 
     // 1. Check whether the key is duplicate
+    BIO_TRACE_START(WCACHE_TRACE_PUT_QUERY_EXIST);
     auto keySlice = mCacheIndex->Aquire(ptId, key);
+    BIO_TRACE_END(WCACHE_TRACE_PUT_QUERY_EXIST, 0);
     if (UNLIKELY(keySlice != nullptr)) {
         LOG_ERROR("Put key is duplicate, key:" << key);
         // TODO::duplicate key handle
@@ -135,14 +137,18 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     // 3. write slice to flow
     WCacheSliceRefPtr sliceRef = nullptr;
+    BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_FLOW);
     auto ret = wcache->Put(key, slice, sliceReader, sliceRef, attr);
+    BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Write slice to flow failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
 
     // 4. Insert slice to index.
+    BIO_TRACE_START(WCACHE_TRACE_PUT_INSERT_INDEX);
     ret = mCacheIndex->Insert(ptId, key, sliceRef);
+    BIO_TRACE_END(WCACHE_TRACE_PUT_INSERT_INDEX, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
     }
@@ -162,14 +168,18 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     LOG_DEBUG("Get key:" << key << ", pt:" << ptId);
 
     // 1. Get key slice ref from index.
+    BIO_TRACE_START(WCACHE_TRACE_GET_QUERY_INDEX);
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
+    BIO_TRACE_END(WCACHE_TRACE_GET_QUERY_INDEX, 0);
     if (UNLIKELY(sliceRef == nullptr)) {
         LOG_WARN("Aquire key :" << key << " slice not exist.");
         return BIO_NOT_EXISTS;
     }
 
     // 2. Read data from flow.
+    BIO_TRACE_START(WCACHE_TRACE_GET_READ_DATA);
     auto ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
+    BIO_TRACE_END(WCACHE_TRACE_GET_READ_DATA, ret);
     mCacheIndex->Release(ptId, sliceRef);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read data from flow failed, key :" << key << ".");

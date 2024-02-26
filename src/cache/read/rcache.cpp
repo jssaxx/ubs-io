@@ -331,7 +331,9 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     RCacheValue value(slice->GetIndexInFlow(), slice->GetOffsetInFlow(), slice->GetLength());
 
     RCacheChunkPtr chunk = nullptr;
+    BIO_TRACE_START(RCACHE_TRACE_PUT_ALLOC_CHUNK);
     auto ret = AllocChunk(key, value, chunk);
+    BIO_TRACE_END(RCACHE_TRACE_PUT_ALLOC_CHUNK, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc chunk for read cache key " << key << "failed.");
         return BIO_ERR;
@@ -343,14 +345,20 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
         chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset << ", indexofflow:" <<
         chunk->GetValue().indexInFlow);
 
+    BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_INDEX);
     ret = InsertToIndex(chunk->GetKey(), chunk);
+    BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_INDEX, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Insert read cache key " << key << " to index failed.");
         return BIO_ERR;
     }
 
+    BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_EVICT);
     AddToEvictList(READ_CACHE_TIER_MEM, MQ_COLD, chunk);
+    BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_EVICT, 0);
+    BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_TRUNC);
     AddToTruncateList(READ_CACHE_TIER_MEM, chunk);
+    BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_TRUNC, 0);
 
     IncCacheData(READ_CACHE_TIER_MEM, chunk->GetValue().length);
     return BIO_OK;
@@ -362,15 +370,18 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     uint32_t bucket = GetHashBucketByKey(key);
     WCacheSlicePtr newSlicePtr = nullptr;
 
+    BIO_TRACE_START(RCACHE_TRACE_GET_QUERY_INDEX);
     indexLock[bucket].Lock();
     auto iter = index[bucket].find(key);
     if (iter == index[bucket].end()) {
         indexLock[bucket].UnLock();
         RCacheStatistic::Instance().IncMisCount();
+        BIO_TRACE_END(RCACHE_TRACE_GET_QUERY_INDEX, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
     RCacheChunkPtr chunk = iter->second;
     indexLock[bucket].UnLock();
+    BIO_TRACE_END(RCACHE_TRACE_GET_QUERY_INDEX, 0);
 
     chunk->lock.lock();
     if (chunk->GetState() != 0) {
@@ -390,7 +401,9 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
         return BIO_ALLOC_FAIL;
     }
 
+    BIO_TRACE_START(RCACHE_TRACE_GET_WRITE_DATA);
     ret = sliceWriter(newSlicePtr.Get(), slice.Get());
+    BIO_TRACE_END(RCACHE_TRACE_GET_WRITE_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Write read cache key:" << key << "data to buffer failed.");
         chunk->lock.unlock();
@@ -398,11 +411,13 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     }
     chunk->lock.unlock();
 
+    BIO_TRACE_START(RCACHE_TRACE_GET_UPDATE_EVICT);
     auto mqType = chunk->GetMqType();
     evictMqLock[tier][mqType].Lock();
     evictMq[tier][mqType].Remove(chunk);
     evictMq[tier][mqType].PushBack(chunk);
     evictMqLock[tier][mqType].UnLock();
+    BIO_TRACE_END(RCACHE_TRACE_GET_UPDATE_EVICT, 0);
     return BIO_OK;
 }
 
@@ -489,18 +504,23 @@ BResult RCache::Delete(const Key &key)
     uint32_t bucket = GetHashBucketByKey(key);
     RCacheChunkPtr chunk = nullptr;
 
+    BIO_TRACE_START(RCACHE_TRACE_DEL_QUERY_INDEX);
     indexLock[bucket].Lock();
     auto iter = index[bucket].find(key);
     if (UNLIKELY(iter == index[bucket].end())) {
         indexLock[bucket].UnLock();
         LOG_INFO("Get read cache key:" << key << " have not exist.");
+        BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
         return BIO_NOT_EXISTS;
     }
     chunk = iter->second;
     chunk->SetState(1);
     indexLock[bucket].UnLock();
+    BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
 
+    BIO_TRACE_START(RCACHE_TRACE_DEL_REMOVE_EVICT);
     DelFromEvictList(chunk->GetTierType(), chunk.Get()->GetMqType(), chunk);
+    BIO_TRACE_END(RCACHE_TRACE_DEL_REMOVE_EVICT, 0);
 
     IncGCData(chunk->GetTierType(), chunk->GetValue().length);
     return BIO_OK;
