@@ -17,6 +17,7 @@ enum BioOpCode : uint16_t {
     BIO_OP_SDK_CREATE_FLOW = 6,
 
     BIO_OP_SERVER_SYNC_DATA,
+    BIO_OP_SERVER_GET_EVICT_OFFSET,
     BIO_OP_BUTT
 };
 
