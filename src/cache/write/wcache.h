@@ -48,6 +48,11 @@ public:
 
     uint64_t GetEvictOffset();
 
+    uint64_t GetPtv()
+    {
+        return mPtv;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
     BResult EvictAllMemSliceToDisk();

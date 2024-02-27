@@ -168,7 +168,7 @@ int32_t BdmDiskReadMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t 
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t len, uint64_t *chunkId)
+int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
 {
     BdmObj *obj = (BdmObj *)objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -178,7 +178,7 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t len, uint64_t
         return BDM_CODE_INVALID_PARAM;
     }
 
-    int32_t ret = BdmAllocatorAllocChunk(item->allocator, bucketId, len, chunkId);
+    int32_t ret = BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Alloc chunk failed, bdm id(%u) length(%lu).", obj->bdmId, len);
         return ret;
@@ -257,12 +257,13 @@ int32_t BdmDiskReset(uintptr_t objPtr)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskGetNextChunk(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId)
+int32_t BdmDiskGetNextChunk(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize,
+    uint64_t *bucketId, uint64_t *bucketOffset)
 {
     BdmObj *obj = (BdmObj *)objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
 
-    int32_t ret = BdmAllocatorGetNextChunk(item->allocator, chunkId, chunkSize, bucketId);
+    int32_t ret = BdmAllocatorGetNextChunk(item->allocator, chunkId, chunkSize, bucketId, bucketOffset);
     if (ret != BDM_CODE_OK && ret != BDM_CODE_SCAN_OFF) {
         BDM_LOGWARN(0, "Bdm get next chunk failed, bdm id(%u) ret(%d).", obj->bdmId, ret);
         return ret;
@@ -615,8 +616,6 @@ int32_t BdmDiskRestoreAllocator(BdmDiskItem *item)
     if (ret != BDM_CODE_OK) {
         return ret;
     }
-
-    return BDM_CODE_ERR; // 暂时关闭故障恢复流程
 
     BdmAllocatorPara allocatorPara = { 0 };
     allocatorPara.metaOps.itemPtr = (uintptr_t)item;
