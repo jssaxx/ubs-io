@@ -6,7 +6,7 @@ CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BUILD_DIR=${PROJ_DIR}/build
 BUILD_TYPE=debug
- 
+arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
   mkdir -p ${BUILD_DIR}
 fi
@@ -76,6 +76,14 @@ mkdir -p boostio/conf
 \cp bio/lib/libbio_sdk.so boostio/lib/.
 \cp bio/lib/libbio_server.so boostio/lib/.
 \cp bio/lib/libsecurec.so boostio/lib/.
+
+echo "当前cpu架构：$arch"
+if [[ "$BUILD_TYPE $arch" == 'debug aarch64' ]]; then
+    \cp bio/lib/libtracepoint.a boostio/lib/.
+    \cp bio/lib/libtracepoint.so boostio/lib/.
+    \cp bio/lib/libcli_agent.a boostio/lib/.
+    \cp bio/lib/libcli_agent.so boostio/lib/.
+fi
 \cp bio/bin/* boostio/bin/.
 \cp ../scripts/* boostio/scripts/.
 \cp bio/include/*.h boostio/include/.
