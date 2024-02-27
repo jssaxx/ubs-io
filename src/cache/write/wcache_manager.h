@@ -17,7 +17,6 @@
 
 namespace ock {
 namespace bio {
-constexpr uint32_t WRITE_CACHE_FLOW_MEM_META_PREFIX = 0;
 constexpr uint64_t WRITE_CACHE_EVICT_STEP_SIZE = 134217728; // 128MB
 constexpr uint64_t WRITE_CACHE_EVICT_PERIOD = 5; // 5秒
 

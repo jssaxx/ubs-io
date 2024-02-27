@@ -62,6 +62,9 @@ public:
     BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
 
 private:
+    BResult Recover();
+
+private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
 };

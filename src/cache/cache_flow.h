@@ -18,12 +18,25 @@ Flow id generate  rule, define flow.h：
 
 namespace ock {
 namespace bio {
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_SHIFT = 40;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT = 11;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_SHIFT = 8;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_MASK = 0xFFFFFF;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_MASK = 0x7;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK = 0xFF;
 
 constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_WCACHE = 0;
 constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_RCACHE = 1;
+
+constexpr uint32_t WCACHE_FLOW_MEM_META_PREFIX  = 1;
+constexpr uint32_t WCACHE_FLOW_MEM_DATA_PREFIX  = 2;
+constexpr uint32_t WCACHE_FLOW_DISK_META_PREFIX = 3;
+constexpr uint32_t WCACHE_FLOW_DISK_DATA_PREFIX = 4;
+
+constexpr uint32_t RCACHE_FLOW_MEM_META_PREFIX  = 5;
+constexpr uint32_t RCACHE_FLOW_MEM_DATA_PREFIX  = 6;
+constexpr uint32_t RCACHE_FLOW_DISK_META_PREFIX = 7;
+constexpr uint32_t RCACHE_FLOW_DISK_DATA_PREFIX = 8;
 
 class CacheFlowIdManager {
 public:
@@ -35,7 +48,16 @@ public:
 
     inline static uint64_t GetPtId(uint64_t flowId)
     {
-        return flowId >> (NO_64 - 13);
+        return flowId >> (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT);
+    }
+    inline static uint64_t GetType(uint64_t flowId)
+    {
+        return (flowId >> (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_TYPE_SHIFT)) &
+            CACHE_FLOW_ID_PREFIX_TYPE_MASK;
+    }
+    inline static uint64_t GetInnerType(uint64_t flowId)
+    {
+        return (flowId >> CACHE_FLOW_ID_PREFIX_SHIFT) & CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK;
     }
 };
 }
