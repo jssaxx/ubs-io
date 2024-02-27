@@ -19,15 +19,18 @@
 
 namespace ock {
 namespace bio {
+class WCache;
+using WCachePtr = Ref<WCache>;
 class WCache {
 public:
-    WCache(uint64_t flowId, uint64_t ptId, uint64_t ptv)
-        : mFlowId(flowId), mPtId(ptId), mPtv(ptv)
+    WCache(uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
+        : mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId)
     {}
 
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key)>;
-    BResult Init(uint16_t diskId, const ExecutorServicePtr &memEvictService,
-        const ExecutorServicePtr &diskEvictService, EvictCallback evictCallback,
+    using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
+    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
+        const GetGlobEvictOffset evictOffset, EvictCallback evictCallback, const RetryCallback retryCallback,
         const RCacheManagerPtr rCacheManager);
 
     void Exit();
@@ -39,7 +42,11 @@ public:
 
     void StartEvictTask(WCacheTierType type);
 
+    void RetryEvictTask(WCacheTierType type);
+
     uint64_t GetCapacity(WCacheTierType type);
+
+    uint64_t GetEvictOffset();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
@@ -47,13 +54,15 @@ private:
     BResult EvictAllDiskSliceToUnderFs();
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
-    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef);
+    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster);
 
 private:
     uint64_t mFlowId;
     uint64_t mPtId;
     uint64_t mPtv;
+    uint16_t mDiskId;
     EvictCallback mEvictCallback;
+    RetryCallback mRetryCallback;
 
     WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
 
@@ -61,6 +70,8 @@ private:
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
+
+    GetGlobEvictOffset mGlobEvictOffset { nullptr };
 
     RCacheManagerPtr mRCacheManager;
 
@@ -70,7 +81,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-using WCachePtr = Ref<WCache>;
 }
 }
 

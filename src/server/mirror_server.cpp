@@ -46,6 +46,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleCreateFlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_SYNC_DATA,
         std::bind(&MirrorServer::HandleSyncData, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_GET_EVICT_OFFSET,
+        std::bind(&MirrorServer::HandleGetEvictOffset, this, std::placeholders::_1));
 }
 
 void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize)
@@ -368,8 +370,75 @@ BResult MirrorServer::Initialize(int32_t type)
         return ret;
     }
 
+    auto globEvictOffset = [this](uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset) -> BResult {
+        return GetFlowGlobEvictOffset(ptId, flowId, isMaster, flowOffset);
+    };
+
+    Cache::Instance().RegGetGlobEvictOffset(globEvictOffset);
+
     mStarted = true;
     return BIO_OK;
+}
+
+BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset)
+{
+    auto ret = Cm::Instance()->CheckLocalRole(ptId, isMaster);
+    ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
+
+    if (isMaster) {
+        BResult ret = Cache::Instance().GetEvictOffset(flowId, flowOffset);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Get evict offset failed:" << ret << ", ptId:" << ptId << ", flowId:" << flowId);
+            return ret;
+        }
+        flowOffset += WRITE_CACHE_EVICT_STEP_SIZE;
+        LOG_INFO("Master:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId <<
+            ", flowOffset:" << flowOffset);
+        return BIO_OK;
+    } else {
+        ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
+        ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
+        LOG_INFO("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId <<
+            ", flowOffset:" << flowOffset);
+        return BIO_OK;
+    }
+}
+
+BResult MirrorServer::GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset)
+{
+    BIO_TRACE_START(MIRROR_TRACE_GET_EVICT_OFFSET);
+    BResult ret = Cache::Instance().GetEvictOffset(req.flowId, flowOffset);
+    BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get evict offset failed:" << ret << ", ptId:" << req.comm.ptId << ", flowId:" << req.flowId);
+        return ret;
+    }
+    LOG_INFO("Master get evict offset, ptId:" << req.comm.ptId << ", flowId:" << req.flowId <<
+        ", flowOffset:" << flowOffset);
+    return BIO_OK;
+}
+
+BResult MirrorServer::SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset)
+{
+    NetEnginePtr rpcEngine = BioServer::Instance()->GetRpcEngine();
+
+    CmPtInfo cache;
+    auto ret = Cm::Instance()->GetPtInfo(ptId, cache);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get ptInfo fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
+    uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
+    GetEvictRequest req = { RequestComm(ptId, cache.version, localNodeId), flowId };
+    ret = rpcEngine->SyncCall<GetEvictRequest, uint64_t>(static_cast<BioNodeId>(cache.masterNodeId),
+        BIO_OP_SERVER_GET_EVICT_OFFSET, req, flowOffset, false);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Send get evict offset failed:" << ret << ", ptId:" << ptId <<
+            ", version:" << cache.version);
+        return ret;
+    }
+    return ret;
 }
 
 int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
@@ -625,5 +694,39 @@ int32_t MirrorServer::HandleSyncData(ServiceContext &ctx)
 
     Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleGetEvictOffset(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetEvictRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BIO_TRACE_START(MIRROR_TRACE_GET_EVICT_OFFSET_HDL);
+    auto *req = static_cast<GetEvictRequest *>(ctx.MessageData());
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, BIO_CHECK_PT_FAIL);
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    uint64_t flowOffset;
+    BResult ret = GetEvictOffset(*req, flowOffset);
+    if (ret != BIO_OK) {
+        Reply(ctx, ret, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, ret);
+        return BIO_OK;
+    }
+
+    Reply(ctx, BIO_OK, static_cast<void *>(&flowOffset), sizeof(uint64_t));
+    BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, 0);
     return BIO_OK;
 }

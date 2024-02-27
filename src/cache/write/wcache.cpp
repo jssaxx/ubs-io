@@ -13,23 +13,25 @@
 
 namespace ock {
 namespace bio {
-BResult WCache::Init(uint16_t diskId, const ExecutorServicePtr &memEvictService,
-    const ExecutorServicePtr &diskEvictService, EvictCallback evictCallback,
+BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
+    const GetGlobEvictOffset evictOffset, EvictCallback evictCallback, const RetryCallback retryCallback,
     const RCacheManagerPtr rCacheManager)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
         ChkTrueNot(cacheTier != nullptr, BIO_ALLOC_FAIL);
-        auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, diskId);
+        auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, mDiskId);
         ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << mFlowId);
         mCacheTiers[i] = cacheTier;
     }
 
-    mEvictService[WCACHE_MEMORY] = memEvictService;
-    mEvictService[WCACHE_DISK] = diskEvictService;
+    mEvictService[WCACHE_MEMORY] = evictService[WCACHE_MEMORY];
+    mEvictService[WCACHE_DISK] = evictService[WCACHE_DISK];
     mEvictRef[WCACHE_MEMORY] = false;
     mEvictRef[WCACHE_DISK] = false;
+    mGlobEvictOffset = evictOffset;
     mEvictCallback = std::move(evictCallback);
+    mRetryCallback = std::move(retryCallback);
     mRCacheManager = rCacheManager;
     mUnderFs = UnderFs::Instance();
 
@@ -54,7 +56,7 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 
     if (attr.strategy == WRITE_BACK) {
         // write back.
-        LOG_INFO("Write back, key:" << key << ", FlyCnt:" << mFlyCnt++);
+        LOG_INFO("Write back, key:" << key << ", FlyCnt:" << ++mFlyCnt);
         StartEvictTask(WCACHE_MEMORY);
     } else {
         // write through
@@ -72,10 +74,30 @@ void WCache::StartEvictTask(WCacheTierType type)
         return;
     }
 
+    bool isSucceed;
     if (type == WCACHE_MEMORY) {
-        mEvictService[type]->Execute([this]() { EvictAllMemSliceToDisk(); });
+        isSucceed = mEvictService[type]->Execute([this]() { EvictAllMemSliceToDisk(); });
     } else {
-        mEvictService[type]->Execute([this]() { EvictAllDiskSliceToUnderFs(); });
+        isSucceed = mEvictService[type]->Execute([this]() { EvictAllDiskSliceToUnderFs(); });
+    }
+
+    if (!isSucceed) {
+        mEvictRef[type] = false;
+    }
+    return;
+}
+
+void WCache::RetryEvictTask(WCacheTierType type)
+{
+    bool isSucceed;
+    if (type == WCACHE_MEMORY) {
+        isSucceed = mEvictService[type]->Execute([this]() { EvictAllMemSliceToDisk(); });
+    } else {
+        isSucceed = mEvictService[type]->Execute([this]() { EvictAllDiskSliceToUnderFs(); });
+    }
+
+    if (!isSucceed) {
+        mEvictRef[type] = false;
     }
     return;
 }
@@ -83,6 +105,11 @@ void WCache::StartEvictTask(WCacheTierType type)
 uint64_t WCache::GetCapacity(WCacheTierType type)
 {
     return mCacheTiers[type]->GetDataCapacity();
+}
+
+uint64_t WCache::GetEvictOffset()
+{
+    return mCacheTiers[WCACHE_DISK]->GetEvictOffset();
 }
 
 BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
@@ -113,7 +140,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     ChkTrueNot(ret == BIO_OK, ret);
 
     LOG_INFO("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
-        offset << ", length:" << length << ", FlyCnt:" << mFlyCnt--);
+        offset << ", length:" << length << ", FlyCnt:" << --mFlyCnt);
 
     // when update slice finished, then release resource of flow.
     IncreaseRef();
@@ -132,7 +159,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     return BIO_OK;
 }
 
-BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef)
+BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster)
 {
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     auto slice = sliceRef->GetSlice();
@@ -207,21 +234,51 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef)
 BResult WCache::EvictAllMemSliceToDisk()
 {
     auto evictSliceQueue = mCacheTiers[WCACHE_MEMORY]->GetEvictSliceQueue();
+    auto sliceIter = evictSliceQueue.begin();
     for (auto &sliceRef : evictSliceQueue) {
         auto ret = EvictFromMemToDisk(sliceRef);
-        ChkNot(ret == BIO_OK);
+        if (ret != BIO_OK) {
+            mCacheTiers[WCACHE_MEMORY]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mRetryCallback(mFlowId, WCACHE_MEMORY);
+            return ret;
+        }
+        ++sliceIter;
     }
+
     mEvictRef[WCACHE_MEMORY] = false;
     return BIO_OK;
 }
 
 BResult WCache::EvictAllDiskSliceToUnderFs()
 {
-    auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();
-    for (auto &sliceRef : evictSliceQueue) {
-        auto ret = EvictFromDiskToUnderFs(sliceRef);
-        ChkNot(ret == BIO_OK);
+    bool isMaster;
+    uint64_t globEvictOffset;
+    auto ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, isMaster, globEvictOffset);
+    if (ret != BIO_OK) {
+        LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
+        mRetryCallback(mFlowId, WCACHE_DISK);
+        return ret;
     }
+
+    auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();
+    auto sliceIter = evictSliceQueue.begin();
+    for (auto &sliceRef : evictSliceQueue) {
+        auto slice = sliceRef->GetSlice();
+        uint64_t sliceEvictOffset = slice->GetOffsetInFlow() + slice->GetLength();
+        if (globEvictOffset < sliceEvictOffset) {
+            mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mRetryCallback(mFlowId, WCACHE_DISK);
+            return BIO_OK;
+        }
+        auto ret = EvictFromDiskToUnderFs(sliceRef, isMaster);
+        if (ret != BIO_OK) {
+            mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mRetryCallback(mFlowId, WCACHE_DISK);
+            return ret;
+        }
+        ++sliceIter;
+    }
+
     mEvictRef[WCACHE_DISK] = false;
     return BIO_OK;
 }

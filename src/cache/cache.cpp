@@ -184,6 +184,16 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     return ret;
 }
 
+void Cache::RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset)
+{
+    mWCacheManager->RegGetGlobEvictOffset(evictOffset);
+}
+
+BResult Cache::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
+{
+    return mWCacheManager->GetEvictOffset(flowId, flowOffset);
+}
+
 BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 {
     BIO_TRACE_START(WCACHE_TRACE_FLUSH);

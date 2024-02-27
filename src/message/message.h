@@ -174,6 +174,15 @@ struct SyncDataRequest {
     {}
 };
 
+struct GetEvictRequest {
+    RequestComm comm;
+    uint64_t flowId;
+
+    GetEvictRequest(RequestComm reqComm, uint64_t getFlowId)
+        : comm(reqComm), flowId(getFlowId)
+    {}
+};
+
 struct ClientCallbackCtx {
     int32_t result;
     std::atomic<uint32_t> quota{};

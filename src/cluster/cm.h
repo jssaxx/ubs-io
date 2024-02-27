@@ -283,6 +283,20 @@ public:
         return BIO_ERR;
     }
 
+    inline BResult CheckLocalRole(uint16_t ptId, bool &isMaster)
+    {
+        ReadLocker<ReadWriteLock> lock(&mLock);
+        if (mPtInfos.find(ptId) != mPtInfos.end()) {
+            if (mNodeId.VNodeId() == mPtInfos[ptId].masterNodeId) {
+                isMaster = true;
+            } else {
+                isMaster = false;
+            }
+            return BIO_OK;
+        }
+        return BIO_ERR;
+    }
+
     BResult ReportDiskStatus(uint16_t diskId, CmDiskStatus status);
 
     BResult ReportPtFinish(std::vector<CmPtFinish> &ptFinish);
