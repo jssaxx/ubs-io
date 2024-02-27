@@ -18,6 +18,7 @@ typedef struct {
     uint32_t length : 21;
     uint32_t resv : 8;
     uint64_t bucketId;
+    uint64_t bucketOffset;
 } BdmChunkMeta;
 
 typedef struct {
@@ -81,7 +82,8 @@ int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t tot
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, BdmChunkIndex *chunk, uint32_t isFree)
+int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset,
+    BdmChunkIndex *chunk, uint32_t isFree)
 {
     BdmChunkMeta *metaAddr = (BdmChunkMeta *)realize->metaAddr;
     BdmChunkMeta *meta = &metaAddr[chunk->index];
@@ -91,6 +93,7 @@ int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, 
     meta->restore = 1UL;
     meta->length = (uint32_t)chunk->length;
     meta->bucketId = bucketId;
+    meta->bucketOffset = bucketOffset;
 
     if (realize->metaOps.writeMeta != NULL) {
         uint64_t len = sizeof(BdmChunkMeta);
@@ -131,7 +134,7 @@ int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root,
             DListAddTail(&neighChunk->head, &realize->free[freeIndex].head);
             realize->free[freeIndex].count++;
 
-            ret = BdmAllocatorUpdateMeta(realize, 0, neighChunk, 1UL);
+            ret = BdmAllocatorUpdateMeta(realize, 0, 0, neighChunk, 1UL);
             if (ret != BDM_CODE_OK) {
                 return ret;
             }
@@ -144,7 +147,7 @@ int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root,
     DListAddTail(&chunk->head, &realize->free[freeIndex].head);
     realize->free[freeIndex].count++;
 
-    ret = BdmAllocatorUpdateMeta(realize, 0, chunk, 1UL);
+    ret = BdmAllocatorUpdateMeta(realize, 0, 0, chunk, 1UL);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -178,7 +181,7 @@ int32_t BdmAllocatorInsertNext(BdmAllocatorRealize *realize, struct RbRoot *root
             DListAddTail(&pos->head, &realize->free[freeIndex].head);
             realize->free[freeIndex].count++;
 
-            ret = BdmAllocatorUpdateMeta(realize, 0, pos, 1UL);
+            ret = BdmAllocatorUpdateMeta(realize, 0, 0, pos, 1UL);
             if (ret != BDM_CODE_OK) {
                 return ret;
             }
@@ -191,7 +194,7 @@ int32_t BdmAllocatorInsertNext(BdmAllocatorRealize *realize, struct RbRoot *root
     DListAddTail(&pos->head, &realize->free[freeIndex].head);
     realize->free[freeIndex].count++;
 
-    ret = BdmAllocatorUpdateMeta(realize, 0, pos, 1UL);
+    ret = BdmAllocatorUpdateMeta(realize, 0, 0, pos, 1UL);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -237,7 +240,7 @@ int32_t BdmAllocatorInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
     DListAddTail(&chunk->head, &realize->free[freeIndex].head);
     realize->free[freeIndex].count++;
 
-    ret = BdmAllocatorUpdateMeta(realize, 0, chunk, 1UL);
+    ret = BdmAllocatorUpdateMeta(realize, 0, 0, chunk, 1UL);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -291,13 +294,13 @@ int32_t BdmAllocatorRestoreInsert(BdmAllocatorRealize *realize, BdmChunkIndex *c
 }
 
 static int32_t BdmAllocatorRemoveSameLen(BdmChunkIndex *chunk, BdmAllocatorRealize *realize, uint64_t bucketId,
-                                         uint64_t freeIndex, uint64_t *index)
+    uint64_t bucketOffset, uint64_t freeIndex, uint64_t *index)
 {
     struct RbRoot *root = &realize->root;
     *index = chunk->index;
     DListDel(&chunk->head);
     realize->free[freeIndex].count--;
-    int32_t ret = BdmAllocatorUpdateMeta(realize, bucketId, chunk, 0UL);
+    int32_t ret = BdmAllocatorUpdateMeta(realize, bucketId, bucketOffset, chunk, 0UL);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -306,7 +309,7 @@ static int32_t BdmAllocatorRemoveSameLen(BdmChunkIndex *chunk, BdmAllocatorReali
 }
 
 static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorRealize *realize, uint64_t bucketId,
-                                         uint64_t length, uint64_t *index)
+    uint64_t bucketOffset, uint64_t length, uint64_t *index)
 {
     struct RbRoot *root = &realize->root;
     BdmChunkIndex *neighChunk = (BdmChunkIndex *)(chunk + length);
@@ -317,7 +320,7 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
     uint64_t freeIdx = MIN(neighChunk->length, BDM_FREE_LIST_NUM) - 1;
     DListAddTail(&neighChunk->head, &realize->free[freeIdx].head);
     realize->free[freeIdx].count++;
-    int32_t ret = BdmAllocatorUpdateMeta(realize, 0, neighChunk, 1UL);
+    int32_t ret = BdmAllocatorUpdateMeta(realize, 0, 0, neighChunk, 1UL);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -326,7 +329,7 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
     DListDel(&chunk->head);
     realize->free[freeIdx].count--;
     chunk->length -= neighChunk->length;
-    ret = BdmAllocatorUpdateMeta(realize, bucketId, chunk, 0UL);
+    ret = BdmAllocatorUpdateMeta(realize, bucketId, bucketOffset, chunk, 0UL);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -335,7 +338,8 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t *index, uint64_t chunkSize)
+int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset, uint64_t *index,
+    uint64_t chunkSize)
 {
     BdmChunkIndex *chunk = NULL;
     uint64_t freeIndex;
@@ -352,10 +356,10 @@ int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint
         while (areaNode != &realize->free[freeIndex].head) {
             chunk = (BdmChunkIndex *)D_LIST_ENTRY(areaNode, BdmChunkIndex, head);
             if (chunk->length == length) {
-                ret = BdmAllocatorRemoveSameLen(chunk, realize, bucketId, freeIndex, index);
+                ret = BdmAllocatorRemoveSameLen(chunk, realize, bucketId, bucketOffset, freeIndex, index);
                 return ret;
             } else if (chunk->length > length) {
-                ret = BdmAllocatorRemoveDiffLen(chunk, realize, bucketId, length, index);
+                ret = BdmAllocatorRemoveDiffLen(chunk, realize, bucketId, bucketOffset, length, index);
                 return ret;
             } else {
                 areaNode = areaNode->next;
@@ -367,12 +371,13 @@ int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint
     return BDM_CODE_ERR;
 }
 
-int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t chunkSize, uint64_t *chunkId)
+int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset,
+    uint64_t chunkSize, uint64_t *chunkId)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
 
     BDM_RWLOCK_WRLOCK(&realize->lock);
-    int32_t ret = BdmAllocatorRemove(realize, bucketId, chunkId, chunkSize);
+    int32_t ret = BdmAllocatorRemove(realize, bucketId, bucketOffset, chunkId, chunkSize);
     if (ret != BDM_CODE_OK) {
         BDM_RWLOCK_UNLOCK(&realize->lock);
         BDM_LOGWARN(0, "Alloc chunk failed, chunk size(%llu).", chunkSize);
@@ -442,7 +447,8 @@ int32_t BdmAllocatorResetChunk(BdmAllocator allocator)
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId)
+int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint64_t *chunkSize,
+    uint64_t *bucketId, uint64_t *bucketOffset)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
     BdmChunkMeta *chunkMeta = (BdmChunkMeta *)realize->metaAddr + realize->scanIndex;
@@ -457,6 +463,7 @@ int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint
             *chunkId = chunkIndex;
             *chunkSize = chunkMeta->length * realize->minChunkSize;
             *bucketId = chunkMeta->bucketId;
+            *bucketOffset = chunkMeta->bucketOffset;
             realize->scanIndex = chunkIndex + chunkMeta->length;
             return BDM_CODE_OK;
         }

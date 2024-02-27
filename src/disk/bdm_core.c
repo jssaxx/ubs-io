@@ -28,14 +28,13 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint6
         return BDM_CODE_ERR;
     }
 
-    UNREFERENCE_PARAM(bucketOffset); // 新版本BDM替换后适配
-
-    int32_t ret = bdm->ops.alloc((uintptr_t)bdm, bucketId, len, chunkId);
+    int32_t ret = bdm->ops.alloc((uintptr_t)bdm, bucketId, bucketOffset, len, chunkId);
     if (ret != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Alloc failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
     *chunkId = ENCODE_CHUNK_ID(*chunkId, bdmId);
+    BDM_LOGINFO(0, "Malloc: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, bucketId, bucketOffset);
     return BDM_CODE_OK;
 }
 
@@ -58,6 +57,7 @@ int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId)
         BDM_LOGERROR(0, "Free failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
+    BDM_LOGINFO(0, "Free: chunk(%lu).", chunkId);
     return BDM_CODE_OK;
 }
 
@@ -227,9 +227,7 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
         return BDM_CODE_ERR;
     }
 
-    UNREFERENCE_PARAM(bucketOffset); // 新版本BDM替换后适配
-
-    int32_t ret = bdm->ops.nextchunk((uintptr_t)bdm, chunkId, chunkSize, bucketId);
+    int32_t ret = bdm->ops.nextchunk((uintptr_t)bdm, chunkId, chunkSize, bucketId, bucketOffset);
     if (ret == BDM_CODE_SCAN_OFF) {
         return ret;
     }
@@ -237,6 +235,7 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
         BDM_LOGERROR(0, "Scan failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
+    BDM_LOGINFO(0, "Recover: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, *bucketId, *bucketOffset);
     return BDM_CODE_OK;
 }
 
