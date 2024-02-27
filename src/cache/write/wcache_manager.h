@@ -17,7 +17,10 @@
 
 namespace ock {
 namespace bio {
-    constexpr uint32_t WRITE_CACHE_FLOW_MEM_META_PREFIX = 0;
+constexpr uint32_t WRITE_CACHE_FLOW_MEM_META_PREFIX = 0;
+constexpr uint64_t WRITE_CACHE_EVICT_STEP_SIZE = 134217728; // 128MB
+constexpr uint64_t WRITE_CACHE_EVICT_PERIOD = 5; // 5秒
+
 class WCacheManager;
 using WCacheManagerPtr = Ref<WCacheManager>;
 class WCacheManager {
@@ -54,6 +57,10 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
+    void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
+
+    BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
+
     BResult Flush(uint64_t ptId, uint64_t ptv);
 
     BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
@@ -65,15 +72,22 @@ private:
                  uint64_t &realLen);
     BResult FlushImpl(uint64_t ptId, uint64_t ptv);
 
+    void RetryEvictThread();
+
 private:
     ReadWriteLock mWCacheManagerLock;
     std::unordered_map<uint64_t, WCachePtr> mWCacheManager;
+    std::vector<WCachePtr> mRetryManager[MAX_WCACHE_TIER];
 
     RCacheManagerPtr mRCacheManager;
 
     bool mRunning = true;
-    ExecutorServicePtr mMemEvictService{ nullptr };
-    ExecutorServicePtr mDiskEvictService{ nullptr };
+    ExecutorServicePtr mEvictService[MAX_WCACHE_TIER] { nullptr, nullptr };
+    ExecutorServicePtr mMemEvictService { nullptr };
+    ExecutorServicePtr mDiskEvictService { nullptr };
+    ExecutorServicePtr mRetryEvictService { nullptr };
+
+    GetGlobEvictOffset mEvictOffset { nullptr };
 
     WCacheIndexPtr mCacheIndex;
 

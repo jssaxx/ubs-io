@@ -57,6 +57,12 @@ private:
     void RegisterOpcode();
     void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
 
+    BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset);
+
+    BResult SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
+
+    BResult GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset);
+
     int32_t HandleQueryPtView(ServiceContext &ctx);
     int32_t HandlePut(ServiceContext &ctx);
     int32_t HandleGet(ServiceContext &ctx);
@@ -66,6 +72,7 @@ private:
     int32_t HandleCreateFlow(ServiceContext &ctx);
 
     int32_t HandleSyncData(ServiceContext &ctx);
+    int32_t HandleGetEvictOffset(ServiceContext &ctx);
 
     void PrintfData(const char *buff)
     {

@@ -53,6 +53,10 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
+    void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
+
+    BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
+
     BResult Flush(uint64_t ptId, uint64_t ptv);
 
     BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
