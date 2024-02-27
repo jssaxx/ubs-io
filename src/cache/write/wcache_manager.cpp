@@ -314,11 +314,15 @@ BResult WCacheManager::FlushImpl(uint64_t ptId, uint64_t ptv)
             if (ptId != flowPtId) {
                 continue;
             }
+            if (flowIt.second->GetPtv() >= ptv) {
+                continue;
+            }
             if (flowIt.second->GetCapacity(WCACHE_MEMORY) == 0 &&
                 flowIt.second->GetCapacity(WCACHE_DISK) == 0) {
                 continue;
             }
-            LOG_INFO("Flow ptId:" << flowPtId << ", flowId:" << flowIt.first <<
+            LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
+                ", flowId:" << flowIt.first <<
                 ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) <<
                 ", Disk:" << flowIt.second->GetCapacity(WCACHE_DISK));
             evictFlows.emplace_back(flowIt.second);
