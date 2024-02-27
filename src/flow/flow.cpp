@@ -57,7 +57,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
     LOG_INFO("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
 
-    if (offset >= mPreLoadOffset || offset > mWritenOffset) {
+    if (offset > mPreLoadOffset || offset > mWritenOffset) {
         LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", writen:" << mWritenOffset);
         return BIO_ERR;
     }

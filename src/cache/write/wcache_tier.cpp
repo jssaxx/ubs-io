@@ -74,6 +74,14 @@ void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.UnLock();
 }
 
+void WCacheTier::RetryEvictSliceQueue(std::list<WCacheSliceRefPtr>::iterator start,
+    std::list<WCacheSliceRefPtr>::iterator end)
+{
+    mEvictSliceQueueLock.Lock();
+    mEvictSliceQueue.insert(mEvictSliceQueue.begin(), start, end);
+    mEvictSliceQueueLock.UnLock();
+}
+
 std::list<WCacheSliceRefPtr> WCacheTier::GetEvictSliceQueue()
 {
     mEvictSliceQueueLock.Lock();
@@ -117,6 +125,11 @@ BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint
 uint64_t WCacheTier::GetDataCapacity()
 {
     return mDataFlow->GetValidLen();
+}
+
+uint64_t WCacheTier::GetEvictOffset()
+{
+    return mDataFlow->GetTruncateOffset();
 }
 
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
