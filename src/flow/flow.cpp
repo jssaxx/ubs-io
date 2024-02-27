@@ -201,8 +201,10 @@ BResult Flow::HoldWait(uint64_t needOffset)
 BResult Flow::RecoverChunk(uint64_t offset, uint64_t chunkId)
 {
     if (mRecoverList.find(offset) != mRecoverList.end()) {
+        LOG_ERROR("Repeat confict, flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
         return BIO_ERR;
     }
+    LOG_INFO("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
     mRecoverList[offset] = chunkId;
     return BIO_OK;
 }
@@ -222,11 +224,13 @@ BResult Flow::RecoverCheck()
             continue;
         }
         if (mPreLoadOffset != elem.first) {
-            LOG_ERROR("Recover check fail:" << mPreLoadOffset << ", current:" << elem.first);
+            LOG_ERROR("Recover check fail, preLoad:" << mPreLoadOffset << ", current offset:" << elem.first);
             return BIO_ERR;
         }
         mPreLoadOffset = elem.first + mChunkSize;
     }
+    LOG_INFO("Recover succeed, flowId:" << mFlowId << ", truncate:" << mTruncateOffset <<
+        ", preLoad:" << mPreLoadOffset);
     return BIO_OK;
 }
 }
