@@ -287,13 +287,20 @@ void BioServer::StopCm()
 
 BResult BioServer::StartMirrorServer()
 {
+    auto flowManager = FlowManager::Instance();
+    auto ret = flowManager->Init();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to init flow manager, ret:" << ret << ".");
+        return BIO_ERR;
+    }
+
     mMirror = MirrorServer::Instance();
     if (UNLIKELY(mMirror == nullptr)) {
         LOG_ERROR("Mirror server instance is nullptr.");
         return BIO_ERR;
     }
 
-    BResult ret = mMirror->Initialize(mConfig->GetCmConfig().deployType);
+    ret = mMirror->Initialize(mConfig->GetCmConfig().deployType);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init mirror server, ret:" << ret << ".");
         return BIO_ERR;
@@ -308,13 +315,6 @@ BResult BioServer::StartMirrorServer()
     ret = mMirrorCrb->Init();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init mirror server crb, ret:" << ret << ".");
-        return BIO_ERR;
-    }
-
-    auto flowManager = FlowManager::Instance();
-    ret = flowManager->Init();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init flow manager, ret:" << ret << ".");
         return BIO_ERR;
     }
 
