@@ -4,6 +4,7 @@
 
 #include "cache.h"
 #include "underfs.h"
+#include "flow_manager.h"
 #include "bio.h"
 #include "bio_trace.h"
 
@@ -19,6 +20,9 @@ BResult Cache::Init()
     mWCacheManager = WCacheManager::Instance();
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
     ret = mWCacheManager->Init(mRCacheManager);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    ret = Recover();
     ChkTrueNot(ret == BIO_OK, ret);
 
     return BIO_OK;
@@ -213,6 +217,18 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult Cache::Recover()
+{
+    std::map<uint64_t, FlowPtr> flowMaps;
+
+    auto ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get flow list fail:" << ret);
         return ret;
     }
     return BIO_OK;

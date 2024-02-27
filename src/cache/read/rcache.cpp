@@ -12,6 +12,8 @@
 
 using namespace ock::bio;
 
+constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
+
 RCache::RCache(uint64_t ptId, uint16_t diskId):mPtId(ptId), mDiskId(diskId)
 {
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
@@ -142,19 +144,19 @@ BResult RCache::Initialize()
     std::vector<uint64_t> tempIds;
 
     uint32_t flowPrefix;
-    for (uint32_t i = READ_CACHE_FLOW_MEM_META_PREFIX; i <= READ_CACHE_FLOW_DISK_DATA_PREFIX; i++) {
+    for (uint32_t i = RCACHE_FLOW_MEM_META_PREFIX; i <= RCACHE_FLOW_DISK_DATA_PREFIX; i++) {
         flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(mPtId, CACHE_FLOW_ID_PREFIX_TYPE_RCACHE, i);
         prefix.push_back(flowPrefix);
     }
 
     FlowIdAllocator::Instance()->GenerateFlowIds(prefix, flowIds);
-    if(UNLIKELY(flowIds.empty() || (flowIds.size() != READ_CACHE_FLOW_DISK_DATA_PREFIX +1))) {
+    if(UNLIKELY(flowIds.empty())) {
         LOG_ERROR("Generate ptId" << mPtId << "flow ids failed.");
         return BIO_ERR;
     }
 
-    tempIds.push_back(flowIds.at(READ_CACHE_FLOW_MEM_META_PREFIX));
-    tempIds.push_back(flowIds.at(READ_CACHE_FLOW_MEM_DATA_PREFIX));
+    tempIds.push_back(flowIds.at(RCACHE_FLOW_MEM_META_PREFIX - RCACHE_FLOW_PREFIX_START));
+    tempIds.push_back(flowIds.at(RCACHE_FLOW_MEM_DATA_PREFIX - RCACHE_FLOW_PREFIX_START));
     auto ret = CreateRCacheFlow(READ_CACHE_TIER_MEM, tempIds);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Init ptId" << mPtId << " memory meta flow failed, error code " << ret);
@@ -163,8 +165,8 @@ BResult RCache::Initialize()
     }
 
     tempIds.clear();
-    tempIds.push_back(flowIds.at(READ_CACHE_FLOW_DISK_META_PREFIX));
-    tempIds.push_back(flowIds.at(READ_CACHE_FLOW_DISK_DATA_PREFIX));
+    tempIds.push_back(flowIds.at(RCACHE_FLOW_DISK_META_PREFIX - RCACHE_FLOW_PREFIX_START));
+    tempIds.push_back(flowIds.at(RCACHE_FLOW_DISK_DATA_PREFIX - RCACHE_FLOW_PREFIX_START));
     ret = CreateRCacheFlow(READ_CACHE_TIER_DISK, tempIds);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Init ptId" << mPtId << "disk meta flow failed, error code " << ret);

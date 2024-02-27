@@ -16,16 +16,19 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t dis
     auto ret = ToFlowType(cacheTier, flowType);
     ChkTrueNot(ret == BIO_OK, ret);
 
+    uint64_t metaInnerType = (cacheTier == WCACHE_MEMORY) ? WCACHE_FLOW_MEM_META_PREFIX : WCACHE_FLOW_DISK_META_PREFIX;
+    uint64_t dataInnerType = (cacheTier == WCACHE_MEMORY) ? WCACHE_FLOW_MEM_DATA_PREFIX : WCACHE_FLOW_DISK_DATA_PREFIX;
+
     auto &flowManager = FlowManager::Instance();
 
-    uint64_t metaFlowId = flowId | (((uint64_t)((cacheTier << 1) | 0) & 0x7FF) << 40) /* meta */;
+    uint64_t metaFlowId = flowId | (metaInnerType << CACHE_FLOW_ID_PREFIX_SHIFT); /* meta */
     mMetaFlow = flowManager->CreateObject(flowType, metaFlowId, diskId);
     ChkTrue(mMetaFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create metaflow, flowType:" << flowType << " metaFlowId" << metaFlowId);
 
     LOG_INFO("Meta flowId:" << metaFlowId << ", flowType:" << flowType);
 
-    uint64_t dataFlowId = flowId | (((uint64_t)((cacheTier << 1) | 1) & 0x7FF) << 40) /* data */;
+    uint64_t dataFlowId = flowId | (dataInnerType << CACHE_FLOW_ID_PREFIX_SHIFT); /* data */
     mDataFlow = flowManager->CreateObject(flowType, dataFlowId, diskId);
     ChkTrue(mDataFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create dataflow, flowType:" << flowType << " dataFlowId" << dataFlowId);
