@@ -34,7 +34,7 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint6
         return ret;
     }
     *chunkId = ENCODE_CHUNK_ID(*chunkId, bdmId);
-    BDM_LOGINFO(0, "Malloc: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, bucketId, bucketOffset);
+    BDM_LOGDEBUG(0, "Malloc: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, bucketId, bucketOffset);
     return BDM_CODE_OK;
 }
 
@@ -57,7 +57,7 @@ int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId)
         BDM_LOGERROR(0, "Free failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
-    BDM_LOGINFO(0, "Free: chunk(%lu).", chunkId);
+    BDM_LOGDEBUG(0, "Free: chunk(%lu).", chunkId);
     return BDM_CODE_OK;
 }
 
@@ -235,7 +235,8 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
         BDM_LOGERROR(0, "Scan failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
-    BDM_LOGINFO(0, "Recover: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, *bucketId, *bucketOffset);
+    *chunkId = ENCODE_CHUNK_ID(*chunkId, bdmId);
+    BDM_LOGDEBUG(0, "Recover: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, *bucketId, *bucketOffset);
     return BDM_CODE_OK;
 }
 

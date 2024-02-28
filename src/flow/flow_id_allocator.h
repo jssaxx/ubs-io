@@ -12,7 +12,8 @@
 
 namespace ock {
 namespace bio {
-
+static constexpr uint64_t FLOW_ID_MASK = 0xFFFFFFFFFF;
+static constexpr uint64_t FLOW_ID_SHIFT = 40UL;
 class FlowIdAllocator;
 using FlowIdAllocatorPtr = Ref<FlowIdAllocator>;
 class FlowIdAllocator {
@@ -29,7 +30,7 @@ public:
     uint64_t GenerateFlowId(uint32_t prefix)
     {
         uint64_t innerFlowId = ++mNextFlowId;
-        return (((static_cast<uint64_t>(prefix)) << FLOW_PREFIX_LIMIT_SHIFT) | (innerFlowId & FLOW_PREFIX_LIMIT));
+        return (((static_cast<uint64_t>(prefix)) << FLOW_ID_SHIFT) | (innerFlowId & FLOW_ID_MASK));
     }
 
     void GenerateFlowIds(const std::vector<uint32_t> &prefix, std::vector<uint64_t> &flowIds)
@@ -37,14 +38,14 @@ public:
         uint64_t flowId;
         uint64_t innerFlowId = ++mNextFlowId;
         for (auto i:prefix){
-            flowId =  (((static_cast<uint64_t>(i)) << FLOW_PREFIX_LIMIT_SHIFT) | (innerFlowId & FLOW_PREFIX_LIMIT));
+            flowId =  (((static_cast<uint64_t>(i)) << FLOW_ID_SHIFT) | (innerFlowId & FLOW_ID_MASK));
             flowIds.push_back(flowId);
         }
     }
 
     void SyncFlowId(uint64_t flowId)
     {
-        uint64_t innerFlowId = flowId & FLOW_PREFIX_LIMIT;
+        uint64_t innerFlowId = flowId & FLOW_ID_MASK;
         if (mNextFlowId < innerFlowId) {
             mNextFlowId = innerFlowId;
         }
@@ -52,14 +53,10 @@ public:
 
     uint32_t GetPrefixFormFlowId(uint64_t flowId)
     {
-        return static_cast<uint32_t>(flowId >> FLOW_PREFIX_LIMIT_SHIFT);
+        return static_cast<uint32_t>(flowId >> FLOW_ID_SHIFT);
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
-
-private:
-    static constexpr uint64_t FLOW_PREFIX_LIMIT = (1UL << 40UL) - 1UL;
-    static constexpr uint64_t FLOW_PREFIX_LIMIT_SHIFT = 40UL;
 
 private:
     std::atomic<uint64_t> mNextFlowId { 0 };

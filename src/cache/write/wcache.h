@@ -53,6 +53,9 @@ public:
         return mPtv;
     }
 
+    using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
+    BResult Recover(RecoverCallback recoverCallback);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
     BResult EvictAllMemSliceToDisk();

@@ -178,13 +178,6 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
     BIO_TRACE_START(UFS_TRACE_PUT);
     fstream file;
-    file.open(keyPath.c_str(), ios::in);
-    if (file.is_open()) {
-        LOG_ERROR("Exist to create file, " << keyPath.c_str());
-        file.close();
-        return BIO_EXISTS;
-    }
-
     file.open(keyPath.c_str(), ios::out | ios::binary);
     if (!file.is_open()) {
         LOG_ERROR("Fail to create file, " << keyPath.c_str());
