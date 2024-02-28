@@ -74,6 +74,11 @@ public:
         return;
     }
 
+    inline uint32_t GetMediaId()
+    {
+        return mMediaId;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

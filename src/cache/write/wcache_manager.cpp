@@ -56,7 +56,8 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     result = mRetryEvictService->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
 
-    mRetryEvictService->Execute([this]() { RetryEvictThread(); });
+    result = mRetryEvictService->Execute([this]() { RetryEvictThread(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
 
     mRCacheManager = rCacheManager;
     return BIO_OK;
@@ -109,13 +110,58 @@ BResult WCacheManager::CreateWCache(uint64_t flowId, uint64_t ptId, uint64_t ptv
         mWCacheManager.emplace(flowId, wcache);
     }
 
-    LOG_INFO("Create cache:" << flowId);
+    LOG_INFO("Create cache, flowId:" << flowId);
 
     return BIO_OK;
 }
 
 BResult WCacheManager::DeleteWCache(uint64_t ptId)
 {
+    return BIO_OK;
+}
+
+BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
+{
+    uint64_t metaFlowId = metaFlow->GetFlowId();
+    uint64_t ptId = CacheFlowIdManager::GetPtId(metaFlowId);
+    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
+    uint64_t innerFlowId = metaFlowId & FLOW_ID_MASK;
+    uint64_t flowId = (flowPrefix << FLOW_ID_SHIFT) | innerFlowId;
+    uint32_t diskId = metaFlow->GetMediaId();
+
+    LOG_INFO("Recover wcache, ptId:" << ptId << ", flowId:" << flowId);
+
+    auto ret = CreateWCache(flowId, ptId, 0, static_cast<uint16_t>(diskId));
+    ChkTrue(ret == BIO_OK, ret, "Failed to create wcache, flowId:" << flowId);
+
+    // 2. Get write flow
+    auto wcache = GetWCache(flowId);
+    if (UNLIKELY(wcache == nullptr)) {
+        LOG_ERROR("Failed to get wcache, flowId:" << flowId);
+        return BIO_NOT_EXISTS;
+    }
+
+    WCache::RecoverCallback recoverCallback = [this](uint64_t ptId, const Key &key,
+        const WCacheSliceRefPtr &sliceRef) -> BResult {
+        BIO_TRACE_START(WCACHE_TRACE_RECOVER);
+        LOG_INFO("Recover key:" << key << ", pt:" << ptId << ", flowId:" << sliceRef->GetSlice()->GetFlowId() <<
+            ", flowOffset:" << sliceRef->GetSlice()->GetOffsetInFlow() <<
+            ", length:" << sliceRef->GetSlice()->GetLength());
+        auto ret = mCacheIndex->Insert(ptId, key, sliceRef);
+        BIO_TRACE_END(WCACHE_TRACE_RECOVER, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
+            return ret;
+        }
+        return BIO_OK;
+    };
+
+    ret = wcache->Recover(recoverCallback);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Recover fail:" << ret << ", flowId:" << flowId);
+        return ret;
+    }
+
     return BIO_OK;
 }
 

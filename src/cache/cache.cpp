@@ -3,6 +3,7 @@
  */
 
 #include "cache.h"
+#include "cache_flow.h"
 #include "underfs.h"
 #include "flow_manager.h"
 #include "bio.h"
@@ -22,9 +23,32 @@ BResult Cache::Init()
     ret = mWCacheManager->Init(mRCacheManager);
     ChkTrueNot(ret == BIO_OK, ret);
 
-    ret = Recover();
-    ChkTrueNot(ret == BIO_OK, ret);
+    return BIO_OK;
+}
 
+BResult Cache::Recover()
+{
+    std::map<uint64_t, FlowPtr> flowMaps;
+
+    auto ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get flow list fail:" << ret);
+        return ret;
+    }
+
+    for (auto &elem : flowMaps) {
+        uint64_t type = CacheFlowIdManager::GetType(elem.first);
+        uint64_t innerType = CacheFlowIdManager::GetInnerType(elem.first);
+        if (static_cast<uint16_t>(type) == CACHE_FLOW_ID_PREFIX_TYPE_WCACHE &&
+            static_cast<uint32_t>(innerType) == WCACHE_FLOW_DISK_META_PREFIX) {
+            ret = mWCacheManager->RecoverCache(elem.second);
+            ChkTrueNot(ret == BIO_OK, ret);
+        } else if (static_cast<uint16_t>(type) == CACHE_FLOW_ID_PREFIX_TYPE_RCACHE &&
+            static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_META_PREFIX) {
+            ret = mRCacheManager->RecoverCache(elem.second);
+            ChkTrueNot(ret == BIO_OK, ret);
+        }
+    }
     return BIO_OK;
 }
 
@@ -217,18 +241,6 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
-        return ret;
-    }
-    return BIO_OK;
-}
-
-BResult Cache::Recover()
-{
-    std::map<uint64_t, FlowPtr> flowMaps;
-
-    auto ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Get flow list fail:" << ret);
         return ret;
     }
     return BIO_OK;

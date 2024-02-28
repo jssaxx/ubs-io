@@ -45,6 +45,8 @@ public:
 
     BResult DeleteWCache(uint64_t ptId);
 
+    BResult RecoverCache(FlowPtr metaFlow);
+
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
