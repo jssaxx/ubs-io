@@ -109,7 +109,57 @@ uint64_t WCache::GetCapacity(WCacheTierType type)
 
 uint64_t WCache::GetEvictOffset()
 {
-    return mCacheTiers[WCACHE_DISK]->GetEvictOffset();
+    return mCacheTiers[WCACHE_DISK]->GetDataEvictOffset();
+}
+
+BResult WCache::Recover(RecoverCallback recoverCallback)
+{
+    auto &diskCache = mCacheTiers[WCACHE_DISK];
+    uint64_t truncateOffset = diskCache->GetMetaEvictOffset();
+    uint64_t virCap = diskCache->GetMetaVirCapacity();
+    WFlowSliceMeta sliceMeta;
+    uint64_t sliceSize = sizeof(WFlowSliceMeta);
+    uint64_t count = virCap / sliceSize;
+    uint64_t startIndex = (truncateOffset + sliceSize - 1) / sliceSize;
+    if ((truncateOffset % sliceSize + sliceSize * count) > virCap) {
+        count--;
+    }
+    uint64_t dataRangeStart = diskCache->GetDataEvictOffset();
+    uint64_t dataRangeEnd = dataRangeStart + diskCache->GetDataVirCapacity();
+    for (uint64_t index = 0; index < count; index++) {
+        uint64_t flowIndex = startIndex + index;
+        WCacheSlicePtr metaSlice = nullptr;
+        auto ret = diskCache->GetMetaSlice(flowIndex, metaSlice);
+        ChkTrue(ret == BIO_OK, ret, "Failed to get meta slice:" << ret);
+
+        ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
+        ChkTrueNot(ret == BIO_OK, ret);
+
+        if (sliceMeta.magic != mFlowId) {
+            continue;
+        }
+
+        if (sliceMeta.offset < dataRangeStart ||
+            sliceMeta.offset + sliceMeta.length > dataRangeEnd) {
+            continue;
+        }
+
+        SliceKey sliceKey(mFlowId, sliceMeta.offset, FLOW_DISK, sliceMeta.length, flowIndex);
+
+        WCacheSlicePtr dataSlice = nullptr;
+        ret = diskCache->GetDataSlice(sliceKey, dataSlice);
+        ChkTrue(ret == BIO_OK, ret, "Failed to get data slice:" << ret);
+
+        auto sliceRef = MakeRef<WCacheSliceRef>(dataSlice);
+        ChkTrueNot(sliceRef != nullptr, BIO_ERR);
+
+        diskCache->AddEvictQueue(sliceRef);
+
+        ret = recoverCallback(mPtId, sliceMeta.key, sliceRef);
+        ChkTrueNot(ret == BIO_OK, ret);
+    }
+
+    return BIO_OK;
 }
 
 BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)

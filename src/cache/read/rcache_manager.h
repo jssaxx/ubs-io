@@ -50,6 +50,8 @@ namespace ock {
 
             BResult DeleteRCache(uint64_t ptId);
 
+            BResult RecoverCache(FlowPtr metaFlow);
+
             uint64_t GetGCData();
 
             const RCachePtr GetRCacheInstanceByPtId(uint64_t ptId);

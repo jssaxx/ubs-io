@@ -18,6 +18,7 @@ struct WFlowSliceMeta {
     char key[NO_512];
     uint64_t offset;
     uint64_t length;
+    uint64_t magic;
 };
 
 enum WCacheTierType {
@@ -61,9 +62,15 @@ public:
 
     BResult GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint64_t length, WFlowMetaDataSlice &metaDataSlice);
 
+    uint64_t GetMetaVirCapacity();
+
+    uint64_t GetMetaEvictOffset();
+
     uint64_t GetDataCapacity();
 
-    uint64_t GetEvictOffset();
+    uint64_t GetDataVirCapacity();
+
+    uint64_t GetDataEvictOffset();
 
     BResult Evict(const WCacheSlicePtr &slice);
 

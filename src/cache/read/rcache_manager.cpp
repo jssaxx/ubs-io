@@ -199,3 +199,8 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
     cacheLock.UnLock();
     return BIO_OK;
 }
+
+BResult RCacheManager::RecoverCache(FlowPtr metaFlow)
+{
+    return BIO_OK;
+}
