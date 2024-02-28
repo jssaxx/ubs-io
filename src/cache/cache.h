@@ -19,6 +19,8 @@ class Cache {
 public:
     BResult Init();
 
+    BResult Recover();
+
     void Exit();
 
     inline static Cache &Instance()
@@ -60,9 +62,6 @@ public:
     BResult Flush(uint64_t ptId, uint64_t ptv);
 
     BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
-
-private:
-    BResult Recover();
 
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };

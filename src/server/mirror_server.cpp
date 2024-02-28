@@ -376,6 +376,12 @@ BResult MirrorServer::Initialize(int32_t type)
 
     Cache::Instance().RegGetGlobEvictOffset(globEvictOffset);
 
+    ret = Cache::Instance().Recover();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to recover cache instance, ret:" << ret << ".");
+        return ret;
+    }
+
     mStarted = true;
     return BIO_OK;
 }

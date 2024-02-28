@@ -50,6 +50,7 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     memcpy_s(sliceMeta.key, NO_512, key, strlen(key));
     sliceMeta.offset = slice->GetOffsetInFlow();
     sliceMeta.length = slice->GetLength();
+    sliceMeta.magic = slice->GetFlowId();
     auto ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     ChkTrueNot(ret == BIO_OK, nullptr);
 
@@ -125,12 +126,27 @@ BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint
     return BIO_OK;
 }
 
+uint64_t WCacheTier::GetMetaVirCapacity()
+{
+    return mMetaFlow->GetTotalLen();
+}
+
+uint64_t WCacheTier::GetMetaEvictOffset()
+{
+    return mMetaFlow->GetTruncateOffset();
+}
+
 uint64_t WCacheTier::GetDataCapacity()
 {
     return mDataFlow->GetValidLen();
 }
 
-uint64_t WCacheTier::GetEvictOffset()
+uint64_t WCacheTier::GetDataVirCapacity()
+{
+    return mDataFlow->GetTotalLen();
+}
+
+uint64_t WCacheTier::GetDataEvictOffset()
 {
     return mDataFlow->GetTruncateOffset();
 }
