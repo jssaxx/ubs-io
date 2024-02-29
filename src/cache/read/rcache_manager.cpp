@@ -4,6 +4,8 @@
 
 #include "bio_log.h"
 #include "rcache_manager.h"
+#include "cache_flow.h"
+#include "flow_manager.h"
 #include "bio_def.h"
 #include "bio_trace.h"
 
@@ -202,5 +204,30 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
 
 BResult RCacheManager::RecoverCache(FlowPtr metaFlow)
 {
+    uint64_t metaFlowId = metaFlow->GetFlowId();
+    uint64_t ptId = CacheFlowIdManager::GetPtId(metaFlowId);
+    uint64_t dataFlowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_RCACHE,
+        RCACHE_FLOW_DISK_DATA_PREFIX);
+    uint64_t innerFlowId = metaFlowId & FLOW_ID_MASK;
+    uint64_t dataFlowId = (dataFlowPrefix << FLOW_ID_SHIFT) | innerFlowId;
+
+    FlowPtr dataFlow = FlowManager::Instance()->GetObject(FLOW_DISK, dataFlowId);
+    ChkTrue(dataFlow != nullptr, BIO_ERR,
+        "Failed to get data flow, flowType:" << FLOW_DISK << ", flowId" << dataFlowId);
+
+    BResult ret;
+
+    ret = metaFlow->Seal();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to seal meta flow, ret:" << ret << ", flowId:" << metaFlowId);
+        return ret;
+    }
+
+    ret = dataFlow->Seal();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to seal data flow, ret:" << ret << ", flowId:" << dataFlowId);
+        return ret;
+    }
+
     return BIO_OK;
 }

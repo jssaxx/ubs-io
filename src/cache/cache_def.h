@@ -17,6 +17,7 @@ using Key = char *;
 using SliceReader = std::function<BResult(const SlicePtr &from, const SlicePtr &to)>;
 using SliceWriter = std::function<BResult(const SlicePtr &from, const SlicePtr &to)>;
 using GetGlobEvictOffset = std::function<BResult(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset)>;
+using GetLocDiskId = std::function<BResult(uint16_t ptId, uint16_t &diskId)>;
 
 struct CacheAttr {
     uint64_t mTenantId;

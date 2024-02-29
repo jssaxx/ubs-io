@@ -72,6 +72,10 @@ private:
     BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice, const SliceWriter &sliceWriter,
                  uint64_t &realLen);
     BResult FlushImpl(uint64_t ptId, uint64_t ptv);
+    BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
+
+    void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
+    BResult SealOldCache(uint64_t ptId, uint64_t ptv);
 
     void RetryEvictThread();
 

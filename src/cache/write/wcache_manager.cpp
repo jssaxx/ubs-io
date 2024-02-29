@@ -19,7 +19,7 @@ constexpr uint32_t DISK_EVICT_QUEUE_SIZE = 8192;
 constexpr uint16_t RETRY_EVICT_THREAD_NUM = 1;
 constexpr uint32_t RETRY_EVICT_QUEUE_SIZE = 8192;
 constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
-constexpr uint32_t FLUSH_INTERAL_TIME = 10000;
+constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
@@ -339,18 +339,103 @@ BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
         }
     } while (isRetry);
 
+    ret = SealOldCache(ptId, ptv);
+    ChkTrueNot(ret == BIO_OK, ret);
+
     return ret;
+}
+
+BResult WCacheManager::FlushImpl(uint64_t ptId, uint64_t ptv)
+{
+    std::list<WCachePtr> flushList;
+
+    ScanOldCache(ptId, ptv, flushList);
+
+    for (const auto &flow : flushList) {
+        flow->Flush();
+    }
+
+    return (flushList.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
 }
 
 BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
     LOG_INFO("Standby handle:" << "ptId:" << ptId << ", version:" << ptv);
+
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeUs();
+    BResult ret;
+
+    do {
+        isRetry = false;
+        ret = ExpiredClearImpl(ptId, ptv);
+        if (ret != BIO_OK) {
+            retryTime = Monotonic::TimeUs() - startTime;
+            if (retryTime < FLUSH_RETRY_MAX_TIME) {
+                isRetry = true;
+                usleep(FLUSH_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    ret = SealOldCache(ptId, ptv);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    return ret;
+}
+
+BResult WCacheManager::ExpiredClearImpl(uint64_t ptId, uint64_t ptv)
+{
+    std::list<WCachePtr> expiredList;
+
+    ScanOldCache(ptId, ptv, expiredList);
+
+    for (const auto &flow : expiredList) {
+        flow->ExpiredClear();
+    }
+
+    return (expiredList.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
+
+    for (const auto &flow : expiredList) {
+        auto ret = flow->Seal();
+        if (ret != BIO_OK) {
+            LOG_ERROR("Seal fail:" << ret << ", flowId::" << flow->GetFlowId());
+            return ret;
+        }
+        {
+            WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+            mWCacheManager.erase(flow->GetFlowId());
+        }
+    }
+
     return BIO_OK;
 }
 
-BResult WCacheManager::FlushImpl(uint64_t ptId, uint64_t ptv)
+void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list)
 {
-    std::list<WCachePtr> evictFlows;
+    WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    for (const auto &flowIt : mWCacheManager) {
+        uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+        if (ptId != flowPtId) {
+            continue;
+        }
+        if (flowIt.second->GetPtv() >= ptv) {
+            continue;
+        }
+        LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
+            ", flowId:" << flowIt.first <<
+            ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) <<
+            ", Disk:" << flowIt.second->GetCapacity(WCACHE_DISK));
+        list.emplace_back(flowIt.second);
+    }
+
+    return;
+}
+
+BResult WCacheManager::SealOldCache(uint64_t ptId, uint64_t ptv)
+{
+    std::list<WCachePtr> sealList;
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -362,24 +447,23 @@ BResult WCacheManager::FlushImpl(uint64_t ptId, uint64_t ptv)
             if (flowIt.second->GetPtv() >= ptv) {
                 continue;
             }
-            if (flowIt.second->GetCapacity(WCACHE_MEMORY) == 0 &&
-                flowIt.second->GetCapacity(WCACHE_DISK) == 0) {
-                continue;
-            }
             LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
                 ", flowId:" << flowIt.first <<
-                ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) <<
-                ", Disk:" << flowIt.second->GetCapacity(WCACHE_DISK));
-            evictFlows.emplace_back(flowIt.second);
+                ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
+                ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
+            sealList.emplace_back(flowIt.second);
         }
     }
     
-    for (const auto &flow : evictFlows) {
-        flow->StartEvictTask(WCACHE_MEMORY);
-        flow->StartEvictTask(WCACHE_DISK);
+    for (const auto &flow : sealList) {
+        auto ret = flow->Seal();
+        if (ret != BIO_OK) {
+            LOG_ERROR("Seal fail:" << ret << ", flowId::" << flow->GetFlowId());
+            return ret;
+        }
     }
 
-    return (evictFlows.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
+    return BIO_OK;
 }
 
 inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)

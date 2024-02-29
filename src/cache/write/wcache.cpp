@@ -67,6 +67,25 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     return BIO_OK;
 }
 
+BResult WCache::Seal()
+{
+    BResult ret;
+
+    ret = mCacheTiers[WCACHE_MEMORY]->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Seal mem cacheTier fail:" << ret << ", flowId:" << mFlowId);
+        return ret;
+    }
+
+    ret = mCacheTiers[WCACHE_DISK]->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Seal disk cacheTier fail:" << ret << ", flowId:" << mFlowId);
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
 void WCache::StartEvictTask(WCacheTierType type)
 {
     bool expectval = false;
@@ -105,6 +124,11 @@ void WCache::RetryEvictTask(WCacheTierType type)
 uint64_t WCache::GetCapacity(WCacheTierType type)
 {
     return mCacheTiers[type]->GetDataCapacity();
+}
+
+uint64_t WCache::GetVirCapacity(WCacheTierType type)
+{
+    return mCacheTiers[type]->GetDataVirCapacity();
 }
 
 uint64_t WCache::GetEvictOffset()
@@ -160,6 +184,34 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
     }
 
     return BIO_OK;
+}
+
+void WCache::Flush()
+{
+    bool expectval = false;
+    if (!mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
+        return;
+    }
+
+    bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this]() { FlushImpl(); });
+    if (!isSucceed) {
+        mEvictRef[WCACHE_DISK] = false;
+    }
+    return;
+}
+
+void WCache::ExpiredClear()
+{
+    bool expectval = false;
+    if (!mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
+        return;
+    }
+
+    bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this]() { ExpiredClearImpl(); });
+    if (!isSucceed) {
+        mEvictRef[WCACHE_DISK] = false;
+    }
+    return;
 }
 
 BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
@@ -324,6 +376,81 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
             mRetryCallback(mFlowId, WCACHE_DISK);
+            return ret;
+        }
+        ++sliceIter;
+    }
+
+    mEvictRef[WCACHE_DISK] = false;
+    return BIO_OK;
+}
+
+BResult WCache::FlushImpl()
+{
+    auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();
+    auto sliceIter = evictSliceQueue.begin();
+    for (auto &sliceRef : evictSliceQueue) {
+        auto ret = EvictFromDiskToUnderFs(sliceRef, true);
+        if (ret != BIO_OK) {
+            mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mEvictRef[WCACHE_DISK] = false;
+            return ret;
+        }
+        ++sliceIter;
+    }
+
+    mEvictRef[WCACHE_DISK] = false;
+    return BIO_OK;
+}
+
+BResult WCache::ExpiredClearDisk(WCacheSliceRefPtr sliceRef)
+{
+    auto &diskCache = mCacheTiers[WCACHE_DISK];
+    auto slice = sliceRef->GetSlice();
+    WCacheSlicePtr metaSlice = nullptr;
+    auto ret = diskCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to to evict from dist to underfs, flowId:" << slice->GetFlowId() << ", index:"
+        << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
+
+    LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() <<
+        ", offset:" << slice->GetOffsetInFlow());
+
+    auto sliceMeta = std::make_shared<WFlowSliceMeta>();
+    ChkTrueNot(sliceMeta != nullptr, BIO_ALLOC_FAIL);
+    ret = mSliceOperator.Copy(metaSlice.Get(), (char *)sliceMeta.get());
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    // when update slice finished, then release resource of flow.
+    IncreaseRef();
+    WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta](const WCacheSlicePtr &oldSlice) {
+        auto &diskCache = mCacheTiers[WCACHE_DISK];
+        auto ret = diskCache->Evict(oldSlice);
+        if (UNLIKELY(ret != BIO_OK)) {
+            DecreaseRef();
+            LOG_ERROR("failed to evict old slice." << ret << ", slice:" << oldSlice->ToString());
+            return;
+        }
+        if (sliceRef->GetState() == SLICE_VALID) {
+            uint64_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
+            mEvictCallback(ptId, sliceMeta->key);
+        }
+        DecreaseRef();
+    };
+
+    sliceRef->SetSlice(nullptr, callback);
+    return BIO_OK;
+}
+
+BResult WCache::ExpiredClearImpl()
+{
+    auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();
+    auto sliceIter = evictSliceQueue.begin();
+    for (auto &sliceRef : evictSliceQueue) {
+        auto ret = ExpiredClearDisk(sliceRef);
+        if (ret != BIO_OK) {
+            mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mEvictRef[WCACHE_DISK] = false;
             return ret;
         }
         ++sliceIter;
