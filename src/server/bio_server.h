@@ -6,6 +6,7 @@
 #define BIO_SERVER_H
 
 #include <mutex>
+#include <utility>
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "bio_config_instance.h"
@@ -16,10 +17,154 @@
 
 namespace ock {
 namespace bio {
+using InitFunc = std::function<int32_t()>;
+using StartFunc = std::function<int32_t()>;
+using ShutdownFunc = std::function<int32_t()>;
+using ExitFunc = std::function<void()>;
+
+struct ModuleDesc {
+    std::string name;
+    InitFunc init;
+    StartFunc start;
+    ShutdownFunc shutdown;
+    ExitFunc exit;
+    ModuleDesc() = default;
+    ModuleDesc(std::string name, InitFunc initFunc, StartFunc startFunc, ShutdownFunc shutdownFunc, ExitFunc exitFunc)
+        : name(std::move(name)),
+          init(std::move(initFunc)),
+          start(std::move(startFunc)),
+          shutdown(std::move(shutdownFunc)),
+          exit(std::move(exitFunc))
+    {}
+};
+
+class BioServiceProc {
+public:
+    BioServiceProc(std::vector<ModuleDesc> modules) noexcept : mModules(std::move(modules)) {}
+
+    ~BioServiceProc() noexcept
+    {
+        mModules.clear();
+    }
+
+    BResult Process()
+    {
+        auto ret = OnServiceInitialize();
+        if (ret != BIO_OK) {
+            return ret;
+        }
+        ret = OnServiceStart();
+        if (ret != BIO_OK) {
+            return ret;
+        }
+        return BIO_OK;
+    }
+
+    BResult OnServiceInitialize()
+    {
+        for (auto it = mModules.cbegin(); it != mModules.cend(); ++it) {
+            if (it->init == nullptr) {
+                LOG_INFO("Module (" << it->name << ") no initialize function, skip.");
+                continue;
+            }
+            LOG_INFO("Module (" << it->name << ") initialize begin...");
+            auto ret = it->init();
+            if (ret == BIO_OK) {
+                LOG_INFO("Module (" << it->name << ") initialize success.");
+            } else {
+                LOG_ERROR("Module (" << it->name << ") initialize failed, result:" << ret << ".");
+                RollbackInit(it);
+                return BIO_ERR;
+            }
+        }
+        return BIO_OK;
+    }
+
+    BResult OnServiceStart()
+    {
+        for (auto it = mModules.cbegin(); it != mModules.cend(); ++it) {
+            if (it->start == nullptr) {
+                LOG_INFO("Module (" << it->name << ") no start function, skip.");
+                continue;
+            }
+            LOG_INFO("Module (" << it->name << ") start begin...");
+            auto ret = it->start();
+            if (ret == BIO_OK) {
+                LOG_INFO("Module (" << it->name << ") start success.");
+            } else {
+                LOG_ERROR("Module (" << it->name << ") start failed, result:" << ret << ".");
+                RollbackStart(it);
+                return BIO_ERR;
+            }
+        }
+        return BIO_OK;
+    }
+
+    BResult OnServiceShutdown()
+    {
+        for (auto it = mModules.crbegin(); it != mModules.crend(); ++it) {
+            if (it->shutdown == nullptr) {
+                LOG_INFO("Module (" << it->name << ") no shutdown function, skip.");
+                continue;
+            }
+            LOG_INFO("Module (" << it->name << ") shutdown begin...");
+            it->shutdown();
+            LOG_INFO("Module (" << it->name << ") shutdown finished.");
+        }
+        return BIO_OK;
+    }
+
+    BResult OnServiceUninitialize()
+    {
+        for (auto it = mModules.crbegin(); it != mModules.crend(); ++it) {
+            if (it->exit == nullptr) {
+                LOG_INFO("Module (" << it->name << ") no exit function, skip.");
+                continue;
+            }
+            LOG_INFO("Module (" << it->name << ") exit begin...");
+            it->exit();
+            LOG_INFO("Module (" << it->name << ") exit finished.");
+        }
+        return BIO_OK;
+    }
+
+    DEFINE_REF_COUNT_FUNCTIONS
+
+private:
+    void RollbackInit(const std::vector<ModuleDesc>::const_iterator &end) noexcept
+    {
+        auto next = end;
+        auto pos = end;
+        for (--pos; next != mModules.cbegin(); --next, --pos) {
+            if (pos->exit != nullptr) {
+                pos->exit();
+            }
+        }
+    }
+
+    void RollbackStart(const std::vector<ModuleDesc>::const_iterator &end) noexcept
+    {
+        auto next = end;
+        auto pos = end;
+        for (--pos; next != mModules.cbegin(); --next, --pos) {
+            if (pos->shutdown != nullptr) {
+                pos->shutdown();
+            }
+        }
+    }
+
+private:
+    std::vector<ModuleDesc> mModules;
+    DEFINE_REF_COUNT_VARIABLE
+};
+using BioServiceProcPtr = Ref<BioServiceProc>;
+
 class BioServer;
 using BioServerPtr = Ref<BioServer>;
 class BioServer {
 public:
+    BioServer() noexcept;
+
     BResult Start();
     void Stop();
 
@@ -29,19 +174,24 @@ public:
         return instance;
     }
 
-    inline NetEnginePtr GetRpcEngine()
+    inline NetEnginePtr GetNetEngine()
     {
         return mNetEngine;
     }
 
-    inline CmPtr GetCm()
+    inline MirrorServerPtr GetMirrorServer()
     {
-        return mCm;
+        return mMirror;
     }
 
     inline CmNodeId GetLocalNid()
     {
         return mLocalNid;
+    }
+
+    inline uint16_t GetNetProtocol()
+    {
+        return static_cast<uint16_t>(mConfig->GetNetConfig().protocol);
     }
 
     inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView()
@@ -96,27 +246,34 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:
-    BResult LoadConfig();
+    BResult BioConfigInit();
+    BResult BioLoggerInit();
+    BResult BioTraceInit();
+    BResult BioUnderFsInit();
+    BResult BioBdmInit();
+    void BioBdmExit();
+    BResult BioNetInit();
+    void BioNetExit();
+    BResult BioCmInit();
+    void BioCmExit();
+    BResult BioMirrorServerInit();
+    void BioMirrorServerExit();
+    BResult BioCacheInit();
+    BResult BioFlowInit();
 
-    BResult StartDisk();
-    void StopDisk();
-
-    BResult StartNetService();
-    void StopNetService();
-
-    BResult StartCm();
-    void StopCm();
+    void Connection();
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
     BResult HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
 
-    BResult StartMirrorServer();
-    void StopMirrorServer();
-
-    void Connection();
+private:
+    BResult StartRpcService(const NetOptions &opt);
+    BResult StartIpcService(const NetOptions &opt);
 
 private:
     bool mStarted = false;
     std::mutex mStartLock;
+    BioServiceProcPtr mService = nullptr;
+
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
     CmPtr mCm = nullptr;
@@ -129,5 +286,4 @@ private:
 };
 }
 }
-
 #endif // BIO_SERVER_H

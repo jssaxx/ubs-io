@@ -44,8 +44,9 @@ public:
     static constexpr uint32_t defaultMaxFlowSize = 1024;
 
     BResult Initialize();
+    BResult Start();
 
-    explicit MirrorClient(int32_t type) : mDeployType(type) {}
+    explicit MirrorClient(BioService::WorkerMode mode) : mMode(mode) {}
     ~MirrorClient() = default;
 
     uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
@@ -61,7 +62,8 @@ public:
 
     BResult DeleteKey(const char *key, const Bio::ObjLocation &location);
 
-    BResult Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location, const Bio::LoadCallback &callback, void *context);
+    BResult Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location,
+        const Bio::LoadCallback &callback, void *context);
 
     Bio::ObjStat StatObject(const char *key, const Bio::ObjLocation &location);
 
@@ -69,17 +71,22 @@ public:
 
     std::vector<uint16_t> ListLocalAffinityPt();
 
-    inline CmNodeId& GetLocalNodeInfo()
+    inline uint16_t GetNetProtocol()
+    {
+        return mNetProtocol;
+    }
+
+    inline CmNodeId &GetLocalNodeInfo()
     {
         return mLocalNid;
     }
 
-    inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp>& GetNodeView()
+    inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &GetNodeView()
     {
         return mNodeView;
     }
 
-    inline std::map<uint16_t, CmPtInfo>& GetPtView()
+    inline std::map<uint16_t, CmPtInfo> &GetPtView()
     {
         return mPtView;
     }
@@ -97,14 +104,17 @@ private:
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t len, uint64_t &flowId, uint64_t &offset, uint64_t &index);
 
-    BResult SendCreateFlowRequest(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
+    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        uint64_t &flowId);
     BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
     BResult CreateFlow(uint16_t ptId);
     BResult DestroyFlow(uint16_t ptId);
 
-    void ConstructPutReq(uint8_t *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
-        WCacheSlicePtr &slice) const;
-    BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index, PutRequest *&req);
+    void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+        uint64_t index, GetSliceResponse *rsp) const;
+    BResult DataCopy(const char *from, SliceAddrDesc *addr, uint32_t addrNum);
+    BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
+        PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index);
@@ -168,11 +178,11 @@ private:
 private:
     std::unordered_map<uint16_t, FlowInstance *> mFlowMap;
     ReadWriteLock mLock;
-    int32_t mDeployType = 1;
+    BioService::WorkerMode mMode;
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
-    CacheSliceOperator mSliceOp;
+    uint16_t mNetProtocol;
     DEFINE_REF_COUNT_VARIABLE
 };
 

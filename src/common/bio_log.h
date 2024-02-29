@@ -28,19 +28,21 @@ namespace bio {
 #define SPDLOG_LEVEL_CRITICAL 5
 #define SPDLOG_LEVEL_OFF 6
 
-#define BIO_LOG_RESET_LEVEL(level)                                                 \
-    do {                                                                           \
-            ock::bio::Logger::gInstance->ResetLogLevel(level);                     \
+#define BIO_LOG_RESET_LEVEL(level)                         \
+    do {                                                   \
+        ock::bio::Logger::gInstance->ResetLogLevel(level); \
     } while (0)
 
 /* for default logger */
 #define BIO_LOG_INTERNAL(level, file, line, func, msg)                             \
     do {                                                                           \
-        if (ock::bio::Logger::gInstance->IsHigherLevel(static_cast<int>(level))) { \
+        if (ock::bio::Logger::gInstance != nullptr &&                              \
+            ock::bio::Logger::gInstance->IsHigherLevel(static_cast<int>(level))) { \
             std::ostringstream oss;                                                \
             oss.str("");                                                           \
             oss.clear();                                                           \
-            oss << "[" << file << ":" << line << "]" << "[" << func << "] " << msg; \
+            oss << "[" << file << ":" << line << "]"                               \
+                << "[" << func << "] " << msg;                                     \
             ock::bio::Logger::gInstance->Log(level, oss.str());                    \
         }                                                                          \
     } while (0)

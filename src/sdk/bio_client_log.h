@@ -1,0 +1,99 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2023. All rights reserved.
+ */
+
+#ifndef BIO_CLIENT_LOG_H
+#define BIO_CLIENT_LOG_H
+
+#include <cstdio>
+#include <cstdint>
+#include <iostream>
+#include <sstream>
+#include <sys/time.h>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+namespace ock {
+namespace bio {
+typedef void (*LogFunc)(int32_t level, const char *logBuf);
+
+class BioClientLog {
+public:
+    enum class Level {
+        LOG_LEVEL_DEBUG = 0,
+        LOG_LEVEL_INFO = 1,
+        LOG_LEVEL_WARN = 2,
+        LOG_LEVEL_ERROR = 3,
+        LOG_LEVEL_BUTT
+    };
+
+    BioClientLog() = default;
+    ~BioClientLog()
+    {
+        func = nullptr;
+    }
+
+    inline LogFunc GetLogFuncFunc(void)
+    {
+        return func;
+    }
+
+    inline void SetLogFuncFunc(LogFunc f)
+    {
+        func = f;
+    }
+
+    inline void SetMinLogLevel(int32_t level)
+    {
+        minLogLevel = level;
+    }
+
+    inline int32_t GetMinLogLevel(void)
+    {
+        return minLogLevel;
+    }
+
+    inline void Log(int level, const std::ostringstream &oss)
+    {
+        if (func != nullptr) {
+            func(level, oss.str().c_str());
+        } else {
+            struct timeval tv {};
+            char strTime[24];
+            gettimeofday(&tv, nullptr);
+            strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
+            std::cout << strTime << tv.tv_usec << " " << level << " " << oss.str() << std::endl;
+        }
+    }
+
+    static BioClientLog *Instance()
+    {
+        static BioClientLog logger;
+        return &logger;
+    }
+
+private:
+    LogFunc func = nullptr;
+    int32_t minLogLevel;
+};
+
+#ifndef BIO_CLIENT_LOG_FILENAME
+#define BIO_CLIENT_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#endif
+#define BASE_LOG(level, args)                                                                                    \
+    do {                                                                                                         \
+        if (((level) + 1) >= BioClientLog::Instance()->GetMinLogLevel()) {                                       \
+            std::ostringstream oss;                                                                              \
+            oss << "[SDK " << __FUNCTION__ << ":" << BIO_CLIENT_LOG_FILENAME << ":" << __LINE__ << "] " << args; \
+            BioClientLog::Instance()->Log(level, oss);                                                           \
+        }                                                                                                        \
+    } while (0)
+
+#define CLIENT_LOG_DEBUG(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_DEBUG), args)
+#define CLIENT_LOG_INFO(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_INFO), args)
+#define CLIENT_LOG_WARN(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_WARN), args)
+#define CLIENT_LOG_ERROR(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_ERROR), args)
+}
+}
+#endif
