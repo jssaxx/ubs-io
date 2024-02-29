@@ -663,5 +663,4 @@ private:
 };
 }
 }
-
 #endif // HDAGGER_DG_VALIDATOR_H

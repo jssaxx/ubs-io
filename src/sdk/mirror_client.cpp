@@ -5,62 +5,65 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include "bio_log.h"
+#include "bio_client_log.h"
 #include "bio_trace.h"
 #include "message_op.h"
 #include "bio_client.h"
-#include "bio_server.h"
+#include "bio_client_agent.h"
+#include "bio_client_net.h"
 #include "mirror_client.h"
 
 using namespace ock::bio;
 
-BResult MirrorClient::SendCreateFlowRequest(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId)
+static void CopyKey(char *dstKey, const char *srcKey)
 {
-    CreateFlowRequest req{};
-    if (opType == 0) {
-        req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), opType, ptId, 0 };
-    } else if (opType == 1) {
-        req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), opType, ptId, flowId };
+    auto ret = memcpy_s(dstKey, KEY_MAX_SIZE, srcKey, sizeof(srcKey));
+    if (UNLIKELY(ret != 0)) {
+        CLIENT_LOG_ERROR("Copy Key failed, key:" << srcKey << ", len:" << sizeof(srcKey) << ".");
     }
+}
 
+BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+    uint64_t &flowId)
+{
     BResult ret = BIO_OK;
-    uint64_t retFlowId = UINT64_MAX;
+    CreateFlowRequest req;
+    if (opType == 0) {
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0 };
+    } else if (opType == 1) {
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId };
+    }
+    CreateFlowResponse rsp;
     do {
-        ret = BioClient::Instance()->SendSync<CreateFlowRequest, uint64_t>(static_cast<BioNodeId>(nodeId),
-            BIO_OP_SDK_CREATE_FLOW, req, retFlowId, false);
+        ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(
+            static_cast<BioNodeId>(nodeId), BIO_OP_SDK_CREATE_FLOW, req, rsp);
         if (UNLIKELY(ret == BIO_NOT_READY)) {
-            LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" << nodeId << ", ptId:" << ptId << ".");
+            CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" << nodeId <<
+                ", ptId:" << ptId << ".");
             sleep(NO_3);
         }
     } while (ret == BIO_NOT_READY);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << nodeId << ", ptId:" << ptId << ".");
+        CLIENT_LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << nodeId << ", ptId:" <<
+            ptId << ".");
         return ret;
     }
 
     if (opType == 0) {
-        flowId = retFlowId;
-    } else if (opType == 1 && retFlowId != 0) {
+        flowId = rsp.flowId;
+    } else if (opType == 1 && rsp.flowId != 0) {
         ret = BIO_ERR;
     }
     return ret;
 }
 
-BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId)
+BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+    uint64_t &flowId)
 {
-    if (nodeId == mLocalNid.VNodeId()) {
-        if (mDeployType == 1) {
-            if (opType == 0) {
-                return MirrorServer::Instance()->CreateFlowMaster(getpid(), ptId, ptEntry.version, flowId);
-            } else {
-                return MirrorServer::Instance()->CreateFlowSlave(getpid(), ptId, ptEntry.version, flowId);
-            }
-        } else {
-            LOG_WARN("Not support get remote flow.");
-            return BIO_ERR;
-        }
+    if (LIKELY(nodeId == mLocalNid.VNodeId())) {
+        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, ptId, opType, flowId);
     } else {
-        return SendCreateFlowRequest(nodeId, ptEntry, ptId, opType, flowId);
+        return SendCreateFlowRequestRemote(nodeId, ptEntry, ptId, opType, flowId);
     }
 }
 
@@ -69,14 +72,14 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt entry failed, ret:" << ret << ", ptId:" << ptId << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret:" << ret << ", ptId:" << ptId << ".");
         return BIO_CHECK_PT_FAIL;
     }
 
     uint64_t flowId = UINT64_MAX;
     ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, ptId, 0, flowId);
     if (UNLIKELY(ret != BIO_OK || flowId == UINT64_MAX)) {
-        LOG_ERROR("Create master flow failed, ret:" << ret << ", ptId:" << ptId << ", masterNid:" <<
+        CLIENT_LOG_ERROR("Create master flow failed, ret:" << ret << ", ptId:" << ptId << ", masterNid:" <<
             ptEntry.masterNodeId << ".");
         return ret;
     }
@@ -87,15 +90,15 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         }
         ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, ptId, 1, flowId);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
+            CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
                 ptEntry.copys[idx].nodeId << ".");
-            // TODO::rollback created flow instance
+            DestroyFlow(ptId);
             return ret;
         }
     }
 
     Insert(ptId, flowId);
-    LOG_DEBUG("Create flow instance success, ptId:" << ptId << ", flowId:" << flowId << ".");
+    CLIENT_LOG_DEBUG("Create flow instance success, ptId:" << ptId << ", flowId:" << flowId << ".");
     return BIO_OK;
 }
 
@@ -110,7 +113,7 @@ BResult MirrorClient::LoadAffinityFlow()
     for (uint16_t &ptId : ptVec) {
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Create affinity flow instance failed, ret:" << ret << ", ptId:" << ptId << ".");
+            CLIENT_LOG_ERROR("Create affinity flow instance failed, ret:" << ret << ", ptId:" << ptId << ".");
         }
     }
     return BIO_OK;
@@ -118,19 +121,22 @@ BResult MirrorClient::LoadAffinityFlow()
 
 BResult MirrorClient::LoadOriginView()
 {
-    if (mDeployType == 1) {
-        mLocalNid = BioServer::Instance()->GetLocalNid();
-        mNodeView = BioServer::Instance()->GetNodeView();
-        mPtView = BioServer::Instance()->GetPtView();
-        if (UNLIKELY(mPtView.empty())) {
-            LOG_ERROR("Load pt view failed.");
-            return BIO_ERR;
-        }
-        return BIO_OK;
-    } else {
-        LOG_WARN("Not support get remote view.");
-        return BIO_ERR;
+    auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mNodeView);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get cluster node view failed, ret:" << ret << ".");
+        return ret;
     }
+    ret = agent::BioClientAgent::Instance()->GetPtView(mPtView);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get pt view failed, ret:" << ret << ".");
+        return ret;
+    }
+    ret = agent::BioClientAgent::Instance()->GetLocalNodeInfo(mNetProtocol, mLocalNid);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
+        return ret;
+    }
+    return BIO_OK;
 }
 
 std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
@@ -156,10 +162,11 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
     } else if (affinity == GLOBAL_BALANCE && !mPtView.empty()) {
         ptId = mPtView[v % mPtView.size()].ptId;
     } else {
-        LOG_ERROR("Invalid affinity type or pt view is empty, objectId:" << objectId << ", affinity:" << affinity << ".");
+        CLIENT_LOG_ERROR("Invalid affinity type or pt view is empty, objectId:" << objectId << ", affinity:" <<
+            affinity << ".");
     }
     if (UNLIKELY(ptId == UINT16_MAX)) {
-        LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
+        CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
     }
     return ptId;
 }
@@ -168,7 +175,7 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
 {
     auto iter = mPtView.find(ptId);
     if (UNLIKELY(iter == mPtView.end())) {
-        LOG_ERROR("Invalid pt id:" << ptId << ".");
+        CLIENT_LOG_ERROR("Invalid pt id:" << ptId << ".");
         return BIO_CHECK_PT_FAIL;
     }
     BResult ret = BIO_OK;
@@ -182,19 +189,12 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
 
 BResult MirrorClient::Initialize()
 {
-    BResult ret = LoadOriginView();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to load origin view, ret:" << ret << ".");
-        return ret;
-    }
+    return LoadOriginView();
+}
 
-    ret = LoadAffinityFlow();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to load affinity flow instance, ret:" << ret << ".");
-        return ret;
-    }
-
-    return BIO_OK;
+BResult MirrorClient::Start()
+{
+    return LoadAffinityFlow();
 }
 
 BResult MirrorClient::Put(MirrorPut &param)
@@ -205,7 +205,7 @@ BResult MirrorClient::Put(MirrorPut &param)
     BResult ret = GetPtEntry(ptId, ptEntry);
     BIO_TRACE_END(SDK_TRACE_PUT_GET_PT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -216,16 +216,17 @@ BResult MirrorClient::Put(MirrorPut &param)
     ret = AllocPutOffset(ptId, param.length, flowId, offset, flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
         return ret;
     }
-    LOG_INFO("Put location info, ptId:" << ptId << ", flowId:" << flowId << ", offset:" << offset << ", key:" << param.key << ".");
+    CLIENT_LOG_DEBUG("Put location info, ptId:" << ptId << ", flowId:" << flowId << ", offset:" << offset << ", key:" <<
+        param.key << ".");
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
     ret = SendPutRequest(ptEntry, param, flowId, offset, flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
     }
     return ret;
 }
@@ -236,16 +237,21 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
         return ret;
     }
 
+    GetRequest req;
+    req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    CopyKey(req.key, param.key);
+    req.ptId = ptId;
+    req.offset = param.offset;
+    req.length = param.length;
     BIO_TRACE_START(SDK_TRACE_GET_SEND);
-    GetRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), param.key, ptId, param.offset, param.length, NetMrInfo() };
     ret = SendGetRequest(ptEntry, req, param.value, realLen);
     BIO_TRACE_END(SDK_TRACE_GET_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send get request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
     }
     return ret;
 }
@@ -256,33 +262,39 @@ BResult MirrorClient::DeleteKey(const char *key, const Bio::ObjLocation &locatio
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
         return BIO_CHECK_PT_FAIL;
     }
 
-    DeleteRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), key, ptId };
+    DeleteRequest req{};
+    req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    CopyKey(req.key, key);
     ret = SendDeleteRequest(ptEntry, req);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send delete request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Send delete request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
     }
     return ret;
 }
 
-BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location, const Bio::LoadCallback &callback,
-    void *context)
+BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location,
+    const Bio::LoadCallback &callback, void *context)
 {
     uint16_t ptId = ParseLocation(location);
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
         return ret;
     }
 
-    LoadRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), key, ptId, offset, length };
+    LoadRequest req{};
+    req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    CopyKey(req.key, key);
+    req.offset = offset;
+    req.length = length;
     ret = SendLoadRequest(ptEntry, req, callback, context);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send load request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
     }
     return ret;
 }
@@ -293,15 +305,17 @@ Bio::ObjStat MirrorClient::StatObject(const char *key, const Bio::ObjLocation &l
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
         return { 0, 0 };
     }
 
     Bio::ObjStat info = { 0, 0 };
-    StatRequest req = { RequestComm(ptId, ptEntry.version, mLocalNid.VNodeId()), key, ptId };
+    StatRequest req{};
+    req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    CopyKey(req.key, key);
     ret = SendStatRequest(ptEntry, req, info);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
         return { 0, 0 };
     }
 
@@ -314,12 +328,12 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t len, uint64_t &flow
     if (UNLIKELY(flowInst == nullptr)) {
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Create flow instance failed, ret: " << ret << ", ptId:" << ptId << ".");
+            CLIENT_LOG_ERROR("Create flow instance failed, ret: " << ret << ", ptId:" << ptId << ".");
             return ret;
         }
         flowInst = Query(ptId);
         if (UNLIKELY(flowInst == nullptr)) {
-            LOG_ERROR("Query flow failed, ptId:" << ptId << ".");
+            CLIENT_LOG_ERROR("Query flow failed, ptId:" << ptId << ".");
             return BIO_INNER_ERR;
         }
     }
@@ -329,57 +343,74 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t len, uint64_t &flow
     return BIO_OK;
 }
 
-void MirrorClient::ConstructPutReq(uint8_t *tmp, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
-    WCacheSlicePtr &slice) const
+void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
+    uint64_t offset, uint64_t index, GetSliceResponse *rsp) const
 {
-    auto *req = static_cast<PutRequest *>(static_cast<void *>(tmp));
-    req->Fill(RequestComm(ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId()), param.attr, param.key, param.length,
-        flowId, offset, index, BioClient::Instance()->GetLocalMrKey(), slice->GetSerializeLen());
-    uint32_t len = 0;
-    char *sliceBuf = static_cast<char *>(static_cast<void *>(tmp)) + sizeof(PutRequest);
-    slice->Serialize(sliceBuf, len);
+    req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    req->tenantId = param.attr.mTenantId;
+    req->affinity = param.attr.affinity;
+    req->strategy = param.attr.strategy;
+    CopyKey(req->key, param.key);
+    req->length = param.length;
+    req->flowId = flowId;
+    req->offset = offset;
+    req->index = index;
+    req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
+    req->sliceLen = rsp->sliceLen;
+    memcpy_s(req->sliceBuf, rsp->sliceLen, rsp->sliceBuf, rsp->sliceLen);
+}
+
+BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint32_t addrNum)
+{
+    uint64_t offset = 0;
+    for (uint32_t i = 0; i < addrNum; i++) {
+        auto ret = memcpy_s(reinterpret_cast<void *>(addr[i].chunkId + addr[i].chunkOffset), addr[i].chunkLen,
+            reinterpret_cast<void *>(const_cast<char *>(from + offset)), addr[i].chunkLen);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to copy data from addr:" << from + offset << " to addr:" << addr[i].chunkId + addr[i].chunkOffset <<
+            " by length:" << addr[i].chunkLen);
+        offset += addr[i].chunkLen;
+    }
+    return BIO_OK;
 }
 
 BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
     PutRequest *&req)
 {
-    if (mDeployType == 1) {
-        WCacheSlicePtr sliceP = nullptr;
-        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
-        BResult ret = MirrorServer::Instance()->GetSlice(flowId, offset, index, param.length, sliceP);
-        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_GET_SLICE, ret);
-        if (UNLIKELY(ret != BIO_OK || sliceP == nullptr)) {
-            LOG_ERROR("Get slice failed, ret:" << ret << ", flowId:" << flowId << ", flowOffset:" << offset <<
-                ", length:" << param.length << ".");
-            return ret;
-        }
-        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
-        ret = mSliceOp.Copy(param.value, sliceP.Get());
-        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<
-                ", flowOffset:" << offset << ", length:" << param.length << ".");
-            return ret;
-        }
-        LOG_INFO("Get slice success, key:" << param.key << ", flowId:" << sliceP->GetFlowId() << ", offsetInFlow:" <<
-            sliceP->GetOffsetInFlow() << ", indexInFlow:" << sliceP->GetIndexInFlow() << ", slice: " <<
-            sliceP->ToString() << ".");
+    GetSliceResponse *rsp = nullptr;
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
+    auto ret = agent::BioClientAgent::Instance()->PrepareResource(ptEntry, flowId, offset, index, param.length, &rsp);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_GET_SLICE, BIO_OK);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Prepare resource failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<
+            ", flowOffset:" << offset << ", length:" << param.length << ".");
+        return ret;
+    }
 
-        uint32_t sliceLen = sliceP->GetSerializeLen();
-        auto *tmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + sliceLen];
-        if (UNLIKELY(tmp == nullptr)) {
-            LOG_ERROR("Alloc put request memory failed, len:" << sizeof(PutRequest) + sliceLen << ".");
-            return BIO_ALLOC_FAIL;
-        }
-        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
-        ConstructPutReq(tmp, ptEntry, param, flowId, offset, index, sliceP);
-        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
-        req = static_cast<PutRequest *>(static_cast<void *>(tmp));
-        return BIO_OK;
-    } else {
-        LOG_WARN("Not support prepare put remote.");
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
+    ret = DataCopy(param.value, rsp->addr, rsp->addrNum);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<
+            ", flowOffset:" << offset << ", length:" << param.length << ".");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        return ret;
+    }
+
+    auto *tmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + rsp->sliceLen];
+    if (UNLIKELY(tmp == nullptr)) {
+        CLIENT_LOG_ERROR("Alloc put request memory failed, len:" << sizeof(PutRequest) + rsp->sliceLen << ".");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         return BIO_INNER_ERR;
     }
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
+    req = static_cast<PutRequest *>(static_cast<void *>(tmp));
+    ConstructPutReq(req, ptEntry, param, flowId, offset, index, rsp);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
+    CLIENT_LOG_DEBUG("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
+        ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
+    delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+    return BIO_OK;
 }
 
 void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index,
@@ -387,38 +418,35 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
 {
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
-        BioClient::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT, static_cast<void *>(req),
-            sizeof(PutRequest) + req->sliceLen, callback, false);
+        net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT,
+            static_cast<void *>(req), sizeof(PutRequest) + req->sliceLen, callback);
     }
 }
 
 void MirrorClient::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const
 {
-    if (localIdx == UINT32_MAX) {
+    if (UNLIKELY(localIdx == UINT32_MAX)) {
         return;
     }
-    if (mDeployType == 1) {
-        WCacheSlicePtr sliceP = MakeRef<WCacheSlice>();
-        char *sliceBuf = static_cast<char *>(static_cast<void *>(req)) + sizeof(PutRequest);
-        sliceP->Deserialize(sliceBuf, req->sliceLen);
-        BResult ret = MirrorServer::Instance()->Put(*req, sliceP);
-        callback.cb(callback.cbCtx, nullptr, 0, ret);
-    } else {
-        LOG_WARN("Not support put local by ipc.");
-        callback.cb(callback.cbCtx, nullptr, 0, BIO_INNER_ERR);
-    }
+    agent::BioClientAgent::Instance()->PutLocal(req, localIdx, callback);
 }
 
-BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index)
+BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+    uint64_t index)
 {
     uint32_t quota = ptEntry.copys.size();
-    ClientCallbackCtx cbCtx = { BIO_OK, quota };
+    ClientCallbackCtx cbCtx;
+    cbCtx.result = BIO_OK;
+    cbCtx.quota = quota;
+    sem_init(&cbCtx.sem, 0, 0);
+    cbCtx.resp = nullptr;
+    cbCtx.respLen = 0;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         }
-        if ((--cbCtx->quota) == 0) {
+        if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
         }
     };
@@ -429,8 +457,8 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
     BResult ret = Prepare(ptEntry, param, flowId, offset, index, req);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Prepare put local failed, ret:" << ret << ", key:" << param.key << ", length:" << param.length <<
-            ", flowId:" << flowId << ", flowOffset:" << offset << ".");
+        CLIENT_LOG_ERROR("Prepare put local failed, ret:" << ret << ", key:" << param.key << ", length:" <<
+            param.length << ", flowId:" << flowId << ", flowOffset:" << offset << ".");
         return ret;
     }
 
@@ -449,8 +477,8 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     if (UNLIKELY(cbCtx.result != BIO_OK)) {
-        LOG_ERROR("Send put request failed, ret:" << cbCtx.result << ", key:" << param.key << ", flowId:" << flowId <<
-            ", offset:" << offset << ", length:" << param.length << ".");
+        CLIENT_LOG_ERROR("Send put request failed, ret:" << cbCtx.result << ", key:" << param.key << ", flowId:" <<
+            flowId << ", offset:" << offset << ", length:" << param.length << ".");
     }
     delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     return cbCtx.result;
@@ -458,35 +486,37 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
 
 BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
-    LOG_INFO("Get value from master, key:" << req.key << ", offset:" << req.offset << ", length:" << req.length <<
-        ", masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ".");
-
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
-        req.SetMrInfo(value, req.length);
-        BResult ret = MirrorServer::Instance()->Get(req, realLen);
+        req.isMr = 0;
+        req.address = reinterpret_cast<uintptr_t>(value);
+        req.size = req.length;
+        BResult ret = agent::BioClientAgent::Instance()->GetLocal(req, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_LOCAL, ret);
         return ret;
     }
 
     NetMrInfo mrInfo;
-    BResult ret = BioClient::Instance()->Alloc(req.length, mrInfo);
+    BResult ret = net::BioClientNet::Instance()->Alloc(req.length, mrInfo);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Alloc rdma page failed, ret:" << ret << ", length:" << req.length << ", page size:" <<
-            BioClient::Instance()->GetDataPage() << ".");
+        CLIENT_LOG_ERROR("Alloc rdma page failed, ret:" << ret << ", length:" << req.length << ", page size:" <<
+            net::BioClientNet::Instance()->GetDataPage() << ".");
         return BIO_ALLOC_FAIL;
     }
-    req.SetMrInfo(mrInfo);
-    LOG_INFO("Alloc rdma page success, length:" << req.length << ", offset:" << req.offset << ", address:" <<
+    req.isMr = 1;
+    req.address = mrInfo.address;
+    req.size = mrInfo.size;
+    req.mrKey = mrInfo.key;
+    CLIENT_LOG_DEBUG("Alloc rdma page success, length:" << req.length << ", offset:" << req.offset << ", address:" <<
         mrInfo.address << ", size:" << mrInfo.size << ", key:" << mrInfo.key << ", dstNid:" << masterNid << ".");
 
     BIO_TRACE_START(SDK_TRACE_GET_REMOTE);
     uint64_t length;
-    ret = BioClient::Instance()->SendSync<GetRequest, uint64_t>(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_GET,
-        req, length, false);
+    ret = net::BioClientNet::Instance()->SendSync<GetRequest, uint64_t>(static_cast<BioNodeId>(masterNid),
+        BIO_OP_SDK_GET, req, length);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset <<
-            ", length:" << req.length << ", dstNid:" << masterNid << ".");
+        CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
+            req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
         realLen = length;
     }
@@ -497,7 +527,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, BIO_OK);
     }
 
-    BioClient::Instance()->Free(mrInfo.address);
+    net::BioClientNet::Instance()->Free(mrInfo.address);
     return ret;
 }
 
@@ -509,34 +539,30 @@ BResult MirrorClient::SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *v
 void MirrorClient::DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, NetEngine::Callback &callback)
 {
     uint16_t dstNid = ptEntry.copys[index].nodeId;
-    BioClient::Instance()->SendAsync<DeleteRequest>(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_DELETE, req, callback,
-        false);
+    net::BioClientNet::Instance()->SendAsync<DeleteRequest>(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_DELETE, req,
+        callback);
 }
 
 void MirrorClient::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback) const
 {
-    if (mDeployType == 1) {
-        BResult ret = MirrorServer::Instance()->Delete(req);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Delete local failed, ret:" << ret << ", key:" << req.key << ".");
-        }
-        callback.cb(callback.cbCtx, nullptr, 0, ret);
-    } else {
-        LOG_WARN("Not support delete local by ipc.");
-        callback.cb(callback.cbCtx, nullptr, 0, BIO_INNER_ERR);
-    }
+    agent::BioClientAgent::Instance()->DeleteLocal(req, callback);
 }
 
 BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
 {
     uint32_t quota = ptEntry.copys.size();
-    ClientCallbackCtx cbCtx = { BIO_OK, quota };
+    ClientCallbackCtx cbCtx;
+    cbCtx.result = BIO_OK;
+    cbCtx.quota = quota;
+    sem_init(&cbCtx.sem, 0, 0);
+    cbCtx.resp = nullptr;
+    cbCtx.respLen = 0;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         }
-        if ((--cbCtx->quota) == 0) {
+        if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
         }
     };
@@ -553,30 +579,20 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     if (UNLIKELY(cbCtx.result != BIO_OK)) {
-        LOG_ERROR("Send delete request failed, ret:" << cbCtx.result << ", key:" << req.key << ".");
+        CLIENT_LOG_ERROR("Send delete request failed, ret:" << cbCtx.result << ", key:" << req.key << ".");
     }
     return cbCtx.result;
 }
 
 BResult MirrorClient::StatRemote(uint16_t dstNid, StatRequest &req, Bio::ObjStat &objInfo)
 {
-    BResult ret = BioClient::Instance()->SendSync<StatRequest, Bio::ObjStat>(static_cast<BioNodeId>(dstNid),
-        BIO_OP_SDK_STAT, req, objInfo, false);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Send sync stat request failed, ret:" << ret << ", key:" << req.key << ", dstNid:" << dstNid << ".");
-        return ret;
-    }
-    return ret;
+    return net::BioClientNet::Instance()->SendSync<StatRequest, Bio::ObjStat>(static_cast<BioNodeId>(dstNid),
+        BIO_OP_SDK_STAT, req, objInfo);
 }
 
 BResult MirrorClient::StatLocal(StatRequest &req, Bio::ObjStat &objInfo) const
 {
-    if (mDeployType == 1) {
-        return MirrorServer::Instance()->Stat(req, objInfo);
-    } else {
-        LOG_WARN("Not support stat local by ipc.");
-        return BIO_INNER_ERR;
-    }
+    return agent::BioClientAgent::Instance()->StatLocal(req, objInfo);
 }
 
 BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, Bio::ObjStat &objInfo)
@@ -592,27 +608,27 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, Bio::
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
 {
     if (masterNid == mLocalNid.VNodeId()) {
-        BResult ret = MirrorServer::Instance()->Load(req);
-        callback(context, ((ret == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+        agent::BioClientAgent::Instance()->LoadLocal(req, callback, context);
         return BIO_OK;
     }
 
     uint16_t ptId = req.comm.ptId;
     auto cbFunc = [ptId, callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
         if (UNLIKELY(result != BIO_OK)) {
-            LOG_ERROR("Load master return failed, ret:" << result << ".");
+            CLIENT_LOG_ERROR("Load master return failed, ret:" << result << ".");
         }
         if (callback != nullptr) {
             callback(context, ((result == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
         }
     };
     NetEngine::Callback cb(cbFunc, nullptr);
-    BioClient::Instance()->SendAsyncBuff(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_LOAD, static_cast<void *>(&req),
-        sizeof(LoadRequest), cb, false);
+    net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_LOAD,
+        static_cast<void *>(&req), sizeof(LoadRequest), cb);
     return BIO_OK;
 }
 
-inline BResult MirrorClient::SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context)
+inline BResult MirrorClient::SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback,
+    void *context)
 {
     return LoadMaster(req, ptEntry.masterNodeId, callback, context);
 }

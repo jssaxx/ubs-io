@@ -2,8 +2,8 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
  */
 
-#ifndef CACHE_MANAGER_H
-#define CACHE_MANAGER_H
+#ifndef BIO_CLIENT_H
+#define BIO_CLIENT_H
 
 #include <atomic>
 #include <mutex>
@@ -15,7 +15,6 @@
 #include "bio_ref.h"
 #include "bio.h"
 #include "bio_lock.h"
-#include "bio_config_instance.h"
 #include "mirror_client.h"
 
 namespace ock {
@@ -24,7 +23,6 @@ class BioClient;
 using BioClientPtr = Ref<BioClient>;
 class BioClient {
 public:
-    // A single client supports a maximum of 1024 cache instances
     static constexpr uint32_t defaultMaxCacheSize = 1024;
 
     static BioClientPtr &Instance()
@@ -33,7 +31,9 @@ public:
         return instance;
     }
 
-    BResult Start();
+    BResult BioLoggerInit();
+
+    BResult Start(BioService::WorkerMode mode);
     void Stop();
 
     inline bool Ready() const
@@ -71,66 +71,20 @@ public:
         return mMirror->DeleteKey(key, location);
     }
 
-    inline BResult Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location, Bio::LoadCallback callback, void *context)
+    inline BResult Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location,
+        Bio::LoadCallback callback, void *context)
     {
         return mMirror->Load(key, offset, length, location, std::move(callback), context);
     }
 
-    inline BResult ListAll(const char *prefix, std::vector<std::pair<char *, Bio::ObjStat>>& objs)
+    inline BResult ListAll(const char *prefix, std::vector<std::pair<char *, Bio::ObjStat>> &objs)
     {
-        // TODO::Not supported listAll operation
         return BIO_INNER_ERR;
     }
 
     inline Bio::ObjStat Stat(const char *key, const Bio::ObjLocation &location)
     {
         return mMirror->StatObject(key, location);
-    }
-
-    inline uint32_t GetDataPage() const
-    {
-        return mRpcService->GetDataPage();
-    }
-
-    inline BResult Alloc(uint64_t size, NetMrInfo &mr)
-    {
-        if (UNLIKELY(mRpcService->GetDataPage() < size)) {
-            return BIO_ALLOC_FAIL;
-        }
-        uintptr_t address = 0;
-        uint32_t key = UINT32_MAX;
-        BResult ret = mRpcService->AllocLocalMrSingle(address, key);
-        mr = NetMrInfo(address, size, key);
-        return ret;
-    }
-
-    inline void Free(uintptr_t address)
-    {
-        mRpcService->FreeLocalMrSingle(address);
-    }
-
-    template <typename TReq, typename TResp>
-    inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp, bool plane)
-    {
-        return mRpcService->SyncCall(target, opcode, req, rsp, plane);
-    }
-
-    template <typename TReq>
-    inline void SendAsync(const BioNodeId target, uint16_t opcode, TReq &req, NetEngine::Callback &cb, bool plane)
-    {
-        mRpcService->AsyncCall(target, opcode, req, cb, plane);
-    }
-
-    inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, NetEngine::Callback &cb, bool plane)
-    {
-        mRpcService->AsyncCallBuff(target, opcode, req, reqLen, cb, plane);
-    }
-
-    inline uint32_t GetLocalMrKey()
-    {
-        uint32_t key = 0;
-        mRpcService->GetLocalMrKey(key);
-        return key;
     }
 
     inline std::shared_ptr<Bio> Query(const uint64_t tenantId)
@@ -184,24 +138,19 @@ public:
         return mCacheMap;
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS
-
-    inline MirrorClientPtr GetMirror()
+    inline MirrorClientPtr GetMirror() const
     {
         return mMirror;
     }
 
+    DEFINE_REF_COUNT_FUNCTIONS
 private:
-    BResult StartRpcService();
-
-private:
-    bool mStarted{ false };
+    BioService::WorkerMode mMode;
+    bool mStarted = false;
     std::mutex mStartLock;
     std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
     ReadWriteLock mLock;
-    BioConfigPtr mConfig{ nullptr };
-    NetEnginePtr mRpcService{ nullptr };
-    MirrorClientPtr mMirror{ nullptr };
+    MirrorClientPtr mMirror = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

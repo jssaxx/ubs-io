@@ -52,7 +52,10 @@ public:
 
     inline BResult AllocOne(uintptr_t &address)
     {
-        ChkTrue(mIsStarted.load() == true, BIO_NOT_READY, "Net block pool not ready.");
+        if (mIsStarted.load() == false) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return BIO_NOT_READY;
+        }
         if (!Pop(address)) {
             return BIO_ALLOC_FAIL;
         }
@@ -61,13 +64,19 @@ public:
 
     inline void ReleaseOne(uintptr_t address)
     {
-        ChkTrueEx(mIsStarted.load() == true, "Net block pool not ready.");
+        if (mIsStarted.load() == false) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return;
+        }
         PushFront(address);
     }
 
     inline BResult AllocMany(uint32_t count, std::vector<uintptr_t> &items)
     {
-        ChkTrue(mIsStarted.load() == true, BIO_NOT_READY, "Net block pool not ready.");
+        if (mIsStarted.load() == false) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return BIO_NOT_READY;
+        }
         if (!PopN(count, items)) {
             return BIO_ALLOC_FAIL;
         }
@@ -76,11 +85,15 @@ public:
 
     inline void ReleaseMany(std::vector<uintptr_t> &items)
     {
-        ChkTrueEx(mIsStarted.load() == true, "Net block pool not ready.");
+        if (mIsStarted.load() == false) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return;
+        }
         PushN(items);
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     inline void PushFront(uintptr_t item)
     {

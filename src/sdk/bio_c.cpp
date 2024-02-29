@@ -12,7 +12,7 @@ using namespace ock::bio;
 int32_t BioCalculateLocation(void *bioHandle, uint32_t objectId, CobjLocation *objLocation)
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
-    Bio::ObjLocation location = {0, 0};
+    Bio::ObjLocation location = { 0, 0 };
 
     auto ret = bio->CalculateLocation(objectId, location);
     if (ret != 0) {
@@ -35,7 +35,7 @@ void *BioCreateCache(uint64_t tenantId, CAffinityStrategy affinityStrategy, CWri
 void *BioNewService()
 {
     auto bs = new BioService();
-    if (bs->Initialize() != RET_CACHE_OK) {
+    if (bs->Initialize(BioService::CONVERGENCE) != RET_CACHE_OK) {
         return nullptr;
     }
     return bs;
@@ -44,7 +44,7 @@ void *BioNewService()
 int32_t BioPut(void *bioHandle, const char *key, const char *value, uint64_t length, CobjLocation objLocation)
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
-    Bio::ObjLocation location = {objLocation.location[0], objLocation.location[1]};
+    Bio::ObjLocation location = { objLocation.location[0], objLocation.location[1] };
     auto ret = bio->Put(key, value, length, location);
     return ret;
 }
@@ -53,7 +53,7 @@ int32_t BioGet(void *bioHandle, const char *key, uint64_t offset, uint64_t lengt
     CobjLocation objLocation, uint64_t *realLength)
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
-    Bio::ObjLocation location = {objLocation.location[0], objLocation.location[1]};
+    Bio::ObjLocation location = { objLocation.location[0], objLocation.location[1] };
     auto ret = bio->Get(key, offset, length, location, value, *realLength);
     return ret;
 }
@@ -61,15 +61,15 @@ int32_t BioGet(void *bioHandle, const char *key, uint64_t offset, uint64_t lengt
 int32_t BioDelete(void *bioHandle, const char *key, CobjLocation objLocation)
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
-    Bio::ObjLocation location = {objLocation.location[0], objLocation.location[1]};
+    Bio::ObjLocation location = { objLocation.location[0], objLocation.location[1] };
     return bio->Delete(key, location);
 }
 
-int32_t BioLoad(void *bioHandle, const char *key, uint64_t offset, uint64_t length,
-    CobjLocation objLocation, LoadCallback callback, void *context)
+int32_t BioLoad(void *bioHandle, const char *key, uint64_t offset, uint64_t length, CobjLocation objLocation,
+    LoadCallback callback, void *context)
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
-    Bio::ObjLocation location = {objLocation.location[0], objLocation.location[1]};
+    Bio::ObjLocation location = { objLocation.location[0], objLocation.location[1] };
     auto ret = bio->Load(key, offset, length, location, callback, context);
     return ret;
 }
@@ -83,13 +83,13 @@ int32_t BioListAll(void *bioHandle, const char *prefix, PairStat **allObj, uint6
         return ret;
     }
     *objNum = objs.size();
-    *allObj = reinterpret_cast<PairStat*>(malloc(*objNum * sizeof(PairStat)));
+    *allObj = reinterpret_cast<PairStat *>(malloc(*objNum * sizeof(PairStat)));
     int i = 0;
     for (auto ele : objs) {
         error_t result = strcpy_s((*allObj)[i].key, MAX_KEY_SIZE, ele.first);
         if (result != 0) {
             free(*allObj);
-            *allObj= nullptr;
+            *allObj = nullptr;
             return result;
         }
         (*allObj)[i].stat.size = ele.second.size;
@@ -102,9 +102,9 @@ int32_t BioListAll(void *bioHandle, const char *prefix, PairStat **allObj, uint6
 CobjStat BioStat(void *bioHandle, const char *key, CobjLocation objLocation)
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
-    Bio::ObjLocation location = {objLocation.location[0], objLocation.location[1]};
+    Bio::ObjLocation location = { objLocation.location[0], objLocation.location[1] };
     auto stat = bio->Stat(key, location);
-    return {stat.size, stat.time};
+    return { stat.size, stat.time };
 }
 
 uint64_t BioGetTenantId(void *bioHandle)
@@ -139,7 +139,7 @@ PairCache *BioListCache(uint64_t *cacheNum)
 {
     auto cacheMap = BioService::ListCache();
     *cacheNum = cacheMap.size();
-    auto *allCache = reinterpret_cast<PairCache*>(malloc(*cacheNum * sizeof(PairCache)));
+    auto *allCache = reinterpret_cast<PairCache *>(malloc(*cacheNum * sizeof(PairCache)));
     if (allCache == nullptr) {
         *cacheNum = 0;
         return nullptr;
