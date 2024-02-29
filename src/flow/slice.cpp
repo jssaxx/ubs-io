@@ -117,7 +117,7 @@ BResult Slice::Deserialize(char *data, uint32_t length)
         "Failed to deserialize data, length:" << length << "  pos + sizeof(mLength):" << pos + sizeof(mLength));
     memcpy_s(&mLength, sizeof(mLength), data + pos, sizeof(mLength));
     pos += sizeof(mLength);
-    size_t vsize = mAddrs.size();
+    size_t vsize = 0;
     ChkTrue(length >= pos + sizeof(vsize), BIO_INVALID_PARAM,
         "Failed to deserialize data, length:" << length << "  pos + sizeof(vsize):" << pos + sizeof(vsize));
     memcpy_s(&vsize, sizeof(vsize), data + pos, sizeof(vsize));
@@ -125,7 +125,7 @@ BResult Slice::Deserialize(char *data, uint32_t length)
     for (size_t i = 0; i < vsize; i++) {
         FlowAddr flowAddr;
         ChkTrue(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM,
-            "Failed to deserialize data, length:" << length << "  pos + sizeof(FlowAddr):" << pos + sizeof(FlowAddr));
+            "Failed to deserialize data, length:" << length << " pos + sizeof(FlowAddr):" << pos + sizeof(FlowAddr));
         memcpy_s(&flowAddr, sizeof(FlowAddr), data + pos, sizeof(FlowAddr));
         mAddrs.push_back(flowAddr);
         pos += sizeof(FlowAddr);

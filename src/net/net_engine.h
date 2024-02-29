@@ -24,18 +24,25 @@ public:
         Stop();
     }
 
+    BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func);
     BResult Start(const NetOptions &opt);
     void Stop();
 
     inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
     {
-        ChkTrue(mRpcService != nullptr, BIO_ERR, "Net service not ready.");
+        if (UNLIKELY(mRpcService == nullptr)) {
+            NET_LOG_ERROR("Net service not ready.");
+            return BIO_NOT_READY;
+        }
         return mRpcService->RegisterMemoryRegion(size, mr);
     }
 
     inline void DestroyMemoryRegion(MemoryRegionPtr &mr)
     {
-        ChkTrueEx(mRpcService != nullptr, "Net service not ready.");
+        if (UNLIKELY(mRpcService == nullptr)) {
+            NET_LOG_ERROR("Net service not ready.");
+            return;
+        }
         mRpcService->DestroyMemoryRegion(mr);
     }
 
@@ -56,102 +63,121 @@ public:
 
     inline BResult AllocLocalMrBatch(uint32_t count, std::vector<uintptr_t> &address, uint32_t &outKey)
     {
-        ChkTrue(mMrBlockPool != nullptr, BIO_NOT_READY, "Net block pool not ready.");
+        if (UNLIKELY(mMrBlockPool == nullptr)) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return BIO_NOT_READY;
+        }
         outKey = mLocalMr->GetLKey();
         return mMrBlockPool->AllocMany(count, address);
     }
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
     {
-        ChkTrue(mMrBlockPool != nullptr, BIO_NOT_READY, "Net block pool not ready.");
+        if (UNLIKELY(mMrBlockPool == nullptr)) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return BIO_NOT_READY;
+        }
         outKey = mLocalMr->GetLKey();
         return mMrBlockPool->AllocOne(address);
     }
 
     inline BResult GetLocalMrKey(uint32_t &outKey)
     {
-        ChkTrue(mMrBlockPool != nullptr, BIO_NOT_READY, "Net block pool not ready.");
+        if (UNLIKELY(mMrBlockPool == nullptr)) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return BIO_NOT_READY;
+        }
         outKey = mLocalMr->GetLKey();
         return BIO_OK;
     }
 
     inline void FreeLocalMrBatch(std::vector<uintptr_t> &address)
     {
-        ChkTrueEx(mMrBlockPool != nullptr, "Net block pool not ready.");
+        if (UNLIKELY(mMrBlockPool == nullptr)) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return;
+        }
         mMrBlockPool->ReleaseMany(address);
     }
 
     inline void FreeLocalMrSingle(uintptr_t address)
     {
-        ChkTrueEx(mMrBlockPool != nullptr, "Net block pool not ready.");
+        if (UNLIKELY(mMrBlockPool == nullptr)) {
+            NET_LOG_ERROR("Net block pool not ready.");
+            return;
+        }
         mMrBlockPool->ReleaseOne(address);
     }
 
     BResult SyncConnect(ConnectInfo &info)
     {
-        ChkTrue(mConnector != nullptr, BIO_NOT_INITIALIZED, "Net Connector net ready.");
+        if (UNLIKELY(mConnector == nullptr)) {
+            NET_LOG_ERROR("Net Connector net ready.");
+            return BIO_NOT_READY;
+        }
         return mConnector->SyncConnect(info);
     }
 
     BResult AsyncConnect(ConnectInfo &info, AsyncConnHandler handler, uintptr_t ctx)
     {
-        ChkTrue(mConnector != nullptr, BIO_NOT_INITIALIZED, "Net Connector net ready.");
+        if (UNLIKELY(mConnector == nullptr)) {
+            NET_LOG_ERROR("Net Connector net ready.");
+            return BIO_NOT_READY;
+        }
         return mConnector->AsyncConnect(info, handler, ctx);
     }
 
     template <typename TReq, typename TResp>
-    BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp &resp, bool isCtrlPanel)
+    BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp &resp)
     {
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             return BIO_INVALID_PARAM;
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, isCtrlPanel, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
 
-        return SyncCall(opCode, req, resp, ch, isCtrlPanel);
+        return SyncCall(opCode, req, resp, ch);
     }
 
     template <typename TReq, typename TResp>
-    BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen,
-        bool isCtrlPanel)
+    BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen)
     {
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             return BIO_INVALID_PARAM;
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, isCtrlPanel, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
 
-        return SyncCall(opCode, req, resp, respLen, ch, isCtrlPanel);
+        return SyncCall(opCode, req, resp, respLen, ch);
     }
 
-    template <typename TReq>
-    BResult AsyncCallWithoutResponse(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, bool isCtrlPanel)
+    template <typename TReq> BResult AsyncCallWithoutResponse(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
     {
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             return BIO_INVALID_PARAM;
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, isCtrlPanel, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
 
-        return AsyncCallWithoutResponse(opCode, req, ch, isCtrlPanel);
+        return AsyncCallWithoutResponse(opCode, req, ch);
     }
 
     using CbFunc = std::function<void(void *ctx, void *resp, uint32_t len, int32_t result)>;
@@ -162,52 +188,51 @@ public:
         Callback(CbFunc func, void *ctx) : cb(std::move(func)), cbCtx(ctx) {}
     };
     template <typename TReq>
-    void AsyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, Callback callback, bool isCtrlPanel)
+    void AsyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, Callback callback)
     {
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             callback.cb(callback.cbCtx, nullptr, 0, BIO_INVALID_PARAM);
             return;
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, isCtrlPanel, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             callback.cb(callback.cbCtx, nullptr, 0, BIO_NET_RETRY);
             return;
         }
 
-        AsyncCall(opCode, req, ch, callback, isCtrlPanel);
+        AsyncCall(opCode, req, ch, callback);
     }
 
-    void AsyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, Callback callback,
-        bool isCtrlPanel)
+    void AsyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, Callback callback)
     {
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             callback.cb(callback.cbCtx, nullptr, 0, BIO_INVALID_PARAM);
             return;
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, isCtrlPanel, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             callback.cb(callback.cbCtx, nullptr, 0, BIO_NET_RETRY);
             return;
         }
 
-        AsyncCallBuffInner(opCode, req, reqLen, ch, callback, isCtrlPanel);
+        AsyncCallBuffInner(opCode, req, reqLen, ch, callback);
     }
 
     BResult SyncRead(const BioNodeId &targetNodeId, const NetRequest &req)
     {
         using namespace ock::hcom;
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, false, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
         return ch->Read(req, nullptr);
@@ -217,9 +242,9 @@ public:
     {
         using namespace ock::hcom;
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, false, ch);
+        auto ret = GetChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
         return ch->Write(req, nullptr);
@@ -229,12 +254,12 @@ public:
     {
         std::lock_guard<std::mutex> guard(mMutex);
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             return BIO_INVALID_PARAM;
         }
 
         if (UNLIKELY(mHandlers[opCode] != nullptr)) {
-            LOG_ERROR("Handler for opCode " << opCode << " already registered");
+            NET_LOG_ERROR("Handler for opCode " << opCode << " already registered");
             return BIO_ALREADY_DONE;
         }
 
@@ -246,7 +271,7 @@ public:
     {
         std::lock_guard<std::mutex> guard(mMutex);
         if (UNLIKELY(mHandleNewChannel != nullptr)) {
-            LOG_ERROR("Failed to register new channel handler");
+            NET_LOG_ERROR("Failed to register new channel handler");
             return BIO_ERR;
         }
 
@@ -258,7 +283,7 @@ public:
     {
         std::lock_guard<std::mutex> guard(mMutex);
         if (UNLIKELY(mHandlerBroken != nullptr)) {
-            LOG_ERROR("Failed to register channel broken handler");
+            NET_LOG_ERROR("Failed to register channel broken handler");
             return BIO_ERR;
         }
 
@@ -271,42 +296,30 @@ public:
         return mStarted;
     }
 
-    inline void SetLocalNodeId(const uint32_t &nodeId)
+    inline void SetLocalNodeId(const uint16_t &nodeId)
     {
         mLocalNodeId = nodeId;
     }
 
-    NetChannelMgrPtr &GetPeerCtrlChannel()
+    NetChannelMgrPtr &GetChannelMgr()
     {
-        return mCtrlChannels;
-    };
-
-    uint16_t GeCtrlChannelNum()
-    {
-        return mOptions.controlPanelConnCount;
-    };
-
-    NetChannelMgrPtr &GetPeerDataChannel()
-    {
-        return mDataChannels;
+        return mChannelMgr;
     }
 
-    uint16_t GeDataChannelNum()
+    uint16_t GeConnectCount()
     {
-        return mOptions.dataPanelConnCount;
+        return mOptions.connCount;
     };
 
-    BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
+    BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr &ch);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
-    BResult CreateSocketPath(std::string &sockPath);
     void AssignIpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options);
-    BResult CreateIpcService();
+    BResult StartIpcService(const NetOptions &opt);
     BResult AssignRpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options);
-    BResult CreateRpcService();
-    BResult CreateNetService();
+    BResult StartRpcService(const NetOptions &opt);
 
     int32_t NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload);
     void ChannelBroken(const ChannelPtr &ch);
@@ -317,7 +330,6 @@ private:
 private:
     std::string GenerateWorkersSetting();
 
-    BResult InitializeBase();
     void StopInner();
 
     BResult InitLocalMrAllocator();
@@ -335,22 +347,21 @@ private:
         }
     }
 
-    template <typename TReq, typename TResp>
-    BResult SyncCall(uint16_t opCode, TReq &req, TResp &resp, ChannelPtr &ch, bool isCtrlPanel)
+    template <typename TReq, typename TResp> BResult SyncCall(uint16_t opCode, TReq &req, TResp &resp, ChannelPtr &ch)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
+        reqOpInfo.timeout = mTimeout;
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg(&resp, sizeof(TResp));
         auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
         if (UNLIKELY(result != BIO_OK)) {
-            LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
             return NetResult(result);
         }
 
         if (NN_UNLIKELY(rspOpInfo.errorCode != BIO_OK)) {
-            LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << rspOpInfo.errorCode);
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << rspOpInfo.errorCode);
             return rspOpInfo.errorCode;
         }
 
@@ -358,21 +369,22 @@ private:
     }
 
     template <typename TReq, typename TResp>
-    BResult SyncCall(uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen, ChannelPtr &ch, bool isCtrlPanel)
+    BResult SyncCall(uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen, ChannelPtr &ch)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
+        reqOpInfo.timeout = mTimeout;
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg{};
         auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
         if (UNLIKELY(result != BIO_OK)) {
-            LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " <<
+                NetErrStr(result));
             return NetResult(result);
         }
 
         if (NN_UNLIKELY(rspOpInfo.errorCode != BIO_OK)) {
-            LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code " <<
+            NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code " <<
                 rspOpInfo.errorCode);
             return rspOpInfo.errorCode;
         }
@@ -382,27 +394,25 @@ private:
         return BIO_OK;
     }
 
-    template <typename TReq>
-    BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch, bool isCtrlPanel)
+    template <typename TReq> BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
+        reqOpInfo.timeout = mTimeout;
         auto *netCallback = NewCallback([](NetServiceContext &context) { return; }, std::placeholders::_1);
         auto result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
         if (UNLIKELY(result != BIO_OK)) {
-            LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
             return NetResult(result);
         }
         return BIO_OK;
     }
 
-    template <typename TReq>
-    void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback, bool isCtrlPanel)
+    template <typename TReq> void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
+        reqOpInfo.timeout = mTimeout;
         auto *netCallback = NewCallback(
             [callback](NetServiceContext &context) {
                 callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.Result());
@@ -410,17 +420,16 @@ private:
             std::placeholders::_1);
         auto result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
         if (UNLIKELY(result != BIO_OK)) {
-            LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
     }
 
-    void AsyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, ChannelPtr &ch, Callback callback,
-        bool isCtrlPanel)
+    void AsyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = isCtrlPanel ? mCtrlPanelTimeout : mDataPanelTimeout;
+        reqOpInfo.timeout = mTimeout;
         auto *netCallback = NewCallback(
             [callback](NetServiceContext &context) {
                 callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.Result());
@@ -428,18 +437,14 @@ private:
             std::placeholders::_1);
         auto result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);
         if (UNLIKELY(result != BIO_OK)) {
-            LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
     }
 
-    inline BResult GetChanel(const BioNodeId &targetNodeId, bool isCtrlPanel, ChannelPtr &ch)
+    inline BResult GetChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
-        if (UNLIKELY(isCtrlPanel)) {
-            return mCtrlChannels->GetChannel(targetNodeId, ch);
-        } else {
-            return mDataChannels->GetChannel(targetNodeId, ch);
-        }
+        return mChannelMgr->GetChannel(targetNodeId, ch);
     }
 
 private:
@@ -447,31 +452,22 @@ private:
 
 private:
     bool mStarted = false;
-    int16_t mCtrlPanelTimeout{ -1 };
-    int16_t mDataPanelTimeout{ -1 };
-    uint32_t mDataPageBytes{ NO_128 * NO_1024 };
-    NetChannelMgrPtr mCtrlChannels{ nullptr };
-    NetChannelMgrPtr mDataChannels{ nullptr };
-
-    MemoryRegionPtr mLocalMr{ nullptr };
-    NetBlockPoolPtr mMrBlockPool{ nullptr };
+    int16_t mTimeout = -1;
+    uint32_t mDataPageBytes = NO_128 * NO_1024;
+    NetChannelMgrPtr mChannelMgr = nullptr;
+    MemoryRegionPtr mLocalMr = nullptr;
+    NetBlockPoolPtr mMrBlockPool = nullptr;
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};
-    NetConnectorPtr mConnector{ nullptr };
-
+    NetConnectorPtr mConnector = nullptr;
     DEFINE_REF_COUNT_VARIABLE
-
-    uint32_t mLocalNodeId{ UINT32_MAX };
-    NewChannelHandler mHandleNewChannel{ nullptr }; /* callback to upper layer */
-    ChannelBrokenHandler mHandlerBroken{ nullptr }; /* callback to upper layer */
-
+    uint16_t mLocalNodeId = UINT16_MAX;
+    NewChannelHandler mHandleNewChannel = nullptr;
+    ChannelBrokenHandler mHandlerBroken = nullptr;
     ock::hcom::NetService *mRpcService = nullptr;
-    std::string socketPath;
     ock::hcom::NetService *mIpcService = nullptr;
     std::mutex mMutex;
-
     NetOptions mOptions;
-    std::string mName;
-    NetExecutorPoolPtr mRequestExecutor{ nullptr };
+    NetExecutorPoolPtr mRequestExecutor = nullptr;
     friend class NetConnectTask;
 };
 

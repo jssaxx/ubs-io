@@ -2,68 +2,96 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
  */
 
-#include "bio_log.h"
-#include "bio_config_instance.h"
-#include "bio_server.h"
+#include "bio_client_log.h"
+#include "bio_client_net.h"
+#include "bio_client_agent.h"
 #include "bio_client.h"
 
 using namespace ock::bio;
 
-BResult BioClient::StartRpcService()
+BResult BioClient::BioLoggerInit()
 {
-    if (mConfig->GetCmConfig().deployType == 1) {
-        mRpcService = BioServer::Instance()->GetRpcEngine();
-        return BIO_OK;
-    } else {
-        LOG_WARN("Not support separated deployment");
+    /*
+    LoggerOptions loggerOptions;
+    loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
+    loggerOptions.path = "./bio_sdk.log";
+    auto logger = Logger::Instance(BIO_CLIENT, loggerOptions);
+    if (logger == nullptr) {
+        std::cout << "Failed to create logger instance." << std::endl;
         return BIO_ERR;
     }
+    auto ret = logger->Init();
+    if (ret != BIO_OK) {
+        std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
+        return BIO_ERR;
+    }
+     */
+    return BIO_OK;
 }
 
-BResult BioClient::Start()
+BResult BioClient::Start(BioService::WorkerMode mode)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
         return BIO_OK;
     }
+    mMode = mode;
 
-    // load configuration instance
-    mConfig = BioConfig::Instance();
-    if (UNLIKELY(mConfig == nullptr)) {
-        LOG_ERROR("Create configure instance failed.");
-        return BIO_ERR;
-    }
-    if (mConfig->GetCmConfig().deployType != 1) {
-        LOG_WARN("Not support separated deployment");
+    if (BioLoggerInit() != BIO_OK) {
         return BIO_ERR;
     }
 
-    // start rpc service
-    BResult ret = StartRpcService();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to start rpc server, ret" << ret << ".");
+    agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
+    if (agentPtr == nullptr) {
+        CLIENT_LOG_ERROR("Failed to create agent instance.");
+        return BIO_ERR;
+    }
+    BResult ret = agentPtr->Initialize(mode);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to Initialize agent, ret:" << ret << ".");
         return ret;
     }
 
-    // initialize mirror client
-    mMirror = MakeRef<MirrorClient>(mConfig->GetCmConfig().deployType);
-    if (UNLIKELY(mMirror == nullptr)) {
-        LOG_ERROR("Create mirror client instance failed.");
+    net::BioClientNetPtr netEngine = net::BioClientNet::Instance();
+    if (netEngine == nullptr) {
+        CLIENT_LOG_ERROR("Failed to create net instance.");
+        return BIO_ERR;
+    }
+    ret = netEngine->StartPre(mode);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to start net service, ret:" << ret << ".");
+        return ret;
+    }
+
+    if ((mMirror = MakeRef<MirrorClient>(mode)) == nullptr) {
+        CLIENT_LOG_ERROR("Create mirror client instance failed.");
         return BIO_ERR;
     }
     ret = mMirror->Initialize();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init mirror client, ret:" << ret << ".");
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
+        return ret;
+    }
+
+    ret =
+        netEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(), mMirror->GetNetProtocol());
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to start net service, ret" << ret << ".");
+        return ret;
+    }
+
+    ret = mMirror->Start();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
         return ret;
     }
 
     mStarted = true;
-    LOG_INFO("Boostio client started.");
+    CLIENT_LOG_INFO("Boostio client start success.");
     return BIO_OK;
 }
 
 void BioClient::Stop()
 {
     mStarted = false;
-    LOG_INFO("Boostio client Stopped!");
 }

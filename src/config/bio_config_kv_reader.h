@@ -183,5 +183,4 @@ inline void KVReader::Dump()
 }
 }
 }
-
 #endif // HDAGGER_DG_KV_H

@@ -90,8 +90,8 @@ public:
      * @param[out]: realLength : object value realLength
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-        char *value, uint64_t &realLength);
+    CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value,
+        uint64_t &realLength);
 
     /* *
      * @brief: Delete key
@@ -111,7 +111,8 @@ public:
      * @param[in]: context: callback context
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, const LoadCallback& callback, void *context);
+    CResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+        const LoadCallback &callback, void *context);
 
     /* *
      * @brief: List all key that meets the prefix condition
@@ -120,7 +121,7 @@ public:
      * @param[out]: objs: Listed objects
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult ListAll(const char *prefix, std::vector<std::pair<char *, ObjStat>>& objs);
+    CResult ListAll(const char *prefix, std::vector<std::pair<char *, ObjStat>> &objs);
 
     /* *
      * @brief: Get object stat info
@@ -162,7 +163,7 @@ public:
     }
 
     Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
-        : mTenantId(id), mAffinity(affinity), mStrategy(strategy) {};
+        : mTenantId(id), mAffinity(affinity), mStrategy(strategy){};
     ~Bio() = default;
 
 private:
@@ -173,6 +174,11 @@ private:
 
 class BioService {
 public:
+    enum WorkerMode {
+        CONVERGENCE,
+        SEPARATES
+    };
+
     struct Descriptor {
         uint64_t tenantId;
         AffinityStrategy affinity;
@@ -182,16 +188,15 @@ public:
     /* *
      * @brief: Initialize bio service
      *
-     * @param[in]: desc: cache descriptor
-     * @return: return cache instance shared point
+     * @param[in]: mode: boostio working mode
+     * @return: return initialize result
      */
-    static CResult Initialize();
+    static CResult Initialize(WorkerMode mode);
 
     /* *
      * @brief: Exit boostio bio service
      *
-     * @param[in]: desc: cache descriptor
-     * @return: return cache instance shared point
+     * @return: void
      */
     static void Exit();
 

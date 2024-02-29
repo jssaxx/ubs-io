@@ -18,17 +18,24 @@ enum NetChBit {
 };
 
 struct ChannelInfo {
-    uint32_t nodeId;
-    pid_t pid;
-    ChannelPtr channel{};
+    uint32_t id;
+    ChannelPtr channel;
 
-    ChannelInfo() : nodeId(UINT32_MAX), pid(0) {}
-    ChannelInfo(uint32_t nid, pid_t procId, ChannelPtr ch) : nodeId(nid), pid(procId), channel(std::move(ch)) {}
+    ChannelInfo() = default;
+    ChannelInfo(uint32_t dst, ChannelPtr ch) : id(dst), channel(std::move(ch)) {}
+};
+
+struct ChannelNode {
+    uint32_t id;
+    ChannelPtr channel;
+
+    ChannelNode() : id(UINT32_MAX), channel(nullptr) {}
+    ChannelNode(uint32_t id, ChannelPtr ch) : id(id), channel(std::move(ch)) {}
 };
 
 class NetChannelMgr {
 public:
-    explicit NetChannelMgr(std::string name) : mName(std::move(name)) {}
+    NetChannelMgr() = default;
     ~NetChannelMgr()
     {
         UnInitialize();
@@ -38,46 +45,32 @@ public:
     void UnInitialize();
 
     BResult AddChannel(uint32_t dstNid, ChannelPtr &ch, bool forceUpdate = false);
-    BResult RemoveChannel(uint32_t peerVNodeId, ChannelPtr &ch);
+    BResult RemoveChannel(uint32_t peerVNodeId, const ChannelPtr &ch);
 
     inline BResult GetChannel(uint32_t dstNid, ChannelPtr &ch)
     {
-        ChkTrue(dstNid < CHANNEL_BUCKET, BIO_INVALID_PARAM,
-            "Failed to get channel in link manager '" << mName << "' as nodeId " << dstNid << " is larger then " <<
-            CHANNEL_BUCKET);
-        if (LIKELY(mChannelBits[dstNid] == BIO_N_BIT_ESTABLISHED)) {
-            ch = mChannels[dstNid];
-            return BIO_OK;
+        std::unique_lock<std::mutex> locker(lock);
+        auto iter = mChannelMgr.find(dstNid);
+        if (UNLIKELY(iter == mChannelMgr.end())) {
+            return BIO_NOT_EXISTS;
         }
-        return BIO_NOT_EXISTS;
+        ch = iter->second->channel;
+        return BIO_OK;
     }
 
-    inline uint16_t ChannelCount() const
-    {
-        return mChannelCount;
-    }
-
-    void AddAcceptChannel(const ChannelPtr &ch, int32_t nodeId, pid_t pid);
-    void RemoveAcceptChannel(uint64_t channelId, ChannelInfo &info);
-    std::pair<int32_t, ChannelInfo> GetAcceptChannel(uint64_t channelId);
-    std::list<ChannelInfo> ListAll();
+    BResult AddChannelNode(uint32_t dstNid, ChannelPtr &ch);
+    void RemoveChannelNode(uint64_t channelId, ChannelNode &chNode);
+    ChannelNode GetChannelNode(uint64_t channelId);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
-    constexpr static uint16_t CHANNEL_BUCKET = 512L;
-
-private:
-    ChannelPtr mChannels[CHANNEL_BUCKET]{};
-    uint16_t mChannelBits[CHANNEL_BUCKET]{};
-
-    std::unordered_map<uint64_t, ChannelInfo *> mAcceptChannels;
+    bool mInited = false;
+    std::unordered_map<uint16_t, ChannelInfo *> mChannelMgr;
+    std::unordered_map<uint64_t, ChannelNode *> mChannelNodeMap;
     std::mutex lock;
 
     DEFINE_REF_COUNT_VARIABLE
-    bool mInited = false;
-    std::atomic<uint16_t> mChannelCount{ 0 };
-    std::string mName;
 };
 
 using NetChannelMgrPtr = Ref<NetChannelMgr>;

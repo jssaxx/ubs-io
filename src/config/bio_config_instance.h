@@ -141,6 +141,4 @@ private:
 };
 }
 }
-
-
 #endif // BOOSTIO_BIO_CONFIG_INSTANCE_H

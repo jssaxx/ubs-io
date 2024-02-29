@@ -34,8 +34,8 @@ static void usage()
         "\tdestroy cache: destroy [tenantId]\n"
         "\tput value to cache: put [key] [filePath] [length] [sliceId]\n"
         "\tget value from cache: get [key] [offset] [length] [location] [filePath]\n"
-        "\tget key state from cache: stat [key] [location]\n"
-        "\tload key to cache: load [key] [offset] [length] [location]\n"
+        "\tstat key info: stat [key] [location]\n"
+        "\tload key: load [key] [offset] [length] [location]\n"
         "\tdelete key: delete [key] [location]\n"
         "\tshow view: show [pt/node/trace] [all/affinity]\n"
         "\tperf test: perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n"
@@ -169,7 +169,7 @@ static void HandleStat(std::vector<std::string> cmds)
     if (keyStat.time == 0) {
         std::cout << "Failed to get key stat. fail." << std::endl;
     } else {
-        std::cout << "Get key stat success." << std::endl;
+        std::cout << "stat success." << std::endl;
         std::cout << "key:" << key <<", location:" << locationInfo.location[0] << std::endl;
         std::cout << "size:" << keyStat.size << std::endl;
         std::cout << "time:" << ctime(&keyStat.time) << std::endl;
@@ -566,11 +566,18 @@ void HandleSigterm(int signum)
 
 int main(int argc, char **argv)
 {
+    if (argc != 2U) {
+        std::cout << "Invalid parameter, please input deployment mode." << std::endl;
+        std::cout << "Usage: bio_console [0/1], 0-mean:converged deployment, 1-mean:separated deployment" << std::endl;
+        return -1;
+    }
+
     struct sigaction termSa {};
     termSa.sa_handler = &HandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 
-    auto ret = BioService::Initialize();
+    BioService::WorkerMode mode = static_cast<BioService::WorkerMode>(std::stoul(argv[1]));
+    auto ret = BioService::Initialize(mode);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;
         return -1;

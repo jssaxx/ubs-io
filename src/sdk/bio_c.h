@@ -27,7 +27,7 @@ typedef struct {
 
 typedef struct {
     uint64_t tenantId;
-    void* bio;
+    void *bio;
 } PairCache;
 
 typedef struct {
@@ -46,14 +46,14 @@ typedef enum {
     STRATEGY_BUTT
 } CWriteStrategy;
 
-/* *
+/**
  * @brief: Initialize bio service
  *
  * @return: return BioServer instance point
  */
 void *BioNewService();
 
-/* *
+/**
  * @brief: Calculate location information
  *
  * @param[in]: bioHandle: cache instance point
@@ -63,7 +63,7 @@ void *BioNewService();
  */
 int32_t BioCalculateLocation(void *bioHandle, uint32_t objectId, CobjLocation *objLocation);
 
-/* *
+/**
  * @brief: Put value
  *
  * @param[in]: bioHandle: cache instance point
@@ -75,7 +75,7 @@ int32_t BioCalculateLocation(void *bioHandle, uint32_t objectId, CobjLocation *o
  */
 int32_t BioPut(void *bioHandle, const char *key, const char *value, uint64_t length, CobjLocation objLocation);
 
-/* *
+/**
  * @brief: Get value
  *
  * @param[in]: bioHandle: cache instance point
@@ -90,7 +90,7 @@ int32_t BioPut(void *bioHandle, const char *key, const char *value, uint64_t len
 int32_t BioGet(void *bioHandle, const char *key, uint64_t offset, uint64_t length, char *value,
     CobjLocation objLocation, uint64_t *realLength);
 
-/* *
+/**
  * @brief: Delete key
  *
  * @param[in]: bioHandle: cache instance point
@@ -100,7 +100,7 @@ int32_t BioGet(void *bioHandle, const char *key, uint64_t offset, uint64_t lengt
  */
 int32_t BioDelete(void *bioHandle, const char *key, CobjLocation objLocation);
 
-/* *
+/**
  * @brief: Load value
  *
  * @param[in]: bioHandle: cache instance point
@@ -110,10 +110,10 @@ int32_t BioDelete(void *bioHandle, const char *key, CobjLocation objLocation);
  * @param[in]: context: callback context
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-int32_t BioLoad(void *bioHandle, const char *key, uint64_t offset, uint64_t length,
-    CobjLocation objLocation, LoadCallback callback, void *context);
+int32_t BioLoad(void *bioHandle, const char *key, uint64_t offset, uint64_t length, CobjLocation objLocation,
+    LoadCallback callback, void *context);
 
-/* *
+/**
  * @brief: List all key that meets the prefix condition
  *
  * @param[in]: bioHandle: cache instance point
@@ -123,7 +123,7 @@ int32_t BioLoad(void *bioHandle, const char *key, uint64_t offset, uint64_t leng
  */
 int32_t BioListAll(void *bioHandle, const char *prefix, PairStat **allObj, uint64_t *objNum);
 
-/* *
+/**
  * @brief: Get object stat info
  *
  * @param[in]: bioHandle: cache instance point
@@ -133,7 +133,7 @@ int32_t BioListAll(void *bioHandle, const char *prefix, PairStat **allObj, uint6
  */
 CobjStat BioStat(void *bioHandle, const char *key, CobjLocation objLocation);
 
-/* *
+/**
  * @brief: Get bio instance tenant id
  *
  * @param[in]: bioHandle: cache instance point
@@ -141,7 +141,7 @@ CobjStat BioStat(void *bioHandle, const char *key, CobjLocation objLocation);
  */
 uint64_t BioGetTenantId(void *bioHandle);
 
-/* *
+/**
  * @brief: Get bio instance affinity policy
  *
  * @param[in]: bioHandle: cache instance point
@@ -149,7 +149,7 @@ uint64_t BioGetTenantId(void *bioHandle);
  */
 CAffinityStrategy BioGetAffinityPolicy(void *bioHandle);
 
-/* *
+/**
  * @brief: Get bio instance write strategy
  *
  * @param[in]: bioHandle: cache instance point
@@ -157,7 +157,7 @@ CAffinityStrategy BioGetAffinityPolicy(void *bioHandle);
  */
 CWriteStrategy BioGetWriteStrategy(void *bioHandle);
 
-/* *
+/**
  * @brief: Create bio instance
  *
  * @param[in]: desc: cache descriptor
@@ -165,14 +165,14 @@ CWriteStrategy BioGetWriteStrategy(void *bioHandle);
  */
 void *BioCreateCache(uint64_t tenantId, CAffinityStrategy affinityStrategy, CWriteStrategy writeStrategy);
 
-/* *
+/**
  * @brief: Exit boostio bio service
  *
  * @return: void
  */
 void BioFreeService();
 
-/* *
+/**
  * @brief: Get bio instance
  *
  * @param[in]: tenantId: tenant id
@@ -180,14 +180,14 @@ void BioFreeService();
  */
 void *BioGetCache(uint64_t tenantId);
 
-/* *
+/**
  * @brief: List bio instance
  *
  * @return: return all caches
  */
 PairCache *BioListCache(uint64_t *cacheNum);
 
-/* *
+/**
  * @brief: Destroy bio instance
  *
  * @param[in]: tenantId: tenant id

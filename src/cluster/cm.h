@@ -114,6 +114,11 @@ struct CmNodeInfo {
     CmNodeStatus status { CM_NODE_NORMAL };
     std::vector<CmDiskInfo> disks;
 
+    CmNodeInfo() = default;
+
+    CmNodeInfo(CmNodeId id, std::string ip, uint16_t port, CmNodeStatus stat, std::vector<CmDiskInfo> ds)
+        :id(id), ip(std::move(ip)), port(port), status(stat), disks(std::move(ds)) {}
+
     std::string ToString() const
     {
         std::ostringstream oss;
@@ -159,7 +164,11 @@ struct CmPtInfo {
     uint16_t masterDiskId;
     std::vector<CmPtCopy> copys;
 
-public:
+    CmPtInfo() = default;
+
+    CmPtInfo(uint64_t v, uint16_t ptId, CmPtState stat, uint16_t mNid, uint16_t mDid, std::vector<CmPtCopy> cpy)
+        :version(v), ptId(ptId), state(stat), masterNodeId(mNid), masterDiskId(mDid), copys(std::move(cpy)) {}
+
     void Clone(const CmPtInfo& ptInfo)
     {
         version = ptInfo.version;

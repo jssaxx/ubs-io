@@ -27,32 +27,17 @@ ConnectTask::~ConnectTask()
 BResult ConnectTask::DoConnect()
 {
     BResult ret = BIO_OK;
-    ChannelPtr ctrlChanel = nullptr;
-    if (mEngine->GeCtrlChannelNum() != 0 &&
-        (ret = mEngine->GetPeerCtrlChannel()->GetChannel(mConnectInfo.peerId, ctrlChanel)) == BIO_NOT_EXISTS) {
-        ret = mEngine->ConnectToPeer(mode, mConnectInfo, true, ctrlChanel);
+    ChannelPtr Chanel = nullptr;
+    if ((ret = mEngine->GetChannelMgr()->GetChannel(mConnectInfo.peerId, Chanel)) == BIO_NOT_EXISTS) {
+        ret = mEngine->ConnectToPeer(mode, mConnectInfo, Chanel);
         if (ret != BIO_OK) {
-            LOG_ERROR("Failed to connect ctrl plane to peer target node id " << mConnectInfo.peerId);
+            NET_LOG_ERROR("Failed to connect data plane to peer target node id " << mConnectInfo.peerId);
             return BIO_ERR;
         }
-        mEngine->GetPeerCtrlChannel()->AddChannel(mConnectInfo.peerId, ctrlChanel);
+        mEngine->GetChannelMgr()->AddChannel(mConnectInfo.peerId, Chanel);
     } else if (ret != BIO_OK) {
-        LOG_ERROR("Failed to repeat connect ctrl plane by target node id " << mConnectInfo.peerId);
+        NET_LOG_ERROR("Failed to repeat connect data plane by target id " << mConnectInfo.peerId);
     }
-
-    ChannelPtr dataChanel = nullptr;
-    if (mEngine->GeDataChannelNum() != 0 &&
-        (ret = mEngine->GetPeerDataChannel()->GetChannel(mConnectInfo.peerId, ctrlChanel)) == BIO_NOT_EXISTS) {
-        ret = mEngine->ConnectToPeer(mode, mConnectInfo, false, dataChanel);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Failed to connect data plane to peer target node id " << mConnectInfo.peerId);
-            return BIO_ERR;
-        }
-        mEngine->GetPeerDataChannel()->AddChannel(mConnectInfo.peerId, dataChanel);
-    } else if (ret != BIO_OK) {
-        LOG_ERROR("Failed to repeat connect data plane by target id " << mConnectInfo.peerId);
-    }
-
     return BIO_OK;
 }
 
@@ -80,24 +65,23 @@ NetConnector::~NetConnector()
     }
 }
 
-BResult NetConnector::Start(const NetOptions &opt)
+BResult NetConnector::Start()
 {
     std::lock_guard<std::mutex> guard(mMutex);
     if (mStarted) {
-        LOG_WARN("Net connector " << opt.name << " has been already started");
+        NET_LOG_WARN("Net connector has been already started");
         return BIO_OK;
     }
 
-    mName = opt.name;
     mExeService = ExecutorService::Create(NO_1, NO_2048);
     if (UNLIKELY(mExeService == nullptr)) {
-        LOG_ERROR("Failed to start execution service for Net connector " << mName << ", probably out of memory.");
+        NET_LOG_ERROR("Failed to start execution service for Net connector " << mName << ", probably out of memory.");
         return BIO_ALLOC_FAIL;
     }
 
     mExeService->SetThreadName("NetConnect-" + mName);
     if (!(mExeService->Start())) {
-        LOG_ERROR("Failed to start execution service for Net connector " << mName);
+        NET_LOG_ERROR("Failed to start execution service for Net connector " << mName);
         mExeService->Stop();
         return BIO_ERR;
     }
@@ -126,7 +110,7 @@ BResult NetConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler,
 
     auto task = MakeRef<ConnectTask>(mEngine);
     if (UNLIKELY(task == nullptr)) {
-        LOG_ERROR("Failed to new connection task in Net connector " << mName << ", probably out of memory.");
+        NET_LOG_ERROR("Failed to new connection task in Net connector " << mName << ", probably out of memory.");
         return BIO_ALLOC_FAIL;
     }
 
@@ -138,7 +122,7 @@ BResult NetConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler,
     task->mUserCtx = ctx;
     auto result = mExeService->Execute(task.Get());
     if (UNLIKELY(!result)) {
-        LOG_ERROR("Failed to enqueue connecting task into Net connector " << mName << ".");
+        NET_LOG_ERROR("Failed to enqueue connecting task into Net connector " << mName << ".");
         return BIO_ERR;
     }
 
@@ -147,23 +131,20 @@ BResult NetConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler,
 
 BResult NetConnector::SyncConnect(ConnectInfo &info)
 {
-    ChkTrueNot(!info.ip.empty(), BIO_INVALID_PARAM);
-    ChkTrueNot(info.port != 0, BIO_INVALID_PARAM);
-    ChkTrueNot(info.retryTimes != 0, BIO_INVALID_PARAM);
-
     auto task = MakeRef<ConnectTask>(mEngine);
     if (UNLIKELY(task == nullptr)) {
-        LOG_ERROR("Failed to new connection task in Net connector " << mName << ", probably out of memory.");
+        NET_LOG_ERROR("Failed to new connection task in Net connector " << mName << ", probably out of memory.");
         return BIO_ALLOC_FAIL;
     }
 
-    task->mode = (info.peerId == mLocalNodeId) ? CONNECT_IPC : CONNECT_RPC;
+    task->mode =
+        (info.peerId == mLocalNodeId || info.peerId == static_cast<uint32_t>(getpid())) ? CONNECT_IPC : CONNECT_RPC;
     task->mEngine = mEngine;
     task->mConnectInfo = info;
     task->mSyncConnect = true;
     auto result = mExeService->Execute(task.Get());
     if (UNLIKELY(!result)) {
-        LOG_ERROR("Failed to enqueue connecting task into Net connector " << mName << ".");
+        NET_LOG_ERROR("Failed to enqueue connecting task into Net connector " << mName << ".");
         return BIO_ERR;
     }
 
