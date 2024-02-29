@@ -5,63 +5,132 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
-#include <cstdint>
-#include <string>
-#include <utility>
-#include "cache_def.h"
+#include <stdint.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <semaphore.h>
 
-namespace ock {
-namespace bio {
-constexpr uint16_t MESSAGE_MAGIC = 0xABCD;
-constexpr uint32_t KEY_MAX_SIZE = 256;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#define DECLARE_CHAR_ARRAY_SET_FUNC(func, CHAR_ARRAY)    \
-    bool func(const std::string &other)                  \
-    {                                                    \
-        if (other.length() > (sizeof(CHAR_ARRAY) - 1)) { \
-            return false;                                \
-        }                                                \
-                                                         \
-        for (uint32_t i = 0; i < other.length(); i++) {  \
-            CHAR_ARRAY[i] = other.at(i);                 \
-        }                                                \
-                                                         \
-        (CHAR_ARRAY)[other.length()] = '\0';             \
-        return true;                                     \
-    }
+const uint16_t MESSAGE_MAGIC = 0xABCD;
+const uint32_t KEY_MAX_SIZE = 256;
+const uint32_t IP_MAX_SIZE = 32;
+const uint32_t DISK_MAX_SIZE = 4;
+const uint32_t CLUSTER_NODE_MAX_SIZE = 256;
+const uint32_t PT_COPY_MAX_SIZE = 2;
+const uint32_t PT_MAX_SIZE = 1024;
+const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 
-#define DECLARE_CHAR_ARRAY_GET_FUNC(func, CHAR_ARRAY)                   \
-    std::string func() const                                            \
-    {                                                                   \
-        return { CHAR_ARRAY, strnlen(CHAR_ARRAY, sizeof(CHAR_ARRAY)) }; \
-    }
-
-struct RequestComm {
+typedef struct {
     uint16_t magic;
     uint16_t ptId;
     uint64_t ptv;
     uint32_t srcNid;
     pid_t pid;
+} RequestComm;
 
-    RequestComm() = default;
-    RequestComm(uint16_t pt, uint64_t v, uint32_t nid)
-        : magic(MESSAGE_MAGIC), ptId(pt), ptv(v), srcNid(nid), pid(getpid()) {}
-};
+/* Query node view */
+typedef struct {
+    uint16_t diskId;
+    uint16_t diskStatus;
+} DiskInfoDesc;
 
-struct QueryViewRequest {
+typedef struct {
+    uint16_t groupId;
+    uint16_t nodeId;
+    char ip[IP_MAX_SIZE];
+    uint16_t port;
+    uint16_t status;
+    uint32_t num;
+    DiskInfoDesc diskDesc[DISK_MAX_SIZE];
+} NodeInfoDesc;
+
+typedef struct {
     RequestComm comm;
-};
+} QueryNodeViewRequest;
 
-struct CreateFlowRequest {
+typedef struct {
+    uint32_t num;
+    NodeInfoDesc desc[CLUSTER_NODE_MAX_SIZE];
+} QueryNodeViewResponse;
+
+/* Query pt view */
+typedef struct {
+    uint16_t nodeId;
+    uint16_t diskId;
+    uint16_t state;
+} PtCopyDesc;
+
+typedef struct {
+    uint64_t version;
+    uint16_t ptId;
+    uint16_t state;
+    uint16_t masterNodeId;
+    uint16_t masterDiskId;
+    PtCopyDesc copys[PT_COPY_MAX_SIZE];
+} PtInfoDesc;
+
+typedef struct {
+    RequestComm comm;
+} QueryPtViewRequest;
+
+typedef struct {
+    uint32_t num;
+    PtInfoDesc desc[PT_MAX_SIZE];
+} QueryPtViewResponse;
+
+/* Query local node info */
+typedef struct {
+    RequestComm comm;
+} GetLocalNidRequest;
+
+typedef struct {
+    uint16_t groupId;
+    uint16_t nodeId;
+    uint16_t protocol;
+} GetLocalNidResponse;
+
+/* Create flow */
+typedef struct {
     RequestComm comm;
     uint16_t opType;
-    uint16_t ptId;
     uint64_t flowId;
-};
+} CreateFlowRequest;
 
-struct PutRequest {
+typedef struct {
+    uint64_t flowId;
+} CreateFlowResponse;
+
+/* Get slice */
+typedef struct {
     RequestComm comm;
-    CacheAttr attr;
+    uint64_t flowId;
+    uint64_t flowOffset;
+    uint64_t flowIndex;
+    uint64_t length;
+} GetSliceRequest;
+
+typedef struct {
+    uint64_t chunkId;
+    uint32_t chunkOffset;
+    uint32_t chunkLen;
+} SliceAddrDesc;
+
+typedef struct {
+    uint64_t addrNum;
+    SliceAddrDesc addr[SLICE_ADDR_MAX_SIZE];
+    uint64_t sliceLen;
+    char sliceBuf[0];
+} GetSliceResponse;
+
+/* Put */
+typedef struct {
+    RequestComm comm;
+    uint64_t tenantId;
+    uint8_t affinity;
+    uint8_t strategy;
     char key[KEY_MAX_SIZE];
     uint64_t length;
     uint64_t flowId;
@@ -70,135 +139,70 @@ struct PutRequest {
     uint32_t mrKey;
     uint32_t sliceLen;
     char sliceBuf[0];
+} PutRequest;
 
-    DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
-    DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
-
-    void Fill(RequestComm reqComm, CacheAttr &cacheAttr, const char *cKey, uint64_t len, uint64_t fId,
-        uint64_t off, uint64_t idx, uint32_t mKey, uint32_t sLen)
-    {
-        comm = reqComm;
-        attr = cacheAttr;
-        Key(cKey);
-        length = len;
-        flowId = fId;
-        offset = off;
-        index = idx;
-        mrKey = mKey;
-        sliceLen = sLen;
-    }
-};
-
-struct GetRequest {
+/* Get */
+typedef struct {
     RequestComm comm;
-    char key[KEY_MAX_SIZE]{};
+    char key[KEY_MAX_SIZE];
     uint16_t ptId;
     uint64_t offset;
     uint64_t length;
-    bool isMr;
-    NetMrInfo mr;
+    uint8_t isMr;
+    uintptr_t address;
+    uint64_t size;
+    uint32_t mrKey;
+} GetRequest;
 
-    DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
-    DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
+typedef struct {
+    uint64_t realLen;
+} GetResponse;
 
-    GetRequest(RequestComm reqComm, const char *cKey, uint16_t pt, uint64_t off, uint64_t len, NetMrInfo info)
-        : comm(reqComm), ptId(pt), offset(off), length(len), isMr(false), mr(info)
-    {
-        Key(cKey);
-    }
-
-    void SetMrInfo(char *value, uint32_t len)
-    {
-        isMr = false;
-        mr.address = reinterpret_cast<uintptr_t>(value);
-        mr.size = len;
-    }
-
-    void SetMrInfo(NetMrInfo mrInfo)
-    {
-        isMr = true;
-        mr = mrInfo;
-    }
-};
-
-struct DeleteRequest {
+/* Delete */
+typedef struct {
     RequestComm comm;
-    char key[KEY_MAX_SIZE]{};
-    uint16_t ptId;
+    char key[KEY_MAX_SIZE];
+} DeleteRequest;
 
-    DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
-    DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
-
-    DeleteRequest(RequestComm reqComm, const char *cKey, uint16_t pt) : comm(reqComm), ptId(pt)
-    {
-        Key(cKey);
-    }
-};
-
-struct StatRequest {
+/* Stat */
+typedef struct {
     RequestComm comm;
-    char key[KEY_MAX_SIZE]{};
-    uint16_t ptId;
+    char key[KEY_MAX_SIZE];
+} StatRequest;
 
-    DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
-    DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
+typedef struct {
+    uint32_t size;
+    time_t time;
+} StatResponse;
 
-    StatRequest(RequestComm reqComm, const char *cKey, uint16_t pt) : comm(reqComm), ptId(pt)
-    {
-        Key(cKey);
-    }
-};
-
-struct LoadRequest {
+/* Load */
+typedef struct {
     RequestComm comm;
-    char key[KEY_MAX_SIZE]{};
-    uint16_t ptId;
+    char key[KEY_MAX_SIZE];
     uint64_t offset;
     uint64_t length;
+} LoadRequest;
 
-    DECLARE_CHAR_ARRAY_SET_FUNC(Key, key);
-    DECLARE_CHAR_ARRAY_GET_FUNC(Key, key);
-
-    LoadRequest(RequestComm reqComm, const char *cKey, uint16_t partId, uint64_t off, uint64_t len)
-        : comm(reqComm), ptId(partId), offset(off), length(len)
-    {
-        Key(cKey);
-    }
-};
-
-struct SyncDataRequest {
+/* Sync data */
+typedef struct {
     RequestComm comm;
+} SyncDataRequest;
 
-    SyncDataRequest(RequestComm reqComm)
-        : comm(reqComm)
-    {}
-};
-
-struct GetEvictRequest {
+/* Evict */
+typedef struct  {
     RequestComm comm;
     uint64_t flowId;
+} GetEvictRequest;
 
-    GetEvictRequest(RequestComm reqComm, uint64_t getFlowId)
-        : comm(reqComm), flowId(getFlowId)
-    {}
-};
-
-struct ClientCallbackCtx {
+typedef struct {
     int32_t result;
-    std::atomic<uint32_t> quota{};
-    sem_t sem{};
+    uint32_t quota;
+    sem_t sem;
     void *resp;
     uint32_t respLen;
+} ClientCallbackCtx;
 
-    ClientCallbackCtx(int32_t ret, uint32_t num)
-    {
-        result = ret;
-        quota.store(num);
-        sem_init(&sem, 0, 0);
-        resp = nullptr;
-        respLen = 0;
-    }
-};
+#ifdef __cplusplus
 }
-}
+#endif
 #endif // MESSAGE_H

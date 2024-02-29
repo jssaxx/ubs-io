@@ -7,9 +7,9 @@ install(TARGETS bio_sdk DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER
 
 target_link_libraries(bio_sdk
         -Wl,--start-group
-        pthread dl aio
+        pthread dl
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/lib/libsecurec.a
-        htracer bio_common bio_bdm bio_flow bio_cache bio_net bio_conf bio_cluster bio_server bio_underfs
+        htracer bio_common bio_net
         -Wl,--end-group)

@@ -43,7 +43,7 @@ private:
     {
         auto ret = DoConnect();
         if (ret != BIO_OK) {
-            LOG_ERROR("Failed to sync connect");
+            NET_LOG_ERROR("Failed to sync connect");
         }
         SetChannelAndNotify(ret);
     }
@@ -52,7 +52,7 @@ private:
     {
         auto ret = DoConnect();
         if (ret != BIO_OK) {
-            LOG_ERROR("Failed to async connect");
+            NET_LOG_ERROR("Failed to async connect");
         }
 
         mAsyncHandler(mUserCtx, ret, mConnectInfo);
@@ -78,7 +78,7 @@ public:
     explicit NetConnector(NetEngine *engine);
     ~NetConnector();
 
-    BResult Start(const NetOptions &opt);
+    BResult Start();
     void Stop();
 
     inline void SetLocalNodeId(const uint32_t &nodeId)

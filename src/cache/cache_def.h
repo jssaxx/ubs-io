@@ -23,6 +23,8 @@ struct CacheAttr {
     AffinityStrategy affinity;
     WriteStrategy strategy;
 
+    CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str) : mTenantId(id), affinity(aff), strategy(str) {}
+
     inline CacheAttr &operator = (const CacheAttr &other)
     {
         mTenantId = other.mTenantId;

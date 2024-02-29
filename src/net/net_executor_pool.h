@@ -26,7 +26,7 @@ public:
     {
         auto ret = ServiceContext::Clone(mContext, oldCtx, true);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Failed to clone service ctx for cm event");
+            NET_LOG_ERROR("Failed to clone service ctx for cm event");
             return BIO_ALLOC_FAIL;
         }
 
@@ -71,7 +71,7 @@ private:
 private:
     DEFINE_REF_COUNT_VARIABLE
 
-    ExecutorServicePtr mExeService { nullptr };
+    ExecutorServicePtr mExeService{ nullptr };
     std::mutex mMutex;
     bool mStarted = false;
     std::string mName;

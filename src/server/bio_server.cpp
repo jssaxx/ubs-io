@@ -8,10 +8,34 @@
 #include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "flow_manager.h"
+#include "bio_server_c.h"
 #include "bio_server.h"
 
 namespace ock {
 namespace bio {
+static void Log(int level, const char *msg)
+{
+    if (Logger::gInstance != nullptr) {
+        Logger::gInstance->Log(level + 1U, msg);
+    }
+}
+
+BioServer::BioServer() noexcept
+{
+    std::vector<ModuleDesc> modules = {
+        { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr, nullptr },
+        { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr, nullptr },
+        { "Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this) },
+        { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
+        { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
+        { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, nullptr },
+        { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr, nullptr },
+        { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioMirrorServerExit, this) },
+    };
+    mService = MakeRef<BioServiceProc>(modules);
+}
+
 BResult BioServer::Start()
 {
     std::lock_guard<std::mutex> lock(mStartLock);
@@ -19,130 +43,87 @@ BResult BioServer::Start()
         return BIO_OK;
     }
 
-    // initialize logger
-    LoggerOptions loggerOptions;
-    loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
-    loggerOptions.path = "./bio.log";
-    auto logger = Logger::Instance(loggerOptions);
-    if (UNLIKELY(logger == nullptr)) {
-        LOG_ERROR("Failed to create logger instance.");
+    // 1. Initialize infrastructure
+    if (BioLoggerInit() != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_ERR;
     }
-    auto ret = logger->Init();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << ".");
-        return BIO_ERR;
-    }
-
-    // load configuration
-    ret = LoadConfig();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to load bio configuration, result:" << ret << ".");
-        return BIO_ERR;
-    }
-
     auto &daemonConfig = mConfig->GetDaemonConfig();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
 
-    // init tracer
-    const std::string dumpDir = "/var/log/boostio/trace/";
-    ret = ock::htracer::HTracerInit(dumpDir);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to load bio tracer, result:" << ret << ".");
-        logger->Exit();
+    // 2. Initialize boostio service
+    ChkTrue(mService != nullptr, BIO_ERR, "Boostio service not created.");
+    auto ret = mService->Process();
+    if (ret != BIO_OK) {
         return BIO_ERR;
     }
 
-    // init underfs
-    ret = UnderFs::Instance()->Init();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init underfs, result:" << ret << ".");
-        logger->Exit();
-        return BIO_ERR;
-    }
-
-    // start bdm
-    ret = StartDisk();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to start bdm service, result:" << ret << ".");
-        logger->Exit();
-        return BIO_ERR;
-    }
-
-    // start rpc server
-    ret = StartNetService();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to start rpc server, ret:" << ret << ".");
-        logger->Exit();
-        StopDisk();
-        return BIO_ERR;
-    }
-
-    // start mirror server
-    ret = StartMirrorServer();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to start mirror server, ret:" << ret << ".");
-        logger->Exit();
-        StopDisk();
-        StopNetService();
-        StopCm();
-        return BIO_ERR;
-    }
-
-    // start cm
-    ret = StartCm();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to start cm, result:" << ret << ".");
-        logger->Exit();
-        StopDisk();
-        StopNetService();
-        return BIO_ERR;
-    }
-
-    // wait connection and pt view initialize finish
+    // 3. wait start finish
     while (!mStarted || mPtView.empty()) {
         sleep(1);
     }
-    LOG_INFO("Boostio Server Started!");
+
+    LOG_INFO("Boostio Server Started.");
     return BIO_OK;
 }
 
 void BioServer::Stop()
 {
-    StopDisk();
-    StopNetService();
-    StopCm();
-    StopMirrorServer();
-    mStarted = false;
-    LOG_INFO("Boostio Server Stopped!");
+    return;
 }
 
-BResult BioServer::LoadConfig()
+BResult BioServer::BioConfigInit()
 {
-    if (mConfig.Get() != nullptr) {
+    if (mConfig != nullptr) {
         return BIO_OK;
     }
-
     mConfig = BioConfig::Instance();
-    if (UNLIKELY(mConfig == nullptr)) {
+    if (mConfig == nullptr) {
         LOG_ERROR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
     auto result = mConfig->Initialize(".");
-    if (UNLIKELY(result != 0)) {
+    if (result != BIO_OK) {
         LOG_ERROR("Failed to initialize configuration, result: " << result << ".");
         return BIO_ERR;
     }
-
     return BIO_OK;
 }
 
-BResult BioServer::StartDisk()
+BResult BioServer::BioLoggerInit()
 {
-    int ret = BdmInit();
-    if (ret != BDM_CODE_OK) {
+    LoggerOptions loggerOptions;
+    loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
+    loggerOptions.path = "./bio.log";
+    auto logger = Logger::Instance(loggerOptions);
+    if (logger == nullptr) {
+        std::cout << "Failed to create logger instance." << std::endl;
         return BIO_ERR;
     }
+    auto ret = logger->Init();
+    if (ret != BIO_OK) {
+        std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult BioServer::BioTraceInit()
+{
+    const std::string dumpDir = "/var/log/boostio/trace/";
+    auto ret = ock::htracer::HTracerInit(dumpDir);
+    ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");
+    return ret;
+}
+
+BResult BioServer::BioUnderFsInit()
+{
+    return UnderFs::Instance()->Init();
+}
+
+BResult BioServer::BioBdmInit()
+{
+    auto ret = BdmInit();
+    ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
 
     auto &daemonConfig = mConfig->GetDaemonConfig();
     DiskDevices diskList;
@@ -153,14 +134,12 @@ BResult BioServer::StartDisk()
     }
 
     ret = BdmStart(&diskList, daemonConfig.diskCap, daemonConfig.segment);
-    if (UNLIKELY(ret != BDM_CODE_OK)) {
-        return BIO_ERR;
-    }
+    ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
 
     DiskAllocator diskAllocator;
     diskAllocator.alloc = [](uint32_t bdmId, uint64_t flowId, uint64_t flowOffset, uint64_t len, uint64_t *chunkId) {
         int ret = BdmAlloc(bdmId, flowId, flowOffset, len, chunkId);
-        if (UNLIKELY(ret != BDM_CODE_OK)) {
+        if (ret != BDM_CODE_OK) {
             return BIO_ERR;
         }
         return BIO_OK;
@@ -176,59 +155,73 @@ BResult BioServer::StartDisk()
     return BIO_OK;
 }
 
-void BioServer::StopDisk()
+void BioServer::BioBdmExit()
 {
-    LOG_INFO("Stopped disk manager.");
+    return;
 }
 
-BResult BioServer::StartNetService()
+BResult BioServer::StartRpcService(const NetOptions &opt)
 {
-    mNetEngine = MakeRef<NetEngine>();
-    ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
-
-    // bio server create rpc and ipc service
-    auto &netConfig = mConfig->GetNetConfig();
-    NetOptions netOptions;
-    netOptions.ipMask = netConfig.dataIpMask;
-    netOptions.port = netConfig.dataPort;
-    netOptions.isBusyLoop = netConfig.isBusyLoop;
-    netOptions.rpcRole = NET_SERVER;
-    netOptions.rpcProtocol = static_cast<ServiceProtocol>(netConfig.protocol);
-    netOptions.localMrSize = mConfig->GetDaemonConfig().memCap;
-    netOptions.name = "BIO-" + std::to_string(netOptions.port);
-    netOptions.dataPanelConnCount = netConfig.dataWorkersCnt;
-    netOptions.dataPanelHandlerCount = netConfig.dataWorkersCnt;
-    netOptions.handleRequestThreadNum = netConfig.handleRequestThreadNum;
-    netOptions.handleRequestQueueSize = netConfig.handleRequestQueueSize;
-
     mNetEngine->SetDataPageKb(mConfig->GetDaemonConfig().segment / NO_1024);
-    auto result = mNetEngine->Start(netOptions);
-    if (UNLIKELY(result != BIO_OK)) {
-        LOG_ERROR("Start rpc engine failed, ret:" << result << ".");
-        return BIO_ERR;
-    }
+    auto ret = mNetEngine->Start(opt);
+    ChkTrue(ret == BIO_OK, BIO_ERR, "Start rpc engine failed, result:" << ret << ".");
 
     MemAllocator memAllocator;
     memAllocator.alloc = [this](uint64_t size, uint64_t *addr) { return this->MemAlloc(size, addr); };
     memAllocator.free = [this](uint64_t addr) { this->MemFree(addr); };
     FlowManager::RegisterMemAllocator(memAllocator);
-
-    LOG_INFO("Net Server Started.");
     return BIO_OK;
 }
 
-void BioServer::StopNetService()
+BResult BioServer::StartIpcService(const NetOptions &opt)
+{
+    return mNetEngine->Start(opt);
+}
+
+BResult BioServer::BioNetInit()
+{
+    mNetEngine = MakeRef<NetEngine>();
+    ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
+
+    // 1. Initialize net engine
+    int16_t timeoutSec = NO_5 * NO_60; // 5min
+    auto &netConfig = mConfig->GetNetConfig();
+    auto ret =
+        mNetEngine->Initialize(timeoutSec, netConfig.handleRequestThreadNum, netConfig.handleRequestQueueSize, Log);
+    ChkTrue(ret == BIO_OK, ret, "Net engine initialize failed, result:" << ret << ".");
+
+    // 2. start rpc service
+    NetOptions netOptions;
+    netOptions.ipMask = netConfig.dataIpMask;
+    netOptions.port = netConfig.dataPort;
+    netOptions.isBusyLoop = netConfig.isBusyLoop;
+    netOptions.role = NET_SERVER;
+    netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
+    netOptions.localMrSize = mConfig->GetDaemonConfig().memCap;
+    netOptions.handlerCount = netConfig.dataWorkersCnt;
+    netOptions.connCount = netConfig.dataWorkersCnt;
+    ret = StartRpcService(netOptions);
+    ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
+
+    // 3. start ipc service
+    netOptions.isBusyLoop = false;
+    netOptions.role = NET_SERVER;
+    netOptions.protocol = ServiceProtocol::SHM;
+    ret = StartIpcService(netOptions);
+    ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
+    return BIO_OK;
+}
+
+void BioServer::BioNetExit()
 {
     if (mNetEngine != nullptr) {
         mNetEngine->Stop();
         mNetEngine = nullptr;
     }
-    LOG_INFO("Rpc service stopped.");
 }
 
-BResult BioServer::StartCm()
+BResult BioServer::BioCmInit()
 {
-    // prepare config.
     CmOptions cmOptions;
     cmOptions.role = ROLE_TOGETHER;
     cmOptions.zkIpMask = mConfig->GetCmConfig().zkHost;
@@ -239,18 +232,12 @@ BResult BioServer::StartCm()
     cmOptions.groups.maxPtNum = static_cast<uint16_t>(mConfig->GetCmConfig().ptNum);
     cmOptions.hbTempTimeout = static_cast<uint32_t>(mConfig->GetCmConfig().registeredTimeoutSec);
     cmOptions.hbPermFaultTime = static_cast<uint32_t>(mConfig->GetCmConfig().registeredPermTimeoutSec);
-
     mCm = Cm::Instance();
-    if (UNLIKELY(mCm == nullptr)) {
-        LOG_ERROR("cm instance is nullptr.");
-        return BIO_ERR;
-    }
+    ChkTrue(mCm != nullptr, BIO_ERR, "cm instance is nullptr.");
 
-    // initial.
     auto result = mCm->Initialize(cmOptions);
-    ChkTrueNot(result == BIO_OK, result);
+    ChkTrue(result == BIO_OK, BIO_ERR, "Cm Initialize failed, result:" << result << ".");
 
-    // register node.
     auto &daemonConfig = mConfig->GetDaemonConfig();
     CmNodeInfo nodeInfo;
     nodeInfo.ip = mConfig->GetNetConfig().dataIp;
@@ -262,56 +249,34 @@ BResult BioServer::StartCm()
         nodeInfo.disks.push_back(diskInfo);
     }
     result = mCm->RegisterNode(nodeInfo);
-    if (UNLIKELY(result != BIO_OK)) {
-        LOG_ERROR("Failed to register node, result: " << result);
-        return result;
-    }
+    ChkTrue(result == BIO_OK, BIO_ERR, "Failed to register node, result: " << result << ".");
 
-    // register listener to cmm.
+    // register listener to cm
     mCm->RegisterNodeHandler(std::bind(&BioServer::HandleCmNodeEvent, this, std::placeholders::_1));
     mCm->RegisterPtHandler(std::bind(&BioServer::HandleCmPtEvent, this, std::placeholders::_1));
 
     result = mCm->Start();
-    if (UNLIKELY(result != BIO_OK)) {
-        LOG_ERROR("Failed to start cm client, result:" << result);
-        return result;
-    }
-    LOG_INFO("Started Cluster manager client successfully");
+    ChkTrue(result == BIO_OK, BIO_ERR, "Failed to start cm client, result: " << result << ".");
     return BIO_OK;
 }
 
-void BioServer::StopCm()
+void BioServer::BioCmExit()
 {
-    LOG_INFO("Stopped cluster manager.");
+    return;
 }
 
-BResult BioServer::StartMirrorServer()
+BResult BioServer::BioMirrorServerInit()
 {
-    auto flowManager = FlowManager::Instance();
-    auto ret = flowManager->Init();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init flow manager, ret:" << ret << ".");
-        return BIO_ERR;
-    }
-
     mMirror = MirrorServer::Instance();
-    if (UNLIKELY(mMirror == nullptr)) {
-        LOG_ERROR("Mirror server instance is nullptr.");
-        return BIO_ERR;
-    }
-
-    ret = mMirror->Initialize(mConfig->GetCmConfig().deployType);
+    ChkTrue(mMirror != nullptr, BIO_ERR, "Mirror server instance is nullptr.");
+    BResult ret = mMirror->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init mirror server, ret:" << ret << ".");
         return BIO_ERR;
     }
 
     mMirrorCrb = MirrorServerCrb::Instance();
-    if (UNLIKELY(mMirrorCrb == nullptr)) {
-        LOG_ERROR("Mirror server crb instance is nullptr.");
-        return BIO_ERR;
-    }
-
+    ChkTrue(mMirrorCrb != nullptr, BIO_ERR, "Mirror server crb instance is nullptr.");
     ret = mMirrorCrb->Init();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init mirror server crb, ret:" << ret << ".");
@@ -321,9 +286,40 @@ BResult BioServer::StartMirrorServer()
     return BIO_OK;
 }
 
-void BioServer::StopMirrorServer()
+void BioServer::BioMirrorServerExit()
 {
-    LOG_INFO("Stopped mirror server.");
+    return;
+}
+
+BResult BioServer::BioCacheInit()
+{
+    return BIO_OK;
+}
+
+BResult BioServer::BioFlowInit()
+{
+    auto flowManager = FlowManager::Instance();
+    ChkTrue(flowManager != nullptr, BIO_ERR, "Flow manager instance is nullptr.");
+    return flowManager->Init();
+}
+
+void BioServer::Connection()
+{
+    uint32_t failCnt = 0;
+    for (auto it = mNodeView.begin(); it != mNodeView.end(); ++it) {
+        if (it->second.id.VNodeId() == mLocalNid.VNodeId()) {
+            continue;
+        }
+        LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" <<
+            it->second.port << ".");
+        ConnectInfo info(it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
+        BResult ret = mNetEngine->SyncConnect(info);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Connect to " << it->first.ToString() << " failed, ret: " << ret << ".");
+            failCnt++;
+        }
+    }
+    LOG_INFO("Connection finish, cluster node num:" << mNodeView.size() << ", failed num: " << failCnt << ".");
 }
 
 BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)
@@ -357,26 +353,174 @@ BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
     }
     return BIO_OK;
 }
+}
+}
 
-void BioServer::Connection()
+using namespace ock::bio;
+
+int32_t BioServerInit()
 {
-    uint32_t failCnt = 0;
-    for (auto it = mNodeView.begin(); it != mNodeView.end(); ++it) {
-        if (it->second.id.VNodeId() == mLocalNid.VNodeId()) {
-            continue;
-        }
-        if (it->second.status != CM_NODE_NORMAL) {
-            continue;
-        }
-        LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" << it->second.port << ".");
-        ConnectInfo info(it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
-        BResult ret = mNetEngine->SyncConnect(info);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Connect to " << it->first.ToString() << " failed, ret: " << ret << ".");
-            failCnt++;
-        }
+    return static_cast<int32_t>(BioServer::Instance()->Start());
+}
+
+void BioServerUninit()
+{
+    BioServer::Instance()->Stop();
+}
+
+uintptr_t GetBioServerNet()
+{
+    NetEnginePtr netEngine = BioServer::Instance()->GetNetEngine();
+    return reinterpret_cast<uintptr_t>(netEngine.Get());
+}
+
+int32_t GetLocalNid(GetLocalNidResponse *rsp)
+{
+    CmNodeId localNid = BioServer::Instance()->GetLocalNid();
+    rsp->groupId = localNid.GroupId();
+    rsp->nodeId = localNid.VNodeId();
+    rsp->protocol = BioServer::Instance()->GetNetProtocol();
+    return 0;
+}
+
+int32_t GetNodeView(QueryNodeViewResponse *rsp)
+{
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView();
+    uint32_t size = nodeView.size();
+    if (UNLIKELY(size > CLUSTER_NODE_MAX_SIZE)) {
+        LOG_ERROR("Cluster node num  " << size << " exceeds 256.");
+        return -1;
     }
-    LOG_INFO("Connection finish, cluster node num:" << mNodeView.size() << ", failed num: " << failCnt << ".");
+    uint32_t index = 0;
+    for (auto &nodeEntry : nodeView) {
+        rsp->desc[index].groupId = nodeEntry.second.id.GroupId();
+        rsp->desc[index].nodeId = nodeEntry.second.id.VNodeId();
+        memcpy_s(rsp->desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        rsp->desc[index].port = nodeEntry.second.port;
+        rsp->desc[index].status = static_cast<uint16_t>(nodeEntry.second.status);
+        rsp->desc[index].num = nodeEntry.second.disks.size();
+        for (uint32_t j = 0; j < nodeEntry.second.disks.size(); j++) {
+            rsp->desc[index].diskDesc[j].diskId = nodeEntry.second.disks[j].diskId;
+            rsp->desc[index].diskDesc[j].diskStatus = static_cast<uint16_t>(nodeEntry.second.disks[j].diskStatus);
+        }
+        index++;
+    }
+    rsp->num = index;
+    return 0;
 }
+
+int32_t GetPtView(QueryPtViewResponse *rsp)
+{
+    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView();
+    uint32_t size = ptView.size();
+    if (UNLIKELY(size > PT_MAX_SIZE)) {
+        LOG_ERROR("Pt view num  " << size << " exceeds 8192.");
+        return -1;
+    }
+    uint32_t index = 0;
+    for (auto &ptEntry : ptView) {
+        rsp->desc[index].version = ptEntry.second.version;
+        rsp->desc[index].ptId = ptEntry.second.ptId;
+        rsp->desc[index].state = static_cast<uint16_t>(ptEntry.second.state);
+        rsp->desc[index].masterNodeId = ptEntry.second.masterNodeId;
+        rsp->desc[index].masterDiskId = ptEntry.second.masterDiskId;
+        for (uint32_t j = 0; j < ptEntry.second.copys.size(); j++) {
+            rsp->desc[index].copys[j].nodeId = ptEntry.second.copys[j].nodeId;
+            rsp->desc[index].copys[j].diskId = ptEntry.second.copys[j].diskId;
+            rsp->desc[index].copys[j].state = static_cast<uint16_t>(ptEntry.second.copys[j].state);
+        }
+        index++;
+    }
+    rsp->num = index;
+    return 0;
 }
+
+int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp)
+{
+    uint64_t flowId;
+    BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(req->comm.pid, req->comm.ptId,
+        req->comm.ptv, flowId);
+    rsp->flowId = flowId;
+    return static_cast<int32_t>(ret);
+}
+
+int32_t CreateFlowSlave(CreateFlowRequest *req)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CreateFlowSlave(req->comm.pid, req->comm.ptId,
+        req->comm.ptv, req->flowId));
+}
+
+int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
+{
+    WCacheSlicePtr sliceP = nullptr;
+    BResult ret = BioServer::Instance()->GetMirrorServer()->GetSlice(req->flowId, req->flowOffset, req->flowIndex,
+        req->length, sliceP);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get slice failed:" << ret << ".");
+        return static_cast<int32_t>(ret);
+    }
+    std::vector<FlowAddr> addrVec = sliceP->GetAddrs();
+    if (addrVec.size() > SLICE_ADDR_MAX_SIZE) {
+        LOG_ERROR("Slice addr num " << addrVec.size() << " exceed 32.");
+        return static_cast<int32_t>(BIO_INNER_ERR);
+    }
+
+    uint32_t sliceLen = sliceP->GetSerializeLen();
+    auto *tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
+    if (UNLIKELY(tmp == nullptr)) {
+        LOG_ERROR("Alloc memory failed, len:" << sizeof(GetSliceResponse) + sliceLen << ".");
+        return static_cast<int32_t>(BIO_INNER_ERR);
+    }
+    *rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
+    (*rsp)->addrNum = addrVec.size();
+    for (uint32_t i = 0; i < addrVec.size(); i++) {
+        (*rsp)->addr[i].chunkId = addrVec[i].chunkId;
+        (*rsp)->addr[i].chunkOffset = addrVec[i].chunkOffset;
+        (*rsp)->addr[i].chunkLen = addrVec[i].chunkLen;
+    }
+    (*rsp)->sliceLen = sliceLen;
+    uint32_t outSliceLen = 0;
+    sliceP->Serialize((*rsp)->sliceBuf, outSliceLen);
+    if (UNLIKELY(outSliceLen != sliceLen)) {
+        LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
+        return static_cast<int32_t>(BIO_INNER_ERR);
+    }
+
+    return BIO_OK;
+}
+
+int32_t Put(PutRequest *req)
+{
+    LOG_DEBUG("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
+        ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
+    WCacheSlicePtr sliceP = MakeRef<WCacheSlice>();
+    sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP));
+}
+
+int32_t Get(GetRequest *req, GetResponse *rsp)
+{
+    uint64_t realLen = 0;
+    BResult ret = BioServer::Instance()->GetMirrorServer()->Get(*req, realLen);
+    rsp->realLen = realLen;
+    return static_cast<int32_t>(ret);
+}
+
+int32_t Delete(DeleteRequest *req)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Delete(*req));
+}
+
+int32_t Stat(StatRequest *req, StatResponse *rsp)
+{
+    Bio::ObjStat objInfo{};
+    BResult ret = BioServer::Instance()->GetMirrorServer()->Stat(*req, objInfo);
+    rsp->size = objInfo.size;
+    rsp->time = objInfo.time;
+    return static_cast<int32_t>(ret);
+}
+
+int32_t Load(LoadRequest *req)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Load(*req));
 }

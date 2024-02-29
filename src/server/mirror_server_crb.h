@@ -62,6 +62,7 @@ public:
     BResult NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     void RunTaskThread(CmPtTaskPtr ptTask);
     void RunTaskThreadImpl(CmPtTaskPtr ptTask);
@@ -77,10 +78,10 @@ private:
     BResult SendSyncDataReq(CmPtInfo &ptInfo);
 
 private:
-    ExecutorServicePtr mTaskService { nullptr };
-    ExecutorServicePtr mJobService { nullptr };
-    bool mInited { false };
-    bool mFisted { true };
+    ExecutorServicePtr mTaskService{ nullptr };
+    ExecutorServicePtr mJobService{ nullptr };
+    bool mInited{ false };
+    bool mFisted{ true };
 
     DEFINE_REF_COUNT_VARIABLE;
 };
