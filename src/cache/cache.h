@@ -61,11 +61,16 @@ public:
 
     BResult Flush(uint64_t ptId, uint64_t ptv);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
+    BResult ExpiredClear(uint64_t ptId, uint64_t ptv, bool retained);
+
+private:
+    BResult ExtraCreateRCache(uint64_t ptId);
 
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
+
+    GetLocDiskId mGetLocDiskId{ nullptr };
 };
 }
 }

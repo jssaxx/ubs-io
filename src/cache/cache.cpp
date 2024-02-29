@@ -8,6 +8,7 @@
 #include "flow_manager.h"
 #include "bio.h"
 #include "bio_trace.h"
+#include "cm.h"
 
 namespace ock {
 namespace bio {
@@ -22,6 +23,10 @@ BResult Cache::Init()
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
     ret = mWCacheManager->Init(mRCacheManager);
     ChkTrueNot(ret == BIO_OK, ret);
+
+    mGetLocDiskId = [](uint16_t ptId, uint16_t &diskId) -> BResult { // 临时放在这里，后面上移一层
+        return Cm::Instance()->GetLocalDiskId(ptId, diskId);
+    };
 
     return BIO_OK;
 }
@@ -224,8 +229,14 @@ BResult Cache::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
 
 BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 {
+    BResult ret = ExtraCreateRCache(ptId);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Extra create rcache fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
     BIO_TRACE_START(WCACHE_TRACE_FLUSH);
-    BResult ret = mWCacheManager->Flush(ptId, ptv);
+    ret = mWCacheManager->Flush(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_FLUSH, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << ptv);
@@ -234,15 +245,43 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
     return BIO_OK;
 }
 
-BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
+BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv, bool retained)
 {
+    BResult ret;
+
+    if (retained) {
+        ret = ExtraCreateRCache(ptId);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Extra create rcache fail:" << ret << ", ptId:" << ptId);
+            return ret;
+        }
+    }
+
     BIO_TRACE_START(WCACHE_TRACE_CLEAR_EXPIRED);
-    BResult ret = mWCacheManager->ExpiredClear(ptId, ptv);
+    ret = mWCacheManager->ExpiredClear(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
     }
+    return BIO_OK;
+}
+
+BResult Cache::ExtraCreateRCache(uint64_t ptId)
+{
+    uint16_t diskId;
+    BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
+    ret = CreateRCache(ptId, diskId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Create read cache fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
     return BIO_OK;
 }
 }

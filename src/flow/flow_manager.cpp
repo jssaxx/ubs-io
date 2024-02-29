@@ -75,6 +75,25 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId, uint32_t media
     }
 }
 
+FlowPtr FlowManager::GetObject(FlowType type, uint64_t flowId)
+{
+    std::lock_guard<std::mutex> lock(mMutex);
+    ChkTrueNot(mInited, nullptr);
+    if (type == FLOW_MEMORY) {
+        auto it = mMemObjManager.find(flowId);
+        if (it != mMemObjManager.end()) {
+            return it->second;
+        }
+        return nullptr;
+    } else {
+        auto it = mDiskObjManager.find(flowId);
+        if (it != mDiskObjManager.end()) {
+            return it->second;
+        }
+        return nullptr;
+    }
+}
+
 BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId) {
     std::lock_guard<std::mutex> lock(mMutex);
     ChkTrueNot(mInited == true, BIO_NOT_READY);

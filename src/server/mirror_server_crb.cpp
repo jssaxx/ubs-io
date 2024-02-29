@@ -159,7 +159,7 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
     }
     if (index == ptInfo.copys.size()) {
         if (mFisted) {
-            ret = JobExpiredClear(ptInfo);
+            ret = JobExpiredClear(ptInfo, false);
             if (ret == BIO_INNER_RETRY) {
                 JobAddRetryList(ptTask, ptInfo);
             }
@@ -222,9 +222,9 @@ bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo)
     return true;
 }
 
-BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)
+BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo, bool retained)
 {
-    auto ret = Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version);
+    auto ret = Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version, retained);
     if (ret != BIO_OK) {
         LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
@@ -243,7 +243,7 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
     LOG_INFO("Sync data succeed:"
         << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
-    ret = JobExpiredClear(ptInfo);
+    ret = JobExpiredClear(ptInfo, true);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
@@ -263,6 +263,9 @@ BResult MirrorServerCrb::SendSyncDataReq(CmPtInfo &ptInfo)
     do {
         isRetry = false;
         ret = MirrorServer::Instance()->SendSyncData(ptInfo.ptId, ptInfo.masterNodeId, ptInfo.version);
+        if (ret == BIO_CHECK_PT_FAIL) {
+            ret = BIO_INNER_RETRY;
+        }
         if (UNLIKELY(ret != BIO_OK && ret != BIO_INNER_RETRY)) {
             LOG_ERROR("Send sync sync data failed:" << ret << ", ptId:" << ptInfo.ptId << ", version:" <<
                 ptInfo.version);

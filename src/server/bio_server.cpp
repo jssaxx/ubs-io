@@ -27,11 +27,11 @@ BioServer::BioServer() noexcept
         { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr, nullptr },
         { "Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this) },
         { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
-        { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
         { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, nullptr },
         { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr, nullptr },
         { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioMirrorServerExit, this) },
+        { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
     };
     mService = MakeRef<BioServiceProc>(modules);
 }
