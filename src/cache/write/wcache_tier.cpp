@@ -151,6 +151,27 @@ uint64_t WCacheTier::GetDataEvictOffset()
     return mDataFlow->GetTruncateOffset();
 }
 
+BResult WCacheTier::Seal()
+{
+    BResult ret;
+
+    ret = mMetaFlow->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Seal meta flow fail:" << ret << ", flowId:" << mMetaFlow->GetFlowId() <<
+            ", flowType:" << mMetaFlow->GetFlowType());
+        return ret;
+    }
+
+    ret = mDataFlow->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Seal data flow fail:" << ret << ", flowId:" << mDataFlow->GetFlowId() <<
+            ", flowType:" << mDataFlow->GetFlowType());
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
 {
     auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice);
