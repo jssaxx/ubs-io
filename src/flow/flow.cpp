@@ -89,6 +89,9 @@ BResult Flow::TruncateOffset(uint64_t offset)
 BResult Flow::Seal()
 {
     BIO_TRACE_START(FLOW_TRACE_SEAL);
+    uint64_t writenOffset = mPreLoadOffset;
+    mWritenOffset = writenOffset;
+    TruncateOffset(mWritenOffset);
     BIO_TRACE_END(FLOW_TRACE_SEAL, 0);
     return BIO_OK;
 }

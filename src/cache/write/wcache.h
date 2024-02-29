@@ -40,13 +40,22 @@ public:
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
+    BResult Seal();
+
     void StartEvictTask(WCacheTierType type);
 
     void RetryEvictTask(WCacheTierType type);
 
     uint64_t GetCapacity(WCacheTierType type);
 
+    uint64_t GetVirCapacity(WCacheTierType type);
+
     uint64_t GetEvictOffset();
+
+    uint64_t GetFlowId()
+    {
+        return mFlowId;
+    }
 
     uint64_t GetPtv()
     {
@@ -56,6 +65,9 @@ public:
     using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 
+    void Flush();
+    void ExpiredClear();
+
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
     BResult EvictAllMemSliceToDisk();
@@ -63,6 +75,11 @@ private:
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster);
+
+    BResult ExpiredClearDisk(WCacheSliceRefPtr sliceRef);
+
+    BResult FlushImpl();
+    BResult ExpiredClearImpl();
 
 private:
     uint64_t mFlowId;

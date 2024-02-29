@@ -72,6 +72,8 @@ public:
 
     uint64_t GetDataEvictOffset();
 
+    BResult Seal();
+
     BResult Evict(const WCacheSlicePtr &slice);
 
     std::list<WCacheSliceRefPtr> GetEvictSliceQueue();
