@@ -183,27 +183,25 @@ BResult BioServer::BioNetInit()
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
 
-    // 1. Initialize net engine
     int16_t timeoutSec = NO_5 * NO_60; // 5min
     auto &netConfig = mConfig->GetNetConfig();
     auto ret =
         mNetEngine->Initialize(timeoutSec, netConfig.handleRequestThreadNum, netConfig.handleRequestQueueSize, Log);
     ChkTrue(ret == BIO_OK, ret, "Net engine initialize failed, result:" << ret << ".");
 
-    // 2. start rpc service
     NetOptions netOptions;
     netOptions.ipMask = netConfig.dataIpMask;
     netOptions.port = netConfig.dataPort;
     netOptions.isBusyLoop = netConfig.isBusyLoop;
     netOptions.role = NET_SERVER;
     netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
-    netOptions.localMrSize = mConfig->GetDaemonConfig().memCap;
+    netOptions.memorySize = mConfig->GetDaemonConfig().memCap;
+    netOptions.regShmMem = true;
     netOptions.handlerCount = netConfig.dataWorkersCnt;
     netOptions.connCount = netConfig.dataWorkersCnt;
     ret = StartRpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
-    // 3. start ipc service
     netOptions.isBusyLoop = false;
     netOptions.role = NET_SERVER;
     netOptions.protocol = ServiceProtocol::SHM;

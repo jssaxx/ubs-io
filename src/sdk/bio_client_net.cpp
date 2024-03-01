@@ -2,11 +2,19 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
  */
 
+#include <utility>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <cerrno>
+#include <sys/syscall.h>
+#include <linux/version.h>
+
+#include "message.h"
+#include "message_op.h"
 #include "bio_client_log.h"
 #include "bio_client_agent.h"
 #include "bio_client_net.h"
-
-#include <utility>
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -90,6 +98,85 @@ void BioClientNet::Stop()
     }
 }
 
+BResult BioClientNet::CorrectFd()
+{
+    int32_t realFd = -1;
+    auto result = mNetEngine->ReceiveFds(static_cast<int32_t>(getpid()), &realFd, 1U);
+    if (result != BIO_OK) {
+        CLIENT_LOG_ERROR("receive file mem fd failed, ret:" << result << ".");
+        return BIO_ERR;
+    }
+    CLIENT_LOG_INFO("Bio client Correct old memFd " << mShmFd << " to real memFd " << realFd << ".");
+    mShmFd = realFd;
+    return BIO_OK;
+}
+
+BResult BioClientNet::CheckShmFd()
+{
+    struct stat buffer{};
+    auto ret = fstat(mShmFd, &buffer);
+    if (ret < 0) {
+        CLIENT_LOG_ERROR("Read file fd " << mShmFd << " failed, ret:" << strerror(errno) << ".");
+        return BIO_ERR;
+    }
+    if (mShmOffset + mShmLength > static_cast<uint64_t>(buffer.st_size)) {
+        CLIENT_LOG_ERROR("Check file size failed.");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult BioClientNet::ShmInitInner()
+{
+    if (CheckShmFd() != BIO_OK) {
+        mShmFd = -1;
+        return BIO_ERR;
+    }
+    auto offset = static_cast<off_t>(mShmOffset);
+    auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    if (address == MAP_FAILED) {
+        NET_LOG_ERROR("Mmap bio_shm size " << mShmLength << " offset " << offset << " failed, error:" <<
+            strerror(errno));
+        close(mShmFd);
+        mShmFd = -1;
+        return BIO_ERR;
+    }
+    mShmAddr = static_cast<uint8_t *>(address);
+    return BIO_OK;
+}
+
+BResult BioClientNet::ShmInit()
+{
+    uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
+    ShmInitRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}};
+    ShmInitResponse rsp;
+    BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(getpid(), BIO_OP_SDK_SHM_INIT, req, rsp);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send shm init request failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    mShmFd = rsp.memFd;
+    mServerPid = rsp.serverPid;
+    mShmOffset = rsp.offset;
+    mShmLength = rsp.length;
+    if (mShmOffset != 0 || mShmLength > defaultMaxShmSize) {
+        CLIENT_LOG_ERROR("Get share memory para failed, offset:" << mShmOffset << ", length:" << mShmLength << ".");
+        return BIO_ERR;
+    }
+
+    if (CorrectFd() != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    if ((ret = ShmInitInner()) != BIO_OK) {
+        return ret;
+    }
+
+    CLIENT_LOG_INFO("Bio client shm init success. offset:" << mShmOffset << ", length:" << mShmLength << ".");
+    return BIO_OK;
+}
+
 BResult BioClientNet::StartIpcService()
 {
     mNetEngine = MakeRef<NetEngine>();
@@ -100,9 +187,7 @@ BResult BioClientNet::StartIpcService()
 
     // 1. Initialize net engine
     int16_t timeoutSec = NO_5 * NO_60; // 5min
-    uint32_t coreThreadNum = NO_128;
-    uint32_t queueSize = NO_1024;
-    auto ret = mNetEngine->Initialize(timeoutSec, coreThreadNum, queueSize, Log);
+    auto ret = mNetEngine->Initialize(timeoutSec, NO_128, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
         return ret;
@@ -110,11 +195,10 @@ BResult BioClientNet::StartIpcService()
 
     // 2. start ipc service
     NetOptions netOptions;
-    netOptions.isBusyLoop = false;
     netOptions.role = NET_CLIENT;
-    netOptions.protocol = ServiceProtocol::SHM;
     netOptions.connCount = NO_4;
     netOptions.handlerCount = NO_4;
+    netOptions.protocol = ServiceProtocol::SHM;
     ret = mNetEngine->Start(netOptions);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Start ipc service failed, result:" << ret << ".");
@@ -123,13 +207,14 @@ BResult BioClientNet::StartIpcService()
 
     // 3. connection to local bio server
     ConnectInfo info(static_cast<uint32_t>(getpid()));
-    CLIENT_LOG_INFO("Connect to local bio server, pid:" << info.peerId << ", ip:" << info.ip << ", port:" <<
-        info.port << ".");
     ret = mNetEngine->SyncConnect(info);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
+        return ret;
     }
-    return ret;
+
+    // 4. shm init
+    return ShmInit();
 }
 
 BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum)
