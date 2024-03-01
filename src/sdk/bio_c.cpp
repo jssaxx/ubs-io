@@ -2,12 +2,16 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
  */
 
-#include "bio_c.h"
-#include <cstring>
-#include "securec.h"
+#include <string>
 #include "bio.h"
+#include "bio_c.h"
+#include "bio_log.h"
+#include "securec.h"
 
 using namespace ock::bio;
+
+ReadHook g_readHook = nullptr;
+WriteHook g_writeHook = nullptr;
 
 int32_t BioCalculateLocation(void *bioHandle, uint32_t objectId, CobjLocation *objLocation)
 {
@@ -45,6 +49,7 @@ int32_t BioPut(void *bioHandle, const char *key, const char *value, uint64_t len
 {
     auto bio = reinterpret_cast<Bio *>(bioHandle);
     Bio::ObjLocation location = { objLocation.location[0], objLocation.location[1] };
+
     auto ret = bio->Put(key, value, length, location);
     return ret;
 }
@@ -151,6 +156,16 @@ PairCache *BioListCache(uint64_t *cacheNum)
         i++;
     }
     return allCache;
+}
+
+void BioReigsterJuiceFSRead(ReadHook rh)
+{
+    g_readHook = rh;
+}
+
+void BioReigsterJuiceFSWrite(WriteHook wh)
+{
+    g_writeHook = wh;
 }
 
 void BioDestroyCache(uint64_t tenantId)
