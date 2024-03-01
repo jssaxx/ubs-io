@@ -21,6 +21,7 @@ constexpr uint32_t NO_2048 = 2048;
 constexpr uint32_t NO_1536 = 1536;
 constexpr uint32_t NO_1024 = 1024;
 constexpr uint32_t NO_512 = 512;
+constexpr uint32_t NO_300 = 300;
 constexpr uint32_t NO_256 = 256;
 constexpr uint32_t NO_255 = 255;
 constexpr uint32_t NO_128 = 128;

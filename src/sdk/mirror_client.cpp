@@ -360,16 +360,22 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     memcpy_s(req->sliceBuf, rsp->sliceLen, rsp->sliceBuf, rsp->sliceLen);
 }
 
-BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint32_t addrNum)
+BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum)
 {
-    uint64_t offset = 0;
+    uint64_t off = 0;
     for (uint32_t i = 0; i < addrNum; i++) {
-        auto ret = memcpy_s(reinterpret_cast<void *>(addr[i].chunkId + addr[i].chunkOffset), addr[i].chunkLen,
-            reinterpret_cast<void *>(const_cast<char *>(from + offset)), addr[i].chunkLen);
-        ChkTrue(ret == BIO_OK, ret,
-            "Failed to copy data from addr:" << from + offset << " to addr:" << addr[i].chunkId + addr[i].chunkOffset <<
-            " by length:" << addr[i].chunkLen);
-        offset += addr[i].chunkLen;
+        uint8_t *realAddr = nullptr;
+        if (mMode == BioService::WorkerMode::CONVERGENCE) {
+            realAddr = reinterpret_cast<uint8_t *>(addr[i].chunkId + addr[i].chunkOffset);
+        } else {
+            realAddr = net::BioClientNet::Instance()->GetShmAddress(offset[i]);
+        }
+        auto ret = memcpy_s(realAddr, addr[i].chunkLen, (from + off), addr[i].chunkLen);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to copy data from addr:" << (from + off) << " to addr:" << realAddr << ".");
+            return BIO_INNER_ERR;
+        }
+        off += addr[i].chunkLen;
     }
     return BIO_OK;
 }
@@ -388,7 +394,7 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flow
     }
 
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
-    ret = DataCopy(param.value, rsp->addr, rsp->addrNum);
+    ret = DataCopy(param.value, rsp->addr, rsp->addrOffset, rsp->addrNum);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<

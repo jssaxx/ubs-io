@@ -30,6 +30,8 @@ bool MirrorServer::CheckAll(RequestComm &reqComm)
 void MirrorServer::RegisterOpcode()
 {
     auto netEngine = BioServer::Instance()->GetNetEngine();
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_SHM_INIT,
+        std::bind(&MirrorServer::HandleShmInit, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO,
         std::bind(&MirrorServer::HandleQueryNodeInfo, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_VIEW,
@@ -367,6 +369,33 @@ BResult MirrorServer::Initialize()
     RegisterOpcode();
 
     mStarted = true;
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(ShmInitRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive shm init message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<ShmInitRequest *>(ctx.MessageData());
+    ShmInitResponse rsp{};
+    rsp.serverPid = getpid();
+    BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length);
+    auto ret = BioServer::Instance()->GetNetEngine()->SendFds(static_cast<uint32_t>(req->comm.pid), &rsp.memFd, NO_1);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Send fds failed, ret:" << ret << ".");
+        Reply(ctx, BIO_ERR, nullptr, 0);
+    } else {
+        Reply(ctx, BIO_OK, &rsp, sizeof(ShmInitResponse));
+    }
     return BIO_OK;
 }
 
@@ -795,6 +824,8 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
         rsp->addr[i].chunkId = addrVec[i].chunkId;
         rsp->addr[i].chunkOffset = addrVec[i].chunkOffset;
         rsp->addr[i].chunkLen = addrVec[i].chunkLen;
+        rsp->addrOffset[i]
+                = BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
     }
     char *sliceBuf = static_cast<char *>(static_cast<void *>(tmp)) + sizeof(GetSliceResponse);
     sliceP->Serialize(sliceBuf, sliceLen);

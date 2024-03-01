@@ -14,6 +14,8 @@
 #include <sstream>
 #include <string>
 
+#include "bio_log.h"
+
 namespace ock {
 namespace bio {
 typedef void (*LogFunc)(int32_t level, const char *logBuf);
@@ -34,22 +36,19 @@ public:
         func = nullptr;
     }
 
-    inline LogFunc GetLogFuncFunc(void)
-    {
-        return func;
-    }
-
-    inline void SetLogFuncFunc(LogFunc f)
-    {
-        func = f;
-    }
-
-    inline void SetMinLogLevel(int32_t level)
+    int32_t Initialize(int32_t mode, int32_t level)
     {
         minLogLevel = level;
+        if (mode == 0) {
+            auto logFunc = [](int level, const char* message) {
+                Logger::gInstance->Log(level + 1, message);
+            };
+            func = logFunc;
+        }
+        return 0;
     }
 
-    inline int32_t GetMinLogLevel(void)
+    inline int32_t GetMinLogLevel() const
     {
         return minLogLevel;
     }
@@ -67,15 +66,15 @@ public:
         }
     }
 
-    static BioClientLog *Instance()
+    static BioClientLog* Instance()
     {
-        static BioClientLog logger;
-        return &logger;
+        static auto *instance = new BioClientLog();
+        return instance;
     }
 
 private:
     LogFunc func = nullptr;
-    int32_t minLogLevel;
+    int32_t minLogLevel = 1;
 };
 
 #ifndef BIO_CLIENT_LOG_FILENAME
@@ -83,7 +82,7 @@ private:
 #endif
 #define BASE_LOG(level, args)                                                                                    \
     do {                                                                                                         \
-        if (((level) + 1) >= BioClientLog::Instance()->GetMinLogLevel()) {                                       \
+        if ((level) >= BioClientLog::Instance()->GetMinLogLevel()) {                                             \
             std::ostringstream oss;                                                                              \
             oss << "[SDK " << __FUNCTION__ << ":" << BIO_CLIENT_LOG_FILENAME << ":" << __LINE__ << "] " << args; \
             BioClientLog::Instance()->Log(level, oss);                                                           \
