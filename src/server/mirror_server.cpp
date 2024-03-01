@@ -366,25 +366,6 @@ BResult MirrorServer::Initialize()
     }
     RegisterOpcode();
 
-    // 后续移植到cache初始化
-    BResult ret = Cache::Instance().Init();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init cache instance, ret:" << ret << ".");
-        return ret;
-    }
-
-    auto globEvictOffset = [this](uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset) -> BResult {
-        return GetFlowGlobEvictOffset(ptId, flowId, isMaster, flowOffset);
-    };
-
-    Cache::Instance().RegGetGlobEvictOffset(globEvictOffset);
-
-    ret = Cache::Instance().Recover();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to recover cache instance, ret:" << ret << ".");
-        return ret;
-    }
-
     mStarted = true;
     return BIO_OK;
 }

@@ -292,6 +292,25 @@ public:
         return BIO_ERR;
     }
 
+    inline BResult CheckPtDegrade(uint16_t ptId, bool &isDegrade)
+    {
+        isDegrade = false;
+        ReadLocker<ReadWriteLock> lock(&mLock);
+        if (mPtInfos.find(ptId) != mPtInfos.end()) {
+            if (mPtInfos[ptId].state == CM_PT_NORMAL) {
+                return BIO_OK;
+            }
+            for (auto& elem : mPtInfos[ptId].copys) {
+                if (elem.state != CM_COPY_RUNNING && elem.state != CM_COPY_RECOVERY) {
+                    isDegrade = true;
+                    return BIO_OK;
+                }
+            }
+            return BIO_OK;
+        }
+        return BIO_ERR;
+    }
+
     inline BResult CheckLocalRole(uint16_t ptId, bool &isMaster)
     {
         ReadLocker<ReadWriteLock> lock(&mLock);

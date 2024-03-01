@@ -123,7 +123,7 @@ namespace ock {
             Key mKey;
             RCacheValue mValue;
             uint32_t aTime;
-            uint8_t  hitCount;
+            uint8_t hitCount {0};
             RCacheTierType tierType;
             MqType mMqType;
             uint64_t mState {0};

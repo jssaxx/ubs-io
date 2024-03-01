@@ -36,7 +36,7 @@ public:
         return mWCacheManager->AllocateFlowId(ptId, flowId);
     }
 
-    BResult CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId);
+    BResult CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId);
 
     BResult CreateRCache(uint64_t ptId, uint16_t diskId);
 
@@ -55,7 +55,15 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key);
 
+    void RegGetLocDiskId(GetLocDiskId getLocDiskId);
+
+    void RegCheckDegrade(CheckDegrade checkDegrade);
+
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
+
+    void RegCacheMalloc(CacheMalloc memMalloc);
+
+    void RegCacheFree(CacheFree memFree);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
@@ -66,11 +74,15 @@ public:
 private:
     BResult ExtraCreateRCache(uint64_t ptId);
 
+    BResult PutByPass(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
+
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
-
     GetLocDiskId mGetLocDiskId{ nullptr };
+    CheckDegrade mCheckDegrade{ nullptr };
+    CacheMalloc mMemMalloc{ nullptr };
+    CacheFree mMemFree{ nullptr };
 };
 }
 }

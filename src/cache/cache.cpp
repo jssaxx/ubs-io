@@ -24,10 +24,6 @@ BResult Cache::Init()
     ret = mWCacheManager->Init(mRCacheManager);
     ChkTrueNot(ret == BIO_OK, ret);
 
-    mGetLocDiskId = [](uint16_t ptId, uint16_t &diskId) -> BResult { // 临时放在这里，后面上移一层
-        return Cm::Instance()->GetLocalDiskId(ptId, diskId);
-    };
-
     return BIO_OK;
 }
 
@@ -68,14 +64,14 @@ BResult Cache::RegisterCacheClient(uint64_t &cacheId)
     return mWCacheManager->AllocateFlowId(0, cacheId);
 }
 
-BResult Cache::CreateWCache(uint64_t cacheId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId)
+BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId)
 {
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
-    auto ret = mWCacheManager->CreateWCache(flowId, ptId, ptv, diskId);
+    auto ret = mWCacheManager->CreateWCache(procId, flowId, ptId, ptv, diskId);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
-    ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, cacheId:"
-        << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
-    LOG_DEBUG("Create wcache success, cacheId:" << cacheId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+    ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, procId:"
+        << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+    LOG_DEBUG("Create wcache success, cacheId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
     return BIO_OK;
 }
 
@@ -108,9 +104,21 @@ BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 
 BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
-    BIO_TRACE_START(WCACHE_TRACE_PUT);
-    auto ret = mWCacheManager->Put(key, slice, sliceReader, attr);
-    BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
+    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
+    bool isDegrade = false;
+    auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isDegrade);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    if (!isDegrade) {
+        BIO_TRACE_START(WCACHE_TRACE_PUT);
+        ret = mWCacheManager->Put(key, slice, sliceReader, attr);
+        BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
+    } else {
+        BIO_TRACE_START(WCACHE_TRACE_PUT_BYPASS);
+        ret = PutByPass(key, slice, sliceReader, attr);
+        BIO_TRACE_END(WCACHE_TRACE_PUT_BYPASS, ret);
+    }
+
     return ret;
 }
 
@@ -217,9 +225,66 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     return ret;
 }
 
+BResult Cache::PutByPass(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
+{
+    uint64_t addr;
+    auto ret = mMemMalloc(slice->GetLength(), &addr);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Malloc value fail, key:" << key << ", length:" << slice->GetLength());
+        return BIO_ALLOC_FAIL;
+    }
+
+    FlowAddr flowAddr = { addr, 0, static_cast<uint32_t>(slice->GetLength()) };
+    std::vector<FlowAddr> addrs = { flowAddr };
+    SlicePtr sliceP = MakeRef<Slice>(slice->GetLength(), addrs, FLOW_MEMORY);
+    if (sliceP == nullptr) {
+        mMemFree(addr);
+        LOG_ERROR("Malloc slice fail, key:" << key << ", length:" << slice->GetLength());
+        return BIO_ALLOC_FAIL;
+    }
+
+    ret = sliceReader(slice.Get(), sliceP);
+    if (ret != BIO_OK) {
+        mMemFree(addr);
+        LOG_ERROR("Slice reader fail:" << ret << ", key:" << key << ", length:" << slice->GetLength());
+        return ret;
+    }
+
+    UnderFsPtr underFsPtr = UnderFs::Instance();
+    ret = underFsPtr->Put(key, reinterpret_cast<char *>(addr), slice->GetLength());
+    if (ret != BIO_OK) {
+        mMemFree(addr);
+        LOG_ERROR("Put underfs fail:" << ret << ", key:" << key << ", length:" << slice->GetLength());
+        return ret;
+    }
+
+    mMemFree(addr);
+    return BIO_OK;
+}
+
+void Cache::RegGetLocDiskId(GetLocDiskId getLocDiskId)
+{
+    mGetLocDiskId = getLocDiskId;
+}
+
+void Cache::RegCheckDegrade(CheckDegrade checkDegrade)
+{
+    mCheckDegrade = checkDegrade;
+}
+
 void Cache::RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset)
 {
     mWCacheManager->RegGetGlobEvictOffset(evictOffset);
+}
+
+void Cache::RegCacheMalloc(CacheMalloc memMalloc)
+{
+    mMemMalloc = memMalloc;
+}
+
+void Cache::RegCacheFree(CacheFree memFree)
+{
+    mMemFree = memFree;
 }
 
 BResult Cache::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
