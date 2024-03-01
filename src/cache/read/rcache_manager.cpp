@@ -215,6 +215,8 @@ BResult RCacheManager::RecoverCache(FlowPtr metaFlow)
     ChkTrue(dataFlow != nullptr, BIO_ERR,
         "Failed to get data flow, flowType:" << FLOW_DISK << ", flowId" << dataFlowId);
 
+    LOG_INFO("Recover rcache, flowId::" << dataFlow->GetFlowId());
+
     BResult ret;
 
     ret = metaFlow->Seal();

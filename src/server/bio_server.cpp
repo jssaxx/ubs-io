@@ -293,6 +293,40 @@ void BioServer::BioMirrorServerExit()
 
 BResult BioServer::BioCacheInit()
 {
+    BResult ret = Cache::Instance().Init();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to init cache instance, ret:" << ret << ".");
+        return ret;
+    }
+
+    GetLocDiskId getLocDiskId = [](uint16_t ptId, uint16_t &diskId) -> BResult {
+        return Cm::Instance()->GetLocalDiskId(ptId, diskId);
+    };
+    Cache::Instance().RegGetLocDiskId(getLocDiskId);
+
+    CheckDegrade checkDegrade = [](uint16_t ptId, bool &isDegrade) -> BResult {
+        return Cm::Instance()->CheckPtDegrade(ptId, isDegrade);
+    };
+    Cache::Instance().RegCheckDegrade(checkDegrade);
+
+    GetGlobEvictOffset evictOffset = [](uint16_t ptId, uint64_t flowId, bool &isMaster,
+        uint64_t &flowOffset) -> BResult {
+        return MirrorServer::Instance()->GetFlowGlobEvictOffset(ptId, flowId, isMaster, flowOffset);
+    };
+    Cache::Instance().RegGetGlobEvictOffset(evictOffset);
+
+    CacheMalloc memMalloc = [this](uint64_t size, uint64_t *addr) { return this->MemAlloc(size, addr); };
+    Cache::Instance().RegCacheMalloc(memMalloc);
+
+    CacheFree memFree = [this](uint64_t addr) { this->MemFree(addr); };
+    Cache::Instance().RegCacheFree(memFree);
+
+    ret = Cache::Instance().Recover();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to recover cache instance, ret:" << ret << ".");
+        return ret;
+    }
+
     return BIO_OK;
 }
 

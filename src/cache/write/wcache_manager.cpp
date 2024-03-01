@@ -81,9 +81,9 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
     return BIO_OK;
 }
 
-BResult WCacheManager::CreateWCache(uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
+BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
 {
-    auto wcache = MakeRef<WCache>(flowId, ptId, ptv, diskId);
+    auto wcache = MakeRef<WCache>(procId, flowId, ptId, ptv, diskId);
     ChkTrueNot(wcache != nullptr, BIO_ALLOC_FAIL);
 
     WCache::EvictCallback evictCallback = [this](uint64_t ptId, const Key &key) -> BResult {
@@ -131,7 +131,7 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
 
     LOG_INFO("Recover wcache, ptId:" << ptId << ", flowId:" << flowId);
 
-    auto ret = CreateWCache(flowId, ptId, 0, static_cast<uint16_t>(diskId));
+    auto ret = CreateWCache(0, flowId, ptId, 0, static_cast<uint16_t>(diskId));
     ChkTrue(ret == BIO_OK, ret, "Failed to create wcache, flowId:" << flowId);
 
     // 2. Get write flow
@@ -339,6 +339,10 @@ BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
         }
     } while (isRetry);
 
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
     ret = SealOldCache(ptId, ptv);
     ChkTrueNot(ret == BIO_OK, ret);
 
@@ -379,6 +383,10 @@ BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
         }
     } while (isRetry);
 
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
     ret = SealOldCache(ptId, ptv);
     ChkTrueNot(ret == BIO_OK, ret);
 
@@ -396,20 +404,6 @@ BResult WCacheManager::ExpiredClearImpl(uint64_t ptId, uint64_t ptv)
     }
 
     return (expiredList.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
-
-    for (const auto &flow : expiredList) {
-        auto ret = flow->Seal();
-        if (ret != BIO_OK) {
-            LOG_ERROR("Seal fail:" << ret << ", flowId::" << flow->GetFlowId());
-            return ret;
-        }
-        {
-            WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
-            mWCacheManager.erase(flow->GetFlowId());
-        }
-    }
-
-    return BIO_OK;
 }
 
 void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list)
@@ -421,6 +415,10 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
             continue;
         }
         if (flowIt.second->GetPtv() >= ptv) {
+            continue;
+        }
+        if (flowIt.second->GetCapacity(WCACHE_MEMORY) == 0 &&
+            flowIt.second->GetCapacity(WCACHE_DISK) == 0) {
             continue;
         }
         LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
