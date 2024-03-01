@@ -62,6 +62,7 @@ private:
     BResult SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
     BResult GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset);
 
+    int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
     int32_t HandleQueryNodeView(ServiceContext &ctx);
     int32_t HandleQueryPtView(ServiceContext &ctx);

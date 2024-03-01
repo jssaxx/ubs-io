@@ -28,6 +28,15 @@ public:
     BResult Start(const NetOptions &opt);
     void Stop();
 
+    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
+    {
+        if (UNLIKELY(mRpcService == nullptr)) {
+            NET_LOG_ERROR("Net service not ready.");
+            return BIO_NOT_READY;
+        }
+        return mRpcService->RegisterMemoryRegion(reinterpret_cast<uintptr_t>(addr), size, mr);
+    }
+
     inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
@@ -109,6 +118,30 @@ public:
         mMrBlockPool->ReleaseOne(address);
     }
 
+    void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length)
+    {
+        fd = mShmFd;
+        offset = mShareOffset;
+        length = mOptions.memorySize;
+    }
+
+    uint8_t* GetShmAddress(uint64_t offset)
+    {
+        if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mOptions.memorySize)) {
+            return nullptr;
+        }
+        return (mShareAddress + (offset - mShareOffset));
+    }
+
+    uint64_t GetAddressOffset(uint64_t addr)
+    {
+        auto realAddr = static_cast<uint8_t*>(reinterpret_cast<void *>(addr));
+        if (UNLIKELY(realAddr < mShareAddress || realAddr >= mShareAddress + mOptions.memorySize)) {
+            return UINT64_MAX;
+        }
+        return ((realAddr - mShareAddress) + mShareOffset);
+    }
+
     BResult SyncConnect(ConnectInfo &info)
     {
         if (UNLIKELY(mConnector == nullptr)) {
@@ -125,6 +158,29 @@ public:
             return BIO_NOT_READY;
         }
         return mConnector->AsyncConnect(info, handler, ctx);
+    }
+
+    BResult SendFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
+    {
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            return BIO_NET_RETRY;
+        }
+        return NetResult(ch->SendFds(fds, count));
+    }
+
+    BResult ReceiveFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
+    {
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            return BIO_NET_RETRY;
+        }
+        int32_t timeoutSec = -1;
+        return NetResult(ch->ReceiveFds(fds, count, timeoutSec));
     }
 
     template <typename TReq, typename TResp>
@@ -291,11 +347,6 @@ public:
         return BIO_OK;
     }
 
-    inline bool IsStarted() const
-    {
-        return mStarted;
-    }
-
     inline void SetLocalNodeId(const uint16_t &nodeId)
     {
         mLocalNodeId = nodeId;
@@ -332,12 +383,17 @@ private:
 
     void StopInner();
 
-    BResult InitLocalMrAllocator();
+    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
+    BResult InitCommMemAllocator();
+    BResult InitShmMemAllocator();
+    BResult InitMemoryAllocator();
 
     static inline BResult NetResult(hcom::SerResult ret)
     {
         using namespace ock::hcom;
         switch (ret) {
+            case SER_OK:
+                return BIO_OK;
             case SER_NEW_OBJECT_FAILED:
             case SER_NOT_ESTABLISHED:
             case SER_TIMEOUT:
@@ -468,6 +524,9 @@ private:
     std::mutex mMutex;
     NetOptions mOptions;
     NetExecutorPoolPtr mRequestExecutor = nullptr;
+    int32_t mShmFd = -1;
+    uint64_t mShareOffset = 0;
+    uint8_t *mShareAddress = nullptr;
     friend class NetConnectTask;
 };
 

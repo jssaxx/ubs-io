@@ -9,24 +9,11 @@
 
 using namespace ock::bio;
 
-BResult BioClient::BioLoggerInit()
+BResult BioClient::BioLoggerInit(BioService::WorkerMode mode)
 {
-    /*
-    LoggerOptions loggerOptions;
-    loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
-    loggerOptions.path = "./bio_sdk.log";
-    auto logger = Logger::Instance(BIO_CLIENT, loggerOptions);
-    if (logger == nullptr) {
-        std::cout << "Failed to create logger instance." << std::endl;
-        return BIO_ERR;
-    }
-    auto ret = logger->Init();
-    if (ret != BIO_OK) {
-        std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
-        return BIO_ERR;
-    }
-     */
-    return BIO_OK;
+    auto defaultLogLevel = static_cast<int32_t>(BioClientLog::Level::LOG_LEVEL_INFO);
+    auto logMode = static_cast<int32_t>(mode);
+    return BioClientLog::Instance()->Initialize(logMode, defaultLogLevel);
 }
 
 BResult BioClient::Start(BioService::WorkerMode mode)
@@ -37,7 +24,7 @@ BResult BioClient::Start(BioService::WorkerMode mode)
     }
     mMode = mode;
 
-    if (BioLoggerInit() != BIO_OK) {
+    if (BioLoggerInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 

@@ -5,6 +5,12 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <climits>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <cerrno>
+#include <sys/syscall.h>
+#include <linux/version.h>
 
 #include "bio_ip_util.h"
 #include "net_log.h"
@@ -128,11 +134,34 @@ void NetEngine::StopInner()
     }
 }
 
-BResult NetEngine::InitLocalMrAllocator()
+BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name)
 {
-    auto result = RegisterMemoryRegion(mOptions.localMrSize, mLocalMr);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
+    auto fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, 600);
+#else
+    auto fd = syscall(SYS_memfd_create, name.c_str(), 0);
+#endif
+    if (fd < 0) {
+        NET_LOG_ERROR("create memory file " << name << ", failed, error:" << strerror(errno));
+        return BIO_INNER_ERR;
+    }
+
+    auto ret = ftruncate(fd, static_cast<off_t>(size));
+    if (ret < 0) {
+        NET_LOG_ERROR("truncate file " <<  name << " with size" << size << " failed, error:" << strerror(errno));
+        close(fd);
+        return BIO_INNER_ERR;
+    }
+
+    shmFd = fd;
+    return BIO_OK;
+}
+
+BResult NetEngine::InitCommMemAllocator()
+{
+    auto result = RegisterMemoryRegion(mOptions.memorySize, mLocalMr);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to register mr by size " << mOptions.localMrSize);
+        NET_LOG_ERROR("Failed to register mr by size " << mOptions.memorySize);
         return result;
     }
 
@@ -141,13 +170,67 @@ BResult NetEngine::InitLocalMrAllocator()
         NET_LOG_ERROR("Make block pool ptr failed.");
         return BIO_ALLOC_FAIL;
     }
-    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.localMrSize / mDataPageBytes);
+    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start block pool " << mOptions.localMrSize << ".");
+        NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
-        NET_LOG_INFO("Succeed to start block pool " << mOptions.localMrSize << ".");
+        NET_LOG_INFO("Succeed to start comm memory block pool size " << mOptions.memorySize << " success.");
     }
     return result;
+}
+
+BResult NetEngine::InitShmMemAllocator()
+{
+    std::string shmName = "bio_shm";
+    auto result = CreateShmFdWithName(mShmFd, mOptions.memorySize, shmName);
+    if (result != BIO_OK) {
+        NET_LOG_ERROR("Failed to create shm fd, size:" << mOptions.memorySize << ".");
+        return result;
+    }
+
+    auto offset = static_cast<off_t>(mShareOffset);
+    auto address = mmap(nullptr, mOptions.memorySize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    if (address == MAP_FAILED) {
+        NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memorySize << " offset " << offset << " failed, error:" <<
+            strerror(errno));
+        close(mShmFd);
+        mShmFd = -1;
+        return BIO_ERR;
+    }
+    mShareAddress = static_cast<uint8_t *>(address);
+
+    result = RegisterMemoryRegion(mShareAddress, mOptions.memorySize, mLocalMr);
+    if (result != BIO_OK) {
+        close(mShmFd);
+        mShmFd = -1;
+        return result;
+    }
+
+    mMrBlockPool = MakeRef<NetBlockPool>();
+    if (mMrBlockPool == nullptr) {
+        NET_LOG_ERROR("Make block pool ptr failed.");
+        close(mShmFd);
+        mShmFd = -1;
+        return BIO_ALLOC_FAIL;
+    }
+    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
+    if (result != BIO_OK) {
+        NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
+        close(mShmFd);
+        mShmFd = -1;
+    } else {
+        NET_LOG_INFO("Succeed to start shm memory block pool size " << mOptions.memorySize << " success.");
+    }
+    return result;
+}
+
+BResult NetEngine::InitMemoryAllocator()
+{
+    if (mOptions.regShmMem == true) {
+        return InitShmMemAllocator();
+    } else {
+        return InitCommMemAllocator();
+    }
 }
 
 std::string NetEngine::GenerateWorkersSetting()
@@ -280,7 +363,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
         return BIO_ERR;
     }
 
-    result = InitLocalMrAllocator();
+    result = InitMemoryAllocator();
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to init mr allocator, result:" << NetErrStr(result) << ".");
         return BIO_ERR;
@@ -309,7 +392,7 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
         return BIO_ERR;
     }
 
-    mChannelMgr->AddChannelNode(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
+    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), true);
     NetChannelUpCtx ctx(netPayload.srcNodeId, true);
     newChannel->UpCtx(ctx.whole);
     return BIO_OK;
