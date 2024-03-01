@@ -10,6 +10,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+typedef uint64_t (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t, int *);
+typedef uint64_t (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
+
+extern ReadHook g_readHook;
+extern WriteHook g_writeHook;
+
+void BioReigsterJuiceFSRead(ReadHook rh);
+
+void BioReigsterJuiceFSWrite(WriteHook wh);
 
 #define LOCATION_LEN 2
 #define MAX_KEY_SIZE 256
