@@ -112,7 +112,7 @@ private:
 
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
         uint64_t index, GetSliceResponse *rsp) const;
-    BResult DataCopy(const char *from, SliceAddrDesc *addr, uint32_t addrNum);
+    BResult DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
         PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);

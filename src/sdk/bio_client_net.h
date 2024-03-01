@@ -52,6 +52,11 @@ public:
         mNetEngine->FreeLocalMrSingle(address);
     }
 
+    uint8_t* GetShmAddress(uint64_t offset)
+    {
+        return mNetEngine->GetShmAddress(offset);
+    }
+
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp)
     {
@@ -85,6 +90,10 @@ public:
 
     DEFINE_REF_COUNT_FUNCTIONS
 private:
+    BResult CheckShmFd();
+    BResult CorrectFd();
+    BResult ShmInitInner();
+    BResult ShmInit();
     BResult StartIpcService();
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum);
     void StopInner();
@@ -92,6 +101,11 @@ private:
 private:
     BioService::WorkerMode mMode;
     NetEnginePtr mNetEngine = nullptr;
+    int32_t mShmFd = -1;
+    uint32_t mServerPid = 0;
+    uint64_t mShmOffset = 0;
+    uint64_t mShmLength = 0;
+    uint8_t *mShmAddr = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

@@ -31,6 +31,18 @@ typedef struct {
     pid_t pid;
 } RequestComm;
 
+/* Shm init */
+typedef struct {
+    RequestComm comm;
+} ShmInitRequest;
+
+typedef struct {
+    int32_t memFd;
+    uint32_t serverPid;
+    uint64_t offset;
+    uint64_t length;
+} ShmInitResponse;
+
 /* Query node view */
 typedef struct {
     uint16_t diskId;
@@ -121,6 +133,7 @@ typedef struct {
 typedef struct {
     uint64_t addrNum;
     SliceAddrDesc addr[SLICE_ADDR_MAX_SIZE];
+    uint64_t addrOffset[SLICE_ADDR_MAX_SIZE];
     uint64_t sliceLen;
     char sliceBuf[0];
 } GetSliceResponse;

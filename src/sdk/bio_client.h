@@ -31,7 +31,7 @@ public:
         return instance;
     }
 
-    BResult BioLoggerInit();
+    BResult BioLoggerInit(BioService::WorkerMode mode);
 
     BResult Start(BioService::WorkerMode mode);
     void Stop();
