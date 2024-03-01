@@ -47,8 +47,13 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 }
 
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
+    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr, bool isDegrade)
 {
+    // degraded write through to underfs
+    if (UNLIKELY(isDegrade)) {
+        return PutByPass(key, srcSlice, sliceReader, destSliceRef);
+    }
+
     // put it memory tier cache.
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     destSliceRef = memCache->Write(key, srcSlice, sliceReader);
@@ -63,6 +68,33 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
         LOG_INFO("Write through, key:" << key);
         EvictFromMemToDisk(destSliceRef);
     }
+
+    return BIO_OK;
+}
+
+BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
+    WCacheSliceRefPtr &destSliceRef)
+{
+    auto &memCache = mCacheTiers[WCACHE_MEMORY];
+    destSliceRef = memCache->Write(key, srcSlice, sliceReader);
+    ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
+
+    auto *value = new char[srcSlice->GetLength()];
+    ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
+
+    auto ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value);
+    if (UNLIKELY(ret != BIO_OK)) {
+        delete[] value;
+        LOG_ERROR("Failed to copy slice to value, key:" << key << " flowId:" << mFlowId);
+        return ret;
+    }
+
+    ret = mUnderFs->Put(key, value, srcSlice->GetLength());
+    delete[] value;
+    ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << " flowId:" << mFlowId);
+
+    ret = memCache->Evict(destSliceRef->GetSlice());
+    ChkTrue(ret == BIO_OK, ret, "Failed to evict, key:" << key << " flowId:" << mFlowId);
 
     return BIO_OK;
 }
