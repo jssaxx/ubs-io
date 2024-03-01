@@ -180,7 +180,8 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     return ret;
 }
 
-BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
+BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
+    CacheAttr &attr, bool isDegrade)
 {
     ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
     ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
@@ -210,11 +211,15 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     // 3. write slice to flow
     WCacheSliceRefPtr sliceRef = nullptr;
     BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_FLOW);
-    auto ret = wcache->Put(key, slice, sliceReader, sliceRef, attr);
+    auto ret = wcache->Put(key, slice, sliceReader, sliceRef, attr, isDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Write slice to flow failed, ret:" << ret << ", key:" << key << ".");
         return ret;
+    }
+
+    if (UNLIKELY(isDegrade)) {
+        return BIO_OK;
     }
 
     // 4. Insert slice to index.

@@ -45,7 +45,7 @@ BResult Cache::Recover()
             ret = mWCacheManager->RecoverCache(elem.second);
             ChkTrueNot(ret == BIO_OK, ret);
         } else if (static_cast<uint16_t>(type) == CACHE_FLOW_ID_PREFIX_TYPE_RCACHE &&
-            static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_META_PREFIX) {
+            static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
             ret = mRCacheManager->RecoverCache(elem.second);
             ChkTrueNot(ret == BIO_OK, ret);
         }
@@ -109,15 +109,9 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isDegrade);
     ChkTrueNot(ret == BIO_OK, ret);
 
-    if (!isDegrade) {
-        BIO_TRACE_START(WCACHE_TRACE_PUT);
-        ret = mWCacheManager->Put(key, slice, sliceReader, attr);
-        BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
-    } else {
-        BIO_TRACE_START(WCACHE_TRACE_PUT_BYPASS);
-        ret = PutByPass(key, slice, sliceReader, attr);
-        BIO_TRACE_END(WCACHE_TRACE_PUT_BYPASS, ret);
-    }
+    BIO_TRACE_START(WCACHE_TRACE_PUT);
+    ret = mWCacheManager->Put(key, slice, sliceReader, attr, isDegrade);
+    BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
 
     return ret;
 }
@@ -223,43 +217,6 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     }
 
     return ret;
-}
-
-BResult Cache::PutByPass(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
-{
-    uint64_t addr;
-    auto ret = mMemMalloc(slice->GetLength(), &addr);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Malloc value fail, key:" << key << ", length:" << slice->GetLength());
-        return BIO_ALLOC_FAIL;
-    }
-
-    FlowAddr flowAddr = { addr, 0, static_cast<uint32_t>(slice->GetLength()) };
-    std::vector<FlowAddr> addrs = { flowAddr };
-    SlicePtr sliceP = MakeRef<Slice>(slice->GetLength(), addrs, FLOW_MEMORY);
-    if (sliceP == nullptr) {
-        mMemFree(addr);
-        LOG_ERROR("Malloc slice fail, key:" << key << ", length:" << slice->GetLength());
-        return BIO_ALLOC_FAIL;
-    }
-
-    ret = sliceReader(slice.Get(), sliceP);
-    if (ret != BIO_OK) {
-        mMemFree(addr);
-        LOG_ERROR("Slice reader fail:" << ret << ", key:" << key << ", length:" << slice->GetLength());
-        return ret;
-    }
-
-    UnderFsPtr underFsPtr = UnderFs::Instance();
-    ret = underFsPtr->Put(key, reinterpret_cast<char *>(addr), slice->GetLength());
-    if (ret != BIO_OK) {
-        mMemFree(addr);
-        LOG_ERROR("Put underfs fail:" << ret << ", key:" << key << ", length:" << slice->GetLength());
-        return ret;
-    }
-
-    mMemFree(addr);
-    return BIO_OK;
 }
 
 void Cache::RegGetLocDiskId(GetLocDiskId getLocDiskId)

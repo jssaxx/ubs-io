@@ -108,7 +108,7 @@ TEST_F(TestWCache, test_put_case_return_ok) {
     WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 0, 0, 1024, addrVec);
 
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
-    ret = g_wcacheManager->Put(g_key, wcacheSlice, reader, attr);
+    ret = g_wcacheManager->Put(g_key, wcacheSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     BioServer::Instance()->MemFree(mrInfo.address);
@@ -151,7 +151,7 @@ TEST_F(TestWCache, test_put_repeat_case_return_ok) {
     WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 1024, 1, 1024, addrVec);
 
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
-    ret = g_wcacheManager->Put(g_key, wcacheSlice, reader, attr);
+    ret = g_wcacheManager->Put(g_key, wcacheSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     BioServer::Instance()->MemFree(mrInfo.address);
@@ -164,19 +164,19 @@ TEST_F(TestWCache, test_evict_case_return_ok) {
 
 TEST_F(TestWCache, test_put_nullkey_case_return_fail) {
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
-    auto ret = g_wcacheManager->Put(nullptr, g_wcacheSlice, reader, attr);
+    auto ret = g_wcacheManager->Put(nullptr, g_wcacheSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_put_nullslice_case_return_fail) {
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
-    auto ret = g_wcacheManager->Put(g_key, nullptr, reader, attr);
+    auto ret = g_wcacheManager->Put(g_key, nullptr, reader, attr, false);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_put_nullreader_case_return_fail) {
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
-    auto ret = g_wcacheManager->Put(g_key, g_wcacheSlice, nullptr, attr);
+    auto ret = g_wcacheManager->Put(g_key, g_wcacheSlice, nullptr, attr, false);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
