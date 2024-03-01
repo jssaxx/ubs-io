@@ -64,7 +64,7 @@ TEST_F(TestWCache, test_cacheId_case_return_ok) {
 }
 
 TEST_F(TestWCache, test_createcache_case_return_ok) {
-    auto ret = g_wcacheManager->CreateWCache(g_cacheId, 0, 0, 0);
+    auto ret = g_wcacheManager->CreateWCache(0, g_cacheId, 0, 0, 0);
     EXPECT_EQ(ret, BIO_OK);
 }
 

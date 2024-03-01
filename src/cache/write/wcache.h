@@ -23,8 +23,8 @@ class WCache;
 using WCachePtr = Ref<WCache>;
 class WCache {
 public:
-    WCache(uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
-        : mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId)
+    WCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
+        : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId)
     {}
 
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key)>;
@@ -51,6 +51,11 @@ public:
     uint64_t GetVirCapacity(WCacheTierType type);
 
     uint64_t GetEvictOffset();
+
+    uint64_t GetProcId()
+    {
+        return mProcId;
+    }
 
     uint64_t GetFlowId()
     {
@@ -82,6 +87,7 @@ private:
     BResult ExpiredClearImpl();
 
 private:
+    uint64_t mProcId;
     uint64_t mFlowId;
     uint64_t mPtId;
     uint64_t mPtv;

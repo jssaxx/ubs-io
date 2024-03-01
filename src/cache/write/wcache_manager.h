@@ -41,7 +41,7 @@ public:
 public:
     BResult AllocateFlowId(uint16_t ptId, uint64_t &flowId);
 
-    BResult CreateWCache(uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
+    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
     BResult DeleteWCache(uint64_t ptId);
 
