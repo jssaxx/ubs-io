@@ -202,32 +202,17 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
     return BIO_OK;
 }
 
-BResult RCacheManager::RecoverCache(FlowPtr metaFlow)
+BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 {
-    uint64_t metaFlowId = metaFlow->GetFlowId();
-    uint64_t ptId = CacheFlowIdManager::GetPtId(metaFlowId);
-    uint64_t dataFlowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_RCACHE,
-        RCACHE_FLOW_DISK_DATA_PREFIX);
-    uint64_t innerFlowId = metaFlowId & FLOW_ID_MASK;
-    uint64_t dataFlowId = (dataFlowPrefix << FLOW_ID_SHIFT) | innerFlowId;
-
-    FlowPtr dataFlow = FlowManager::Instance()->GetObject(FLOW_DISK, dataFlowId);
-    ChkTrue(dataFlow != nullptr, BIO_ERR,
-        "Failed to get data flow, flowType:" << FLOW_DISK << ", flowId" << dataFlowId);
+    LOG_INFO("Recover rcache, flowId::" << dataFlow->GetFlowId());
 
     LOG_INFO("Recover rcache, flowId::" << dataFlow->GetFlowId());
 
     BResult ret;
 
-    ret = metaFlow->Seal();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to seal meta flow, ret:" << ret << ", flowId:" << metaFlowId);
-        return ret;
-    }
-
     ret = dataFlow->Seal();
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to seal data flow, ret:" << ret << ", flowId:" << dataFlowId);
+        LOG_ERROR("Failed to seal data flow, ret:" << ret << ", flowId:" << dataFlow->GetFlowId());
         return ret;
     }
 
