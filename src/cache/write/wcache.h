@@ -38,7 +38,7 @@ public:
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr, bool isDegrade);
 
     BResult Seal();
 
@@ -85,6 +85,9 @@ private:
 
     BResult FlushImpl();
     BResult ExpiredClearImpl();
+
+    BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
+        WCacheSliceRefPtr &destSliceRef);
 
 private:
     uint64_t mProcId;

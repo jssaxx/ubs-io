@@ -50,7 +50,7 @@ namespace ock {
 
             BResult DeleteRCache(uint64_t ptId);
 
-            BResult RecoverCache(FlowPtr metaFlow);
+            BResult RecoverCache(FlowPtr dataFlow);
 
             uint64_t GetGCData();
 
