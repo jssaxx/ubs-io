@@ -100,7 +100,7 @@ namespace ock {
         private:
             BResult InsertToIndex(const Key &key, RCacheChunkPtr &chunk);
 
-            BResult DeleteFromIndex(const Key &key);
+            BResult DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk);
 
             void AddToEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk);
 

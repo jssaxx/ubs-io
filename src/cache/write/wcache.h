@@ -27,7 +27,7 @@ public:
         : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId)
     {}
 
-    using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key)>;
+    using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
         const GetGlobEvictOffset evictOffset, EvictCallback evictCallback, const RetryCallback retryCallback,
@@ -39,6 +39,8 @@ public:
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr, bool isDegrade);
+
+    BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
     BResult Seal();
 

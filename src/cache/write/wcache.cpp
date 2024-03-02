@@ -99,6 +99,37 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     return BIO_OK;
 }
 
+BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
+{
+    auto slice = sliceRef->GetSlice();
+    WCacheSlicePtr metaSlice = nullptr;
+    if (slice->GetFlowType() == FLOW_MEMORY) {
+        auto ret = mCacheTiers[WCACHE_MEMORY]->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to get meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:"
+            << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+    } else {
+        auto ret = mCacheTiers[WCACHE_DISK]->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to get meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:"
+            << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+    }
+
+    LOG_INFO("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:"
+        << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+
+    WFlowSliceMeta sliceMeta;
+    auto ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    sliceMeta.hasEvict = 1;
+
+    ret = mSliceOperator.Copy((char *)&sliceMeta, metaSlice.Get());
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    return BIO_OK;
+}
+
 BResult WCache::Seal()
 {
     BResult ret;
@@ -211,8 +242,12 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
 
         diskCache->AddEvictQueue(sliceRef);
 
-        ret = recoverCallback(mPtId, sliceMeta.key, sliceRef);
-        ChkTrueNot(ret == BIO_OK, ret);
+        if (sliceMeta.hasEvict == 0) {
+            ret = recoverCallback(mPtId, sliceMeta.key, sliceRef);
+            ChkTrueNot(ret == BIO_OK, ret);
+        } else {
+            sliceRef->SetState(SLICE_INVALID);
+        }
     }
 
     return BIO_OK;
@@ -355,10 +390,14 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
         }
         if (sliceRef->GetState() == SLICE_VALID) {
             uint64_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
-            mEvictCallback(ptId, sliceMeta->key);
+            mEvictCallback(ptId, sliceMeta->key, sliceRef);
         }
         DecreaseRef();
     };
+
+    sliceMeta->hasEvict = 1;
+    ret = mSliceOperator.Copy((char *)sliceMeta.get(), metaSlice.Get());
+    ChkTrueNot(ret == BIO_OK, ret);
 
     sliceRef->SetSlice(nullptr, callback);
     BIO_TRACE_END(WCACHE_TRACE_EVICT2UNDERFS, 0);
@@ -465,7 +504,7 @@ BResult WCache::ExpiredClearDisk(WCacheSliceRefPtr sliceRef)
         }
         if (sliceRef->GetState() == SLICE_VALID) {
             uint64_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
-            mEvictCallback(ptId, sliceMeta->key);
+            mEvictCallback(ptId, sliceMeta->key, sliceRef);
         }
         DecreaseRef();
     };
