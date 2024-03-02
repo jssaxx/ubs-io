@@ -122,11 +122,8 @@ BResult WCacheManager::DeleteWCache(uint64_t ptId)
 
 BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
 {
-    uint64_t metaFlowId = metaFlow->GetFlowId();
-    uint64_t ptId = CacheFlowIdManager::GetPtId(metaFlowId);
-    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
-    uint64_t innerFlowId = metaFlowId & FLOW_ID_MASK;
-    uint64_t flowId = (flowPrefix << FLOW_ID_SHIFT) | innerFlowId;
+    uint64_t flowId = GenFlowId(metaFlow->GetFlowId());
+    uint64_t ptId = CacheFlowIdManager::GetPtId(flowId);
     uint32_t diskId = metaFlow->GetMediaId();
 
     LOG_INFO("Recover wcache, ptId:" << ptId << ", flowId:" << flowId);
@@ -282,9 +279,10 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 
     // 2. Get write flow
     auto slice = sliceRef->GetSlice();
-    auto wcache = GetWCache(slice->GetFlowId());
+    uint64_t flowId = GenFlowId(slice->GetFlowId());
+    auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
+        LOG_ERROR("Failed to get flow by id:" << flowId << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -535,6 +533,15 @@ void WCacheManager::RetryEvictThread()
         retryFlows.clear();
         sleep(1);
     }
+}
+
+uint64_t WCacheManager::GenFlowId(uint64_t sliceFlowId)
+{
+    uint64_t ptId = CacheFlowIdManager::GetPtId(sliceFlowId);
+    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
+    uint64_t innerFlowId = sliceFlowId & FLOW_ID_MASK;
+    uint64_t flowId = (flowPrefix << FLOW_ID_SHIFT) | innerFlowId;
+    return flowId;
 }
 }
 }

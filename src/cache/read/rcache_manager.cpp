@@ -204,9 +204,7 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
 
 BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 {
-    LOG_INFO("Recover rcache, flowId::" << dataFlow->GetFlowId());
-
-    LOG_INFO("Recover rcache, flowId::" << dataFlow->GetFlowId());
+    LOG_INFO("Recover rcache, flowId:" << dataFlow->GetFlowId());
 
     BResult ret;
 
