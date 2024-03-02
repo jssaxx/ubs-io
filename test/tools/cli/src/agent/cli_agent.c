@@ -1752,7 +1752,7 @@ s32 CLI_AgentInit(u32 uiCurPid, char *pAppName)
         return RETURN_OK;
     }
 
-    /*初始化diagnose agent 端*/    
+    /*初始化diagnose agent 端*/
     ret = diag_agentInit(uiCurPid, pAppName);
     if(RETURN_OK == ret)
     {

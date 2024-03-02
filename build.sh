@@ -6,18 +6,20 @@ CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BUILD_DIR=${PROJ_DIR}/build
 BUILD_TYPE=debug
+DIAGNOSE_FLAG=false
+DIAGNOSE=off
+CMAKE_FLAGS=
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
   mkdir -p ${BUILD_DIR}
 fi
- 
+
 if [[ "$1" == 'Debug' ]]; then
   BUILD_TYPE=debug
 elif [[ "$1" == 'Release' ]]; then
   BUILD_TYPE=release
 fi
 
-CMAKE_FLAGS=""
 if [[ "$2" == 'Ut' ]]; then
     BUILD_UT=ON
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
@@ -29,9 +31,22 @@ if [ -n "${BUILD_UT}" ];then
     sh scripts/build_mockcpp.sh
 fi
 
+if [[ "$3" == 'diagnose' ]];then
+  DIAGNOSE=on
+fi
+
 cd $BUILD_DIR
 echo "BUILD_DIR=${BUILD_DIR}"
- 
+
+if [[ "$BUILD_TYPE" == 'debug' ]]; then
+    CMAKE_FLAGS+='-DOPEN_TEST_TOOLS=ON '
+    DIAGNOSE_FLAG=true
+fi
+
+if [[ "$DIAGNOSE_FLAG $DIAGNOSE" == 'false on' ]]; then
+    CMAKE_FLAGS+='-DOPEN_TEST_TOOLS=ON '
+    DIAGNOSE_FLAG=true
+fi
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 8"
 
@@ -81,9 +96,15 @@ echo "当前cpu架构：$arch"
 if [[ "$BUILD_TYPE $arch" == 'debug aarch64' ]]; then
     \cp bio/lib/libtracepoint.a boostio/lib/.
     \cp bio/lib/libtracepoint.so boostio/lib/.
+fi
+
+if [[ "$DIAGNOSE_FLAG" == 'true' ]]; then
     \cp bio/lib/libcli_agent.a boostio/lib/.
     \cp bio/lib/libcli_agent.so boostio/lib/.
+    \cp bio/lib/libsdk_diagnose.so boostio/lib/.
+    \cp bio/lib/libhtracer_diagnose.so boostio/lib/.
 fi
+
 \cp bio/bin/* boostio/bin/.
 \cp ../scripts/* boostio/scripts/.
 \cp bio/include/*.h boostio/include/.
