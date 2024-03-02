@@ -23,6 +23,9 @@ static void Log(int level, const char *msg)
 BioServer::BioServer() noexcept
 {
     std::vector<ModuleDesc> modules = {
+#ifdef USE_DEBUG_TOOLS
+        { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
+#endif
         { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr, nullptr },
         { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr, nullptr },
         { "Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this) },
@@ -334,6 +337,20 @@ BResult BioServer::BioFlowInit()
     ChkTrue(flowManager != nullptr, BIO_ERR, "Flow manager instance is nullptr.");
     return flowManager->Init();
 }
+
+#ifdef USE_DEBUG_TOOLS
+#define BIO_SERVER_DIAGNOSE_PID 456
+BResult BioServer::BioServerDiagnoseInit()
+{
+    char rootName[] = "bio_server";
+    auto ret = CLI_AgentInit((uint32_t)BIO_SERVER_DIAGNOSE_PID, rootName);
+    if (ret != BIO_OK) {
+        LOG_ERROR("init bio server diagnose fail.");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+#endif
 
 void BioServer::Connection()
 {

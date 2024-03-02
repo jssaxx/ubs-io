@@ -14,6 +14,9 @@
 #include "cm.h"
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
+#ifdef USE_DEBUG_TOOLS
+#include "cli.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -260,7 +263,9 @@ protected:
     void BioMirrorServerExit();
     BResult BioCacheInit();
     BResult BioFlowInit();
-
+#ifdef USE_DEBUG_TOOLS
+    BResult BioServerDiagnoseInit();
+#endif
     void Connection();
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
     BResult HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);

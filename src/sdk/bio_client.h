@@ -16,6 +16,11 @@
 #include "bio.h"
 #include "bio_lock.h"
 #include "mirror_client.h"
+#ifdef USE_DEBUG_TOOLS
+#include "cli.h"
+#include "sdk_diagnose.h"
+#include "htracer_diagnose.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -144,6 +149,13 @@ public:
     }
 
     DEFINE_REF_COUNT_FUNCTIONS
+
+#ifdef USE_DEBUG_TOOLS
+protected:
+    BResult BioDiagnoseSdkInit();
+    BResult BioDiagnoseHtracerInit();
+    BResult BioClientDiagnoseInit(BioService::WorkerMode mode);
+#endif
 private:
     BioService::WorkerMode mMode;
     bool mStarted = false;
