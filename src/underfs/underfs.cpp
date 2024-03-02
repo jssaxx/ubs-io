@@ -112,6 +112,11 @@ BResult UnderFs::Delete(const char *key)
     BIO_TRACE_START(UFS_TRACE_DEL);
     ret = rados_remove(mIoCtx, key);
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
+    if (ret == -ENOENT) {
+        BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
+        LOG_WARN("Fail to check file, not exist, " << key);
+        return BIO_NOT_EXISTS;
+    }
     if (ret < 0) {
         LOG_ERROR("Failed to remove object, ret:" << ret);
         return BIO_ERR;
