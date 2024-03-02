@@ -23,9 +23,7 @@ public:
 
     WCacheSliceRefPtr Aquire(uint64_t ptId, const Key &key);
 
-    void Release(uint64_t ptId, WCacheSliceRefPtr &sliceRef);
-
-    BResult Delete(uint64_t ptId, const Key &key);
+    BResult Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:

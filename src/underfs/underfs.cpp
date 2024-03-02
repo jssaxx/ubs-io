@@ -227,7 +227,7 @@ BResult UnderFs::Delete(const char *key)
     ifstream infile(keyPath.c_str());
     if (!infile.good()) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
-        LOG_ERROR("Fail to check file, " << keyPath.c_str());
+        LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
     }
     infile.close();
