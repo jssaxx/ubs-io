@@ -80,6 +80,8 @@ private:
 
     void RetryEvictThread();
 
+    uint64_t GenFlowId(uint64_t sliceFlowId);
+
 private:
     ReadWriteLock mWCacheManagerLock;
     std::unordered_map<uint64_t, WCachePtr> mWCacheManager;
