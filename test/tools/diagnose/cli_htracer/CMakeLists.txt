@@ -1,0 +1,12 @@
+aux_source_directory(. HTRACE_DIAGNOSE_SRCS)
+add_library(htracer_diagnose_static STATIC ${HTRACE_DIAGNOSE_SRCS})
+set_target_properties(htracer_diagnose_static PROPERTIES OUTPUT_NAME htracer_diagnose)
+target_include_directories(htracer_diagnose_static PUBLIC .)
+target_link_libraries(htracer_diagnose_static PUBLIC cli_agent_static htracer)
+target_include_directories(htracer_diagnose_static PUBLIC ${CMAKE_SOURCE_DIR}/src/htracer ${CMAKE_SOURCE_DIR}/test/tools/cli/include)
+
+add_library(htracer_diagnose_shared SHARED ${HTRACE_DIAGNOSE_SRCS})
+set_target_properties(htracer_diagnose_shared PROPERTIES OUTPUT_NAME htracer_diagnose)
+target_include_directories(htracer_diagnose_shared PUBLIC .)
+target_link_libraries(htracer_diagnose_shared PUBLIC cli_agent_shared htracer)
+target_include_directories(htracer_diagnose_shared PUBLIC ${CMAKE_SOURCE_DIR}/src/htracer ${CMAKE_SOURCE_DIR}/test/tools/cli/include)
