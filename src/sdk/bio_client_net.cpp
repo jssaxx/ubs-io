@@ -106,7 +106,6 @@ BResult BioClientNet::CorrectFd()
         CLIENT_LOG_ERROR("receive file mem fd failed, ret:" << result << ".");
         return BIO_ERR;
     }
-    CLIENT_LOG_INFO("Bio client Correct old memFd " << mShmFd << " to real memFd " << realFd << ".");
     mShmFd = realFd;
     return BIO_OK;
 }
@@ -173,7 +172,9 @@ BResult BioClientNet::ShmInit()
         return ret;
     }
 
-    CLIENT_LOG_INFO("Bio client shm init success. offset:" << mShmOffset << ", length:" << mShmLength << ".");
+    mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
+    CLIENT_LOG_INFO("Bio client shm init success. offset:" << mShmOffset << ", length:" << mShmLength << ", fd:" <<
+        mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShmAddr));
     return BIO_OK;
 }
 
