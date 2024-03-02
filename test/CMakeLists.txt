@@ -1,5 +1,5 @@
 add_subdirectory(benchmarks)
-if (CMAKE_BUILD_TYPE STREQUAL "debug"  AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+if (OPEN_TEST_TOOLS STREQUAL "ON")
     add_subdirectory(tools)
 endif()
 
