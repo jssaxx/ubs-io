@@ -125,9 +125,18 @@ public:
         length = mOptions.memorySize;
     }
 
+    void SetShmInfo(int32_t fd, uint8_t *addr, uint64_t off, uint64_t size)
+    {
+        mShmFd = fd;
+        mShareOffset = off;
+        mShmSize = size;
+        mShareAddress = addr;
+    }
+
     uint8_t* GetShmAddress(uint64_t offset)
     {
-        if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mOptions.memorySize)) {
+        if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mShmSize)) {
+            NET_LOG_ERROR("Shm info, fd:" << mShmFd << ", offset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }
         return (mShareAddress + (offset - mShareOffset));
@@ -135,11 +144,11 @@ public:
 
     uint64_t GetAddressOffset(uint64_t addr)
     {
-        auto realAddr = static_cast<uint8_t*>(reinterpret_cast<void *>(addr));
-        if (UNLIKELY(realAddr < mShareAddress || realAddr >= mShareAddress + mOptions.memorySize)) {
+        auto shmAddr = reinterpret_cast<uintptr_t>(mShareAddress);
+        if (UNLIKELY(addr < shmAddr || addr >= shmAddr + mShmSize)) {
             return UINT64_MAX;
         }
-        return ((realAddr - mShareAddress) + mShareOffset);
+        return ((addr - shmAddr) + mShareOffset);
     }
 
     BResult SyncConnect(ConnectInfo &info)
@@ -526,6 +535,7 @@ private:
     NetExecutorPoolPtr mRequestExecutor = nullptr;
     int32_t mShmFd = -1;
     uint64_t mShareOffset = 0;
+    uint64_t mShmSize = 0;
     uint8_t *mShareAddress = nullptr;
     friend class NetConnectTask;
 };

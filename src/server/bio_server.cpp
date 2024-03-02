@@ -523,7 +523,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
 
 int32_t Put(PutRequest *req)
 {
-    LOG_DEBUG("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
+    LOG_INFO("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
         ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
     WCacheSlicePtr sliceP = MakeRef<WCacheSlice>();
     sliceP->Deserialize(req->sliceBuf, req->sliceLen);

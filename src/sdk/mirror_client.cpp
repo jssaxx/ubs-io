@@ -18,11 +18,6 @@ using namespace ock::bio;
 static void CopyKey(char *dstKey, const char *srcKey)
 {
     auto keyLen = strlen(srcKey);
-    if (UNLIKELY(keyLen + 1 > KEY_MAX_SIZE)) {
-        CLIENT_LOG_ERROR("Copy Key failed, key is too large, length:" << (keyLen + 1)
-        << ", KEY_MAX_SIZE:" << KEY_MAX_SIZE << ".");
-    }
-
     auto ret = memcpy_s(dstKey, KEY_MAX_SIZE, srcKey, keyLen);
     dstKey[keyLen] = '\0';
     if (UNLIKELY(ret != 0)) {
@@ -121,6 +116,8 @@ BResult MirrorClient::LoadAffinityFlow()
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create affinity flow instance failed, ret:" << ret << ", ptId:" << ptId << ".");
+        } else {
+            CLIENT_LOG_INFO("Load affinity flow success, ptId:" << ptId << ".");
         }
     }
     return BIO_OK;
@@ -143,6 +140,7 @@ BResult MirrorClient::LoadOriginView()
         CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
         return ret;
     }
+    CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
     return BIO_OK;
 }
 
@@ -376,9 +374,13 @@ BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *
             realAddr = reinterpret_cast<uint8_t *>(addr[i].chunkId + addr[i].chunkOffset);
         } else {
             realAddr = net::BioClientNet::Instance()->GetShmAddress(offset[i]);
+            if (UNLIKELY(realAddr == nullptr)) {
+                CLIENT_LOG_ERROR("Get shm addr failed offset:" << offset[i] << ".");
+                return BIO_INNER_ERR;
+            }
         }
         auto ret = memcpy_s(realAddr, addr[i].chunkLen, (from + off), addr[i].chunkLen);
-        if (ret != BIO_OK) {
+        if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Failed to copy data from addr:" << (from + off) << " to addr:" << realAddr << ".");
             return BIO_INNER_ERR;
         }
