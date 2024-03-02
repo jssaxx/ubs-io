@@ -367,7 +367,6 @@ BResult MirrorServer::Initialize()
         return BIO_OK;
     }
     RegisterOpcode();
-
     mStarted = true;
     return BIO_OK;
 }
@@ -509,7 +508,7 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         rsp.desc[index].masterNodeId = ptEntry.second.masterNodeId;
         rsp.desc[index].masterDiskId = ptEntry.second.masterDiskId;
         for (uint32_t j = 0; j < ptEntry.second.copys.size(); j++) {
-            rsp.desc[index].copys[j].nodeId = ptEntry.second.copys[j].diskId;
+            rsp.desc[index].copys[j].nodeId = ptEntry.second.copys[j].nodeId;
             rsp.desc[index].copys[j].diskId = ptEntry.second.copys[j].diskId;
             rsp.desc[index].copys[j].state = static_cast<uint16_t>(ptEntry.second.copys[j].state);
         }
@@ -600,12 +599,11 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
-    LOG_DEBUG("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
+    LOG_INFO("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
         ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
 
     WCacheSlicePtr sliceP = MakeRef<WCacheSlice>();
-    char *sliceBuf = static_cast<char *>(static_cast<void *>(req)) + sizeof(PutRequest);
-    sliceP->Deserialize(sliceBuf, req->sliceLen);
+    sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     BResult result = Put(*req, sliceP);
 
     Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
@@ -797,20 +795,22 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
     auto *req = static_cast<GetSliceRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
 
     WCacheSlicePtr sliceP = nullptr;
     BResult ret = GetSlice(req->flowId, req->flowOffset, req->flowIndex, req->length, sliceP);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get slice failed:" << ret << ".");
-        return static_cast<int32_t>(ret);
+        Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
     }
     uint32_t sliceLen = sliceP->GetSerializeLen();
     auto *tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
     if (UNLIKELY(tmp == nullptr)) {
         LOG_ERROR("Alloc memory failed, len:" << sizeof(GetSliceResponse) + sliceLen << ".");
-        return static_cast<int32_t>(BIO_INNER_ERR);
+        Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        return BIO_OK;
     }
     GetSliceResponse *rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
 
@@ -827,10 +827,15 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
         rsp->addrOffset[i]
                 = BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
     }
-    char *sliceBuf = static_cast<char *>(static_cast<void *>(tmp)) + sizeof(GetSliceResponse);
-    sliceP->Serialize(sliceBuf, sliceLen);
-
-    Reply(ctx, BIO_OK, rsp, sizeof(GetSliceResponse) + sliceLen);
+    rsp->sliceLen = sliceLen;
+    uint32_t outSliceLen = 0;
+    sliceP->Serialize(rsp->sliceBuf, outSliceLen);
+    if (UNLIKELY(outSliceLen != sliceLen)) {
+        LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
+        Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+    } else {
+        Reply(ctx, BIO_OK, rsp, sizeof(GetSliceResponse) + sliceLen);
+    }
     delete[] tmp;
     return BIO_OK;
 }
