@@ -19,6 +19,7 @@ struct WFlowSliceMeta {
     uint64_t offset;
     uint64_t length;
     uint64_t magic;
+    uint64_t hasEvict;
 };
 
 enum WCacheTierType {

@@ -51,6 +51,7 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     sliceMeta.offset = slice->GetOffsetInFlow();
     sliceMeta.length = slice->GetLength();
     sliceMeta.magic = slice->GetFlowId();
+    sliceMeta.hasEvict = 0;
     auto ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     ChkTrueNot(ret == BIO_OK, nullptr);
 

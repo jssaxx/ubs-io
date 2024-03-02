@@ -41,18 +41,18 @@ BResult RCache::InsertToIndex(const Key &key, RCacheChunkPtr &chunk)
     indexLock[bucket].Lock();
     auto iter = index[bucket].find(key);
     if (UNLIKELY(iter != index[bucket].end())) {
+        index[bucket][key] = chunk;
         indexLock[bucket].UnLock();
-        LOG_ERROR("Insert read cache key " << key << "have exist, can not insert.");
+        LOG_WARN("Repeat insert, key:" << key);
         return BIO_EXISTS;
     }
 
     index[bucket][key] = chunk;
     indexLock[bucket].UnLock();
-
     return BIO_OK;
 }
 
-BResult RCache::DeleteFromIndex(const Key &key)
+BResult RCache::DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk)
 {
     uint32_t bucket = GetHashBucketByKey(key);
 
@@ -62,6 +62,14 @@ BResult RCache::DeleteFromIndex(const Key &key)
         indexLock[bucket].UnLock();
         LOG_INFO("Delete read cache key:" << key << "have not exist.");
         return BIO_NOT_EXISTS;
+    }
+    RCacheChunkPtr ichunk = iter->second;
+    if ((ichunk->GetValue().indexInFlow != chunk->GetValue().indexInFlow) ||
+        (ichunk->GetValue().flowOffset != chunk->GetValue().flowOffset) ||
+        (ichunk->GetValue().length != chunk->GetValue().length)) {
+        indexLock[bucket].UnLock();
+        LOG_INFO("Expired chunk, key:" << key);
+        return BIO_OK;
     }
     index[bucket].erase(iter);
     indexLock[bucket].UnLock();
@@ -350,7 +358,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_INDEX);
     ret = InsertToIndex(chunk->GetKey(), chunk);
     BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_INDEX, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
+    if (UNLIKELY((ret != BIO_OK) && (ret != BIO_EXISTS))) {
         LOG_ERROR("Insert read cache key " << key << " to index failed.");
         return BIO_ERR;
     }
@@ -490,7 +498,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     chunk->SetTierType(READ_CACHE_TIER_MEM);
 
     ret = InsertToIndex(chunk->GetKey(), chunk);
-    if (UNLIKELY(ret != BIO_OK)) {
+    if (UNLIKELY((ret != BIO_OK) && (ret != BIO_EXISTS))) {
         LOG_ERROR("Insert read cache key" << key << "to index failed.");
         return BIO_ERR;
     }
@@ -624,7 +632,7 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
         truncateQ[READ_CACHE_TIER_DISK].PopBack();
         truncateLock[READ_CACHE_TIER_DISK].UnLock();
         chunk->lock.lock();
-        auto ret = DeleteFromIndex(chunk->GetKey());
+        auto ret = DeleteFromIndex(chunk->GetKey(), chunk);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_INFO("Get read cache key:" << chunk->GetKey() << "not exist.");
             chunk->lock.unlock();
