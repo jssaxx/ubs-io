@@ -60,16 +60,16 @@ static void HandlePerf(std::vector<std::string> cmds);
 int diagnose::BioSdkCommand::Initialize() noexcept
 {
     CLI_CMD_S command;
-    strncpy(command.szCommand, "bioSdk", CLI_MAX_COMMAND_LEN);
-    strncpy(command.szDescription, "bioSdk commands.", CLI_MAX_CMD_DESC_LEN);
+    strncpy(command.szCommand, "biosdk", CLI_MAX_COMMAND_LEN);
+    strncpy(command.szDescription, "biosdk commands.", CLI_MAX_CMD_DESC_LEN);
     command.fnCmdDo = BioSdkDebugProcess;
     command.fnPrintCmdHelp = BioSdkDebugHelp;
     auto result = CLI_RegCmd(&command);
     if (result != 0) {
-        printf("register bioSdk diagnose failed.");
+        printf("register biosdk diagnose failed.");
         return -1;
     } else {
-        printf("register bioSdk diagnose succeeded\n");
+        printf("register biosdk diagnose succeeded\n");
     }
 
     return 0;
@@ -77,7 +77,7 @@ int diagnose::BioSdkCommand::Initialize() noexcept
 
 void diagnose::BioSdkCommand::Destroy() noexcept
 {
-    CLI_UnRegCmd((char *)"bioSdk");
+    CLI_UnRegCmd((char *)"biosdk");
 }
 
 static void HandleList()
@@ -104,16 +104,24 @@ static void HandleCreate(std::vector<std::string> cmds)
             return;
         }
     }
-    auto tenantId = std::stoul(cmds[1]);
-    auto affinity = std::stoul(cmds[2]);
-    auto strategy = std::stoul(cmds[3]);
+    uint32_t tenantId = 0;
+    uint32_t affinity = 0;
+    uint32_t strategy = 0;
+    try {
+        tenantId = std::stoul(cmds[1]);
+        affinity = std::stoul(cmds[2]);
+        strategy = std::stoul(cmds[3]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
     BioService::Descriptor desc = { tenantId, static_cast<AffinityStrategy>(affinity),
                                     static_cast<WriteStrategy>(strategy)};
     auto cache = BioService::CreateCache(desc);
     if (cache == nullptr) {
         CLI_PrintBuf("Create cache failed.\n");
     } else {
-        CLI_PrintBuf("Create and open cache success, tenantId:%d.\n", tenantId);
+        CLI_PrintBuf("Create and open cache success, tenantId:%u.\n", tenantId);
         gCurrentCache = cache;
     }
 }
@@ -124,12 +132,18 @@ static void HandleOpen(std::vector<std::string> cmds)
         CLI_PrintBuf("invalid input.\n");
         return;
     }
-    auto tenantId = std::stoul(cmds[1]);
+    uint32_t tenantId = 0;
+    try {
+        tenantId = std::stoul(cmds[1]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
     auto cache = BioService::GetCache(tenantId);
     if (cache == nullptr) {
-        CLI_PrintBuf("The cache does not exist, tenantId:%d\n", tenantId);
+        CLI_PrintBuf("The cache does not exist, tenantId:%u\n", tenantId);
     } else {
-        CLI_PrintBuf("Open cache success, tenantId:%d\n", tenantId);
+        CLI_PrintBuf("Open cache success, tenantId:%u\n", tenantId);
         gCurrentCache = cache;
     }
 }
@@ -140,9 +154,15 @@ static void HandleDestroy(std::vector<std::string> cmds)
         CLI_PrintBuf("invalid input.\n");
         return;
     }
-    auto tenantId = std::stoul(cmds[1]);
+    uint32_t tenantId = 0;
+    try {
+        tenantId = std::stoul(cmds[1]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
     BioService::DestroyCache(tenantId);
-    CLI_PrintBuf("Destroy cache success, tenantId:%d.\n", tenantId);
+    CLI_PrintBuf("Destroy cache success, tenantId:%u.\n", tenantId);
 }
 
 static void HandlePut(std::vector<std::string> cmds)
@@ -155,8 +175,16 @@ static void HandlePut(std::vector<std::string> cmds)
     }
     auto key = cmds[1].c_str();
     auto filePath = cmds[2].c_str();
-    auto length = std::stoull(cmds[3]);
-    auto sliceId = std::stoul(cmds[4]);
+    uint64_t length = 0;
+    uint32_t sliceId = 0;
+    try {
+        auto length = std::stoull(cmds[3]);
+        auto sliceId = std::stoul(cmds[4]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
+
 
     Bio::ObjLocation location{};
     auto ret = gCurrentCache->CalculateLocation(sliceId, location);
@@ -197,10 +225,20 @@ static void HandleGet(std::vector<std::string> cmds)
             return;
         }
     }
+    uint64_t offset = 0;
+    uint64_t length = 0;
+    uint64_t location = 0;
+
     auto key = cmds[1].c_str();
-    auto offset = std::stoull(cmds[2]);
-    auto length = std::stoull(cmds[3]);
-    auto location = std::stoull(cmds[4]);
+    try {
+        offset = std::stoull(cmds[2]);
+        length = std::stoull(cmds[3]);
+        location = std::stoull(cmds[4]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
+
     auto filePath = cmds[5].c_str();
     FILE *fp = nullptr;
     if ((fp = fopen(filePath, "w")) == nullptr) {
@@ -215,7 +253,7 @@ static void HandleGet(std::vector<std::string> cmds)
         CLI_PrintBuf("Failed to get a value. result:%d.\n", ret);
     } else {
         CLI_PrintBuf("Get value success, key:%s, offset:%d, length:%d, realLen:%d, location:%llu\n",
-            key, offset, length, realLen, locationInfo.location[0]);
+                     key, offset, length, realLen, locationInfo.location[0]);
         if (fwrite(value, sizeof(char), realLen, fp) != realLen) {
             CLI_PrintBuf("Write value to file failed, errno:%d\n", errno);
         }
@@ -230,8 +268,14 @@ static void HandleStat(std::vector<std::string> cmds)
         CLI_PrintBuf("invalid input.\n");
         return;
     }
+    uint64_t location = 0;
     auto key = cmds[1].c_str();
-    auto location = std::stoull(cmds[2]);
+    try {
+        location = std::stoull(cmds[2]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
     Bio::ObjLocation locationInfo{ location, 0 };
     Bio::ObjStat keyStat = gCurrentCache->Stat(key, locationInfo);
     if (keyStat.time == 0) {
@@ -263,10 +307,19 @@ static void HandleLoad(std::vector<std::string> cmds)
             return;
         }
     }
+    uint64_t offset = 0;
+    uint64_t length = 0;
+    uint64_t location = 0;
     auto key = cmds[1].c_str();
-    auto offset = std::stoull(cmds[2]);
-    auto length = std::stoull(cmds[3]);
-    auto location = std::stoull(cmds[4]);
+    try {
+        offset = std::stoull(cmds[2]);
+        length = std::stoull(cmds[3]);
+        location = std::stoull(cmds[4]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
+
     int loadFlag = 0;
 
     Bio::ObjLocation locationInfo{ location, 0 };
@@ -285,8 +338,14 @@ static void HandleDelete(std::vector<std::string> cmds)
         CLI_PrintBuf("invalid input.\n");
         return;
     }
+    uint64_t location = 0;
     auto key = cmds[1].c_str();
-    auto location = std::stoull(cmds[2]);
+    try {
+        location = std::stoull(cmds[2]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
     Bio::ObjLocation locationInfo{ location, 0 };
     auto ret = gCurrentCache->Delete(key, locationInfo);
     if (ret != RET_CACHE_OK) {
@@ -311,7 +370,7 @@ static void HandleShow(std::vector<std::string> cmds)
             std::map<uint16_t, CmPtInfo> ptView = BioClient::Instance()->GetMirror()->GetPtView();
             CLI_PrintBuf("Pt view:\n");
             for (auto &ptEntry : ptView) {
-                CLI_PrintBuf("%s\n", ptEntry.second.ToString());
+                CLI_PrintBuf("%s\n", ptEntry.second.ToString().c_str());
             }
         } else if (type == "affinity") {
             std::vector<uint16_t> ptList = BioClient::Instance()->GetMirror()->ListLocalAffinityPt();
@@ -328,18 +387,18 @@ static void HandleShow(std::vector<std::string> cmds)
         std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioClient::Instance()->GetMirror()->GetNodeView();
         CLI_PrintBuf("Node view:\n");
         for (auto &nodeEntry : nodeView) {
-            CLI_PrintBuf("%s\n", nodeEntry.second.ToString());
+            CLI_PrintBuf("%s\n", nodeEntry.second.ToString().c_str());
         }
         CLI_PrintBuf("Local Node:");
         CmNodeId localNode = BioClient::Instance()->GetMirror()->GetLocalNodeInfo();
-        CLI_PrintBuf("%s\n", localNode.ToString());
+        CLI_PrintBuf("%s\n", localNode.ToString().c_str());
     } else if (viewType == "trace") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d.\n", cmds.size());
             return;
         }
         auto info = ock::htracer::GetTraceInfo();
-        CLI_PrintBuf("%s\n", info);
+        CLI_PrintBuf("%s\n", info.c_str());
     }
 }
 
@@ -420,10 +479,19 @@ static void HandlePerf(std::vector<std::string> cmds)
         CLI_PrintBuf("Create and open a cache first!\n");
         return;
     }
+
+    uint32_t bs = 0;
+    uint32_t ioDepth = 0;
+    uint32_t size = 0;
     auto rw = cmds[1].c_str();
-    auto bs = (std::stoul(cmds[2]) * 1024);
-    auto ioDepth = std::stoul(cmds[3]);
-    auto size = (std::stoul(cmds[4]) * 1024 * 1024);
+    try {
+        bs = (std::stoul(cmds[2]) * 1024);
+        ioDepth = std::stoul(cmds[3]);
+        size = (std::stoul(cmds[4]) * 1024 * 1024);
+    } catch (std::exception e) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
     auto count = size / bs;
 
     perfTestRunner runner = nullptr;
@@ -436,7 +504,7 @@ static void HandlePerf(std::vector<std::string> cmds)
         return;
     }
 
-    CLI_PrintBuf("Perf test start, rw:%s, bs:%d, ioDepth:%d, size:%d, count:%d.\n", rw, bs, ioDepth, size, count);
+    CLI_PrintBuf("Perf test start, rw:%s, bs:%u, ioDepth:%u, size:%u, count:%d.\n", rw, bs, ioDepth, size, count);
     auto *th = (pthread_t *)malloc(sizeof(pthread_t) * ioDepth);
     auto *param = (PerfTestParam *)malloc(sizeof(PerfTestParam) * ioDepth);
     if (th == nullptr || param == nullptr) {
@@ -511,17 +579,17 @@ static void HandlePerf(std::vector<std::string> cmds)
 
 static void BioSdkDebugHelp(char *command, int detail) noexcept
 {
-    CLI_PrintBuf("list: bioSdk list caches\n");
-    CLI_PrintBuf("create cache: bioSdk create [tenantId] [affinity] [strategy]\n");
-    CLI_PrintBuf("open cache: bioSdk open [tenantId]\n");
-    CLI_PrintBuf("destroy cache: bioSdk destroy [tenantId]\n");
-    CLI_PrintBuf("put value to cache: bioSdk put [key] [filePath] [length] [sliceId]\n");
-    CLI_PrintBuf("get value from cache: bioSdk get [key] [offset] [length] [location] [filePath]\n");
-    CLI_PrintBuf("get key state from cache: bioSdk stat [key] [location]\n");
-    CLI_PrintBuf("load key to cache: bioSdk load [key] [offset] [length] [location]\n");
-    CLI_PrintBuf("delete key: bioSdk delete [key] [location]\n");
-    CLI_PrintBuf("show view: bioSdk show [pt/node/trace] [all/affinity]\n");
-    CLI_PrintBuf("perf test: bioSdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
+    CLI_PrintBuf("list: biosdk list caches\n");
+    CLI_PrintBuf("create cache: biosdk create [tenantId] [affinity] [strategy]\n");
+    CLI_PrintBuf("open cache: biosdk open [tenantId]\n");
+    CLI_PrintBuf("destroy cache: biosdk destroy [tenantId]\n");
+    CLI_PrintBuf("put value to cache: biosdk put [key] [filePath] [length] [sliceId]\n");
+    CLI_PrintBuf("get value from cache: biosdk get [key] [offset] [length] [location] [filePath]\n");
+    CLI_PrintBuf("get key state from cache: biosdk stat [key] [location]\n");
+    CLI_PrintBuf("load key to cache: biosdk load [key] [offset] [length] [location]\n");
+    CLI_PrintBuf("delete key: biosdk delete [key] [location]\n");
+    CLI_PrintBuf("show view: biosdk show [pt/node/trace] [all/affinity]\n");
+    CLI_PrintBuf("perf test: biosdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     CLI_PrintBuf("exit: exit console\n");
 }
 

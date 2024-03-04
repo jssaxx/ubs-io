@@ -517,6 +517,36 @@ def check_config(conf_path):
 
     return 0
 
+def get_nodes_info_no_conf():
+    user_str = "user"
+    password_str = "password"
+    global ZK_IP
+    global NODE_COUNT
+    with open(HOST_IP_LIST) as host_file:
+        count = 0
+        for temp in host_file:
+            ip_disk = temp.split("::")
+            host_ip = ip_disk[0].strip()
+            if count == 0 :
+                ZK_IP = host_ip
+            net_ip = ip_disk[1].strip()
+            disk_path = ip_disk[2].strip()
+            echo_to_terminal("node{0} net: {1} disk_path: {2}.".format(count, net_ip, disk_path))
+            if not is_valid_ip_address(host_ip):
+                error_log("invalid host_ip form {0}.".format(host_ip))
+                return False
+            template = {
+                "node id": count,
+                "ip": host_ip,
+                "net": net_ip,
+                "port": DEFAULT_SSH_PORT,
+                "disk": disk_path,
+                user_str: INSTALL_USER,
+                password_str: INSTALL_PASSWORD
+            }
+            count += 1
+            nodes_info.append(template)
+    return 0
 
 def get_nodes_info(conf_path):
     user_str = "user"
@@ -551,6 +581,7 @@ def get_nodes_info(conf_path):
     config = configparser.ConfigParser()
     config.read(conf_path, encoding='utf-8')
     config["bio"]["bio.cm.nodes_count"] = str(NODE_COUNT)
+    config["bio"]["bio.cm.initial.nodes_count"] = str(NODE_COUNT)
     with open(conf_path, 'w') as originConfig:
         config.write(originConfig)
     return 0
@@ -561,7 +592,7 @@ def node_basic_info_init():
         logging.error("pid:{0} get info from {1} failed.".format(PID, "host_ip_list"))
         return -1
     # 获取节点信息
-    if get_nodes_info() != 0:
+    if get_nodes_info_no_conf() != 0:
         logging.error("pid:{0} get_nodes_info \"{0}\" failed".format(PID, "host_ip_list"))
         return -1
     logging.info("pid:{0} initialization for installation works fine.".format(PID))
