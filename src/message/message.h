@@ -188,6 +188,20 @@ typedef struct {
     time_t time;
 } StatResponse;
 
+/* List */
+typedef struct {
+    RequestComm comm;
+    char prefix[KEY_MAX_SIZE];
+    uint16_t ptId;
+    uint32_t flag;
+} ListRequest;
+
+typedef struct {
+    uint32_t reserved;
+    uint32_t num;
+    char statBuf[0];
+} ListResponse;
+
 /* Load */
 typedef struct {
     RequestComm comm;

@@ -29,7 +29,7 @@ public:
         const char *key;
         const char *value;
         uint64_t length;
-        Bio::ObjLocation location;
+        ObjLocation location;
     };
 
     struct MirrorGet {
@@ -38,7 +38,7 @@ public:
         char *value;
         uint64_t offset;
         uint64_t length;
-        Bio::ObjLocation location;
+        ObjLocation location;
     };
 
     static constexpr uint32_t defaultMaxFlowSize = 1024;
@@ -46,12 +46,12 @@ public:
     BResult Initialize();
     BResult Start();
 
-    explicit MirrorClient(BioService::WorkerMode mode) : mMode(mode) {}
+    explicit MirrorClient(WorkerMode mode) : mMode(mode) {}
     ~MirrorClient() = default;
 
     uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
 
-    inline uint16_t ParseLocation(Bio::ObjLocation location)
+    inline uint16_t ParseLocation(ObjLocation location)
     {
         return static_cast<uint16_t>(location.location[0]);
     }
@@ -60,12 +60,14 @@ public:
 
     BResult Get(MirrorGet &param, uint64_t &realLen);
 
-    BResult DeleteKey(const char *key, const Bio::ObjLocation &location);
+    BResult DeleteKey(const char *key, const ObjLocation &location);
 
-    BResult Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location,
+    BResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
         const Bio::LoadCallback &callback, void *context);
 
-    Bio::ObjStat StatObject(const char *key, const Bio::ObjLocation &location);
+    BResult ListAll(const char *prefix, std::vector<ObjStat> &objs);
+
+    BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
@@ -126,9 +128,13 @@ private:
     void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback) const;
     BResult SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req);
 
-    BResult StatRemote(uint16_t dstNid, StatRequest &req, Bio::ObjStat &objInfo);
-    BResult StatLocal(StatRequest &req, Bio::ObjStat &objInfo) const;
-    BResult SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, Bio::ObjStat &objInfo);
+    BResult StatRemote(uint16_t dstNid, StatRequest &req, ObjStat &objInfo);
+    BResult StatLocal(StatRequest &req, ObjStat &objInfo) const;
+    BResult SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjStat &objInfo);
+
+    BResult ListRemote(uint16_t nid, ListRequest &req, std::vector<ObjStat> &objs);
+    BResult ListLocal(ListRequest &req, std::vector<ObjStat> &objs);
+    BResult SendListRequest(ListRequest &req, std::vector<ObjStat> &objs);
 
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
@@ -178,7 +184,7 @@ private:
 private:
     std::unordered_map<uint16_t, FlowInstance *> mFlowMap;
     ReadWriteLock mLock;
-    BioService::WorkerMode mMode;
+    WorkerMode mMode;
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;

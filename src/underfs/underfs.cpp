@@ -4,6 +4,8 @@
 #include "underfs.h"
 #include "bio_log.h"
 #include "bio_trace.h"
+#include "bio_functions.h"
+#include "message.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -138,6 +140,26 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
     }
     return BIO_OK;
 }
+
+BResult UnderFs::List(const char *prefix, std::vector<ObjStat> &objStat)
+{
+    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
+
+    rados_list_ctx_t *listCtx = nullptr;
+    int ret = rados_nobjects_list_open(mIoCtx, listCtx);
+    if (ret < 0) {
+        LOG_ERROR("Failed to list open, ret:" << ret);
+        return BIO_ERR;
+    }
+
+    BIO_TRACE_START(UFS_TRACE_LIST);
+    char *entry = nullptr;
+    while (rados_nobjects_list_next(listCtx, &entry, nullptr, nullptr) != (-ENOENT)) {
+        LOG_INFO("List result, entry:" << entry);
+    }
+    BIO_TRACE_END(UFS_TRACE_LIST, ret);
+    return BIO_OK;
+}
 #else
 BResult UnderFs::Init()
 {
@@ -260,12 +282,36 @@ BResult UnderFs::Stat(const char *key, ObjStat &objStat)
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
     }
-
+    CopyKey(objStat.key, key, KEY_MAX_SIZE);
     objStat.size = file_stat.st_size;
-    objStat.mTime = file_stat.st_ctime;
+    objStat.time = file_stat.st_ctime;
     BIO_TRACE_END(UFS_TRACE_STAT, 0);
     return BIO_OK;
 }
+
+BResult UnderFs::List(const char *prefix, std::vector<ObjStat> &objStat)
+{
+    std::string keyPath = CEPH_PATH_EXT;
+    struct dirent *ptr;
+    DIR *dir = opendir(keyPath.c_str());
+    while ((ptr = readdir(dir)) != nullptr) {
+        if (memcmp(ptr->d_name, prefix, strlen(prefix)) == 0) {
+            struct stat file_stat;
+            if (stat(keyPath.c_str(), &file_stat) != 0) {
+                LOG_ERROR("Fail to check file, " << keyPath.c_str());
+                continue;
+            }
+            ObjStat statInfo;
+            CopyKey(statInfo.key, ptr->d_name, KEY_MAX_SIZE);
+            statInfo.size = file_stat.st_size;
+            statInfo.time = file_stat.st_ctime;
+            objStat.push_back(statInfo);
+        }
+    }
+    closedir(dir);
+    return BIO_OK;
+}
+
 #endif
 }
 }
