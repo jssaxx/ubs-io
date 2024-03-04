@@ -77,6 +77,8 @@ public:
 
     BResult Evict(const WCacheSlicePtr &slice);
 
+    bool IsEmptyEvictSliceQueue();
+
     std::list<WCacheSliceRefPtr> GetEvictSliceQueue();
 
     DEFINE_REF_COUNT_FUNCTIONS;
