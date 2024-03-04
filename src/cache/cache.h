@@ -53,6 +53,8 @@ public:
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
+    BResult List(char *prefix, uint16_t ptId, uint32_t flag, std::vector<ObjStat> &objs);
+
     BResult Delete(uint64_t ptId, const Key &key);
 
     void RegGetLocDiskId(GetLocDiskId getLocDiskId);

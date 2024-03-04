@@ -235,14 +235,14 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     return ToCResult(ret);
 }
 
-CResult Bio::ListAll(const char *prefix, std::vector<std::pair<char *, ObjStat>> &objs)
+CResult Bio::ListAll(const char *prefix, std::vector<ObjStat> &objs)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
 
     if (UNLIKELY(prefix == nullptr)) {
-        CLIENT_LOG_ERROR("Invalid ListAll parameter, prefix:" << prefix << ".");
+        CLIENT_LOG_ERROR("Invalid list parameter, prefix:" << prefix << ".");
         return RET_CACHE_EPERM;
     }
 
@@ -257,25 +257,24 @@ CResult Bio::ListAll(const char *prefix, std::vector<std::pair<char *, ObjStat>>
     return ToCResult(ret);
 }
 
-Bio::ObjStat Bio::Stat(const char *key, const ObjLocation &location)
+CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
 {
     if (UNLIKELY(!gClient->Ready())) {
-        return { 0, 0 };
+        return RET_CACHE_NOT_READY;
     }
 
     if (UNLIKELY(!KeyValid(key))) {
         CLIENT_LOG_ERROR("Invalid Stat parameter, key:" << key << ".");
-        return { 0, 0 };
+        return RET_CACHE_EPERM;
     }
 
     BIO_TRACE_START(SDK_TRACE_STAT);
-    Bio::ObjStat stat = gClient->Stat(key, location);
-    BResult ret = (stat.size == 0) ? BIO_ERR : BIO_OK;
+    auto ret = gClient->Stat(key, location, stat);
     BIO_TRACE_END(SDK_TRACE_STAT, ret);
-    return stat;
+    return ToCResult(ret);
 }
 
-std::shared_ptr<Bio> BioService::CreateCache(const BioService::Descriptor &desc)
+std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
 {
     if (UNLIKELY(desc.tenantId == 0 || desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT)) {
         CLIENT_LOG_ERROR("Invalid cache descriptor, tenantId:" << desc.tenantId << ", affinity:" << desc.affinity <<
@@ -299,12 +298,12 @@ std::shared_ptr<Bio> BioService::CreateCache(const BioService::Descriptor &desc)
     return cache;
 }
 
-std::shared_ptr<Bio> BioService::GetCache(uint64_t tenantId)
+CacheDescriptor BioService::GetCache(uint64_t tenantId)
 {
     return gClient->Query(tenantId);
 }
 
-std::unordered_map<uint64_t, std::shared_ptr<Bio>> BioService::ListCache()
+std::vector<CacheDescriptor> BioService::ListCache()
 {
     return gClient->List();
 }
@@ -327,4 +326,201 @@ void BioService::Exit()
     gClient->Stop();
 }
 }
+}
+
+/********************************* Boostio api implementation in C language **********************/
+using namespace ock::bio;
+
+std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
+std::mutex gLock;
+
+CResult BioInitialize(WorkerMode mode)
+{
+    return BioService::Initialize(mode);
+}
+
+void BioExit()
+{
+    BioService::Exit();
+}
+
+CResult BioCreateCache(CacheDescriptor desc)
+{
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(desc.tenantId);
+        if (UNLIKELY(iter != gBioCacheMap.end())) {
+            return RET_CACHE_EXISTS;
+        }
+    }
+    auto bioInstance = ock::bio::BioService::CreateCache(desc);
+    if (UNLIKELY(bioInstance == nullptr)) {
+        return RET_CACHE_ERROR;
+    }
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        gBioCacheMap.insert({ desc.tenantId, bioInstance});
+    }
+    return RET_CACHE_OK;
+}
+
+CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc)
+{
+    if (UNLIKELY(desc == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    std::unique_lock<std::mutex> locker(gLock);
+    auto iter = gBioCacheMap.find(tenantId);
+    if (UNLIKELY(iter == gBioCacheMap.end())) {
+        return RET_CACHE_NOT_FOUND;
+    }
+    *desc = { iter->second->mTenantId, iter->second->mAffinity, iter->second->mStrategy };
+    return RET_CACHE_OK;
+}
+
+void BioDestroyCache(uint64_t tenantId)
+{
+    std::unique_lock<std::mutex> locker(gLock);
+    auto iter = gBioCacheMap.find(tenantId);
+    if (UNLIKELY(iter == gBioCacheMap.end())) {
+        return;
+    }
+    gBioCacheMap.erase(iter);
+}
+
+CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *location)
+{
+    if (UNLIKELY(location == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    ObjLocation outLocation;
+    auto ret = bioInstance->CalculateLocation(objectId, outLocation);
+    location->location[0] = outLocation.location[0];
+    location->location[1] = outLocation.location[1];
+    return ret;
+}
+
+CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->Put(key, value, length, location);
+}
+
+CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
+               char *value, uint64_t *realLength)
+{
+    if (UNLIKELY(realLength == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    uint64_t outLen = 0;
+    auto ret = bioInstance->Get(key, offset, length, location, value, outLen);
+    *realLength = outLen;
+    return ret;
+}
+
+CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->Delete(key, location);
+}
+
+CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
+                LoadCallback callback, void *context)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->Load(key, offset, length, location, callback, context);
+}
+
+CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **Objs, uint64_t *objNum)
+{
+    if (UNLIKELY(objNum == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    std::vector<ObjStat> objsVec;
+    auto ret = bioInstance->ListAll(prefix, objsVec);
+    if (UNLIKELY(ret != RET_CACHE_OK)) {
+        return ret;
+    }
+
+    *objNum = objsVec.size();
+    *Objs = (ObjStat *)malloc(sizeof(ObjStat) * (*objNum));
+    for (uint64_t idx = 0; idx < (*objNum); idx++) {
+        (*Objs)[idx] = objsVec[idx];
+    }
+    return RET_CACHE_OK;
+}
+
+CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
+{
+    if (UNLIKELY(stat == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    if (UNLIKELY(key == nullptr || stat == nullptr)) {
+        return RET_CACHE_ERROR;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    ObjStat statInfo;
+    auto ret = bioInstance->Stat(key, location, statInfo);
+    *stat = statInfo;
+    return ret;
 }

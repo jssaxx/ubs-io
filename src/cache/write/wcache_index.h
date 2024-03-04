@@ -23,6 +23,8 @@ public:
 
     WCacheSliceRefPtr Aquire(uint64_t ptId, const Key &key);
 
+    BResult FuzzyAquire(uint64_t ptId, const char *prefix, std::vector<ObjStat> &objs);
+
     BResult Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 
     DEFINE_REF_COUNT_FUNCTIONS;

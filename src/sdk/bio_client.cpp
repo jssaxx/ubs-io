@@ -12,7 +12,7 @@
 #endif
 using namespace ock::bio;
 
-BResult BioClient::BioLoggerInit(BioService::WorkerMode mode)
+BResult BioClient::BioLoggerInit(WorkerMode mode)
 {
     auto defaultLogLevel = static_cast<int32_t>(BioClientLog::Level::LOG_LEVEL_INFO);
     auto logMode = static_cast<int32_t>(mode);
@@ -57,10 +57,10 @@ BResult BioClient::BioDiagnoseHtracerInit()
     return ret;
 }
 
-BResult BioClient::BioClientDiagnoseInit(BioService::WorkerMode mode)
+BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 {
     BResult ret = BIO_OK;
-    if (mode == BioService::SEPARATES) {
+    if (mode == SEPARATES) {
         char rootName[] = "bio_sdk";
         ret =  CLI_AgentInit(SDK_DIAGNOSE_PID, rootName);
         if (ret != BIO_OK) {
@@ -84,7 +84,7 @@ BResult BioClient::BioClientDiagnoseInit(BioService::WorkerMode mode)
 }
 #endif
 
-BResult BioClient::Start(BioService::WorkerMode mode)
+BResult BioClient::Start(WorkerMode mode)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {

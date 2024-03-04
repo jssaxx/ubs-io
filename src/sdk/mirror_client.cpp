@@ -8,27 +8,13 @@
 #include "bio_client_log.h"
 #include "bio_trace.h"
 #include "message_op.h"
+#include "bio_functions.h"
 #include "bio_client.h"
 #include "bio_client_agent.h"
 #include "bio_client_net.h"
 #include "mirror_client.h"
 
 using namespace ock::bio;
-
-static void CopyKey(char *dstKey, const char *srcKey)
-{
-    auto keyLen = strlen(srcKey);
-    if (UNLIKELY(keyLen + 1 > KEY_MAX_SIZE)) {
-        CLIENT_LOG_ERROR("Copy Key failed, key is too large, length:" << (keyLen + 1)
-        << ", KEY_MAX_SIZE:" << KEY_MAX_SIZE << ".");
-    }
-
-    auto ret = memcpy_s(dstKey, KEY_MAX_SIZE, srcKey, keyLen);
-    dstKey[keyLen] = '\0';
-    if (UNLIKELY(ret != 0)) {
-        CLIENT_LOG_ERROR("Copy Key failed, key:" << srcKey << ", len:" << sizeof(srcKey) << ".");
-    }
-}
 
 BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     uint64_t &flowId)
@@ -253,7 +239,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
 
     GetRequest req;
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
-    CopyKey(req.key, param.key);
+    CopyKey(req.key, param.key, KEY_MAX_SIZE);
     req.ptId = ptId;
     req.offset = param.offset;
     req.length = param.length;
@@ -266,7 +252,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
     return ret;
 }
 
-BResult MirrorClient::DeleteKey(const char *key, const Bio::ObjLocation &location)
+BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
 {
     uint16_t ptId = ParseLocation(location);
     CmPtInfo ptEntry;
@@ -278,7 +264,7 @@ BResult MirrorClient::DeleteKey(const char *key, const Bio::ObjLocation &locatio
 
     DeleteRequest req{};
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
-    CopyKey(req.key, key);
+    CopyKey(req.key, key, KEY_MAX_SIZE);
     ret = SendDeleteRequest(ptEntry, req);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send delete request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
@@ -286,7 +272,7 @@ BResult MirrorClient::DeleteKey(const char *key, const Bio::ObjLocation &locatio
     return ret;
 }
 
-BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location,
+BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
     const Bio::LoadCallback &callback, void *context)
 {
     uint16_t ptId = ParseLocation(location);
@@ -299,7 +285,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
 
     LoadRequest req{};
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
-    CopyKey(req.key, key);
+    CopyKey(req.key, key, KEY_MAX_SIZE);
     req.offset = offset;
     req.length = length;
     ret = SendLoadRequest(ptEntry, req, callback, context);
@@ -309,27 +295,37 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
     return ret;
 }
 
-Bio::ObjStat MirrorClient::StatObject(const char *key, const Bio::ObjLocation &location)
+BResult MirrorClient::ListAll(const char *prefix, std::vector<ObjStat> &objs)
+{
+    ListRequest req{};
+    req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
+    CopyKey(req.prefix, prefix, KEY_MAX_SIZE);
+    auto ret = SendListRequest(req, objs);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send list request failed, ret:" << ret << ", prefix:" << prefix << ".");
+    }
+    return ret;
+}
+
+BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, ObjStat &stat)
 {
     uint16_t ptId = ParseLocation(location);
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
-        return { 0, 0 };
+        return ret;
     }
 
-    Bio::ObjStat info = { 0, 0 };
+    ObjStat info;
     StatRequest req{};
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
-    CopyKey(req.key, key);
+    CopyKey(req.key, key, KEY_MAX_SIZE);
     ret = SendStatRequest(ptEntry, req, info);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
-        return { 0, 0 };
     }
-
-    return info;
+    return ret;
 }
 
 BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t len, uint64_t &flowId, uint64_t &offset, uint64_t &index)
@@ -360,7 +356,7 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->tenantId = param.attr.mTenantId;
     req->affinity = param.attr.affinity;
     req->strategy = param.attr.strategy;
-    CopyKey(req->key, param.key);
+    CopyKey(req->key, param.key, KEY_MAX_SIZE);
     req->length = param.length;
     req->flowId = flowId;
     req->offset = offset;
@@ -375,7 +371,7 @@ BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *
     uint64_t off = 0;
     for (uint32_t i = 0; i < addrNum; i++) {
         uint8_t *realAddr = nullptr;
-        if (mMode == BioService::WorkerMode::CONVERGENCE) {
+        if (mMode == WorkerMode::CONVERGENCE) {
             realAddr = reinterpret_cast<uint8_t *>(addr[i].chunkId + addr[i].chunkOffset);
         } else {
             realAddr = net::BioClientNet::Instance()->GetShmAddress(offset[i]);
@@ -604,18 +600,18 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
     return cbCtx.result;
 }
 
-BResult MirrorClient::StatRemote(uint16_t dstNid, StatRequest &req, Bio::ObjStat &objInfo)
+BResult MirrorClient::StatRemote(uint16_t dstNid, StatRequest &req, ObjStat &objInfo)
 {
-    return net::BioClientNet::Instance()->SendSync<StatRequest, Bio::ObjStat>(static_cast<BioNodeId>(dstNid),
+    return net::BioClientNet::Instance()->SendSync<StatRequest, ObjStat>(static_cast<BioNodeId>(dstNid),
         BIO_OP_SDK_STAT, req, objInfo);
 }
 
-BResult MirrorClient::StatLocal(StatRequest &req, Bio::ObjStat &objInfo) const
+BResult MirrorClient::StatLocal(StatRequest &req, ObjStat &objInfo) const
 {
     return agent::BioClientAgent::Instance()->StatLocal(req, objInfo);
 }
 
-BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, Bio::ObjStat &objInfo)
+BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjStat &objInfo)
 {
     uint16_t dstNid = ptEntry.masterNodeId;
     if (dstNid == mLocalNid.VNodeId()) {
@@ -623,6 +619,57 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, Bio::
     } else {
         return StatRemote(dstNid, req, objInfo);
     }
+}
+
+BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::vector<ObjStat> &objs)
+{
+    ListResponse *rsp = nullptr;
+    uint64_t rspLen = 0;
+    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
+        BIO_OP_SDK_LIST, req, &rsp, rspLen);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    auto statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+    for (uint32_t i = 0; i < rsp->num; i++) {
+        ObjStat stat;
+        CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
+        stat.size = statBuff[i].size;
+        stat.time = statBuff[i].time;
+        objs.push_back(stat);
+    }
+    delete[] rsp;
+    return BIO_OK;
+}
+
+BResult MirrorClient::ListLocal(ListRequest &req, std::vector<ObjStat> &objs)
+{
+    return agent::BioClientAgent::Instance()->ListLocal(req, objs);
+}
+
+BResult MirrorClient::SendListRequest(ListRequest &req, std::vector<ObjStat> &objs)
+{
+    uint32_t index = 0;
+    for (auto &ptEntry : mPtView) {
+        uint16_t dstNid = ptEntry.second.masterNodeId;
+        req.flag = index;
+        req.comm.ptId = ptEntry.second.ptId;
+        req.comm.ptv =  ptEntry.second.version;
+        req.ptId = ptEntry.second.ptId;
+        BResult result = BIO_OK;
+        if (dstNid == mLocalNid.VNodeId()) {
+            result = ListLocal(req, objs);
+        } else {
+            result = ListRemote(dstNid, req, objs);
+        }
+        if (result != BIO_OK) {
+            CLIENT_LOG_ERROR("Send list request failed, ret:" << result << ", dstNid:" << dstNid <<
+                ", ptId:" << req.ptId << ".");
+        }
+        index++;
+    }
+    return BIO_OK;
 }
 
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
