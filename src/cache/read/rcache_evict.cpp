@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include "bio_log.h"
+#include "bio_config_instance.h"
 #include "rcache_evict.h"
 
 using namespace ock::bio;
@@ -20,11 +21,11 @@ uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType 
 {
     uint64_t waterData;
     uint64_t cacheData = rCache->GetCacheData(tier);
-
+    auto config = BioConfig::Instance()->GetDaemonConfig();
     if (tier == READ_CACHE_TIER_MEM) {
-        waterData = (READ_CACHE_MEM_RESOURCE_QUANTITY * READ_CACHE_EVICT_WATER_LEVEL) / 100;
+        waterData = (config.memResourceQuantity * config.evictWaterLevel) / 100;
     } else {
-        waterData = (READ_CACHE_DISK_RESOURCE_QUANTITY * READ_CACHE_EVICT_WATER_LEVEL) / 100;
+        waterData = (config.diskResourceQuantity * config.evictWaterLevel) / 100;
     }
 
     return cacheData > waterData ? cacheData - waterData : 0ULL;

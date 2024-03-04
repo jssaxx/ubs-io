@@ -41,6 +41,12 @@ const auto DISK_CAPACITY_SIZE_GB = std::make_pair("bio.disk.size_in_gb", 8);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
+const auto EVICT_WATER_LEVEL = std::make_pair("bio.cache.evict_water_level", 90);
+
+const auto MEM_RESOURCE_QUANTITY_GB = std::make_pair("bio.cache.mem_resource_quantity_in_gb", 10);
+
+const auto DISK_RESOURCE_QUANTITY_GB = std::make_pair("bio.cache.disk_resource_quantity_in_gb", 10240);
+
 class BioConfig;
 using BioConfigPtr = Ref<BioConfig>;
 
@@ -73,6 +79,9 @@ public:
         uint32_t segment = 2097152; // 2MB
         uint64_t memCap = 8589934592; // 8GB
         uint64_t diskCap = 8589934592; // 8GB
+        uint64_t evictWaterLevel = 90;
+        uint64_t memResourceQuantity = 10737418240; // 10GB
+        uint64_t diskResourceQuantity = 10995116277760; // 10TB
         std::vector<std::string> diskList;
     };
 
@@ -118,6 +127,12 @@ public:
     {
         return mClientConfig;
     }
+
+    uint64_t ModifyConfigEvictWaterLevel(uint64_t level);
+
+    uint64_t ModifyConfigMemResourceQuantity(uint64_t quantity);
+
+    uint64_t ModifyConfigDiskResourceQuantity(uint64_t quantity);
 
 private:
     void DumpToLog();

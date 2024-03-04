@@ -1,14 +1,14 @@
-//
-// Created by j30026471 on 2024/2/28.
-//
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2020-2020. All rights reserved.
+ */
 
-#ifndef BOOSTIO_SDK_DIAGNOSE_H
-#define BOOSTIO_SDK_DIAGNOSE_H
+#ifndef BOOSTIO_SERVER_DIAGNOSE_H
+#define BOOSTIO_SERVER_DIAGNOSE_H
 
 namespace ock {
     namespace bio {
         namespace diagnose {
-            class BioSdkCommand {
+            class BioServerCommand {
             public:
                 static int Initialize() noexcept;
                 static void Destroy() noexcept;
@@ -21,10 +21,10 @@ namespace ock {
 extern "C" {
 #endif
 
-extern int SdkDiagnoseInit();
+extern int ServerDiagnoseInit();
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif //BOOSTIO_SDK_DIAGNOSE_H
+#endif //BOOSTIO_SERVER_DIAGNOSE_H

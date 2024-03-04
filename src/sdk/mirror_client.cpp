@@ -18,6 +18,11 @@ using namespace ock::bio;
 static void CopyKey(char *dstKey, const char *srcKey)
 {
     auto keyLen = strlen(srcKey);
+    if (UNLIKELY(keyLen + 1 > KEY_MAX_SIZE)) {
+        CLIENT_LOG_ERROR("Copy Key failed, key is too large, length:" << (keyLen + 1)
+        << ", KEY_MAX_SIZE:" << KEY_MAX_SIZE << ".");
+    }
+
     auto ret = memcpy_s(dstKey, KEY_MAX_SIZE, srcKey, keyLen);
     dstKey[keyLen] = '\0';
     if (UNLIKELY(ret != 0)) {

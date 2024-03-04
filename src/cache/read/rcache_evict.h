@@ -15,7 +15,6 @@ namespace ock {
         constexpr uint32_t READ_CACHE_EVICT_SERVICE_NUM = 2;
         constexpr uint32_t READ_CACHE_EVICT_SERVICE_MASK = READ_CACHE_EVICT_SERVICE_NUM - 1;
         constexpr uint32_t READ_CACHE_EVICT_INTERVAL_MS = 6 * 1000;
-        constexpr uint32_t READ_CACHE_EVICT_WATER_LEVEL = 90;
 
         class RCacheEvict {
         public:
