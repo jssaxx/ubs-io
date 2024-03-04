@@ -305,9 +305,9 @@ BResult MirrorServer::Delete(DeleteRequest &req)
     return ret;
 }
 
-BResult MirrorServer::List(ListRequest &req, std::vector<ObjStat> &objs)
+BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult ret = Cache::Instance().List(req.prefix, req.ptId, req.flag, objs);
+    BResult ret = Cache::Instance().List(req.prefix, req.comm.ptId, req.flag, objs);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("List key failed, ret:" << ret << ", prefix:" << req.prefix << ".");
     } else {
@@ -734,7 +734,7 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
     }
 
     auto req = static_cast<ListRequest *>(ctx.MessageData());
-    std::vector<ObjStat> objs;
+    std::unordered_map<std::string, ObjStat> objs;
     BResult ret = List(*req, objs);
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);
@@ -750,10 +750,12 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
     auto rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
     rsp->num = objs.size();
     auto statBuf = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
-    for (uint32_t i = 0; i < rsp->num; i++) {
-        CopyKey(statBuf[i].key, objs[i].key, KEY_MAX_SIZE);
-        statBuf[i].size = objs[i].size;
-        statBuf[i].time = objs[i].time;
+    uint32_t index = 0;
+    for (auto &obj : objs) {
+        CopyKey(statBuf[index].key, obj.second.key, KEY_MAX_SIZE);
+        statBuf[index].size = obj.second.size;
+        statBuf[index].time = obj.second.time;
+        index++;
     }
     Reply(ctx, BIO_OK, static_cast<void *>(rsp), sizeof(ListResponse) + sizeof(ObjStat) * objs.size());
     delete[] tmp;

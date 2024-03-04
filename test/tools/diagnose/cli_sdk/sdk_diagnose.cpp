@@ -51,6 +51,7 @@ static void HandleOpen(std::vector<std::string> cmds);
 static void HandleDestroy(std::vector<std::string> cmds);
 static void HandlePut(std::vector<std::string> cmds);
 static void HandleGet(std::vector<std::string> cmds);
+static void HandleList(std::vector<std::string> cmds);
 static void HandleStat(std::vector<std::string> cmds);
 static void HandleLoad(std::vector<std::string> cmds);
 static void HandleDelete(std::vector<std::string> cmds);
@@ -262,6 +263,28 @@ static void HandleGet(std::vector<std::string> cmds)
     }
     delete[] value;
     fclose(fp);
+}
+
+static void HandleList(std::vector<std::string> cmds)
+{
+    if (!std::regex_match(cmds[2], pattern)) {
+        CLI_PrintBuf("invalid input.\n");
+        return;
+    }
+    uint64_t location = 0;
+    auto prefix = cmds[1].c_str();
+
+    ObjStat *objs = nullptr;
+    uint64_t objNum = 0;
+    auto ret = BioListAll(gTenantId, prefix, &objs, &objNum);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to get list.\n");
+    } else {
+        CLI_PrintBuf("List all success, obj num: %lu.\n", objNum);
+        for (uint32_t idx = 0; idx < objNum; idx++) {
+            CLI_PrintBuf("idx %u: key:%s, size:%u, time:%s\n", objs[idx].key, objs[idx].size, ctime(&objs[idx].time));
+        }
+    }
 }
 
 static void HandleStat(std::vector<std::string> cmds)

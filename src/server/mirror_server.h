@@ -42,7 +42,7 @@ public:
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP);
     BResult Get(GetRequest &req, uint64_t &realLen);
     BResult Delete(DeleteRequest &req);
-    BResult List(ListRequest &req, std::vector<ObjStat> &objs);
+    BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult Stat(StatRequest &req, ObjStat &objInfo);
     BResult Load(LoadRequest &req);
     BResult SyncData(SyncDataRequest &req);

@@ -354,7 +354,7 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callba
     }
 }
 
-BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::vector<ObjStat> &objs)
+BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     ListResponse *rsp = nullptr;
     uint64_t rspLen = 0;
@@ -365,13 +365,13 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::vector<ObjSt
         return ret;
     }
 
-    ObjStat *statInfo = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+    auto statInfo = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
     for (uint32_t i = 0; i < rsp->num; i++) {
         ObjStat stat;
         CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
         stat.size = statInfo[i].size;
         stat.time = statInfo[i].time;
-        objs.push_back(stat);
+        objs.insert({ stat.key, stat });
     }
     delete[] rsp;
     return BIO_OK;
@@ -396,7 +396,7 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
     }
 }
 
-BResult BioClientAgent::ListLocal(ListRequest &req, std::vector<ObjStat> &objs)
+BResult BioClientAgent::ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     if (mMode == CONVERGENCE) {
         ListResponse *rsp = nullptr;
@@ -404,7 +404,7 @@ BResult BioClientAgent::ListLocal(ListRequest &req, std::vector<ObjStat> &objs)
         if (ret != BIO_OK) {
             return ret;
         }
-        ObjStat *statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+        auto statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
         for (uint32_t i = 0; i < rsp->num; i++) {
             if (objs.size() >= 1000U) {
                 break;
@@ -413,7 +413,7 @@ BResult BioClientAgent::ListLocal(ListRequest &req, std::vector<ObjStat> &objs)
             CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
             stat.size = statBuff[i].size;
             stat.time = statBuff[i].time;
-            objs.push_back(stat);
+            objs.insert({ stat.key, stat });
         }
         delete[] rsp;
         return BIO_OK;

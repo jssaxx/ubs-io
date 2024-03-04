@@ -192,7 +192,6 @@ typedef struct {
 typedef struct {
     RequestComm comm;
     char prefix[KEY_MAX_SIZE];
-    uint16_t ptId;
     uint32_t flag;
 } ListRequest;
 
