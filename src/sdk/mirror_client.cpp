@@ -295,7 +295,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
     return ret;
 }
 
-BResult MirrorClient::ListAll(const char *prefix, std::vector<ObjStat> &objs)
+BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
     ListRequest req{};
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
@@ -621,7 +621,7 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
     }
 }
 
-BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::vector<ObjStat> &objs)
+BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     ListResponse *rsp = nullptr;
     uint64_t rspLen = 0;
@@ -637,18 +637,18 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::vector<Obj
         CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
         stat.size = statBuff[i].size;
         stat.time = statBuff[i].time;
-        objs.push_back(stat);
+        objs.insert({ stat.key, stat });
     }
     delete[] rsp;
     return BIO_OK;
 }
 
-BResult MirrorClient::ListLocal(ListRequest &req, std::vector<ObjStat> &objs)
+BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     return agent::BioClientAgent::Instance()->ListLocal(req, objs);
 }
 
-BResult MirrorClient::SendListRequest(ListRequest &req, std::vector<ObjStat> &objs)
+BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     uint32_t index = 0;
     for (auto &ptEntry : mPtView) {
@@ -656,8 +656,7 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::vector<ObjStat> &ob
         req.flag = index;
         req.comm.ptId = ptEntry.second.ptId;
         req.comm.ptv =  ptEntry.second.version;
-        req.ptId = ptEntry.second.ptId;
-        BResult result = BIO_OK;
+        BResult result;
         if (dstNid == mLocalNid.VNodeId()) {
             result = ListLocal(req, objs);
         } else {
@@ -665,7 +664,7 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::vector<ObjStat> &ob
         }
         if (result != BIO_OK) {
             CLIENT_LOG_ERROR("Send list request failed, ret:" << result << ", dstNid:" << dstNid <<
-                ", ptId:" << req.ptId << ".");
+                ", ptId:" << ptEntry.second.ptId << ".");
         }
         index++;
     }

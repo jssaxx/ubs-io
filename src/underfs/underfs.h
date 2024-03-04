@@ -7,7 +7,7 @@
 #include <string>
 #include <cstring>
 #include <ctime>
-#include <vector>
+#include <unordered_map>
 
 #include "bio_c.h"
 #include "bio_err.h"
@@ -47,7 +47,7 @@ public:
 
     BResult Stat(const char *key, ObjStat &objStat);
 
-    BResult List(const char *prefix, std::vector<ObjStat> &objStat);
+    BResult List(const char *prefix, std::unordered_map<std::string, ObjStat> &objStat);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
