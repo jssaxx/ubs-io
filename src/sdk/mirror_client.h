@@ -65,7 +65,7 @@ public:
     BResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
         const Bio::LoadCallback &callback, void *context);
 
-    BResult ListAll(const char *prefix, std::vector<ObjStat> &objs);
+    BResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
@@ -132,9 +132,9 @@ private:
     BResult StatLocal(StatRequest &req, ObjStat &objInfo) const;
     BResult SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjStat &objInfo);
 
-    BResult ListRemote(uint16_t nid, ListRequest &req, std::vector<ObjStat> &objs);
-    BResult ListLocal(ListRequest &req, std::vector<ObjStat> &objs);
-    BResult SendListRequest(ListRequest &req, std::vector<ObjStat> &objs);
+    BResult ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
+    BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
+    BResult SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);

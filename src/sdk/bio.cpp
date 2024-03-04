@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include "securec.h"
+#include "bio_functions.h"
 #include "bio_client_log.h"
 #include "bio_trace.h"
 #include "bio_client.h"
@@ -235,7 +236,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     return ToCResult(ret);
 }
 
-CResult Bio::ListAll(const char *prefix, std::vector<ObjStat> &objs)
+CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
@@ -487,16 +488,23 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **Objs, uint64
         }
         bioInstance = iter->second;
     }
-    std::vector<ObjStat> objsVec;
-    auto ret = bioInstance->ListAll(prefix, objsVec);
+    std::unordered_map<std::string, ObjStat> objs;
+    auto ret = bioInstance->ListAll(prefix, objs);
     if (UNLIKELY(ret != RET_CACHE_OK)) {
         return ret;
     }
 
-    *objNum = objsVec.size();
+    *objNum = objs.size();
     *Objs = (ObjStat *)malloc(sizeof(ObjStat) * (*objNum));
-    for (uint64_t idx = 0; idx < (*objNum); idx++) {
-        (*Objs)[idx] = objsVec[idx];
+    if (*Objs == nullptr) {
+        return RET_CACHE_NO_SPACE;
+    }
+    uint32_t index = 0;
+    for (auto &obj : objs) {
+        CopyKey((*Objs)[index].key, obj.second.key, MAX_KEY_SIZE);
+        (*Objs)[index].size = obj.second.size;
+        (*Objs)[index].time = obj.second.time;
+        index++;
     }
     return RET_CACHE_OK;
 }

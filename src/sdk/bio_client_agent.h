@@ -77,7 +77,7 @@ public:
 
     void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
-    BResult ListLocal(ListRequest &req, std::vector<ObjStat> &objs);
+    BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
 
@@ -102,7 +102,7 @@ private:
 
     void SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
-    BResult SendListRequestLocal(ListRequest &req, std::vector<ObjStat> &objs);
+    BResult SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult SendStatRequestLocal(StatRequest &req, ObjStat &objInfo);
 

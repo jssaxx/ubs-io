@@ -185,7 +185,7 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     return ret;
 }
 
-BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::vector<ObjStat> &objs)
+BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_map<std::string, ObjStat> &objs)
 {
     BResult ret = mWCacheManager->List(prefix, ptId, objs);
     if (UNLIKELY(ret != BIO_OK)) {

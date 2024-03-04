@@ -289,7 +289,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &objStat)
     return BIO_OK;
 }
 
-BResult UnderFs::List(const char *prefix, std::vector<ObjStat> &objStat)
+BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, ObjStat> &objStat)
 {
     std::string keyPath = CEPH_PATH_EXT;
     struct dirent *ptr;
@@ -305,13 +305,12 @@ BResult UnderFs::List(const char *prefix, std::vector<ObjStat> &objStat)
             CopyKey(statInfo.key, ptr->d_name, KEY_MAX_SIZE);
             statInfo.size = file_stat.st_size;
             statInfo.time = file_stat.st_ctime;
-            objStat.push_back(statInfo);
+            objStat.insert({ statInfo.key, statInfo});
         }
     }
     closedir(dir);
     return BIO_OK;
 }
-
 #endif
 }
 }

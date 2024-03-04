@@ -12,7 +12,6 @@
 #include "bio_server_c.h"
 #include "bio_server.h"
 
-
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
 #endif
@@ -595,7 +594,7 @@ int32_t Delete(DeleteRequest *req)
 
 int32_t List(ListRequest *req, ListResponse **rsp)
 {
-    std::vector<ObjStat> objs;
+    std::unordered_map<std::string, ObjStat> objs;
     BResult ret = BioServer::Instance()->GetMirrorServer()->List(*req, objs);
     if (ret != BIO_OK) {
         return ret;
@@ -609,10 +608,12 @@ int32_t List(ListRequest *req, ListResponse **rsp)
     *rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
     (*rsp)->num = objs.size();
     auto statBuf = static_cast<ObjStat *>(static_cast<void*>((*rsp)->statBuf));
-    for (uint32_t i = 0; i < (*rsp)->num; i++) {
-        CopyKey(statBuf[i].key, objs[i].key, KEY_MAX_SIZE);
-        statBuf[i].size = objs[i].size;
-        statBuf[i].time = objs[i].time;
+    uint32_t index = 0;
+    for (auto &obj : objs) {
+        CopyKey(statBuf[index].key, obj.second.key, MAX_KEY_SIZE);
+        statBuf[index].size = obj.second.size;
+        statBuf[index].time = obj.second.time;
+        index++;
     }
     return BIO_OK;
 }

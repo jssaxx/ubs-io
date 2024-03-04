@@ -36,6 +36,8 @@ int32_t Get(GetRequest *req, GetResponse *rsp);
 
 int32_t Delete(DeleteRequest *req);
 
+int32_t List(ListRequest *req, ListResponse **rsp);
+
 int32_t Stat(StatRequest *req, StatResponse *rsp);
 
 int32_t Load(LoadRequest *req);

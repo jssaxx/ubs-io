@@ -82,7 +82,7 @@ public:
         return mMirror->Load(key, offset, length, location, std::move(callback), context);
     }
 
-    inline BResult ListAll(const char *prefix, std::vector<ObjStat> &objs)
+    inline BResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
     {
         return mMirror->ListAll(prefix, objs);
     }
