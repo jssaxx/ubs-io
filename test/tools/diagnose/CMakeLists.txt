@@ -5,6 +5,7 @@ include_directories(../cli/include
 
 add_subdirectory(cli_htracer)
 add_subdirectory(cli_sdk)
+add_subdirectory(cli_server)
 
 if (OPEN_TEST_TOOLS STREQUAL "ON")
     target_link_libraries(bio_server

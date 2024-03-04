@@ -25,8 +25,6 @@ namespace ock {
     namespace bio {
         constexpr uint32_t READ_CACHE_META_HASH_BUCKET_NUM  = 10000;
         constexpr uint32_t READ_CACHE_META_HASH_BUCKET_MASK = READ_CACHE_META_HASH_BUCKET_NUM - 1;
-        constexpr uint64_t READ_CACHE_MEM_RESOURCE_QUANTITY  = (10ULL * 1024ULL * 1024ULL * 1024ULL);
-        constexpr uint64_t READ_CACHE_DISK_RESOURCE_QUANTITY = (10ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL);
 
         class RCache {
         public:
