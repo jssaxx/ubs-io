@@ -84,7 +84,7 @@ public:
      * @param[out]: objs: Listed objects
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult ListAll(const char *prefix, std::vector<ObjStat> &objs);
+    CResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
     /**
      * @brief: Get object stat info

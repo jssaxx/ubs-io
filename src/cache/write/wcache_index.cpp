@@ -46,7 +46,7 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     }
 }
 
-BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::vector<ObjStat> &objs)
+BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_ERR);
@@ -62,7 +62,7 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::vector<
                 CopyKey(stat.key, iter->first.c_str(), KEY_MAX_SIZE);
                 stat.size = iter->second->GetSlice()->GetLength();
                 stat.time = time(nullptr);
-                objs.push_back(stat);
+                objs.insert({ stat.key, stat});
             }
         }
     }

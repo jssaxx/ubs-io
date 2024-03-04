@@ -178,6 +178,7 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
  * @param[out]: objs: object array
  * @param[out]: objNum: object number
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ * @tip: Use free to release the objs memory
  */
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **Objs, uint64_t *objNum);
 
