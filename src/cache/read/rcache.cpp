@@ -440,13 +440,13 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     uint64_t flowOffset;
     uint64_t indexInFlow;
 
-    UnderFs::ObjStat stat;
+    ObjStat stat;
     auto ret = underFsPtr->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
         return ret;
     }
-    uint64_t totalLen = stat.size;
+    uint64_t totalLen = static_cast<uint64_t>(stat.size);
 
     if (UNLIKELY(offset >= totalLen)) {
         LOG_ERROR("Input offset:" << offset << ", len:" << len << ", realLen:" << totalLen);

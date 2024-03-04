@@ -173,16 +173,34 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     }
 
     UnderFsPtr underFsPtr = UnderFs::Instance();
-    UnderFs::ObjStat stat;
+    ObjStat stat;
     ret = underFsPtr->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
         return ret;
     }
 
-    cacheObjStat.time = stat.mTime;
+    cacheObjStat.time = stat.time;
     cacheObjStat.size = stat.size;
     return ret;
+}
+
+BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::vector<ObjStat> &objs)
+{
+    BResult ret = mWCacheManager->List(prefix, ptId, objs);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Write cache list failed, ret:" << ret << ", prefix:" << prefix << ", ptId:" << ptId << ".");
+    }
+
+    if (flag == 1) {
+        UnderFsPtr underFsPtr = UnderFs::Instance();
+        ret = underFsPtr->List(prefix, objs);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("UnderFS list failed, ret:" << ret << ", prefix:" << prefix << ".");
+        }
+    }
+
+    return BIO_OK;
 }
 
 BResult Cache::Delete(uint64_t ptId, const Key &key)

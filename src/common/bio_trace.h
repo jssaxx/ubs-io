@@ -166,6 +166,7 @@ enum UfsTracerType {
     UFS_TRACE_GET,
     UFS_TRACE_DEL,
     UFS_TRACE_STAT,
+    UFS_TRACE_LIST,
     UFS_TRACE_END,
 };
 

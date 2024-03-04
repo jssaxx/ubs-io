@@ -6,10 +6,13 @@
 #include "htracer.h"
 #include "bio_log.h"
 #include "bdm_core.h"
+#include "bio_functions.h"
 #include "bio_config_instance.h"
 #include "flow_manager.h"
 #include "bio_server_c.h"
 #include "bio_server.h"
+
+
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
 #endif
@@ -590,9 +593,33 @@ int32_t Delete(DeleteRequest *req)
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Delete(*req));
 }
 
+int32_t List(ListRequest *req, ListResponse **rsp)
+{
+    std::vector<ObjStat> objs;
+    BResult ret = BioServer::Instance()->GetMirrorServer()->List(*req, objs);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    char *tmp = new (std::nothrow) char[sizeof(ListResponse) + sizeof(ObjStat) * objs.size()];
+    if (UNLIKELY(tmp == nullptr)) {
+        LOG_ERROR("Alloc memory failed, len:" << (sizeof(ListResponse) + sizeof(ObjStat) * objs.size()) << ".");
+        return BIO_ALLOC_FAIL;
+    }
+    *rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
+    (*rsp)->num = objs.size();
+    auto statBuf = static_cast<ObjStat *>(static_cast<void*>((*rsp)->statBuf));
+    for (uint32_t i = 0; i < (*rsp)->num; i++) {
+        CopyKey(statBuf[i].key, objs[i].key, KEY_MAX_SIZE);
+        statBuf[i].size = objs[i].size;
+        statBuf[i].time = objs[i].time;
+    }
+    return BIO_OK;
+}
+
 int32_t Stat(StatRequest *req, StatResponse *rsp)
 {
-    Bio::ObjStat objInfo{};
+    ObjStat objInfo{};
     BResult ret = BioServer::Instance()->GetMirrorServer()->Stat(*req, objInfo);
     rsp->size = objInfo.size;
     rsp->time = objInfo.time;

@@ -49,7 +49,7 @@ int main(int argc, char **argv)
     termSa.sa_handler = &HandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 
-    BioService::WorkerMode mode = static_cast<BioService::WorkerMode>(std::stoul(argv[1]));
+    WorkerMode mode = static_cast<WorkerMode>(std::stoul(argv[1]));
     auto ret = BioService::Initialize(mode);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;

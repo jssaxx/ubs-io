@@ -36,9 +36,9 @@ public:
         return instance;
     }
 
-    BResult BioLoggerInit(BioService::WorkerMode mode);
+    BResult BioLoggerInit(WorkerMode mode);
 
-    BResult Start(BioService::WorkerMode mode);
+    BResult Start(WorkerMode mode);
     void Stop();
 
     inline bool Ready() const
@@ -46,7 +46,7 @@ public:
         return mStarted;
     }
 
-    inline BResult CalculateLocation(const uint64_t objectId, AffinityStrategy affinity, Bio::ObjLocation &location)
+    inline BResult CalculateLocation(const uint64_t objectId, AffinityStrategy affinity, ObjLocation &location)
     {
         uint16_t ptId = mMirror->SelectingPt(objectId, affinity);
         if (UNLIKELY(ptId == UINT16_MAX)) {
@@ -56,7 +56,7 @@ public:
         return BIO_OK;
     }
 
-    inline BResult ParseLocation(Bio::ObjLocation &location)
+    inline BResult ParseLocation(ObjLocation &location)
     {
         return mMirror->ParseLocation(location);
     }
@@ -71,37 +71,37 @@ public:
         return mMirror->Get(param, length);
     }
 
-    inline BResult DeleteKey(const char *key, const Bio::ObjLocation &location)
+    inline BResult DeleteKey(const char *key, const ObjLocation &location)
     {
         return mMirror->DeleteKey(key, location);
     }
 
-    inline BResult Load(const char *key, uint64_t offset, uint64_t length, const Bio::ObjLocation &location,
+    inline BResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
         Bio::LoadCallback callback, void *context)
     {
         return mMirror->Load(key, offset, length, location, std::move(callback), context);
     }
 
-    inline BResult ListAll(const char *prefix, std::vector<std::pair<char *, Bio::ObjStat>> &objs)
+    inline BResult ListAll(const char *prefix, std::vector<ObjStat> &objs)
     {
-        return BIO_INNER_ERR;
+        return mMirror->ListAll(prefix, objs);
     }
 
-    inline Bio::ObjStat Stat(const char *key, const Bio::ObjLocation &location)
+    inline BResult Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     {
-        return mMirror->StatObject(key, location);
+        return mMirror->StatObject(key, location, stat);
     }
 
-    inline std::shared_ptr<Bio> Query(const uint64_t tenantId)
+    inline CacheDescriptor Query(const uint64_t tenantId)
     {
         mLock.LockRead();
         auto it = mCacheMap.find(tenantId);
         if (LIKELY(it != mCacheMap.end())) {
             mLock.UnLock();
-            return it->second;
+            return { it->second->mTenantId, it->second->mAffinity, it->second->mStrategy };
         }
         mLock.UnLock();
-        return nullptr;
+        return { UINT64_MAX, AFFINITY_BUTT, STRATEGY_BUTT };
     }
 
     inline BResult Insert(const std::shared_ptr<Bio> &instance)
@@ -111,17 +111,17 @@ public:
             mLock.UnLock();
             return BIO_ERR;
         }
-        auto it = mCacheMap.find(instance->GetTenantId());
+        auto it = mCacheMap.find(instance->mTenantId);
         if (UNLIKELY(it != mCacheMap.end())) {
-            if (it->second->GetAffinityPolicy() != instance->GetAffinityPolicy() ||
-                it->second->GetWriteStrategy() != instance->GetWriteStrategy()) {
+            if (it->second->mAffinity != instance->mAffinity ||
+                it->second->mStrategy != instance->mStrategy) {
                 mLock.UnLock();
                 return BIO_ERR;
             }
             mLock.UnLock();
             return BIO_OK;
         }
-        mCacheMap[instance->GetTenantId()] = instance;
+        mCacheMap[instance->mTenantId] = instance;
         mLock.UnLock();
         return BIO_OK;
     }
@@ -138,9 +138,15 @@ public:
         mLock.UnLock();
     }
 
-    inline std::unordered_map<uint64_t, std::shared_ptr<Bio>> List()
+    inline std::vector<CacheDescriptor> List()
     {
-        return mCacheMap;
+        mLock.LockRead();
+        std::vector<CacheDescriptor> vec;
+        for (auto &cache : mCacheMap) {
+            vec.push_back({ cache.second->mTenantId, cache.second->mAffinity, cache.second->mStrategy });
+        }
+        mLock.UnLock();
+        return vec;
     }
 
     inline MirrorClientPtr GetMirror() const
@@ -154,10 +160,10 @@ public:
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioDiagnoseHtracerInit();
-    BResult BioClientDiagnoseInit(BioService::WorkerMode mode);
+    BResult BioClientDiagnoseInit(WorkerMode mode);
 #endif
 private:
-    BioService::WorkerMode mMode;
+    WorkerMode mMode;
     bool mStarted = false;
     std::mutex mStartLock;
     std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
