@@ -164,13 +164,18 @@ void WCache::StartEvictTask(WCacheTierType type)
     }
 
     if (!isSucceed) {
-        mEvictRef[type] = false;
+        mEvictRef[type].store(false);
     }
     return;
 }
 
 void WCache::RetryEvictTask(WCacheTierType type)
 {
+    if (mCacheTiers[type]->IsEmptyEvictSliceQueue()) {
+        mEvictRef[type].store(false);
+        return;
+    }
+
     bool isSucceed;
     if (type == WCACHE_MEMORY) {
         isSucceed = mEvictService[type]->Execute([this]() { EvictAllMemSliceToDisk(); });
@@ -179,7 +184,7 @@ void WCache::RetryEvictTask(WCacheTierType type)
     }
 
     if (!isSucceed) {
-        mEvictRef[type] = false;
+        mEvictRef[type].store(false);
     }
     return;
 }
@@ -418,7 +423,7 @@ BResult WCache::EvictAllMemSliceToDisk()
         ++sliceIter;
     }
 
-    mEvictRef[WCACHE_MEMORY] = false;
+    RetryEvictTask(WCACHE_MEMORY);
     return BIO_OK;
 }
 
@@ -452,7 +457,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         ++sliceIter;
     }
 
-    mEvictRef[WCACHE_DISK] = false;
+    RetryEvictTask(WCACHE_DISK);
     return BIO_OK;
 }
 
@@ -470,7 +475,7 @@ BResult WCache::FlushImpl()
         ++sliceIter;
     }
 
-    mEvictRef[WCACHE_DISK] = false;
+    mEvictRef[WCACHE_DISK].store(false);
     return BIO_OK;
 }
 
@@ -527,7 +532,7 @@ BResult WCache::ExpiredClearImpl()
         ++sliceIter;
     }
 
-    mEvictRef[WCACHE_DISK] = false;
+    mEvictRef[WCACHE_DISK].store(false);
     return BIO_OK;
 }
 

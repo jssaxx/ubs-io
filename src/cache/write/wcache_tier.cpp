@@ -87,6 +87,15 @@ void WCacheTier::RetryEvictSliceQueue(std::list<WCacheSliceRefPtr>::iterator sta
     mEvictSliceQueueLock.UnLock();
 }
 
+bool WCacheTier::IsEmptyEvictSliceQueue()
+{
+    bool isEmpty;
+    mEvictSliceQueueLock.Lock();
+    isEmpty = mEvictSliceQueue.empty();
+    mEvictSliceQueueLock.UnLock();
+    return isEmpty;
+}
+
 std::list<WCacheSliceRefPtr> WCacheTier::GetEvictSliceQueue()
 {
     mEvictSliceQueueLock.Lock();
