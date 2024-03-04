@@ -10,6 +10,9 @@
 #include "flow_manager.h"
 #include "bio_server_c.h"
 #include "bio_server.h"
+#ifdef USE_DEBUG_TOOLS
+#include <dlfcn.h>
+#endif
 
 namespace ock {
 namespace bio {
@@ -348,8 +351,35 @@ BResult BioServer::BioServerDiagnoseInit()
         LOG_ERROR("init bio server diagnose fail.");
         return BIO_ERR;
     }
+    ret = this->BioServerDiagnoseInitInner();
+    if (ret != BIO_OK) {
+        LOG_ERROR("inner init bio server diagnose fail.");
+        return BIO_ERR;
+    }
     return BIO_OK;
 }
+
+using ServerDiagnose = int (*)();
+
+BResult BioServer::BioServerDiagnoseInitInner()
+{
+    const char *soFileName = "libserver_diagnose.so";
+    void *handler = dlopen(soFileName, RTLD_NOW);
+    if (handler == nullptr) {
+        LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
+        return BIO_ERR;
+    }
+
+    ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
+    BResult ret = serverInitFunc();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
+        return BIO_ERR;
+    }
+
+    return ret;
+}
+
 #endif
 
 void BioServer::Connection()
