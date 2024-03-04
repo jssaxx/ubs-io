@@ -37,6 +37,10 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(DISK_CAPACITY_SIZE_GB, VIntRange::Create(DISK_CAPACITY_SIZE_GB.first, NO_1, NO_8192));
     AddStrConf(DISK_CONF_PATH, VStrNotNull::Create(DISK_CONF_PATH.first));
 
+    AddIntConf(EVICT_WATER_LEVEL, VStrNotNull::Create(EVICT_WATER_LEVEL.first));
+    AddIntConf(MEM_RESOURCE_QUANTITY_GB, VStrNotNull::Create(MEM_RESOURCE_QUANTITY_GB.first));
+    AddIntConf(DISK_RESOURCE_QUANTITY_GB, VStrNotNull::Create(DISK_RESOURCE_QUANTITY_GB.first));
+
     /* load security related config */
     AddBoolConf(SECURITY_ENABLED);
     AddStrConf(SECURITY_CONF_PATH, VStrNotNull::Create(SECURITY_CONF_PATH.first));
@@ -133,6 +137,9 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     mDaemonConfig.segment = conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE;
     mDaemonConfig.memCap = conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE;
     mDaemonConfig.diskCap = conf->GetInt(DISK_CAPACITY_SIZE_GB.first) * GB_SIZE;
+    mDaemonConfig.evictWaterLevel = conf->GetInt(EVICT_WATER_LEVEL.first);
+    mDaemonConfig.memResourceQuantity = conf->GetInt(MEM_RESOURCE_QUANTITY_GB.first) * GB_SIZE;
+    mDaemonConfig.diskResourceQuantity = conf->GetInt(DISK_RESOURCE_QUANTITY_GB.first) * GB_SIZE;
 
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
@@ -221,6 +228,32 @@ void BioConfig::DumpToLog()
     }
 
     LOG_INFO(ossTmp.str());
+}
+
+uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint64_t level)
+{
+    auto ori = mDaemonConfig.evictWaterLevel;
+    mDaemonConfig.evictWaterLevel = level;
+    LOG_INFO("config changed:mDaemonConfig.evictWaterLevel, " << ori << " => " << level);
+    return ori;
+}
+
+uint64_t BioConfig::ModifyConfigMemResourceQuantity(uint64_t quantity)
+{
+    auto ori = mDaemonConfig.memResourceQuantity >> 30;
+    auto quantityInBytes = quantity << 30;
+    mDaemonConfig.memResourceQuantity = quantityInBytes;
+    LOG_INFO("config changed:mDaemonConfig.memResourceQuantity(GB), " << ori << " => " << quantity);
+    return ori;
+}
+
+uint64_t BioConfig::ModifyConfigDiskResourceQuantity(uint64_t quantity)
+{
+    auto ori = mDaemonConfig.diskResourceQuantity >> 30;
+    auto quantityInBytes = quantity << 30;
+    mDaemonConfig.diskResourceQuantity = quantityInBytes;
+    LOG_INFO("config changed:mDaemonConfig.diskResourceQuantity(GB), " << ori << " => " << quantity);
+    return ori;
 }
 }
 }

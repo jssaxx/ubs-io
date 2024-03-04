@@ -265,6 +265,7 @@ protected:
     BResult BioFlowInit();
 #ifdef USE_DEBUG_TOOLS
     BResult BioServerDiagnoseInit();
+    BResult BioServerDiagnoseInitInner();
 #endif
     void Connection();
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
