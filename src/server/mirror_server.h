@@ -42,7 +42,8 @@ public:
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP);
     BResult Get(GetRequest &req, uint64_t &realLen);
     BResult Delete(DeleteRequest &req);
-    BResult Stat(StatRequest &req, Bio::ObjStat &objInfo);
+    BResult List(ListRequest &req, std::vector<ObjStat> &objs);
+    BResult Stat(StatRequest &req, ObjStat &objInfo);
     BResult Load(LoadRequest &req);
     BResult SyncData(SyncDataRequest &req);
 
@@ -70,10 +71,10 @@ private:
     int32_t HandleGet(ServiceContext &ctx);
     int32_t HandleDelete(ServiceContext &ctx);
     int32_t HandleStat(ServiceContext &ctx);
+    int32_t HandleList(ServiceContext &ctx);
     int32_t HandleLoad(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
     int32_t HandleGetSlice(ServiceContext &ctx);
-
     int32_t HandleSyncData(ServiceContext &ctx);
     int32_t HandleGetEvictOffset(ServiceContext &ctx);
 

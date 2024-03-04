@@ -25,7 +25,7 @@ public:
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
     using GetNodeViewFuncPtr = int32_t (*)(QueryNodeViewResponse *);
-    using GetPtViewFuncPtr = int32_t (*)(QueryPtViewResponse *rsp);
+    using GetPtViewFuncPtr = int32_t (*)(QueryPtViewResponse *);
     using CreateFlowMasterFuncPtr = int32_t (*)(CreateFlowRequest *, CreateFlowResponse *);
     using CreateFlowSlaveFuncPtr = int32_t (*)(CreateFlowRequest *);
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
@@ -33,6 +33,7 @@ public:
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
     using DeleteFuncPtr = int32_t (*)(DeleteRequest *);
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
+    using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
 
     BioClientAgent()
@@ -49,7 +50,7 @@ public:
         return instance;
     }
 
-    BResult Initialize(BioService::WorkerMode mode);
+    BResult Initialize(WorkerMode mode);
 
     NetEnginePtr GetNetService()
     {
@@ -76,7 +77,9 @@ public:
 
     void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
-    BResult StatLocal(StatRequest &req, Bio::ObjStat &objInfo);
+    BResult ListLocal(ListRequest &req, std::vector<ObjStat> &objs);
+    
+    BResult StatLocal(StatRequest &req, ObjStat &objInfo);
 
     void LoadLocal(LoadRequest &req, const Bio::LoadCallback &callback, void *context);
 
@@ -99,13 +102,15 @@ private:
 
     void SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
-    BResult SendStatRequestLocal(StatRequest &req, Bio::ObjStat &objInfo);
+    BResult SendListRequestLocal(ListRequest &req, std::vector<ObjStat> &objs);
+
+    BResult SendStatRequestLocal(StatRequest &req, ObjStat &objInfo);
 
     BResult SendLoadRequestLocal(LoadRequest &req);
 
     DEFINE_REF_COUNT_FUNCTIONS
 private:
-    BioService::WorkerMode mMode = BioService::CONVERGENCE;
+    WorkerMode mMode = CONVERGENCE;
     CmNodeId mLocalNid;
     uint32_t localPid;
     DEFINE_REF_COUNT_VARIABLE;
@@ -124,6 +129,7 @@ private:
     GetFuncPtr getOp = nullptr;
     DeleteFuncPtr deleteOp = nullptr;
     StatFuncPtr statOp = nullptr;
+    ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;
 };
 }

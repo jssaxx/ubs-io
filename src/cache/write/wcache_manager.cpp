@@ -258,12 +258,19 @@ BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheOb
     if (sliceRef != nullptr) {
         cacheObjStat.size = sliceRef->GetSlice()->GetLength();
         cacheObjStat.time = time(nullptr);
-
         sliceRef->Release();
         return BIO_OK;
     }
-
     return BIO_NOT_EXISTS;
+}
+
+BResult WCacheManager::List(char *prefix, uint16_t ptId, std::vector<ObjStat> &objs)
+{
+    if (objs.size() >= 1000U) {
+        return BIO_OK;
+    }
+    ChkTrueNot(prefix != nullptr, BIO_INVALID_PARAM);
+    return mCacheIndex->FuzzyAquire(ptId, prefix, objs);
 }
 
 BResult WCacheManager::Delete(uint64_t ptId, const Key &key)

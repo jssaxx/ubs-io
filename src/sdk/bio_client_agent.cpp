@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <dlfcn.h>
+#include "bio_functions.h"
 #include "bio_client_log.h"
 #include "message_op.h"
 #include "bio_client_net.h"
@@ -12,10 +13,10 @@
 using namespace ock::bio;
 using namespace ock::bio::agent;
 
-BResult BioClientAgent::Initialize(BioService::WorkerMode mode)
+BResult BioClientAgent::Initialize(WorkerMode mode)
 {
     mMode = mode;
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         const char *soFileName = "libbio_server.so";
         handler = dlopen(soFileName, RTLD_NOW);
         if (handler == nullptr) {
@@ -74,6 +75,9 @@ BResult BioClientAgent::InitOperation()
     if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("Delete"))) == nullptr) {
         return BIO_ERR;
     }
+    if ((listOp = reinterpret_cast<ListFuncPtr>(LoadFunction("List"))) == nullptr) {
+        return BIO_ERR;
+    }
     if ((statOp = reinterpret_cast<StatFuncPtr>(LoadFunction("Stat"))) == nullptr) {
         return BIO_ERR;
     }
@@ -110,7 +114,7 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
 BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
 {
     BResult ret = BIO_OK;
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         GetLocalNidResponse getLocalNidRsp{};
         ret = getLocalNidOp(&getLocalNidRsp);
         localNid = { getLocalNidRsp.groupId, getLocalNidRsp.nodeId };
@@ -148,7 +152,7 @@ BResult BioClientAgent::SendGetClusterNodeViewRequest(std::map<CmNodeId, CmNodeI
 
 BResult BioClientAgent::GetClusterNodeView(std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         QueryNodeViewResponse queryNodeViewRsp{};
         auto ret = getNodeViewOp(&queryNodeViewRsp);
         for (uint32_t i = 0; i < queryNodeViewRsp.num; i++) {
@@ -192,7 +196,7 @@ BResult BioClientAgent::SendGetPtViewRequest(std::map<uint16_t, CmPtInfo> &ptVie
 
 BResult BioClientAgent::GetPtView(std::map<uint16_t, CmPtInfo> &ptView)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         QueryPtViewResponse queryPtViewRsp{};
         auto ret = getPtViewOp(&queryPtViewRsp);
         for (uint32_t i = 0; i < queryPtViewRsp.num; i++) {
@@ -247,7 +251,7 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
 BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     uint64_t &flowId)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         if (opType == 0) {
             CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
                                       opType,
@@ -281,7 +285,7 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
 BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
     uint64_t length, GetSliceResponse **rsp)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
                                 flowId,
                                 offset,
@@ -301,7 +305,7 @@ void BioClientAgent::SendPutRequestLocal(PutRequest *req, NetEngine::Callback &c
 
 void BioClientAgent::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         auto ret = putOp(req);
         callback.cb(callback.cbCtx, nullptr, 0, ret);
     } else {
@@ -325,7 +329,7 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, uint64_t &realLen)
 
 BResult BioClientAgent::GetLocal(GetRequest &req, uint64_t &realLen)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
         realLen = rsp.realLen;
@@ -342,7 +346,7 @@ void BioClientAgent::SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callb
 
 void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         auto ret = deleteOp(&req);
         callback.cb(callback.cbCtx, nullptr, 0, ret);
     } else {
@@ -350,20 +354,71 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callba
     }
 }
 
-BResult BioClientAgent::SendStatRequestLocal(StatRequest &req, Bio::ObjStat &objInfo)
+BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::vector<ObjStat> &objs)
 {
-    return net::BioClientNet::Instance()->SendSync<StatRequest, Bio::ObjStat>(localPid, BIO_OP_SDK_STAT, req, objInfo);
+    ListResponse *rsp = nullptr;
+    uint64_t rspLen = 0;
+    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(localPid,
+        BIO_OP_SDK_LIST, req, &rsp, rspLen);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
+        return ret;
+    }
+
+    ObjStat *statInfo = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+    for (uint32_t i = 0; i < rsp->num; i++) {
+        ObjStat stat;
+        CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
+        stat.size = statInfo[i].size;
+        stat.time = statInfo[i].time;
+        objs.push_back(stat);
+    }
+    delete[] rsp;
+    return BIO_OK;
 }
 
-BResult BioClientAgent::StatLocal(StatRequest &req, Bio::ObjStat &objInfo)
+BResult BioClientAgent::SendStatRequestLocal(StatRequest &req, ObjStat &objInfo)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    return net::BioClientNet::Instance()->SendSync<StatRequest, ObjStat>(localPid, BIO_OP_SDK_STAT, req, objInfo);
+}
+
+BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
+{
+    if (mMode == CONVERGENCE) {
         StatResponse rsp{};
         auto ret = statOp(&req, &rsp);
-        objInfo = { rsp.size, rsp.time };
+        CopyKey(objInfo.key, req.key, KEY_MAX_SIZE);
+        objInfo.size = rsp.size;
+        objInfo.time = rsp.time;
         return ret;
     } else {
         return SendStatRequestLocal(req, objInfo);
+    }
+}
+
+BResult BioClientAgent::ListLocal(ListRequest &req, std::vector<ObjStat> &objs)
+{
+    if (mMode == CONVERGENCE) {
+        ListResponse *rsp = nullptr;
+        auto ret = listOp(&req, &rsp);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+        ObjStat *statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+        for (uint32_t i = 0; i < rsp->num; i++) {
+            if (objs.size() >= 1000U) {
+                break;
+            }
+            ObjStat stat;
+            CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
+            stat.size = statBuff[i].size;
+            stat.time = statBuff[i].time;
+            objs.push_back(stat);
+        }
+        delete[] rsp;
+        return BIO_OK;
+    } else {
+        return SendListRequestLocal(req, objs);
     }
 }
 
@@ -379,7 +434,7 @@ BResult BioClientAgent::SendLoadRequestLocal(LoadRequest &req)
 
 void BioClientAgent::LoadLocal(LoadRequest &req, const Bio::LoadCallback &callback, void *context)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         auto ret = loadOp(&req);
         callback(context, ((ret == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
         return;

@@ -5,8 +5,11 @@
 #define BOOSTIO_UNDERFS_H
 
 #include <string>
+#include <cstring>
 #include <ctime>
+#include <vector>
 
+#include "bio_c.h"
 #include "bio_err.h"
 #include "bio_ref.h"
 
@@ -26,11 +29,6 @@ class UnderFs;
 using UnderFsPtr = Ref<UnderFs>;
 class UnderFs {
 public:
-    struct ObjStat {
-        uint64_t size;
-        time_t mTime;
-    };
-
     static UnderFsPtr &Instance()
     {
         static auto instance = MakeRef<UnderFs>();
@@ -48,7 +46,9 @@ public:
     BResult Delete(const char *key);
 
     BResult Stat(const char *key, ObjStat &objStat);
- 
+
+    BResult List(const char *prefix, std::vector<ObjStat> &objStat);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
     rados_t mConn;

@@ -7,6 +7,7 @@
 #include "bio_client.h"
 #include "bio_server.h"
 #include "bio_trace.h"
+#include "bio_functions.h"
 #include "message_op.h"
 #include "mirror_server.h"
 
@@ -46,6 +47,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleDelete, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_STAT,
         std::bind(&MirrorServer::HandleStat, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LIST,
+        std::bind(&MirrorServer::HandleList, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LOAD,
         std::bind(&MirrorServer::HandleLoad, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CREATE_FLOW,
@@ -302,7 +305,18 @@ BResult MirrorServer::Delete(DeleteRequest &req)
     return ret;
 }
 
-BResult MirrorServer::Stat(StatRequest &req, Bio::ObjStat &objInfo)
+BResult MirrorServer::List(ListRequest &req, std::vector<ObjStat> &objs)
+{
+    BResult ret = Cache::Instance().List(req.prefix, req.ptId, req.flag, objs);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("List key failed, ret:" << ret << ", prefix:" << req.prefix << ".");
+    } else {
+        LOG_INFO("Mirror server List success, prefix:" << req.prefix << ", num:" << objs.size() << ".");
+    }
+    return ret;
+}
+
+BResult MirrorServer::Stat(StatRequest &req, ObjStat &objInfo)
 {
     std::string key(req.key);
     CacheObjStat objStat{};
@@ -693,7 +707,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         return BIO_CHECK_PT_FAIL;
     }
 
-    Bio::ObjStat objInfo = {};
+    ObjStat objInfo = {};
     BResult ret = Stat(*req, objInfo);
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);
@@ -701,8 +715,48 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    Reply(ctx, BIO_OK, static_cast<void *>(&objInfo), sizeof(Bio::ObjStat));
+    Reply(ctx, BIO_OK, static_cast<void *>(&objInfo), sizeof(ObjStat));
     BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleList(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(ListRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive load message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<ListRequest *>(ctx.MessageData());
+    std::vector<ObjStat> objs;
+    BResult ret = List(*req, objs);
+    if (ret != BIO_OK) {
+        Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
+
+    char *tmp = new (std::nothrow) char[sizeof(ListResponse) + sizeof(ObjStat) * objs.size()];
+    if (UNLIKELY(tmp == nullptr)) {
+        LOG_ERROR("Alloc memory failed, len:" << (sizeof(ListResponse) + sizeof(ObjStat) * objs.size()) << ".");
+        Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+    auto rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
+    rsp->num = objs.size();
+    auto statBuf = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+    for (uint32_t i = 0; i < rsp->num; i++) {
+        CopyKey(statBuf[i].key, objs[i].key, KEY_MAX_SIZE);
+        statBuf[i].size = objs[i].size;
+        statBuf[i].time = objs[i].time;
+    }
+    Reply(ctx, BIO_OK, static_cast<void *>(rsp), sizeof(ListResponse) + sizeof(ObjStat) * objs.size());
+    delete[] tmp;
     return BIO_OK;
 }
 

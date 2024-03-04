@@ -3,6 +3,9 @@
  */
 
 #include "wcache_index.h"
+#include "message.h"
+#include "bio_functions.h"
+
 namespace ock {
 namespace bio {
 inline uint32_t WCacheIndex::Hash(const Key &key)
@@ -41,6 +44,29 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     } else {
         return nullptr;
     }
+}
+
+BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::vector<ObjStat> &objs)
+{
+    WCacheIndexTable *table = GetIndexTable(ptId);
+    ChkTrueNot(table != nullptr, BIO_ERR);
+
+    for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; bucket++) {
+        ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+        for (auto iter = table->sliceIndex[bucket].begin(); iter != table->sliceIndex[bucket].end(); iter++) {
+            if (objs.size() >= 1000U) {
+                return BIO_OK;
+            }
+            if (memcmp(prefix, iter->first.c_str(), strlen(prefix)) == 0) {
+                ObjStat stat;
+                CopyKey(stat.key, iter->first.c_str(), KEY_MAX_SIZE);
+                stat.size = iter->second->GetSlice()->GetLength();
+                stat.time = time(nullptr);
+                objs.push_back(stat);
+            }
+        }
+    }
+    return BIO_OK;
 }
 
 BResult WCacheIndex::Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)

@@ -57,6 +57,8 @@ public:
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
+    BResult List(char *prefix, uint16_t ptId, std::vector<ObjStat> &objs);
+
     BResult Delete(uint64_t ptId, const Key &key);
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);

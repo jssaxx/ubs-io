@@ -33,11 +33,11 @@ static void Log(int level, const char *msg)
     }
 }
 
-BResult BioClientNet::StartPre(BioService::WorkerMode mode)
+BResult BioClientNet::StartPre(WorkerMode mode)
 {
     mMode = mode;
     BResult ret = BIO_OK;
-    if (mode == BioService::CONVERGENCE) {
+    if (mode == CONVERGENCE) {
         mNetEngine = BioClientAgent::Instance()->GetNetService();
         if (mNetEngine == nullptr) {
             ret = BIO_ERR;
@@ -51,7 +51,7 @@ BResult BioClientNet::StartPre(BioService::WorkerMode mode)
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView,
     uint16_t protocol)
 {
-    if (mMode == BioService::CONVERGENCE) {
+    if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
     mNetEngine->SetLocalNodeId(localNid);
@@ -93,7 +93,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
 
 void BioClientNet::Stop()
 {
-    if (mMode == BioService::SEPARATES) {
+    if (mMode == SEPARATES) {
         StopInner();
     }
 }
