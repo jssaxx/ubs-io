@@ -116,16 +116,18 @@ BResult MirrorClient::LoadAffinityFlow()
 
 BResult MirrorClient::LoadOriginView()
 {
-    auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mNodeView);
+    auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mCurNodeTimes, mNodeView);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get cluster node view failed, ret:" << ret << ".");
         return ret;
     }
-    ret = agent::BioClientAgent::Instance()->GetPtView(mPtView);
+    LOG_INFO("Cur node times:" << mCurNodeTimes);
+    ret = agent::BioClientAgent::Instance()->GetPtView(mCurPtTimes, mPtView);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get pt view failed, ret:" << ret << ".");
         return ret;
     }
+    LOG_INFO("Cur pt times:" << mCurPtTimes);
     ret = agent::BioClientAgent::Instance()->GetLocalNodeInfo(mNetProtocol, mLocalNid);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
@@ -697,4 +699,30 @@ inline BResult MirrorClient::SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req
     void *context)
 {
     return LoadMaster(req, ptEntry.masterNodeId, callback, context);
+}
+
+BResult MirrorClient::RebuildNodeView(uint64_t &realNodeTimes)
+{
+    mNodeView.clear();
+    auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mCurNodeTimes, mNodeView);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get cluster node view failed, ret:" << ret << ".");
+        return ret;
+    }
+    realNodeTimes = mCurNodeTimes;
+    LOG_INFO("Cur node times:" << mCurNodeTimes);
+    return BIO_OK;
+}
+
+BResult MirrorClient::RebuildPtView(uint64_t &realPtTimes)
+{
+    mPtView.clear();
+    auto ret = agent::BioClientAgent::Instance()->GetPtView(mCurPtTimes, mPtView);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get pt view failed, ret:" << ret << ".");
+        return ret;
+    }
+    realPtTimes = mCurPtTimes;
+    LOG_INFO("Cur pt times:" << mCurPtTimes);
+    return BIO_OK;
 }

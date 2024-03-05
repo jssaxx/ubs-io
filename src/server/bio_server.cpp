@@ -8,6 +8,7 @@
 #include "bdm_core.h"
 #include "bio_functions.h"
 #include "bio_config_instance.h"
+#include "bio_monotonic.h"
 #include "flow_manager.h"
 #include "bio_server_c.h"
 #include "bio_server.h"
@@ -417,6 +418,8 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
         Connection();
         mStarted = true;
     }
+    mCurNodeTimes = Monotonic::TimeUs();
+    LOG_INFO("Cur node times:" << mCurNodeTimes);
     return BIO_OK;
 }
 
@@ -432,6 +435,8 @@ BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
         LOG_ERROR("Handle ptevent fail, ret:" << ret);
         return ret;
     }
+    mCurPtTimes = Monotonic::TimeUs();
+    LOG_INFO("Cur pt times:" << mCurPtTimes);
     return BIO_OK;
 }
 }
@@ -466,7 +471,7 @@ int32_t GetLocalNid(GetLocalNidResponse *rsp)
 
 int32_t GetNodeView(QueryNodeViewResponse *rsp)
 {
-    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView();
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp->curNodeTimes);
     uint32_t size = nodeView.size();
     if (UNLIKELY(size > CLUSTER_NODE_MAX_SIZE)) {
         LOG_ERROR("Cluster node num  " << size << " exceeds 256.");
@@ -492,7 +497,7 @@ int32_t GetNodeView(QueryNodeViewResponse *rsp)
 
 int32_t GetPtView(QueryPtViewResponse *rsp)
 {
-    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView();
+    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp->curPtTimes);
     uint32_t size = ptView.size();
     if (UNLIKELY(size > PT_MAX_SIZE)) {
         LOG_ERROR("Pt view num  " << size << " exceeds 8192.");
@@ -630,4 +635,9 @@ int32_t Stat(StatRequest *req, StatResponse *rsp)
 int32_t Load(LoadRequest *req)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Load(*req));
+}
+
+int32_t ReportHb(uint64_t *curNodeTimes, uint64_t *curPtTimes)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetHbInfo(curNodeTimes, curPtTimes));
 }

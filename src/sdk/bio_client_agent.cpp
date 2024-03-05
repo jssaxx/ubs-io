@@ -84,6 +84,9 @@ BResult BioClientAgent::InitOperation()
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
         return BIO_ERR;
     }
+    if ((hbOp = reinterpret_cast<ReportHbPtr>(LoadFunction("ReportHb"))) == nullptr) {
+        return BIO_ERR;
+    }
     return BIO_OK;
 }
 
@@ -127,7 +130,8 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     return ret;
 }
 
-BResult BioClientAgent::SendGetClusterNodeViewRequest(std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
+BResult BioClientAgent::SendGetClusterNodeViewRequest(uint64_t &curNodeTimes,
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
 {
     QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryNodeViewResponse rsp;
@@ -147,10 +151,11 @@ BResult BioClientAgent::SendGetClusterNodeViewRequest(std::map<CmNodeId, CmNodeI
             CmNodeInfo(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId), rsp.desc[i].ip, rsp.desc[i].port,
             static_cast<CmNodeStatus>(rsp.desc[i].status), disks)));
     }
+    curNodeTimes = rsp.curNodeTimes;
     return BIO_OK;
 }
 
-BResult BioClientAgent::GetClusterNodeView(std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
+BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
 {
     if (mMode == CONVERGENCE) {
         QueryNodeViewResponse queryNodeViewRsp{};
@@ -166,13 +171,14 @@ BResult BioClientAgent::GetClusterNodeView(std::map<CmNodeId, CmNodeInfo, CmNode
                 queryNodeViewRsp.desc[i].ip, queryNodeViewRsp.desc[i].port,
                 static_cast<CmNodeStatus>(queryNodeViewRsp.desc[i].status), disks)));
         }
+        curNodeTimes = queryNodeViewRsp.curNodeTimes;
         return ret;
     } else {
-        return SendGetClusterNodeViewRequest(nodeView);
+        return SendGetClusterNodeViewRequest(curNodeTimes, nodeView);
     }
 }
 
-BResult BioClientAgent::SendGetPtViewRequest(std::map<uint16_t, CmPtInfo> &ptView)
+BResult BioClientAgent::SendGetPtViewRequest(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
 {
     QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryPtViewResponse rsp;
@@ -191,10 +197,11 @@ BResult BioClientAgent::SendGetPtViewRequest(std::map<uint16_t, CmPtInfo> &ptVie
         ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
             static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
     }
+    curPtTimes = rsp.curPtTimes;
     return BIO_OK;
 }
 
-BResult BioClientAgent::GetPtView(std::map<uint16_t, CmPtInfo> &ptView)
+BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
 {
     if (mMode == CONVERGENCE) {
         QueryPtViewResponse queryPtViewRsp{};
@@ -209,9 +216,10 @@ BResult BioClientAgent::GetPtView(std::map<uint16_t, CmPtInfo> &ptView)
                 queryPtViewRsp.desc[i].ptId, static_cast<CmPtState>(queryPtViewRsp.desc[i].state),
                 queryPtViewRsp.desc[i].masterNodeId, queryPtViewRsp.desc[i].masterDiskId, copys)));
         }
+        curPtTimes = queryPtViewRsp.curPtTimes;
         return ret;
     } else {
-        return SendGetPtViewRequest(ptView);
+        return SendGetPtViewRequest(curPtTimes, ptView);
     }
 }
 
@@ -441,5 +449,33 @@ void BioClientAgent::LoadLocal(LoadRequest &req, const Bio::LoadCallback &callba
     } else {
         auto ret = SendLoadRequestLocal(req);
         callback(context, ((ret == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+    }
+}
+
+BResult BioClientAgent::SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTimes)
+{
+    HbRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    HbResponse rsp;
+    auto ret = net::BioClientNet::Instance()->SendSync<HbRequest, HbResponse>(localPid,
+        BIO_OP_SDK_REPORT_HB, req, rsp);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    curNodeTimes = rsp.curNodeTimes;
+    curPtTimes = rsp.curPtTimes;
+    return BIO_OK;
+}
+
+BResult BioClientAgent::ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes)
+{
+    if (mMode == CONVERGENCE) {
+        HbResponse rsp{};
+        auto ret = hbOp(&rsp.curNodeTimes, &rsp.curPtTimes);
+        curNodeTimes = rsp.curNodeTimes;
+        curPtTimes = rsp.curPtTimes;
+        return ret;
+    } else {
+        return SendHbRequest(curNodeTimes, curPtTimes);
     }
 }

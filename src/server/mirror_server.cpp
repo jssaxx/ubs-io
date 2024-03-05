@@ -55,6 +55,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleCreateFlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_SLICE,
         std::bind(&MirrorServer::HandleGetSlice, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_REPORT_HB,
+        std::bind(&MirrorServer::HandleReportHb, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_SYNC_DATA,
         std::bind(&MirrorServer::HandleSyncData, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_GET_EVICT_OFFSET,
@@ -458,14 +460,14 @@ int32_t MirrorServer::HandleQueryNodeView(ServiceContext &ctx)
         return BIO_CHECK_PT_FAIL;
     }
 
-    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView();
+    QueryNodeViewResponse rsp;
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
     uint32_t size = nodeView.size();
     if (UNLIKELY(size > CLUSTER_NODE_MAX_SIZE)) {
         LOG_ERROR("Cluster node num  " << size << " exceeds 256.");
         return BIO_ERR;
     }
 
-    QueryNodeViewResponse rsp;
     uint32_t index = 0;
     for (auto &nodeEntry : nodeView) {
         rsp.desc[index].groupId = nodeEntry.second.id.GroupId();
@@ -506,14 +508,14 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         return BIO_CHECK_PT_FAIL;
     }
 
-    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView();
+    QueryPtViewResponse rsp;
+    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
     uint32_t size = ptView.size();
     if (UNLIKELY(size > PT_MAX_SIZE)) {
         LOG_ERROR("Pt view num  " << size << " exceeds 8192.");
         return -1;
     }
 
-    QueryPtViewResponse rsp;
     uint32_t index = 0;
     for (auto &ptEntry : ptView) {
         rsp.desc[index].version = ptEntry.second.version;
@@ -786,6 +788,31 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
     BResult ret = Load(*req);
     Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
     BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleReportHb(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(HbRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive hb message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    HbResponse rsp;
+    auto ret = BioServer::Instance()->GetHbInfo(&rsp.curNodeTimes, &rsp.curPtTimes);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get hb info fail:" << ret);
+        Reply(ctx, ret, nullptr, 0);
+        return ret;
+    }
+
+    Reply(ctx, BIO_OK, &rsp, sizeof(HbResponse));
     return BIO_OK;
 }
 
