@@ -624,7 +624,7 @@ def install_all_nodes(pkg_path):
         return -1
     # 各个节点启动进程
     time.sleep(10)
-    if DEPLOYMENT_MODE == 1 :
+    if DEPLOYMENT_MODE == "1" :
         echo_to_terminal("(5/6)----------start boostio in all nodes.")
         if broad_cast(start_boostio) != 0:
             echo_to_terminal("start fs failed.")
