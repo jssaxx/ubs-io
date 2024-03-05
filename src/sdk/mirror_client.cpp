@@ -536,6 +536,9 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
 
 BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
+    CLIENT_LOG_INFO("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
+        req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
+
     BResult ret;
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
