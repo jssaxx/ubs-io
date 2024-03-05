@@ -179,6 +179,8 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     } else {
         cacheObjStat.time = stat.time;
         cacheObjStat.size = stat.size;
+        LOG_INFO("UnderFS stat success, key:" << key << ", size:" << cacheObjStat.size << ", time:" <<
+            cacheObjStat.time << ".");
     }
     return ret;
 }
@@ -203,6 +205,8 @@ BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_m
             if (objs.size() >= 1000U) {
                 return BIO_OK;
             }
+            LOG_INFO("UnderFS list success, key:" << info.first << ", size:" <<
+                info.second.size << ", time:" << info.second.time << ".");
             objs.insert({ info.first, { info.second.size, info.second.time } });
         }
     }
