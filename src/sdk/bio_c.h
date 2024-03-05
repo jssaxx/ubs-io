@@ -106,7 +106,7 @@ CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc);
  * @param[in]: tenantId: tenant id
  * @return: void
  */
-void BioDestroyCache(uint64_t tenantId);
+CResult BioDestroyCache(uint64_t tenantId);
 
 /**
  * @brief: Calculate location

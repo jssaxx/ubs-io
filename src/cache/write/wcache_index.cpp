@@ -3,8 +3,6 @@
  */
 
 #include "wcache_index.h"
-#include "message.h"
-#include "bio_functions.h"
 
 namespace ock {
 namespace bio {
@@ -46,23 +44,20 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     }
 }
 
-BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
+BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ChkTrueNot(table != nullptr, BIO_ERR);
+    ChkTrueNot(table != nullptr, BIO_INVALID_PARAM);
 
     for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; bucket++) {
         ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
-        for (auto iter = table->sliceIndex[bucket].begin(); iter != table->sliceIndex[bucket].end(); iter++) {
-            if (objs.size() >= 1000U) {
+        for (auto &info : table->sliceIndex[bucket]) {
+            if (UNLIKELY(objs.size() >= 1000U)) {
                 return BIO_OK;
             }
-            if (memcmp(prefix, iter->first.c_str(), strlen(prefix)) == 0) {
-                ObjStat stat;
-                CopyKey(stat.key, iter->first.c_str(), KEY_MAX_SIZE);
-                stat.size = iter->second->GetSlice()->GetLength();
-                stat.time = time(nullptr);
-                objs.insert({ stat.key, stat});
+            if (memcmp(prefix, info.first.c_str(), strlen(prefix)) == 0) {
+                objs.insert({ info.first,
+                { static_cast<uint32_t>(info.second->GetSlice()->GetLength()), time(nullptr) } });
             }
         }
     }

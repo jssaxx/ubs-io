@@ -29,21 +29,15 @@ static void HtracerClear() noexcept;
 int diagnose::HtracerCommand::Initialize() noexcept
 {
     CLI_CMD_S command;
-
     strncpy(command.szCommand, "htracer", CLI_MAX_COMMAND_LEN);
     strncpy(command.szDescription, "htracer commands.", CLI_MAX_CMD_DESC_LEN);
     command.fnCmdDo = HtracerDebugProcess;
     command.fnPrintCmdHelp = HtracerDebugHelp;
-
     auto ret = CLI_RegCmd(&command);
     if (ret != 0) {
         printf("register htracer diagnose failed.");
-        return -1;
-    } else {
-        printf("register htrracer diagnose succeeded\n");
     }
-
-    return 0;
+    return ret;
 }
 
 void diagnose::HtracerCommand::Destroy() noexcept

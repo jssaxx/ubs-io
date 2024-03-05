@@ -4,8 +4,6 @@
 #include "underfs.h"
 #include "bio_log.h"
 #include "bio_trace.h"
-#include "bio_functions.h"
-#include "message.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -141,7 +139,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
     return BIO_OK;
 }
 
-BResult UnderFs::List(const char *prefix, std::vector<ObjStat> &objStat)
+BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat)
 {
     ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
 
@@ -269,27 +267,25 @@ BResult UnderFs::Delete(const char *key)
     return BIO_OK;
 }
 
-BResult UnderFs::Stat(const char *key, ObjStat &objStat)
+BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
 {
-    std::string keyPath = CEPH_PATH_EXT;
-    keyPath += key;
-
     using namespace std;
 
     BIO_TRACE_START(UFS_TRACE_STAT);
+    std::string keyPath = CEPH_PATH_EXT;
+    keyPath += key;
     struct stat file_stat;
     if (stat(keyPath.c_str(), &file_stat) != 0) {
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
     }
-    CopyKey(objStat.key, key, KEY_MAX_SIZE);
     objStat.size = file_stat.st_size;
     objStat.time = file_stat.st_ctime;
     BIO_TRACE_END(UFS_TRACE_STAT, 0);
     return BIO_OK;
 }
 
-BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, ObjStat> &objStat)
+BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat)
 {
     std::string keyPath = CEPH_PATH_EXT;
     struct dirent *ptr;
@@ -301,11 +297,8 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, ObjSta
                 LOG_ERROR("Fail to check file, " << keyPath.c_str());
                 continue;
             }
-            ObjStat statInfo;
-            CopyKey(statInfo.key, ptr->d_name, KEY_MAX_SIZE);
-            statInfo.size = file_stat.st_size;
-            statInfo.time = file_stat.st_ctime;
-            objStat.insert({ statInfo.key, statInfo});
+            UnderFs::ObjStat statInfo = { static_cast<uint32_t>(file_stat.st_size), file_stat.st_ctime };
+            objStat.insert({ ptr->d_name, statInfo});
         }
     }
     closedir(dir);

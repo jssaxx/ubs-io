@@ -32,12 +32,8 @@ int diagnose::BioServerCommand::Initialize() noexcept
     auto result = CLI_RegCmd(&command);
     if (result != 0) {
         printf("register BioServer diagnose failed.");
-        return -1;
-    } else {
-        printf("register BioServer diagnose succeeded\n");
     }
-
-    return 0;
+    return result;
 }
 
 void diagnose::BioServerCommand::Destroy() noexcept

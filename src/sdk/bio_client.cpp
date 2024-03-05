@@ -20,9 +20,7 @@ BResult BioClient::BioLoggerInit(WorkerMode mode)
 }
 
 #ifdef USE_DEBUG_TOOLS
-#define SDK_DIAGNOSE_PID 123
 using SdkDiagnose = int (*)();
-
 BResult BioClient::BioDiagnoseSdkInit()
 {
     const char *soFileName = "libsdk_diagnose.so";
@@ -52,7 +50,6 @@ BResult BioClient::BioDiagnoseHtracerInit()
     BResult ret = sdkInitFunc();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize htracer diagnose, ret:" << ret << ".");
-        return BIO_ERR;
     }
     return ret;
 }
@@ -61,9 +58,10 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 {
     BResult ret = BIO_OK;
     if (mode == SEPARATES) {
-        char rootName[] = "bio_sdk";
-        ret =  CLI_AgentInit(SDK_DIAGNOSE_PID, rootName);
+        std::string diagName = "bio_sdk";
+        ret =  CLI_AgentInit(getpid(), const_cast<char*>(diagName.c_str()));
         if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
             return BIO_ERR;
         }
     }
@@ -77,9 +75,7 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
     ret = this->BioDiagnoseHtracerInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize htracer diagnose, ret:" << ret << ".");
-        return BIO_ERR;
     }
-
     return ret;
 }
 #endif
