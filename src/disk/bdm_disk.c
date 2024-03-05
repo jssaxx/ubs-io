@@ -617,6 +617,8 @@ int32_t BdmDiskRestoreAllocator(BdmDiskItem *item)
         return ret;
     }
 
+    return BDM_CODE_ERR; // 临时关闭故障恢复，方便B002转测
+
     BdmAllocatorPara allocatorPara = { 0 };
     allocatorPara.metaOps.itemPtr = (uintptr_t)item;
     allocatorPara.metaOps.writeMeta = BdmDiskWriteMeta;
