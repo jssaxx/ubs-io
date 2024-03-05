@@ -13,6 +13,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "bio_log.h"
 
@@ -42,7 +43,7 @@ public:
         if (mode == 1) {
             LoggerOptions loggerOptions;
             loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
-            loggerOptions.path = "./bio_sdk.log";
+            loggerOptions.path = "./bio_sdk_" + std::to_string(getpid()) + ".log";
             auto logger = Logger::Instance(loggerOptions);
             if (logger == nullptr) {
                 std::cout << "Failed to create logger instance." << std::endl;
