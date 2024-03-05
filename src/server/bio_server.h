@@ -197,13 +197,15 @@ public:
         return static_cast<uint16_t>(mConfig->GetNetConfig().protocol);
     }
 
-    inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView()
+    inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView(uint64_t *curNodeTimes)
     {
+        *curNodeTimes = mCurNodeTimes;
         return mNodeView;
     }
 
-    inline std::map<uint16_t, CmPtInfo> GetPtView()
+    inline std::map<uint16_t, CmPtInfo> GetPtView(uint64_t *curPtTimes)
     {
+        *curPtTimes = mCurPtTimes;
         return mPtView;
     }
 
@@ -244,6 +246,13 @@ public:
     inline void MemFree(uint64_t addr)
     {
         mNetEngine->FreeLocalMrSingle(addr);
+    }
+
+    BResult GetHbInfo(uint64_t *curNodeTimes, uint64_t *curPtTimes)
+    {
+        *curNodeTimes = mCurNodeTimes;
+        *curPtTimes = mCurPtTimes;
+        return BIO_OK;
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
@@ -288,6 +297,8 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
+    uint64_t mCurNodeTimes = 0;
+    uint64_t mCurPtTimes = 0;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

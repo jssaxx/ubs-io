@@ -73,6 +73,7 @@ private:
     int32_t HandleStat(ServiceContext &ctx);
     int32_t HandleList(ServiceContext &ctx);
     int32_t HandleLoad(ServiceContext &ctx);
+    int32_t HandleReportHb(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
     int32_t HandleGetSlice(ServiceContext &ctx);
     int32_t HandleSyncData(ServiceContext &ctx);

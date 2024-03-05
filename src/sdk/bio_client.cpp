@@ -158,3 +158,66 @@ void BioClient::Stop()
 {
     mStarted = false;
 }
+
+BResult BioClient::Recover()
+{
+    constexpr uint16_t HEARTBEAT_THREAD_NUM = 1;
+    constexpr uint32_t HEARTBEAT_QUEUE_SIZE = 128;
+
+    mHeartService = ExecutorService::Create(HEARTBEAT_THREAD_NUM, HEARTBEAT_QUEUE_SIZE);
+    if (UNLIKELY(mHeartService == nullptr)) {
+        LOG_ERROR("Failed to start heartbeat execution service");
+        return BIO_ALLOC_FAIL;
+    }
+
+    mHeartService->SetThreadName("sdk-heartbeat");
+    auto result = mHeartService->Start();
+    ChkTrueNot(result, BIO_INNER_ERR);
+
+    result = mHeartService->Execute([this]() { Heartbeat(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
+}
+
+void BioClient::Heartbeat()
+{
+    constexpr uint16_t HEART_INTERAL = 2;
+    agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
+    net::BioClientNetPtr netEngine = net::BioClientNet::Instance();
+    uint64_t oldNodeTimes = 0;
+    uint64_t oldPtTimes = 0;
+
+    while (mRunning) {
+        sleep(HEART_INTERAL);
+        uint64_t curNodeTimes = 0;
+        uint64_t curPtTimes = 0;
+        BResult ret = agentPtr->ReportHb(curNodeTimes, curPtTimes);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Report hb fail:" << ret << ".");
+            continue;
+        }
+
+        if (oldNodeTimes != curNodeTimes) {
+            uint64_t realNodeTimes;
+            ret = mMirror->RebuildNodeView(realNodeTimes);
+            if (ret != BIO_OK) {
+                CLIENT_LOG_ERROR("Failed to rebuild nodeview, ret:" << ret << ".");
+                continue;
+            }
+            ret = netEngine->Rebuild(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView());
+            if (ret != BIO_OK) {
+                CLIENT_LOG_ERROR("Failed to rebuild channel, ret" << ret << ".");
+                continue;
+            }
+            oldNodeTimes = realNodeTimes;
+        }
+        if (oldPtTimes != curPtTimes) {
+            uint64_t realPtTimes;
+            ret = mMirror->RebuildPtView(realPtTimes);
+            if (ret != BIO_OK) {
+                CLIENT_LOG_ERROR("Failed to rebuild ptview, ret:" << ret << ".");
+                continue;
+            }
+            oldNodeTimes = realPtTimes;
+        }
+    }
+}

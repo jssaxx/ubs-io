@@ -15,6 +15,7 @@
 #include "bio_ref.h"
 #include "bio.h"
 #include "bio_lock.h"
+#include "bio_execution.h"
 #include "mirror_client.h"
 #ifdef USE_DEBUG_TOOLS
 #include "cli.h"
@@ -154,7 +155,11 @@ public:
         return mMirror;
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    DEFINE_REF_COUNT_FUNCTIONS;
+
+private:
+    BResult Recover();
+    void Heartbeat();
 
 #ifdef USE_DEBUG_TOOLS
 protected:
@@ -169,6 +174,8 @@ private:
     std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
     ReadWriteLock mLock;
     MirrorClientPtr mMirror = nullptr;
+    bool mRunning = true;
+    ExecutorServicePtr mHeartService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

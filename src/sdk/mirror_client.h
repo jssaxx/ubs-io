@@ -93,6 +93,10 @@ public:
         return mPtView;
     }
 
+    BResult RebuildNodeView(uint64_t &realNodeTimes);
+
+    BResult RebuildPtView(uint64_t &realPtTimes);
+
 private:
     inline void Copy(const void *src, void *dst, const uint64_t len)
     {
@@ -188,6 +192,8 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
+    uint64_t mCurNodeTimes;
+    uint64_t mCurPtTimes;
     uint16_t mNetProtocol;
     DEFINE_REF_COUNT_VARIABLE
 };
