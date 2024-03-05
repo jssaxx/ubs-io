@@ -315,6 +315,12 @@ public:
         return ch->Write(req, nullptr);
     }
 
+    BResult SyncWrite(ChannelPtr ch, const NetRequest &req)
+    {
+        using namespace ock::hcom;
+        return ch->Write(req, nullptr);
+    }
+
     BResult RegisterNewRequestHandler(uint32_t opCode, const NewRequestHandler &h)
     {
         std::lock_guard<std::mutex> guard(mMutex);
