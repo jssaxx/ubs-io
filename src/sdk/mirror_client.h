@@ -125,6 +125,7 @@ private:
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index);
 
+    BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
     BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
 

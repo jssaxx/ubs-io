@@ -189,16 +189,18 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
     return ret;
 }
 
-BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
+BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen, uint64_t &addrOffset)
 {
     std::string key(req.key);
     uint32_t dstNid = req.comm.srcNid;
+    pid_t dstPid = req.comm.pid;
     uint32_t localNid = BioServer::Instance()->GetLocalNid().VNodeId();
     uint32_t rKey = req.mrKey;
 
-    auto writer = [dstNid, localNid, rKey, key, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    auto writer = [dstNid, dstPid, &addrOffset, localNid, rKey, key, this]
+            (const SlicePtr &from, const SlicePtr &to) -> BResult {
         BResult ret = BIO_ERR;
-        if (dstNid == localNid) {
+        if ((dstNid == localNid) && (dstPid == getpid())) {
             std::vector<NetMrInfo> rMrVec;
             for (auto addr : to->GetAddrs()) {
                 MrInfo mr{};
@@ -256,11 +258,18 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen)
             }
         }
 
+        if ((dstNid == localNid) && (dstPid != getpid())) {
+            addrOffset =
+                    BioServer::Instance()->GetNetEngine()->GetAddressOffset(static_cast<uint64_t>(lMrVec[0].address));
+            // isAlloc是true的话有内存泄露
+            return BIO_OK;
+        }
+
         for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
             uint32_t off = 0;
             NetRequest writeReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[idx].key,
                 lMrVec[idx].size);
-            ret = BioServer::Instance()->GetNetEngine()->SyncWrite(static_cast<BioNodeId>(dstNid), writeReq);
+            ret = BioServer::Instance()->GetNetEngine()->SyncWrite(dstNid, writeReq);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Sync write failed, ret:" << ret << ", dstNid:" << dstNid << ".");
                 break;
@@ -309,11 +318,23 @@ BResult MirrorServer::Delete(DeleteRequest &req)
 
 BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult ret = Cache::Instance().List(req.prefix, req.comm.ptId, req.flag, objs);
+    std::unordered_map<std::string, CacheObjStat> cacheStatInfo;
+    BResult ret = Cache::Instance().List(req.prefix, req.comm.ptId, req.flag, cacheStatInfo);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("List key failed, ret:" << ret << ", prefix:" << req.prefix << ".");
     } else {
-        LOG_INFO("Mirror server List success, prefix:" << req.prefix << ", num:" << objs.size() << ".");
+        for (auto &info : cacheStatInfo) {
+            if (objs.size() >= 1000U) {
+                return BIO_OK;
+            }
+            ObjStat stat;
+            CopyKey(stat.key, info.first.c_str(), MAX_KEY_SIZE);
+            stat.size = info.second.size;
+            stat.time = info.second.time;
+            objs.insert({ info.first, stat });
+        }
+        LOG_INFO("Mirror server List success, prefix:" << req.prefix << ", ptId:" << req.comm.ptId <<
+            ", num:" << objs.size() << ".");
     }
     return ret;
 }
@@ -321,13 +342,14 @@ BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, Obj
 BResult MirrorServer::Stat(StatRequest &req, ObjStat &objInfo)
 {
     std::string key(req.key);
-    CacheObjStat objStat{};
+    CacheObjStat objStat;
     BIO_TRACE_START(MIRROR_TRACE_STAT);
     BResult ret = Cache::Instance().Stat(req.comm.ptId, const_cast<char *>(key.c_str()), objStat);
     BIO_TRACE_END(MIRROR_TRACE_STAT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Stat key failed, ret:" << ret << ", key:" << key << ".");
     } else {
+        CopyKey(objInfo.key, req.key, KEY_MAX_SIZE);
         objInfo.size = objStat.size;
         objInfo.time = objStat.time;
     }
@@ -648,14 +670,14 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
         return BIO_CHECK_PT_FAIL;
     }
 
-    uint64_t realLen;
-    BResult result = Get(*req, realLen);
+    GetResponse rsp;
+    BResult result = Get(*req, rsp.realLen, rsp.addrOffset);
     if (result != BIO_OK) {
         Reply(ctx, result, nullptr, 0);
         return BIO_OK;
     }
 
-    Reply(ctx, BIO_OK, static_cast<void *>(&realLen), sizeof(realLen));
+    Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(GetResponse));
     BIO_TRACE_END(MIRROR_TRACE_GET_HDL, 0);
     return BIO_OK;
 }
@@ -709,7 +731,7 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         return BIO_CHECK_PT_FAIL;
     }
 
-    ObjStat objInfo = {};
+    ObjStat objInfo;
     BResult ret = Stat(*req, objInfo);
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);

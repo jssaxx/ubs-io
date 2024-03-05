@@ -3,6 +3,8 @@
  */
 
 #include <unistd.h>
+
+#include <utility>
 #include "htracer.h"
 #include "bio_log.h"
 #include "bdm_core.h"
@@ -53,7 +55,8 @@ BResult BioServer::Start()
     }
 
     // 1. Initialize infrastructure
-    if (BioLoggerInit() != BIO_OK || BioConfigInit() != BIO_OK) {
+    std::string logPath = "./bio.log";
+    if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_ERR;
     }
     auto &daemonConfig = mConfig->GetDaemonConfig();
@@ -98,11 +101,11 @@ BResult BioServer::BioConfigInit()
     return BIO_OK;
 }
 
-BResult BioServer::BioLoggerInit()
+BResult BioServer::BioLoggerInit(std::string pathName)
 {
     LoggerOptions loggerOptions;
     loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
-    loggerOptions.path = "./bio.log";
+    loggerOptions.path = std::move(pathName);
     auto logger = Logger::Instance(loggerOptions);
     if (logger == nullptr) {
         std::cout << "Failed to create logger instance." << std::endl;
@@ -345,11 +348,11 @@ BResult BioServer::BioFlowInit()
 }
 
 #ifdef USE_DEBUG_TOOLS
-#define BIO_SERVER_DIAGNOSE_PID 456
 BResult BioServer::BioServerDiagnoseInit()
 {
-    char rootName[] = "bio_server";
-    auto ret = CLI_AgentInit((uint32_t)BIO_SERVER_DIAGNOSE_PID, rootName);
+    uint32_t procPid = 456U;
+    std::string diagName = "bio_server";
+    auto ret = CLI_AgentInit(procPid, const_cast<char*>(diagName.c_str()));
     if (ret != BIO_OK) {
         LOG_ERROR("init bio server diagnose fail.");
         return BIO_ERR;
@@ -363,7 +366,6 @@ BResult BioServer::BioServerDiagnoseInit()
 }
 
 using ServerDiagnose = int (*)();
-
 BResult BioServer::BioServerDiagnoseInitInner()
 {
     const char *soFileName = "libserver_diagnose.so";
@@ -372,17 +374,13 @@ BResult BioServer::BioServerDiagnoseInitInner()
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_ERR;
     }
-
     ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
     BResult ret = serverInitFunc();
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
-        return BIO_ERR;
     }
-
     return ret;
 }
-
 #endif
 
 void BioServer::Connection()
@@ -586,10 +584,7 @@ int32_t Put(PutRequest *req)
 
 int32_t Get(GetRequest *req, GetResponse *rsp)
 {
-    uint64_t realLen = 0;
-    BResult ret = BioServer::Instance()->GetMirrorServer()->Get(*req, realLen);
-    rsp->realLen = realLen;
-    return static_cast<int32_t>(ret);
+    return BioServer::Instance()->GetMirrorServer()->Get(*req, rsp->realLen, rsp->addrOffset);
 }
 
 int32_t Delete(DeleteRequest *req)

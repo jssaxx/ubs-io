@@ -6,7 +6,6 @@
 #define BOOSTIO_BIO_CACHE_H
 
 #include <atomic>
-#include "bio.h"
 #include "bio_err.h"
 #include "cache_def.h"
 #include "wcache_manager.h"
@@ -53,7 +52,7 @@ public:
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
-    BResult List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_map<std::string, ObjStat> &objs);
+    BResult List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_map<std::string, CacheObjStat> &objs);
 
     BResult Delete(uint64_t ptId, const Key &key);
 

@@ -9,7 +9,6 @@
 #include <ctime>
 #include <unordered_map>
 
-#include "bio_c.h"
 #include "bio_err.h"
 #include "bio_ref.h"
 
@@ -29,6 +28,11 @@ class UnderFs;
 using UnderFsPtr = Ref<UnderFs>;
 class UnderFs {
 public:
+    struct ObjStat {
+        uint32_t size;
+        time_t time;
+    };
+
     static UnderFsPtr &Instance()
     {
         static auto instance = MakeRef<UnderFs>();
@@ -45,9 +49,9 @@ public:
 
     BResult Delete(const char *key);
 
-    BResult Stat(const char *key, ObjStat &objStat);
+    BResult Stat(const char *key, UnderFs::ObjStat &objStat);
 
-    BResult List(const char *prefix, std::unordered_map<std::string, ObjStat> &objStat);
+    BResult List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:

@@ -264,11 +264,8 @@ BResult WCacheManager::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheOb
     return BIO_NOT_EXISTS;
 }
 
-BResult WCacheManager::List(char *prefix, uint16_t ptId, std::unordered_map<std::string, ObjStat> &objs)
+BResult WCacheManager::List(char *prefix, uint16_t ptId, std::unordered_map<std::string, CacheObjStat> &objs)
 {
-    if (objs.size() >= 1000U) {
-        return BIO_OK;
-    }
     ChkTrueNot(prefix != nullptr, BIO_INVALID_PARAM);
     return mCacheIndex->FuzzyAquire(ptId, prefix, objs);
 }
