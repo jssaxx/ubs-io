@@ -56,6 +56,8 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unorder
                 return BIO_OK;
             }
             if (memcmp(prefix, info.first.c_str(), strlen(prefix)) == 0) {
+                LOG_INFO("Wcache list success, key:" << info.first << ", size:" <<
+                    info.second->GetSlice()->GetLength() << ", time:" << time(nullptr) << ".");
                 objs.insert({ info.first,
                 { static_cast<uint32_t>(info.second->GetSlice()->GetLength()), time(nullptr) } });
             }
