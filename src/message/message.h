@@ -64,6 +64,7 @@ typedef struct {
 } QueryNodeViewRequest;
 
 typedef struct {
+    uint64_t curNodeTimes;
     uint32_t num;
     NodeInfoDesc desc[CLUSTER_NODE_MAX_SIZE];
 } QueryNodeViewResponse;
@@ -89,6 +90,7 @@ typedef struct {
 } QueryPtViewRequest;
 
 typedef struct {
+    uint64_t curPtTimes;
     uint32_t num;
     PtInfoDesc desc[PT_MAX_SIZE];
 } QueryPtViewResponse;
@@ -208,6 +210,16 @@ typedef struct {
     uint64_t offset;
     uint64_t length;
 } LoadRequest;
+
+/* Report Hb */
+typedef struct {
+    RequestComm comm;
+} HbRequest;
+
+typedef struct {
+    uint64_t curNodeTimes;
+    uint64_t curPtTimes;
+} HbResponse;
 
 /* Sync data */
 typedef struct {

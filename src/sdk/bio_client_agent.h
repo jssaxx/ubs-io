@@ -35,6 +35,7 @@ public:
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
+    using ReportHbPtr = int32_t (*)(uint64_t *, uint64_t *);
 
     BioClientAgent()
     {
@@ -62,9 +63,9 @@ public:
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
 
-    BResult GetClusterNodeView(std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
+    BResult GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
 
-    BResult GetPtView(std::map<uint16_t, CmPtInfo> &ptView);
+    BResult GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView);
 
     BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
 
@@ -83,13 +84,16 @@ public:
 
     void LoadLocal(LoadRequest &req, const Bio::LoadCallback &callback, void *context);
 
+    BResult ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes);
+
 private:
     BResult InitOperation();
     void *LoadFunction(const char *name);
 
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
-    BResult SendGetClusterNodeViewRequest(std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
-    BResult SendGetPtViewRequest(std::map<uint16_t, CmPtInfo> &ptView);
+    BResult SendGetClusterNodeViewRequest(uint64_t &curNodeTimes,
+        std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
+    BResult SendGetPtViewRequest(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView);
 
     BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
 
@@ -108,7 +112,9 @@ private:
 
     BResult SendLoadRequestLocal(LoadRequest &req);
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    BResult SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTimes);
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 private:
     WorkerMode mMode = CONVERGENCE;
     CmNodeId mLocalNid;
@@ -131,6 +137,7 @@ private:
     StatFuncPtr statOp = nullptr;
     ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;
+    ReportHbPtr hbOp = nullptr;
 };
 }
 }

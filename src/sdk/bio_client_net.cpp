@@ -206,16 +206,21 @@ BResult BioClientNet::StartIpcService()
         return ret;
     }
 
-    // 3. connection to local bio server
-    ConnectInfo info(static_cast<uint32_t>(getpid()));
-    ret = mNetEngine->SyncConnect(info);
+    // 3. listen channel broken event
+    ret = ListenEvent();
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
+        CLIENT_LOG_ERROR("Listen event failed, result:" << ret << ".");
         return ret;
     }
 
-    // 4. shm init
-    return ShmInit();
+    // 4. recover ipc service
+    ret = RecoverIpcService();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Recover ipc failed, result:" << ret << ".");
+        return ret;
+    }
+
+    return BIO_OK;
 }
 
 BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum)
@@ -231,7 +236,72 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     return mNetEngine->Start(netOptions);
 }
 
+BResult BioClientNet::ListenEvent()
+{
+    constexpr uint16_t EVENT_THREAD_NUM = 1;
+    constexpr uint32_t EVENT_QUEUE_SIZE = 128;
+
+    mEventService = ExecutorService::Create(EVENT_THREAD_NUM, EVENT_QUEUE_SIZE);
+    if (UNLIKELY(mEventService == nullptr)) {
+        LOG_ERROR("Failed to start event execution service");
+        return BIO_ALLOC_FAIL;
+    }
+
+    mEventService->SetThreadName("sdk-event");
+    auto result = mEventService->Start();
+    ChkTrueNot(result, BIO_INNER_ERR);
+
+    auto channelBroken = [this](uint32_t nodeId) -> void {
+        if (nodeId == static_cast<uint32_t>(getpid())) {
+            mEventService->Execute([this]() { RecoverIpcService(); });
+        }
+    };
+    mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+
+    BIO_OK;
+}
+
+BResult BioClientNet::RecoverIpcService()
+{
+    // 1. connection to local bio server
+    ConnectInfo info(static_cast<uint32_t>(getpid()));
+    auto ret = mNetEngine->SyncConnect(info);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
+        return ret;
+    }
+
+    // 2. shm init
+    ret = ShmInit();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get shm info fail, result:" << ret << ".");
+        return ret;
+    }
+    return BIO_OK;
+}
+
 void BioClientNet::StopInner()
 {
     mNetEngine->Stop();
+}
+
+BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
+{
+    if (mMode == CONVERGENCE) {
+        return BIO_OK;
+    }
+
+    for (auto &node : nodeView) {
+        if (node.second.id.VNodeId() == localNid) {
+            continue;
+        }
+        ConnectInfo info(node.second.id.VNodeId(), node.second.ip, node.second.port, NO_3);
+        LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip << ", port:" << info.port << ".");
+        auto ret = mNetEngine->SyncConnect(info);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
+            return ret;
+        }
+    }
+    return BIO_OK;
 }
