@@ -35,7 +35,7 @@ Usage:
 {name:s} [option]
 
 Options:
-    install    [pkg_path] [user] [group] [install_path]
+    install    [pkg_path] [user] [group] [install_path] [deployment_mod 0/1 0:convergence deployment   1:separates deployment]
     uninstall 
     start_boostio    
     stop_boostio    
@@ -60,11 +60,12 @@ STORAGE_DEVICE_TYPE = ""
 MEM_FS_CONFIG_FILE = "memfs.conf"
 INSTALL_USER = ""
 INSTALL_PASSWORD = ""
-
+DEPLOYMENT_MODE = 0
 DEFAULT_DEPLOY_USER = "boostio"
 DEFAULT_DEPLOY_GROUP = "boostio"
 DEFAULT_INSTALL_PATH = "/opt"
 INSTALL_SCRIPT_PATH = "/opt/boostio/scripts"
+
 
 BOOSTIO_CONF = "bio.conf"
 ZK_IP = ""
@@ -623,12 +624,15 @@ def install_all_nodes(pkg_path):
         return -1
     # 各个节点启动进程
     time.sleep(10)
-    echo_to_terminal("(5/6)----------start boostio in all nodes.")
-    if broad_cast(start_boostio) != 0:
-        echo_to_terminal("start fs failed.")
-        return -1
-    time.sleep(10)
+    if DEPLOYMENT_MODE == 1 :
+        echo_to_terminal("(5/6)----------start boostio in all nodes.")
+        if broad_cast(start_boostio) != 0:
+            echo_to_terminal("start fs failed.")
+            return -1
+        time.sleep(10)
+
     echo_to_terminal("(6/6)----------success.")
+
     return 0
 
 
@@ -705,16 +709,18 @@ def exec_build(args):
         logging.error("invalid password.")
         return False
     global DEFAULT_INSTALL_PATH
+    global DEPLOYMENT_MODE
     if args[1] == "install":
-        if len(args) != 3 and len(args) != 6:
+        if len(args) != 7:
             help_info()
             return -1
-        if len(args) == 6:
+        if len(args) == 7:
             global DEFAULT_DEPLOY_USER
             DEFAULT_DEPLOY_USER = args[3]
             global DEFAULT_DEPLOY_GROUP
             DEFAULT_DEPLOY_GROUP = args[4]
             DEFAULT_INSTALL_PATH = args[5]
+            DEPLOYMENT_MODE = args[6]
             if DEFAULT_INSTALL_PATH.endswith('/'):
                 DEFAULT_INSTALL_PATH = DEFAULT_INSTALL_PATH[0:len(DEFAULT_INSTALL_PATH) - 1]
             INSTALL_SCRIPT_PATH = DEFAULT_INSTALL_PATH + "/boostio/scripts"
@@ -726,9 +732,15 @@ def exec_build(args):
                 DEFAULT_INSTALL_PATH = DEFAULT_INSTALL_PATH[0:len(DEFAULT_INSTALL_PATH) - 1]
             INSTALL_SCRIPT_PATH = DEFAULT_INSTALL_PATH + "/boostio/scripts"
         return uninstall_all_nodes()
-    elif args[1] == "stop_boostio" and len(args) == 2:
+    elif args[1] == "stop_boostio" and len(args) == 3:
+        if args[2] == "0":
+            echo_to_terminal("convergence deployment not support stop service.")
+            return -1
         return stop_all_nodes()
-    elif args[1] == "start_boostio" and len(args) == 2:
+    elif args[1] == "start_boostio" and len(args) == 3:
+        if args[2] == "0":
+            echo_to_terminal("convergence deployment not support start service.")
+            return -1
         return start_all_nodes()
     else:
         help_info()

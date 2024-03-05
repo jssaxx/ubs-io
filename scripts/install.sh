@@ -108,6 +108,14 @@ register_systemd()
   touch $BIN_PATH/executeBio.sh
   cat > $BIN_PATH/executeBio.sh << EOF
 export LD_LIBRARY_PATH=$LIB_PATH
+BioID=`ps -ef | grep bio_console | grep -v grep | awk '{print $2}'`
+echo $BioID
+for id in $BioID
+do
+kill -9 $id
+echo "kill $id"
+done
+setenforce 0
 cd $BIN_PATH
 ./bio_daemon
 EOF
