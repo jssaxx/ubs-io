@@ -277,7 +277,8 @@ CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
 
 std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
 {
-    if (UNLIKELY(desc.tenantId == 0 || desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT)) {
+    if (UNLIKELY(desc.tenantId == 0 || desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT ||
+        desc.affinity < LOCAL_AFFINITY || desc.strategy < WRITE_BACK)) {
         CLIENT_LOG_ERROR("Invalid cache descriptor, tenantId:" << desc.tenantId << ", affinity:" << desc.affinity <<
             ", strategy:" << desc.strategy << ".");
         return nullptr;
