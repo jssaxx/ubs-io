@@ -54,6 +54,13 @@ clear_env()
 #      #清理zk
 #      echo "清理zk."
 #  fi
+  BioID=`ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}'`
+  echo $BioID
+  for id in $BioID
+  do
+   kill -9 $id
+   echo "kill $id"
+  done
 
   systemctl disable boostio
   sleep 10
@@ -108,13 +115,6 @@ register_systemd()
   touch $BIN_PATH/executeBio.sh
   cat > $BIN_PATH/executeBio.sh << EOF
 export LD_LIBRARY_PATH=$LIB_PATH
-BioID=`ps -ef | grep bio_console | grep -v grep | awk '{print $2}'`
-echo $BioID
-for id in $BioID
-do
-kill -9 $id
-echo "kill $id"
-done
 setenforce 0
 cd $BIN_PATH
 ./bio_daemon
