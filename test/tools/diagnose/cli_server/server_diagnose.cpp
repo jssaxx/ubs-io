@@ -89,6 +89,10 @@ static bool CanConvertToUint64(const std::string &str, uint64_t &val)
 
 static void BioServerDebugProcess(int argc, char *argv[]) noexcept
 {
+    if (argc <= 1) {
+        BioServerDebugHelp(argv[0], 1);
+        return;
+    }
     std::vector<std::string> cmds;
     for (int i = 1; i < argc; i++) {
         std::string str(argv[i]);
