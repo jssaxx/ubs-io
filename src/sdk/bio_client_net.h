@@ -88,7 +88,9 @@ public:
         return key;
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    BResult Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 private:
     BResult CheckShmFd();
     BResult CorrectFd();
@@ -96,6 +98,8 @@ private:
     BResult ShmInit();
     BResult StartIpcService();
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum);
+    BResult RecoverIpcService();
+    BResult ListenEvent();
     void StopInner();
 
 private:
@@ -106,6 +110,7 @@ private:
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint8_t *mShmAddr = nullptr;
+    ExecutorServicePtr mEventService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }
