@@ -258,7 +258,7 @@ BResult BioClientNet::ListenEvent()
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
 
-    BIO_OK;
+    return BIO_OK;
 }
 
 BResult BioClientNet::RecoverIpcService()
