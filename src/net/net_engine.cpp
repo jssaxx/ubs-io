@@ -174,7 +174,8 @@ BResult NetEngine::InitCommMemAllocator()
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
-        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ".");
+        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize <<
+            ", key:" << mLocalMr->GetLKey() << ".");
     }
     return result;
 }
@@ -221,7 +222,8 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
     } else {
         NET_LOG_INFO("Succeed to start shm memory pool success, size:" << mOptions.memorySize << " , shmOffset:"
-            << mShareOffset << ", shmFd:" << mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShareAddress));
+            << mShareOffset << ", shmFd:" << mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShareAddress) <<
+            ", key:" << mLocalMr->GetLKey() << ".");
     }
     return result;
 }

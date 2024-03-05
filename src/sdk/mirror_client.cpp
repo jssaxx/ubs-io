@@ -319,11 +319,10 @@ BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, O
         return ret;
     }
 
-    ObjStat info;
     StatRequest req{};
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     CopyKey(req.key, key, KEY_MAX_SIZE);
-    ret = SendStatRequest(ptEntry, req, info);
+    ret = SendStatRequest(ptEntry, req, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
     }
@@ -502,18 +501,8 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
     return cbCtx.result;
 }
 
-BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
+BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
-    if (masterNid == mLocalNid.VNodeId()) {
-        BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
-        req.isMr = 0;
-        req.address = reinterpret_cast<uintptr_t>(value);
-        req.size = req.length;
-        BResult ret = agent::BioClientAgent::Instance()->GetLocal(req, realLen);
-        BIO_TRACE_END(SDK_TRACE_GET_LOCAL, ret);
-        return ret;
-    }
-
     NetMrInfo mrInfo;
     BResult ret = net::BioClientNet::Instance()->Alloc(req.length, mrInfo);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -528,24 +517,35 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
     CLIENT_LOG_DEBUG("Alloc rdma page success, length:" << req.length << ", offset:" << req.offset << ", address:" <<
         mrInfo.address << ", size:" << mrInfo.size << ", key:" << mrInfo.key << ", dstNid:" << masterNid << ".");
 
-    BIO_TRACE_START(SDK_TRACE_GET_REMOTE);
-    uint64_t length;
-    ret = net::BioClientNet::Instance()->SendSync<GetRequest, uint64_t>(static_cast<BioNodeId>(masterNid),
-        BIO_OP_SDK_GET, req, length);
+    GetResponse rsp;
+    ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(static_cast<BioNodeId>(masterNid),
+        BIO_OP_SDK_GET, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
-        realLen = length;
-    }
-    BIO_TRACE_END(SDK_TRACE_GET_REMOTE, ret);
-    if (LIKELY(ret == BIO_OK)) {
+        realLen = rsp.realLen;
         BIO_TRACE_START(SDK_TRACE_GET_COPY2U);
         Copy(reinterpret_cast<void *>(mrInfo.address), value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, BIO_OK);
     }
 
     net::BioClientNet::Instance()->Free(mrInfo.address);
+    return ret;
+}
+
+BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
+{
+    BResult ret;
+    if (masterNid == mLocalNid.VNodeId()) {
+        BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
+        ret = agent::BioClientAgent::Instance()->GetLocal(req, value, realLen);
+        BIO_TRACE_END(SDK_TRACE_GET_LOCAL, ret);
+    } else {
+        BIO_TRACE_START(SDK_TRACE_GET_REMOTE);
+        ret = GetMasterRemote(req, masterNid, value, realLen);
+        BIO_TRACE_END(SDK_TRACE_GET_REMOTE, ret);
+    }
     return ret;
 }
 

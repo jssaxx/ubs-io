@@ -172,31 +172,38 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
         return ret;
     }
 
-    UnderFsPtr underFsPtr = UnderFs::Instance();
-    ObjStat stat;
-    ret = underFsPtr->Stat(key, stat);
+    UnderFs::ObjStat stat;
+    ret = UnderFs::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
-        return ret;
+    } else {
+        cacheObjStat.time = stat.time;
+        cacheObjStat.size = stat.size;
     }
-
-    cacheObjStat.time = stat.time;
-    cacheObjStat.size = stat.size;
     return ret;
 }
 
-BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_map<std::string, ObjStat> &objs)
+BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_map<std::string, CacheObjStat> &objs)
 {
     BResult ret = mWCacheManager->List(prefix, ptId, objs);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Write cache list failed, ret:" << ret << ", prefix:" << prefix << ", ptId:" << ptId << ".");
+        LOG_WARN("Write cache list failed, ret:" << ret << ", prefix:" << prefix << ", ptId:" << ptId << ".");
+    }
+    if (UNLIKELY(objs.size() >= 1000U)) {
+        return BIO_OK;
     }
 
     if (flag == 1) {
-        UnderFsPtr underFsPtr = UnderFs::Instance();
-        ret = underFsPtr->List(prefix, objs);
+        std::unordered_map<std::string, UnderFs::ObjStat> underStatInfo;
+        ret = UnderFs::Instance()->List(prefix, underStatInfo);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("UnderFS list failed, ret:" << ret << ", prefix:" << prefix << ".");
+        }
+        for (auto &info : underStatInfo) {
+            if (objs.size() >= 1000U) {
+                return BIO_OK;
+            }
+            objs.insert({ info.first, { info.second.size, info.second.time } });
         }
     }
 

@@ -23,7 +23,7 @@ public:
 
     WCacheSliceRefPtr Aquire(uint64_t ptId, const Key &key);
 
-    BResult FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
+    BResult FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs);
 
     BResult Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 

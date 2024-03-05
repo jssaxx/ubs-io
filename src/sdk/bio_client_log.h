@@ -39,12 +39,26 @@ public:
     int32_t Initialize(int32_t mode, int32_t level)
     {
         minLogLevel = level;
-        if (mode == 0) {
-            auto logFunc = [](int level, const char* message) {
-                Logger::gInstance->Log(level + 1, message);
-            };
-            func = logFunc;
+        if (mode == 1) {
+            LoggerOptions loggerOptions;
+            loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
+            loggerOptions.path = "./bio_sdk.log";
+            auto logger = Logger::Instance(loggerOptions);
+            if (logger == nullptr) {
+                std::cout << "Failed to create logger instance." << std::endl;
+                return -1;
+            }
+            auto ret = logger->Init();
+            if (ret != 0) {
+                std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path <<
+                    "." << std::endl;
+                return -1;
+            }
         }
+        auto logFunc = [](int level, const char* message) {
+            Logger::gInstance->Log(level + 1, message);
+        };
+        func = logFunc;
         return 0;
     }
 

@@ -321,29 +321,36 @@ void BioClientAgent::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Cal
     }
 }
 
-BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, uint64_t &realLen)
+BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
-    realLen = 0;
-    uint64_t length;
-    auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, uint64_t>(localPid, BIO_OP_SDK_GET, req, length);
+    GetResponse rsp;
+    auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(localPid, BIO_OP_SDK_GET, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
     } else {
-        realLen = length;
+        realLen = rsp.realLen;
+        uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
+        ret = memcpy_s(reinterpret_cast<void *>(value), realLen, reinterpret_cast<void *>(addr), realLen);
+        if (ret != 0) {
+            CLIENT_LOG_ERROR("memcpy_s failed.");
+        }
     }
     return ret;
 }
 
-BResult BioClientAgent::GetLocal(GetRequest &req, uint64_t &realLen)
+BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     if (mMode == CONVERGENCE) {
+        req.isMr = 0;
+        req.address = reinterpret_cast<uintptr_t>(value);
+        req.size = req.length;
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
         realLen = rsp.realLen;
         return ret;
     } else {
-        return SendGetRequestLocal(req, realLen);
+        return SendGetRequestLocal(req, value, realLen);
     }
 }
 

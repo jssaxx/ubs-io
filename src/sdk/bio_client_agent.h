@@ -74,7 +74,7 @@ public:
 
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback);
 
-    BResult GetLocal(GetRequest &req, uint64_t &realLen);
+    BResult GetLocal(GetRequest &req, char *value, uint64_t &realLen);
 
     void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
@@ -102,7 +102,7 @@ private:
 
     void SendPutRequestLocal(PutRequest *req, NetEngine::Callback &callback);
 
-    BResult SendGetRequestLocal(GetRequest &req, uint64_t &realLen);
+    BResult SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen);
 
     void SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback);
 

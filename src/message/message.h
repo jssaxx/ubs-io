@@ -170,6 +170,7 @@ typedef struct {
 } GetRequest;
 
 typedef struct {
+    uint64_t addrOffset;
     uint64_t realLen;
 } GetResponse;
 

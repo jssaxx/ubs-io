@@ -355,7 +355,7 @@ CResult BioCreateCache(CacheDescriptor desc)
             return RET_CACHE_EXISTS;
         }
     }
-    auto bioInstance = ock::bio::BioService::CreateCache(desc);
+    auto bioInstance = BioService::CreateCache(desc);
     if (UNLIKELY(bioInstance == nullptr)) {
         return RET_CACHE_ERROR;
     }
@@ -380,14 +380,16 @@ CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc)
     return RET_CACHE_OK;
 }
 
-void BioDestroyCache(uint64_t tenantId)
+CResult BioDestroyCache(uint64_t tenantId)
 {
     std::unique_lock<std::mutex> locker(gLock);
     auto iter = gBioCacheMap.find(tenantId);
     if (UNLIKELY(iter == gBioCacheMap.end())) {
-        return;
+        return RET_CACHE_NOT_FOUND;
     }
+    BioService::DestroyCache(tenantId);
     gBioCacheMap.erase(iter);
+    return RET_CACHE_OK;
 }
 
 CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *location)
@@ -530,6 +532,8 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
 
     ObjStat statInfo;
     auto ret = bioInstance->Stat(key, location, statInfo);
-    *stat = statInfo;
+    if (LIKELY(ret == RET_CACHE_OK)) {
+        *stat = statInfo;
+    }
     return ret;
 }
