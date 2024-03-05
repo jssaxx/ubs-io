@@ -57,7 +57,7 @@ public:
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
-    BResult List(char *prefix, uint16_t ptId, std::unordered_map<std::string, ObjStat> &objs);
+    BResult List(char *prefix, uint16_t ptId, std::unordered_map<std::string, CacheObjStat> &objs);
 
     BResult Delete(uint64_t ptId, const Key &key);
 

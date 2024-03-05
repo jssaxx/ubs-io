@@ -11,29 +11,25 @@
 #include "bio_client.h"
 
 using namespace ock::bio;
+
 std::atomic<bool> gDaemonRunning = { false };
 
 void HandleSigterm(int signum)
 {
     (void)signum;
-
-    // already existed, do nothing.
     if (!gDaemonRunning) {
         std::cout << "Already exited!" << std::endl;
         return;
     }
 
-    // disable core dump when stopping
     struct rlimit coreLimiter = {
             .rlim_cur = 0,
             .rlim_max = 0
     };
-
     int result = setrlimit(RLIMIT_CORE, &coreLimiter);
     if (UNLIKELY(result != 0)) {
         std::cout << "Failed to disable core dump, errno " << errno << std::endl;
     }
-
     gDaemonRunning = false;
 }
 
@@ -57,9 +53,8 @@ int main(int argc, char **argv)
     }
 
     gDaemonRunning = true;
-    std::cout << "BoostIO service running." << std::endl;
-
-    while (true) {
+    std::cout << "BoostIO Console Start Success." << std::endl;
+    while (gDaemonRunning) {
         sleep(5);
     }
     return 0;

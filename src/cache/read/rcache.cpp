@@ -440,7 +440,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     uint64_t flowOffset;
     uint64_t indexInFlow;
 
-    ObjStat stat;
+    UnderFs::ObjStat stat;
     auto ret = underFsPtr->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);

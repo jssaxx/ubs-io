@@ -259,7 +259,7 @@ public:
 
 protected:
     BResult BioConfigInit();
-    BResult BioLoggerInit();
+    BResult BioLoggerInit(std::string pathName);
     BResult BioTraceInit();
     BResult BioUnderFsInit();
     BResult BioBdmInit();
