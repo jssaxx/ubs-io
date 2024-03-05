@@ -584,7 +584,8 @@ int32_t Put(PutRequest *req)
 
 int32_t Get(GetRequest *req, GetResponse *rsp)
 {
-    return BioServer::Instance()->GetMirrorServer()->Get(*req, rsp->realLen, rsp->addrOffset);
+    ServiceContext ctx;
+    return BioServer::Instance()->GetMirrorServer()->Get(ctx, *req, rsp->realLen, rsp->addrOffset);
 }
 
 int32_t Delete(DeleteRequest *req)

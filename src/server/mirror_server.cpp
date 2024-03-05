@@ -189,7 +189,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
     return ret;
 }
 
-BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen, uint64_t &addrOffset)
+BResult MirrorServer::Get(ServiceContext &ctx, GetRequest &req, uint64_t &realLen, uint64_t &addrOffset)
 {
     std::string key(req.key);
     uint32_t dstNid = req.comm.srcNid;
@@ -197,7 +197,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen, uint64_t &addrOffs
     uint32_t localNid = BioServer::Instance()->GetLocalNid().VNodeId();
     uint32_t rKey = req.mrKey;
 
-    auto writer = [dstNid, dstPid, &addrOffset, localNid, rKey, key, this]
+    auto writer = [dstNid, dstPid, &addrOffset, localNid, rKey, key, &ctx, this]
             (const SlicePtr &from, const SlicePtr &to) -> BResult {
         BResult ret = BIO_ERR;
         if ((dstNid == localNid) && (dstPid == getpid())) {
@@ -269,7 +269,7 @@ BResult MirrorServer::Get(GetRequest &req, uint64_t &realLen, uint64_t &addrOffs
             uint32_t off = 0;
             NetRequest writeReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[idx].key,
                 lMrVec[idx].size);
-            ret = BioServer::Instance()->GetNetEngine()->SyncWrite(dstNid, writeReq);
+            ret = BioServer::Instance()->GetNetEngine()->SyncWrite(ctx.Channel(), writeReq);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Sync write failed, ret:" << ret << ", dstNid:" << dstNid << ".");
                 break;
@@ -671,7 +671,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
     }
 
     GetResponse rsp;
-    BResult result = Get(*req, rsp.realLen, rsp.addrOffset);
+    BResult result = Get(ctx, *req, rsp.realLen, rsp.addrOffset);
     if (result != BIO_OK) {
         Reply(ctx, result, nullptr, 0);
         return BIO_OK;
