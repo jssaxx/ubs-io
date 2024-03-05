@@ -101,8 +101,7 @@ fi
 if [[ "$DIAGNOSE_FLAG" == 'true' ]]; then
     \cp bio/lib/libcli_agent.a boostio/lib/.
     \cp bio/lib/libcli_agent.so boostio/lib/.
-    \cp bio/lib/libsdk_diagnose.so boostio/lib/.
-    \cp bio/lib/libhtracer_diagnose.so boostio/lib/.
+    \cp bio/lib/*_diagnose.so boostio/lib/.
 fi
 
 \cp bio/bin/* boostio/bin/.
