@@ -18,9 +18,9 @@ const uint16_t MESSAGE_MAGIC = 0xABCD;
 const uint32_t KEY_MAX_SIZE = 256;
 const uint32_t IP_MAX_SIZE = 32;
 const uint32_t DISK_MAX_SIZE = 4;
-const uint32_t CLUSTER_NODE_MAX_SIZE = 256;
+const uint32_t CLUSTER_NODE_MAX_SIZE = 16;
 const uint32_t PT_COPY_MAX_SIZE = 2;
-const uint32_t PT_MAX_SIZE = 1024;
+const uint32_t PT_MAX_SIZE = 128;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 
 typedef struct {

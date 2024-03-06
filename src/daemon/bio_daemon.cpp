@@ -4,13 +4,49 @@
 
 #include <csignal>
 #include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "bio_server.h"
 
 using namespace ock::bio;
 
 std::atomic<bool> gDaemonRunning = { false };
 
-void HandleSigterm(int signum)
+static bool IsRunning()
+{
+    std::string processName = "bio_daemon";
+    std::string filePath = "/opt/boostio/run/";
+    std::string fileName = filePath + processName + ".lock";
+    int ret = mkdir(filePath.c_str(), 755);
+    if (ret < 0) {
+        std::cout << "Mkdir failed, file path " << filePath.c_str() << " errno " << errno << "." << std::endl;
+        return true;
+    }
+
+    int fd = open(fileName.c_str(), O_WRONLY | O_CREAT, 0600);
+    if (fd < 0) {
+        std::cout << "Open failed, file " << fileName.c_str() << "errno " << errno << "." << std::endl;
+        return true;
+    }
+
+    struct flock lock;
+    lock.l_type = F_WRLCK;
+    lock.l_start = 0;
+    lock.l_whence = SEEK_SET;
+    lock.l_len = 0;
+    ret = fcntl(fd, F_SETLK, &lock);
+    if (ret < 0) {
+        std::cout << "Process lock file is locked." << std::endl;
+        close(fd);
+        return true;
+    }
+
+    return false;
+}
+
+static void HandleSigterm(int signum)
 {
     (void)signum;
     if (!gDaemonRunning) {
