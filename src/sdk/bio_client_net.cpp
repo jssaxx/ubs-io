@@ -225,11 +225,13 @@ BResult BioClientNet::StartIpcService()
 
 BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum)
 {
+    const uint64_t defaultMemorySize = (128UL * 1024UL * 1024UL); // 128M
     NetOptions netOptions;
     netOptions.ipMask = std::move(ipMask);
     netOptions.port = port;
     netOptions.role = NET_CLIENT;
     netOptions.isBusyLoop = false;
+    netOptions.memorySize = defaultMemorySize;
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;

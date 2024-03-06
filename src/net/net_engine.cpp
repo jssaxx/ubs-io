@@ -170,6 +170,8 @@ BResult NetEngine::InitCommMemAllocator()
         NET_LOG_ERROR("Make block pool ptr failed.");
         return BIO_ALLOC_FAIL;
     }
+
+    SetDataPageKb(NO_4 * NO_1024);
     result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
