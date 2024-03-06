@@ -74,8 +74,8 @@ struct NetOptions {
 const std::string CONN_PAYLOAD_PREFIX_DATA = "bio-data-";
 const uint32_t CONN_PAYLOAD_PREFIX_SIZE = CONN_PAYLOAD_PREFIX_DATA.size();
 const std::string UDS_NAME = "BIO_SHM_UDS";
-constexpr uint32_t IPC_MAX_MESSAGE_SIZE = (33 * 1024);
-constexpr uint32_t MAX_MESSAGE_SIZE = (4 * 1024 * 4096);
+constexpr uint32_t IPC_MAX_MESSAGE_SIZE = (33 * 1024); // 33k
+constexpr uint32_t MAX_MESSAGE_SIZE = (32 * 1024); // 32k
 constexpr uint32_t MAX_MESSAGE_HEAD_SIZE = 1024;
 
 union NetConnPayload {
