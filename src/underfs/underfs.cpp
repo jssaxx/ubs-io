@@ -293,8 +293,8 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
     while ((ptr = readdir(dir)) != nullptr) {
         if (memcmp(ptr->d_name, prefix, strlen(prefix)) == 0) {
             struct stat file_stat;
-            if (stat(ptr->d_name, &file_stat) != 0) {
-                LOG_ERROR("Fail to check file, " << keyPath.c_str());
+            if (stat(((keyPath + ptr->d_name).c_str()), &file_stat) != 0) {
+                LOG_ERROR("Fail to stat file " << (keyPath + ptr->d_name) << ", errorno " << errno << ".");
                 continue;
             }
             UnderFs::ObjStat statInfo = { static_cast<uint32_t>(file_stat.st_size), file_stat.st_ctime };
