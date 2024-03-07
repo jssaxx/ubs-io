@@ -69,19 +69,22 @@ private:
     void RunTaskThreadFinish(CmPtTaskPtr ptTask);
     void RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo);
 
+    void UpdatePt(CmPtInfo &ptInfo);
+
     void JobAddFinishList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
     void JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
-    bool JobPreCheck(CmPtInfo &ptInfo);
+    bool JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist);
     BResult JobExpiredClear(CmPtInfo &ptInfo, bool retained);
     BResult JobSyncData(CmPtInfo &ptInfo);
 
     BResult SendSyncDataReq(CmPtInfo &ptInfo);
 
 private:
+    ReadWriteLock mLock;
+    std::map<uint16_t, CmPtInfo> mPtInfos;
     ExecutorServicePtr mTaskService{ nullptr };
     ExecutorServicePtr mJobService{ nullptr };
     bool mInited{ false };
-    bool mFisted{ true };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

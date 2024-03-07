@@ -94,7 +94,6 @@ void MirrorServerCrb::RunTaskThread(CmPtTaskPtr ptTask)
         }
     } while (isRetry);
 
-    mFisted = false;
     return;
 }
 
@@ -145,8 +144,11 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
 
     LOG_INFO("Job begin: ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
-    if (!JobPreCheck(ptInfo)) {
+    bool isForce = false;
+    bool isExist = false;
+    if (!JobPreCheck(ptInfo, isForce, isExist)) {
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+        UpdatePt(ptInfo);
         return;
     }
 
@@ -158,30 +160,44 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
         }
     }
     if (index == ptInfo.copys.size()) {
-        if (mFisted) {
+        if (isForce || isExist) {
             ret = JobExpiredClear(ptInfo, false);
             if (ret == BIO_INNER_RETRY) {
                 JobAddRetryList(ptTask, ptInfo);
+                ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+                return;
             }
         }
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+        UpdatePt(ptInfo);
         return;
     }
 
     if (ptInfo.copys[index].state != CM_COPY_RECOVERY) {
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+        UpdatePt(ptInfo);
         return;
     }
 
     ret = JobSyncData(ptInfo);
     if (ret == BIO_OK) {
         JobAddFinishList(ptTask, ptInfo);
+        UpdatePt(ptInfo);
     } else if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY) {
         JobAddRetryList(ptTask, ptInfo);
     }
 
     ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
     return;
+}
+
+void MirrorServerCrb::UpdatePt(CmPtInfo &ptInfo)
+{
+    mLock.LockWrite();
+    CmPtInfo cloneInfo;
+    cloneInfo.Clone(ptInfo);
+    mPtInfos[ptInfo.ptId] = cloneInfo;
+    mLock.UnLock();
 }
 
 void MirrorServerCrb::JobAddFinishList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo)
@@ -198,15 +214,27 @@ void MirrorServerCrb::JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo)
     ptTask->lock.UnLock();
 }
 
-bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo)
+bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist)
 {
     if (ptInfo.state == CM_PT_INIT || ptInfo.state == CM_PT_FAULT || ptInfo.state == CM_PT_BUTT) {
         return false;
     }
 
-    if (ptInfo.state == CM_PT_NORMAL && mFisted == false) {
-        return false;
+    if (mPtInfos.find(ptInfo.ptId) == mPtInfos.end()) {
+        isForce = true;
+        return true;
     }
+
+    uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
+    uint16_t index;
+    mLock.LockRead();
+    for (index = 0; index < mPtInfos[ptInfo.ptId].copys.size(); index++) {
+        if (ptInfo.copys[index].nodeId == localNodeId) {
+            isExist = true;
+            break;
+        }
+    }
+    mLock.UnLock();
 
     CmPtInfo cache;
     auto ret = Cm::Instance()->GetPtInfo(ptInfo.ptId, cache);
