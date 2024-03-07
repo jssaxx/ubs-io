@@ -45,7 +45,8 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint64_t ptId)
     cacheLock.LockRead();
     auto iter =  cache.find(ptId);
     if (UNLIKELY(iter == cache.end())) {
-        LOG_ERROR("Read cache pt id " << ptId << " do not exist.");
+        cacheLock.UnLock();
+        LOG_WARN("Read cache pt id " << ptId << " do not exist.");
         return nullptr;
     }
     cachePtr = iter->second;
@@ -211,6 +212,52 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to seal data flow, ret:" << ret << ", flowId:" << dataFlow->GetFlowId());
         return ret;
+    }
+
+    return BIO_OK;
+}
+
+BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
+{
+    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", version:" << ptv);
+
+    RCachePtr rCache = GetRCacheInstanceByPtId(ptId);
+    if (UNLIKELY(rCache == nullptr)) {
+        LOG_INFO("No needed, not exist, ptId:" << ptId << ", version:" << ptv);
+        return BIO_OK;
+    }
+
+    uint64_t evictTotalData;
+    uint64_t haveEvictData;
+
+    BResult ret;
+
+    evictTotalData = rCache->GetCacheData(READ_CACHE_TIER_MEM);
+    ret = rCache->EvictMemData(evictTotalData, haveEvictData);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Expired mem clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        return ret;
+    }
+
+    LOG_INFO("Expired mem, total:" << evictTotalData << ", hasEvict:" << haveEvictData <<
+        ", ptId:" << ptId << ", version:" << ptv);
+
+    if (evictTotalData != haveEvictData) {
+        return BIO_INNER_RETRY;
+    }
+
+    evictTotalData = rCache->GetCacheData(READ_CACHE_TIER_DISK);
+    ret = rCache->EvictDiskData(evictTotalData, haveEvictData);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Expired disk clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        return ret;
+    }
+
+    LOG_INFO("Expired disk, total:" << evictTotalData << ", hasEvict:" << haveEvictData <<
+        ", ptId:" << ptId << ", version:" << ptv);
+
+    if (evictTotalData != haveEvictData) {
+        return BIO_INNER_RETRY;
     }
 
     return BIO_OK;

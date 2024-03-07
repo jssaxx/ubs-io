@@ -538,6 +538,34 @@ BResult RCache::Delete(const Key &key)
 
 BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictData)
 {
+    bool expectval = false;
+    if (!mMemEvict.compare_exchange_weak(expectval, true)) {
+        haveEvictData = 0ULL;
+        return BIO_OK;
+    }
+
+    BResult ret = EvictMemDataImpl(needEvictData, haveEvictData);
+
+    mMemEvict.store(false);
+    return ret;
+}
+
+BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData)
+{
+    bool expectval = false;
+    if (!mDiskEvict.compare_exchange_weak(expectval, true)) {
+        haveEvictData = 0ULL;
+        return BIO_OK;
+    }
+
+    BResult ret = EvictDiskDataImpl(needEvictData, haveEvictData);
+
+    mDiskEvict.store(false);
+    return ret;
+}
+
+BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData)
+{
     haveEvictData = 0ULL;
 
     RCacheChunkPtr chunk;
@@ -616,7 +644,7 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
     return BIO_OK;
 }
 
-BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData)
+BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData)
 {
     haveEvictData = 0ULL;
 
