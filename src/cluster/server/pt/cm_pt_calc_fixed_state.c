@@ -230,7 +230,8 @@ void ViewPtEntryListUpdateNodeState(uint16_t nodeId, NodeState state, NodeInfo *
     }
 }
 
-static int32_t ViewPtEntryTrim(PtEntry *ptEntry, uint16_t copyNum)
+static int32_t ViewPtEntryTrim(PtEntry *ptEntry, uint16_t copyNum, uint16_t ptNum, uint16_t *masterList,
+    uint16_t nodeId, uint16_t validNum)
 {
     uint16_t copyIndex;
     uint16_t statNum = 0;
@@ -260,6 +261,25 @@ static int32_t ViewPtEntryTrim(PtEntry *ptEntry, uint16_t copyNum)
     }
     ptEntry->state = PT_STATE_NORMAL;
     ptEntry->copyNum = copyNum;
+
+    if (validNum == 0) {
+        return TRUE;
+    }
+
+    uint16_t nodeIndex = INVALID_VALUE16;
+    for (copyIndex = 0; copyIndex < copyNum; copyIndex++) {
+        if (ptEntry->copyList[copyIndex].nodeId == nodeId) {
+            nodeIndex = copyIndex;
+        }
+    }
+
+    if ((masterList[nodeId] < (ptNum / validNum)) && nodeIndex != INVALID_VALUE16) {
+        ptEntry->masterNodeId = ptEntry->copyList[nodeIndex].nodeId;
+        ptEntry->masterDiskId = ptEntry->copyList[nodeIndex].diskId;
+        ptEntry->referNum++;
+        masterList[nodeId]++;
+    }
+
     return TRUE;
 }
 
@@ -281,10 +301,36 @@ int32_t ViewPtSatisfiedCopyNum(PtEntry *ptEntry, uint16_t minCopyNum)
     return TRUE;
 }
 
-void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList, int32_t *ptChange)
+uint16_t *GenMasterList(PtEntryList *ptEntryList, uint16_t nodeNum)
+{
+    size_t len = sizeof(uint16_t) * nodeNum;
+    uint16_t *masterList = (uint16_t *)malloc(len);
+    if (masterList == NULL) {
+        CM_LOGERROR("Malloc fail, len(%u).", len);
+        return NULL;
+    }
+    memset_s(masterList, len, 0, len);
+
+    uint16_t index;
+    for (index = 0; index < ptEntryList->ptNum; index++) {
+        if (ptEntryList->ptEntryList[index].masterNodeId < nodeNum) {
+            masterList[ptEntryList->ptEntryList[index].masterNodeId] += 1UL;
+        }
+    }
+
+    return masterList;
+}
+
+void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList,
+    int32_t *ptChange, uint16_t nodeNum, uint16_t validNum)
 {
     PtEntry *ptEntry = NULL;
     uint16_t index, copyIndex;
+
+    uint16_t *masterList = GenMasterList(ptEntryList, nodeNum);
+    if (masterList == NULL) {
+        return;
+    }
 
     for (index = 0; index < ptNum; index++) {
         if (ptList[index].ptId >= ptEntryList->ptNum) {
@@ -304,7 +350,8 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
                 *ptChange = TRUE;
                 ptEntry->copyList[copyIndex].state = PT_COPY_STATE_RUNNING;
                 ViewPtUpdateCopyKeepAlive(ptEntry, ptEntryList->minCopyNum);
-                int32_t isUpdate = ViewPtEntryTrim(ptEntry, ptEntryList->maxCopyNum);
+                int32_t isUpdate = ViewPtEntryTrim(ptEntry, ptEntryList->maxCopyNum, ptEntryList->ptNum, masterList,
+                    nodeId, validNum);
                 if (isUpdate == FALSE) {
                     ViewPtEntryUpdatePtState(ptEntry, ptEntryList);
                 }
@@ -312,5 +359,7 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
             }
         }
     }
+
+    free(masterList);
 }
 
