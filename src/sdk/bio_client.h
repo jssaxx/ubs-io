@@ -17,6 +17,8 @@
 #include "bio_lock.h"
 #include "bio_execution.h"
 #include "mirror_client.h"
+#include "bio_client_net.h"
+
 #ifdef USE_DEBUG_TOOLS
 #include "cli.h"
 #include "sdk_diagnose.h"
@@ -36,8 +38,6 @@ public:
         static auto instance = MakeRef<BioClient>();
         return instance;
     }
-
-    BResult BioLoggerInit(WorkerMode mode);
 
     BResult Start(WorkerMode mode);
     void Stop();
@@ -158,8 +158,14 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    BResult Recover();
+    BResult BioClientLoggerInit(WorkerMode mode);
+    BResult BioClientAgentInit(WorkerMode mode);
+    BResult BioClientNetPreInit(WorkerMode mode);
+    BResult BioClientNetPostInit();
+    BResult BioClientMirrorInit(WorkerMode mode);
+    BResult BioClientStartWork();
     void Heartbeat();
+    BResult BioClientRecover();
 
 #ifdef USE_DEBUG_TOOLS
 protected:
@@ -167,6 +173,7 @@ protected:
     BResult BioDiagnoseHtracerInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
 #endif
+
 private:
     WorkerMode mMode;
     bool mStarted = false;
@@ -174,6 +181,7 @@ private:
     std::unordered_map<uint64_t, std::shared_ptr<Bio>> mCacheMap;
     ReadWriteLock mLock;
     MirrorClientPtr mMirror = nullptr;
+    net::BioClientNetPtr mNetEngine = nullptr;
     bool mRunning = true;
     ExecutorServicePtr mHeartService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
