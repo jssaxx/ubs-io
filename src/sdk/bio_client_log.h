@@ -41,18 +41,17 @@ public:
     {
         minLogLevel = level;
         if (mode == 1) {
-            LoggerOptions loggerOptions;
-            loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
-            loggerOptions.path = "./bio_sdk_" + std::to_string(getpid()) + ".log";
-            auto logger = Logger::Instance(loggerOptions);
+            LoggerOptions options;
+            options.minLogLevel = level;
+            options.path = "./bio_sdk_" + std::to_string(getpid()) + ".log";
+            auto logger = Logger::Instance(options);
             if (logger == nullptr) {
                 std::cout << "Failed to create logger instance." << std::endl;
                 return -1;
             }
             auto ret = logger->Init();
             if (ret != 0) {
-                std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path <<
-                    "." << std::endl;
+                std::cout << "Failed to init log, ret:" << ret << ", log path:" << options.path << "." << std::endl;
                 return -1;
             }
         }
