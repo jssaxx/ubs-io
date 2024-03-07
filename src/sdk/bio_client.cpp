@@ -145,6 +145,12 @@ BResult BioClient::Start(WorkerMode mode)
         return ret;
     }
 
+    ret = Recover();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to start heartbeat, ret:" << ret << ".");
+        return ret;
+    }
+
     mStarted = true;
     CLIENT_LOG_INFO("Boostio client start success.");
     return BIO_OK;
@@ -162,7 +168,7 @@ BResult BioClient::Recover()
 
     mHeartService = ExecutorService::Create(HEARTBEAT_THREAD_NUM, HEARTBEAT_QUEUE_SIZE);
     if (UNLIKELY(mHeartService == nullptr)) {
-        LOG_ERROR("Failed to start heartbeat execution service");
+        CLIENT_LOG_ERROR("Failed to start heartbeat execution service");
         return BIO_ALLOC_FAIL;
     }
 
@@ -172,6 +178,8 @@ BResult BioClient::Recover()
 
     result = mHeartService->Execute([this]() { Heartbeat(); });
     ChkTrueNot(result, BIO_INNER_ERR);
+
+    return BIO_OK;
 }
 
 void BioClient::Heartbeat()
@@ -191,8 +199,8 @@ void BioClient::Heartbeat()
             CLIENT_LOG_ERROR("Report hb fail:" << ret << ".");
             continue;
         }
-
         if (oldNodeTimes != curNodeTimes) {
+            CLIENT_LOG_INFO("oldNodeTimes:" << oldNodeTimes << ", curNodeTimes:" << curNodeTimes);
             uint64_t realNodeTimes;
             ret = mMirror->RebuildNodeView(realNodeTimes);
             if (ret != BIO_OK) {
@@ -207,13 +215,14 @@ void BioClient::Heartbeat()
             oldNodeTimes = realNodeTimes;
         }
         if (oldPtTimes != curPtTimes) {
+            CLIENT_LOG_INFO("oldPtTimes:" << oldPtTimes << ", curPtTimes:" << curPtTimes);
             uint64_t realPtTimes;
             ret = mMirror->RebuildPtView(realPtTimes);
             if (ret != BIO_OK) {
                 CLIENT_LOG_ERROR("Failed to rebuild ptview, ret:" << ret << ".");
                 continue;
             }
-            oldNodeTimes = realPtTimes;
+            oldPtTimes = realPtTimes;
         }
     }
 }

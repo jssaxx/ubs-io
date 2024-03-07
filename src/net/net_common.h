@@ -39,16 +39,17 @@ enum ConnectMode {
 };
 
 struct ConnectInfo {
+    uint32_t srcId;
     uint32_t peerId;
     std::string ip;
     uint16_t port;
     uint16_t retryTimes;
 
     ConnectInfo() = default;
-    ConnectInfo(uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : peerId(nid), ip(std::move(ip)), port(port), retryTimes(times)
+    ConnectInfo(uint32_t srcid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
+        : srcId(srcid), peerId(nid), ip(std::move(ip)), port(port), retryTimes(times)
     {}
-    ConnectInfo(uint32_t nid) : peerId(nid), port(0), retryTimes(NO_3) {}
+    ConnectInfo(uint32_t srcid, uint32_t nid) : srcId(srcid), peerId(nid), port(0), retryTimes(NO_3) {}
 };
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
@@ -86,7 +87,7 @@ union NetConnPayload {
     uint64_t whole = 0;
 
     NetConnPayload() = default;
-    explicit NetConnPayload(uint16_t sId, uint16_t tId) : srcNodeId(sId), tgtNodeId(tId) {}
+    explicit NetConnPayload(uint32_t sId, uint32_t tId) : srcNodeId(sId), tgtNodeId(tId) {}
     explicit NetConnPayload(uint64_t p) : whole(p) {}
 
     std::string ToPayloadStr(const std::string &prefix) const

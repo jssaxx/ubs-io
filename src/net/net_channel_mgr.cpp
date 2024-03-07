@@ -57,7 +57,7 @@ BResult NetChannelMgr::RemoveChannel(uint32_t dstNid, const ChannelPtr &ch)
         mChannelMgr.erase(iter);
         delete chInfo;
     }
-    NET_LOG_INFO("Remove channel with nodeId " << dstNid << " success.");
+    NET_LOG_INFO("Remove channel with nodeId " << dstNid << ", channel " << ch->Id() << " success.");
     return BIO_OK;
 }
 

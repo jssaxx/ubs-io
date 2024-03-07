@@ -35,9 +35,12 @@ BResult ConnectTask::DoConnect()
             return BIO_ERR;
         }
         mEngine->GetChannelMgr()->AddChannel(mConnectInfo.peerId, Chanel);
+        NET_LOG_INFO("Connect succeed, channel " << Chanel->Id() << ", target node id:" << mConnectInfo.peerId);
+        return ret;
     } else if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to repeat connect data plane by target id " << mConnectInfo.peerId);
     }
+    NET_LOG_INFO("Connect exist, channel " << Chanel->Id() << ", target node id:" << mConnectInfo.peerId);
     return BIO_OK;
 }
 

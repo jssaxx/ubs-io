@@ -80,8 +80,10 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         if (node.second.id.VNodeId() == localNid) {
             continue;
         }
-        ConnectInfo info(node.second.id.VNodeId(), node.second.ip, node.second.port, NO_3);
-        LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip << ", port:" << info.port << ".");
+        ConnectInfo info(static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
+            node.second.port, NO_3);
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip <<
+            ", port:" << info.port << ".");
         ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
@@ -187,7 +189,7 @@ BResult BioClientNet::StartIpcService()
     }
 
     // 1. Initialize net engine
-    int16_t timeoutSec = NO_5 * NO_60; // 5min
+    int16_t timeoutSec = NO_16; // 16s
     auto ret = mNetEngine->Initialize(timeoutSec, NO_128, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
@@ -245,7 +247,7 @@ BResult BioClientNet::ListenEvent()
 
     mEventService = ExecutorService::Create(EVENT_THREAD_NUM, EVENT_QUEUE_SIZE);
     if (UNLIKELY(mEventService == nullptr)) {
-        LOG_ERROR("Failed to start event execution service");
+        CLIENT_LOG_ERROR("Failed to start event execution service");
         return BIO_ALLOC_FAIL;
     }
 
@@ -255,7 +257,7 @@ BResult BioClientNet::ListenEvent()
 
     auto channelBroken = [this](uint32_t nodeId) -> void {
         if (nodeId == static_cast<uint32_t>(getpid())) {
-            mEventService->Execute([this]() { RecoverIpcService(); });
+            mEventService->Execute([this]() { Recover(); });
         }
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
@@ -263,10 +265,24 @@ BResult BioClientNet::ListenEvent()
     return BIO_OK;
 }
 
+void BioClientNet::Recover()
+{
+    constexpr uint16_t RECOVER_INTERAL = 2;
+    uint32_t retryCnt = 0;
+    BResult ret;
+    do {
+        ret = RecoverIpcService();
+        if (ret != BIO_OK) {
+            CLIENT_LOG_WARN("Delay retry connect, retry cnt:" << retryCnt++);
+            sleep(RECOVER_INTERAL);
+        }
+    } while (ret != BIO_OK);
+}
+
 BResult BioClientNet::RecoverIpcService()
 {
     // 1. connection to local bio server
-    ConnectInfo info(static_cast<uint32_t>(getpid()));
+    ConnectInfo info(static_cast<uint32_t>(getpid()), static_cast<uint32_t>(getpid()));
     auto ret = mNetEngine->SyncConnect(info);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
@@ -297,8 +313,13 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
         if (node.second.id.VNodeId() == localNid) {
             continue;
         }
-        ConnectInfo info(node.second.id.VNodeId(), node.second.ip, node.second.port, NO_3);
-        LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip << ", port:" << info.port << ".");
+        if (node.second.status != CM_NODE_NORMAL) {
+            continue;
+        }
+        ConnectInfo info(static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
+            node.second.port, NO_3);
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip <<
+            ", port:" << info.port << ".");
         auto ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
