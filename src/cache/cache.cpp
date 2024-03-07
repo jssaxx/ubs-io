@@ -305,6 +305,14 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv, bool retained)
             LOG_ERROR("Extra create rcache fail:" << ret << ", ptId:" << ptId);
             return ret;
         }
+    } else {
+        BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
+        ret = mRCacheManager->ExpiredClear(ptId, ptv);
+        BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+            return ret;
+        }
     }
 
     BIO_TRACE_START(WCACHE_TRACE_CLEAR_EXPIRED);

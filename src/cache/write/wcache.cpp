@@ -286,6 +286,19 @@ void WCache::ExpiredClear()
     return;
 }
 
+bool WCache::IsEmptyEvict()
+{
+    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue()) {
+        return false;
+    }
+
+    if (!mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue()) {
+        return false;
+    }
+
+    return true;
+}
+
 BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
 {
     auto slice = sliceRef->GetSlice();

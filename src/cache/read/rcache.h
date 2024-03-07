@@ -94,8 +94,12 @@ namespace ock {
 
             BResult EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData);
 
-            DEFINE_REF_COUNT_FUNCTIONS
+            DEFINE_REF_COUNT_FUNCTIONS;
         private:
+            BResult EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData);
+
+            BResult EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData);
+
             BResult InsertToIndex(const Key &key, RCacheChunkPtr &chunk);
 
             BResult DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk);
@@ -121,6 +125,9 @@ namespace ock {
 
             BResult CreateRCacheFlow(RCacheTierType tier, std::vector<uint64_t> flowIds);
         private:
+            std::atomic<bool> mMemEvict { false };
+            std::atomic<bool> mDiskEvict { false };
+
             std::atomic<uint64_t> cacheData[READ_CACHE_TIER_BUTT];
             std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
 

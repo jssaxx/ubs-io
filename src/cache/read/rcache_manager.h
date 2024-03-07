@@ -52,6 +52,8 @@ namespace ock {
 
             BResult RecoverCache(FlowPtr dataFlow);
 
+            BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
+
             uint64_t GetGCData();
 
             const RCachePtr GetRCacheInstanceByPtId(uint64_t ptId);
