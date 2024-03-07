@@ -131,6 +131,62 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
     return Cache::Instance().GetWCacheSlice(sliceKey, slice);
 }
 
+void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp)
+{
+    uint32_t bar = req.bar;
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
+    uint32_t index = 0;
+    for (auto &nodeEntry : nodeView) {
+        if ((bar--) != 0) { // Skip the obtained node
+            continue;
+        }
+        if (index == CLUSTER_NODE_SIZE) {
+            break;
+        }
+        rsp.desc[index].groupId = nodeEntry.second.id.GroupId();
+        rsp.desc[index].nodeId = nodeEntry.second.id.VNodeId();
+        memcpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        rsp.desc[index].port = nodeEntry.second.port;
+        rsp.desc[index].status = static_cast<uint16_t>(nodeEntry.second.status);
+        rsp.desc[index].num = nodeEntry.second.disks.size();
+        for (uint32_t j = 0; j < nodeEntry.second.disks.size(); j++) {
+            rsp.desc[index].diskDesc[j].diskId = nodeEntry.second.disks[j].diskId;
+            rsp.desc[index].diskDesc[j].diskStatus = static_cast<uint16_t>(nodeEntry.second.disks[j].diskStatus);
+        }
+        index++;
+    }
+    rsp.num = index;
+    rsp.flag = (index == 0) ? 0 : 1;
+}
+
+void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp)
+{
+    uint32_t bar = req.bar;
+    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
+    uint32_t index = 0;
+    for (auto &ptEntry : ptView) {
+        if ((bar--) != 0) { // Skip the obtained pt
+            continue;
+        }
+        if (index == PT_SIZE) {
+            break;
+        }
+        rsp.desc[index].version = ptEntry.second.version;
+        rsp.desc[index].ptId = ptEntry.second.ptId;
+        rsp.desc[index].state = static_cast<uint16_t>(ptEntry.second.state);
+        rsp.desc[index].masterNodeId = ptEntry.second.masterNodeId;
+        rsp.desc[index].masterDiskId = ptEntry.second.masterDiskId;
+        for (uint32_t j = 0; j < ptEntry.second.copys.size(); j++) {
+            rsp.desc[index].copys[j].nodeId = ptEntry.second.copys[j].nodeId;
+            rsp.desc[index].copys[j].diskId = ptEntry.second.copys[j].diskId;
+            rsp.desc[index].copys[j].state = static_cast<uint16_t>(ptEntry.second.copys[j].state);
+        }
+        index++;
+    }
+    rsp.num = index;
+    rsp.flag = (index == 0) ? 0 : 1;
+}
+
 BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
 {
     std::string key(req.key);
@@ -480,29 +536,7 @@ int32_t MirrorServer::HandleQueryNodeView(ServiceContext &ctx)
     }
 
     QueryNodeViewResponse rsp;
-    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
-    uint32_t size = nodeView.size();
-    if (UNLIKELY(size > CLUSTER_NODE_MAX_SIZE)) {
-        LOG_ERROR("Cluster node num  " << size << " exceeds 256.");
-        return BIO_ERR;
-    }
-
-    uint32_t index = 0;
-    for (auto &nodeEntry : nodeView) {
-        rsp.desc[index].groupId = nodeEntry.second.id.GroupId();
-        rsp.desc[index].nodeId = nodeEntry.second.id.VNodeId();
-        memcpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
-        rsp.desc[index].port = nodeEntry.second.port;
-        rsp.desc[index].status = static_cast<uint16_t>(nodeEntry.second.status);
-        rsp.desc[index].num = nodeEntry.second.disks.size();
-        for (uint32_t j = 0; j < nodeEntry.second.disks.size(); j++) {
-            rsp.desc[index].diskDesc[j].diskId = nodeEntry.second.disks[j].diskId;
-            rsp.desc[index].diskDesc[j].diskStatus = static_cast<uint16_t>(nodeEntry.second.disks[j].diskStatus);
-        }
-        index++;
-    }
-    rsp.num = index;
-
+    QueryNodeView(*req, rsp);
     Reply(ctx, BIO_OK, &rsp, sizeof(QueryNodeViewResponse));
     return BIO_OK;
 }
@@ -528,29 +562,7 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
     }
 
     QueryPtViewResponse rsp;
-    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
-    uint32_t size = ptView.size();
-    if (UNLIKELY(size > PT_MAX_SIZE)) {
-        LOG_ERROR("Pt view num  " << size << " exceeds 8192.");
-        return -1;
-    }
-
-    uint32_t index = 0;
-    for (auto &ptEntry : ptView) {
-        rsp.desc[index].version = ptEntry.second.version;
-        rsp.desc[index].ptId = ptEntry.second.ptId;
-        rsp.desc[index].state = static_cast<uint16_t>(ptEntry.second.state);
-        rsp.desc[index].masterNodeId = ptEntry.second.masterNodeId;
-        rsp.desc[index].masterDiskId = ptEntry.second.masterDiskId;
-        for (uint32_t j = 0; j < ptEntry.second.copys.size(); j++) {
-            rsp.desc[index].copys[j].nodeId = ptEntry.second.copys[j].nodeId;
-            rsp.desc[index].copys[j].diskId = ptEntry.second.copys[j].diskId;
-            rsp.desc[index].copys[j].state = static_cast<uint16_t>(ptEntry.second.copys[j].state);
-        }
-        index++;
-    }
-    rsp.num = index;
-
+    QueryPtView(*req, rsp);
     Reply(ctx, BIO_OK, &rsp, sizeof(QueryPtViewResponse));
     return BIO_OK;
 }

@@ -20,9 +20,9 @@ uintptr_t GetBioServerNet();
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
-int32_t GetNodeView(QueryNodeViewResponse *rsp);
+int32_t GetNodeView(QueryNodeViewRequest *req, QueryNodeViewResponse *rsp);
 
-int32_t GetPtView(QueryPtViewResponse *rsp);
+int32_t GetPtView(QueryPtViewRequest *req, QueryPtViewResponse *rsp);
 
 int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp);
 

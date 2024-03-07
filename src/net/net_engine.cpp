@@ -249,8 +249,8 @@ std::string NetEngine::GenerateWorkersSetting()
 void NetEngine::AssignIpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options)
 {
     options.mode = NetDriverWorkingMode::NET_EVENT_POLLING;
-    options.mrSendReceiveSegSize = IPC_MAX_MESSAGE_SIZE + MAX_MESSAGE_HEAD_SIZE;
-    options.mrSendReceiveSegCount = NO_512;
+    options.mrSendReceiveSegSize = MAX_MESSAGE_SIZE + MAX_MESSAGE_HEAD_SIZE;
+    options.mrSendReceiveSegCount = NO_1024;
     options.heartBeatIdleTime = NO_5;
     options.heartBeatProbeInterval = NO_1;
     options.qpSendQueueSize = NO_64;

@@ -24,8 +24,8 @@ public:
     using BioServerStopFuncPtr = void (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
-    using GetNodeViewFuncPtr = int32_t (*)(QueryNodeViewResponse *);
-    using GetPtViewFuncPtr = int32_t (*)(QueryPtViewResponse *);
+    using GetNodeViewFuncPtr = int32_t (*)(QueryNodeViewRequest *, QueryNodeViewResponse *);
+    using GetPtViewFuncPtr = int32_t (*)(QueryPtViewRequest *, QueryPtViewResponse *);
     using CreateFlowMasterFuncPtr = int32_t (*)(CreateFlowRequest *, CreateFlowResponse *);
     using CreateFlowSlaveFuncPtr = int32_t (*)(CreateFlowRequest *);
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
@@ -91,9 +91,6 @@ private:
     void *LoadFunction(const char *name);
 
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
-    BResult SendGetClusterNodeViewRequest(uint64_t &curNodeTimes,
-        std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
-    BResult SendGetPtViewRequest(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView);
 
     BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
 

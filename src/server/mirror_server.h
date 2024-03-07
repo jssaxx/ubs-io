@@ -38,6 +38,8 @@ public:
     BResult CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId);
     BResult CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
     BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t flowIndex, uint64_t length, WCacheSlicePtr &slice);
+    void QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp);
+    void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP);
     BResult Get(ServiceContext &ctx, GetRequest &req, uint64_t &realLen, uint64_t &addrOffset);

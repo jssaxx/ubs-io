@@ -17,10 +17,10 @@ extern "C" {
 const uint16_t MESSAGE_MAGIC = 0xABCD;
 const uint32_t KEY_MAX_SIZE = 256;
 const uint32_t IP_MAX_SIZE = 32;
-const uint32_t DISK_MAX_SIZE = 4;
-const uint32_t CLUSTER_NODE_MAX_SIZE = 16;
+const uint32_t DISK_MAX_SIZE = 8;
+const uint32_t CLUSTER_NODE_SIZE = 32;
 const uint32_t PT_COPY_MAX_SIZE = 2;
-const uint32_t PT_MAX_SIZE = 128;
+const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 
 typedef struct {
@@ -61,13 +61,15 @@ typedef struct {
 
 typedef struct {
     RequestComm comm;
+    uint32_t bar;
 } QueryNodeViewRequest;
 
 typedef struct {
+    int32_t flag;
     uint64_t curNodeTimes;
     uint32_t num;
-    NodeInfoDesc desc[CLUSTER_NODE_MAX_SIZE];
-} QueryNodeViewResponse;
+    NodeInfoDesc desc[CLUSTER_NODE_SIZE];
+} QueryNodeViewResponse; // size:2456
 
 /* Query pt view */
 typedef struct {
@@ -87,13 +89,15 @@ typedef struct {
 
 typedef struct {
     RequestComm comm;
+    uint32_t bar;
 } QueryPtViewRequest;
 
 typedef struct {
+    int32_t flag;
     uint64_t curPtTimes;
     uint32_t num;
-    PtInfoDesc desc[PT_MAX_SIZE];
-} QueryPtViewResponse;
+    PtInfoDesc desc[PT_SIZE];
+} QueryPtViewResponse; // size:2072
 
 /* Query local node info */
 typedef struct {
