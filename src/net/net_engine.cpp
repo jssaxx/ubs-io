@@ -381,8 +381,6 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
 
 int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload)
 {
-    NET_LOG_INFO("Receive new peer connected from " << ipPort << ", payload " << payload);
-
     NewChannelResp resp;
     if (mHandleNewChannel != nullptr) {
         mHandleNewChannel(newChannel, ipPort, resp);
@@ -398,9 +396,12 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
         return BIO_ERR;
     }
 
-    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), true);
+    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
     NetChannelUpCtx ctx(netPayload.srcNodeId, true);
     newChannel->UpCtx(ctx.whole);
+
+    NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", peer connected from:" <<
+        netPayload.srcNodeId << ", ip:" << ipPort << ", payload " << payload);
     return BIO_OK;
 }
 
@@ -409,14 +410,9 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
     NetChannelUpCtx ctx(ch->UpCtx());
     NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << ctx.peerId << ".");
 
-    if (ctx.AcceptedChannel()) {
-        ChannelNode chNode;
-        mChannelMgr->RemoveChannelNode(ch->Id(), chNode);
-        if (mHandlerBroken != nullptr) {
-            mHandlerBroken(chNode.id);
-        }
-    } else {
-        mChannelMgr->RemoveChannel(ctx.peerId, ch);
+    mChannelMgr->RemoveChannel(ctx.peerId, ch);
+    if (mHandlerBroken != nullptr) {
+        mHandlerBroken(ctx.peerId);
     }
 }
 
@@ -463,16 +459,15 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr
     prefix = CONN_PAYLOAD_PREFIX_DATA;
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
+        NetConnPayload payload(info.srcId, info.peerId);
         if (mode == CONNECT_IPC) {
-            NetConnPayload payload(static_cast<uint32_t>(getpid()), info.peerId);
             result = netService->Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
         } else {
-            NetConnPayload payload(mLocalNodeId, info.peerId);
             result = netService->Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
         }
         if (result == 0) {
             NET_LOG_INFO("Connect to peer success, ip:" << info.ip << ", port:" << info.port << ", pid:" << getpid() <<
-                ".");
+                ", payload " <<  payload.ToPayloadStr(prefix) << ".");
             break;
         }
     }

@@ -26,7 +26,8 @@ typedef struct {
     int32_t (*viewRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptList);
     int32_t (*needRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptList);
     void (*updateState)(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList, int32_t *ptChange);
-    void (*updateFinish)(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList, int32_t *ptChange);
+    void (*updateFinish)(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList,
+        int32_t *ptChange, uint16_t nodeNum, uint16_t validNum);
 } CalcOps;
 
 CalcOps *CmPtCalcOpsGet(PtNumLimitMode numLimit);

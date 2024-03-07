@@ -22,6 +22,8 @@
 
 namespace ock {
 namespace bio {
+constexpr uint16_t BIO_IO_TIMEOUT_TIME = 60;
+constexpr uint16_t BIO_IO_INTERAL_TIME = 2;
 class MirrorClient {
 public:
     struct MirrorPut {
@@ -69,7 +71,7 @@ public:
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    DEFINE_REF_COUNT_FUNCTIONS;
 
     std::vector<uint16_t> ListLocalAffinityPt();
 
@@ -98,6 +100,19 @@ public:
     BResult RebuildPtView(uint64_t &realPtTimes);
 
 private:
+    BResult PutImpl(MirrorPut &param);
+
+    BResult GetImpl(MirrorGet &param, uint64_t &realLen);
+
+    BResult DeleteKeyImpl(const char *key, const ObjLocation &location);
+
+    BResult LoadImpl(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+        const Bio::LoadCallback &callback, void *context);
+
+    BResult ListAllImpl(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
+
+    BResult StatObjectImpl(const char *key, const ObjLocation &location, ObjStat &stat);
+
     inline void Copy(const void *src, void *dst, const uint64_t len)
     {
         memcpy_s(dst, len, src, len);
@@ -108,7 +123,10 @@ private:
 
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
 
-    BResult AllocPutOffset(uint16_t ptId, uint64_t len, uint64_t &flowId, uint64_t &offset, uint64_t &index);
+    uint32_t CalcPtQuota(CmPtInfo &ptEntry);
+
+    BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId,
+        uint64_t &offset, uint64_t &index);
 
     BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
         uint64_t &flowId);
@@ -144,7 +162,7 @@ private:
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
 
-    inline BResult Insert(uint16_t ptId, uint64_t flowId)
+    inline BResult Insert(uint16_t ptId, uint64_t ptv, uint64_t flowId)
     {
         mLock.LockWrite();
         if (UNLIKELY(mFlowMap.size() > defaultMaxFlowSize)) {
@@ -152,11 +170,19 @@ private:
             return BIO_ERR;
         }
         auto it = mFlowMap.find(ptId);
-        if (UNLIKELY(it != mFlowMap.end())) {
+        if (it != mFlowMap.end()) {
+            FlowInstance *instance = it->second;
+            if (instance->Version() == ptv) {
+                mLock.UnLock();
+                return BIO_OK;
+            }
+            mFlowMap.erase(it);
+            delete instance;
+            mFlowMap[ptId] = new FlowInstance(flowId, ptv);
             mLock.UnLock();
             return BIO_OK;
         }
-        mFlowMap[ptId] = new FlowInstance(flowId);
+        mFlowMap[ptId] = new FlowInstance(flowId, ptv);
         mLock.UnLock();
         return BIO_OK;
     }

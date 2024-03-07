@@ -176,7 +176,7 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
     ret = JobSyncData(ptInfo);
     if (ret == BIO_OK) {
         JobAddFinishList(ptTask, ptInfo);
-    } else if (ret == BIO_ALLOC_FAIL || ret == BIO_NET_RETRY) {
+    } else if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY) {
         JobAddRetryList(ptTask, ptInfo);
     }
 
