@@ -365,9 +365,6 @@ BResult MirrorServer::Load(LoadRequest &req)
     BResult ret =
         Cache::Instance().Load(req.comm.ptId, const_cast<char *>(key.c_str()), req.offset, req.length, realLen);
     BIO_TRACE_END(MIRROR_TRACE_LOAD, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Load key failed, ret:" << ret << ", key:" << key << ".");
-    }
     return ret;
 }
 
@@ -799,17 +796,18 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
     auto *req = static_cast<LoadRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
-
+    BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
     BResult ret = Load(*req);
-    Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
-    BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, 0);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Load key failed, ret:" << ret << ", key:" << req->key << ".");
+    }
+    BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, ret);
+    Reply(ctx, ret, nullptr, 0);
     return BIO_OK;
 }
 

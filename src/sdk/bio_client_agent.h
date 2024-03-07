@@ -82,7 +82,7 @@ public:
     
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
 
-    void LoadLocal(LoadRequest &req, const Bio::LoadCallback &callback, void *context);
+    BResult LoadLocal(LoadRequest &req);
 
     BResult ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes);
 
