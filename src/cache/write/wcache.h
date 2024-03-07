@@ -74,6 +74,7 @@ public:
 
     void Flush();
     void ExpiredClear();
+    bool IsEmptyEvict();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:

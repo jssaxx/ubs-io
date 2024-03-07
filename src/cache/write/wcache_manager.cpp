@@ -430,8 +430,7 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
         if (flowIt.second->GetPtv() >= ptv) {
             continue;
         }
-        if (flowIt.second->GetCapacity(WCACHE_MEMORY) == 0 &&
-            flowIt.second->GetCapacity(WCACHE_DISK) == 0) {
+        if (flowIt.second->IsEmptyEvict()) {
             continue;
         }
         LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
