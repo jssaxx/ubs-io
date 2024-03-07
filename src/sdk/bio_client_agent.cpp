@@ -130,97 +130,74 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     return ret;
 }
 
-BResult BioClientAgent::SendGetClusterNodeViewRequest(uint64_t &curNodeTimes,
-    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
-{
-    QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    QueryNodeViewResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(localPid,
-        BIO_OP_SDK_GET_NODE_VIEW, req, rsp);
-    if (ret != BIO_OK) {
-        return ret;
-    }
-
-    for (uint32_t i = 0; i < rsp.num; i++) {
-        std::vector<CmDiskInfo> disks;
-        for (uint32_t j = 0; j < rsp.desc[i].num; j++) {
-            disks.push_back(
-                { rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus) });
-        }
-        nodeView.insert(std::make_pair(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId),
-            CmNodeInfo(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId), rsp.desc[i].ip, rsp.desc[i].port,
-            static_cast<CmNodeStatus>(rsp.desc[i].status), disks)));
-    }
-    curNodeTimes = rsp.curNodeTimes;
-    return BIO_OK;
-}
-
 BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
 {
-    if (mMode == CONVERGENCE) {
-        QueryNodeViewResponse queryNodeViewRsp{};
-        auto ret = getNodeViewOp(&queryNodeViewRsp);
-        for (uint32_t i = 0; i < queryNodeViewRsp.num; i++) {
+    BResult ret = BIO_OK;
+    int32_t flag = 0;
+    uint32_t progressBar = 0;
+    do {
+        QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
+        QueryNodeViewResponse rsp;
+        if (mMode == CONVERGENCE) {
+            ret = getNodeViewOp(&req, &rsp);
+        } else {
+            ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(localPid,
+                BIO_OP_SDK_GET_NODE_VIEW, req, rsp);
+        }
+        if (ret != BIO_OK) {
+            nodeView.clear();
+            return ret;
+        }
+        for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmDiskInfo> disks;
-            for (uint32_t j = 0; j < queryNodeViewRsp.desc[i].num; j++) {
-                disks.push_back({ queryNodeViewRsp.desc[i].diskDesc[j].diskId,
-                    static_cast<CmDiskStatus>(queryNodeViewRsp.desc[i].diskDesc[j].diskStatus) });
+            for (uint32_t j = 0; j < rsp.desc[i].num; j++) {
+                disks.push_back(
+                    { rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus) });
             }
-            nodeView.insert(std::make_pair(CmNodeId(queryNodeViewRsp.desc[i].groupId, queryNodeViewRsp.desc[i].nodeId),
-                CmNodeInfo(CmNodeId(queryNodeViewRsp.desc[i].groupId, queryNodeViewRsp.desc[i].nodeId),
-                queryNodeViewRsp.desc[i].ip, queryNodeViewRsp.desc[i].port,
-                static_cast<CmNodeStatus>(queryNodeViewRsp.desc[i].status), disks)));
+            nodeView.insert(std::make_pair(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId),
+                CmNodeInfo(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId), rsp.desc[i].ip, rsp.desc[i].port,
+                static_cast<CmNodeStatus>(rsp.desc[i].status), disks)));
         }
-        curNodeTimes = queryNodeViewRsp.curNodeTimes;
-        return ret;
-    } else {
-        return SendGetClusterNodeViewRequest(curNodeTimes, nodeView);
-    }
-}
-
-BResult BioClientAgent::SendGetPtViewRequest(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
-{
-    QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    QueryPtViewResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(localPid,
-        BIO_OP_SDK_QUERY_PT_VIEW, req, rsp);
-    if (ret != BIO_OK) {
-        return ret;
-    }
-
-    for (uint32_t i = 0; i < rsp.num; i++) {
-        std::vector<CmPtCopy> copys;
-        for (uint32_t j = 0; j < PT_COPY_MAX_SIZE; j++) {
-            copys.push_back({ rsp.desc[i].copys[j].nodeId, rsp.desc[i].copys[j].diskId,
-                static_cast<CmCopyState>(rsp.desc[i].copys[j].state) });
-        }
-        ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
-            static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
-    }
-    curPtTimes = rsp.curPtTimes;
+        flag = rsp.flag;
+        progressBar += rsp.num;
+        curNodeTimes = rsp.curNodeTimes;
+    } while (flag == 1);
     return BIO_OK;
 }
 
 BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
 {
-    if (mMode == CONVERGENCE) {
-        QueryPtViewResponse queryPtViewRsp{};
-        auto ret = getPtViewOp(&queryPtViewRsp);
-        for (uint32_t i = 0; i < queryPtViewRsp.num; i++) {
+    BResult ret = BIO_OK;
+    int32_t flag = 0;
+    uint32_t progressBar = 0;
+    do {
+        QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
+        QueryPtViewResponse rsp;
+        if (mMode == CONVERGENCE) {
+            ret = getPtViewOp(&req, &rsp);
+        } else {
+            ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(localPid,
+                BIO_OP_SDK_QUERY_PT_VIEW, req, rsp);
+        }
+        if (ret != BIO_OK) {
+            ptView.clear();
+            return ret;
+        }
+        for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmPtCopy> copys;
             for (uint32_t j = 0; j < PT_COPY_MAX_SIZE; j++) {
-                copys.push_back({ queryPtViewRsp.desc[i].copys[j].nodeId, queryPtViewRsp.desc[i].copys[j].diskId,
-                    static_cast<CmCopyState>(queryPtViewRsp.desc[i].copys[j].state) });
+                copys.push_back({ rsp.desc[i].copys[j].nodeId, rsp.desc[i].copys[j].diskId,
+                    static_cast<CmCopyState>(rsp.desc[i].copys[j].state) });
             }
-            ptView.insert(std::make_pair(queryPtViewRsp.desc[i].ptId, CmPtInfo(queryPtViewRsp.desc[i].version,
-                queryPtViewRsp.desc[i].ptId, static_cast<CmPtState>(queryPtViewRsp.desc[i].state),
-                queryPtViewRsp.desc[i].masterNodeId, queryPtViewRsp.desc[i].masterDiskId, copys)));
+            ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
+                static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId,
+                rsp.desc[i].masterDiskId, copys)));
         }
-        curPtTimes = queryPtViewRsp.curPtTimes;
-        return ret;
-    } else {
-        return SendGetPtViewRequest(curPtTimes, ptView);
-    }
+        flag = rsp.flag;
+        progressBar += rsp.num;
+        curPtTimes = rsp.curPtTimes;
+    } while (flag == 1);
+    return BIO_OK;
 }
 
 BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId)
