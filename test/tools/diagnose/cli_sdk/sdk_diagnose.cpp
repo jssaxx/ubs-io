@@ -311,15 +311,15 @@ static void HandleStat(std::vector<std::string> cmds)
 }
 
 typedef struct {
-    sem_t *ctx;
+    sem_t sem;
     CResult result;
 } LoadContext;
 
-void TestCallback(void *context, int32_t result)
+static void TestCallback(void *context, int32_t result)
 {
     LoadContext* loadCtx = reinterpret_cast<LoadContext*>(context);
     loadCtx->result = static_cast<CResult>(result);
-    sem_post(loadCtx->ctx);
+    sem_post(&(loadCtx->sem));
 }
 
 static void HandleLoad(std::vector<std::string> cmds)
@@ -343,17 +343,17 @@ static void HandleLoad(std::vector<std::string> cmds)
         return;
     }
 
-    int loadFlag = 0;
     ObjLocation locationInfo{ location, 0 };
-    sem_t loadSem;
-    sem_init(&loadSem, 0, 0);
-    LoadContext loadCtx = {&loadSem, RET_CACHE_OK};
+    LoadContext loadCtx;
+    sem_init(&(loadCtx.sem), 0, 0);
+    loadCtx.result = RET_CACHE_OK;
     auto ret = BioLoad(gTenantId, key, offset, length, locationInfo, TestCallback, &loadCtx);
     if (ret != RET_CACHE_OK) {
         CLI_PrintBuf("Load failed, key:%s, result:%d.\n", key, ret);
         return;
     } else {
-        sem_wait(&loadSem);
+        sem_wait(&(loadCtx.sem));
+        sem_destroy(&(loadCtx.sem));
         if (loadCtx.result == RET_CACHE_OK) {
             CLI_PrintBuf("Load success, key:%s.\n", key);
         } else {

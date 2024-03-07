@@ -19,8 +19,8 @@ static bool IsRunning()
     std::string processName = "bio_daemon";
     std::string filePath = "/opt/boostio/run/";
     std::string fileName = filePath + processName + ".lock";
-    int ret = mkdir(filePath.c_str(), 755);
-    if (ret < 0) {
+    int ret = mkdir(filePath.c_str(), 640);
+    if (ret < 0 && errno != EEXIST) {
         std::cout << "Mkdir failed, file path " << filePath.c_str() << " errno " << errno << "." << std::endl;
         return true;
     }
@@ -67,6 +67,11 @@ static void HandleSigterm(int signum)
 
 int main(int argc, char *argv[])
 {
+    if (IsRunning()) {
+        std::cout << "bio_daemon process is running." << std::endl;
+        return -1;
+    }
+
     auto bioServer = BioServer::Instance();
     auto ret = bioServer->Start();
     if (ret != BIO_OK) {

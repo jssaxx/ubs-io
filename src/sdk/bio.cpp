@@ -211,7 +211,7 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
 }
 
 CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-    const LoadCallback &callback, void *context)
+    const BioLoadCallback &callback, void *context)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
@@ -223,15 +223,15 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_EPERM;
     }
 
+    LoadCallback cb = [&callback](void *context, BResult result) {
+        callback(context, ToCResult(result));
+    };
     BIO_TRACE_START(SDK_TRACE_LOAD);
-    BResult ret = gClient->Load(key, offset, length, location, callback, context);
+    BResult ret = gClient->Load(key, offset, length, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Load value failed, ret:" << ret << ", key:" << key << ", location0:" <<
             location.location[0] << ", location1:" << location.location[1] << ".");
-    } else {
-        CLIENT_LOG_INFO("Load value success, key:" << key << ", location0:" << location.location[0] << ", location1:" <<
-            location.location[1] << ".");
     }
     return ToCResult(ret);
 }
@@ -463,7 +463,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location)
 }
 
 CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-                LoadCallback callback, void *context)
+                BioLoadCallback callback, void *context)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {

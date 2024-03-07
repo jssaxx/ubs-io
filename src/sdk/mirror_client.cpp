@@ -189,7 +189,7 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     if (UNLIKELY(iter == mPtView.end())) {
         mLock.UnLock();
         CLIENT_LOG_ERROR("Invalid pt id:" << ptId << ".");
-        return BIO_CHECK_PT_FAIL;
+        return BIO_INVALID_PARAM;
     }
     BResult ret = BIO_OK;
     if (UNLIKELY(iter->second.state == CM_PT_FAULT)) {
@@ -894,23 +894,34 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
 
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
 {
+    CLIENT_LOG_INFO("Load master start, masterNid:" << masterNid << ", key:" << req.key << ", offset:" <<
+        req.offset << ", length:" << req.length << ".");
+
     if (masterNid == mLocalNid.VNodeId()) {
-        agent::BioClientAgent::Instance()->LoadLocal(req, callback, context);
+        auto ret = agent::BioClientAgent::Instance()->LoadLocal(req);
+        callback(context, ret);
         return BIO_OK;
     }
 
-    uint16_t ptId = req.comm.ptId;
-    auto cbFunc = [ptId, callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
+    auto cbFunc = [&callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
         if (UNLIKELY(result != BIO_OK)) {
-            CLIENT_LOG_ERROR("Load master return failed, ret:" << result << ".");
+            CLIENT_LOG_ERROR("Send Load master failed, result:" << result << ".");
+            if (UNLIKELY(callback != nullptr)) {
+                callback(context, result);
+            }
+            return;
         }
-        if (callback != nullptr) {
-            callback(context, ((result == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+        BResult hdlRet = *(static_cast<BResult*>(resp));
+        if (UNLIKELY(hdlRet != BIO_OK)) {
+            CLIENT_LOG_ERROR("Load master failed, result:" << hdlRet << ".");
+        }
+        if (UNLIKELY(callback != nullptr)) {
+            callback(context, hdlRet);
         }
     };
     NetEngine::Callback cb(cbFunc, nullptr);
-    net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(masterNid), BIO_OP_SDK_LOAD,
-        static_cast<void *>(&req), sizeof(LoadRequest), cb);
+    net::BioClientNet::Instance()->SendAsync<LoadRequest>(static_cast<uint32_t>(masterNid), BIO_OP_SDK_LOAD,
+        req, cb);
     return BIO_OK;
 }
 

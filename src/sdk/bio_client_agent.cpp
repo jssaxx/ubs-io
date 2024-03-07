@@ -447,15 +447,12 @@ BResult BioClientAgent::SendLoadRequestLocal(LoadRequest &req)
     return result;
 }
 
-void BioClientAgent::LoadLocal(LoadRequest &req, const Bio::LoadCallback &callback, void *context)
+BResult BioClientAgent::LoadLocal(LoadRequest &req)
 {
     if (mMode == CONVERGENCE) {
-        auto ret = loadOp(&req);
-        callback(context, ((ret == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
-        return;
+        return loadOp(&req);
     } else {
-        auto ret = SendLoadRequestLocal(req);
-        callback(context, ((ret == BIO_OK) ? RET_CACHE_OK : RET_CACHE_ERROR));
+        return SendLoadRequestLocal(req);
     }
 }
 

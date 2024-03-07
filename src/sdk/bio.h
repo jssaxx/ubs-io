@@ -18,7 +18,7 @@ constexpr uint32_t BIO_IO_MAX_LEN = 4194304;
 
 class Bio {
 public:
-    using LoadCallback = std::function<void(void *context, CResult result)>;
+    using LoadCallback = std::function<void(void *context, int32_t result)>;
 
     /**
      * @brief: Calculate location information
@@ -75,7 +75,7 @@ public:
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
     CResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-        const LoadCallback &callback, void *context);
+        const BioLoadCallback &callback, void *context);
 
     /**
      * @brief: List all key that meets the prefix condition
