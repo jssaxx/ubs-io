@@ -195,7 +195,7 @@ BResult BioServer::BioNetInit()
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
 
-    int16_t timeoutSec = NO_5 * NO_60; // 5min
+    int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
     auto ret =
         mNetEngine->Initialize(timeoutSec, netConfig.handleRequestThreadNum, netConfig.handleRequestQueueSize, Log);
@@ -390,9 +390,12 @@ void BioServer::Connection()
         if (it->second.id.VNodeId() == mLocalNid.VNodeId()) {
             continue;
         }
+        if (it->second.status != CM_NODE_NORMAL) {
+            continue;
+        }
         LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" <<
             it->second.port << ".");
-        ConnectInfo info(it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
+        ConnectInfo info(mLocalNid.VNodeId(), it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
         BResult ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
             LOG_ERROR("Connect to " << it->first.ToString() << " failed, ret: " << ret << ".");

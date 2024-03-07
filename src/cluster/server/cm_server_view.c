@@ -591,7 +591,15 @@ void CmServerViewPtEvent(CmPtEvent *ptEvent)
         return;
     }
 
-    spool->calcOps->updateFinish(ptEvent->nodeId, ptEvent->ptList, ptEvent->ptNum, spool->ptEntryList, &spool->ptChange);
+    uint16_t validNum = 0;
+    for (uint16_t index = 0; index < spool->stateList->nodeNum; index++) {
+        if (spool->stateList->nodeList[index].clusterState == NODE_CLUSTER_STATE_IN) {
+            validNum++;
+        }
+    }
+
+    spool->calcOps->updateFinish(ptEvent->nodeId, ptEvent->ptList, ptEvent->ptNum, spool->ptEntryList,
+        &spool->ptChange, pool->maxNodeNum, validNum);
     return;
 }
 

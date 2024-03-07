@@ -100,6 +100,7 @@ private:
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum);
     BResult RecoverIpcService();
     BResult ListenEvent();
+    void Recover();
     void StopInner();
 
 private:
