@@ -50,7 +50,7 @@ enum WorkerMode : int32_t {
 
 #define MAX_KEY_SIZE 256
 #define LOCATION_SIZE 2
-typedef void (*LoadCallback)(void *context, int32_t result);
+typedef void (*BioLoadCallback)(void *context, int32_t result);
 
 typedef struct {
     char key[MAX_KEY_SIZE];
@@ -168,7 +168,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-                LoadCallback callback, void *context);
+                BioLoadCallback callback, void *context);
 
 /**
  * @brief: List all key that meets the prefix condition
