@@ -29,7 +29,7 @@ using UnderFsPtr = Ref<UnderFs>;
 class UnderFs {
 public:
     struct ObjStat {
-        uint32_t size;
+        uint64_t size;
         time_t time;
     };
 

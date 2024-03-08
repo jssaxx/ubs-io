@@ -130,7 +130,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
 
     ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_STAT);
-    ret = rados_stat(mIoCtx, key, &stat.size, &stat.mTime);
+    ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to stat object, ret:" << ret);
@@ -143,8 +143,8 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
 {
     ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
 
-    rados_list_ctx_t *listCtx = nullptr;
-    int ret = rados_nobjects_list_open(mIoCtx, listCtx);
+    rados_list_ctx_t listCtx;
+    int ret = rados_nobjects_list_open(mIoCtx, &listCtx);
     if (ret < 0) {
         LOG_ERROR("Failed to list open, ret:" << ret);
         return BIO_ERR;
@@ -152,9 +152,19 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
 
     BIO_TRACE_START(UFS_TRACE_LIST);
     char *entry = nullptr;
-    while (rados_nobjects_list_next(listCtx, &entry, nullptr, nullptr) != (-ENOENT)) {
+    while (rados_nobjects_list_next(listCtx, const_cast<const char**>(&entry), nullptr, nullptr) != (-ENOENT)) {
         LOG_INFO("List result, entry:" << entry);
+        if (memcmp(entry, prefix, strlen(prefix)) == 0) {
+            ObjStat objectStat;
+            ret = this->Stat(entry, objectStat);
+            if (ret != 0) {
+                LOG_ERROR("Fail to stat object " << entry << ", ret: " << ret << ".");
+                continue;
+            }
+            objStat.insert({ entry, objectStat});
+        }
     }
+    rados_nobjects_list_close(listCtx);
     BIO_TRACE_END(UFS_TRACE_LIST, ret);
     return BIO_OK;
 }
