@@ -84,7 +84,11 @@ public:
     inline uint32_t GetLocalMrKey()
     {
         uint32_t key = 0;
-        mNetEngine->GetLocalMrKey(key);
+        if (mMode == CONVERGENCE) {
+            mNetEngine->GetLocalMrKey(key);
+        } else {
+            key = mShmKey;
+        }
         return key;
     }
 
@@ -110,6 +114,7 @@ private:
     uint32_t mServerPid = 0;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
+    uint32_t mShmKey = 0;
     uint8_t *mShmAddr = nullptr;
     ExecutorServicePtr mEventService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
