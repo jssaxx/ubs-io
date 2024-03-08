@@ -37,7 +37,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     result = mEvictService[WCACHE_MEMORY]->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
 
-    mEvictService[WCACHE_DISK] = ExecutorService::Create(MEM_EVICT_THREAD_NUM, MEM_EVICT_QUEUE_SIZE);
+    mEvictService[WCACHE_DISK] = ExecutorService::Create(DISK_EVICT_THREAD_NUM, DISK_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mEvictService[WCACHE_DISK] == nullptr)) {
         LOG_ERROR("Failed to start execution service for disk evict, probably out of memory");
         return BIO_ALLOC_FAIL;
@@ -316,6 +316,12 @@ void WCacheManager::RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset)
     mEvictOffset = evictOffset;
 }
 
+void WCacheManager::RegCheckLocRole(CheckLocRole localRole)
+{
+    LOG_INFO("Register check loc role func");
+    mLocRole = localRole;
+}
+
 BResult WCacheManager::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
 {
     auto wcache = GetWCache(flowId);
@@ -459,6 +465,112 @@ BResult WCacheManager::SealOldCache(uint64_t ptId, uint64_t ptv)
             }
             LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
                 ", flowId:" << flowIt.first <<
+                ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
+                ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
+            sealList.emplace_back(flowIt.second);
+        }
+    }
+    
+    for (const auto &flow : sealList) {
+        auto ret = flow->Seal();
+        if (ret != BIO_OK) {
+            LOG_ERROR("Seal fail:" << ret << ", flowId::" << flow->GetFlowId());
+            return ret;
+        }
+    }
+
+    return BIO_OK;
+}
+
+BResult WCacheManager::HandleProcBroken(uint64_t procId)
+{
+    LOG_INFO("Handle proc broken:" << procId);
+
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeUs();
+    BResult ret;
+
+    do {
+        isRetry = false;
+        ret = HandleProcBrokenImpl(procId);
+        if (ret != BIO_OK) {
+            retryTime = Monotonic::TimeUs() - startTime;
+            if (retryTime < FLUSH_RETRY_MAX_TIME) {
+                isRetry = true;
+                usleep(FLUSH_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    ret = SealProcCache(procId);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    return ret;
+}
+
+BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId)
+{
+    std::list<WCachePtr> brokenList;
+    bool isMaster;
+
+    ScanProcCache(procId, brokenList);
+
+    for (const auto &flow : brokenList) {
+        uint64_t flowPtId = flow->GetPtId();
+        auto ret = mLocRole(static_cast<uint16_t>(flowPtId), isMaster);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Get local role fail:" << ret << ", ptId:" << flowPtId);
+            continue;
+        }
+        if (isMaster) {
+            flow->Flush();
+        } else {
+            flow->ExpiredClear();
+        }
+    }
+
+    return (brokenList.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
+}
+
+void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
+{
+    WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    for (const auto &flowIt : mWCacheManager) {
+        uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+        if (procId != flowIt.second->GetProcId()) {
+            continue;
+        }
+        if (flowIt.second->IsEmptyEvict()) {
+            continue;
+        }
+        LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
+            ", flowId:" << flowIt.first << ", procId:" << procId <<
+            ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) <<
+            ", Disk:" << flowIt.second->GetCapacity(WCACHE_DISK));
+        list.emplace_back(flowIt.second);
+    }
+
+    return;
+}
+
+BResult WCacheManager::SealProcCache(uint32_t procId)
+{
+    std::list<WCachePtr> sealList;
+
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &flowIt : mWCacheManager) {
+            uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+            if (procId != flowIt.second->GetProcId()) {
+                continue;
+            }
+            LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() <<
+                ", flowId:" << flowIt.first << ", procId:" << procId <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
             sealList.emplace_back(flowIt.second);

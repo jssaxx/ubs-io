@@ -62,9 +62,9 @@ public:
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
 
-    void RegCacheMalloc(CacheMalloc memMalloc);
+    void RegCheckLocRole(CheckLocRole locRole);
 
-    void RegCacheFree(CacheFree memFree);
+    BResult HandleProcBroken(uint32_t procId);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
@@ -82,8 +82,6 @@ private:
     RCacheManagerPtr mRCacheManager{ nullptr };
     GetLocDiskId mGetLocDiskId{ nullptr };
     CheckDegrade mCheckDegrade{ nullptr };
-    CacheMalloc mMemMalloc{ nullptr };
-    CacheFree mMemFree{ nullptr };
 };
 }
 }
