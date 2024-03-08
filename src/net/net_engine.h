@@ -118,11 +118,12 @@ public:
         mMrBlockPool->ReleaseOne(address);
     }
 
-    void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length)
+    void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint32_t &mKey)
     {
         fd = mShmFd;
         offset = mShareOffset;
         length = mOptions.memorySize;
+        mKey = mLocalMr->GetLKey();
     }
 
     void SetShmInfo(int32_t fd, uint8_t *addr, uint64_t off, uint64_t size)
@@ -503,7 +504,12 @@ private:
         reqOpInfo.timeout = mTimeout;
         auto *netCallback = NewCallback(
             [callback](NetServiceContext &context) {
-                callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.Result());
+                if (context.Result() != SER_OK) {
+                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), BIO_NET_ERROR);
+                } else {
+                    NetServiceOpInfo rspOpInfo = context.OpInfo();
+                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), rspOpInfo.errorCode);
+                }
             },
             std::placeholders::_1);
         auto result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);

@@ -41,6 +41,7 @@ typedef struct {
     uint32_t serverPid;
     uint64_t offset;
     uint64_t length;
+    uint32_t mKey;
 } ShmInitResponse;
 
 /* Query node view */
