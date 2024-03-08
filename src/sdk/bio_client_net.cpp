@@ -161,6 +161,7 @@ BResult BioClientNet::ShmInit()
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
     mShmLength = rsp.length;
+    mShmKey = rsp.mKey;
     if (mShmOffset != 0 || mShmLength > defaultMaxShmSize) {
         CLIENT_LOG_ERROR("Get share memory para failed, offset:" << mShmOffset << ", length:" << mShmLength << ".");
         return BIO_ERR;

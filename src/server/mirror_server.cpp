@@ -478,7 +478,7 @@ int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
     auto req = static_cast<ShmInitRequest *>(ctx.MessageData());
     ShmInitResponse rsp{};
     rsp.serverPid = getpid();
-    BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length);
+    BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
     auto ret = BioServer::Instance()->GetNetEngine()->SendFds(static_cast<uint32_t>(req->comm.pid), &rsp.memFd, NO_1);
     if (ret != BIO_OK) {
         LOG_ERROR("Send fds failed, ret:" << ret << ".");
@@ -653,7 +653,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     BResult result = Put(*req, sliceP);
 
-    Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
+    Reply(ctx, result, nullptr, 0);
     BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, 0);
     return BIO_OK;
 }
