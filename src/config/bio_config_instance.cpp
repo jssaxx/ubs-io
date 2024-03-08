@@ -53,6 +53,12 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_1024));
     AddIntConf(CM_GROUP_ID, VIntRange::Create(CM_GROUP_ID.first, 0, NO_255));
     AddStrConf(CM_ZK_HOST, VStrNotNull::Create(CM_ZK_HOST.first));
+
+    /* load underfs config */
+    AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrNotNull::Create(UNDERFS_CEPH_CFG_PATH.first));
+    AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
+    AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
+    AddStrConf(UNDERFS_CEPH_POOL, VStrNotNull::Create(UNDERFS_CEPH_POOL.first));
 }
 
 BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
@@ -67,6 +73,9 @@ BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     ChkTrueNot(ret == BIO_OK, ret);
 
     ret = AutoConfigClient(conf);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    ret = AutoConfigUnderFs(conf);
     ChkTrueNot(ret == BIO_OK, ret);
 
     return ret;
@@ -154,6 +163,15 @@ BResult BioConfig::AutoConfigClient(const ConfigurationPtr &conf)
 {
     auto reserveSize = conf->GetInt(CLIENT_LOCAL_MR_MB.first);
     mClientConfig.localMrSize = reserveSize * MB_SIZE;
+    return BIO_OK;
+}
+
+BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
+{
+    mUnderFsConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
+    mUnderFsConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
+    mUnderFsConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
+    mUnderFsConfig.pool = conf->GetStr(UNDERFS_CEPH_POOL.first);
     return BIO_OK;
 }
 

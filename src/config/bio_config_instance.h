@@ -47,6 +47,11 @@ const auto MEM_RESOURCE_QUANTITY_GB = std::make_pair("bio.cache.mem_resource_qua
 
 const auto DISK_RESOURCE_QUANTITY_GB = std::make_pair("bio.cache.disk_resource_quantity_in_gb", 10240);
 
+const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
+const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
+const auto UNDERFS_CEPH_USER = std::make_pair("bio.underfs.ceph.user", "client.admin");
+const auto UNDERFS_CEPH_POOL = std::make_pair("bio.underfs.ceph.pool", "jfspool");
+
 class BioConfig;
 using BioConfigPtr = Ref<BioConfig>;
 
@@ -96,6 +101,10 @@ public:
 
     struct UnderFsConfig {
         UnderFsType underFsType;
+        std::string cfgPath;
+        std::string cluster;
+        std::string user;
+        std::string pool;
     };
 
 public:
@@ -128,6 +137,11 @@ public:
         return mClientConfig;
     }
 
+    const UnderFsConfig &GetUnderFsConfig() const noexcept
+    {
+        return mUnderFsConfig;
+    }
+
     uint64_t ModifyConfigEvictWaterLevel(uint64_t level);
 
     uint64_t ModifyConfigMemResourceQuantity(uint64_t quantity);
@@ -147,11 +161,14 @@ private:
 
     BResult AutoConfigClient(const ConfigurationPtr &conf);
 
+    BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
+
 private:
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
+    UnderFsConfig mUnderFsConfig;
     bool mInited { false };
 };
 }

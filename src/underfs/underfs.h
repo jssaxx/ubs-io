@@ -58,9 +58,10 @@ private:
     rados_t mConn;
     rados_ioctx_t mIoCtx;
 
-    std::string mCluster { "ceph" };
-    std::string mUser { "client.admin" };
-    std::string mPool { "jfspool" };
+    std::string mCfgPath;
+    std::string mCluster;
+    std::string mUser;
+    std::string mPool;
 
     bool mInited { false };
 
