@@ -19,8 +19,7 @@ using SliceWriter = std::function<BResult(const SlicePtr &from, const SlicePtr &
 using GetGlobEvictOffset = std::function<BResult(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset)>;
 using GetLocDiskId = std::function<BResult(uint16_t ptId, uint16_t &diskId)>;
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
-using CacheMalloc = std::function<BResult(uint64_t, uint64_t *)>;
-using CacheFree = std::function<void(uint64_t)>;
+using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
 
 struct CacheAttr {
     uint64_t mTenantId;
