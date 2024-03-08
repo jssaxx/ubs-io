@@ -39,7 +39,7 @@ struct CacheAttr {
 };
 
 struct CacheObjStat {
-    uint32_t size; // value size
+    uint64_t size; // value size
     time_t   time; // modify time;
 };
 }
