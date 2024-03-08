@@ -64,6 +64,11 @@ public:
         return mFlowId;
     }
 
+    uint64_t GetPtId()
+    {
+        return mPtId;
+    }
+
     uint64_t GetPtv()
     {
         return mPtv;

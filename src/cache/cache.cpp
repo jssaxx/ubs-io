@@ -262,19 +262,19 @@ void Cache::RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset)
     mWCacheManager->RegGetGlobEvictOffset(evictOffset);
 }
 
-void Cache::RegCacheMalloc(CacheMalloc memMalloc)
+void Cache::RegCheckLocRole(CheckLocRole locRole)
 {
-    mMemMalloc = memMalloc;
-}
-
-void Cache::RegCacheFree(CacheFree memFree)
-{
-    mMemFree = memFree;
+    mWCacheManager->RegCheckLocRole(locRole);
 }
 
 BResult Cache::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
 {
     return mWCacheManager->GetEvictOffset(flowId, flowOffset);
+}
+
+BResult Cache::HandleProcBroken(uint32_t procId)
+{
+    return mWCacheManager->HandleProcBroken(procId);
 }
 
 BResult Cache::Flush(uint64_t ptId, uint64_t ptv)

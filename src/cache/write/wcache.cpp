@@ -378,7 +378,9 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     }
 
     if (sliceRef->GetState() == SLICE_VALID) {
-        ret = mUnderFs->Put(key, value, sliceMeta->length);
+        if (isMaster) {
+            ret = mUnderFs->Put(key, value, sliceMeta->length);
+        }
         delete[] value;
         ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
 
