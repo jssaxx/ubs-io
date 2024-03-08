@@ -63,11 +63,15 @@ public:
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
 
+    void RegCheckLocRole(CheckLocRole localRole);
+
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
     BResult Flush(uint64_t ptId, uint64_t ptv);
 
     BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
+
+    BResult HandleProcBroken(uint64_t procId);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
@@ -76,9 +80,13 @@ private:
                  uint64_t &realLen);
     BResult FlushImpl(uint64_t ptId, uint64_t ptv);
     BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
+    BResult HandleProcBrokenImpl(uint64_t procId);
 
     void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
     BResult SealOldCache(uint64_t ptId, uint64_t ptv);
+
+    void ScanProcCache(uint64_t procId, std::list<WCachePtr> &list);
+    BResult SealProcCache(uint32_t procId);
 
     void RetryEvictThread();
 
@@ -98,6 +106,7 @@ private:
     ExecutorServicePtr mRetryEvictService { nullptr };
 
     GetGlobEvictOffset mEvictOffset { nullptr };
+    CheckLocRole mLocRole { nullptr };
 
     WCacheIndexPtr mCacheIndex;
 

@@ -325,11 +325,18 @@ BResult BioServer::BioCacheInit()
     };
     Cache::Instance().RegGetGlobEvictOffset(evictOffset);
 
-    CacheMalloc memMalloc = [this](uint64_t size, uint64_t *addr) { return this->MemAlloc(size, addr); };
-    Cache::Instance().RegCacheMalloc(memMalloc);
+    CheckLocRole checkLocRole = [](uint16_t ptId, bool &isMaster) -> BResult {
+        return Cm::Instance()->CheckLocalRole(ptId, isMaster);
+    };
+    Cache::Instance().RegCheckLocRole(checkLocRole);
 
-    CacheFree memFree = [this](uint64_t addr) { this->MemFree(addr); };
-    Cache::Instance().RegCacheFree(memFree);
+    auto channelBroken = [this](uint32_t nodeId) -> void {
+        uint32_t nodeNum = static_cast<uint32_t>(mConfig->GetCmConfig().nodeNum);
+        if (nodeId > nodeNum) {
+            Cache::Instance().HandleProcBroken(nodeId);
+        }
+    };
+    mNetEngine->RegisterChannelBrokenHandler(channelBroken);
 
     ret = Cache::Instance().Recover();
     if (UNLIKELY(ret != BIO_OK)) {
