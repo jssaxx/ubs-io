@@ -4,7 +4,7 @@
 #include "underfs.h"
 #include "bio_log.h"
 #include "bio_trace.h"
-
+#include "bio_config_instance.h"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -16,7 +16,12 @@ namespace bio {
 #ifdef _ceph_Integrate
 BResult UnderFs::Init()
 {
-    std::string cfg = "/etc/ceph/ceph.conf";
+    BioConfigPtr config = BioConfig::Instance();
+    mCfgPath = config->GetUnderFsConfig().cfgPath;
+    mCluster = config->GetUnderFsConfig().cluster;
+    mUser = config->GetUnderFsConfig().user;
+    mPool = config->GetUnderFsConfig().pool;
+
     int ret;
 
     if (mInited) {
@@ -29,7 +34,7 @@ BResult UnderFs::Init()
         return BIO_ERR;
     }
 
-    ret = rados_conf_read_file(mConn, cfg.c_str());
+    ret = rados_conf_read_file(mConn, mCfgPath.c_str());
     if (ret < 0) {
         LOG_ERROR("Failed to read config, ret:" << ret);
         rados_shutdown(mConn);
@@ -78,6 +83,8 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
     int ret;
 
+    LOG_INFO("Put key:" << key);
+
     ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_PUT);
     ret = rados_write(mIoCtx, key, value, len, 0);
@@ -93,6 +100,8 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 {
     int ret;
 
+    LOG_INFO("Get key:" << key);
+
     ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_GET);
     ret = rados_read(mIoCtx, key, value, len, off);
@@ -107,6 +116,8 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 BResult UnderFs::Delete(const char *key)
 {
     int ret;
+
+    LOG_INFO("Del key:" << key);
 
     ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_DEL);
