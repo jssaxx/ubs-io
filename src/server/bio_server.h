@@ -224,11 +224,8 @@ public:
     inline BResult MemAlloc(uint64_t size, NetMrInfo &mr)
     {
         auto ret = mNetEngine->AllocLocalMrSingle(mr.address, mr.key);
-        if (UNLIKELY(ret != BIO_OK)) {
-            return ret;
-        }
         mr.size = size;
-        return BIO_OK;
+        return ret;
     }
 
     inline BResult MemAlloc(uint64_t size, uint64_t *addr)

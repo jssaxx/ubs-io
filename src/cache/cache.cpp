@@ -107,12 +107,14 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     bool isDegrade = false;
     auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isDegrade);
-    ChkTrueNot(ret == BIO_OK, ret);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Check degrade failed, ret:" << ret << ", ptId:" << ptId << ", isDegrade:" << isDegrade << ".");
+        return ret;
+    }
 
     BIO_TRACE_START(WCACHE_TRACE_PUT);
     ret = mWCacheManager->Put(key, slice, sliceReader, attr, isDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
-
     return ret;
 }
 
@@ -130,7 +132,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     if (ret == BIO_NOT_EXISTS) {
         ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
         if (UNLIKELY(ret != BIO_OK) && ret != BIO_NOT_EXISTS) {
-            LOG_ERROR("Get key " << key << " read data from read cache failed, ret:" << ret);
+            LOG_ERROR("Get key " << key << " from read cache failed, ret:" << ret);
         } else if (ret == BIO_OK) {
             LOG_INFO("read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
         }

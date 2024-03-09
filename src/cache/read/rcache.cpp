@@ -415,7 +415,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     ret = sliceWriter(newSlicePtr.Get(), slice.Get());
     BIO_TRACE_END(RCACHE_TRACE_GET_WRITE_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Write read cache key:" << key << "data to buffer failed.");
+        LOG_ERROR("Write read cache key:" << key << " data to buffer failed, ret:" << ret << ".");
         chunk->lock.unlock();
         return BIO_INNER_ERR;
     }
