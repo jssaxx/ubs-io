@@ -180,18 +180,14 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
 BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
     CacheAttr &attr, bool isDegrade)
 {
-    ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
-    ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
-    ChkTrueNot(sliceReader != nullptr, BIO_INVALID_PARAM);
-
-    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
-
-    LOG_DEBUG("Put key:" << key << ", pt:" << ptId << ", flowId:" << slice->GetFlowId());
+    ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
+    ChkTrue(slice != nullptr, BIO_INVALID_PARAM, "Slice is nullptr.");
+    ChkTrue(sliceReader != nullptr, BIO_INVALID_PARAM, "Slice reader is nullptr.");
 
     // 1. Get write flow
     auto wcache = GetWCache(slice->GetFlowId());
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
+        LOG_ERROR("Failed to get wcache flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -212,12 +208,12 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     // 4. Insert slice to index.
     BIO_TRACE_START(WCACHE_TRACE_PUT_INSERT_INDEX);
+    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     ret = mCacheIndex->Insert(ptId, key, sliceRef);
     BIO_TRACE_END(WCACHE_TRACE_PUT_INSERT_INDEX, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
     }
-
     return ret;
 }
 

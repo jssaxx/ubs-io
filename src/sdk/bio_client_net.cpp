@@ -40,7 +40,7 @@ BResult BioClientNet::StartPre(WorkerMode mode)
     if (mode == CONVERGENCE) {
         mNetEngine = BioClientAgent::Instance()->GetNetService();
         if (mNetEngine == nullptr) {
-            ret = BIO_ERR;
+            ret = BIO_INNER_ERR;
         }
     } else {
         ret = StartIpcService();
@@ -66,7 +66,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         }
     }
     if (port == UINT16_MAX) {
-        CLIENT_LOG_WARN("Not found local node info.");
+        CLIENT_LOG_ERROR("Not found local node info.");
         return BIO_OK;
     }
 
@@ -220,10 +220,8 @@ BResult BioClientNet::StartIpcService()
     ret = RecoverIpcService();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Recover ipc failed, result:" << ret << ".");
-        return ret;
     }
-
-    return BIO_OK;
+    return ret;
 }
 
 BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum)
@@ -248,13 +246,16 @@ BResult BioClientNet::ListenEvent()
 
     mEventService = ExecutorService::Create(EVENT_THREAD_NUM, EVENT_QUEUE_SIZE);
     if (UNLIKELY(mEventService == nullptr)) {
-        CLIENT_LOG_ERROR("Failed to start event execution service");
+        CLIENT_LOG_ERROR("Failed to create event execution service");
         return BIO_ALLOC_FAIL;
     }
 
     mEventService->SetThreadName("sdk-event");
     auto result = mEventService->Start();
-    ChkTrueNot(result, BIO_INNER_ERR);
+    if (!result) {
+        CLIENT_LOG_ERROR("Failed to start event execution service");
+        return BIO_INNER_ERR;
+    }
 
     auto channelBroken = [this](uint32_t nodeId) -> void {
         if (nodeId == static_cast<uint32_t>(getpid())) {

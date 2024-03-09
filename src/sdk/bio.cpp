@@ -151,10 +151,10 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
-            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+            ", location:" << location.location[0] << ".");
     } else {
-        CLIENT_LOG_INFO("Put value success, key:" << key << ", length:" << length << ", location0:" <<
-            location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_INFO("Put value success, key:" << key << ", length:" << length << ", location:" <<
+            location.location[0] << ".");
     }
     return ToCResult(ret);
 }
@@ -348,21 +348,16 @@ void BioExit()
 
 CResult BioCreateCache(CacheDescriptor desc)
 {
-    {
-        std::unique_lock<std::mutex> locker(gLock);
-        auto iter = gBioCacheMap.find(desc.tenantId);
-        if (UNLIKELY(iter != gBioCacheMap.end())) {
-            return RET_CACHE_EXISTS;
-        }
+    std::unique_lock<std::mutex> locker(gLock);
+    auto iter = gBioCacheMap.find(desc.tenantId);
+    if (UNLIKELY(iter != gBioCacheMap.end())) {
+        return RET_CACHE_EXISTS;
     }
     auto bioInstance = BioService::CreateCache(desc);
     if (UNLIKELY(bioInstance == nullptr)) {
-        return RET_CACHE_ERROR;
+        return RET_CACHE_EPERM;
     }
-    {
-        std::unique_lock<std::mutex> locker(gLock);
-        gBioCacheMap.insert({ desc.tenantId, bioInstance});
-    }
+    gBioCacheMap.insert({ desc.tenantId, bioInstance });
     return RET_CACHE_OK;
 }
 

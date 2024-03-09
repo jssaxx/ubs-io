@@ -8,14 +8,13 @@ namespace ock {
 namespace bio {
 inline uint32_t WCacheIndex::Hash(const Key &key)
 {
-    // TODO: optimize me.
     return std::hash<std::string>{}(key) % HASH_BUCKET_NUM;
 }
 
 BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
+    ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get wcache index table failed, invalid ptId:" << ptId << ".");
     auto bucket = Hash(key);
     WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto sliceMeta = table->sliceIndex[bucket].find(key);

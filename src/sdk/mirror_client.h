@@ -136,11 +136,19 @@ private:
 
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
         uint64_t index, GetSliceResponse *rsp) const;
+    void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+        uint64_t index, NetMrInfo &mr) const;
     BResult DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
+    bool IsExistLocalCopy(CmPtInfo &ptEntry);
+    BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+        uint64_t index, PutRequest *&req);
+    BResult PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+        uint64_t index, PutRequest *&req);
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
         PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
+    void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index);
 
     BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);

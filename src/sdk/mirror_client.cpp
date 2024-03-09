@@ -67,7 +67,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get pt entry failed, ret:" << ret << ", ptId:" << ptId << ".");
-        return BIO_CHECK_PT_FAIL;
+        return ret;
     }
 
     uint64_t flowId = UINT64_MAX;
@@ -127,18 +127,21 @@ BResult MirrorClient::LoadOriginView()
         CLIENT_LOG_ERROR("Get cluster node view failed, ret:" << ret << ".");
         return ret;
     }
-    CLIENT_LOG_INFO("Cur node times:" << mCurNodeTimes);
+    CLIENT_LOG_INFO("Current node times:" << mCurNodeTimes);
+
     ret = agent::BioClientAgent::Instance()->GetPtView(mCurPtTimes, mPtView);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get pt view failed, ret:" << ret << ".");
         return ret;
     }
-    CLIENT_LOG_INFO("Cur pt times:" << mCurPtTimes);
+    CLIENT_LOG_INFO("Current pt times:" << mCurPtTimes);
+
     ret = agent::BioClientAgent::Instance()->GetLocalNodeInfo(mNetProtocol, mLocalNid);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
         return ret;
     }
+
     CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
     return BIO_OK;
 }
@@ -241,7 +244,7 @@ BResult MirrorClient::Put(MirrorPut &param)
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt << ", ret:" << ret << ".");
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -255,14 +258,14 @@ BResult MirrorClient::Put(MirrorPut &param)
 
 BResult MirrorClient::PutImpl(MirrorPut &param)
 {
-    BIO_TRACE_START(SDK_TRACE_PUT_GET_PT);
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
+    BIO_TRACE_START(SDK_TRACE_PUT_GET_PT);
     BResult ret = GetPtEntry(ptId, ptEntry);
     BIO_TRACE_END(SDK_TRACE_PUT_GET_PT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
-        return BIO_CHECK_PT_FAIL;
+        return ret;
     }
 
     uint64_t flowId = UINT64_MAX;
@@ -275,8 +278,6 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
         CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
         return ret;
     }
-    CLIENT_LOG_DEBUG("Put location info, ptId:" << ptId << ", flowId:" << flowId << ", offset:" << offset << ", key:" <<
-        param.key << ".");
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
     ret = SendPutRequest(ptEntry, param, flowId, offset, flowIndex);
@@ -548,7 +549,7 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
     if (flowInst->Version() != ptv) {
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Create flow instance failed, ret: " << ret << ", ptId:" << ptId << ".");
+            CLIENT_LOG_ERROR("Create flow instance failed, need retry, ret: " << ret << ", ptId:" << ptId << ".");
         }
         return BIO_INNER_RETRY;
     }
@@ -570,9 +571,29 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->flowId = flowId;
     req->offset = offset;
     req->index = index;
+    req->mrAddress = 0;
+    req->mrSize = 0;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = rsp->sliceLen;
     memcpy_s(req->sliceBuf, rsp->sliceLen, rsp->sliceBuf, rsp->sliceLen);
+}
+
+void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
+    uint64_t offset, uint64_t index, NetMrInfo &mr) const
+{
+    req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    req->tenantId = param.attr.mTenantId;
+    req->affinity = param.attr.affinity;
+    req->strategy = param.attr.strategy;
+    CopyKey(req->key, param.key, KEY_MAX_SIZE);
+    req->length = param.length;
+    req->flowId = flowId;
+    req->offset = offset;
+    req->index = index;
+    req->mrAddress = mr.address;
+    req->mrSize = mr.size;
+    req->mrKey = mr.key;
+    req->sliceLen = 0;
 }
 
 BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum)
@@ -599,8 +620,19 @@ BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *
     return BIO_OK;
 }
 
-BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
-    PutRequest *&req)
+bool MirrorClient::IsExistLocalCopy(CmPtInfo &ptEntry)
+{
+    for (uint32_t i = 0; i < ptEntry.copys.size(); i++) {
+        if (ptEntry.copys[i].nodeId == mLocalNid.VNodeId() &&
+           (ptEntry.copys[i].state == CM_COPY_RUNNING || ptEntry.copys[i].state == CM_COPY_RECOVERY)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+    uint64_t index, PutRequest *&req)
 {
     GetSliceResponse *rsp = nullptr;
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
@@ -621,21 +653,53 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flow
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         return ret;
     }
-
-    auto *tmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + rsp->sliceLen];
+    auto tmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + rsp->sliceLen];
     if (UNLIKELY(tmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put request memory failed, len:" << sizeof(PutRequest) + rsp->sliceLen << ".");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
-        return BIO_INNER_ERR;
+        return BIO_ALLOC_FAIL;
     }
+
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, flowId, offset, index, rsp);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
-    CLIENT_LOG_DEBUG("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
-        ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
+}
+
+BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
+    uint64_t index, PutRequest *&req)
+{
+    NetMrInfo mr;
+    BResult ret = net::BioClientNet::Instance()->Alloc(param.length, mr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
+        return BIO_ALLOC_FAIL;
+    }
+
+    ret = memcpy_s(reinterpret_cast<char *>(mr.address), mr.size, param.value, param.length);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<
+            ", flowOffset:" << offset << ", length:" << param.length << ".");
+        net::BioClientNet::Instance()->Free(mr.address);
+        return BIO_ALLOC_FAIL;
+    }
+
+    auto tmp = new uint8_t[sizeof(GetSliceResponse)];
+    req = static_cast<PutRequest *>(static_cast<void *>(tmp));
+    ConstructPutReq(req, ptEntry, param, flowId, offset, index, mr);
+    return BIO_OK;
+}
+
+BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index,
+    PutRequest *&req)
+{
+    if (IsExistLocalCopy(ptEntry)) {
+        return PrepareFromServer(ptEntry, param, flowId, offset, index, req);
+    } else {
+        return PrepareFromClient(ptEntry, param, flowId, offset, index, req);
+    }
 }
 
 void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index,
@@ -653,7 +717,16 @@ void MirrorClient::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callb
     if (UNLIKELY(localIdx == UINT32_MAX)) {
         return;
     }
-    agent::BioClientAgent::Instance()->PutLocal(req, localIdx, callback);
+    agent::BioClientAgent::Instance()->PutLocal(req, callback);
+}
+
+void MirrorClient::InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota)
+{
+    cbCtx.result = BIO_OK;
+    cbCtx.quota = quota;
+    sem_init(&cbCtx.sem, 0, 0);
+    cbCtx.resp = nullptr;
+    cbCtx.respLen = 0;
 }
 
 BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset,
@@ -661,11 +734,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
 {
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
-    cbCtx.result = BIO_OK;
-    cbCtx.quota = quota;
-    sem_init(&cbCtx.sem, 0, 0);
-    cbCtx.resp = nullptr;
-    cbCtx.respLen = 0;
+    InitCallbackCtx(cbCtx, quota);
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         if (UNLIKELY(result != BIO_OK)) {
@@ -682,7 +751,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
     BResult ret = Prepare(ptEntry, param, flowId, offset, index, req);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Prepare put local failed, ret:" << ret << ", key:" << param.key << ", length:" <<
+        CLIENT_LOG_ERROR("Prepare put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
             param.length << ", flowId:" << flowId << ", flowOffset:" << offset << ".");
         return ret;
     }
@@ -705,10 +774,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
 
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
-    if (UNLIKELY(cbCtx.result != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send put request failed, ret:" << cbCtx.result << ", key:" << param.key << ", flowId:" <<
-            flowId << ", offset:" << offset << ", length:" << param.length << ".");
-    }
+    net::BioClientNet::Instance()->Free(req->mrAddress);
     delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     return cbCtx.result;
 }
