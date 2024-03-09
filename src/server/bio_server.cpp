@@ -330,10 +330,9 @@ BResult BioServer::BioCacheInit()
     };
     Cache::Instance().RegCheckLocRole(checkLocRole);
 
-    auto channelBroken = [this](uint32_t nodeId) -> void {
-        uint32_t nodeNum = static_cast<uint32_t>(mConfig->GetCmConfig().nodeNum);
-        if (nodeId > nodeNum) {
-            Cache::Instance().HandleProcBroken(nodeId);
+    auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
+        if (pid != 0) {
+            Cache::Instance().HandleProcBroken(pid);
         }
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
@@ -402,7 +401,7 @@ void BioServer::Connection()
         }
         LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" <<
             it->second.port << ".");
-        ConnectInfo info(mLocalNid.VNodeId(), it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
+        ConnectInfo info(mLocalNid.VNodeId(), 0, it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
         BResult ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
             LOG_ERROR("Connect to " << it->first.ToString() << " failed, ret: " << ret << ".");

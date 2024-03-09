@@ -104,7 +104,7 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
 {
     GetLocalNidRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     GetLocalNidResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<GetLocalNidRequest, GetLocalNidResponse>(localPid,
+    auto ret = net::BioClientNet::Instance()->SendSync<GetLocalNidRequest, GetLocalNidResponse>(INVALID_NID,
         BIO_OP_SDK_GET_NODE_INFO, req, rsp);
     if (ret != BIO_OK) {
         return ret;
@@ -141,7 +141,7 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNo
         if (mMode == CONVERGENCE) {
             ret = getNodeViewOp(&req, &rsp);
         } else {
-            ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(localPid,
+            ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(INVALID_NID,
                 BIO_OP_SDK_GET_NODE_VIEW, req, rsp);
         }
         if (ret != BIO_OK) {
@@ -176,7 +176,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         if (mMode == CONVERGENCE) {
             ret = getPtViewOp(&req, &rsp);
         } else {
-            ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(localPid,
+            ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(INVALID_NID,
                 BIO_OP_SDK_QUERY_PT_VIEW, req, rsp);
         }
         if (ret != BIO_OK) {
@@ -211,7 +211,7 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
     }
     CreateFlowResponse rsp;
     do {
-        ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(localPid,
+        ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(INVALID_NID,
             BIO_OP_SDK_CREATE_FLOW, req, rsp);
         if (UNLIKELY(ret == BIO_NOT_READY)) {
             CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" <<
@@ -260,8 +260,8 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
     GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
                             flowId, offset, index, length };
     uint64_t rspLen = 0;
-    return net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(localPid, BIO_OP_SDK_GET_SLICE,
-        req, rsp, rspLen);
+    return net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
+        BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
 }
 
 BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
@@ -278,7 +278,7 @@ BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint
 
 void BioClientAgent::SendPutRequestLocal(PutRequest *req, NetEngine::Callback &callback)
 {
-    net::BioClientNet::Instance()->SendAsyncBuff(localPid, BIO_OP_SDK_PUT, static_cast<void *>(req),
+    net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_PUT, static_cast<void *>(req),
         sizeof(PutRequest) + req->sliceLen, callback);
 }
 
@@ -295,7 +295,8 @@ void BioClientAgent::PutLocal(PutRequest *req, NetEngine::Callback &callback)
 BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     GetResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(localPid, BIO_OP_SDK_GET, req, rsp);
+    auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID,
+        BIO_OP_SDK_GET, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
@@ -327,7 +328,7 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
 
 void BioClientAgent::SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback)
 {
-    net::BioClientNet::Instance()->SendAsync<DeleteRequest>(localPid, BIO_OP_SDK_DELETE, req, callback);
+    net::BioClientNet::Instance()->SendAsync<DeleteRequest>(INVALID_NID, BIO_OP_SDK_DELETE, req, callback);
 }
 
 void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback)
@@ -344,7 +345,7 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
 {
     ListResponse *rsp = nullptr;
     uint64_t rspLen = 0;
-    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(localPid,
+    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(INVALID_NID,
         BIO_OP_SDK_LIST, req, &rsp, rspLen);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
@@ -365,7 +366,7 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
 
 BResult BioClientAgent::SendStatRequestLocal(StatRequest &req, ObjStat &objInfo)
 {
-    return net::BioClientNet::Instance()->SendSync<StatRequest, ObjStat>(localPid, BIO_OP_SDK_STAT, req, objInfo);
+    return net::BioClientNet::Instance()->SendSync<StatRequest, ObjStat>(INVALID_NID, BIO_OP_SDK_STAT, req, objInfo);
 }
 
 BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
@@ -411,7 +412,7 @@ BResult BioClientAgent::ListLocal(ListRequest &req, std::unordered_map<std::stri
 BResult BioClientAgent::SendLoadRequestLocal(LoadRequest &req)
 {
     BResult result = BIO_OK;
-    auto ret = net::BioClientNet::Instance()->SendSync<LoadRequest, BResult>(localPid, BIO_OP_SDK_LOAD, req, result);
+    auto ret = net::BioClientNet::Instance()->SendSync<LoadRequest, BResult>(INVALID_NID, BIO_OP_SDK_LOAD, req, result);
     if (ret != BIO_OK) {
         return ret;
     }
@@ -431,7 +432,7 @@ BResult BioClientAgent::SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTim
 {
     HbRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     HbResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<HbRequest, HbResponse>(localPid,
+    auto ret = net::BioClientNet::Instance()->SendSync<HbRequest, HbResponse>(INVALID_NID,
         BIO_OP_SDK_REPORT_HB, req, rsp);
     if (ret != BIO_OK) {
         return ret;
