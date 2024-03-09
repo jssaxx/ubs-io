@@ -417,14 +417,15 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
         LOG_INFO("Node:" << it->first.ToString() << ", " << it->second.ToString());
     }
 
-    // The current cluster startup must be all node started successfully
-    if (static_cast<uint32_t>(mConfig->GetCmConfig().nodeNum) == nodeInfos.size()) {
-        mNodeView = nodeInfos;
+    if (!mStarted) {
         mLocalNid = mCm->GetCmLocalNodeId();
         mNetEngine->SetLocalNodeId(mLocalNid.VNodeId());
-        Connection();
         mStarted = true;
     }
+
+    mNodeView = nodeInfos;
+    Connection();
+
     mCurNodeTimes = Monotonic::TimeUs();
     LOG_INFO("Cur node times:" << mCurNodeTimes);
     return BIO_OK;
