@@ -145,7 +145,7 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
         }
         rsp.desc[index].groupId = nodeEntry.second.id.GroupId();
         rsp.desc[index].nodeId = nodeEntry.second.id.VNodeId();
-        memcpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        strncpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
         rsp.desc[index].port = nodeEntry.second.port;
         rsp.desc[index].status = static_cast<uint16_t>(nodeEntry.second.status);
         rsp.desc[index].num = nodeEntry.second.disks.size();
@@ -479,7 +479,7 @@ int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
     ShmInitResponse rsp{};
     rsp.serverPid = getpid();
     BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
-    auto ret = BioServer::Instance()->GetNetEngine()->SendFds(static_cast<uint32_t>(req->comm.pid), &rsp.memFd, NO_1);
+    auto ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
     if (ret != BIO_OK) {
         LOG_ERROR("Send fds failed, ret:" << ret << ".");
         Reply(ctx, BIO_ERR, nullptr, 0);

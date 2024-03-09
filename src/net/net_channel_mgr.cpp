@@ -27,7 +27,7 @@ void NetChannelMgr::UnInitialize()
     mInited = false;
 }
 
-BResult NetChannelMgr::AddChannel(uint32_t dstNid, ChannelPtr &ch, bool forceUpdate)
+BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch)
 {
     if (UNLIKELY(ch == nullptr)) {
         NET_LOG_ERROR("The channel is nullptr.");
@@ -37,12 +37,13 @@ BResult NetChannelMgr::AddChannel(uint32_t dstNid, ChannelPtr &ch, bool forceUpd
     auto chNode = new ChannelNode(dstNid, ch);
     mChannelNodeMap.emplace(std::make_pair(ch->Id(), chNode));
     auto chInfo = new ChannelInfo(dstNid, ch);
-    mChannelMgr.insert(std::make_pair(dstNid, chInfo));
-    NET_LOG_INFO("Added channel with nodeId " << dstNid << " into channel manager channel id " << ch->Id());
+    mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
+    NET_LOG_INFO("Added channel with nodeId " << dstNid.nid << " pid " << dstNid.pid <<
+        " into channel manager channel id " << ch->Id());
     return BIO_OK;
 }
 
-BResult NetChannelMgr::RemoveChannel(uint32_t dstNid, const ChannelPtr &ch)
+BResult NetChannelMgr::RemoveChannel(NetNode dstNid, const ChannelPtr &ch)
 {
     std::unique_lock<std::mutex> locker(lock);
     auto pos = mChannelNodeMap.find(ch->Id());
@@ -51,44 +52,15 @@ BResult NetChannelMgr::RemoveChannel(uint32_t dstNid, const ChannelPtr &ch)
         mChannelNodeMap.erase(pos);
         delete chNode;
     }
-    auto iter = mChannelMgr.find(dstNid);
+    auto iter = mChannelMgr.find(dstNid.whole);
     if (iter != mChannelMgr.end()) {
         auto chInfo = iter->second;
         mChannelMgr.erase(iter);
         delete chInfo;
     }
-    NET_LOG_INFO("Remove channel with nodeId " << dstNid << ", channel " << ch->Id() << " success.");
+    NET_LOG_INFO("Remove channel with nodeId " << dstNid.nid << " pid " << dstNid.pid <<
+        ", channel " << ch->Id() << " success.");
     return BIO_OK;
-}
-
-BResult NetChannelMgr::AddChannelNode(uint32_t dstNid, ChannelPtr &ch)
-{
-    std::unique_lock<std::mutex> locker(lock);
-    auto chNode = new ChannelNode(dstNid, ch);
-    mChannelNodeMap.emplace(std::make_pair(ch->Id(), chNode));
-    return BIO_OK;
-}
-
-void NetChannelMgr::RemoveChannelNode(uint64_t channelId, ChannelNode &chNode)
-{
-    std::unique_lock<std::mutex> locker(lock);
-    auto pos = mChannelNodeMap.find(channelId);
-    if (pos != mChannelNodeMap.end()) {
-        auto chNodeP = pos->second;
-        chNode = *chNodeP;
-        mChannelNodeMap.erase(pos);
-        delete chNodeP;
-    }
-}
-
-ChannelNode NetChannelMgr::GetChannelNode(uint64_t channelId)
-{
-    std::unique_lock<std::mutex> locker(lock);
-    auto pos = mChannelNodeMap.find(channelId);
-    if (pos != mChannelNodeMap.end()) {
-        return ChannelNode(pos->second->id, pos->second->channel);
-    }
-    return ChannelNode();
 }
 }
 }
