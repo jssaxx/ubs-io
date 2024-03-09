@@ -110,14 +110,14 @@ public:
         mLock.LockWrite();
         if (UNLIKELY(mCacheMap.size() > defaultMaxCacheSize)) {
             mLock.UnLock();
-            return BIO_ERR;
+            return BIO_INNER_ERR;
         }
         auto it = mCacheMap.find(instance->mTenantId);
         if (UNLIKELY(it != mCacheMap.end())) {
             if (it->second->mAffinity != instance->mAffinity ||
                 it->second->mStrategy != instance->mStrategy) {
                 mLock.UnLock();
-                return BIO_ERR;
+                return BIO_INNER_ERR;
             }
             mLock.UnLock();
             return BIO_OK;

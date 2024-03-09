@@ -57,18 +57,16 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     // put it memory tier cache.
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     destSliceRef = memCache->Write(key, srcSlice, sliceReader);
-    ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
-
-    if (attr.strategy == WRITE_BACK) {
-        // write back.
-        LOG_INFO("Write back, key:" << key << ", FlyCnt:" << ++mFlyCnt);
-        StartEvictTask(WCACHE_MEMORY);
-    } else {
-        // write through
-        LOG_INFO("Write through, key:" << key);
-        EvictFromMemToDisk(destSliceRef);
+    if (UNLIKELY(destSliceRef == nullptr)) {
+        LOG_ERROR("Memory cache write failed.");
+        return BIO_INNER_ERR;
     }
 
+    if (attr.strategy == WRITE_BACK) {
+        StartEvictTask(WCACHE_MEMORY); // write back
+    } else {
+        EvictFromMemToDisk(destSliceRef); // write through
+    }
     return BIO_OK;
 }
 

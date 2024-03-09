@@ -156,6 +156,8 @@ typedef struct {
     uint64_t flowId;
     uint64_t offset;
     uint64_t index;
+    uintptr_t mrAddress;
+    uint64_t mrSize;
     uint32_t mrKey;
     uint32_t sliceLen;
     char sliceBuf[0];

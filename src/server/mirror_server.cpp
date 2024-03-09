@@ -195,8 +195,8 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
     uint32_t rMrKey = req.mrKey;
     std::vector<FlowAddr> rFlowAddr = sliceP->GetAddrs();
     LOG_INFO("Mirror server put, key:" << key << ", srcNid:" << dstNid << ", flowId:" << sliceP->GetFlowId() <<
-        ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" << sliceP->GetIndexInFlow() << ", slice: " <<
-        sliceP->ToString() << ", rFlowSize:" << rFlowAddr.size() << ".");
+        ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" << sliceP->GetIndexInFlow() <<
+        ", slice: " << sliceP->ToString() << ", rFlowSize:" << rFlowAddr.size() << ".");
 
     auto reader = [dstNid, localNid, rMrKey](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (dstNid == localNid) {
@@ -238,10 +238,10 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
     BIO_TRACE_START(MIRROR_TRACE_PUT);
     CacheAttr attr(req.tenantId, static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
     BResult ret = Cache::Instance().Put(const_cast<char *>(key.c_str()), sliceP, reader, attr);
+    BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
     }
-    BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
     return ret;
 }
 
@@ -321,9 +321,9 @@ BResult MirrorServer::Get(ServiceContext &ctx, GetRequest &req, uint64_t &realLe
             return BIO_OK;
         }
 
+        uint32_t off = 0;
         for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
-            uint32_t off = 0;
-            NetRequest writeReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[idx].key,
+            NetRequest writeReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key,
                 lMrVec[idx].size);
             ret = BioServer::Instance()->GetNetEngine()->SyncWrite(ctx.Channel(), writeReq);
             if (UNLIKELY(ret != BIO_OK)) {
@@ -635,24 +635,37 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive put message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        Reply(ctx, BIO_NET_RETRY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<PutRequest *>(ctx.MessageData());
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
     }
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_HDL);
-    auto *req = static_cast<PutRequest *>(ctx.MessageData());
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, BIO_CHECK_PT_FAIL);
-        return BIO_CHECK_PT_FAIL;
+    WCacheSlicePtr sliceP = nullptr;
+    if (req->sliceLen == 0) {
+        MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
+        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+        sliceP = MakeRef<WCacheSlice>(req->flowId, req->offset, req->index, req->length, addrVec);
+        if (UNLIKELY(sliceP == nullptr)) {
+            LOG_ERROR("Make wcache slice failed.");
+            Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+            return BIO_OK;
+        }
+    } else {
+        sliceP = MakeRef<WCacheSlice>();
+        if (UNLIKELY(sliceP == nullptr)) {
+            LOG_ERROR("Make wcache slice failed.");
+            Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+            return BIO_OK;
+        }
+        sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     }
-    LOG_INFO("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
-        ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
-
-    WCacheSlicePtr sliceP = MakeRef<WCacheSlice>();
-    sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     BResult result = Put(*req, sliceP);
-
     Reply(ctx, result, nullptr, 0);
     BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, 0);
     return BIO_OK;
@@ -672,7 +685,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
     }
 
     BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
-    auto *req = static_cast<GetRequest *>(ctx.MessageData());
+    auto req = static_cast<GetRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_GET_HDL, BIO_CHECK_PT_FAIL);

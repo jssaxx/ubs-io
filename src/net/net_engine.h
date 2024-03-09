@@ -111,8 +111,7 @@ public:
 
     inline void FreeLocalMrSingle(uintptr_t address)
     {
-        if (UNLIKELY(mMrBlockPool == nullptr)) {
-            NET_LOG_ERROR("Net block pool not ready.");
+        if (UNLIKELY(mMrBlockPool == nullptr || address == 0)) {
             return;
         }
         mMrBlockPool->ReleaseOne(address);

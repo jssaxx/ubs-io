@@ -72,7 +72,7 @@ public:
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
 
-    void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback);
+    void PutLocal(PutRequest *req, NetEngine::Callback &callback);
 
     BResult GetLocal(GetRequest &req, char *value, uint64_t &realLen);
 

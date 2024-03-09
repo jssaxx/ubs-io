@@ -21,17 +21,17 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
         handler = dlopen(soFileName, RTLD_NOW);
         if (handler == nullptr) {
             CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
-            return BIO_ERR;
+            return BIO_INNER_ERR;
         }
         if (InitOperation() != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to init operation.");
-            return BIO_ERR;
+            return BIO_INNER_ERR;
         }
         // Start boostio server for converged deployment mode
         auto ret = startOp();
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to start bio server, ret:" << ret << ".");
-            return BIO_ERR;
+            return BIO_INNER_ERR;
         }
     }
     return BIO_OK;
@@ -40,52 +40,52 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
 BResult BioClientAgent::InitOperation()
 {
     if ((startOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerInit"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((stopOp = reinterpret_cast<BioServerStopFuncPtr>(LoadFunction("BioServerUninit"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((getLocalNidOp = reinterpret_cast<GetLocalNidFuncPtr>(LoadFunction("GetLocalNid"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((getNodeViewOp = reinterpret_cast<GetNodeViewFuncPtr>(LoadFunction("GetNodeView"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((getPtViewOp = reinterpret_cast<GetPtViewFuncPtr>(LoadFunction("GetPtView"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((createFlowMasterOp = reinterpret_cast<CreateFlowMasterFuncPtr>(LoadFunction("CreateFlowMaster"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((createFlowSlaveOp = reinterpret_cast<CreateFlowSlaveFuncPtr>(LoadFunction("CreateFlowSlave"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((getSliceOp = reinterpret_cast<GetSliceFuncPtr>(LoadFunction("GetSlice"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((putOp = reinterpret_cast<PutFuncPtr>(LoadFunction("Put"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((getOp = reinterpret_cast<GetFuncPtr>(LoadFunction("Get"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("Delete"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((listOp = reinterpret_cast<ListFuncPtr>(LoadFunction("List"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((statOp = reinterpret_cast<StatFuncPtr>(LoadFunction("Stat"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     if ((hbOp = reinterpret_cast<ReportHbPtr>(LoadFunction("ReportHb"))) == nullptr) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     return BIO_OK;
 }
@@ -258,10 +258,7 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
     uint64_t length, GetSliceResponse **rsp)
 {
     GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                            flowId,
-                            offset,
-                            index,
-                            length };
+                            flowId, offset, index, length };
     uint64_t rspLen = 0;
     return net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(localPid, BIO_OP_SDK_GET_SLICE,
         req, rsp, rspLen);
@@ -272,10 +269,7 @@ BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint
 {
     if (mMode == CONVERGENCE) {
         GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                                flowId,
-                                offset,
-                                index,
-                                length };
+                                flowId, offset, index, length };
         return getSliceOp(&req, rsp);
     } else {
         return SendPrepareResourceLocal(ptEntry, flowId, offset, index, length, rsp);
@@ -288,7 +282,7 @@ void BioClientAgent::SendPutRequestLocal(PutRequest *req, NetEngine::Callback &c
         sizeof(PutRequest) + req->sliceLen, callback);
 }
 
-void BioClientAgent::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback)
+void BioClientAgent::PutLocal(PutRequest *req, NetEngine::Callback &callback)
 {
     if (mMode == CONVERGENCE) {
         auto ret = putOp(req);
