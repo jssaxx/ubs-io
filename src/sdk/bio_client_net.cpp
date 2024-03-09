@@ -80,9 +80,9 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         if (node.second.id.VNodeId() == localNid) {
             continue;
         }
-        ConnectInfo info(static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
+        ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_3);
-        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip <<
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
             ", port:" << info.port << ".");
         ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
@@ -103,7 +103,7 @@ void BioClientNet::Stop()
 BResult BioClientNet::CorrectFd()
 {
     int32_t realFd = -1;
-    auto result = mNetEngine->ReceiveFds(static_cast<int32_t>(getpid()), &realFd, 1U);
+    auto result = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
     if (result != BIO_OK) {
         CLIENT_LOG_ERROR("receive file mem fd failed, ret:" << result << ".");
         return BIO_ERR;
@@ -149,9 +149,9 @@ BResult BioClientNet::ShmInitInner()
 BResult BioClientNet::ShmInit()
 {
     uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
-    ShmInitRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}};
+    ShmInitRequest req = {{MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid()}};
     ShmInitResponse rsp;
-    BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(getpid(), BIO_OP_SDK_SHM_INIT, req, rsp);
+    BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send shm init request failed, ret:" << ret << ".");
         return ret;
@@ -257,8 +257,8 @@ BResult BioClientNet::ListenEvent()
         return BIO_INNER_ERR;
     }
 
-    auto channelBroken = [this](uint32_t nodeId) -> void {
-        if (nodeId == static_cast<uint32_t>(getpid())) {
+    auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
+        if (nodeId == INVALID_NID) {
             mEventService->Execute([this]() { Recover(); });
         }
     };
@@ -284,7 +284,7 @@ void BioClientNet::Recover()
 BResult BioClientNet::RecoverIpcService()
 {
     // 1. connection to local bio server
-    ConnectInfo info(static_cast<uint32_t>(getpid()), static_cast<uint32_t>(getpid()));
+    ConnectInfo info(INVALID_NID, static_cast<uint32_t>(getpid()), INVALID_NID);
     auto ret = mNetEngine->SyncConnect(info);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
@@ -318,9 +318,9 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
         if (node.second.status != CM_NODE_NORMAL) {
             continue;
         }
-        ConnectInfo info(static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
+        ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_3);
-        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId << ", ip:" << info.ip <<
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
             ", port:" << info.port << ".");
         auto ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {

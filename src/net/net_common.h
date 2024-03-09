@@ -27,7 +27,7 @@ using ChannelPtr = ock::hcom::NetChannelPtr;
 using ServiceContext = ock::hcom::NetServiceContext;
 using NewRequestHandler = std::function<int32_t(ServiceContext &)>;
 using NewChannelHandler = std::function<int32_t(const ChannelPtr &, const std::string &ipPort, NewChannelResp &)>;
-using ChannelBrokenHandler = std::function<void(uint32_t nodeId)>;
+using ChannelBrokenHandler = std::function<void(uint32_t nodeId, uint32_t procId)>;
 using ServiceProtocol = ock::hcom::NetServiceProtocol;
 using MemoryRegionPtr = ock::hcom::NetMemoryRegionPtr;
 using MemoryAllocatorPtr = ock::hcom::NetMemoryAllocatorPtr;
@@ -38,18 +38,35 @@ enum ConnectMode {
     CONNECT_RPC = 1,
 };
 
+constexpr uint32_t INVALID_NID = 1024;
+
+union NetNode {
+    struct {
+        uint32_t nid;
+        uint32_t pid;
+    };
+    uint64_t whole = 0;
+
+    NetNode() = default;
+    NetNode(uint32_t inNid, uint32_t inPid) : nid(inNid), pid(inPid) {}
+    NetNode(uint64_t p) : whole(p) {}
+    NetNode(const NetNode& inNid) : nid(inNid.nid), pid(inNid.pid) {}
+};
+
 struct ConnectInfo {
-    uint32_t srcId;
-    uint32_t peerId;
+    NetNode srcId;
+    NetNode peerId;
     std::string ip;
     uint16_t port;
     uint16_t retryTimes;
 
     ConnectInfo() = default;
-    ConnectInfo(uint32_t srcid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : srcId(srcid), peerId(nid), ip(std::move(ip)), port(port), retryTimes(times)
+    ConnectInfo(uint32_t srcid, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
+        : srcId(srcid, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times)
     {}
-    ConnectInfo(uint32_t srcid, uint32_t nid) : srcId(srcid), peerId(nid), port(0), retryTimes(NO_3) {}
+    ConnectInfo(uint32_t srcid, uint32_t srcPid, uint32_t nid)
+        : srcId(srcid, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3)
+    {}
 };
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
@@ -79,15 +96,12 @@ constexpr uint32_t MAX_MESSAGE_SIZE = (4 * 1024);
 constexpr uint32_t MAX_MESSAGE_HEAD_SIZE = 1024;
 
 union NetConnPayload {
-    struct {
-        uint32_t srcNodeId;
-        uint32_t tgtNodeId;
-    };
+    NetNode srcNodeId;
     uint64_t whole = 0;
 
-    NetConnPayload() = default;
-    explicit NetConnPayload(uint32_t sId, uint32_t tId) : srcNodeId(sId), tgtNodeId(tId) {}
-    explicit NetConnPayload(uint64_t p) : whole(p) {}
+    NetConnPayload() : srcNodeId(0, 0) {}
+    NetConnPayload(NetNode sId) : srcNodeId(sId.nid, sId.pid) {}
+    NetConnPayload(uint64_t p) : whole(p) {}
 
     std::string ToPayloadStr(const std::string &prefix) const
     {
@@ -103,35 +117,7 @@ union NetConnPayload {
         }
         NetConnPayload pl(nodeIds);
         srcNodeId = pl.srcNodeId;
-        tgtNodeId = pl.tgtNodeId;
         return BIO_OK;
-    }
-};
-
-union NetChannelUpCtx {
-    struct {
-        uint64_t peerId : 32;    /* peer node id */
-        uint64_t isAccepted : 1; /* accepted from other */
-        uint64_t reserved : 31;  /* reserved */
-    };
-    uint64_t whole = 0;
-
-    NetChannelUpCtx() = default;
-    explicit NetChannelUpCtx(uint64_t w) : whole(w) {}
-    NetChannelUpCtx(const BioNodeId &pId, bool accepted)
-    {
-        peerId = pId;
-        isAccepted = accepted ? 1 : 0;
-    }
-
-    inline BioNodeId PeerId() const
-    {
-        return BioNodeId(peerId);
-    }
-
-    inline bool AcceptedChannel() const
-    {
-        return isAccepted;
     }
 };
 
