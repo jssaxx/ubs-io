@@ -169,14 +169,8 @@ public:
         return mConnector->AsyncConnect(info, handler, ctx);
     }
 
-    BResult SendFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
+    BResult SendFds(ChannelPtr ch, int32_t fds[], uint32_t count)
     {
-        ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
-        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
-            return BIO_NET_RETRY;
-        }
         return NetResult(ch->SendFds(fds, count));
     }
 

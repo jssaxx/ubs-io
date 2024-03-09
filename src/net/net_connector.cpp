@@ -31,16 +31,16 @@ BResult ConnectTask::DoConnect()
     if ((ret = mEngine->GetChannelMgr()->GetChannel(mConnectInfo.peerId, Chanel)) == BIO_NOT_EXISTS) {
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, Chanel);
         if (ret != BIO_OK) {
-            NET_LOG_ERROR("Failed to connect data plane to peer target node id " << mConnectInfo.peerId);
+            NET_LOG_ERROR("Failed to connect data plane to peer target node id " << mConnectInfo.peerId.nid);
             return BIO_ERR;
         }
         mEngine->GetChannelMgr()->AddChannel(mConnectInfo.peerId, Chanel);
-        NET_LOG_INFO("Connect succeed, channel " << Chanel->Id() << ", target node id:" << mConnectInfo.peerId);
+        NET_LOG_INFO("Connect succeed, channel " << Chanel->Id() << ", target node id " << mConnectInfo.peerId.nid);
         return ret;
     } else if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to repeat connect data plane by target id " << mConnectInfo.peerId);
+        NET_LOG_ERROR("Failed to repeat connect data plane by target node id " << mConnectInfo.peerId.nid);
     }
-    NET_LOG_INFO("Connect exist, channel " << Chanel->Id() << ", target node id:" << mConnectInfo.peerId);
+    NET_LOG_INFO("Connect exist, channel " << Chanel->Id() << ", target node id " << mConnectInfo.peerId.nid);
     return BIO_OK;
 }
 
@@ -106,7 +106,6 @@ void NetConnector::Stop()
 BResult NetConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler, uintptr_t ctx)
 {
     ChkTrueNot(!info.ip.empty(), BIO_INVALID_PARAM);
-    ChkTrueNot(info.peerId != 0, BIO_INVALID_PARAM);
     ChkTrueNot(info.port != 0, BIO_INVALID_PARAM);
     ChkTrueNot(info.retryTimes != 0, BIO_INVALID_PARAM);
     ChkTrueNot(handler != nullptr, BIO_INVALID_PARAM);
@@ -117,7 +116,7 @@ BResult NetConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler,
         return BIO_ALLOC_FAIL;
     }
 
-    task->mode = (info.peerId == mLocalNodeId) ? CONNECT_IPC : CONNECT_RPC;
+    task->mode = (info.srcId.nid == INVALID_NID) ? CONNECT_IPC : CONNECT_RPC;
     task->mEngine = mEngine;
     task->mConnectInfo = info;
     task->mSyncConnect = false;
@@ -140,8 +139,7 @@ BResult NetConnector::SyncConnect(ConnectInfo &info)
         return BIO_ALLOC_FAIL;
     }
 
-    task->mode =
-        (info.peerId == mLocalNodeId || info.peerId == static_cast<uint32_t>(getpid())) ? CONNECT_IPC : CONNECT_RPC;
+    task->mode = (info.srcId.nid == INVALID_NID) ? CONNECT_IPC : CONNECT_RPC;
     task->mEngine = mEngine;
     task->mConnectInfo = info;
     task->mSyncConnect = true;

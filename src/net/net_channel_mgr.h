@@ -18,19 +18,19 @@ enum NetChBit {
 };
 
 struct ChannelInfo {
-    uint32_t id;
+    NetNode id;
     ChannelPtr channel;
 
     ChannelInfo() = default;
-    ChannelInfo(uint32_t dst, ChannelPtr ch) : id(dst), channel(std::move(ch)) {}
+    ChannelInfo(NetNode dst, ChannelPtr ch) : id(dst), channel(std::move(ch)) {}
 };
 
 struct ChannelNode {
-    uint32_t id;
+    NetNode id;
     ChannelPtr channel;
 
-    ChannelNode() : id(UINT32_MAX), channel(nullptr) {}
-    ChannelNode(uint32_t id, ChannelPtr ch) : id(id), channel(std::move(ch)) {}
+    ChannelNode() : id(0, 0), channel(nullptr) {}
+    ChannelNode(NetNode dst, ChannelPtr ch) : id(dst), channel(std::move(ch)) {}
 };
 
 class NetChannelMgr {
@@ -44,13 +44,14 @@ public:
     BResult Initialize();
     void UnInitialize();
 
-    BResult AddChannel(uint32_t dstNid, ChannelPtr &ch, bool forceUpdate = false);
-    BResult RemoveChannel(uint32_t peerVNodeId, const ChannelPtr &ch);
+    BResult AddChannel(NetNode dstNid, ChannelPtr &ch);
+    BResult RemoveChannel(NetNode dstNid, const ChannelPtr &ch);
 
     inline BResult GetChannel(uint32_t dstNid, ChannelPtr &ch)
     {
         std::unique_lock<std::mutex> locker(lock);
-        auto iter = mChannelMgr.find(dstNid);
+        NetNode rDstNid(dstNid, 0);
+        auto iter = mChannelMgr.find(rDstNid.whole);
         if (UNLIKELY(iter == mChannelMgr.end())) {
             return BIO_NOT_EXISTS;
         }
@@ -58,19 +59,26 @@ public:
         return BIO_OK;
     }
 
-    BResult AddChannelNode(uint32_t dstNid, ChannelPtr &ch);
-    void RemoveChannelNode(uint64_t channelId, ChannelNode &chNode);
-    ChannelNode GetChannelNode(uint64_t channelId);
+    inline BResult GetChannel(NetNode dstNid, ChannelPtr &ch)
+    {
+        std::unique_lock<std::mutex> locker(lock);
+        auto iter = mChannelMgr.find(dstNid.whole);
+        if (UNLIKELY(iter == mChannelMgr.end())) {
+            return BIO_NOT_EXISTS;
+        }
+        ch = iter->second->channel;
+        return BIO_OK;
+    }
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     bool mInited = false;
-    std::unordered_map<uint16_t, ChannelInfo *> mChannelMgr;
+    std::unordered_map<uint64_t, ChannelInfo *> mChannelMgr;
     std::unordered_map<uint64_t, ChannelNode *> mChannelNodeMap;
     std::mutex lock;
 
-    DEFINE_REF_COUNT_VARIABLE
+    DEFINE_REF_COUNT_VARIABLE;
 };
 
 using NetChannelMgrPtr = Ref<NetChannelMgr>;
