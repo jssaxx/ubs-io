@@ -24,7 +24,7 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
     agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
     if (agentPtr == nullptr) {
         CLIENT_LOG_ERROR("Failed to create agent instance.");
-        return BIO_ERR;
+        return BIO_ALLOC_FAIL;
     }
     BResult ret = agentPtr->Initialize(mode);
     if (ret != BIO_OK) {
@@ -38,7 +38,7 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode)
     mNetEngine = net::BioClientNet::Instance();
     if (mNetEngine == nullptr) {
         CLIENT_LOG_ERROR("Failed to create net instance.");
-        return BIO_ERR;
+        return BIO_ALLOC_FAIL;
     }
     auto ret = mNetEngine->StartPre(mode);
     if (ret != BIO_OK) {
@@ -49,20 +49,15 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode)
 
 BResult BioClient::BioClientNetPostInit()
 {
-    auto ret = mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(),
-                                     mMirror->GetNodeView(),
-                                     mMirror->GetNetProtocol());
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to start net service, ret" << ret << ".");
-    }
-    return ret;
+    return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
+        mMirror->GetNetProtocol());
 }
 
 BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 {
     if ((mMirror = MakeRef<MirrorClient>(mode)) == nullptr) {
         CLIENT_LOG_ERROR("Create mirror client instance failed.");
-        return BIO_ERR;
+        return BIO_ALLOC_FAIL;
     }
     auto ret = mMirror->Initialize();
     if (ret != BIO_OK) {
@@ -163,13 +158,12 @@ BResult BioClient::BioDiagnoseSdkInit()
     void *handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     SdkDiagnose sdkInitFunc = reinterpret_cast<SdkDiagnose>(dlsym(handler, "SdkDiagnoseInit"));
     BResult ret = sdkInitFunc();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
-        return BIO_ERR;
     }
     return ret;
 }
@@ -180,7 +174,7 @@ BResult BioClient::BioDiagnoseHtracerInit()
     void *handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     SdkDiagnose sdkInitFunc = reinterpret_cast<SdkDiagnose>(dlsym(handler, "HtracerDiagnoseInit"));
     BResult ret = sdkInitFunc();
@@ -198,14 +192,14 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
         ret =  CLI_AgentInit(getpid(), const_cast<char*>(diagName.c_str()));
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
-            return BIO_ERR;
+            return BIO_INNER_ERR;
         }
     }
 
     ret = this->BioDiagnoseSdkInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
-        return BIO_ERR;
+        return ret;
     }
 
     ret = this->BioDiagnoseHtracerInit();

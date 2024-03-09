@@ -57,7 +57,7 @@ BResult BioServer::Start()
     // 1. Initialize infrastructure
     std::string logPath = "./bio.log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
     auto &daemonConfig = mConfig->GetDaemonConfig();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
@@ -66,12 +66,12 @@ BResult BioServer::Start()
     ChkTrue(mService != nullptr, BIO_ERR, "Boostio service not created.");
     auto ret = mService->Process();
     if (ret != BIO_OK) {
-        return BIO_ERR;
+        return ret;
     }
 
     // 3. wait start finish
     while (!mStarted || mPtView.empty()) {
-        sleep(1);
+        sleep(5U);
     }
 
     LOG_INFO("Boostio Server Started.");
@@ -545,10 +545,23 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
 
 int32_t Put(PutRequest *req)
 {
-    LOG_INFO("Put request, key:" << req->key << ", length:" << req->length << ", flowId:" << req->flowId <<
-        ", offset:" << req->offset << ", index:" << req->index << ", sliceLen:" << req->sliceLen);
-    WCacheSlicePtr sliceP = MakeRef<WCacheSlice>();
-    sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+    WCacheSlicePtr sliceP = nullptr;
+    if (req->sliceLen == 0) {
+        MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
+        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+        sliceP = MakeRef<WCacheSlice>(req->flowId, req->offset, req->index, req->length, addrVec);
+        if (UNLIKELY(sliceP == nullptr)) {
+            LOG_ERROR("Make wcache slice failed.");
+            return BIO_ALLOC_FAIL;
+        }
+    } else {
+        sliceP = MakeRef<WCacheSlice>();
+        if (UNLIKELY(sliceP == nullptr)) {
+            LOG_ERROR("Make wcache slice failed.");
+            return BIO_ALLOC_FAIL;
+        }
+        sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+    }
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP));
 }
 
