@@ -122,6 +122,34 @@ BResult MirrorClient::LoadAffinityFlow()
 
 BResult MirrorClient::LoadOriginView()
 {
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t retryCnt = 0;
+    BResult ret;
+
+    do {
+        isRetry = false;
+        ret = LoadOriginViewImpl();
+        if (LIKELY(ret == BIO_OK)) {
+            return BIO_OK;
+        }
+        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
+            ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
+            CLIENT_LOG_INFO("Delay retry, times:" << ++retryCnt << ", ret:" << ret << ".");
+            retryTime = Monotonic::TimeSec() - startTime;
+            if (retryTime < BIO_INIT_TIMEOUT_TIME) {
+                isRetry = true;
+                sleep(BIO_IO_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    return ret;
+}
+
+BResult MirrorClient::LoadOriginViewImpl()
+{
     auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mCurNodeTimes, mNodeView);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get cluster node view failed, ret:" << ret << ".");
@@ -141,8 +169,12 @@ BResult MirrorClient::LoadOriginView()
         CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
         return ret;
     }
-
     CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
+
+    if (mNodeView.size() == 0 || mPtView.size() == 0) {
+        return BIO_INNER_RETRY;
+    }
+
     return BIO_OK;
 }
 

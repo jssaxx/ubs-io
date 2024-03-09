@@ -22,6 +22,7 @@
 
 namespace ock {
 namespace bio {
+constexpr uint16_t BIO_INIT_TIMEOUT_TIME = 90;
 constexpr uint16_t BIO_IO_TIMEOUT_TIME = 60;
 constexpr uint16_t BIO_IO_INTERAL_TIME = 2;
 class MirrorClient {
@@ -119,6 +120,7 @@ private:
     }
 
     BResult LoadOriginView();
+    BResult LoadOriginViewImpl();
     BResult LoadAffinityFlow();
 
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
