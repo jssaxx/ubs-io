@@ -54,6 +54,7 @@ public:
             return BIO_CHECK_PT_FAIL;
         }
         location.location[0] = (static_cast<uint64_t>(ptId) & 0x000000000000FFFF);
+        location.location[1] = 0ULL;
         return BIO_OK;
     }
 
