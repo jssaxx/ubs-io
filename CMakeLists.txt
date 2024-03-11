@@ -86,6 +86,10 @@ if (OPEN_TEST_TOOLS STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TOOLS)
 endif()
 
+if (OPEN_UNDERFS_CEPH STREQUAL "ON")
+    add_compile_definitions(_ceph_Integrate)
+endif()
+
 add_subdirectory(3rdparty)
 add_subdirectory(src)
 add_subdirectory(configs)

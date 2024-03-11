@@ -498,7 +498,8 @@ private:
         auto *netCallback = NewCallback(
             [callback](NetServiceContext &context) {
                 if (context.Result() != SER_OK) {
-                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), BIO_NET_ERROR);
+                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(),
+                        NetResult(context.Result()));
                 } else {
                     NetServiceOpInfo rspOpInfo = context.OpInfo();
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), rspOpInfo.errorCode);

@@ -51,7 +51,7 @@ steps:
         path: boostio/test/llt/3rdparty/mockcpp
   BUILD:
     - build_execute:
-        command: sh boostio/build.sh ${BUILD_TYPE}
+        command: sh boostio/build.sh ${BUILD_TYPE} XX Ceph
         check:
           fail_on_error: true
           mode: sync
