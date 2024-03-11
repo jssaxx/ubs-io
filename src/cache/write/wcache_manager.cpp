@@ -220,30 +220,25 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
     uint64_t &realLen)
 {
-    ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
-    ChkTrueNot(slice != nullptr, BIO_INVALID_PARAM);
-    ChkTrueNot(sliceWriter != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
+    ChkTrue(slice != nullptr, BIO_INVALID_PARAM, "Slice is nullptr.");
+    ChkTrue(sliceWriter != nullptr, BIO_INVALID_PARAM, "Slice writer is nullptr.");
 
     uint64_t ptId = slice->GetPtId();
-
-    LOG_DEBUG("Get key:" << key << ", pt:" << ptId);
-
-    // 1. Get key slice ref from index.
     BIO_TRACE_START(WCACHE_TRACE_GET_QUERY_INDEX);
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
-    BIO_TRACE_END(WCACHE_TRACE_GET_QUERY_INDEX, 0);
+    BIO_TRACE_END(WCACHE_TRACE_GET_QUERY_INDEX, ((sliceRef == nullptr) ? BIO_NOT_EXISTS : BIO_OK));
     if (UNLIKELY(sliceRef == nullptr)) {
-        LOG_WARN("Aquire key :" << key << " slice not exist.");
         return BIO_NOT_EXISTS;
     }
 
-    // 2. Read data from flow.
     BIO_TRACE_START(WCACHE_TRACE_GET_READ_DATA);
     auto ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
     BIO_TRACE_END(WCACHE_TRACE_GET_READ_DATA, ret);
     sliceRef->Release();
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Read data from flow failed, key :" << key << ".");
+        LOG_ERROR("WCache Read data failed, key :" << key << ", offset:" << offset << ", length:" <<
+            sliceRef->GetSlice()->GetLength() << ".");
     }
     return ret;
 }
@@ -268,32 +263,28 @@ BResult WCacheManager::List(char *prefix, uint16_t ptId, std::unordered_map<std:
 
 BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
 {
-    ChkTrueNot(key != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
 
-    // 1. Aquire slice ref from index.
     WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
     if (UNLIKELY(sliceRef == nullptr)) {
-        LOG_WARN("Aquire key slice failed, key:" << key << ".");
+        LOG_WARN("Write cache aquire slice failed, key:" << key << ", ptId:" << ptId << ".");
         return BIO_NOT_EXISTS;
     }
 
-    // 2. Get write flow
     auto slice = sliceRef->GetSlice();
     uint64_t flowId = GenFlowId(slice->GetFlowId());
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get flow by id:" << flowId << ", key:" << key << ".");
+        LOG_ERROR("Failed to get flow, flowId:" << flowId << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
-    // 3. delete slice from flow
     auto ret = wcache->Delete(key, sliceRef);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Delete slice from flow failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
 
-    // 4. delete slice from index
     ret = mCacheIndex->Delete(ptId, key, sliceRef);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to delete. key:" << key << ", ret:" << ret);
@@ -598,7 +589,7 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     if (UNLIKELY(offset >= srcSlice->GetLength())) {
-        LOG_ERROR("Failed to split slice. offset:" << offset << ", real length:" << srcSlice->GetLength());
+        LOG_ERROR("Failed to split slice. offset:" << offset << ", length:" << srcSlice->GetLength());
         return BIO_READ_EXCEED;
     }
 
@@ -606,18 +597,18 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
     if (realLen > destSlice->GetLength()) {
         realLen = destSlice->GetLength();
     }
-    // split slice, get real range from slice.
     auto newSlice = srcSlice->Split(offset, realLen);
     if (UNLIKELY(newSlice == nullptr)) {
         LOG_ERROR("Failed to split slice. offset:" << offset << ", length:" << realLen);
         return BIO_READ_EXCEED;
     }
 
-    // write slice to dest slice.
     auto ret = sliceWriter(newSlice, destSlice.Get());
-    ChkTrueNot(ret == BIO_OK, ret);
-
-    return BIO_OK;
+    if (ret != BIO_OK) {
+        LOG_ERROR("Call slice writer to dst slice failed, ret:" << ret << ", offset:" << offset << ", length:" <<
+            realLen << ".");
+    }
+    return ret;
 }
 
 void WCacheManager::RetryEvictThread()

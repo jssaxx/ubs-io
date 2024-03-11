@@ -202,12 +202,17 @@ typedef struct {
 typedef struct {
     RequestComm comm;
     char prefix[KEY_MAX_SIZE];
-    uint32_t flag;
+    bool isListUnderFs;
+    uintptr_t address;
+    uint64_t size;
+    uint32_t mrKey;
 } ListRequest;
 
 typedef struct {
-    uint32_t reserved;
+    uintptr_t addr;
+    uint64_t addrOffset;
     uint32_t num;
+    uint32_t buffLen;
     char statBuf[0];
 } ListResponse;
 

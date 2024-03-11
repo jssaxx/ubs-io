@@ -28,7 +28,7 @@ BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefP
 WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ChkTrueNot(table != nullptr, nullptr);
+    ChkTrue(table != nullptr, nullptr, "Invalid table, ptId:" << ptId << ".");
     auto bucket = Hash(key);
     ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto sliceMeta = table->sliceIndex[bucket].find(key);
@@ -36,7 +36,7 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
         return nullptr;
     }
     auto sliceRef = sliceMeta->second;
-    if (sliceRef->Aquire()) {
+    if (LIKELY(sliceRef->Aquire())) {
         return sliceRef;
     } else {
         return nullptr;
