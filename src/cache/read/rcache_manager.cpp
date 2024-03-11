@@ -86,26 +86,16 @@ BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &
 BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
-    BIO_TRACE_START(RCACHE_TRACE_GET);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    if (UNLIKELY(cachePtr == nullptr)) {
-        BIO_TRACE_END(RCACHE_TRACE_GET, BIO_NOT_EXISTS);
-        return BIO_NOT_EXISTS;
-    }
-    auto ret = cachePtr->Get(key, offset, slice, sliceWriter, realLen);
-    BIO_TRACE_END(RCACHE_TRACE_GET, ret);
-    return ret;
+    ChkTrue(cachePtr != nullptr, BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
+    return cachePtr->Get(key, offset, slice, sliceWriter, realLen);
 }
 
 BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     BIO_TRACE_START(RCACHE_TRACE_LOAD);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    if (UNLIKELY(cachePtr == nullptr)) {
-        BIO_TRACE_END(RCACHE_TRACE_LOAD, BIO_NOT_EXISTS);
-        return BIO_NOT_EXISTS;
-    }
-
+    ChkTrue(cachePtr != nullptr, BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
     auto ret = cachePtr->Load(key, offset, len, realLen);
     BIO_TRACE_END(RCACHE_TRACE_LOAD, ret);
     return ret;
@@ -113,16 +103,9 @@ BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint
 
 BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
 {
-    BIO_TRACE_START(RCACHE_TRACE_DEL);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    if (UNLIKELY(cachePtr == nullptr)) {
-        BIO_TRACE_END(RCACHE_TRACE_DEL, BIO_NOT_EXISTS);
-        return BIO_NOT_EXISTS;
-    }
-
-    auto ret = cachePtr->Delete(key);
-    BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
-    return ret;
+    ChkTrue(cachePtr != nullptr, BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
+    return cachePtr->Delete(key);
 }
 
 BResult RCacheManager::CreateRCache(uint64_t ptId, uint16_t diskId)

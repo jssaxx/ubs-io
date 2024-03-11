@@ -103,6 +103,7 @@ private:
 
     void SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
+    BResult CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult SendStatRequestLocal(StatRequest &req, ObjStat &objInfo);

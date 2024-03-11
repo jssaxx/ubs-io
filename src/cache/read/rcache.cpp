@@ -258,23 +258,21 @@ BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &c
     uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     RCacheValue value = chunk->GetValue();
-    std::vector<FlowAddr> flowAdd;
-
     if (UNLIKELY(offset >= value.length)) {
-        LOG_ERROR("Flow offset:" << value.flowOffset << ", length:" << value.length <<
-            ", input offset:" << offset << ", len:" << len);
-        return BIO_INVALID_PARAM;
+        LOG_ERROR("Read exceed, flow offset:" << value.flowOffset << ", length:" << value.length <<
+            ", input offset:" << offset << ", input length:" << len << ".");
+        return BIO_READ_EXCEED;
     }
 
+    std::vector<FlowAddr> flowAdd;
     realLen = value.length - offset;
     if (realLen > len) {
         realLen = len;
     }
-
     BResult ret = flow[tier]->GetDataFlow()->GetAddrByOffset(value.flowOffset + offset, realLen, flowAdd);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get key: " << chunk->GetKey() << ", tier:" << tier << ", flowOffset:" << value.flowOffset <<
-            ", length:" << value.length << " failed.");
+        LOG_ERROR("Get addr failed, ret:" << ret << ", key: " << chunk->GetKey() << ", tier:" << tier <<
+            ", flowOffset:" << value.flowOffset << ", length:" << value.length << ".");
         return ret;
     }
 
@@ -282,8 +280,8 @@ BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &c
     FlowType flowType = GetFlowTypeByTierType(tier);
     slicePtr = MakeRef<WCacheSlice>(flowId, value.flowOffset + offset, 0ULL, realLen, flowAdd, flowType);
     if (UNLIKELY(slicePtr == nullptr)) {
-        LOG_ERROR("Alloc slice ptr for read cache failed.");
-        return BIO_ERR;
+        LOG_ERROR("Make slice point failed.");
+        return BIO_ALLOC_FAIL;
     }
 
     return BIO_OK;
@@ -391,11 +389,11 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     }
     RCacheChunkPtr chunk = iter->second;
     indexLock[bucket].UnLock();
-    BIO_TRACE_END(RCACHE_TRACE_GET_QUERY_INDEX, 0);
+    BIO_TRACE_END(RCACHE_TRACE_GET_QUERY_INDEX, BIO_OK);
 
     chunk->lock.lock();
     if (chunk->GetState() != 0) {
-        LOG_ERROR("Already delete, " << key);
+        LOG_ERROR("Chunk already delete, key:" << key << ".");
         chunk->lock.unlock();
         return BIO_NOT_EXISTS;
     }
@@ -403,21 +401,21 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     RCacheStatistic::Instance().IncHisCount();
     auto tier = chunk->GetTierType();
     auto ret = GetSliceFromChunkIO(tier, chunk, newSlicePtr, offset, slice->GetLength(), realLen);
-    if (UNLIKELY(ret != BIO_OK) || UNLIKELY(newSlicePtr == nullptr)) {
-        LOG_ERROR("Alloc slice for read cache key:" << key << ", type:" << tier << ", length:"
-        	<< chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset
-        	<< ", indexofflow:" << chunk->GetValue().indexInFlow);
+    if (UNLIKELY(ret != BIO_OK || newSlicePtr == nullptr)) {
+        LOG_ERROR("Read cache alloc slice failed, ret:" << ret << ", key:" << key << ", type:" << tier << ", length:"
+        	<< chunk->GetValue().length << ", flow offset:" << chunk->GetValue().flowOffset
+            << ", indexofflow:" << chunk->GetValue().indexInFlow << ".");
         chunk->lock.unlock();
-        return BIO_ALLOC_FAIL;
+        return ret;
     }
 
     BIO_TRACE_START(RCACHE_TRACE_GET_WRITE_DATA);
     ret = sliceWriter(newSlicePtr.Get(), slice.Get());
     BIO_TRACE_END(RCACHE_TRACE_GET_WRITE_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Write read cache key:" << key << " data to buffer failed, ret:" << ret << ".");
+        LOG_ERROR("Call slice writer to dst failed, ret:" << ret << ", key:" << key << ".");
         chunk->lock.unlock();
-        return BIO_INNER_ERR;
+        return ret;
     }
     chunk->lock.unlock();
 
@@ -427,80 +425,75 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     evictMq[tier][mqType].Remove(chunk);
     evictMq[tier][mqType].PushBack(chunk);
     evictMqLock[tier][mqType].UnLock();
-    BIO_TRACE_END(RCACHE_TRACE_GET_UPDATE_EVICT, 0);
+    BIO_TRACE_END(RCACHE_TRACE_GET_UPDATE_EVICT, BIO_OK);
     return BIO_OK;
 }
 
 BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
-    UnderFsPtr underFsPtr = UnderFs::Instance();
-    WCacheSlicePtr toSlicePtr = nullptr;
-
-    RCacheChunkPtr chunk = nullptr;
-    uint64_t flowOffset;
-    uint64_t indexInFlow;
-
     UnderFs::ObjStat stat;
-    auto ret = underFsPtr->Stat(key, stat);
+    auto ret = UnderFs::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
+        LOG_ERROR("Stat key from under fs failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
+
     uint64_t totalLen = static_cast<uint64_t>(stat.size);
-
     if (UNLIKELY(offset >= totalLen)) {
-        LOG_ERROR("Input offset:" << offset << ", len:" << len << ", realLen:" << totalLen);
-        return BIO_INVALID_PARAM;
+        LOG_ERROR("Read exceed, input offset:" << offset << ", input length:" << len << ", totalLen:" << totalLen);
+        return BIO_READ_EXCEED;
     }
-
     realLen = totalLen - offset;
     if (realLen > len) {
         realLen = len;
     }
 
+    RCacheChunkPtr chunk = nullptr;
+    uint64_t flowOffset;
+    uint64_t indexInFlow;
     flow[READ_CACHE_TIER_MEM]->AllocOffset(realLen, flowOffset, indexInFlow);
     RCacheValue chunkValue(indexInFlow, flowOffset, realLen);
     ret = AllocChunk(key, chunkValue, chunk);
-    if (UNLIKELY(ret != BIO_OK) || UNLIKELY(chunk == nullptr)) {
-        LOG_ERROR("Alloc chunk for read cache key " << key << "failed.");
+    if (UNLIKELY(ret != BIO_OK || chunk == nullptr)) {
+        LOG_ERROR("Read cache alloc chunk failed, ret:" << ret << ",  key " << key << ".");
         return BIO_ALLOC_FAIL;
     }
 
+    WCacheSlicePtr toSlicePtr = nullptr;
     ret = GetSliceFromChunk(READ_CACHE_TIER_MEM, chunk, toSlicePtr);
-    if (UNLIKELY(ret != BIO_OK) || UNLIKELY(toSlicePtr == nullptr)) {
-        LOG_ERROR("Alloc slice for read cache key " << key << "failed.");
+    if (UNLIKELY(ret != BIO_OK || toSlicePtr == nullptr)) {
+        LOG_ERROR("Read cache alloc slice failed, ret:" << ret << ", key:" << key << ".");
         return BIO_ALLOC_FAIL;
     }
 
     char *value = new(std::nothrow) char[realLen];
     if (UNLIKELY(value == nullptr)) {
-        LOG_ERROR("Alloc memory for key " << key << "failed.");
+        LOG_ERROR("Alloc memory failed, key " << key << ", len:" << realLen << ".");
         return BIO_ALLOC_FAIL;
     }
 
-    ret = underFsPtr->Get(key, value, realLen, offset); // 先调用桩接口
+    ret = UnderFs::Instance()->Get(key, value, realLen, offset);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Read data from under fs key " << key << "failed.");
-        delete [] value;
+        LOG_ERROR("Read data from under fs failed, ret:" << ret << ", key " << key << ", offset:" << offset <<
+            ", length:" << realLen << ".");
+        delete[] value;
         return BIO_ALLOC_FAIL;
     }
 
     ret = mSliceOperator.Copy(value, toSlicePtr.Get());
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Read key "<< key << " data to read cache failed.");
-        delete [] value;
+        LOG_ERROR("Copy date to slice failed, ret:" << ret << ", key "<< key << " .");
+        delete[] value;
         return BIO_ALLOC_FAIL;
     }
-
-    delete [] value;
+    delete[] value;
 
     chunk->SetMqType(MQ_COLD);
     chunk->SetTierType(READ_CACHE_TIER_MEM);
-
     ret = InsertToIndex(chunk->GetKey(), chunk);
-    if (UNLIKELY((ret != BIO_OK) && (ret != BIO_EXISTS))) {
-        LOG_ERROR("Insert read cache key" << key << "to index failed.");
-        return BIO_ERR;
+    if (UNLIKELY(ret != BIO_OK && ret != BIO_EXISTS)) {
+        LOG_ERROR("Read cache insert index failed, ret:" << ret << ", key" << key << ".");
+        return BIO_INNER_ERR;
     }
 
     AddToEvictList(READ_CACHE_TIER_MEM, MQ_COLD, chunk);

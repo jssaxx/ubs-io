@@ -304,8 +304,8 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         realLen = rsp.realLen;
         uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
         ret = memcpy_s(reinterpret_cast<void *>(value), realLen, reinterpret_cast<void *>(addr), realLen);
-        if (ret != 0) {
-            CLIENT_LOG_ERROR("memcpy_s failed.");
+        if (UNLIKELY(ret != 0)) {
+            CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
         }
     }
     return ret;
@@ -340,27 +340,58 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callba
         return SendDeleteRequestLocal(req, callback);
     }
 }
+BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
+{
+    req.address = 0;
+    req.size = 0;
+    req.mrKey = 0;
+    ListResponse *rsp = nullptr;
+    auto ret = listOp(&req, &rsp);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    if (rsp->num != 0) {
+        auto statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+        for (uint32_t i = 0; i < rsp->num; i++) {
+            if (objs.size() >= 1000U) {
+                break;
+            }
+            ObjStat stat;
+            CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
+            stat.size = statBuff[i].size;
+            stat.time = statBuff[i].time;
+            objs.insert({ stat.key, stat });
+        }
+    }
+    delete[] rsp;
+    return BIO_OK;
+}
 
 BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    ListResponse *rsp = nullptr;
-    uint64_t rspLen = 0;
-    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(INVALID_NID,
-        BIO_OP_SDK_LIST, req, &rsp, rspLen);
+    req.address = 0;
+    req.size = 0;
+    req.mrKey = 0;
+    ListResponse rsp;
+    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(localPid,
+        BIO_OP_SDK_LIST, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
         return ret;
     }
 
-    auto statInfo = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
-    for (uint32_t i = 0; i < rsp->num; i++) {
-        ObjStat stat;
-        CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
-        stat.size = statInfo[i].size;
-        stat.time = statInfo[i].time;
-        objs.insert({ stat.key, stat });
+    if (rsp.num != 0) {
+        uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
+        auto statInfo = reinterpret_cast<ObjStat *>(addr);
+        for (uint32_t i = 0; i < rsp.num; i++) {
+            ObjStat stat;
+            CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
+            stat.size = statInfo[i].size;
+            stat.time = statInfo[i].time;
+            objs.insert({ stat.key, stat });
+        }
     }
-    delete[] rsp;
     return BIO_OK;
 }
 
@@ -386,24 +417,7 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
 BResult BioClientAgent::ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     if (mMode == CONVERGENCE) {
-        ListResponse *rsp = nullptr;
-        auto ret = listOp(&req, &rsp);
-        if (ret != BIO_OK) {
-            return ret;
-        }
-        auto statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
-        for (uint32_t i = 0; i < rsp->num; i++) {
-            if (objs.size() >= 1000U) {
-                break;
-            }
-            ObjStat stat;
-            CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
-            stat.size = statBuff[i].size;
-            stat.time = statBuff[i].time;
-            objs.insert({ stat.key, stat });
-        }
-        delete[] rsp;
-        return BIO_OK;
+        return CallServerListIntf(req, objs);
     } else {
         return SendListRequestLocal(req, objs);
     }

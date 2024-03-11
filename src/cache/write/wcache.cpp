@@ -115,16 +115,13 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
 
     LOG_INFO("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:"
         << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
-
     WFlowSliceMeta sliceMeta;
     auto ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
-    ChkTrueNot(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret, "Slice copy failed.");
 
     sliceMeta.hasEvict = 1;
-
     ret = mSliceOperator.Copy((char *)&sliceMeta, metaSlice.Get());
-    ChkTrueNot(ret == BIO_OK, ret);
-
+    ChkTrue(ret == BIO_OK, ret, "Slice copy failed.");
     return BIO_OK;
 }
 
