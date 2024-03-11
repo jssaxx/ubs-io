@@ -6,8 +6,8 @@ CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BUILD_DIR=${PROJ_DIR}/build
 BUILD_TYPE=debug
-DIAGNOSE_FLAG=false
-DIAGNOSE=off
+DIAGNOSE_FLAG=true
+DIAGNOSE=on
 CMAKE_FLAGS=
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -31,22 +31,15 @@ if [ -n "${BUILD_UT}" ];then
     sh scripts/build_mockcpp.sh
 fi
 
-if [[ "$3" == 'diagnose' ]];then
-  DIAGNOSE=on
+if [[ "$3" == 'Ceph' ]];then
+  CMAKE_FLAGS+='-DOPEN_UNDERFS_CEPH=ON '
 fi
 
 cd $BUILD_DIR
 echo "BUILD_DIR=${BUILD_DIR}"
 
-if [[ "$BUILD_TYPE" == 'debug' ]]; then
-    CMAKE_FLAGS+='-DOPEN_TEST_TOOLS=ON '
-    DIAGNOSE_FLAG=true
-fi
+CMAKE_FLAGS+='-DOPEN_TEST_TOOLS=ON '
 
-if [[ "$DIAGNOSE_FLAG $DIAGNOSE" == 'false on' ]]; then
-    CMAKE_FLAGS+='-DOPEN_TEST_TOOLS=ON '
-    DIAGNOSE_FLAG=true
-fi
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 8"
 
