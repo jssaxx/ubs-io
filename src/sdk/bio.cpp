@@ -166,10 +166,14 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || (offset + length) > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, offset:" << offset << "length:" <<
-            length << ", max length:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
+        CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
+    }
+    if (UNLIKELY((offset + length) > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Read length exceed limit, offset" << offset << "length:" << length << ", limits:" <<
+            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        return RET_CACHE_READ_EXCEED;
     }
 
     StatisticGetIoSize(length);
@@ -223,15 +227,24 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_EPERM;
     }
 
-    LoadCallback cb = [&callback](void *context, BResult result) {
-        callback(context, ToCResult(result));
+    LoadCallback cb = [&key, &offset, &length, &location, &callback](void *context, BResult result) {
+        if (result != BIO_OK) {
+            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ", offset:" << offset <<
+                ", length:" << length << ", location:" << location.location[0] << ".");
+        } else {
+            CLIENT_LOG_INFO("Load success, key:" << key << ", offset:" << offset << ", length:" << length <<
+                ", location:" << location.location[0] << ".");
+        }
+        if (callback != nullptr) {
+            callback(context, ToCResult(result));
+        }
     };
     BIO_TRACE_START(SDK_TRACE_LOAD);
     BResult ret = gClient->Load(key, offset, length, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Load value failed, ret:" << ret << ", key:" << key << ", location0:" <<
-            location.location[0] << ", location1:" << location.location[1] << ".");
+        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", offset:" << offset <<
+            ", length:" << length << ", location:" << location.location[0] << ".");
     }
     return ToCResult(ret);
 }
@@ -251,9 +264,9 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
     BResult ret = gClient->ListAll(prefix, objs);
     BIO_TRACE_END(SDK_TRACE_LISTALL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("List object failed, ret:" << ret << ", prefix:" << prefix << ".");
+        CLIENT_LOG_ERROR("List all failed, ret:" << ret << ", prefix:" << prefix << ".");
     } else {
-        CLIENT_LOG_INFO("List object success, prefix:" << prefix << ", num:" << objs.size() << ".");
+        CLIENT_LOG_INFO("List all success, prefix:" << prefix << ", num:" << objs.size() << ".");
     }
     return ToCResult(ret);
 }

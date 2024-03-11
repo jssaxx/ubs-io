@@ -169,6 +169,7 @@ BResult MirrorClient::LoadOriginViewImpl()
         CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
         return ret;
     }
+
     CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
 
     if (mNodeView.size() == 0 || mPtView.size() == 0) {
@@ -336,7 +337,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -389,7 +390,7 @@ BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -408,7 +409,7 @@ BResult MirrorClient::DeleteKeyImpl(const char *key, const ObjLocation &location
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
-        return BIO_CHECK_PT_FAIL;
+        return ret;
     }
 
     DeleteRequest req{};
@@ -438,7 +439,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -461,7 +462,7 @@ BResult MirrorClient::LoadImpl(const char *key, uint64_t offset, uint64_t length
         return ret;
     }
 
-    LoadRequest req{};
+    LoadRequest req;
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     CopyKey(req.key, key, KEY_MAX_SIZE);
     req.offset = offset;
@@ -489,7 +490,7 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            LOG_INFO("Delay retry, prefix:" << prefix << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, prefix:" << prefix << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -503,7 +504,7 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
 
 BResult MirrorClient::ListAllImpl(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
-    ListRequest req{};
+    ListRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
     CopyKey(req.prefix, prefix, KEY_MAX_SIZE);
     auto ret = SendListRequest(req, objs);
@@ -529,7 +530,7 @@ BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, O
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -824,8 +825,6 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
     req.address = mrInfo.address;
     req.size = mrInfo.size;
     req.mrKey = mrInfo.key;
-    CLIENT_LOG_DEBUG("Alloc rdma page success, length:" << req.length << ", offset:" << req.offset << ", address:" <<
-        mrInfo.address << ", size:" << mrInfo.size << ", key:" << mrInfo.key << ", dstNid:" << masterNid << ".");
 
     GetResponse rsp;
     ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(static_cast<BioNodeId>(masterNid),
@@ -836,19 +835,20 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
     } else {
         realLen = rsp.realLen;
         BIO_TRACE_START(SDK_TRACE_GET_COPY2U);
-        Copy(reinterpret_cast<void *>(mrInfo.address), value, realLen);
-        BIO_TRACE_END(SDK_TRACE_GET_COPY2U, BIO_OK);
+        ret = Copy(reinterpret_cast<void *>(mrInfo.address), value, realLen);
+        BIO_TRACE_END(SDK_TRACE_GET_COPY2U, ret);
+        if (UNLIKELY(ret != 0)) {
+            CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
+        }
     }
-
     net::BioClientNet::Instance()->Free(mrInfo.address);
     return ret;
 }
 
 BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
-    CLIENT_LOG_INFO("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
+    CLIENT_LOG_DEBUG("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
-
     BResult ret;
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
@@ -883,15 +883,13 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
-    cbCtx.result = BIO_OK;
-    cbCtx.quota = quota;
-    sem_init(&cbCtx.sem, 0, 0);
-    cbCtx.resp = nullptr;
-    cbCtx.respLen = 0;
+    InitCallbackCtx(cbCtx, quota);
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (ClientCallbackCtx *)ctx;
+        auto cbCtx = (ClientCallbackCtx *)ctx;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
+        } else {
+            cbCtx->result = *(static_cast<BResult *>(resp));
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
@@ -913,9 +911,6 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
 
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
-    if (UNLIKELY(cbCtx.result != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send delete request failed, ret:" << cbCtx.result << ", key:" << req.key << ".");
-    }
     return cbCtx.result;
 }
 
@@ -942,23 +937,35 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
 
 BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    ListResponse *rsp = nullptr;
-    uint64_t rspLen = 0;
-    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
-        BIO_OP_SDK_LIST, req, &rsp, rspLen);
+    uint64_t maxSize = sizeof(ObjStat) * 1000U;
+    NetMrInfo mr;
+    auto ret = net::BioClientNet::Instance()->Alloc(maxSize, mr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc rdma memory failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    req.address = mr.address;
+    req.size = maxSize;
+    req.mrKey = mr.key;
+    ListResponse rsp;
+    ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
+        BIO_OP_SDK_LIST, req, rsp);
     if (ret != BIO_OK) {
         return ret;
     }
 
-    auto statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
-    for (uint32_t i = 0; i < rsp->num; i++) {
-        ObjStat stat;
-        CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
-        stat.size = statBuff[i].size;
-        stat.time = statBuff[i].time;
-        objs.insert({ stat.key, stat });
+    if (rsp.num != 0) {
+        auto statInfo = reinterpret_cast<ObjStat *>(mr.address);
+        for (uint32_t i = 0; i < rsp.num; i++) {
+            ObjStat stat;
+            CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
+            stat.size = statInfo[i].size;
+            stat.time = statInfo[i].time;
+            objs.insert({ stat.key, stat });
+        }
     }
-    delete[] rsp;
+    net::BioClientNet::Instance()->Free(mr.address);
     return BIO_OK;
 }
 
@@ -969,13 +976,13 @@ BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string
 
 BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
+    BResult result = BIO_OK;
     uint32_t index = 0;
     for (auto &ptEntry : mPtView) {
         uint16_t dstNid = ptEntry.second.masterNodeId;
-        req.flag = index;
+        req.isListUnderFs = (index == 0) ? true : false;
         req.comm.ptId = ptEntry.second.ptId;
         req.comm.ptv =  ptEntry.second.version;
-        BResult result;
         if (dstNid == mLocalNid.VNodeId()) {
             result = ListLocal(req, objs);
         } else {
@@ -992,9 +999,6 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
 
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
 {
-    CLIENT_LOG_INFO("Load master start, masterNid:" << masterNid << ", key:" << req.key << ", offset:" <<
-        req.offset << ", length:" << req.length << ".");
-
     if (masterNid == mLocalNid.VNodeId()) {
         auto ret = agent::BioClientAgent::Instance()->LoadLocal(req);
         callback(context, ret);
@@ -1003,19 +1007,11 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
 
     auto cbFunc = [&callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
         if (UNLIKELY(result != BIO_OK)) {
-            CLIENT_LOG_ERROR("Send Load master failed, result:" << result << ".");
-            if (UNLIKELY(callback != nullptr)) {
-                callback(context, result);
-            }
+            callback(context, result);
             return;
         }
         BResult hdlRet = *(static_cast<BResult*>(resp));
-        if (UNLIKELY(hdlRet != BIO_OK)) {
-            CLIENT_LOG_ERROR("Load master failed, result:" << hdlRet << ".");
-        }
-        if (UNLIKELY(callback != nullptr)) {
-            callback(context, hdlRet);
-        }
+        callback(context, hdlRet);
     };
     NetEngine::Callback cb(cbFunc, nullptr);
     net::BioClientNet::Instance()->SendAsync<LoadRequest>(static_cast<uint32_t>(masterNid), BIO_OP_SDK_LOAD,
