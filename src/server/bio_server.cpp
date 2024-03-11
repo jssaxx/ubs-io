@@ -567,8 +567,8 @@ int32_t Put(PutRequest *req)
 
 int32_t Get(GetRequest *req, GetResponse *rsp)
 {
-    ServiceContext ctx;
-    return BioServer::Instance()->GetMirrorServer()->Get(ctx, *req, rsp->realLen, rsp->addrOffset);
+    ServiceContext netCtx;
+    return BioServer::Instance()->GetMirrorServer()->Get(*req, rsp->realLen, rsp->addrOffset, netCtx);
 }
 
 int32_t Delete(DeleteRequest *req)
@@ -590,7 +590,9 @@ int32_t List(ListRequest *req, ListResponse **rsp)
         return BIO_ALLOC_FAIL;
     }
     *rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
+    (*rsp)->addrOffset = 0;
     (*rsp)->num = objs.size();
+    (*rsp)->buffLen = sizeof(ObjStat) * objs.size();
     auto statBuf = static_cast<ObjStat *>(static_cast<void*>((*rsp)->statBuf));
     uint32_t index = 0;
     for (auto &obj : objs) {

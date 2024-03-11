@@ -114,22 +114,21 @@ private:
 
     BResult StatObjectImpl(const char *key, const ObjLocation &location, ObjStat &stat);
 
-    inline void Copy(const void *src, void *dst, const uint64_t len)
+    inline int32_t Copy(const void *src, void *dst, const uint64_t len)
     {
-        memcpy_s(dst, len, src, len);
+        return memcpy_s(dst, len, src, len);
     }
 
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();
     BResult LoadAffinityFlow();
 
+    void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
-
     uint32_t CalcPtQuota(CmPtInfo &ptEntry);
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId,
         uint64_t &offset, uint64_t &index);
-
     BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
         uint64_t &flowId);
     BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
@@ -150,7 +149,6 @@ private:
         PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
-    void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t offset, uint64_t index);
 
     BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);

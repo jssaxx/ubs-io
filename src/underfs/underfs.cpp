@@ -262,12 +262,9 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
 BResult UnderFs::Delete(const char *key)
 {
+    using namespace std;
     std::string keyPath = CEPH_PATH_EXT;
     keyPath += key;
-
-    using namespace std;
-
-    LOG_INFO("Del key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_DEL);
     ifstream infile(keyPath.c_str());
@@ -278,7 +275,6 @@ BResult UnderFs::Delete(const char *key)
     }
     infile.close();
 
-    //删除文件
     if (remove(keyPath.c_str()) != 0) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_ERR);
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());

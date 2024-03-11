@@ -124,45 +124,41 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     BIO_TRACE_START(WCACHE_TRACE_GET);
     auto ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
-    if (ret == BIO_OK) {
-        LOG_INFO("write cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
+    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+        LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset <<
+            ", length:" << slice->GetLength() << ".");
+        return ret;
+    } else if (ret == BIO_OK) {
+        LOG_INFO("Write cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength());
         return BIO_OK;
     }
 
-    if (ret == BIO_NOT_EXISTS) {
-        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
-        if (UNLIKELY(ret != BIO_OK) && ret != BIO_NOT_EXISTS) {
-            LOG_ERROR("Get key " << key << " from read cache failed, ret:" << ret);
-        } else if (ret == BIO_OK) {
-            LOG_INFO("read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
-        }
+    BIO_TRACE_START(RCACHE_TRACE_GET);
+    ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
+    BIO_TRACE_END(RCACHE_TRACE_GET, ret);
+    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+        LOG_ERROR("Get key " << key << " from read cache failed, ret:" << ret);
+        return ret;
+    } else if (ret == BIO_OK) {
+        LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength());
+        return BIO_OK;
     }
 
-    if (ret == BIO_NOT_EXISTS) {
-        ret = mRCacheManager->Load(slice->GetPtId(), key, 0, BIO_IO_MAX_LEN, realLen);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Load key " << key << " read data from under fs failed.");
-            return ret;
-        }
-
+    ret = mRCacheManager->Load(slice->GetPtId(), key, 0, BIO_IO_MAX_LEN, realLen);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Read cache load failed, ret:" << ret << ", key " << key << ".");
+    } else {
         ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Get key " << key << " read data from read cache failed.");
-            return ret;
+        if (LIKELY(ret == BIO_OK)) {
+            LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
         }
-        LOG_INFO("Load and read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
     }
     return ret;
 }
 
 BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
-    auto ret = mRCacheManager->Load(ptId, key, 0, BIO_IO_MAX_LEN, realLen);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ", offset:" <<
-            offset << ", len:" << len << ".");
-    }
-    return ret;
+    return mRCacheManager->Load(ptId, key, 0, BIO_IO_MAX_LEN, realLen);
 }
 
 BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
@@ -187,7 +183,7 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     return ret;
 }
 
-BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_map<std::string, CacheObjStat> &objs)
+BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<std::string, CacheObjStat> &objs)
 {
     BResult ret = mWCacheManager->List(prefix, ptId, objs);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -197,7 +193,7 @@ BResult Cache::List(char *prefix, uint16_t ptId, uint32_t flag, std::unordered_m
         return BIO_OK;
     }
 
-    if (flag == 1) {
+    if (force) {
         std::unordered_map<std::string, UnderFs::ObjStat> underStatInfo;
         ret = UnderFs::Instance()->List(prefix, underStatInfo);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -224,28 +220,26 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Write cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
         return ret;
-    } else if (ret == BIO_OK) {
-        LOG_INFO("Write cache delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
     }
 
+    BIO_TRACE_START(RCACHE_TRACE_DEL);
     ret = mRCacheManager->Delete(ptId, key);
+    BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
         return ret;
-    } else {
-        LOG_INFO("Read cache delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
     }
 
-    UnderFsPtr underFsPtr = UnderFs::Instance();
-    ret = underFsPtr->Delete(key);
+    ret = UnderFs::Instance()->Delete(key);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Delete key " << key << " from under fs failed, ret: " << ret);
+        LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
         return ret;
-    } else {
-        LOG_INFO("UnderFS delete finish, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
+    }
+
+    if (ret == BIO_NOT_EXISTS) {
+        LOG_WARN("Not found key in delete process, key " << key << ", ptId:" << ptId << ".");
         ret = BIO_OK;
     }
-
     return ret;
 }
 

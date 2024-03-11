@@ -42,7 +42,7 @@ public:
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP);
-    BResult Get(ServiceContext &ctx, GetRequest &req, uint64_t &realLen, uint64_t &addrOffset);
+    BResult Get(GetRequest &req, uint64_t &realLen, uint64_t &addrOffset, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult Stat(StatRequest &req, ObjStat &objInfo);
@@ -61,6 +61,8 @@ private:
     bool CheckAll(RequestComm &reqComm);
     void RegisterOpcode();
     void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
+    void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs);
+    void ReplyListResultRemote(ServiceContext &ctx, ListRequest *req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
     BResult GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset);
