@@ -13,7 +13,7 @@
 #include "bio_ref.h"
 
 #ifdef _ceph_Integrate
-#include "librados.h"
+#include "rados/librados.h"
 #else
 typedef void *rados_t;
 typedef void *rados_ioctx_t;
