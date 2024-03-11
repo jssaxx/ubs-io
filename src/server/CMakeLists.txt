@@ -9,6 +9,10 @@ if (OPEN_TEST_TOOLS STREQUAL "ON")
             ../../test/tools/diagnose/cli_htracer)
 endif()
 
+if (OPEN_UNDERFS_CEPH STREQUAL "ON")
+target_link_libraries(bio_server -Wl,--start-group rados -Wl,--end-group)
+endif()
+
 target_link_libraries(bio_server
         -Wl,--start-group
         pthread dl aio
