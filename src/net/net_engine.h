@@ -297,6 +297,12 @@ public:
         return ch->Read(req, nullptr);
     }
 
+    BResult SyncRead(ChannelPtr ch, const NetRequest &req)
+    {
+        using namespace ock::hcom;
+        return ch->Read(req, nullptr);
+    }
+
     BResult SyncWrite(const BioNodeId &targetNodeId, const NetRequest &req)
     {
         using namespace ock::hcom;

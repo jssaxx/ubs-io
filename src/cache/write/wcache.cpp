@@ -285,11 +285,13 @@ void WCache::ExpiredClear()
 
 bool WCache::IsEmptyEvict()
 {
-    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue()) {
+    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue() ||
+        mEvictRef[WCACHE_MEMORY] == true) {
         return false;
     }
 
-    if (!mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue()) {
+    if (!mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue() ||
+        mEvictRef[WCACHE_DISK] == true) {
         return false;
     }
 
