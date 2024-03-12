@@ -156,7 +156,7 @@ enum CmPtState : uint16_t {
 };
 
 struct CmPtInfo {
-    uint64_t version;
+    uint64_t version = 0;
     uint64_t referNum;
     uint16_t ptId;
     CmPtState state;

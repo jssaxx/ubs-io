@@ -55,6 +55,8 @@ public:
 
     void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 
+    void DelEvictQueue(WCacheSliceRefPtr sliceRef);
+
     void RetryEvictSliceQueue(std::list<WCacheSliceRefPtr>::iterator start, std::list<WCacheSliceRefPtr>::iterator end);
 
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);

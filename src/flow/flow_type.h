@@ -9,7 +9,7 @@
 
 namespace ock {
 namespace bio {
-enum FlowType : uint8_t {
+enum FlowType : int32_t {
     FLOW_MEMORY = 1,
     FLOW_DISK = 2,
 };

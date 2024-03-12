@@ -1034,10 +1034,12 @@ BResult MirrorClient::RebuildNodeView(uint64_t &realNodeTimes)
         return ret;
     }
     realNodeTimes = mCurNodeTimes;
-    mLock.LockWrite();
-    mNodeView.clear();
-    mNodeView.swap(nodeView);
-    mLock.UnLock();
+    if (!nodeView.empty()) {
+        mLock.LockWrite();
+        mNodeView.clear();
+        mNodeView.swap(nodeView);
+        mLock.UnLock();
+    }
     CLIENT_LOG_INFO("Cur node times:" << mCurNodeTimes << ", nodeview size:" << mNodeView.size());
     return BIO_OK;
 }
@@ -1051,10 +1053,12 @@ BResult MirrorClient::RebuildPtView(uint64_t &realPtTimes)
         return ret;
     }
     realPtTimes = mCurPtTimes;
-    mLock.LockWrite();
-    mPtView.clear();
-    mPtView.swap(ptView);
-    mLock.UnLock();
+    if (!ptView.empty()) {
+        mLock.LockWrite();
+        mPtView.clear();
+        mPtView.swap(ptView);
+        mLock.UnLock();
+    }
     CLIENT_LOG_INFO("Cur pt times:" << mCurPtTimes << ", ptview size:" << mPtView.size());
     return BIO_OK;
 }

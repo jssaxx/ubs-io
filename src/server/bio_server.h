@@ -211,6 +211,9 @@ public:
 
     inline CmPtInfo GetPtEntry(uint64_t ptId)
     {
+        if (mPtView.find(ptId) == mPtView.end()) {
+            return CmPtInfo();
+        }
         return mPtView[ptId];
     }
 
