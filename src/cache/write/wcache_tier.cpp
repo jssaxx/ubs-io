@@ -79,6 +79,13 @@ void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.UnLock();
 }
 
+void WCacheTier::DelEvictQueue(WCacheSliceRefPtr sliceRef)
+{
+    mEvictSliceQueueLock.Lock();
+    mEvictSliceQueue.remove(sliceRef);
+    mEvictSliceQueueLock.UnLock();
+}
+
 void WCacheTier::RetryEvictSliceQueue(std::list<WCacheSliceRefPtr>::iterator start,
     std::list<WCacheSliceRefPtr>::iterator end)
 {
