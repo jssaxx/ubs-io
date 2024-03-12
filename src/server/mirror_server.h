@@ -42,7 +42,7 @@ public:
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx);
-    BResult Get(GetRequest &req, uint64_t &realLen, uint64_t &addrOffset, ServiceContext &netCtx);
+    BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult Stat(StatRequest &req, ObjStat &objInfo);
@@ -82,6 +82,18 @@ private:
     int32_t HandleGetSlice(ServiceContext &ctx);
     int32_t HandleSyncData(ServiceContext &ctx);
     int32_t HandleGetEvictOffset(ServiceContext &ctx);
+    int32_t HandleFreeMem(ServiceContext &ctx);
+
+    BResult ReaderLocal(const SlicePtr &from, const SlicePtr &to);
+    BResult ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx);
+
+    void InitGetResponse(GetResponse &rsp);
+    BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
+    BResult WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
+        std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
+    BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp);
+    BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
+        ServiceContext &netCtx);
 
 private:
     bool mStarted = false;

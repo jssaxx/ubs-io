@@ -22,6 +22,7 @@ const uint32_t CLUSTER_NODE_SIZE = 32;
 const uint32_t PT_COPY_MAX_SIZE = 2;
 const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
+const uint32_t SLICE_ADDR_SIZE = 4;
 
 typedef struct {
     uint16_t magic;
@@ -178,7 +179,11 @@ typedef struct {
 } GetRequest;
 
 typedef struct {
-    uint64_t addrOffset;
+    bool isAlloc;
+    uint32_t num;
+    uintptr_t address[SLICE_ADDR_SIZE];
+    uint64_t addrOffset[SLICE_ADDR_SIZE];
+    uint64_t addrLen[SLICE_ADDR_SIZE];
     uint64_t realLen;
 } GetResponse;
 
@@ -245,6 +250,13 @@ typedef struct  {
     RequestComm comm;
     uint64_t flowId;
 } GetEvictRequest;
+
+/* Free server memory */
+typedef struct  {
+    RequestComm comm;
+    uint32_t num;
+    uintptr_t addr[SLICE_ADDR_SIZE];
+} FreeMemRequest;
 
 typedef struct {
     int32_t result;
