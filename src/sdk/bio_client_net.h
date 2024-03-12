@@ -75,6 +75,12 @@ public:
         mNetEngine->AsyncCall(target, opcode, req, cb);
     }
 
+    template <typename TReq>
+    BResult SendAsync(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
+    {
+        return mNetEngine->AsyncCallWithoutResponse(targetNodeId, opCode, req);
+    }
+
     inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen,
         NetEngine::Callback &cb)
     {

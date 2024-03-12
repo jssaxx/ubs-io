@@ -302,10 +302,29 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
     } else {
         realLen = rsp.realLen;
-        uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
-        ret = memcpy_s(reinterpret_cast<void *>(value), realLen, reinterpret_cast<void *>(addr), realLen);
-        if (UNLIKELY(ret != 0)) {
-            CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
+        uint64_t off = 0;
+        for (uint32_t idx = 0; idx < rsp.num; idx++) {
+            uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
+            ret = memcpy_s(static_cast<void *>(value + off), rsp.addrLen[idx],
+                           reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
+            if (UNLIKELY(ret != 0)) {
+                CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
+                    rsp.addrLen[idx] << ".");
+                break;
+            }
+            off += rsp.addrLen[idx];
+        }
+
+        if (rsp.isAlloc) {
+            FreeMemRequest freeReq = { req.comm, rsp.num, { 0 } };
+            for (uint32_t idx = 0; idx < rsp.num; idx++) {
+                freeReq.addr[idx] = rsp.address[idx];
+            }
+            auto freeRet = net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID,
+                BIO_OP_SDK_FREE_MEM, freeReq);
+            if (freeRet != BIO_OK) {
+                CLIENT_LOG_ERROR("Send async free request failed, ret:" << ret << ".");
+            }
         }
     }
     return ret;
@@ -374,7 +393,7 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
     req.size = 0;
     req.mrKey = 0;
     ListResponse rsp;
-    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(localPid,
+    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(INVALID_NID,
         BIO_OP_SDK_LIST, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
@@ -390,6 +409,13 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
             stat.size = statInfo[i].size;
             stat.time = statInfo[i].time;
             objs.insert({ stat.key, stat });
+        }
+
+        FreeMemRequest freeReq = { req.comm, 1, { 0 } };
+        freeReq.addr[0] = rsp.addr;
+        ret = net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID, BIO_OP_SDK_FREE_MEM, freeReq);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Send async free request failed, ret:" << ret << ".");
         }
     }
     return BIO_OK;
