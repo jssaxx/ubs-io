@@ -234,7 +234,8 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
     uint32_t index = 0;
     for (auto &ptEntry : ptView) {
-        if ((bar--) != 0) { // Skip the obtained pt
+        if (bar != 0) { // Skip the obtained pt
+            bar--;
             continue;
         }
         if (index == PT_SIZE) {
