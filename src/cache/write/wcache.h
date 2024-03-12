@@ -74,6 +74,11 @@ public:
         return mPtv;
     }
 
+    bool IsSeal()
+    {
+        return mIsSeal;
+    }
+
     using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 
@@ -120,6 +125,8 @@ private:
     UnderFsPtr mUnderFs;
 
     std::atomic<uint64_t> mFlyCnt { 0 };
+
+    bool mIsSeal { false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };
