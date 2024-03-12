@@ -179,6 +179,8 @@ BResult NetEngine::InitCommMemAllocator()
         NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize <<
             ", key:" << mLocalMr->GetLKey() << ".");
     }
+    LOG_INFO("Regist mem: addr:" << mLocalMr->GetAddress() << ", size:" << mOptions.memorySize <<
+        ", Key:" << mLocalMr->GetLKey());
     return result;
 }
 
@@ -209,6 +211,9 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
         return result;
     }
+
+    LOG_INFO("Regist mem: addr:" << (uintptr_t)(mShareAddress) << ", size:" << mOptions.memorySize <<
+        ", Key:" << mLocalMr->GetLKey());
 
     mMrBlockPool = MakeRef<NetBlockPool>();
     if (mMrBlockPool == nullptr) {
