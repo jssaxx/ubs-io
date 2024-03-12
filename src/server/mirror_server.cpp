@@ -257,7 +257,7 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
     rsp.flag = (index == 0) ? 0 : 1;
 }
 
-BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
+BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx)
 {
     std::string key(req.key);
     uint32_t dstNid = req.comm.srcNid;
@@ -268,7 +268,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
         ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" << sliceP->GetIndexInFlow() <<
         ", slice: " << sliceP->ToString() << ", rFlowSize:" << rFlowAddr.size() << ".");
 
-    auto reader = [dstNid, localNid, rMrKey](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    auto reader = [dstNid, localNid, rMrKey, &req, &netCtx](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (dstNid == localNid) {
             return BIO_OK;
         }
@@ -294,7 +294,12 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP)
         for (uint32_t idx = 0; idx < rMrVec.size(); idx++) {
             NetRequest readReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key,
                 lMrVec[idx].size);
-            BResult ret = BioServer::Instance()->GetNetEngine()->SyncRead(static_cast<BioNodeId>(dstNid), readReq);
+            BResult ret;
+            if (req.isExistLocal) {
+                ret = BioServer::Instance()->GetNetEngine()->SyncRead(static_cast<BioNodeId>(dstNid), readReq);
+            } else {
+                ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), readReq);
+            }
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Sync read failed, ret:" << ret << ", dstNid:" << dstNid << ".");
                 BIO_TRACE_END(MIRROR_TRACE_PUT_READ_DATA, ret);
@@ -731,7 +736,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         }
         sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     }
-    BResult result = Put(*req, sliceP);
+    BResult result = Put(*req, sliceP, ctx);
     Reply(ctx, result, nullptr, 0);
     BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, 0);
     return BIO_OK;

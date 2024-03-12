@@ -159,6 +159,7 @@ typedef struct {
     uintptr_t mrAddress;
     uint64_t mrSize;
     uint32_t mrKey;
+    bool isExistLocal;
     uint32_t sliceLen;
     char sliceBuf[0];
 } PutRequest;

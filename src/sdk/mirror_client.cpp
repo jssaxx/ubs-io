@@ -696,6 +696,7 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, uin
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, flowId, offset, index, rsp);
+    req->isExistLocal = true;
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
@@ -722,6 +723,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, uin
     auto tmp = new uint8_t[sizeof(GetSliceResponse)];
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, flowId, offset, index, mr);
+    req->isExistLocal = false;
     return BIO_OK;
 }
 
@@ -792,12 +794,12 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
     uint32_t localIdx = UINT32_MAX;
     std::vector<uint32_t> remoteIdx;
     for (uint32_t idx = 0; idx < quota; idx++) {
-        if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
-            localIdx = idx;
-            continue;
-        }
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING &&
             ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
+            continue;
+        }
+        if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
+            localIdx = idx;
             continue;
         }
         remoteIdx.emplace_back(idx);

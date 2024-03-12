@@ -562,7 +562,8 @@ int32_t Put(PutRequest *req)
         }
         sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     }
-    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP));
+    ServiceContext netCtx;
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx));
 }
 
 int32_t Get(GetRequest *req, GetResponse *rsp)
