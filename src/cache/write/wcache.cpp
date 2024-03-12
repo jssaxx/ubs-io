@@ -131,6 +131,8 @@ BResult WCache::Seal()
 {
     BResult ret;
 
+    mIsSeal = true;
+
     ret = mCacheTiers[WCACHE_MEMORY]->Seal();
     if (ret != BIO_OK) {
         LOG_ERROR("Seal mem cacheTier fail:" << ret << ", flowId:" << mFlowId);

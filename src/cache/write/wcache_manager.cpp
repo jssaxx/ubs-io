@@ -171,6 +171,12 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
         return BIO_NOT_EXISTS;
     }
+
+    if (UNLIKELY(wcache->IsSeal())) {
+        LOG_WARN("Delay retry, flow is sealed:" << sliceKey.flowId);
+        return BIO_INNER_RETRY;
+    }
+
     BIO_TRACE_START(WCACHE_TRACE_GET_SLICE);
     auto ret = wcache->GetWCacheSlice(sliceKey, slice);
     BIO_TRACE_END(WCACHE_TRACE_GET_SLICE, ret);
