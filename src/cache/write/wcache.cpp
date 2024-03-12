@@ -94,6 +94,8 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     ret = memCache->Evict(destSliceRef->GetSlice());
     ChkTrue(ret == BIO_OK, ret, "Failed to evict, key:" << key << " flowId:" << mFlowId);
 
+    memCache->DelEvictQueue(destSliceRef);
+
     return BIO_OK;
 }
 
