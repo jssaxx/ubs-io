@@ -86,6 +86,22 @@ public:
         return mLocalNid;
     }
 
+    inline bool CheckIsOnline(uint16_t nodeId)
+    {
+        CmNodeId node(mLocalNid.groupId, nodeId);
+        bool isOnline = false;
+        mLock.LockRead();
+        if (mNodeView.find(node) != mNodeView.end()) {
+            if (mNodeView[node].status == CM_NODE_NORMAL) {
+                isOnline = true;
+            }
+            mLock.UnLock();
+            return isOnline;
+        }
+        mLock.UnLock();
+        return false;
+    }
+
     inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &GetNodeView()
     {
         return mNodeView;

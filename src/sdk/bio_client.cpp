@@ -49,6 +49,12 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode)
 
 BResult BioClient::BioClientNetPostInit()
 {
+    CheckNodeOnline checkHandle = [this](uint16_t nodeId) -> bool {
+        return mMirror->CheckIsOnline(nodeId);
+    };
+
+    mNetEngine->RegCheckNodeOnline(checkHandle);
+    
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
         mMirror->GetNetProtocol());
 }

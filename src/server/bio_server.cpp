@@ -401,14 +401,40 @@ void BioServer::Connection()
         }
         LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" <<
             it->second.port << ".");
-        ConnectInfo info(mLocalNid.VNodeId(), 0, it->second.id.VNodeId(), it->second.ip, it->second.port, 1);
-        BResult ret = mNetEngine->SyncConnect(info);
+        ConnectInfo info(mLocalNid.VNodeId(), 0, it->second.id.VNodeId(), it->second.ip, it->second.port, NO_1);
+        auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
+            ReConnect(userCtx, ret, info);
+        };
+        BResult ret = mNetEngine->AsyncConnect(info, handler, 0);
         if (ret != BIO_OK) {
             LOG_ERROR("Connect to " << it->first.ToString() << " failed, ret: " << ret << ".");
             failCnt++;
         }
     }
+    sleep(NO_1);
     LOG_INFO("Connection finish, cluster node num:" << mNodeView.size() << ", failed num: " << failCnt << ".");
+}
+
+void BioServer::ReConnect(uintptr_t userCtx, int32_t ret, ConnectInfo &info)
+{
+    if (ret == BIO_OK) {
+        return;
+    }
+    if (!CheckIsOnline(info.peerId.nid)) {
+        LOG_WARN("Target peer id:" << info.peerId.nid << " is offline.");
+        return;
+    }
+    LOG_INFO("ReConnect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
+        ", port:" << info.port << ".");
+    sleep(NO_2);
+    auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
+        ReConnect(userCtx, ret, info);
+    };
+    BResult result = mNetEngine->AsyncConnect(info, handler, 0);
+    if (result != BIO_OK) {
+        LOG_ERROR("Connect to " << info.peerId.nid << " failed, ret: " << result << ".");
+    }
+    return;
 }
 
 BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)
