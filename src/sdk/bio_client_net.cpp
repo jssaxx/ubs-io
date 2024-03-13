@@ -81,15 +81,19 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
             continue;
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
-            node.second.port, NO_3);
+            node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
             ", port:" << info.port << ".");
-        ret = mNetEngine->SyncConnect(info);
+        auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
+            ReConnect(userCtx, ret, info);
+        };
+        ret = mNetEngine->AsyncConnect(info, handler, 0);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
             return ret;
         }
     }
+    sleep(NO_1);
     return BIO_OK;
 }
 
@@ -319,14 +323,43 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
             continue;
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
-            node.second.port, NO_3);
+            node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
             ", port:" << info.port << ".");
-        auto ret = mNetEngine->SyncConnect(info);
+        auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
+            ReConnect(userCtx, ret, info);
+        };
+        auto ret = mNetEngine->AsyncConnect(info, handler, 0);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
             return ret;
         }
     }
     return BIO_OK;
+}
+
+void BioClientNet::ReConnect(uintptr_t userCtx, int32_t ret, ConnectInfo &info)
+{
+    if (ret == BIO_OK) {
+        return;
+    }
+    if (mCheckOnLine == nullptr) {
+        CLIENT_LOG_WARN("Unable check node isOnline, peer id:" << info.peerId.nid << ".");
+        return;
+    }
+    if (!mCheckOnLine(info.peerId.nid)) {
+        CLIENT_LOG_WARN("Target peer id:" << info.peerId.nid << " is offline.");
+        return;
+    }
+    CLIENT_LOG_INFO("ReConnect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
+        ", port:" << info.port << ".");
+    sleep(NO_2);
+    auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
+        ReConnect(userCtx, ret, info);
+    };
+    BResult result = mNetEngine->AsyncConnect(info, handler, 0);
+    if (result != BIO_OK) {
+        CLIENT_LOG_ERROR("Connect to " << info.peerId.nid << " failed, ret: " << result << ".");
+    }
+    return;
 }

@@ -76,7 +76,7 @@ BResult NetConnector::Start()
         return BIO_OK;
     }
 
-    mExeService = ExecutorService::Create(NO_1, NO_2048);
+    mExeService = ExecutorService::Create(NO_4, NO_2048);
     if (UNLIKELY(mExeService == nullptr)) {
         NET_LOG_ERROR("Failed to start execution service for Net connector " << mName << ", probably out of memory.");
         return BIO_ALLOC_FAIL;
