@@ -227,13 +227,11 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_EPERM;
     }
 
-    LoadCallback cb = [&key, &offset, &length, &location, &callback](void *context, BResult result) {
+    LoadCallback cb = [key, &callback](void *context, BResult result) {
         if (result != BIO_OK) {
-            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ", offset:" << offset <<
-                ", length:" << length << ", location:" << location.location[0] << ".");
+            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ".");
         } else {
-            CLIENT_LOG_INFO("Load success, key:" << key << ", offset:" << offset << ", length:" << length <<
-                ", location:" << location.location[0] << ".");
+            CLIENT_LOG_INFO("Load success, key:" << key << ".");
         }
         if (callback != nullptr) {
             callback(context, ToCResult(result));
