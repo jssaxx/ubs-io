@@ -117,6 +117,7 @@ register_systemd()
 export LD_LIBRARY_PATH=$LIB_PATH
 setenforce 0
 cd $BIN_PATH
+/bin/bash ../scripts/executeReady.sh
 ./bio_daemon
 EOF
   chmod 750 $BIN_PATH/executeBio.sh
