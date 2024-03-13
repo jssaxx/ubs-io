@@ -793,7 +793,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
 
     uint32_t localIdx = UINT32_MAX;
     std::vector<uint32_t> remoteIdx;
-    for (uint32_t idx = 0; idx < quota; idx++) {
+    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING &&
             ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
             continue;
@@ -899,13 +899,13 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
     };
     NetEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
 
-    for (uint32_t idx = 0; idx < quota; idx++) {
-        if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
-            DeleteLocal(req, callback);
-            continue;
-        }
+    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING &&
             ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
+            continue;
+        }
+        if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
+            DeleteLocal(req, callback);
             continue;
         }
         DeleteRemote(req, ptEntry, idx, callback);
