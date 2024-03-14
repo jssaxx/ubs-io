@@ -333,6 +333,8 @@ BResult BioServer::BioCacheInit()
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (pid != 0) {
             Cache::Instance().HandleProcBroken(pid);
+        } else {
+            ReConnect(nodeId);
         }
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
@@ -403,7 +405,9 @@ void BioServer::Connection()
             it->second.port << ".");
         ConnectInfo info(mLocalNid.VNodeId(), 0, it->second.id.VNodeId(), it->second.ip, it->second.port, NO_1);
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
-            ReConnect(userCtx, ret, info);
+            if (ret != BIO_OK) {
+                ReConnect(info.peerId.nid);
+            }
         };
         BResult ret = mNetEngine->AsyncConnect(info, handler, 0);
         if (ret != BIO_OK) {
@@ -415,20 +419,21 @@ void BioServer::Connection()
     LOG_INFO("Connection finish, cluster node num:" << mNodeView.size() << ", failed num: " << failCnt << ".");
 }
 
-void BioServer::ReConnect(uintptr_t userCtx, int32_t ret, ConnectInfo &info)
+void BioServer::ReConnect(uint32_t peerId)
 {
-    if (ret == BIO_OK) {
+    std::string ip;
+    uint16_t port;
+    if (!CheckIsOnline(peerId, ip, port)) {
+        LOG_WARN("Target peer id:" << peerId << " is offline.");
         return;
     }
-    if (!CheckIsOnline(info.peerId.nid)) {
-        LOG_WARN("Target peer id:" << info.peerId.nid << " is offline.");
-        return;
-    }
-    LOG_INFO("ReConnect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
-        ", port:" << info.port << ".");
+    LOG_INFO("ReConnect to remote node:" << peerId << ", ip:" << ip << ", port:" << port << ".");
     sleep(NO_2);
+    ConnectInfo info(mLocalNid.VNodeId(), 0, peerId, ip, port, NO_1);
     auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
-        ReConnect(userCtx, ret, info);
+        if (ret != BIO_OK) {
+            ReConnect(info.peerId.nid);
+        }
     };
     BResult result = mNetEngine->AsyncConnect(info, handler, 0);
     if (result != BIO_OK) {

@@ -197,13 +197,15 @@ public:
         return static_cast<uint16_t>(mConfig->GetNetConfig().protocol);
     }
 
-    inline bool CheckIsOnline(uint16_t nodeId)
+    inline bool CheckIsOnline(uint16_t nodeId, std::string &ip, uint16_t &port)
     {
         CmNodeId node(mLocalNid.groupId, nodeId);
         bool isOnline = false;
         if (mNodeView.find(node) != mNodeView.end()) {
             if (mNodeView[node].status == CM_NODE_NORMAL) {
                 isOnline = true;
+                ip = mNodeView[node].ip;
+                port = mNodeView[node].port;
             }
             return isOnline;
         }
@@ -296,7 +298,7 @@ protected:
 private:
     BResult StartRpcService(const NetOptions &opt);
     BResult StartIpcService(const NetOptions &opt);
-    void ReConnect(uintptr_t userCtx, int32_t ret, ConnectInfo &info);
+    void ReConnect(uint32_t peerId);
 
 private:
     bool mStarted = false;

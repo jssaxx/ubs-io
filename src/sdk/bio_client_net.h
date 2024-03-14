@@ -13,7 +13,7 @@
 
 namespace ock {
 namespace bio {
-using CheckNodeOnline = std::function<bool(uint16_t nodeId)>;
+using CheckNodeOnline = std::function<bool(uint16_t nodeId, std::string &ip, uint16_t &port)>;
 namespace net {
 class BioClientNet;
 using BioClientNetPtr = Ref<BioClientNet>;
@@ -116,8 +116,8 @@ private:
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum);
     BResult RecoverIpcService();
     BResult ListenEvent();
-    void ReConnect(uintptr_t userCtx, int32_t ret, ConnectInfo &info);
-    void Recover();
+    void RecoverIpc();
+    void RecoverRpc(uint32_t peerId);
     void StopInner();
 
 private:
@@ -131,6 +131,7 @@ private:
     uint8_t *mShmAddr = nullptr;
     ExecutorServicePtr mEventService = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
+    uint16_t mLocalNid;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }
