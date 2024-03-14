@@ -138,7 +138,7 @@ void Flow::PreLoadSchedule()
     mLock.UnLock();
 
     if (preloadFlag == true) {
-        LOG_INFO("PreLoadSchedule: not ready:" << mType);
+        LOG_INFO("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
         return;
     }
 
