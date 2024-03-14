@@ -289,11 +289,15 @@ bool WCache::IsEmptyEvict()
 {
     if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue() ||
         mEvictRef[WCACHE_MEMORY] == true) {
+        LOG_INFO("Mem: sliceQueue:" << mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue());
+        LOG_INFO("Mem: task:" << mEvictRef[WCACHE_MEMORY]);
         return false;
     }
 
     if (!mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue() ||
         mEvictRef[WCACHE_DISK] == true) {
+        LOG_INFO("Disk: sliceQueue:" << mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue());
+        LOG_INFO("Disk: task:" << mEvictRef[WCACHE_DISK]);
         return false;
     }
 

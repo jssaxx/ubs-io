@@ -47,17 +47,20 @@ BResult NetChannelMgr::RemoveChannel(NetNode dstNid, const ChannelPtr &ch)
 {
     std::unique_lock<std::mutex> locker(lock);
     auto pos = mChannelNodeMap.find(ch->Id());
-    if (pos != mChannelNodeMap.end()) {
-        auto chNode = pos->second;
-        mChannelNodeMap.erase(pos);
-        delete chNode;
+    if (pos == mChannelNodeMap.end()) {
+        return BIO_NOT_EXISTS;
     }
+    auto chNode = pos->second;
+    mChannelNodeMap.erase(pos);
+    delete chNode;
     auto iter = mChannelMgr.find(dstNid.whole);
-    if (iter != mChannelMgr.end()) {
-        auto chInfo = iter->second;
-        mChannelMgr.erase(iter);
-        delete chInfo;
+    if (iter == mChannelMgr.end()) {
+        NET_LOG_WARN("Impossble, not found, with nodeId " << dstNid.nid);
+        return BIO_ERR;
     }
+    auto chInfo = iter->second;
+    mChannelMgr.erase(iter);
+    delete chInfo;
     NET_LOG_INFO("Remove channel with nodeId " << dstNid.nid << " pid " << dstNid.pid <<
         ", channel " << ch->Id() << " success.");
     return BIO_OK;

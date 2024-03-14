@@ -54,6 +54,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
+    mLocalNid = localNid;
     mNetEngine->SetLocalNodeId(localNid);
 
     std::string ipMask;
@@ -85,7 +86,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
             ", port:" << info.port << ".");
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
-            ReConnect(userCtx, ret, info);
+            RecoverRpc(info.peerId.nid);
         };
         ret = mNetEngine->AsyncConnect(info, handler, 0);
         if (ret != BIO_OK) {
@@ -263,7 +264,9 @@ BResult BioClientNet::ListenEvent()
 
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (nodeId == INVALID_NID) {
-            mEventService->Execute([this]() { Recover(); });
+            mEventService->Execute([this]() { RecoverIpc(); });
+        } else {
+            RecoverRpc(nodeId);
         }
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
@@ -271,7 +274,7 @@ BResult BioClientNet::ListenEvent()
     return BIO_OK;
 }
 
-void BioClientNet::Recover()
+void BioClientNet::RecoverIpc()
 {
     constexpr uint16_t RECOVER_INTERAL = 2;
     uint32_t retryCnt = 0;
@@ -314,7 +317,7 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
-
+    mLocalNid = localNid;
     for (auto &node : nodeView) {
         if (node.second.id.VNodeId() == localNid) {
             continue;
@@ -327,7 +330,9 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
             ", port:" << info.port << ".");
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
-            ReConnect(userCtx, ret, info);
+            if (ret != BIO_OK) {
+                RecoverRpc(info.peerId.nid);
+            }
         };
         auto ret = mNetEngine->AsyncConnect(info, handler, 0);
         if (ret != BIO_OK) {
@@ -338,24 +343,25 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
     return BIO_OK;
 }
 
-void BioClientNet::ReConnect(uintptr_t userCtx, int32_t ret, ConnectInfo &info)
+void BioClientNet::RecoverRpc(uint32_t peerId)
 {
-    if (ret == BIO_OK) {
-        return;
-    }
     if (mCheckOnLine == nullptr) {
-        CLIENT_LOG_WARN("Unable check node isOnline, peer id:" << info.peerId.nid << ".");
+        CLIENT_LOG_WARN("Unable check node isOnline, peer id:" << peerId << ".");
         return;
     }
-    if (!mCheckOnLine(info.peerId.nid)) {
-        CLIENT_LOG_WARN("Target peer id:" << info.peerId.nid << " is offline.");
+    std::string ip;
+    uint16_t port;
+    if (!mCheckOnLine(peerId, ip, port)) {
+        CLIENT_LOG_WARN("Target peer id:" << peerId << " is offline.");
         return;
     }
-    CLIENT_LOG_INFO("ReConnect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
-        ", port:" << info.port << ".");
+    CLIENT_LOG_INFO("ReConnect to remote node:" << peerId << ", ip:" << ip << ", port:" << port << ".");
     sleep(NO_2);
+    ConnectInfo info(mLocalNid, static_cast<uint32_t>(getpid()), peerId, ip, port, NO_1);
     auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
-        ReConnect(userCtx, ret, info);
+        if (ret != BIO_OK) {
+            RecoverRpc(info.peerId.nid);
+        }
     };
     BResult result = mNetEngine->AsyncConnect(info, handler, 0);
     if (result != BIO_OK) {

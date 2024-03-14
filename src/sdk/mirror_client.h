@@ -86,7 +86,7 @@ public:
         return mLocalNid;
     }
 
-    inline bool CheckIsOnline(uint16_t nodeId)
+    inline bool CheckIsOnline(uint16_t nodeId, std::string &ip, uint16_t &port)
     {
         CmNodeId node(mLocalNid.groupId, nodeId);
         bool isOnline = false;
@@ -94,6 +94,8 @@ public:
         if (mNodeView.find(node) != mNodeView.end()) {
             if (mNodeView[node].status == CM_NODE_NORMAL) {
                 isOnline = true;
+                ip = mNodeView[node].ip;
+                port = mNodeView[node].port;
             }
             mLock.UnLock();
             return isOnline;
