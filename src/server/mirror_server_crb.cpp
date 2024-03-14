@@ -10,7 +10,7 @@
 
 namespace ock {
 namespace bio {
-constexpr uint16_t CRB_TASK_RETRY_MAX_TIME = 300;
+constexpr uint16_t CRB_TASK_RETRY_MAX_TIME = 36000;
 constexpr uint16_t CRB_TASK_INTERAL_TIME = 5;
 constexpr uint16_t CRB_JOB_RETRY_MAX_TIME = 5;
 constexpr uint16_t CRB_JOB_INTERAL_TIME = 1;
@@ -148,7 +148,6 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
     bool isExist = false;
     if (!JobPreCheck(ptInfo, isForce, isExist)) {
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
-        UpdatePt(ptInfo);
         return;
     }
 
@@ -220,6 +219,17 @@ bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist
         return false;
     }
 
+    CmPtInfo cache;
+    auto ret = Cm::Instance()->GetPtInfo(ptInfo.ptId, cache);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get ptInfo fail:" << ret << ", ptId:" << ptInfo.ptId);
+        return false;
+    }
+
+    if (cache.state != ptInfo.state || cache.version != ptInfo.version) {
+        return false;
+    }
+
     if (mPtInfos.find(ptInfo.ptId) == mPtInfos.end()) {
         isForce = true;
         return true;
@@ -235,17 +245,6 @@ bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist
         }
     }
     mLock.UnLock();
-
-    CmPtInfo cache;
-    auto ret = Cm::Instance()->GetPtInfo(ptInfo.ptId, cache);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Get ptInfo fail:" << ret << ", ptId:" << ptInfo.ptId);
-        return false;
-    }
-
-    if (cache.state != ptInfo.state || cache.version != ptInfo.version) {
-        return false;
-    }
 
     return true;
 }

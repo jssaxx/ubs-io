@@ -401,8 +401,16 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
         return BIO_ERR;
     }
 
-    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
     newChannel->UpCtx(netPayload.srcNodeId.whole);
+
+    if (netPayload.srcNodeId.pid == 0) {
+        NET_LOG_INFO("No needed add channel " << newChannel->Id() << ", peer connected nid " <<
+            netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " <<
+            ipPort << ", payload " << payload);
+        return BIO_OK;
+    }
+
+    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
 
     NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", peer connected nid " <<
         netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " <<
@@ -416,7 +424,10 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
     NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << dstNodeId.nid <<
         " pid " << dstNodeId.pid << ".");
 
-    mChannelMgr->RemoveChannel(dstNodeId, ch);
+    auto ret = mChannelMgr->RemoveChannel(dstNodeId, ch);
+    if (ret != BIO_OK) {
+        return;
+    }
     if (mHandlerBroken != nullptr) {
         mHandlerBroken(dstNodeId.nid, dstNodeId.pid);
     }
