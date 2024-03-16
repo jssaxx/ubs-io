@@ -292,6 +292,21 @@ public:
         return BIO_ERR;
     }
 
+    inline BResult GetLocalDiskStatus(uint16_t diskId, bool &isNormal)
+    {
+        ReadLocker<ReadWriteLock> lock(&mLock);
+        if (mNodeInfos.find(mNodeId) != mNodeInfos.end()) {
+            for (auto& elem : mNodeInfos[mNodeId].disks) {
+                if (elem.diskId == diskId) {
+                    isNormal = (elem.diskStatus == CM_DISK_NORMAL) ? true : false;
+                    return BIO_OK;
+                }
+            }
+            return BIO_ERR;
+        }
+        return BIO_ERR;
+    }
+
     inline BResult CheckPtDegrade(uint16_t ptId, bool &isDegrade)
     {
         isDegrade = false;

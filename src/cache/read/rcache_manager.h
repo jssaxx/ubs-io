@@ -46,7 +46,7 @@ namespace ock {
 
             BResult Delete(uint64_t ptId, const Key &key);
 
-            BResult CreateRCache(uint64_t ptId, uint16_t diskId);
+            BResult CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
             BResult DeleteRCache(uint64_t ptId);
 
@@ -54,18 +54,22 @@ namespace ock {
 
             BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
 
+            BResult ExpiredClearImpl(RCachePtr rCache);
+
             uint64_t GetGCData();
 
             const RCachePtr GetRCacheInstanceByPtId(uint64_t ptId);
-            DEFINE_REF_COUNT_FUNCTIONS
+            DEFINE_REF_COUNT_FUNCTIONS;
         private:
             ReadWriteLock cacheLock;
             std::unordered_map<uint64_t, RCachePtr> cache; // read cache object
 
+            std::atomic<uint32_t> mWorkIndex { 0 };
+
             RCacheEvictPtr rCacheEvict; // read cache evict service
 
             RCacheGCPtr rCacheGCPtr; // read cache gc service
-            DEFINE_REF_COUNT_VARIABLE
+            DEFINE_REF_COUNT_VARIABLE;
         };
     }
 }
