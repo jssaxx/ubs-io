@@ -204,9 +204,7 @@ BResult RCache::Destroy()
 
     for (uint32_t i = 0; i < READ_CACHE_META_HASH_BUCKET_NUM; i++) {
         indexLock[i].Lock();
-        for (auto iter = index[i].begin(); iter != index[i].end();iter++) {
-            index[i].erase(iter);
-        }
+        index[i].clear();
         indexLock[i].UnLock();
     }
 
