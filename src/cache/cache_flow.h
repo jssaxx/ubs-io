@@ -18,6 +18,7 @@ Flow id generate  rule, define flow.h：
 
 namespace ock {
 namespace bio {
+constexpr uint64_t CACHE_FLOW_ID_INNER_MASK = 0xFFFFFFFFFF;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_SHIFT = 40;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT = 11;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_SHIFT = 8;
@@ -58,6 +59,13 @@ public:
     inline static uint64_t GetInnerType(uint64_t flowId)
     {
         return (flowId >> CACHE_FLOW_ID_PREFIX_SHIFT) & CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK;
+    }
+    inline static uint64_t GenOutFlowId(uint64_t flowId)
+    {
+        uint64_t innerFlowId = flowId & CACHE_FLOW_ID_INNER_MASK;
+        uint64_t prefix = flowId >> (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_TYPE_SHIFT);
+        uint64_t outPrefix = prefix << (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_TYPE_SHIFT);
+        return (outPrefix | innerFlowId);
     }
 };
 }

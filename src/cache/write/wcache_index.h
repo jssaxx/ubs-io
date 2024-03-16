@@ -27,6 +27,8 @@ public:
 
     BResult Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 
+    void ExpiredClear(uint64_t ptId);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 private:
     WCacheIndexTable *GetIndexTable(uint64_t ptId);

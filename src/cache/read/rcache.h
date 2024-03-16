@@ -28,7 +28,7 @@ namespace ock {
 
         class RCache {
         public:
-            RCache(uint64_t ptId, uint16_t diskId);
+            RCache(uint64_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex);
 
             ~RCache();
 
@@ -47,9 +47,29 @@ namespace ock {
 
             BResult Delete(const Key &key);
 
+            inline uint64_t GetFlowId()
+            {
+                return mFlowId;
+            }
+
             inline uint64_t GetPtId()
             {
                 return mPtId;
+            }
+
+            inline uint64_t GetPtv()
+            {
+                return mPtv;
+            }
+
+            inline uint32_t GetWorkIndex()
+            {
+                return mWorkIndex;
+            }
+
+            inline void SetDelete()
+            {
+                mIsNormal = false;
             }
 
             inline uint64_t GetCacheData(RCacheTierType tierType)
@@ -94,6 +114,8 @@ namespace ock {
 
             BResult EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData);
 
+            bool IsEmptyEvict();
+
             DEFINE_REF_COUNT_FUNCTIONS;
         private:
             BResult EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData);
@@ -131,8 +153,13 @@ namespace ock {
             std::atomic<uint64_t> cacheData[READ_CACHE_TIER_BUTT];
             std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
 
+            bool mIsNormal { true };
+
+            uint64_t mFlowId;
             uint64_t mPtId;
+            uint64_t mPtv;
             uint16_t mDiskId;
+            uint32_t mWorkIndex;
             SpinLock indexLock[READ_CACHE_META_HASH_BUCKET_NUM];
             std::unordered_map<std::string, RCacheChunkPtr> index[READ_CACHE_META_HASH_BUCKET_NUM];  // read cache index
 

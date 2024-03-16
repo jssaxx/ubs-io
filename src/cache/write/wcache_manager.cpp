@@ -101,28 +101,47 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
         mRetryManager[cacheTier].push_back(wcache);
     };
 
-    auto ret = wcache->Init(mEvictService, mEvictOffset, evictCallback,
-        retryCallback, mRCacheManager);
+    auto ret = wcache->Init(mEvictService, mRCacheManager);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
+
+    wcache->RegOp(mGetLocDiskStatus, mEvictOffset, evictCallback, retryCallback);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
         mWCacheManager.emplace(flowId, wcache);
     }
 
-    LOG_INFO("Create cache, flowId:" << flowId);
+    LOG_INFO("Create cache, procId:" << procId << ", flowId:" << flowId << ", ptId:" << ptId << ", ptv:" << ptv);
 
     return BIO_OK;
 }
 
-BResult WCacheManager::DeleteWCache(uint64_t ptId)
+BResult WCacheManager::DeleteWCache(uint64_t flowId)
 {
+    mWCacheManagerLock.LockWrite();
+    auto iter = mWCacheManager.find(flowId);
+    if (iter == mWCacheManager.end()) {
+        mWCacheManagerLock.UnLock();
+        return BIO_OK;
+    }
+
+    WCachePtr wcache = iter->second;
+    auto ret = wcache->Destroy();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Destroy cache, flowId:" << wcache->GetFlowId() << " fail:" << ret);
+    }
+
+    mWCacheManager.erase(iter);
+    mWCacheManagerLock.UnLock();
+
+    LOG_INFO("Delete cache, procId:" << wcache->GetProcId() << ", flowId:" << wcache->GetFlowId() << ", ptId:" <<
+        wcache->GetPtId() << ", ptv:" << wcache->GetPtv());
     return BIO_OK;
 }
 
 BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
 {
-    uint64_t flowId = GenFlowId(metaFlow->GetFlowId());
+    uint64_t flowId = CacheFlowIdManager::GenOutFlowId(metaFlow->GetFlowId());
     uint64_t ptId = CacheFlowIdManager::GetPtId(flowId);
     uint32_t diskId = metaFlow->GetMediaId();
 
@@ -170,11 +189,6 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
         return BIO_NOT_EXISTS;
-    }
-
-    if (UNLIKELY(wcache->IsSeal())) {
-        LOG_WARN("Delay retry, flow is sealed:" << sliceKey.flowId);
-        return BIO_INNER_RETRY;
     }
 
     BIO_TRACE_START(WCACHE_TRACE_GET_SLICE);
@@ -278,7 +292,7 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     }
 
     auto slice = sliceRef->GetSlice();
-    uint64_t flowId = GenFlowId(slice->GetFlowId());
+    uint64_t flowId = CacheFlowIdManager::GenOutFlowId(slice->GetFlowId());
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("Failed to get flow, flowId:" << flowId << ", key:" << key << ".");
@@ -301,6 +315,12 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     sliceRef->SetState(SLICE_INVALID);
     sliceRef->Release();
     return BIO_OK;
+}
+
+void WCacheManager::RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus)
+{
+    LOG_INFO("Register get loc disk status func");
+    mGetLocDiskStatus = getLocDiskStatus;
 }
 
 void WCacheManager::RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset)
@@ -332,7 +352,7 @@ BResult WCacheManager::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
 
 BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
 {
-    LOG_INFO("Master handle:" << "ptId:" << ptId << ", version:" << ptv);
+    LOG_INFO("Master handle:" << "ptId:" << ptId << ", ptv:" << ptv);
 
     bool isRetry = false;
     uint64_t retryTime;
@@ -355,7 +375,7 @@ BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
         return ret;
     }
 
-    ret = SealOldCache(ptId, ptv);
+    ret = ClearOldCache(ptId, ptv);
     ChkTrueNot(ret == BIO_OK, ret);
 
     return ret;
@@ -376,7 +396,7 @@ BResult WCacheManager::FlushImpl(uint64_t ptId, uint64_t ptv)
 
 BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
-    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", version:" << ptv);
+    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", ptv:" << ptv);
 
     bool isRetry = false;
     uint64_t retryTime;
@@ -399,8 +419,10 @@ BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
         return ret;
     }
 
-    ret = SealOldCache(ptId, ptv);
+    ret = ClearOldCache(ptId, ptv);
     ChkTrueNot(ret == BIO_OK, ret);
+
+    mCacheIndex->ExpiredClear(ptId);
 
     return ret;
 }
@@ -442,9 +464,9 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
     return;
 }
 
-BResult WCacheManager::SealOldCache(uint64_t ptId, uint64_t ptv)
+BResult WCacheManager::ClearOldCache(uint64_t ptId, uint64_t ptv)
 {
-    std::list<WCachePtr> sealList;
+    std::list<uint64_t> clearList;
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -460,15 +482,14 @@ BResult WCacheManager::SealOldCache(uint64_t ptId, uint64_t ptv)
                 ", flowId:" << flowIt.first <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
-            sealList.emplace_back(flowIt.second);
+            clearList.emplace_back(flowIt.first);
         }
     }
     
-    for (const auto &flow : sealList) {
-        auto ret = flow->Seal();
+    for (const auto &flowId : clearList) {
+        auto ret = DeleteWCache(flowId);
         if (ret != BIO_OK) {
-            LOG_ERROR("Seal fail:" << ret << ", flowId::" << flow->GetFlowId());
-            return ret;
+            LOG_ERROR("Clear fail:" << ret << ", flowId::" << flowId);
         }
     }
 
@@ -500,7 +521,7 @@ BResult WCacheManager::HandleProcBroken(uint64_t procId)
         return ret;
     }
 
-    ret = SealProcCache(procId);
+    ret = ClearProcCache(procId);
     ChkTrueNot(ret == BIO_OK, ret);
 
     return ret;
@@ -551,9 +572,9 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
     return;
 }
 
-BResult WCacheManager::SealProcCache(uint32_t procId)
+BResult WCacheManager::ClearProcCache(uint32_t procId)
 {
-    std::list<WCachePtr> sealList;
+    std::list<uint64_t> clearList;
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -566,15 +587,14 @@ BResult WCacheManager::SealProcCache(uint32_t procId)
                 ", flowId:" << flowIt.first << ", procId:" << procId <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
-            sealList.emplace_back(flowIt.second);
+            clearList.emplace_back(flowIt.first);
         }
     }
     
-    for (const auto &flow : sealList) {
-        auto ret = flow->Seal();
+    for (const auto &flowId : clearList) {
+        auto ret = DeleteWCache(flowId);
         if (ret != BIO_OK) {
-            LOG_ERROR("Seal fail:" << ret << ", flowId::" << flow->GetFlowId());
-            return ret;
+            LOG_ERROR("Clear fail:" << ret << ", flowId::" << flowId);
         }
     }
 
@@ -641,15 +661,6 @@ void WCacheManager::RetryEvictThread()
         retryFlows.clear();
         sleep(1);
     }
-}
-
-uint64_t WCacheManager::GenFlowId(uint64_t sliceFlowId)
-{
-    uint64_t ptId = CacheFlowIdManager::GetPtId(sliceFlowId);
-    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
-    uint64_t innerFlowId = sliceFlowId & FLOW_ID_MASK;
-    uint64_t flowId = (flowPrefix << FLOW_ID_SHIFT) | innerFlowId;
-    return flowId;
 }
 }
 }

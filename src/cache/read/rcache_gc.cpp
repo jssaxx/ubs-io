@@ -26,7 +26,11 @@ BResult RCacheGC::GcHandle(uint32_t index, RCacheTierType tier)
     BResult result;
     RCachePtr rCache = nullptr;
 
-    for (auto iter = GCRCache[index].begin(); iter != GCRCache[index].end();iter++) {
+    GCRCacheLock[index].Lock();
+    std::list<RCachePtr> list = GCRCache[index];
+    GCRCacheLock[index].UnLock();
+
+    for (auto iter = list.begin(); iter != list.end();iter++) {
         rCache = *iter;
         result = GCOneRCacheHandle(rCache, tier);
         if (result != BIO_OK) {
@@ -88,31 +92,29 @@ BResult RCacheGC::Initialize()
 
 BResult RCacheGC::Start(RCachePtr rCachePtr)
 {
-    uint32_t index = (workIndex++) % READ_CACHE_GC_SERVICE_MASK;
+    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_GC_SERVICE_MASK;
 
-    GCRCacheLock->Lock();
+    GCRCacheLock[index].Lock();
     GCRCache[index].push_back(rCachePtr);
-    GCRCacheLock->UnLock();
+    GCRCacheLock[index].UnLock();
 
     return BIO_OK;
 }
 
 BResult RCacheGC::Stop(RCachePtr rCachePtr)
 {
-    workStatus.store(false);
+    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_GC_SERVICE_MASK;
 
-    for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
-        for (uint32_t i = 0; i < READ_CACHE_GC_SERVICE_NUM; i++) {
-            works[i]->join();
-        }
+    GCRCacheLock[index].Lock();
+    auto iter = std::find(GCRCache[index].begin(), GCRCache[index].end(), rCachePtr);
+    if (iter != GCRCache[index].end()) {
+        GCRCache[index].erase(iter);
+        GCRCacheLock[index].UnLock();
+        return BIO_OK;
     }
 
-    GCRCacheLock->Lock();
-    for (uint32_t index = 0; index < READ_CACHE_GC_SERVICE_NUM; index++) {
-        GCRCache[index].clear();
-    }
-    GCRCacheLock->UnLock();
-    return BIO_OK;
+    GCRCacheLock[index].UnLock();
+    return BIO_NOT_EXISTS;
 }
 
 BResult RCacheGC::Destroy()

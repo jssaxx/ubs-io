@@ -8,12 +8,16 @@
 #include "flow_manager.h"
 #include "bio_def.h"
 #include "bio_trace.h"
+#include "bio_monotonic.h"
 
 using namespace ock::bio;
 
 RCacheManager::RCacheManager() {}
 
 RCacheManager::~RCacheManager() {}
+
+constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
+constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 
 BResult RCacheManager::Init()
 {
@@ -108,17 +112,18 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
     return cachePtr->Delete(key);
 }
 
-BResult RCacheManager::CreateRCache(uint64_t ptId, uint16_t diskId)
+BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId)
 {
     cacheLock.LockWrite();
     auto iter = cache.find(ptId);
     if (iter != cache.end()) {
-        LOG_INFO("Pt id" << ptId << "have associated read cache object.");
+        LOG_INFO("Exist, ptId:" << ptId << " have associated read cache object.");
         cacheLock.UnLock();
         return BIO_OK;
     }
 
-    auto cacheObj = MakeRef<RCache>(ptId, diskId);
+    uint32_t workIndex = mWorkIndex++;
+    auto cacheObj = MakeRef<RCache>(ptId, ptv, diskId, workIndex);
     if (UNLIKELY(cacheObj == nullptr)) {
         LOG_ERROR("Create read cache object memory failed.");
         cacheLock.UnLock();
@@ -127,7 +132,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint16_t diskId)
 
     auto ret = cacheObj->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Initialize read cache object ptId" << ptId <<" failed, error code"<<ret);
+        LOG_ERROR("Initialize read cache object ptId:" << ptId <<" failed, error code"<<ret);
         cacheLock.UnLock();
         return ret;
     }
@@ -137,17 +142,19 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint16_t diskId)
 
     ret = rCacheEvict->Start(cacheObj);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Start ptId" << ptId << "read cache to evict service failed, error code" << ret);
+        LOG_ERROR("Start ptId:" << ptId << "read cache to evict service failed, error code" << ret);
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
 
     ret = rCacheGCPtr->Start(cacheObj);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Start ptId" << ptId << "read cache to GC service failed, error code" << ret);
+        LOG_ERROR("Start ptId:" << ptId << "read cache to GC service failed, error code" << ret);
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
+
+    LOG_INFO("Create cache, flowId:" << cacheObj->GetFlowId() << ", ptId:" << ptId << ", ptv:" << ptv);
 
     return BIO_OK;
 }
@@ -162,26 +169,16 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
     }
 
     RCachePtr cachePtr = iter->second;
-    auto ret = rCacheEvict->Stop(cachePtr);
-    if (UNLIKELY(ret != BIO_OK)) {
-        cacheLock.UnLock();
-        LOG_ERROR("Stop ptId" << cachePtr->GetPtId() << "read cache evict service failed, error code" << ret);
-        return BIO_ALLOC_FAIL;
-    }
-
-    ret = rCacheGCPtr->Stop(cachePtr);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Stop ptId" << cachePtr->GetPtId() << "read cache GC service failed, error code" << ret);
-        return BIO_ALLOC_FAIL;
-    }
-
-    ret = cachePtr.Get()->Destroy();
+    auto ret = cachePtr->Destroy();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Destroy ptId" << ptId << " read cache object failed, error code " << ret);
     }
 
     cache.erase(iter);
     cacheLock.UnLock();
+
+    LOG_INFO("Delete rcache, flowId:" << cachePtr->GetFlowId() << ", ptId:" << ptId <<
+        ", ptv:" << cachePtr->GetPtv());
     return BIO_OK;
 }
 
@@ -189,57 +186,65 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 {
     LOG_INFO("Recover rcache, flowId:" << dataFlow->GetFlowId());
 
-    BResult ret;
-
-    ret = dataFlow->Seal();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to seal data flow, ret:" << ret << ", flowId:" << dataFlow->GetFlowId());
-        return ret;
-    }
+    dataFlow->Seal();
+    FlowManager::Instance()->DestroyObject(dataFlow->GetFlowType(), dataFlow->GetFlowId());
 
     return BIO_OK;
 }
 
 BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
-    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", version:" << ptv);
+    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", ptv:" << ptv);
 
     RCachePtr rCache = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(rCache == nullptr)) {
-        LOG_INFO("No needed, not exist, ptId:" << ptId << ", version:" << ptv);
+        LOG_INFO("No needed, not exist, ptId:" << ptId << ", ptv:" << ptv);
         return BIO_OK;
     }
 
-    uint64_t evictTotalData;
-    uint64_t haveEvictData;
+    if (rCache->GetPtv() >= ptv) {
+        LOG_INFO("No needed, matched, ptId:" << ptId << ", ptv:" << rCache->GetPtv());
+        return BIO_OK;
+    }
 
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret;
 
-    evictTotalData = rCache->GetCacheData(READ_CACHE_TIER_MEM);
-    ret = rCache->EvictMemData(evictTotalData, haveEvictData);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Expired mem clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+    do {
+        isRetry = false;
+        ret = ExpiredClearImpl(rCache);
+        if (ret != BIO_OK) {
+            retryTime = Monotonic::TimeUs() - startTime;
+            if (retryTime < FLUSH_RETRY_MAX_TIME) {
+                isRetry = true;
+                usleep(FLUSH_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    return DeleteRCache(ptId);
+}
+
+BResult RCacheManager::ExpiredClearImpl(RCachePtr rCache)
+{
+    rCache->SetDelete();
+
+    auto ret = rCacheEvict->Stop(rCache);
+    if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
+        cacheLock.UnLock();
+        LOG_ERROR("Stop ptId" << rCache->GetPtId() << "read cache evict service failed:" << ret);
         return ret;
     }
 
-    LOG_INFO("Expired mem, total:" << evictTotalData << ", hasEvict:" << haveEvictData <<
-        ", ptId:" << ptId << ", version:" << ptv);
-
-    if (evictTotalData != haveEvictData) {
-        return BIO_INNER_RETRY;
-    }
-
-    evictTotalData = rCache->GetCacheData(READ_CACHE_TIER_DISK);
-    ret = rCache->EvictDiskData(evictTotalData, haveEvictData);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Expired disk clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+    ret = rCacheGCPtr->Stop(rCache);
+    if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
+        LOG_ERROR("Stop ptId" << rCache->GetPtId() << "read cache GC service failed:" << ret);
         return ret;
     }
 
-    LOG_INFO("Expired disk, total:" << evictTotalData << ", hasEvict:" << haveEvictData <<
-        ", ptId:" << ptId << ", version:" << ptv);
-
-    if (evictTotalData != haveEvictData) {
+    if (!rCache->IsEmptyEvict()) {
         return BIO_INNER_RETRY;
     }
 

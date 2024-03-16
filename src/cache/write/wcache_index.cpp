@@ -85,6 +85,25 @@ BResult WCacheIndex::Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sli
     return BIO_OK;
 }
 
+void WCacheIndex::ExpiredClear(uint64_t ptId)
+{
+    WCacheIndexTable *table = GetIndexTable(ptId);
+    ChkTrueExNot(table != nullptr);
+
+    for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; bucket++) {
+        WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+        for (auto it = table->sliceIndex[bucket].begin(); it != table->sliceIndex[bucket].end();) {
+            if (it->second->GetSlice() == nullptr) {
+                it = table->sliceIndex[bucket].erase(it);
+                LOG_INFO("Expired clear, ptId:" << ptId << ", key:" << it->first);
+            } else {
+                ++it;
+            }
+        }
+    }
+    return;
+}
+
 WCacheIndexTable *WCacheIndex::GetIndexTable(uint64_t ptId)
 {
     {

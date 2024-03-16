@@ -43,7 +43,7 @@ public:
 
     BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
-    BResult DeleteWCache(uint64_t ptId);
+    BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);
 
@@ -60,6 +60,8 @@ public:
     BResult List(char *prefix, uint16_t ptId, std::unordered_map<std::string, CacheObjStat> &objs);
 
     BResult Delete(uint64_t ptId, const Key &key);
+
+    void RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus);
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
 
@@ -83,14 +85,12 @@ private:
     BResult HandleProcBrokenImpl(uint64_t procId);
 
     void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
-    BResult SealOldCache(uint64_t ptId, uint64_t ptv);
+    BResult ClearOldCache(uint64_t ptId, uint64_t ptv);
 
     void ScanProcCache(uint64_t procId, std::list<WCachePtr> &list);
-    BResult SealProcCache(uint32_t procId);
+    BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
-
-    uint64_t GenFlowId(uint64_t sliceFlowId);
 
 private:
     ReadWriteLock mWCacheManagerLock;
@@ -105,6 +105,7 @@ private:
     ExecutorServicePtr mDiskEvictService { nullptr };
     ExecutorServicePtr mRetryEvictService { nullptr };
 
+    GetLocDiskStatus mGetLocDiskStatus { nullptr };
     GetGlobEvictOffset mEvictOffset { nullptr };
     CheckLocRole mLocRole { nullptr };
 
