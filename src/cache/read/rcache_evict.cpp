@@ -67,7 +67,11 @@ BResult RCacheEvict::EvictHandle(uint32_t index, RCacheTierType tier)
     BResult result;
     RCachePtr rCache = nullptr;
 
-    for (auto iter = evictRCache[index].begin(); iter != evictRCache[index].end();iter++) {
+    evictRCacheLock[index].Lock();
+    std::list<RCachePtr> list = evictRCache[index];
+    evictRCacheLock[index].UnLock();
+
+    for (auto iter = list.begin(); iter != list.end();iter++) {
         rCache = *iter;
         result = EvictOneRCacheHandle(rCache, tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
@@ -134,31 +138,28 @@ BResult RCacheEvict::Destroy()
 
 BResult RCacheEvict::Start(RCachePtr rCachePtr)
 {
-    uint32_t index = (workIndex++) % READ_CACHE_EVICT_SERVICE_MASK;
+    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_MASK;
 
-    evictRCacheLock->Lock();
+    evictRCacheLock[index].Lock();
     evictRCache[index].push_back(rCachePtr);
-    evictRCacheLock->UnLock();
+    evictRCacheLock[index].UnLock();
 
     return BIO_OK;
 }
 
 BResult RCacheEvict::Stop(RCachePtr rCachePtr)
 {
-    workStatus.store(false);
+    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_MASK;
 
-    for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
-        for (uint32_t i = 0; i < READ_CACHE_EVICT_SERVICE_MASK; i++) {
-            works[i]->join();
-        }
+    evictRCacheLock[index].Lock();
+    auto iter = std::find(evictRCache[index].begin(), evictRCache[index].end(), rCachePtr);
+    if (iter != evictRCache[index].end()) {
+        evictRCache[index].erase(iter);
+        evictRCacheLock[index].UnLock();
+        return BIO_OK;
     }
 
-    evictRCacheLock->Lock();
-    for (uint32_t index = 0; index < READ_CACHE_EVICT_SERVICE_NUM; index++) {
-        evictRCache[index].clear();
-    }
-    evictRCacheLock->UnLock();
-
-    return BIO_OK;
+    evictRCacheLock[index].UnLock();
+    return BIO_NOT_EXISTS;
 }
 

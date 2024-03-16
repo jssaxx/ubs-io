@@ -91,11 +91,13 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
 BResult RCacheFlow::Destroy()
 {
     if (mMetaFlow != nullptr) {
+        mMetaFlow->Seal();
         FlowManager::Instance()->DestroyObject(mMetaFlow->GetFlowType(), mMetaFlow->GetFlowId());
         mMetaFlow = nullptr;
     }
 
     if (mDataFlow != nullptr) {
+        mDataFlow->Seal();
         FlowManager::Instance()->DestroyObject(mDataFlow->GetFlowType(), mDataFlow->GetFlowId());
         mDataFlow = nullptr;
     }

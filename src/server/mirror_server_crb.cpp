@@ -160,7 +160,7 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
     }
     if (index == ptInfo.copys.size()) {
         if (isForce || isExist) {
-            ret = JobExpiredClear(ptInfo, false);
+            ret = JobExpiredClear(ptInfo);
             if (ret == BIO_INNER_RETRY) {
                 JobAddRetryList(ptTask, ptInfo);
                 ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
@@ -249,9 +249,9 @@ bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist
     return true;
 }
 
-BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo, bool retained)
+BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)
 {
-    auto ret = Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version, retained);
+    auto ret = Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version);
     if (ret != BIO_OK) {
         LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
@@ -270,7 +270,7 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
     LOG_INFO("Sync data succeed:"
         << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
-    ret = JobExpiredClear(ptInfo, true);
+    ret = JobExpiredClear(ptInfo);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }

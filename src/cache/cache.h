@@ -37,9 +37,7 @@ public:
 
     BResult CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId);
 
-    BResult CreateRCache(uint64_t ptId, uint16_t diskId);
-
-    BResult DeleteCache(uint64_t ptId);
+    BResult CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
@@ -58,6 +56,8 @@ public:
 
     void RegGetLocDiskId(GetLocDiskId getLocDiskId);
 
+    void RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus);
+
     void RegCheckDegrade(CheckDegrade checkDegrade);
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
@@ -70,10 +70,10 @@ public:
 
     BResult Flush(uint64_t ptId, uint64_t ptv);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t ptv, bool retained);
+    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
 
 private:
-    BResult ExtraCreateRCache(uint64_t ptId);
+    BResult ExtraCreateRCache(uint64_t ptId, uint64_t ptv);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
 

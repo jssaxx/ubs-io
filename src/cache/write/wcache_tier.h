@@ -75,7 +75,7 @@ public:
 
     uint64_t GetDataEvictOffset();
 
-    BResult Seal();
+    BResult Destroy();
 
     BResult Evict(const WCacheSlicePtr &slice);
 

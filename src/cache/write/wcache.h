@@ -30,8 +30,10 @@ public:
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-        const GetGlobEvictOffset evictOffset, EvictCallback evictCallback, const RetryCallback retryCallback,
         const RCacheManagerPtr rCacheManager);
+
+    void RegOp(GetLocDiskStatus getLocDiskStatus, const GetGlobEvictOffset evictOffset,
+        EvictCallback evictCallback, const RetryCallback retryCallback);
 
     void Exit();
 
@@ -42,7 +44,7 @@ public:
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
-    BResult Seal();
+    BResult Destroy();
 
     void StartEvictTask(WCacheTierType type);
 
@@ -74,11 +76,6 @@ public:
         return mPtv;
     }
 
-    bool IsSeal()
-    {
-        return mIsSeal;
-    }
-
     using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 
@@ -94,10 +91,13 @@ private:
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster);
 
-    BResult ExpiredClearDisk(WCacheSliceRefPtr sliceRef);
-
     BResult FlushImpl();
-    BResult ExpiredClearImpl();
+
+    BResult ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef);
+    BResult ExpiredClearMem();
+
+    BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
+    BResult ExpiredClearDisk();
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef);
@@ -118,6 +118,7 @@ private:
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
+    GetLocDiskStatus mGetLocDiskStatus { nullptr };
     GetGlobEvictOffset mGlobEvictOffset { nullptr };
 
     RCacheManagerPtr mRCacheManager;
@@ -125,8 +126,6 @@ private:
     UnderFsPtr mUnderFs;
 
     std::atomic<uint64_t> mFlyCnt { 0 };
-
-    bool mIsSeal { false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

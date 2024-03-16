@@ -162,7 +162,7 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
         return ret;
     }
 
-    ret = Cache::Instance().CreateRCache(ptId, diskId);
+    ret = Cache::Instance().CreateRCache(ptId, ptv, diskId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");
     } else {
