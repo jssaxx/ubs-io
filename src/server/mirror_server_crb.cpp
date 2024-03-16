@@ -239,7 +239,7 @@ bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist
     uint16_t index;
     mLock.LockRead();
     for (index = 0; index < mPtInfos[ptInfo.ptId].copys.size(); index++) {
-        if (ptInfo.copys[index].nodeId == localNodeId) {
+        if (mPtInfos[ptInfo.ptId].copys[index].nodeId == localNodeId) {
             isExist = true;
             break;
         }
