@@ -75,25 +75,13 @@ BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16
     return BIO_OK;
 }
 
-BResult Cache::CreateRCache(uint64_t ptId, uint16_t diskId)
+BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId)
 {
     BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
-    auto ret = mRCacheManager->CreateRCache(ptId, diskId);
+    auto ret = mRCacheManager->CreateRCache(ptId, ptv, diskId);
     BIO_TRACE_END(RCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create RCache, ptId:" << ptId);
 
-    return BIO_OK;
-}
-
-BResult Cache::DeleteCache(uint64_t ptId)
-{
-    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
-    mRCacheManager->DeleteRCache(ptId);
-    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, 0);
-
-    BIO_TRACE_START(RCACHE_TRACE_DESTROY_OBJ);
-    mWCacheManager->DeleteWCache(ptId);
-    BIO_TRACE_END(RCACHE_TRACE_DESTROY_OBJ, 0);
     return BIO_OK;
 }
 
@@ -248,6 +236,11 @@ void Cache::RegGetLocDiskId(GetLocDiskId getLocDiskId)
     mGetLocDiskId = getLocDiskId;
 }
 
+void Cache::RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus)
+{
+    mWCacheManager->RegGetLocDiskStatus(getLocDiskStatus);
+}
+
 void Cache::RegCheckDegrade(CheckDegrade checkDegrade)
 {
     mCheckDegrade = checkDegrade;
@@ -275,7 +268,7 @@ BResult Cache::HandleProcBroken(uint32_t procId)
 
 BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 {
-    BResult ret = ExtraCreateRCache(ptId);
+    BResult ret = ExtraCreateRCache(ptId, ptv);
     if (ret != BIO_OK) {
         LOG_ERROR("Extra create rcache fail:" << ret << ", ptId:" << ptId);
         return ret;
@@ -291,24 +284,16 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
     return BIO_OK;
 }
 
-BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv, bool retained)
+BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
     BResult ret;
 
-    if (retained) {
-        ret = ExtraCreateRCache(ptId);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Extra create rcache fail:" << ret << ", ptId:" << ptId);
-            return ret;
-        }
-    } else {
-        BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
-        ret = mRCacheManager->ExpiredClear(ptId, ptv);
-        BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
-            return ret;
-        }
+    BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
+    ret = mRCacheManager->ExpiredClear(ptId, ptv);
+    BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        return ret;
     }
 
     BIO_TRACE_START(WCACHE_TRACE_CLEAR_EXPIRED);
@@ -321,7 +306,7 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv, bool retained)
     return BIO_OK;
 }
 
-BResult Cache::ExtraCreateRCache(uint64_t ptId)
+BResult Cache::ExtraCreateRCache(uint64_t ptId, uint64_t ptv)
 {
     uint16_t diskId;
     BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
@@ -330,7 +315,7 @@ BResult Cache::ExtraCreateRCache(uint64_t ptId)
         return ret;
     }
 
-    ret = CreateRCache(ptId, diskId);
+    ret = CreateRCache(ptId, ptv, diskId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create read cache fail:" << ret << ", ptId:" << ptId);
         return ret;

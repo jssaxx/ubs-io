@@ -63,12 +63,6 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     auto sliceRef = MakeRef<WCacheSliceRef>(dataSlice);
     ChkTrueNot(sliceRef != nullptr, nullptr);
 
-    {
-        mEvictSliceQueueLock.Lock();
-        mEvictSliceQueue.emplace_back(sliceRef);
-        mEvictSliceQueueLock.UnLock();
-    }
-
     return sliceRef;
 }
 
@@ -168,22 +162,18 @@ uint64_t WCacheTier::GetDataEvictOffset()
     return mDataFlow->GetTruncateOffset();
 }
 
-BResult WCacheTier::Seal()
+BResult WCacheTier::Destroy()
 {
-    BResult ret;
-
-    ret = mMetaFlow->Seal();
-    if (ret != BIO_OK) {
-        LOG_ERROR("Seal meta flow fail:" << ret << ", flowId:" << mMetaFlow->GetFlowId() <<
-            ", flowType:" << mMetaFlow->GetFlowType());
-        return ret;
+    if (mMetaFlow != nullptr) {
+        mMetaFlow->Seal();
+        FlowManager::Instance()->DestroyObject(mMetaFlow->GetFlowType(), mMetaFlow->GetFlowId());
+        mMetaFlow = nullptr;
     }
 
-    ret = mDataFlow->Seal();
-    if (ret != BIO_OK) {
-        LOG_ERROR("Seal data flow fail:" << ret << ", flowId:" << mDataFlow->GetFlowId() <<
-            ", flowType:" << mDataFlow->GetFlowType());
-        return ret;
+    if (mDataFlow != nullptr) {
+        mDataFlow->Seal();
+        FlowManager::Instance()->DestroyObject(mDataFlow->GetFlowType(), mDataFlow->GetFlowId());
+        mDataFlow = nullptr;
     }
 
     return BIO_OK;

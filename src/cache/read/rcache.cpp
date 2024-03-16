@@ -14,7 +14,8 @@ using namespace ock::bio;
 
 constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
 
-RCache::RCache(uint64_t ptId, uint16_t diskId):mPtId(ptId), mDiskId(diskId)
+RCache::RCache(uint64_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
+    :mPtId(ptId), mPtv(ptv), mDiskId(diskId), mWorkIndex(workIndex)
 {
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         flow[tier] = nullptr;
@@ -192,12 +193,23 @@ BResult RCache::Initialize()
         }
     }
 
+    mFlowId = CacheFlowIdManager::GenOutFlowId(tempIds[0]);
+
     return BIO_OK;
 }
 
 BResult RCache::Destroy()
 {
     BResult ret;
+
+    for (uint32_t i = 0; i < READ_CACHE_META_HASH_BUCKET_NUM; i++) {
+        indexLock[i].Lock();
+        for (auto iter = index[i].begin(); iter != index[i].end();iter++) {
+            index[i].erase(iter);
+        }
+        indexLock[i].UnLock();
+    }
+
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         if (flow[tier] != nullptr) {
             ret = flow[tier]->Destroy();
@@ -219,14 +231,6 @@ BResult RCache::Destroy()
             truncateQ[tier].PopFront();
         }
         truncateLock[tier].UnLock();
-    }
-
-    for (uint32_t i = 0; i < READ_CACHE_META_HASH_BUCKET_NUM; i++) {
-        indexLock[i].Lock();
-        for (auto iter = index[i].begin(); iter != index[i].end();iter++) {
-            index[i].erase(iter);
-        }
-        indexLock[i].UnLock();
     }
 
     return BIO_OK;
@@ -531,6 +535,11 @@ BResult RCache::Delete(const Key &key)
 
 BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictData)
 {
+    if (!mIsNormal) {
+        haveEvictData = 0;
+        return BIO_OK;
+    }
+
     bool expectval = false;
     if (!mMemEvict.compare_exchange_weak(expectval, true)) {
         haveEvictData = 0ULL;
@@ -545,6 +554,11 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
 
 BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData)
 {
+    if (!mIsNormal) {
+        haveEvictData = 0;
+        return BIO_OK;
+    }
+
     bool expectval = false;
     if (!mDiskEvict.compare_exchange_weak(expectval, true)) {
         haveEvictData = 0ULL;
@@ -555,6 +569,21 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
 
     mDiskEvict.store(false);
     return ret;
+}
+
+bool RCache::IsEmptyEvict()
+{
+    if (mMemEvict == true) {
+        LOG_INFO("Mem: task:" << mMemEvict);
+        return false;
+    }
+
+    if (mDiskEvict == true) {
+        LOG_INFO("Disk: task:" << mDiskEvict);
+        return false;
+    }
+
+    return true;
 }
 
 BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData)
@@ -569,6 +598,9 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
     SlicePtr to;
 
     while (haveEvictData < needEvictData) {
+        if (!mIsNormal) {
+            return BIO_OK;
+        }
         truncateLock[READ_CACHE_TIER_MEM].Lock();
         if (truncateQ[READ_CACHE_TIER_MEM].IsEmpty()) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
@@ -643,6 +675,9 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
 
     RCacheChunkPtr chunk;
     while (haveEvictData < needEvictData) {
+        if (!mIsNormal) {
+            return BIO_OK;
+        }
         truncateLock[READ_CACHE_TIER_DISK].Lock();
         if (truncateQ[READ_CACHE_TIER_DISK].IsEmpty()) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
