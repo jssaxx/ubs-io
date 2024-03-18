@@ -318,8 +318,8 @@ BResult BioServer::BioCacheInit()
     };
     Cache::Instance().RegGetLocDiskId(getLocDiskId);
 
-    GetLocDiskStatus getLocDiskStatus = [](uint16_t diskId, bool &isNormal) -> BResult {
-        return Cm::Instance()->GetLocalDiskStatus(diskId, isNormal);
+    GetLocDiskStatus getLocDiskStatus = [](uint16_t ptId, uint16_t diskId, bool &isNormal) -> void {
+        Cm::Instance()->GetLocalDiskStatus(ptId, diskId, isNormal);
     };
     Cache::Instance().RegGetLocDiskStatus(getLocDiskStatus);
 

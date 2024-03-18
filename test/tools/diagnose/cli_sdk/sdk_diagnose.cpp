@@ -12,6 +12,7 @@
 #include "cli.h"
 #include "htracer.h"
 #include "bio_client.h"
+#include "bio_lock.h"
 #include "sdk_diagnose.h"
 
 #ifdef __cplusplus
@@ -43,6 +44,7 @@ struct PerfTestParam {
 typedef void *(*perfTestRunner)(void *param);
 
 static std::unordered_map<std::string, ObjLocation> gLocation;
+static ReadWriteLock gLocationLock;
 
 static void BioSdkDebugProcess(int argc, char *argv[]) noexcept;
 static void BioSdkDebugHelp(char *command, int detail) noexcept;
@@ -452,7 +454,9 @@ static void *PerfTestPutImpl(void *param)
             break;
         }
         keyIndex++;
+        gLocationLock.LockWrite();
         gLocation.emplace(key, location);
+        gLocationLock.UnLock();
     }
 
     delete[] value;
