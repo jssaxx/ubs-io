@@ -324,8 +324,8 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize)
             failCnt++;
         }
     }
-    if (failCnt == diskList->num) {
-        BDM_LOGERROR(0, "Create devices all disks failed, ret(%d).", ret);
+    if ((diskList->num != 0) && (failCnt == diskList->num)) {
+        BDM_LOGERROR(0, "Create devices all disks failed, disk num(%u), ret(%d).", diskList->num, ret);
         return ret;
     }
     g_bdmStart = 1UL;
