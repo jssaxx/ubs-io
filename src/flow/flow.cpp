@@ -106,7 +106,7 @@ void Flow::PreLoadHandle()
         if (ret != BIO_OK) {
             LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" <<
                 mMediaId << ", chunkSize:" << mChunkSize);
-            HoldClean(NO_MAX_VALUE64, BIO_ERR, false);
+            HoldClean(NO_MAX_VALUE64, ret, false);
             break;
         }
 

@@ -18,6 +18,7 @@
 #include "bio_types.h"
 
 #include "cm_inner.h"
+#include "cm_c.h"
 
 namespace ock {
 namespace bio {
@@ -54,11 +55,6 @@ enum CmStatus : uint16_t {
 enum CmNodeStatus : uint16_t {
     CM_NODE_NORMAL = 0,
     CM_NODE_FAULT = 1,
-};
-
-enum CmDiskStatus : uint16_t {
-    CM_DISK_NORMAL = 0,
-    CM_DISK_FAULT = 1,
 };
 
 struct CmDiskInfo {

@@ -12,6 +12,7 @@
 #include <linux/version.h>
 #include "securec.h"
 #include "dlist.h"
+#include "cm_c.h"
 #include "bdm_threadpool.h"
 #include "bdm_obj.h"
 #include "bdm_allocator.h"
@@ -121,7 +122,7 @@ static uint64_t g_bdmIndex = 0;
 
 static BdmThreadPool g_bdmThreadPool;
 
-uint64_t BdmDiskInnerReadWrite(int32_t fd, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
+uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
 {
     uint64_t remain = len;
     int64_t rc = 0;
@@ -142,15 +143,37 @@ uint64_t BdmDiskInnerReadWrite(int32_t fd, char *buff, uint64_t len, uint64_t of
     return (len - remain);
 }
 
+int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
+{
+    uint64_t rwLen;
+    uint32_t retry = 0;
+    while (retry <= BDM_IO_RETRY_NUM) {
+        rwLen = BdmDiskInnerReadWriteImpl(itemPtr->fd, buff, len, offset, isRead);
+        if (rwLen == len) {
+            return BDM_CODE_OK;
+        }
+        retry++;
+    }
+    BDM_LOGERROR(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
+        itemPtr->name, offset, len);
+
+    int32_t ret = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
+    if (ret != BDM_CODE_OK) {
+        BDM_LOGERROR(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
+    }
+
+    return BDM_CODE_ERR_IO;
+}
+
 int32_t BdmDiskWriteMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t len)
 {
     BdmDiskItem *item = (BdmDiskItem *)itemPtr;
 
     uint64_t rwOffset = item->offset + item->metaOffset + offset;
-    uint64_t rwLen = BdmDiskInnerReadWrite(item->fd, (char*)buf, len, rwOffset, FALSE);
-    if (rwLen != len) {
-        BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).", len, rwLen, item->name);
-        return BDM_CODE_ERR;
+    int ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, FALSE);
+    if (ret != BDM_CODE_OK) {
+        BDM_LOGWARN(0, "Write disk failed, need(%lu) device(%s).", len, item->name);
+        return ret;
     }
     return BDM_CODE_OK;
 }
@@ -160,10 +183,10 @@ int32_t BdmDiskReadMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t 
     BdmDiskItem *item = (BdmDiskItem *)itemPtr;
 
     uint64_t rwOffset = item->offset + item->metaOffset + offset;
-    uint64_t rwLen = BdmDiskInnerReadWrite(item->fd, (char*)buf, len, rwOffset, TRUE);
-    if (rwLen != len) {
-        BDM_LOGWARN(0, "Read disk failed, need(%lu) real(%lu) device(%s).", len, rwLen, item->name);
-        return BDM_CODE_ERR;
+    int ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, TRUE);
+    if (ret != BDM_CODE_OK) {
+        BDM_LOGWARN(0, "Read disk failed, need(%lu) device(%s).", len, item->name);
+        return ret;
     }
     return BDM_CODE_OK;
 }
@@ -212,12 +235,11 @@ int32_t BdmDiskRead(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *b
         return ret;
     }
 
-    int32_t fd = item->fd;
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
-    uint64_t rwLen = BdmDiskInnerReadWrite(fd, (char*)buf, len, rwOffset, TRUE);
-    if (rwLen != len) {
-        BDM_LOGWARN(0, "Read disk failed, need(%lu) real(%lu) device(%s).", len, rwLen, item->name);
-        return BDM_CODE_ERR;
+    ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, TRUE);
+    if (ret != BDM_CODE_OK) {
+        BDM_LOGWARN(0, "Read disk failed, need(%lu) device(%s).", len, item->name);
+        return ret;
     }
     return BDM_CODE_OK;
 }
@@ -233,12 +255,11 @@ int32_t BdmDiskWrite(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *
         return ret;
     }
 
-    int32_t fd = item->fd;
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
-    uint64_t rwLen = BdmDiskInnerReadWrite(fd, (char*)buf, len, rwOffset, FALSE);
-    if (rwLen != len) {
-        BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).", len, rwLen, item->name);
-        return BDM_CODE_ERR;
+    ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, FALSE);
+    if (ret != BDM_CODE_OK) {
+        BDM_LOGWARN(0, "Write disk failed, need(%lu) device(%s).", len, item->name);
+        return ret;
     }
     return BDM_CODE_OK;
 }
@@ -450,9 +471,14 @@ static void BdmCompleteIOHandler(const struct io_event *ioEvent, BdmThreadPool *
             if (BdmDiskRetryIo(bdmPool->ioctx[threadIdx], &iocbP) == 0) {
                 return;
             }
+            BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
+            BDM_LOGERROR(0, "Try to report disk fault, bdmId %u, device %s, chunkId %ld, res %ld res2 %ld",
+                item->bdmId, item->name, bdmIo->chunkId, ioEvent->res, ioEvent->res2);
+
+            CmReportDiskStatus((uint16_t)item->bdmId, CM_DISK_FAULT);
         }
         BDM_LOGERROR(0, "failed chunkId %ld, res %ld res2 %ld", bdmIo->chunkId, ioEvent->res, ioEvent->res2);
-        bdmIo->cb(bdmIo->ctx, -1);
+        bdmIo->cb(bdmIo->ctx, BDM_CODE_ERR_IO);
     } else {
         bdmIo->cb(bdmIo->ctx, 0);
     }
@@ -586,7 +612,7 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
         return ret;
     }
 
-    uint64_t rwLen = BdmDiskInnerReadWrite(item->fd, (char*)&head, item->headSize, item->offset, TRUE);
+    uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char*)&head, item->headSize, item->offset, TRUE);
     if (rwLen != item->headSize) {
         BDM_LOGWARN(0, "Read disk failed, need(%lu) real(%lu) device(%s).", item->headSize, rwLen, item->name);
         return BDM_CODE_ERR;
@@ -690,7 +716,7 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
     }
 
     uint64_t rwOffset = item->offset;
-    uint64_t rwLen = BdmDiskInnerReadWrite(item->fd, (char*)restoreBuff, BDM_RESTORE_META_SIZE, rwOffset, FALSE);
+    uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char*)restoreBuff, BDM_RESTORE_META_SIZE, rwOffset, FALSE);
     if (rwLen != BDM_RESTORE_META_SIZE) {
         BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).",
             BDM_RESTORE_META_SIZE, rwLen, item->name);
@@ -839,6 +865,10 @@ BdmObj *BdmDiskCreate(uint32_t bdmId, uintptr_t createPara)
 
 int32_t BdmDiskDestory(BdmObj *obj)
 {
+    if (obj == NULL) {
+        BDM_LOGINFO(0, "Bdm obj is null, no need to destory.");
+        return BDM_CODE_OK;
+    }
     BDM_LOGINFO(0, "Bdm disk destory, bdm id(%u).", obj->bdmId);
 
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
