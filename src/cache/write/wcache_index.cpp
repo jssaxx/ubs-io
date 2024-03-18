@@ -94,8 +94,8 @@ void WCacheIndex::ExpiredClear(uint64_t ptId)
         WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
         for (auto it = table->sliceIndex[bucket].begin(); it != table->sliceIndex[bucket].end();) {
             if (it->second->GetSlice() == nullptr) {
-                it = table->sliceIndex[bucket].erase(it);
                 LOG_INFO("Expired clear, ptId:" << ptId << ", key:" << it->first);
+                it = table->sliceIndex[bucket].erase(it);
             } else {
                 ++it;
             }

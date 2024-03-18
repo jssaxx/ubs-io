@@ -251,8 +251,8 @@ s32 diag_agentLogin(DIAG_SYS_AGENT_S* pSysAgent)
     pSendMsg->msgHead.agentId = pAgent->agentId;
     pSendMsg->msgHead.msgType = MSG_TYPE_CONTROL;
     pSendMsg->msgHead.msgOption = MSG_CONTROL_OPTION_AGENT_LOGIN;
-    snprintf(pSendMsg->msgData, (ulong)MAX_DIAG_BUFFER_LEN, "%s", pAgent->agentName);
-    pSendMsg->msgHead.dataLen = (u16)ret;
+    ret = snprintf(pSendMsg->msgData, (ulong)MAX_DIAG_AGENT_NAME_LEN, "%s", pAgent->agentName);
+    pSendMsg->msgHead.dataLen = (u16)((ret < 0) ? MAX_DIAG_AGENT_NAME_LEN : ret);
 
     ret = diag_login(pAgent->socketFd, &(pAgent->socketServerAddr), pSendMsg, pRecvMsg);
     if(RETURN_OK != ret)
