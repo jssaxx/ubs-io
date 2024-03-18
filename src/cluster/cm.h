@@ -288,19 +288,28 @@ public:
         return BIO_ERR;
     }
 
-    inline BResult GetLocalDiskStatus(uint16_t diskId, bool &isNormal)
+    inline void GetLocalDiskStatus(uint16_t ptId, uint16_t diskId, bool &isNormal)
     {
         ReadLocker<ReadWriteLock> lock(&mLock);
-        if (mNodeInfos.find(mNodeId) != mNodeInfos.end()) {
-            for (auto& elem : mNodeInfos[mNodeId].disks) {
-                if (elem.diskId == diskId) {
-                    isNormal = (elem.diskStatus == CM_DISK_NORMAL) ? true : false;
-                    return BIO_OK;
-                }
-            }
-            return BIO_ERR;
+        isNormal = false;
+        if (mNodeInfos.find(mNodeId) == mNodeInfos.end()) {
+            return;
         }
-        return BIO_ERR;
+        for (auto& elem : mNodeInfos[mNodeId].disks) {
+            if (elem.diskId == diskId && elem.diskStatus == CM_DISK_FAULT) {
+                return;
+            }
+        }
+        if (mPtInfos.find(ptId) == mPtInfos.end()) {
+            return;
+        }
+        for (auto& elem : mPtInfos[ptId].copys) {
+            if (elem.nodeId == mNodeId.VNodeId() && elem.diskId == diskId) {
+                isNormal = true;
+                return;
+            }
+        }
+        return;
     }
 
     inline BResult CheckPtDegrade(uint16_t ptId, bool &isDegrade)

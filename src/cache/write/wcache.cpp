@@ -152,6 +152,13 @@ BResult WCache::Destroy()
 
 void WCache::StartEvictTask(WCacheTierType type)
 {
+    bool isNormal = false;
+    mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    if (!isNormal) {
+        mEvictRef[type].store(false); // break task
+        return;
+    }
+
     bool expectval = false;
     if (!mEvictRef[type].compare_exchange_weak(expectval, true)) {
         return;
@@ -178,10 +185,10 @@ void WCache::RetryEvictTask(WCacheTierType type)
     }
 
     bool isNormal = false;
-    auto ret = mGetLocDiskStatus(mDiskId, isNormal);
-    if ((ret == BIO_OK) && (!isNormal)) {
+    mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    if (!isNormal) {
         mEvictRef[type].store(false); // break task
-        LOG_WARN("Disk fault, no need, flowId:" << mFlowId);
+        LOG_WARN("Disk fault or Pt rebalance, no need, flowId:" << mFlowId);
         return;
     }
 
@@ -391,22 +398,19 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     ret = mSliceOperator.Copy(metaSlice.Get(), (char *)sliceMeta.get());
     ChkTrueNot(ret == BIO_OK, ret);
 
-    auto &key = sliceMeta->key;
-    ChkTrueNot(sliceMeta->length == slice->GetLength(), BIO_INNER_ERR);
-    auto *value = new char[sliceMeta->length];
-    ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
+    if (sliceRef->GetState() == SLICE_VALID && isMaster) {
+        auto &key = sliceMeta->key;
+        ChkTrueNot(sliceMeta->length == slice->GetLength(), BIO_INNER_ERR);
+        auto *value = new char[sliceMeta->length];
+        ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
-    ret = mSliceOperator.Copy(slice.Get(), value);
-    if (UNLIKELY(ret != BIO_OK)) {
-        delete[] value;
-        LOG_ERROR("failed to copy slice to value. ret:" << ret << ",slice:" << slice->ToString());
-        return ret;
-    }
-
-    if (sliceRef->GetState() == SLICE_VALID) {
-        if (isMaster) {
-            ret = mUnderFs->Put(key, value, sliceMeta->length);
+        ret = mSliceOperator.Copy(slice.Get(), value);
+        if (UNLIKELY(ret != BIO_OK)) {
+            delete[] value;
+            LOG_ERROR("failed to copy slice to value. ret:" << ret << ",slice:" << slice->ToString());
+            return ret;
         }
+        ret = mUnderFs->Put(key, value, sliceMeta->length);
         delete[] value;
         ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
 
