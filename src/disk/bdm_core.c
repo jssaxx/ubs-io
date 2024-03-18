@@ -213,6 +213,11 @@ int32_t BdmResetScanPool(uint32_t bdmId)
     return BDM_CODE_OK;
 }
 
+BdmDiskState BdmGetDiskStatus(uint32_t bdmId)
+{
+    return BdmGetBdmStatus(bdmId);
+}
+
 int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
     uint64_t *bucketOffset)
 {
@@ -311,12 +316,17 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize)
     }
 
     uint32_t diskId;
+    uint32_t failCnt = 0;
     for (diskId = 0; diskId < diskList->num; diskId++) {
         ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, capacity, chunkSize);
         if (ret != BDM_CODE_OK) {
             BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
-            return ret;
+            failCnt++;
         }
+    }
+    if (failCnt == diskList->num) {
+        BDM_LOGERROR(0, "Create devices all disks failed, ret(%d).", ret);
+        return ret;
     }
     g_bdmStart = 1UL;
     BDM_LOGINFO(0, "Bdm start succeed.");

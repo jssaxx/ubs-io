@@ -255,7 +255,11 @@ BResult BioServer::BioCmInit()
     CmDiskInfo diskInfo;
     for (uint32_t index = 0; index < daemonConfig.diskList.size(); index++) {
         diskInfo.diskId = index;
-        diskInfo.diskStatus = CM_DISK_NORMAL;
+        if (BdmGetDiskStatus(index) == BDM_DISK_STATE_NORMAL) {
+            diskInfo.diskStatus = CM_DISK_NORMAL;
+        } else {
+            diskInfo.diskStatus = CM_DISK_FAULT;
+        }
         nodeInfo.disks.push_back(diskInfo);
     }
     result = mCm->RegisterNode(nodeInfo);

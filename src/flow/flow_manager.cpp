@@ -164,6 +164,10 @@ BResult FlowManager::Recover()
     int ret;
 
     for (uint32_t diskId = 0; diskId < diskNum; diskId++) {
+        if (BdmGetDiskStatus(diskId) == BDM_DISK_STATE_FAULT) {
+            LOG_ERROR("Bdm get diskId:" << diskId << " status is not ok.");
+            continue;
+        }
         ret = BdmResetScanPool(diskId);
         if (ret != BDM_CODE_OK) {
             LOG_ERROR("Bdm reset scan fail:" << ret << ", diskId:" << diskId);

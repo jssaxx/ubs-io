@@ -166,6 +166,16 @@ BdmObj *BdmGetBdmObj(uint32_t bdmId)
     return g_bdmObj.list[bdmId].obj;
 }
 
+BdmDiskState BdmGetBdmStatus(uint32_t bdmId)
+{
+    if (bdmId >= BDM_MAX_NUM || g_bdmObj.list[bdmId].used == FALSE || g_bdmObj.list[bdmId].obj == NULL) {
+        BDM_LOGWARN(0, "Invalid bdm id(%u) or bdm is not ok.", bdmId);
+        return BDM_DISK_STATE_FAULT;
+    }
+
+    return BDM_DISK_STATE_NORMAL;
+}
+
 int32_t BdmObjInit(void)
 {
     uint32_t index;
