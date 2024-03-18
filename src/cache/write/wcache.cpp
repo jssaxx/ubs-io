@@ -379,7 +379,7 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     WCacheSlicePtr metaSlice = nullptr;
     auto ret = diskCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
     ChkTrue(ret == BIO_OK, ret,
-        "Failed to to evict from dist to underfs, flowId:" << slice->GetFlowId() << ", index:"
+        "Failed to to evict from disk to underfs, flowId:" << slice->GetFlowId() << ", index:"
         << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
 
     BIO_TRACE_START(WCACHE_TRACE_EVICT2UNDERFS);

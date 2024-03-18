@@ -152,7 +152,11 @@ int32_t Cm::QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx)
     nodeInfo->diskList.type = DISK_TYPE_DRAM;
     for (uint16_t index = 0; index < nodeInfo->diskList.num; index++) {
         nodeInfo->diskList.list[index].diskId = cm->mNode.disks[index].diskId;
-        nodeInfo->diskList.list[index].state = DISK_STATE_NORMAL;
+        if (cm->mNode.disks[index].diskStatus == CM_DISK_NORMAL) {
+            nodeInfo->diskList.list[index].state = DISK_STATE_NORMAL;
+        } else {
+            nodeInfo->diskList.list[index].state = DISK_STATE_FAULT;
+        }
     }
     nodeInfo->netList.num = 0;
     return 0;
@@ -286,4 +290,11 @@ void Cm::ScanPtListAffinity()
     return;
 }
 }
+}
+
+/********************************* CM api implementation in C language **********************/
+using namespace ock::bio;
+int32_t CmReportDiskStatus(uint16_t diskId, CmDiskStatus status)
+{
+    return Cm::Instance()->ReportDiskStatus(diskId, status);
 }

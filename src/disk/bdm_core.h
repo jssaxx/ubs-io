@@ -33,6 +33,7 @@ typedef struct {
 typedef enum {
     BDM_CODE_OK = 0,
     BDM_CODE_ERR = -1,
+    BDM_CODE_ERR_IO = 5,
     BDM_CODE_INVALID_PARAM = -110,
     BDM_CODE_NOT_EXIST = -109,
     BDM_CODE_EXIST = -108,
@@ -42,6 +43,12 @@ typedef enum {
     BDM_CODE_INVALID_BDM_ID = -104,
     BDM_CODE_SCAN_OFF = -103,
 } BdmRetCode;
+
+typedef enum {
+    BDM_DISK_STATE_NORMAL = 0,
+    BDM_DISK_STATE_FAULT  = 1,
+    BDM_DISK_STATE_BUTT
+} BdmDiskState;
 
 #define BDM_IO_CTX_RES_LEN (256UL)
 
@@ -91,6 +98,8 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
 int32_t BdmInit(void);
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize);
+
+BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
 
 #ifdef __cplusplus
 }
