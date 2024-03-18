@@ -48,6 +48,8 @@ typedef struct {
 
 BdmObj *BdmGetBdmObj(uint32_t bdmId);
 
+BdmDiskState BdmGetBdmStatus(uint32_t bdmId);
+
 typedef BdmObj *(*BdmCreateFunc)(uint32_t bdmId, uintptr_t createPara);
 
 typedef int32_t (*BdmDestoryFunc)(BdmObj *obj);
