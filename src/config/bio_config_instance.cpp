@@ -35,7 +35,7 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_1, NO_512));
     AddIntConf(DISK_CAPACITY_SIZE_GB, VIntRange::Create(DISK_CAPACITY_SIZE_GB.first, NO_1, NO_8192));
-    AddStrConf(DISK_CONF_PATH, VStrNotNull::Create(DISK_CONF_PATH.first));
+    AddStrConf(DISK_CONF_PATH);
 
     AddIntConf(EVICT_WATER_LEVEL, VStrNotNull::Create(EVICT_WATER_LEVEL.first));
     AddIntConf(MEM_RESOURCE_QUANTITY_GB, VStrNotNull::Create(MEM_RESOURCE_QUANTITY_GB.first));
@@ -152,7 +152,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
-    if (mDaemonConfig.diskList.size() == 0 || mDaemonConfig.diskList.size() > NO_4) {
+    if (mDaemonConfig.diskList.size() > NO_4) {
         LOG_ERROR("Failed to spilt disk path, " << diskMask);
         return BIO_ERR;
     }

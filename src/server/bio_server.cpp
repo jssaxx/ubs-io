@@ -34,7 +34,8 @@ BioServer::BioServer() noexcept
 #ifdef USE_DEBUG_TOOLS
         { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
 #endif
-        { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr, nullptr },
+        { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioTraceExit, this) },
         { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr, nullptr },
         { "Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this) },
         { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
@@ -125,6 +126,11 @@ BResult BioServer::BioTraceInit()
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");
     return ret;
+}
+
+void BioServer::BioTraceExit()
+{
+    ock::htracer::HTracerExit();
 }
 
 BResult BioServer::BioUnderFsInit()
