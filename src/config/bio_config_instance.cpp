@@ -15,11 +15,13 @@ void BioConfig::LoadDefaultConf()
 
     /* load net config for fs */
     AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma"));
-    AddBoolConf(NET_DATA_BUSY_POLL_MODE);
-    AddIntConf(NET_DATA_WORKERS_COUNT, VIntRange::Create(NET_DATA_WORKERS_COUNT.first, NO_1, NO_16));
+    AddBoolConf(NET_RPC_DATA_BUSY_POLL_MODE);
+    AddIntConf(NET_RPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_RPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
+    AddBoolConf(NET_IPC_DATA_BUSY_POLL_MODE);
+    AddIntConf(NET_IPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_IPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
     /* don't allow empty */
     AddStrConf(NET_DATA_IP_MASK, VIpv4MaskValidator::Create(NET_DATA_IP_MASK.first, false));
-    AddIntConf(NET_DATA_PORT, VIntRange::Create(NET_DATA_PORT.first, NO_2048, NO_65535));
+    AddIntConf(NET_DATA_PORT, VIntRange::Create(NET_DATA_PORT.first, NO_7201, NO_7800));
 
     /* load net config for cm */
     /* don't allow empty */
@@ -28,37 +30,27 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
 
-    AddIntConf(CLIENT_LOCAL_MR_MB, VIntRange::Create(CLIENT_LOCAL_MR_MB.first, NO_256, NO_8192));
-
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug"));
-    AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
+    AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_512));
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_1, NO_512));
-    AddIntConf(DISK_CAPACITY_SIZE_GB, VIntRange::Create(DISK_CAPACITY_SIZE_GB.first, NO_1, NO_8192));
     AddStrConf(DISK_CONF_PATH);
 
-    AddIntConf(EVICT_WATER_LEVEL, VStrNotNull::Create(EVICT_WATER_LEVEL.first));
-    AddIntConf(MEM_RESOURCE_QUANTITY_GB, VStrNotNull::Create(MEM_RESOURCE_QUANTITY_GB.first));
-    AddIntConf(DISK_RESOURCE_QUANTITY_GB, VStrNotNull::Create(DISK_RESOURCE_QUANTITY_GB.first));
-
-    /* load security related config */
-    AddBoolConf(SECURITY_ENABLED);
-    AddStrConf(SECURITY_CONF_PATH, VStrNotNull::Create(SECURITY_CONF_PATH.first));
+    AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
+    AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
+    AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
 
     /* load cluster manager config */
-    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 2, NO_256));
-    AddIntConf(CM_NODE_NUM, VIntRange::Create(CM_NODE_NUM.first, 2, NO_256));
-    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, 2, NO_8192));
-    AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_16, NO_60));
-    AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_1024));
-    AddIntConf(CM_GROUP_ID, VIntRange::Create(CM_GROUP_ID.first, 0, NO_255));
+    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
+    AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
+    AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_600));
     AddStrConf(CM_ZK_HOST, VStrNotNull::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrNotNull::Create(UNDERFS_CEPH_CFG_PATH.first));
+    AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrRealPath::Create(UNDERFS_CEPH_CFG_PATH.first));
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
-    AddStrConf(UNDERFS_CEPH_POOL, VStrNotNull::Create(UNDERFS_CEPH_POOL.first));
+    AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
 }
 
 BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
@@ -95,8 +87,11 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     }
     mNetConfig.dataIp = std::move(goodIps[0]);
 
-    mNetConfig.isBusyLoop = conf->GetBool(NET_DATA_BUSY_POLL_MODE.first);
-    mNetConfig.dataWorkersCnt = conf->GetInt(NET_DATA_WORKERS_COUNT.first);
+    mNetConfig.isRpcBusyLoop = conf->GetBool(NET_RPC_DATA_BUSY_POLL_MODE.first);
+    mNetConfig.rpcDataWorkersCnt = conf->GetInt(NET_RPC_DATA_WORKERS_COUNT.first);
+
+    mNetConfig.isIpcBusyLoop = conf->GetBool(NET_IPC_DATA_BUSY_POLL_MODE.first);
+    mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
 
     std::string protocol = conf->GetStr(NET_DATA_PROTOCOL.first);
     if (protocol == "rdma") {
@@ -116,12 +111,12 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigCm(const ConfigurationPtr &conf)
 {
-    mCmConfig.initialNodeNum = conf->GetInt(CM_INITIAL_NODE_NUM.first);
-    mCmConfig.nodeNum = conf->GetInt(CM_NODE_NUM.first);
+    mCmConfig.initialNodeNum = NO_2;
+    mCmConfig.nodeNum = NO_256;
     mCmConfig.ptNum = conf->GetInt(CM_PT_NUM.first);
     mCmConfig.registeredTimeoutSec = conf->GetInt(CM_NODE_REGISTER_TIMEOUT.first);
     mCmConfig.registeredPermTimeoutSec = conf->GetInt(CM_NODE_REGISTER_PERM_TIMEOUT.first);
-    mCmConfig.groupId = conf->GetInt(CM_GROUP_ID.first);
+    mCmConfig.groupId = NO_U64_0;
     mCmConfig.zkHost = conf->GetStr(CM_ZK_HOST.first);
 
     return BIO_OK;
@@ -145,24 +140,31 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 
     mDaemonConfig.segment = conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE;
     mDaemonConfig.memCap = conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE;
-    mDaemonConfig.diskCap = conf->GetInt(DISK_CAPACITY_SIZE_GB.first) * GB_SIZE;
-    mDaemonConfig.evictWaterLevel = conf->GetInt(EVICT_WATER_LEVEL.first);
-    mDaemonConfig.memResourceQuantity = conf->GetInt(MEM_RESOURCE_QUANTITY_GB.first) * GB_SIZE;
-    mDaemonConfig.diskResourceQuantity = conf->GetInt(DISK_RESOURCE_QUANTITY_GB.first) * GB_SIZE;
+    mDaemonConfig.evictWaterLevel = conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first);
+    mDaemonConfig.memReadWriteRatio = conf->GetStr(MEM_READ_WRITE_RATIO.first);
+    mDaemonConfig.diskReadWriteRatio = conf->GetStr(DISK_READ_WRITE_RATIO.first);
 
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > NO_4) {
-        LOG_ERROR("Failed to spilt disk path, " << diskMask);
+        LOG_ERROR("Failed to spilt disk path, number of paths cannot exceed 4. " << diskMask);
         return BIO_ERR;
     }
+
+    for (std::string &diskPath : mDaemonConfig.diskList) {
+        if (!FileUtil::CanonicalPath(diskPath)) {
+            LOG_ERROR("Disk path not exist, value " << diskPath);
+            return BIO_ERR;
+        }
+        mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
+    }
+
     return BIO_OK;
 }
 
 BResult BioConfig::AutoConfigClient(const ConfigurationPtr &conf)
 {
-    auto reserveSize = conf->GetInt(CLIENT_LOCAL_MR_MB.first);
-    mClientConfig.localMrSize = reserveSize * MB_SIZE;
+    mClientConfig.localMrSize = NO_512 * MB_SIZE;
     return BIO_OK;
 }
 
@@ -256,21 +258,19 @@ uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint64_t level)
     return ori;
 }
 
-uint64_t BioConfig::ModifyConfigMemResourceQuantity(uint64_t quantity)
+std::string BioConfig::ModifyConfigMemReadWriteRatio(const std::string &ratios)
 {
-    auto ori = mDaemonConfig.memResourceQuantity >> 30;
-    auto quantityInBytes = quantity << 30;
-    mDaemonConfig.memResourceQuantity = quantityInBytes;
-    LOG_INFO("config changed:mDaemonConfig.memResourceQuantity(GB), " << ori << " => " << quantity);
+    auto ori = mDaemonConfig.memReadWriteRatio;
+    mDaemonConfig.memReadWriteRatio = ratios;
+    LOG_INFO("config changed:mDaemonConfig.memReadWriteRatio(GB), " << ori << " => " << ratios);
     return ori;
 }
 
-uint64_t BioConfig::ModifyConfigDiskResourceQuantity(uint64_t quantity)
+std::string BioConfig::ModifyConfigDiskReadWriteRatio(const std::string &ratios)
 {
-    auto ori = mDaemonConfig.diskResourceQuantity >> 30;
-    auto quantityInBytes = quantity << 30;
-    mDaemonConfig.diskResourceQuantity = quantityInBytes;
-    LOG_INFO("config changed:mDaemonConfig.diskResourceQuantity(GB), " << ori << " => " << quantity);
+    auto ori = mDaemonConfig.diskReadWriteRatio;
+    mDaemonConfig.diskReadWriteRatio = ratios;
+    LOG_INFO("config changed:mDaemonConfig.diskReadWriteRatio(GB), " << ori << " => " << ratios);
     return ori;
 }
 }

@@ -15,6 +15,7 @@
 #include "bdm_core.h"
 #include "bio_server.h"
 #include "server_diagnose.h"
+#include "bio_functions.h"
 
 using namespace ock::bio;
 
@@ -46,19 +47,19 @@ void diagnose::BioServerCommand::Destroy() noexcept
 static void HandleModifyEvictWaterLevel(uint64_t level)
 {
     auto ori = BioConfig::Instance()->ModifyConfigEvictWaterLevel(level);
-    CLI_PrintBuf("config changed: EvictWaterLevel, %lu => %lu\n",ori,level);
+    CLI_PrintBuf("config changed: EvictWaterLevel, %lu => %lu\n", ori, level);
 }
 
-static void HandleModifyEvictMemQuantity(uint64_t quantity)
+static void HandleModifyMemReadWriteRatio(const std::string &ratios)
 {
-    auto ori = BioConfig::Instance()->ModifyConfigMemResourceQuantity(quantity);
-    CLI_PrintBuf("config changed: MemResourceQuantity(GB), %lu => %lu\n",ori,quantity);
+    auto ori = BioConfig::Instance()->ModifyConfigMemReadWriteRatio(ratios);
+    CLI_PrintBuf("config changed: MemReadWriteRatio, %s => %s\n", ori.c_str(), ratios.c_str());
 }
 
-static void HandleModifyEvictDiskQuantity(uint64_t quantity)
+static void HandleModifyDiskReadWriteRatio(const std::string &ratios)
 {
-    auto ori = BioConfig::Instance()->ModifyConfigDiskResourceQuantity(quantity);
-    CLI_PrintBuf("config changed: DiskResourceQuantity(GB), %lu => %lu\n",ori,quantity);
+    auto ori = BioConfig::Instance()->ModifyConfigDiskReadWriteRatio(ratios);
+    CLI_PrintBuf("config changed: MemReadWriteRatio, %s => %s\n", ori.c_str(), ratios.c_str());
 }
 
 static void BioServerHandleShow(std::vector<std::string> cmds)
@@ -96,11 +97,11 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
 
 static void BioServerDebugHelp(char *command, int detail) noexcept
 {
-    CLI_PrintBuf("change water level:bioserver chgwlv [water_level]\n");
-    CLI_PrintBuf("change memory resource quantity(GB):bioserver chgmq [memory_quantity]\n");
-    CLI_PrintBuf("change disk resource quantity(GB):bioserver chgdq [disk_quantity]\n");
-    CLI_PrintBuf("show:bioserver show [disk]\n");
-    CLI_PrintBuf("exit: exit bioserver\n");
+    CLI_PrintBuf("change water level: bioserver chgwlv [water_level]\n");
+    CLI_PrintBuf("change memory read write ratio: bioserver chgmr [memory ratio]\n");
+    CLI_PrintBuf("change disk read write ratio: bioserver chgdr [disk ratio]\n");
+    CLI_PrintBuf("show: bioserver show [disk]\n");
+    CLI_PrintBuf("exit: exit console\n");
 }
 
 static bool CanConvertToUint64(const std::string &str, uint64_t &val)
@@ -132,37 +133,42 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
     }
 
     std::string cmdType = cmds[0];
-    uint64_t value = 0;
+    std::string ratios;
+    std::string errMsg;
     if (cmdType == "chgwlv") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
             return;
         }
+        uint64_t value = 0;
         if (!CanConvertToUint64(cmds[1], value)) {
-            CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1]);
+            CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1].c_str());
+            return;
+        }
+        if (value < 0 || value > 100) {
+            CLI_PrintBuf("Input parameters failed!, water level %s should in range(0-100)\n", cmds[1].c_str());
             return;
         }
         HandleModifyEvictWaterLevel(value);
-    } else if (cmdType == "chgmq") {
+    } else if (cmdType == "chgmr") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
+        }
+        if (!validateRatios(cmds[1], errMsg)) {
+            CLI_PrintBuf("Input parameters failed!, %s, values %s\n", errMsg.c_str(), cmds[1].c_str());
+            return;
+        }
+        HandleModifyMemReadWriteRatio(cmds[1]);
+    } else if (cmdType == "chgdr") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
             return;
         }
-        if (!CanConvertToUint64(cmds[1], value)) {
-            CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1]);
+        if (!validateRatios(cmds[1], errMsg)) {
+            CLI_PrintBuf("Input parameters failed!, %s, values %s\n", errMsg.c_str(), cmds[1].c_str());
             return;
         }
-        HandleModifyEvictMemQuantity(value);
-    } else if (cmdType == "chgdq") {
-        if (cmds.size() != 2) {
-            CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
-            return;
-        }
-        if (!CanConvertToUint64(cmds[1], value)) {
-            CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1]);
-            return;
-        }
-        HandleModifyEvictDiskQuantity(value);
+        HandleModifyDiskReadWriteRatio(cmds[1]);
     } else if (cmdType == "show") {
         if (cmds.size() < 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());

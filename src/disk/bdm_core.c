@@ -2,6 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2023. All rights reserved.
  */
 
+#include <unistd.h>
 #include "bdm_core.h"
 #include "bdm_common.h"
 #include "bdm_obj.h"
@@ -301,12 +302,11 @@ static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, 
     if (ret != BDM_CODE_OK) {
         return ret;
     }
-    BDM_LOGINFO(0, "DiskId(%u) BdmId(%u) chunkSize(%lu) capacity(%lu).",
-        diskId, bdmId, chunkSize, capacity);
+    BDM_LOGINFO(0, "DiskId(%u) BdmId(%u) chunkSize(%lu) capacity(%lu).", diskId, bdmId, chunkSize, capacity);
     return ret;
 }
 
-int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize)
+int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
 {
     int32_t ret;
 
@@ -318,7 +318,7 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize)
     uint32_t diskId;
     uint32_t failCnt = 0;
     for (diskId = 0; diskId < diskList->num; diskId++) {
-        ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, capacity, chunkSize);
+        ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, diskList->diskCaps[diskId], chunkSize);
         if (ret != BDM_CODE_OK) {
             BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
             failCnt++;
