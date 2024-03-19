@@ -276,6 +276,7 @@ protected:
     BResult BioConfigInit();
     BResult BioLoggerInit(std::string pathName);
     BResult BioTraceInit();
+    void BioTraceExit();
     BResult BioUnderFsInit();
     BResult BioBdmInit();
     void BioBdmExit();
