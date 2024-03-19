@@ -106,8 +106,12 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     BIO_TRACE_START(UFS_TRACE_GET);
     ret = rados_read(mIoCtx, key, value, len, off);
     BIO_TRACE_END(UFS_TRACE_GET, ret);
+    if (ret == -ENOENT) {
+        LOG_WARN("Fail to get object " << key << ", not exist.");
+        return BIO_NOT_EXISTS;
+    }
     if (ret < 0) {
-        LOG_ERROR("Failed to read object, ret:" << ret);
+        LOG_ERROR("Failed to read object " << key << ", ret:" << ret);
         return BIO_ERR;
     }
     return BIO_OK;
@@ -143,8 +147,12 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
     BIO_TRACE_START(UFS_TRACE_STAT);
     ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
+    if (ret == -ENOENT) {
+        LOG_WARN("Fail to stat object " << key << ", not exist.");
+        return BIO_NOT_EXISTS;
+    }
     if (ret < 0) {
-        LOG_ERROR("Failed to stat object, ret:" << ret);
+        LOG_ERROR("Failed to stat object " << key << ", ret:" << ret);
         return BIO_ERR;
     }
     return BIO_OK;
