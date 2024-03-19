@@ -154,12 +154,12 @@ int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, ui
         }
         retry++;
     }
-    BDM_LOGERROR(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
+    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
         itemPtr->name, offset, len);
 
     int32_t ret = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
     if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
+        BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
 
     return BDM_CODE_ERR_IO;
@@ -858,7 +858,7 @@ BdmObj *BdmDiskCreate(uint32_t bdmId, uintptr_t createPara)
     g_bdmDisk.num++;
     BDM_SPIN_UNLOCK(&g_bdmDisk.lock);
 
-    BDM_LOGINFO(0, "Bdm disk create succeed, bdm id(%u) size(%lu).", bdmId, para->length);
+    BDM_LOGINFO(0, "Bdm disk create succeed, bdm id(%u) size(%lu), fd(%d).", bdmId, para->length, item->fd);
 
     return obj;
 }
