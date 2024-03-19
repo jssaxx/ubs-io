@@ -294,13 +294,15 @@ public:
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
-        return ch->Read(req, nullptr);
+        ret = ch->Read(req, nullptr);
+        return NetResult(ret);
     }
 
     BResult SyncRead(ChannelPtr ch, const NetRequest &req)
     {
         using namespace ock::hcom;
-        return ch->Read(req, nullptr);
+        auto ret = ch->Read(req, nullptr);
+        return NetResult(ret);
     }
 
     BResult SyncWrite(const BioNodeId &targetNodeId, const NetRequest &req)
@@ -312,13 +314,15 @@ public:
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
-        return ch->Write(req, nullptr);
+        ret = ch->Write(req, nullptr);
+        return NetResult(ret);
     }
 
     BResult SyncWrite(ChannelPtr ch, const NetRequest &req)
     {
         using namespace ock::hcom;
-        return ch->Write(req, nullptr);
+        auto ret = ch->Write(req, nullptr);
+        return NetResult(ret);
     }
 
     BResult RegisterNewRequestHandler(uint32_t opCode, const NewRequestHandler &h)
@@ -414,7 +418,7 @@ private:
             case SER_TIMEOUT:
                 return BIO_NET_RETRY;
             default:
-                return BIO_NET_ERROR;
+                return BIO_NET_RETRY; // hcom错误码太多，SDK端IO遇到网络IO异常时需要进行重试处理
         }
     }
 

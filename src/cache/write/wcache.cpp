@@ -360,7 +360,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     ChkTrueNot(ret == BIO_OK, ret);
 
     LOG_INFO("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
-        offset << ", length:" << length << ", FlyCnt:" << --mFlyCnt);
+        offset << ", length:" << length);
 
     // when update slice finished, then release resource of flow.
     IncreaseRef();
