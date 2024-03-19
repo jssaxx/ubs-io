@@ -13,44 +13,36 @@ namespace bio {
 const auto LOG_LEVEL = std::make_pair("bio.log.level", "info");
 
 const auto NET_DATA_PROTOCOL = std::make_pair("bio.net.data.protocol", "tcp");
-const auto NET_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.data.busy_polling_mode", false);
-const auto NET_DATA_WORKERS_COUNT = std::make_pair("bio.net.data.workers_count", 4);
+const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.rpc.data.busy_polling_mode", false);
+const auto NET_RPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.rpc.data.workers_count", 4);
+const auto NET_IPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.ipc.data.busy_polling_mode", false);
+const auto NET_IPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.ipc.data.workers_count", 4);
 const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/24");
-const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 9898);
+const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("bio.net.request.executor.queue.size", 1024);
 
-const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
-const auto CM_NODE_NUM = std::make_pair("bio.cm.nodes_count", 2);
 const auto CM_PT_NUM = std::make_pair("bio.cm.pts_count", 16);
-const auto CM_GROUP_ID = std::make_pair("bio.cm.group.id", 1);
 const auto CM_ZK_HOST = std::make_pair("bio.cm.zk_host", "127.0.0.1:2181");
 const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("bio.cm.register_timeout_sec", 30);
 const auto CM_NODE_REGISTER_PERM_TIMEOUT = std::make_pair("bio.cm.register_perm_timeout_sec", 60);
 
-const auto CLIENT_LOCAL_MR_MB = std::make_pair("bio.client.buffer.size_in_mb", 512);
+const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
-const auto SECURITY_ENABLED = std::make_pair("bio.security.enabled", false);
-const auto SECURITY_CONF_PATH = std::make_pair("bio.security.conf", "bio_security.conf");
-
-const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 2);
-
-const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 8);
-
-const auto DISK_CAPACITY_SIZE_GB = std::make_pair("bio.disk.size_in_gb", 8);
+const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
-const auto EVICT_WATER_LEVEL = std::make_pair("bio.cache.evict_water_level", 90);
+const auto RCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.rcache.evict_water_level", 90);
 
-const auto MEM_RESOURCE_QUANTITY_GB = std::make_pair("bio.cache.mem_resource_quantity_in_gb", 10);
+const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio", "5:5");
 
-const auto DISK_RESOURCE_QUANTITY_GB = std::make_pair("bio.cache.disk_resource_quantity_in_gb", 10240);
+const auto DISK_READ_WRITE_RATIO = std::make_pair("bio.cache.disk_read_write_ratio", "5:5");
 
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
 const auto UNDERFS_CEPH_USER = std::make_pair("bio.underfs.ceph.user", "client.admin");
-const auto UNDERFS_CEPH_POOL = std::make_pair("bio.underfs.ceph.pool", "jfspool");
+const auto UNDERFS_CEPH_POOL = std::make_pair("bio.underfs.ceph.pool", "0:jfspool1,1:jfspool2");
 
 class BioConfig;
 using BioConfigPtr = Ref<BioConfig>;
@@ -62,8 +54,10 @@ public:
         std::string dataIp = "127.0.0.1";
         uint16_t dataPort = 9998;
         uint16_t protocol = 1;
-        bool isBusyLoop = false;
-        uint16_t dataWorkersCnt = 4;
+        bool isRpcBusyLoop = false;
+        uint16_t rpcDataWorkersCnt = 4;
+        bool isIpcBusyLoop = false;
+        uint16_t ipcDataWorkersCnt = 4;
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
     };
@@ -81,20 +75,20 @@ public:
 
     struct DaemonConfig {
         int32_t logLevel = 0;
-        uint32_t segment = 2097152; // 2MB
-        uint64_t memCap = 8589934592; // 8GB
-        uint64_t diskCap = 8589934592; // 8GB
+        uint32_t segment = 4194304;    // 4MB
+        uint64_t memCap = 53687091200; // 50GB
         uint64_t evictWaterLevel = 90;
-        uint64_t memResourceQuantity = 10737418240; // 10GB
-        uint64_t diskResourceQuantity = 10995116277760; // 10TB
+        std::string memReadWriteRatio = "5:5";
+        std::string diskReadWriteRatio = "5:5";
         std::vector<std::string> diskList;
+        std::vector<int64_t> diskCaps;
     };
 
     struct ClientConfig {
         uint64_t localMrSize = 0;
     };
 
-    enum UnderFsType{
+    enum UnderFsType {
         UNDER_FS_LOCAL_FILE,
         UNDER_FS_CEPH
     };
@@ -108,7 +102,8 @@ public:
     };
 
 public:
-    static const BioConfigPtr &Instance() {
+    static const BioConfigPtr &Instance()
+    {
         static auto instance = MakeRef<BioConfig>();
         return instance;
     }
@@ -144,9 +139,9 @@ public:
 
     uint64_t ModifyConfigEvictWaterLevel(uint64_t level);
 
-    uint64_t ModifyConfigMemResourceQuantity(uint64_t quantity);
+    std::string ModifyConfigMemReadWriteRatio(const std::string &ratios);
 
-    uint64_t ModifyConfigDiskResourceQuantity(uint64_t quantity);
+    std::string ModifyConfigDiskReadWriteRatio(const std::string &ratios);
 
 private:
     void DumpToLog();
@@ -169,7 +164,7 @@ private:
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
-    bool mInited { false };
+    bool mInited{ false };
 };
 }
 }
