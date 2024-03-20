@@ -9,10 +9,12 @@
 #include <sys/resource.h>
 #include "htracer.h"
 #include "bio_client.h"
-#include "server_diagnose.h"
 #include "cli.h"
 #include "bio_config_instance.h"
 #include "bio_log.h"
+#include "bdm_core.h"
+#include "bio_server.h"
+#include "server_diagnose.h"
 
 using namespace ock::bio;
 
@@ -59,12 +61,46 @@ static void HandleModifyEvictDiskQuantity(uint64_t quantity)
     CLI_PrintBuf("config changed: DiskResourceQuantity(GB), %lu => %lu\n",ori,quantity);
 }
 
+static void BioServerHandleShow(std::vector<std::string> cmds)
+{
+    auto cType = cmds[1].c_str();
+    std::string cmdType(cType);
+    if (cmdType == "disk") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        auto &daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+        CmDiskStatus diskStatus;
+        CLI_PrintBuf("Disk Info:\n");
+        CLI_PrintBuf("id        name                status    totalCapacity       usedCapacity \n");
+        for (uint32_t i = 0; i < daemonConfig.diskList.size(); i++) {
+            if (BioServer::Instance()->GetDiskStatusFromNodeView(i, diskStatus) != BIO_OK) {
+                continue;
+            }
+            if (diskStatus == CM_DISK_FAULT) {
+                CLI_PrintBuf("%-10d%-20s%-10s \n", i, daemonConfig.diskList[i].c_str(), "fault");
+                continue;
+            }
+            uint64_t totalCap = 0;
+            uint64_t usedCap = 0;
+            BdmGetCapacity(i, &totalCap, &usedCap);
+            CLI_PrintBuf("%-10d%-20s%-10s%-20llu%-20llu \n",
+                i, daemonConfig.diskList[i].c_str(), "normal", totalCap, usedCap);
+        }
+        return;
+    } else {
+        CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+    }
+}
+
 static void BioServerDebugHelp(char *command, int detail) noexcept
 {
     CLI_PrintBuf("change water level:bioserver chgwlv [water_level]\n");
     CLI_PrintBuf("change memory resource quantity(GB):bioserver chgmq [memory_quantity]\n");
     CLI_PrintBuf("change disk resource quantity(GB):bioserver chgdq [disk_quantity]\n");
-    CLI_PrintBuf("exit: exit console\n");
+    CLI_PrintBuf("show:bioserver show [disk]\n");
+    CLI_PrintBuf("exit: exit bioserver\n");
 }
 
 static bool CanConvertToUint64(const std::string &str, uint64_t &val)
@@ -100,27 +136,39 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
     if (cmdType == "chgwlv") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
+            return;
         }
         if (!CanConvertToUint64(cmds[1], value)) {
             CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1]);
+            return;
         }
         HandleModifyEvictWaterLevel(value);
     } else if (cmdType == "chgmq") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
+            return;
         }
         if (!CanConvertToUint64(cmds[1], value)) {
             CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1]);
+            return;
         }
         HandleModifyEvictMemQuantity(value);
     } else if (cmdType == "chgdq") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
+            return;
         }
         if (!CanConvertToUint64(cmds[1], value)) {
             CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1]);
+            return;
         }
         HandleModifyEvictDiskQuantity(value);
+    } else if (cmdType == "show") {
+        if (cmds.size() < 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
+            return;
+        }
+        BioServerHandleShow(cmds);
     } else if (cmdType == "exit") {
         return;
     } else {

@@ -218,6 +218,21 @@ public:
         return mNodeView;
     }
 
+    BResult GetDiskStatusFromNodeView(uint16_t diskId, CmDiskStatus &diskStatus)
+    {
+        if (mNodeView.find(mLocalNid) != mNodeView.end()) {
+            CmNodeInfo nodeInfo = mNodeView[mLocalNid];
+            for (uint32_t idx = 0; idx < nodeInfo.disks.size(); idx++) {
+                if (nodeInfo.disks[idx].diskId == diskId) {
+                    diskStatus = nodeInfo.disks[idx].diskStatus;
+                    return BIO_OK;
+                }
+            }
+        }
+        LOG_ERROR("Get disk status failed, diskId " << diskId);
+        return BIO_ERR;
+    }
+
     inline std::map<uint16_t, CmPtInfo> GetPtView(uint64_t *curPtTimes)
     {
         *curPtTimes = mCurPtTimes;
