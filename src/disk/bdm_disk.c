@@ -633,6 +633,12 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
         return BDM_CODE_ERR;
     }
 
+    rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char*)&head, item->headSize, item->offset, FALSE);
+    if (rwLen != item->headSize) {
+        BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).", item->headSize, rwLen, item->name);
+        return BDM_CODE_ERR;
+    }
+
     return BDM_CODE_OK;
 }
 
