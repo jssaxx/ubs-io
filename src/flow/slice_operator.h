@@ -14,6 +14,7 @@ class SliceOperator {
     virtual BResult Copy(const SlicePtr &from, const SlicePtr &to) = 0;
     virtual BResult Copy(const char *from, const SlicePtr &to) = 0;
     virtual BResult Copy(const SlicePtr &from, char *to) = 0;
+    virtual BResult Copy(const char *from, uint64_t start, uint32_t len, const SlicePtr &to) = 0;
 };
 }
 }

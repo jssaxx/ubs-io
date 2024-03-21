@@ -59,6 +59,7 @@ include_directories(
         ${SRC_DIR}/cache
         ${SRC_DIR}/cache/read
         ${SRC_DIR}/cache/write
+        ${SRC_DIR}/cache/overloadctrl
         ${SRC_DIR}/cluster
 		${SRC_DIR}/cluster/common
         ${SRC_DIR}/config
