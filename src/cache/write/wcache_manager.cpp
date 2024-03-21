@@ -71,11 +71,12 @@ void WCacheManager::Exit()
     mRetryEvictService->Stop();
 }
 
-BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t &flowId)
+BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId)
 {
     BIO_TRACE_START(WCACHE_TRACE_ALLOC_ID);
     auto flowIdAllocator = FlowIdAllocator::Instance();
-    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
+    uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, ptv,
+        CACHE_FLOW_ID_PREFIX_TYPE_WCACHE, 0);
     flowId = flowIdAllocator->GenerateFlowId(flowPrefix);
     BIO_TRACE_END(WCACHE_TRACE_ALLOC_ID, 0);
     return BIO_OK;
@@ -104,7 +105,7 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
     auto ret = wcache->Init(mEvictService, mRCacheManager);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
-    wcache->RegOp(mGetLocDiskStatus, mEvictOffset, evictCallback, retryCallback);
+    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);

@@ -57,7 +57,7 @@ public:
     BResult Load(LoadRequest &req);
     BResult SyncData(SyncDataRequest &req);
 
-    BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset);
+    BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
 
     BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
