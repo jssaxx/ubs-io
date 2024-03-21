@@ -28,11 +28,9 @@ public:
         return cacheInstance;
     }
 
-    BResult RegisterCacheClient(uint64_t &cacheId);
-
-    inline BResult AllocateFlowId(uint64_t cacheId, uint16_t ptId, uint64_t &flowId)
+    inline BResult AllocateFlowId(uint64_t cacheId, uint16_t ptId, uint64_t ptv, uint64_t &flowId)
     {
-        return mWCacheManager->AllocateFlowId(ptId, flowId);
+        return mWCacheManager->AllocateFlowId(ptId, ptv, flowId);
     }
 
     BResult CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId);

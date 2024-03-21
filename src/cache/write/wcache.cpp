@@ -35,10 +35,11 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
     return BIO_OK;
 }
 
-void WCache::RegOp(GetLocDiskStatus getLocDiskStatus, const GetGlobEvictOffset evictOffset,
+void WCache::RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
     EvictCallback evictCallback, const RetryCallback retryCallback)
 {
     mGetLocDiskStatus = getLocDiskStatus;
+    mLocRole = locRole;
     mGlobEvictOffset = evictOffset;
     mEvictCallback = std::move(evictCallback);
     mRetryCallback = std::move(retryCallback);
@@ -476,12 +477,21 @@ BResult WCache::EvictAllMemSliceToDisk()
 BResult WCache::EvictAllDiskSliceToUnderFs()
 {
     bool isMaster;
-    uint64_t globEvictOffset;
-    auto ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, isMaster, globEvictOffset);
-    if (ret != BIO_OK) {
-        LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
-        mRetryCallback(mFlowId, WCACHE_DISK);
-        return ret;
+    auto ret = mLocRole(static_cast<uint16_t>(mPtId), isMaster);
+    ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << mPtId);
+
+    if (mIsMaster || isMaster) {
+        mIsMaster = isMaster = true; // 分区再均衡时，旧分区主需要继续淘汰到后端存储。
+    }
+
+    uint64_t globEvictOffset = NO_MAX_VALUE64;
+    if (!isMaster) {
+        auto ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, globEvictOffset);
+        if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
+            LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
+            mRetryCallback(mFlowId, WCACHE_DISK);
+            return ret;
+        }
     }
 
     auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();

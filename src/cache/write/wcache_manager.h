@@ -17,7 +17,6 @@
 
 namespace ock {
 namespace bio {
-constexpr uint64_t WRITE_CACHE_EVICT_STEP_SIZE = 134217728; // 128MB
 constexpr uint64_t WRITE_CACHE_EVICT_PERIOD = 5; // 5秒
 
 class WCacheManager;
@@ -39,7 +38,7 @@ public:
     void Exit();
 
 public:
-    BResult AllocateFlowId(uint16_t ptId, uint64_t &flowId);
+    BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
     BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
 

@@ -32,7 +32,7 @@ public:
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
         const RCacheManagerPtr rCacheManager);
 
-    void RegOp(GetLocDiskStatus getLocDiskStatus, const GetGlobEvictOffset evictOffset,
+    void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
         EvictCallback evictCallback, const RetryCallback retryCallback);
 
     void Exit();
@@ -119,11 +119,14 @@ private:
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
     GetLocDiskStatus mGetLocDiskStatus { nullptr };
+    CheckLocRole mLocRole { nullptr };
     GetGlobEvictOffset mGlobEvictOffset { nullptr };
 
     RCacheManagerPtr mRCacheManager;
 
     UnderFsPtr mUnderFs;
+
+    bool mIsMaster { false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

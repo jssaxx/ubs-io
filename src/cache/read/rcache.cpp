@@ -154,7 +154,8 @@ BResult RCache::Initialize()
 
     uint32_t flowPrefix;
     for (uint32_t i = RCACHE_FLOW_MEM_META_PREFIX; i <= RCACHE_FLOW_DISK_DATA_PREFIX; i++) {
-        flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(mPtId, CACHE_FLOW_ID_PREFIX_TYPE_RCACHE, i);
+        flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(mPtId, mPtv,
+            CACHE_FLOW_ID_PREFIX_TYPE_RCACHE, i);
         prefix.push_back(flowPrefix);
     }
 

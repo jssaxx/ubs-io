@@ -176,7 +176,7 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
 
 BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId)
 {
-    auto ret = Cache::Instance().AllocateFlowId(procId, ptId, flowId);
+    auto ret = Cache::Instance().AllocateFlowId(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc flow id failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
         return ret;
@@ -713,28 +713,13 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
     return BIO_OK;
 }
 
-BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset)
+BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset)
 {
-    auto ret = Cm::Instance()->CheckLocalRole(ptId, isMaster);
+    auto ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
-
-    if (isMaster) {
-        ret = Cache::Instance().GetEvictOffset(flowId, flowOffset);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Get evict offset failed:" << ret << ", ptId:" << ptId << ", flowId:" << flowId);
-            return ret;
-        }
-        flowOffset += WRITE_CACHE_EVICT_STEP_SIZE;
-        LOG_INFO("Master:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" <<
-            flowOffset);
-        return BIO_OK;
-    } else {
-        ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
-        ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
-        LOG_INFO("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" <<
-            flowOffset);
-        return BIO_OK;
-    }
+    LOG_INFO("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" <<
+        flowOffset);
+    return BIO_OK;
 }
 
 BResult MirrorServer::GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset)
