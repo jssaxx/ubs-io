@@ -68,6 +68,41 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
     }
 }
 
+BResult CacheSliceOperator::Copy(const char *from, uint64_t start, uint32_t len, const SlicePtr &to)
+{
+    ChkTrueNot(Validate(to), BIO_INVALID_PARAM);
+    ChkTrueNot(from != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(to->GetFlowType() == FLOW_MEMORY, BIO_INVALID_PARAM);
+
+    auto &toAddrs = to->GetAddrs();
+    uint64_t offset1 = start;
+    uint64_t offset2 = 0;
+    uint32_t len1 = len;
+    uint64_t offset = 0;
+    for (auto toAddr : toAddrs) {
+        if (offset + toAddr.chunkLen <= offset1) {
+            offset += toAddr.chunkLen;
+            continue;
+        }
+        uint64_t boff = offset1 - offset;
+        uint64_t blen = toAddr.chunkLen - boff;
+        blen = (len1 > blen) ? blen : len1;
+        if (blen == 0) {
+            break;
+        }
+        len1 -= blen;
+        auto ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset + boff), blen,
+            reinterpret_cast<void *>(const_cast<char *>(from + offset2)), blen);
+        ChkTrue(ret == BIO_OK, ret,
+            "Failed to copy data from memory address:" << from + offset2 << " to memory address:" <<
+            toAddr.chunkId + toAddr.chunkOffset + boff << " by length:" << blen);
+        offset += toAddr.chunkLen;
+        offset1 = offset;
+        offset2 += blen;
+    }
+    return BIO_OK;
+}
+
 BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
 {
     ChkTrueNot(Validate(from), BIO_INVALID_PARAM);
