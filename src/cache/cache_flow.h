@@ -18,13 +18,16 @@ Flow id generate  rule, define flow.h：
 
 namespace ock {
 namespace bio {
-constexpr uint64_t CACHE_FLOW_ID_INNER_MASK = 0xFFFFFFFFFF;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_SHIFT = 40;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT = 11;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_SHIFT = 8;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_MASK = 0xFFFFFF;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_MASK = 0x7;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK = 0xFF;
+constexpr uint64_t CACHE_FLOW_ID_INNER_MASK = 0xFFFFFFFF;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_SHIFT = 32;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT = 19;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_SN_SHIFT = 8;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_SHIFT = 4;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_MASK = 0xFFFFFFFF;
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_MASK = 0x1FFF; // 13
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_SN_MASK = 0x7FF; // 11
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_MASK = 0xF; // 4
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK = 0xF; // 4
 
 constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_WCACHE = 0;
 constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_RCACHE = 1;
@@ -41,10 +44,16 @@ constexpr uint32_t RCACHE_FLOW_DISK_DATA_PREFIX = 8;
 
 class CacheFlowIdManager {
 public:
-    inline static uint32_t GenerateCacheFlowIdPrefix(uint16_t ptId, uint16_t type, uint16_t innerType)
+    inline static uint32_t GenerateCacheFlowIdPrefix(uint16_t ptId, uint64_t ptv,
+        uint16_t type, uint16_t innerType)
     {
-        return CACHE_FLOW_ID_PREFIX_MASK & (((static_cast<uint32_t>(ptId)) << CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT) |
-            ((static_cast<uint32_t>(type)) << CACHE_FLOW_ID_PREFIX_TYPE_SHIFT) | (static_cast<uint32_t>(innerType)));
+        uint32_t ptIdP = ptId & CACHE_FLOW_ID_PREFIX_PT_ID_MASK;
+        uint32_t ptvP = static_cast<uint32_t>(ptv) & CACHE_FLOW_ID_PREFIX_PT_SN_MASK;
+        uint32_t typeP = type & CACHE_FLOW_ID_PREFIX_TYPE_MASK;
+        uint32_t innerTypeP = innerType & CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK;
+
+        return (ptIdP << CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT) | (ptvP << CACHE_FLOW_ID_PREFIX_PT_SN_SHIFT) |
+            (typeP << CACHE_FLOW_ID_PREFIX_TYPE_SHIFT) | (innerTypeP);
     }
 
     inline static uint64_t GetPtId(uint64_t flowId)

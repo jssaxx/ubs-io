@@ -63,11 +63,6 @@ void Cache::Exit()
     mRCacheManager->Exit();
 }
 
-BResult Cache::RegisterCacheClient(uint64_t &cacheId)
-{
-    return mWCacheManager->AllocateFlowId(0, cacheId);
-}
-
 BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId)
 {
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);

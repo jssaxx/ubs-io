@@ -12,8 +12,8 @@
 
 namespace ock {
 namespace bio {
-static constexpr uint64_t FLOW_ID_MASK = 0xFFFFFFFFFF;
-static constexpr uint64_t FLOW_ID_SHIFT = 40UL;
+static constexpr uint64_t FLOW_ID_MASK = 0xFFFFFFFF;
+static constexpr uint64_t FLOW_ID_SHIFT = 32UL;
 class FlowIdAllocator;
 using FlowIdAllocatorPtr = Ref<FlowIdAllocator>;
 class FlowIdAllocator {
