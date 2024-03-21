@@ -334,9 +334,8 @@ BResult BioServer::BioCacheInit()
     };
     Cache::Instance().RegCheckDegrade(checkDegrade);
 
-    GetGlobEvictOffset evictOffset = [](uint16_t ptId, uint64_t flowId, bool &isMaster,
-        uint64_t &flowOffset) -> BResult {
-        return MirrorServer::Instance()->GetFlowGlobEvictOffset(ptId, flowId, isMaster, flowOffset);
+    GetGlobEvictOffset evictOffset = [](uint16_t ptId, uint64_t flowId, uint64_t &flowOffset) -> BResult {
+        return MirrorServer::Instance()->GetFlowGlobEvictOffset(ptId, flowId, flowOffset);
     };
     Cache::Instance().RegGetGlobEvictOffset(evictOffset);
 

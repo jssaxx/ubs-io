@@ -16,7 +16,7 @@ namespace bio {
 using Key = char *;
 using SliceReader = std::function<BResult(const SlicePtr &from, const SlicePtr &to)>;
 using SliceWriter = std::function<BResult(const SlicePtr &from, const SlicePtr &to)>;
-using GetGlobEvictOffset = std::function<BResult(uint16_t ptId, uint64_t flowId, bool &isMaster, uint64_t &flowOffset)>;
+using GetGlobEvictOffset = std::function<BResult(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset)>;
 using GetLocDiskId = std::function<BResult(uint16_t ptId, uint16_t &diskId)>;
 using GetLocDiskStatus = std::function<void(uint16_t ptId, uint16_t diskId, bool &isNormal)>;
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
