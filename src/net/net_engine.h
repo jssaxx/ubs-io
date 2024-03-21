@@ -376,6 +376,11 @@ public:
         return mChannelMgr;
     }
 
+    ServiceProtocol GetNetProtocol()
+    {
+        return mOptions.protocol;
+    }
+
     uint16_t GeConnectCount()
     {
         return mOptions.connCount;

@@ -10,6 +10,7 @@
 #include "flow_manager.h"
 #include "cache_flow.h"
 #include "bio_trace.h"
+#include "cache_overload_ctrl.h"
 
 namespace ock {
 namespace bio {
@@ -499,6 +500,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
             mRetryCallback(mFlowId, WCACHE_DISK);
             return ret;
         }
+        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT, slice->GetLength());
         ++sliceIter;
     }
 

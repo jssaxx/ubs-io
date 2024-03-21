@@ -41,6 +41,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleQueryPtView, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_PUT,
         std::bind(&MirrorServer::HandlePut, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_PUT_SLOW,
+        std::bind(&MirrorServer::HandlePutSlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET,
         std::bind(&MirrorServer::HandleGet, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DELETE,
@@ -324,6 +326,26 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
         }
     };
 
+    BIO_TRACE_START(MIRROR_TRACE_PUT);
+    CacheAttr attr(req.tenantId, static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
+    BResult ret = Cache::Instance().Put(req.key, sliceP, reader, attr);
+    BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
+    }
+    return ret;
+}
+
+BResult MirrorServer::PutSlow(PutRequest &req, const WCacheSlicePtr &sliceP)
+{
+    LOG_INFO("Mirror server put slow, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
+        sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
+        sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" <<
+        sliceP->GetAddrs().size() << ".");
+
+    auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        return BIO_OK;
+    };
     BIO_TRACE_START(MIRROR_TRACE_PUT);
     CacheAttr attr(req.tenantId, static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
     BResult ret = Cache::Instance().Put(req.key, sliceP, reader, attr);
@@ -774,7 +796,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-        sliceP = MakeRef<WCacheSlice>(req->flowId, req->offset, req->index, req->length, addrVec);
+        sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -793,6 +815,101 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     Reply(ctx, result, nullptr, 0);
     BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, 0);
     return BIO_OK;
+}
+
+void MirrorServer::PutSlowDeleteRecode(std::string key)
+{
+    std::unique_lock<std::mutex> locker(mapLock);
+    auto iter = putSlowMap.find(key);
+    if (UNLIKELY(iter == putSlowMap.end())) {
+        return;
+    }
+    PutSlowRecode *recode = iter->second;
+    delete recode;
+    recode = nullptr;
+    putSlowMap.erase(iter);
+}
+
+BResult MirrorServer::PutSlowCreateRecode(PutRequest *req)
+{
+    WCacheSlicePtr sliceP = nullptr;
+    BResult ret = GetSlice(req->flowId, req->flowOffset, req->flowIndex, req->length, sliceP);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get slice failed:" << ret << ".");
+        return ret;
+    }
+    auto recode = new PutSlowRecode(sliceP);
+    putSlowMap.insert({ req->key, recode });
+    return BIO_OK;
+}
+
+WCacheSlicePtr MirrorServer::PutDataToSlice(PutRequest *req, BResult &result, bool &isEnd)
+{
+    PutSlowRecode *recode = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(mapLock);
+        auto iter = putSlowMap.find(req->key);
+        if (UNLIKELY(iter == putSlowMap.end())) {
+            result = PutSlowCreateRecode(req);
+            if (result != BIO_OK) {
+                LOG_ERROR("Put slow alloc slice failed, ret:" << result << ".");
+                return nullptr;
+            }
+            iter = putSlowMap.find(req->key);
+            if (UNLIKELY(iter == putSlowMap.end())) {
+                LOG_ERROR("Find put slow recode failed, it may be a system error.");
+                return nullptr;
+            }
+            recode = iter->second;
+        } else {
+            recode = iter->second;
+        }
+    }
+
+    result = mSliceOp.Copy(req->sliceBuf, req->splitOffsetInFlow, req->sliceLen, recode->sliceP.Get());
+    if (result != BIO_OK) {
+        LOG_ERROR("Put slow copy data to slice failed, ret:" << result << ".");
+        return nullptr;
+    }
+    LOG_DEBUG("Receive put slow, key:" << req->key << ", splitIndex:" << req->splitIndex << ", splitOffsetInFlow:" <<
+        req->splitOffsetInFlow << ", length:" << req->sliceLen << ".");
+    recode->receiveCnt++;
+    if (recode->receiveCnt == req->splitTotalNum) {
+        isEnd = true;
+    }
+    return recode->sliceP;
+}
+
+int32_t MirrorServer::HandlePutSlow(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive put message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_NET_RETRY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<PutRequest *>(ctx.MessageData());
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
+    bool isEnd = false;
+    BResult result = BIO_OK;
+    WCacheSlicePtr sliceP = PutDataToSlice(req, result, isEnd);
+    if (result != BIO_OK || !isEnd) {
+        Reply(ctx, result, nullptr, 0);
+        return BIO_OK;
+    }
+
+    PutSlowDeleteRecode(req->key);
+    result = PutSlow(*req, sliceP);
+    Reply(ctx, result, nullptr, 0);
 }
 
 int32_t MirrorServer::HandleGet(ServiceContext &ctx)

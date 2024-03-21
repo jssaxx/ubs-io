@@ -595,7 +595,7 @@ int32_t Put(PutRequest *req)
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-        sliceP = MakeRef<WCacheSlice>(req->flowId, req->offset, req->index, req->length, addrVec);
+        sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
