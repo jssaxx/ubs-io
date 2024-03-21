@@ -16,6 +16,13 @@
 
 namespace ock {
 namespace bio {
+struct PutSlowRecode {
+    WCacheSlicePtr sliceP;
+    std::atomic<uint32_t> receiveCnt;
+
+    explicit PutSlowRecode(WCacheSlicePtr slice) : sliceP(slice), receiveCnt(0) {}
+};
+
 class MirrorServer;
 using MirrorServerPtr = Ref<MirrorServer>;
 class MirrorServer {
@@ -42,6 +49,7 @@ public:
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx);
+    BResult PutSlow(PutRequest &req, const WCacheSlicePtr &sliceP);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
@@ -72,6 +80,7 @@ private:
     int32_t HandleQueryNodeView(ServiceContext &ctx);
     int32_t HandleQueryPtView(ServiceContext &ctx);
     int32_t HandlePut(ServiceContext &ctx);
+    int32_t HandlePutSlow(ServiceContext &ctx);
     int32_t HandleGet(ServiceContext &ctx);
     int32_t HandleDelete(ServiceContext &ctx);
     int32_t HandleStat(ServiceContext &ctx);
@@ -95,10 +104,16 @@ private:
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx);
 
+    void PutSlowDeleteRecode(std::string key);
+    BResult PutSlowCreateRecode(PutRequest *req);
+    WCacheSlicePtr PutDataToSlice(PutRequest *req, BResult &result, bool &isEnd);
+
 private:
     bool mStarted = false;
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
+    std::unordered_map<std::string, PutSlowRecode*> putSlowMap;
+    std::mutex mapLock;
     DEFINE_REF_COUNT_VARIABLE
 };
 }

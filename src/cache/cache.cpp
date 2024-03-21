@@ -9,6 +9,7 @@
 #include "bio.h"
 #include "bio_trace.h"
 #include "cm.h"
+#include "cache_overload_ctrl.h"
 
 namespace ock {
 namespace bio {
@@ -17,12 +18,15 @@ BResult Cache::Init()
     mRCacheManager = RCacheManager::Instance();
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
     auto ret = mRCacheManager->Init();
-    ChkTrueNot(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret, "Initialize read cache manager failed, ret:" << ret << ".");
 
     mWCacheManager = WCacheManager::Instance();
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
     ret = mWCacheManager->Init(mRCacheManager);
-    ChkTrueNot(ret == BIO_OK, ret);
+    ChkTrue(ret == BIO_OK, ret, "Initialize write cache manager failed, ret:" << ret << ".");
+
+    ret = CacheOverloadCtrl::Instance().Initialize();
+    ChkTrue(ret == BIO_OK, ret, "Initialize overload ctrl failed, ret:" << ret << ".");
 
     return BIO_OK;
 }
@@ -103,6 +107,10 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     BIO_TRACE_START(WCACHE_TRACE_PUT);
     ret = mWCacheManager->Put(key, slice, sliceReader, attr, isDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
+
+    if (ret == BIO_OK) {
+        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_FRONT_WRITE, slice->GetLength());
+    }
     return ret;
 }
 
