@@ -144,35 +144,33 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
 
     LOG_INFO("Job begin: ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
-    bool isForce = false;
-    bool isExist = false;
-    if (!JobPreCheck(ptInfo, isForce, isExist)) {
+    if (!JobPreCheck(ptInfo)) {
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
         return;
     }
 
-    uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
-    uint16_t index;
-    for (index = 0; index < ptInfo.copys.size(); index++) {
-        if (ptInfo.copys[index].nodeId == localNodeId) {
-            break;
-        }
-    }
-    if (index == ptInfo.copys.size()) {
-        if (isForce || isExist) {
-            ret = JobExpiredClear(ptInfo);
-            if (ret == BIO_INNER_RETRY) {
-                JobAddRetryList(ptTask, ptInfo);
-                ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
-                return;
-            }
+    uint16_t curIndex;
+    bool curExist = false;
+    ret = JobPreHandle(ptInfo, curIndex, curExist);
+    if (ret != BIO_OK) {
+        LOG_WARN("Pre handle fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+        if (ret == BIO_INNER_RETRY) {
+            JobAddRetryList(ptTask, ptInfo);
+            ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+            return;
         }
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
         UpdatePt(ptInfo);
         return;
     }
 
-    if (ptInfo.copys[index].state != CM_COPY_RECOVERY) {
+    if (!curExist) {
+        ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+        UpdatePt(ptInfo);
+        return;
+    }
+
+    if (ptInfo.copys[curIndex].state != CM_COPY_RECOVERY) {
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
         UpdatePt(ptInfo);
         return;
@@ -213,7 +211,7 @@ void MirrorServerCrb::JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo)
     ptTask->lock.UnLock();
 }
 
-bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist)
+bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo)
 {
     if (ptInfo.state == CM_PT_INIT || ptInfo.state == CM_PT_FAULT || ptInfo.state == CM_PT_BUTT) {
         return false;
@@ -230,23 +228,63 @@ bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist
         return false;
     }
 
-    if (mPtInfos.find(ptInfo.ptId) == mPtInfos.end()) {
-        isForce = true;
-        return true;
-    }
+    return true;
+}
+
+BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool &curExist)
+{
+    bool isFirst = false;
 
     uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
     uint16_t index;
+
+    bool oldMaster = false;
+    bool oldExist = false;
+
     mLock.LockRead();
-    for (index = 0; index < mPtInfos[ptInfo.ptId].copys.size(); index++) {
-        if (mPtInfos[ptInfo.ptId].copys[index].nodeId == localNodeId) {
-            isExist = true;
-            break;
+    if (mPtInfos.find(ptInfo.ptId) != mPtInfos.end()) {
+        if (mPtInfos[ptInfo.ptId].masterNodeId == localNodeId) {
+            oldMaster = true;
         }
+        for (index = 0; index < mPtInfos[ptInfo.ptId].copys.size(); index++) {
+            if (mPtInfos[ptInfo.ptId].copys[index].nodeId == localNodeId) {
+                oldExist = true;
+                break;
+            }
+        }
+    } else {
+        isFirst = true;
     }
     mLock.UnLock();
 
-    return true;
+    bool curMaster = false;
+
+    if (ptInfo.masterNodeId == localNodeId) {
+        curMaster = true;
+    }
+    for (index = 0; index < ptInfo.copys.size(); index++) {
+        if (ptInfo.copys[index].nodeId == localNodeId) {
+            curIndex = index;
+            curExist = true;
+            break;
+        }
+    }
+
+    if (!oldMaster && curMaster) {
+        auto ret = Cache::Instance().ExtraCreateRCache(ptInfo.ptId, ptInfo.version);
+        if (ret != BIO_OK) {
+            return BIO_INNER_RETRY;
+        }
+    }
+
+    if (!curExist && (isFirst || oldExist)) {
+        auto ret = JobExpiredClear(ptInfo);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
+
+    return BIO_OK;
 }
 
 BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)

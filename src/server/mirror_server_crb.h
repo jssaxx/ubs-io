@@ -73,7 +73,8 @@ private:
 
     void JobAddFinishList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
     void JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
-    bool JobPreCheck(CmPtInfo &ptInfo, bool &isForce, bool &isExist);
+    bool JobPreCheck(CmPtInfo &ptInfo);
+    BResult JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool &curExist);
     BResult JobExpiredClear(CmPtInfo &ptInfo);
     BResult JobSyncData(CmPtInfo &ptInfo);
 

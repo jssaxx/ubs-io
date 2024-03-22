@@ -895,6 +895,7 @@ int32_t MirrorServer::HandlePutSlow(ServiceContext &ctx)
     PutSlowDeleteRecode(req->key);
     result = PutSlow(*req, sliceP);
     Reply(ctx, result, nullptr, 0);
+    return BIO_OK;
 }
 
 int32_t MirrorServer::HandleGet(ServiceContext &ctx)
