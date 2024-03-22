@@ -70,10 +70,7 @@ public:
 
     BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
 
-private:
     BResult ExtraCreateRCache(uint64_t ptId, uint64_t ptv);
-
-    BResult PutByPass(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
 
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };

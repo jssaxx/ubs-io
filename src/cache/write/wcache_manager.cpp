@@ -20,6 +20,7 @@ constexpr uint16_t RETRY_EVICT_THREAD_NUM = 1;
 constexpr uint32_t RETRY_EVICT_QUEUE_SIZE = 8192;
 constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
 constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
+constexpr uint32_t BROKEN_INTERAL_TIME = 1000000;
 
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
@@ -501,26 +502,25 @@ BResult WCacheManager::HandleProcBroken(uint64_t procId)
 {
     LOG_INFO("Handle proc broken:" << procId);
 
-    bool isRetry = false;
-    uint64_t retryTime;
-    uint64_t startTime = Monotonic::TimeUs();
+    bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this, procId]() { HandleProcBrokenHdl(procId); });
+    if (!isSucceed) {
+        LOG_ERROR("Sche proc broken:" << procId << ", failed");
+        return BIO_ERR;
+    }
+
+    return BIO_OK;
+}
+
+BResult WCacheManager::HandleProcBrokenHdl(uint64_t procId)
+{
     BResult ret;
 
     do {
-        isRetry = false;
         ret = HandleProcBrokenImpl(procId);
         if (ret != BIO_OK) {
-            retryTime = Monotonic::TimeUs() - startTime;
-            if (retryTime < FLUSH_RETRY_MAX_TIME) {
-                isRetry = true;
-                usleep(FLUSH_INTERAL_TIME);
-            }
+            usleep(BROKEN_INTERAL_TIME);
         }
-    } while (isRetry);
-
-    if (ret != BIO_OK) {
-        return ret;
-    }
+    } while (ret != BIO_OK);
 
     ret = ClearProcCache(procId);
     ChkTrueNot(ret == BIO_OK, ret);
