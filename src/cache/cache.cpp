@@ -271,14 +271,8 @@ BResult Cache::HandleProcBroken(uint32_t procId)
 
 BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 {
-    BResult ret = ExtraCreateRCache(ptId, ptv);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Extra create rcache fail:" << ret << ", ptId:" << ptId);
-        return ret;
-    }
-
     BIO_TRACE_START(WCACHE_TRACE_FLUSH);
-    ret = mWCacheManager->Flush(ptId, ptv);
+    auto ret = mWCacheManager->Flush(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_FLUSH, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << ptv);

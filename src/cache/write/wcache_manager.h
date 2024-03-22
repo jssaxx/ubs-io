@@ -81,6 +81,7 @@ private:
                  uint64_t &realLen);
     BResult FlushImpl(uint64_t ptId, uint64_t ptv);
     BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
+    BResult HandleProcBrokenHdl(uint64_t procId);
     BResult HandleProcBrokenImpl(uint64_t procId);
 
     void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
