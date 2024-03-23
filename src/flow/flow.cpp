@@ -17,7 +17,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
         return BIO_ERR;
     }
 
-    if (offset + len >= mPreLoadOffset) {
+    if (offset + len > mPreLoadOffset) {
         auto ret = HoldWait(offset + len);
         if (ret != BIO_OK) {
             return ret;
