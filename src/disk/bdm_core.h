@@ -69,6 +69,7 @@ typedef struct {
 
 typedef struct {
     uint32_t num;
+    uint64_t diskCaps[DISK_DEV_NUM];
     DiskPath list[DISK_DEV_NUM];
 } DiskDevices;
 
@@ -97,7 +98,7 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
 
 int32_t BdmInit(void);
 
-int32_t BdmStart(DiskDevices *diskList, uint64_t capacity, uint64_t chunkSize);
+int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 
 BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
 
@@ -106,4 +107,3 @@ BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
 #endif
 
 #endif
-

@@ -67,6 +67,11 @@ namespace ock {
                 return mWorkIndex;
             }
 
+            inline uint64_t GetDiskId()
+            {
+                return mDiskId;
+            }
+
             inline void SetDelete()
             {
                 mIsNormal = false;

@@ -10,6 +10,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 namespace ock {
 namespace bio {
@@ -59,6 +60,8 @@ public:
      * @brief Get the realpath for security consideration
      */
     static bool CanonicalPath(std::string &path);
+
+    static int64_t GetDiskCapacity(std::string &diskPath);
 };
 
 inline bool FileUtil::Exist(const std::string &path)
@@ -186,6 +189,22 @@ inline bool FileUtil::CanonicalPath(std::string &path)
     path = realPath;
     free(realPath);
     return true;
+}
+
+inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
+{
+    // get the capacity of this device
+    int fd = open(diskPath.c_str(), (O_RDWR | O_SYNC));
+    if (fd < 0) {
+        return 0;
+    }
+    off_t off = lseek(fd, 0, SEEK_END);
+    if (off < 0) {
+        close(fd);
+        return 0;
+    }
+    close(fd);
+    return off;
 }
 }
 }
