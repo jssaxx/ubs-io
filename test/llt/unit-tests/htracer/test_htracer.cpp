@@ -1,0 +1,56 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+#include <mockcpp/mockcpp.hpp>
+#include <unistd.h>
+#include <iostream>
+#include "htracer.h"
+#include "service//htracer_service.h"
+#include "bio_log.h"
+#include "securec.h"
+#include "test_htracer.h"
+
+using namespace ock::htracer;
+
+bool TestHtracer::gSetup = false;
+
+void TestHtracer::SetUp()
+{
+    if (gSetup) {
+        return;
+    }
+    gSetup = true;
+    return;
+}
+
+void TestHtracer::TearDown()
+{
+    return;
+}
+
+int32_t TestHtracer::HTracerInitMock(const std::string &dumpDir)
+{
+    LOG_INFO("going to htracer mock.");
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+        LOG_INFO("当前工作目录的绝对路径是: " << cwd << ".");
+    } else {
+        return RET_ERR;
+    }
+    std::string mission("/htracer/");
+    strncpy_s(cwd + strlen(cwd), strlen(mission.c_str()) + 1, mission.c_str(), strlen(mission.c_str()) + 1);
+    auto &service = HTracerService::GetInstance();
+
+    const std::string stubDumpDir = cwd;
+    if (service.StartUp(stubDumpDir) != RET_OK) {
+        LOG_INFO("fail in htracer mock.");
+        return RET_ERR;
+    }
+    return RET_OK;
+}
+
+void TestHtracer::Stub() noexcept
+{
+    MOCKER(HTracerInit).stubs().will(invoke(HTracerInitMock));
+}

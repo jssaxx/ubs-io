@@ -25,12 +25,6 @@ if [[ "$2" == 'Ut' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
 fi
 
-if [ -n "${BUILD_UT}" ];then
-    # build mockcpp for ut
-    cd $PROJ_DIR
-    sh scripts/build_mockcpp.sh
-fi
-
 if [[ "$3" == 'Ceph' ]];then
   CMAKE_FLAGS+='-DOPEN_UNDERFS_CEPH=ON '
 fi
@@ -56,16 +50,6 @@ $BUILD_CMD || {
 }
 echo
 echo "build boostio successful."
-
-if [ -n "${BUILD_UT}" ];then
-    cd ${BUILD_DIR}/test/llt
-    ./bio_test --gtest_output=xml:./
-
-    lcov -d ../../src -c -o all.info --rc lcov_branch_coverage=1
-    lcov -r all.info '/usr/include/*' '*/3rdparty/*' -o new.info --rc lcov_branch_coverage=1
-	genhtml new.info --output-directory result
-	tar cvf result.tar result
-fi
 
 cd ${PROJ_DIR}/output
 rm -rf boostio

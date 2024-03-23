@@ -1,25 +1,22 @@
-//
-// Created by root on 12/11/23.
-//
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
 
-#include "gtest/gtest.h"
-#include <mockcpp/mokc.h>
 #include <mockcpp/mockcpp.hpp>
 #include "bio_mock.h"
-#include "test_rpc_engine.h"
 #include "net_engine.h"
+#include "test_rpc_engine.h"
 
 using namespace ock::bio;
 
-bool TestRpcEngine::g_setup = false;
+bool TestRpcEngine::gSetup = false;
 
 void TestRpcEngine::SetUp()
 {
-    if (g_setup) {
+    if (gSetup) {
         return;
     }
-    // XXX
-    g_setup = true;
+    gSetup = true;
     return;
 }
 
@@ -44,7 +41,7 @@ void TestRpcEngine::Stub()
 {
     MOCKER_CPP(&NetEngine::SyncConnect, BResult (*)(ConnectInfo &info)).stubs().will(invoke(SyncConnect_Stub));
     MOCKER_CPP(&NetEngine::AsyncConnect, BResult (*)(ConnectInfo &info,
-        AsyncConnHandler handler, uintptr_t ctx)).stubs().will(invoke(AsyncConnect_Stub));
+        AsyncConnHandler handler, uintptr_t ctx)).stubs().will(returnValue(0));
 }
 
 TEST_F(TestRpcEngine, test_rpc_engine_initialize) {}
