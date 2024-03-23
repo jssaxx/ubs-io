@@ -313,6 +313,13 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
     }
+
+    if (ret == BIO_NOT_EXISTS) {
+        CLIENT_LOG_WARN("Cache not found, mayby expired:" << param.flowId << ", ptId:" <<
+            ptId << ", key:" << param.key << ".");
+        Delete(ptId, param.flowId);
+        return BIO_INNER_RETRY;
+    }
     return ret;
 }
 

@@ -220,11 +220,15 @@ private:
         return BIO_OK;
     }
 
-    inline void Delete(uint16_t ptId)
+    inline void Delete(uint16_t ptId, uint64_t flowId)
     {
         mLock.LockWrite();
         auto it = mFlowMap.find(ptId);
         if (UNLIKELY(it == mFlowMap.end())) {
+            mLock.UnLock();
+            return;
+        }
+        if (it->second->FlowId() != flowId) {
             mLock.UnLock();
             return;
         }
