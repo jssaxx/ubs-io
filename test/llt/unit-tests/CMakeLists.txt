@@ -1,0 +1,61 @@
+cmake_minimum_required(VERSION 3.13)
+if(COMMAND cmake_policy)
+    cmake_policy(SET CMP0003 NEW)
+endif(COMMAND cmake_policy)
+project(BIO_TEST VERSION 1.0 LANGUAGES CXX)
+EXECUTE_PROCESS(COMMAND g++ -dumpversion
+        TIMEOUT 5
+        OUTPUT_VARIABLE cPlusPlusVerString
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REGEX MATCH "[(0-9)]*" cPlusPlusVerNum ${cPlusPlusVerString})
+message(${cPlusPlusVerNum})
+if (${cPlusPlusVerNum} GREATER 4)
+    set(CMAKE_CXX_STANDARD 14)
+else()
+    set(CMAKE_CXX_STANDARD 11)
+endif()
+
+include(../conf/comp.cmake)
+aux_source_directory(mock BIO_TEST)
+aux_source_directory(htracer BIO_TEST)
+aux_source_directory(server BIO_TEST)
+aux_source_directory(cache/read BIO_TEST)
+aux_source_directory(cache/write BIO_TEST)
+aux_source_directory(net/rpc BIO_TEST)
+aux_source_directory(cm BIO_TEST)
+add_executable(bio_test ${BIO_TEST} main.cpp)
+
+set(TEST_DIR ${PROJECT_SOURCE_DIR})
+target_include_directories(bio_test PRIVATE
+        ${TEST_DIR}/mock
+        ${TEST_DIR}/htracer
+        ${TEST_DIR}/server
+        ${TEST_DIR}/cm
+        ${TEST_DIR}/cache/read
+        ${TEST_DIR}/cache/write
+        ${TEST_DIR}/net/rpc
+        ${SRC_DIR}/common
+        ${SRC_DIR}/net
+        ${SRC_DIR}/cache
+        ${SRC_DIR}/cache/read
+        ${SRC_DIR}/cache/write
+        ${SRC_DIR}/cluster
+        ${SRC_DIR}/config
+        ${SRC_DIR}/disk
+        ${SRC_DIR}/htracer
+        ${SRC_DIR}/net
+		${SRC_DIR}/net/rpc
+        ${SRC_DIR}/sdk
+        ${SRC_DIR}/server
+        ${SRC_DIR}/stream
+        ${SRC_DIR}/underfs)
+
+target_link_libraries(bio_test bio_server
+        -Wl,--start-group
+        pthread dl rt aio
+        -Wl,--end-group)
+
+
+set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")
+set_target_properties(bio_test PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+set_target_properties(bio_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

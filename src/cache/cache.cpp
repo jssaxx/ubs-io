@@ -25,9 +25,6 @@ BResult Cache::Init()
     ret = mWCacheManager->Init(mRCacheManager);
     ChkTrue(ret == BIO_OK, ret, "Initialize write cache manager failed, ret:" << ret << ".");
 
-    ret = CacheOverloadCtrl::Instance().Initialize();
-    ChkTrue(ret == BIO_OK, ret, "Initialize overload ctrl failed, ret:" << ret << ".");
-
     return BIO_OK;
 }
 
