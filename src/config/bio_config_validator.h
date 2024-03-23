@@ -11,6 +11,7 @@
 #include "bio_ref.h"
 #include "bio_types.h"
 #include "bio_str_util.h"
+#include "bio_functions.h"
 
 namespace ock {
 namespace bio {
@@ -660,6 +661,100 @@ public:
 
 private:
     bool mOwnerBigThanOther = false;
+};
+
+class VStrRatio : public Validator {
+public:
+    static ValidatorPtr Create(const std::string &name)
+    {
+        return ValidatorPtr(new (std::nothrow) VStrRatio(name));
+    }
+
+    explicit VStrRatio(const std::string &name) : Validator(name) {};
+
+    ~VStrRatio() override = default;
+
+    bool Initialize() override
+    {
+        return true;
+    }
+
+    bool Validate(const std::string &value) override
+    {
+        return validateRatios(value, mErrMsg);
+    }
+};
+
+class VStrRealPath : public Validator {
+public:
+    static ValidatorPtr Create(const std::string &name)
+    {
+        return ValidatorPtr(new (std::nothrow) VStrRealPath(name));
+    }
+
+    explicit VStrRealPath(const std::string &name) : Validator(name) {};
+
+    ~VStrRealPath() override = default;
+
+    bool Initialize() override
+    {
+        return true;
+    }
+
+    bool Validate(const std::string &value) override
+    {
+        if (value.empty()) {
+            mErrMsg = "Invalid value for <" + mName + ">, it should not be empty";
+            return false;
+        }
+
+        std::string tmpPath(value);
+        if (!FileUtil::CanonicalPath(tmpPath)) {
+            mErrMsg = "Invalid value for <" + mName + ">, path must exist";
+            return false;
+        }
+
+        return true;
+    }
+};
+
+class VStrCephPool : public Validator {
+public:
+    static ValidatorPtr Create(const std::string &name)
+    {
+        return ValidatorPtr(new (std::nothrow) VStrCephPool(name));
+    }
+
+    explicit VStrCephPool(const std::string &name) : Validator(name) {};
+
+    ~VStrCephPool() override = default;
+
+    bool Initialize() override
+    {
+        return true;
+    }
+
+    bool Validate(const std::string &value) override
+    {
+        if (value.empty()) {
+            mErrMsg = "Invalid value for <" + mName + ">, it should not be empty";
+            return false;
+        }
+
+        std::vector<std::string> idWithPoolNames;
+        StrUtil::Split(value, ",", idWithPoolNames);
+        for (const auto& idWithPoolName : idWithPoolNames) {
+            std::vector<std::string> idAndPoolName;
+            StrUtil::Split(idWithPoolName, ":", idAndPoolName);
+            long poolId = 0;
+            if (idAndPoolName.size() != 2 || !StrUtil::StrToLong(idAndPoolName[0], poolId) || poolId < 0) {
+                mErrMsg = "Invalid value for <" + mName + ">, it should like poolNo0:poolName0,poolNo1:poolName1";
+                return false;
+            }
+        }
+
+        return true;
+    }
 };
 }
 }

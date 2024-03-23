@@ -2,7 +2,6 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2024-2024. All rights reserved.
  */
 
-#include <cstdint>
 #include "bio_log.h"
 #include "bio_config_instance.h"
 #include "rcache_evict.h"
@@ -17,15 +16,25 @@ RCacheEvict::~RCacheEvict()
 {
 }
 
+uint64_t GetReadRatio(std::string readWriteRatios)
+{
+    std::vector<std::string> ratios;
+    StrUtil::Split(readWriteRatios, ":", ratios);
+    long readRatio = 0;
+    StrUtil::StrToLong(ratios[0], readRatio);
+    return readRatio;
+}
+
 uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType tier)
 {
     uint64_t waterData;
     uint64_t cacheData = rCache->GetCacheData(tier);
     auto config = BioConfig::Instance()->GetDaemonConfig();
     if (tier == READ_CACHE_TIER_MEM) {
-        waterData = (config.memResourceQuantity * config.evictWaterLevel) / 100;
+        waterData = (GetReadRatio(config.memReadWriteRatio) * config.memCap * config.evictWaterLevel) / NO_1000;
     } else {
-        waterData = (config.diskResourceQuantity * config.evictWaterLevel) / 100;
+        waterData = (GetReadRatio(config.diskReadWriteRatio) * config.diskCaps.at(rCache->GetDiskId()) *
+            config.evictWaterLevel) / NO_1000;
     }
 
     return cacheData > waterData ? cacheData - waterData : 0ULL;

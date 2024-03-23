@@ -503,15 +503,6 @@ def check_config(conf_path):
         echo_to_terminal("config does not contain bio.disk.size_in_gb.")
         return -1
 
-    if "bio.security.enabled" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.security.enabled.")
-        return -1
-    else:
-        security_enabled = (config["bio"]["bio.security.enabled"])
-        if security_enabled.strip() != "false" and security_enabled.strip() != "true":
-            echo_to_terminal("bio.security.enabled is not in false/true")
-            return -1
-
     if "bio.security.conf" not in config["bio"]:
         echo_to_terminal("config does not contain bio.security.conf.")
         return -1

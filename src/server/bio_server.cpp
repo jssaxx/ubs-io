@@ -146,12 +146,13 @@ BResult BioServer::BioBdmInit()
     auto &daemonConfig = mConfig->GetDaemonConfig();
     DiskDevices diskList;
     diskList.num = 0;
-    for (uint32_t i = 0; i < daemonConfig.diskList.size(); i++) {
-        strcpy(diskList.list[diskList.num].path, daemonConfig.diskList[i].c_str());
+    for (auto diskPathStr : daemonConfig.diskList) {
+        strcpy(diskList.list[diskList.num].path, diskPathStr.c_str());
+        diskList.diskCaps[diskList.num] = FileUtil::GetDiskCapacity(diskPathStr);
         diskList.num++;
     }
 
-    ret = BdmStart(&diskList, daemonConfig.diskCap, daemonConfig.segment);
+    ret = BdmStart(&diskList, daemonConfig.segment);
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
 
     DiskAllocator diskAllocator;
@@ -210,19 +211,21 @@ BResult BioServer::BioNetInit()
     NetOptions netOptions;
     netOptions.ipMask = netConfig.dataIpMask;
     netOptions.port = netConfig.dataPort;
-    netOptions.isBusyLoop = netConfig.isBusyLoop;
+    netOptions.isBusyLoop = netConfig.isRpcBusyLoop;
     netOptions.role = NET_SERVER;
     netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
     netOptions.memorySize = mConfig->GetDaemonConfig().memCap;
     netOptions.regShmMem = true;
-    netOptions.handlerCount = netConfig.dataWorkersCnt;
-    netOptions.connCount = netConfig.dataWorkersCnt;
+    netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
+    netOptions.connCount = netConfig.rpcDataWorkersCnt;
     ret = StartRpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
-    netOptions.isBusyLoop = false;
+    netOptions.isBusyLoop = netConfig.isIpcBusyLoop;
     netOptions.role = NET_SERVER;
     netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.handlerCount = netConfig.ipcDataWorkersCnt;
+    netOptions.connCount = netConfig.ipcDataWorkersCnt;
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
     return BIO_OK;
@@ -374,7 +377,7 @@ BResult BioServer::BioServerDiagnoseInit()
 {
     uint32_t procPid = 456U;
     std::string diagName = "bio_server";
-    auto ret = CLI_AgentInit(procPid, const_cast<char*>(diagName.c_str()));
+    auto ret = CLI_AgentInit(procPid, const_cast<char *>(diagName.c_str()));
     if (ret != BIO_OK) {
         LOG_ERROR("init bio server diagnose fail.");
         return BIO_ERR;
@@ -639,7 +642,7 @@ int32_t List(ListRequest *req, ListResponse **rsp)
     (*rsp)->addrOffset = 0;
     (*rsp)->num = objs.size();
     (*rsp)->buffLen = sizeof(ObjStat) * objs.size();
-    auto statBuf = static_cast<ObjStat *>(static_cast<void*>((*rsp)->statBuf));
+    auto statBuf = static_cast<ObjStat *>(static_cast<void *>((*rsp)->statBuf));
     uint32_t index = 0;
     for (auto &obj : objs) {
         CopyKey(statBuf[index].key, obj.second.key, MAX_KEY_SIZE);
