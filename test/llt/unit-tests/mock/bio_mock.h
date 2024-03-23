@@ -9,4 +9,4 @@
 
 #define MOCKER_CPP(api, TT) MOCKCPP_NS::mockAPI(#api, reinterpret_cast<TT>(api))
 
-#endif //BOOSTIO_BIO_MOCK_H
+#endif // BOOSTIO_BIO_MOCK_H

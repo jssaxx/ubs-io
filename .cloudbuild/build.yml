@@ -38,17 +38,9 @@ steps:
         tag: tag_Huawei_Secure_C_V100R001C01SPC011B003_00001
         path: boostio/3rdparty/secure/huawei_secure_c
     - gitlab:
-        url: https://szv-open.codehub.huawei.com/OpenSourceCenter/google/googletest.git
-        tag: release-1.8.1
-        path: boostio/3rdparty/gtest/gtest
-    - gitlab:
         url: https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/zookeeper.git
         tag: 3.8.1-h1
         path: boostio/3rdparty/zookeeper/zookeeper
-    - gitlab:
-        url: https://codehub-dg-y.huawei.com/OpenSourceCenter/sinojelly/mockcpp.git
-        tag: v2.7
-        path: boostio/test/llt/3rdparty/mockcpp
   BUILD:
     - build_execute:
         command: sh boostio/build.sh ${BUILD_TYPE} XX Ceph
