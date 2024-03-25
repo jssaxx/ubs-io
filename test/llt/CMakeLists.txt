@@ -18,7 +18,12 @@ include_directories(${SRC_DIR}/common
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include/zookeeper
         ${TEST_DIR}/mock
+        ${TEST_DIR}/htracer
+        ${TEST_DIR}/server
         ${TEST_DIR}/cm
+        ${TEST_DIR}/disk
+        ${TEST_DIR}/cache/read
+        ${TEST_DIR}/cache/write
         ${TEST_DIR}/net/rpc)
 
 link_directories(

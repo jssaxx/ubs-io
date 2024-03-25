@@ -23,6 +23,7 @@ aux_source_directory(cache/read BIO_TEST)
 aux_source_directory(cache/write BIO_TEST)
 aux_source_directory(net/rpc BIO_TEST)
 aux_source_directory(cm BIO_TEST)
+aux_source_directory(disk BIO_TEST)
 add_executable(bio_test ${BIO_TEST} main.cpp)
 
 set(TEST_DIR ${PROJECT_SOURCE_DIR})
@@ -31,6 +32,7 @@ target_include_directories(bio_test PRIVATE
         ${TEST_DIR}/htracer
         ${TEST_DIR}/server
         ${TEST_DIR}/cm
+        ${TEST_DIR}/disk
         ${TEST_DIR}/cache/read
         ${TEST_DIR}/cache/write
         ${TEST_DIR}/net/rpc
