@@ -198,3 +198,9 @@ TEST_F(TestWCache, test_put_nullreader_case_return_fail)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
+TEST_F(TestWCache, test_repeat_delete_return_ok)
+{
+    auto ret = gWcacheManager->Delete(G_PT_ID, G_KEY);
+    EXPECT_EQ(ret, BIO_OK);
+}
+

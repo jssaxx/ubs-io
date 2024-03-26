@@ -19,6 +19,8 @@ public:
 };
 class WCacheIndex {
 public:
+    ~WCacheIndex();
+
     BResult Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef);
 
     WCacheSliceRefPtr Aquire(uint64_t ptId, const Key &key);

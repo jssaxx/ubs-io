@@ -119,5 +119,6 @@ BResult RCacheGC::Stop(RCachePtr rCachePtr)
 
 BResult RCacheGC::Destroy()
 {
+    workStatus.store(false);
     return BIO_OK;
 }
