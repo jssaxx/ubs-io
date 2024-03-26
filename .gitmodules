@@ -1,10 +1,6 @@
 [submodule "3rdparty/hcom/hcom"]
 	path = 3rdparty/hcom/hcom
 	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hcom.git
-[submodule "3rdparty/spdlog/spdlog"]
-	path = 3rdparty/spdlog/spdlog
-	url = https://codehub-dg-y.huawei.com/OpenSourceCenter/spdlog.git
-	branch = huawei/v1.9.2
 [submodule "3rdparty/secure/huawei_secure_c"]
 	path = 3rdparty/secure/huawei_secure_c
 	url = https://codehub-dg-y.huawei.com/hwsecurec_group/huawei_secure_c.git
@@ -13,3 +9,7 @@
 	path = 3rdparty/zookeeper/zookeeper
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/zookeeper.git
 	tag = 3.8.1-h1
+[submodule "3rdparty/spdlog/spdlog"]
+	path = 3rdparty/spdlog/spdlog
+	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/gabime/spdlog.git
+	tag = v1.12.0
