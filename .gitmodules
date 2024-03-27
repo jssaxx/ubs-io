@@ -8,7 +8,7 @@
 [submodule "3rdparty/zookeeper/zookeeper"]
 	path = 3rdparty/zookeeper/zookeeper
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/zookeeper.git
-	tag = 3.8.1-h1
+	tag = 3.8.1-h3
 [submodule "3rdparty/spdlog/spdlog"]
 	path = 3rdparty/spdlog/spdlog
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/gabime/spdlog.git
