@@ -354,7 +354,7 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callba
 {
     if (mMode == CONVERGENCE) {
         auto ret = deleteOp(&req);
-        callback.cb(callback.cbCtx, nullptr, 0, ret);
+        callback.cb(callback.cbCtx, &ret, sizeof(ret), BIO_OK);
     } else {
         return SendDeleteRequestLocal(req, callback);
     }

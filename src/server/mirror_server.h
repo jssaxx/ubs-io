@@ -94,6 +94,10 @@ private:
     int32_t HandleFreeMem(ServiceContext &ctx);
 
     BResult ReaderLocal(const SlicePtr &from, const SlicePtr &to);
+    BResult ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
+                               ServiceContext &netCtx);
+    BResult ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
+                                  ServiceContext &netCtx);
     BResult ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
