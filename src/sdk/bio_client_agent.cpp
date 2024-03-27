@@ -332,10 +332,10 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
 
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
+    req.size = req.length;
     if (mMode == CONVERGENCE) {
         req.isMr = 0;
         req.address = reinterpret_cast<uintptr_t>(value);
-        req.size = req.length;
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
         realLen = rsp.realLen;

@@ -1296,7 +1296,8 @@ int32_t MirrorServer::HandleFreeMem(ServiceContext &ctx)
 
     auto req = static_cast<FreeMemRequest *>(ctx.MessageData());
     for (uint32_t idx = 0; idx < req->num; idx++) {
-        BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(req->addr[idx]);
+        auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx]);
+        BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
     }
     Reply(ctx, BIO_OK, nullptr, 0);
     return BIO_OK;
