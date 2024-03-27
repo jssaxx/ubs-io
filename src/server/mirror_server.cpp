@@ -266,6 +266,58 @@ BResult MirrorServer::ReaderLocal(const SlicePtr &from, const SlicePtr &to)
     return BIO_OK;
 }
 
+BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec,
+    std::vector<NetMrInfo> &rMrVec, ServiceContext &netCtx)
+{
+    BResult ret = BIO_OK;
+    for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
+        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrVec[idx].address <<
+            ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrVec[idx].key << ", size:" << lMrVec[idx].size << ".");
+        if (req.isExistLocal) {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
+        } else {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
+        }
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
+                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[idx].address << ", rKey:" << rMrVec[idx].key <<
+                ", size:" << lMrVec[idx].size << ".");
+            break;
+        }
+    }
+    return ret;
+}
+
+BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec,
+    std::vector<NetMrInfo> &rMrVec, ServiceContext &netCtx)
+{
+    ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Slice addr num not match, rAddrNum:" << rMrVec.size() << ".");
+    BResult ret = BIO_OK;
+    uintptr_t rMrAddr = rMrVec[0].address;
+    uint32_t rMrKey = rMrVec[0].key;
+    uint64_t off = 0;
+    for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        rMrAddr += off;
+        NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
+        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrAddr <<
+            ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
+        if (req.isExistLocal) {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
+        } else {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
+        }
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
+                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrAddr << ", rKey:" << rMrKey << ", size:" <<
+                lMrVec[idx].size << ".");
+            break;
+        }
+        off += lMrVec[idx].size;
+    }
+    return ret;
+}
+
 BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx)
 {
     // 1. parse remote mr info
@@ -286,26 +338,16 @@ BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, Put
         addr.ToMrInfo(mr);
         lMrVec.emplace_back(NetMrInfo(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey()));
     }
-    ChkTrue(rMrVec.size() == lMrVec.size(), BIO_INNER_ERR, "Slice flow addr num not match, lAddrNum:" << lMrVec.size()
-        << ", rAddrNum:" << rMrVec.size() << ".");
 
     // 3. one side read
     BResult ret = BIO_OK;
-    for (uint32_t idx = 0; idx < rMrVec.size(); idx++) {
-        NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
-        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrVec[idx].address <<
-            ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrVec[idx].key << ", size:" << lMrVec[idx].size << ".");
-        if (req.isExistLocal) {
-            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
-        } else {
-            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
-        }
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
-                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[idx].address << ", rKey:" << rMrVec[idx].key <<
-                ", size:" << lMrVec[idx].size << ".");
-            break;
-        }
+    if (lMrVec.size() > rMrVec.size()) {
+        ret = ReaderRemoteNotEquals(req, lMrVec, rMrVec, netCtx);
+    } else if (lMrVec.size() == rMrVec.size()) {
+        ret = ReaderRemoteEquals(req, lMrVec, rMrVec, netCtx);
+    } else {
+        LOG_ERROR("Slice addr num not match, lAddrNum:" << lMrVec.size() << ", rAddrNum:" << rMrVec.size() << ".");
+        ret = BIO_INNER_ERR;
     }
     BIO_TRACE_END(MIRROR_TRACE_PUT_READ_DATA, ret);
     return ret;
