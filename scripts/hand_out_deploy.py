@@ -330,7 +330,7 @@ def install_init(pkg_path):
         return -1
 
     # 获取节点信息
-    if get_nodes_info(CONFIG_PATH) != 0:
+    if get_nodes_info() != 0:
         logging.error("pid:{0} get_nodes_info \"{1}\" failed".format(PID, HOST_IP_LIST))
         return -1
 
@@ -387,24 +387,6 @@ def check_config(conf_path):
             echo_to_terminal("bio.log.level is null.")
             return -1
 
-    if "bio.cm.initial.nodes_count" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.cmc.initial.nodes_count.")
-        return -1
-    else:
-        cm_initail_nodes_count = int(config["bio"]["bio.cm.initial.nodes_count"])
-        if cm_initail_nodes_count < 2:
-            echo_to_terminal("block_size is not in range 2 - 256.")
-            return -1
-
-    if "bio.cm.nodes_count" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.cmc.nodes_count.")
-        return -1
-    else:
-        cm_node_count = int(config["bio"]["bio.cm.nodes_count"])
-        if cm_node_count < 2 or cm_node_count > 256:
-            echo_to_terminal("max_open_files is not in range 1024 - 65536.")
-            return -1
-
     if "bio.cm.pts_count" not in config["bio"]:
         echo_to_terminal("config does not contain bio.cmc.pts_count.")
         return -1
@@ -432,15 +414,6 @@ def check_config(conf_path):
             echo_to_terminal("bio.cm.register_perm_timeout_sec is null.")
             return -1
 
-    # if "bio.zk_host.port" not in config["bio"]:
-    #     echo_to_terminal("config does not contain bio.zk_host.port.")
-    #     return -1
-    # else:
-    #     zk_host_port = int(config["bio"]["bio.cmc.pts_count"])
-    #     if zk_host_port != DEFAULT_ZK_PORT:
-    #         echo_to_terminal("zk_host_port is {0} not {1}.".format(zk_host_port, DEFAULT_ZK_PORT))
-    #         return -1
-
     if "bio.net.data.protocol" not in config["bio"]:
         echo_to_terminal("config does not contain bio.net.data.protocol.")
         return -1
@@ -450,61 +423,12 @@ def check_config(conf_path):
             echo_to_terminal("bio.net.data.protocol is not in rdma/tcp")
             return -1
 
-    if "bio.net.data.busy_polling_mode" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.net.data.busy_polling_mode.")
-        return -1
-    else:
-        net_data_busy_polling_mode = (config["bio"]["bio.net.data.busy_polling_mode"])
-        if net_data_busy_polling_mode.strip() != "false" and net_data_busy_polling_mode.strip() != "true":
-            echo_to_terminal("bio.net.data.busy_polling_mode is not in false/true")
-            return -1
-
-    if "bio.net.data.workers_count" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.net.data.workers_count.")
-        return -1
-
-
-    # if "bio.net.data.listen_port" not in config["bio"]:
-    #     echo_to_terminal("config does not contain bio.net.data.listen_port.")
-    #     return -1
-    # else:
-    #     net_listen_port = int(config["bio"]["bio.net.data.listen_port"])
-    #     if net_listen_port != DEFAULT_HCOM_PORT:
-    #         echo_to_terminal("data listen port is {0} not {1}.".format(net_listen_port, DEFAULT_HCOM_PORT))
-    #         return -1
-
-    # if "bio.net.cmm.ip_mask" not in config["bio"]:
-    #     echo_to_terminal("config does not contain bio.net.cmm.ip_mask.")
-    #     return -1
-    # else:
-    #     cmm_ip_mask = (config["bio"]["bio.net.cmm.ip_mask"])
-    #     if cmm_ip_mask.strip() != DEFAULT_CMM_IP_MASK:
-    #         echo_to_terminal("bio.net.cmm.ip_mask is {0} not {1}".format(cmm_ip_mask.strip(), DEFAULT_CMM_IP_MASK))
-    #         return -1
-
-    # if "bio.net.cmm.listen_port" not in config["bio"]:
-    #     echo_to_terminal("config does not contain bio.net.cmm.listen_port.")
-    #     return -1
-    # else:
-    #     cmm_listen_port = int(config["bio"]["bio.net.cmm.listen_port"])
-    #     if cmm_listen_port != DEFAULT_CMM_PORT:
-    #         echo_to_terminal("cmm listen port is {0} not {1}.".format(cmm_listen_port, DEFAULT_CMM_PORT))
-    #         return -1
-
     if "bio.segment.size_in_mb" not in config["bio"]:
         echo_to_terminal("config does not bio.segment.size_in_mb.")
         return -1
 
     if "bio.mem.size_in_gb" not in config["bio"]:
         echo_to_terminal("config does not contain bio.mem.size_in_gb.")
-        return -1
-
-    if "bio.disk.size_in_gb" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.disk.size_in_gb.")
-        return -1
-
-    if "bio.security.conf" not in config["bio"]:
-        echo_to_terminal("config does not contain bio.security.conf.")
         return -1
 
     return 0
@@ -540,7 +464,7 @@ def get_nodes_info_no_conf():
             nodes_info.append(template)
     return 0
 
-def get_nodes_info(conf_path):
+def get_nodes_info():
     user_str = "user"
     password_str = "password"
     global ZK_IP
@@ -570,12 +494,6 @@ def get_nodes_info(conf_path):
             count += 1
             nodes_info.append(template)
         NODE_COUNT = count
-    config = configparser.ConfigParser()
-    config.read(conf_path, encoding='utf-8')
-    config["bio"]["bio.cm.nodes_count"] = str(NODE_COUNT)
-    config["bio"]["bio.cm.initial.nodes_count"] = str(NODE_COUNT)
-    with open(conf_path, 'w') as originConfig:
-        config.write(originConfig)
     return 0
 
 
