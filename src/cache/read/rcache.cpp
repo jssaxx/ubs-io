@@ -524,10 +524,6 @@ BResult RCache::Delete(const Key &key)
     indexLock[bucket].UnLock();
     BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
 
-    BIO_TRACE_START(RCACHE_TRACE_DEL_REMOVE_EVICT);
-    DelFromEvictList(chunk->GetTierType(), chunk.Get()->GetMqType(), chunk);
-    BIO_TRACE_END(RCACHE_TRACE_DEL_REMOVE_EVICT, 0);
-
     IncGCData(chunk->GetTierType(), chunk->GetValue().length);
     return BIO_OK;
 }
