@@ -104,7 +104,6 @@ def send_files_to_node(node):
     config.read(CONFIG_PATH, encoding='utf-8')
     config["bio"]["bio.cm.zk_host"] = ZK_IP + ":" + str(DEFAULT_ZK_PORT)
     config["bio"]["bio.net.data.ip_mask"] = str(node[net_str]) + "/24"
-    config["bio"]["bio.net.data.listen_port"] = str(DEFAULT_HCOM_PORT)
     config["bio"]["bio.disk.path"] = str(node[disk_str])
     folder_path = os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "{0}".format(node[node_id])))
     if os.path.exists(folder_path):
