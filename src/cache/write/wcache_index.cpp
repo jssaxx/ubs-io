@@ -6,6 +6,14 @@
 
 namespace ock {
 namespace bio {
+WCacheIndex::~WCacheIndex()
+{
+    for (const auto &sliceIndex : mTable) {
+        delete sliceIndex.second;
+    }
+
+    mTable.clear();
+}
 inline uint32_t WCacheIndex::Hash(const Key &key)
 {
     return std::hash<std::string>{}(key) % HASH_BUCKET_NUM;

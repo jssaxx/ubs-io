@@ -108,6 +108,7 @@ TEST_F(TestRCache, test_rcache_get_ok)
     uint64_t realLen;
     ret = gRcacheManager->Get(G_PT_ID, key1, 0ULL, readSlicePtr, rwriter, realLen);
     ret = memcmp(G_VALUE, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
+    free((void *)flowAddr.chunkId);
     EXPECT_EQ(ret, 0);
 }
 
@@ -133,6 +134,7 @@ TEST_F(TestRCache, test_rcache_load_ok)
     EXPECT_NE(readSlicePtr, nullptr);
     ret = gRcacheManager->Get(G_PT_ID, key2, 0ULL, readSlicePtr, rwriter, realLen);
     ret = memcmp(G_VALUE, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
+    free((void *)flowAddr.chunkId);
     EXPECT_EQ(ret, 0);
 }
 

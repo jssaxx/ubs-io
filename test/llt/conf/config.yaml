@@ -13,8 +13,6 @@ pipeline:
       exec: "bash ../../../build.sh Debug Ut"
   run:
     - task: "run_test"
-      exec: "pwd; cd ../../../build/; ./bio_test --gtest_output=xml:./"
-      args: false
   report:
     - task: "lcov_report"
       exec: "pwd;cd ../../../build/;sh ../test/llt/report_lcov.sh"

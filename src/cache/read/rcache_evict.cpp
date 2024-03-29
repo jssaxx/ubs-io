@@ -142,6 +142,7 @@ BResult RCacheEvict::Initialize()
 
 BResult RCacheEvict::Destroy()
 {
+    workStatus.store(false);
     return BIO_OK;
 }
 
