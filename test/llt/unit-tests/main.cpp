@@ -46,5 +46,6 @@ int main(int argc, char *argv[])
 
     ock::htracer::HTracerExit();
     WCacheManager::Instance()->Exit();
+    RCacheManager::Instance()->Exit();
     return runRet;
 }

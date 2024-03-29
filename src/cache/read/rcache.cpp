@@ -648,6 +648,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         flow[READ_CACHE_TIER_MEM]->UpdateDataTruncOffset(chunk->GetValue().flowOffset, chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
         LOG_INFO("RCache evict chunk to disk tier success, " << chunk->ToString());
+        delete [] newChunk->GetKey();
         chunk->lock.unlock();
         BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, BIO_OK);
     }
