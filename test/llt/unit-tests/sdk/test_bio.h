@@ -7,12 +7,10 @@
 
 #include "gtest/gtest.h"
 
-class TestBioServer : public testing::Test {
+class TestBio : public testing::Test {
     void SetUp() override;
 
     void TearDown() override;
-public:
-    static void Stub();
 private:
     static bool gSetup;
 };

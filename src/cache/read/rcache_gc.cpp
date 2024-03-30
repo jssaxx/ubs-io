@@ -56,6 +56,7 @@ void *RCacheGC::Worker(void *context)
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_GC_INTERVAL_MS));
     }
 
+    delete para;
     return nullptr;
 }
 
@@ -79,7 +80,7 @@ BResult RCacheGC::Initialize()
             auto *th = new std::thread(Worker, static_cast<void*>(para));
             if (th) {
                 pthread_setname_np(th->native_handle(), "GcWorker");
-                works[i] = th;
+                works[tier][i] = th;
             } else {
                 LOG_ERROR("Create thread for read cache GC failed");
                 return BIO_ALLOC_FAIL;
@@ -120,5 +121,13 @@ BResult RCacheGC::Stop(RCachePtr rCachePtr)
 BResult RCacheGC::Destroy()
 {
     workStatus.store(false);
+    for (auto& work : works) {
+        for (auto th : work) {
+            if (th) {
+                th->join();
+                delete th;
+            }
+        }
+    }
     return BIO_OK;
 }
