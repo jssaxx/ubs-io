@@ -98,7 +98,7 @@ public:
         std::string cfgPath;
         std::string cluster;
         std::string user;
-        std::string pool;
+        std::unordered_map<uint64_t, std::string> pools;
     };
 
 public:
