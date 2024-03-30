@@ -20,7 +20,7 @@ BResult UnderFs::Init()
     mCfgPath = config->GetUnderFsConfig().cfgPath;
     mCluster = config->GetUnderFsConfig().cluster;
     mUser = config->GetUnderFsConfig().user;
-    mPool = config->GetUnderFsConfig().pool;
+    mPool = config->GetUnderFsConfig().pools.at(0);
 
     int ret;
 
