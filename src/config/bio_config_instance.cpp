@@ -173,7 +173,18 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     mUnderFsConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
     mUnderFsConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
     mUnderFsConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
-    mUnderFsConfig.pool = conf->GetStr(UNDERFS_CEPH_POOL.first);
+
+    std::vector<std::string> idWithPoolNames;
+    StrUtil::Split(conf->GetStr(UNDERFS_CEPH_POOL.first), ",", idWithPoolNames);
+    for (const auto& idWithPoolName : idWithPoolNames) {
+        std::vector<std::string> idAndPoolName;
+        StrUtil::Split(idWithPoolName, ":", idAndPoolName);
+        long poolId = 0;
+        if (StrUtil::StrToLong(idAndPoolName[0], poolId)) {
+            mUnderFsConfig.pools.emplace(poolId, idAndPoolName[1]);
+        }
+    }
+
     return BIO_OK;
 }
 
