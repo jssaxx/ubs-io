@@ -10,6 +10,7 @@
 #include "bio_config_instance.h"
 #include "cache_slice_operator.h"
 #include "rcache_manager.h"
+#include "bdm_core.h"
 #include "test_rcache.h"
 
 using namespace ock::bio;
@@ -36,6 +37,7 @@ void TestRCache::TearDown()
 static CacheSliceOperator gSlicerOperator;
 
 constexpr uint64_t G_PT_ID = 1;
+constexpr uint64_t G_PT_V = 1;
 constexpr Key G_KEY = "123123key";
 constexpr char *G_VALUE = "test/read/cache/data";
 
@@ -50,12 +52,13 @@ auto rwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
 
 TEST_F(TestRCache, test_rcache_create_ok)
 {
-    auto ret = gRcacheManager->CreateRCache(G_PT_ID, 0, 0);
+    auto ret = gRcacheManager->CreateRCache(G_PT_ID, G_PT_V, 0);
     EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestRCache, test_rcache_put_ok)
 {
+    LOG_INFO("run test_rcache_put");
     uint64_t len = strlen(G_VALUE) + 1;
     WCacheSlicePtr slicePtr = nullptr;
 
@@ -69,6 +72,10 @@ TEST_F(TestRCache, test_rcache_put_ok)
     ret = gRcacheManager->Put(G_PT_ID, G_KEY, slicePtr);
     EXPECT_EQ(ret, 0);
 
+    uint64_t totalCap = 0;
+    uint64_t usedCap = 0;
+    BdmGetCapacity(0, &totalCap, &usedCap);
+    LOG_INFO("total cap " << totalCap << " used cap " << usedCap);
     uint64_t needEvictData = len;
     uint64_t haveEvictData;
     gRcacheManager->GetRCacheInstanceByPtId(G_PT_ID)->EvictMemData(needEvictData, haveEvictData);
@@ -110,6 +117,9 @@ TEST_F(TestRCache, test_rcache_get_ok)
     ret = memcmp(G_VALUE, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
     free((void *)flowAddr.chunkId);
     EXPECT_EQ(ret, 0);
+
+    ret = gRcacheManager->Delete(G_PT_ID, key1);
+    EXPECT_EQ(ret, 0);
 }
 
 TEST_F(TestRCache, test_rcache_load_ok)
@@ -136,6 +146,10 @@ TEST_F(TestRCache, test_rcache_load_ok)
     ret = memcmp(G_VALUE, reinterpret_cast<void *>(readSlicePtr->GetAddrs()[0].chunkId), len);
     free((void *)flowAddr.chunkId);
     EXPECT_EQ(ret, 0);
+
+    ret = gRcacheManager->Delete(G_PT_ID, key2);
+    UnderFs::Instance()->Delete(key2);
+    EXPECT_EQ(ret, 0);
 }
 
 TEST_F(TestRCache, test_rcache_delete_ok)
@@ -157,3 +171,10 @@ TEST_F(TestRCache, test_rcache_delete_ok)
     ret = gRcacheManager->Delete(G_PT_ID, key4);
     EXPECT_EQ(ret, 0);
 }
+
+TEST_F(TestRCache, test_rcache_expired_clear_ok)
+{
+    auto ret = gRcacheManager->ExpiredClear(G_PT_ID, 2);
+    EXPECT_EQ(ret, 0);
+}
+
