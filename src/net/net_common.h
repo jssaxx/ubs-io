@@ -59,13 +59,14 @@ struct ConnectInfo {
     std::string ip;
     uint16_t port;
     uint16_t retryTimes;
+    bool isSelfPoll;
 
     ConnectInfo() = default;
     ConnectInfo(uint32_t srcid, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : srcId(srcid, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times)
+        : srcId(srcid, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times), isSelfPoll(false)
     {}
     ConnectInfo(uint32_t srcid, uint32_t srcPid, uint32_t nid)
-        : srcId(srcid, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3)
+        : srcId(srcid, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3), isSelfPoll(false)
     {}
 };
 
@@ -86,6 +87,7 @@ struct NetOptions {
     uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
     bool regShmMem = false;                              /* register the memory to shared */
     Role role = NET_BUTT;                                /* net service role */
+    uint32_t eventPollingTimeout;
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
 };
 

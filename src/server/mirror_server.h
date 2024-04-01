@@ -61,6 +61,7 @@ public:
 
     BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
+    void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
     MirrorServer() = default;
     ~MirrorServer() = default;
     DEFINE_REF_COUNT_FUNCTIONS
@@ -68,7 +69,6 @@ public:
 private:
     bool CheckAll(RequestComm &reqComm);
     void RegisterOpcode();
-    void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
     void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs);
     void ReplyListResultRemote(ServiceContext &ctx, ListRequest *req, std::unordered_map<std::string, ObjStat> &objs);
 

@@ -18,7 +18,7 @@ void BioConfig::LoadDefaultConf()
     AddBoolConf(NET_RPC_DATA_BUSY_POLL_MODE);
     AddIntConf(NET_RPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_RPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
     AddBoolConf(NET_IPC_DATA_BUSY_POLL_MODE);
-    AddIntConf(NET_IPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_IPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
+    AddIntConf(NET_IPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_IPC_DATA_WORKERS_COUNT.first, NO_1, NO_128));
     /* don't allow empty */
     AddStrConf(NET_DATA_IP_MASK, VIpv4MaskValidator::Create(NET_DATA_IP_MASK.first, false));
     AddIntConf(NET_DATA_PORT, VIntRange::Create(NET_DATA_PORT.first, NO_7201, NO_7800));

@@ -13,3 +13,7 @@
 	path = 3rdparty/spdlog/spdlog
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/gabime/spdlog.git
 	tag = v1.12.0
+[submodule "3rdparty/io_interceptor/io_interceptor"]
+	path = 3rdparty/io_interceptor/io_interceptor
+	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/io_interceptor.git
+	branch = br_develop_BeiMing_H_24.3.RC1_330
