@@ -308,6 +308,7 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     req->mrKey  = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = spaceInfo.descriptorSize;
     req->copyFree = true;
+    req->mrAddress = 0ULL;
     memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
 
     CLIENT_LOG_INFO("Put copy free request key:" << req->key << ", length:" << ", index:" << req->flowIndex <<
