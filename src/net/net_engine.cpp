@@ -491,6 +491,9 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr
     NetServiceConnectOptions options{};
     std::string prefix;
     options.epSize = mOptions.connCount;
+    if (info.isSelfPoll) {
+        options.flags = NET_EP_SELF_POLLING;
+    }
     prefix = CONN_PAYLOAD_PREFIX_DATA;
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
