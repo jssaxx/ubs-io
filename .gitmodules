@@ -1,6 +1,3 @@
-[submodule "3rdparty/hcom/hcom"]
-	path = 3rdparty/hcom/hcom
-	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hcom.git
 [submodule "3rdparty/secure/huawei_secure_c"]
 	path = 3rdparty/secure/huawei_secure_c
 	url = https://codehub-dg-y.huawei.com/hwsecurec_group/huawei_secure_c.git
@@ -17,3 +14,7 @@
 	path = 3rdparty/io_interceptor/io_interceptor
 	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/io_interceptor.git
 	branch = br_develop_BeiMing_H_24.3.RC1_330
+[submodule "3rdparty/hcom/hcom"]
+	path = 3rdparty/hcom/hcom
+	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hcom.git
+	branch = br_release_BeiMing_I_24.4.0_20240930
