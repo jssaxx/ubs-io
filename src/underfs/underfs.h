@@ -19,7 +19,7 @@ typedef void *rados_t;
 typedef void *rados_ioctx_t;
 #endif
 
-#define CEPH_PATH "/mnt/ceph/"
+#define CEPH_PATH "./ceph"
 
 namespace ock {
 namespace bio {
