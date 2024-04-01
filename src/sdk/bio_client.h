@@ -22,7 +22,6 @@
 #ifdef USE_DEBUG_TOOLS
 #include "cli.h"
 #include "sdk_diagnose.h"
-#include "htracer_diagnose.h"
 #endif
 
 namespace ock {
@@ -171,7 +170,6 @@ private:
 #ifdef USE_DEBUG_TOOLS
 protected:
     BResult BioDiagnoseSdkInit();
-    BResult BioDiagnoseHtracerInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
 #endif
 

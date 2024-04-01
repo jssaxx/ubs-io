@@ -1,15 +1,13 @@
 include_directories(../cli/include
         ../tracepoint/include
-        cli_sdk
-        cli_htracer)
+        cli_sdk)
 
-add_subdirectory(cli_htracer)
+
 add_subdirectory(cli_sdk)
 add_subdirectory(cli_server)
 
 if (OPEN_TEST_TOOLS STREQUAL "ON")
     target_link_libraries(bio_server
-            htracer_diagnose_shared
             sdk_diagnose_shared)
     target_link_libraries(bio_sdk cli_agent_shared)
     TARGET_INCLUDE_DIRECTORIES(bio_sdk PUBLIC ${BOOSTIO_TOOLS_INCLUDE_DIR})

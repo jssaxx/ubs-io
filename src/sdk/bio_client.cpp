@@ -174,22 +174,6 @@ BResult BioClient::BioDiagnoseSdkInit()
     return ret;
 }
 
-BResult BioClient::BioDiagnoseHtracerInit()
-{
-    const char *soFileName = "libhtracer_diagnose.so";
-    void *handler = dlopen(soFileName, RTLD_NOW);
-    if (handler == nullptr) {
-        CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
-        return BIO_INNER_ERR;
-    }
-    SdkDiagnose sdkInitFunc = reinterpret_cast<SdkDiagnose>(dlsym(handler, "HtracerDiagnoseInit"));
-    BResult ret = sdkInitFunc();
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to Initialize htracer diagnose, ret:" << ret << ".");
-    }
-    return ret;
-}
-
 BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 {
     BResult ret = BIO_OK;
@@ -205,12 +189,6 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
     ret = this->BioDiagnoseSdkInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
-        return ret;
-    }
-
-    ret = this->BioDiagnoseHtracerInit();
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to Initialize htracer diagnose, ret:" << ret << ".");
     }
     return ret;
 }
