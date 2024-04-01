@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include "bio_c.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -164,6 +165,7 @@ typedef struct {
     uint32_t splitIndex;
     uint64_t splitOffsetInFlow;
     bool isExistLocal;
+    uint8_t  copyFree;
     uint32_t sliceLen;
     char sliceBuf[0];
 } PutRequest;
@@ -269,6 +271,75 @@ typedef struct {
     uint32_t respLen;
 } ClientCallbackCtx;
 
+/* AllocSpace */
+typedef struct {
+    RequestComm comm;
+    uint16_t ptId;
+    uint32_t length;
+    uint64_t flowId;
+    uint64_t offset;
+    uint64_t index;
+    ObjLocation location;
+} AllocSpaceRequest;
+
+typedef struct {
+    uint32_t pid;
+    uint64_t length;
+    uint64_t startTime;
+}InterceptorAllocPageReq;
+
+typedef struct {
+    uint64_t offset;
+    uint64_t size;
+}InterceptorAllocPage;
+
+typedef struct {
+    uint32_t pid;
+    uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
+    CacheSpaceInfo address;
+}InterceptorAllocPageRsp;
+
+typedef struct {
+    uint32_t pid;
+    int32_t fd;
+    uint64_t inode;
+    uint64_t nbytes;
+    int64_t offset;
+    uint64_t startTime;
+}InterceptorPreadIn;
+
+typedef struct {
+    int32_t ret;
+    uint32_t unused;
+    uint64_t dataLen;
+    char data[];
+}InterceptorPreadOut;
+
+typedef struct {
+    uint32_t pid;
+    uint64_t fd;
+    uint64_t inode;
+    uint64_t nbytes;
+    int64_t  offset;
+    uint64_t startTime;
+    char data[];
+}InterceptorPwriteIn;
+
+typedef struct {
+    uint32_t pid;
+    uint64_t fd;
+    uint64_t inode;
+    uint64_t nbytes;
+    int64_t  offset;
+    uint64_t startTime;
+    CacheSpaceInfo address;
+}InterceptorLargePwriteIn;
+
+typedef struct {
+    int32_t ret;
+    uint32_t unused;
+    int64_t dataLen;
+}InterceptorPwriteOut;
 #ifdef __cplusplus
 }
 #endif

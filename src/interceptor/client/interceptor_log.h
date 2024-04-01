@@ -1,0 +1,90 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2023. All rights reserved.
+ */
+
+#ifndef INTERCEPTOR_LOG_H
+#define INTERCEPTOR_LOG_H
+
+#include <cstdio>
+#include <cstdint>
+#include <iostream>
+#include <sstream>
+#include <sys/time.h>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+namespace ock {
+namespace bio {
+typedef void (*LogFunc)(int32_t level, const char *logBuf);
+
+class InterceptorLog {
+public:
+    enum class Level {
+        LOG_LEVEL_DEBUG = 0,
+        LOG_LEVEL_INFO = 1,
+        LOG_LEVEL_WARN = 2,
+        LOG_LEVEL_ERROR = 3,
+        LOG_LEVEL_BUTT
+    };
+
+    InterceptorLog() = default;
+    ~InterceptorLog()
+    {
+        func = nullptr;
+    }
+
+    int32_t Initialize(int32_t level)
+    {
+        minLogLevel = level;
+        return 0;
+    }
+
+    inline int32_t GetMinLogLevel() const
+    {
+        return minLogLevel;
+    }
+
+    inline void Log(int level, const std::ostringstream &oss)
+    {
+        if (func != nullptr) {
+            func(level, oss.str().c_str());
+        } else {
+            struct timeval tv {};
+            char strTime[24];
+            gettimeofday(&tv, nullptr);
+            strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
+            std::cout << strTime << tv.tv_usec << " " << level << " " << oss.str() << std::endl;
+        }
+    }
+
+    static InterceptorLog* Instance()
+    {
+        static auto *instance = new InterceptorLog();
+        return instance;
+    }
+
+private:
+    LogFunc func = nullptr;
+    int32_t minLogLevel = 1;
+};
+
+#ifndef INTERCEPTOR_LOG_FILENAME
+#define INTERCEPTOR_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#endif
+#define INTERCEPTOR_LOG(level, args)                                                                               \
+    do {                                                                                                           \
+        if ((level) >= InterceptorLog::Instance()->GetMinLogLevel()) {                                             \
+            std::ostringstream oss;                                                                                \
+            oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] "   << args; \
+            InterceptorLog::Instance()->Log(level, oss);                                                           \
+        }                                                                                                          \
+    } while (0)
+
+#define CLOG_DEBUG(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_DEBUG), args)
+#define CLOG_INFO(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_INFO), args)
+#define CLOG_WARN(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_WARN), args)
+#define CLOG_ERROR(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_ERROR), args)
+}
+}
+#endif

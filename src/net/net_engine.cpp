@@ -12,6 +12,7 @@
 #include <sys/syscall.h>
 #include <linux/version.h>
 
+#include "securec.h"
 #include "bio_ip_util.h"
 #include "net_log.h"
 #include "net_executor_pool.h"
@@ -54,12 +55,14 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         return ret;
     }
 
+    reqExecutorNum = coreThreadNum;
     mRequestExecutor = MakeRef<NetExecutorPool>("NetExecutor");
     if (mRequestExecutor == nullptr) {
         NET_LOG_ERROR("Make net request executor failed.");
         return BIO_ALLOC_FAIL;
     }
-    ret = mRequestExecutor->Start(coreThreadNum, queueSize);
+
+    ret = mRequestExecutor->Start(reqExecutorNum, queueSize);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to start request executor, ret:" << ret << ".");
         return ret;
@@ -260,23 +263,22 @@ void NetEngine::AssignIpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOpti
     options.heartBeatProbeInterval = NO_1;
     options.qpSendQueueSize = NO_64;
     options.pollingBatchSize = NO_16;
-    options.prePostReceiveSizePerQP = NO_32;
+    options.prePostReceiveSizePerQP = NO_64;
     options.oobType = NET_OOB_UDS;
-    options.SetWorkerGroups("1");
-    const static int DEFAULT_THREAD_PRIORITY = -20;
+    options.completionQueueDepth = NO_8192;
+    const static int DEFAULT_THREAD_PRIORITY = 0;
     options.workerThreadPriority = DEFAULT_THREAD_PRIORITY;
     if (isOobSvr) {
         NetServiceOobUDSListenerOptions listenOpt;
         listenOpt.Name(UDS_NAME);
         listenOpt.perm = 0;
         mIpcService->AddOobUdsOptions(listenOpt);
-        options.SetWorkerGroups("4");
         mIpcService->RegisterNewChannelHandler(std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
             std::placeholders::_2, std::placeholders::_3));
     }
     mIpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
         BROKEN_ALL);
-    mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
+    mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestIPCReceived, this, std::placeholders::_1));
     mIpcService->RegisterOpSentHandler(0, std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
     mIpcService->RegisterOpOneSideHandler(0, std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
 }
@@ -295,13 +297,16 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     }
 
     NetServiceOptions options{};
+    options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
+    std::ostringstream oss;
+    oss << std::to_string(opt.handlerCount);
+    options.SetWorkerGroups(oss.str());
     AssignIpcServiceOptions(isOobSvr, options);
     auto result = mIpcService->Start(options);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start ipc service, result:" << NetErrStr(result) << ".");
         return BIO_ERR;
     }
-
     NET_LOG_INFO("Bio server Start ipc service success, protocol:" << opt.protocol << ".");
     return BIO_OK;
 }
@@ -450,6 +455,19 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
         return BIO_ERR;
     }
     return mRequestExecutor->AddTask(handler, ctx);
+}
+
+int32_t NetEngine::RequestIPCReceived(ServiceContext &ctx)
+{
+    auto &handler = mHandlers[ctx.OpCode()];
+    if (UNLIKELY(handler == nullptr)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() <<
+                                                                           " as no handler registered");
+        return BIO_ERR;
+    }
+
+    auto ret = handler(ctx);
+    return ret;
 }
 
 int32_t NetEngine::RequestPosted(const ServiceContext &ctx)
