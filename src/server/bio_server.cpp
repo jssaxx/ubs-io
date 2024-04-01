@@ -3,7 +3,6 @@
  */
 
 #include <unistd.h>
-
 #include <utility>
 #include "htracer.h"
 #include "bio_log.h"
@@ -13,8 +12,8 @@
 #include "bio_monotonic.h"
 #include "flow_manager.h"
 #include "bio_server_c.h"
+#include "interceptor_server.h"
 #include "bio_server.h"
-
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
 #endif
@@ -41,6 +40,7 @@ BioServer::BioServer() noexcept
         { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
         { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, nullptr },
         { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr, nullptr },
+        { "InterceptorServer", std::bind(&BioServer::BioIntercepterServerInit, this), nullptr, nullptr, nullptr},
         { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioMirrorServerExit, this) },
         { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
@@ -360,6 +360,17 @@ BResult BioServer::BioCacheInit()
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to recover cache instance, ret:" << ret << ".");
         return ret;
+    }
+
+    return BIO_OK;
+}
+
+BResult BioServer::BioIntercepterServerInit()
+{
+    auto ret = InterceptorServer::GetInstance().StartServer();
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Failed to init interceptor server, ret:" << ret << ".");
+        return BIO_ERR;
     }
 
     return BIO_OK;

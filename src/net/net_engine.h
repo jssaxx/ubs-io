@@ -204,6 +204,24 @@ public:
         return SyncCall(opCode, req, resp, ch);
     }
 
+    template <typename TResp>
+    BResult SyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, TResp &resp)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return BIO_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            return BIO_NET_RETRY;
+        }
+
+        return SyncCallBuffInner(opCode, req, reqLen, resp, ch);
+    }
+
     template <typename TReq, typename TResp>
     BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen)
     {
@@ -399,6 +417,7 @@ private:
     int32_t NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload);
     void ChannelBroken(const ChannelPtr &ch);
     int32_t RequestReceived(ServiceContext &ctx);
+    int32_t RequestIPCReceived(ServiceContext &ctx);
     int RequestPosted(const ServiceContext &ctx);
     int OneSideDone(const ServiceContext &ctx);
 
@@ -435,6 +454,28 @@ private:
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg(&resp, sizeof(TResp));
         auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+        if (UNLIKELY(result != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
+            return NetResult(result);
+        }
+
+        if (NN_UNLIKELY(rspOpInfo.errorCode != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << rspOpInfo.errorCode);
+            return rspOpInfo.errorCode;
+        }
+
+        return BIO_OK;
+    }
+
+    template <typename TResp> BResult SyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, TResp &resp,
+            ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        NetServiceOpInfo reqOpInfo(opCode);
+        reqOpInfo.timeout = mTimeout;
+        NetServiceOpInfo rspOpInfo{};
+        NetServiceMessage respMsg(&resp, sizeof(TResp));
+        auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen}, rspOpInfo, respMsg);
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
             return NetResult(result);
@@ -554,6 +595,7 @@ private:
     std::mutex mMutex;
     NetOptions mOptions;
     NetExecutorPoolPtr mRequestExecutor = nullptr;
+    uint32_t reqExecutorNum;
     int32_t mShmFd = -1;
     uint64_t mShareOffset = 0;
     uint64_t mShmSize = 0;

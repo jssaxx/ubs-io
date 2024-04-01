@@ -151,10 +151,41 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
-            ", location:" << location.location[0] << ".");
+            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_INFO("Put value success, key:" << key << ", length:" << length << ", location:" <<
-            location.location[0] << ".");
+        CLIENT_LOG_INFO("Put value success, key:" << key << ", length:" << length << ", location0:" <<
+            location.location[0] << ", location1:" << location.location[1] << ".");
+    }
+    return ToCResult(ret);
+}
+
+CResult Bio::Put(const char *key, CacheSpaceInfo &spaceInfo)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    if (UNLIKELY(!KeyValid(key) || spaceInfo.addressNum == 0 || spaceInfo.descriptorSize == 0)) {
+        return RET_CACHE_EPERM;
+    }
+
+    CLIENT_LOG_INFO("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
+        ", location1:" << spaceInfo.loc.location[1] << ", address num:" << spaceInfo.addressNum << ", address0:" <<
+        spaceInfo.address[0].address << ", address0 size:" << spaceInfo.address[0].size << ", address1:" <<
+        spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size << ".");
+
+    uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, key, nullptr, length, spaceInfo.loc };
+    StatisticPutIoSize(length);
+    BIO_TRACE_START(SDK_TRACE_PUT);
+    BResult ret = gClient->Put(param, spaceInfo);
+    BIO_TRACE_END(SDK_TRACE_PUT, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+            ", location0:" << spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
+    } else {
+        CLIENT_LOG_INFO("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
+            spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
     }
     return ToCResult(ret);
 }
@@ -241,8 +272,8 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     BResult ret = gClient->Load(key, offset, length, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", offset:" << offset <<
-            ", length:" << length << ", location:" << location.location[0] << ".");
+        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+            length << ", location:" << location.location[0] << ".");
     }
     return ToCResult(ret);
 }
@@ -283,6 +314,30 @@ CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     BIO_TRACE_START(SDK_TRACE_STAT);
     auto ret = gClient->Stat(key, location, stat);
     BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    return ToCResult(ret);
+}
+
+CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spaceInfo)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    ObjLocation location;
+    if (spaceInfo.allocLoc != 0) {
+        auto ret = gClient->CalculateLocation(objectId, LOCAL_AFFINITY, location);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return RET_CACHE_NOT_READY;
+        }
+        spaceInfo.loc = location;
+    } else {
+        location = spaceInfo.loc;
+    }
+
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, nullptr, nullptr, length, location };
+    BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE);
+    auto ret = gClient->AllocSpace(param, spaceInfo);
+    BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE, ret);
     return ToCResult(ret);
 }
 
@@ -341,7 +396,7 @@ void BioService::Exit()
 }
 }
 
-/********************************* Boostio api implementation in C language **********************/
+/* ******************************** Boostio api implementation in C language ********************* */
 using namespace ock::bio;
 
 std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
@@ -416,7 +471,38 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
     auto ret = bioInstance->CalculateLocation(objectId, outLocation);
     location->location[0] = outLocation.location[0];
     location->location[1] = outLocation.location[1];
+    CLIENT_LOG_INFO("Get location success, tenantId:" << tenantId << ", objectId:" << objectId << ", location0:" <<
+        location->location[0] << ", location1:" << location->location[1] << ".");
     return ret;
+}
+
+CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceInfo *spaceInfo)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    return bioInstance->AllocSpace(objectId, length, *spaceInfo);
+}
+
+CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spaceInfo)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(gLock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->Put(key, *spaceInfo);
 }
 
 CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location)
@@ -433,8 +519,8 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
     return bioInstance->Put(key, value, length, location);
 }
 
-CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-               char *value, uint64_t *realLength)
+CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
+    uint64_t *realLength)
 {
     if (UNLIKELY(realLength == nullptr)) {
         return RET_CACHE_EPERM;
@@ -469,7 +555,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location)
 }
 
 CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-                BioLoadCallback callback, void *context)
+    BioLoadCallback callback, void *context)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -542,4 +628,38 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
         *stat = statInfo;
     }
     return ret;
+}
+
+ReadHook g_readHook = nullptr;
+WriteHook g_writeHook = nullptr;
+WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
+
+void BioReigsterJuiceFSRead(ReadHook rh)
+{
+    g_readHook = rh;
+}
+
+void BioReigsterJuiceFSWrite(WriteHook wh)
+{
+    g_writeHook = wh;
+}
+
+void BioReigsterJuiceFSWriteCopyFree(WriteCopyFreeHook wh)
+{
+    g_writeCopyFreeHook = wh;
+}
+
+uint64_t BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
+{
+    g_readHook(inode, buff, count, offset, readLen);
+}
+
+uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
+{
+    g_writeHook(inode, buff, count, offset, fh);
+}
+
+uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
+{
+    g_writeCopyFreeHook(inode, offset, count, spaceInfo);
 }

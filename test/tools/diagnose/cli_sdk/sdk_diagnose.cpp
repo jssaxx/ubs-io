@@ -588,8 +588,8 @@ static void HandlePerf(std::vector<std::string> cmds)
     float time_use = cost_sec * 1000000U + cost_usec;
     auto totalCount = static_cast<double>(count * ioDepth) ;
     auto totalSize = static_cast<double>(count * bs);
-    double dataPerf = static_cast<double>((totalSize * 1000000U) / 1048576U) / time_use;
-    double iops = static_cast<double>(totalSize * 1000000U) / time_use;
+    double dataPerf = static_cast<double>(((totalSize / 1048576U) * 1000000U / time_use) * ioDepth);
+    double iops = static_cast<double>(totalCount * 1000000U) / time_use;
     int bwFactor = 1;
 
     time_t rawtime;
@@ -604,7 +604,7 @@ static void HandlePerf(std::vector<std::string> cmds)
     CLI_PrintBuf("  total spent                : %.2f ms\n", time_use / 1000U);
     CLI_PrintBuf("  throughput                 : %.4f MB/s\n", dataPerf * bwFactor);
     CLI_PrintBuf("  IOPS                       : %.2f /s\n", iops);
-    CLI_PrintBuf("  latency                    : %.2f (us)\n", time_use / totalCount);
+    CLI_PrintBuf("  latency                    : %.2f (us)\n", time_use / count);
     CLI_PrintBuf("Perf Test End.\n");
 
     free(param);

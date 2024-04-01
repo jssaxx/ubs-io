@@ -100,7 +100,7 @@ private:
     BResult ExpiredClearDisk();
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
 private:
     uint64_t mProcId;

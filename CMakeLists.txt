@@ -72,10 +72,13 @@ include_directories(
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
+        ${SRC_DIR}/interceptor
+        ${SRC_DIR}/interceptor/server
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/include
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
+        ${PROJECT_3RDPARTY_BIN_DIR}/io_interceptor/include
 )
 
 if (${DEBUG_UT} MATCHES "ON")

@@ -64,10 +64,13 @@ mkdir -p boostio/conf
 \cp 3rdparty/hcom/lib/securec/* boostio/lib/.
 \cp 3rdparty/zookeeper/lib/* boostio/lib/.
 \cp 3rdparty/huawei_secure_c/lib/* boostio/lib/.
+\cp 3rdparty/io_interceptor/lib/libock_interceptor.so boostio/lib/.
 \cp bio/conf/*.conf boostio/conf/.
 \cp bio/lib/libbio_sdk.so boostio/lib/.
 \cp bio/lib/libbio_server.so boostio/lib/.
 \cp bio/lib/libsecurec.so boostio/lib/.
+\cp bio/lib/libbio_interceptor_server.so boostio/lib/.
+\cp bio/lib/libock_iofwd_proxy.so boostio/lib/.
 
 echo "当前cpu架构：$arch"
 if [[ "$BUILD_TYPE $arch" == 'debug aarch64' ]]; then
