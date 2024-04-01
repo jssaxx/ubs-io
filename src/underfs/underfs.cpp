@@ -223,7 +223,7 @@ void UnderFs::Stop()
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
-    std::string keyPath = CEPH_PATH_EXT;
+    std::string keyPath = CEPH_PATH;
     keyPath += key;
 
     using namespace std;
@@ -246,7 +246,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
 BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
-    std::string keyPath = CEPH_PATH_EXT;
+    std::string keyPath = CEPH_PATH;
     keyPath += key;
 
     using namespace std;
@@ -271,7 +271,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 BResult UnderFs::Delete(const char *key)
 {
     using namespace std;
-    std::string keyPath = CEPH_PATH_EXT;
+    std::string keyPath = CEPH_PATH;
     keyPath += key;
 
     BIO_TRACE_START(UFS_TRACE_DEL);
@@ -297,7 +297,7 @@ BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
     using namespace std;
 
     BIO_TRACE_START(UFS_TRACE_STAT);
-    std::string keyPath = CEPH_PATH_EXT;
+    std::string keyPath = CEPH_PATH;
     keyPath += key;
     struct stat file_stat;
     if (stat(keyPath.c_str(), &file_stat) != 0) {
@@ -312,7 +312,7 @@ BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
 
 BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat)
 {
-    std::string keyPath = CEPH_PATH_EXT;
+    std::string keyPath = CEPH_PATH;
     struct dirent *ptr;
     DIR *dir = opendir(keyPath.c_str());
     while ((ptr = readdir(dir)) != nullptr) {
