@@ -277,7 +277,94 @@ BResult MirrorClient::Put(MirrorPut &param)
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
             ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt << ", ret:" << ret << ".");
+            LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
+            retryTime = Monotonic::TimeSec() - startTime;
+            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                isRetry = true;
+                sleep(BIO_IO_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    return ret;
+}
+
+BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo,
+                                          PutRequest *&req)
+{
+    auto *reqTmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
+    if (UNLIKELY(reqTmp == nullptr)) {
+        CLIENT_LOG_ERROR("Alloc put memory failed, len:" << sizeof(PutRequest) + spaceInfo.descriptorSize << ".");
+        return BIO_INNER_ERR;
+    }
+
+    req = static_cast<PutRequest *>(static_cast<void *>(reqTmp));
+    req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
+    req->tenantId = param.attr.mTenantId;
+    req->affinity = param.attr.affinity;
+    req->strategy = param.attr.strategy;
+    CopyKey(req->key, param.key, KEY_MAX_SIZE);
+    req->length = param.length;
+    req->mrKey  = net::BioClientNet::Instance()->GetLocalMrKey();
+    req->sliceLen = spaceInfo.descriptorSize;
+    req->copyFree = true;
+    memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
+
+    CLIENT_LOG_INFO("Put copy free request key:" << req->key << ", length:" << ", index:" << req->flowIndex <<
+                    ", sliceLen:" << req->sliceLen << ", mrkey:" << req->mrKey);
+    return BIO_OK;
+}
+
+BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo)
+{
+    uint16_t ptId = ParseLocation(spaceInfo.loc);
+    CmPtInfo ptEntry;
+    BResult ret = GetPtEntry(ptId, ptEntry);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    PutRequest *req = nullptr;
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
+    ret = PreparePutWithSpace(param, ptEntry, spaceInfo, req);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Prepare put with space failed, ret:" << ret << ", key:" << param.key << ", length:"
+                         << param.length << ", loc0:" << spaceInfo.loc.location[0] << ", loc1:" <<
+                         spaceInfo.loc.location[1] << ".");
+        return ret;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_PUT_SEND);
+    ret = SendPutRequestFast(ptEntry, param, req);
+    BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+    }
+
+    delete[] static_cast<uint8_t *>(static_cast<void *>(req));
+    BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
+    return ret;
+}
+
+BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
+{
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t retryCnt = 0;
+    BResult ret;
+
+    do {
+        isRetry = false;
+        ret = PutImpl(param, spaceInfo);
+        if (LIKELY(ret == BIO_OK)) {
+            return BIO_OK;
+        }
+        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY ||
+            ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
+            LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 isRetry = true;
@@ -564,6 +651,79 @@ BResult MirrorClient::StatObjectImpl(const char *key, const ObjLocation &locatio
     return ret;
 }
 
+BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+{
+    uint16_t ptId = ParseLocation(param.location);
+    CmPtInfo ptEntry;
+    BResult ret = GetPtEntry(ptId, ptEntry);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc space failed, ret: " << ret << ", ptId:" << ptId << ".");
+        return ret;
+    }
+
+    uint64_t flowId = UINT64_MAX;
+    uint64_t offset = UINT64_MAX;
+    uint64_t flowIndex = UINT64_MAX;
+    BIO_TRACE_START(SDK_TRACE_PUT_ALLOC_OFF);
+    ret = AllocPutOffset(ptId, ptEntry.version, param.length, flowId, offset, flowIndex);
+    BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        return ret;
+    }
+
+    GetSliceResponse *rsp = nullptr;
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
+    ret = agent::BioClientAgent::Instance()->PrepareResource(ptEntry, flowId, offset, flowIndex,
+                                                             param.length, &rsp);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_GET_SLICE, BIO_OK);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc put space failed, ret:" << ret << ", key:" << param.key << ", flowId:" << flowId <<
+                         ", flowOffset:" << offset << ", length:" << param.length << ".");
+        return ret;
+    }
+
+    spaceInfo.descriptorSize = rsp->sliceLen;
+    ret = memcpy_s(spaceInfo.descriptorInfo, CACHE_SPACE_DEC_SIZE, rsp->sliceBuf, rsp->sliceLen);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Failed to copy cache space info src size:" << rsp->sliceLen << " to size:" <<
+                         CACHE_SPACE_DEC_SIZE << ".");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        return BIO_INNER_ERR;
+    }
+
+    spaceInfo.addressNum = rsp->addrNum;
+    for (uint32_t idx = 0; idx < spaceInfo.addressNum ; idx++) {
+        if (mMode == WorkerMode::CONVERGENCE) {
+            spaceInfo.address[idx].address = rsp->addr[idx].chunkId + rsp->addr[idx].chunkOffset;
+        } else {
+            uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx]);
+            spaceInfo.address[idx].address = reinterpret_cast<uintptr_t>(realAddr);
+        }
+        spaceInfo.address[idx].size = rsp->addr[idx].chunkLen;
+    }
+
+    delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+    return BIO_OK;
+}
+
+BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+{
+    BResult ret;
+
+    ret = AllocSpaceImpl(param, spaceInfo);
+    if (LIKELY(ret == BIO_OK)) {
+        return BIO_OK;
+    }
+
+    CLIENT_LOG_INFO("Alloc space key:" << param.key << ", location0:" << spaceInfo.loc.location[0] << ", location1:"
+                    << spaceInfo.loc.location[1] << ", address num:" << spaceInfo.addressNum
+                    << ", address0:" << spaceInfo.address[0].address << ", address0 size:" << spaceInfo.address[0].size
+                    << ", address1:" << spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size
+                    << ".");
+    return ret;
+}
+
 BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId,
     uint64_t &offset, uint64_t &index)
 {
@@ -613,6 +773,7 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->splitIndex = 0;
     req->splitOffsetInFlow = 0;
     req->sliceLen = rsp->sliceLen;
+    req->copyFree = false;
     memcpy_s(req->sliceBuf, rsp->sliceLen, rsp->sliceBuf, rsp->sliceLen);
 }
 
@@ -752,6 +913,7 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
 {
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
+        req->copyFree = false;
         net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT,
             static_cast<void *>(req), sizeof(PutRequest) + req->sliceLen, callback);
     }
@@ -774,7 +936,7 @@ void MirrorClient::InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota)
     cbCtx.respLen = 0;
 }
 
-BResult MirrorClient::SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param)
+BResult MirrorClient::SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
@@ -789,16 +951,6 @@ BResult MirrorClient::SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param)
         }
     };
     NetEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
-
-    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
-    PutRequest *req = nullptr;
-    BResult ret = Prepare(ptEntry, param, req);
-    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Prepare put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
-            param.length << ", flowId:" << param.flowId << ", flowOffset:" << param.flowOffset << ".");
-        return ret;
-    }
 
     uint32_t localIdx = UINT32_MAX;
     std::vector<uint32_t> remoteIdx;
@@ -819,7 +971,6 @@ BResult MirrorClient::SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param)
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     net::BioClientNet::Instance()->Free(req->mrAddress);
-    delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     return cbCtx.result;
 }
 
@@ -937,9 +1088,20 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
         ret = SendPutRequestSlow(ptEntry, param);
         BIO_TRACE_END(SDK_TRACE_PUT_SLOW_SEND, ret);
     } else {
+        BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
+        PutRequest *req = nullptr;
+        BResult ret = Prepare(ptEntry, param, req);
+        BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Prepare put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
+                param.length << ", flowId:" << param.flowId << ", flowOffset:" << param.flowOffset << ".");
+            return ret;
+        }
+
         BIO_TRACE_START(SDK_TRACE_PUT_SEND);
-        ret = SendPutRequestFast(ptEntry, param);
+        ret = SendPutRequestFast(ptEntry, param, req);
         BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
+        delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     }
     return ret;
 }

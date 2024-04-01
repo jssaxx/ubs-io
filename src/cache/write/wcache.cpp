@@ -58,12 +58,12 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 {
     // degraded write through to underfs
     if (UNLIKELY(isDegrade)) {
-        return PutByPass(key, srcSlice, sliceReader, destSliceRef);
+        return PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
     }
 
     // put it memory tier cache.
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
-    destSliceRef = memCache->Write(key, srcSlice, sliceReader);
+    destSliceRef = memCache->Write(key, srcSlice, sliceReader, attr);
     if (UNLIKELY(destSliceRef == nullptr)) {
         LOG_ERROR("Memory cache write failed.");
         return BIO_INNER_ERR;
@@ -79,10 +79,10 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 }
 
 BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-    WCacheSliceRefPtr &destSliceRef)
+    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
-    destSliceRef = memCache->Write(key, srcSlice, sliceReader);
+    destSliceRef = memCache->Write(key, srcSlice, sliceReader, attr);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
     auto *value = new char[srcSlice->GetLength()];

@@ -96,6 +96,25 @@ public:
      */
     CResult Stat(const char *key, const ObjLocation &location, ObjStat &stat);
 
+    /**
+     * @brief: alloc write space
+     *
+     * @param[in]: objectId: object id for alloc space
+     * @param[in]: length : alloc space length
+     * @param[out]: spaceInfo: alloc space info
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spaceInfo);
+
+    /**
+     * @brief: put for copy free
+     *
+     * @param[in]: key: put key
+     * @param[in]: spaceInfo : alloc space info
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult Put(const char *key, CacheSpaceInfo &spaceInfo);
+
     Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
         : mTenantId(id), mAffinity(affinity), mStrategy(strategy){};
 

@@ -65,6 +65,8 @@ public:
 
     BResult Put(MirrorPut &param);
 
+    BResult Put(MirrorPut &param, CacheSpaceInfo &spaceInfo);
+
     BResult Get(MirrorGet &param, uint64_t &realLen);
 
     BResult DeleteKey(const char *key, const ObjLocation &location);
@@ -75,6 +77,8 @@ public:
     BResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
+
+    BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -123,7 +127,9 @@ public:
     BResult RebuildPtView(uint64_t &realPtTimes);
 
 private:
+    BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo, PutRequest *&req);
     BResult PutImpl(MirrorPut &param);
+    BResult PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
 
@@ -141,6 +147,7 @@ private:
         return memcpy_s(dst, len, src, len);
     }
 
+    BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();
     BResult LoadAffinityFlow();
@@ -168,7 +175,7 @@ private:
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
-    BResult SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param);
+    BResult SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
     void StructPutRequestSlow(MirrorPut &param, CmPtInfo &ptEntry, uint32_t splitCount, PutRequest *req);
     void PutRemoteSlow(MirrorPut &param, CmPtInfo &ptEntry, std::vector<uint32_t> &index, uint32_t splitCount,
         NetEngine::Callback &callback);

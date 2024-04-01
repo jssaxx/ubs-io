@@ -23,12 +23,13 @@ using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
 using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
 
 struct CacheAttr {
+    bool mCopyFree;
     uint64_t mTenantId;
     AffinityStrategy affinity;
     WriteStrategy strategy;
 
-    CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str) : mTenantId(id), affinity(aff), strategy(str) {}
-
+    CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str) : mCopyFree(false), mTenantId(id), affinity(aff), strategy(str) {}
+    CacheAttr(bool copyFree, uint64_t id, AffinityStrategy aff, WriteStrategy str) : mCopyFree(copyFree), mTenantId(id), affinity(aff), strategy(str) {}
     inline CacheAttr &operator = (const CacheAttr &other)
     {
         mTenantId = other.mTenantId;

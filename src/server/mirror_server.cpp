@@ -96,7 +96,7 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
 
         auto addrP = reinterpret_cast<ObjStat *>(address);
         uint32_t index = 0;
-        for (auto &obj: objs) {
+        for (auto &obj : objs) {
             CopyKey(addrP[index].key, obj.second.key, KEY_MAX_SIZE);
             addrP[index].size = obj.second.size;
             addrP[index].time = obj.second.time;
@@ -106,8 +106,8 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
 
     ListResponse rsp;
     rsp.addr = address;
-    rsp.addrOffset = (address != 0) ?
-            BioServer::Instance()->GetNetEngine()->GetAddressOffset(static_cast<uint64_t>(address)) : 0;
+    rsp.addrOffset =
+        (address != 0) ? BioServer::Instance()->GetNetEngine()->GetAddressOffset(static_cast<uint64_t>(address)) : 0;
     rsp.num = objs.size();
     rsp.buffLen = 0;
     Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(ListResponse));
@@ -300,8 +300,8 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         rMrAddr += off;
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
-        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrAddr <<
-            ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
+        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrAddr << ", lKey:" <<
+            lMrVec[idx].key << ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
         if (req.isExistLocal) {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
@@ -357,8 +357,8 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
 {
     LOG_INFO("Mirror server put, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
         sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
-        sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" <<
-        sliceP->GetAddrs().size() << ".");
+        sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() <<
+        ".");
 
     auto reader = [&req, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) {
@@ -369,7 +369,8 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
     };
 
     BIO_TRACE_START(MIRROR_TRACE_PUT);
-    CacheAttr attr(req.tenantId, static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
+    CacheAttr attr(req.copyFree, req.tenantId, static_cast<AffinityStrategy>(req.affinity),
+        static_cast<WriteStrategy>(req.strategy));
     BResult ret = Cache::Instance().Put(req.key, sliceP, reader, attr);
     BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -382,12 +383,10 @@ BResult MirrorServer::PutSlow(PutRequest &req, const WCacheSlicePtr &sliceP)
 {
     LOG_INFO("Mirror server put slow, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
         sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
-        sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" <<
-        sliceP->GetAddrs().size() << ".");
+        sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() <<
+        ".");
 
-    auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        return BIO_OK;
-    };
+    auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult { return BIO_OK; };
     BIO_TRACE_START(MIRROR_TRACE_PUT);
     CacheAttr attr(req.tenantId, static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
     BResult ret = Cache::Instance().Put(req.key, sliceP, reader, attr);
@@ -481,7 +480,7 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
     return BIO_OK;
 }
 
-BResult  MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
+BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
     ServiceContext &netCtx)
 {
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
@@ -493,8 +492,8 @@ BResult  MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(netCtx.Channel(), rReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lAddr:" << lMrVec[idx].address <<
-                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[0].address + off << ", rKey:" <<
-                rMrVec[0].key << ", size:" << lMrVec[idx].size << ".");
+                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[0].address + off << ", rKey:" << rMrVec[0].key <<
+                ", size:" << lMrVec[idx].size << ".");
             break;
         }
         off += lMrVec[idx].size;
@@ -520,8 +519,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) &&
-            (req.comm.pid == getpid())) {
+        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
             return WriterLocalSameProcess(from, to, req.mrKey);
         }
 
@@ -533,8 +531,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
             return ret;
         }
 
-        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) &&
-            (req.comm.pid != getpid())) {
+        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
             return WriterLocalDiffProcess(isAlloc, lMrVec, rsp);
         }
 
@@ -580,8 +577,8 @@ BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, Obj
             stat.time = info.second.time;
             objs.insert({ info.first, stat });
         }
-        LOG_INFO("Mirror server List success, prefix:" << req.prefix << ", ptId:" << req.comm.ptId <<
-            ", num:" << objs.size() << ".");
+        LOG_INFO("Mirror server List success, prefix:" << req.prefix << ", ptId:" << req.comm.ptId << ", num:" <<
+            objs.size() << ".");
     }
     return ret;
 }
@@ -759,8 +756,7 @@ BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uin
 {
     auto ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
-    LOG_INFO("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" <<
-        flowOffset);
+    LOG_INFO("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" << flowOffset);
     return BIO_OK;
 }
 
@@ -1204,8 +1200,8 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
         rsp->addr[i].chunkId = addrVec[i].chunkId;
         rsp->addr[i].chunkOffset = addrVec[i].chunkOffset;
         rsp->addr[i].chunkLen = addrVec[i].chunkLen;
-        rsp->addrOffset[i]
-                = BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
+        rsp->addrOffset[i] =
+            BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
     }
     rsp->sliceLen = sliceLen;
     uint32_t outSliceLen = 0;

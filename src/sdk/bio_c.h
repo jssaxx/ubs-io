@@ -68,6 +68,23 @@ typedef struct {
     WriteStrategy strategy;
 } CacheDescriptor;
 
+#define CACHE_SPACE_ADDRESS_SIZE 2
+#define CACHE_SPACE_DEC_SIZE 64
+
+typedef struct {
+    uint64_t address;
+    uint32_t size;
+}CacheAddress;
+
+typedef struct {
+    uint8_t  allocLoc;
+    uint16_t addressNum;
+    uint16_t descriptorSize;
+    ObjLocation loc;
+    CacheAddress address[CACHE_SPACE_ADDRESS_SIZE];
+    char descriptorInfo[CACHE_SPACE_DEC_SIZE];
+}CacheSpaceInfo;
+
 /**
  * @brief: Initialize bio service
  *
@@ -193,6 +210,38 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **Objs, uint64
  */
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
 
+/**
+ * @brief: alloc write space for write copy free
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: objectId: object id for generate location
+ * @param[in]: length : alloc space length
+ * @param[out]: stat: object stat info
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceInfo *spaceInfo);
+
+/**
+ * @brief: put with space
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: key: write key
+ * @param[in]: addressInfo : write alloc space
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spaceInfo);
+
+typedef uint64_t(*ReadHook) (uint64_t, char *, uint64_t, uint64_t, int *);
+typedef uint64_t(*WriteHook) (uint64_t, char *, uint64_t, uint64_t, uint64_t);
+typedef uint64_t(*WriteCopyFreeHook) (uint64_t, uint64_t, uint64_t, CacheSpaceInfo *);
+
+uint64_t BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
+uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh);
+uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo);
+
+void BioReigsterJuiceFSRead(ReadHook rh);
+void BioReigsterJuiceFSWrite(WriteHook wh);
+void BioReigsterJuiceFSWriteCopyFree(WriteCopyFreeHook wh);
 #ifdef __cplusplus
 }
 #endif

@@ -67,6 +67,11 @@ public:
         return mMirror->Put(param);
     }
 
+    inline BResult Put(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+    {
+        return mMirror->Put(param, spaceInfo);
+    }
+
     inline BResult Get(MirrorClient::MirrorGet &param, uint64_t &length)
     {
         return mMirror->Get(param, length);
@@ -91,6 +96,11 @@ public:
     inline BResult Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     {
         return mMirror->StatObject(key, location, stat);
+    }
+
+    inline BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+    {
+        return mMirror->AllocSpace(param, spaceInfo);
     }
 
     inline CacheDescriptor Query(const uint64_t tenantId)
