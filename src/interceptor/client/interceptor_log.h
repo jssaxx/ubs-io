@@ -66,7 +66,7 @@ public:
 
 private:
     LogFunc func = nullptr;
-    int32_t minLogLevel = 1;
+    int32_t minLogLevel = 3;
 };
 
 #ifndef INTERCEPTOR_LOG_FILENAME
