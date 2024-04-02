@@ -411,6 +411,36 @@ uint16_t ViewCalcPtEntryHasNodeId(PtEntry *ptEntry, uint16_t nodeId)
     return FALSE;
 }
 
+int32_t ViewCalcBuildPreCheck(CalcCore *calc, uint16_t *index, PtEntry *ptEntry, uint64_t globalVersion)
+{
+    if (ptEntry->birthVersion == globalVersion) {
+        return CM_OK;
+    }
+
+    if (ptEntry->state != PT_STATE_NORMAL && ptEntry->state != PT_STATE_DEGRADE_LOSS1) {
+        return CM_OK;
+    }
+
+    uint16_t nodeId, diskId;
+    if (ptEntry->copyList[*index].state != PT_COPY_STATE_INIT &&
+        ptEntry->copyList[*index].state != PT_COPY_STATE_OUT) {
+        nodeId = ptEntry->copyList[*index].nodeId;
+        diskId = ptEntry->copyList[*index].diskId;
+    } else {
+        nodeId = ptEntry->copyList[*index + calc->copyNum].nodeId;
+        diskId = ptEntry->copyList[*index + calc->copyNum].diskId;
+        *index = *index + calc->copyNum;
+    }
+    if (ptEntry->masterNodeId == nodeId && ptEntry->masterDiskId == diskId) {
+        return CM_OK;
+    }
+    if (nodeId == NODE_ID_INVALID || diskId == DISK_ID_INVALID) {
+        CM_LOGERROR("Impossible.");
+        return CM_OK;
+    }
+    return CM_ERR;
+}
+
 int32_t ViewCalcBuildPtEntry1(CalcCore *calc, uint16_t copyIndex, PtEntry *ptEntry, uint64_t globalVersion, DList *head)
 {
     CalcElem *elem, *startElem;
@@ -426,8 +456,14 @@ int32_t ViewCalcBuildPtEntry1(CalcCore *calc, uint16_t copyIndex, PtEntry *ptEnt
         return CM_OK;
     }
 
-    uint16_t nodeId = ptEntry->copyList[copyIndex].nodeId;
-    uint16_t diskId = ptEntry->copyList[copyIndex].diskId;
+    uint16_t index = copyIndex;
+    int32_t ret = ViewCalcBuildPreCheck(calc, &index, ptEntry, globalVersion);
+    if (ret == CM_OK) {
+        return CM_OK;
+    }
+
+    uint16_t nodeId = ptEntry->copyList[index].nodeId;
+    uint16_t diskId = ptEntry->copyList[index].diskId;
 
     startElem = NULL;
 
@@ -527,10 +563,6 @@ int32_t ViewCalcBuildPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeSt
             }
         }
         for (ptId = 0; ptId < calc->ptNum; ptId++) {
-            PtEntry *ptEntry = &ptEntryList->ptEntryList[ptId];
-            if (ptEntry->state != PT_STATE_NORMAL || ptEntry->copyNum != calc->copyNum) {
-                continue;
-            }
             ret = ViewCalcBuildPtEntry1(calc, copyIndex, &ptEntryList->ptEntryList[ptId], ptEntryList->globalVersion, &calc->busy);
             if (ret != CM_OK) {
                 CM_LOGERROR("Build ptEntry failed, copyIndex(%u) poolId(%u) ptId(%u).", copyIndex, ptEntryList->poolId, ptId);
