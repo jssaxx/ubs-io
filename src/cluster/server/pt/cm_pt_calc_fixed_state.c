@@ -273,7 +273,10 @@ static int32_t ViewPtEntryTrim(PtEntry *ptEntry, uint16_t copyNum, uint16_t ptNu
         }
     }
 
-    if ((masterList[nodeId] < (ptNum / validNum)) && nodeIndex != INVALID_VALUE16) {
+    if ((nodeIndex != INVALID_VALUE16) &&
+        (masterList[nodeId] < (ptNum / validNum)) &&
+        (masterList[ptEntry->masterNodeId] > (ptNum / validNum))) {
+        masterList[ptEntry->masterNodeId]--;
         ptEntry->masterNodeId = ptEntry->copyList[nodeIndex].nodeId;
         ptEntry->masterDiskId = ptEntry->copyList[nodeIndex].diskId;
         ptEntry->referNum++;

@@ -207,6 +207,12 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
         return BIO_NOT_EXISTS;
     }
 
+    bool isNormal = wcache->GetState();
+    if (!isNormal) {
+        LOG_ERROR("Failed to check wcache flow by id:" << slice->GetFlowId() << ".");
+        return BIO_NOT_EXISTS;
+    }
+
     BIO_TRACE_START(WCACHE_TRACE_GET_SLICE);
     auto ret = wcache->GetWCacheSlice(sliceKey, slice);
     BIO_TRACE_END(WCACHE_TRACE_GET_SLICE, ret);
