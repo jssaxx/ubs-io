@@ -71,7 +71,12 @@ struct OverloadCtrlConfig {
 class CacheOverloadCtrl {
 public:
     CacheOverloadCtrl() = default;
-    ~CacheOverloadCtrl() = default;
+
+    ~CacheOverloadCtrl()
+    {
+        startWorker = false;
+        mStatisticExecutor->Stop();
+    }
 
     static CacheOverloadCtrl &Instance()
     {
@@ -92,7 +97,7 @@ private:
 
     uint64_t GetBwStatAverageValue(BwStatObj &obj);
     int32_t GetCacheWaterMarkDirect(VmStatObj &obj);
-    void UpdateBwStatValue(BwStatObj &obj);
+    void UpdateBwStatValue(BwStatObj &obj, BwStatType type);
     void UpdateCacheStatBw(BwStatType type);
     void UpdateCacheWaterDirect();
     void OverloadPeriodStatistics();
@@ -101,6 +106,7 @@ private:
     uint64_t GetCacheWaterMark();
 
 private:
+    std::atomic<bool> startWorker;
     OverloadCtrlGlbInfo mOverloadCtrlGlbInfo;
     OverloadCtrlConfig mOverloadCtrlConfig;
     ExecutorServicePtr mStatisticExecutor;
