@@ -405,6 +405,14 @@ static void CmServerViewOnlineUpdateState(NodeInfo *nodeInfo, NodeStateInfo *nod
         nodeState->clusterState = NODE_CLUSTER_STATE_IN;
     }
 
+    for (index = 0; index < nodeState->diskNum; index++) {
+        if (nodeInfo->diskList.list[index].state == DISK_STATE_NORMAL) {
+            nodeState->diskList[index].clusterState = DISK_CLUSTER_STATE_IN;
+        } else {
+            nodeState->diskList[index].clusterState = DISK_CLUSTER_STATE_OUT;
+        }
+    }
+
     return;
 }
 

@@ -18,6 +18,10 @@ constexpr uint16_t DISK_EVICT_THREAD_NUM = 8;
 constexpr uint32_t DISK_EVICT_QUEUE_SIZE = 8192;
 constexpr uint16_t RETRY_EVICT_THREAD_NUM = 1;
 constexpr uint32_t RETRY_EVICT_QUEUE_SIZE = 8192;
+constexpr uint16_t DESTROY_EVICT_THREAD_NUM = 1;
+constexpr uint32_t DESTROY_EVICT_QUEUE_SIZE = 8192;
+constexpr uint32_t DESTROY_EVICT_TIMEOUT = 60;
+constexpr uint32_t DESTROY_EVICT_INTERAL = 15;
 constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
 constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 constexpr uint32_t BROKEN_INTERAL_TIME = 1000000;
@@ -58,6 +62,16 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     ChkTrueNot(result, BIO_INNER_ERR);
 
     result = mRetryEvictService->Execute([this]() { RetryEvictThread(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
+
+    mDestroyEvictService = ExecutorService::Create(DESTROY_EVICT_THREAD_NUM, DESTROY_EVICT_QUEUE_SIZE);
+    if (UNLIKELY(mDestroyEvictService == nullptr)) {
+        LOG_ERROR("Failed to start execution service for delay destroy, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+
+    mDestroyEvictService->SetThreadName("wcache-delay-destroy");
+    result = mDestroyEvictService->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
 
     mRCacheManager = rCacheManager;
@@ -210,6 +224,12 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     auto wcache = GetWCache(slice->GetFlowId());
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("Failed to get wcache flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    bool isNormal = wcache->GetState();
+    if (!isNormal) {
+        LOG_ERROR("Failed to check wcache flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -468,7 +488,7 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
 
 BResult WCacheManager::ClearOldCache(uint64_t ptId, uint64_t ptv)
 {
-    std::list<uint64_t> clearList;
+    uint64_t evictTime = Monotonic::TimeSec() + DESTROY_EVICT_TIMEOUT;
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -484,16 +504,15 @@ BResult WCacheManager::ClearOldCache(uint64_t ptId, uint64_t ptv)
                 ", flowId:" << flowIt.first <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
-            clearList.emplace_back(flowIt.first);
+            if (flowIt.second->GetState()) {
+                flowIt.second->SetState(false);
+                mDestroyManager.emplace(flowIt.first, evictTime);
+            }
         }
     }
-    
-    for (const auto &flowId : clearList) {
-        auto ret = DeleteWCache(flowId);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Clear fail:" << ret << ", flowId::" << flowId);
-        }
-    }
+
+    auto result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
 
     return BIO_OK;
 }
@@ -575,7 +594,7 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
 
 BResult WCacheManager::ClearProcCache(uint32_t procId)
 {
-    std::list<uint64_t> clearList;
+    uint64_t evictTime = Monotonic::TimeSec() + DESTROY_EVICT_TIMEOUT;
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -588,16 +607,15 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
                 ", flowId:" << flowIt.first << ", procId:" << procId <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
-            clearList.emplace_back(flowIt.first);
+            if (flowIt.second->GetState()) {
+                flowIt.second->SetState(false);
+                mDestroyManager.emplace(flowIt.first, evictTime);
+            }
         }
     }
     
-    for (const auto &flowId : clearList) {
-        auto ret = DeleteWCache(flowId);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Clear fail:" << ret << ", flowId::" << flowId);
-        }
-    }
+    auto result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
 
     return BIO_OK;
 }
@@ -661,6 +679,35 @@ void WCacheManager::RetryEvictThread()
         }
         retryFlows.clear();
         sleep(1);
+    }
+}
+
+void WCacheManager::DestroyEvictThread()
+{
+    std::unordered_map<uint64_t, uint64_t> destroyManager;
+
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        std::swap(mDestroyManager, destroyManager);
+    }
+
+    while (!destroyManager.empty()) {
+        uint64_t curTime = Monotonic::TimeSec();
+        for (auto it = destroyManager.begin(); it != destroyManager.end();) {
+            if (it->second <= curTime) {
+                auto ret = DeleteWCache(it->first);
+                if (ret != BIO_OK) {
+                    ++it;
+                    continue;
+                }
+                it = destroyManager.erase(it);
+            } else {
+                LOG_INFO("Delay, flowId:" << it->first << ", expired:" << it->second <<
+                    ", current:" << curTime);
+                ++it;
+            }
+        }
+        sleep(DESTROY_EVICT_INTERAL);
     }
 }
 }
