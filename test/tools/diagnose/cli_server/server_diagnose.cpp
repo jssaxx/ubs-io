@@ -90,15 +90,21 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
                 i, daemonConfig.diskList[i].c_str(), "normal", totalCap, usedCap);
         }
         return;
-    } else if (cmdType == "trace") {
-        if (cmds.size() != 2) {
-            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
-            return;
-        }
-        auto info = ock::htracer::GetTraceInfo();
-        CLI_PrintBuf(info.c_str());
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+    }
+}
+
+static void HandleServerTrace(std::vector<std::string> cmds)
+{
+    auto cType = cmds[1].c_str();
+    std::string viewType(cType);
+    if (viewType == "show") {
+        auto info = ock::htracer::GetTraceInfo();
+        CLI_PrintBuf(info.c_str());
+    } else if (viewType == "clear") {
+        ock::htracer::ClearTraceInfo();
+        CLI_PrintBuf("clearing statistics server records succeeded.\n");
     }
 }
 
@@ -107,7 +113,8 @@ static void BioServerDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("change water level: bioserver chgwlv [water_level]\n");
     CLI_PrintBuf("change memory read write ratio: bioserver chgmr [memory ratio]\n");
     CLI_PrintBuf("change disk read write ratio: bioserver chgdr [disk ratio]\n");
-    CLI_PrintBuf("show: bioserver show [disk/trace]\n");
+    CLI_PrintBuf("show: bioserver show [disk]\n");
+    CLI_PrintBuf("trace: bioserver trace [show/clear]\n");
     CLI_PrintBuf("exit: exit console\n");
 }
 
@@ -182,6 +189,12 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         BioServerHandleShow(cmds);
+    } else if (cmdType == "trace") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
+            return;
+        }
+        HandleServerTrace(cmds);
     } else if (cmdType == "exit") {
         return;
     } else {

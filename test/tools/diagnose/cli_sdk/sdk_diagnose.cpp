@@ -424,13 +424,21 @@ static void HandleShow(std::vector<std::string> cmds)
         CLI_PrintBuf("Local Node:");
         CmNodeId localNode = BioClient::Instance()->GetMirror()->GetLocalNodeInfo();
         CLI_PrintBuf("%s\n", localNode.ToString().c_str());
-    } else if (viewType == "trace") {
-        if (cmds.size() != 2) {
-            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
-            return;
-        }
+    } else {
+        CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+    }
+}
+
+static void HandleSdkTrace(std::vector<std::string> cmds)
+{
+    auto cType = cmds[1].c_str();
+    std::string viewType(cType);
+    if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
         CLI_PrintBuf(info.c_str());
+    } else if (viewType == "clear") {
+        ock::htracer::ClearTraceInfo();
+        CLI_PrintBuf("clearing statistics sdk records succeeded.\n");
     }
 }
 
@@ -623,7 +631,8 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tlist all object: sdk listall [prefix]\n");
     CLI_PrintBuf("\tload object: sdk load [key] [offset] [length] [location]\n");
     CLI_PrintBuf("\tdelete object: sdk delete [key] [location]\n");
-    CLI_PrintBuf("\tshow view: sdk show [pt/node/trace] [all/affinity]\n");
+    CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity]\n");
+    CLI_PrintBuf("\ttrace: sdk trace [show/clear]\n");
     CLI_PrintBuf("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     CLI_PrintBuf("\texit: exit console\n");
 }
@@ -728,6 +737,12 @@ static void BioSdkDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleShow(cmds);
+    } else if (cmdType == "trace") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleSdkTrace(cmds);
     } else if (cmdType == "perf") {
         if (cmds.size() != 5) {
             CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
