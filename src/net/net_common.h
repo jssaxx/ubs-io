@@ -63,9 +63,9 @@ struct ConnectInfo {
 
     ConnectInfo() = default;
     ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : srcId(srcId, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times) {}
+        : srcId(srcId, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times), isSelfPoll(false) {}
     ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid)
-        : srcId(srcId, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3) {}
+        : srcId(srcId, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3), isSelfPoll(false) {}
 };
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
