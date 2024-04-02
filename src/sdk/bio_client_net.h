@@ -31,11 +31,6 @@ public:
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView, uint16_t protocol);
     void Stop();
 
-    bool IsSlowerProtocols()
-    {
-        return false; // (mNetEngine->GetNetProtocol() == ServiceProtocol::TCP) ? true : false;
-    }
-
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
     {
         mCheckOnLine = checkOnLine;
