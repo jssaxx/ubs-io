@@ -46,6 +46,16 @@ public:
 
     BResult Destroy();
 
+    void SetState(bool isNormal)
+    {
+        mIsNormal = isNormal;
+    }
+
+    bool GetState()
+    {
+        return mIsNormal;
+    }
+
     void StartEvictTask(WCacheTierType type);
 
     void RetryEvictTask(WCacheTierType type);
@@ -108,6 +118,7 @@ private:
     uint64_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
+    bool mIsNormal { true };
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
@@ -125,8 +136,6 @@ private:
     RCacheManagerPtr mRCacheManager;
 
     UnderFsPtr mUnderFs;
-
-    bool mIsMaster { false };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

@@ -91,11 +91,13 @@ private:
     BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
+    void DestroyEvictThread();
 
 private:
     ReadWriteLock mWCacheManagerLock;
     std::unordered_map<uint64_t, WCachePtr> mWCacheManager;
     std::vector<WCachePtr> mRetryManager[MAX_WCACHE_TIER];
+    std::unordered_map<uint64_t, uint64_t> mDestroyManager;
 
     RCacheManagerPtr mRCacheManager;
 
@@ -104,6 +106,7 @@ private:
     ExecutorServicePtr mMemEvictService { nullptr };
     ExecutorServicePtr mDiskEvictService { nullptr };
     ExecutorServicePtr mRetryEvictService { nullptr };
+    ExecutorServicePtr mDestroyEvictService { nullptr };
 
     GetLocDiskStatus mGetLocDiskStatus { nullptr };
     GetGlobEvictOffset mEvictOffset { nullptr };
