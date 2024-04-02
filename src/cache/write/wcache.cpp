@@ -480,10 +480,6 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     auto ret = mLocRole(static_cast<uint16_t>(mPtId), isMaster);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << mPtId);
 
-    if (mIsMaster || isMaster) {
-        mIsMaster = isMaster = true; // 分区再均衡时，旧分区主需要继续淘汰到后端存储。
-    }
-
     uint64_t globEvictOffset = NO_MAX_VALUE64;
     if (!isMaster) {
         auto ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, globEvictOffset);

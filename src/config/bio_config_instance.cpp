@@ -111,7 +111,7 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigCm(const ConfigurationPtr &conf)
 {
-    mCmConfig.initialNodeNum = NO_2;
+    mCmConfig.initialNodeNum = NO_3;
     mCmConfig.nodeNum = NO_256;
     mCmConfig.ptNum = conf->GetInt(CM_PT_NUM.first);
     mCmConfig.registeredTimeoutSec = conf->GetInt(CM_NODE_REGISTER_TIMEOUT.first);

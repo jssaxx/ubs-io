@@ -238,14 +238,10 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
     uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
     uint16_t index;
 
-    bool oldMaster = false;
     bool oldExist = false;
 
     mLock.LockRead();
     if (mPtInfos.find(ptInfo.ptId) != mPtInfos.end()) {
-        if (mPtInfos[ptInfo.ptId].masterNodeId == localNodeId) {
-            oldMaster = true;
-        }
         for (index = 0; index < mPtInfos[ptInfo.ptId].copys.size(); index++) {
             if (mPtInfos[ptInfo.ptId].copys[index].nodeId == localNodeId) {
                 oldExist = true;
@@ -257,11 +253,6 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
     }
     mLock.UnLock();
 
-    bool curMaster = false;
-
-    if (ptInfo.masterNodeId == localNodeId) {
-        curMaster = true;
-    }
     for (index = 0; index < ptInfo.copys.size(); index++) {
         if (ptInfo.copys[index].nodeId == localNodeId) {
             curIndex = index;
@@ -270,7 +261,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
         }
     }
 
-    if (!oldMaster && curMaster) {
+    if (!oldExist && curExist) {
         auto ret = Cache::Instance().ExtraCreateRCache(ptInfo.ptId, ptInfo.version);
         if (ret != BIO_OK) {
             return BIO_INNER_RETRY;
