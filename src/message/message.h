@@ -161,9 +161,6 @@ typedef struct {
     uintptr_t mrAddress;
     uint64_t mrSize;
     uint32_t mrKey;
-    uint32_t splitTotalNum;
-    uint32_t splitIndex;
-    uint64_t splitOffsetInFlow;
     bool isExistLocal;
     uint8_t  copyFree;
     uint32_t sliceLen;
