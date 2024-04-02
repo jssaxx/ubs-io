@@ -177,7 +177,7 @@ public:
     BResult ReceiveFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
     {
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -195,7 +195,7 @@ public:
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -213,7 +213,7 @@ public:
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -231,7 +231,7 @@ public:
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -248,7 +248,7 @@ public:
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -274,7 +274,7 @@ public:
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             callback.cb(callback.cbCtx, nullptr, 0, BIO_NET_RETRY);
@@ -293,7 +293,7 @@ public:
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             callback.cb(callback.cbCtx, nullptr, 0, BIO_NET_RETRY);
@@ -307,7 +307,7 @@ public:
     {
         using namespace ock::hcom;
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -327,7 +327,7 @@ public:
     {
         using namespace ock::hcom;
         ChannelPtr ch{ nullptr };
-        auto ret = GetChanel(targetNodeId, ch);
+        auto ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
@@ -389,9 +389,14 @@ public:
         mLocalNodeId = nodeId;
     }
 
-    NetChannelMgrPtr &GetChannelMgr()
+    NetChannelMgrPtr &GetCtrlChannelMgr()
     {
-        return mChannelMgr;
+        return mCtrlChannelMgr;
+    }
+	
+	NetChannelMgrPtr &GetDataChannelMgr()
+    {
+        return mDataChannelMgr;
     }
 
     ServiceProtocol GetNetProtocol()
@@ -404,12 +409,12 @@ public:
         return mOptions.connCount;
     };
 
-    BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr &ch);
+    BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
-    void AssignIpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options);
+    void AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options);
     BResult StartIpcService(const NetOptions &opt);
     BResult AssignRpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options);
     BResult StartRpcService(const NetOptions &opt);
@@ -569,9 +574,14 @@ private:
         }
     }
 
-    inline BResult GetChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
+    inline BResult GetCtrlChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
-        return mChannelMgr->GetChannel(targetNodeId, ch);
+        return mCtrlChannelMgr->GetChannel(targetNodeId, ch);
+    }
+
+    inline BResult GetDataChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
+    {
+        return mDataChannelMgr->GetChannel(targetNodeId, ch);
     }
 
 private:
@@ -581,7 +591,8 @@ private:
     bool mStarted = false;
     int16_t mTimeout = -1;
     uint32_t mDataPageBytes = NO_128 * NO_1024;
-    NetChannelMgrPtr mChannelMgr = nullptr;
+    NetChannelMgrPtr mCtrlChannelMgr = nullptr;
+    NetChannelMgrPtr mDataChannelMgr = nullptr;
     MemoryRegionPtr mLocalMr = nullptr;
     NetBlockPoolPtr mMrBlockPool = nullptr;
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};

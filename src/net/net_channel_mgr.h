@@ -12,11 +12,6 @@
 
 namespace ock {
 namespace bio {
-enum NetChBit {
-    BIO_N_BIT_EMPTY = 0,
-    BIO_N_BIT_ESTABLISHED = 1,
-};
-
 struct ChannelInfo {
     NetNode id;
     ChannelPtr channel;
@@ -45,7 +40,7 @@ public:
     void UnInitialize();
 
     BResult AddChannel(NetNode dstNid, ChannelPtr &ch);
-    BResult RemoveChannel(NetNode dstNid, const ChannelPtr &ch);
+    BResult RemoveChannel(const NetNode& dstNid, const ChannelPtr &ch);
 
     inline BResult GetChannel(uint32_t dstNid, ChannelPtr &ch)
     {
@@ -59,7 +54,7 @@ public:
         return BIO_OK;
     }
 
-    inline BResult GetChannel(NetNode dstNid, ChannelPtr &ch)
+    inline BResult GetChannel(const NetNode& dstNid, ChannelPtr &ch)
     {
         std::unique_lock<std::mutex> locker(lock);
         auto iter = mChannelMgr.find(dstNid.whole);
@@ -70,7 +65,7 @@ public:
         return BIO_OK;
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS;
+    DEFINE_REF_COUNT_FUNCTIONS
 
 private:
     bool mInited = false;
@@ -78,7 +73,7 @@ private:
     std::unordered_map<uint64_t, ChannelNode *> mChannelNodeMap;
     std::mutex lock;
 
-    DEFINE_REF_COUNT_VARIABLE;
+    DEFINE_REF_COUNT_VARIABLE
 };
 
 using NetChannelMgrPtr = Ref<NetChannelMgr>;
