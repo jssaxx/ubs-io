@@ -78,6 +78,7 @@ public:
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
         uint64_t evictWaterLevel = 90;
+        uint64_t diskEvictWaterLevel = 90;
         std::string memReadWriteRatio = "5:5";
         std::string diskReadWriteRatio = "5:5";
         std::vector<std::string> diskList;
@@ -137,7 +138,7 @@ public:
         return mUnderFsConfig;
     }
 
-    uint64_t ModifyConfigEvictWaterLevel(uint64_t level);
+    uint64_t ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level);
 
     std::string ModifyConfigMemReadWriteRatio(const std::string &ratios);
 

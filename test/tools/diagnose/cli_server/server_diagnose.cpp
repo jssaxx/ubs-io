@@ -21,7 +21,7 @@ using namespace ock::bio;
 
 static void BioServerDebugProcess(int argc, char *argv[]) noexcept;
 static void BioServerDebugHelp(char *command, int detail) noexcept;
-static void HandleModifyEvictWaterLevel(uint64_t level);
+static void HandleModifyEvictWaterLevel(uint8_t tier, uint64_t level);
 static void HandleModifyEvictMemQuantity(uint64_t quantity);
 static void HandleModifyEvictDiskQuantity(uint64_t quantity);
 
@@ -44,10 +44,10 @@ void diagnose::BioServerCommand::Destroy() noexcept
     CLI_UnRegCmd((char *)"bioServer");
 }
 
-static void HandleModifyEvictWaterLevel(uint64_t level)
+static void HandleModifyEvictWaterLevel(uint8_t tier, uint64_t level)
 {
-    auto ori = BioConfig::Instance()->ModifyConfigEvictWaterLevel(level);
-    CLI_PrintBuf("config changed: EvictWaterLevel, %lu => %lu\n", ori, level);
+    auto ori = BioConfig::Instance()->ModifyConfigEvictWaterLevel(tier, level);
+    CLI_PrintBuf("config changed tier:%u EvictWaterLevel, %lu => %lu\n", tier, ori, level);
 }
 
 static void HandleModifyMemReadWriteRatio(const std::string &ratios)
@@ -110,7 +110,7 @@ static void HandleServerTrace(std::vector<std::string> cmds)
 
 static void BioServerDebugHelp(char *command, int detail) noexcept
 {
-    CLI_PrintBuf("change water level: bioserver chgwlv [water_level]\n");
+    CLI_PrintBuf("change water level: bioserver chgwlv [tier] [water_level]\n");
     CLI_PrintBuf("change memory read write ratio: bioserver chgmr [memory ratio]\n");
     CLI_PrintBuf("change disk read write ratio: bioserver chgdr [disk ratio]\n");
     CLI_PrintBuf("show: bioserver show [disk]\n");
@@ -150,20 +150,29 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
     std::string ratios;
     std::string errMsg;
     if (cmdType == "chgwlv") {
-        if (cmds.size() != 2) {
+        if (cmds.size() != 3) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
             return;
         }
+
+        uint64_t tier = 0;
+        if (!CanConvertToUint64(cmds[1], tier)) {
+            CLI_PrintBuf("Input tier parameters failed!, values %s is not number\n", cmds[1].c_str());
+            return;
+        }
+
         uint64_t value = 0;
-        if (!CanConvertToUint64(cmds[1], value)) {
-            CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[1].c_str());
+        if (!CanConvertToUint64(cmds[2], value)) {
+            CLI_PrintBuf("Input parameters failed!, values %s is not number\n", cmds[2].c_str());
             return;
         }
-        if (value < 0 || value > 100) {
-            CLI_PrintBuf("Input parameters failed!, water level %s should in range(0-100)\n", cmds[1].c_str());
+
+        if ((tier != 0 && tier != 1) || (value < 0 || value > 100)) {
+            CLI_PrintBuf("Input parameters failed!, water level tier:%s %s should in range(0-100)\n", cmds[1].c_str(),
+                         cmds[2].c_str());
             return;
         }
-        HandleModifyEvictWaterLevel(value);
+        HandleModifyEvictWaterLevel(tier, value);
     } else if (cmdType == "chgmr") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
