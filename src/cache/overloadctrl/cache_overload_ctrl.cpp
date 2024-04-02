@@ -34,7 +34,7 @@ uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
     for (uint16_t idx = 0; idx < obj.cycleNum; idx++) {
         startTime = obj.hisStartTime[curIdx];
         totalValue += obj.hisValue[curIdx];
-        if (!(endTime >= startTime + 5000U)) {
+        if (endTime < startTime + 5000U) {
             if (obj.isStatPageCnt) {
                 maxValue = std::max<uint64_t>(maxValue, ((obj.hisValue[curIdx] * 1000U * obj.pageSize) /
                         std::max<uint64_t>(obj.hisEndTime[curIdx] - obj.hisStartTime[curIdx], 1)));
@@ -56,12 +56,17 @@ uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
     return totalValue;
 }
 
-void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj)
+void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
 {
+    const std::string bwTypeStr[BW_STAT_BUTT] = { "write", "evict" };
     uint64_t curTime = Monotonic::TimeMs();
     if (curTime >= (obj.calcBwCycleTime + obj.calcBwCycle)) {
         obj.calcBwCycleTime = curTime;
         obj.calcBwValue = GetBwStatAverageValue(obj);
+        if (obj.calcBwValue != 0) {
+            auto dataPerf = static_cast<double>(obj.calcBwValue / 1048576U);
+            LOG_INFO("Current "<< bwTypeStr[type] << " bandwidth value is " << dataPerf << " MB.");
+        }
     } else {
         return;
     }
@@ -78,7 +83,7 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj)
 
 void CacheOverloadCtrl::UpdateCacheStatBw(BwStatType type)
 {
-    UpdateBwStatValue(mOverloadCtrlGlbInfo.bwStatObj[type]);
+    UpdateBwStatValue(mOverloadCtrlGlbInfo.bwStatObj[type], type);
 }
 
 int32_t CacheOverloadCtrl::GetCacheWaterMarkDirect(VmStatObj &obj)
@@ -129,9 +134,14 @@ void CacheOverloadCtrl::UpdateCacheWaterDirect()
 void CacheOverloadCtrl::OverloadPeriodStatistics()
 {
     LOG_INFO("Cache overload ctrl period statistics start.");
+    constexpr uint64_t period = 5; // 5s
     uint64_t startTime = Monotonic::TimeSec();
     while (true) {
-        if (Monotonic::TimeSec() - startTime < NO_5) { // The average bandwidth and watermark are updated every 5 sec
+        if (!startWorker) {
+            LOG_INFO("Cache overload ctrl period statistics end.");
+            break;
+        }
+        if (Monotonic::TimeSec() - startTime < period) {
             sleep(NO_1);
             continue;
         }
@@ -141,7 +151,6 @@ void CacheOverloadCtrl::OverloadPeriodStatistics()
         UpdateCacheWaterDirect();
         startTime = Monotonic::TimeSec();
     }
-    LOG_INFO("Cache overload ctrl period statistics end.");
 }
 
 uint64_t CacheOverloadCtrl::GetCacheWriteBandwidth()
@@ -228,6 +237,7 @@ BResult CacheOverloadCtrl::Initialize()
         return BIO_INNER_ERR;
     }
 
+    startWorker = true;
     return BIO_OK;
 }
 }
