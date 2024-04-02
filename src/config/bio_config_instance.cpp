@@ -141,6 +141,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     mDaemonConfig.segment = conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE;
     mDaemonConfig.memCap = conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE;
     mDaemonConfig.evictWaterLevel = conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first);
+    mDaemonConfig.diskEvictWaterLevel = conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first);
     mDaemonConfig.memReadWriteRatio = conf->GetStr(MEM_READ_WRITE_RATIO.first);
     mDaemonConfig.diskReadWriteRatio = conf->GetStr(DISK_READ_WRITE_RATIO.first);
 
@@ -261,11 +262,18 @@ void BioConfig::DumpToLog()
     LOG_INFO(ossTmp.str());
 }
 
-uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint64_t level)
+uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
 {
-    auto ori = mDaemonConfig.evictWaterLevel;
-    mDaemonConfig.evictWaterLevel = level;
-    LOG_INFO("config changed:mDaemonConfig.evictWaterLevel, " << ori << " => " << level);
+    uint64_t ori;
+    if (tier == 0) {
+        ori = mDaemonConfig.evictWaterLevel;
+        mDaemonConfig.evictWaterLevel = level;
+    } else {
+        ori = mDaemonConfig.diskEvictWaterLevel;
+        mDaemonConfig.diskEvictWaterLevel = level;
+    }
+
+    LOG_INFO("config changed tier:" << tier <<", evictWaterLevel, " << ori << " => " << level);
     return ori;
 }
 
