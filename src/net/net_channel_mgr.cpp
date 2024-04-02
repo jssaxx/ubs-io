@@ -35,15 +35,22 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch)
     }
     std::unique_lock<std::mutex> locker(lock);
     auto chNode = new ChannelNode(dstNid, ch);
+    if (UNLIKELY(chNode == nullptr)) {
+        NET_LOG_ERROR("Alloc memory failed.");
+        return BIO_ALLOC_FAIL;
+    }
     mChannelNodeMap.emplace(std::make_pair(ch->Id(), chNode));
     auto chInfo = new ChannelInfo(dstNid, ch);
+    if (UNLIKELY(chInfo == nullptr)) {
+        NET_LOG_ERROR("Alloc memory failed.");
+        return BIO_ALLOC_FAIL;
+    }
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
-    NET_LOG_INFO("Added channel with nodeId " << dstNid.nid << " pid " << dstNid.pid <<
-        " into channel manager channel id " << ch->Id());
+    NET_LOG_INFO("Added channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() << ".");
     return BIO_OK;
 }
 
-BResult NetChannelMgr::RemoveChannel(NetNode dstNid, const ChannelPtr &ch)
+BResult NetChannelMgr::RemoveChannel(const NetNode& dstNid, const ChannelPtr &ch)
 {
     std::unique_lock<std::mutex> locker(lock);
     auto pos = mChannelNodeMap.find(ch->Id());
@@ -55,14 +62,14 @@ BResult NetChannelMgr::RemoveChannel(NetNode dstNid, const ChannelPtr &ch)
     delete chNode;
     auto iter = mChannelMgr.find(dstNid.whole);
     if (iter == mChannelMgr.end()) {
-        NET_LOG_WARN("Impossble, not found, with nodeId " << dstNid.nid);
+        NET_LOG_WARN("Impossible, not found, with nodeId " << dstNid.nid);
         return BIO_ERR;
     }
     auto chInfo = iter->second;
     mChannelMgr.erase(iter);
     delete chInfo;
-    NET_LOG_INFO("Remove channel with nodeId " << dstNid.nid << " pid " << dstNid.pid <<
-        ", channel " << ch->Id() << " success.");
+    chInfo = nullptr;
+    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() << ".");
     return BIO_OK;
 }
 }

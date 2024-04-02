@@ -54,7 +54,6 @@ private:
         if (ret != BIO_OK) {
             NET_LOG_ERROR("Failed to async connect");
         }
-
         mAsyncHandler(mUserCtx, ret, mConnectInfo);
     }
 

@@ -38,9 +38,15 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
     NetLog::Instance()->SetLogFuncFunc(func);
     mTimeout = timeoutSec;
 
-    mChannelMgr = MakeRef<NetChannelMgr>();
-    if (mChannelMgr == nullptr) {
-        NET_LOG_ERROR("Make channel manager failed.");
+    mCtrlChannelMgr = MakeRef<NetChannelMgr>();
+    if (mCtrlChannelMgr == nullptr) {
+        NET_LOG_ERROR("Make ctrl channel manager failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    mDataChannelMgr = MakeRef<NetChannelMgr>();
+    if (mDataChannelMgr == nullptr) {
+        NET_LOG_ERROR("Make data channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
 
@@ -114,7 +120,8 @@ void NetEngine::StopInner()
         mConnector = nullptr;
     }
 
-    mChannelMgr = nullptr;
+    mCtrlChannelMgr = nullptr;
+    mDataChannelMgr = nullptr;
 
     if (mMrBlockPool != nullptr) {
         mMrBlockPool->Stop();
@@ -250,22 +257,32 @@ BResult NetEngine::InitMemoryAllocator()
 std::string NetEngine::GenerateWorkersSetting()
 {
     std::ostringstream oss;
-    oss << std::to_string(mOptions.handlerCount);
+    /*
+     * server side two groups: ctrl panel and data panel
+     * client side two groups: ctrl panel and data panel
+     * so, 4 groups in total
+     *
+     * server side groups */
+    oss << std::to_string(mOptions.connCount) << "," << std::to_string(mOptions.connCount);
+    /* client side groups */
+    oss << "," << std::to_string(mOptions.connCount) << "," << std::to_string(mOptions.connCount);
     return oss.str();
 }
 
-void NetEngine::AssignIpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options)
+void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options)
 {
-    options.mode = NetDriverWorkingMode::NET_EVENT_POLLING;
+    options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
+    options.SetWorkerGroups(GenerateWorkersSetting());
     options.mrSendReceiveSegSize = MAX_MESSAGE_SIZE + MAX_MESSAGE_HEAD_SIZE;
     options.mrSendReceiveSegCount = NO_1024;
     options.heartBeatIdleTime = NO_5;
     options.heartBeatProbeInterval = NO_1;
-    options.qpSendQueueSize = NO_64;
+    options.qpSendQueueSize = NO_512;
     options.pollingBatchSize = NO_16;
     options.prePostReceiveSizePerQP = NO_64;
     options.oobType = NET_OOB_UDS;
     options.completionQueueDepth = NO_8192;
+    options.eventPollingTimeout = NO_1000;
     const static int DEFAULT_THREAD_PRIORITY = 0;
     options.workerThreadPriority = DEFAULT_THREAD_PRIORITY;
     if (isOobSvr) {
@@ -297,11 +314,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     }
 
     NetServiceOptions options{};
-    options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
-    std::ostringstream oss;
-    oss << std::to_string(opt.handlerCount);
-    options.SetWorkerGroups(oss.str());
-    AssignIpcServiceOptions(isOobSvr, options);
+    AssignIpcServiceOptions(opt, isOobSvr, options);
     auto result = mIpcService->Start(options);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start ipc service, result:" << NetErrStr(result) << ".");
@@ -401,12 +414,14 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     }
 
     NetConnPayload netPayload;
-    if (netPayload.FromPayloadStr(payload) != BIO_OK) {
+    bool isCtrl = true;
+    if (netPayload.FromPayloadStr(payload, isCtrl) != BIO_OK) {
         NET_LOG_ERROR("Failed to parse payload:" << payload << ".");
         return BIO_ERR;
     }
 
-    newChannel->UpCtx(netPayload.srcNodeId.whole);
+    NetChannelUpCtx ctx(netPayload.srcNodeId, isCtrl, true);
+    newChannel->UpCtx(ctx.whole);
 
     if (netPayload.srcNodeId.pid == 0) {
         NET_LOG_INFO("No needed add channel " << newChannel->Id() << ", peer connected nid " <<
@@ -415,26 +430,29 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
         return BIO_OK;
     }
 
-    mChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
-
-    NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", peer connected nid " <<
-        netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " <<
-        ipPort << ", payload " << payload);
+    if (isCtrl) {
+        mCtrlChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
+    } else {
+        mDataChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
+    }
+    NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", peer connected from:" << netPayload.srcNodeId.nid <<
+        "-" << netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload " << payload << ".");
     return BIO_OK;
 }
 
 void NetEngine::ChannelBroken(const ChannelPtr &ch)
 {
-    NetNode dstNodeId(ch->UpCtx());
-    NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << dstNodeId.nid <<
-        " pid " << dstNodeId.pid << ".");
+    NetChannelUpCtx ctx(ch->UpCtx());
+    NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << ctx.peerId << ".");
 
-    auto ret = mChannelMgr->RemoveChannel(dstNodeId, ch);
-    if (ret != BIO_OK) {
-        return;
+    NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
+    if (ctx.IsCtrlPanel()) {
+        mCtrlChannelMgr->RemoveChannel(dstNid, ch);
+    } else {
+        mDataChannelMgr->RemoveChannel(dstNid, ch);
     }
     if (mHandlerBroken != nullptr) {
-        mHandlerBroken(dstNodeId.nid, dstNodeId.pid);
+        mHandlerBroken(dstNid.nid, dstNid.pid);
     }
 }
 
@@ -461,13 +479,10 @@ int32_t NetEngine::RequestIPCReceived(ServiceContext &ctx)
 {
     auto &handler = mHandlers[ctx.OpCode()];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() <<
-                                                                           " as no handler registered");
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() << ".");
         return BIO_ERR;
     }
-
-    auto ret = handler(ctx);
-    return ret;
+    return handler(ctx);
 }
 
 int32_t NetEngine::RequestPosted(const ServiceContext &ctx)
@@ -480,7 +495,7 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
-BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr &ch)
+BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
     NetService *netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
     if (netService == nullptr) {
@@ -491,10 +506,19 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr
     NetServiceConnectOptions options{};
     std::string prefix;
     options.epSize = mOptions.connCount;
+    if (isCtrlPanel) {
+        options.clientGrpNo = WKR_GRP_INDEX_CTRL_CLIENT;
+        options.serverGrpNo = WKR_GRP_INDEX_CTRL_SERVER;
+        prefix = CONN_PAYLOAD_PREFIX_CTRL;
+    } else {
+        options.clientGrpNo = WKR_GRP_INDEX_DATA_CLIENT;
+        options.serverGrpNo = WKR_GRP_INDEX_DATA_SERVER;
+        prefix = CONN_PAYLOAD_PREFIX_DATA;
+    }
     if (info.isSelfPoll) {
         options.flags = NET_EP_SELF_POLLING;
     }
-    prefix = CONN_PAYLOAD_PREFIX_DATA;
+
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         NetConnPayload payload(info.srcId);
@@ -511,11 +535,12 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, ChannelPtr
     }
     if (result != 0) {
         NET_LOG_ERROR("Connect to peer failed, ret:" << NetErrStr(result) << ", ip " << info.ip << ", port " <<
-            info.port << ", nid " << info.peerId.nid << ".");
+            info.port << ", nid " << info.peerId.nid << ", pid " << info.peerId.pid << ".");
         return result;
     }
 
-    ch->UpCtx(info.peerId.whole);
+    NetChannelUpCtx ctx(info.peerId, isCtrlPanel, false);
+    ch->UpCtx(ctx.whole);
     ch->SetOneSideTimeout(mTimeout);
     ch->SetTwoSideTimeout(mTimeout);
     return BIO_OK;
