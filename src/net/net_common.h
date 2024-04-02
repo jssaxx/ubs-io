@@ -49,7 +49,7 @@ union NetNode {
 
     NetNode() = default;
     NetNode(uint32_t inNid, uint32_t inPid) : nid(inNid), pid(inPid) {}
-    NetNode(uint64_t p) : whole(p) {}
+    explicit NetNode(uint64_t p) : whole(p) {}
     NetNode(const NetNode& inNid) : nid(inNid.nid), pid(inNid.pid) {}
 };
 
@@ -62,12 +62,10 @@ struct ConnectInfo {
     bool isSelfPoll;
 
     ConnectInfo() = default;
-    ConnectInfo(uint32_t srcid, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : srcId(srcid, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times), isSelfPoll(false)
-    {}
-    ConnectInfo(uint32_t srcid, uint32_t srcPid, uint32_t nid)
-        : srcId(srcid, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3), isSelfPoll(false)
-    {}
+    ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
+        : srcId(srcId, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times) {}
+    ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid)
+        : srcId(srcId, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3) {}
 };
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
@@ -91,6 +89,7 @@ struct NetOptions {
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
 };
 
+const std::string CONN_PAYLOAD_PREFIX_CTRL = "bio-ctrl-";
 const std::string CONN_PAYLOAD_PREFIX_DATA = "bio-data-";
 const uint32_t CONN_PAYLOAD_PREFIX_SIZE = CONN_PAYLOAD_PREFIX_DATA.size();
 const std::string UDS_NAME = "BIO_SHM_UDS";
@@ -102,16 +101,24 @@ union NetConnPayload {
     uint64_t whole = 0;
 
     NetConnPayload() : srcNodeId(0, 0) {}
-    NetConnPayload(NetNode sId) : srcNodeId(sId.nid, sId.pid) {}
-    NetConnPayload(uint64_t p) : whole(p) {}
+    explicit NetConnPayload(NetNode sId) : srcNodeId(sId.nid, sId.pid) {}
+    explicit NetConnPayload(uint64_t p) : whole(p) {}
 
     std::string ToPayloadStr(const std::string &prefix) const
     {
         return prefix + std::to_string(whole);
     }
 
-    BResult FromPayloadStr(const std::string &payload)
+    BResult FromPayloadStr(const std::string &payload, bool &isCtrl)
     {
+        if (StrUtil::StartWith(payload, CONN_PAYLOAD_PREFIX_CTRL)) {
+            isCtrl = true;
+        } else if (StrUtil::StartWith(payload, CONN_PAYLOAD_PREFIX_DATA)) {
+            isCtrl = false;
+        } else {
+            return BIO_INVALID_PARAM;
+        }
+
         auto nodeIdStr = payload.substr(CONN_PAYLOAD_PREFIX_SIZE, payload.length() - CONN_PAYLOAD_PREFIX_SIZE);
         long nodeIds = 0;
         if (UNLIKELY(!StrUtil::StrToLong(nodeIdStr, nodeIds))) {
@@ -120,6 +127,32 @@ union NetConnPayload {
         NetConnPayload pl(nodeIds);
         srcNodeId = pl.srcNodeId;
         return BIO_OK;
+    }
+};
+
+union NetChannelUpCtx {
+    struct {
+        uint64_t peerId : 16;    /* peer node id */
+        uint64_t procId : 32;    /* peer process id */
+        uint64_t isAccepted : 1; /* accepted from other */
+        uint64_t panelId : 2;    /* panel id, 0 for ctrl, 1 for data */
+        uint64_t reserved : 13;  /* reserved */
+    };
+    uint64_t whole = 0;
+
+    NetChannelUpCtx() = default;
+    explicit NetChannelUpCtx(uint64_t w) : whole(w) {}
+    NetChannelUpCtx(const NetNode &pId, bool isCtrlPanel, bool accepted)
+    {
+        peerId = static_cast<uint16_t>(pId.nid);
+        procId = pId.pid;
+        panelId = isCtrlPanel ? 0 : 1;
+        isAccepted = accepted ? 1 : 0;
+    }
+
+    inline bool IsCtrlPanel() const
+    {
+        return panelId == NO_U64_0;
     }
 };
 
