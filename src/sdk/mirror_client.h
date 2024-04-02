@@ -175,12 +175,7 @@ private:
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
-    BResult SendPutRequestFast(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
-    void StructPutRequestSlow(MirrorPut &param, CmPtInfo &ptEntry, uint32_t splitCount, PutRequest *req);
-    void PutRemoteSlow(MirrorPut &param, CmPtInfo &ptEntry, std::vector<uint32_t> &index, uint32_t splitCount,
-        NetEngine::Callback &callback);
-    void PutLocalSlow(MirrorPut &param, CmPtInfo &ptEntry, uint32_t localIdx, NetEngine::Callback &callback);
-    BResult SendPutRequestSlow(CmPtInfo &ptEntry, MirrorPut &param);
+    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
 
     BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
