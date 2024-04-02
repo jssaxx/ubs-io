@@ -34,7 +34,7 @@ uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType 
         waterData = (GetReadRatio(config.memReadWriteRatio) * config.memCap * config.evictWaterLevel) / NO_1000;
     } else {
         waterData = (GetReadRatio(config.diskReadWriteRatio) * config.diskCaps.at(rCache->GetDiskId()) *
-            config.evictWaterLevel) / NO_1000;
+            config.diskEvictWaterLevel) / NO_1000;
     }
 
     return cacheData > waterData ? cacheData - waterData : 0ULL;
