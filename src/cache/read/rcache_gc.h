@@ -62,7 +62,7 @@ namespace ock {
         std::atomic<uint32_t> workIndex;
         SpinLock GCRCacheLock[READ_CACHE_GC_SERVICE_NUM];
         std::list<RCachePtr> GCRCache[READ_CACHE_GC_SERVICE_NUM];
-        std::thread *works[READ_CACHE_GC_SERVICE_NUM];
+        std::thread *works[READ_CACHE_TIER_BUTT][READ_CACHE_GC_SERVICE_NUM];
         DEFINE_REF_COUNT_VARIABLE
     };
 

@@ -525,6 +525,7 @@ BResult RCache::Delete(const Key &key)
     BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
 
     IncGCData(chunk->GetTierType(), chunk->GetValue().length);
+    delete [] chunk->GetKey();
     return BIO_OK;
 }
 

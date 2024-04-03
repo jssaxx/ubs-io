@@ -300,12 +300,12 @@ inline void ExecutorService::RunInThread(int16_t cpuId)
     }
 
     pthread_setname_np(pthread_self(), threadName.c_str());
-    LOG_DEBUG("Thread is started for executor service <" << threadName << "> cpuId " << cpuId);
+    LOG_INFO("Thread is started for executor service <" << threadName << "> cpuId " << cpuId);
 
     while (runFlag) {
         DoRunnable(runFlag);
     }
-    LOG_INFO("Thread for executor service <" << threadName << "> cpuId " << cpuId << " exiting");
+    LOG_INFO("Thread for executor service <" << threadName << "> cpuId " << cpuId << "> exiting");
 }
 }
 }
