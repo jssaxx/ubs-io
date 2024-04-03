@@ -37,6 +37,11 @@ public:
         return mRpcService->RegisterMemoryRegion(reinterpret_cast<uintptr_t>(addr), size, mr);
     }
 
+    NetOptions Show()
+    {
+        return mOptions;
+    }
+
     inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
