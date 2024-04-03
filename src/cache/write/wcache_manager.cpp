@@ -51,6 +51,15 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     result = mEvictService[WCACHE_DISK]->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
 
+    mGcEvictService = ExecutorService::Create(DISK_EVICT_THREAD_NUM, DISK_EVICT_QUEUE_SIZE);
+    if (UNLIKELY(mGcEvictService == nullptr)) {
+        LOG_ERROR("Failed to start execution service for gc evict, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+    mGcEvictService->SetThreadName("wcache-evict-gc");
+    result = mGcEvictService->Start();
+    ChkTrueNot(result, BIO_INNER_ERR);
+
     mRetryEvictService = ExecutorService::Create(RETRY_EVICT_THREAD_NUM, RETRY_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mRetryEvictService == nullptr)) {
         LOG_ERROR("Failed to start execution service for retry evict, probably out of memory");
@@ -527,7 +536,7 @@ BResult WCacheManager::HandleProcBroken(uint64_t procId)
 {
     LOG_INFO("Handle proc broken:" << procId);
 
-    bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this, procId]() { HandleProcBrokenHdl(procId); });
+    bool isSucceed = mGcEvictService->Execute([this, procId]() { HandleProcBrokenHdl(procId); });
     if (!isSucceed) {
         LOG_ERROR("Sche proc broken:" << procId << ", failed");
         return BIO_ERR;

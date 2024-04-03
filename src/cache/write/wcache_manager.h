@@ -103,8 +103,7 @@ private:
 
     bool mRunning = true;
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER] { nullptr, nullptr };
-    ExecutorServicePtr mMemEvictService { nullptr };
-    ExecutorServicePtr mDiskEvictService { nullptr };
+    ExecutorServicePtr mGcEvictService { nullptr };
     ExecutorServicePtr mRetryEvictService { nullptr };
     ExecutorServicePtr mDestroyEvictService { nullptr };
 
