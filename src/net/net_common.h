@@ -85,7 +85,6 @@ struct NetOptions {
     uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
     bool regShmMem = false;                              /* register the memory to shared */
     Role role = NET_BUTT;                                /* net service role */
-    uint32_t eventPollingTimeout;
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
 };
 

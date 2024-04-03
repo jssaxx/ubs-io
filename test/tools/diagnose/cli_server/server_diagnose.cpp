@@ -90,6 +90,20 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
                 i, daemonConfig.diskList[i].c_str(), "normal", totalCap, usedCap);
         }
         return;
+    } else if (cmdType == "net") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        std::string protoStr[4U] = { "RDMA", "TCP", "UDS", "SHM" };
+        std::string modeStr[2U] = { "BUSY_POLLING", "EVENT_POLLING" };
+        NetOptions option = BioServer::Instance()->GetNetEngine()->Show();
+        CLI_PrintBuf("  Boostio rpc net info: \n");
+        CLI_PrintBuf("  Node_IP: %s:%u, Net_protocol:%s, RPC_Mode:%s, Request_executor_num:%u, Workers_count:%u,"
+                     " RDMA_memory_size:%lu GB \n",
+            option.ipMask.c_str(), option.port, protoStr[option.protocol].c_str(),
+            (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, option.connCount,
+            (option.memorySize / NO_1024 / NO_1024 / NO_1024));
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -113,7 +127,7 @@ static void BioServerDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("change water level: bioserver chgwlv [tier] [water_level]\n");
     CLI_PrintBuf("change memory read write ratio: bioserver chgmr [memory ratio]\n");
     CLI_PrintBuf("change disk read write ratio: bioserver chgdr [disk ratio]\n");
-    CLI_PrintBuf("show: bioserver show [disk]\n");
+    CLI_PrintBuf("show: bioserver show [disk/net]\n");
     CLI_PrintBuf("trace: bioserver trace [show/clear]\n");
     CLI_PrintBuf("exit: exit console\n");
 }
