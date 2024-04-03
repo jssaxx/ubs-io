@@ -15,6 +15,8 @@ using namespace ock::htracer;
 
 bool TestHtracer::gSetup = false;
 
+std::string stubDumpDir;
+
 void TestHtracer::SetUp()
 {
     if (gSetup) {
@@ -42,7 +44,7 @@ int32_t TestHtracer::HTracerInitMock(const std::string &dumpDir)
     strncpy_s(cwd + strlen(cwd), strlen(mission.c_str()) + 1, mission.c_str(), strlen(mission.c_str()) + 1);
     auto &service = HTracerService::GetInstance();
 
-    const std::string stubDumpDir = cwd;
+    stubDumpDir = cwd;
     if (service.StartUp(stubDumpDir) != RET_OK) {
         LOG_INFO("fail in htracer mock.");
         return RET_ERR;
@@ -53,4 +55,10 @@ int32_t TestHtracer::HTracerInitMock(const std::string &dumpDir)
 void TestHtracer::Stub() noexcept
 {
     MOCKER(HTracerInit).stubs().will(invoke(HTracerInitMock));
+}
+
+TEST_F(TestHtracer, test_get_trace_info_ok)
+{
+    auto info = GetTraceInfo();
+    EXPECT_NE(info, "");
 }

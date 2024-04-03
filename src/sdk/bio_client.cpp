@@ -239,5 +239,6 @@ BResult BioClient::Start(WorkerMode mode)
 
 void BioClient::Stop()
 {
+    mRunning = false;
     mStarted = false;
 }

@@ -106,6 +106,7 @@ void *RCacheEvict::Worker(void *context)
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_EVICT_INTERVAL_MS));
     }
 
+    delete para;
     return nullptr;
 }
 
@@ -116,7 +117,7 @@ BResult RCacheEvict::Initialize()
     workStatus.store(true);
 
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
-        for (uint32_t i = 0; i < READ_CACHE_EVICT_SERVICE_MASK; i++) {
+        for (uint32_t i = 0; i < READ_CACHE_EVICT_SERVICE_NUM; i++) {
             para = new (std::nothrow) RCacheEvictWorkerParam();
             if (para == nullptr) {
                 LOG_ERROR("Alloc read cache para memory failed");
@@ -129,7 +130,7 @@ BResult RCacheEvict::Initialize()
             auto *th = new std::thread(Worker, static_cast<void*>(para));
             if (th) {
                 pthread_setname_np(th->native_handle(), "evictWorker");
-                works[i] = th;
+                works[tier][i] = th;
             } else {
                 LOG_ERROR("Create thread for read cache evict failed");
                 return BIO_ALLOC_FAIL;
@@ -143,6 +144,14 @@ BResult RCacheEvict::Initialize()
 BResult RCacheEvict::Destroy()
 {
     workStatus.store(false);
+    for (auto& work : works) {
+        for (auto th : work) {
+            if (th) {
+                th->join();
+                delete th;
+            }
+        }
+    }
     return BIO_OK;
 }
 
