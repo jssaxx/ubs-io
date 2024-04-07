@@ -17,7 +17,7 @@ void CM_Ulog(int logLevel, const char *funcName, int line, const char *fileName,
     char dataBuf[CM_LOG_BUF_LEN];
     int ret;
 
-    ret = memset_s(dataBuf, sizeof (dataBuf), 0, sizeof (dataBuf));
+    ret = memset_s(dataBuf, sizeof(dataBuf), 0, sizeof(dataBuf));
     if (ret != 0) {
         return;
     }

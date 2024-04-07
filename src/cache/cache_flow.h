@@ -24,28 +24,27 @@ constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT = 19;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_SN_SHIFT = 8;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_SHIFT = 4;
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_MASK = 0xFFFFFFFF;
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_MASK = 0x1FFF; // 13
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_SN_MASK = 0x7FF; // 11
-constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_MASK = 0xF; // 4
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_MASK = 0x1FFF;   // 13
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_SN_MASK = 0x7FF;    // 11
+constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_MASK = 0xF;       // 4
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK = 0xF; // 4
 
 constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_WCACHE = 0;
 constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_RCACHE = 1;
 
-constexpr uint32_t WCACHE_FLOW_MEM_META_PREFIX  = 1;
-constexpr uint32_t WCACHE_FLOW_MEM_DATA_PREFIX  = 2;
+constexpr uint32_t WCACHE_FLOW_MEM_META_PREFIX = 1;
+constexpr uint32_t WCACHE_FLOW_MEM_DATA_PREFIX = 2;
 constexpr uint32_t WCACHE_FLOW_DISK_META_PREFIX = 3;
 constexpr uint32_t WCACHE_FLOW_DISK_DATA_PREFIX = 4;
 
-constexpr uint32_t RCACHE_FLOW_MEM_META_PREFIX  = 5;
-constexpr uint32_t RCACHE_FLOW_MEM_DATA_PREFIX  = 6;
+constexpr uint32_t RCACHE_FLOW_MEM_META_PREFIX = 5;
+constexpr uint32_t RCACHE_FLOW_MEM_DATA_PREFIX = 6;
 constexpr uint32_t RCACHE_FLOW_DISK_META_PREFIX = 7;
 constexpr uint32_t RCACHE_FLOW_DISK_DATA_PREFIX = 8;
 
 class CacheFlowIdManager {
 public:
-    inline static uint32_t GenerateCacheFlowIdPrefix(uint16_t ptId, uint64_t ptv,
-        uint16_t type, uint16_t innerType)
+    inline static uint32_t GenerateCacheFlowIdPrefix(uint16_t ptId, uint64_t ptv, uint16_t type, uint16_t innerType)
     {
         uint32_t ptIdP = ptId & CACHE_FLOW_ID_PREFIX_PT_ID_MASK;
         uint32_t ptvP = static_cast<uint32_t>(ptv) & CACHE_FLOW_ID_PREFIX_PT_SN_MASK;

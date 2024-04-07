@@ -31,7 +31,8 @@ int32_t CmServerScheduleInit(void)
     uint16_t i;
 
     for (i = 0; i < CM_SERVER_THREADPOOL_NUM; i++) {
-        g_scheduleThread[i] = CmThreadPoolCreate(CM_SERVER_THREAD_NUM, CM_SERVER_QUEUE_SIZE, 0, CM_SERVER_THREADPOOL_NAME);
+        g_scheduleThread[i] =
+            CmThreadPoolCreate(CM_SERVER_THREAD_NUM, CM_SERVER_QUEUE_SIZE, 0, CM_SERVER_THREADPOOL_NAME);
         if (g_scheduleThread[i] == NULL) {
             CM_LOGERROR("Threadpool create failed.");
             return RETURN_ERROR;

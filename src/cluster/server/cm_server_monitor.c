@@ -19,7 +19,7 @@
 
 typedef enum {
     RECORD_STATE_NORMAL = 0,
-    RECORD_STATE_FAULT  = 1,
+    RECORD_STATE_FAULT = 1,
 } RecordState;
 
 typedef struct {
@@ -203,11 +203,11 @@ static void CmServerMonitorResetNode(uint16_t poolId, uint16_t nodeId)
 
     nodeInfo->used = FALSE;
     nodeInfo->nodeId = nodeId;
-    
+
     nodeInfo->node.state = RECORD_STATE_NORMAL;
     nodeInfo->node.id = nodeId;
     nodeInfo->node.times = 0;
-    
+
     nodeInfo->diskNum = 0;
 
     return;
@@ -282,7 +282,8 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
         }
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
-                g_faultMonitor.handle.ExpiredDiskSet(record->pool->poolId, nodeId, nodeList->list[nodeId].diskList[index].id);
+                g_faultMonitor.handle.ExpiredDiskSet(record->pool->poolId, nodeId,
+                    nodeList->list[nodeId].diskList[index].id);
                 continue;
             }
         }
@@ -322,7 +323,7 @@ uint16_t CmServerMonitorPoolIsExpired(uint16_t poolId)
             }
             continue;
         }
-        for (index = 0; index <nodeList->list[nodeId].diskNum; index++) {
+        for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].state == RECORD_STATE_FAULT) {
                 if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
                     return TRUE;
@@ -506,4 +507,3 @@ void CmServerMonitorExit(void)
     CM_LOGINFO("Cm server monitor exit succeed.");
     return;
 }
-

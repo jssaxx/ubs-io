@@ -173,8 +173,8 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
     return 0;
 }
 
-static int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t cpuid,
-                               const char *poolName, BDM_BATCH_CTX_S *batchCtx)
+static int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t cpuid, const char *poolName,
+    BDM_BATCH_CTX_S *batchCtx)
 {
     thread->queueSize = queueSize;
     strncpy_s(thread->name, sizeof(thread->name), poolName, sizeof(thread->name) - 1);
@@ -217,7 +217,7 @@ static int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t
 }
 
 BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, BDM_BIND_CPU_S *binds,
-                                       const char *poolName, BDM_BATCH_CTX_S *batchCtx)
+    const char *poolName, BDM_BATCH_CTX_S *batchCtx)
 {
     int32_t ret;
 
@@ -268,7 +268,7 @@ int32_t BdmThreadPoolAdd(BDM_THREAD_POOL_S *threadPool, BDM_THREAD_HANDLE handle
         if (ret == 0) {
             break;
         }
-        
+
         thread->queueFullCnt++;
         usleep(THREAD_SLEEP_INTERVAL);
     }
@@ -320,4 +320,3 @@ int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadPool, int32_t flags)
     free(threadPool);
     return 0;
 }
-

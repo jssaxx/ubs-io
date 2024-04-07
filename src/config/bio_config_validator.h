@@ -184,7 +184,7 @@ public:
         return ValidatorPtr(new (std::nothrow) VStrNotNull(name));
     }
 
-    explicit VStrNotNull(const std::string &name) : Validator(name) {};
+    explicit VStrNotNull(const std::string &name) : Validator(name){};
 
     ~VStrNotNull() override = default;
 
@@ -209,7 +209,7 @@ public:
     {
         return ValidatorPtr(new (std::nothrow) VIntRange(name, start, end));
     }
-    VIntRange(const std::string &name, const int &start, const int &end) : Validator(name), mStart(start), mEnd(end) {};
+    VIntRange(const std::string &name, const int &start, const int &end) : Validator(name), mStart(start), mEnd(end){};
 
     ~VIntRange() override = default;
 
@@ -250,7 +250,7 @@ public:
     }
 
     VLongRange(const std::string &name, const long &start, const long &end)
-        : Validator(name), mStart(start), mEnd(end) {};
+        : Validator(name), mStart(start), mEnd(end){};
 
     ~VLongRange() override = default;
 
@@ -561,7 +561,7 @@ public:
         return { new (std::nothrow) VIpv4PortListValidator(name) };
     }
 
-    explicit VIpv4PortListValidator(const std::string &name) : Validator(name) {};
+    explicit VIpv4PortListValidator(const std::string &name) : Validator(name){};
 
     ~VIpv4PortListValidator() override = default;
 
@@ -610,7 +610,7 @@ public:
     }
 
     VFilePermissionValidator(const std::string &name, bool ownerBigThanOther)
-        : Validator(name), mOwnerBigThanOther(ownerBigThanOther) {};
+        : Validator(name), mOwnerBigThanOther(ownerBigThanOther){};
 
     ~VFilePermissionValidator() override = default;
 
@@ -670,7 +670,7 @@ public:
         return ValidatorPtr(new (std::nothrow) VStrRatio(name));
     }
 
-    explicit VStrRatio(const std::string &name) : Validator(name) {};
+    explicit VStrRatio(const std::string &name) : Validator(name){};
 
     ~VStrRatio() override = default;
 
@@ -692,7 +692,7 @@ public:
         return ValidatorPtr(new (std::nothrow) VStrRealPath(name));
     }
 
-    explicit VStrRealPath(const std::string &name) : Validator(name) {};
+    explicit VStrRealPath(const std::string &name) : Validator(name){};
 
     ~VStrRealPath() override = default;
 
@@ -725,7 +725,7 @@ public:
         return ValidatorPtr(new (std::nothrow) VStrCephPool(name));
     }
 
-    explicit VStrCephPool(const std::string &name) : Validator(name) {};
+    explicit VStrCephPool(const std::string &name) : Validator(name){};
 
     ~VStrCephPool() override = default;
 
@@ -743,7 +743,7 @@ public:
 
         std::vector<std::string> idWithPoolNames;
         StrUtil::Split(value, ",", idWithPoolNames);
-        for (const auto& idWithPoolName : idWithPoolNames) {
+        for (const auto &idWithPoolName : idWithPoolNames) {
             std::vector<std::string> idAndPoolName;
             StrUtil::Split(idWithPoolName, ":", idAndPoolName);
             long poolId = 0;

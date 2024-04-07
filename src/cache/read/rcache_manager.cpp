@@ -51,7 +51,7 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint64_t ptId)
 {
     RCachePtr cachePtr = nullptr;
     cacheLock.LockRead();
-    auto iter =  cache.find(ptId);
+    auto iter = cache.find(ptId);
     if (UNLIKELY(iter == cache.end())) {
         cacheLock.UnLock();
         LOG_WARN("Read cache pt id " << ptId << " do not exist.");
@@ -136,7 +136,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId
 
     auto ret = cacheObj->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Initialize read cache object ptId:" << ptId <<" failed, error code"<<ret);
+        LOG_ERROR("Initialize read cache object ptId:" << ptId << " failed, error code" << ret);
         cacheLock.UnLock();
         return ret;
     }
@@ -181,8 +181,7 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
     cache.erase(iter);
     cacheLock.UnLock();
 
-    LOG_INFO("Delete rcache, flowId:" << cachePtr->GetFlowId() << ", ptId:" << ptId <<
-        ", ptv:" << cachePtr->GetPtv());
+    LOG_INFO("Delete rcache, flowId:" << cachePtr->GetFlowId() << ", ptId:" << ptId << ", ptv:" << cachePtr->GetPtv());
     return BIO_OK;
 }
 
@@ -198,7 +197,7 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 
 BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
-    LOG_INFO("Standby handle:" << "ptId:" << ptId << ", ptv:" << ptv);
+    LOG_INFO("RCache expired clear, ptId:" << ptId << ", ptv:" << ptv << ".");
 
     RCachePtr rCache = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(rCache == nullptr)) {

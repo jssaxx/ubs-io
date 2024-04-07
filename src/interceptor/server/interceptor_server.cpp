@@ -49,11 +49,11 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    int32_t readLen = req->nbytes;
-    BResult ret = BioReadHook(req->inode, resp->data, req->nbytes, req->offset, &readLen);
-    if (UNLIKELY(ret != BIO_OK)) {
+    int readLen = static_cast<int>(req->nbytes);
+    auto ret = BioReadHook(req->inode, resp->data, req->nbytes, req->offset, &readLen);
+    if (UNLIKELY(ret != 0)) {
         BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, ret);
+        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, BIO_ALLOC_FAIL);
         return BIO_OK;
     }
 
@@ -85,7 +85,7 @@ int32_t InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
         req->nbytes << " fd:" << req->fd);
     InterceptorPwriteOut resp;
 
-    resp.dataLen = BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL);
+    resp.dataLen = static_cast<int64_t>(BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL));
     if (UNLIKELY(resp.dataLen < 0)) {
         BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
@@ -161,7 +161,7 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         ", address0 size:" << addressInfo.address[0].size << ", address1:" << addressInfo.address[1].address <<
         ", address1 size:" << addressInfo.address[1].size << ".");
     resp.ret = 0;
-    resp.dataLen = BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo);
+    resp.dataLen = static_cast<int64_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
     if (UNLIKELY(resp.dataLen < 0)) {
         BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);

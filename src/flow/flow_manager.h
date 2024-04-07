@@ -17,12 +17,12 @@
 namespace ock {
 namespace bio {
 struct MemAllocator {
-    std::function<BResult(uint64_t, uint64_t *)> alloc { nullptr };
-    std::function<void(uint64_t)> free { nullptr };
+    std::function<BResult(uint64_t, uint64_t *)> alloc{ nullptr };
+    std::function<void(uint64_t)> free{ nullptr };
 };
 struct DiskAllocator {
-    std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *)> alloc { nullptr };
-    std::function<void(uint32_t, uint64_t, uint64_t)> free { nullptr };
+    std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *)> alloc{ nullptr };
+    std::function<void(uint32_t, uint64_t, uint64_t)> free{ nullptr };
 };
 class FlowManager;
 using FlowManagerPtr = Ref<FlowManager>;
@@ -62,8 +62,8 @@ public:
         mDiskAllocator.free = diskAllocator.free;
     }
 
-    static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset,
-        uint64_t len, uint64_t *chunkId)
+    static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset, uint64_t len,
+        uint64_t *chunkId)
     {
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_ALLOC);
@@ -103,12 +103,12 @@ private:
 
     std::mutex mMutex;
 
-    FlowTaskPoolPtr mTaskPool { nullptr };
+    FlowTaskPoolPtr mTaskPool{ nullptr };
 
     static MemAllocator mMemAllocator;
     static DiskAllocator mDiskAllocator;
 
-    bool mInited { false };
+    bool mInited{ false };
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

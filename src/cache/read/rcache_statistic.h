@@ -9,29 +9,29 @@
 #include <atomic>
 
 namespace ock {
-    namespace bio {
-    class RCacheStatistic {
-    public:
-        static RCacheStatistic &Instance()
-        {
-            static RCacheStatistic instance;
-            return instance;
-        }
-        inline void IncHisCount()
-        {
-            hisCount++;
-        }
-
-        inline void IncMisCount()
-        {
-            misCount++;
-        }
-
-    private:
-        std::atomic<uint64_t> misCount;
-        std::atomic<uint64_t> hisCount;
-    };
+namespace bio {
+class RCacheStatistic {
+public:
+    static RCacheStatistic &Instance()
+    {
+        static RCacheStatistic instance;
+        return instance;
     }
+    inline void IncHisCount()
+    {
+        hisCount++;
+    }
+
+    inline void IncMisCount()
+    {
+        misCount++;
+    }
+
+private:
+    std::atomic<uint64_t> misCount;
+    std::atomic<uint64_t> hisCount;
+};
+}
 }
 
 #endif // BOOSTIO_RCACHE_STATISTIC_H

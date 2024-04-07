@@ -138,7 +138,7 @@ public:
         mShareAddress = addr;
     }
 
-    uint8_t* GetShmAddress(uint64_t offset)
+    uint8_t *GetShmAddress(uint64_t offset)
     {
         if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mShmSize)) {
             NET_LOG_ERROR("Shm info, fd:" << mShmFd << ", offset:" << mShareOffset << ", size:" << mShmSize << ".");
@@ -398,8 +398,8 @@ public:
     {
         return mCtrlChannelMgr;
     }
-	
-	NetChannelMgrPtr &GetDataChannelMgr()
+
+    NetChannelMgrPtr &GetDataChannelMgr()
     {
         return mDataChannelMgr;
     }
@@ -477,15 +477,15 @@ private:
         return BIO_OK;
     }
 
-    template <typename TResp> BResult SyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, TResp &resp,
-            ChannelPtr &ch)
+    template <typename TResp>
+    BResult SyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, TResp &resp, ChannelPtr &ch)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg(&resp, sizeof(TResp));
-        auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen}, rspOpInfo, respMsg);
+        auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen }, rspOpInfo, respMsg);
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
             return NetResult(result);

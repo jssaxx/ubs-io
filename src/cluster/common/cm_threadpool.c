@@ -43,7 +43,8 @@ void *ThreadPoolThread(void *thread_pool)
 int ParamCheck(uint16_t *thread_num, uint16_t *queue_size)
 {
     if (*thread_num == 0 || *queue_size == 0) {
-        CM_LOGERROR(0, "create thread pool, invalid param, thread_num = %u, queue_size = %u\r\n", *thread_num, *queue_size);
+        CM_LOGERROR(0, "create thread pool, invalid param, thread_num = %u, queue_size = %u\r\n", *thread_num,
+            *queue_size);
         return -1;
     }
     if (*thread_num > THREAD_POOL_MAX_THREADS) {
@@ -156,7 +157,6 @@ int32_t CmThreadPoolAdd(CM_THREAD_POOL_S *pool, THREAD_CALL_BACK callback, void 
             break;
         }
 
-        
         pool->queue_full_cnt++;
         usleep(200);
     }
@@ -197,4 +197,3 @@ int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags)
 
     return 0;
 }
-

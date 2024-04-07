@@ -39,8 +39,8 @@ BResult ConnectTask::DoConnect()
         NET_LOG_INFO("Connect ctrl succeed, channel id:" << ctrlChanel->Id() << ", target node id:" <<
             mConnectInfo.peerId.nid << ", pid:" << mConnectInfo.peerId.pid << ".");
     } else {
-        NET_LOG_INFO("Exist connect ctrl plane by target node id " << mConnectInfo.peerId.nid <<
-            ", pid:" << mConnectInfo.peerId.pid << ".");
+        NET_LOG_INFO("Exist connect ctrl plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
+            mConnectInfo.peerId.pid << ".");
     }
 
     ChannelPtr dataChanel = nullptr;
@@ -55,8 +55,8 @@ BResult ConnectTask::DoConnect()
         NET_LOG_INFO("Connect data succeed, channel id:" << dataChanel->Id() << ", target node id:" <<
             mConnectInfo.peerId.nid << ", pid:" << mConnectInfo.peerId.pid << ".");
     } else if (ret != BIO_OK) {
-        NET_LOG_INFO("Exist connect data plane by target node id " << mConnectInfo.peerId.nid <<
-            ", pid:" << mConnectInfo.peerId.pid << ".");
+        NET_LOG_INFO("Exist connect data plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
+            mConnectInfo.peerId.pid << ".");
     }
 
     return BIO_OK;

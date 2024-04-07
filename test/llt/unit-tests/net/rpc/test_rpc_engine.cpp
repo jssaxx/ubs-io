@@ -39,9 +39,10 @@ BResult AsyncConnect_Stub(ConnectInfo &info, AsyncConnHandler handler, uintptr_t
 
 void TestRpcEngine::Stub()
 {
-    MOCKER_CPP(&NetEngine::SyncConnect, BResult (*)(ConnectInfo &info)).stubs().will(invoke(SyncConnect_Stub));
-    MOCKER_CPP(&NetEngine::AsyncConnect, BResult (*)(ConnectInfo &info,
-        AsyncConnHandler handler, uintptr_t ctx)).stubs().will(returnValue(0));
+    MOCKER_CPP(&NetEngine::SyncConnect, BResult(*)(ConnectInfo & info)).stubs().will(invoke(SyncConnect_Stub));
+    MOCKER_CPP(&NetEngine::AsyncConnect, BResult(*)(ConnectInfo & info, AsyncConnHandler handler, uintptr_t ctx))
+        .stubs()
+        .will(returnValue(0));
 }
 
 TEST_F(TestRpcEngine, test_rpc_engine_initialize) {}

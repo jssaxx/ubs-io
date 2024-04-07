@@ -48,11 +48,11 @@ public:
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
-    BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
-        CacheAttr &attr, bool isDegrade);
+    BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr,
+        bool isDegrade);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-                uint64_t &realLen);
+        uint64_t &realLen);
 
     BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
@@ -75,10 +75,11 @@ public:
     BResult HandleProcBroken(uint64_t procId);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     WCachePtr GetWCache(uint64_t flowId);
-    BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice, const SliceWriter &sliceWriter,
-                 uint64_t &realLen);
+    BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
+        const SliceWriter &sliceWriter, uint64_t &realLen);
     BResult FlushImpl(uint64_t ptId, uint64_t ptv);
     BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
     BResult HandleProcBrokenHdl(uint64_t procId);
@@ -102,14 +103,14 @@ private:
     RCacheManagerPtr mRCacheManager;
 
     bool mRunning = true;
-    ExecutorServicePtr mEvictService[MAX_WCACHE_TIER] { nullptr, nullptr };
-    ExecutorServicePtr mGcEvictService { nullptr };
-    ExecutorServicePtr mRetryEvictService { nullptr };
-    ExecutorServicePtr mDestroyEvictService { nullptr };
+    ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
+    ExecutorServicePtr mGcEvictService{ nullptr };
+    ExecutorServicePtr mRetryEvictService{ nullptr };
+    ExecutorServicePtr mDestroyEvictService{ nullptr };
 
-    GetLocDiskStatus mGetLocDiskStatus { nullptr };
-    GetGlobEvictOffset mEvictOffset { nullptr };
-    CheckLocRole mLocRole { nullptr };
+    GetLocDiskStatus mGetLocDiskStatus{ nullptr };
+    GetGlobEvictOffset mEvictOffset{ nullptr };
+    CheckLocRole mLocRole{ nullptr };
 
     WCacheIndexPtr mCacheIndex;
 

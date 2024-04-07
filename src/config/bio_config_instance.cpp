@@ -138,10 +138,10 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
         return BIO_ERR;
     }
 
-    mDaemonConfig.segment = conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE;
-    mDaemonConfig.memCap = conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE;
-    mDaemonConfig.evictWaterLevel = conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first);
-    mDaemonConfig.diskEvictWaterLevel = conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first);
+    mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
+    mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
+    mDaemonConfig.evictWaterLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
+    mDaemonConfig.diskEvictWaterLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.memReadWriteRatio = conf->GetStr(MEM_READ_WRITE_RATIO.first);
     mDaemonConfig.diskReadWriteRatio = conf->GetStr(DISK_READ_WRITE_RATIO.first);
 
@@ -177,7 +177,7 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 
     std::vector<std::string> idWithPoolNames;
     StrUtil::Split(conf->GetStr(UNDERFS_CEPH_POOL.first), ",", idWithPoolNames);
-    for (const auto& idWithPoolName : idWithPoolNames) {
+    for (const auto &idWithPoolName : idWithPoolNames) {
         std::vector<std::string> idAndPoolName;
         StrUtil::Split(idWithPoolName, ":", idAndPoolName);
         long poolId = 0;
@@ -273,7 +273,7 @@ uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
         mDaemonConfig.diskEvictWaterLevel = level;
     }
 
-    LOG_INFO("config changed tier:" << tier <<", evictWaterLevel, " << ori << " => " << level);
+    LOG_INFO("config changed tier:" << tier << ", evictWaterLevel, " << ori << " => " << level);
     return ori;
 }
 

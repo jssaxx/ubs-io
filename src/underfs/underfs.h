@@ -53,6 +53,7 @@ public:
     BResult List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     rados_t mConn;
     rados_ioctx_t mIoCtx;
@@ -62,8 +63,7 @@ private:
     std::string mUser;
     std::string mPool;
 
-    bool mInited { false };
-
+    bool mInited{ false };
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

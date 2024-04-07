@@ -70,26 +70,11 @@ namespace bio {
         }                                         \
     } while (0)
 
-#define ChkNot(ARGS)                              \
-    do {                                          \
-        if (__builtin_expect(!(ARGS), 0) != 0) {  \
-            LOG_ERROR("Check Failed: " << #ARGS); \
-        }                                         \
-    } while (0)
-
 #define ChkTrue(ARGS, RET, MSG)                                  \
     do {                                                         \
         if (__builtin_expect(!(ARGS), 0) != 0) {                 \
             LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
             return RET;                                          \
-        }                                                        \
-    } while (0)
-
-#define ChkTrueEx(ARGS, MSG)                                     \
-    do {                                                         \
-        if (__builtin_expect(!(ARGS), 0) != 0) {                 \
-            LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
-            return;                                              \
         }                                                        \
     } while (0)
 

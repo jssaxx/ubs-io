@@ -39,8 +39,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
     while (remainLen > 0) {
         curLen = mChunkSize - curOffset % mChunkSize;
         curLen = (remainLen > curLen) ? curLen : remainLen;
-        flowAddr.push_back(FlowAddr(mChunkList[curOffset / mChunkSize], curOffset % mChunkSize, curLen));
-        LOG_DEBUG("ChunkId:" << mChunkList[curOffset / mChunkSize] << ", chunkOffset:" << curOffset % mChunkSize << ", curLen:" << curLen);
+        flowAddr.emplace_back(mChunkList[curOffset / mChunkSize], curOffset % mChunkSize, curLen);
         curOffset += curLen;
         remainLen -= curLen;
     }
@@ -104,8 +103,8 @@ void Flow::PreLoadHandle()
     do {
         auto ret = FlowManager::MediaAlloc(mType, mMediaId, mFlowId, mPreLoadOffset, mChunkSize, &chunkId);
         if (ret != BIO_OK) {
-            LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" <<
-                mMediaId << ", chunkSize:" << mChunkSize);
+            LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" << mMediaId <<
+                ", chunkSize:" << mChunkSize);
             HoldClean(NO_MAX_VALUE64, BIO_INNER_RETRY, false);
             break;
         }
@@ -118,7 +117,6 @@ void Flow::PreLoadHandle()
         mLock.UnLock();
         HoldClean(offset, BIO_OK, !isReady);
     } while (!isReady);
-    return;
 }
 
 void Flow::PreLoadSchedule()
@@ -132,12 +130,12 @@ void Flow::PreLoadSchedule()
 
     mLock.LockWrite();
     bool preloadFlag = mPreLoadFlag;
-    if (mPreLoadFlag == false) {
+    if (!mPreLoadFlag) {
         mPreLoadFlag = true;
     }
     mLock.UnLock();
 
-    if (preloadFlag == true) {
+    if (preloadFlag) {
         LOG_DEBUG("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
         return;
     }
@@ -149,7 +147,6 @@ void Flow::PreLoadSchedule()
         mPreLoadFlag = false;
         return;
     }
-    return;
 }
 
 void Flow::HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag)
@@ -169,7 +166,6 @@ void Flow::HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag)
         }
     }
     mLock.UnLock();
-    return;
 }
 
 BResult Flow::HoldWait(uint64_t needOffset)
@@ -218,7 +214,7 @@ BResult Flow::RecoverCheck()
         return BIO_OK;
     }
     bool isFirst = true;
-    for (auto& elem : mRecoverList) {
+    for (auto &elem : mRecoverList) {
         mChunkList.push_back(elem.second);
         if (isFirst) {
             mTruncateOffset = elem.first;
@@ -232,8 +228,8 @@ BResult Flow::RecoverCheck()
         }
         mPreLoadOffset = elem.first + mChunkSize;
     }
-    LOG_INFO("Recover succeed, flowId:" << mFlowId << ", truncate:" << mTruncateOffset <<
-        ", preLoad:" << mPreLoadOffset);
+    LOG_INFO("Recover succeed, flowId:" << mFlowId << ", truncate:" << mTruncateOffset << ", preLoad:" <<
+        mPreLoadOffset);
     return BIO_OK;
 }
 }

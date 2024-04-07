@@ -10,8 +10,8 @@
 #include "securec.h"
 
 #define CHUNK_ID_TO_BDMID(chunkId) (((chunkId) >> 48UL) & 0xFFFF)
-#define ENCODE_CHUNK_ID(chunkId, bdmId) ((((uint64_t)(bdmId) & 0xFFFF) << 48UL) | ((chunkId) & 0xFFFFFFFFFFFF))
-#define DENCODE_CHUNK_ID(chunkId) ((chunkId) & 0xFFFFFFFFFFFF)
+#define ENCODE_CHUNK_ID(chunkId, bdmId) ((((uint64_t)(bdmId)&0xFFFF) << 48UL) | ((chunkId)&0xFFFFFFFFFFFF))
+#define DENCODE_CHUNK_ID(chunkId) ((chunkId)&0xFFFFFFFFFFFF)
 
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;

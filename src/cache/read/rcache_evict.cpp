@@ -8,15 +8,18 @@
 
 using namespace ock::bio;
 
-RCacheEvict::RCacheEvict():workIndex(0)
+RCacheEvict::RCacheEvict() : workStatus(false), workIndex(0)
 {
+    for (uint32_t i = 0; i < READ_CACHE_TIER_BUTT; i++) {
+        for (uint32_t j = 0; j < READ_CACHE_EVICT_SERVICE_NUM; j++) {
+            works[i][j] = nullptr;
+        }
+    }
 }
 
-RCacheEvict::~RCacheEvict()
-{
-}
+RCacheEvict::~RCacheEvict() {}
 
-uint64_t GetReadRatio(std::string readWriteRatios)
+static uint64_t GetReadRatio(std::string readWriteRatios)
 {
     std::vector<std::string> ratios;
     StrUtil::Split(readWriteRatios, ":", ratios);
@@ -80,7 +83,7 @@ BResult RCacheEvict::EvictHandle(uint32_t index, RCacheTierType tier)
     std::list<RCachePtr> list = evictRCache[index];
     evictRCacheLock[index].UnLock();
 
-    for (auto iter = list.begin(); iter != list.end();iter++) {
+    for (auto iter = list.begin(); iter != list.end(); iter++) {
         rCache = *iter;
         result = EvictOneRCacheHandle(rCache, tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
@@ -93,14 +96,15 @@ BResult RCacheEvict::EvictHandle(uint32_t index, RCacheTierType tier)
 
 void *RCacheEvict::Worker(void *context)
 {
-    RCacheEvictWorkerParam *para = static_cast<RCacheEvictWorkerParam*>(context);
+    RCacheEvictWorkerParam *para = static_cast<RCacheEvictWorkerParam *>(context);
     RCacheEvictPtr rCacheEvict = para->rCacheEvict;
 
     BResult result;
     while (rCacheEvict->GetWorkStatus()) {
         result = rCacheEvict->EvictHandle(para->index, para->tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
-            LOG_ERROR("Gc handle read cache index " << para->index << "tier " << para->tier << "failed, error code" << result);
+            LOG_ERROR("Gc handle read cache index " << para->index << "tier " << para->tier << "failed, error code" <<
+                result);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_EVICT_INTERVAL_MS));
@@ -124,10 +128,10 @@ BResult RCacheEvict::Initialize()
                 return BIO_ALLOC_FAIL;
             }
 
-            para->tier  = static_cast<RCacheTierType>(tier);;
+            para->tier = static_cast<RCacheTierType>(tier);
             para->index = i;
             para->rCacheEvict = this;
-            auto *th = new std::thread(Worker, static_cast<void*>(para));
+            auto *th = new std::thread(Worker, static_cast<void *>(para));
             if (th) {
                 pthread_setname_np(th->native_handle(), "evictWorker");
                 works[tier][i] = th;
@@ -144,7 +148,7 @@ BResult RCacheEvict::Initialize()
 BResult RCacheEvict::Destroy()
 {
     workStatus.store(false);
-    for (auto& work : works) {
+    for (auto &work : works) {
         for (auto th : work) {
             if (th) {
                 th->join();
@@ -181,4 +185,3 @@ BResult RCacheEvict::Stop(RCachePtr rCachePtr)
     evictRCacheLock[index].UnLock();
     return BIO_NOT_EXISTS;
 }
-

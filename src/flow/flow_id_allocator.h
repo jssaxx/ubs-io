@@ -12,8 +12,9 @@
 
 namespace ock {
 namespace bio {
-static constexpr uint64_t FLOW_ID_MASK = 0xFFFFFFFF;
-static constexpr uint64_t FLOW_ID_SHIFT = 32UL;
+constexpr uint64_t FLOW_ID_MASK = 0xFFFFFFFF;
+constexpr uint64_t FLOW_ID_SHIFT = 32UL;
+
 class FlowIdAllocator;
 using FlowIdAllocatorPtr = Ref<FlowIdAllocator>;
 class FlowIdAllocator {
@@ -37,8 +38,8 @@ public:
     {
         uint64_t flowId;
         uint64_t innerFlowId = ++mNextFlowId;
-        for (auto i:prefix){
-            flowId =  (((static_cast<uint64_t>(i)) << FLOW_ID_SHIFT) | (innerFlowId & FLOW_ID_MASK));
+        for (auto i : prefix) {
+            flowId = (((static_cast<uint64_t>(i)) << FLOW_ID_SHIFT) | (innerFlowId & FLOW_ID_MASK));
             flowIds.push_back(flowId);
         }
     }
@@ -59,7 +60,7 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    std::atomic<uint64_t> mNextFlowId { 0 };
+    std::atomic<uint64_t> mNextFlowId{ 0 };
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

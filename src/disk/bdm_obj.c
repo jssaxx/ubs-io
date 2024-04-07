@@ -196,4 +196,3 @@ int32_t BdmObjInit(void)
 
     return BDM_CODE_OK;
 }
-

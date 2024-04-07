@@ -18,10 +18,10 @@ enum HResult {
 
 constexpr int32_t SERVICE_SHIFT = 16;
 
-#define TRACE_DELAY_BEGIN(TP_ID)                                                \
-    uint64_t tsBegin##TP_ID = ock::utils::Monotonic::TimeNs();                  \
-    if (ock::htracer::HtracerManager::IsEnable()) {                             \
-        ock::htracer::HtracerManager::DelayBegin(TP_ID, #TP_ID);                \
+#define TRACE_DELAY_BEGIN(TP_ID)                                 \
+    uint64_t tsBegin##TP_ID = ock::utils::Monotonic::TimeNs();   \
+    if (ock::htracer::HtracerManager::IsEnable()) {              \
+        ock::htracer::HtracerManager::DelayBegin(TP_ID, #TP_ID); \
     }
 
 #define TRACE_DELAY_END(TP_ID, RET_CODE)                                        \
@@ -31,9 +31,9 @@ constexpr int32_t SERVICE_SHIFT = 16;
         ock::htracer::HtracerManager::DelayEnd(TP_ID, tpDiff##TP_ID, RET_CODE); \
     }
 
-#define TRACE_ASYNC_DELAY_BEGIN(TP_ID)                                          \
-    if (ock::htracer::HtracerManager::IsEnable()) {                             \
-        ock::htracer::HtracerManager::DelayBegin(TP_ID, #TP_ID);                \
+#define TRACE_ASYNC_DELAY_BEGIN(TP_ID)                           \
+    if (ock::htracer::HtracerManager::IsEnable()) {              \
+        ock::htracer::HtracerManager::DelayBegin(TP_ID, #TP_ID); \
     }
 
 #define TRACE_ASYNC_DELAY_END(TP_ID, RET_CODE, START_TIME)                      \
@@ -51,9 +51,9 @@ std::string GetTraceInfo();
 
 void ClearTraceInfo();
 
-constexpr int32_t GetTraceId(int32_t serviceId, int32_t innerId)
+constexpr int32_t GetTraceId(uint32_t serviceId, uint32_t innerId)
 {
-    return ((static_cast<uint32_t>(serviceId) << SERVICE_SHIFT) | (innerId & 0xFFFF));
+    return ((serviceId << SERVICE_SHIFT) | (innerId & 0xFFFF));
 }
 }
 }

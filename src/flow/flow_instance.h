@@ -12,13 +12,11 @@
 
 namespace ock {
 namespace bio {
-
 class FlowInstance;
 using FlowInstancePtr = Ref<FlowInstance>;
 class FlowInstance {
 public:
-    FlowInstance(const uint64_t flowId, uint64_t version = 0) : mFlowId(flowId),  mVersion(version)
-    {}
+    FlowInstance(const uint64_t flowId, uint64_t version = 0) : mFlowId(flowId), mVersion(version) {}
     ~FlowInstance() = default;
 
     inline uint64_t FlowId() const
@@ -36,7 +34,7 @@ public:
         lock.Lock();
         offset = mIndex++;
         uint64_t outOffset = mOffset;
-        mOffset +=len;
+        mOffset += len;
         lock.UnLock();
         return outOffset;
     }
@@ -46,8 +44,8 @@ public:
 private:
     uint64_t mFlowId;
     uint64_t mVersion;
-    uint64_t mIndex { 0 };
-    uint64_t mOffset { 0 };
+    uint64_t mIndex{ 0 };
+    uint64_t mOffset{ 0 };
     SpinLock lock;
 
     DEFINE_REF_COUNT_VARIABLE;

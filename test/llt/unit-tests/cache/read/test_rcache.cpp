@@ -36,10 +36,10 @@ void TestRCache::TearDown()
 
 static CacheSliceOperator gSlicerOperator;
 
-constexpr uint64_t G_PT_ID = 1;
-constexpr uint64_t G_PT_V = 1;
-constexpr Key G_KEY = "123123key";
-constexpr char *G_VALUE = "test/read/cache/data";
+static constexpr uint64_t G_PT_ID = 1;
+static constexpr uint64_t G_PT_V = 1;
+static constexpr Key G_KEY = "123123key";
+static constexpr char *G_VALUE = "test/read/cache/data";
 
 static RCacheSlicePtr gRcacheSlice;
 
@@ -177,4 +177,3 @@ TEST_F(TestRCache, test_rcache_expired_clear_ok)
     auto ret = gRcacheManager->ExpiredClear(G_PT_ID, 2);
     EXPECT_EQ(ret, 0);
 }
-

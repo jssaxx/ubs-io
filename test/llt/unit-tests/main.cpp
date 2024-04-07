@@ -36,20 +36,20 @@ int main(int argc, char *argv[])
     TestCm::Stub();
     TestRpcEngine::Stub();
     TestHtracer::Stub();
-    (void) system("rm -rf conf");
-    (void) system("mkdir conf");
-    (void) system("cp ../configs/* conf");
-    (void) system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' ./conf/bio.conf");
-    (void) system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' ./conf/bio.conf");
+    (void)system("rm -rf conf");
+    (void)system("mkdir conf");
+    (void)system("cp ../configs/* conf");
+    (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' ./conf/bio.conf");
+    (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' ./conf/bio.conf");
     if (DiskPathInvalid()) {
         TestDisk::Stub();
-        (void) system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' ./conf/bio.conf");
-        (void) system("touch test1");
-        (void) system("touch test2");
+        (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' ./conf/bio.conf");
+        (void)system("touch test1");
+        (void)system("touch test2");
     }
-    (void) system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
-                  "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
-    (void) system("touch ceph.conf");
+    (void)system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
+        "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
+    (void)system("touch ceph.conf");
 
     auto bioServer = BioServer::Instance();
     auto ret = bioServer->Start();
@@ -58,11 +58,11 @@ int main(int argc, char *argv[])
     ::testing::InitGoogleTest(&argc, argv);
     int runRet = RUN_ALL_TESTS();
 
-    (void) system("rm -rf conf");
-    (void) system("rm -rf ceph.conf");
+    (void)system("rm -rf conf");
+    (void)system("rm -rf ceph.conf");
     if (DiskPathInvalid()) {
-        (void) system("rm -rf test1");
-        (void) system("rm -rf test2");
+        (void)system("rm -rf test1");
+        (void)system("rm -rf test2");
     }
 
     ClearTraceInfo();

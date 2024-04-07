@@ -73,7 +73,8 @@ static void *CmClientPtEventHandle(void *arg)
     return NULL;
 }
 
-static int32_t CmClientPtEventReport(uint16_t poolId, uint16_t nodeId, uint16_t eventType, uint16_t ptNum, PtFinish *eventList)
+static int32_t CmClientPtEventReport(uint16_t poolId, uint16_t nodeId, uint16_t eventType, uint16_t ptNum,
+    PtFinish *eventList)
 {
     CmPtEvent *ptEvent = (CmPtEvent *)malloc(sizeof(CmPtEvent) + sizeof(CmPtFinish) * ptNum);
     if (ptEvent == NULL) {
@@ -146,7 +147,8 @@ int32_t CM_SetDiskStatus(uint16_t poolId, uint16_t diskId, DiskState state)
         return CM_OK;
     }
 
-    CM_LOGINFO("Setdisk, poolId(%u) nodeId(%u) diskId(%u) state(%s).", poolId, nodeInfo.nodeId, diskId, CM_DISK_STATE(state));
+    CM_LOGINFO("Setdisk, poolId(%u) nodeId(%u) diskId(%u) state(%s).", poolId, nodeInfo.nodeId, diskId,
+        CM_DISK_STATE(state));
 
     ret = CmClientZkRecordNodeInfo(poolId, &nodeInfo);
     if (ret != CM_OK) {

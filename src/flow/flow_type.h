@@ -23,15 +23,13 @@ struct FlowAddr {
     uint64_t chunkId;
     uint32_t chunkOffset;
     uint32_t chunkLen;
-public:
+
     FlowAddr() = default;
-    FlowAddr(MrInfo &mrInfo)
-        : chunkId(mrInfo.address), chunkOffset(0), chunkLen(mrInfo.size)
-    {}
+    explicit FlowAddr(MrInfo &mrInfo) : chunkId(mrInfo.address), chunkOffset(0), chunkLen(mrInfo.size) {}
     FlowAddr(uint64_t inChunkId, uint32_t inChunkOffset, uint32_t inChunkLen)
         : chunkId(inChunkId), chunkOffset(inChunkOffset), chunkLen(inChunkLen)
     {}
-    void ToMrInfo(MrInfo &mrInfo)
+    void ToMrInfo(MrInfo &mrInfo) const
     {
         mrInfo.address = chunkId + chunkOffset;
         mrInfo.size = chunkLen;

@@ -458,7 +458,7 @@ public:
 
 private:
     RingBuffer<T> mRingBuffer; /* ring buffer to data store */
-    sem_t mSem {};             /* semaphore to wait and notify */
+    sem_t mSem{};              /* semaphore to wait and notify */
 };
 }
 }

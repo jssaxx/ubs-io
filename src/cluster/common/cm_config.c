@@ -9,10 +9,10 @@
 #define ZK_SERVER_LIST_LEN (128)
 
 #define CM_LINK_MIN_TIMEOUT 5000   /* 心跳超时时间，最小值 */
-#define CM_LINK_MAX_TIMEOUT 120000  /* 心跳超时时间，最大值 */
+#define CM_LINK_MAX_TIMEOUT 120000 /* 心跳超时时间，最大值 */
 
 #define CM_PERM_FAULT_MIN_TIMEOUT 30000   /* 永久超时时间，最小值 */
-#define CM_PERM_FAULT_MAX_TIMEOUT 1200000  /* 永久超时时间，最大值 */
+#define CM_PERM_FAULT_MAX_TIMEOUT 1200000 /* 永久超时时间，最大值 */
 
 typedef struct {
     uint16_t used;

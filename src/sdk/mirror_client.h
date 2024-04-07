@@ -53,7 +53,7 @@ public:
     BResult Initialize();
     BResult Start();
 
-    explicit MirrorClient(WorkerMode mode) : mMode(mode) {}
+    explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
     ~MirrorClient() = default;
 
     uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
@@ -80,7 +80,7 @@ public:
 
     BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
 
-    DEFINE_REF_COUNT_FUNCTIONS;
+    DEFINE_REF_COUNT_FUNCTIONS
 
     std::vector<uint16_t> ListLocalAffinityPt();
 
@@ -156,8 +156,8 @@ private:
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
     uint32_t CalcPtQuota(CmPtInfo &ptEntry);
 
-    BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId,
-        uint64_t &offset, uint64_t &index);
+    BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
+        uint64_t &index);
     BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
         uint64_t &flowId);
     BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);

@@ -14,6 +14,7 @@ constexpr uint32_t HASH_BUCKET_NUM = 1024;
 struct WCacheIndexTable {
     ReadWriteLock sliceIndexLock[HASH_BUCKET_NUM];
     std::unordered_map<std::string, WCacheSliceRefPtr> sliceIndex[HASH_BUCKET_NUM];
+
 public:
     WCacheIndexTable() = default;
 };
@@ -32,6 +33,7 @@ public:
     void ExpiredClear(uint64_t ptId);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     WCacheIndexTable *GetIndexTable(uint64_t ptId);
     static uint32_t Hash(const Key &key);

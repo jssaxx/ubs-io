@@ -56,7 +56,7 @@ extern "C" {
 #endif
 
 #ifndef ROUND_UP
-#define ROUND_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
+#define ROUND_UP(x, align) (((x) + (align)-1) & ~((align)-1))
 #endif
 
 #ifndef ROUND_DOWN
@@ -104,7 +104,7 @@ extern "C" {
 #endif
 
 #ifndef ATOMIC_CAS
-#define ATOMIC_CAS(x, y, z) __sync_val_compare_and_swap ((x), (y), (z))
+#define ATOMIC_CAS(x, y, z) __sync_val_compare_and_swap((x), (y), (z))
 #endif
 
 #define BDM_SPINLOCK_T pthread_spinlock_t
@@ -138,24 +138,24 @@ typedef enum CmLogLevel {
 
 void BDM_Ulog(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
 
-#define BDM_LOGINFO(LogID, ...)                                                                     \
-    do {                                                                                    \
-        BDM_Ulog(BDM_LOG_INFO, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__);            \
+#define BDM_LOGINFO(LogID, ...)                                                            \
+    do {                                                                                   \
+        BDM_Ulog(BDM_LOG_INFO, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
-#define BDM_LOGDEBUG(LogID, ...)                                                                    \
+#define BDM_LOGDEBUG(LogID, ...)                                                            \
     do {                                                                                    \
-        BDM_Ulog(BDM_LOG_DEBUG, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__);           \
+        BDM_Ulog(BDM_LOG_DEBUG, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
-#define BDM_LOGWARN(LogID, ...)                                                                     \
-    do {                                                                                    \
-        BDM_Ulog(BDM_LOG_WARNING, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__);         \
+#define BDM_LOGWARN(LogID, ...)                                                               \
+    do {                                                                                      \
+        BDM_Ulog(BDM_LOG_WARNING, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
-#define BDM_LOGERROR(LogID, ...)                                                                    \
+#define BDM_LOGERROR(LogID, ...)                                                            \
     do {                                                                                    \
-        BDM_Ulog(BDM_LOG_ERROR, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__);           \
+        BDM_Ulog(BDM_LOG_ERROR, __FUNCTION__, __LINE__, __BDM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
 #ifdef __cplusplus

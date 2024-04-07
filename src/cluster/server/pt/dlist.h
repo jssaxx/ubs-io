@@ -14,21 +14,23 @@
 #endif
 
 struct DListHead {
-    struct DListHead *next, *prev;   /* *< 前驱后驱指针  */
+    struct DListHead *next, *prev; /* *< 前驱后驱指针  */
 };
 
 typedef struct DListHead DList;
 
-#define D_LIST_HEAD_INIT(name) {                          \
-    &(name), &(name)       \
-}
+#define D_LIST_HEAD_INIT(name) \
+    {                          \
+        &(name), &(name)       \
+    }
 
 #define D_LIST_HEAD(name) DList name = D_LIST_HEAD_INIT(name)
 
-#define D_INIT_LIST_HEAD(ptr) do {                      \
-    (ptr)->next = (ptr);  \
-    (ptr)->prev = (ptr);  \
-} while (0)
+#define D_INIT_LIST_HEAD(ptr) \
+    do {                      \
+        (ptr)->next = (ptr);  \
+        (ptr)->prev = (ptr);  \
+    } while (0)
 
 #if defined(__cplusplus)
 extern "C" {
@@ -67,8 +69,7 @@ static inline void DListDel(DList *entry)
 
 #define D_LIST_ENTRY(ptr, type, member) ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 
-#define D_LIST_FOR_DEL_EACH(pos, head) \
-    for ((pos) = (head)->next; (pos) != (head); (pos) = (head)->next)
+#define D_LIST_FOR_DEL_EACH(pos, head) for ((pos) = (head)->next; (pos) != (head); (pos) = (head)->next)
 
 #define D_LIST_FOR_EACH(pos, head) \
     for ((pos) = (head)->next, PREFETCH((pos)->next); (pos) != (head); (pos) = (pos)->next, PREFETCH((pos)->next))

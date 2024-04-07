@@ -134,8 +134,8 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
             rc = pwrite(fd, buff + (len - remain), remain, offset + (len - remain));
         }
         if (rc <= 0) {
-            BDM_LOGWARN(0, "%s failed (%s), fd %d, rc %d, len %d, off %lu, remain %lu.",
-                isRead ? "Read" : "Write", strerror(errno), fd, rc, len, offset, remain);
+            BDM_LOGWARN(0, "%s failed (%s), fd %d, rc %d, len %d, off %lu, remain %lu.", isRead ? "Read" : "Write",
+                strerror(errno), fd, rc, len, offset, remain);
             break;
         }
         remain -= rc;
@@ -170,7 +170,7 @@ int32_t BdmDiskWriteMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t
     BdmDiskItem *item = (BdmDiskItem *)itemPtr;
 
     uint64_t rwOffset = item->offset + item->metaOffset + offset;
-    int ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, FALSE);
+    int ret = BdmDiskInnerReadWrite(item, (char *)buf, len, rwOffset, FALSE);
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Write disk failed, need(%lu) device(%s).", len, item->name);
         return ret;
@@ -183,7 +183,7 @@ int32_t BdmDiskReadMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t 
     BdmDiskItem *item = (BdmDiskItem *)itemPtr;
 
     uint64_t rwOffset = item->offset + item->metaOffset + offset;
-    int ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, TRUE);
+    int ret = BdmDiskInnerReadWrite(item, (char *)buf, len, rwOffset, TRUE);
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Read disk failed, need(%lu) device(%s).", len, item->name);
         return ret;
@@ -236,7 +236,7 @@ int32_t BdmDiskRead(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *b
     }
 
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
-    ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, TRUE);
+    ret = BdmDiskInnerReadWrite(item, (char *)buf, len, rwOffset, TRUE);
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Read disk failed, need(%lu) device(%s).", len, item->name);
         return ret;
@@ -256,7 +256,7 @@ int32_t BdmDiskWrite(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *
     }
 
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
-    ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, FALSE);
+    ret = BdmDiskInnerReadWrite(item, (char *)buf, len, rwOffset, FALSE);
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Write disk failed, need(%lu) device(%s).", len, item->name);
         return ret;
@@ -278,8 +278,8 @@ int32_t BdmDiskReset(uintptr_t objPtr)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskGetNextChunk(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize,
-    uint64_t *bucketId, uint64_t *bucketOffset)
+int32_t BdmDiskGetNextChunk(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+    uint64_t *bucketOffset)
 {
     BdmObj *obj = (BdmObj *)objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -433,7 +433,7 @@ int32_t BdmDiskCreateCheck(BdmCreatePara *para)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskRetryIo(io_context_t ctx, struct iocb** iocbPP)
+int32_t BdmDiskRetryIo(io_context_t ctx, struct iocb **iocbPP)
 {
     BdmIoContext *bdmIo = (BdmIoContext *)*iocbPP;
     int32_t j = 0;
@@ -472,8 +472,8 @@ static void BdmCompleteIOHandler(const struct io_event *ioEvent, BdmThreadPool *
                 return;
             }
             BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
-            BDM_LOGERROR(0, "Try to report disk fault, bdmId %u, device %s, chunkId %ld, res %ld res2 %ld",
-                item->bdmId, item->name, bdmIo->chunkId, ioEvent->res, ioEvent->res2);
+            BDM_LOGERROR(0, "Try to report disk fault, bdmId %u, device %s, chunkId %ld, res %ld res2 %ld", item->bdmId,
+                item->name, bdmIo->chunkId, ioEvent->res, ioEvent->res2);
 
             CmReportDiskStatus((uint16_t)item->bdmId, CM_DISK_FAULT);
         }
@@ -509,13 +509,13 @@ void *BdmDiskEventsThread(void *argsP)
         if (recvs <= 0) {
             continue;
         }
-        
+
         for (int k = 0; k < recvs; k++) {
             BdmCompleteIOHandler(&events[k], bdmPool, threadIdx);
             events[k].obj = NULL;
         }
     }
-    
+
     return NULL;
 }
 
@@ -580,17 +580,11 @@ int32_t BdmDiskOpenDisk(BdmCreatePara *para, BdmDiskItem *item)
 
 bool BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item)
 {
-    return (head->magic == BDM_DISK_MAGIC &&
-            head->bdmId == item->bdmId &&
-            head->minChunkSize == item->minChunkSize &&
-            head->maxChunkSize == item->maxChunkSize &&
-            head->totalSize == item->totalSize &&
-            head->metaOffset == item->metaOffset &&
-            head->metaLength == item->metaLength &&
-            head->dataOffset == item->dataOffset &&
-            head->dataLength == item->dataLength &&
-            head->offset == item->offset &&
-            head->headSize == item->headSize);
+    return (head->magic == BDM_DISK_MAGIC && head->bdmId == item->bdmId && head->minChunkSize == item->minChunkSize &&
+        head->maxChunkSize == item->maxChunkSize && head->totalSize == item->totalSize &&
+        head->metaOffset == item->metaOffset && head->metaLength == item->metaLength &&
+        head->dataOffset == item->dataOffset && head->dataLength == item->dataLength && head->offset == item->offset &&
+        head->headSize == item->headSize);
 }
 
 int32_t BdmDiskPreCheckFileLen(int32_t fd, uint64_t length)
@@ -612,7 +606,7 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
         return ret;
     }
 
-    uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char*)&head, item->headSize, item->offset, TRUE);
+    uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char *)&head, item->headSize, item->offset, TRUE);
     if (rwLen != item->headSize) {
         BDM_LOGWARN(0, "Read disk failed, need(%lu) real(%lu) device(%s).", item->headSize, rwLen, item->name);
         return BDM_CODE_ERR;
@@ -633,7 +627,7 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
         return BDM_CODE_ERR;
     }
 
-    rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char*)&head, item->headSize, item->offset, FALSE);
+    rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char *)&head, item->headSize, item->offset, FALSE);
     if (rwLen != item->headSize) {
         BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).", item->headSize, rwLen, item->name);
         return BDM_CODE_ERR;
@@ -722,10 +716,9 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
     }
 
     uint64_t rwOffset = item->offset;
-    uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char*)restoreBuff, BDM_RESTORE_META_SIZE, rwOffset, FALSE);
+    uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char *)restoreBuff, BDM_RESTORE_META_SIZE, rwOffset, FALSE);
     if (rwLen != BDM_RESTORE_META_SIZE) {
-        BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).",
-            BDM_RESTORE_META_SIZE, rwLen, item->name);
+        BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).", BDM_RESTORE_META_SIZE, rwLen, item->name);
         free(restoreBuff);
         return BDM_CODE_ERR;
     }
@@ -941,8 +934,8 @@ int32_t BdmDiskThreadPoolInit(void)
             BDM_LOGERROR(0, "Bdm pool init failed, ret(%d)", ret);
             return BDM_CODE_ERR;
         }
-        
-        ret = pthread_create(&bdmPool->threadId[index], NULL, BdmDiskEventsThread, (void*)threadCtx);
+
+        ret = pthread_create(&bdmPool->threadId[index], NULL, BdmDiskEventsThread, (void *)threadCtx);
         if (ret != 0) {
             BDM_LOGERROR(0, "Pthread create failed, errno(%s).", strerror(errno));
             return BDM_CODE_ERR;
@@ -961,8 +954,7 @@ int32_t BdmDiskThreadPoolInit(void)
         BDM_BATCH_CTX_S batchCtx;
         batchCtx.batchHandle = BdmDiskSubmitAIO;
         batchCtx.batchCtx = (void *)threadCtx;
-        bdmPool->pool[index] = BdmThreadPoolCreate(BDM_DEFAULT_THREAD_NUM, 1024UL, &cpus, "bdm_disk",
-            &batchCtx);
+        bdmPool->pool[index] = BdmThreadPoolCreate(BDM_DEFAULT_THREAD_NUM, 1024UL, &cpus, "bdm_disk", &batchCtx);
         if (bdmPool->pool[index] == NULL) {
             BDM_LOGERROR(0, "Pthread pool create failed, errno(%s).", strerror(errno));
             return BDM_CODE_ERR;
@@ -992,4 +984,3 @@ int32_t BdmDiskInit(void)
 
     return BDM_CODE_OK;
 }
-

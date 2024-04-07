@@ -17,49 +17,48 @@ extern "C" {
 
 void CmSleep(unsigned int seconds);
 
-#define CM_SLEEP(var)  CmSleep(var)
-#define CM_SEM_S  sem_t
+#define CM_SLEEP(var) CmSleep(var)
+#define CM_SEM_S sem_t
 
-#define CM_SEM_INIT(sem, i)                                                                                    \
-    do {                                                                                                       \
-        int initRet = sem_init(sem, i, 0);                                                                     \
-        if (initRet != 0) {                                                                                   \
-            CM_LOGERROR(0, "Func(%s) Line(%d) init sem fail, ret(%d)", __FUNCTION__, __LINE__, initRet);       \
-        }                                                                                                      \
+#define CM_SEM_INIT(sem, i)                                                                              \
+    do {                                                                                                 \
+        int initRet = sem_init(sem, i, 0);                                                               \
+        if (initRet != 0) {                                                                              \
+            CM_LOGERROR(0, "Func(%s) Line(%d) init sem fail, ret(%d)", __FUNCTION__, __LINE__, initRet); \
+        }                                                                                                \
     } while (0)
 
-#define CM_SEM_DOWN(sem)                                                                                       \
-    do {                                                                                                       \
-        int downRet;                                                                                           \
-        downRet = sem_wait(sem);                                                                               \
-        while (downRet != 0 && errno == EINTR)                                                                 \
-        {                                                                                                      \
-            downRet = sem_wait(sem);                                                                           \
-        }                                                                                                      \
+#define CM_SEM_DOWN(sem)                         \
+    do {                                         \
+        int downRet;                             \
+        downRet = sem_wait(sem);                 \
+        while (downRet != 0 && errno == EINTR) { \
+            downRet = sem_wait(sem);             \
+        }                                        \
     } while (0)
 
-#define CM_SEM_UP(sem)                                                                                         \
-    do {                                                                                                       \
-        int upRet = sem_post(sem);                                                                             \
-        if (upRet != 0) {                                                                                      \
-            CM_LOGERROR(0, "FuncName(%s)Line(%d) up lwtSem failed(%d).", __FUNCTION__, __LINE__, upRet);       \
-        }                                                                                                      \
+#define CM_SEM_UP(sem)                                                                                   \
+    do {                                                                                                 \
+        int upRet = sem_post(sem);                                                                       \
+        if (upRet != 0) {                                                                                \
+            CM_LOGERROR(0, "FuncName(%s)Line(%d) up lwtSem failed(%d).", __FUNCTION__, __LINE__, upRet); \
+        }                                                                                                \
     } while (0)
 
-#define CM_SEM_DESTROY(sem)                                                                                      \
-    do {                                                                                                         \
-        int destRet = sem_destroy(sem);                                                                          \
-        if (destRet != 0) {                                                                                      \
-            CM_LOGERROR(0, "FuncName(%s)Line(%d) destory lwtSem failed(%d).", __FUNCTION__, __LINE__, destRet);  \
-        }                                                                                                        \
+#define CM_SEM_DESTROY(sem)                                                                                     \
+    do {                                                                                                        \
+        int destRet = sem_destroy(sem);                                                                         \
+        if (destRet != 0) {                                                                                     \
+            CM_LOGERROR(0, "FuncName(%s)Line(%d) destory lwtSem failed(%d).", __FUNCTION__, __LINE__, destRet); \
+        }                                                                                                       \
     } while (0)
 
-#define CM_SEM_YIELD()                                                                                           \
-    do {                                                                                                         \
-        int yieldRet = sched_yield();                                                                            \
-        if (yieldRet != 0) {                                                                                     \
-            CM_LOGERROR(0, "Func(%s) Line(%d) yield sem fail, ret(%d)", __FUNCTION__, __LINE__, yieldRet);       \
-        }                                                                                                        \
+#define CM_SEM_YIELD()                                                                                     \
+    do {                                                                                                   \
+        int yieldRet = sched_yield();                                                                      \
+        if (yieldRet != 0) {                                                                               \
+            CM_LOGERROR(0, "Func(%s) Line(%d) yield sem fail, ret(%d)", __FUNCTION__, __LINE__, yieldRet); \
+        }                                                                                                  \
     } while (0)
 
 typedef void *(*THREAD_CALL_BACK)(void *arg);

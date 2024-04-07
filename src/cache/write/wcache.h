@@ -29,8 +29,7 @@ public:
 
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
-    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-        const RCacheManagerPtr rCacheManager);
+    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager);
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
         EvictCallback evictCallback, const RetryCallback retryCallback);
@@ -94,6 +93,7 @@ public:
     bool IsEmptyEvict();
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     BResult EvictAllMemSliceToDisk();
     BResult EvictAllDiskSliceToUnderFs();
@@ -118,7 +118,7 @@ private:
     uint64_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
-    bool mIsNormal { true };
+    bool mIsNormal{ true };
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
@@ -129,9 +129,9 @@ private:
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
-    GetLocDiskStatus mGetLocDiskStatus { nullptr };
-    CheckLocRole mLocRole { nullptr };
-    GetGlobEvictOffset mGlobEvictOffset { nullptr };
+    GetLocDiskStatus mGetLocDiskStatus{ nullptr };
+    CheckLocRole mLocRole{ nullptr };
+    GetGlobEvictOffset mGlobEvictOffset{ nullptr };
 
     RCacheManagerPtr mRCacheManager;
 
