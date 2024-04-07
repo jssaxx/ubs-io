@@ -133,7 +133,7 @@ public:
         ValidatorTag tag = 0);
     void AddStrConf(const std::pair<std::string, std::string> &, const ValidatorPtr &validator = nullptr,
         ValidatorTag tag = 0);
-    void AddBoolConf(const std::pair<std::string, bool> &);
+    void AddBoolConf(const std::pair<std::string, bool> &pair);
     void AddLongConf(const std::pair<std::string, long> &, const ValidatorPtr &validator = nullptr,
         ValidatorTag tag = 0);
 

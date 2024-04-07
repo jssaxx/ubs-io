@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     gDaemonRunning = true;
     std::cout << "BoostIO Console Start Success." << std::endl;
     while (gDaemonRunning) {
-        sleep(5);
+        sleep(NO_5);
     }
     return 0;
 }

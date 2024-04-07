@@ -124,7 +124,7 @@ private:
     WorkerMode mMode;
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
-    uint32_t mServerPid = 0;
+    int32_t mServerPid = 0;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint32_t mShmKey = 0;

@@ -168,12 +168,10 @@ BResult MirrorClient::LoadOriginViewImpl()
         return ret;
     }
 
-    CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
-
-    if (mNodeView.size() == 0 || mPtView.size() == 0) {
+    if (mNodeView.empty() || mPtView.empty()) {
         return BIO_INNER_RETRY;
     }
-
+    CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
     return BIO_OK;
 }
 

@@ -36,8 +36,8 @@ uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType 
     if (tier == READ_CACHE_TIER_MEM) {
         waterData = (GetReadRatio(config.memReadWriteRatio) * config.memCap * config.evictWaterLevel) / NO_1000;
     } else {
-        waterData = (GetReadRatio(config.diskReadWriteRatio) * config.diskCaps.at(rCache->GetDiskId()) *
-            config.diskEvictWaterLevel) / NO_1000;
+        waterData = (GetReadRatio(config.diskReadWriteRatio) *
+            static_cast<uint64_t>(config.diskCaps.at(rCache->GetDiskId())) * config.diskEvictWaterLevel) / NO_1000;
     }
 
     return cacheData > waterData ? cacheData - waterData : 0ULL;
@@ -45,21 +45,19 @@ uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType 
 
 BResult RCacheEvict::EvictOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)
 {
-    uint64_t evictData = 0ULL;
     uint64_t evictTotalData = GetEvictDataByTier(rCache, tier);
-
     if (evictTotalData == 0ULL) {
         return BIO_NEED_WAIT;
     }
 
-    int32_t ret;
+    BResult ret;
+    uint64_t evictData = 0ULL;
     while (evictData < evictTotalData) {
         if (tier == READ_CACHE_TIER_MEM) {
             ret = rCache->EvictMemData(evictTotalData, evictData);
         } else {
             ret = rCache->EvictDiskData(evictTotalData, evictData);
         }
-
         if (ret == BIO_NEED_WAIT) {
             break;
         }

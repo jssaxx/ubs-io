@@ -193,6 +193,10 @@ inline bool FileUtil::CanonicalPath(std::string &path)
 
 inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
 {
+    char *canonicalPath = realpath(diskPath.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        return 0;
+    }
     // get the capacity of this device
     int fd = open(diskPath.c_str(), (O_RDWR | O_SYNC));
     if (fd < 0) {

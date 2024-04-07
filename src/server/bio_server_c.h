@@ -5,7 +5,7 @@
 #ifndef BIO_SERVER_C_H
 #define BIO_SERVER_C_H
 
-#include "stdint.h"
+#include "cstdint"
 #include "message.h"
 
 #ifdef __cplusplus

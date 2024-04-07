@@ -40,21 +40,21 @@ static constexpr Key G_KEY = "123123123";
 static uint64_t g_cacheId = 0;
 static WCacheSlicePtr gWcacheSlice;
 
-auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+static auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
     EXPECT_EQ(ret, BIO_OK);
     return ret;
 };
 
-auto wwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+static auto wwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
     EXPECT_EQ(ret, BIO_OK);
     return ret;
 };
 
-BResult GetSlice(uint64_t g_cacheId, uint64_t flowOffset, uint64_t length)
+static BResult GetSlice(uint64_t g_cacheId, uint64_t flowOffset, uint64_t length)
 {
     SliceKey sliceKey{ g_cacheId, flowOffset, FLOW_MEMORY, length, 0 };
     return gWcacheManager->GetWCacheSlice(sliceKey, gWcacheSlice);

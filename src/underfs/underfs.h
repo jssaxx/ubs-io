@@ -19,8 +19,6 @@ typedef void *rados_t;
 typedef void *rados_ioctx_t;
 #endif
 
-#define CEPH_PATH "./ceph/"
-
 namespace ock {
 namespace bio {
 class UnderFs;
@@ -63,6 +61,7 @@ private:
     std::string mUser;
     std::string mPool;
 
+    std::string mEmulationCephPath;
     bool mInited{ false };
     DEFINE_REF_COUNT_VARIABLE;
 };

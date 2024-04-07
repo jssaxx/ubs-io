@@ -747,7 +747,7 @@ public:
             std::vector<std::string> idAndPoolName;
             StrUtil::Split(idWithPoolName, ":", idAndPoolName);
             long poolId = 0;
-            if (idAndPoolName.size() != 2 || !StrUtil::StrToLong(idAndPoolName[0], poolId) || poolId < 0) {
+            if (idAndPoolName.size() != NO_2 || !StrUtil::StrToLong(idAndPoolName[0], poolId) || poolId < 0) {
                 mErrMsg = "Invalid value for <" + mName + ">, it should like poolNo0:poolName0,poolNo1:poolName1";
                 return false;
             }
