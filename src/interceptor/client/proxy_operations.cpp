@@ -117,7 +117,7 @@ int ProxyOperations::CheckSelfPath(const std::string &mountPoint, const std::str
 int ProxyOperations::OpenProxy(const char *path, int flags, va_list args)
 {
     mode_t mode = 0;
-    if ((flags & O_CREAT) || (flags & O_TMPFILE)) {
+    if ((static_cast<uint32_t>(flags) & O_CREAT) || (static_cast<uint32_t>(flags) & O_TMPFILE)) {
         mode = va_arg(args, mode_t);
         return OpenMode(path, flags, mode);
     }
@@ -158,7 +158,7 @@ int ProxyOperations::OpenMode(const char *path, int flags, mode_t mode)
 int ProxyOperations::Open64Proxy(const char *path, int flags, va_list args)
 {
     mode_t mode = 0;
-    if (flags & O_CREAT) {
+    if (static_cast<uint32_t>(flags) & O_CREAT) {
         mode = va_arg(args, mode_t);
         return Open64Mode(path, flags, mode);
     }
@@ -199,7 +199,7 @@ int ProxyOperations::Open64Mode(const char *path, int flags, mode_t mode)
 int ProxyOperations::OpenAtProxy(int dirFd, const char *path, int flags, va_list args)
 {
     mode_t mode = 0;
-    if (flags & O_CREAT) {
+    if (static_cast<uint32_t>(flags) & O_CREAT) {
         mode = va_arg(args, mode_t);
         return OpenAtMode(dirFd, path, flags, mode);
     }

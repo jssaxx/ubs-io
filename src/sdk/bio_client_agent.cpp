@@ -407,7 +407,7 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
 
     if (rsp.num != 0) {
         uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
-        auto statInfo = reinterpret_cast<ObjStat *>(addr);
+        auto statInfo = static_cast<ObjStat *>(static_cast<void *>(addr));
         for (uint32_t i = 0; i < rsp.num; i++) {
             ObjStat stat;
             CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);

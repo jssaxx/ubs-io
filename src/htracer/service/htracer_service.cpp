@@ -187,8 +187,12 @@ int HTracerService::PrepareDumpFile(const std::string &dumpDir)
     if (ret != RET_OK) {
         return RET_ERR;
     }
-    dumpFilePath = dumpFileDir + "htrace_" + std::to_string(getpid()) + ".dat";
+    char *canonicalPath = realpath(dumpFileDir.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        return RET_ERR;
+    }
 
+    dumpFilePath = dumpFileDir + "htrace_" + std::to_string(getpid()) + ".dat";
     int fd = open(dumpFilePath.c_str(), O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
     if (fd < 0) {
         return RET_ERR;
