@@ -43,7 +43,7 @@ static constexpr char *G_VALUE = "test/read/cache/data";
 
 static RCacheSlicePtr gRcacheSlice;
 
-auto rwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+static auto rwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = gSlicerOperator.Copy(from, to);
     EXPECT_EQ(ret, BIO_OK);

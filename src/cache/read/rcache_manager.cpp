@@ -3,12 +3,12 @@
  */
 
 #include "bio_log.h"
-#include "rcache_manager.h"
 #include "cache_flow.h"
 #include "flow_manager.h"
 #include "bio_def.h"
 #include "bio_trace.h"
 #include "bio_monotonic.h"
+#include "rcache_manager.h"
 
 using namespace ock::bio;
 
@@ -16,8 +16,8 @@ RCacheManager::RCacheManager() {}
 
 RCacheManager::~RCacheManager() {}
 
-constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
-constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
+static constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
+static constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 
 BResult RCacheManager::Init()
 {

@@ -14,11 +14,11 @@ using namespace ock::bio;
 
 bool TestBio::gSetup = false;
 
-constexpr uint32_t G_TENANT_ID = 5;
-constexpr char *G_KEY = "456123keybio";
-constexpr uint64_t G_LENGTH = 1024;
+static constexpr uint32_t G_TENANT_ID = 5;
+static constexpr char *G_KEY = "456123keybio";
+static constexpr uint64_t G_LENGTH = 1024;
 
-ObjLocation g_Location{};
+static ObjLocation g_Location{};
 
 void TestBio::SetUp()
 {
@@ -131,10 +131,12 @@ TEST_F(TestBio, test_bio_stat_case_return_ok)
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
-struct LoadContext {
-    sem_t sem;
-    CResult result;
-};
+namespace {
+    struct LoadContext {
+        sem_t sem;
+        CResult result;
+    };
+}
 
 static void TestCallback(void *context, int32_t result)
 {

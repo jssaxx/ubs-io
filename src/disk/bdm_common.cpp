@@ -2,8 +2,8 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2023. All rights reserved.
  */
 
-#include <stdarg.h>
-#include <stdio.h>
+#include <cstdarg>
+#include <cstdio>
 #include "securec.h"
 #include "bio_log.h"
 #include "bdm_common.h"

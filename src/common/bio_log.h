@@ -16,8 +16,8 @@
 
 namespace ock {
 namespace bio {
-#ifndef __BIO_LOG_FILENAME__
-#define __BIO_LOG_FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#ifndef BIO_LOG_FILENAME
+#define BIO_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
 
 #define SPDLOG_LEVEL_TRACE 0
@@ -47,12 +47,12 @@ namespace bio {
         }                                                                          \
     } while (0)
 
-#define LOG_CRITICAL(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_CRITICAL, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
-#define LOG_ERROR(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_ERROR, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
-#define LOG_WARN(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_WARN, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
-#define LOG_INFO(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_INFO, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
-#define LOG_DEBUG(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_DEBUG, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
-#define LOG_TRACE(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_TRACE, __BIO_LOG_FILENAME__, __LINE__, __FUNCTION__, msg)
+#define LOG_CRITICAL(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_CRITICAL, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_ERROR(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_ERROR, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_WARN(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_WARN, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_INFO(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_INFO, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_DEBUG(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_DEBUG, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_TRACE(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_TRACE, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 
 #define ChkTrueNot(ARGS, RET)                     \
     do {                                          \
@@ -90,7 +90,7 @@ public:
     static Logger *Instance(const LoggerOptions &options);
     static void Destroy();
 
-    static int32_t ChangeLogLevel(int32_t logLevel);
+    static int32_t ChangeLogLevel(int32_t newLogLevel);
 
 public:
     explicit Logger(LoggerOptions options) : mOptions(std::move(options)) {}

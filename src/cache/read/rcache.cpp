@@ -3,16 +3,16 @@
  */
 
 #include <cstdint>
-#include "rcache.h"
 #include "cache_flow.h"
 #include "cache_slice.h"
 #include "rcache_statistic.h"
 #include "underfs.h"
 #include "bio_trace.h"
+#include "rcache.h"
 
 using namespace ock::bio;
 
-constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
+static constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
 
 RCache::RCache(uint64_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
     : mFlowId(0), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mWorkIndex(workIndex)

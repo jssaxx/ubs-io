@@ -197,7 +197,7 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  * @tip: Use free to release the objs memory
  */
-CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **Objs, uint64_t *objNum);
+CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum);
 
 /**
  * @brief: Get object info
@@ -239,9 +239,10 @@ uint64_t BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset
 uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh);
 uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo);
 
-void BioReigsterJuiceFSRead(ReadHook rh);
-void BioReigsterJuiceFSWrite(WriteHook wh);
-void BioReigsterJuiceFSWriteCopyFree(WriteCopyFreeHook wh);
+void BioRegisterJuiceFSRead(ReadHook rh);
+void BioRegisterJuiceFSWrite(WriteHook wh);
+void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh);
+
 #ifdef __cplusplus
 }
 #endif

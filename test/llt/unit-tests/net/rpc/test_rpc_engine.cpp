@@ -25,12 +25,12 @@ void TestRpcEngine::TearDown()
     return;
 }
 
-BResult SyncConnect_Stub(ConnectInfo &info)
+static BResult SyncConnect_Stub(ConnectInfo &info)
 {
     return BIO_OK;
 }
 
-BResult AsyncConnect_Stub(ConnectInfo &info, AsyncConnHandler handler, uintptr_t ctx)
+static BResult AsyncConnect_Stub(ConnectInfo &info, AsyncConnHandler handler, uintptr_t ctx)
 {
     uintptr_t userCtx = 0;
     handler(userCtx, 0, info);

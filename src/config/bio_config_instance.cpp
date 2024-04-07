@@ -100,7 +100,7 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
         mNetConfig.protocol = 1;
     } else {
         LOG_ERROR("Invalid configuration with protocol items: " << protocol);
-        mNetConfig.protocol = 255;
+        mNetConfig.protocol = NO_255;
     }
 
     mNetConfig.handleRequestThreadNum = conf->GetInt(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first);

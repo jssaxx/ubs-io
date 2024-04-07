@@ -16,19 +16,17 @@ namespace bio {
 #ifdef _ceph_Integrate
 BResult UnderFs::Init()
 {
+    if (mInited) {
+        return BIO_OK;
+    }
+
     BioConfigPtr config = BioConfig::Instance();
     mCfgPath = config->GetUnderFsConfig().cfgPath;
     mCluster = config->GetUnderFsConfig().cluster;
     mUser = config->GetUnderFsConfig().user;
     mPool = config->GetUnderFsConfig().pools.at(0);
 
-    int ret;
-
-    if (mInited) {
-        return BIO_OK;
-    }
-
-    ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
+    int ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
     if (ret < 0 || mConn == nullptr) {
         LOG_ERROR("Failed to create, ret:" << ret);
         return BIO_ERR;
@@ -63,7 +61,8 @@ BResult UnderFs::Init()
         return BIO_ERR;
     }
 
-    LOG_INFO("Underfs init succeed");
+    LOG_INFO("UnderFS initialize succeed, path:" << mCfgPath << ", cluster:" << mCluster << ", user:" << mUser <<
+        ", pool:" << mPool << ".");
     mInited = true;
     return BIO_OK;
 }
@@ -75,21 +74,18 @@ void UnderFs::Stop()
     }
     rados_shutdown(mConn);
     mInited = false;
-    return;
 }
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
-    int ret;
+    ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
+    LOG_INFO("UnderFs put key:" << key);
 
-    LOG_INFO("Put key:" << key);
-
-    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_PUT);
-    ret = rados_write(mIoCtx, key, value, len, 0);
+    int ret = rados_write(mIoCtx, key, value, len, 0);
     BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
-        LOG_ERROR("Failed to write object, ret:" << ret);
+        LOG_ERROR("Failed to write object, ret:" << ret << ".");
         return BIO_ERR;
     }
     return BIO_OK;
@@ -97,13 +93,11 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
 BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
-    int ret;
+    ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
+    LOG_INFO("UnderFs get key:" << key);
 
-    LOG_INFO("Get key:" << key);
-
-    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_GET);
-    ret = rados_read(mIoCtx, key, value, len, off);
+    int ret = rados_read(mIoCtx, key, value, len, off);
     BIO_TRACE_END(UFS_TRACE_GET, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to get object " << key << ", not exist.");
@@ -118,13 +112,11 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
 BResult UnderFs::Delete(const char *key)
 {
-    int ret;
+    ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
+    LOG_INFO("UnderFs delete key:" << key);
 
-    LOG_INFO("Del key:" << key);
-
-    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_DEL);
-    ret = rados_remove(mIoCtx, key);
+    int ret = rados_remove(mIoCtx, key);
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret == -ENOENT) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
@@ -140,11 +132,11 @@ BResult UnderFs::Delete(const char *key)
 
 BResult UnderFs::Stat(const char *key, ObjStat &stat)
 {
-    int ret;
+    ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
+    LOG_INFO("UnderFs stat key:" << key);
 
-    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(UFS_TRACE_STAT);
-    ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
+    int ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to stat object " << key << ", not exist.");
@@ -159,7 +151,8 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
 
 BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat)
 {
-    ChkTrueNot(mIoCtx != nullptr, BIO_NOT_READY);
+    ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
+    LOG_INFO("UnderFs list prefix:" << prefix);
 
     rados_list_ctx_t listCtx;
     int ret = rados_nobjects_list_open(mIoCtx, &listCtx);
@@ -189,27 +182,27 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
 #else
 BResult UnderFs::Init()
 {
-    static std::string cephPath = CEPH_PATH;
-
+    static const std::string CEPH_PATH = "./ceph/";
     if (mInited) {
         return BIO_OK;
     }
 
-    DIR *dir = opendir(cephPath.c_str());
+    mEmulationCephPath = CEPH_PATH;
+    DIR *dir = opendir(mEmulationCephPath.c_str());
     if (dir == nullptr) {
-        int status = mkdir(cephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        int status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         if (status == 0) {
-            LOG_INFO("Succeed to create directory, " << cephPath.c_str());
+            LOG_INFO("Succeed to create directory, " << mEmulationCephPath.c_str());
         } else {
-            LOG_ERROR("Failed to create directory, " << cephPath.c_str() << ", status:" << status);
+            LOG_ERROR("Failed to create directory, " << mEmulationCephPath.c_str() << ", status:" << status);
             return BIO_ERR;
         }
     } else {
-        LOG_INFO("Exist to check directory, " << cephPath.c_str());
+        LOG_INFO("Exist to check directory, " << mEmulationCephPath.c_str());
         closedir(dir);
     }
 
-    LOG_INFO("Underfs init succeed");
+    LOG_INFO("UnderFS initialize succeed, emulation path:" << mEmulationCephPath << ".");
     mInited = true;
     return BIO_OK;
 }
@@ -217,12 +210,11 @@ BResult UnderFs::Init()
 void UnderFs::Stop()
 {
     mInited = false;
-    return;
 }
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
-    std::string keyPath = CEPH_PATH;
+    std::string keyPath = mEmulationCephPath;
     keyPath += key;
 
     using namespace std;
@@ -245,7 +237,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
 BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
-    std::string keyPath = CEPH_PATH;
+    std::string keyPath = mEmulationCephPath;
     keyPath += key;
 
     using namespace std;
@@ -269,12 +261,11 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
 BResult UnderFs::Delete(const char *key)
 {
-    using namespace std;
-    std::string keyPath = CEPH_PATH;
+    std::string keyPath = mEmulationCephPath;
     keyPath += key;
 
     BIO_TRACE_START(UFS_TRACE_DEL);
-    ifstream infile(keyPath.c_str());
+    std::ifstream infile(keyPath.c_str());
     if (!infile.good()) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
@@ -293,14 +284,14 @@ BResult UnderFs::Delete(const char *key)
 
 BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
 {
-    using namespace std;
+    std::string keyPath = mEmulationCephPath;
+    keyPath += key;
 
     BIO_TRACE_START(UFS_TRACE_STAT);
-    std::string keyPath = CEPH_PATH;
-    keyPath += key;
     struct stat file_stat;
     if (stat(keyPath.c_str(), &file_stat) != 0) {
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
+        BIO_TRACE_END(UFS_TRACE_STAT, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
     objStat.size = file_stat.st_size;
@@ -311,8 +302,9 @@ BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
 
 BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat)
 {
-    std::string keyPath = CEPH_PATH;
+    std::string keyPath = mEmulationCephPath;
     struct dirent *ptr;
+
     DIR *dir = opendir(keyPath.c_str());
     while ((ptr = readdir(dir)) != nullptr) {
         if (memcmp(ptr->d_name, prefix, strlen(prefix)) == 0) {

@@ -47,8 +47,7 @@ public:
         ObjLocation location;
     };
 
-    static constexpr uint32_t defaultMaxFlowSize = 1024;
-    static constexpr uint32_t SPLIT_PAGE_SIZE = 4 * 1024;
+    static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
     BResult Initialize();
     BResult Start();
@@ -200,7 +199,7 @@ private:
     inline BResult Insert(uint16_t ptId, uint64_t ptv, uint64_t flowId)
     {
         mLock.LockWrite();
-        if (UNLIKELY(mFlowMap.size() > defaultMaxFlowSize)) {
+        if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
             mLock.UnLock();
             return BIO_ERR;
         }

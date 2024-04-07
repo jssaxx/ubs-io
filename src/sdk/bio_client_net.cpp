@@ -182,7 +182,7 @@ BResult BioClientNet::ShmInit()
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
     CLIENT_LOG_INFO("Bio client shm init success. offset:" << mShmOffset << ", length:" << mShmLength << ", fd:" <<
-        mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShmAddr));
+        mShmFd << ".");
     return BIO_OK;
 }
 
