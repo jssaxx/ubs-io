@@ -11,7 +11,6 @@
 
 namespace ock {
 namespace bio {
-
 struct SliceKey {
     uint64_t flowId;
     uint64_t flowOffset;
@@ -21,7 +20,8 @@ struct SliceKey {
 
 public:
     SliceKey(uint64_t fId, uint64_t off, FlowType type, uint64_t len, uint64_t index)
-            : flowId(fId), flowOffset(off), flowType(type), length(len), indexInFlow(index) {}
+        : flowId(fId), flowOffset(off), flowType(type), length(len), indexInFlow(index)
+    {}
 
     bool Validate() const
     {
@@ -184,9 +184,9 @@ public:
     }
 
 private:
-    uint64_t mFlowId {0};
-    uint64_t mOffsetInFlow {0}; /* the offset of a slice in the flow. */
-    uint64_t mIndexInFlow {0};  /* the index of a slice in the flow, which is unique in a flow. */
+    uint64_t mFlowId{ 0 };
+    uint64_t mOffsetInFlow{ 0 }; /* the offset of a slice in the flow. */
+    uint64_t mIndexInFlow{ 0 };  /* the index of a slice in the flow, which is unique in a flow. */
 };
 using WCacheSlicePtr = Ref<WCacheSlice>;
 

@@ -58,7 +58,7 @@ public:
         }
     }
 
-    static InterceptorLog* Instance()
+    static InterceptorLog *Instance()
     {
         static auto *instance = new InterceptorLog();
         return instance;
@@ -72,13 +72,14 @@ private:
 #ifndef INTERCEPTOR_LOG_FILENAME
 #define INTERCEPTOR_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
-#define INTERCEPTOR_LOG(level, args)                                                                               \
-    do {                                                                                                           \
-        if ((level) >= InterceptorLog::Instance()->GetMinLogLevel()) {                                             \
-            std::ostringstream oss;                                                                                \
-            oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] "   << args; \
-            InterceptorLog::Instance()->Log(level, oss);                                                           \
-        }                                                                                                          \
+#define INTERCEPTOR_LOG(level, args)                                                                                \
+    do {                                                                                                            \
+        if ((level) >= InterceptorLog::Instance()->GetMinLogLevel()) {                                              \
+            std::ostringstream oss;                                                                                 \
+            oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] " << \
+                args;                                                                                               \
+            InterceptorLog::Instance()->Log(level, oss);                                                            \
+        }                                                                                                           \
     } while (0)
 
 #define CLOG_DEBUG(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_DEBUG), args)

@@ -78,7 +78,7 @@ typedef struct {
 
 void BdmThreadBindCPUs(const char *name, int32_t cpuid);
 BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, BDM_BIND_CPU_S *binds,
-                                       const char *poolName, BDM_BATCH_CTX_S *batchCtx);
+    const char *poolName, BDM_BATCH_CTX_S *batchCtx);
 int32_t BdmThreadPoolAdd(BDM_THREAD_POOL_S *threadpool, BDM_THREAD_HANDLE handle, void *ctx);
 int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadpool, int32_t flags);
 

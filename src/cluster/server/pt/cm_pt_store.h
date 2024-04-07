@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2022-2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
  */
 
 #ifndef CM_PT_STORE_H
@@ -28,4 +28,3 @@ StoreOps *CmPtStoreOpsGet(void);
 #endif
 
 #endif
-

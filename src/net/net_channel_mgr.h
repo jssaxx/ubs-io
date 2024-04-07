@@ -40,7 +40,7 @@ public:
     void UnInitialize();
 
     BResult AddChannel(NetNode dstNid, ChannelPtr &ch);
-    BResult RemoveChannel(const NetNode& dstNid, const ChannelPtr &ch);
+    BResult RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch);
 
     inline BResult GetChannel(uint32_t dstNid, ChannelPtr &ch)
     {
@@ -54,7 +54,7 @@ public:
         return BIO_OK;
     }
 
-    inline BResult GetChannel(const NetNode& dstNid, ChannelPtr &ch)
+    inline BResult GetChannel(const NetNode &dstNid, ChannelPtr &ch)
     {
         std::unique_lock<std::mutex> locker(lock);
         auto iter = mChannelMgr.find(dstNid.whole);

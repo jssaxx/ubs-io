@@ -6,14 +6,19 @@
 
 #include "gtest/gtest.h"
 
+namespace ock {
+namespace bio {
 class TestCm : public testing::Test {
     void SetUp() override;
 
     void TearDown() override;
+
 public:
     static void Stub();
+
 private:
     static bool gSetup;
 };
-
+}
+}
 #endif // BOOSTIO_TEST_CM_H

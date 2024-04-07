@@ -11,6 +11,7 @@
 #include "securec.h"
 #include "test_htracer.h"
 
+using namespace ock::bio;
 using namespace ock::htracer;
 
 bool TestHtracer::gSetup = false;

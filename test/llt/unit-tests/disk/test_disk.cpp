@@ -27,7 +27,7 @@ void TestDisk::TearDown()
 
 void TestDisk::Stub()
 {
-    MOCKER_CPP(&FileUtil::GetDiskCapacity, int64_t (*)(std::string &diskPath)).stubs().will(returnValue(1073741824));
+    MOCKER_CPP(&FileUtil::GetDiskCapacity, int64_t(*)(std::string & diskPath)).stubs().will(returnValue(1073741824));
 }
 
 TEST_F(TestDisk, test_disk_initialize) {}

@@ -33,12 +33,13 @@ void TestWCache::TearDown()
     return;
 }
 
-constexpr uint16_t G_PT_ID = 1;
-constexpr uint16_t G_PT_V = 1;
-constexpr Key G_KEY = "123123123";
+static constexpr uint16_t G_PT_ID = 1;
+static constexpr uint16_t G_PT_V = 1;
+static constexpr Key G_KEY = "123123123";
 
 static uint64_t g_cacheId = 0;
 static WCacheSlicePtr gWcacheSlice;
+
 auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
@@ -55,7 +56,7 @@ auto wwriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
 
 BResult GetSlice(uint64_t g_cacheId, uint64_t flowOffset, uint64_t length)
 {
-    SliceKey sliceKey{g_cacheId, flowOffset, FLOW_MEMORY, length, 0};
+    SliceKey sliceKey{ g_cacheId, flowOffset, FLOW_MEMORY, length, 0 };
     return gWcacheManager->GetWCacheSlice(sliceKey, gWcacheSlice);
 }
 
@@ -203,4 +204,3 @@ TEST_F(TestWCache, test_repeat_delete_return_ok)
     auto ret = gWcacheManager->Delete(G_PT_ID, G_KEY);
     EXPECT_EQ(ret, BIO_OK);
 }
-

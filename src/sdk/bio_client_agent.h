@@ -37,13 +37,8 @@ public:
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
     using ReportHbPtr = int32_t (*)(uint64_t *, uint64_t *);
 
-    BioClientAgent()
-    {
-        mLocalNid.groupId = 0;
-        mLocalNid.nodeId = UINT16_MAX;
-        localPid = static_cast<uint32_t>(getpid());
-    }
-    ~BioClientAgent() {}
+    BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
+    ~BioClientAgent() = default;
 
     static BioClientAgentPtr &Instance()
     {
@@ -79,7 +74,7 @@ public:
     void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback);
 
     BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
-    
+
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
 
     BResult LoadLocal(LoadRequest &req);
@@ -113,6 +108,7 @@ private:
     BResult SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTimes);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     WorkerMode mMode = CONVERGENCE;
     CmNodeId mLocalNid;

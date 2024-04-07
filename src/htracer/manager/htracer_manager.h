@@ -100,6 +100,7 @@ private:
     {
         return (tpId & 0xFFFF);
     }
+
 private:
     static bool mEnable;
 };

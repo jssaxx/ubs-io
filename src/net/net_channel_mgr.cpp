@@ -50,7 +50,7 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch)
     return BIO_OK;
 }
 
-BResult NetChannelMgr::RemoveChannel(const NetNode& dstNid, const ChannelPtr &ch)
+BResult NetChannelMgr::RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch)
 {
     std::unique_lock<std::mutex> locker(lock);
     auto pos = mChannelNodeMap.find(ch->Id());

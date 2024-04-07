@@ -28,8 +28,15 @@ struct CacheAttr {
     AffinityStrategy affinity;
     WriteStrategy strategy;
 
-    CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str) : mCopyFree(false), mTenantId(id), affinity(aff), strategy(str) {}
-    CacheAttr(bool copyFree, uint64_t id, AffinityStrategy aff, WriteStrategy str) : mCopyFree(copyFree), mTenantId(id), affinity(aff), strategy(str) {}
+    CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str)
+        : mCopyFree(false), mTenantId(id), affinity(aff), strategy(str)
+    {}
+    CacheAttr(bool copyFree, uint64_t id, AffinityStrategy aff, WriteStrategy str)
+        : mCopyFree(copyFree), mTenantId(id), affinity(aff), strategy(str)
+    {}
+    CacheAttr(CacheAttr &other)
+        : mCopyFree(other.mCopyFree), mTenantId(other.mTenantId), affinity(other.affinity), strategy(other.strategy)
+    {}
     inline CacheAttr &operator = (const CacheAttr &other)
     {
         mTenantId = other.mTenantId;
@@ -41,7 +48,7 @@ struct CacheAttr {
 
 struct CacheObjStat {
     uint64_t size; // value size
-    time_t   time; // modify time;
+    time_t time;   // modify time;
 };
 }
 }

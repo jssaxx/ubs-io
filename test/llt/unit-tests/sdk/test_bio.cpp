@@ -10,6 +10,8 @@
 #include "bio_mock.h"
 #include "test_bio.h"
 
+using namespace ock::bio;
+
 bool TestBio::gSetup = false;
 
 constexpr uint32_t G_TENANT_ID = 5;
@@ -40,7 +42,7 @@ TEST_F(TestBio, test_bio_initialize_case_return_ok)
 
 TEST_F(TestBio, test_bio_create_cache_case_return_ok)
 {
-    CacheDescriptor desc = {G_TENANT_ID, AffinityStrategy::LOCAL_AFFINITY, WriteStrategy::WRITE_BACK};
+    CacheDescriptor desc = { G_TENANT_ID, AffinityStrategy::LOCAL_AFFINITY, WriteStrategy::WRITE_BACK };
     auto ret = BioCreateCache(desc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
@@ -66,7 +68,7 @@ TEST_F(TestBio, test_bio_put_case_return_ok)
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
-    EXPECT_EQ(fread((void *) value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
+    EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
     auto ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -77,7 +79,7 @@ TEST_F(TestBio, test_bio_put_keynull_case_return_fail)
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
-    EXPECT_EQ(fread((void *) value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
+    EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
     auto ret = BioPut(G_TENANT_ID, nullptr, value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -88,7 +90,7 @@ TEST_F(TestBio, test_bio_put_tenantid_unexist_case_return_fail)
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
-    EXPECT_EQ(fread((void *) value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
+    EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
     auto ret = BioPut(2, nullptr, value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
@@ -96,11 +98,11 @@ TEST_F(TestBio, test_bio_put_tenantid_unexist_case_return_fail)
 
 TEST_F(TestBio, test_bio_get_case_return_ok)
 {
-    (void) system("touch bio_get_file");
+    (void)system("touch bio_get_file");
     FILE *fp = fopen("./bio_get_file", "w");
     EXPECT_NE(fp, nullptr);
     char *value = new char[G_LENGTH];
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     uint64_t realLen = G_LENGTH;
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
     EXPECT_EQ(fwrite(value, sizeof(char), realLen, fp), realLen);
@@ -122,7 +124,7 @@ TEST_F(TestBio, test_bio_list_all_case_return_ok)
 
 TEST_F(TestBio, test_bio_stat_case_return_ok)
 {
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     ObjStat keyStat;
     auto ret = BioStat(G_TENANT_ID, G_KEY, locationInfo, &keyStat);
     EXPECT_EQ(keyStat.size, G_LENGTH);
@@ -143,7 +145,7 @@ static void TestCallback(void *context, int32_t result)
 
 TEST_F(TestBio, test_bio_load_case_return_ok)
 {
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     LoadContext loadCtx;
     sem_init(&(loadCtx.sem), 0, 0);
     loadCtx.result = RET_CACHE_OK;
@@ -155,7 +157,7 @@ TEST_F(TestBio, test_bio_load_case_return_ok)
 
 TEST_F(TestBio, test_bio_delete_case_return_ok)
 {
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     auto ret = BioDelete(G_TENANT_ID, G_KEY, locationInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }

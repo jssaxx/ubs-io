@@ -399,8 +399,8 @@ void BioService::Exit()
 /* ******************************** Boostio api implementation in C language ********************* */
 using namespace ock::bio;
 
-std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
-std::mutex gLock;
+static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
+static std::mutex gLock;
 
 CResult BioInitialize(WorkerMode mode)
 {

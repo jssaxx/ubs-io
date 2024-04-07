@@ -20,8 +20,8 @@
 
 #include "rb_tree.h"
 
-#ifdef  __cplusplus
-#if  __cplusplus
+#ifdef __cplusplus
+#if __cplusplus
 extern "C" {
 #endif
 #endif
@@ -179,8 +179,7 @@ void RbInsertColor(struct RbNode *node, struct RbRoot *root)
   \param[in]  root - 根
   \retval 无
 */
-static void RbEraseColor(struct RbNode *node, struct RbNode *parent,
-    struct RbRoot *root)
+static void RbEraseColor(struct RbNode *node, struct RbNode *parent, struct RbRoot *root)
 {
     struct RbNode *other = NULL;
     while ((!node || RB_IS_BLACK(node)) && node != root->rbNode) {
@@ -192,8 +191,7 @@ static void RbEraseColor(struct RbNode *node, struct RbNode *parent,
                 RbRotateLeft(parent, root);
                 other = parent->rbRight;
             }
-            if ((!other->rbLeft || RB_IS_BLACK(other->rbLeft)) &&
-                (!other->rbRight || RB_IS_BLACK(other->rbRight))) {
+            if ((!other->rbLeft || RB_IS_BLACK(other->rbLeft)) && (!other->rbRight || RB_IS_BLACK(other->rbRight))) {
                 RB_SET_RED(other);
                 node = parent;
                 parent = RB_PARENT(node);
@@ -219,8 +217,7 @@ static void RbEraseColor(struct RbNode *node, struct RbNode *parent,
                 RbRotateRight(parent, root);
                 other = parent->rbLeft;
             }
-            if ((!other->rbLeft || RB_IS_BLACK(other->rbLeft)) &&
-                (!other->rbRight || RB_IS_BLACK(other->rbRight))) {
+            if ((!other->rbLeft || RB_IS_BLACK(other->rbLeft)) && (!other->rbRight || RB_IS_BLACK(other->rbRight))) {
                 RB_SET_RED(other);
                 node = parent;
                 parent = RB_PARENT(node);
@@ -324,7 +321,7 @@ void RbErase(struct RbNode *node, struct RbRoot *root)
         root->rbNode = child;
     }
 
- color:
+color:
     if (color == RB_BLACK) {
         RbEraseColor(child, parent, root);
     }
@@ -347,7 +344,7 @@ void RbErase(struct RbNode *node, struct RbRoot *root)
 */
 struct RbNode *RbFirst(const struct RbRoot *root)
 {
-    struct RbNode  *n;
+    struct RbNode *n;
 
     n = root->rbNode;
     if (!n) {
@@ -455,8 +452,7 @@ struct RbNode *RbPrev(struct RbNode *node)
 
   \retval 无
 */
-void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode,
-    struct RbRoot *root)
+void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode, struct RbRoot *root)
 {
     struct RbNode *parent = RB_PARENT(victim);
 
@@ -482,9 +478,8 @@ void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode,
 }
 
 
-#ifdef  __cplusplus
-#if  __cplusplus
+#ifdef __cplusplus
+#if __cplusplus
 }
 #endif
 #endif
-

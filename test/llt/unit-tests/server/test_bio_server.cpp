@@ -6,6 +6,8 @@
 #include "gtest/gtest.h"
 #include "test_bio_server.h"
 
+using namespace ock::bio;
+
 bool TestBioServer::gSetup = false;
 
 void TestBioServer::SetUp()
@@ -22,6 +24,4 @@ void TestBioServer::TearDown()
     return;
 }
 
-TEST_F(TestBioServer, test_bio_server_initialize)
-{
-}
+TEST_F(TestBioServer, test_bio_server_initialize) {}

@@ -12,69 +12,69 @@
 #include "flow_instance.h"
 
 namespace ock {
-    namespace bio {
-        class RCacheFlow {
-        public:
-            RCacheFlow();
+namespace bio {
+class RCacheFlow {
+public:
+    RCacheFlow();
 
-            ~RCacheFlow();
+    ~RCacheFlow();
 
-            BResult Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds);
+    BResult Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds);
 
-            BResult Destroy();
+    BResult Destroy();
 
-            FlowPtr &GetMetaFlow();
+    FlowPtr &GetMetaFlow();
 
-            FlowPtr &GetDataFlow();
+    FlowPtr &GetDataFlow();
 
-            FlowInstancePtr &GetMetaFlowInstance();
+    FlowInstancePtr &GetMetaFlowInstance();
 
-            FlowInstancePtr &GetDataFlowInstance();
+    FlowInstancePtr &GetDataFlowInstance();
 
-            inline uint64_t GetMetaTruncOffset()
-            {
-                return mMetaTruncOffset;
-            }
-
-            inline void AddMetaTruncOffset(uint64_t len)
-            {
-                mMetaTruncOffset += len;
-            }
-
-            inline uint64_t GetDataTruncOffset()
-            {
-                return mDataTruncOffset;
-            }
-
-            inline void UpdateDataTruncOffset(uint64_t off, uint64_t len)
-            {
-                mDataTruncOffset = off + len;
-            }
-
-            inline void AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow)
-            {
-                offset = mDataFlowInstance->AllocOffset(len, indexInFlow);
-            }
-
-            DEFINE_REF_COUNT_FUNCTIONS
-        private:
-            uint64_t mPtId = 0;
-            uint16_t mDiskId = 0;
-
-            FlowPtr mMetaFlow = nullptr;
-            FlowInstancePtr mMetaFlowInstance = nullptr;
-            uint64_t mMetaTruncOffset = 0;
-
-            FlowPtr mDataFlow = nullptr;
-            FlowInstancePtr mDataFlowInstance = nullptr;
-            uint64_t mDataTruncOffset = 0;
-            std::atomic<uint64_t> mindexInFlow{0};
-
-        DEFINE_REF_COUNT_VARIABLE
-        };
-
-        using RCacheFlowPtr = Ref<RCacheFlow>;
+    inline uint64_t GetMetaTruncOffset()
+    {
+        return mMetaTruncOffset;
     }
+
+    inline void AddMetaTruncOffset(uint64_t len)
+    {
+        mMetaTruncOffset += len;
+    }
+
+    inline uint64_t GetDataTruncOffset()
+    {
+        return mDataTruncOffset;
+    }
+
+    inline void UpdateDataTruncOffset(uint64_t off, uint64_t len)
+    {
+        mDataTruncOffset = off + len;
+    }
+
+    inline void AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow)
+    {
+        offset = mDataFlowInstance->AllocOffset(len, indexInFlow);
+    }
+
+    DEFINE_REF_COUNT_FUNCTIONS
+private:
+    uint64_t mPtId = 0;
+    uint16_t mDiskId = 0;
+
+    FlowPtr mMetaFlow = nullptr;
+    FlowInstancePtr mMetaFlowInstance = nullptr;
+    uint64_t mMetaTruncOffset = 0;
+
+    FlowPtr mDataFlow = nullptr;
+    FlowInstancePtr mDataFlowInstance = nullptr;
+    uint64_t mDataTruncOffset = 0;
+    std::atomic<uint64_t> mindexInFlow{ 0 };
+
+    DEFINE_REF_COUNT_VARIABLE
+};
+
+using RCacheFlowPtr = Ref<RCacheFlow>;
+}
 }
 
-#endif //BOOSTIO_RCACHE_FLOW_H
+#endif // BOOSTIO_RCACHE_FLOW_H

@@ -83,8 +83,8 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_1);
-        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
-            ", port:" << info.port << ".");
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
+            ".");
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             RecoverRpc(info.peerId.nid);
         };
@@ -119,7 +119,7 @@ BResult BioClientNet::CorrectFd()
 
 BResult BioClientNet::CheckShmFd()
 {
-    struct stat buffer{};
+    struct stat buffer {};
     auto ret = fstat(mShmFd, &buffer);
     if (ret < 0) {
         CLIENT_LOG_ERROR("Read file fd " << mShmFd << " failed, ret:" << strerror(errno) << ".");
@@ -154,7 +154,7 @@ BResult BioClientNet::ShmInitInner()
 BResult BioClientNet::ShmInit()
 {
     uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
-    ShmInitRequest req = {{MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid()}};
+    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() } };
     ShmInitResponse rsp;
     BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
     if (ret != BIO_OK) {
@@ -327,8 +327,8 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_1);
-        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip <<
-            ", port:" << info.port << ".");
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
+            ".");
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             if (ret != BIO_OK) {
                 RecoverRpc(info.peerId.nid);

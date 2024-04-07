@@ -34,4 +34,3 @@ void CM_ClientExit(void)
 {
     EXIT_MODULES(g_cmClientModules);
 }
-

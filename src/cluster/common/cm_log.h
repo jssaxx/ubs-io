@@ -58,7 +58,7 @@ extern "C" {
 #endif
 
 #ifndef ROUND_UP
-#define ROUND_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
+#define ROUND_UP(x, align) (((x) + (align)-1) & ~((align)-1))
 #endif
 
 #ifndef ROUND_DOWN
@@ -106,7 +106,7 @@ extern "C" {
 #endif
 
 #ifndef ATOMIC_CAS
-#define ATOMIC_CAS(x, y, z) __sync_val_compare_and_swap ((x), (y), (z))
+#define ATOMIC_CAS(x, y, z) __sync_val_compare_and_swap((x), (y), (z))
 #endif
 
 #ifndef DATA_INIT
@@ -138,24 +138,24 @@ typedef enum CmLogLevel {
 
 void CM_Ulog(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
 
-#define CM_LOGINFO(...)                                                                     \
-    do {                                                                                    \
-        CM_Ulog(CM_LOG_INFO, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__);            \
+#define CM_LOGINFO(...)                                                                 \
+    do {                                                                                \
+        CM_Ulog(CM_LOG_INFO, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
-#define CM_LOGDEBUG(...)                                                                    \
-    do {                                                                                    \
-        CM_Ulog(CM_LOG_DEBUG, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__);           \
+#define CM_LOGDEBUG(...)                                                                 \
+    do {                                                                                 \
+        CM_Ulog(CM_LOG_DEBUG, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
-#define CM_LOGWARN(...)                                                                     \
-    do {                                                                                    \
-        CM_Ulog(CM_LOG_WARNING, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__);         \
+#define CM_LOGWARN(...)                                                                    \
+    do {                                                                                   \
+        CM_Ulog(CM_LOG_WARNING, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
-#define CM_LOGERROR(...)                                                                    \
-    do {                                                                                    \
-        CM_Ulog(CM_LOG_ERROR, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__);           \
+#define CM_LOGERROR(...)                                                                 \
+    do {                                                                                 \
+        CM_Ulog(CM_LOG_ERROR, __FUNCTION__, __LINE__, __CM_LOG_FILENAME__, __VA_ARGS__); \
     } while (0)
 
 #ifdef __cplusplus
