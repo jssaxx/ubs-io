@@ -48,6 +48,8 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     BResult res;
     auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
     auto metaSlice = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), res);
+    ChkTrue(metaSlice != nullptr, nullptr, "Failed to get meta slice, flowId" <<
+        mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
     auto ret = memcpy_s(sliceMeta.key, NO_512, key, strlen(key));
     if (ret != 0) {
@@ -71,6 +73,8 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
         dataSlice = slice;
     } else {
         dataSlice = GetSlice(mDataFlow, slice->GetOffsetInFlow(), slice->GetIndexInFlow(), slice->GetLength(), res);
+        ChkTrue(dataSlice != nullptr, nullptr, "Failed to get data slice, flowId" <<
+            mDataFlow->GetFlowId() << " ret:" << res);
         ret = sliceReader(slice.Get(), dataSlice.Get());
         ChkTrueNot(ret == BIO_OK, nullptr);
     }
@@ -179,6 +183,19 @@ uint64_t WCacheTier::GetDataVirCapacity()
 uint64_t WCacheTier::GetDataEvictOffset()
 {
     return mDataFlow->GetTruncateOffset();
+}
+
+BResult WCacheTier::Seal()
+{
+    if (mMetaFlow != nullptr) {
+        mMetaFlow->Seal();
+    }
+
+    if (mDataFlow != nullptr) {
+        mDataFlow->Seal();
+    }
+
+    return BIO_OK;
 }
 
 BResult WCacheTier::Destroy()

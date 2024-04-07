@@ -132,6 +132,25 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
     return BIO_OK;
 }
 
+BResult WCache::Seal()
+{
+    BResult ret;
+
+    ret = mCacheTiers[WCACHE_MEMORY]->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Seal mem cacheTier fail:" << ret << ", flowId:" << mFlowId);
+        return ret;
+    }
+
+    ret = mCacheTiers[WCACHE_DISK]->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Seal disk cacheTier fail:" << ret << ", flowId:" << mFlowId);
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
 BResult WCache::Destroy()
 {
     BResult ret;

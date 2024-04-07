@@ -612,6 +612,7 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
             if (flowIt.second->GetState()) {
                 flowIt.second->SetState(false);
+                flowIt.second->Seal();
                 mDestroyManager.emplace(flowIt.first, evictTime);
             }
         }

@@ -43,6 +43,8 @@ public:
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
+    BResult Seal();
+
     BResult Destroy();
 
     void SetState(bool isNormal)
