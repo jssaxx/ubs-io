@@ -12,7 +12,7 @@
 
 using namespace ock::bio;
 
-std::atomic<bool> gDaemonRunning = { false };
+static std::atomic<bool> gDaemonRunning = { false };
 
 static bool IsRunning()
 {

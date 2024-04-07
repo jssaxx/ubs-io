@@ -3,9 +3,8 @@
  */
 
 #include <iostream>
-
-#include "bio_log.h"
 #include "spdlog/sinks/rotating_file_sink.h"
+#include "bio_log.h"
 
 namespace ock {
 namespace bio {

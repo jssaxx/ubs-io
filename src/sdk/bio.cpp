@@ -400,7 +400,7 @@ void BioService::Exit()
 using namespace ock::bio;
 
 static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
-static std::mutex gLock;
+static std::mutex g_lock;
 
 CResult BioInitialize(WorkerMode mode)
 {
@@ -414,7 +414,7 @@ void BioExit()
 
 CResult BioCreateCache(CacheDescriptor desc)
 {
-    std::unique_lock<std::mutex> locker(gLock);
+    std::unique_lock<std::mutex> locker(g_lock);
     auto iter = gBioCacheMap.find(desc.tenantId);
     if (UNLIKELY(iter != gBioCacheMap.end())) {
         return RET_CACHE_EXISTS;
@@ -432,7 +432,7 @@ CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc)
     if (UNLIKELY(desc == nullptr)) {
         return RET_CACHE_EPERM;
     }
-    std::unique_lock<std::mutex> locker(gLock);
+    std::unique_lock<std::mutex> locker(g_lock);
     auto iter = gBioCacheMap.find(tenantId);
     if (UNLIKELY(iter == gBioCacheMap.end())) {
         return RET_CACHE_NOT_FOUND;
@@ -443,7 +443,7 @@ CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc)
 
 CResult BioDestroyCache(uint64_t tenantId)
 {
-    std::unique_lock<std::mutex> locker(gLock);
+    std::unique_lock<std::mutex> locker(g_lock);
     auto iter = gBioCacheMap.find(tenantId);
     if (UNLIKELY(iter == gBioCacheMap.end())) {
         return RET_CACHE_NOT_FOUND;
@@ -460,7 +460,7 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
     }
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -480,7 +480,7 @@ CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, Cac
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -495,7 +495,7 @@ CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spac
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -509,7 +509,7 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -527,7 +527,7 @@ CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t len
     }
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -544,7 +544,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -559,7 +559,7 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -569,36 +569,36 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
     return bioInstance->Load(key, offset, length, location, callback, context);
 }
 
-CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **Objs, uint64_t *objNum)
+CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum)
 {
     if (UNLIKELY(objNum == nullptr)) {
         return RET_CACHE_EPERM;
     }
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
         }
         bioInstance = iter->second;
     }
-    std::unordered_map<std::string, ObjStat> objs;
-    auto ret = bioInstance->ListAll(prefix, objs);
+    std::unordered_map<std::string, ObjStat> listObjs;
+    auto ret = bioInstance->ListAll(prefix, listObjs);
     if (UNLIKELY(ret != RET_CACHE_OK)) {
         return ret;
     }
 
-    *objNum = objs.size();
-    *Objs = (ObjStat *)malloc(sizeof(ObjStat) * (*objNum));
-    if (*Objs == nullptr) {
+    *objNum = listObjs.size();
+    *objs = (ObjStat *)malloc(sizeof(ObjStat) * (*objNum));
+    if (*objs == nullptr) {
         return RET_CACHE_NO_SPACE;
     }
     uint32_t index = 0;
-    for (auto &obj : objs) {
-        CopyKey((*Objs)[index].key, obj.second.key, MAX_KEY_SIZE);
-        (*Objs)[index].size = obj.second.size;
-        (*Objs)[index].time = obj.second.time;
+    for (auto &obj : listObjs) {
+        CopyKey((*objs)[index].key, obj.second.key, MAX_KEY_SIZE);
+        (*objs)[index].size = obj.second.size;
+        (*objs)[index].time = obj.second.time;
         index++;
     }
     return RET_CACHE_OK;
@@ -614,7 +614,7 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
     }
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
-        std::unique_lock<std::mutex> locker(gLock);
+        std::unique_lock<std::mutex> locker(g_lock);
         auto iter = gBioCacheMap.find(tenantId);
         if (UNLIKELY(iter == gBioCacheMap.end())) {
             return RET_CACHE_NOT_FOUND;
@@ -634,17 +634,17 @@ ReadHook g_readHook = nullptr;
 WriteHook g_writeHook = nullptr;
 WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
 
-void BioReigsterJuiceFSRead(ReadHook rh)
+void BioRegisterJuiceFSRead(ReadHook rh)
 {
     g_readHook = rh;
 }
 
-void BioReigsterJuiceFSWrite(WriteHook wh)
+void BioRegisterJuiceFSWrite(WriteHook wh)
 {
     g_writeHook = wh;
 }
 
-void BioReigsterJuiceFSWriteCopyFree(WriteCopyFreeHook wh)
+void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh)
 {
     g_writeCopyFreeHook = wh;
 }

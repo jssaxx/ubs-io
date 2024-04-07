@@ -75,7 +75,7 @@ public:
 
 private:
     NetLogFunc func = nullptr;
-    int32_t minLogLevel;
+    int32_t minLogLevel = 0;
 };
 
 #ifndef NET_LOG_FILENAME

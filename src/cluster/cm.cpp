@@ -28,7 +28,7 @@ BResult Cm::Start()
     strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
     pools.poolId = mOptions.groups.groupId;
     pools.type = DISK_TYPE_DRAM;
-    pools.redundance = (mOptions.groups.replicaNum == 2) ? PT_REP_DOUBLE : PT_REP_TRIPLE;
+    pools.redundance = (mOptions.groups.replicaNum == 2U) ? PT_REP_DOUBLE : PT_REP_TRIPLE;
     pools.initialNodeNum = mOptions.groups.initialNodeNum;
     pools.maxNodeNum = mOptions.groups.maxNodeNum;
     pools.maxPtNum = mOptions.groups.maxPtNum;
@@ -142,7 +142,7 @@ BResult Cm::RegisterPtHandler(const CmPtHandler &ptHandler)
 
 int32_t Cm::QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx)
 {
-    Cm *cm = reinterpret_cast<Cm *>(ctx);
+    Cm *cm = static_cast<Cm *>(ctx);
     WriteLocker<ReadWriteLock> lock(&cm->mLock);
 
     nodeInfo->port = cm->mNode.port;
@@ -167,7 +167,7 @@ int32_t Cm::QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx)
 
 int32_t Cm::NotifyNodeListChange(NodeStateList *nodeList, void *ctx)
 {
-    Cm *cm = reinterpret_cast<Cm *>(ctx);
+    Cm *cm = static_cast<Cm *>(ctx);
     WriteLocker<ReadWriteLock> lock(&cm->mLock);
 
     if (cm->mNodeId.whole == NO_MAX_VALUE32) {
@@ -215,7 +215,7 @@ int32_t Cm::NotifyNodeListChange(NodeStateList *nodeList, void *ctx)
 
 int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 {
-    Cm *cm = reinterpret_cast<Cm *>(ctx);
+    Cm *cm = static_cast<Cm *>(ctx);
     WriteLocker<ReadWriteLock> lock(&cm->mLock);
     cm->mStatus = CM_NORMAL;
 

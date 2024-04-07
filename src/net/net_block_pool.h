@@ -166,7 +166,7 @@ private:
     }
 
 private:
-    static const uint16_t BUCKET_COUNT = 32;
+    static constexpr uint16_t BUCKET_COUNT = 32;
     /*
      * Node info for linked list
      */

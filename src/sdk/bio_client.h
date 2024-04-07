@@ -30,7 +30,7 @@ class BioClient;
 using BioClientPtr = Ref<BioClient>;
 class BioClient {
 public:
-    static constexpr uint32_t defaultMaxCacheSize = 1024;
+    static constexpr uint32_t DEFAULT_MAX_CACHE_SIZE = 1024;
 
     static BioClientPtr &Instance()
     {
@@ -118,7 +118,7 @@ public:
     inline BResult Insert(const std::shared_ptr<Bio> &instance)
     {
         mLock.LockWrite();
-        if (UNLIKELY(mCacheMap.size() > defaultMaxCacheSize)) {
+        if (UNLIKELY(mCacheMap.size() > DEFAULT_MAX_CACHE_SIZE)) {
             mLock.UnLock();
             return BIO_INNER_ERR;
         }

@@ -19,7 +19,7 @@
 
 namespace ock {
 namespace bio {
-typedef void (*LogFunc)(int32_t level, const char *logBuf);
+using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
 
 class BioClientLog {
 public:

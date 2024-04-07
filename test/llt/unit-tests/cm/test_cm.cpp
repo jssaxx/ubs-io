@@ -27,7 +27,7 @@ void TestCm::TearDown()
 
 static LocalNodeQueryOpHandle gLocalQuery = { nullptr, nullptr, nullptr };
 
-int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
+static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
 {
     gLocalQuery.queryLocalNodeInfo = handle->queryLocalNodeInfo;
     gLocalQuery.queryLocalNodeMr = handle->queryLocalNodeMr;
@@ -37,7 +37,7 @@ int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandl
 
 static NodeListChangeOpHandle gNodeChange = { nullptr, nullptr };
 
-int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
+static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
 {
     gNodeChange.notifyNodeListChange = handle->notifyNodeListChange;
     gNodeChange.ctx = handle->ctx;
@@ -46,21 +46,21 @@ int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpH
 
 static PtViewChangeOpHandle gPtChange = { nullptr, nullptr };
 
-int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
+static int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
 {
     gPtChange.notifyPtListChange = handle->notifyPtListChange;
     gPtChange.ctx = handle->ctx;
     return 0;
 }
 
-uint16_t CM_GetLocalNodeId_Stub(uint16_t poolId)
+static uint16_t CM_GetLocalNodeId_Stub(uint16_t poolId)
 {
     return 0;
 }
 
 static NodeInfo gNodeInfo;
 
-int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
+static int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
 {
     uint16_t nodeId = nodeInfo->nodeId;
     memcpy_s(nodeInfo, sizeof(NodeInfo), &gNodeInfo, sizeof(NodeInfo));
@@ -68,7 +68,7 @@ int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
     return 0;
 }
 
-void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
+static void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
 {
     nodeList->poolId = pools->poolId;
     nodeList->nodeNum = nodeNum;
@@ -87,7 +87,7 @@ void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
     }
 }
 
-int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
+static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
     constexpr int8_t ERR_2 = -2;
     constexpr int8_t ERR_3 = -3;
