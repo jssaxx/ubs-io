@@ -63,10 +63,6 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
     if (curTime >= (obj.calcBwCycleTime + obj.calcBwCycle)) {
         obj.calcBwCycleTime = curTime;
         obj.calcBwValue = GetBwStatAverageValue(obj);
-        if (obj.calcBwValue != 0) {
-            auto dataPerf = static_cast<double>(obj.calcBwValue / 1048576U);
-            LOG_INFO("Current " << bwTypeStr[type] << " bandwidth value is " << dataPerf << " MB.");
-        }
     } else {
         return;
     }

@@ -87,7 +87,10 @@ static int32_t CmConfigReset(PoolInfo *pools, uint16_t num)
 {
     uint16_t index, poolId;
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
-        memset(&g_cmConfig.poolList[poolId].pool, 0, sizeof(PoolInfo));
+        int32_t ret = memset_s(&g_cmConfig.poolList[poolId].pool, sizeof(PoolInfo), 0, sizeof(PoolInfo));
+        if (ret != 0) {
+            return CM_ERR;
+        }
         g_cmConfig.poolList[poolId].used = FALSE;
         g_cmConfig.poolList[poolId].pool.poolId = poolId;
         g_cmConfig.poolList[poolId].pool.type = DISK_TYPE_DRAM;
