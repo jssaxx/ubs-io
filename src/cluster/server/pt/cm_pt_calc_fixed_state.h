@@ -11,7 +11,8 @@
 extern "C" {
 #endif
 
-void ViewPtEntryListUpdateNodeState(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList, int32_t *pgChange);
+void ViewPtEntryListUpdateNodeState(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList,
+    int32_t *pgChange);
 
 void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList,
     int32_t *ptChange, uint16_t nodeNum, uint16_t validNum);

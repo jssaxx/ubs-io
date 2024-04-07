@@ -158,7 +158,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
 
     auto ret = ftruncate(fd, static_cast<off_t>(size));
     if (ret < 0) {
-        NET_LOG_ERROR("truncate file " <<  name << " with size" << size << " failed, error:" << strerror(errno));
+        NET_LOG_ERROR("truncate file " << name << " with size" << size << " failed, error:" << strerror(errno));
         close(fd);
         return BIO_INNER_ERR;
     }
@@ -186,11 +186,11 @@ BResult NetEngine::InitCommMemAllocator()
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
-        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize <<
-            ", key:" << mLocalMr->GetLKey() << ".");
+        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:" <<
+            mLocalMr->GetLKey() << ".");
     }
-    LOG_INFO("Regist mem: addr:" << mLocalMr->GetAddress() << ", size:" << mOptions.memorySize <<
-        ", Key:" << mLocalMr->GetLKey());
+    LOG_INFO("Regist mem: addr:" << mLocalMr->GetAddress() << ", size:" << mOptions.memorySize << ", Key:" <<
+        mLocalMr->GetLKey());
     return result;
 }
 
@@ -222,8 +222,8 @@ BResult NetEngine::InitShmMemAllocator()
         return result;
     }
 
-    LOG_INFO("Regist mem: addr:" << (uintptr_t)(mShareAddress) << ", size:" << mOptions.memorySize <<
-        ", Key:" << mLocalMr->GetLKey());
+    LOG_INFO("Regist mem: addr:" << (uintptr_t)(mShareAddress) << ", size:" << mOptions.memorySize << ", Key:" <<
+        mLocalMr->GetLKey());
 
     mMrBlockPool = MakeRef<NetBlockPool>();
     if (mMrBlockPool == nullptr) {
@@ -238,8 +238,8 @@ BResult NetEngine::InitShmMemAllocator()
         close(mShmFd);
         mShmFd = -1;
     } else {
-        NET_LOG_INFO("Succeed to start shm memory pool success, size:" << mOptions.memorySize << " , shmOffset:"
-            << mShareOffset << ", shmFd:" << mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShareAddress) <<
+        NET_LOG_INFO("Succeed to start shm memory pool success, size:" << mOptions.memorySize << " , shmOffset:" <<
+            mShareOffset << ", shmFd:" << mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShareAddress) <<
             ", key:" << mLocalMr->GetLKey() << ".");
     }
     return result;
@@ -425,8 +425,8 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
 
     if (netPayload.srcNodeId.pid == 0) {
         NET_LOG_INFO("No needed add channel " << newChannel->Id() << ", peer connected nid " <<
-            netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " <<
-            ipPort << ", payload " << payload);
+            netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " << ipPort << ", payload " <<
+            payload);
         return BIO_OK;
     }
 
@@ -529,7 +529,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
         }
         if (result == 0) {
             NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", nid " <<
-                info.peerId.nid << ", payload " <<  payload.ToPayloadStr(prefix) << ".");
+                info.peerId.nid << ", payload " << payload.ToPayloadStr(prefix) << ".");
             break;
         }
     }

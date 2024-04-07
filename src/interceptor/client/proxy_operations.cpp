@@ -116,8 +116,6 @@ int ProxyOperations::CheckSelfPath(const std::string &mountPoint, const std::str
 
 int ProxyOperations::OpenProxy(const char *path, int flags, va_list args)
 {
-    int pError = 0;
-
     mode_t mode = 0;
     if ((flags & O_CREAT) || (flags & O_TMPFILE)) {
         mode = va_arg(args, mode_t);
@@ -159,8 +157,6 @@ int ProxyOperations::OpenMode(const char *path, int flags, mode_t mode)
 
 int ProxyOperations::Open64Proxy(const char *path, int flags, va_list args)
 {
-    int pError = 0;
-
     mode_t mode = 0;
     if (flags & O_CREAT) {
         mode = va_arg(args, mode_t);
@@ -202,8 +198,6 @@ int ProxyOperations::Open64Mode(const char *path, int flags, mode_t mode)
 
 int ProxyOperations::OpenAtProxy(int dirFd, const char *path, int flags, va_list args)
 {
-    int pError = 0;
-
     mode_t mode = 0;
     if (flags & O_CREAT) {
         mode = va_arg(args, mode_t);
@@ -341,7 +335,7 @@ int32_t ProxyOperations::CreateInner(const char *path, int fd)
     if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
         std::string &&suffix = GetPathNoPrefix(path, CONTEXT.mountPoint);
         struct stat statBuf;
-        auto ret = stat(restoredPath.c_str(), &statBuf);
+        ret = stat(restoredPath.c_str(), &statBuf);
         if (UNLIKELY(ret != 0)) {
             return BIO_ERR;
         }

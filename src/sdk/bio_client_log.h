@@ -55,9 +55,7 @@ public:
                 return -1;
             }
         }
-        auto logFunc = [](int level, const char* message) {
-            Logger::gInstance->Log(level + 1, message);
-        };
+        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level + 1, message); };
         func = logFunc;
         return 0;
     }
@@ -80,7 +78,7 @@ public:
         }
     }
 
-    static BioClientLog* Instance()
+    static BioClientLog *Instance()
     {
         static auto *instance = new BioClientLog();
         return instance;

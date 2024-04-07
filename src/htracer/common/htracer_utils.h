@@ -31,6 +31,9 @@ public:
         time_t rawTime;
         time(&rawTime);
         auto tmInfo = localtime(&rawTime);
+        if (tmInfo == nullptr) {
+            return "";
+        }
         std::stringstream ss;
         ss << std::setfill('0') << std::setw(widthTwo) << std::right << tmInfo->tm_hour << ":" << std::setfill('0') <<
             std::setw(widthTwo) << std::right << tmInfo->tm_min << ":" << std::setfill('0') << std::setw(widthTwo) <<
@@ -42,7 +45,7 @@ public:
     {
         std::string::size_type pos1 = 0;
         std::string::size_type pos2 = src.find(sep);
-    
+
         std::string tmpStr;
         while (std::string::npos != pos2) {
             tmpStr = src.substr(pos1, pos2 - pos1);
@@ -50,7 +53,7 @@ public:
             pos1 = pos2 + sep.size();
             pos2 = src.find(sep, pos1);
         }
-    
+
         if (pos1 != src.length()) {
             tmpStr = src.substr(pos1);
             out.emplace_back(tmpStr);
@@ -71,8 +74,8 @@ public:
             std::setw(digitWidth) << (static_cast<double>(begin) / iopsDiff) << "\t" << std::left <<
             std::setw(digitWidth) << (min == UINT64_MAX ? 0 : ((double)min / unitStep)) << "\t" << std::left <<
             std::setw(digitWidth) << static_cast<double>(max) / unitStep << "\t" << std::left <<
-            std::setw(digitWidth) << (goodEnd == 0 ? 0 : static_cast<double>(total) / static_cast<double>(goodEnd) /
-            unitStep) << "\t" <<
+            std::setw(digitWidth) <<
+            (goodEnd == 0 ? 0 : static_cast<double>(total) / static_cast<double>(goodEnd) / unitStep) << "\t" <<
             std::left << std::setw(digitWidth) << static_cast<double>(total) / unitStep;
         return os.str();
     }

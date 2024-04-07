@@ -12,7 +12,8 @@ namespace ock {
 namespace bio {
 template <typename T> class BioDoubleList {
 public:
-    void Initialize(uint8_t lane) {
+    void Initialize(uint8_t lane)
+    {
         this->lane = lane;
     }
 

@@ -38,6 +38,7 @@ public:
     WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     uint64_t mPreTruncateSliceIndex = { 0 };
 
@@ -52,7 +53,7 @@ public:
     BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
 
     WCacheSliceRefPtr Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
-                            CacheAttr &attr);
+        CacheAttr &attr);
 
     void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 
@@ -89,8 +90,7 @@ public:
 private:
     BResult ToFlowType(WCacheTierType tier, FlowType &flowType);
     static WCacheSlicePtr GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, BResult &ret);
-    static WCacheSlicePtr GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index,
-        uint64_t length, BResult &ret);
+    static WCacheSlicePtr GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length, BResult &ret);
 
 private:
     FlowPtr mMetaFlow;

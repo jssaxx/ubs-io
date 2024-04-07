@@ -34,4 +34,3 @@ void CM_ServerExit(void)
 {
     EXIT_MODULES(g_cmServerModules);
 }
-

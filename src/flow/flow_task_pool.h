@@ -46,6 +46,7 @@ public:
     BResult AddTask(FlowTaskHandler &handler);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     void StopInner()
     {
@@ -58,7 +59,7 @@ private:
 private:
     DEFINE_REF_COUNT_VARIABLE;
 
-    ExecutorServicePtr mExeService { nullptr };
+    ExecutorServicePtr mExeService{ nullptr };
     std::mutex mMutex;
     bool mStarted = false;
     std::string mName;
@@ -68,4 +69,3 @@ using FlowTaskPoolPtr = Ref<FlowTaskPool>;
 }
 
 #endif // BOOSTIO_FLOW_TASK_POOL_H
-

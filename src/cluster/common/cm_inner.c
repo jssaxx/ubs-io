@@ -35,4 +35,3 @@ void CM_Exit(void)
 {
     EXIT_MODULES(g_cmModules);
 }
-

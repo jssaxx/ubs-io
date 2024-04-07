@@ -176,7 +176,7 @@ public:
     {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
-        return ((uint64_t)ts.tv_sec) + ts.tv_nsec / 1000000000L;
+        return static_cast<uint64_t>(ts.tv_sec + ts.tv_nsec / 1000000000L);
     }
 #endif /* USE_PROCESS_MONOTONIC */
 };

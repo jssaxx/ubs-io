@@ -35,13 +35,13 @@ enum AffinityStrategy : int32_t {
     LOCAL_AFFINITY = 1, // data local affinity
     GLOBAL_BALANCE = 2, // data global balance
     AFFINITY_BUTT
-} ;
+};
 
 enum WriteStrategy : int32_t {
     WRITE_BACK = 1,
     WRITE_THROUGH = 2,
     STRATEGY_BUTT
-} ;
+};
 
 enum WorkerMode : int32_t {
     CONVERGENCE,
@@ -74,16 +74,16 @@ typedef struct {
 typedef struct {
     uint64_t address;
     uint32_t size;
-}CacheAddress;
+} CacheAddress;
 
 typedef struct {
-    uint8_t  allocLoc;
+    uint8_t allocLoc;
     uint16_t addressNum;
     uint16_t descriptorSize;
     ObjLocation loc;
     CacheAddress address[CACHE_SPACE_ADDRESS_SIZE];
     char descriptorInfo[CACHE_SPACE_DEC_SIZE];
-}CacheSpaceInfo;
+} CacheSpaceInfo;
 
 /**
  * @brief: Initialize bio service
@@ -159,8 +159,8 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
  * @param[out]: realLength : real length
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-               char *value, uint64_t *realLength);
+CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
+    uint64_t *realLength);
 
 /**
  * @brief: Delete key
@@ -185,7 +185,7 @@ CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
-                BioLoadCallback callback, void *context);
+    BioLoadCallback callback, void *context);
 
 /**
  * @brief: List all key that meets the prefix condition
@@ -231,9 +231,9 @@ CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, Cac
  */
 CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spaceInfo);
 
-typedef uint64_t(*ReadHook) (uint64_t, char *, uint64_t, uint64_t, int *);
-typedef uint64_t(*WriteHook) (uint64_t, char *, uint64_t, uint64_t, uint64_t);
-typedef uint64_t(*WriteCopyFreeHook) (uint64_t, uint64_t, uint64_t, CacheSpaceInfo *);
+typedef uint64_t (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
+typedef uint64_t (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
+typedef uint64_t (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceInfo *);
 
 uint64_t BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
 uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh);

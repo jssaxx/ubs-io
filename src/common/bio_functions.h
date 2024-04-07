@@ -19,7 +19,7 @@ inline void CopyKey(char *dstKey, const char *srcKey, uint32_t maxLen)
     auto ret = memcpy_s(dstKey, maxLen, srcKey, keyLen);
     dstKey[keyLen] = '\0';
     if (UNLIKELY(ret != 0)) {
-        LOG_ERROR("Copy Key failed, key:" << srcKey << ", len:" << sizeof(srcKey) << ".");
+        LOG_ERROR("Copy Key failed, ret:" << ret << ".");
     }
 }
 
@@ -55,7 +55,6 @@ inline bool validateRatios(const std::string &value, std::string &errMsg)
     }
     return true;
 }
-
 }
 }
 #endif

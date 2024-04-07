@@ -90,7 +90,7 @@ public:
     }
 
 private:
-    pthread_rwlock_t mLock {};
+    pthread_rwlock_t mLock{};
 };
 
 class SpinLock {

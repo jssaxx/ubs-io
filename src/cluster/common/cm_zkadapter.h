@@ -21,9 +21,9 @@ typedef int32_t (*ptChangeNotifyFp)(PtEntryList *ptList);
 
 int32_t CmClientZkGetNodeId(uint16_t poolId, const char *ipv4AddrStr, uint16_t port, uint16_t *nodeId);
 
-int32_t CmClientZkRecordNodeInfo(uint16_t poolId, NodeInfo* nodeInfo);
+int32_t CmClientZkRecordNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 
-int32_t CmClientZkRegisterNodeInfo(uint16_t poolId, NodeInfo* nodeInfo);
+int32_t CmClientZkRegisterNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 
 int32_t CmClientZkRecordMr(uint16_t poolId, NodeMetaBuff *mr);
 
@@ -35,7 +35,7 @@ int32_t CmClientZkGetMr(uint16_t poolId, NodeMetaBuff *mr);
 
 int32_t CmClientZkGetNodeState(uint16_t poolId, uint16_t nodeId, NodeStateInfo *cmState);
 
-int32_t CmClientZkGetNodeInfo(uint16_t poolId, NodeInfo* nodeInfo);
+int32_t CmClientZkGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 
 int32_t CmClientZkNodeEventExistCheck(uint16_t poolId, uint16_t nodeId);
 
@@ -136,8 +136,8 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
 
 #define CM_ZK_RADIX_10 10UL
 
-int CmZkCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
-    int mode, char *pathBuffer, int pathBufferLen);
+int CmZkCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl, int mode,
+    char *pathBuffer, int pathBufferLen);
 
 int CmZkDelete(zhandle_t *zh, const char *path, int version);
 

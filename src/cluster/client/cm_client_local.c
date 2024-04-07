@@ -173,8 +173,8 @@ static int32_t CmClientLocalGetNode(uint16_t poolId, PoolInfo *poolInfo, NodeInf
     }
 
     if (nodeInfo->diskList.num > DISK_LIST_NUM || nodeInfo->netList.num > NET_LIST_NUM) {
-        CM_LOGERROR("Invalid nodeInfo, poolId(%u) disk num(%d) net num(%d).", poolId,
-            nodeInfo->diskList.num, nodeInfo->netList.num);
+        CM_LOGERROR("Invalid nodeInfo, poolId(%u) disk num(%d) net num(%d).", poolId, nodeInfo->diskList.num,
+            nodeInfo->netList.num);
         return CM_ERR;
     }
 
@@ -221,7 +221,8 @@ static int32_t CmClientLocalCheckNode(uint16_t poolId, PoolInfo *poolInfo, NodeI
     }
 
     if (ret == CM_NOT_EXIST) {
-        CM_LOGINFO("First register, poolId(%u) ipv4AddrStr(%s) port(%u).", poolId, nodeInfo->ipv4AddrStr, nodeInfo->port);
+        CM_LOGINFO("First register, poolId(%u) ipv4AddrStr(%s) port(%u).", poolId, nodeInfo->ipv4AddrStr,
+            nodeInfo->port);
         return CM_OK; // no needed.
     }
 
@@ -343,7 +344,7 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
         "down",
         "butt",
     };
-    
+
     static const char *cstate[NODE_CLUSTER_STATE_BUTT + 1] = {
         "invalid",
         "out",
@@ -354,8 +355,8 @@ static int32_t CmClientNodeListChangeFp(NodeStateList *changeList)
     uint16_t index;
     for (index = 0; index < changeList->nodeNum; index++) {
         NodeStateInfo *changeInfo = &changeList->nodeList[index];
-        CM_LOGINFO("NodeChange: poolId(%u) nodeId(%u) state(%s-%s) session(%lu).",
-            poolId, changeInfo->nodeId, nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
+        CM_LOGINFO("NodeChange: poolId(%u) nodeId(%u) state(%s-%s) session(%lu).", poolId, changeInfo->nodeId,
+            nstate[changeInfo->state], cstate[changeInfo->clusterState], changeInfo->sessionId);
     }
 
     if (g_subNodeChange[poolId].notifyNodeListChange != NULL) {
@@ -387,8 +388,8 @@ static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
     uint16_t index;
     for (index = 0; index < changeList->ptNum; index++) {
         PtEntry *ptEntry = &changeList->ptEntryList[index];
-        CM_LOGINFO("ptChange: poolId(%u) ptId(%u) state(%s) version(%lu) refer(%lu).",
-            poolId, ptEntry->ptId, ptstate[ptEntry->state], ptEntry->birthVersion, ptEntry->referNum);
+        CM_LOGINFO("ptChange: poolId(%u) ptId(%u) state(%s) version(%lu) refer(%lu).", poolId, ptEntry->ptId,
+            ptstate[ptEntry->state], ptEntry->birthVersion, ptEntry->referNum);
     }
 
     if (g_subPtChange[poolId].notifyPtListChange != NULL) {
@@ -462,4 +463,3 @@ void CmClientLocalExit(void)
 {
     return;
 }
-

@@ -27,9 +27,9 @@ public:
 
 public:
     HTracerService(const HTracerService &) = delete;
-    HTracerService& operator=(const HTracerService&) = delete;
+    HTracerService &operator = (const HTracerService &) = delete;
     HTracerService(HTracerService &&) = delete;
-    HTracerService& operator=(HTracerService &&) = delete;
+    HTracerService &operator = (HTracerService &&) = delete;
 
 public:
     std::string GetTraceInfo();
@@ -50,13 +50,13 @@ private:
     ~HTracerService() = default;
 
 private:
-    off_t writePos {0};
+    off_t writePos{ 0 };
     std::string dumpFilePath;
     std::string headline;
     std::thread mDumpThread;
     std::condition_variable mDumpCond;
     std::mutex mDumpLock;
-    bool mIsRunning {false};
+    bool mIsRunning{ false };
 };
 }
 }

@@ -124,8 +124,7 @@ public:
         }
         auto it = mCacheMap.find(instance->mTenantId);
         if (UNLIKELY(it != mCacheMap.end())) {
-            if (it->second->mAffinity != instance->mAffinity ||
-                it->second->mStrategy != instance->mStrategy) {
+            if (it->second->mAffinity != instance->mAffinity || it->second->mStrategy != instance->mStrategy) {
                 mLock.UnLock();
                 return BIO_INNER_ERR;
             }

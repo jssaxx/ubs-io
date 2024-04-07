@@ -2,7 +2,6 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
  */
 
-#include <chrono>
 #include <iostream>
 #include <memory>
 #include <csignal>
@@ -12,9 +11,9 @@
 
 using namespace ock::bio;
 
-std::atomic<bool> gDaemonRunning = { false };
+static std::atomic<bool> gDaemonRunning = { false };
 
-void HandleSigterm(int signum)
+static void ConsoleHandleSigterm(int signum)
 {
     (void)signum;
     if (!gDaemonRunning) {
@@ -23,8 +22,8 @@ void HandleSigterm(int signum)
     }
 
     struct rlimit coreLimiter = {
-            .rlim_cur = 0,
-            .rlim_max = 0
+        .rlim_cur = 0,
+        .rlim_max = 0
     };
     int result = setrlimit(RLIMIT_CORE, &coreLimiter);
     if (UNLIKELY(result != 0)) {
@@ -42,7 +41,7 @@ int main(int argc, char **argv)
     }
 
     struct sigaction termSa {};
-    termSa.sa_handler = &HandleSigterm;
+    termSa.sa_handler = &ConsoleHandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 
     WorkerMode mode = static_cast<WorkerMode>(std::stoul(argv[1]));

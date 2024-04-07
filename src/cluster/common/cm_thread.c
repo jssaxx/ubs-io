@@ -25,4 +25,3 @@ int32_t CmSwitchThreadAsync(const char *name, void *data, THREAD_CALL_BACK handl
     pthread_detach(threadId);
     return RETURN_OK;
 }
-

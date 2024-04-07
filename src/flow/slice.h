@@ -172,9 +172,9 @@ private:
     std::mutex mSliceLock;
     S mSlice{ nullptr };
     S mNewSlice{ nullptr };
-    SetSliceCallback mSetSliceCallback { nullptr };
-    std::atomic<uint64_t> mRef { 0 };
-    std::atomic<SliceState> mState { SLICE_VALID };
+    SetSliceCallback mSetSliceCallback{ nullptr };
+    std::atomic<uint64_t> mRef{ 0 };
+    std::atomic<SliceState> mState{ SLICE_VALID };
     DEFINE_REF_COUNT_VARIABLE;
 };
 using SliceRefPtr = Ref<SliceRef<SlicePtr>>;

@@ -104,22 +104,23 @@ struct CmNodeIdCmp {
 };
 
 struct CmNodeInfo {
-    CmNodeId id { 0 };
+    CmNodeId id{ 0 };
     std::string ip;
-    uint16_t port { 0 };
-    CmNodeStatus status { CM_NODE_NORMAL };
+    uint16_t port{ 0 };
+    CmNodeStatus status{ CM_NODE_NORMAL };
     std::vector<CmDiskInfo> disks;
 
     CmNodeInfo() = default;
 
     CmNodeInfo(CmNodeId id, std::string ip, uint16_t port, CmNodeStatus stat, std::vector<CmDiskInfo> ds)
-        :id(id), ip(std::move(ip)), port(port), status(stat), disks(std::move(ds)) {}
+        : id(id), ip(std::move(ip)), port(port), status(stat), disks(std::move(ds))
+    {}
 
     std::string ToString() const
     {
         std::ostringstream oss;
-        oss << "node " << id.ToString() << ", ip " << ip.c_str() << ", port " << port << ", status " <<
-            status << ", disknum " << disks.size();
+        oss << "node " << id.ToString() << ", ip " << ip.c_str() << ", port " << port << ", status " << status <<
+            ", disknum " << disks.size();
         for (uint32_t idx = 0; idx < disks.size(); idx++) {
             oss << ", disk " << disks[idx].diskId << ", status " << disks[idx].diskStatus;
         }
@@ -161,11 +162,17 @@ struct CmPtInfo {
     std::vector<CmPtCopy> copys;
 
     CmPtInfo() = default;
-
     CmPtInfo(uint64_t v, uint16_t ptId, CmPtState stat, uint16_t mNid, uint16_t mDid, std::vector<CmPtCopy> cpy)
-        :version(v), ptId(ptId), state(stat), masterNodeId(mNid), masterDiskId(mDid), copys(std::move(cpy)) {}
+        : version(v),
+          referNum(0),
+          ptId(ptId),
+          state(stat),
+          masterNodeId(mNid),
+          masterDiskId(mDid),
+          copys(std::move(cpy))
+    {}
 
-    void Clone(const CmPtInfo& ptInfo)
+    void Clone(const CmPtInfo &ptInfo)
     {
         version = ptInfo.version;
         referNum = ptInfo.referNum;
@@ -173,7 +180,7 @@ struct CmPtInfo {
         state = ptInfo.state;
         masterNodeId = ptInfo.masterNodeId;
         masterDiskId = ptInfo.masterDiskId;
-        for (auto& elem : ptInfo.copys) {
+        for (auto &elem : ptInfo.copys) {
             copys.push_back(elem);
         }
         return;
@@ -194,10 +201,9 @@ struct CmPtInfo {
 struct CmPtFinish {
     uint64_t version;
     uint16_t ptId;
+
 public:
-    CmPtFinish(uint16_t vversion, uint16_t pptId)
-        : version(vversion), ptId(pptId)
-    {}
+    CmPtFinish(uint16_t vversion, uint16_t pptId) : version(vversion), ptId(pptId) {}
 };
 
 using CmNodeHandler = std::function<BResult(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)>;
@@ -277,7 +283,7 @@ public:
     {
         ReadLocker<ReadWriteLock> lock(&mLock);
         if (mPtInfos.find(ptId) != mPtInfos.end()) {
-            for (auto& elem : mPtInfos[ptId].copys) {
+            for (auto &elem : mPtInfos[ptId].copys) {
                 if (elem.nodeId == mNodeId.VNodeId()) {
                     diskId = elem.diskId;
                     return BIO_OK;
@@ -295,7 +301,7 @@ public:
         if (mNodeInfos.find(mNodeId) == mNodeInfos.end()) {
             return;
         }
-        for (auto& elem : mNodeInfos[mNodeId].disks) {
+        for (auto &elem : mNodeInfos[mNodeId].disks) {
             if (elem.diskId == diskId && elem.diskStatus == CM_DISK_FAULT) {
                 return;
             }
@@ -303,7 +309,7 @@ public:
         if (mPtInfos.find(ptId) == mPtInfos.end()) {
             return;
         }
-        for (auto& elem : mPtInfos[ptId].copys) {
+        for (auto &elem : mPtInfos[ptId].copys) {
             if (elem.nodeId == mNodeId.VNodeId() && elem.diskId == diskId) {
                 isNormal = true;
                 return;
@@ -320,7 +326,7 @@ public:
             if (mPtInfos[ptId].state == CM_PT_NORMAL) {
                 return BIO_OK;
             }
-            for (auto& elem : mPtInfos[ptId].copys) {
+            for (auto &elem : mPtInfos[ptId].copys) {
                 if (elem.state != CM_COPY_RUNNING && elem.state != CM_COPY_RECOVERY) {
                     isDegrade = true;
                     return BIO_OK;
@@ -369,14 +375,14 @@ public:
     CmNodeHandler mNodeHandler;
     CmPtHandler mPtHandler;
 
-    CmNodeId mNodeId { NO_MAX_VALUE32 };
+    CmNodeId mNodeId{ NO_MAX_VALUE32 };
 
     std::atomic<CmStatus> mStatus = { CM_INIT };
 
-    uint64_t mNodeVersion { 0 };
+    uint64_t mNodeVersion{ 0 };
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeInfos;
 
-    uint64_t mPtVersion { 0 };
+    uint64_t mPtVersion{ 0 };
     std::map<uint16_t, CmPtInfo> mPtInfos;
     std::atomic<uint16_t> mPtInfoIdx = { 0 };
 
@@ -384,8 +390,8 @@ public:
     std::atomic<uint16_t> mLocalIdx = { 0 };
 
     ReadWriteLock mLock;
-    bool mStarted { false };
-    bool mInited { false };
+    bool mStarted{ false };
+    bool mInited{ false };
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

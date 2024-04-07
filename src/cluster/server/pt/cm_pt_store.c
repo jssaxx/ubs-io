@@ -172,7 +172,8 @@ static int32_t ViewStoreRecordSubPtView(StoreCore *store, PtEntryList *ptList)
             continue;
         }
         uint16_t ptNum = 0;
-        D_LIST_FOR_EACH_SAFE(pos, next, &store->nodeList[nodeId]) {
+        D_LIST_FOR_EACH_SAFE(pos, next, &store->nodeList[nodeId])
+        {
             elem = D_LIST_ENTRY(pos, NodeElem, node);
             store->ptList->ptEntryList[ptNum] = elem->ptEntry;
             ptNum++;
@@ -228,13 +229,9 @@ static int32_t ViewStoreInitial(Storer storer, PtEntryList *ptList)
 
 static int32_t ViewStorePtEntryIsSame(PtEntry *elem1, PtEntry *elem2)
 {
-    if (elem1->ptId != elem2->ptId ||
-        elem1->state != elem2->state ||
-        elem1->birthVersion != elem2->birthVersion ||
-        elem1->masterNodeId != elem2->masterNodeId ||
-        elem1->masterDiskId != elem2->masterDiskId ||
-        elem1->referNum != elem2->referNum ||
-        elem1->copyNum != elem2->copyNum) {
+    if (elem1->ptId != elem2->ptId || elem1->state != elem2->state || elem1->birthVersion != elem2->birthVersion ||
+        elem1->masterNodeId != elem2->masterNodeId || elem1->masterDiskId != elem2->masterDiskId ||
+        elem1->referNum != elem2->referNum || elem1->copyNum != elem2->copyNum) {
         return FALSE;
     }
 
@@ -258,7 +255,8 @@ static int32_t ViewStoreCheckSubPtView1(PtEntryList *ptList, DList *head)
     int32_t isUpdate = FALSE;
 
     uint16_t ptNum = 0;
-    D_LIST_FOR_EACH_SAFE(pos, next, head) {
+    D_LIST_FOR_EACH_SAFE(pos, next, head)
+    {
         ptNum++;
     }
 
@@ -267,7 +265,8 @@ static int32_t ViewStoreCheckSubPtView1(PtEntryList *ptList, DList *head)
     }
 
     uint16_t index = 0;
-    D_LIST_FOR_EACH_SAFE(pos, next, head) {
+    D_LIST_FOR_EACH_SAFE(pos, next, head)
+    {
         elem = D_LIST_ENTRY(pos, NodeElem, node);
         if (index >= ptList->ptNum) {
             ptList->ptEntryList[index] = elem->ptEntry;
@@ -401,7 +400,8 @@ static int32_t ViewStoreUpdateSubPtView(StoreCore *store, PtEntryList *ptList)
     store->ptList->changeVersion = ptList->changeVersion;
 
     for (nodeId = 0; nodeId < store->maxNodeNum; nodeId++) {
-        int32_t isUpdate = ViewStoreUpdateSubPtView1(store->ptList, &store->nodeList[nodeId], &store->nodeListBak[nodeId]);
+        int32_t isUpdate =
+            ViewStoreUpdateSubPtView1(store->ptList, &store->nodeList[nodeId], &store->nodeListBak[nodeId]);
         if (isUpdate == FALSE) {
             continue;
         }
@@ -418,8 +418,7 @@ static int32_t ViewStoreUpdateSubPtView(StoreCore *store, PtEntryList *ptList)
 
 static int32_t ViewStoreIsNeedUpdate(PtEntryList *preList, PtEntryList *nexList)
 {
-    if (preList->globalVersion != nexList->globalVersion ||
-        preList->changeVersion != nexList->changeVersion ||
+    if (preList->globalVersion != nexList->globalVersion || preList->changeVersion != nexList->changeVersion ||
         preList->ptNum != nexList->ptNum) {
         return CM_OK;
     }
@@ -496,4 +495,3 @@ StoreOps *CmPtStoreOpsGet(void)
 {
     return &g_storeOps;
 }
-

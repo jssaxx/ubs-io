@@ -149,7 +149,7 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS
 
 protected:
-    virtual void LoadDefaultConf() {};
+    virtual void LoadDefaultConf(){};
 
 protected:
     bool SetWithTypeAutoConvert(const std::string &key, const std::string &value, bool skipIfLack = false);

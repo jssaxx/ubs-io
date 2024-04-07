@@ -23,60 +23,66 @@
 
 #include <stddef.h>
 
-#ifdef  __cplusplus
-#if  __cplusplus
+#ifdef __cplusplus
+#if __cplusplus
 extern "C" {
 #endif
 #endif
 /**
-*  红黑树节点颜色 红
-*/
-#define RB_RED     0
+ * 红黑树节点颜色 红
+ */
+#define RB_RED 0
 /**
-*  红黑树节点颜色 黑
-*/
-#define RB_BLACK   1
+ * 红黑树节点颜色 黑
+ */
+#define RB_BLACK 1
 
 /**
-*  红黑树节点结构体
-*/
+ * 红黑树节点结构体
+ */
 struct RbNode {
-    unsigned long  rbParentColor;
+    unsigned long rbParentColor;
     struct RbNode *rbRight;
     struct RbNode *rbLeft;
 } __attribute__((aligned(sizeof(long))));
-    /* The alignment might seem pointless, but allegedly CRIS needs it */
+/* The alignment might seem pointless, but allegedly CRIS needs it */
 /**
-*  红黑树根结构体
-*/
+ * 红黑树根结构体
+ */
 struct RbRoot {
     struct RbNode *rbNode;
 };
 
 /**
-*  获取父节点
-*/
-#define RB_PARENT(r)   ((struct RbNode *)((r)->rbParentColor & ~3))
+ * 获取父节点
+ */
+#define RB_PARENT(r) ((struct RbNode *)((r)->rbParentColor & ~3))
 /**
-*  获取节点颜色
-*/
-#define RB_COLOR(r)   ((r)->rbParentColor & 1)
+ * 获取节点颜色
+ */
+#define RB_COLOR(r) ((r)->rbParentColor & 1)
 /**
-*  获取节点是否为红
-*/
-#define RB_IS_RED(r)   (!RB_COLOR(r))
+ * 获取节点是否为红
+ */
+#define RB_IS_RED(r) (!RB_COLOR(r))
 /**
-*  获取节点是否为黑
-*/
+ * 获取节点是否为黑
+ */
 #define RB_IS_BLACK(r) RB_COLOR(r)
 /**
-*  设置节点为红色
-*/
-#define RB_SET_RED(r)  do { (r)->rbParentColor &= ~1; } while (0)
+ * 设置节点为红色
+ */
+#define RB_SET_RED(r)             \
+    do {                          \
+        (r)->rbParentColor &= ~1; \
+    } while (0)
 /**
-*  设置节点为黑色
-*/
-#define RB_SET_BLACK(r)  do { (r)->rbParentColor |= 1; } while (0)
+ * 设置节点为黑色
+ */
+#define RB_SET_BLACK(r)          \
+    do {                         \
+        (r)->rbParentColor |= 1; \
+    } while (0)
 
 /**
 * @brief 功能描述:  设置节点的父节点
@@ -111,26 +117,30 @@ static inline void RbSetColor(struct RbNode *rb, unsigned long color)
     rb->rbParentColor = (rb->rbParentColor & ~1) | color;
 }
 /**
-*  定义红黑树(根节点)
-*/
-#define RB_ROOT    (struct RbRoot) { NULL, }
+ * 定义红黑树(根节点)
+ */
+#define RB_ROOT     \
+    (struct RbRoot) \
+    {               \
+        NULL,       \
+    }
 /**
-*  根据节点获取节点所在结构体
-*/
+ * 根据节点获取节点所在结构体
+ */
 #define RB_ENTRY(ptr, type, member) CONTAINER_OF(ptr, type, member)
 
 /**
-*  判断红黑树是否为空
-*/
-#define RB_EMPTY_ROOT(root)    ((root)->rbNode == NULL)
+ * 判断红黑树是否为空
+ */
+#define RB_EMPTY_ROOT(root) ((root)->rbNode == NULL)
 /**
-*  判断节点是否无父节点
-*/
-#define RB_EMPTY_NODE(node)    (RB_PARENT((node)) == (node))
+ * 判断节点是否无父节点
+ */
+#define RB_EMPTY_NODE(node) (RB_PARENT((node)) == (node))
 /**
-*  清除节点的父节点
-*/
-#define RB_CLEAR_NODE(node)    (RbSetParent(node, node))
+ * 清除节点的父节点
+ */
+#define RB_CLEAR_NODE(node) (RbSetParent(node, node))
 
 /**
 * @brief 功能描述:  将node插入红黑树,node默认为红色，并对违背红黑树性质的地方进行纠正
@@ -211,8 +221,7 @@ extern struct RbNode *RbFirst(const struct RbRoot *root);
 * @param[in]  root - 树根
 * @retval 无
 */
-extern void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode,
-                          struct RbRoot *root);
+extern void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode, struct RbRoot *root);
 
 /**
 * @brief 功能描述:  将节点link到新节点
@@ -227,8 +236,7 @@ extern void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode,
 * @param[in]  rb_link - link节点
 * @retval 无
 */
-static inline void RbLinkNode(struct RbNode *node, struct RbNode *parent,
-                              struct RbNode **rbLink)
+static inline void RbLinkNode(struct RbNode *node, struct RbNode *parent, struct RbNode **rbLink)
 {
     node->rbParentColor = (unsigned long)(void *)parent;
     node->rbLeft = node->rbRight = NULL;
@@ -236,10 +244,10 @@ static inline void RbLinkNode(struct RbNode *node, struct RbNode *parent,
     *rbLink = node;
 }
 
-#ifdef  __cplusplus
-#if  __cplusplus
+#ifdef __cplusplus
+#if __cplusplus
 }
 #endif
 #endif
 
-#endif  /* RB_TREE_H */
+#endif /* RB_TREE_H */

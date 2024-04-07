@@ -40,7 +40,7 @@ BioServer::BioServer() noexcept
         { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
         { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, nullptr },
         { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr, nullptr },
-        { "InterceptorServer", std::bind(&BioServer::BioIntercepterServerInit, this), nullptr, nullptr, nullptr},
+        { "InterceptorServer", std::bind(&BioServer::BioIntercepterServerInit, this), nullptr, nullptr, nullptr },
         { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioMirrorServerExit, this) },
         { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
@@ -147,8 +147,11 @@ BResult BioServer::BioBdmInit()
     DiskDevices diskList;
     diskList.num = 0;
     for (auto diskPathStr : daemonConfig.diskList) {
-        strcpy(diskList.list[diskList.num].path, diskPathStr.c_str());
-        diskList.diskCaps[diskList.num] = FileUtil::GetDiskCapacity(diskPathStr);
+        ret = strcpy_s(diskList.list[diskList.num].path, DISK_PATH_LEN, diskPathStr.c_str());
+        if (ret != 0) {
+            return BIO_ERR;
+        }
+        diskList.diskCaps[diskList.num] = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPathStr));
         diskList.num++;
     }
 

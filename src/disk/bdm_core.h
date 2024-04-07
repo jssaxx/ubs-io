@@ -46,7 +46,7 @@ typedef enum {
 
 typedef enum {
     BDM_DISK_STATE_NORMAL = 0,
-    BDM_DISK_STATE_FAULT  = 1,
+    BDM_DISK_STATE_FAULT = 1,
     BDM_DISK_STATE_BUTT
 } BdmDiskState;
 
