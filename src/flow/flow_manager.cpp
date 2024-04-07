@@ -47,7 +47,10 @@ BResult FlowManager::Exit()
 FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId, uint32_t mediaId)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    ChkTrueNot(mInited == true, nullptr);
+    if (!mInited) {
+        LOG_WARN("Flow manager not ready.");
+        return nullptr;
+    }
     BioConfigPtr config = BioConfig::Instance();
     uint64_t segment = config->GetDaemonConfig().segment;
     if (type == FLOW_MEMORY) {

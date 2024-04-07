@@ -136,26 +136,26 @@ typedef enum CmLogLevel {
     BDM_LOG_BUTT
 } CmLogLevel;
 
-void BDM_Ulog(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
+void BdmLogFunc(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
 
-#define BDM_LOGINFO(LogID, ...)                                                        \
-    do {                                                                               \
-        BDM_Ulog(BDM_LOG_INFO, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
+#define BDM_LOGINFO(LogID, ...)                                                          \
+    do {                                                                                 \
+        BdmLogFunc(BDM_LOG_INFO, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
     } while (0)
 
-#define BDM_LOGDEBUG(LogID, ...)                                                        \
-    do {                                                                                \
-        BDM_Ulog(BDM_LOG_DEBUG, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
-    } while (0)
-
-#define BDM_LOGWARN(LogID, ...)                                                           \
+#define BDM_LOGDEBUG(LogID, ...)                                                          \
     do {                                                                                  \
-        BDM_Ulog(BDM_LOG_WARNING, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
+        BdmLogFunc(BDM_LOG_DEBUG, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
     } while (0)
 
-#define BDM_LOGERROR(LogID, ...)                                                        \
-    do {                                                                                \
-        BDM_Ulog(BDM_LOG_ERROR, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
+#define BDM_LOGWARN(LogID, ...)                                                             \
+    do {                                                                                    \
+        BdmLogFunc(BDM_LOG_WARNING, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
+    } while (0)
+
+#define BDM_LOGERROR(LogID, ...)                                                          \
+    do {                                                                                  \
+        BdmLogFunc(BDM_LOG_ERROR, __FUNCTION__, __LINE__, BDM_LOG_FILENAME, __VA_ARGS__); \
     } while (0)
 
 #ifdef __cplusplus

@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 
     auto bioServer = BioServer::Instance();
     auto ret = bioServer->Start();
-    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_EQ(ret, BIO_OK);
 
     ::testing::InitGoogleTest(&argc, argv);
     int runRet = RUN_ALL_TESTS();

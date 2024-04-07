@@ -136,26 +136,26 @@ typedef enum CmLogLevel {
     CM_LOG_BUTT
 } CmLogLevel;
 
-void CM_Ulog(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
+void CmLogFunc(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
 
-#define CM_LOGINFO(...)                                                             \
-    do {                                                                            \
-        CM_Ulog(CM_LOG_INFO, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
+#define CM_LOGINFO(...)                                                               \
+    do {                                                                              \
+        CmLogFunc(CM_LOG_INFO, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
     } while (0)
 
-#define CM_LOGDEBUG(...)                                                             \
-    do {                                                                             \
-        CM_Ulog(CM_LOG_DEBUG, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
-    } while (0)
-
-#define CM_LOGWARN(...)                                                                \
+#define CM_LOGDEBUG(...)                                                               \
     do {                                                                               \
-        CM_Ulog(CM_LOG_WARNING, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
+        CmLogFunc(CM_LOG_DEBUG, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
     } while (0)
 
-#define CM_LOGERROR(...)                                                             \
-    do {                                                                             \
-        CM_Ulog(CM_LOG_ERROR, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
+#define CM_LOGWARN(...)                                                                  \
+    do {                                                                                 \
+        CmLogFunc(CM_LOG_WARNING, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
+    } while (0)
+
+#define CM_LOGERROR(...)                                                               \
+    do {                                                                               \
+        CmLogFunc(CM_LOG_ERROR, __FUNCTION__, __LINE__, CM_LOG_FILENAME, __VA_ARGS__); \
     } while (0)
 
 #ifdef __cplusplus
