@@ -22,9 +22,12 @@ typedef void *Calculator;
 typedef struct {
     Calculator (*createCalculator)(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t copyNum, uint16_t minCopyNum);
     void (*destoryCalculator)(Calculator calculator);
-    int32_t (*viewInitial)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptList);
-    int32_t (*viewRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptList);
-    int32_t (*needRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptList);
+    int32_t (*viewInitial)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
+        PtEntryList *ptList);
+    int32_t (*viewRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
+        PtEntryList *ptList);
+    int32_t (*needRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
+        PtEntryList *ptList);
     void (*updateState)(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList, int32_t *ptChange);
     void (*updateFinish)(uint16_t nodeId, CmPtFinish *ptList, uint16_t ptNum, PtEntryList *ptEntryList,
         int32_t *ptChange, uint16_t nodeNum, uint16_t validNum);
@@ -37,4 +40,3 @@ CalcOps *CmPtCalcOpsGet(PtNumLimitMode numLimit);
 #endif
 
 #endif
-

@@ -37,7 +37,7 @@ uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
         if (endTime < startTime + 5000U) {
             if (obj.isStatPageCnt) {
                 maxValue = std::max<uint64_t>(maxValue, ((obj.hisValue[curIdx] * 1000U * obj.pageSize) /
-                        std::max<uint64_t>(obj.hisEndTime[curIdx] - obj.hisStartTime[curIdx], 1)));
+                    std::max<uint64_t>(obj.hisEndTime[curIdx] - obj.hisStartTime[curIdx], 1)));
             } else {
                 maxValue = obj.hisValue[curIdx];
             }
@@ -65,7 +65,7 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
         obj.calcBwValue = GetBwStatAverageValue(obj);
         if (obj.calcBwValue != 0) {
             auto dataPerf = static_cast<double>(obj.calcBwValue / 1048576U);
-            LOG_INFO("Current "<< bwTypeStr[type] << " bandwidth value is " << dataPerf << " MB.");
+            LOG_INFO("Current " << bwTypeStr[type] << " bandwidth value is " << dataPerf << " MB.");
         }
     } else {
         return;
@@ -168,10 +168,11 @@ void CacheOverloadCtrl::InitOverloadConfig()
     mOverloadCtrlConfig.downPreBwRatio = NO_5;                                         // 下调百分比5%
     mOverloadCtrlConfig.overloadAdjustBwRatio = NO_10;                                 // 过载调整百分比10%
     mOverloadCtrlConfig.minWriteReportBwWith = (static_cast<uint64_t>(NO_1)) << NO_30; // 中低水位写带宽最低上报值，1G
-    mOverloadCtrlConfig.baseAdjustReportBw = (static_cast<uint64_t>(NO_4)) << NO_10;   // 基本的带宽调整值，4K
-    mOverloadCtrlConfig.zeroAdjustReportBw = (NO_1024 * NO_1024);                      // 保底的带宽调整值，1M
+    mOverloadCtrlConfig.baseAdjustReportBw = (static_cast<uint64_t>(NO_4)) << NO_10; // 基本的带宽调整值，4K
+    mOverloadCtrlConfig.zeroAdjustReportBw = (NO_1024 * NO_1024);                    // 保底的带宽调整值，1M
     mOverloadCtrlConfig.minReportBw = (NO_1024 * NO_1024);
-    mOverloadCtrlConfig.maxWriteReportBw =  (static_cast<uint64_t>(NO_1024 * NO_5)) << NO_10; // 上调带宽时的上限值1GB，避免调太大
+    mOverloadCtrlConfig.maxWriteReportBw =
+        (static_cast<uint64_t>(NO_1024 * NO_5)) << NO_10; // 上调带宽时的上限值1GB，避免调太大
     mOverloadCtrlConfig.remainConcurBound = NO_100;
     mOverloadCtrlConfig.remainConcurTryUp = 0;
 }

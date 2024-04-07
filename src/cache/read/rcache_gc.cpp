@@ -8,13 +8,16 @@
 
 using namespace ock::bio;
 
-RCacheGC::RCacheGC():garbageData{0ULL}, workStatus(false), workIndex(0)
+RCacheGC::RCacheGC() : garbageData(0ULL), workStatus(false), workIndex(0)
 {
+    for (uint32_t i = 0; i < READ_CACHE_TIER_BUTT; i++) {
+        for (uint32_t j = 0; j < READ_CACHE_GC_SERVICE_NUM; j++) {
+            works[i][j] = nullptr;
+        }
+    }
 }
 
-RCacheGC::~RCacheGC()
-{
-}
+RCacheGC::~RCacheGC() {}
 
 BResult RCacheGC::GCOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)
 {
@@ -30,7 +33,7 @@ BResult RCacheGC::GcHandle(uint32_t index, RCacheTierType tier)
     std::list<RCachePtr> list = GCRCache[index];
     GCRCacheLock[index].UnLock();
 
-    for (auto iter = list.begin(); iter != list.end();iter++) {
+    for (auto iter = list.begin(); iter != list.end(); iter++) {
         rCache = *iter;
         result = GCOneRCacheHandle(rCache, tier);
         if (result != BIO_OK) {
@@ -43,14 +46,15 @@ BResult RCacheGC::GcHandle(uint32_t index, RCacheTierType tier)
 
 void *RCacheGC::Worker(void *context)
 {
-    RCacheGCWorkerParam *para = static_cast<RCacheGCWorkerParam*>(context);
+    RCacheGCWorkerParam *para = static_cast<RCacheGCWorkerParam *>(context);
     RCacheGCPtr rCacheGc = para->rCacheEvict;
 
     BResult result;
     while (rCacheGc->GetWorkStatus()) {
         result = rCacheGc->GcHandle(para->index, para->tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
-            LOG_ERROR("Gc handle read cache index " << para->index << "tier " << para->tier << "failed, error code" << result);
+            LOG_ERROR("Gc handle read cache index " << para->index << "tier " << para->tier << "failed, error code" <<
+                result);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_GC_INTERVAL_MS));
@@ -74,10 +78,10 @@ BResult RCacheGC::Initialize()
                 return BIO_ALLOC_FAIL;
             }
 
-            para->tier  = static_cast<RCacheTierType>(tier);
+            para->tier = static_cast<RCacheTierType>(tier);
             para->index = i;
             para->rCacheEvict = this;
-            auto *th = new std::thread(Worker, static_cast<void*>(para));
+            auto *th = new std::thread(Worker, static_cast<void *>(para));
             if (th) {
                 pthread_setname_np(th->native_handle(), "GcWorker");
                 works[tier][i] = th;
@@ -121,7 +125,7 @@ BResult RCacheGC::Stop(RCachePtr rCachePtr)
 BResult RCacheGC::Destroy()
 {
     workStatus.store(false);
-    for (auto& work : works) {
+    for (auto &work : works) {
         for (auto th : work) {
             if (th) {
                 th->join();

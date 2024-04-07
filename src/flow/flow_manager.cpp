@@ -94,7 +94,8 @@ FlowPtr FlowManager::GetObject(FlowType type, uint64_t flowId)
     }
 }
 
-BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId) {
+BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
+{
     std::lock_guard<std::mutex> lock(mMutex);
     ChkTrueNot(mInited == true, BIO_NOT_READY);
     if (type == FLOW_MEMORY) {

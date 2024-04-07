@@ -43,7 +43,7 @@ struct ModuleDesc {
 
 class BioServiceProc {
 public:
-    BioServiceProc(std::vector<ModuleDesc> modules) noexcept : mModules(std::move(modules)) {}
+    explicit BioServiceProc(std::vector<ModuleDesc> modules) noexcept : mModules(std::move(modules)) {}
 
     ~BioServiceProc() noexcept
     {

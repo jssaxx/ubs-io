@@ -8,17 +8,24 @@
 #include <cstdint>
 #include "gtest/gtest.h"
 
+namespace ock {
+namespace bio {
 class TestHtracer : public testing::Test {
     void SetUp() override;
 
     void TearDown() override;
+
 public:
     static void Stub() noexcept;
+
     static void ServerMock() noexcept;
+
 private:
     static int32_t HTracerInitMock(const std::string &dumpDir);
+
     static bool gSetup;
 };
-
+}
+}
 
 #endif // BOOSTIO_TEST_HTRACER_H

@@ -8,6 +8,7 @@
 #include "securec.h"
 #include "test_cm.h"
 
+using namespace ock::bio;
 bool TestCm::gSetup = false;
 
 void TestCm::SetUp()
@@ -24,7 +25,7 @@ void TestCm::TearDown()
     return;
 }
 
-static LocalNodeQueryOpHandle gLocalQuery = {nullptr, nullptr, nullptr};
+static LocalNodeQueryOpHandle gLocalQuery = { nullptr, nullptr, nullptr };
 
 int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
 {
@@ -34,7 +35,7 @@ int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandl
     return 0;
 }
 
-static NodeListChangeOpHandle gNodeChange = {nullptr, nullptr};
+static NodeListChangeOpHandle gNodeChange = { nullptr, nullptr };
 
 int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
 {
@@ -43,7 +44,7 @@ int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpH
     return 0;
 }
 
-static PtViewChangeOpHandle gPtChange = {nullptr, nullptr};
+static PtViewChangeOpHandle gPtChange = { nullptr, nullptr };
 
 int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
 {
@@ -86,21 +87,20 @@ void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
     }
 }
 
-constexpr int8_t ERR_2 = -2;
-constexpr int8_t ERR_3 = -3;
-
 int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
+    constexpr int8_t ERR_2 = -2;
+    constexpr int8_t ERR_3 = -3;
+
     if (pools == nullptr || num != 1) {
         return -1;
     }
-    if (gLocalQuery.queryLocalNodeInfo == nullptr ||
-        gNodeChange.notifyNodeListChange == nullptr ||
+    if (gLocalQuery.queryLocalNodeInfo == nullptr || gNodeChange.notifyNodeListChange == nullptr ||
         gPtChange.notifyPtListChange == nullptr) {
         return ERR_2;
     }
-    uint16_t nodeNum = 2;
-    auto nodeList = (NodeStateList *) malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
+    uint16_t nodeNum = 2U;
+    auto nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
     if (nodeList == nullptr) {
         return ERR_3;
     }

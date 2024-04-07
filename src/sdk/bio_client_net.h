@@ -58,7 +58,7 @@ public:
         mNetEngine->FreeLocalMrSingle(address);
     }
 
-    uint8_t* GetShmAddress(uint64_t offset)
+    uint8_t *GetShmAddress(uint64_t offset)
     {
         return mNetEngine->GetShmAddress(offset);
     }
@@ -81,8 +81,7 @@ public:
         mNetEngine->AsyncCall(target, opcode, req, cb);
     }
 
-    template <typename TReq>
-    BResult SendAsync(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
+    template <typename TReq> BResult SendAsync(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
     {
         return mNetEngine->AsyncCallWithoutResponse(targetNodeId, opCode, req);
     }
@@ -107,6 +106,7 @@ public:
     BResult Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     BResult CheckShmFd();
     BResult CorrectFd();

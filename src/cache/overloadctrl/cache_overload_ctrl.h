@@ -89,8 +89,7 @@ public:
     void AddBandwidth(BwStatType type, uint64_t count);
 
 private:
-    void InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, uint32_t calcBWCycleMs,
-        bool isStatPageCnt);
+    void InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, uint32_t calcBWCycleMs, bool isStatPageCnt);
     void InitWmStatObj(VmStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, uint32_t calcBWCycleMs);
     void InitOverloadConfig();
     void InitOverloadGlbInfo();

@@ -130,7 +130,8 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     return ret;
 }
 
-BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
+BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
 {
     BResult ret = BIO_OK;
     int32_t flag = 0;
@@ -190,8 +191,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
                     static_cast<CmCopyState>(rsp.desc[i].copys[j].state) });
             }
             ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
-                static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId,
-                rsp.desc[i].masterDiskId, copys)));
+                static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
         }
         flag = rsp.flag;
         progressBar += rsp.num;
@@ -258,10 +258,13 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
     uint64_t length, GetSliceResponse **rsp)
 {
     GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                            flowId, offset, index, length };
+                            flowId,
+                            offset,
+                            index,
+                            length };
     uint64_t rspLen = 0;
-    return net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
-        BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
+    return net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID, BIO_OP_SDK_GET_SLICE,
+        req, rsp, rspLen);
 }
 
 BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
@@ -269,7 +272,10 @@ BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint
 {
     if (mMode == CONVERGENCE) {
         GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                                flowId, offset, index, length };
+                                flowId,
+                                offset,
+                                index,
+                                length };
         return getSliceOp(&req, rsp);
     } else {
         return SendPrepareResourceLocal(ptEntry, flowId, offset, index, length, rsp);
@@ -295,8 +301,7 @@ void BioClientAgent::PutLocal(PutRequest *req, NetEngine::Callback &callback)
 BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     GetResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID,
-        BIO_OP_SDK_GET, req, rsp);
+    auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID, BIO_OP_SDK_GET, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
@@ -304,9 +309,9 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         realLen = rsp.realLen;
         uint64_t off = 0;
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
-            uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
-            ret = memcpy_s(static_cast<void *>(value + off), rsp.addrLen[idx],
-                           reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
+            uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
+            ret = memcpy_s(static_cast<void *>(value + off), rsp.addrLen[idx], reinterpret_cast<void *>(addr),
+                rsp.addrLen[idx]);
             if (UNLIKELY(ret != 0)) {
                 CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
                     rsp.addrLen[idx] << ".");
@@ -320,8 +325,8 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
             for (uint32_t idx = 0; idx < rsp.num; idx++) {
                 freeReq.addr[idx] = rsp.address[idx];
             }
-            auto freeRet = net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID,
-                BIO_OP_SDK_FREE_MEM, freeReq);
+            auto freeRet =
+                net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID, BIO_OP_SDK_FREE_MEM, freeReq);
             if (freeRet != BIO_OK) {
                 CLIENT_LOG_ERROR("Send async free request failed, ret:" << ret << ".");
             }
@@ -371,7 +376,7 @@ BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<
     }
 
     if (rsp->num != 0) {
-        auto statBuff = static_cast<ObjStat *>(static_cast<void*>(rsp->statBuf));
+        auto statBuff = static_cast<ObjStat *>(static_cast<void *>(rsp->statBuf));
         for (uint32_t i = 0; i < rsp->num; i++) {
             if (objs.size() >= 1000U) {
                 break;
@@ -393,15 +398,15 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
     req.size = 0;
     req.mrKey = 0;
     ListResponse rsp;
-    BResult ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(INVALID_NID,
-        BIO_OP_SDK_LIST, req, rsp);
+    BResult ret =
+        net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(INVALID_NID, BIO_OP_SDK_LIST, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
         return ret;
     }
 
     if (rsp.num != 0) {
-        uint8_t* addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
+        uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
         auto statInfo = reinterpret_cast<ObjStat *>(addr);
         for (uint32_t i = 0; i < rsp.num; i++) {
             ObjStat stat;
@@ -472,8 +477,8 @@ BResult BioClientAgent::SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTim
 {
     HbRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     HbResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<HbRequest, HbResponse>(INVALID_NID,
-        BIO_OP_SDK_REPORT_HB, req, rsp);
+    auto ret =
+        net::BioClientNet::Instance()->SendSync<HbRequest, HbResponse>(INVALID_NID, BIO_OP_SDK_REPORT_HB, req, rsp);
     if (ret != BIO_OK) {
         return ret;
     }

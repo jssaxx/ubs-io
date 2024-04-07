@@ -11,9 +11,7 @@
 
 using namespace ock::bio;
 
-RCacheFlow::RCacheFlow():mMetaFlow(nullptr),mDataFlow(nullptr)
-{
-}
+RCacheFlow::RCacheFlow() : mMetaFlow(nullptr), mDataFlow(nullptr) {}
 
 RCacheFlow::~RCacheFlow()
 {
@@ -48,12 +46,12 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
     mPtId = ptId;
     mDiskId = diskId;
 
-    if(UNLIKELY(flowIds.empty())) {
+    if (UNLIKELY(flowIds.empty())) {
         LOG_ERROR("Generate pt id" << ptId << "flow ids failed.");
         return BIO_ERR;
     }
 
-    mMetaFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
+    mMetaFlow = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
     if (UNLIKELY(mMetaFlow == nullptr)) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "meta flow failed.");
         Destroy();
@@ -69,7 +67,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
         return BIO_ERR;
     }
 
-    mDataFlow  = FlowManager::Instance()->CreateObject(flowType, flowIds[1], diskId);
+    mDataFlow = FlowManager::Instance()->CreateObject(flowType, flowIds[1], diskId);
     if (UNLIKELY(mDataFlow == nullptr)) {
         LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "data flow failed.");
         Destroy();

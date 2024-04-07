@@ -13,9 +13,12 @@ extern "C" {
 
 Calculator CreateViewCalculator(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t copyNum, uint16_t minCopyNum);
 void DestoryViewCalculator(Calculator calculator);
-int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptEntryList);
-int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptEntryList);
-int32_t ViewCalculatorNeedRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList, PtEntryList *ptEntryList);
+int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
+    PtEntryList *ptEntryList);
+int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
+    PtEntryList *ptEntryList);
+int32_t ViewCalculatorNeedRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
+    PtEntryList *ptEntryList);
 
 #ifdef __cplusplus
 }

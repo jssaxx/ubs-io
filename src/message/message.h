@@ -40,7 +40,7 @@ typedef struct {
 
 typedef struct {
     int32_t memFd;
-    uint32_t serverPid;
+    int32_t serverPid;
     uint64_t offset;
     uint64_t length;
     uint32_t mKey;
@@ -162,7 +162,7 @@ typedef struct {
     uint64_t mrSize;
     uint32_t mrKey;
     bool isExistLocal;
-    uint8_t  copyFree;
+    uint8_t copyFree;
     uint32_t sliceLen;
     char sliceBuf[0];
 } PutRequest;
@@ -248,13 +248,13 @@ typedef struct {
 } SyncDataRequest;
 
 /* Evict */
-typedef struct  {
+typedef struct {
     RequestComm comm;
     uint64_t flowId;
 } GetEvictRequest;
 
 /* Free server memory */
-typedef struct  {
+typedef struct {
     RequestComm comm;
     uint32_t num;
     uintptr_t addr[SLICE_ADDR_SIZE];
@@ -283,18 +283,18 @@ typedef struct {
     uint32_t pid;
     uint64_t length;
     uint64_t startTime;
-}InterceptorAllocPageReq;
+} InterceptorAllocPageReq;
 
 typedef struct {
     uint64_t offset;
     uint64_t size;
-}InterceptorAllocPage;
+} InterceptorAllocPage;
 
 typedef struct {
     uint32_t pid;
     uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
     CacheSpaceInfo address;
-}InterceptorAllocPageRsp;
+} InterceptorAllocPageRsp;
 
 typedef struct {
     uint32_t pid;
@@ -303,40 +303,40 @@ typedef struct {
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
-}InterceptorPreadIn;
+} InterceptorPreadIn;
 
 typedef struct {
     int32_t ret;
     uint32_t unused;
     uint64_t dataLen;
     char data[];
-}InterceptorPreadOut;
+} InterceptorPreadOut;
 
 typedef struct {
     uint32_t pid;
     uint64_t fd;
     uint64_t inode;
     uint64_t nbytes;
-    int64_t  offset;
+    int64_t offset;
     uint64_t startTime;
     char data[];
-}InterceptorPwriteIn;
+} InterceptorPwriteIn;
 
 typedef struct {
     uint32_t pid;
     uint64_t fd;
     uint64_t inode;
     uint64_t nbytes;
-    int64_t  offset;
+    int64_t offset;
     uint64_t startTime;
     CacheSpaceInfo address;
-}InterceptorLargePwriteIn;
+} InterceptorLargePwriteIn;
 
 typedef struct {
     int32_t ret;
     uint32_t unused;
     int64_t dataLen;
-}InterceptorPwriteOut;
+} InterceptorPwriteOut;
 #ifdef __cplusplus
 }
 #endif

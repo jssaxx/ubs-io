@@ -54,7 +54,7 @@ BResult BioClient::BioClientNetPostInit()
     };
 
     mNetEngine->RegCheckNodeOnline(checkHandle);
-    
+
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
         mMirror->GetNetProtocol());
 }
@@ -179,7 +179,7 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
     BResult ret = BIO_OK;
     if (mode == SEPARATES) {
         std::string diagName = "bio_sdk";
-        ret =  CLI_AgentInit(getpid(), const_cast<char*>(diagName.c_str()));
+        ret = CLI_AgentInit(getpid(), const_cast<char *>(diagName.c_str()));
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
             return BIO_INNER_ERR;

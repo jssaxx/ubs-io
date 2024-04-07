@@ -61,7 +61,6 @@ BResult UnderFs::Init()
         LOG_ERROR("Failed to create ioctx, ret:" << ret);
         rados_shutdown(mConn);
         return BIO_ERR;
-
     }
 
     LOG_INFO("Underfs init succeed");
@@ -171,7 +170,7 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
 
     BIO_TRACE_START(UFS_TRACE_LIST);
     char *entry = nullptr;
-    while (rados_nobjects_list_next(listCtx, const_cast<const char**>(&entry), nullptr, nullptr) != (-ENOENT)) {
+    while (rados_nobjects_list_next(listCtx, const_cast<const char **>(&entry), nullptr, nullptr) != (-ENOENT)) {
         LOG_INFO("List result, entry:" << entry);
         if (memcmp(entry, prefix, strlen(prefix)) == 0) {
             ObjStat objectStat;
@@ -180,7 +179,7 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
                 LOG_ERROR("Fail to stat object " << entry << ", ret: " << ret << ".");
                 continue;
             }
-            objStat.insert({ entry, objectStat});
+            objStat.insert({ entry, objectStat });
         }
     }
     rados_nobjects_list_close(listCtx);
@@ -196,7 +195,7 @@ BResult UnderFs::Init()
         return BIO_OK;
     }
 
-    DIR* dir = opendir(cephPath.c_str());
+    DIR *dir = opendir(cephPath.c_str());
     if (dir == nullptr) {
         int status = mkdir(cephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         if (status == 0) {
@@ -323,7 +322,7 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
                 continue;
             }
             UnderFs::ObjStat statInfo = { static_cast<uint32_t>(file_stat.st_size), file_stat.st_ctime };
-            objStat.insert({ ptr->d_name, statInfo});
+            objStat.insert({ ptr->d_name, statInfo });
         }
     }
     closedir(dir);

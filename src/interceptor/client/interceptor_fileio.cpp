@@ -34,7 +34,7 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     }
 
     InterceptorPreadIn request;
-    request.pid = getpid();
+    request.pid = static_cast<uint32_t>(getpid());
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -199,8 +199,8 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
 
     size_t reqLen = sizeof(InterceptorPwriteIn) + std::min(count, INTERCEPTOR_RDWR_BUFFER_SIZE);
     InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(malloc(reqLen));
-    request->pid = getpid();
-    request->fd = fd;
+    request->pid = static_cast<uint32_t>(getpid());
+    request->fd = static_cast<uint64_t>(fd);
     request->inode = file->GetInode();
     request->offset = offset;
     request->nbytes = count;
@@ -240,7 +240,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     InterceptorLargePwriteIn writeReq;
     writeReq.startTime = Monotonic::TimeNs();
 
-    req.pid = getpid();
+    req.pid = static_cast<uint32_t>(getpid());
     req.length = count;
     InterceptorAllocPageRsp resp;
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorAllocPageReq, InterceptorAllocPageRsp>(
@@ -264,8 +264,8 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         copyBuff += resp.address.address[i].size;
     }
 
-    writeReq.pid = getpid();
-    writeReq.fd = fd;
+    writeReq.pid = static_cast<uint32_t>(getpid());
+    writeReq.fd = static_cast<uint64_t>(fd);
     writeReq.inode = file->GetInode();
     writeReq.offset = offset;
     writeReq.nbytes = count;

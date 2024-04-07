@@ -13,7 +13,6 @@
 
 namespace ock {
 namespace bio {
-
 class Cache {
 public:
     BResult Init();
@@ -42,7 +41,7 @@ public:
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-                uint64_t &realLen);
+        uint64_t &realLen);
 
     BResult Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 

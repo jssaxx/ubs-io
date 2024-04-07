@@ -28,8 +28,8 @@ typedef struct {
     int32_t (*readAsync)(BdmAsyncOpsReq *req);
     int32_t (*writeAsync)(BdmAsyncOpsReq *req);
     int32_t (*reset)(uintptr_t objPtr);
-    int32_t (*nextchunk)(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize,
-        uint64_t *bucketId, uint64_t *bucketOffset);
+    int32_t (*nextchunk)(uintptr_t objPtr, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+        uint64_t *bucketOffset);
     int32_t (*getcap)(uintptr_t objPtr, uint64_t *totalSize, uint64_t *usedSize);
 } BdmOps;
 
@@ -65,4 +65,3 @@ int32_t BdmObjInit(void);
 #endif
 
 #endif
-

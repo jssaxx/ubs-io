@@ -68,8 +68,8 @@ BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
     auto ret = mWCacheManager->CreateWCache(procId, flowId, ptId, ptv, diskId);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
-    ChkTrue(ret == BIO_OK, ret, "Failed to create WCache, procId:"
-        << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to create WCache, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
     LOG_DEBUG("Create wcache success, cacheId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
     return BIO_OK;
 }
@@ -110,17 +110,17 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
 }
 
 BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-                   uint64_t &realLen)
+    uint64_t &realLen)
 {
     BIO_TRACE_START(WCACHE_TRACE_GET);
     auto ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset <<
-            ", length:" << slice->GetLength() << ".");
+        LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+            slice->GetLength() << ".");
         return ret;
     } else if (ret == BIO_OK) {
-        LOG_INFO("Write cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength());
+        LOG_INFO("Write cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
         return BIO_OK;
     }
 
@@ -131,7 +131,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
         LOG_ERROR("Get key " << key << " from read cache failed, ret:" << ret);
         return ret;
     } else if (ret == BIO_OK) {
-        LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength());
+        LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
         return BIO_OK;
     }
 
@@ -141,7 +141,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     } else {
         ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
         if (LIKELY(ret == BIO_OK)) {
-            LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", length:" << slice->GetLength() << ".");
+            LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
         }
     }
     return ret;
@@ -194,8 +194,8 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
             if (objs.size() >= 1000U) {
                 return BIO_OK;
             }
-            LOG_INFO("UnderFS list success, key:" << info.first << ", size:" <<
-                info.second.size << ", time:" << info.second.time << ".");
+            LOG_INFO("UnderFS list success, key:" << info.first << ", size:" << info.second.size << ", time:" <<
+                info.second.time << ".");
             objs.insert({ info.first, { info.second.size, info.second.time } });
         }
     }

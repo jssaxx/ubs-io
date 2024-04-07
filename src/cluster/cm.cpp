@@ -84,10 +84,10 @@ BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
     }
     int ret = CM_SetPtFinishStatus(mOptions.groups.groupId, num, ptList);
     if (ret != 0) {
-        delete [] ptList;
+        delete[] ptList;
         return BIO_ERR;
     }
-    delete [] ptList;
+    delete[] ptList;
     return BIO_OK;
 }
 
@@ -147,7 +147,10 @@ int32_t Cm::QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx)
 
     nodeInfo->port = cm->mNode.port;
     nodeInfo->status = NODE_STATUS_OK;
-    strcpy_s(nodeInfo->ipv4AddrStr, IP_ADDR_LEN, cm->mNode.ip.c_str());
+    auto ret = strcpy_s(nodeInfo->ipv4AddrStr, IP_ADDR_LEN, cm->mNode.ip.c_str());
+    if (ret != 0) {
+        return -1;
+    }
     nodeInfo->diskList.num = cm->mNode.disks.size();
     nodeInfo->diskList.type = DISK_TYPE_DRAM;
     for (uint16_t index = 0; index < nodeInfo->diskList.num; index++) {
@@ -233,8 +236,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
     };
 
     for (uint16_t index = 0; index < ptList->ptNum; index++) {
-        if (ptList->ptEntryList[index].state == PT_STATE_INIT ||
-            ptList->ptEntryList[index].state == PT_STATE_BUTT) {
+        if (ptList->ptEntryList[index].state == PT_STATE_INIT || ptList->ptEntryList[index].state == PT_STATE_BUTT) {
             continue;
         }
 
@@ -292,7 +294,7 @@ void Cm::ScanPtListAffinity()
 }
 }
 
-/********************************* CM api implementation in C language **********************/
+/* ******************************** CM api implementation in C language ********************* */
 using namespace ock::bio;
 int32_t CmReportDiskStatus(uint16_t diskId, CmDiskStatus status)
 {

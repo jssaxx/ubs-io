@@ -61,7 +61,7 @@ public:
 public:
     BResult NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
 
-    DEFINE_REF_COUNT_FUNCTIONS;
+    DEFINE_REF_COUNT_FUNCTIONS
 
 private:
     void RunTaskThread(CmPtTaskPtr ptTask);
@@ -87,7 +87,7 @@ private:
     ExecutorServicePtr mJobService{ nullptr };
     bool mInited{ false };
 
-    DEFINE_REF_COUNT_VARIABLE;
+    DEFINE_REF_COUNT_VARIABLE
 };
 }
 }

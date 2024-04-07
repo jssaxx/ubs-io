@@ -48,8 +48,8 @@ typedef struct {
     BdmChunkIndex chunkList[0];
 } BdmAllocatorRealize;
 
-int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t totalSize,
-                                 uint64_t *metaSize, uint64_t *dataSize)
+int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t totalSize, uint64_t *metaSize,
+    uint64_t *dataSize)
 {
     uint64_t elemSize = sizeof(BdmChunkMeta);
 
@@ -98,7 +98,7 @@ int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, 
     if (realize->metaOps.writeMeta != NULL) {
         uint64_t len = sizeof(BdmChunkMeta);
         uint64_t offset = chunk->index * len;
-        int32_t ret = realize->metaOps.writeMeta(realize->metaOps.itemPtr, offset, (void*)(meta), len);
+        int32_t ret = realize->metaOps.writeMeta(realize->metaOps.itemPtr, offset, (void *)(meta), len);
         if (ret != BDM_CODE_OK) {
             BDM_LOGWARN(0, "Update pri meta failed, ret(%d).", ret);
             return ret;
@@ -109,7 +109,7 @@ int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, 
 }
 
 int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root, BdmChunkIndex *chunk,
-                              BdmChunkIndex *pos, struct RbNode **newNode)
+    BdmChunkIndex *pos, struct RbNode **newNode)
 {
     struct RbNode *neighbNode = NULL;
     BdmChunkIndex *neighChunk = NULL;
@@ -156,7 +156,7 @@ int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root,
 }
 
 int32_t BdmAllocatorInsertNext(BdmAllocatorRealize *realize, struct RbRoot *root, BdmChunkIndex *chunk,
-                               BdmChunkIndex *pos, struct RbNode **newNode)
+    BdmChunkIndex *pos, struct RbNode **newNode)
 {
     struct RbNode *neighbNode = NULL;
     BdmChunkIndex *neighChunk = NULL;
@@ -371,8 +371,8 @@ int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint
     return BDM_CODE_ERR;
 }
 
-int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset,
-    uint64_t chunkSize, uint64_t *chunkId)
+int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset, uint64_t chunkSize,
+    uint64_t *chunkId)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
 
@@ -401,8 +401,8 @@ int32_t BdmAllocatorFreeChunk(BdmAllocator allocator, uint64_t chunkSize, uint64
     BdmChunkIndex *chunk = &realize->chunkList[chunkId];
     if (chunkSize != (chunk->length * realize->minChunkSize)) {
         BDM_RWLOCK_UNLOCK(&realize->lock);
-        BDM_LOGWARN(0, "Invalid chunk id(%llu), length(%llu) real(%llu).",
-            chunkId, chunkSize, chunk->length * realize->minChunkSize);
+        BDM_LOGWARN(0, "Invalid chunk id(%llu), length(%llu) real(%llu).", chunkId, chunkSize,
+            chunk->length * realize->minChunkSize);
         return BDM_CODE_INVALID_PARAM;
     }
     int32_t ret = BdmAllocatorInsert(realize, chunk);
@@ -416,8 +416,7 @@ int32_t BdmAllocatorFreeChunk(BdmAllocator allocator, uint64_t chunkSize, uint64
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorCheckChunk(BdmAllocator allocator, uint64_t chunkId, uint64_t offset,
-    uint64_t length)
+int32_t BdmAllocatorCheckChunk(BdmAllocator allocator, uint64_t chunkId, uint64_t offset, uint64_t length)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
     if (chunkId >= realize->chunkNum) {
@@ -447,16 +446,16 @@ int32_t BdmAllocatorResetChunk(BdmAllocator allocator)
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint64_t *chunkSize,
-    uint64_t *bucketId, uint64_t *bucketOffset)
+int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+    uint64_t *bucketOffset)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
     BdmChunkMeta *chunkMeta = (BdmChunkMeta *)realize->metaAddr + realize->scanIndex;
     uint64_t chunkIndex = realize->scanIndex;
     while (chunkIndex < realize->chunkNum) {
         if (chunkMeta->head != 1UL) {
-            BDM_LOGERROR(0, "Impossible, min chunk(%llu) max chunk(%llu) total size(%llu).",
-                realize->minChunkSize, realize->maxChunkSize, realize->totalSize);
+            BDM_LOGERROR(0, "Impossible, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
+                realize->maxChunkSize, realize->totalSize);
             return BDM_CODE_ERR;
         }
         if (chunkMeta->free == 0UL) {
@@ -472,8 +471,8 @@ int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint
         continue;
     }
 
-    BDM_LOGINFO(0, "Allocator restore, min chunk(%llu) max chunk(%llu) total size(%llu).",
-        realize->minChunkSize, realize->maxChunkSize, realize->totalSize);
+    BDM_LOGINFO(0, "Allocator restore, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
+        realize->maxChunkSize, realize->totalSize);
     realize->scanIndex = realize->chunkNum;
     return BDM_CODE_SCAN_OFF;
 }
@@ -497,8 +496,8 @@ int32_t BdmAllocatorCreateImpl(BdmAllocatorRealize *realize)
         return BDM_CODE_ERR;
     }
 
-    BDM_LOGINFO(0, "Allocator create, min chunk(%llu) max chunk(%llu) total size(%llu).",
-        realize->minChunkSize, realize->maxChunkSize, realize->totalSize);
+    BDM_LOGINFO(0, "Allocator create, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
+        realize->maxChunkSize, realize->totalSize);
 
     return BDM_CODE_OK;
 }
@@ -511,7 +510,7 @@ int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
     }
 
     uint32_t len = sizeof(BdmChunkMeta) * realize->chunkNum;
-    int32_t ret = realize->metaOps.readMeta(realize->metaOps.itemPtr, 0, (void*)realize->metaAddr, len);
+    int32_t ret = realize->metaOps.readMeta(realize->metaOps.itemPtr, 0, (void *)realize->metaAddr, len);
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Bdm read meta failed, ret(%d).", ret);
         return ret;
@@ -524,8 +523,8 @@ int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
     while (chunkIndex < realize->chunkNum) {
         chunkMeta = nextChunkMeta;
         if (chunkMeta->head != 1UL) {
-            BDM_LOGERROR(0, "Impossible, min chunk(%llu) max chunk(%llu) total size(%llu).",
-                realize->minChunkSize, realize->maxChunkSize, realize->totalSize);
+            BDM_LOGERROR(0, "Impossible, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
+                realize->maxChunkSize, realize->totalSize);
             return BDM_CODE_ERR;
         }
         if (chunkMeta->free == 1UL || chunkMeta->restore == 0UL) {
@@ -562,8 +561,8 @@ int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
 BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
 {
     uint64_t chunkNum = para->totalSize / para->minChunkSize;
-    BdmAllocatorRealize *realize = (BdmAllocatorRealize *)malloc(sizeof(BdmAllocatorRealize) +
-        sizeof(BdmChunkIndex) * chunkNum);
+    BdmAllocatorRealize *realize =
+        (BdmAllocatorRealize *)malloc(sizeof(BdmAllocatorRealize) + sizeof(BdmChunkIndex) * chunkNum);
     if (realize == NULL) {
         BDM_LOGERROR(0, "Malloc failed, chunk num(%llu).", chunkNum);
         return 0L;
@@ -610,11 +609,10 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
 int32_t BdmAllocatorDestory(BdmAllocator allocator)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
-    BDM_LOGINFO(0, "Allocator destory, min chunk(%llu) max chunk(%llu) total size(%llu).",
-        realize->minChunkSize, realize->maxChunkSize, realize->totalSize);
+    BDM_LOGINFO(0, "Allocator destory, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
+        realize->maxChunkSize, realize->totalSize);
     BDM_RWLOCK_DESTORY(&realize->lock);
     free((void *)realize->metaAddr);
     free(realize);
     return BDM_CODE_OK;
 }
-

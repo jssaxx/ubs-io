@@ -20,27 +20,27 @@ typedef enum {
     CM_BUSY = -1097,
 } CmReturnCode;
 
-#define PT_MAX_COPY_NUM        (3)                                /* 最大副本数[REP:1-3] */
-#define PT_MAX_COPY_INDEX      (PT_MAX_COPY_NUM * 2UL)            /* 中间视图最大副本索引 */
-#define PT_COPY_NUM_3          (3)                                /* 3副本 */
-#define PT_COPY_NUM_2          (2)                                /* 2副本 */
-#define PT_COPY_NUM_1          (1)                                /* 1副本 */
-#define MAX_PT_ENTRY           (1024)                             /* PT最大数量 */
-#define MIN_PT_ENTRY           (3)                                /* PT最小数量 */
+#define PT_MAX_COPY_NUM (3)                       /* 最大副本数[REP:1-3] */
+#define PT_MAX_COPY_INDEX (PT_MAX_COPY_NUM * 2UL) /* 中间视图最大副本索引 */
+#define PT_COPY_NUM_3 (3)                         /* 3副本 */
+#define PT_COPY_NUM_2 (2)                         /* 2副本 */
+#define PT_COPY_NUM_1 (1)                         /* 1副本 */
+#define MAX_PT_ENTRY (1024)                       /* PT最大数量 */
+#define MIN_PT_ENTRY (3)                          /* PT最小数量 */
 
-#define MAX_NODE_NUM           (1024)                             /* POOL管理节点的最大数量 */
-#define MIN_NODE_NUM           (3)                                /* POOL管理节点的最小数量 */
-#define MAX_POOL_NUM           (512)                              /* POOL的数量上限 */
-#define DISK_LIST_NUM          (16)                               /* 每个节点上最大的磁盘数量 */
-#define NET_LIST_NUM           (4)                                /* 每个节点上最大IO面IP列表数量 */
-#define POOL_NAME_LEN          (32)                               /* POOL名长度 */
-#define DISK_NAME_LEN          (64)                               /* 磁盘名长度 */
-#define DISK_SN_LEN            (64)                               /* 磁盘SN长度 */
-#define IP_ADDR_LEN            (16)                               /* IP地址长度 */
+#define MAX_NODE_NUM (1024) /* POOL管理节点的最大数量 */
+#define MIN_NODE_NUM (3)    /* POOL管理节点的最小数量 */
+#define MAX_POOL_NUM (512)  /* POOL的数量上限 */
+#define DISK_LIST_NUM (16)  /* 每个节点上最大的磁盘数量 */
+#define NET_LIST_NUM (4)    /* 每个节点上最大IO面IP列表数量 */
+#define POOL_NAME_LEN (32)  /* POOL名长度 */
+#define DISK_NAME_LEN (64)  /* 磁盘名长度 */
+#define DISK_SN_LEN (64)    /* 磁盘SN长度 */
+#define IP_ADDR_LEN (16)    /* IP地址长度 */
 
-#define NODE_META_BUFF_LEN     (4096)
-#define NODE_ID_INVALID        (0xFFFF)
-#define DISK_ID_INVALID        (0xFFFF)
+#define NODE_META_BUFF_LEN (4096)
+#define NODE_ID_INVALID (0xFFFF)
+#define DISK_ID_INVALID (0xFFFF)
 
 typedef enum {
     CONFIG_ROLE_CMM = 1,
@@ -49,25 +49,25 @@ typedef enum {
 } ConfigRole;
 
 typedef enum {
-    PT_STATE_INIT          = 0,    // init
-    PT_STATE_NORMAL        = 1,    // OK
-    PT_STATE_DEGRADE_LOSS1 = 2,    // degrade 1
-    PT_STATE_DEGRADE_LOSS2 = 3,    // degrade 2
-    PT_STATE_FAULT = 4,            // fault;
+    PT_STATE_INIT = 0,          // init
+    PT_STATE_NORMAL = 1,        // OK
+    PT_STATE_DEGRADE_LOSS1 = 2, // degrade 1
+    PT_STATE_DEGRADE_LOSS2 = 3, // degrade 2
+    PT_STATE_FAULT = 4,         // fault;
     PT_STATE_BUTT
 } PtState;
 
 typedef enum {
-    PT_COPY_STATE_INIT     = 0,
-    PT_COPY_STATE_RUNNING  = 1,
-    PT_COPY_STATE_DOWN     = 2,
-    PT_COPY_STATE_OUT      = 3,
+    PT_COPY_STATE_INIT = 0,
+    PT_COPY_STATE_RUNNING = 1,
+    PT_COPY_STATE_DOWN = 2,
+    PT_COPY_STATE_OUT = 3,
     PT_COPY_STATE_RECOVERY = 4,
     PT_COPY_STATE_BUTT
 } PtCopyState;
 
 typedef enum {
-    PT_NONE       = 0,
+    PT_NONE = 0,
     PT_REP_SINGLE = 1,
     PT_REP_DOUBLE = 2,
     PT_REP_TRIPLE = 3,
@@ -75,19 +75,19 @@ typedef enum {
 } PtRedundanceMode;
 
 typedef struct {
-    uint16_t nodeId;                /* pt副本所在node的nodeId */
-    uint16_t diskId;                /* pt副本所在node上对应的diskId */
-    uint16_t keepAlive;             /* pt副本保活标识，当可用副本数降低到minCopyNum时激活，预防数据丢失 */
-    uint16_t state;                 /* pt中副本的状态，见 PtCopyState         */
+    uint16_t nodeId;    /* pt副本所在node的nodeId */
+    uint16_t diskId;    /* pt副本所在node上对应的diskId */
+    uint16_t keepAlive; /* pt副本保活标识，当可用副本数降低到minCopyNum时激活，预防数据丢失 */
+    uint16_t state;     /* pt中副本的状态，见 PtCopyState         */
 } PtEntryCopy;
 
 typedef struct {
-    uint64_t birthVersion;          /* pt版本号 */
-    uint16_t ptId;                  /* pt id */
-    uint16_t state;                 /* PT状态，见 PtState     */
-    uint16_t masterNodeId;          /* 分区主node id */
-    uint16_t masterDiskId;          /* 分区主disk Id */
-    uint64_t referNum : 56;         /* pt副本临时故障/恢复时计数递增 */
+    uint64_t birthVersion;  /* pt版本号 */
+    uint16_t ptId;          /* pt id */
+    uint16_t state;         /* PT状态，见 PtState     */
+    uint16_t masterNodeId;  /* 分区主node id */
+    uint16_t masterDiskId;  /* 分区主disk Id */
+    uint64_t referNum : 56; /* pt副本临时故障/恢复时计数递增 */
     uint64_t copyNum : 8;
     PtEntryCopy copyList[PT_MAX_COPY_INDEX];
 } PtEntry;
@@ -97,8 +97,8 @@ typedef struct {
     uint16_t ptNum;
     uint16_t maxCopyNum;
     uint16_t minCopyNum;
-    uint64_t globalVersion;         /* pt全局版本号:视图计算时递增 */
-    uint64_t changeVersion;         /* pt更新版本号:视图更新时递增 */
+    uint64_t globalVersion; /* pt全局版本号:视图计算时递增 */
+    uint64_t changeVersion; /* pt更新版本号:视图更新时递增 */
     PtEntry ptEntryList[];
 } PtEntryList;
 
@@ -115,21 +115,21 @@ typedef enum {
 
 typedef enum {
     NODE_STATE_INVALID = 0,
-    NODE_STATE_UP      = 1,
-    NODE_STATE_DOWN    = 2,
+    NODE_STATE_UP = 1,
+    NODE_STATE_DOWN = 2,
     NODE_STATE_BUTT
 } NodeState;
 
 typedef enum {
     NODE_CLUSTER_STATE_INVALID = 0,
-    NODE_CLUSTER_STATE_OUT     = 1,
-    NODE_CLUSTER_STATE_IN      = 2,
+    NODE_CLUSTER_STATE_OUT = 1,
+    NODE_CLUSTER_STATE_IN = 2,
     NODE_CLUSTER_STATE_BUTT
 } NodeClusterState;
 
 typedef enum {
     NET_STATE_NORMAL = 0,
-    NET_STATE_FAULT  = 1,
+    NET_STATE_FAULT = 1,
     NET_STATE_BUTT
 } NetState;
 
@@ -141,21 +141,21 @@ typedef struct {
 
 typedef enum {
     DISK_TYPE_DRAM = 0,
-    DISK_TYPE_SCM  = 1,
-    DISK_TYPE_SSD  = 2,
+    DISK_TYPE_SCM = 1,
+    DISK_TYPE_SSD = 2,
     DISK_TYPE_BUTT
 } DiskType;
 
 typedef enum {
     DISK_STATE_NORMAL = 0,
-    DISK_STATE_FAULT  = 1,
+    DISK_STATE_FAULT = 1,
     DISK_STATE_BUTT
 } DiskState;
 
 typedef enum {
     DISK_CLUSTER_STATE_INVALID = 0,
-    DISK_CLUSTER_STATE_OUT     = 1,
-    DISK_CLUSTER_STATE_IN      = 2,
+    DISK_CLUSTER_STATE_OUT = 1,
+    DISK_CLUSTER_STATE_IN = 2,
     DISK_CLUSTER_STATE_BUTT
 } DiskClusterState;
 
@@ -180,7 +180,7 @@ typedef struct {
     uint16_t nodeId;
     uint16_t port;
     uint16_t status; // 见 NodeStatus
-    uint16_t resv; // 对齐
+    uint16_t resv;   // 对齐
     char ipv4AddrStr[IP_ADDR_LEN];
     DiskList diskList;
     NetList netList;
@@ -200,7 +200,7 @@ typedef struct {
 typedef struct {
     uint64_t sessionId;
     uint16_t nodeId;
-    uint16_t state; // 见 NodeState
+    uint16_t state;        // 见 NodeState
     uint16_t clusterState; // 见 NodeClusterState
     uint16_t diskNum;
     NodeDiskState diskList[DISK_LIST_NUM];
@@ -249,7 +249,7 @@ typedef struct {
 typedef struct {
     char *zkIpMask;
     char *ipStr;
-    uint32_t regTimeOut; // 毫秒
+    uint32_t regTimeOut;     // 毫秒
     uint32_t regPermTimeOut; // 毫秒
 } CmCfgInfo;
 
@@ -271,7 +271,7 @@ int32_t CM_GetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 /*
  * 功能描述：获取指定节点的mr信息
  * 参数说明：poolId: {in}，pool ID
- *               mr: {in/out}, MetaBuffInfo结构体指针
+ *         mr: {in/out}, MetaBuffInfo结构体指针
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_GetNodeMr(uint16_t poolId, NodeMetaBuff *mr);

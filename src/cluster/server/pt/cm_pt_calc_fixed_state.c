@@ -219,7 +219,8 @@ void ViewPtEntryListUpdateNodeUp(uint16_t nodeId, NodeInfo *info, PtEntryList *p
     }
 }
 
-void ViewPtEntryListUpdateNodeState(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList, int32_t *pgChange)
+void ViewPtEntryListUpdateNodeState(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList,
+    int32_t *pgChange)
 {
     if (state == NODE_STATE_DOWN) {
         ViewPtEntryListUpdateNodeDown(nodeId, ptList, pgChange);
@@ -273,8 +274,7 @@ static int32_t ViewPtEntryTrim(PtEntry *ptEntry, uint16_t copyNum, uint16_t ptNu
         }
     }
 
-    if ((nodeIndex != INVALID_VALUE16) &&
-        (masterList[nodeId] < (ptNum / validNum)) &&
+    if ((nodeIndex != INVALID_VALUE16) && (masterList[nodeId] < (ptNum / validNum)) &&
         (masterList[ptEntry->masterNodeId] > (ptNum / validNum))) {
         masterList[ptEntry->masterNodeId]--;
         ptEntry->masterNodeId = ptEntry->copyList[nodeIndex].nodeId;
@@ -345,16 +345,18 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
             continue;
         }
         if (ViewPtSatisfiedCopyNum(ptEntry, ptEntryList->minCopyNum) == FALSE) {
-            CM_LOGWARN("Invalid, poolId(%u) ptId(%u), not satisfy min copynum.", ptEntryList->poolId, ptList[index].ptId);
+            CM_LOGWARN("Invalid, poolId(%u) ptId(%u), not satisfy min copynum.", ptEntryList->poolId,
+                ptList[index].ptId);
             continue;
         }
         for (copyIndex = 0; copyIndex < ptEntry->copyNum; copyIndex++) {
-            if (ptEntry->copyList[copyIndex].nodeId == nodeId && ptEntry->copyList[copyIndex].state == PT_COPY_STATE_RECOVERY) {
+            if (ptEntry->copyList[copyIndex].nodeId == nodeId &&
+                ptEntry->copyList[copyIndex].state == PT_COPY_STATE_RECOVERY) {
                 *ptChange = TRUE;
                 ptEntry->copyList[copyIndex].state = PT_COPY_STATE_RUNNING;
                 ViewPtUpdateCopyKeepAlive(ptEntry, ptEntryList->minCopyNum);
-                int32_t isUpdate = ViewPtEntryTrim(ptEntry, ptEntryList->maxCopyNum, ptEntryList->ptNum, masterList,
-                    nodeId, validNum);
+                int32_t isUpdate =
+                    ViewPtEntryTrim(ptEntry, ptEntryList->maxCopyNum, ptEntryList->ptNum, masterList, nodeId, validNum);
                 if (isUpdate == FALSE) {
                     ViewPtEntryUpdatePtState(ptEntry, ptEntryList);
                 }
@@ -365,4 +367,3 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
 
     free(masterList);
 }
-

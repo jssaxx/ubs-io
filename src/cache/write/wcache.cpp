@@ -14,8 +14,7 @@
 
 namespace ock {
 namespace bio {
-BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-    const RCacheManagerPtr rCacheManager)
+BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
@@ -112,17 +111,17 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
     if (slice->GetFlowType() == FLOW_MEMORY) {
         auto ret = mCacheTiers[WCACHE_MEMORY]->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
         ChkTrue(ret == BIO_OK, ret,
-            "Failed to get meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:"
-            << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+            "Failed to get meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:" << slice->GetIndexInFlow() <<
+            ", flowOffset:" << slice->GetOffsetInFlow());
     } else {
         auto ret = mCacheTiers[WCACHE_DISK]->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
         ChkTrue(ret == BIO_OK, ret,
-            "Failed to get meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:"
-            << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+            "Failed to get meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:" << slice->GetIndexInFlow() <<
+            ", flowOffset:" << slice->GetOffsetInFlow());
     }
 
-    LOG_INFO("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:"
-        << slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+    LOG_INFO("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:" << slice->GetIndexInFlow() <<
+        ", flowOffset:" << slice->GetOffsetInFlow());
     WFlowSliceMeta sliceMeta;
     auto ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
     ChkTrue(ret == BIO_OK, ret, "Slice copy failed.");
@@ -249,8 +248,7 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
             continue;
         }
 
-        if (sliceMeta.offset < dataRangeStart ||
-            sliceMeta.offset + sliceMeta.length > dataRangeEnd) {
+        if (sliceMeta.offset < dataRangeStart || sliceMeta.offset + sliceMeta.length > dataRangeEnd) {
             continue;
         }
 
@@ -311,21 +309,17 @@ void WCache::ExpiredClear()
             }
         }
     }
-
-    return;
 }
 
 bool WCache::IsEmptyEvict()
 {
-    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue() ||
-        mEvictRef[WCACHE_MEMORY] == true) {
+    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue() || mEvictRef[WCACHE_MEMORY]) {
         LOG_INFO("Mem: sliceQueue:" << mCacheTiers[WCACHE_MEMORY]->IsEmptyEvictSliceQueue());
         LOG_INFO("Mem: task:" << mEvictRef[WCACHE_MEMORY]);
         return false;
     }
 
-    if (!mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue() ||
-        mEvictRef[WCACHE_DISK] == true) {
+    if (!mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue() || mEvictRef[WCACHE_DISK]) {
         LOG_INFO("Disk: sliceQueue:" << mCacheTiers[WCACHE_DISK]->IsEmptyEvictSliceQueue());
         LOG_INFO("Disk: task:" << mEvictRef[WCACHE_DISK]);
         return false;
@@ -347,8 +341,8 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     WFlowMetaDataSlice memMetaDataSlice;
     auto ret = memCache->GetMetaDataSlice(indexInFlow, offset, length, memMetaDataSlice);
     ChkTrue(ret == BIO_OK, ret,
-        "Failed to get meta data slice in WCACHE_MEMORY, indexInFlow:" << indexInFlow << " offset:"
-        << offset << " length:" << length);
+        "Failed to get meta data slice in WCACHE_MEMORY, indexInFlow:" << indexInFlow << " offset:" << offset <<
+        " length:" << length);
 
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     WFlowMetaDataSlice diskMetaDataSlice;
@@ -388,12 +382,13 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     WCacheSlicePtr metaSlice = nullptr;
     auto ret = diskCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
     ChkTrue(ret == BIO_OK, ret,
-        "Failed to to evict from disk to underfs, flowId:" << slice->GetFlowId() << ", index:"
-        << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
+        "Failed to to evict from disk to underfs, flowId:" << slice->GetFlowId() << ", index:" <<
+        slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
 
     BIO_TRACE_START(WCACHE_TRACE_EVICT2UNDERFS);
 
-    LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" << slice->GetOffsetInFlow());
+    LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" <<
+        slice->GetOffsetInFlow());
 
     auto sliceMeta = std::make_shared<WFlowSliceMeta>();
     ChkTrueNot(sliceMeta != nullptr, BIO_ALLOC_FAIL);

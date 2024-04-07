@@ -33,8 +33,9 @@ class Flow;
 using FlowPtr = Ref<Flow>;
 class Flow {
 public:
-    Flow(FlowType type, uint64_t flowId, uint32_t mediaId, uint64_t chunkSize, uint64_t preLoadSize) : mType(type),
-        mFlowId(flowId), mMediaId(mediaId), mChunkSize(chunkSize), mPreLoadSize(preLoadSize) {}
+    Flow(FlowType type, uint64_t flowId, uint32_t mediaId, uint64_t chunkSize, uint64_t preLoadSize)
+        : mType(type), mFlowId(flowId), mMediaId(mediaId), mChunkSize(chunkSize), mPreLoadSize(preLoadSize)
+    {}
     ~Flow() = default;
 
     BResult GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr);
@@ -100,11 +101,11 @@ private:
 
     std::vector<uint64_t> mChunkList;
 
-    std::atomic<uint64_t> mTruncateOffset { 0 };
-    std::atomic<uint64_t> mWritenOffset { 0 };
-    std::atomic<uint64_t> mPreLoadOffset { 0 };
+    std::atomic<uint64_t> mTruncateOffset{ 0 };
+    std::atomic<uint64_t> mWritenOffset{ 0 };
+    std::atomic<uint64_t> mPreLoadOffset{ 0 };
 
-    bool mPreLoadFlag { false };
+    bool mPreLoadFlag{ false };
     std::list<IoHoldCtx *> mHoldList;
 
     std::map<uint64_t, uint64_t> mRecoverList;
