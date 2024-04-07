@@ -323,7 +323,7 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         if (rsp.isAlloc) {
             FreeMemRequest freeReq = { req.comm, rsp.num, { 0 } };
             for (uint32_t idx = 0; idx < rsp.num; idx++) {
-                freeReq.addr[idx] = rsp.address[idx];
+                freeReq.addr[idx] = rsp.addrOffset[idx];
             }
             auto freeRet =
                 net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID, BIO_OP_SDK_FREE_MEM, freeReq);
