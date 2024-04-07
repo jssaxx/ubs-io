@@ -11,7 +11,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-void CM_Ulog(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...)
+void CmLogFunc(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...)
 {
     va_list argPtr;
     char dataBuf[CM_LOG_BUF_LEN];

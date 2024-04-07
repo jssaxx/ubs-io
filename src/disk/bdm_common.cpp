@@ -12,7 +12,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-void BDM_Ulog(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...)
+void BdmLogFunc(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...)
 {
     va_list argPtr;
     char dataBuf[BDM_LOG_BUF_LEN];
