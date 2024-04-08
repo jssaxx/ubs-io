@@ -174,6 +174,7 @@ TEST_F(TestRCache, test_rcache_delete_ok)
 
 TEST_F(TestRCache, test_rcache_expired_clear_ok)
 {
+    Cache::Instance().Recover();
     auto ret = gRcacheManager->ExpiredClear(G_PT_ID, 2);
     EXPECT_EQ(ret, 0);
 }

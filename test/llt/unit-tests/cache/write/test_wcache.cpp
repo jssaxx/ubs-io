@@ -10,6 +10,9 @@
 #include "bio_config_instance.h"
 #include "cache_slice_operator.h"
 #include "wcache_manager.h"
+#include "bdm_core.h"
+#include "flow_task_pool.h"
+#include "flow_manager.h"
 #include "test_wcache.h"
 
 using namespace ock::bio;
@@ -72,27 +75,21 @@ TEST_F(TestWCache, test_createcache_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestWCache, test_deletecache_case_return_ok)
-{
-    auto ret = gWcacheManager->DeleteWCache(G_PT_ID);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 TEST_F(TestWCache, test_getslice_case_return_ok)
 {
-    auto ret = GetSlice(g_cacheId, 0, 1024);
+    auto ret = GetSlice(g_cacheId, 0, NO_1024);
     EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestWCache, test_getslice_invalidcacheid_case_return_fail)
 {
-    auto ret = GetSlice(NO_MAX_VALUE64, 0, 1024);
+    auto ret = GetSlice(NO_MAX_VALUE64, 0, NO_1024);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_getslice_invalidoffset_case_return_fail)
 {
-    auto ret = GetSlice(g_cacheId, NO_MAX_VALUE64, 1024);
+    auto ret = GetSlice(g_cacheId, NO_MAX_VALUE64, NO_1024);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
@@ -104,19 +101,19 @@ TEST_F(TestWCache, test_getslice_invalidlength_case_return_fail)
 
 TEST_F(TestWCache, test_getslice_noexistcacheid_case_return_fail)
 {
-    auto ret = GetSlice(30, 0, 1024);
+    auto ret = GetSlice(NO_30, 0, NO_1024);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
 TEST_F(TestWCache, test_put_case_return_ok)
 {
     NetMrInfo bioMrInfo;
-    auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
+    auto ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
 
     MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 0, 0, 1024, addrVec);
+    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 0, 0, NO_1024, addrVec);
 
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWcacheManager->Put(G_KEY, wcacheSlice, reader, attr, false);
@@ -128,12 +125,12 @@ TEST_F(TestWCache, test_put_case_return_ok)
 TEST_F(TestWCache, test_get_case_return_ok)
 {
     NetMrInfo bioMrInfo;
-    auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
+    auto ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
 
     MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-    RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, 1024, addrVec);
+    RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
 
     uint64_t realLen = 0;
     ret = gWcacheManager->Get(G_KEY, 0, rcacheSlice, wwriter, realLen);
@@ -158,24 +155,18 @@ TEST_F(TestWCache, test_delete_case_return_ok)
 TEST_F(TestWCache, test_put_repeat_case_return_ok)
 {
     NetMrInfo bioMrInfo;
-    auto ret = BioServer::Instance()->MemAlloc(1024, bioMrInfo);
+    auto ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
 
     MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, 1024, 1, 1024, addrVec);
+    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, NO_1024, 1, NO_1024, addrVec);
 
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWcacheManager->Put(G_KEY, wcacheSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     BioServer::Instance()->MemFree(mrInfo.address);
-}
-
-TEST_F(TestWCache, test_evict_case_return_ok)
-{
-    auto ret = gWcacheManager->Flush(G_PT_ID, 0);
-    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestWCache, test_put_nullkey_case_return_fail)
@@ -199,8 +190,104 @@ TEST_F(TestWCache, test_put_nullreader_case_return_fail)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
+std::vector<FlowAddr> addrVec;
+TEST_F(TestWCache, test_put_degrate_case_return_ok)
+{
+    NetMrInfo bioMrInfo;
+    auto ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
+    EXPECT_EQ(ret, BIO_OK);
+
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    addrVec = { FlowAddr(mrInfo) };
+    WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(g_cacheId, NO_4096, NO_4, NO_1024, addrVec);
+
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ret = gWcacheManager->Put("degrate", wcacheSlice, reader, attr, true);
+    EXPECT_EQ(ret, BIO_OK);
+
+    BioServer::Instance()->MemFree(mrInfo.address);
+}
+
+TEST_F(TestWCache, test_disk_read_async__case_return_ok)
+{
+    uintptr_t buff = 0;
+    BdmIoCtx ctx{};
+    int ret = BdmReadAsync(0, 0, &buff, NO_1024, &ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_disk_write_async__case_return_ok)
+{
+    uintptr_t buff = 0;
+    BdmIoCtx ctx{};
+    int ret = BdmWriteAsync(0, 0, &buff, NO_1024, &ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestWCache, test_repeat_delete_return_ok)
 {
     auto ret = gWcacheManager->Delete(G_PT_ID, G_KEY);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+void TestWCache::Stub()
+{
+    MOCKER_CPP(&WCache::IsEmptyEvict, bool (*)()).stubs().will(returnValue(false));
+}
+
+int32_t BdmGetNextUsedChunkIdStub(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+    uint64_t *bucketOffset)
+{
+    *chunkId = 0;
+    *chunkSize = NO_4194304;
+    *bucketId = g_cacheId;
+    *bucketOffset = 0;
+    return BIO_OK;
+}
+
+void TestWCache::RecoverStub()
+{
+    MOCKER(BdmGetNextUsedChunkId).stubs().will(invoke(BdmGetNextUsedChunkIdStub));
+    MOCKER_CPP(&FlowTaskPool::Start, BResult(*)(uint32_t coreThreadNum, uint32_t queueSize))
+        .stubs()
+        .will(returnValue(BIO_OK));
+}
+
+TEST_F(TestWCache, test_flowmanager_recover_case_return_fail)
+{
+    TestWCache::RecoverStub();
+    auto ret = FlowManager::Instance()->Init();
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_expired_clear_case_return_ok)
+{
+    auto ret = gWcacheManager->ExpiredClear(G_PT_ID, NO_2);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_evict_case_return_ok)
+{
+    auto ret = gWcacheManager->Flush(G_PT_ID, NO_2);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_expired_clear_case_return_fail)
+{
+    TestWCache::Stub();
+    auto ret = gWcacheManager->ExpiredClear(G_PT_ID, NO_2);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
+}
+
+TEST_F(TestWCache, test_evict_case_return_fail)
+{
+    TestWCache::Stub();
+    auto ret = gWcacheManager->Flush(G_PT_ID, NO_2);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
+}
+
+TEST_F(TestWCache, test_deletecache_case_return_ok)
+{
+    auto ret = gWcacheManager->DeleteWCache(g_cacheId);
     EXPECT_EQ(ret, BIO_OK);
 }
