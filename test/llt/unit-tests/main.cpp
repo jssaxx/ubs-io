@@ -53,7 +53,10 @@ int main(int argc, char *argv[])
 
     auto bioServer = BioServer::Instance();
     auto ret = bioServer->Start();
-    ASSERT_EQ(ret, BIO_OK);
+    if (ret != BIO_OK) {
+        std::cout << "server start failed" << std::endl;
+        return -1;
+    }
 
     ::testing::InitGoogleTest(&argc, argv);
     int runRet = RUN_ALL_TESTS();

@@ -157,7 +157,7 @@ void CmClientLocalUpdateNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
     return;
 }
 
-static int32_t CmClientLocalGetNode(uint16_t poolId, PoolInfo *poolInfo, NodeInfo *nodeInfo)
+int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo)
 {
     int32_t ret;
 
@@ -267,7 +267,7 @@ static int32_t CmClientLocalRegisterNode(uint16_t poolId)
         return CM_ERR;
     }
 
-    ret = CmClientLocalGetNode(poolId, poolInfo, nodeInfo);
+    ret = CmClientLocalGetNode(poolId, nodeInfo);
     if (ret != CM_OK) {
         CM_LOGERROR("Get nodeInfo failed, poolId(%u) ret(%d).", poolId, ret);
         return ret;
