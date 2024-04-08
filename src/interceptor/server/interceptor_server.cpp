@@ -52,6 +52,8 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     int readLen = static_cast<int>(req->nbytes);
     auto ret = BioReadHook(req->inode, resp->data, req->nbytes, req->offset, &readLen);
     if (UNLIKELY(ret != 0)) {
+        free(resp);
+        resp = nullptr;
         BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, BIO_ALLOC_FAIL);
         return BIO_OK;
@@ -64,7 +66,8 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_OK, static_cast<void *>(resp),
         sizeof(InterceptorPreadOut) + readLen);
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ_REPLY, 0);
-    delete[] resp;
+    free(resp);
+    resp = nullptr;
     return BIO_OK;
 }
 
