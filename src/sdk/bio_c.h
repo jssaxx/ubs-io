@@ -6,12 +6,12 @@
 #define BIO_C_H
 
 #include <stdint.h>
-#include <ctime>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-enum CResult : int32_t {
+typedef enum {
     RET_CACHE_OK = 0,            // successful
     RET_CACHE_PROTECTED = 1,     // cache write protected
     RET_CACHE_ERROR = 2,         // unknown error code
@@ -29,27 +29,27 @@ enum CResult : int32_t {
     RET_CACHE_READ_EXCEED = 14,  // read limit is exceeded
     RET_CACHE_EXISTS = 15,       // cache already exists
     RET_CACHE_BUTT
-};
+} CResult;
 
-enum AffinityStrategy : int32_t {
+typedef enum {
     LOCAL_AFFINITY = 1, // data local affinity
     GLOBAL_BALANCE = 2, // data global balance
     AFFINITY_BUTT
-};
+} AffinityStrategy;
 
-enum WriteStrategy : int32_t {
+typedef enum {
     WRITE_BACK = 1,
     WRITE_THROUGH = 2,
     STRATEGY_BUTT
-};
+} WriteStrategy;
 
-enum WorkerMode : int32_t {
+typedef enum {
     CONVERGENCE,
     SEPARATES
-};
+} WorkerMode;
 
-#define MAX_KEY_SIZE 256
-#define LOCATION_SIZE 2
+#define MAX_KEY_SIZE (256)
+#define LOCATION_SIZE (2)
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 
 typedef struct {
@@ -68,8 +68,8 @@ typedef struct {
     WriteStrategy strategy;
 } CacheDescriptor;
 
-#define CACHE_SPACE_ADDRESS_SIZE 2
-#define CACHE_SPACE_DEC_SIZE 64
+#define CACHE_SPACE_ADDRESS_SIZE (2)
+#define CACHE_SPACE_DEC_SIZE (64)
 
 typedef struct {
     uint64_t address;
@@ -195,9 +195,17 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
  * @param[out]: objs: object array
  * @param[out]: objNum: object number
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
- * @tip: Use free to release the objs memory
  */
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum);
+
+/**
+ * @brief: Free list all returned resources
+ *
+ * @param[out]: objs: object array
+ * @param[out]: objNum: object number
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+void BioFreeListResources(ObjStat *objs, uint64_t objNum);
 
 /**
  * @brief: Get object info
