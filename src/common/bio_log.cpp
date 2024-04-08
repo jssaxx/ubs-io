@@ -163,7 +163,6 @@ int32_t Logger::Init()
 
 void Logger::Exit()
 {
-    std::lock_guard<std::mutex> guard(gMutex);
     if (mSpdLogger != nullptr) {
         mSpdLogger->flush();
         mSpdLogger = nullptr;

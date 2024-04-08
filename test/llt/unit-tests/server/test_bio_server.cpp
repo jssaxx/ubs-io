@@ -25,3 +25,5 @@ void TestBioServer::TearDown()
 }
 
 TEST_F(TestBioServer, test_bio_server_initialize) {}
+
+TEST_F(TestBioServer, test_evict_case_return_ok) {}

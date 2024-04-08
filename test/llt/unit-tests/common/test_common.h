@@ -2,26 +2,24 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
 
-#ifndef BOOSTIO_TEST_WCACHE_H
-#define BOOSTIO_TEST_WCACHE_H
+#ifndef BOOSTIO_TEST_COMMON_H
+#define BOOSTIO_TEST_COMMON_H
+
 
 #include "gtest/gtest.h"
 
 namespace ock {
 namespace bio {
-class TestWCache : public testing::Test {
+class TestCommon : public testing::Test {
     void SetUp() override;
 
     void TearDown() override;
-
-public:
-    static void Stub();
-
-    static void RecoverStub();
 
 private:
     static bool gSetup;
 };
 }
 }
-#endif // BOOSTIO_TEST_WCACHE_H
+
+
+#endif // BOOSTIO_TEST_COMMON_H
