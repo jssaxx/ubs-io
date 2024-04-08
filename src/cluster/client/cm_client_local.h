@@ -15,6 +15,8 @@ uint16_t CmClientLocalGetNodeId(uint16_t poolId);
 
 int32_t CmClientLocalGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 
+int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo);
+
 void CmClientLocalUpdateNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 
 int32_t CmClientLocalInit(void);
