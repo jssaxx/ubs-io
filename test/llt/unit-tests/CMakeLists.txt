@@ -44,6 +44,9 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/cache/read
         ${SRC_DIR}/cache/write
         ${SRC_DIR}/cluster
+        ${SRC_DIR}/cluster/common
+        ${SRC_DIR}/cluster/client
+        ${SRC_DIR}/cluster/server
         ${SRC_DIR}/config
         ${SRC_DIR}/disk
         ${SRC_DIR}/htracer
