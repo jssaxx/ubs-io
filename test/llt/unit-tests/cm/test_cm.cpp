@@ -34,7 +34,7 @@ void TestCm::TearDown()
 
 static LocalNodeQueryOpHandle gLocalQuery = {nullptr, nullptr, nullptr};
 
-int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
+static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
 {
     gLocalQuery.queryLocalNodeInfo = handle->queryLocalNodeInfo;
     gLocalQuery.queryLocalNodeMr = handle->queryLocalNodeMr;
@@ -44,7 +44,7 @@ int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandl
 
 static NodeListChangeOpHandle gNodeChange = {nullptr, nullptr};
 
-int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
+static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
 {
     gNodeChange.notifyNodeListChange = handle->notifyNodeListChange;
     gNodeChange.ctx = handle->ctx;
@@ -53,21 +53,21 @@ int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpH
 
 static PtViewChangeOpHandle gPtChange = {nullptr, nullptr};
 
-int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
+static int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
 {
     gPtChange.notifyPtListChange = handle->notifyPtListChange;
     gPtChange.ctx = handle->ctx;
     return 0;
 }
 
-uint16_t CM_GetLocalNodeId_Stub(uint16_t poolId)
+static uint16_t CM_GetLocalNodeId_Stub(uint16_t poolId)
 {
     return 0;
 }
 
 static NodeInfo gNodeInfo;
 
-int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
+static int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
 {
     uint16_t nodeId = nodeInfo->nodeId;
     memcpy_s(nodeInfo, sizeof(NodeInfo), &gNodeInfo, sizeof(NodeInfo));
@@ -75,7 +75,7 @@ int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
     return 0;
 }
 
-void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
+static void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
 {
     nodeList->poolId = pools->poolId;
     nodeList->nodeNum = nodeNum;
@@ -94,11 +94,11 @@ void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
     }
 }
 
-constexpr int8_t ERR_2 = -2;
-constexpr int8_t ERR_3 = -3;
-
-int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
+static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
+    static constexpr int8_t ERR_2 = -2;
+    static constexpr int8_t ERR_3 = -3;
+
     LOG_INFO("call CM_Init_Stub");
     if (pools == nullptr || num != 1) {
         return -1;
@@ -144,39 +144,38 @@ int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfg
     return 0;
 }
 
-void ZooSetDebugLevel()
+static void ZooSetDebugLevel()
 {
     LOG_INFO("call ZooSetDebugLevel");
 }
 
-zhandle_t* ZookeeperInit()
+static zhandle_t* ZookeeperInit()
 {
     LOG_INFO("call ZookeeperInit");
     return (zhandle_t *) "zHandle";
 }
 
-int ZooState()
+static int ZooState()
 {
     LOG_INFO("call ZooState");
     return ZOO_CONNECTED_STATE;
 }
 
-int ZooRecvTimeout()
+static int ZooRecvTimeout()
 {
     LOG_INFO("call ZooRecvTimeout");
     return (int)NO_10;
 }
 
-int ZooCreate(zhandle_t *zh, const char *path, const char *value,
-              int valuelen, const struct ACL_vector *acl, int mode,
-              char *pathBuffer, int pathBufferLen)
+static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
+    int mode, char *pathBuffer, int pathBufferLen)
 {
     LOG_INFO("call ZooCreate");
 
     return ZOK;
 }
 
-int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
+static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
 {
     LOG_INFO("call ZooGet");
     if (*bufferLen == (int)sizeof(uint16_t)) {
@@ -208,19 +207,19 @@ int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *buffer
     return ZOK;
 }
 
-int ZooExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
+static int ZooExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
 {
     LOG_INFO("call ZooExists");
     return ZNONODE;
 }
 
-int ZooSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
+static int ZooSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
 {
     LOG_INFO("call ZooSet");
     return ZOK;
 }
 
-int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
+static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
     struct Stat *stat)
 {
     LOG_INFO("call ZooWget");
@@ -249,19 +248,20 @@ int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCt
     return ZOK;
 }
 
-int ZooDelete(zhandle_t *zh, const char *path, int version)
+static int ZooDelete(zhandle_t *zh, const char *path, int version)
 {
     LOG_INFO("call ZooDelete");
     return ZOK;
 }
 
-int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
+static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
     struct String_vector *strings)
 {
     LOG_INFO("call ZooWgetChildren");
     return ZOK;
 }
-int ZooDeallocateStringVector(struct String_vector *strings)
+
+static int ZooDeallocateStringVector(struct String_vector *strings)
 {
     if (strings != nullptr) {
         if (strings->data != nullptr) {
@@ -271,6 +271,7 @@ int ZooDeallocateStringVector(struct String_vector *strings)
     }
     return ZOK;
 }
+
 void TestCm::Stub()
 {
     MOCKER(CM_RegNodeListChangeNotifyHandle).stubs().will(invoke(CM_RegNodeListChangeNotifyHandle_Stub));
