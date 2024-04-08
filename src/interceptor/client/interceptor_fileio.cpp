@@ -205,10 +205,10 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     request->offset = offset;
     request->nbytes = count;
     request->startTime = Monotonic::TimeNs();
-
     auto ret = memcpy_s(request->data, count, (const char *)buf, count);
     if (UNLIKELY(ret != 0)) {
         free(request);
+        request = nullptr;
         return -1;
     }
 
@@ -216,6 +216,8 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
     if (UNLIKELY(ret != 0)) {
+        free(request);
+        request = nullptr;
         return -1;
     }
 
