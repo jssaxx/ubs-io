@@ -604,6 +604,15 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
     return RET_CACHE_OK;
 }
 
+void BioFreeListResources(ObjStat *objs, uint64_t objNum)
+{
+    if (objNum == 0) {
+        return;
+    }
+    free(objs);
+    objs = nullptr;
+}
+
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
 {
     if (UNLIKELY(stat == nullptr)) {
