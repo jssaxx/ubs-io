@@ -10,6 +10,8 @@ if (OPEN_TEST_TOOLS STREQUAL "ON")
             ${SRC_DIR}/../test/tools/cli/include/
             ${SRC_DIR}/../test/tools/diagnose/cli_sdk/
             ${SRC_DIR}/../test/tools/diagnose/cli_htracer/
+            ${SRC_DIR}/../test/tools/bio_tp/
+            ${SRC_DIR}/../test/tools/tracepoint/include
     )
 endif()
 

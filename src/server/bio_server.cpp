@@ -16,6 +16,7 @@
 #include "bio_server.h"
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
+#include "bio_tracepoint_helper.h"
 #endif
 
 namespace ock {
@@ -32,6 +33,7 @@ BioServer::BioServer() noexcept
     std::vector<ModuleDesc> modules = {
 #ifdef USE_DEBUG_TOOLS
         { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
+        { "Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr },
 #endif
         { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioTraceExit, this) },
@@ -419,6 +421,16 @@ BResult BioServer::BioServerDiagnoseInitInner()
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
     }
     return ret;
+}
+
+BResult BioServer::BioServerTracePointInit()
+{
+    auto ret = tp::TracePointManager::Initialize();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Init bio server tracepoint fail.");
+        return BIO_ERR;
+    }
+    return BIO_OK;
 }
 #endif
 

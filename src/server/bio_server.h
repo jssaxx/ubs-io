@@ -307,6 +307,7 @@ protected:
 #ifdef USE_DEBUG_TOOLS
     BResult BioServerDiagnoseInit();
     BResult BioServerDiagnoseInitInner();
+    BResult BioServerTracePointInit();
 #endif
     void Connection();
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);

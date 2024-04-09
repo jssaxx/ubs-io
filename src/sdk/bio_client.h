@@ -180,6 +180,7 @@ private:
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
+    BResult BioClientTracePointInit(WorkerMode mode);
 #endif
 
 private:
