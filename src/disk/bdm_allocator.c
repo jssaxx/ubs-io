@@ -380,7 +380,8 @@ int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64
     int32_t ret = BdmAllocatorRemove(realize, bucketId, bucketOffset, chunkId, chunkSize);
     if (ret != BDM_CODE_OK) {
         BDM_RWLOCK_UNLOCK(&realize->lock);
-        BDM_LOGWARN(0, "Alloc chunk failed, chunk size(%llu).", chunkSize);
+        BDM_LOGWARN(0, "Alloc chunk failed, chunk size(%llu), used cap(%llu), total cap(%llu).",
+            chunkSize, realize->usedSize, realize->totalSize);
         return ret;
     }
     realize->usedSize += chunkSize;
