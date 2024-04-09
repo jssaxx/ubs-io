@@ -6,14 +6,17 @@ SET(BOOSTIO_TOOLS_INCLUDE_DIR
         ${SOURCE_DIR}/test/tools/tracepoint/include/
         ${SOURCE_DIR}/test/tools/diagnose/cli_htracer/
         ${SOURCE_DIR}/test/tools/diagnose/cli_sdk/
+        ${SOURCE_DIR}/test/tools/trancepoint/include/
+        ${SOURCE_DIR}/test/tools/bio_tp/
         PARENT_SCOPE)
 
 link_directories(${TARGET_INSTALL_LIB_DIR})
 
 add_subdirectory(cli)
-if (CMAKE_BUILD_TYPE STREQUAL "debug"  AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     add_subdirectory(tracepoint)
 endif()
 
+add_subdirectory(bio_tp)
 add_subdirectory(diagnose)
 
