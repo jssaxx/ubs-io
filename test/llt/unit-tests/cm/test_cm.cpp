@@ -13,6 +13,7 @@
 #include "cm_server_init.h"
 #include "cm_client_init.h"
 #include "cm_client_local.h"
+#include "server/cm_server_view.h"
 #include "test_cm.h"
 
 using namespace ock::bio;
@@ -32,7 +33,7 @@ void TestCm::TearDown()
     return;
 }
 
-static LocalNodeQueryOpHandle gLocalQuery = {nullptr, nullptr, nullptr};
+static LocalNodeQueryOpHandle gLocalQuery = { nullptr, nullptr, nullptr };
 
 static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
 {
@@ -42,7 +43,7 @@ static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQuery
     return 0;
 }
 
-static NodeListChangeOpHandle gNodeChange = {nullptr, nullptr};
+static NodeListChangeOpHandle gNodeChange = { nullptr, nullptr };
 
 static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
 {
@@ -51,7 +52,7 @@ static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListCh
     return 0;
 }
 
-static PtViewChangeOpHandle gPtChange = {nullptr, nullptr};
+static PtViewChangeOpHandle gPtChange = { nullptr, nullptr };
 
 static int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
 {
@@ -103,12 +104,11 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
     if (pools == nullptr || num != 1) {
         return -1;
     }
-    if (gNodeChange.notifyNodeListChange == nullptr ||
-        gPtChange.notifyPtListChange == nullptr) {
+    if (gNodeChange.notifyNodeListChange == nullptr || gPtChange.notifyPtListChange == nullptr) {
         return ERR_2;
     }
     uint16_t nodeNum = 2;
-    auto nodeList = (NodeStateList *) malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
+    auto nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
     if (nodeList == nullptr) {
         return ERR_3;
     }
@@ -149,10 +149,10 @@ static void ZooSetDebugLevel()
     LOG_INFO("call ZooSetDebugLevel");
 }
 
-static zhandle_t* ZookeeperInit()
+static zhandle_t *ZookeeperInit()
 {
     LOG_INFO("call ZookeeperInit");
-    return (zhandle_t *) "zHandle";
+    return (zhandle_t *)"zHandle";
 }
 
 static int ZooState()
@@ -171,7 +171,6 @@ static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int val
     int mode, char *pathBuffer, int pathBufferLen)
 {
     LOG_INFO("call ZooCreate");
-
     return ZOK;
 }
 
@@ -232,7 +231,7 @@ static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *wa
     if (result = strstr(zkPath, CM_NODE_LIST_PATH)) {
         NodeInfoList *nodeChangeList = (NodeInfoList *)buffer;
         nodeChangeList->poolId = 0;
-        nodeChangeList->nodeNum =0;
+        nodeChangeList->nodeNum = 0;
     } else if (result = strstr(zkPath, CM_STATE_PATH)) {
         NodeStateList *nodeStatList = (NodeStateList *)buffer;
         nodeStatList->poolId = 0;
@@ -384,4 +383,42 @@ TEST_F(TestCm, test_cm_record_pt_event)
     ptEvent.ptNum = 0;
     int ret = CmClientZkRecordPtEvent(&ptEvent);
     EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_report_disk_status_fault)
+{
+    int ret = CmReportDiskStatus(0, CM_DISK_FAULT);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_report_disk_status_normal)
+{
+    int ret = CmReportDiskStatus(0, CM_DISK_NORMAL);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_server_view_role_change_slave)
+{
+    int ret = CmServerViewRoleChange(CM_SERVER_SLAVE);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_server_view_role_change_master)
+{
+    int ret = CmServerViewRoleChange(CM_SERVER_MASTER);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_node_list_change)
+{
+    CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
+    if (nodeList == nullptr) {
+        return;
+    }
+    nodeList->poolId = 0;
+    nodeList->nodeNum = 1;
+    nodeList->nodeList[0] = 0;
+    int ret = CmServerViewNodeListChange(nodeList);
+    EXPECT_EQ(ret, CM_OK);
+    free(nodeList);
 }

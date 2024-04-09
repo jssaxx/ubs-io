@@ -17,6 +17,12 @@ int32_t CmServerViewInit(void);
 
 void CmServerViewExit(void);
 
+int32_t CmServerViewRoleChange(CmServerRole role);
+
+int32_t CmServerViewNodeListChange(CmNodeIdList *watchList);
+
+int32_t CmServerViewNodeEvent(CmNodeEvent *nodeEvent);
+
 #ifdef __cplusplus
 }
 #endif

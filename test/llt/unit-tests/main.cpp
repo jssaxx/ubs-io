@@ -11,6 +11,7 @@
 #include "test_rpc_engine.h"
 #include "test_htracer.h"
 #include "test_disk.h"
+#include "bdm_core.h"
 
 using namespace ock::bio;
 using namespace ock::htracer;
@@ -36,6 +37,9 @@ int main(int argc, char *argv[])
     TestCm::Stub();
     TestRpcEngine::Stub();
     TestHtracer::Stub();
+    (void)system("rm -rf test1");
+    (void)system("rm -rf test2");
+    (void)system("rm -rf ceph");
     (void)system("rm -rf conf");
     (void)system("mkdir conf");
     (void)system("cp ../configs/* conf");
@@ -63,15 +67,19 @@ int main(int argc, char *argv[])
 
     (void)system("rm -rf conf");
     (void)system("rm -rf ceph.conf");
-    if (DiskPathInvalid()) {
-        (void)system("rm -rf test1");
-        (void)system("rm -rf test2");
-    }
 
     ClearTraceInfo();
+
+    Cache::Instance().Recover();
 
     ock::htracer::HTracerExit();
     WCacheManager::Instance()->Exit();
     RCacheManager::Instance()->Exit();
+    BdmDestory(0);
+    Logger::ChangeLogLevel(-1);
+    Logger::ChangeLogLevel(NO_3);
+    Logger::gInstance->Flush();
+    Logger::Destroy();
+
     return runRet;
 }
