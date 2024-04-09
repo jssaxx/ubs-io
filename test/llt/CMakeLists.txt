@@ -23,6 +23,7 @@ include_directories(${SRC_DIR}/common
         ${TEST_DIR}/cm
         ${TEST_DIR}/disk
         ${TEST_DIR}/sdk
+        ${TEST_DIR}/common
         ${TEST_DIR}/cache/read
         ${TEST_DIR}/cache/write
         ${TEST_DIR}/net/rpc)
