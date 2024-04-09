@@ -73,7 +73,7 @@ mkdir -p boostio/conf
 \cp bio/lib/libock_iofwd_proxy.so boostio/lib/.
 
 echo "当前cpu架构：$arch"
-if [[ "$BUILD_TYPE $arch" == 'debug aarch64' ]]; then
+if [[ "$DIAGNOSE_FLAG $arch" == 'true aarch64' ]]; then
     \cp bio/lib/libtracepoint.a boostio/lib/.
     \cp bio/lib/libtracepoint.so boostio/lib/.
 fi
@@ -82,6 +82,7 @@ if [[ "$DIAGNOSE_FLAG" == 'true' ]]; then
     \cp bio/lib/libcli_agent.a boostio/lib/.
     \cp bio/lib/libcli_agent.so boostio/lib/.
     \cp bio/lib/*_diagnose.so boostio/lib/.
+    \cp bio/lib/libbio_tracepoint.so boostio/lib/.
 fi
 
 \cp bio/bin/* boostio/bin/.

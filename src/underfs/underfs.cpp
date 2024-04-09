@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
+#include "bio_tracepoint_helper.h"
 
 namespace ock {
 namespace bio {
@@ -78,11 +79,14 @@ void UnderFs::Stop()
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
+    int ret = BIO_ERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs put key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_PUT);
-    int ret = rados_write(mIoCtx, key, value, len, 0);
+    LVOS_TP_START(SERVER_UNDERFS_PUT, &ret, -1)
+    ret = rados_write(mIoCtx, key, value, len, 0);
+    LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to write object, ret:" << ret << ".");
@@ -93,11 +97,14 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 
 BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
+    int ret = BIO_ERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
-    int ret = rados_read(mIoCtx, key, value, len, off);
+    LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -ENOENT)
+    ret = rados_read(mIoCtx, key, value, len, off);
+    LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_GET, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to get object " << key << ", not exist.");
@@ -112,11 +119,14 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
 BResult UnderFs::Delete(const char *key)
 {
+    int ret = BIO_ERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs delete key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_DEL);
-    int ret = rados_remove(mIoCtx, key);
+    LVOS_TP_START(SERVER_UNDERFS_DELETE, &ret, -ENOENT)
+    ret = rados_remove(mIoCtx, key);
+    LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret == -ENOENT) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
@@ -132,11 +142,14 @@ BResult UnderFs::Delete(const char *key)
 
 BResult UnderFs::Stat(const char *key, ObjStat &stat)
 {
+    int ret = BIO_ERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs stat key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_STAT);
-    int ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
+    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, -ENOENT)
+    ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
+    LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to stat object " << key << ", not exist.");
@@ -224,7 +237,10 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
     BIO_TRACE_START(UFS_TRACE_PUT);
     fstream file;
     file.open(keyPath.c_str(), ios::out | ios::binary);
-    if (!file.is_open()) {
+    int isOpen = static_cast<int>(file.is_open());
+    LVOS_TP_START(SERVER_UNDERFS_PUT, &isOpen, 0)
+    LVOS_TP_END
+    if (!isOpen) {
         LOG_ERROR("Fail to create file, " << keyPath.c_str());
         return BIO_ERR;
     }
@@ -247,7 +263,10 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     BIO_TRACE_START(UFS_TRACE_GET);
     fstream file;
     file.open(keyPath.c_str(), ios::in);
-    if (!file.is_open()) {
+    int isOpen = static_cast<int>(file.is_open());
+    LVOS_TP_START(SERVER_UNDERFS_GET, &isOpen, 0)
+    LVOS_TP_END
+    if (!isOpen) {
         LOG_ERROR("Fail to open file, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
     }
@@ -266,7 +285,10 @@ BResult UnderFs::Delete(const char *key)
 
     BIO_TRACE_START(UFS_TRACE_DEL);
     std::ifstream infile(keyPath.c_str());
-    if (!infile.good()) {
+    int isGood = static_cast<int>(infile.good());
+    LVOS_TP_START(SERVER_UNDERFS_DELETE, &isGood, 0)
+    LVOS_TP_END
+    if (!isGood) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
@@ -289,7 +311,11 @@ BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
 
     BIO_TRACE_START(UFS_TRACE_STAT);
     struct stat file_stat;
-    if (stat(keyPath.c_str(), &file_stat) != 0) {
+    int ret = BIO_ERR;
+    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, BIO_ERR)
+    ret = stat(keyPath.c_str(), &file_stat);
+    LVOS_TP_END
+    if (ret != 0) {
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
         BIO_TRACE_END(UFS_TRACE_STAT, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;

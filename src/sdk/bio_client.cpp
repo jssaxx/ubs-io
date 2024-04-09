@@ -9,6 +9,7 @@
 #include "bio_client.h"
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
+#include "bio_tracepoint_helper.h"
 #endif
 using namespace ock::bio;
 
@@ -192,6 +193,19 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
     }
     return ret;
 }
+
+BResult BioClient::BioClientTracePointInit(WorkerMode mode)
+{
+    BResult ret = BIO_OK;
+    if (mode == SEPARATES) {
+        ret =  tp::TracePointManager::Initialize();
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to Initialize tracepoint, ret:" << ret << ".");
+            return BIO_INNER_ERR;
+        }
+    }
+    return BIO_OK;
+}
 #endif
 
 BResult BioClient::Start(WorkerMode mode)
@@ -212,6 +226,9 @@ BResult BioClient::Start(WorkerMode mode)
 
 #ifdef USE_DEBUG_TOOLS
     if (this->BioClientDiagnoseInit(mode) != BIO_OK) {
+        return BIO_ERR;
+    }
+    if (this->BioClientTracePointInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 #endif
