@@ -216,7 +216,7 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
 
     bool isNormal = wcache->GetState();
     if (!isNormal) {
-        LOG_ERROR("Failed to check wcache flow by id:" << slice->GetFlowId() << ".");
+        LOG_ERROR("Failed to check wcache flow by id:" << wcache->GetFlowId() << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -242,7 +242,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     bool isNormal = wcache->GetState();
     if (!isNormal) {
-        LOG_ERROR("Failed to check wcache flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
+        LOG_ERROR("Failed to check wcache flow by id:" << wcache->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
