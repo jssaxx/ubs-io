@@ -191,7 +191,7 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
         }
-        if (!validateRatios(cmds[1], errMsg)) {
+        if (!ValidateRatios("bio.cache.mem_read_write_ratio", cmds[1], errMsg)) {
             CLI_PrintBuf("Input parameters failed!, %s, values %s\n", errMsg.c_str(), cmds[1].c_str());
             return;
         }
@@ -201,7 +201,7 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
             CLI_PrintBuf("Input parameters failed!, num:%d\n", cmds.size());
             return;
         }
-        if (!validateRatios(cmds[1], errMsg)) {
+        if (!ValidateRatios("bio.cache.disk_read_write_ratio", cmds[1], errMsg)) {
             CLI_PrintBuf("Input parameters failed!, %s, values %s\n", errMsg.c_str(), cmds[1].c_str());
             return;
         }

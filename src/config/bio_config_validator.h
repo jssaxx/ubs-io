@@ -681,7 +681,7 @@ public:
 
     bool Validate(const std::string &value) override
     {
-        return validateRatios(value, mErrMsg);
+        return ValidateRatios(mName, value, mErrMsg);
     }
 };
 
@@ -753,6 +753,32 @@ public:
             }
         }
 
+        return true;
+    }
+};
+
+class VStrBoolRange : public Validator {
+public:
+    static ValidatorPtr Create(const std::string &name)
+    {
+        return ValidatorPtr(new (std::nothrow) VStrBoolRange(name));
+    }
+
+    explicit VStrBoolRange(const std::string &name) : Validator(name){};
+
+    ~VStrBoolRange() override = default;
+
+    bool Initialize() override
+    {
+        return true;
+    }
+
+    bool Validate(const std::string &value) override
+    {
+        if (value != "true" && value != "false") {
+            mErrMsg = "Invalid value for <" + mName + ">, it should be true or false";
+            return false;
+        }
         return true;
     }
 };
