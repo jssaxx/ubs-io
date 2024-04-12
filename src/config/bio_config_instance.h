@@ -13,9 +13,9 @@ namespace bio {
 const auto LOG_LEVEL = std::make_pair("bio.log.level", "info");
 
 const auto NET_DATA_PROTOCOL = std::make_pair("bio.net.data.protocol", "tcp");
-const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.rpc.data.busy_polling_mode", false);
+const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.rpc.data.busy_polling_mode", "false");
 const auto NET_RPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.rpc.data.workers_count", 4);
-const auto NET_IPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.ipc.data.busy_polling_mode", false);
+const auto NET_IPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.ipc.data.busy_polling_mode", "false");
 const auto NET_IPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.ipc.data.workers_count", 4);
 const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/24");
 const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
