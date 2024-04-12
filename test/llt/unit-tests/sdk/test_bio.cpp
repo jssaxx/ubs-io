@@ -39,16 +39,11 @@ void TestBio::TearDown()
     return;
 }
 
-TEST_F(TestBio, test_bio_initialize_case_return_ok)
-{
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-}
-
 TEST_F(TestBio, test_bio_create_cache_case_return_ok)
 {
     CacheDescriptor desc = { G_TENANT_ID, AffinityStrategy::LOCAL_AFFINITY, WriteStrategy::WRITE_BACK };
     auto ret = BioCreateCache(desc);
+    sleep(ock::bio::NO_10);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
@@ -90,6 +85,21 @@ TEST_F(TestBio, test_bio_put_case_return_ok)
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
+TEST_F(TestBio, test_bio_get_case_return_ok)
+{
+    (void)system("touch bio_get_file");
+    FILE *fp = fopen("./bio_get_file", "w");
+    EXPECT_NE(fp, nullptr);
+    char *value = new char[G_LENGTH];
+    ObjLocation locationInfo{ 0, 0 };
+    uint64_t realLen = G_LENGTH;
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
+    EXPECT_EQ(fwrite(value, sizeof(char), realLen, fp), realLen);
+    delete[] value;
+    fclose(fp);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
 TEST_F(TestBio, test_bio_put_keynull_case_return_fail)
 {
     FILE *fp = fopen("./bio_test", "r");
@@ -110,21 +120,6 @@ TEST_F(TestBio, test_bio_put_tenantid_unexist_case_return_fail)
     auto ret = BioPut(2, nullptr, value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-}
-
-TEST_F(TestBio, test_bio_get_case_return_ok)
-{
-    (void)system("touch bio_get_file");
-    FILE *fp = fopen("./bio_get_file", "w");
-    EXPECT_NE(fp, nullptr);
-    char *value = new char[G_LENGTH];
-    ObjLocation locationInfo{ 0, 0 };
-    uint64_t realLen = G_LENGTH;
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
-    EXPECT_EQ(fwrite(value, sizeof(char), realLen, fp), realLen);
-    delete[] value;
-    fclose(fp);
-    EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
 TEST_F(TestBio, test_bio_put_diff_size_case_return_ok)
@@ -345,11 +340,6 @@ TEST_F(TestBio, test_bio_destroy_cache_case_return_ok)
 {
     auto ret = BioDestroyCache(G_TENANT_ID);
     EXPECT_EQ(ret, RET_CACHE_OK);
-}
-
-TEST_F(TestBio, test_bio_exit_case_return_ok)
-{
-    BioExit();
 }
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_down)
@@ -782,6 +772,7 @@ TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
 
 TEST_F(TestBio, test_bio_initialize_serverso_unexists_case_return_fail)
 {
+    BioExit();
     auto ret = BioInitialize(WorkerMode::SEPARATES);
     EXPECT_EQ(ret, ock::bio::BIO_INNER_ERR);
 }

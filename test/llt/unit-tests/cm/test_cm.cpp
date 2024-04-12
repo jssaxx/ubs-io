@@ -174,10 +174,15 @@ static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int val
     return ZOK;
 }
 
+static bool g_firstGetNodeId = true;
 static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
 {
     LOG_INFO("call ZooGet");
     if (*bufferLen == (int)sizeof(uint16_t)) {
+        if (g_firstGetNodeId) {
+            g_firstGetNodeId = false;
+            return ZNONODE;
+        }
         uint32_t *nodeId = (uint32_t *)buffer;
         *nodeId = 0;
     } else if (*bufferLen == (int)sizeof(uint64_t)) {
@@ -202,6 +207,10 @@ static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int 
         memcpy_s(nodeInfo, sizeof(NodeInfo), &gNodeInfo, sizeof(NodeInfo));
         nodeInfo->nodeId = nodeId;
         return 0;
+    } else if (*bufferLen == (int32_t)(sizeof(PtEntryList) + sizeof(PtEntry) * NO_16)) {
+        LOG_INFO("call ZooGet change pt entry list");
+        PtEntryList *ptList = (PtEntryList *)buffer;
+        ptList->ptNum = 0;
     }
     return ZOK;
 }
@@ -253,10 +262,32 @@ static int ZooDelete(zhandle_t *zh, const char *path, int version)
     return ZOK;
 }
 
+static std::vector<std::string> gZkGetChildrenFirst;
 static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
     struct String_vector *strings)
 {
-    LOG_INFO("call ZooWgetChildren");
+    LOG_INFO("call ZooWgetChildren" << path);
+    auto it = std::find(gZkGetChildrenFirst.begin(), gZkGetChildrenFirst.end(), path);
+    if (it != gZkGetChildrenFirst.end()) {
+        strings->count = 0;
+    } else {
+        strings->count = 1;
+        strings->data = static_cast<char **>(malloc(sizeof(char *)));
+        uint16_t newLen = strlen(path) + NO_3;
+        char *tmp = (char *)malloc(newLen);
+        int ret = strcpy_s(tmp, newLen, path);
+        if (ret != BIO_OK) {
+            LOG_ERROR("call ZooWgetChildren cpy_s " << ret);
+            return BIO_ERR;
+        }
+        ret = strcat_s(tmp, newLen, "/0");
+        if (ret != BIO_OK) {
+            LOG_ERROR("call ZooWgetChildren cat_s " << ret);
+            return BIO_ERR;
+        }
+        strings->data[0] = tmp;
+        gZkGetChildrenFirst.push_back(path);
+    }
     return ZOK;
 }
 
@@ -407,6 +438,52 @@ TEST_F(TestCm, test_cm_server_view_role_change_master)
 {
     int ret = CmServerViewRoleChange(CM_SERVER_MASTER);
     EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
+{
+    PoolInfo pools;
+    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
+    EXPECT_EQ(ret, 0);
+
+    pools.poolId = 0;
+    pools.type = DISK_TYPE_DRAM;
+    pools.redundance = PT_REP_DOUBLE;
+    pools.initialNodeNum = NO_3;
+    pools.maxNodeNum = NO_256;
+    pools.maxPtNum = NO_16;
+
+    auto nodeList = (NodeStateList *) malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_2);
+    InitNodeList(&pools, nodeList, NO_2);
+    gNodeChange.notifyNodeListChange(nodeList, gNodeChange.ctx);
+    free(nodeList);
+
+    auto ptList = (PtEntryList *) malloc(sizeof(PtEntryList) + sizeof(PtEntry) * gNodeInfo.diskList.num);
+    ptList->poolId = pools.poolId;
+    ptList->ptNum = 0;
+    ptList->maxCopyNum = 1;
+    ptList->minCopyNum = 1;
+    ptList->globalVersion = 1;
+    ptList->changeVersion = 1;
+    for (uint16_t diskIdx = 0; diskIdx < gNodeInfo.diskList.num; diskIdx++) {
+        ptList->ptEntryList[diskIdx].birthVersion = 1;
+        ptList->ptEntryList[diskIdx].ptId = diskIdx;
+        ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
+        ptList->ptEntryList[diskIdx].masterNodeId = 0;
+        ptList->ptEntryList[diskIdx].masterDiskId = gNodeInfo.diskList.list[diskIdx].diskId;
+        ptList->ptEntryList[diskIdx].referNum = 0;
+        ptList->ptEntryList[diskIdx].copyNum = 1;
+        ptList->ptEntryList[diskIdx].copyList[0].nodeId = 0;
+        ptList->ptEntryList[diskIdx].copyList[0].diskId = gNodeInfo.diskList.list[diskIdx].diskId;
+        ptList->ptEntryList[diskIdx].copyList[0].keepAlive = 0;
+        ptList->ptEntryList[diskIdx].copyList[0].state = PT_COPY_STATE_RUNNING;
+    }
+    gPtChange.notifyPtListChange(ptList, gPtChange.ctx);
+    ret = CmServerViewRoleChange(CM_SERVER_MASTER);
+    EXPECT_EQ(ret, CM_OK);
+    ptList->ptNum = gNodeInfo.diskList.num;
+    gPtChange.notifyPtListChange(ptList, gPtChange.ctx);
+    free(ptList);
 }
 
 TEST_F(TestCm, test_cm_node_list_change)
