@@ -254,5 +254,4 @@ void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh);
 #ifdef __cplusplus
 }
 #endif
-
 #endif // BIO_C_H

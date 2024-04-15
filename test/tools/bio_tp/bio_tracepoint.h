@@ -8,19 +8,19 @@
 #endif
 
 namespace ock {
-    namespace bio {
-        namespace tp {
-            class TracePointManager {
-            public:
-                static int Initialize() noexcept;
-                static void Destroy() noexcept;
+namespace bio {
+namespace tp {
+class TracePointManager {
+public:
+    static int Initialize() noexcept;
+    static void Destroy() noexcept;
 
-            private:
-                static int RegisterAllPoints() noexcept;
-                static void RemoveAllPoints() noexcept;
-            };
-        }
-    }
+private:
+    static int RegisterAllPoints() noexcept;
+    static void RemoveAllPoints() noexcept;
+};
+}
+}
 }
 
 #endif // BIO_TRACEPOINT_H

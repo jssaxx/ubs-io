@@ -41,6 +41,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
 
     /* load cluster manager config */
+    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 2, NO_256));
     AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
     AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_600));
@@ -111,14 +112,13 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigCm(const ConfigurationPtr &conf)
 {
-    mCmConfig.initialNodeNum = NO_3;
+    mCmConfig.initialNodeNum = conf->GetInt(CM_INITIAL_NODE_NUM.first);
     mCmConfig.nodeNum = NO_256;
     mCmConfig.ptNum = conf->GetInt(CM_PT_NUM.first);
     mCmConfig.registeredTimeoutSec = conf->GetInt(CM_NODE_REGISTER_TIMEOUT.first);
     mCmConfig.registeredPermTimeoutSec = conf->GetInt(CM_NODE_REGISTER_PERM_TIMEOUT.first);
     mCmConfig.groupId = NO_U64_0;
     mCmConfig.zkHost = conf->GetStr(CM_ZK_HOST.first);
-
     return BIO_OK;
 }
 

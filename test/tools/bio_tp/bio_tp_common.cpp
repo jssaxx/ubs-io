@@ -6,13 +6,9 @@
 
 using namespace ock::bio;
 
-void tp::CommonTp::Register() noexcept
-{
-}
+void tp::CommonTp::Register() noexcept {}
 
-void tp::CommonTp::Deregister() noexcept
-{
-}
+void tp::CommonTp::Deregister() noexcept {}
 
 void tp::CommonTp::IntValueCallback(LVOS_TRACEP_PARAM_S *user, int *value, int set) noexcept
 {
@@ -36,6 +32,4 @@ void tp::CommonTp::LongValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, long *value
     errno = err;
 }
 
-void tp::CommonTp::NoProcessCallback(LVOS_TRACEP_PARAM_S *user) noexcept
-{
-}
+void tp::CommonTp::NoProcessCallback(LVOS_TRACEP_PARAM_S *user) noexcept {}

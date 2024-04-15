@@ -188,6 +188,20 @@ std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
     return ans;
 }
 
+std::vector<uint64_t> MirrorClient::ShowPtHit()
+{
+    std::vector<uint64_t> res;
+    for (uint32_t idx = 0; idx < mPtView.size(); idx++) {
+        res.emplace_back(mPtHit[idx].load());
+    }
+    return res;
+}
+
+void MirrorClient::StatisticPtHit(uint16_t ptId)
+{
+    mPtHit[ptId]++;
+}
+
 uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
 {
     size_t v = std::hash<std::uint64_t>{}(objectId);
@@ -210,6 +224,8 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
     }
     if (UNLIKELY(ptId == UINT16_MAX)) {
         CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
+    } else {
+        StatisticPtHit(ptId);
     }
     return ptId;
 }
@@ -248,11 +264,22 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
 
 BResult MirrorClient::Initialize()
 {
-    return LoadOriginView();
+    BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
+    BResult ret = LoadOriginView();
+    BIO_TRACE_END(SDK_TRACE_INIT_LOAD_VIEW, ret);
+    return ret;
 }
 
 BResult MirrorClient::Start()
 {
+    uint32_t ptSize = mPtView.size();
+    mPtHit = new (std::nothrow) std::atomic<uint64_t>[ptSize];
+    if (mPtHit == nullptr) {
+        return BIO_ALLOC_FAIL;
+    }
+    for (uint32_t idx = 0; idx < ptSize; idx++) {
+        mPtHit[idx].store(0);
+    }
     return LoadAffinityFlow();
 }
 
@@ -338,7 +365,6 @@ BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo)
     }
 
     delete[] static_cast<uint8_t *>(static_cast<void *>(req));
-    BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
     return ret;
 }
 
@@ -841,11 +867,6 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, rsp);
-    if (mMode == CONVERGENCE) {
-        req->isExistLocal = false;
-    } else {
-        req->isExistLocal = true;
-    }
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
@@ -871,7 +892,6 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     auto tmp = new uint8_t[sizeof(GetSliceResponse)];
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
-    req->isExistLocal = false;
     return BIO_OK;
 }
 
@@ -890,8 +910,11 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
         req->copyFree = false;
+        BIO_TRACE_ASYNC_BEGIN(SDK_TRACE_PUT_REMOTE_ASYNC);
+        BIO_TRACE_START(SDK_TRACE_PUT_REMOTE_SYNC);
         net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT,
             static_cast<void *>(req), sizeof(PutRequest) + req->sliceLen, callback);
+        BIO_TRACE_END(SDK_TRACE_PUT_REMOTE_SYNC, BIO_OK);
     }
 }
 
@@ -912,16 +935,25 @@ void MirrorClient::InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota)
     cbCtx.respLen = 0;
 }
 
+void MirrorClient::SendPutRemoteDone(uint32_t len, int32_t ret, uint64_t ts)
+{
+    if (len != NO_100) { // Tip：使用100去区分是本地回调函数远端回调
+        BIO_TRACE_ASYNC_END(SDK_TRACE_PUT_REMOTE_ASYNC, ret, ts);
+    }
+}
+
 BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
-    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+    uint64_t ts = Monotonic::TimeNs();
+    auto cbFunc = [this, ts](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         }
+        SendPutRemoteDone(len, cbCtx->result, ts);
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
         }

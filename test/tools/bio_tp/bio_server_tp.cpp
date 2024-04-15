@@ -22,11 +22,7 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_UNDERFS_STAT);
 }
 #else
-void tp::ServerTp::Register() noexcept
-{
-}
+void tp::ServerTp::Register() noexcept {}
 
-void tp::ServerTp::Deregister() noexcept
-{
-}
+void tp::ServerTp::Deregister() noexcept {}
 #endif

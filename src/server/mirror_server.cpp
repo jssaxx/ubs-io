@@ -65,17 +65,36 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleFreeMem, this, std::placeholders::_1));
 }
 
-void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize)
+void MirrorServer::ReplyDone(uint32_t opcode, int32_t ret, uint64_t ts)
 {
+    if (opcode == BIO_OP_SDK_PUT) {
+        BIO_TRACE_ASYNC_END(MIRROR_TRACE_PUT_REPLY, ret, ts);
+    }
+    BIO_TRACE_ASYNC_END(NET_TRACE_REPLY_ASYNC, ret, ts);
+}
+
+void MirrorServer::Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize, uint32_t opcode)
+{
+    uint64_t ts = Monotonic::TimeNs();
     NetServiceOpInfo opInfo{};
     opInfo.errorCode = static_cast<int16_t>(retCode);
-    NetCallback *callback = NewCallback([](NetServiceContext &context) {}, std::placeholders::_1);
+    NetCallback *callback = NewCallback([this, ts, opcode](NetServiceContext &context) {
+        ReplyDone(opcode, context.Result(), ts);
+        }, std::placeholders::_1);
+
+    if (opcode == BIO_OP_SDK_PUT) {
+        BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_PUT_REPLY);
+    }
+
     int32_t ret;
+    BIO_TRACE_ASYNC_BEGIN(NET_TRACE_REPLY_ASYNC);
+    BIO_TRACE_START(NET_TRACE_REPLY_SYNC);
     if (resp != nullptr) {
         ret = ctx.ReplySend(opInfo, { resp, respSize }, callback);
     } else {
         ret = ctx.ReplySend(opInfo, { &retCode, sizeof(retCode) }, callback);
     }
+    BIO_TRACE_END(NET_TRACE_REPLY_SYNC, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Reply Send failed, ret:" << ret << ".");
     }
@@ -272,11 +291,7 @@ BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo>
         NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
         LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrVec[idx].address <<
             ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrVec[idx].key << ", size:" << lMrVec[idx].size << ".");
-        if (req.isExistLocal) {
-            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
-        } else {
-            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
-        }
+        ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
                 ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[idx].address << ", rKey:" << rMrVec[idx].key <<
@@ -300,11 +315,7 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
         LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrAddr << ", lKey:" <<
             lMrVec[idx].key << ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
-        if (req.isExistLocal) {
-            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
-        } else {
-            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
-        }
+        ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
                 ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrAddr << ", rKey:" << rMrKey << ", size:" <<
@@ -794,7 +805,6 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_PUT_HDL);
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
@@ -814,9 +824,11 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
         }
         sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     }
+
+    BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
     BResult result = Put(*req, sliceP, ctx);
-    Reply(ctx, result, nullptr, 0);
-    BIO_TRACE_END(MIRROR_TRACE_PUT_HDL, 0);
+    BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
+    Reply(ctx, result, nullptr, 0, BIO_OP_SDK_PUT);
     return BIO_OK;
 }
 

@@ -36,7 +36,7 @@ extern "C" {
 #define MAX_DIAG_AGENT_NAME_LEN    (32)
 #define MAX_DIAG_CMD_LEN           (32)
 #define MAX_DIAG_CMD_DESC_LEN      (64)
-#define MAX_DIAG_PRINT_BUFFER_LEN  (32*1024)
+#define MAX_DIAG_PRINT_BUFFER_LEN  (512*1024)
 
 #define MAX_DIAG_PAGE_SIZE         (4160)
 #define MAX_DIAG_MIDDLE_MEM_LEN    (256)

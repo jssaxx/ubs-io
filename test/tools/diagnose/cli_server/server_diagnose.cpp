@@ -16,6 +16,7 @@
 #include "bio_server.h"
 #include "server_diagnose.h"
 #include "bio_functions.h"
+#include "cache_overload_ctrl.h"
 
 using namespace ock::bio;
 
@@ -97,13 +98,32 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         }
         std::string protoStr[4U] = { "RDMA", "TCP", "UDS", "SHM" };
         std::string modeStr[2U] = { "BUSY_POLLING", "EVENT_POLLING" };
-        NetOptions option = BioServer::Instance()->GetNetEngine()->Show();
-        CLI_PrintBuf("  Boostio rpc net info: \n");
-        CLI_PrintBuf("  Node_IP: %s:%u, Net_protocol:%s, RPC_Mode:%s, Request_executor_num:%u, Workers_count:%u,"
-                     " RDMA_memory_size:%lu GB \n",
+        uint32_t executorNum = 0;
+        NetOptions option;
+        BioServer::Instance()->GetNetEngine()->Show(executorNum, option);
+        CLI_PrintBuf("Boostio rpc info: \n");
+        CLI_PrintBuf("  ip: %s:%u, protocol:%s, mode:%s, workers_count:%u, request_executor:%u, memory_size:%luGB\n",
             option.ipMask.c_str(), option.port, protoStr[option.protocol].c_str(),
-            (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, option.connCount,
+            (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, executorNum,
             (option.memorySize / NO_1024 / NO_1024 / NO_1024));
+    } else if (cmdType == "olc") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        std::vector<uint64_t> writeBwVec;
+        std::vector<uint64_t> evictBwVec;
+        std::vector<uint64_t> vmVec;
+        CacheOverloadCtrl::Instance().Show(writeBwVec, evictBwVec, vmVec);
+        CLI_PrintBuf("  Boostio overload ctrl info: \n");
+        CLI_PrintBuf("  Bandwidth: \n");
+        for (uint32_t idx = 0; idx < writeBwVec.size(); idx++) {
+            CLI_PrintBuf("      idx:%u : %lu -- %lu \n", idx, writeBwVec[idx], evictBwVec[idx]);
+        }
+        CLI_PrintBuf("  Water level: \n");
+        for (uint32_t idx = 0; idx < vmVec.size(); idx++) {
+            CLI_PrintBuf("      idx:%u : %lu \n", idx, vmVec[idx]);
+        }
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -127,7 +147,7 @@ static void BioServerDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("change water level: bioserver chgwlv [tier] [water_level]\n");
     CLI_PrintBuf("change memory read write ratio: bioserver chgmr [memory ratio]\n");
     CLI_PrintBuf("change disk read write ratio: bioserver chgdr [disk ratio]\n");
-    CLI_PrintBuf("show: bioserver show [disk/net]\n");
+    CLI_PrintBuf("show: bioserver show [disk/net/olc]\n");
     CLI_PrintBuf("trace: bioserver trace [show/clear]\n");
     CLI_PrintBuf("exit: exit console\n");
 }

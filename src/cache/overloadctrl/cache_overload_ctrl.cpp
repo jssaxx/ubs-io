@@ -14,6 +14,7 @@
 #include "bio_log.h"
 #include "bio_types.h"
 #include "bio_monotonic.h"
+#include "cache.h"
 #include "cache_overload_ctrl.h"
 
 namespace ock {
@@ -21,6 +22,23 @@ namespace bio {
 void CacheOverloadCtrl::AddBandwidth(BwStatType type, uint64_t count)
 {
     mOverloadCtrlGlbInfo.bwStatObj[type].curValue += count;
+}
+
+void CacheOverloadCtrl::Show(std::vector<uint64_t> &writeBwVec, std::vector<uint64_t> &evictBwVec,
+    std::vector<uint64_t> &vmVec)
+{
+    BwStatObj &writeObj = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE];
+    for (uint32_t idx = 0; idx < MAX_OVERLOAD_STAT_CYCLE_NUM; idx++) {
+        writeBwVec.emplace_back(writeObj.hisValue[idx]);
+    }
+    BwStatObj &evictObj = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT];
+    for (uint32_t idx = 0; idx < MAX_OVERLOAD_STAT_CYCLE_NUM; idx++) {
+        evictBwVec.emplace_back(evictObj.hisValue[idx]);
+    }
+    VmStatObj &vmObj = mOverloadCtrlGlbInfo.wmStatObj;
+    for (uint32_t idx = 0; idx < MAX_OVERLOAD_STAT_CYCLE_NUM; idx++) {
+        vmVec.emplace_back(vmObj.hisValue[idx]);
+    }
 }
 
 uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
@@ -156,7 +174,15 @@ uint64_t CacheOverloadCtrl::GetCacheWriteBandwidth()
 
 uint64_t CacheOverloadCtrl::GetCacheWaterMark()
 {
-    return 0;
+    uint64_t memTotal = 0;
+    uint64_t memUsed = 0;
+    uint64_t diskTotal = 0;
+    uint64_t diskUsed = 0;
+    Cache::Instance().GetCacheResources(memTotal, memUsed, diskTotal, diskUsed);
+    uint64_t memVm = std::min<uint64_t>(PERCENT_100, (memUsed * CACHE_OLC_PERCENT_BASE / memTotal));
+    uint64_t diskVm = std::min<uint64_t>(PERCENT_100, (diskUsed * CACHE_OLC_PERCENT_BASE / diskTotal));
+    uint64_t retWm = std::max<uint64_t>(memVm, diskVm);
+    return retWm;
 }
 
 void CacheOverloadCtrl::InitOverloadConfig()
