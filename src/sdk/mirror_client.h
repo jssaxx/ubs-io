@@ -29,8 +29,8 @@ class MirrorClient {
 public:
     struct MirrorPut {
         CacheAttr attr;
-        const char *key;
-        const char *value;
+        char *key;
+        char *value;
         uint64_t length;
         ObjLocation location;
         uint64_t flowId;
@@ -82,6 +82,8 @@ public:
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
+    BResult GetFileLocation(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &fileLocationQueryRsp);
+
     BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
 
     DEFINE_REF_COUNT_FUNCTIONS
@@ -126,9 +128,17 @@ public:
         return mPtView;
     }
 
+    void GetCurViewTimes(uint64_t &oldNodeTimes, uint64_t &oldPtTimes)
+    {
+        oldNodeTimes = mCurNodeTimes;
+        oldPtTimes = oldPtTimes;
+    }
+
     BResult RebuildNodeView(uint64_t &realNodeTimes);
 
     BResult RebuildPtView(uint64_t &realPtTimes);
+
+    BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
 
 private:
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo, PutRequest *&req);
@@ -157,7 +167,6 @@ private:
     BResult LoadAffinityFlow();
 
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
-    BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
     uint32_t CalcPtQuota(CmPtInfo &ptEntry);
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
@@ -271,6 +280,56 @@ private:
 };
 
 using MirrorClientPtr = Ref<MirrorClient>;
+
+class TaskQueue;
+using TaskQueuePtr = Ref<TaskQueue>;
+class TaskQueue {
+public:
+    static TaskQueuePtr &Instance()
+    {
+        static auto instance = MakeRef<TaskQueue>();
+        return instance;
+    }
+
+    bool Apply(uint32_t index, sem_t *sem)
+    {
+        WriteLocker<ReadWriteLock> lock(&mLock[index]);
+        mReal[index]++;
+        if (mReal[index] > mCount[index]) {
+            mList[index].push_back(sem);
+            return false;
+        }
+        return true;
+    }
+
+    void Release(uint32_t index)
+    {
+        WriteLocker<ReadWriteLock> lock(&mLock[index]);
+        mReal[index]--;
+        if (mList[index].empty()) {
+            return;
+        }
+        auto it = mList[index].begin();
+        sem_post(*it);
+        mList[index].pop_front();
+    }
+
+    uint32_t RefCount(uint32_t index)
+    {
+        WriteLocker<ReadWriteLock> lock(&mLock[index]);
+        return mReal[index];
+    }
+
+    DEFINE_REF_COUNT_FUNCTIONS;
+
+private:
+    ReadWriteLock mLock[NO_2];
+    std::list<sem_t *> mList[NO_2];
+    uint32_t mCount[NO_2] { NO_4, NO_4 };
+    uint32_t mReal[NO_2] { 0, 0 };
+
+    DEFINE_REF_COUNT_VARIABLE;
+};
 }
 }
 #endif

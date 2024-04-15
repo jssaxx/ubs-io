@@ -87,6 +87,8 @@ public:
 
     std::list<WCacheSliceRefPtr> GetEvictSliceQueue();
 
+    WCacheSliceRefPtr GetEvictSlice();
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include "securec.h"
+#include "message.h"
 #include "bio_functions.h"
 #include "bio_client_log.h"
 #include "bio_trace.h"
@@ -146,7 +147,8 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
 
     StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, key, value, length, location };
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
+        const_cast<char *>(value), length, location };
     BResult ret = gClient->Put(param);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -175,7 +177,8 @@ CResult Bio::Put(const char *key, CacheSpaceInfo &spaceInfo)
         spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size << ".");
 
     uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, key, nullptr, length, spaceInfo.loc };
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
+        nullptr, length, spaceInfo.loc };
     StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
     BResult ret = gClient->Put(param, spaceInfo);
@@ -671,4 +674,37 @@ uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offse
 uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
 {
     return g_writeCopyFreeHook(inode, offset, count, spaceInfo);
+}
+
+CResult BioGetFileLocation(ObjLocation location, ObjLocationInfo *locInfo)
+{
+    auto mirror = gClient->GetMirror();
+    auto ptId = static_cast<uint16_t>(location.location[0]);
+    ock::bio::CmPtInfo info;
+    mirror->GetPtEntry(ptId, info);
+    FileLocationQueryRsp rsp;
+    uint16_t slaveId = 0;
+    int i = 0;
+    for (;i < info.copys.size(); ++i) {
+        if (info.copys[i].nodeId != info.masterNodeId) {
+            slaveId = info.copys[i].nodeId;
+            break;
+        }
+    }
+
+    if (i == info.copys.size()) {
+        CLIENT_LOG_ERROR("failed to get file location for ptId:" << ptId << ", no copy found");
+        return RET_CACHE_ERROR;
+    }
+
+    auto ret = mirror->GetFileLocation(info.masterNodeId, slaveId, rsp);
+    if (ret != BIO_OK) {
+        return RET_CACHE_ERROR;
+    }
+    memcpy_s(locInfo->hostMaster, NO_16, rsp.hostMaster, NO_16);
+    memcpy_s(locInfo->hostSlave, NO_16, rsp.hostSlave, NO_16);
+
+    locInfo->portMaster = rsp.portMaster;
+    locInfo->portSlave = rsp.portSlave;
+    return RET_CACHE_OK;
 }

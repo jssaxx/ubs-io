@@ -101,6 +101,8 @@ private:
 
     std::vector<uint64_t> mChunkList;
 
+    std::atomic<bool> mSealed { false };
+
     std::atomic<uint64_t> mTruncateOffset{ 0 };
     std::atomic<uint64_t> mWritenOffset{ 0 };
     std::atomic<uint64_t> mPreLoadOffset{ 0 };

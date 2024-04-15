@@ -159,7 +159,7 @@ BResult RCacheEvict::Destroy()
 
 BResult RCacheEvict::Start(RCachePtr rCachePtr)
 {
-    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_MASK;
+    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_NUM;
 
     evictRCacheLock[index].Lock();
     evictRCache[index].push_back(rCachePtr);
@@ -170,7 +170,7 @@ BResult RCacheEvict::Start(RCachePtr rCachePtr)
 
 BResult RCacheEvict::Stop(RCachePtr rCachePtr)
 {
-    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_MASK;
+    uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_NUM;
 
     evictRCacheLock[index].Lock();
     auto iter = std::find(evictRCache[index].begin(), evictRCache[index].end(), rCachePtr);

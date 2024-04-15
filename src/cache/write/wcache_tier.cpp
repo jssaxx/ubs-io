@@ -124,6 +124,20 @@ std::list<WCacheSliceRefPtr> WCacheTier::GetEvictSliceQueue()
     return evictSliceQueue;
 }
 
+WCacheSliceRefPtr WCacheTier::GetEvictSlice()
+{
+    WCacheSliceRefPtr sliceRef = nullptr;
+    mEvictSliceQueueLock.Lock();
+    if (mEvictSliceQueue.empty()) {
+        mEvictSliceQueueLock.UnLock();
+        return nullptr;
+    }
+    sliceRef = mEvictSliceQueue.front();
+    mEvictSliceQueue.pop_front();
+    mEvictSliceQueueLock.UnLock();
+    return sliceRef;
+}
+
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
     mMetaFlow->GetFlowId();

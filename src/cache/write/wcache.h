@@ -43,7 +43,7 @@ public:
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
-    BResult Seal();
+    BResult Seal(WCacheTierType type);
 
     BResult Destroy();
 
@@ -92,7 +92,7 @@ public:
 
     void Flush();
     void ExpiredClear();
-    bool IsEmptyEvict();
+    bool IsEmptyEvict(WCacheTierType type);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -102,6 +102,8 @@ private:
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster);
+
+    bool EvictDiskSatisfiedCond();
 
     BResult FlushImpl();
 
@@ -121,6 +123,7 @@ private:
     uint64_t mPtv;
     uint16_t mDiskId;
     bool mIsNormal{ true };
+    bool mIsForced { false };
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 

@@ -105,7 +105,8 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -ENOENT)
     ret = rados_read(mIoCtx, key, value, len, off);
     LVOS_TP_END
-    BIO_TRACE_END(UFS_TRACE_GET, ret);
+    int res = (ret < 0) ? BIO_ERR : BIO_OK;
+    BIO_TRACE_END(UFS_TRACE_GET, res);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to get object " << key << ", not exist.");
         return BIO_NOT_EXISTS;
