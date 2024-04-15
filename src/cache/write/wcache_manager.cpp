@@ -482,7 +482,8 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
         if (flowIt.second->GetPtv() >= ptv) {
             continue;
         }
-        if (flowIt.second->IsEmptyEvict()) {
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
+            flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
         LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
@@ -586,7 +587,11 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
         if (procId != flowIt.second->GetProcId()) {
             continue;
         }
-        if (flowIt.second->IsEmptyEvict()) {
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY)) {
+            flowIt.second->Seal(WCACHE_MEMORY);
+        }
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
+            flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
         LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
@@ -614,7 +619,6 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
             if (flowIt.second->GetState()) {
                 flowIt.second->SetState(false);
-                flowIt.second->Seal();
                 mDestroyManager.emplace(flowIt.first, evictTime);
             }
         }

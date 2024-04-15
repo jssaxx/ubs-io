@@ -78,6 +78,7 @@ private:
 
     int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
+    int32_t HandleQueryNodeInfoByPt(ServiceContext &ctx);
     int32_t HandleQueryNodeView(ServiceContext &ctx);
     int32_t HandleQueryPtView(ServiceContext &ctx);
     int32_t HandlePut(ServiceContext &ctx);
@@ -106,7 +107,7 @@ private:
         std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
     BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp);
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
-        ServiceContext &netCtx);
+        ServiceContext &netCtx, GetRequest &req);
 
 private:
     bool mStarted = false;

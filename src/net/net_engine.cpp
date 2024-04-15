@@ -14,6 +14,7 @@
 
 #include "securec.h"
 #include "bio_ip_util.h"
+#include "bio_trace.h"
 #include "net_log.h"
 #include "net_executor_pool.h"
 #include "net_engine.h"
@@ -34,6 +35,8 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         NET_LOG_WARN("Net engine has been already initialized.");
         return BIO_OK;
     }
+
+    mUsedBlock = 0;
 
     NetLog::Instance()->SetLogFuncFunc(func);
     mTimeout = timeoutSec;
@@ -273,7 +276,7 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
 {
     options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
     options.SetWorkerGroups(GenerateWorkersSetting());
-    options.mrSendReceiveSegSize = MAX_MESSAGE_SIZE + MAX_MESSAGE_HEAD_SIZE;
+    options.mrSendReceiveSegSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.mrSendReceiveSegCount = NO_1024;
     options.heartBeatIdleTime = NO_5;
     options.heartBeatProbeInterval = NO_1;
@@ -336,7 +339,7 @@ BResult NetEngine::AssignRpcServiceOptions(bool isOobSvr, NetServiceOptions &opt
 
     options.mode =
         mOptions.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
-    options.mrSendReceiveSegSize = MAX_MESSAGE_SIZE + MAX_MESSAGE_HEAD_SIZE;
+    options.mrSendReceiveSegSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.mrSendReceiveSegCount = NO_1024;
     options.qpSendQueueSize = NO_4096;
     options.qpReceiveQueueSize = NO_2048;
@@ -472,7 +475,10 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
             " as no handler registered");
         return BIO_ERR;
     }
-    return mRequestExecutor->AddTask(handler, ctx);
+    BIO_TRACE_START(NET_TRACE_SHEDULE);
+    auto ret = mRequestExecutor->AddTask(handler, ctx);
+    BIO_TRACE_END(NET_TRACE_SHEDULE, ret);
+    return ret;
 }
 
 int32_t NetEngine::RequestIPCReceived(ServiceContext &ctx)
@@ -482,7 +488,10 @@ int32_t NetEngine::RequestIPCReceived(ServiceContext &ctx)
         NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() << ".");
         return BIO_ERR;
     }
-    return handler(ctx);
+    BIO_TRACE_START(NET_TRACE_IPC_HDL);
+    auto ret = handler(ctx);
+    BIO_TRACE_END(NET_TRACE_IPC_HDL, ret);
+    return ret;
 }
 
 int32_t NetEngine::RequestPosted(const ServiceContext &ctx)

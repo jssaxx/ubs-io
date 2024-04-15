@@ -42,6 +42,18 @@ public:
     BResult AddChannel(NetNode dstNid, ChannelPtr &ch);
     BResult RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch);
 
+    inline BResult GetChannel(uint32_t dstNid, uint32_t pid, ChannelPtr &ch)
+    {
+        std::unique_lock<std::mutex> locker(lock);
+        NetNode rDstNid(dstNid, pid);
+        auto iter = mChannelMgr.find(rDstNid.whole);
+        if (UNLIKELY(iter == mChannelMgr.end())) {
+            return BIO_NOT_EXISTS;
+        }
+        ch = iter->second->channel;
+        return BIO_OK;
+    }
+
     inline BResult GetChannel(uint32_t dstNid, ChannelPtr &ch)
     {
         std::unique_lock<std::mutex> locker(lock);

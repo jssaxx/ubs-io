@@ -94,6 +94,18 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
             return ret;
         }
     }
+    for (auto &node : nodeView) {
+        if (node.second.id.VNodeId() == localNid) {
+            continue;
+        }
+        do {
+            ret = mNetEngine->CheckConnect(static_cast<BioNodeId>(node.second.id.VNodeId()));
+            if (ret != BIO_OK) {
+                CLIENT_LOG_WARN("Connect to bio server not ready, result:" << ret << ".");
+                sleep(NO_2);
+            }
+        } while (ret != BIO_OK);
+    }
     sleep(NO_1);
     return BIO_OK;
 }
@@ -195,7 +207,7 @@ BResult BioClientNet::StartIpcService()
     }
 
     // 1. Initialize net engine
-    int16_t timeoutSec = NO_16; // 16s
+    int16_t timeoutSec = NO_32; // 32s
     auto ret = mNetEngine->Initialize(timeoutSec, NO_128, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");

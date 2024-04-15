@@ -63,6 +63,13 @@ typedef struct {
 } ObjLocation;
 
 typedef struct {
+    char hostMaster[16];
+    char hostSlave[16];
+    uint16_t portMaster;
+    uint16_t portSlave;
+} ObjLocationInfo;
+
+typedef struct {
     uint64_t tenantId;
     AffinityStrategy affinity;
     WriteStrategy strategy;
@@ -250,6 +257,8 @@ uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, C
 void BioRegisterJuiceFSRead(ReadHook rh);
 void BioRegisterJuiceFSWrite(WriteHook wh);
 void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh);
+
+CResult BioGetFileLocation(ObjLocation location, ObjLocationInfo *locInfo);
 
 #ifdef __cplusplus
 }

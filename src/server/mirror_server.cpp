@@ -35,6 +35,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleShmInit, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO,
         std::bind(&MirrorServer::HandleQueryNodeInfo, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO_BY_PT,
+        std::bind(&MirrorServer::HandleQueryNodeInfoByPt, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_VIEW,
         std::bind(&MirrorServer::HandleQueryNodeView, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_PT_VIEW,
@@ -472,7 +474,7 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
 }
 
 BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
-    ServiceContext &netCtx)
+    ServiceContext &netCtx, GetRequest &req)
 {
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
     BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
@@ -480,7 +482,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     BResult ret = BIO_OK;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         NetRequest rReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
-        ret = BioServer::Instance()->GetNetEngine()->SyncWrite(netCtx.Channel(), rReq);
+        ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, req.comm.pid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lAddr:" << lMrVec[idx].address <<
                 ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[0].address + off << ", rKey:" << rMrVec[0].key <<
@@ -526,7 +528,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
             return WriterLocalDiffProcess(isAlloc, lMrVec, rsp);
         }
 
-        return WriterRemote(isAlloc, lMrVec, rMrVec, netCtx);
+        return WriterRemote(isAlloc, lMrVec, rMrVec, netCtx, req);
     };
 
     BIO_TRACE_START(MIRROR_TRACE_GET);
@@ -665,6 +667,47 @@ int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
     return BIO_OK;
 }
 
+int32_t MirrorServer::HandleQueryNodeInfoByPt(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(FileLocationQueryReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive query pt message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto *req = static_cast<FileLocationQueryReq *>(ctx.MessageData());
+    CmNodeInfo nodeInfo;
+    CmNodeId id;
+    id.nodeId = req->masterPtId;
+    id.groupId = 0;
+    auto ret = BioServer::Instance()->GetNodeInfo(id, nodeInfo);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    FileLocationQueryRsp rsp;
+    memcpy_s(rsp.hostMaster, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    rsp.portMaster = nodeInfo.port;
+
+    id.nodeId = req->slavePtId;
+    id.groupId = 0;
+    ret = BioServer::Instance()->GetNodeInfo(id, nodeInfo);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    memcpy_s(rsp.hostSlave, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    rsp.portSlave = nodeInfo.port;
+
+    Reply(ctx, BIO_OK, &rsp, sizeof(FileLocationQueryRsp));
+    return BIO_OK;
+}
+
 int32_t MirrorServer::HandleQueryNodeInfo(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
@@ -757,7 +800,7 @@ BResult MirrorServer::GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset)
     BResult ret = Cache::Instance().GetEvictOffset(req.flowId, flowOffset);
     BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get evict offset failed:" << ret << ", ptId:" << req.comm.ptId << ", flowId:" << req.flowId);
+        LOG_WARN("Get evict offset failed:" << ret << ", ptId:" << req.comm.ptId << ", flowId:" << req.flowId);
         return ret;
     }
     LOG_INFO("Master get evict offset, ptId:" << req.comm.ptId << ", flowId:" << req.flowId << ", flowOffset:" <<
