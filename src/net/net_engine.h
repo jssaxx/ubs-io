@@ -8,6 +8,8 @@
 #include <arpa/inet.h>
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
+#include "bio_trace.h"
+#include "bio_monotonic.h"
 #include "net_common.h"
 #include "net_channel_mgr.h"
 #include "net_connector.h"
@@ -37,9 +39,10 @@ public:
         return mRpcService->RegisterMemoryRegion(reinterpret_cast<uintptr_t>(addr), size, mr);
     }
 
-    NetOptions Show()
+    void Show(uint32_t &executorNum, NetOptions &option)
     {
-        return mOptions;
+        executorNum = reqExecutorNum;
+        option = mOptions;
     }
 
     inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
@@ -194,8 +197,10 @@ public:
     template <typename TReq, typename TResp>
     BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp &resp)
     {
+        BIO_TRACE_START(NET_TRACE_SYNC_CALL_V1);
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
             NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_INVALID_PARAM);
             return BIO_INVALID_PARAM;
         }
 
@@ -203,35 +208,22 @@ public:
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_NET_RETRY);
             return BIO_NET_RETRY;
         }
 
-        return SyncCall(opCode, req, resp, ch);
-    }
-
-    template <typename TResp>
-    BResult SyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, TResp &resp)
-    {
-        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
-            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
-            return BIO_INVALID_PARAM;
-        }
-
-        ChannelPtr ch{ nullptr };
-        auto ret = GetCtrlChanel(targetNodeId, ch);
-        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
-            return BIO_NET_RETRY;
-        }
-
-        return SyncCallBuffInner(opCode, req, reqLen, resp, ch);
+        ret = SyncCall(opCode, req, resp, ch);
+        BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, ret);
+        return ret;
     }
 
     template <typename TReq, typename TResp>
     BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen)
     {
+        BIO_TRACE_START(NET_TRACE_SYNC_CALL_V2);
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
             NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_V2, BIO_INVALID_PARAM);
             return BIO_INVALID_PARAM;
         }
 
@@ -239,10 +231,36 @@ public:
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_V2, BIO_NET_RETRY);
             return BIO_NET_RETRY;
         }
 
-        return SyncCall(opCode, req, resp, respLen, ch);
+        ret = SyncCall(opCode, req, resp, respLen, ch);
+        BIO_TRACE_END(NET_TRACE_SYNC_CALL_V2, ret);
+        return ret;
+    }
+
+    template <typename TResp>
+    BResult SyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, TResp &resp)
+    {
+        BIO_TRACE_START(NET_TRACE_SYNC_CALL_BUFF);
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, BIO_INVALID_PARAM);
+            return BIO_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetCtrlChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, BIO_NET_RETRY);
+            return BIO_NET_RETRY;
+        }
+
+        ret = SyncCallBuffInner(opCode, req, reqLen, resp, ch);
+        BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, ret);
+        return ret;
     }
 
     template <typename TReq> BResult AsyncCallWithoutResponse(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
@@ -317,14 +335,18 @@ public:
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
+        BIO_TRACE_START(NET_TRACE_SYNC_READ_V1);
         ret = ch->Read(req, nullptr);
+        BIO_TRACE_END(NET_TRACE_SYNC_READ_V1, ret);
         return NetResult(ret);
     }
 
     BResult SyncRead(ChannelPtr ch, const NetRequest &req)
     {
         using namespace ock::hcom;
+        BIO_TRACE_START(NET_TRACE_SYNC_READ_V2);
         auto ret = ch->Read(req, nullptr);
+        BIO_TRACE_END(NET_TRACE_SYNC_READ_V2, ret);
         return NetResult(ret);
     }
 
@@ -337,14 +359,18 @@ public:
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
+        BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
         ret = ch->Write(req, nullptr);
+        BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V1, ret);
         return NetResult(ret);
     }
 
     BResult SyncWrite(ChannelPtr ch, const NetRequest &req)
     {
         using namespace ock::hcom;
+        BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V2);
         auto ret = ch->Write(req, nullptr);
+        BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V2, ret);
         return NetResult(ret);
     }
 
@@ -431,7 +457,6 @@ private:
     int RequestPosted(const ServiceContext &ctx);
     int OneSideDone(const ServiceContext &ctx);
 
-private:
     std::string GenerateWorkersSetting();
 
     void StopInner();
@@ -539,21 +564,37 @@ private:
         return BIO_OK;
     }
 
+    inline void AsyncCallDone(int32_t result, uint64_t ts)
+    {
+        BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL, result, ts);
+    }
+
     template <typename TReq> void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
+        uint64_t ts = Monotonic::TimeNs();
+
         auto *netCallback = NewCallback(
-            [callback](NetServiceContext &context) {
+            [this, ts, callback](NetServiceContext &context) {
+                AsyncCallDone(context.Result(), ts);
                 callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.Result());
             },
             std::placeholders::_1);
+
+        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
         auto result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL, result, ts);
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
+    }
+
+    inline void AsyncCallBuffDone(int32_t result, uint64_t ts)
+    {
+        BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL_BUFF, result, ts);
     }
 
     void AsyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, ChannelPtr &ch, Callback callback)
@@ -561,32 +602,45 @@ private:
         using namespace ock::hcom;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
+        uint64_t ts = Monotonic::TimeNs();
+
         auto *netCallback = NewCallback(
-            [callback](NetServiceContext &context) {
+            [this, ts, callback](NetServiceContext &context) {
                 if (context.Result() != SER_OK) {
+                    AsyncCallBuffDone(context.Result(), ts);
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(),
                         NetResult(context.Result()));
                 } else {
                     NetServiceOpInfo rspOpInfo = context.OpInfo();
+                    AsyncCallBuffDone(rspOpInfo.errorCode, ts);
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), rspOpInfo.errorCode);
                 }
             },
             std::placeholders::_1);
+
+        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL_BUFF);
         auto result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL_BUFF, result, ts);
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
     }
 
     inline BResult GetCtrlChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
-        return mCtrlChannelMgr->GetChannel(targetNodeId, ch);
+        BIO_TRACE_START(NET_TRACE_GET_CTRL_CHANNEL);
+        BResult result = mCtrlChannelMgr->GetChannel(targetNodeId, ch);
+        BIO_TRACE_END(NET_TRACE_GET_CTRL_CHANNEL, result);
+        return result;
     }
 
     inline BResult GetDataChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
-        return mDataChannelMgr->GetChannel(targetNodeId, ch);
+        BIO_TRACE_START(NET_TRACE_GET_DATA_CHANNEL);
+        BResult result = mDataChannelMgr->GetChannel(targetNodeId, ch);
+        BIO_TRACE_END(NET_TRACE_GET_DATA_CHANNEL, result);
+        return result;
     }
 
 private:

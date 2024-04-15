@@ -22,6 +22,7 @@ const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("bio.net.request.executor.queue.size", 1024);
 
+const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
 const auto CM_PT_NUM = std::make_pair("bio.cm.pts_count", 16);
 const auto CM_ZK_HOST = std::make_pair("bio.cm.zk_host", "127.0.0.1:2181");
 const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("bio.cm.register_timeout_sec", 30);
@@ -63,7 +64,6 @@ public:
     };
 
     struct CmConfig {
-        int32_t deployType = 1; // 1-Converged deployment, 0-Separated deployment
         int32_t initialNodeNum = 2;
         int32_t nodeNum = 2;
         int32_t ptNum = 2;

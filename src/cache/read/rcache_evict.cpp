@@ -31,7 +31,7 @@ static uint64_t GetReadRatio(std::string readWriteRatios)
 uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType tier)
 {
     uint64_t waterData;
-    uint64_t cacheData = rCache->GetCacheData(tier);
+    uint64_t cacheDataV = rCache->GetCacheData(tier);
     auto config = BioConfig::Instance()->GetDaemonConfig();
     if (tier == READ_CACHE_TIER_MEM) {
         waterData = (GetReadRatio(config.memReadWriteRatio) * config.memCap * config.evictWaterLevel) / NO_1000;
@@ -40,7 +40,7 @@ uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType 
             static_cast<uint64_t>(config.diskCaps.at(rCache->GetDiskId())) * config.diskEvictWaterLevel) / NO_1000;
     }
 
-    return cacheData > waterData ? cacheData - waterData : 0ULL;
+    return cacheDataV > waterData ? cacheDataV - waterData : 0ULL;
 }
 
 BResult RCacheEvict::EvictOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)

@@ -411,6 +411,12 @@ static void HandleShow(std::vector<std::string> cmds)
             for (auto &entry : ptList) {
                 CLI_PrintBuf(" %u\n", entry);
             }
+        } else if (type == "hit") {
+            auto hitRet = BioClient::Instance()->GetMirror()->ShowPtHit();
+            CLI_PrintBuf("PT Hit info:\n");
+            for (uint32_t idx = 0; idx < hitRet.size(); idx++) {
+                CLI_PrintBuf("  PtId:%u : %lu\n", idx, hitRet[idx]);
+            }
         }
     } else if (viewType == "node") {
         if (cmds.size() != 2) {
@@ -632,7 +638,7 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tlist all object: sdk listall [prefix]\n");
     CLI_PrintBuf("\tload object: sdk load [key] [offset] [length] [location]\n");
     CLI_PrintBuf("\tdelete object: sdk delete [key] [location]\n");
-    CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity]\n");
+    CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity/hit]\n");
     CLI_PrintBuf("\ttrace: sdk trace [show/clear]\n");
     CLI_PrintBuf("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     CLI_PrintBuf("\texit: exit console\n");

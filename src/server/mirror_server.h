@@ -13,6 +13,7 @@
 #include "bio.h"
 #include "message.h"
 #include "cache.h"
+#include "message_op.h"
 
 namespace ock {
 namespace bio {
@@ -60,7 +61,8 @@ public:
 
     BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
-    void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
+    void ReplyDone(uint32_t opcode, int32_t ret, uint64_t ts);
+    void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize, uint32_t opcode = BIO_OP_BUTT);
     MirrorServer() = default;
     ~MirrorServer() = default;
     DEFINE_REF_COUNT_FUNCTIONS

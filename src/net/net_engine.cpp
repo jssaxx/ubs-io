@@ -222,7 +222,7 @@ BResult NetEngine::InitShmMemAllocator()
         return result;
     }
 
-    LOG_INFO("Regist mem: addr:" << (uintptr_t)(mShareAddress) << ", size:" << mOptions.memorySize << ", Key:" <<
+    LOG_INFO("Register mem: addr:" << (uintptr_t)(mShareAddress) << ", size:" << mOptions.memorySize << ", Key:" <<
         mLocalMr->GetLKey());
 
     mMrBlockPool = MakeRef<NetBlockPool>();
@@ -263,9 +263,9 @@ std::string NetEngine::GenerateWorkersSetting()
      * so, 4 groups in total
      *
      * server side groups */
-    oss << std::to_string(mOptions.connCount) << "," << std::to_string(mOptions.connCount);
+    oss << std::to_string(mOptions.handlerCount) << "," << std::to_string(mOptions.handlerCount);
     /* client side groups */
-    oss << "," << std::to_string(mOptions.connCount) << "," << std::to_string(mOptions.connCount);
+    oss << "," << std::to_string(mOptions.handlerCount) << "," << std::to_string(mOptions.handlerCount);
     return oss.str();
 }
 
