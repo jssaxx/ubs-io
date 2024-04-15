@@ -6,15 +6,14 @@
 
 #include "bio_tp_common.h"
 namespace ock {
-    namespace bio {
-        namespace tp {
-            class SdkTp {
-            public:
-                static void Register() noexcept;
-                static void Deregister() noexcept;
-
-            };
-        }
-    }
+namespace bio {
+namespace tp {
+class SdkTp {
+public:
+    static void Register() noexcept;
+    static void Deregister() noexcept;
+};
+}
+}
 }
 #endif // BIO_SDK_TP_H

@@ -7,6 +7,7 @@
 #include "bio_functions.h"
 #include "bio_client_log.h"
 #include "message_op.h"
+#include "bio_trace.h"
 #include "bio_client_net.h"
 #include "bio_client_agent.h"
 
@@ -291,10 +292,14 @@ void BioClientAgent::SendPutRequestLocal(PutRequest *req, NetEngine::Callback &c
 void BioClientAgent::PutLocal(PutRequest *req, NetEngine::Callback &callback)
 {
     if (mMode == CONVERGENCE) {
+        BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
         auto ret = putOp(req);
-        callback.cb(callback.cbCtx, nullptr, 0, ret);
+        BIO_TRACE_END(SDK_TRACE_PUT_LOCAL_SYNC, ret);
+        callback.cb(callback.cbCtx, nullptr, NO_100, ret); // Tip：使用100去区分是本地回调函数远端回调
     } else {
+        BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
         SendPutRequestLocal(req, callback);
+        BIO_TRACE_END(SDK_TRACE_PUT_LOCAL_SYNC, BIO_OK);
     }
 }
 
