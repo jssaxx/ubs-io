@@ -79,7 +79,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
     for (uint32_t i = 0; i < cleanList.size(); i++) {
         uint64_t chunkId = cleanList[i];
-        FlowManager::MediaFree(mType, mMediaId, mChunkSize, chunkId);
+        FlowManager::MediaFree(mType, mMediaId, mChunkSize, chunkId, mFlowId);
     }
     BIO_TRACE_END(FLOW_TRACE_TRUNCATE, 0);
     return BIO_OK;
@@ -87,6 +87,13 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
 BResult Flow::Seal()
 {
+    if (mSealed == true) {
+        return BIO_OK;
+    }
+    mSealed = true;
+
+    LOG_INFO("Seal flow:" << mFlowId);
+
     BIO_TRACE_START(FLOW_TRACE_SEAL);
     uint64_t writenOffset = mPreLoadOffset;
     mWritenOffset = writenOffset;

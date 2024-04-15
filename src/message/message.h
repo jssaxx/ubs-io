@@ -91,6 +91,18 @@ typedef struct {
 } PtInfoDesc;
 
 typedef struct {
+    uint16_t masterPtId;
+    uint16_t slavePtId;
+} FileLocationQueryReq;
+
+typedef struct {
+    char hostMaster[16];
+    char hostSlave[16];
+    uint16_t portMaster;
+    uint16_t portSlave;
+} FileLocationQueryRsp;
+
+typedef struct {
     RequestComm comm;
     uint32_t bar;
 } QueryPtViewRequest;

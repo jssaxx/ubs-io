@@ -14,9 +14,6 @@
 #include "cm.h"
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
-#ifdef USE_DEBUG_TOOLS
-#include "cli.h"
-#endif
 
 namespace ock {
 namespace bio {
@@ -283,6 +280,14 @@ public:
         *curNodeTimes = mCurNodeTimes;
         *curPtTimes = mCurPtTimes;
         return BIO_OK;
+    }
+
+    inline BResult GetNodeInfo(CmNodeId nid, CmNodeInfo &nodeInfo)
+    {
+        if (UNLIKELY(mCm == nullptr)) {
+            return BIO_NOT_READY;
+        }
+        return mCm->GetNodeInfo(nid, nodeInfo);
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;

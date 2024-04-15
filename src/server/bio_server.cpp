@@ -15,6 +15,7 @@
 #include "interceptor_server.h"
 #include "bio_server.h"
 #ifdef USE_DEBUG_TOOLS
+#include "cli.h"
 #include <dlfcn.h>
 #include "bio_tracepoint_helper.h"
 #endif

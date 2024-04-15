@@ -81,6 +81,8 @@ void BioClient::Heartbeat()
     uint64_t oldNodeTimes = 0;
     uint64_t oldPtTimes = 0;
 
+    mMirror->GetCurViewTimes(oldNodeTimes, oldPtTimes);
+
     while (mRunning) {
         sleep(HEART_INTERAL);
         uint64_t curNodeTimes = 0;

@@ -81,6 +81,8 @@ public:
 
     BResult ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes);
 
+    BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
+
 private:
     BResult InitOperation();
     void *LoadFunction(const char *name);

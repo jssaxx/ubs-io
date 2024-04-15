@@ -88,6 +88,11 @@ public:
         return mMrBlockPool->AllocMany(count, address);
     }
 
+    inline uint64_t GetUsedBlockNum()
+    {
+        return mUsedBlock;
+    }
+
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
     {
         if (UNLIKELY(mMrBlockPool == nullptr)) {
@@ -95,7 +100,11 @@ public:
             return BIO_NOT_READY;
         }
         outKey = mLocalMr->GetLKey();
-        return mMrBlockPool->AllocOne(address);
+        auto ret = mMrBlockPool->AllocOne(address);
+        if (ret == BIO_OK) {
+            mUsedBlock += NO_1;
+        }
+        return ret;
     }
 
     inline BResult GetLocalMrKey(uint32_t &outKey)
@@ -123,6 +132,7 @@ public:
             return;
         }
         mMrBlockPool->ReleaseOne(address);
+        mUsedBlock -= NO_1;
     }
 
     void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint32_t &mKey)
@@ -157,6 +167,21 @@ public:
             return UINT64_MAX;
         }
         return ((addr - shmAddr) + mShareOffset);
+    }
+
+    BResult CheckConnect(const BioNodeId targetNodeId)
+    {
+        using namespace ock::hcom;
+        ChannelPtr ch{ nullptr };
+        auto ret = GetCtrlChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return BIO_NET_RETRY;
+        }
+        ret = GetDataChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return BIO_NET_RETRY;
+        }
+        return BIO_OK;
     }
 
     BResult SyncConnect(ConnectInfo &info)
@@ -326,6 +351,19 @@ public:
         AsyncCallBuffInner(opCode, req, reqLen, ch, callback);
     }
 
+    BResult SyncRead(const BioNodeId &targetNodeId, uint32_t pid, const NetRequest &req)
+    {
+        using namespace ock::hcom;
+        ChannelPtr ch{ nullptr };
+        auto ret = GetDataChanel(targetNodeId, pid, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
+            return BIO_NET_RETRY;
+        }
+        ret = ch->Read(req, nullptr);
+        return NetResult(ret);
+    }
+
     BResult SyncRead(const BioNodeId &targetNodeId, const NetRequest &req)
     {
         using namespace ock::hcom;
@@ -347,6 +385,19 @@ public:
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V2);
         auto ret = ch->Read(req, nullptr);
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V2, ret);
+        return NetResult(ret);
+    }
+
+    BResult SyncWrite(const BioNodeId &targetNodeId, uint32_t pid, const NetRequest &req)
+    {
+        using namespace ock::hcom;
+        ChannelPtr ch{ nullptr };
+        auto ret = GetDataChanel(targetNodeId, pid, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
+            return BIO_NET_RETRY;
+        }
+        ret = ch->Write(req, nullptr);
         return NetResult(ret);
     }
 
@@ -635,6 +686,11 @@ private:
         return result;
     }
 
+    inline BResult GetDataChanel(const BioNodeId &targetNodeId, uint32_t pid, ChannelPtr &ch)
+    {
+        return mDataChannelMgr->GetChannel(targetNodeId, pid, ch);
+    }
+
     inline BResult GetDataChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
         BIO_TRACE_START(NET_TRACE_GET_DATA_CHANNEL);
@@ -654,6 +710,7 @@ private:
     NetChannelMgrPtr mDataChannelMgr = nullptr;
     MemoryRegionPtr mLocalMr = nullptr;
     NetBlockPoolPtr mMrBlockPool = nullptr;
+    std::atomic<uint64_t> mUsedBlock;
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};
     NetConnectorPtr mConnector = nullptr;
     DEFINE_REF_COUNT_VARIABLE
