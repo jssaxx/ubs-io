@@ -12,6 +12,7 @@ namespace ock {
 namespace bio {
 MemAllocator FlowManager::mMemAllocator;
 DiskAllocator FlowManager::mDiskAllocator;
+std::atomic<uint64_t> FlowManager::mUsedRes[NO_2][NO_2];
 BResult FlowManager::Init()
 {
     if (mInited) {
@@ -28,6 +29,11 @@ BResult FlowManager::Init()
     }
 
     mInited = true;
+
+    mUsedRes[0][0] = 0;  // wcache memory used
+    mUsedRes[0][NO_1] = 0;  // wcache disk used
+    mUsedRes[NO_1][0] = 0;  // rcache memory used
+    mUsedRes[NO_1][NO_1] = 0;  // rcache disk used
 
     ret = Recover();
     if (ret != BIO_OK) {
@@ -59,7 +65,7 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId, uint32_t media
             return it->second;
         }
         BIO_TRACE_START(FLOW_TRACE_CREATE_OBJ);
-        auto object = MakeRef<Flow>(type, flowId, mediaId, segment, segment * NO_4);
+        auto object = MakeRef<Flow>(type, flowId, mediaId, segment, 0);
         ChkTrueNot(object != nullptr, nullptr);
         mMemObjManager[flowId] = object;
         BIO_TRACE_END(FLOW_TRACE_CREATE_OBJ, 0);

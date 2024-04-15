@@ -146,6 +146,18 @@ BResult MirrorClient::LoadOriginView()
     return ret;
 }
 
+BResult MirrorClient::GetFileLocation(uint16_t masterPtId, uint16_t slavePtId,
+    FileLocationQueryRsp &fileLocationQueryRsp)
+{
+    auto ret = agent::BioClientAgent::Instance()->SendGetNodeInfoRequest(masterPtId, slavePtId,
+        fileLocationQueryRsp);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get Node Info failed, ret:" << ret << ", masterPtId:"<< masterPtId <<
+            ", slavePtId:"<< slavePtId << ".");
+    }
+    return ret;
+}
+
 BResult MirrorClient::LoadOriginViewImpl()
 {
     auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mCurNodeTimes, mNodeView);
@@ -291,10 +303,25 @@ BResult MirrorClient::Put(MirrorPut &param)
     uint64_t retryCnt = 0;
     BResult ret;
 
+    sem_t sem;
+    sem_init(&sem, 0, 0);
+    TaskQueuePtr taskQueue = TaskQueue::Instance();
+    bool isSucceed = taskQueue->Apply(0, &sem);
+    if (!isSucceed) {
+        sem_wait(&sem);
+    }
+
     do {
         isRetry = false;
         ret = PutImpl(param);
+        uint64_t endTime = Monotonic::TimeSec();
+        if ((endTime > startTime) && (endTime - startTime > NO_30)) {
+            CLIENT_LOG_ERROR("Too long, key:" << param.key << ", cost:" << (endTime - startTime) <<
+                ", ret:" << ret << ".");
+        }
         if (LIKELY(ret == BIO_OK)) {
+            taskQueue->Release(0);
+            sem_destroy(&sem);
             return BIO_OK;
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
@@ -306,6 +333,9 @@ BResult MirrorClient::Put(MirrorPut &param)
             }
         }
     } while (isRetry);
+
+    taskQueue->Release(0);
+    sem_destroy(&sem);
 
     return ret;
 }
@@ -437,10 +467,25 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
     uint64_t retryCnt = 0;
     BResult ret;
 
+    sem_t sem;
+    sem_init(&sem, 0, 0);
+    TaskQueuePtr taskQueue = TaskQueue::Instance();
+    bool isSucceed = taskQueue->Apply(NO_1, &sem);
+    if (!isSucceed) {
+        sem_wait(&sem);
+    }
+
     do {
         isRetry = false;
         ret = GetImpl(param, realLen);
+        uint64_t endTime = Monotonic::TimeSec();
+        if ((endTime > startTime) && (endTime - startTime > NO_30)) {
+            CLIENT_LOG_ERROR("Too long, key:" << param.key << ", cost:" << (endTime - startTime) <<
+                ", ret:" << ret << ".");
+        }
         if (LIKELY(ret == BIO_OK)) {
+            taskQueue->Release(NO_1);
+            sem_destroy(&sem);
             return BIO_OK;
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
@@ -452,6 +497,9 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
             }
         }
     } while (isRetry);
+
+    taskQueue->Release(NO_1);
+    sem_destroy(&sem);
 
     return ret;
 }

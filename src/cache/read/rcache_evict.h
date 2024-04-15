@@ -14,7 +14,7 @@ namespace ock {
 namespace bio {
 constexpr uint32_t READ_CACHE_EVICT_SERVICE_NUM = 2;
 constexpr uint32_t READ_CACHE_EVICT_SERVICE_MASK = READ_CACHE_EVICT_SERVICE_NUM - 1;
-constexpr uint32_t READ_CACHE_EVICT_INTERVAL_MS = 6 * 1000;
+constexpr uint32_t READ_CACHE_EVICT_INTERVAL_MS = 1 * 1000;
 
 class RCacheEvict {
 public:

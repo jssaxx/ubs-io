@@ -115,6 +115,19 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
     return BIO_OK;
 }
 
+BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId,
+    FileLocationQueryRsp &rsp)
+{
+    FileLocationQueryReq req = { masterPtId, slavePtId };
+    auto ret = net::BioClientNet::Instance()->SendSync<FileLocationQueryReq, FileLocationQueryRsp>(INVALID_NID,
+        BIO_OP_SDK_GET_NODE_INFO_BY_PT, req, rsp);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
 BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
 {
     BResult ret = BIO_OK;
