@@ -15,7 +15,9 @@
 
 namespace ock {
 namespace bio {
-#define MAX_OVERLOAD_STAT_CYCLE_NUM (64)
+constexpr uint32_t MAX_OVERLOAD_STAT_CYCLE_NUM = 64;
+constexpr uint32_t CACHE_OLC_PERCENT_BASE = 100;
+constexpr uint32_t PERCENT_100 = 100;
 
 enum BwStatType {
     BW_STAT_FRONT_WRITE = 0,
@@ -87,6 +89,8 @@ public:
     BResult Initialize();
 
     void AddBandwidth(BwStatType type, uint64_t count);
+
+    void Show(std::vector<uint64_t> &writeBwVec, std::vector<uint64_t> &evictBwVec, std::vector<uint64_t> &vmVec);
 
 private:
     void InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, uint32_t calcBWCycleMs, bool isStatPageCnt);

@@ -71,6 +71,8 @@ public:
 
     BResult ExtraCreateRCache(uint64_t ptId, uint64_t ptv);
 
+    void GetCacheResources(uint64_t &memTotal, uint64_t &memUsed, uint64_t &diskTotal, uint64_t &diskUsed);
+
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };

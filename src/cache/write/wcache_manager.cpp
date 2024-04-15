@@ -234,7 +234,9 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     ChkTrue(sliceReader != nullptr, BIO_INVALID_PARAM, "Slice reader is nullptr.");
 
     // 1. Get write flow
+    BIO_TRACE_START(WCACHE_TRACE_PUT_GET_WCACHE);
     auto wcache = GetWCache(slice->GetFlowId());
+    BIO_TRACE_END(WCACHE_TRACE_PUT_GET_WCACHE, (wcache == nullptr) ? BIO_NOT_EXISTS : BIO_OK);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("Failed to get wcache flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;

@@ -53,8 +53,13 @@ public:
     BResult Start();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
-    ~MirrorClient() = default;
+    ~MirrorClient()
+    {
+        delete[] mPtHit;
+    }
 
+    std::vector<uint64_t> ShowPtHit();
+    void StatisticPtHit(uint16_t ptId);
     uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
 
     inline uint16_t ParseLocation(ObjLocation location)
@@ -174,6 +179,7 @@ private:
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
+    void SendPutRemoteDone(uint32_t len, int32_t ret, uint64_t ts);
     BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
 
@@ -260,6 +266,7 @@ private:
     uint64_t mCurNodeTimes;
     uint64_t mCurPtTimes;
     uint16_t mNetProtocol;
+    std::atomic<uint64_t> *mPtHit = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
 
