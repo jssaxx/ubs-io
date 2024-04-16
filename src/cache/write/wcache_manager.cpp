@@ -139,6 +139,19 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
     return BIO_OK;
 }
 
+BResult WCacheManager::DestroyWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv)
+{
+    LOG_INFO("Handle cache broken:" << procId << ", flowId:" << flowId);
+
+    bool isSucceed = mGcEvictService->Execute([this, procId, flowId]() { HandleCacheBrokenHdl(procId, flowId); });
+    if (!isSucceed) {
+        LOG_ERROR("Sche proc broken:" << procId << ", failed");
+        return BIO_ERR;
+    }
+
+    return BIO_OK;
+}
+
 BResult WCacheManager::DeleteWCache(uint64_t flowId)
 {
     mWCacheManagerLock.LockWrite();
@@ -523,6 +536,59 @@ BResult WCacheManager::ClearOldCache(uint64_t ptId, uint64_t ptv)
     ChkTrueNot(result, BIO_INNER_ERR);
 
     return BIO_OK;
+}
+
+BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
+{
+    BResult ret;
+
+    auto wcache = GetWCache(flowId);
+    if (UNLIKELY(wcache == nullptr)) {
+        LOG_ERROR("Failed to get wcache flow by id:" << flowId << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    do {
+        ret = HandleCacheBrokenImpl(wcache);
+        if (ret != BIO_OK) {
+            usleep(BROKEN_INTERAL_TIME);
+        }
+    } while (ret != BIO_OK);
+
+    uint64_t evictTime = Monotonic::TimeSec() + DESTROY_EVICT_TIMEOUT;
+    if (wcache->GetState()) {
+        wcache->SetState(false);
+        mDestroyManager.emplace(flowId, evictTime);
+    }
+
+    auto result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
+
+    return BIO_OK;
+}
+
+BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
+{
+    if (wcache->IsEmptyEvict(WCACHE_MEMORY) &&
+        wcache->IsEmptyEvict(WCACHE_DISK)) {
+        return BIO_OK;
+    }
+
+    uint64_t flowPtId = wcache->GetPtId();
+    bool isMaster;
+    auto ret = mLocRole(static_cast<uint16_t>(flowPtId), isMaster);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get local role fail:" << ret << ", ptId:" << flowPtId << ", flowId:" <<
+            wcache->GetFlowId());
+        return BIO_ERR;
+    }
+    if (isMaster) {
+        wcache->Flush();
+    } else {
+        wcache->ExpiredClear();
+    }
+
+    return BIO_INNER_RETRY;
 }
 
 BResult WCacheManager::HandleProcBroken(uint64_t procId)

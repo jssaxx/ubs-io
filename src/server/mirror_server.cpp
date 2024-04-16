@@ -55,6 +55,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleLoad, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CREATE_FLOW,
         std::bind(&MirrorServer::HandleCreateFlow, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DESTROY_FLOW,
+        std::bind(&MirrorServer::HandleDestroyFlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_SLICE,
         std::bind(&MirrorServer::HandleGetSlice, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_REPORT_HB,
@@ -213,6 +215,17 @@ BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t p
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
+    return ret;
+}
+
+BResult MirrorServer::DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
+{
+    auto ret = Cache::Instance().DestroyWCache(procId, ptId, ptv, flowId);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Destroy write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
+        return ret;
+    }
+
     return ret;
 }
 
@@ -1092,6 +1105,37 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
 
     Reply(ctx, BIO_OK, static_cast<void *>(&flowId), sizeof(uint64_t));
     BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleDestroyFlow(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(DestroyFlowRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive destroy flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BIO_TRACE_START(MIRROR_TRACE_DESTROYFLOW_HDL);
+    auto *req = static_cast<DestroyFlowRequest *>(ctx.MessageData());
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_DESTROYFLOW_HDL, BIO_CHECK_PT_FAIL);
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    auto result = DestroyFlow(req->comm.pid, req->comm.ptId, req->comm.ptv, req->flowId);
+    if (UNLIKELY(result != BIO_OK)) {
+        LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
+    }
+
+    Reply(ctx, result, static_cast<void *>(&req->flowId), sizeof(uint64_t));
+    BIO_TRACE_END(MIRROR_TRACE_DESTROYFLOW_HDL, 0);
     return BIO_OK;
 }
 

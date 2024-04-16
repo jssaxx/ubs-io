@@ -88,9 +88,9 @@ public:
         return mMrBlockPool->AllocMany(count, address);
     }
 
-    inline uint64_t GetUsedBlockNum()
+    inline uint64_t GetUsedBlockSize()
     {
-        return mUsedBlock;
+        return mUsedBlock * mDataPageBytes;
     }
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)

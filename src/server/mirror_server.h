@@ -45,6 +45,7 @@ public:
     BResult CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
     BResult CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId);
     BResult CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
+    BResult DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
     BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t flowIndex, uint64_t length, WCacheSlicePtr &slice);
     void QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp);
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
@@ -89,6 +90,7 @@ private:
     int32_t HandleLoad(ServiceContext &ctx);
     int32_t HandleReportHb(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
+    int32_t HandleDestroyFlow(ServiceContext &ctx);
     int32_t HandleGetSlice(ServiceContext &ctx);
     int32_t HandleSyncData(ServiceContext &ctx);
     int32_t HandleGetEvictOffset(ServiceContext &ctx);

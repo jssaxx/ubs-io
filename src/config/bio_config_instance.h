@@ -80,7 +80,11 @@ public:
         uint64_t evictWaterLevel = 90;
         uint64_t diskEvictWaterLevel = 90;
         std::string memReadWriteRatio = "5:5";
+        long memReadRatio = 5;
+        long memWriteRatio = 5;
         std::string diskReadWriteRatio = "5:5";
+        long diskReadRatio = 5;
+        long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
     };
