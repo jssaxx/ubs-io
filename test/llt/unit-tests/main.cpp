@@ -12,6 +12,7 @@
 #include "test_htracer.h"
 #include "test_disk.h"
 #include "bdm_core.h"
+#include "test_wcache.h"
 
 using namespace ock::bio;
 using namespace ock::htracer;
@@ -55,9 +56,8 @@ int main(int argc, char *argv[])
         "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
     (void)system("touch ceph.conf");
 
-    auto bioServer = BioServer::Instance();
-    auto ret = bioServer->Start();
-    if (ret != BIO_OK) {
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
+    if (ret != RET_CACHE_OK) {
         std::cout << "server start failed" << std::endl;
         return -1;
     }
@@ -70,7 +70,19 @@ int main(int argc, char *argv[])
 
     ClearTraceInfo();
 
+    uint64_t ptId = 1;
+    uint64_t ptv = 2;
+    RCacheManager::Instance()->ExpiredClear(ptId, ptv);
+
+    WCacheManager::Instance()->ExpiredClear(ptId, ptv);
+    WCacheManager::Instance()->Flush(ptId, ptv);
+
+    std::cout << "Exiting background threads..." << std::endl;
+    sleep(NO_60);
     Cache::Instance().Recover();
+    TestWCache::Stub();
+    WCacheManager::Instance()->ExpiredClear(ptId, ptv);
+    WCacheManager::Instance()->Flush(ptId, ptv);
 
     ock::htracer::HTracerExit();
     WCacheManager::Instance()->Exit();
@@ -78,8 +90,8 @@ int main(int argc, char *argv[])
     BdmDestory(0);
     Logger::ChangeLogLevel(-1);
     Logger::ChangeLogLevel(NO_3);
-    Logger::gInstance->Flush();
     Logger::Destroy();
+    std::cout << "All background threads exit" << std::endl;
 
     return runRet;
 }

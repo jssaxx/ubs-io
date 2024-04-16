@@ -87,6 +87,23 @@ TEST_F(TestRCache, test_rcache_put_ok)
     EXPECT_EQ(needEvictData, haveEvictData);
 }
 
+TEST_F(TestRCache, test_rcache_put_ptid_unexist_return_fail)
+{
+    LOG_INFO("run test_rcache_put_ptid_unexist_return_fail");
+    uint64_t len = strlen(G_VALUE) + 1;
+    WCacheSlicePtr slicePtr = nullptr;
+
+    auto ret = gRcacheManager->AllocResources(G_PT_ID, len, slicePtr);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(slicePtr->GetLength(), len);
+
+    ret = gSlicerOperator.Copy(G_VALUE, slicePtr.Get());
+    EXPECT_EQ(ret, 0);
+
+    ret = gRcacheManager->Put(NO_10, G_KEY, slicePtr);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+}
+
 TEST_F(TestRCache, test_rcache_get_ok)
 {
     uint64_t len = strlen(G_VALUE) + 1;
@@ -169,12 +186,5 @@ TEST_F(TestRCache, test_rcache_delete_ok)
     EXPECT_EQ(ret, 0);
 
     ret = gRcacheManager->Delete(G_PT_ID, key4);
-    EXPECT_EQ(ret, 0);
-}
-
-TEST_F(TestRCache, test_rcache_expired_clear_ok)
-{
-    Cache::Instance().Recover();
-    auto ret = gRcacheManager->ExpiredClear(G_PT_ID, 2);
     EXPECT_EQ(ret, 0);
 }

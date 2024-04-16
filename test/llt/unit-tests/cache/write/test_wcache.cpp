@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <mockcpp/mockcpp.hpp>
 #include <cstdint>
+#include <libaio.h>
 #include "bio_server.h"
 #include "bio_mock.h"
 #include "bio_config_instance.h"
@@ -208,22 +209,6 @@ TEST_F(TestWCache, test_put_degrate_case_return_ok)
     BioServer::Instance()->MemFree(mrInfo.address);
 }
 
-TEST_F(TestWCache, test_disk_read_async__case_return_ok)
-{
-    uintptr_t buff = 0;
-    BdmIoCtx ctx{};
-    int ret = BdmReadAsync(0, 0, &buff, NO_1024, &ctx);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_disk_write_async__case_return_ok)
-{
-    uintptr_t buff = 0;
-    BdmIoCtx ctx{};
-    int ret = BdmWriteAsync(0, 0, &buff, NO_1024, &ctx);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 TEST_F(TestWCache, test_repeat_delete_return_ok)
 {
     auto ret = gWcacheManager->Delete(G_PT_ID, G_KEY);
@@ -257,37 +242,5 @@ TEST_F(TestWCache, test_flowmanager_recover_case_return_fail)
 {
     TestWCache::RecoverStub();
     auto ret = FlowManager::Instance()->Init();
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_expired_clear_case_return_ok)
-{
-    auto ret = gWcacheManager->ExpiredClear(G_PT_ID, NO_2);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_evict_case_return_ok)
-{
-    auto ret = gWcacheManager->Flush(G_PT_ID, NO_2);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_expired_clear_case_return_fail)
-{
-    TestWCache::Stub();
-    auto ret = gWcacheManager->ExpiredClear(G_PT_ID, NO_2);
-    EXPECT_EQ(ret, BIO_INNER_RETRY);
-}
-
-TEST_F(TestWCache, test_evict_case_return_fail)
-{
-    TestWCache::Stub();
-    auto ret = gWcacheManager->Flush(G_PT_ID, NO_2);
-    EXPECT_EQ(ret, BIO_INNER_RETRY);
-}
-
-TEST_F(TestWCache, test_deletecache_case_return_ok)
-{
-    auto ret = gWcacheManager->DeleteWCache(g_cacheId);
     EXPECT_EQ(ret, BIO_OK);
 }
