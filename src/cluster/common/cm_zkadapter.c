@@ -1281,7 +1281,7 @@ int32_t CmServerZkGetPtEntryList(PtEntryList *ptEntryList)
     char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
     int32_t ret;
 
-    int32_t len = (int32_t)(sizeof(ptEntryList) + sizeof(PtEntry) * ptEntryList->ptNum);
+    int32_t len = (int32_t)(sizeof(PtEntryList) + sizeof(PtEntry) * ptEntryList->ptNum);
 
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, ptEntryList->poolId, CM_PT_PATH);
     if (ret < 0) {
