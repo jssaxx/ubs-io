@@ -28,6 +28,8 @@ int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp);
 
 int32_t CreateFlowSlave(CreateFlowRequest *req);
 
+int32_t DestroyFlow(DestroyFlowRequest *req);
+
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp);
 
 int32_t Put(PutRequest *req);

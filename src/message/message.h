@@ -136,6 +136,16 @@ typedef struct {
     uint64_t flowId;
 } CreateFlowResponse;
 
+/* Destroy flow */
+typedef struct {
+    RequestComm comm;
+    uint64_t flowId;
+} DestroyFlowRequest;
+
+typedef struct {
+    uint64_t flowId;
+} DestroyFlowResponse;
+
 /* Get slice */
 typedef struct {
     RequestComm comm;
