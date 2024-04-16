@@ -482,7 +482,8 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     BResult ret = BIO_OK;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         NetRequest rReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
-        ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, req.comm.pid, rReq);
+        uint32_t dstPid = req.isConvDeploy ? 0 : req.comm.pid; // 融合部署场景目的端PID填充0
+        ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, dstPid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lAddr:" << lMrVec[idx].address <<
                 ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[0].address + off << ", rKey:" << rMrVec[0].key <<
