@@ -579,6 +579,12 @@ int32_t CreateFlowSlave(CreateFlowRequest *req)
         req->comm.ptv, req->flowId));
 }
 
+int32_t DestroyFlow(DestroyFlowRequest *req)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId,
+        req->comm.ptv, req->flowId));
+}
+
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
 {
     WCacheSlicePtr sliceP = nullptr;

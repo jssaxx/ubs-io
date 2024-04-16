@@ -147,8 +147,16 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     }
     mDaemonConfig.evictWaterLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.diskEvictWaterLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
+    std::vector<std::string> ratios;
     mDaemonConfig.memReadWriteRatio = conf->GetStr(MEM_READ_WRITE_RATIO.first);
+    StrUtil::Split(mDaemonConfig.memReadWriteRatio, ":", ratios);
+    StrUtil::StrToLong(ratios[0], mDaemonConfig.memReadRatio);
+    StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.memWriteRatio);
+    ratios.clear();
     mDaemonConfig.diskReadWriteRatio = conf->GetStr(DISK_READ_WRITE_RATIO.first);
+    StrUtil::Split(mDaemonConfig.diskReadWriteRatio, ":", ratios);
+    StrUtil::StrToLong(ratios[0], mDaemonConfig.diskReadRatio);
+    StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.diskWriteRatio);
 
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);

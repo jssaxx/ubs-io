@@ -36,6 +36,8 @@ public:
 
     BResult CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
+    BResult DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId);
+
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);

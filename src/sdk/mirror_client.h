@@ -173,9 +173,11 @@ private:
         uint64_t &index);
     BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
         uint64_t &flowId);
+    BResult SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
+    BResult DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlow(uint16_t ptId);
-    BResult DestroyFlow(uint16_t ptId);
+    BResult DestroyFlow(uint16_t ptId, uint64_t flowId);
 
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
         uint64_t flowIndex, GetSliceResponse *rsp) const;
@@ -251,6 +253,8 @@ private:
         delete it->second;
         mFlowMap.erase(it);
         mLock.UnLock();
+
+        DestroyFlow(ptId, flowId);
     }
 
     inline FlowInstance *Query(uint16_t ptId)

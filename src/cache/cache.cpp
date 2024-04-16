@@ -84,6 +84,17 @@ BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId)
     return BIO_OK;
 }
 
+BResult Cache::DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId)
+{
+    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
+    auto ret = mWCacheManager->DestroyWCache(procId, flowId, ptId, ptv);
+    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, ret);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to destroy WCache, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+    LOG_DEBUG("Destroy wcache success, cacheId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+    return BIO_OK;
+}
+
 BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
     return mWCacheManager->GetWCacheSlice(sliceKey, slice);

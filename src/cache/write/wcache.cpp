@@ -17,6 +17,7 @@
 
 namespace ock {
 namespace bio {
+constexpr uint32_t OVERFLOW_LEVEL = 90;
 BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
@@ -72,19 +73,20 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     }
 
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint32_t segment = config.segment;
-    uint64_t memCap = config.memCap;
-    uint64_t usedBlock = BioServer::Instance()->GetNetEngine()->GetUsedBlockNum();
+    uint64_t usedSize = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
 
-    constexpr uint32_t MEM_OVERFLOW_RATE = 80;
-    constexpr uint32_t MEM_OVERFLOW_PERCENT = 100;
+    uint64_t cacheSize = FlowManager::GetCacheUsedSize(0, FLOW_MEMORY);
+    uint64_t configSize = (config.memWriteRatio * config.memCap) / NO_10;
+
+    LOG_INFO("usedSize:" << (usedSize / NO_1048576) << ", memCap:" << (config.memCap / NO_1048576) <<
+        ", cacheSize:" << (cacheSize / NO_1048576) << ", configSize:" << (configSize / NO_1048576));
 
     bool isOverflow = false;
-    if ((usedBlock * segment) >= (memCap * MEM_OVERFLOW_RATE / MEM_OVERFLOW_PERCENT)) {
+    if ((usedSize >= (config.memCap * OVERFLOW_LEVEL / NO_100)) || (cacheSize >= configSize)) {
         isOverflow = true;
     }
 
-    LOG_INFO("Current used level:" << (usedBlock * NO_4));
+    LOG_INFO("Current used level:" << (usedSize / NO_1048576) << ", wcache:" << (cacheSize / NO_1048576));
 
     if (attr.strategy == WRITE_BACK && !isOverflow) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BACK);
@@ -494,13 +496,8 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
 bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t cacheData = FlowManager::GetRCacheUsedSize(FLOW_MEMORY);
-    std::vector<std::string> ratios;
-    StrUtil::Split(config.memReadWriteRatio, ":", ratios);
-    long readRatio = 0;
-    StrUtil::StrToLong(ratios[0], readRatio);
-    uint64_t configData = (readRatio * config.memCap) / NO_10;
-
+    uint64_t cacheData = FlowManager::GetCacheUsedSize(NO_1, FLOW_MEMORY);
+    uint64_t configData = (config.memReadRatio * config.memCap) / NO_10;
     return (cacheData < configData);
 }
 

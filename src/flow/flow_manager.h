@@ -64,12 +64,12 @@ public:
         mDiskAllocator.free = diskAllocator.free;
     }
 
-    static uint64_t GetRCacheUsedSize(FlowType type)
+    static uint64_t GetCacheUsedSize(uint64_t cacheType, FlowType type)
     {
         if (type == FLOW_MEMORY) {
-            return mUsedRes[NO_1][0];
+            return mUsedRes[cacheType][0];
         } else {
-            return mUsedRes[NO_1][NO_1];
+            return mUsedRes[cacheType][NO_1];
         }
     }
 
