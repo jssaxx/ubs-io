@@ -190,6 +190,7 @@ typedef struct {
     uintptr_t address;
     uint64_t size;
     uint32_t mrKey;
+    bool isConvDeploy;
 } GetRequest;
 
 typedef struct {

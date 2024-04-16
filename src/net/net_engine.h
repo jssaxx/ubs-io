@@ -394,7 +394,8 @@ public:
         ChannelPtr ch{ nullptr };
         auto ret = GetDataChanel(targetNodeId, pid, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", pid:" <<
+                pid << ", result " << ret);
             return BIO_NET_RETRY;
         }
         ret = ch->Write(req, nullptr);
@@ -407,7 +408,8 @@ public:
         ChannelPtr ch{ nullptr };
         auto ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId <<
+                ", pid:0, result " << ret);
             return BIO_NET_RETRY;
         }
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
