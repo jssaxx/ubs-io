@@ -28,6 +28,7 @@ public:
     using GetPtViewFuncPtr = int32_t (*)(QueryPtViewRequest *, QueryPtViewResponse *);
     using CreateFlowMasterFuncPtr = int32_t (*)(CreateFlowRequest *, CreateFlowResponse *);
     using CreateFlowSlaveFuncPtr = int32_t (*)(CreateFlowRequest *);
+    using DestroyFlowFuncPtr = int32_t (*)(DestroyFlowRequest *);
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
     using PutFuncPtr = int32_t (*)(PutRequest *);
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
@@ -64,6 +65,8 @@ public:
 
     BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
 
+    BResult DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
+
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
 
@@ -90,6 +93,8 @@ private:
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
 
     BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
+
+    BResult SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 
     BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
         uint64_t length, GetSliceResponse **rsp);
@@ -126,6 +131,7 @@ private:
     GetPtViewFuncPtr getPtViewOp = nullptr;
     CreateFlowMasterFuncPtr createFlowMasterOp = nullptr;
     CreateFlowSlaveFuncPtr createFlowSlaveOp = nullptr;
+    DestroyFlowFuncPtr destroyFlowOp = nullptr;
     GetSliceFuncPtr getSliceOp = nullptr;
     PutFuncPtr putOp = nullptr;
     GetFuncPtr getOp = nullptr;

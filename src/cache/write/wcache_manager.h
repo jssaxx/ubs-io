@@ -42,6 +42,8 @@ public:
 
     BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
 
+    BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv);
+
     BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);
@@ -82,6 +84,8 @@ private:
         const SliceWriter &sliceWriter, uint64_t &realLen);
     BResult FlushImpl(uint64_t ptId, uint64_t ptv);
     BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
+    BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
+    BResult HandleCacheBrokenImpl(WCachePtr wcache);
     BResult HandleProcBrokenHdl(uint64_t procId);
     BResult HandleProcBrokenImpl(uint64_t procId);
 

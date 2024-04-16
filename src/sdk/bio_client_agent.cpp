@@ -64,6 +64,9 @@ BResult BioClientAgent::InitOperation()
     if ((createFlowSlaveOp = reinterpret_cast<CreateFlowSlaveFuncPtr>(LoadFunction("CreateFlowSlave"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((destroyFlowOp = reinterpret_cast<DestroyFlowFuncPtr>(LoadFunction("DestroyFlow"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((getSliceOp = reinterpret_cast<GetSliceFuncPtr>(LoadFunction("GetSlice"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -247,6 +250,22 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
     return ret;
 }
 
+BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
+{
+    DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
+        flowId };
+    DestroyFlowResponse rsp;
+    BResult ret = net::BioClientNet::Instance()->SendSync<DestroyFlowRequest, DestroyFlowResponse>(INVALID_NID,
+        BIO_OP_SDK_DESTROY_FLOW, req, rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send sync destroy flow request failed:" << ret << ", nodeId:" << mLocalNid.VNodeId() <<
+            ", ptId:" << ptId << ", flowId:" << flowId << ".");
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
 BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     uint64_t &flowId)
 {
@@ -265,6 +284,17 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_
         }
     } else {
         return SendCreateFlowRequestLocal(ptEntry, ptId, opType, flowId);
+    }
+}
+
+BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
+{
+    if (mMode == CONVERGENCE) {
+        DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
+            flowId };
+        return destroyFlowOp(&req);
+    } else {
+        return SendDestroyFlowRequestLocal(ptEntry, ptId, flowId);
     }
 }
 

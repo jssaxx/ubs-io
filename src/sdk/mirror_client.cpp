@@ -51,6 +51,23 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
     return ret;
 }
 
+BResult MirrorClient::SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId,
+    uint64_t flowId)
+{
+    DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
+        flowId };
+    DestroyFlowResponse rsp;
+    BResult ret = net::BioClientNet::Instance()->SendSync<DestroyFlowRequest, DestroyFlowResponse>(
+        static_cast<BioNodeId>(nodeId), BIO_OP_SDK_DESTROY_FLOW, req, rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send sync destroy flow request failed, ret:" << ret << ", nodeId:" << nodeId <<
+            ", ptId:" << ptId << ", flowId:" << flowId << ".");
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
 BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     uint64_t &flowId)
 {
@@ -58,6 +75,15 @@ BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_
         return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, ptId, opType, flowId);
     } else {
         return SendCreateFlowRequestRemote(nodeId, ptEntry, ptId, opType, flowId);
+    }
+}
+
+BResult MirrorClient::DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
+{
+    if (LIKELY(nodeId == mLocalNid.VNodeId())) {
+        return agent::BioClientAgent::Instance()->DestroyFlowLocal(getpid(), ptEntry, ptId, flowId);
+    } else {
+        return SendDestroyFlowRequestRemote(nodeId, ptEntry, ptId, flowId);
     }
 }
 
@@ -89,7 +115,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
                 ptEntry.copys[idx].nodeId << ".");
-            DestroyFlow(ptId);
+            DestroyFlow(ptId, flowId);
             return ret;
         }
     }
@@ -100,8 +126,27 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     return BIO_OK;
 }
 
-BResult MirrorClient::DestroyFlow(uint16_t ptId)
+BResult MirrorClient::DestroyFlow(uint16_t ptId, uint64_t flowId)
 {
+    CmPtInfo ptEntry;
+    BResult ret = GetPtEntry(ptId, ptEntry);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Get pt entry failed, ret:" << ret << ", ptId:" << ptId << ".");
+        return ret;
+    }
+
+    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
+        if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
+            continue;
+        }
+        ret = DestroyFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, ptId, flowId);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Destroy flow failed, ret:" << ret << ", ptId:" << ptId << ", nid:" <<
+                ptEntry.copys[idx].nodeId << ", flowId:" << flowId << ".");
+            continue;
+        }
+    }
+
     return BIO_OK;
 }
 
@@ -441,21 +486,19 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
     ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId <<
+            ", flowId:" << param.flowId << ", key:" << param.key << ".");
+        Delete(ptId, param.flowId);
         return ret;
     }
 
     ret = SendPutRequest(ptEntry, param);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId <<
+            ", flowId:" << param.flowId << ", key:" << param.key << ".");
+        Delete(ptId, param.flowId);
     }
 
-    if (ret == BIO_NOT_EXISTS) {
-        CLIENT_LOG_WARN("Cache not found, mayby expired:" << param.flowId << ", ptId:" << ptId << ", key:" <<
-            param.key << ".");
-        Delete(ptId, param.flowId);
-        return BIO_INNER_RETRY;
-    }
     return ret;
 }
 
