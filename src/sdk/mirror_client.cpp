@@ -520,6 +520,7 @@ BResult MirrorClient::GetImpl(MirrorGet &param, uint64_t &realLen)
     req.ptId = ptId;
     req.offset = param.offset;
     req.length = param.length;
+    req.isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
     BIO_TRACE_START(SDK_TRACE_GET_SEND);
     ret = SendGetRequest(ptEntry, req, param.value, realLen);
     BIO_TRACE_END(SDK_TRACE_GET_SEND, ret);
