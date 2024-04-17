@@ -15,6 +15,7 @@ class TestCm : public testing::Test {
 
 public:
     static void Stub();
+    static void CancelNodeStub();
 
 private:
     static bool gSetup;

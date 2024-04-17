@@ -159,6 +159,8 @@ int CmClientZkInit(void);
 int CmServerZkInit(void);
 
 int CmZkInit(void);
+
+void CmClientZkFreeParaList(uint16_t poolId);
 #endif
 #if defined(__cplusplus)
 }
