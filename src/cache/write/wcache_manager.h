@@ -103,7 +103,6 @@ private:
     std::unordered_map<uint64_t, WCachePtr> mWCacheManager;
     std::vector<WCachePtr> mRetryManager[MAX_WCACHE_TIER];
     std::unordered_map<uint64_t, uint64_t> mDestroyManager;
-
     RCacheManagerPtr mRCacheManager;
 
     bool mRunning = true;
