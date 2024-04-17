@@ -13,6 +13,11 @@
 #include "test_disk.h"
 #include "bdm_core.h"
 #include "test_wcache.h"
+#include "server/cm_server_view.h"
+#include "server/cm_server_monitor.h"
+#include "ut_common.h"
+
+void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv);
 
 using namespace ock::bio;
 using namespace ock::htracer;
@@ -72,26 +77,37 @@ int main(int argc, char *argv[])
 
     uint64_t ptId = 1;
     uint64_t ptv = 2;
-    RCacheManager::Instance()->ExpiredClear(ptId, ptv);
 
-    WCacheManager::Instance()->ExpiredClear(ptId, ptv);
-    WCacheManager::Instance()->Flush(ptId, ptv);
+    Cache::Instance().HandleProcBroken(0);
+    Cache::Instance().ExpiredClear(ptId, ptv);
+
+    Cache::Instance().Flush(ptId, ptv);
 
     std::cout << "Exiting background threads..." << std::endl;
     sleep(NO_60);
+    ExitBackgroundThreads(ptId, ptv);
+
+    std::cout << "All background threads exit" << std::endl;
+
+    return runRet;
+}
+
+void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv)
+{
     Cache::Instance().Recover();
     TestWCache::Stub();
     WCacheManager::Instance()->ExpiredClear(ptId, ptv);
     WCacheManager::Instance()->Flush(ptId, ptv);
 
-    ock::htracer::HTracerExit();
+    HTracerExit();
     WCacheManager::Instance()->Exit();
     RCacheManager::Instance()->Exit();
     BdmDestory(0);
     Logger::ChangeLogLevel(-1);
     Logger::ChangeLogLevel(NO_3);
     Logger::Destroy();
-    std::cout << "All background threads exit" << std::endl;
-
-    return runRet;
+    ZkFreeParaList();
+    CmServerListenDiskFault(0, 0, 0);
+    CmServerMonitorExit();
+    CmServerViewExit();
 }

@@ -14,6 +14,7 @@
 #include "cm_client_init.h"
 #include "cm_client_local.h"
 #include "server/cm_server_view.h"
+#include "server/cm_server_monitor.h"
 #include "test_cm.h"
 
 using namespace ock::bio;
@@ -174,13 +175,11 @@ static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int val
     return ZOK;
 }
 
-static bool g_firstGetNodeId = true;
 static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
 {
     LOG_INFO("call ZooGet");
     if (*bufferLen == (int)sizeof(uint16_t)) {
-        if (g_firstGetNodeId) {
-            g_firstGetNodeId = false;
+        if (strcmp(path, "/cm/meta/ip/127.0.0.1") == 0) {
             return ZNONODE;
         }
         uint32_t *nodeId = (uint32_t *)buffer;
@@ -211,6 +210,10 @@ static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int 
         LOG_INFO("call ZooGet change pt entry list");
         PtEntryList *ptList = (PtEntryList *)buffer;
         ptList->ptNum = 0;
+    } else if (*bufferLen == (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_256)) {
+        NodeStateList *stateList = (NodeStateList *)buffer;
+        stateList->nodeList[0].state = NODE_STATE_UP;
+        stateList->nodeList[0].clusterState = NODE_CLUSTER_STATE_IN;
     }
     return ZOK;
 }
@@ -241,17 +244,38 @@ static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *wa
         NodeInfoList *nodeChangeList = (NodeInfoList *)buffer;
         nodeChangeList->poolId = 0;
         nodeChangeList->nodeNum = 0;
+        watcher(zh, ZOO_CREATED_EVENT, 1, path, watcherCtx);
     } else if (result = strstr(zkPath, CM_STATE_PATH)) {
         NodeStateList *nodeStatList = (NodeStateList *)buffer;
         nodeStatList->poolId = 0;
         nodeStatList->nodeNum = 0;
+        watcher(zh, ZOO_CREATED_EVENT, 1, path, watcherCtx);
     } else if (result = strstr(zkPath, CM_PT_PATH)) {
         PtEntryList *ptList = (PtEntryList *)buffer;
+
         ptList->poolId = 0;
-        ptList->ptNum = 0;
+        ptList->ptNum = gNodeInfo.diskList.num;
+        ptList->maxCopyNum = 1;
+        ptList->minCopyNum = 1;
+        ptList->globalVersion = 1;
+        ptList->changeVersion = 1;
+        for (uint16_t diskIdx = 0; diskIdx < gNodeInfo.diskList.num; diskIdx++) {
+            ptList->ptEntryList[diskIdx].birthVersion = 1;
+            ptList->ptEntryList[diskIdx].ptId = diskIdx;
+            ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
+            ptList->ptEntryList[diskIdx].masterNodeId = 0;
+            ptList->ptEntryList[diskIdx].masterDiskId = gNodeInfo.diskList.list[diskIdx].diskId;
+            ptList->ptEntryList[diskIdx].referNum = 0;
+            ptList->ptEntryList[diskIdx].copyNum = 1;
+            ptList->ptEntryList[diskIdx].copyList[0].nodeId = 0;
+            ptList->ptEntryList[diskIdx].copyList[0].diskId = gNodeInfo.diskList.list[diskIdx].diskId;
+            ptList->ptEntryList[diskIdx].copyList[0].keepAlive = 0;
+            ptList->ptEntryList[diskIdx].copyList[0].state = PT_COPY_STATE_RUNNING;
+        }
     } else if (result = strstr(zkPath, CM_MASTER_PATH)) {
         uint16_t *masterNodeId = (uint16_t *)buffer;
         *masterNodeId = 0;
+        watcher(zh, ZOO_CREATED_EVENT, 1, path, watcherCtx);
     }
     return ZOK;
 }
@@ -288,6 +312,7 @@ static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, 
         strings->data[0] = tmp;
         gZkGetChildrenFirst.push_back(path);
     }
+    watcher(zh, ZOO_CREATED_EVENT, 1, path, watcherCtx);
     return ZOK;
 }
 
@@ -299,6 +324,11 @@ static int ZooDeallocateStringVector(struct String_vector *strings)
             strings->data = nullptr;
         }
     }
+    return ZOK;
+}
+
+int ZookeeperClose(zhandle_t *zh)
+{
     return ZOK;
 }
 
@@ -322,6 +352,7 @@ void TestCm::Stub()
     MOCKER(zoo_wget).stubs().will(invoke(ZooWget));
     MOCKER(zoo_delete).stubs().will(invoke(ZooDelete));
     MOCKER(zoo_wget_children).stubs().will(invoke(ZooWgetChildren));
+    MOCKER(zookeeper_close).stubs().will(invoke(ZookeeperClose));
     MOCKER(deallocate_String_vector).stubs().will(invoke(ZooDeallocateStringVector));
 }
 
@@ -453,12 +484,12 @@ TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
     pools.maxNodeNum = NO_256;
     pools.maxPtNum = NO_16;
 
-    auto nodeList = (NodeStateList *) malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_2);
+    auto nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_2);
     InitNodeList(&pools, nodeList, NO_2);
     gNodeChange.notifyNodeListChange(nodeList, gNodeChange.ctx);
     free(nodeList);
 
-    auto ptList = (PtEntryList *) malloc(sizeof(PtEntryList) + sizeof(PtEntry) * gNodeInfo.diskList.num);
+    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * gNodeInfo.diskList.num);
     ptList->poolId = pools.poolId;
     ptList->ptNum = 0;
     ptList->maxCopyNum = 1;
@@ -486,16 +517,59 @@ TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
     free(ptList);
 }
 
-TEST_F(TestCm, test_cm_node_list_change)
+void CmServerCancelNodeFaultStub() {}
+
+void CmServerMonitorInitMgrStub() {}
+
+int32_t CmServerMonitorLoadPoolStub()
+{
+    return 0;
+}
+
+TEST_F(TestCm, test_cm_server_view_change_case_return_ok)
 {
     CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
     if (nodeList == nullptr) {
         return;
     }
     nodeList->poolId = 0;
-    nodeList->nodeNum = 1;
+    nodeList->nodeNum = NO_256;
     nodeList->nodeList[0] = 0;
     int ret = CmServerViewNodeListChange(nodeList);
     EXPECT_EQ(ret, CM_OK);
     free(nodeList);
+    ret = CmServerMonitorInit();
+    EXPECT_EQ(ret, CM_OK);
+}
+
+
+void TestCm::CancelNodeStub()
+{
+    MOCKER(CmServerCancelNodeFault).stubs().will(invoke(CmServerCancelNodeFaultStub));
+    MOCKER(CmServerMonitorInitMgr).stubs().will(invoke(CmServerMonitorInitMgrStub));
+    MOCKER(CmServerMonitorLoadPool).stubs().will(invoke(CmServerMonitorLoadPoolStub));
+}
+
+TEST_F(TestCm, test_cm_server_monitor_expire_case_return_ok)
+{
+    CancelNodeStub();
+    CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
+    if (nodeList == nullptr) {
+        return;
+    }
+    nodeList->poolId = 0;
+    nodeList->nodeNum = NO_256;
+    nodeList->nodeList[0] = 0;
+    int ret = CmServerViewNodeListChange(nodeList);
+    EXPECT_EQ(ret, CM_OK);
+    free(nodeList);
+    ret = CmServerMonitorInit();
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
+{
+    auto state = (NodeStateInfo *)malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState) * DISK_LIST_NUM);
+    auto ret = CmServerViewGetNodeState(0, state);
+    EXPECT_EQ(ret, CM_OK);
 }

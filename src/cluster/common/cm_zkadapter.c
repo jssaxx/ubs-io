@@ -169,7 +169,9 @@ int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
         return CM_ERR;
     }
 
+    CM_LOGINFO("call zk get begin");
     ret = CmZkGet(g_zh, zkPath, UNWATCH_ZNODE, (char *)&nodeInfo->nodeId, &retLen, NULL);
+    CM_LOGINFO("call zk get end");
     if (ret == ZOK) {
         CM_LOGINFO("Recover ip(%s) matched nodeId(%u).", nodeInfo->ipv4AddrStr, nodeInfo->nodeId);
         return CmClientZkRecordNodeId(poolId, nodeInfo);
