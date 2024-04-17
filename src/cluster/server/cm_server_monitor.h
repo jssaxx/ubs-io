@@ -27,6 +27,10 @@ void CmServerCancelNodeFault(uint16_t poolId, uint16_t nodeId);
 
 void CmServerCancelDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId);
 
+int32_t CmServerMonitorLoadPool(uint16_t poolId);
+
+void CmServerMonitorInitMgr(void);
+
 void CmServerMonitorReset(void);
 
 int32_t CmServerMonitorInit(void);

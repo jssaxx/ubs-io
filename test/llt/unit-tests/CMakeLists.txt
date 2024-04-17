@@ -26,7 +26,7 @@ aux_source_directory(cm BIO_TEST)
 aux_source_directory(disk BIO_TEST)
 aux_source_directory(sdk BIO_TEST)
 aux_source_directory(common BIO_TEST)
-add_executable(bio_test ${BIO_TEST} main.cpp)
+add_executable(bio_test ${BIO_TEST} main.cpp ut_common.cpp ut_common.h)
 
 set(TEST_DIR ${PROJECT_SOURCE_DIR})
 target_include_directories(bio_test PRIVATE
