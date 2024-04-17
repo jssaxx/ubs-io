@@ -244,3 +244,29 @@ TEST_F(TestWCache, test_flowmanager_recover_case_return_fail)
     auto ret = FlowManager::Instance()->Init();
     EXPECT_EQ(ret, BIO_OK);
 }
+
+TEST_F(TestWCache, test_get_evict_offset_return_ok)
+{
+    uint64_t  flowOffset = 0;
+    auto ret = Cache::Instance().GetEvictOffset(g_cacheId, flowOffset);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_handle_pro_broken_return_ok)
+{
+    uint64_t procId = 0;
+    auto ret = Cache::Instance().HandleProcBroken(procId);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_flush_return_ok)
+{
+    auto ret = Cache::Instance().Flush(G_PT_ID, G_PT_V);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_expired_clear_return_ok)
+{
+    auto ret = Cache::Instance().ExpiredClear(G_PT_ID, G_PT_V);
+    EXPECT_EQ(ret, BIO_OK);
+}
