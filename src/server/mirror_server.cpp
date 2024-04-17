@@ -306,7 +306,11 @@ BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo>
         NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
         LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrVec[idx].address <<
             ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrVec[idx].key << ", size:" << lMrVec[idx].size << ".");
-        ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
+        if (req.memFromServer) {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
+        } else {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
+        }
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
                 ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[idx].address << ", rKey:" << rMrVec[idx].key <<
@@ -330,7 +334,11 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
         LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrAddr << ", lKey:" <<
             lMrVec[idx].key << ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
-        ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
+        if (req.memFromServer) {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
+        } else {
+            ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
+        }
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
                 ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrAddr << ", rKey:" << rMrKey << ", size:" <<

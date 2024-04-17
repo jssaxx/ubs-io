@@ -183,7 +183,7 @@ typedef struct {
     uintptr_t mrAddress;
     uint64_t mrSize;
     uint32_t mrKey;
-    bool isExistLocal;
+    bool memFromServer;
     uint8_t copyFree;
     uint32_t sliceLen;
     char sliceBuf[0];

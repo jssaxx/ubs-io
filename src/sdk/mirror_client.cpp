@@ -404,6 +404,7 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = spaceInfo.descriptorSize;
     req->copyFree = true;
+    req->memFromServer = true;
     req->mrAddress = 0ULL;
     memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
 
@@ -489,6 +490,7 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
         CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId <<
             ", flowId:" << param.flowId << ", key:" << param.key << ".");
         Delete(ptId, param.flowId);
+        ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret;
         return ret;
     }
 
@@ -497,6 +499,7 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId <<
             ", flowId:" << param.flowId << ", key:" << param.key << ".");
         Delete(ptId, param.flowId);
+        ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret;
     }
 
     return ret;
@@ -959,6 +962,7 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, rsp);
+    req->memFromServer = false;
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
@@ -984,6 +988,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     auto tmp = new uint8_t[sizeof(GetSliceResponse)];
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
+    req->memFromServer = false;
     return BIO_OK;
 }
 
