@@ -97,6 +97,7 @@ install_package()
   mkdir -p $CONF_PATH
   mkdir -p $LOG_PATH
   mkdir -p $SCRIPTS_PATH
+  mkdir -p $BOOSTIO_HTRACE_LOG_PATH
   mkdir -p $SECURITY_PATH/authorization
 
   touch $LOG_FILE
@@ -160,7 +161,7 @@ check_user_group()
 set_permissions()
 {
   chown -R $RUN_USER:$RUN_GROUP $INSTALL_PATH
-  chmod -R 755 $INSTALL_PATH
+  chmod -R 750 $INSTALL_PATH
   chmod -R 700 $INSTALL_PATH/tools
   chmod -R 500 $CONF_PATH
   chmod -R 750 $BIN_PATH
@@ -185,11 +186,16 @@ set_permissions()
   chown -R $RUN_USER:$RUN_GROUP $SCRIPTS_PATH
   chown $RUN_USER:$RUN_GROUP $CONF_PATH
   chown $RUN_USER:$RUN_GROUP $CONF_PATH/bio.conf
+  chown $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
+  chmod 750 $BOOSTIO_HTRACE_LOG_PATH
   chmod 550 $CONF_PATH
   chmod 640 $CONF_PATH/bio.conf
-  chmod 750 $BIN_PATH
+  chmod 550 $BIN_PATH
   chmod 550 $BIN_PATH/bio_daemon
   chmod 550 $BIN_PATH/bio_console
+  chmod 550 $BIN_PATH/cli_client
+  chmod 550 $BIN_PATH/cli_server
+  chmod 550 $BIN_PATH/executeBio.sh
   chmod -R 550 $LIB_PATH
   chmod -R 550 $SCRIPTS_PATH
 
