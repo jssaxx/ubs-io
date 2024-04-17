@@ -59,7 +59,7 @@ BResult BioServer::Start()
     }
 
     // 1. Initialize infrastructure
-    std::string logPath = "/var/log/boostio/bio.log";
+    std::string logPath = "./bio.log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }

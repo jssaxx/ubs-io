@@ -120,7 +120,7 @@ export LD_LIBRARY_PATH=$LIB_PATH
 cd $BIN_PATH
 ./bio_daemon
 EOF
-  chmod 750 $BIN_PATH/executeBio.sh
+  chmod 550 $BIN_PATH/executeBio.sh
   chown $RUN_GROUP:$RUN_USER $BIN_PATH/executeBio.sh
   service_config=$SYSTEMD_SERVICE_PATH
   cat > $service_config << EOF
@@ -196,7 +196,6 @@ set_permissions()
   chmod 550 $BIN_PATH/bio_console
   chmod 550 $BIN_PATH/cli_client
   chmod 550 $BIN_PATH/cli_server
-  chmod 550 $BIN_PATH/executeBio.sh
   chmod -R 550 $LIB_PATH
   chmod -R 550 $SCRIPTS_PATH
   chmod 640 /etc/ceph/ceph.client.admin.keyring
