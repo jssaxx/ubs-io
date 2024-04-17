@@ -43,7 +43,7 @@ public:
         if (mode == 1) {
             LoggerOptions options;
             options.minLogLevel = level;
-            options.path = "./bio_sdk_" + std::to_string(getpid()) + ".log";
+            options.path = "/var/log/boostio/bio_sdk_" + std::to_string(getpid()) + ".log";
             auto logger = Logger::Instance(options);
             if (logger == nullptr) {
                 std::cout << "Failed to create logger instance." << std::endl;

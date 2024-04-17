@@ -84,7 +84,6 @@ install(){
 #拷贝软件包
 install_package()
 {
-
   DEPRESS_PATH=$(cd $(dirname "$0")/..; pwd)
   mkdir -p $INSTALL_PATH
   rm -rf $INSTALL_PATH/*
@@ -97,6 +96,7 @@ install_package()
   mkdir -p $CONF_PATH
   mkdir -p $LOG_PATH
   mkdir -p $SCRIPTS_PATH
+  rm -f $BOOSTIO_HTRACE_LOG_PATH
   mkdir -p $BOOSTIO_HTRACE_LOG_PATH
   mkdir -p $SECURITY_PATH/authorization
 
@@ -115,13 +115,13 @@ register_systemd()
 {
   touch $BIN_PATH/executeBio.sh
   cat > $BIN_PATH/executeBio.sh << EOF
+#!/bin/bash
 export LD_LIBRARY_PATH=$LIB_PATH
-setenforce 0
 cd $BIN_PATH
-/bin/bash ../scripts/executeReady.sh
 ./bio_daemon
 EOF
   chmod 750 $BIN_PATH/executeBio.sh
+  chown $RUN_GROUP:$RUN_USER $BIN_PATH/executeBio.sh
   service_config=$SYSTEMD_SERVICE_PATH
   cat > $service_config << EOF
 [Unit]
@@ -133,8 +133,9 @@ Group=$RUN_GROUP
 Type=simple
 NotifyAccess=main
 Environment=LD_LIBRARY_PATH=$LIB_PATH
-AmbientCapabilities=CAP_SETUID CAP_SETGID
-ExecStart=su - $RUN_USER -c "bash $BIN_PATH/executeBio.sh"
+AmbientCapabilities=CAP_SETUID CAP_SETGID CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_IPC_LOCK
+ExecStart=$BIN_PATH/executeBio.sh
 Restart=always
 RestartSec=1
 [Install]
@@ -186,7 +187,7 @@ set_permissions()
   chown -R $RUN_USER:$RUN_GROUP $SCRIPTS_PATH
   chown $RUN_USER:$RUN_GROUP $CONF_PATH
   chown $RUN_USER:$RUN_GROUP $CONF_PATH/bio.conf
-  chown $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
+  chown -R $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
   chmod 750 $BOOSTIO_HTRACE_LOG_PATH
   chmod 550 $CONF_PATH
   chmod 640 $CONF_PATH/bio.conf
@@ -198,7 +199,7 @@ set_permissions()
   chmod 550 $BIN_PATH/executeBio.sh
   chmod -R 550 $LIB_PATH
   chmod -R 550 $SCRIPTS_PATH
-
+  chmod 640 /etc/ceph/ceph.client.admin.keyring
   print_log "info" "set logfile permission."
 }
 
