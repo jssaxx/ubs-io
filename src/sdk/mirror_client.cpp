@@ -962,7 +962,7 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, rsp);
-    req->memFromServer = false;
+    req->memFromServer = true;
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
