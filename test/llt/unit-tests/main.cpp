@@ -8,7 +8,7 @@
 #include "htracer.h"
 #include "wcache_manager.h"
 #include "test_cm.h"
-#include "test_rpc_engine.h"
+#include "test_net.h"
 #include "test_htracer.h"
 #include "test_disk.h"
 #include "bdm_core.h"
@@ -41,7 +41,6 @@ static bool DiskPathInvalid()
 int main(int argc, char *argv[])
 {
     TestCm::Stub();
-    TestRpcEngine::Stub();
     TestHtracer::Stub();
     (void)system("rm -rf test1");
     (void)system("rm -rf test2");
@@ -63,7 +62,7 @@ int main(int argc, char *argv[])
 
     auto ret = BioInitialize(WorkerMode::CONVERGENCE);
     if (ret != RET_CACHE_OK) {
-        std::cout << "server start failed" << std::endl;
+        std::cout << "boostio initialize failed, result:" << ret << "." << std::endl;
         return -1;
     }
 
@@ -74,21 +73,16 @@ int main(int argc, char *argv[])
     (void)system("rm -rf ceph.conf");
 
     ClearTraceInfo();
-
     uint64_t ptId = 1;
     uint64_t ptv = 2;
-
     Cache::Instance().HandleProcBroken(0);
     Cache::Instance().ExpiredClear(ptId, ptv);
-
     Cache::Instance().Flush(ptId, ptv);
 
     std::cout << "Exiting background threads..." << std::endl;
     sleep(NO_60);
     ExitBackgroundThreads(ptId, ptv);
-
     std::cout << "All background threads exit" << std::endl;
-
     return runRet;
 }
 

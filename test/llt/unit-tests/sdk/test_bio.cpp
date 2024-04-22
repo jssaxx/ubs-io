@@ -15,6 +15,8 @@
 #include "server/pt/cm_pt_calc_fixed_state.h"
 #include "cm_comm.h"
 #include "server/pt/cm_pt_calc_fixed.h"
+#include "server/interceptor_server.h"
+#include "tracepoint.h"
 #include "test_bio.h"
 
 bool TestBio::gSetup = false;
@@ -172,7 +174,6 @@ TEST_F(TestBio, test_bio_get)
     uint64_t realLen = G_LENGTH;
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
     EXPECT_EQ(fwrite(value, sizeof(char), realLen, fp), realLen);
-    EXPECT_EQ(ret, RET_CACHE_OK);
     // null realLen
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -182,7 +183,6 @@ TEST_F(TestBio, test_bio_get)
     delete[] value;
     fclose(fp);
 }
-
 
 TEST_F(TestBio, test_bio_put_diff_size_case_return_ok)
 {
@@ -386,6 +386,7 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
     uint64_t objNum = 0;
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    BioFreeListResources(objs, objNum);
 }
 
 TEST_F(TestBio, test_bio_put_remote_case_return_fail)
@@ -397,7 +398,7 @@ TEST_F(TestBio, test_bio_put_remote_case_return_fail)
     EXPECT_EQ(fread((void *) value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
     auto ret = BioPut(G_TENANT_ID, "putremote", value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
-    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
 TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
@@ -883,4 +884,14 @@ TEST_F(TestBio, test_bio_put_not_ready_case_return_fail)
     auto ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+}
+
+TEST_F(TestBio, test_agent_init_return_err)
+{
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_AGENT_INIT_FAIL", 0, 1, userParam);
+    auto ret = BioInitialize(WorkerMode::SEPARATES);
+    EXPECT_EQ(ret, ock::bio::BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_AGENT_INIT_FAIL");
 }

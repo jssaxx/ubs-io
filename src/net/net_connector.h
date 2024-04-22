@@ -59,7 +59,7 @@ private:
 
 private:
     ConnectMode mode = CONNECT_RPC;           /* connect mode */
-    NetEngine *mEngine{ nullptr };            /* engine, use raw pointer to avoid include files dead-locks */
+    NetEngine *mEngine = nullptr;             /* engine, use raw pointer to avoid include files dead-locks */
     ConnectInfo mConnectInfo{};               /* connect info */
     BResult mResult = BIO_OK;                 /* connect result */
     bool mSyncConnect = true;                 /* connect type */
@@ -93,11 +93,11 @@ public:
 private:
     DEFINE_REF_COUNT_VARIABLE
 
-    ExecutorServicePtr mExeService{ nullptr };
-    uint32_t mLocalNodeId{ UINT32_MAX };
-    NetEngine *mEngine{ nullptr };
-    std::mutex mMutex;
     bool mStarted = false;
+    ExecutorServicePtr mExeService = nullptr;
+    uint32_t mLocalNodeId = UINT32_MAX;
+    NetEngine *mEngine = nullptr;
+    std::mutex mMutex;
     std::string mName;
 };
 

@@ -31,10 +31,7 @@ struct ChannelNode {
 class NetChannelMgr {
 public:
     NetChannelMgr() = default;
-    ~NetChannelMgr()
-    {
-        UnInitialize();
-    }
+    ~NetChannelMgr() = default;
 
     BResult Initialize();
     void UnInitialize();

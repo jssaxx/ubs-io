@@ -14,9 +14,6 @@ class TestBioServer : public testing::Test {
 
     void TearDown() override;
 
-public:
-    static void Stub();
-
 private:
     static bool gSetup;
 };
