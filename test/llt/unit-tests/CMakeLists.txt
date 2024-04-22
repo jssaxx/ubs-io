@@ -21,7 +21,7 @@ aux_source_directory(htracer BIO_TEST)
 aux_source_directory(server BIO_TEST)
 aux_source_directory(cache/read BIO_TEST)
 aux_source_directory(cache/write BIO_TEST)
-aux_source_directory(net/rpc BIO_TEST)
+aux_source_directory(net BIO_TEST)
 aux_source_directory(cm BIO_TEST)
 aux_source_directory(disk BIO_TEST)
 aux_source_directory(sdk BIO_TEST)
@@ -39,9 +39,9 @@ target_include_directories(bio_test PRIVATE
         ${TEST_DIR}/common
         ${TEST_DIR}/cache/read
         ${TEST_DIR}/cache/write
-        ${TEST_DIR}/net/rpc
+        ${TEST_DIR}/net
+		${TEST_DIR}/../../tools/tracepoint/include
         ${SRC_DIR}/common
-        ${SRC_DIR}/net
         ${SRC_DIR}/cache
         ${SRC_DIR}/cache/read
         ${SRC_DIR}/cache/write
@@ -52,8 +52,7 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/config
         ${SRC_DIR}/disk
         ${SRC_DIR}/htracer
-        ${SRC_DIR}/net
-		${SRC_DIR}/net/rpc
+		${SRC_DIR}/net
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
         ${SRC_DIR}/stream

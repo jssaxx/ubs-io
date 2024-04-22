@@ -164,6 +164,11 @@ public:
         return mMirror;
     }
 
+    inline net::BioClientNetPtr GetNetEngine() const
+    {
+        return mNetEngine;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

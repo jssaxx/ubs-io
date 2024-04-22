@@ -662,6 +662,21 @@ BResult MirrorServer::Initialize()
     return BIO_OK;
 }
 
+int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req)
+{
+    ShmInitResponse rsp;
+    rsp.serverPid = getpid();
+    BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
+    auto ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Send fds failed, ret:" << ret << ".");
+        Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+    } else {
+        Reply(ctx, BIO_OK, &rsp, sizeof(ShmInitResponse));
+    }
+    return BIO_OK;
+}
+
 int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
@@ -676,33 +691,42 @@ int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
     }
 
     auto req = static_cast<ShmInitRequest *>(ctx.MessageData());
-    ShmInitResponse rsp{};
-    rsp.serverPid = getpid();
-    BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
-    auto ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Send fds failed, ret:" << ret << ".");
-        Reply(ctx, BIO_ERR, nullptr, 0);
-    } else {
-        Reply(ctx, BIO_OK, &rsp, sizeof(ShmInitResponse));
+    return MirrorServerShmInit(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req)
+{
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
     }
+
+    CmNodeId localNid = BioServer::Instance()->GetLocalNid();
+    GetLocalNidResponse rsp = { localNid.GroupId(), localNid.VNodeId(), BioServer::Instance()->GetNetProtocol() };
+    Reply(ctx, BIO_OK, &rsp, sizeof(GetLocalNidResponse));
     return BIO_OK;
 }
 
-int32_t MirrorServer::HandleQueryNodeInfoByPt(ServiceContext &ctx)
+int32_t MirrorServer::HandleQueryNodeInfo(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
 
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(FileLocationQueryReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetLocalNidRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive query pt message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
-    auto *req = static_cast<FileLocationQueryReq *>(ctx.MessageData());
+    auto req = static_cast<GetLocalNidRequest *>(ctx.MessageData());
+    return MirrorServerQueryNodeInfo(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLocationQueryReq *req)
+{
     CmNodeInfo nodeInfo;
     CmNodeId id;
     id.nodeId = req->masterPtId;
@@ -730,29 +754,34 @@ int32_t MirrorServer::HandleQueryNodeInfoByPt(ServiceContext &ctx)
     return BIO_OK;
 }
 
-int32_t MirrorServer::HandleQueryNodeInfo(ServiceContext &ctx)
+int32_t MirrorServer::HandleQueryNodeInfoByPt(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
         Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
 
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetLocalNidRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(FileLocationQueryReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive query pt message len:" << ctx.MessageDataLen() << " or message data invalid.");
         Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
-    auto *req = static_cast<GetLocalNidRequest *>(ctx.MessageData());
+    auto req = static_cast<FileLocationQueryReq *>(ctx.MessageData());
+    return MirrorServerQueryNodeInfoByPt(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeViewRequest *req)
+{
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_CHECK_PT_FAIL;
     }
 
-    CmNodeId localNid = BioServer::Instance()->GetLocalNid();
-    GetLocalNidResponse rsp = { localNid.GroupId(), localNid.VNodeId(), BioServer::Instance()->GetNetProtocol() };
-    Reply(ctx, BIO_OK, &rsp, sizeof(GetLocalNidResponse));
+    QueryNodeViewResponse rsp;
+    QueryNodeView(*req, rsp);
+    Reply(ctx, BIO_OK, &rsp, sizeof(QueryNodeViewResponse));
     return BIO_OK;
 }
 
@@ -770,15 +799,20 @@ int32_t MirrorServer::HandleQueryNodeView(ServiceContext &ctx)
     }
 
     auto req = static_cast<QueryNodeViewRequest *>(ctx.MessageData());
+    return MirrorServerQueryNodeView(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerQueryPtView(ServiceContext &ctx, QueryPtViewRequest *req)
+{
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_CHECK_PT_FAIL;
     }
 
-    QueryNodeViewResponse rsp;
-    QueryNodeView(*req, rsp);
-    Reply(ctx, BIO_OK, &rsp, sizeof(QueryNodeViewResponse));
+    QueryPtViewResponse rsp;
+    QueryPtView(*req, rsp);
+    Reply(ctx, BIO_OK, &rsp, sizeof(QueryPtViewResponse));
     return BIO_OK;
 }
 
@@ -795,17 +829,8 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    auto *req = static_cast<QueryPtViewRequest *>(ctx.MessageData());
-    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
-        LOG_ERROR("Check message magic failed.");
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
-    }
-
-    QueryPtViewResponse rsp;
-    QueryPtView(*req, rsp);
-    Reply(ctx, BIO_OK, &rsp, sizeof(QueryPtViewResponse));
-    return BIO_OK;
+    auto req = static_cast<QueryPtViewRequest *>(ctx.MessageData());
+    return MirrorServerQueryPtView(ctx, req);
 }
 
 BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset)
@@ -851,20 +876,8 @@ BResult MirrorServer::SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uin
     return ret;
 }
 
-int32_t MirrorServer::HandlePut(ServiceContext &ctx)
+int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 {
-    if (UNLIKELY(!Ready())) {
-        Reply(ctx, BIO_NOT_READY, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive put message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        Reply(ctx, BIO_NET_RETRY, nullptr, 0);
-        return BIO_OK;
-    }
-
-    auto req = static_cast<PutRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
@@ -897,6 +910,43 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     return BIO_OK;
 }
 
+int32_t MirrorServer::HandlePut(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive put message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_NET_RETRY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<PutRequest *>(ctx.MessageData());
+    return MirrorServerPut(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
+{
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
+    GetResponse rsp;
+    BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
+    BResult result = Get(*req, rsp, ctx);
+    BIO_TRACE_END(MIRROR_TRACE_GET_HDL, result);
+    if (result != BIO_OK) {
+        Reply(ctx, result, nullptr, 0);
+        return BIO_OK;
+    }
+
+    Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(GetResponse));
+    return BIO_OK;
+}
+
 int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
@@ -910,23 +960,21 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
     auto req = static_cast<GetRequest *>(ctx.MessageData());
+    return MirrorServerGet(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)
+{
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_GET_HDL, BIO_CHECK_PT_FAIL);
         return BIO_CHECK_PT_FAIL;
     }
 
-    GetResponse rsp;
-    BResult result = Get(*req, rsp, ctx);
-    if (result != BIO_OK) {
-        Reply(ctx, result, nullptr, 0);
-        return BIO_OK;
-    }
-
-    Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(GetResponse));
-    BIO_TRACE_END(MIRROR_TRACE_GET_HDL, 0);
+    BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
+    BResult result = Delete(*req);
+    BIO_TRACE_END(MIRROR_TRACE_DEL_HDL, result);
+    Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
     return BIO_OK;
 }
 
@@ -944,18 +992,28 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
     }
 
     auto req = static_cast<DeleteRequest *>(ctx.MessageData());
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
-    }
-
-    BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
-    BResult result = Delete(*req);
-    BIO_TRACE_END(MIRROR_TRACE_DEL_HDL, result);
-    Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
-    return BIO_OK;
+    return MirrorServerDelete(ctx, req);
 }
 
+int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
+{
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
+    ObjStat objInfo;
+    BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
+    BResult ret = Stat(*req, objInfo);
+    BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, ret);
+    if (ret != BIO_OK) {
+        Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
+
+    Reply(ctx, BIO_OK, static_cast<void *>(&objInfo), sizeof(ObjStat));
+    return BIO_OK;
+}
 int32_t MirrorServer::HandleStat(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
@@ -969,24 +1027,24 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
-    auto *req = static_cast<StatRequest *>(ctx.MessageData());
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, BIO_CHECK_PT_FAIL);
-        return BIO_CHECK_PT_FAIL;
-    }
+    auto req = static_cast<StatRequest *>(ctx.MessageData());
+    return MirrorServerStat(ctx, req);
+}
 
-    ObjStat objInfo;
-    BResult ret = Stat(*req, objInfo);
+int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
+{
+    std::unordered_map<std::string, ObjStat> objs;
+    BResult ret = List(*req, objs);
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, ret);
         return BIO_OK;
     }
 
-    Reply(ctx, BIO_OK, static_cast<void *>(&objInfo), sizeof(ObjStat));
-    BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, 0);
+    if (static_cast<uint16_t>(req->comm.srcNid) == BioServer::Instance()->GetLocalNid().VNodeId()) {
+        ReplyListResultLocal(ctx, objs);
+    } else {
+        ReplyListResultRemote(ctx, req, objs);
+    }
     return BIO_OK;
 }
 
@@ -1004,18 +1062,20 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
     }
 
     auto req = static_cast<ListRequest *>(ctx.MessageData());
-    std::unordered_map<std::string, ObjStat> objs;
-    BResult ret = List(*req, objs);
-    if (ret != BIO_OK) {
-        Reply(ctx, ret, nullptr, 0);
-        return BIO_OK;
+    return MirrorServerList(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
+{
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_CHECK_PT_FAIL;
     }
 
-    if (static_cast<uint16_t>(req->comm.srcNid) == BioServer::Instance()->GetLocalNid().VNodeId()) {
-        ReplyListResultLocal(ctx, objs);
-    } else {
-        ReplyListResultRemote(ctx, req, objs);
-    }
+    BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
+    BResult ret = Load(*req);
+    BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, ret);
+    Reply(ctx, ret, nullptr, 0);
     return BIO_OK;
 }
 
@@ -1033,15 +1093,20 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
     }
 
     auto req = static_cast<LoadRequest *>(ctx.MessageData());
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
+    return MirrorServerLoad(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerReportHb(ServiceContext &ctx)
+{
+    HbResponse rsp;
+    auto ret = BioServer::Instance()->GetHbInfo(&rsp.curNodeTimes, &rsp.curPtTimes);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get hb info fail:" << ret);
+        Reply(ctx, ret, nullptr, 0);
+        return ret;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
-    BResult ret = Load(*req);
-    BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, ret);
-    Reply(ctx, ret, nullptr, 0);
+    Reply(ctx, BIO_OK, &rsp, sizeof(HbResponse));
     return BIO_OK;
 }
 
@@ -1058,41 +1123,19 @@ int32_t MirrorServer::HandleReportHb(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    HbResponse rsp;
-    auto ret = BioServer::Instance()->GetHbInfo(&rsp.curNodeTimes, &rsp.curPtTimes);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Get hb info fail:" << ret);
-        Reply(ctx, ret, nullptr, 0);
-        return ret;
-    }
-
-    Reply(ctx, BIO_OK, &rsp, sizeof(HbResponse));
-    return BIO_OK;
+    return MirrorServerReportHb(ctx);
 }
 
-int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
+int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req)
 {
-    if (UNLIKELY(!Ready())) {
-        Reply(ctx, BIO_NOT_READY, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CreateFlowRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive create flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
-    BIO_TRACE_START(MIRROR_TRACE_CREATEFLOW_HDL);
-    auto *req = static_cast<CreateFlowRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, BIO_CHECK_PT_FAIL);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
 
     BResult result;
     uint64_t flowId = UINT64_MAX;
+    BIO_TRACE_START(MIRROR_TRACE_CREATEFLOW_HDL);
     if (req->opType == 0) {
         result = CreateFlowMaster(req->comm.pid, req->comm.ptId, req->comm.ptv, flowId);
         if (UNLIKELY(result != BIO_OK)) {
@@ -1110,9 +1153,44 @@ int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
     } else {
         LOG_ERROR("Invalid op type, opType:" << req->opType << ", ptId:" << req->comm.ptId << ".");
     }
+    BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, BIO_OK);
 
     Reply(ctx, BIO_OK, static_cast<void *>(&flowId), sizeof(uint64_t));
-    BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleCreateFlow(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CreateFlowRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive create flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<CreateFlowRequest *>(ctx.MessageData());
+    return MirrorServerCreateFlow(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRequest *req)
+{
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BIO_TRACE_START(MIRROR_TRACE_DESTROYFLOW_HDL);
+    auto result = DestroyFlow(req->comm.pid, req->comm.ptId, req->comm.ptv, req->flowId);
+    BIO_TRACE_END(MIRROR_TRACE_DESTROYFLOW_HDL, result);
+    if (UNLIKELY(result != BIO_OK)) {
+        LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
+    }
+
+    Reply(ctx, result, static_cast<void *>(&req->flowId), sizeof(uint64_t));
     return BIO_OK;
 }
 
@@ -1129,38 +1207,12 @@ int32_t MirrorServer::HandleDestroyFlow(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_DESTROYFLOW_HDL);
-    auto *req = static_cast<DestroyFlowRequest *>(ctx.MessageData());
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_DESTROYFLOW_HDL, BIO_CHECK_PT_FAIL);
-        return BIO_CHECK_PT_FAIL;
-    }
-
-    auto result = DestroyFlow(req->comm.pid, req->comm.ptId, req->comm.ptv, req->flowId);
-    if (UNLIKELY(result != BIO_OK)) {
-        LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
-    }
-
-    Reply(ctx, result, static_cast<void *>(&req->flowId), sizeof(uint64_t));
-    BIO_TRACE_END(MIRROR_TRACE_DESTROYFLOW_HDL, 0);
-    return BIO_OK;
+    auto req = static_cast<DestroyFlowRequest *>(ctx.MessageData());
+    return MirrorServerDestroyFlow(ctx, req);
 }
 
-int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
+int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest *req)
 {
-    if (UNLIKELY(!Ready())) {
-        Reply(ctx, BIO_NOT_READY, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetSliceRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive create flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
-    auto *req = static_cast<GetSliceRequest *>(ctx.MessageData());
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
@@ -1180,7 +1232,7 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
         Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
     }
-    GetSliceResponse *rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
+    auto rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
 
     std::vector<FlowAddr> addrVec = sliceP->GetAddrs();
     if (addrVec.size() > SLICE_ADDR_MAX_SIZE) {
@@ -1193,7 +1245,7 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
         rsp->addr[i].chunkOffset = addrVec[i].chunkOffset;
         rsp->addr[i].chunkLen = addrVec[i].chunkLen;
         rsp->addrOffset[i] =
-            BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
+                BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
     }
     rsp->sliceLen = sliceLen;
     uint32_t outSliceLen = 0;
@@ -1205,6 +1257,37 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
         Reply(ctx, BIO_OK, rsp, sizeof(GetSliceResponse) + sliceLen);
     }
     delete[] tmp;
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetSliceRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive create flow message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<GetSliceRequest *>(ctx.MessageData());
+    return MirrorServerGetSlice(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerSyncData(ServiceContext &ctx, SyncDataRequest *req)
+{
+    if (UNLIKELY(!CheckAll(req->comm))) {
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA_HDL);
+    BResult ret = SyncData(*req);
+    BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, ret);
+    Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
     return BIO_OK;
 }
 
@@ -1221,17 +1304,27 @@ int32_t MirrorServer::HandleSyncData(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA_HDL);
-    auto *req = static_cast<SyncDataRequest *>(ctx.MessageData());
+    auto req = static_cast<SyncDataRequest *>(ctx.MessageData());
+    return MirrorServerSyncData(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerGetEvictOffset(ServiceContext &ctx, GetEvictRequest *req)
+{
     if (UNLIKELY(!CheckAll(req->comm))) {
         Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, BIO_CHECK_PT_FAIL);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
 
-    BResult ret = SyncData(*req);
-    Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
-    BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, 0);
+    uint64_t flowOffset;
+    BIO_TRACE_START(MIRROR_TRACE_GET_EVICT_OFFSET_HDL);
+    BResult ret = GetEvictOffset(*req, flowOffset);
+    BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, ret);
+    if (ret != BIO_OK) {
+        Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
+
+    Reply(ctx, BIO_OK, static_cast<void *>(&flowOffset), sizeof(uint64_t));
     return BIO_OK;
 }
 
@@ -1248,24 +1341,17 @@ int32_t MirrorServer::HandleGetEvictOffset(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_GET_EVICT_OFFSET_HDL);
     auto req = static_cast<GetEvictRequest *>(ctx.MessageData());
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, BIO_CHECK_PT_FAIL);
-        return BIO_CHECK_PT_FAIL;
-    }
+    return MirrorServerGetEvictOffset(ctx, req);
+}
 
-    uint64_t flowOffset;
-    BResult ret = GetEvictOffset(*req, flowOffset);
-    if (ret != BIO_OK) {
-        Reply(ctx, ret, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, ret);
-        return BIO_OK;
+int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req)
+{
+    for (uint32_t idx = 0; idx < req->num; idx++) {
+        auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx]);
+        BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
     }
-
-    Reply(ctx, BIO_OK, static_cast<void *>(&flowOffset), sizeof(uint64_t));
-    BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET_HDL, 0);
+    Reply(ctx, BIO_OK, nullptr, 0);
     return BIO_OK;
 }
 
@@ -1283,10 +1369,5 @@ int32_t MirrorServer::HandleFreeMem(ServiceContext &ctx)
     }
 
     auto req = static_cast<FreeMemRequest *>(ctx.MessageData());
-    for (uint32_t idx = 0; idx < req->num; idx++) {
-        auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx]);
-        BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
-    }
-    Reply(ctx, BIO_OK, nullptr, 0);
-    return BIO_OK;
+    return MirrorServerFreeMem(ctx, req);
 }

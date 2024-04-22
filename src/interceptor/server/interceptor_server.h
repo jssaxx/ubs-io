@@ -22,12 +22,13 @@ public:
 
     int32_t StartServer();
 
-private:
-    void RegisterOpcode();
     int32_t HandleInterceptorRead(ServiceContext &ctx);
     int32_t HandleInterceptorWrite(ServiceContext &ctx);
     int32_t HandleInterceptorAllocPage(ServiceContext &ctx);
     int32_t HandleInterceptorLargeWrite(ServiceContext &ctx);
+
+private:
+    void RegisterOpcode();
 };
 }
 }

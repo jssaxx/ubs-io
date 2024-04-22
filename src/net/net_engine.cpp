@@ -46,12 +46,14 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         NET_LOG_ERROR("Make ctrl channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
+    mCtrlChannelMgr->Initialize();
 
     mDataChannelMgr = MakeRef<NetChannelMgr>();
     if (mDataChannelMgr == nullptr) {
         NET_LOG_ERROR("Make data channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
+    mDataChannelMgr->Initialize();
 
     mConnector = MakeRef<NetConnector>(this);
     if (mConnector == nullptr) {
@@ -123,7 +125,9 @@ void NetEngine::StopInner()
         mConnector = nullptr;
     }
 
+    mCtrlChannelMgr->UnInitialize();
     mCtrlChannelMgr = nullptr;
+    mDataChannelMgr->UnInitialize();
     mDataChannelMgr = nullptr;
 
     if (mMrBlockPool != nullptr) {
@@ -504,6 +508,23 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
+void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, NetServiceConnectOptions &op)
+{
+    op.epSize = mOptions.connCount;
+    if (isCtrl) {
+        op.clientGrpNo = WKR_GRP_INDEX_CTRL_CLIENT;
+        op.serverGrpNo = WKR_GRP_INDEX_CTRL_SERVER;
+        prefix = CONN_PAYLOAD_PREFIX_CTRL;
+    } else {
+        op.clientGrpNo = WKR_GRP_INDEX_DATA_CLIENT;
+        op.serverGrpNo = WKR_GRP_INDEX_DATA_SERVER;
+        prefix = CONN_PAYLOAD_PREFIX_DATA;
+    }
+    if (info.isSelfPoll) {
+        op.flags = NET_EP_SELF_POLLING;
+    }
+}
+
 BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
     NetService *netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
@@ -512,29 +533,24 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
         return BIO_ERR;
     }
 
-    NetServiceConnectOptions options{};
+    NetServiceConnectOptions options;
     std::string prefix;
-    options.epSize = mOptions.connCount;
-    if (isCtrlPanel) {
-        options.clientGrpNo = WKR_GRP_INDEX_CTRL_CLIENT;
-        options.serverGrpNo = WKR_GRP_INDEX_CTRL_SERVER;
-        prefix = CONN_PAYLOAD_PREFIX_CTRL;
-    } else {
-        options.clientGrpNo = WKR_GRP_INDEX_DATA_CLIENT;
-        options.serverGrpNo = WKR_GRP_INDEX_DATA_SERVER;
-        prefix = CONN_PAYLOAD_PREFIX_DATA;
-    }
-    if (info.isSelfPoll) {
-        options.flags = NET_EP_SELF_POLLING;
-    }
-
+    FillConnectOption(info, isCtrlPanel, prefix, options);
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         NetConnPayload payload(info.srcId);
         if (mode == CONNECT_IPC) {
+#ifndef USE_HCOM_STUB
             result = netService->Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
+#else
+            result = NetStub::Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
+#endif
         } else {
+#ifndef USE_HCOM_STUB
             result = netService->Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
+#else
+            result = NetStub::Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
+#endif
         }
         if (result == 0) {
             NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", nid " <<

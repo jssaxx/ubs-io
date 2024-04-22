@@ -23,6 +23,9 @@ fi
 if [[ "$2" == 'Ut' ]]; then
     BUILD_UT=ON
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
+else
+	BUILD_UT=OFF
+	CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
 if [[ "$3" == 'Ceph' ]];then
