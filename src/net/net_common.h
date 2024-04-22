@@ -33,6 +33,14 @@ using MemoryRegionPtr = ock::hcom::NetMemoryRegionPtr;
 using MemoryAllocatorPtr = ock::hcom::NetMemoryAllocatorPtr;
 using NetRequest = hcom::NetServiceRequest;
 
+using CbFunc = std::function<void(void *ctx, void *resp, uint32_t len, int32_t result)>;
+struct Callback {
+    CbFunc cb;
+    void *cbCtx;
+    Callback() : cb([](void *ctx, void *resp, uint32_t len, int32_t result) {}), cbCtx(nullptr) {}
+    Callback(CbFunc func, void *ctx) : cb(std::move(func)), cbCtx(ctx) {}
+};
+
 enum ConnectMode {
     CONNECT_IPC = 0,
     CONNECT_RPC = 1,

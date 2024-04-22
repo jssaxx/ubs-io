@@ -76,7 +76,7 @@ public:
     }
 
     template <typename TReq>
-    inline void SendAsync(const BioNodeId target, uint16_t opcode, TReq &req, NetEngine::Callback &cb)
+    inline void SendAsync(const BioNodeId target, uint16_t opcode, TReq &req, Callback &cb)
     {
         mNetEngine->AsyncCall(target, opcode, req, cb);
     }
@@ -87,7 +87,7 @@ public:
     }
 
     inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen,
-        NetEngine::Callback &cb)
+        Callback &cb)
     {
         mNetEngine->AsyncCallBuff(target, opcode, req, reqLen, cb);
     }

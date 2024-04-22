@@ -14,6 +14,8 @@ BResult NetChannelMgr::Initialize()
         return BIO_OK;
     }
 
+    mChannelMgr.clear();
+    mChannelNodeMap.clear();
     mInited = true;
     NET_LOG_INFO("Net engine channel manager initialize success.");
     return BIO_OK;
@@ -24,6 +26,16 @@ void NetChannelMgr::UnInitialize()
     if (!mInited) {
         return;
     }
+    for (auto &node : mChannelNodeMap) {
+        auto chNode = node.second;
+        delete chNode;
+    }
+    mChannelNodeMap.clear();
+    for (auto &node : mChannelMgr) {
+        auto chInfo = node.second;
+        delete chInfo;
+    }
+    mChannelMgr.clear();
     mInited = false;
 }
 

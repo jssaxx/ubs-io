@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2012-2023. All rights reserved.
+ * Description: trans_stub.h
+ * date: 2022-09-15
+ */
+
+#ifndef NET_STUB_H
+#define NET_STUB_H
+
+#include <cstdint>
+#include <cstdlib>
+#include <string>
+#include <atomic>
+
+#include "net_common.h"
+
+namespace ock {
+namespace hcom {
+class NetServiceDefaultImp {
+public:
+    static NetChannel *MakeChannel();
+private:
+    static std::atomic<uint64_t> idGen;
+};
+}
+}
+
+namespace ock {
+namespace bio {
+class NetStub {
+public:
+    static int32_t Connect(const std::string &oobIpOrName, uint16_t oobPort, const std::string &payload, ChannelPtr &ch,
+        ock::hcom::NetServiceConnectOptions options);
+
+    static int32_t SyncCall(const ock::hcom::NetServiceOpInfo &reqOpInfo, const ock::hcom::NetServiceMessage &req,
+        ock::hcom::NetServiceOpInfo &rspOpInfo, ock::hcom::NetServiceMessage &rsp);
+
+    static int32_t AsyncCall(const ock::hcom::NetServiceOpInfo &reqOpInfo, const ock::hcom::NetServiceMessage &req,
+        Callback callback);
+
+    static int32_t SyncRead(const NetRequest &request);
+
+    static int32_t SyncWrite(const NetRequest &request);
+
+    static int32_t SendFds(int fds[], uint32_t len);
+
+    static std::atomic<uint64_t> connectCount;
+};
+}
+}
+
+#endif

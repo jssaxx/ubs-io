@@ -61,6 +61,13 @@ public:
 public:
     BResult NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
 
+    void JobAddFinishList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
+    void JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
+    bool JobPreCheck(CmPtInfo &ptInfo);
+    BResult JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool &curExist);
+    BResult JobExpiredClear(CmPtInfo &ptInfo);
+    BResult JobSyncData(CmPtInfo &ptInfo);
+
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
@@ -70,13 +77,6 @@ private:
     void RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo);
 
     void UpdatePt(CmPtInfo &ptInfo);
-
-    void JobAddFinishList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
-    void JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
-    bool JobPreCheck(CmPtInfo &ptInfo);
-    BResult JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool &curExist);
-    BResult JobExpiredClear(CmPtInfo &ptInfo);
-    BResult JobSyncData(CmPtInfo &ptInfo);
 
     BResult SendSyncDataReq(CmPtInfo &ptInfo);
 

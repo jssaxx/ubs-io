@@ -184,6 +184,11 @@ public:
         return mMirror;
     }
 
+    inline MirrorServerCrbPtr GetMirrorCrb()
+    {
+        return mMirrorCrb;
+    }
+
     inline CmNodeId GetLocalNid()
     {
         return mLocalNid;

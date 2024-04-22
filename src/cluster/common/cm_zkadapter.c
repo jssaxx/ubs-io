@@ -147,7 +147,7 @@ static int32_t CmClientZkAtoi(const char *str)
     return num;
 }
 
-static uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre)
+uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre)
 {
     int32_t step = strlen(pre);
     const char *str = &path[step];
@@ -723,7 +723,7 @@ int32_t CmClientZkSubStateListChange(uint16_t poolId, stateChangeNotifyFp notify
     return CM_OK;
 }
 
-static int32_t CmClientZkPtEntryIsSame(PtEntry *elem1, PtEntry *elem2)
+int32_t CmClientZkPtEntryIsSame(PtEntry *elem1, PtEntry *elem2)
 {
     if (elem1->ptId != elem2->ptId || elem1->state != elem2->state || elem1->birthVersion != elem2->birthVersion ||
         elem1->masterNodeId != elem2->masterNodeId || elem1->masterDiskId != elem2->masterDiskId ||
@@ -843,15 +843,6 @@ int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
     }
     CmClientZkUpdatePtList(ptList);
     free(ptList);
-    return CM_OK;
-}
-
-int32_t CmClientZkSubMasterNodeIdChange(uint16_t poolId, masterChangeNotifyFp notifyFp)
-{
-    g_cZkMgr.restore[poolId].masterChange = notifyFp;
-    if (g_cZkMgr.restore[poolId].stateList->masterNodeId != NODE_ID_INVALID) {
-        notifyFp(poolId, g_cZkMgr.restore[poolId].stateList->masterNodeId);
-    }
     return CM_OK;
 }
 

@@ -70,11 +70,11 @@ public:
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
 
-    void PutLocal(PutRequest *req, NetEngine::Callback &callback);
+    void PutLocal(PutRequest *req, Callback &callback);
 
     BResult GetLocal(GetRequest &req, char *value, uint64_t &realLen);
 
-    void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback);
+    void DeleteLocal(DeleteRequest &req, Callback &callback);
 
     BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
@@ -99,11 +99,11 @@ private:
     BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
         uint64_t length, GetSliceResponse **rsp);
 
-    void SendPutRequestLocal(PutRequest *req, NetEngine::Callback &callback);
+    void SendPutRequestLocal(PutRequest *req, Callback &callback);
 
     BResult SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen);
 
-    void SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback);
+    void SendDeleteRequestLocal(DeleteRequest &req, Callback &callback);
 
     BResult CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);

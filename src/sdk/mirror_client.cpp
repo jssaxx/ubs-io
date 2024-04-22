@@ -1002,7 +1002,7 @@ BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&
 }
 
 void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index,
-    NetEngine::Callback &callback)
+    Callback &callback)
 {
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
@@ -1015,7 +1015,7 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
     }
 }
 
-void MirrorClient::PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const
+void MirrorClient::PutLocal(PutRequest *req, uint32_t localIdx, Callback &callback) const
 {
     if (UNLIKELY(localIdx == UINT32_MAX)) {
         return;
@@ -1055,7 +1055,7 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
             sem_post(&cbCtx->sem);
         }
     };
-    NetEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
 
     uint32_t localIdx = UINT32_MAX;
     std::vector<uint32_t> remoteIdx;
@@ -1152,14 +1152,14 @@ BResult MirrorClient::SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *v
     return GetMaster(req, ptEntry.masterNodeId, value, realLen);
 }
 
-void MirrorClient::DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, NetEngine::Callback &callback)
+void MirrorClient::DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, Callback &callback)
 {
     uint16_t dstNid = ptEntry.copys[index].nodeId;
     net::BioClientNet::Instance()->SendAsync<DeleteRequest>(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_DELETE, req,
         callback);
 }
 
-void MirrorClient::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback) const
+void MirrorClient::DeleteLocal(DeleteRequest &req, Callback &callback) const
 {
     agent::BioClientAgent::Instance()->DeleteLocal(req, callback);
 }
@@ -1180,7 +1180,7 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
             sem_post(&cbCtx->sem);
         }
     };
-    NetEngine::Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
 
     for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
@@ -1297,7 +1297,7 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
         BResult hdlRet = *(static_cast<BResult *>(resp));
         callback(context, hdlRet);
     };
-    NetEngine::Callback cb(cbFunc, nullptr);
+    Callback cb(cbFunc, nullptr);
     net::BioClientNet::Instance()->SendAsync<LoadRequest>(static_cast<uint32_t>(masterNid), BIO_OP_SDK_LOAD, req, cb);
     return BIO_OK;
 }

@@ -27,7 +27,11 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
         CLIENT_LOG_ERROR("Failed to create agent instance.");
         return BIO_ALLOC_FAIL;
     }
-    BResult ret = agentPtr->Initialize(mode);
+
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_AGENT_INIT_FAIL, &ret, BIO_ERR);
+    ret = agentPtr->Initialize(mode);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize agent, ret:" << ret << ".");
     }
