@@ -227,7 +227,7 @@ static int32_t ViewStoreInitial(Storer storer, PtEntryList *ptList)
     return CM_OK;
 }
 
-static int32_t ViewStorePtEntryIsSame(PtEntry *elem1, PtEntry *elem2)
+int32_t ViewStorePtEntryIsSame(PtEntry *elem1, PtEntry *elem2)
 {
     if (elem1->ptId != elem2->ptId || elem1->state != elem2->state || elem1->birthVersion != elem2->birthVersion ||
         elem1->masterNodeId != elem2->masterNodeId || elem1->masterDiskId != elem2->masterDiskId ||

@@ -10,9 +10,12 @@
 #include "zookeeper.h"
 #include "cm_zkadapter.h"
 #include "cm_config.h"
-#include "cm_server_init.h"
-#include "cm_client_init.h"
-#include "cm_client_local.h"
+#include "common/cm_inner.h"
+#include "client/cm_client_init.h"
+#include "client/cm_client_local.h"
+#include "server/pt/cm_pt_calc_fixed_state.h"
+#include "server/pt/cm_pt_store.h"
+#include "server/cm_server_init.h"
 #include "server/cm_server_view.h"
 #include "server/cm_server_monitor.h"
 #include "test_cm.h"
@@ -572,4 +575,56 @@ TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
     auto state = (NodeStateInfo *)malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState) * DISK_LIST_NUM);
     auto ret = CmServerViewGetNodeState(0, state);
     EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_get_node_info)
+{
+    NodeInfo nodeInfo;
+    auto ret = CM_GetNodeInfo(0, &nodeInfo);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+static int32_t StubNodeChgHandler(NodeStateList *nodeList, void *ctx)
+{
+    return BIO_OK;
+}
+
+TEST_F(TestCm, test_cm_register_node_chg)
+{
+    NodeListChangeOpHandle handle = { StubNodeChgHandler, nullptr };
+    auto ret = CM_RegNodeListChangeNotifyHandle(0, &handle);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_set_pt_finish)
+{
+    PtFinish eventList = { 1, 1, 0 };
+    auto ret = CM_SetPtFinishStatus(0, 1, &eventList);
+    EXPECT_EQ(ret, CM_OK);
+}
+
+TEST_F(TestCm, test_cm_is_pt_same)
+{
+    PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
+        {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
+    PtEntry elem2 = elem1;
+    auto ret = ViewStorePtEntryIsSame(&elem1, &elem2);
+    EXPECT_EQ(ret, 1);
+}
+
+TEST_F(TestCm, test_cm_get_node_id_by_path)
+{
+    std::string path = "/zk/123";
+    std::string pre = "/zk/";
+    auto ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
+    EXPECT_EQ(ret, 123U);
+}
+
+TEST_F(TestCm, test_cm_is_zk_pt_same)
+{
+    PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
+        {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
+    PtEntry elem2 = elem1;
+    auto ret = CmClientZkPtEntryIsSame(&elem1, &elem2);
+    EXPECT_EQ(ret, 1);
 }

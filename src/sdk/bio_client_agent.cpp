@@ -326,13 +326,13 @@ BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint
     }
 }
 
-void BioClientAgent::SendPutRequestLocal(PutRequest *req, NetEngine::Callback &callback)
+void BioClientAgent::SendPutRequestLocal(PutRequest *req, Callback &callback)
 {
     net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_PUT, static_cast<void *>(req),
         sizeof(PutRequest) + req->sliceLen, callback);
 }
 
-void BioClientAgent::PutLocal(PutRequest *req, NetEngine::Callback &callback)
+void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
 {
     if (mMode == CONVERGENCE) {
         BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
@@ -398,12 +398,12 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
     }
 }
 
-void BioClientAgent::SendDeleteRequestLocal(DeleteRequest &req, NetEngine::Callback &callback)
+void BioClientAgent::SendDeleteRequestLocal(DeleteRequest &req, Callback &callback)
 {
     net::BioClientNet::Instance()->SendAsync<DeleteRequest>(INVALID_NID, BIO_OP_SDK_DELETE, req, callback);
 }
 
-void BioClientAgent::DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback)
+void BioClientAgent::DeleteLocal(DeleteRequest &req, Callback &callback)
 {
     if (mMode == CONVERGENCE) {
         auto ret = deleteOp(&req);

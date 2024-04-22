@@ -49,7 +49,9 @@ int32_t CmClientZkSubStateListChange(uint16_t poolId, stateChangeNotifyFp notify
 
 int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp);
 
-int32_t CmClientZkSubMasterNodeIdChange(uint16_t poolId, masterChangeNotifyFp notifyFp);
+uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre);
+
+int32_t CmClientZkPtEntryIsSame(PtEntry *elem1, PtEntry *elem2);
 #endif
 #if DESC("zk server")
 typedef int32_t (*ZkNotifyMetaRoleFp)(CmServerRole serverRole);

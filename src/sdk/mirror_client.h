@@ -188,8 +188,8 @@ private:
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
-    void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, NetEngine::Callback &callback);
-    void PutLocal(PutRequest *req, uint32_t localIdx, NetEngine::Callback &callback) const;
+    void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, Callback &callback);
+    void PutLocal(PutRequest *req, uint32_t localIdx, Callback &callback) const;
     void SendPutRemoteDone(uint32_t len, int32_t ret, uint64_t ts);
     BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
@@ -198,8 +198,8 @@ private:
     BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
 
-    void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, NetEngine::Callback &callback);
-    void DeleteLocal(DeleteRequest &req, NetEngine::Callback &callback) const;
+    void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, Callback &callback);
+    void DeleteLocal(DeleteRequest &req, Callback &callback) const;
     BResult SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req);
 
     BResult StatRemote(uint16_t dstNid, StatRequest &req, ObjStat &objInfo);

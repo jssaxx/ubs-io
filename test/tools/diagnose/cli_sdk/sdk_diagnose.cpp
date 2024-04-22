@@ -70,11 +70,7 @@ int diagnose::BioSdkCommand::Initialize() noexcept
     strncpy(command.szDescription, "sdk commands.", CLI_MAX_CMD_DESC_LEN);
     command.fnCmdDo = BioSdkDebugProcess;
     command.fnPrintCmdHelp = BioSdkDebugHelp;
-    auto result = CLI_RegCmd(&command);
-    if (result != 0) {
-        printf("Register sdk diagnose failed.");
-    }
-    return result;
+    return CLI_RegCmd(&command);
 }
 
 void diagnose::BioSdkCommand::Destroy() noexcept

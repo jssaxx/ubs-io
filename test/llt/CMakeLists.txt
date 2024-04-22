@@ -1,6 +1,5 @@
 include_directories(${SRC_DIR}/common
         ${SRC_DIR}/common
-        ${SRC_DIR}/net
         ${SRC_DIR}/cache
         ${SRC_DIR}/cache/read
         ${SRC_DIR}/cache/write
@@ -9,11 +8,11 @@ include_directories(${SRC_DIR}/common
         ${SRC_DIR}/disk
         ${SRC_DIR}/htracer
         ${SRC_DIR}/net
-        ${SRC_DIR}/net/rpc
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
+		${SRC_DIR}/interceptor
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/include/hcom
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include/zookeeper
@@ -26,7 +25,7 @@ include_directories(${SRC_DIR}/common
         ${TEST_DIR}/common
         ${TEST_DIR}/cache/read
         ${TEST_DIR}/cache/write
-        ${TEST_DIR}/net/rpc)
+        ${TEST_DIR}/net)
 
 link_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/
