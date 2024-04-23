@@ -55,17 +55,19 @@ clear_env()
 #      echo "清理zk."
 #  fi
   BioID=`ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}'`
-  echo $BioID
   for id in $BioID
   do
    kill -9 $id
-   echo "kill $id"
   done
-
+  BioConsoleID=`ps -ef | grep bio_console  | grep -v grep | awk '{print $2}'`
+  for id in $BioConsoleID
+  do
+   kill -9 $id
+  done
   systemctl disable boostio
   sleep 10
   rm -f $SYSTEMD_SERVICE_PATH
-  rm -f $BOOSTIO_HTRACE_LOG_PATH
+  rm -rf $BOOSTIO_HTRACE_LOG_PATH
   systemctl daemon-reload
   semanage fcontext -D $INSTALL_PATH > /dev/null 2>&1
   [ -d "$INSTALL_PATH" ] && rm -rf $INSTALL_PATH/

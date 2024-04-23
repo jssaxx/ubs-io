@@ -61,7 +61,7 @@ BResult RCache::DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk)
     auto iter = index[bucket].find(key);
     if (iter == index[bucket].end()) {
         indexLock[bucket].UnLock();
-        LOG_INFO("Delete read cache key:" << key << "have not exist.");
+        LOG_INFO("Delete read cache key:" << key << " have not exist.");
         return BIO_NOT_EXISTS;
     }
     RCacheChunkPtr ichunk = iter->second;
@@ -160,7 +160,7 @@ BResult RCache::Initialize()
 
     FlowIdAllocator::Instance()->GenerateFlowIds(prefix, flowIds);
     if (UNLIKELY(flowIds.empty())) {
-        LOG_ERROR("Generate ptId" << mPtId << "flow ids failed.");
+        LOG_ERROR("Generate ptId " << mPtId << " flow ids failed.");
         return BIO_ERR;
     }
 
@@ -178,7 +178,7 @@ BResult RCache::Initialize()
     tempIds.push_back(flowIds.at(RCACHE_FLOW_DISK_DATA_PREFIX - RCACHE_FLOW_PREFIX_START));
     ret = CreateRCacheFlow(READ_CACHE_TIER_DISK, tempIds);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Init ptId" << mPtId << "disk meta flow failed, error code " << ret);
+        LOG_ERROR("Init ptId" << mPtId << " disk meta flow failed, error code " << ret);
         Destroy();
         return BIO_ERR;
     }
@@ -212,7 +212,7 @@ BResult RCache::Destroy()
         if (flow[tier] != nullptr) {
             ret = flow[tier]->Destroy();
             if (ret != BIO_OK) {
-                LOG_ERROR("Destroy pt id " << mPtId << "tier type" << tier << "flow failed, error code " << ret);
+                LOG_ERROR("Destroy pt id " << mPtId << " tier type " << tier << " flow failed, error code " << ret);
             }
         }
 
@@ -345,7 +345,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     auto ret = AllocChunk(key, value, chunk);
     BIO_TRACE_END(RCACHE_TRACE_PUT_ALLOC_CHUNK, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Alloc chunk for read cache key " << key << "failed.");
+        LOG_ERROR("Alloc chunk for read cache key " << key << " failed.");
         return BIO_ERR;
     }
     chunk->SetMqType(MQ_COLD);
@@ -494,7 +494,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     chunk->SetTierType(READ_CACHE_TIER_MEM);
     ret = InsertToIndex(chunk->GetKey(), chunk);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_EXISTS)) {
-        LOG_ERROR("Read cache insert index failed, ret:" << ret << ", key" << key << ".");
+        LOG_ERROR("Read cache insert index failed, ret:" << ret << ", key " << key << ".");
         return BIO_INNER_ERR;
     }
 
@@ -605,7 +605,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
         if (chunk->GetValue().flowOffset != truncateOffset) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
-            LOG_INFO("Wait chunk" << chunk->ToString() << ", cur truncate offset:" << truncateOffset);
+            LOG_INFO("Wait chunk " << chunk->ToString() << ", cur truncate offset:" << truncateOffset);
             break;
         }
         truncateQ[READ_CACHE_TIER_MEM].PopBack();
@@ -662,7 +662,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
     uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
     auto ret = flow[READ_CACHE_TIER_MEM]->GetDataFlow()->TruncateOffset(truncateOffset);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Truncate read cache key " << chunk->GetKey() << "mem data flow to " << truncateOffset <<
+        LOG_ERROR("Truncate read cache key " << chunk->GetKey() << " mem data flow to " << truncateOffset <<
             " failed." << ret);
         return BIO_ALLOC_FAIL;
     }
@@ -690,7 +690,7 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         uint64_t truncateOffset = flow[READ_CACHE_TIER_DISK]->GetDataTruncOffset();
         if (chunk->GetValue().flowOffset != truncateOffset) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
-            LOG_INFO("Wait chunk" << chunk->ToString() << ", cur truncate offset:" << truncateOffset);
+            LOG_INFO("Wait chunk " << chunk->ToString() << ", cur truncate offset:" << truncateOffset);
             break;
         }
         BIO_TRACE_START(RCACHE_TRACE_EVICT2NULL);
@@ -699,7 +699,7 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         chunk->lock.lock();
         auto ret = DeleteFromIndex(chunk->GetKey(), chunk);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_INFO("Get read cache key:" << chunk->GetKey() << "not exist.");
+            LOG_INFO("Get read cache key:" << chunk->GetKey() << " not exist.");
             chunk->lock.unlock();
             BIO_TRACE_END(RCACHE_TRACE_EVICT2NULL, 0);
             continue;

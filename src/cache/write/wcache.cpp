@@ -446,7 +446,7 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
         ret = mSliceOperator.Copy(slice.Get(), value);
         if (UNLIKELY(ret != BIO_OK)) {
             delete[] value;
-            LOG_ERROR("failed to copy slice to value. ret:" << ret << ",slice:" << slice->ToString());
+            LOG_ERROR("failed to copy slice to value. ret:" << ret << ", slice:" << slice->ToString());
             return ret;
         }
         ret = mUnderFs->Put(key, value, sliceMeta->length);
