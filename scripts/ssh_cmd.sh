@@ -60,6 +60,10 @@ expect <<-EOF
        "* *#";{ send "echo \"recode: \$\?\"\r" }
     }
     expect {
+       "]*"; { send "echo \"recode: \$\?\"\r" }
+       "* *#";{ send "echo \"recode: \$\?\"\r" }
+    }
+    expect {
        "]*"; { send "exit\r" }
        "* *#";{ send "exit\r" }
     }

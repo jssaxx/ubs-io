@@ -47,13 +47,13 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
     mDiskId = diskId;
 
     if (UNLIKELY(flowIds.empty())) {
-        LOG_ERROR("Generate pt id" << ptId << "flow ids failed.");
+        LOG_ERROR("Generate pt id " << ptId << "flow ids failed.");
         return BIO_ERR;
     }
 
     mMetaFlow = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
     if (UNLIKELY(mMetaFlow == nullptr)) {
-        LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "meta flow failed.");
+        LOG_ERROR("Create pt id " << ptId << " flow type " << flowType << " meta flow failed.");
         Destroy();
         return BIO_ERR;
     }
@@ -62,14 +62,14 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
 
     mMetaFlowInstance = MakeRef<FlowInstance>(flowIds[0]);
     if (UNLIKELY(mMetaFlowInstance == nullptr)) {
-        LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "flow instance failed.");
+        LOG_ERROR("Create pt id " << ptId << " flow type " << flowType << " flow instance failed.");
         Destroy();
         return BIO_ERR;
     }
 
     mDataFlow = FlowManager::Instance()->CreateObject(flowType, flowIds[1], diskId);
     if (UNLIKELY(mDataFlow == nullptr)) {
-        LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "data flow failed.");
+        LOG_ERROR("Create pt id " << ptId << " flow type " << flowType << " data flow failed.");
         Destroy();
         return BIO_ERR;
     }
@@ -78,7 +78,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
 
     mDataFlowInstance = MakeRef<FlowInstance>(flowIds[1]);
     if (UNLIKELY(mDataFlowInstance == nullptr)) {
-        LOG_ERROR("Create pt id" << ptId << "flow type" << flowType << "flow instance failed.");
+        LOG_ERROR("Create pt id " << ptId << " flow type " << flowType << " flow instance failed.");
         Destroy();
         return BIO_ERR;
     }

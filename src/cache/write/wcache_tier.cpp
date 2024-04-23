@@ -144,7 +144,7 @@ BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
     BResult ret;
     slice = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), ret);
     ChkTrue(slice != nullptr, ret,
-        "Failed to get meta slice, flowId" << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
+        "Failed to get meta slice, flowId " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
     return BIO_OK;
 }
 
