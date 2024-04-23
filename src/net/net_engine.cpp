@@ -165,7 +165,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
 
     auto ret = ftruncate(fd, static_cast<off_t>(size));
     if (ret < 0) {
-        NET_LOG_ERROR("truncate file " << name << " with size" << size << " failed, error:" << strerror(errno));
+        NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
         close(fd);
         return BIO_INNER_ERR;
     }

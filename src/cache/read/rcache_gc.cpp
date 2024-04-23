@@ -37,7 +37,7 @@ BResult RCacheGC::GcHandle(uint32_t index, RCacheTierType tier)
         rCache = *iter;
         result = GCOneRCacheHandle(rCache, tier);
         if (result != BIO_OK) {
-            LOG_ERROR("Gc handle read cache pt " << rCache->GetPtId() << "failed, error code" << result);
+            LOG_ERROR("Gc handle read cache pt " << rCache->GetPtId() << " failed, error code" << result);
         }
     }
 
@@ -53,8 +53,8 @@ void *RCacheGC::Worker(void *context)
     while (rCacheGc->GetWorkStatus()) {
         result = rCacheGc->GcHandle(para->index, para->tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
-            LOG_ERROR("Gc handle read cache index " << para->index << "tier " << para->tier << "failed, error code" <<
-                result);
+            LOG_ERROR("Gc handle read cache index " << para->index << " tier " << para->tier <<
+            " failed, error code " << result);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_GC_INTERVAL_MS));
