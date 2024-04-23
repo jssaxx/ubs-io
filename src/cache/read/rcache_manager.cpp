@@ -136,7 +136,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId
 
     auto ret = cacheObj->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Initialize read cache object ptId:" << ptId << " failed, error code" << ret);
+        LOG_ERROR("Initialize read cache object ptId:" << ptId << " failed, error code " << ret);
         cacheLock.UnLock();
         return ret;
     }
@@ -146,14 +146,14 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId
 
     ret = rCacheEvict->Start(cacheObj);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Start ptId:" << ptId << "read cache to evict service failed, error code" << ret);
+        LOG_ERROR("Start ptId:" << ptId << " read cache to evict service failed, error code " << ret);
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
 
     ret = rCacheGCPtr->Start(cacheObj);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Start ptId:" << ptId << "read cache to GC service failed, error code" << ret);
+        LOG_ERROR("Start ptId:" << ptId << " read cache to GC service failed, error code " << ret);
         DeleteRCache(ptId);
         return BIO_ALLOC_FAIL;
     }
@@ -175,7 +175,7 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
     RCachePtr cachePtr = iter->second;
     auto ret = cachePtr->Destroy();
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Destroy ptId" << ptId << " read cache object failed, error code " << ret);
+        LOG_ERROR("Destroy ptId " << ptId << " read cache object failed, error code " << ret);
     }
 
     cache.erase(iter);
@@ -237,13 +237,13 @@ BResult RCacheManager::ExpiredClearImpl(RCachePtr rCache)
     auto ret = rCacheEvict->Stop(rCache);
     if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
         cacheLock.UnLock();
-        LOG_ERROR("Stop ptId" << rCache->GetPtId() << "read cache evict service failed:" << ret);
+        LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache evict service failed:" << ret);
         return ret;
     }
 
     ret = rCacheGCPtr->Stop(rCache);
     if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Stop ptId" << rCache->GetPtId() << "read cache GC service failed:" << ret);
+        LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache GC service failed:" << ret);
         return ret;
     }
 

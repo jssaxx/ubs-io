@@ -81,7 +81,7 @@ BResult WCacheIndex::Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sli
     WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto iter = table->sliceIndex[bucket].find(key);
     if (iter == table->sliceIndex[bucket].end()) {
-        LOG_INFO("Delete write cache key:" << key << "have not exist.");
+        LOG_INFO("Delete write cache key:" << key << " have not exist.");
         return BIO_NOT_EXISTS;
     }
     if (iter->second != sliceRef) {

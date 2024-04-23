@@ -124,7 +124,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         auto &fromAddrs = from->GetAddrs();
         uint64_t offset = 0;
         for (auto fromAddr : fromAddrs) {
-            LOG_DEBUG("Copy data from disk:" << ", from off:" << fromAddr.chunkOffset << ", to off:" << offset);
+            LOG_DEBUG("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
             BIO_TRACE_START(BDM_TRACE_READ_SYNC);
             auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
                 fromAddr.chunkLen);
