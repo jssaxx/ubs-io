@@ -22,14 +22,16 @@ BResult BioClient::BioClientLoggerInit(WorkerMode mode)
 
 BResult BioClient::BioClientAgentInit(WorkerMode mode)
 {
-    agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
+    agent::BioClientAgentPtr agentPtr = nullptr;
+    LVOS_TP_START(SDK_SET_RET_FAIL, &agentPtr, nullptr);
+    agentPtr = agent::BioClientAgent::Instance();
+    LVOS_TP_END;
     if (agentPtr == nullptr) {
         CLIENT_LOG_ERROR("Failed to create agent instance.");
         return BIO_ALLOC_FAIL;
     }
-
     BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_AGENT_INIT_FAIL, &ret, BIO_ERR);
+    LVOS_TP_START(SDK_SET_RET_FAIL_CONFLICT, &ret, BIO_ERR);
     ret = agentPtr->Initialize(mode);
     LVOS_TP_END;
     if (ret != BIO_OK) {
@@ -40,12 +42,17 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
 
 BResult BioClient::BioClientNetPreInit(WorkerMode mode)
 {
+    LVOS_TP_START(SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL, &(this->mNetEngine), nullptr);
     mNetEngine = net::BioClientNet::Instance();
+    LVOS_TP_END;
     if (mNetEngine == nullptr) {
         CLIENT_LOG_ERROR("Failed to create net instance.");
         return BIO_ALLOC_FAIL;
     }
-    auto ret = mNetEngine->StartPre(mode);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL_CONFLICT, &ret, BIO_ERR);
+    ret = mNetEngine->StartPre(mode);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to start net service, ret:" << ret << ".");
     }
@@ -66,11 +73,17 @@ BResult BioClient::BioClientNetPostInit()
 
 BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 {
-    if ((mMirror = MakeRef<MirrorClient>(mode)) == nullptr) {
+    LVOS_TP_START(SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL, &mMirror, nullptr);
+    mMirror = MakeRef<MirrorClient>(mode);
+    LVOS_TP_END;
+    if (mMirror == nullptr) {
         CLIENT_LOG_ERROR("Create mirror client instance failed.");
         return BIO_ALLOC_FAIL;
     }
-    auto ret = mMirror->Initialize();
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL_CONFLICT, &ret, BIO_ERR);
+    ret = mMirror->Initialize();
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
