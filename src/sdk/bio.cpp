@@ -11,6 +11,9 @@
 #include "bio_trace.h"
 #include "bio_client.h"
 #include "bio.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -181,7 +184,10 @@ CResult Bio::Put(const char *key, CacheSpaceInfo &spaceInfo)
         nullptr, length, spaceInfo.loc };
     StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
-    BResult ret = gClient->Put(param, spaceInfo);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_RET_FAIL, &ret, BIO_ERR);
+    ret = gClient->Put(param, spaceInfo);
+    LVOS_TP_END;
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
@@ -238,7 +244,10 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
     }
 
     BIO_TRACE_START(SDK_TRACE_DELETE);
-    BResult ret = gClient->DeleteKey(key, location);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_RET_FAIL, &ret, BIO_ERR);
+    ret = gClient->DeleteKey(key, location);
+    LVOS_TP_END;
     BIO_TRACE_END(SDK_TRACE_DELETE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << key << ".");
@@ -272,7 +281,10 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         }
     };
     BIO_TRACE_START(SDK_TRACE_LOAD);
-    BResult ret = gClient->Load(key, offset, length, location, cb, context);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_RET_FAIL, &ret, BIO_ERR);
+    ret = gClient->Load(key, offset, length, location, cb, context);
+    LVOS_TP_END;
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
@@ -293,7 +305,10 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
     }
 
     BIO_TRACE_START(SDK_TRACE_LISTALL);
-    BResult ret = gClient->ListAll(prefix, objs);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_RET_FAIL, &ret, BIO_ERR);
+    ret = gClient->ListAll(prefix, objs);
+    LVOS_TP_END;
     BIO_TRACE_END(SDK_TRACE_LISTALL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("List all failed, ret:" << ret << ", prefix:" << prefix << ".");
@@ -328,7 +343,10 @@ CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spac
 
     ObjLocation location;
     if (spaceInfo.allocLoc != 0) {
-        auto ret = gClient->CalculateLocation(objectId, LOCAL_AFFINITY, location);
+        BResult ret = BIO_ERR;
+        LVOS_TP_START(SDK_SET_RET_FAIL, &ret, BIO_ERR);
+        ret = gClient->CalculateLocation(objectId, LOCAL_AFFINITY, location);
+        LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK)) {
             return RET_CACHE_NOT_READY;
         }
@@ -355,7 +373,10 @@ std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
 
     BIO_TRACE_START(SDK_TRACE_CREATE_CACHE);
     auto cache = std::make_shared<Bio>(desc.tenantId, desc.affinity, desc.strategy);
-    BResult ret = gClient->Insert(cache);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(SDK_SET_RET_FAIL, &ret, BIO_ERR);
+    ret = gClient->Insert(cache);
+    LVOS_TP_END;
     BIO_TRACE_END(SDK_TRACE_CREATE_CACHE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Client insert cache instance failed, ret:" << ret << ".");
@@ -593,7 +614,9 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
     }
 
     *objNum = listObjs.size();
+    LVOS_TP_START(SDK_SET_RET_FAIL_CONFLICT, objs, nullptr);
     *objs = (ObjStat *)malloc(sizeof(ObjStat) * (*objNum));
+    LVOS_TP_END;
     if (*objs == nullptr) {
         return RET_CACHE_NO_SPACE;
     }
