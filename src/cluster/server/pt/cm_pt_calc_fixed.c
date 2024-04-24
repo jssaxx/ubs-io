@@ -21,6 +21,8 @@ typedef struct {
     uint16_t copyNum;
     uint16_t minCopyNum;
 
+    uint16_t diskNum;
+
     DList busy;
     DList free;
     CalcElem *buff;
@@ -121,6 +123,7 @@ void ViewCalcBuildBusyList(CalcCore *calc, NodeInfoList *nodeList, NodeStateList
                 DListAddTail(&elem->node, &calc->busy);
             }
         }
+        calc->diskNum = diskList->num;
     }
 }
 
@@ -266,6 +269,14 @@ void ViewCalcResetBusyList(CalcCore *calc)
         elem = D_LIST_ENTRY(pos, CalcElem, node);
         elem->referNum = 0;
     }
+
+    uint16_t diskNum = calc->diskNum;
+    do {
+        elem = D_LIST_ENTRY(calc->busy.next, CalcElem, node);
+        DListDel(&elem->node);
+        DListAddTail(&elem->node, &calc->busy);
+        diskNum--;
+    } while (diskNum != 0);
 
     return;
 }

@@ -15,7 +15,7 @@
 namespace ock {
 namespace bio {
 struct WFlowSliceMeta {
-    char key[NO_512];
+    char key[NO_512 - NO_32]; // 512对齐，走DIRECT IO
     uint64_t offset;
     uint64_t length;
     uint64_t magic;
