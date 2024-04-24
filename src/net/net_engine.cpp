@@ -302,7 +302,13 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
     }
     mIpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
         BROKEN_ALL);
-    mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestIPCReceived, this, std::placeholders::_1));
+    if (reqExecutorNum > NO_32) {
+        mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestReceived, this,
+            std::placeholders::_1));
+    } else {
+        mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestIPCReceived, this,
+            std::placeholders::_1));
+    }
     mIpcService->RegisterOpSentHandler(0, std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
     mIpcService->RegisterOpOneSideHandler(0, std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
 }
@@ -457,9 +463,9 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
         mCtrlChannelMgr->RemoveChannel(dstNid, ch);
     } else {
         mDataChannelMgr->RemoveChannel(dstNid, ch);
-    }
-    if (mHandlerBroken != nullptr) {
-        mHandlerBroken(dstNid.nid, dstNid.pid);
+        if (mHandlerBroken != nullptr) {
+            mHandlerBroken(dstNid.nid, dstNid.pid); // 去重
+        }
     }
 }
 

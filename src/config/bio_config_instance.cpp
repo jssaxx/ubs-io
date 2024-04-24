@@ -40,6 +40,8 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
 
+    AddStrConf(WORK_SCENE, VStrEnum::Create(NET_DATA_PROTOCOL.first, "none||bigdata"));
+
     /* load cluster manager config */
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 2, NO_256));
     AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
@@ -136,6 +138,15 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     } else {
         LOG_ERROR("Failed to load daemon log level config, invalid level " << logLevel);
         return BIO_ERR;
+    }
+
+    std::string scene = conf->GetStr(WORK_SCENE.first);
+    if (scene == "none") {
+        mDaemonConfig.scene = 0;
+    } else if (scene == "bigdata") {
+        mDaemonConfig.scene = 1;
+    } else {
+        LOG_ERROR("Invalid configuration with scene items: " << scene);
     }
 
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);

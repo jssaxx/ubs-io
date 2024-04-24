@@ -40,6 +40,8 @@ const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio
 
 const auto DISK_READ_WRITE_RATIO = std::make_pair("bio.cache.disk_read_write_ratio", "5:5");
 
+const auto WORK_SCENE = std::make_pair("bio.work.scene", "none");
+
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
 const auto UNDERFS_CEPH_USER = std::make_pair("bio.underfs.ceph.user", "client.admin");
@@ -87,6 +89,7 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
+        uint16_t scene = 0;
     };
 
     struct ClientConfig {

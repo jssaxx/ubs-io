@@ -440,18 +440,22 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     if (sliceRef->GetState() == SLICE_VALID && isMaster) {
         auto &key = sliceMeta->key;
         ChkTrueNot(sliceMeta->length == slice->GetLength(), BIO_INNER_ERR);
-        auto *value = new char[sliceMeta->length];
-        ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
+        uint64_t value;
+        ret = BioServer::Instance()->MemAlloc(sliceMeta->length, &value);
+        ChkTrueNot(ret == BIO_OK, BIO_ALLOC_FAIL);
 
-        ret = mSliceOperator.Copy(slice.Get(), value);
+        ret = mSliceOperator.Copy(slice.Get(), reinterpret_cast<char *>(value));
         if (UNLIKELY(ret != BIO_OK)) {
-            delete[] value;
+            BioServer::Instance()->MemFree(value);
             LOG_ERROR("failed to copy slice to value. ret:" << ret << ", slice:" << slice->ToString());
             return ret;
         }
-        ret = mUnderFs->Put(key, value, sliceMeta->length);
-        delete[] value;
-        ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
+        ret = mUnderFs->Put(key, reinterpret_cast<char *>(value), sliceMeta->length);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
+            BioServer::Instance()->MemFree(value);
+            return ret;
+        }
 
         LOG_INFO("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
 
@@ -460,7 +464,8 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
         uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
         WCacheSlicePtr writeSlice = nullptr;
         mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
-        ret = mSliceOperator.Copy(slice.Get(), writeSlice.Get());
+        ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());
+        BioServer::Instance()->MemFree(value);
         ChkTrueNot(ret == BIO_OK, ret);
         ret = mRCacheManager->Put(ptId, key, writeSlice);
         ChkTrue(ret == BIO_OK, ret, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key);
@@ -483,10 +488,6 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
         }
         DecreaseRef();
     };
-
-    sliceMeta->hasEvict = 1;
-    ret = mSliceOperator.Copy((char *)sliceMeta.get(), metaSlice.Get());
-    ChkTrueNot(ret == BIO_OK, ret);
 
     sliceRef->SetSlice(nullptr, callback);
     BIO_TRACE_END(WCACHE_TRACE_EVICT2UNDERFS, 0);

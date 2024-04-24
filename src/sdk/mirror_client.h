@@ -25,6 +25,7 @@ namespace bio {
 constexpr uint16_t BIO_INIT_TIMEOUT_TIME = 90;
 constexpr uint16_t BIO_IO_TIMEOUT_TIME = 60;
 constexpr uint16_t BIO_IO_INTERAL_TIME = 2;
+using UpdateView = std::function<void(void)>;
 class MirrorClient {
 public:
     struct MirrorPut {
@@ -49,7 +50,7 @@ public:
 
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
-    BResult Initialize();
+    BResult Initialize(UpdateView updateView, WorkerScene scene);
     BResult Start();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
@@ -128,15 +129,9 @@ public:
         return mPtView;
     }
 
-    void GetCurViewTimes(uint64_t &oldNodeTimes, uint64_t &oldPtTimes)
-    {
-        oldNodeTimes = mCurNodeTimes;
-        oldPtTimes = oldPtTimes;
-    }
+    BResult RebuildNodeView();
 
-    BResult RebuildNodeView(uint64_t &realNodeTimes);
-
-    BResult RebuildPtView(uint64_t &realPtTimes);
+    BResult RebuildPtView();
 
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
 
@@ -279,6 +274,8 @@ private:
     uint64_t mCurNodeTimes;
     uint64_t mCurPtTimes;
     uint16_t mNetProtocol;
+    UpdateView mUpdateView { nullptr };
+    WorkerScene mScene = SCENE_NONE;
     std::atomic<uint64_t> *mPtHit = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
@@ -329,7 +326,7 @@ public:
 private:
     ReadWriteLock mLock[NO_2];
     std::list<sem_t *> mList[NO_2];
-    uint32_t mCount[NO_2] { NO_4, NO_4 };
+    uint32_t mCount[NO_2] { NO_32, NO_32 };
     uint32_t mReal[NO_2] { 0, 0 };
 
     DEFINE_REF_COUNT_VARIABLE;

@@ -148,7 +148,7 @@ void Flow::PreLoadSchedule()
     }
 
     std::function<void()> func = std::bind(&Flow::PreLoadHandle, this);
-    auto ret = FlowManager::Instance()->PreLoadObject(func);
+    auto ret = FlowManager::Instance()->PreLoadObject(mType, func);
     if (ret != BIO_OK) {
         LOG_ERROR("Preload failed:" << ret << ", flowId:" << mFlowId);
         mPreLoadFlag = false;

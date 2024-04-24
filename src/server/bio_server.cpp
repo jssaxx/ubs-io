@@ -426,11 +426,13 @@ BResult BioServer::BioServerDiagnoseInitInner()
 
 BResult BioServer::BioServerTracePointInit()
 {
+#ifdef USE_DEBUG_TP_TOOLS
     auto ret = tp::TracePointManager::Initialize();
     if (ret != BIO_OK) {
         LOG_ERROR("Init bio server tracepoint fail.");
         return BIO_ERR;
     }
+#endif
     return BIO_OK;
 }
 #endif

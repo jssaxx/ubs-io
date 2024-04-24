@@ -15,7 +15,6 @@
 #include "bio_ref.h"
 #include "bio.h"
 #include "bio_lock.h"
-#include "bio_execution.h"
 #include "mirror_client.h"
 #include "bio_client_net.h"
 
@@ -178,8 +177,8 @@ private:
     BResult BioClientNetPostInit();
     BResult BioClientMirrorInit(WorkerMode mode);
     BResult BioClientStartWork();
-    void Heartbeat();
-    BResult BioClientRecover();
+    void BioClientUpdateHandle();
+    void BioClientUpdateView();
 
 #ifdef USE_DEBUG_TOOLS
 protected:
@@ -196,7 +195,7 @@ private:
     ReadWriteLock mLock;
     MirrorClientPtr mMirror = nullptr;
     net::BioClientNetPtr mNetEngine = nullptr;
-    bool mRunning = true;
+    std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };

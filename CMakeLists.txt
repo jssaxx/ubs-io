@@ -89,6 +89,9 @@ endif()
 
 if (OPEN_TEST_TOOLS STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TOOLS)
+	if (OPEN_TEST_TP_TOOLS STREQUAL "ON")
+		add_compile_definitions(USE_DEBUG_TP_TOOLS)
+	endif()
 endif()
 
 if (OPEN_UNDERFS_CEPH STREQUAL "ON")
