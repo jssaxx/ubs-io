@@ -489,6 +489,10 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
         DecreaseRef();
     };
 
+    sliceMeta->hasEvict = 1;
+    ret = mSliceOperator.Copy((char *)sliceMeta.get(), metaSlice.Get());
+    ChkTrueNot(ret == BIO_OK, ret);
+
     sliceRef->SetSlice(nullptr, callback);
     BIO_TRACE_END(WCACHE_TRACE_EVICT2UNDERFS, 0);
     return BIO_OK;
