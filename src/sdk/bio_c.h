@@ -48,6 +48,11 @@ typedef enum {
     SEPARATES
 } WorkerMode;
 
+typedef enum : uint16_t {
+    SCENE_NONE = 0,
+    SCENE_BIGDATA = 1
+} WorkerScene;
+
 #define MAX_KEY_SIZE (256)
 #define LOCATION_SIZE (2)
 typedef void (*BioLoadCallback)(void *context, int32_t result);

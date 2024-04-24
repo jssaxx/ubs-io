@@ -51,7 +51,7 @@ public:
 
     BResult GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager);
 
-    BResult PreLoadObject(std::function<void(void)> handle);
+    BResult PreLoadObject(FlowType type, std::function<void(void)> handle);
 
     static void RegisterMemAllocator(MemAllocator memAllocator)
     {
@@ -157,7 +157,7 @@ private:
 
     std::mutex mMutex;
 
-    FlowTaskPoolPtr mTaskPool{ nullptr };
+    FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{ nullptr, nullptr };
 
     static std::atomic<uint64_t> mUsedRes[NO_2][NO_2];
 

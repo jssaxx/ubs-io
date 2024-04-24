@@ -37,6 +37,8 @@
 
 #define BDM_BIND_CPU_START (60UL)
 
+#define BDM_BLOCK_SIZE (512UL)
+
 static uint32_t g_bdmAioIsDirect = FALSE;
 
 typedef struct {
@@ -262,7 +264,7 @@ int32_t BdmDiskRead(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *b
 
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
     uint64_t bufStart = (uint64_t)buf;
-    if (bufStart % 512 == 0 && len % 4194304 == 0 && rwOffset % 512 == 0) {
+    if (bufStart % BDM_BLOCK_SIZE == 0 && len % BDM_BLOCK_SIZE == 0 && rwOffset % BDM_BLOCK_SIZE == 0) {
         ret = BdmDiskInnerReadWriteDirect(item, (char*)buf, len, rwOffset, TRUE);
     } else {
         ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, TRUE);
@@ -287,7 +289,7 @@ int32_t BdmDiskWrite(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *
 
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
     uint64_t bufStart = (uint64_t)buf;
-    if (bufStart % 512 == 0 && len % 4194304 == 0 && rwOffset % 512 == 0) {
+    if (bufStart % BDM_BLOCK_SIZE == 0 && len % BDM_BLOCK_SIZE == 0 && rwOffset % BDM_BLOCK_SIZE == 0) {
         ret = BdmDiskInnerReadWriteDirect(item, (char*)buf, len, rwOffset, FALSE);
     } else {
         ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, FALSE);

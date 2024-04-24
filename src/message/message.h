@@ -41,6 +41,7 @@ typedef struct {
 typedef struct {
     int32_t memFd;
     int32_t serverPid;
+    WorkerScene scene;
     uint64_t offset;
     uint64_t length;
     uint32_t mKey;

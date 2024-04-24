@@ -22,16 +22,14 @@ BResult BioClient::BioClientLoggerInit(WorkerMode mode)
 
 BResult BioClient::BioClientAgentInit(WorkerMode mode)
 {
-    agent::BioClientAgentPtr agentPtr = nullptr;
-    LVOS_TP_START(SDK_SET_RET_FAIL, &agentPtr, nullptr);
-    agentPtr = agent::BioClientAgent::Instance();
-    LVOS_TP_END;
+    agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
     if (agentPtr == nullptr) {
         CLIENT_LOG_ERROR("Failed to create agent instance.");
         return BIO_ALLOC_FAIL;
     }
+
     BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_SET_RET_FAIL_CONFLICT, &ret, BIO_ERR);
+    LVOS_TP_START(SDK_AGENT_INIT_FAIL, &ret, BIO_ERR);
     ret = agentPtr->Initialize(mode);
     LVOS_TP_END;
     if (ret != BIO_OK) {
@@ -42,17 +40,12 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
 
 BResult BioClient::BioClientNetPreInit(WorkerMode mode)
 {
-    LVOS_TP_START(SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL, &(this->mNetEngine), nullptr);
     mNetEngine = net::BioClientNet::Instance();
-    LVOS_TP_END;
     if (mNetEngine == nullptr) {
         CLIENT_LOG_ERROR("Failed to create net instance.");
         return BIO_ALLOC_FAIL;
     }
-    BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL_CONFLICT, &ret, BIO_ERR);
-    ret = mNetEngine->StartPre(mode);
-    LVOS_TP_END;
+    auto ret = mNetEngine->StartPre(mode);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to start net service, ret:" << ret << ".");
     }
@@ -71,95 +64,61 @@ BResult BioClient::BioClientNetPostInit()
         mMirror->GetNetProtocol());
 }
 
+void BioClient::BioClientUpdateHandle()
+{
+    agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
+    net::BioClientNetPtr netEngine = net::BioClientNet::Instance();
+
+    auto ret = mMirror->RebuildNodeView();
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Failed to rebuild node view, ret:" << ret << ".");
+        return;
+    }
+    ret = netEngine->Rebuild(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView());
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Failed to rebuild net engine, ret" << ret << ".");
+        return;
+    }
+
+    ret = mMirror->RebuildPtView();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to rebuild pt view, ret:" << ret << ".");
+        return;
+    }
+
+    return;
+}
+
+void BioClient::BioClientUpdateView()
+{
+    bool expectval = false;
+    if (!mIsUpdating.compare_exchange_weak(expectval, true)) {
+        return;
+    }
+    BioClientUpdateHandle();
+    mIsUpdating.store(false);
+    return;
+}
+
 BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 {
-    LVOS_TP_START(SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL, &mMirror, nullptr);
-    mMirror = MakeRef<MirrorClient>(mode);
-    LVOS_TP_END;
-    if (mMirror == nullptr) {
+    if ((mMirror = MakeRef<MirrorClient>(mode)) == nullptr) {
         CLIENT_LOG_ERROR("Create mirror client instance failed.");
         return BIO_ALLOC_FAIL;
     }
+
+    mIsUpdating = false;
+    UpdateView updateView = [this]() { BioClientUpdateView(); };
+    WorkerScene scene = mNetEngine->GetWorkerScene();
+
     BResult ret = BIO_ERR;
     LVOS_TP_START(SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL_CONFLICT, &ret, BIO_ERR);
-    ret = mMirror->Initialize();
+    ret = mMirror->Initialize(updateView, scene);
     LVOS_TP_END;
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
     return ret;
-}
-
-void BioClient::Heartbeat()
-{
-    constexpr uint16_t HEART_INTERAL = 2;
-    agent::BioClientAgentPtr agentPtr = agent::BioClientAgent::Instance();
-    net::BioClientNetPtr netEngine = net::BioClientNet::Instance();
-    uint64_t oldNodeTimes = 0;
-    uint64_t oldPtTimes = 0;
-
-    mMirror->GetCurViewTimes(oldNodeTimes, oldPtTimes);
-
-    while (mRunning) {
-        sleep(HEART_INTERAL);
-        uint64_t curNodeTimes = 0;
-        uint64_t curPtTimes = 0;
-        BResult ret = agentPtr->ReportHb(curNodeTimes, curPtTimes);
-        if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Report hb fail:" << ret << ".");
-            continue;
-        }
-        if (oldNodeTimes != curNodeTimes) {
-            CLIENT_LOG_INFO("oldNodeTimes:" << oldNodeTimes << ", curNodeTimes:" << curNodeTimes);
-            uint64_t realNodeTimes;
-            ret = mMirror->RebuildNodeView(realNodeTimes);
-            if (UNLIKELY(ret != BIO_OK)) {
-                CLIENT_LOG_ERROR("Failed to rebuild node view, ret:" << ret << ".");
-                continue;
-            }
-            ret = netEngine->Rebuild(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView());
-            if (UNLIKELY(ret != BIO_OK)) {
-                CLIENT_LOG_ERROR("Failed to rebuild net engine, ret" << ret << ".");
-                continue;
-            }
-            oldNodeTimes = realNodeTimes;
-        }
-        if (oldPtTimes != curPtTimes) {
-            CLIENT_LOG_INFO("oldPtTimes:" << oldPtTimes << ", curPtTimes:" << curPtTimes);
-            uint64_t realPtTimes;
-            ret = mMirror->RebuildPtView(realPtTimes);
-            if (ret != BIO_OK) {
-                CLIENT_LOG_ERROR("Failed to rebuild pt view, ret:" << ret << ".");
-                continue;
-            }
-            oldPtTimes = realPtTimes;
-        }
-    }
-}
-
-BResult BioClient::BioClientRecover()
-{
-    constexpr uint16_t HEARTBEAT_THREAD_NUM = 1;
-    constexpr uint32_t HEARTBEAT_QUEUE_SIZE = 128;
-
-    mHeartService = ExecutorService::Create(HEARTBEAT_THREAD_NUM, HEARTBEAT_QUEUE_SIZE);
-    if (UNLIKELY(mHeartService == nullptr)) {
-        CLIENT_LOG_ERROR("Failed to create heartbeat execution service.");
-        return BIO_ALLOC_FAIL;
-    }
-
-    mHeartService->SetThreadName("sdk-heartbeat");
-    if (!mHeartService->Start()) {
-        CLIENT_LOG_ERROR("Failed to start heartbeat execution service.");
-        return BIO_INNER_ERR;
-    }
-
-    if (!mHeartService->Execute([this]() { Heartbeat(); })) {
-        CLIENT_LOG_ERROR("Failed to execute heartbeat.");
-        return BIO_INNER_ERR;
-    }
-
-    return BIO_OK;
 }
 
 BResult BioClient::BioClientStartWork()
@@ -168,10 +127,6 @@ BResult BioClient::BioClientStartWork()
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
         return ret;
-    }
-    ret = BioClientRecover();
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to start heartbeat, ret:" << ret << ".");
     }
     return ret;
 }
@@ -215,6 +170,7 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 
 BResult BioClient::BioClientTracePointInit(WorkerMode mode)
 {
+#ifdef USE_DEBUG_TP_TOOLS
     BResult ret = BIO_OK;
     if (mode == SEPARATES) {
         ret =  tp::TracePointManager::Initialize();
@@ -223,6 +179,7 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
             return BIO_INNER_ERR;
         }
     }
+#endif
     return BIO_OK;
 }
 #endif
@@ -275,6 +232,5 @@ BResult BioClient::Start(WorkerMode mode)
 
 void BioClient::Stop()
 {
-    mRunning = false;
     mStarted = false;
 }

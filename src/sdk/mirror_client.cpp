@@ -319,9 +319,13 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
     return quota;
 }
 
-BResult MirrorClient::Initialize()
+BResult MirrorClient::Initialize(UpdateView updateView, WorkerScene scene)
 {
+    CLIENT_LOG_INFO("Initialize, scene:" << scene);
+
     BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
+    mUpdateView = updateView;
+    mScene = scene;
     BResult ret = LoadOriginView();
     BIO_TRACE_END(SDK_TRACE_INIT_LOAD_VIEW, ret);
     return ret;
@@ -348,6 +352,19 @@ BResult MirrorClient::Put(MirrorPut &param)
     uint64_t retryCnt = 0;
     BResult ret;
 
+    bool isSelf = false;
+    char *value = param.value;
+    if (param.length != NO_4194304 && mScene == SCENE_BIGDATA) {
+        CLIENT_LOG_INFO("Not Align Io, key:" << param.key << ", length:" << param.length);
+        isSelf = true;
+        param.value = (char *)malloc(NO_4194304);
+        if (param.value == nullptr) {
+            return BIO_ERR;
+        }
+        memcpy_s(param.value, NO_4194304, value, param.length);
+        param.length = NO_4194304;
+    }
+
     sem_t sem;
     sem_init(&sem, 0, 0);
     TaskQueuePtr taskQueue = TaskQueue::Instance();
@@ -367,12 +384,17 @@ BResult MirrorClient::Put(MirrorPut &param)
         if (LIKELY(ret == BIO_OK)) {
             taskQueue->Release(0);
             sem_destroy(&sem);
+            if (isSelf) {
+                free(param.value);
+                param.value = value;
+            }
             return BIO_OK;
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
             LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -381,6 +403,11 @@ BResult MirrorClient::Put(MirrorPut &param)
 
     taskQueue->Release(0);
     sem_destroy(&sem);
+
+    if (isSelf) {
+        free(param.value);
+        param.value = value;
+    }
 
     return ret;
 }
@@ -462,6 +489,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
             LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -538,6 +566,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -594,6 +623,7 @@ BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
             CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -642,6 +672,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
             CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -692,6 +723,7 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
             CLIENT_LOG_INFO("Delay retry, prefix:" << prefix << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -731,6 +763,7 @@ BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, O
             CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
             }
@@ -1308,7 +1341,7 @@ inline BResult MirrorClient::SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req
     return LoadMaster(req, ptEntry.masterNodeId, callback, context);
 }
 
-BResult MirrorClient::RebuildNodeView(uint64_t &realNodeTimes)
+BResult MirrorClient::RebuildNodeView()
 {
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView;
     auto ret = agent::BioClientAgent::Instance()->GetClusterNodeView(mCurNodeTimes, nodeView);
@@ -1316,7 +1349,7 @@ BResult MirrorClient::RebuildNodeView(uint64_t &realNodeTimes)
         CLIENT_LOG_ERROR("Get cluster node view failed, ret:" << ret << ".");
         return ret;
     }
-    realNodeTimes = mCurNodeTimes;
+
     if (!nodeView.empty()) {
         mLock.LockWrite();
         mNodeView.clear();
@@ -1327,7 +1360,7 @@ BResult MirrorClient::RebuildNodeView(uint64_t &realNodeTimes)
     return BIO_OK;
 }
 
-BResult MirrorClient::RebuildPtView(uint64_t &realPtTimes)
+BResult MirrorClient::RebuildPtView()
 {
     std::map<uint16_t, CmPtInfo> ptView;
     auto ret = agent::BioClientAgent::Instance()->GetPtView(mCurPtTimes, ptView);
@@ -1335,7 +1368,7 @@ BResult MirrorClient::RebuildPtView(uint64_t &realPtTimes)
         CLIENT_LOG_ERROR("Get pt view failed, ret:" << ret << ".");
         return ret;
     }
-    realPtTimes = mCurPtTimes;
+
     if (!ptView.empty()) {
         mLock.LockWrite();
         mPtView.clear();
