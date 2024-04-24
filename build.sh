@@ -16,8 +16,10 @@ fi
 
 if [[ "$1" == 'Debug' ]]; then
   BUILD_TYPE=debug
+  CMAKE_FLAGS+='-DOPEN_TEST_TP_TOOLS=ON '
 elif [[ "$1" == 'Release' ]]; then
   BUILD_TYPE=release
+  CMAKE_FLAGS+='-DOPEN_TEST_TP_TOOLS=OFF '
 fi
 
 if [[ "$2" == 'Ut' ]]; then

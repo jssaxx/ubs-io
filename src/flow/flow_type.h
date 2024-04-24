@@ -10,8 +10,9 @@
 namespace ock {
 namespace bio {
 enum FlowType : int32_t {
-    FLOW_MEMORY = 1,
-    FLOW_DISK = 2,
+    FLOW_MEMORY = 0,
+    FLOW_DISK = 1,
+    FLOW_BUTT
 };
 
 struct MrInfo {

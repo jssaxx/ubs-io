@@ -18,12 +18,22 @@ BResult FlowManager::Init()
     if (mInited) {
         return BIO_OK;
     }
-    mTaskPool = MakeRef<FlowTaskPool>("flow");
-    if (mTaskPool == nullptr) {
+    mTaskPool[FLOW_MEMORY] = MakeRef<FlowTaskPool>("flow_mem");
+    if (mTaskPool[FLOW_MEMORY] == nullptr) {
         LOG_ERROR("Failed to start flow task pool, probably out of memory");
         return BIO_ERR;
     }
-    auto ret = mTaskPool->Start(NO_4, NO_4096);
+    auto ret = mTaskPool[FLOW_MEMORY]->Start(NO_4, NO_4096);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
+    mTaskPool[FLOW_DISK] = MakeRef<FlowTaskPool>("flow_disk");
+    if (mTaskPool[FLOW_DISK] == nullptr) {
+        LOG_ERROR("Failed to start flow task pool, probably out of memory");
+        return BIO_ERR;
+    }
+    ret = mTaskPool[FLOW_DISK]->Start(NO_64, NO_4096);
     if (ret != BIO_OK) {
         return ret;
     }
@@ -45,7 +55,8 @@ BResult FlowManager::Init()
 
 BResult FlowManager::Exit()
 {
-    mTaskPool->Stop();
+    mTaskPool[FLOW_MEMORY]->Stop();
+    mTaskPool[FLOW_DISK]->Stop();
     mInited = false;
     return BIO_OK;
 }
@@ -76,7 +87,7 @@ FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId, uint32_t media
             return it->second;
         }
         BIO_TRACE_START(FLOW_TRACE_CREATE_OBJ);
-        auto object = MakeRef<Flow>(type, flowId, mediaId, segment, segment * NO_16);
+        auto object = MakeRef<Flow>(type, flowId, mediaId, segment, segment * NO_2);
         ChkTrueNot(object != nullptr, nullptr);
         mDiskObjManager[flowId] = object;
         BIO_TRACE_END(FLOW_TRACE_CREATE_OBJ, 0);
@@ -146,12 +157,12 @@ BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &ob
     return BIO_OK;
 }
 
-BResult FlowManager::PreLoadObject(std::function<void()> handle)
+BResult FlowManager::PreLoadObject(FlowType type, std::function<void()> handle)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    ChkTrueNot(mTaskPool != nullptr, BIO_NOT_READY);
+    ChkTrueNot(mTaskPool[type] != nullptr, BIO_NOT_READY);
     BIO_TRACE_START(FLOW_TRACE_PRELOAD_OBJ);
-    auto ret = mTaskPool->AddTask(handle);
+    auto ret = mTaskPool[type]->AddTask(handle);
     BIO_TRACE_END(FLOW_TRACE_PRELOAD_OBJ, ret);
     if (ret != BIO_OK) {
         LOG_ERROR("Submit task failed:" << ret);

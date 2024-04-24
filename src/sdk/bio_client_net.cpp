@@ -3,13 +3,13 @@
  */
 
 #include <utility>
+#include <cerrno>
+#include <thread>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <cerrno>
 #include <sys/syscall.h>
 #include <linux/version.h>
-
 #include "message.h"
 #include "message_op.h"
 #include "bio_client_log.h"
@@ -85,28 +85,12 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
             node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
             ".");
-        auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
-            RecoverRpc(info.peerId.nid);
-        };
-        ret = mNetEngine->AsyncConnect(info, handler, 0);
+        ret = mNetEngine->SyncConnect(info);
         if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Connect to local bio server failed, result:" << ret << ".");
+            CLIENT_LOG_ERROR("Connect to bio server failed, result:" << ret << ".");
             return ret;
         }
     }
-    for (auto &node : nodeView) {
-        if (node.second.id.VNodeId() == localNid) {
-            continue;
-        }
-        do {
-            ret = mNetEngine->CheckConnect(static_cast<BioNodeId>(node.second.id.VNodeId()));
-            if (ret != BIO_OK) {
-                CLIENT_LOG_WARN("Connect to bio server not ready, result:" << ret << ".");
-                sleep(NO_2);
-            }
-        } while (ret != BIO_OK);
-    }
-    sleep(NO_1);
     return BIO_OK;
 }
 
@@ -174,6 +158,7 @@ BResult BioClientNet::ShmInit()
         return ret;
     }
 
+    mScene = rsp.scene;
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
@@ -258,28 +243,15 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
 
 BResult BioClientNet::ListenEvent()
 {
-    constexpr uint16_t EVENT_THREAD_NUM = 1;
-    constexpr uint32_t EVENT_QUEUE_SIZE = 128;
-
-    mEventService = ExecutorService::Create(EVENT_THREAD_NUM, EVENT_QUEUE_SIZE);
-    if (UNLIKELY(mEventService == nullptr)) {
-        CLIENT_LOG_ERROR("Failed to create event execution service");
-        return BIO_ALLOC_FAIL;
-    }
-
-    mEventService->SetThreadName("sdk-event");
-    auto result = mEventService->Start();
-    if (!result) {
-        CLIENT_LOG_ERROR("Failed to start event execution service");
-        return BIO_INNER_ERR;
-    }
-
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
-        if (nodeId == INVALID_NID) {
-            mEventService->Execute([this]() { RecoverIpc(); });
-        } else {
-            RecoverRpc(nodeId);
-        }
+        std::thread t([this, nodeId]() {
+            if (nodeId == INVALID_NID) {
+                RecoverIpc();
+            } else {
+                RecoverRpc(nodeId);
+            }
+        });
+        t.detach();
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
 

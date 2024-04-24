@@ -36,6 +36,11 @@ public:
         mCheckOnLine = checkOnLine;
     }
 
+    inline WorkerScene GetWorkerScene() const
+    {
+        return mScene;
+    }
+
     inline uint32_t GetDataPage() const
     {
         return mNetEngine->GetDataPage();
@@ -122,6 +127,7 @@ private:
 
 private:
     WorkerMode mMode;
+    WorkerScene mScene;
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
@@ -129,7 +135,6 @@ private:
     uint64_t mShmLength = 0;
     uint32_t mShmKey = 0;
     uint8_t *mShmAddr = nullptr;
-    ExecutorServicePtr mEventService = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
     uint16_t mLocalNid;
     DEFINE_REF_COUNT_VARIABLE;
