@@ -10,6 +10,9 @@
 #include "bio_trace.h"
 #include "bio_client_net.h"
 #include "bio_client_agent.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -19,8 +22,12 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
     mMode = mode;
     if (mMode == CONVERGENCE) {
         const char *soFileName = "libbio_server.so";
+        LVOS_TP_START(DLOPEN_SERVERSO_FAIL, &handler, nullptr);
         handler = dlopen(soFileName, RTLD_NOW);
+        LVOS_TP_END;
         if (handler == nullptr) {
+            LVOS_TP_START(DLOPEN_SERVERSO_FAIL_RESET, &handler);
+            LVOS_TP_END;
             CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
             return BIO_INNER_ERR;
         }

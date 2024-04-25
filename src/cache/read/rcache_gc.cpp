@@ -5,6 +5,9 @@
 #include <thread>
 #include <chrono>
 #include "rcache_gc.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 using namespace ock::bio;
 
@@ -72,7 +75,9 @@ BResult RCacheGC::Initialize()
 
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         for (uint32_t i = 0; i < READ_CACHE_GC_SERVICE_NUM; i++) {
+            LVOS_TP_START(RCACHE_GC_PARAM_FAIL, 0);
             para = new (std::nothrow) RCacheGCWorkerParam();
+            LVOS_TP_END;
             if (para == nullptr) {
                 LOG_ERROR("Alloc read cache GC para memory failed");
                 return BIO_ALLOC_FAIL;
@@ -82,6 +87,8 @@ BResult RCacheGC::Initialize()
             para->index = i;
             para->rCacheEvict = this;
             auto *th = new std::thread(Worker, static_cast<void *>(para));
+            LVOS_TP_START(RCACHE_GC_THREAD_FAIL, &th, nullptr);
+            LVOS_TP_END;
             if (th) {
                 pthread_setname_np(th->native_handle(), "GcWorker");
                 works[tier][i] = th;

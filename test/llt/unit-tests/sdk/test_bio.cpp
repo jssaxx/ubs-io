@@ -944,19 +944,22 @@ TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
     EXPECT_EQ(ret, ock::bio::BIO_OK);
 }
 
-TEST_F(TestBio, test_bio_initialize_serverso_unexists_case_return_fail)
+TEST_F(TestBio, test_bio_initialize_stratege_case_return_fail)
 {
     BioExit();
     auto ret = BioInitialize(WorkerMode::SEPARATES);
     EXPECT_EQ(ret, ock::bio::BIO_INNER_ERR);
 }
 
-TEST_F(TestBio, test_bio_initialize_stratege_case_return_fail)
+TEST_F(TestBio, test_bio_initialize_dlopen_fail_case_return_fail)
 {
-    (void) system("mv libbio_server.so libbio_server.so_bak");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "DLOPEN_SERVERSO_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "DLOPEN_SERVERSO_FAIL_RESET", 0, 1, userParam);
     auto ret = BioInitialize(WorkerMode::CONVERGENCE);
-    (void) system("mv libbio_server.so_bak libbio_server.so");
     EXPECT_EQ(ret, ock::bio::BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "DLOPEN_SERVERSO_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "DLOPEN_SERVERSO_FAIL_RESET");
 }
 
 TEST_F(TestBio, test_bio_calculateLocation_not_ready_case_return_fail)

@@ -17,7 +17,6 @@
 #ifdef USE_DEBUG_TOOLS
 #include "cli.h"
 #include <dlfcn.h>
-#include "bio_tracepoint_helper.h"
 #endif
 
 namespace ock {
@@ -53,10 +52,12 @@ BioServer::BioServer() noexcept
 
 BResult BioServer::Start()
 {
+    LVOS_TP_START(NO_PROCESS_SERVER_START, 0);
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
         return BIO_OK;
     }
+    LVOS_TP_END;
 
     // 1. Initialize infrastructure
     std::string logPath = "/var/log/boostio/bio.log";
@@ -89,15 +90,24 @@ void BioServer::Stop()
 
 BResult BioServer::BioConfigInit()
 {
+    LVOS_TP_START(NO_PROCESS_CONFIG, 0);
     if (mConfig != nullptr) {
         return BIO_OK;
     }
+    LVOS_TP_END;
+
     mConfig = BioConfig::Instance();
+    LVOS_TP_START(CONFIG_INSTANCE_FAIL, &mConfig, nullptr);
+    LVOS_TP_END;
     if (mConfig == nullptr) {
+        LVOS_TP_START(CONFIG_INSTANCE_FAIL_RESET, &mConfig);
+        LVOS_TP_END;
         LOG_ERROR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
     auto result = mConfig->Initialize(".");
+    LVOS_TP_START(CONFIG_INIT_FAIL, &result, -1);
+    LVOS_TP_END;
     if (result != BIO_OK) {
         LOG_ERROR("Failed to initialize configuration, result: " << result << ".");
         return BIO_ERR;
@@ -116,6 +126,8 @@ BResult BioServer::BioLoggerInit(std::string pathName)
         return BIO_ERR;
     }
     auto ret = logger->Init();
+    LVOS_TP_START(LOG_INIT_FAIL, &ret, -1);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
         return BIO_ERR;
@@ -205,6 +217,9 @@ BResult BioServer::StartIpcService(const NetOptions &opt)
 
 BResult BioServer::BioNetInit()
 {
+    if (mNetEngineInited) {
+        return BIO_OK;
+    }
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
 
@@ -234,6 +249,7 @@ BResult BioServer::BioNetInit()
     netOptions.connCount = netConfig.ipcDataWorkersCnt;
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
+    mNetEngineInited = true;
     return BIO_OK;
 }
 
@@ -296,9 +312,16 @@ void BioServer::BioCmExit()
 
 BResult BioServer::BioMirrorServerInit()
 {
+    LVOS_TP_START(NO_PROCESS_MIRROR_SERVER_INIT, 0);
+    if (mMirrorInited) {
+        return BIO_OK;
+    }
+    LVOS_TP_END;
     mMirror = MirrorServer::Instance();
     ChkTrue(mMirror != nullptr, BIO_ERR, "Mirror server instance is nullptr.");
     BResult ret = mMirror->Initialize();
+    LVOS_TP_START(MIRROR_SERVER_INIT_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init mirror server, ret:" << ret << ".");
         return BIO_ERR;
@@ -311,6 +334,7 @@ BResult BioServer::BioMirrorServerInit()
         LOG_ERROR("Failed to init mirror server crb, ret:" << ret << ".");
         return BIO_ERR;
     }
+    mMirrorInited = true;
 
     return BIO_OK;
 }
@@ -322,7 +346,14 @@ void BioServer::BioMirrorServerExit()
 
 BResult BioServer::BioCacheInit()
 {
-    BResult ret = Cache::Instance().Init();
+    LVOS_TP_START(NO_PROCESS_CACHE_INIT, 0);
+    if (mCacheInited) {
+        return BIO_OK;
+    }
+    LVOS_TP_END;
+    BResult ret = BIO_OK;
+    LVOS_TP_START(NO_PROCESS_CACHE_PROCESS, 0);
+    ret = Cache::Instance().Init();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init cache instance, ret:" << ret << ".");
         return ret;
@@ -361,6 +392,7 @@ BResult BioServer::BioCacheInit()
         }
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    LVOS_TP_END;
 
     ret = Cache::Instance().Recover();
     if (UNLIKELY(ret != BIO_OK)) {
@@ -368,17 +400,22 @@ BResult BioServer::BioCacheInit()
         return ret;
     }
 
+    mCacheInited = true;
     return BIO_OK;
 }
 
 BResult BioServer::BioIntercepterServerInit()
 {
+    if (mInterceptorInited) {
+        return BIO_OK;
+    }
     auto ret = InterceptorServer::GetInstance().StartServer();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init interceptor server, ret:" << ret << ".");
         return BIO_ERR;
     }
 
+    mInterceptorInited = true;
     return BIO_OK;
 }
 
@@ -395,6 +432,8 @@ BResult BioServer::BioServerDiagnoseInit()
     uint32_t procPid = 456U;
     std::string diagName = "bio_server";
     auto ret = CLI_AgentInit(procPid, const_cast<char *>(diagName.c_str()));
+    LVOS_TP_START(CLI_AGENT_INIT_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("init bio server diagnose fail.");
         return BIO_ERR;
@@ -412,12 +451,16 @@ BResult BioServer::BioServerDiagnoseInitInner()
 {
     const char *soFileName = "libserver_diagnose.so";
     void *handler = dlopen(soFileName, RTLD_NOW);
+    LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
+    LVOS_TP_END;
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_ERR;
     }
     ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
     BResult ret = serverInitFunc();
+    LVOS_TP_START(CLI_SERVER_DIAGNOSE_INIT_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
     }
@@ -633,12 +676,16 @@ int32_t Put(PutRequest *req)
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
+        LVOS_TP_START(PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL, &sliceP, nullptr);
+        LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
         }
     } else {
         sliceP = MakeRef<WCacheSlice>();
+        LVOS_TP_START(PUT_ALLOC_SLICE_FAIL, &sliceP, nullptr);
+        LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
@@ -668,12 +715,18 @@ int32_t List(ListRequest *req, ListResponse **rsp)
 {
     std::unordered_map<std::string, ObjStat> objs;
     BResult ret = BioServer::Instance()->GetMirrorServer()->List(*req, objs);
+    LVOS_TP_START(LIST_LIST_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }
 
     char *tmp = new (std::nothrow) char[sizeof(ListResponse) + sizeof(ObjStat) * objs.size()];
+    LVOS_TP_START(LIST_MALLOC_RSP_FAIL, &tmp, nullptr);
+    LVOS_TP_END;
     if (UNLIKELY(tmp == nullptr)) {
+        LVOS_TP_START(LIST_MALLOC_RSP_FAIL_RESET, &tmp);
+        LVOS_TP_END;
         LOG_ERROR("Alloc memory failed, len:" << (sizeof(ListResponse) + sizeof(ObjStat) * objs.size()) << ".");
         return BIO_ALLOC_FAIL;
     }

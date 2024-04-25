@@ -15,11 +15,15 @@ DiskAllocator FlowManager::mDiskAllocator;
 std::atomic<uint64_t> FlowManager::mUsedRes[NO_2][NO_2];
 BResult FlowManager::Init()
 {
+    LVOS_TP_START(ALLOC_TASK_POOL_FAIL, &mTaskPool[FLOW_MEMORY], nullptr);
     if (mInited) {
         return BIO_OK;
     }
     mTaskPool[FLOW_MEMORY] = MakeRef<FlowTaskPool>("flow_mem");
+    LVOS_TP_END;
     if (mTaskPool[FLOW_MEMORY] == nullptr) {
+        LVOS_TP_START(ALLOC_TASK_POOL_FAIL_RESET, &mTaskPool[FLOW_MEMORY]);
+        LVOS_TP_END;
         LOG_ERROR("Failed to start flow task pool, probably out of memory");
         return BIO_ERR;
     }
@@ -45,12 +49,7 @@ BResult FlowManager::Init()
     mUsedRes[NO_1][0] = 0;  // rcache memory used
     mUsedRes[NO_1][NO_1] = 0;  // rcache disk used
 
-    ret = Recover();
-    if (ret != BIO_OK) {
-        return ret;
-    }
-
-    return BIO_OK;
+    return Recover();
 }
 
 BResult FlowManager::Exit()

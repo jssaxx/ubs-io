@@ -4,6 +4,8 @@
 #ifndef BIO_TP_COMMON_H
 #define BIO_TP_COMMON_H
 
+#include "flow_task_pool.h"
+
 #ifdef __aarch64__
 #include "tracepoint.h"
 #else
@@ -23,10 +25,13 @@ public:
 
 public:
     static void IntValueCallback(LVOS_TRACEP_PARAM_S *user, int *value, int set) noexcept;
+    static void IntValueResetCallback(LVOS_TRACEP_PARAM_S *user, int *value) noexcept;
     static void IntValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, int *value, int set, int err) noexcept;
     static void LongValueCallback(LVOS_TRACEP_PARAM_S *user, long *value, long set) noexcept;
     static void LongValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, long *value, long set, int err) noexcept;
     static void NoProcessCallback(LVOS_TRACEP_PARAM_S *user) noexcept;
+    static void PointerValueCallback(LVOS_TRACEP_PARAM_S *user, void** value, void* set) noexcept;
+    static void PointerValueResetCallback(LVOS_TRACEP_PARAM_S *user, void** value) noexcept;
 };
 }
 }
