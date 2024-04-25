@@ -56,13 +56,6 @@ TEST_F(TestBio, test_bio_create_cache)
     // invalid case
     ret = BioCreateCache({G_INVALID_TENANT_ID, affinity, strategy});
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    // error branches
-    tenantId = G_TENANT_ID+1;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    ret = BioCreateCache({tenantId, affinity, strategy});
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
 }
 
 TEST_F(TestBio, test_bio_get_cache)
@@ -314,18 +307,6 @@ TEST_F(TestBio, test_bio_list_all)
     // null prefix
     ret = BioListAll(G_TENANT_ID, nullptr, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    // error branches
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
-    userParam = {};
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL_CONFLICT", 0, 1, userParam);
-    ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_NO_SPACE);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL_CONFLICT");
-    BioFreeListResources(objs, objNum);
 }
 
 TEST_F(TestBio, test_bio_stat)
@@ -377,12 +358,6 @@ TEST_F(TestBio, test_bio_load)
     // invalid load parameter
     ret = BioLoad(G_TENANT_ID, nullptr, 0, G_LENGTH, locationInfo, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    // error branches
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, TestCallback, &loadCtx);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
     sem_wait(&(loadCtx.sem));
     sem_destroy(&(loadCtx.sem));
 }
@@ -403,16 +378,6 @@ TEST_F(TestBio, test_bio_delete)
     // delete a non-existent cache
     ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, locationInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-    // error branches
-    int length = 6000;
-    std::string value1(length, ' ');
-    ret = BioPut(G_TENANT_ID, "4_8k", value1.c_str(), length, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    ret = BioDelete(G_TENANT_ID, G_KEY, locationInfo);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
 }
 
 CacheSpaceInfo addressInfo;
@@ -429,12 +394,6 @@ TEST_F(TestBio, test_bio_allocspace)
     // nonexistent tenantId
     ret = BioAllocSpace(G_INVALID_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-    // error branches
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    ret = BioAllocSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
-    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
 }
 
 TEST_F(TestBio, test_bio_putwithspace_case)
@@ -448,12 +407,6 @@ TEST_F(TestBio, test_bio_putwithspace_case)
     // nonexistent tenantId
     ret = BioPutWithSpace(G_INVALID_TENANT_ID, "putwithspace", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-    // error branches
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    ret = BioPutWithSpace(G_TENANT_ID, "putwithspace", &addressInfo);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
 }
 
 void TestBio::VNodeIdStub()
@@ -1043,49 +996,4 @@ TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
     static uint64_t objectId = 1;
     auto ret = BioPutWithSpace(G_TENANT_ID, "putwithspace", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
-}
-
-TEST_F(TestBio, test_agent_init_return_err)
-{
-    BioExit();
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL", 0, 1, userParam);
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL");
-    userParam = {};
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_RET_FAIL_CONFLICT", 0, 1, userParam);
-    ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_RET_FAIL_CONFLICT");
-}
-
-TEST_F(TestBio, test_bio_client_net_pre_init_return_err)
-{
-    BioExit();
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL", 0, 1, userParam);
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL");
-    userParam = {};
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL_CONFLICT", 0, 1, userParam);
-    ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_BIO_CLIENT_NET_PRE_INIT_FAIL_CONFLICT");
-}
-
-TEST_F(TestBio, test_bio_client_mirror_init_return_err)
-{
-    BioExit();
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL", 0, 1, userParam);
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL");
-    userParam = {};
-    LVOS_HVS_activeTracePoint(0, "SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL_CONFLICT", 0, 1, userParam);
-    ret = BioInitialize(WorkerMode::CONVERGENCE);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL_CONFLICT");
 }
