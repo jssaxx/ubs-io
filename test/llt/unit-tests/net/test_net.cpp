@@ -7,7 +7,10 @@
 #include "net_engine.h"
 #include "bio_server.h"
 #include "net_stub.h"
+#include "tracepoint.h"
 #include "test_net.h"
+
+#include "bio_client_log.h"
 
 using namespace ock::bio;
 
@@ -54,6 +57,12 @@ TEST_F(TestNet, test_net_new_channel)
     ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
     int32_t ret = engine->NewChannel("127.0.0.1", channel, "bio-ctrl-2");
     EXPECT_EQ(ret, BIO_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_NET_PEER_CONNECTION_REFUSED", 0, 1, userParam);
+    ret = engine->NewChannel("127.0.0.1", channel, "bio-ctrl-2");
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_PEER_CONNECTION_REFUSED");
 }
 
 TEST_F(TestNet, test_net_broken_channel)
@@ -167,4 +176,49 @@ TEST_F(TestNet, test_net_write)
 
     ret = engine->SyncWrite(1, req);
     EXPECT_EQ(ret, BIO_OK);
+
+    ServiceContext ctx;
+    ret = engine->SyncWrite(ctx.Channel(), req);
+    EXPECT_EQ(ret, BIO_OK);
 }
+
+TEST_F(TestNet, test_net_sync_connect)
+{
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    uint32_t mPid = 0;
+    ConnectInfo mConnectInfo(INVALID_NID, mPid, INVALID_NID);
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_CONNECT_CTRL_PLANE", 0, 1, userParam);
+    BResult ret = engine->SyncConnect(mConnectInfo);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_CONNECT_CTRL_PLANE");
+}
+
+TEST_F(TestNet, test_net_receive_fds)
+{
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    BioNodeId targetNodeId = 1;
+    int32_t realFd = 1;
+    BResult ret = engine->ReceiveFds(targetNodeId, &realFd, NO_1);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+}
+
+TEST_F(TestNet, test_net_set_shminfo)
+{
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    int32_t mShmFd = -1;
+    uint8_t *mShmAddr = nullptr;
+    uint64_t mShmOffset = 0;
+    uint64_t mShmLength = 0;
+    engine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
+}
+
+TEST_F(TestNet, test_net_get_shmaddress)
+{
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    uint64_t mShmOffset = 0;
+    engine->GetShmAddress(mShmOffset);
+    mShmOffset = 1;
+    engine->GetShmAddress(mShmOffset);
+}
+
