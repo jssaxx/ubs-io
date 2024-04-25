@@ -14,7 +14,10 @@
 #include "bio_client_net.h"
 #include "bio_monotonic.h"
 #include "mirror_client.h"
-
+#ifdef USE_DEBUG_TOOLS
+#include <dlfcn.h>
+#include "bio_tracepoint_helper.h"
+#endif
 using namespace ock::bio;
 
 BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
@@ -290,13 +293,18 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
 BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
 {
     mLock.LockRead();
-    auto iter = mPtView.find(ptId);
+    auto iter = mPtView.end();
+    LVOS_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, &iter, mPtView.end());
+    iter = mPtView.find(ptId);
+    LVOS_TP_END;
     if (UNLIKELY(iter == mPtView.end())) {
         mLock.UnLock();
         CLIENT_LOG_ERROR("Invalid pt id:" << ptId << ".");
         return BIO_INVALID_PARAM;
     }
     BResult ret = BIO_OK;
+    LVOS_TP_START(SDK_MIRROR_CHECK_PT_FAIL, &(iter->second.state), CM_PT_FAULT);
+    LVOS_TP_END;
     if (UNLIKELY(iter->second.state == CM_PT_FAULT)) {
         ret = BIO_CHECK_PT_FAIL;
     } else {
@@ -415,7 +423,10 @@ BResult MirrorClient::Put(MirrorPut &param)
 BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo,
     PutRequest *&req)
 {
-    auto *reqTmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
+    uint8_t *reqTmp = nullptr;
+    LVOS_TP_START(SDK_MIRROR_PUT_MEMORY_FAIL, &reqTmp, nullptr);
+    reqTmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
+    LVOS_TP_END;
     if (UNLIKELY(reqTmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put memory failed, len:" << sizeof(PutRequest) + spaceInfo.descriptorSize << ".");
         return BIO_INNER_ERR;
@@ -1108,6 +1119,8 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     net::BioClientNet::Instance()->Free(req->mrAddress);
+    LVOS_TP_START(SDK_MIRROR_SEND_PUT_FAIL, &(cbCtx.result), BIO_INNER_ERR);
+    LVOS_TP_END;
     return cbCtx.result;
 }
 
