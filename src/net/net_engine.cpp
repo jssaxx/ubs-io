@@ -18,6 +18,9 @@
 #include "net_log.h"
 #include "net_executor_pool.h"
 #include "net_engine.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -421,6 +424,8 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     if (mHandleNewChannel != nullptr) {
         mHandleNewChannel(newChannel, ipPort, resp);
     }
+    LVOS_TP_START(SERVER_NET_PEER_CONNECTION_REFUSED, &resp.result, BIO_INNER_ERR);
+    LVOS_TP_END;
     if (resp.result != 0) {
         NET_LOG_WARN("Peer connection from " << ipPort << " has been refused");
         return BIO_ERR;
@@ -533,12 +538,14 @@ void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &p
 
 BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
-    NetService *netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
+    NetService *netService = nullptr;
+    LVOS_TP_START(SERVER_NET_FAIL_TO_CONNECT_CTRL_PLANE, &netService, nullptr);
+    netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
+    LVOS_TP_END;
     if (netService == nullptr) {
         NET_LOG_ERROR("Net service not ready.");
         return BIO_ERR;
     }
-
     NetServiceConnectOptions options;
     std::string prefix;
     FillConnectOption(info, isCtrlPanel, prefix, options);
