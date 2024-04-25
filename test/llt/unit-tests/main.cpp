@@ -16,6 +16,8 @@
 #include "server/cm_server_view.h"
 #include "server/cm_server_monitor.h"
 #include "ut_common.h"
+#include "flow_manager.h"
+#include "bio_server_c.h"
 
 void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv);
 
@@ -42,6 +44,7 @@ int main(int argc, char *argv[])
 {
     TestCm::Stub();
     TestHtracer::Stub();
+    (void)system("chmod 777 /var/log/boostio/bio.log");
     (void)system("rm -rf test1");
     (void)system("rm -rf test2");
     (void)system("rm -rf ceph");
@@ -94,8 +97,8 @@ void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv)
     WCacheManager::Instance()->Flush(ptId, ptv);
 
     HTracerExit();
-    WCacheManager::Instance()->Exit();
-    RCacheManager::Instance()->Exit();
+    Cache::Instance().Exit();
+    FlowManager::Instance()->Exit();
     BdmDestory(0);
     Logger::ChangeLogLevel(-1);
     Logger::ChangeLogLevel(NO_3);
@@ -104,4 +107,5 @@ void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv)
     CmServerListenDiskFault(0, 0, 0);
     CmServerMonitorExit();
     CmServerViewExit();
+    BioServerUninit();
 }

@@ -8,6 +8,9 @@
 #include "bio_monotonic.h"
 #include "flow_id_allocator.h"
 #include "cache_flow.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -725,6 +728,8 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
     }
 
     auto ret = sliceWriter(newSlice, destSlice.Get());
+    LVOS_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Call slice writer to dst slice failed, ret:" << ret << ", offset:" << offset << ", length:" <<
             realLen << ".");

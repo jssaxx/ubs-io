@@ -21,24 +21,38 @@ constexpr uint32_t CRB_JOB_QUEUE_SIZE = 8192;
 
 BResult MirrorServerCrb::Init()
 {
+    LVOS_TP_START(NO_PROCESS_MIRROR_SERVER_CRB_INIT, 0);
     if (mInited) {
         return BIO_OK;
     }
+    LVOS_TP_END;
 
     BResult result;
 
+    LVOS_TP_START(MIRROR_SERVER_TASK_FAIL, &mTaskService, nullptr);
     mTaskService = ExecutorService::Create(CRB_TASK_THREAD_NUM, CRB_TASK_QUEUE_SIZE);
+    LVOS_TP_END;
+    LVOS_TP_START(MIRROR_SERVER_TASK_FAIL_RESET_OUTER, &mTaskService);
+    LVOS_TP_END;
     if (UNLIKELY(mTaskService == nullptr)) {
+        LVOS_TP_START(MIRROR_SERVER_TASK_FAIL_RESET, &mTaskService);
+        LVOS_TP_END;
         LOG_ERROR("Failed to start executor service for crb task");
         return BIO_ERR;
     }
 
+    LVOS_TP_START(NO_PROCESS_MIRROR_SERVER_TASK_START, 0);
     mTaskService->SetThreadName("crb-task");
     result = mTaskService->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
+    LVOS_TP_END;
 
+    LVOS_TP_START(MIRROR_SERVER_JOB_FAIL, &mJobService, nullptr);
     mJobService = ExecutorService::Create(CRB_JOB_THREAD_NUM, CRB_JOB_QUEUE_SIZE);
+    LVOS_TP_END;
     if (UNLIKELY(mJobService == nullptr)) {
+        LVOS_TP_START(MIRROR_SERVER_JOB_FAIL_RESET, &mJobService);
+        LVOS_TP_END;
         LOG_ERROR("Failed to start executor service for crb job");
         return BIO_ERR;
     }

@@ -10,6 +10,9 @@
 #include "bio_trace.h"
 #include "cm.h"
 #include "cache_overload_ctrl.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -36,6 +39,8 @@ BResult Cache::Recover()
     std::map<uint64_t, FlowPtr> flowMaps;
 
     auto ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
+    LVOS_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Get flow list fail:" << ret);
         return ret;
