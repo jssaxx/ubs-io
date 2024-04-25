@@ -28,10 +28,7 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
         return BIO_ALLOC_FAIL;
     }
 
-    BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_AGENT_INIT_FAIL, &ret, BIO_ERR);
-    ret = agentPtr->Initialize(mode);
-    LVOS_TP_END;
+    auto ret = agentPtr->Initialize(mode);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize agent, ret:" << ret << ".");
     }
@@ -111,10 +108,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     UpdateView updateView = [this]() { BioClientUpdateView(); };
     WorkerScene scene = mNetEngine->GetWorkerScene();
 
-    BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_SET_BIO_CLIENT_MIRROR_INIT_FAIL_CONFLICT, &ret, BIO_ERR);
-    ret = mMirror->Initialize(updateView, scene);
-    LVOS_TP_END;
+    auto ret = mMirror->Initialize(updateView, scene);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
