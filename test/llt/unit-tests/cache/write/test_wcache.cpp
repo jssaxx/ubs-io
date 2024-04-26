@@ -14,6 +14,7 @@
 #include "bdm_core.h"
 #include "flow_task_pool.h"
 #include "flow_manager.h"
+#include "tracepoint.h"
 #include "test_wcache.h"
 
 using namespace ock::bio;
@@ -215,6 +216,20 @@ TEST_F(TestWCache, test_repeat_delete_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestWCache, test_start_pool_threadnum_incorrect_return_fail)
+{
+    FlowTaskPoolPtr flowTaskPool = MakeRef<FlowTaskPool>("testflow");
+    auto ret = flowTaskPool->Start(0, NO_16);
+    EXPECT_EQ(ret, BIO_ALLOC_FAIL);
+}
+
+TEST_F(TestWCache, test_start_pool_return_ok)
+{
+    FlowTaskPoolPtr flowTaskPool = MakeRef<FlowTaskPool>("testflow");
+    auto ret = flowTaskPool->Start(8, NO_16);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 void TestWCache::Stub()
 {
     MOCKER_CPP(&WCache::IsEmptyEvict, bool (*)()).stubs().will(returnValue(false));
@@ -250,4 +265,25 @@ TEST_F(TestWCache, test_get_evict_offset_return_ok)
     uint64_t  flowOffset = 0;
     auto ret = Cache::Instance().GetEvictOffset(g_cacheId, flowOffset);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL_RESET", 0, 1, userParam);
+    auto ret = GetSlice(g_cacheId, 0, NO_1024);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL_RESET");
+    EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
+{
+    GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1, 0, 1, NO_128 };
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
+    auto ret = GetSlice(g_cacheId, 0, NO_1024);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
+    EXPECT_EQ(ret, BIO_ERR);
 }

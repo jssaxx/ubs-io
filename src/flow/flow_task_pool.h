@@ -6,6 +6,9 @@
 
 #include "bio_execution.h"
 #include "bio_err.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {

@@ -55,7 +55,6 @@ int32_t TestHtracer::HTracerInitMock(const std::string &dumpDir)
 
 void TestHtracer::Stub() noexcept
 {
-    MOCKER(HTracerInit).stubs().will(invoke(HTracerInitMock));
 }
 
 TEST_F(TestHtracer, test_get_trace_info_ok)

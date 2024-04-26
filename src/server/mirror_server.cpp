@@ -179,7 +179,11 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
     auto ret = Cm::Instance()->GetLocalDiskId(ptId, diskId);
     ChkTrue(ret == BIO_OK, ret, "Get local disk fail:" << ret << ", ptId:" << ptId);
 
+    LVOS_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL, &ret, BIO_ERR);
     ret = Cache::Instance().CreateWCache(procId, ptId, ptv, diskId, flowId);
+    LVOS_TP_END;
+    LVOS_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL_RESET, &ret, BIO_OK);
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
         return ret;

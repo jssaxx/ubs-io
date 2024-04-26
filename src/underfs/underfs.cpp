@@ -10,7 +10,9 @@
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
+#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -197,14 +199,20 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
 BResult UnderFs::Init()
 {
     static const std::string CEPH_PATH = "./ceph/";
+    LVOS_TP_START(NO_PROCESS_UNDERFS_INIT, 0);
     if (mInited) {
         return BIO_OK;
     }
+    LVOS_TP_END;
 
     mEmulationCephPath = CEPH_PATH;
     DIR *dir = opendir(mEmulationCephPath.c_str());
+    LVOS_TP_START(UNDERFS_OPEN_DIR_FAIL, &dir, nullptr);
+    LVOS_TP_END;
     if (dir == nullptr) {
         int status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        LVOS_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_ERR);
+        LVOS_TP_END;
         if (status == 0) {
             LOG_INFO("Succeed to create directory, " << mEmulationCephPath.c_str());
         } else {

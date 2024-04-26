@@ -6,9 +6,7 @@ if (OPEN_TEST_TOOLS STREQUAL "ON")
     include_directories(../../test/tools/diagnose
             ../../test/tools/cli/include
             ../../test/tools/diagnose/cli_sdk
-            ../../test/tools/diagnose/cli_htracer
-            ../../test/tools/bio_tp/
-            ../../test/tools/tracepoint/include)
+            ../../test/tools/diagnose/cli_htracer)
 endif()
 
 if (OPEN_UNDERFS_CEPH STREQUAL "ON")

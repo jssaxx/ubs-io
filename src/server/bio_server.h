@@ -14,6 +14,9 @@
 #include "cm.h"
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -73,7 +76,9 @@ public:
                 LOG_INFO("Module (" << it->name << ") initialize success.");
             } else {
                 LOG_ERROR("Module (" << it->name << ") initialize failed, result:" << ret << ".");
+                LVOS_TP_START(NO_PROCESS_ROLLBACK_SERVICE_INIT, 0);
                 RollbackInit(it);
+                LVOS_TP_END;
                 return BIO_ERR;
             }
         }
@@ -83,17 +88,22 @@ public:
     BResult OnServiceStart()
     {
         for (auto it = mModules.cbegin(); it != mModules.cend(); ++it) {
+            int32_t ret = 0;
+            LVOS_TP_START(SERVICE_START_FAIL, &ret, -1);
             if (it->start == nullptr) {
                 LOG_INFO("Module (" << it->name << ") no start function, skip.");
                 continue;
             }
             LOG_INFO("Module (" << it->name << ") start begin...");
-            auto ret = it->start();
+            ret = it->start();
+            LVOS_TP_END;
             if (ret == BIO_OK) {
                 LOG_INFO("Module (" << it->name << ") start success.");
             } else {
                 LOG_ERROR("Module (" << it->name << ") start failed, result:" << ret << ".");
+                LVOS_TP_START(NO_PROCESS_ROLLBACK_SERVICE_START, 0);
                 RollbackStart(it);
+                LVOS_TP_END;
                 return BIO_ERR;
             }
         }
@@ -343,6 +353,11 @@ private:
     std::map<uint16_t, CmPtInfo> mPtView;
     uint64_t mCurNodeTimes = 0;
     uint64_t mCurPtTimes = 0;
+
+    bool mNetEngineInited = false;
+    bool mCacheInited = false;
+    bool mInterceptorInited = false;
+    bool mMirrorInited = false;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

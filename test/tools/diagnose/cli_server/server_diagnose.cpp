@@ -26,8 +26,13 @@ static void HandleModifyEvictWaterLevel(uint8_t tier, uint64_t level);
 static void HandleModifyEvictMemQuantity(uint64_t quantity);
 static void HandleModifyEvictDiskQuantity(uint64_t quantity);
 
+static bool mInited = false;
 int diagnose::BioServerCommand::Initialize() noexcept
 {
+    if (mInited) {
+        return 0;
+    }
+
     CLI_CMD_S command;
     strncpy(command.szCommand, "bioServer", CLI_MAX_COMMAND_LEN);
     strncpy(command.szDescription, "bioServer commands.", CLI_MAX_CMD_DESC_LEN);
@@ -37,6 +42,7 @@ int diagnose::BioServerCommand::Initialize() noexcept
     if (result != 0) {
         printf("register BioServer diagnose failed.");
     }
+    mInited = true;
     return result;
 }
 

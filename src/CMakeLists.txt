@@ -1,3 +1,9 @@
+if (${OPEN_TEST_TOOLS} MATCHES "ON")
+include_directories(
+        ${SRC_DIR}/../test/tools/bio_tp/
+        ${SRC_DIR}/../test/tools/tracepoint/include)
+endif()
+
 add_subdirectory(cluster)
 add_subdirectory(common)
 add_subdirectory(config)
