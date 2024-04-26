@@ -5,6 +5,9 @@
 #include <iostream>
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "bio_log.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -44,8 +47,12 @@ void Logger::LogToStdErr(const std::ostringstream &oss)
 
 bool Logger::ValidateParams(const LoggerOptions &options)
 {
+    LVOS_TP_START(MIN_LOG_LEVEL_FAIL, &options.minLogLevel, -1);
+    LVOS_TP_END;
     /* for normal log */
     if (options.minLogLevel < 0 || options.minLogLevel > MIN_LOG_LEVEL_MAX) {
+        LVOS_TP_START(MIN_LOG_LEVEL_FAIL_RESET, &options.minLogLevel);
+        LVOS_TP_END;
         BIO_LOG_STD_ERR("Invalid min log level for logger, which should be 0,1,2,3,4,5");
         return false;
     }
@@ -55,13 +62,21 @@ bool Logger::ValidateParams(const LoggerOptions &options)
         return false;
     }
 
+    LVOS_TP_START(LOG_ROTATION_FILE_SIZE_FAIL, &options.rotationFileSizeInMB, -1);
+    LVOS_TP_END;
     if (options.rotationFileSizeInMB > ROTATION_FILE_SIZE_MAX_MB ||
         options.rotationFileSizeInMB < ROTATION_FILE_SIZE_MIN_MB) {
+        LVOS_TP_START(LOG_ROTATION_FILE_SIZE_FAIL_RESET, &options.rotationFileSizeInMB);
+        LVOS_TP_END;
         BIO_LOG_STD_ERR("Invalid max file size for logger, which should be between 2MB to 100MB");
         return false;
     }
 
+    LVOS_TP_START(LOG_ROTATION_FILE_COUNT_FAIL, &options.rotationFileCount, -1);
+    LVOS_TP_END;
     if (options.rotationFileCount > ROTATION_FILE_COUNT_MAX || options.rotationFileCount < 1) {
+        LVOS_TP_START(LOG_ROTATION_FILE_COUNT_FAIL_RESET, &options.rotationFileCount);
+        LVOS_TP_END;
         BIO_LOG_STD_ERR("Invalid max file count for logger, which should be less than 50");
         return false;
     }
@@ -73,10 +88,12 @@ Logger *Logger::Instance(const LoggerOptions &options)
 {
     std::lock_guard<std::mutex> guard(gMutex);
 
+    LVOS_TP_START(NO_PROCESS_LOG_INSTANCE, 0);
     /* already created */
     if (gInstance != nullptr) {
         return gInstance;
     }
+    LVOS_TP_END;
 
     /* create */
     if (!ValidateParams(options)) {

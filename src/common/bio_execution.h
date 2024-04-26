@@ -15,6 +15,9 @@
 #include "bio_ref.h"
 #include "bio_def.h"
 #include "bio_ring_buffer.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -197,12 +200,17 @@ private:
 
 inline bool ExecutorService::Start()
 {
+    LVOS_TP_START(NO_PROCESS_EXECUTOR, 0);
     if (mStarted) {
         return true;
     }
+    LVOS_TP_END;
 
     /* init ring buffer blocking queue */
-    auto result = mRunnableQueue.Initialize();
+    int result = 0;
+    LVOS_TP_START(QUEUE_INIT_FAIL, &result, -1);
+    result = mRunnableQueue.Initialize();
+    LVOS_TP_END;
     if (result != 0) {
         LOG_ERROR("Failed to initialize queue, result " << result);
         return false;
@@ -211,6 +219,8 @@ inline bool ExecutorService::Start()
     for (uint16_t i = 0; i < mThreadNum; i++) {
         auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
         auto *thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
+        LVOS_TP_START(EXECUTOR_THREAD_FAIL, &thr, nullptr);
+        LVOS_TP_END;
         if (thr == nullptr) {
             LOG_ERROR("Failed to create executor thread " << i);
             return false;

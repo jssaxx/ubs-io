@@ -11,6 +11,8 @@
 #include "cache_slice_operator.h"
 #include "rcache_manager.h"
 #include "bdm_core.h"
+#include "tracepoint.h"
+#include "flow_manager.h"
 #include "test_rcache.h"
 
 using namespace ock::bio;
@@ -187,4 +189,24 @@ TEST_F(TestRCache, test_rcache_delete_ok)
 
     ret = gRcacheManager->Delete(G_PT_ID, key4);
     EXPECT_EQ(ret, 0);
+}
+
+TEST_F(TestRCache, test_cache_recover_return_err)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().Recover();
+    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL");
+}
+
+TEST_F(TestRCache, test_flowmanager_init_task_pool_exeception_return_err)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "ALLOC_TASK_POOL_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "ALLOC_TASK_POOL_FAIL_RESET", 0, 1, userParam);
+    auto ret = FlowManager::Instance()->Init();
+    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "ALLOC_TASK_POOL_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "ALLOC_TASK_POOL_FAIL_RESET");
 }

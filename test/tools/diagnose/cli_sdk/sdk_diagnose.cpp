@@ -63,13 +63,18 @@ static void *PerfTestPutImpl(void *param);
 static void *PerfTestGetImpl(void *param);
 static void HandlePerf(std::vector<std::string> cmds);
 
+static bool mInited = false;
 int diagnose::BioSdkCommand::Initialize() noexcept
 {
+    if (mInited) {
+        return 0;
+    }
     CLI_CMD_S command;
     strncpy(command.szCommand, "sdk", CLI_MAX_COMMAND_LEN);
     strncpy(command.szDescription, "sdk commands.", CLI_MAX_CMD_DESC_LEN);
     command.fnCmdDo = BioSdkDebugProcess;
     command.fnPrintCmdHelp = BioSdkDebugHelp;
+    mInited = true;
     return CLI_RegCmd(&command);
 }
 

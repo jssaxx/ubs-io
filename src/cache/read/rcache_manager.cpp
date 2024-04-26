@@ -9,6 +9,9 @@
 #include "bio_trace.h"
 #include "bio_monotonic.h"
 #include "rcache_manager.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 using namespace ock::bio;
 
@@ -21,14 +24,19 @@ static constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 
 BResult RCacheManager::Init()
 {
+    LVOS_TP_START(NO_PROCESS_RCACHE_EVICT, 0);
     rCacheEvict = MakeRef<RCacheEvict>();
-    BResult ret = rCacheEvict->Initialize();
+    LVOS_TP_END;
+    BResult ret = BIO_OK;
+    LVOS_TP_START(NO_PROCESS_RCACHE_GC, 0);
+    ret = rCacheEvict->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init rcache evict, ret:" << ret << ".");
         return ret;
     }
 
     rCacheGCPtr = MakeRef<RCacheGC>();
+    LVOS_TP_END;
     ret = rCacheGCPtr->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init rcache GC, ret:" << ret << ".");
@@ -119,15 +127,19 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
 BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId)
 {
     cacheLock.LockWrite();
+    LVOS_TP_START(NO_PROCESS_RCACHE_FIND, 0);
     auto iter = cache.find(ptId);
     if (iter != cache.end()) {
         LOG_INFO("Exist, ptId:" << ptId << " have associated read cache object.");
         cacheLock.UnLock();
         return BIO_OK;
     }
+    LVOS_TP_END;
 
     uint32_t workIndex = mWorkIndex++;
     auto cacheObj = MakeRef<RCache>(ptId, ptv, diskId, workIndex);
+    LVOS_TP_START(RCACHE_ALLOC_OBJ_FAIL, &cacheObj, nullptr);
+    LVOS_TP_END;
     if (UNLIKELY(cacheObj == nullptr)) {
         LOG_ERROR("Create read cache object memory failed.");
         cacheLock.UnLock();
@@ -135,6 +147,8 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId
     }
 
     auto ret = cacheObj->Initialize();
+    LVOS_TP_START(RCACHE_INIT_OBJ_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Initialize read cache object ptId:" << ptId << " failed, error code " << ret);
         cacheLock.UnLock();
