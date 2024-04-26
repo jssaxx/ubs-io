@@ -20,7 +20,11 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
+        LVOS_TP_START(WCACHE_TIER_ALLOC_FAIL, &cacheTier, nullptr);
+        LVOS_TP_END;
         ChkTrueNot(cacheTier != nullptr, BIO_ALLOC_FAIL);
+        LVOS_TP_START(WCACHE_TIER_TYPE_FAIL, &i, MAX_WCACHE_TIER);
+        LVOS_TP_END;
         auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, mDiskId);
         ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << mFlowId);
         mCacheTiers[i] = cacheTier;
@@ -75,7 +79,9 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 
     // put it memory tier cache.
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
+    LVOS_TP_START(WRITE_SLICE_NULL_FAIL, &destSliceRef, nullptr);
     destSliceRef = memCache->Write(key, srcSlice, sliceReader, attr);
+    LVOS_TP_END;
     if (UNLIKELY(destSliceRef == nullptr)) {
         LOG_ERROR("Memory cache write failed.");
         return BIO_INNER_RETRY;
@@ -143,6 +149,8 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     auto slice = sliceRef->GetSlice();
     WCacheSlicePtr metaSlice = nullptr;
+    LVOS_TP_START(WCACHE_FLOW_DISK_FAIL, slice->GetFlowType(), FLOW_DISK);
+    LVOS_TP_END;
     if (slice->GetFlowType() == FLOW_MEMORY) {
         auto ret = mCacheTiers[WCACHE_MEMORY]->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
         ChkTrue(ret == BIO_OK, ret,
@@ -184,13 +192,19 @@ BResult WCache::Destroy()
 {
     BResult ret;
 
+    LVOS_TP_START(MEMORY_WCACHE_TIER_DESTROY_FAIL, &ret, BIO_ERR);
     ret = mCacheTiers[WCACHE_MEMORY]->Destroy();
+    LVOS_TP_END;
+    LVOS_TP_START(MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET, &ret, BIO_OK);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Seal mem cacheTier fail:" << ret << ", flowId:" << mFlowId);
         return ret;
     }
 
+    LVOS_TP_START(DISK_WCACHE_TIER_DESTROY_FAIL, &ret, BIO_ERR);
     ret = mCacheTiers[WCACHE_DISK]->Destroy();
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Seal disk cacheTier fail:" << ret << ", flowId:" << mFlowId);
         return ret;
@@ -324,6 +338,7 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
 
 void WCache::Flush()
 {
+    LVOS_TP_START(NO_PROCESS_WCACHE_FLUSH, 0);
     mIsForced = true;
 
     bool expectval = false;
@@ -336,10 +351,12 @@ void WCache::Flush()
         mEvictRef[WCACHE_DISK] = false;
     }
     return;
+    LVOS_TP_END;
 }
 
 void WCache::ExpiredClear()
 {
+    LVOS_TP_START(NO_PROCESS_WCACHE_EXPIRED_CLEAR, 0);
     mIsForced = true;
 
     {
@@ -361,6 +378,7 @@ void WCache::ExpiredClear()
             }
         }
     }
+    LVOS_TP_END;
 }
 
 bool WCache::IsEmptyEvict(WCacheTierType type)

@@ -8,6 +8,7 @@
 #include "bio_server.h"
 #include "tracepoint.h"
 #include "bio_server_c.h"
+#include "bdm_obj.h"
 #include "test_bio_server.h"
 
 using namespace ock::bio;
@@ -110,6 +111,54 @@ TEST_F(TestBioServer, test_bio_server_put)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestBioServer, test_bio_server_put_slice_alloc_fail_reply_ok)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcdslice", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.copyFree = false;
+    req.memFromServer = true;
+    req.mrAddress = 0ULL;
+    req.mrSize = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "PUT_SLICE_ZERO_ALLOC_FAIL", 0, 1, userParam);
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    LVOS_HVS_deactiveTracePoint(0, "PUT_SLICE_ZERO_ALLOC_FAIL");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_slice_normal_alloc_fail_reply_ok)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcdslice", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = NO_128;
+    req.copyFree = false;
+    req.memFromServer = true;
+    req.mrAddress = 0ULL;
+    req.mrSize = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "PUT_SLICE_NORMAL_ALLOC_FAIL", 0, 1, userParam);
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    LVOS_HVS_deactiveTracePoint(0, "PUT_SLICE_NORMAL_ALLOC_FAIL");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestBioServer, test_bio_server_get)
 {
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
@@ -136,9 +185,11 @@ TEST_F(TestBioServer, test_bio_server_get_read_err_reply_return_ok)
     req.length = 128U;
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_READ_CALLBACK_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_READ_CALLBACK", 0, 1, userParam);
     auto ret = mirror->MirrorServerGet(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_READ_CALLBACK_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_READ_CALLBACK");
 }
 
 TEST_F(TestBioServer, test_list_list_err_return_fail)
@@ -182,7 +233,8 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
-    auto ret = Put(&req);
+    PutResponse response;
+    auto ret = Put(&req, &response);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
@@ -203,7 +255,8 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_alloc_slice_err_return_fail)
     req.mrSize = 0;
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL", 0, 1, userParam);
-    auto ret = Put(&req);
+    PutResponse response;
+    auto ret = Put(&req, &response);
     LVOS_HVS_deactiveTracePoint(0, "PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL");
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
 }
@@ -225,7 +278,8 @@ TEST_F(TestBioServer, test_put_slice_alloc_slice_err_return_fail)
     req.mrSize = 0;
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "PUT_ALLOC_SLICE_FAIL", 0, 1, userParam);
-    auto ret = Put(&req);
+    PutResponse response;
+    auto ret = Put(&req, &response);
     LVOS_HVS_deactiveTracePoint(0, "PUT_ALLOC_SLICE_FAIL");
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
 }
@@ -258,6 +312,23 @@ TEST_F(TestBioServer, test_bio_server_list)
     CopyKey(req.prefix, "a", KEY_MAX_SIZE);
     auto ret = mirror->MirrorServerList(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_list_prefix_null_reply_ok)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    ListRequest req;
+    req.comm = { MESSAGE_MAGIC, 0, 0, 1, getpid() };
+    req.isListUnderFs = false;
+    CopyKey(req.prefix, "a", KEY_MAX_SIZE);
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_INDEX_TABLE_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "MIRROR_LIST_FAIL", 0, 1, userParam);
+    auto ret = mirror->MirrorServerList(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_INDEX_TABLE_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "MIRROR_LIST_FAIL");
 }
 
 TEST_F(TestBioServer, test_bio_server_list_inner)
@@ -310,6 +381,28 @@ TEST_F(TestBioServer, test_mirror_slave_create_flow_wcache_err)
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_FLOW_CREATE_WCACHE_FAIL");
 }
 
+TEST_F(TestBioServer, test_slave_create_flow_ok)
+{
+    CreateFlowRequest req = { { MESSAGE_MAGIC, 0, NO_128, NO_10, getpid() }, 1, 1 };
+    auto ret = CreateFlowSlave(&req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, destroy_flow_OK)
+{
+    DestroyFlowRequest req = { { MESSAGE_MAGIC, 0, NO_128, NO_10, getpid() }, 1 };
+    auto ret = DestroyFlow(&req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, report_hb_ok)
+{
+    uint64_t curNodeTimes = 0;
+    uint64_t curPtTimes = 0;
+    auto ret = ReportHb(&curNodeTimes, &curPtTimes);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_alloc_obj_err)
 {
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
@@ -325,6 +418,51 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_alloc_obj_err)
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_FLOW_CREATE_WCACHE_FAIL_RESET");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_FIND");
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_ALLOC_OBJ_FAIL");
+}
+
+TEST_F(TestBioServer, test_mirror_server_destroy_flow_rcache_alloc_obj_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    DestroyFlowRequest req = { { MESSAGE_MAGIC, 0, 1, 1, getpid() }, 0 };
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "DESTROY_WCACHE_FAIL", 0, 1, userParam);
+    auto ret = mirror->MirrorServerDestroyFlow(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "DESTROY_WCACHE_FAIL");
+}
+
+TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    uint64_t offset = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SYNCCALL_FAIL", 0, 1, userParam);
+    auto ret = mirror->GetFlowGlobEvictOffset(0, 0, offset);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SYNCCALL_FAIL");
+}
+
+TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_channel_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    uint64_t offset = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SYNCCALL_CHANNEL_FAIL", 0, 1, userParam);
+    auto ret = mirror->GetFlowGlobEvictOffset(0, 0, offset);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SYNCCALL_CHANNEL_FAIL");
+}
+
+TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_opcode_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    uint64_t offset = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SYNCCALL_OPCODE_FAIL", 0, 1, userParam);
+    auto ret = mirror->GetFlowGlobEvictOffset(0, 0, offset);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+    LVOS_HVS_deactiveTracePoint(0, "SYNCCALL_OPCODE_FAIL");
 }
 
 TEST_F(TestBioServer, test_mirror_other_create_flow_err)
@@ -361,6 +499,34 @@ TEST_F(TestBioServer, test_bio_server_load)
     CopyKey(req.key, "abcd", KEY_MAX_SIZE);
     auto ret = mirror->MirrorServerLoad(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_delete_disk_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    DeleteRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_DISK_FAIL", 0, 1, userParam);
+    auto ret = mirror->Delete(req);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_DISK_FAIL");
+}
+
+TEST_F(TestBioServer, test_bio_server_delete_key_null_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    DeleteRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_DELETE", 0, 1, userParam);
+    auto ret = mirror->Delete(req);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_MIRROR_DELETE");
 }
 
 TEST_F(TestBioServer, test_bio_server_delete)
@@ -405,6 +571,24 @@ TEST_F(TestBioServer, test_bio_server_get_evict_off)
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetEvictRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1 };
+    auto ret = mirror->MirrorServerGetEvictOffset(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_get_evict_off_check_fail)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    GetEvictRequest req = { { MESSAGE_MAGIC, 1, 2, 1, getpid() }, 1 };
+    auto ret = mirror->MirrorServerGetEvictOffset(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_get_evict_off_flowid_err)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    GetEvictRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, NO_128 };
     auto ret = mirror->MirrorServerGetEvictOffset(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
 }
@@ -504,6 +688,45 @@ TEST_F(TestBioServer, test_bio_server_writer)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestBioServer, test_bio_server_writer_mr_pool_null)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    std::vector<FlowAddr> addr;
+    addr.emplace_back(FlowAddr(1, 0, NO_128));
+    WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr, FLOW_DISK);
+    WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
+    std::vector<NetMrInfo> rMrVec;
+    rMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
+    std::vector<NetMrInfo> lMrVec;
+    lMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
+    uint32_t rKey = 1;
+    bool isAlloc = true;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "MR_POOL_NULL_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "MR_POOL_NULL_FAIL_RESET", 0, 1, userParam);
+    auto ret = mirror->WriterParseMrInfo(from.Get(), to.Get(), rMrVec, lMrVec, rKey, isAlloc);
+    EXPECT_EQ(ret, BIO_NOT_READY);
+    LVOS_HVS_deactiveTracePoint(0, "MR_POOL_NULL_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "MR_POOL_NULL_FAIL_RESET");
+}
+
+TEST_F(TestBioServer, test_bio_server_writer_copy_slice_fail)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    std::vector<FlowAddr> addr;
+    addr.emplace_back(FlowAddr(1, 0, NO_128));
+    WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr, FLOW_DISK);
+    WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
+    std::vector<NetMrInfo> rMrVec;
+    rMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
+    std::vector<NetMrInfo> lMrVec;
+    lMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
+    uint32_t rKey = 1;
+    bool isAlloc = true;
+    auto ret = mirror->WriterParseMrInfo(from.Get(), to.Get(), rMrVec, lMrVec, rKey, isAlloc);
+    EXPECT_EQ(ret, BIO_DISK_IOERR);
+}
+
 TEST_F(TestBioServer, test_bio_server_handle)
 {
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
@@ -586,6 +809,51 @@ TEST_F(TestBioServer, test_bio_server_expire_clear)
     ptInfo.ptId = 1;
     ptInfo.version = 1;
     crb->JobExpiredClear(ptInfo);
+}
+
+TEST_F(TestBioServer, test_bio_server_expire_clear_ptid_err)
+{
+    MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
+    CmPtInfo ptInfo;
+    ptInfo.ptId = NO_128;
+    ptInfo.version = 1;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
+    auto ret = crb->JobExpiredClear(ptInfo);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
+}
+
+TEST_F(TestBioServer, test_bio_server_expire_clear_table_err)
+{
+    MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
+    CmPtInfo ptInfo;
+    ptInfo.ptId = NO_128;
+    ptInfo.version = 1;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_EXPIRED_CLEAR_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_INDEX_TABLE_FAIL", 0, 1, userParam);
+    auto ret = crb->JobExpiredClear(ptInfo);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_EXPIRED_CLEAR_OK");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_INDEX_TABLE_FAIL");
+}
+
+TEST_F(TestBioServer, test_bio_server_expire_clear_imp_err)
+{
+    MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
+    CmPtInfo ptInfo;
+    ptInfo.ptId = 1;
+    ptInfo.version = 1;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_EVICT_ERR", 0, 1, userParam);
+    auto ret = crb->JobExpiredClear(ptInfo);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_EVICT");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_EVICT_ERR");
 }
 
 TEST_F(TestBioServer, test_bio_server_add_sync_data)

@@ -519,6 +519,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
     uint32_t off = 0;
     BResult ret = BIO_OK;
+    LVOS_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         NetRequest rReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
         uint32_t dstPid = req.isConvDeploy ? 0 : req.comm.pid; // 融合部署场景目的端PID填充0
@@ -536,6 +537,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
             BioServer::Instance()->MemFree(mr.address);
         }
     }
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_GET_WRITE_DATA, ret);
     return ret;
 }
@@ -552,9 +554,11 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        LVOS_TP_START(NO_PROCESS_WCACHE_READ_CALLBACK, 0);
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
             return WriterLocalSameProcess(from, to, req.mrKey);
         }
+        LVOS_TP_END;
 
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
@@ -583,7 +587,10 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 BResult MirrorServer::Delete(DeleteRequest &req)
 {
     BIO_TRACE_START(MIRROR_TRACE_DEL);
-    BResult ret = Cache::Instance().Delete(req.comm.ptId, req.key);
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(NO_PROCESS_MIRROR_DELETE, 0);
+    ret = Cache::Instance().Delete(req.comm.ptId, req.key);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << req.key << ", ptId:" << req.comm.ptId << ".");
@@ -939,6 +946,8 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
+        LVOS_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
+        LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -946,6 +955,8 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
         }
     } else {
         sliceP = MakeRef<WCacheSlice>();
+        LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
+        LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -1091,6 +1102,8 @@ int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
 {
     std::unordered_map<std::string, ObjStat> objs;
     BResult ret = List(*req, objs);
+    LVOS_TP_START(MIRROR_LIST_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
@@ -1283,6 +1296,8 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     }
     uint32_t sliceLen = sliceP->GetSerializeLen();
     auto *tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
+    LVOS_TP_START(GET_SLICE_ALLOC_FAIL, &tmp, nullptr);
+    LVOS_TP_END;
     if (UNLIKELY(tmp == nullptr)) {
         LOG_ERROR("Alloc memory failed, len:" << sizeof(GetSliceResponse) + sliceLen << ".");
         Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);

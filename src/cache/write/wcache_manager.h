@@ -76,6 +76,8 @@ public:
 
     BResult HandleProcBroken(uint64_t procId);
 
+    BResult HandleProcBrokenHdl(uint64_t procId);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -86,7 +88,6 @@ private:
     BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
     BResult HandleCacheBrokenImpl(WCachePtr wcache);
-    BResult HandleProcBrokenHdl(uint64_t procId);
     BResult HandleProcBrokenImpl(uint64_t procId);
 
     void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);

@@ -29,6 +29,7 @@ public:
     static void IntValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, int *value, int set, int err) noexcept;
     static void LongValueCallback(LVOS_TRACEP_PARAM_S *user, long *value, long set) noexcept;
     static void LongValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, long *value, long set, int err) noexcept;
+    static void BoolValueCallback(LVOS_TRACEP_PARAM_S *user, bool *value, bool set) noexcept;
     static void NoProcessCallback(LVOS_TRACEP_PARAM_S *user) noexcept;
     static void PointerValueCallback(LVOS_TRACEP_PARAM_S *user, void** value, void* set) noexcept;
     static void PointerValueResetCallback(LVOS_TRACEP_PARAM_S *user, void** value) noexcept;
