@@ -78,7 +78,6 @@ int main(int argc, char *argv[])
     ClearTraceInfo();
     uint64_t ptId = 1;
     uint64_t ptv = 2;
-    Cache::Instance().HandleProcBroken(0);
     Cache::Instance().ExpiredClear(ptId, ptv);
     Cache::Instance().Flush(ptId, ptv);
 

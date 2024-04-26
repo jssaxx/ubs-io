@@ -191,6 +191,23 @@ TEST_F(TestRCache, test_rcache_delete_ok)
     EXPECT_EQ(ret, 0);
 }
 
+TEST_F(TestRCache, test_cache_extra_create_rcache_get_err)
+{
+    auto ret = Cache::Instance().ExtraCreateRCache(NO_128, NO_10);
+    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+}
+
+TEST_F(TestRCache, test_cache_extra_create_rcache_err)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_FIND", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_ALLOC_OBJ_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().ExtraCreateRCache(G_PT_ID, G_PT_V);
+    EXPECT_EQ(ret, ock::bio::BIO_ALLOC_FAIL);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_FIND");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_ALLOC_OBJ_FAIL");
+}
+
 TEST_F(TestRCache, test_cache_recover_return_err)
 {
     LVOS_TRACEP_PARAM_S userParam;
@@ -209,4 +226,66 @@ TEST_F(TestRCache, test_flowmanager_init_task_pool_exeception_return_err)
     EXPECT_EQ(ret, ock::bio::BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "ALLOC_TASK_POOL_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "ALLOC_TASK_POOL_FAIL_RESET");
+}
+
+TEST_F(TestRCache, test_cache_init_rcache_init_err)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_INIT_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().Init();
+    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL");
+}
+
+TEST_F(TestRCache, test_cache_init_wcache_init_err)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_INIT_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_INIT_FAIL_RESET", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_MANAGER_INIT_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().Init();
+    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL_RESET");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_MANAGER_INIT_FAIL");
+}
+
+TEST_F(TestRCache, test_cache_recover_err_return_ok)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_TYPE_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_TYPE_INNER_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_RECOVER", 0, 1, userParam);
+    auto ret = Cache::Instance().Recover();
+    EXPECT_EQ(ret, ock::bio::BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_TYPE_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_TYPE_INNER_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CACHE_RECOVER");
+}
+
+TEST_F(TestRCache, test_cache_recover_cache_tier_err_return_fail)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_TIER_ALLOC_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().Recover();
+    EXPECT_EQ(ret, ock::bio::BIO_ALLOC_FAIL);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_TIER_ALLOC_FAIL");
+}
+
+TEST_F(TestRCache, test_cache_recover_flow_type_err_return_fail)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_TIER_TYPE_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().Recover();
+    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_TIER_TYPE_FAIL");
+}
+
+TEST_F(TestRCache, test_cache_recover_flowid_err_return_fail)
+{
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL", 0, 1, userParam);
+    auto ret = Cache::Instance().Recover();
+    EXPECT_EQ(ret, ock::bio::BIO_NOT_EXISTS);
+    LVOS_HVS_deactiveTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL");
 }

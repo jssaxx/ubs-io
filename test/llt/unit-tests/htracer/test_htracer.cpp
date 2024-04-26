@@ -9,6 +9,7 @@
 #include "service//htracer_service.h"
 #include "bio_log.h"
 #include "securec.h"
+#include "tracepoint.h"
 #include "test_htracer.h"
 
 using namespace ock::bio;

@@ -120,6 +120,8 @@ BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint
 BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
 {
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
+    LVOS_TP_START(RCACHE_MANAGER_DELETE_ERR, &cachePtr, nullptr);
+    LVOS_TP_END;
     ChkTrue(cachePtr != nullptr, BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
     return cachePtr->Delete(key);
 }
@@ -201,11 +203,12 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
 
 BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 {
+    LVOS_TP_START(NO_PROCESS_CACHE_RECOVER, 0);
     LOG_INFO("Recover rcache, flowId:" << dataFlow->GetFlowId());
 
     dataFlow->Seal();
     FlowManager::Instance()->DestroyObject(dataFlow->GetFlowType(), dataFlow->GetFlowId());
-
+    LVOS_TP_END;
     return BIO_OK;
 }
 
@@ -249,6 +252,8 @@ BResult RCacheManager::ExpiredClearImpl(RCachePtr rCache)
     rCache->SetDelete();
 
     auto ret = rCacheEvict->Stop(rCache);
+    LVOS_TP_START(RCACHE_EVICT_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
     if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
         cacheLock.UnLock();
         LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache evict service failed:" << ret);
