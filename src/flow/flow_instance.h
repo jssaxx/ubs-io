@@ -39,6 +39,15 @@ public:
         return outOffset;
     }
 
+    inline void RollbackOffset(uint64_t len)
+    {
+        lock.Lock();
+        mIndex--;
+        mOffset -= len;
+        lock.UnLock();
+        return;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

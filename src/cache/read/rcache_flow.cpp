@@ -41,6 +41,20 @@ FlowInstancePtr &RCacheFlow::GetDataFlowInstance()
     return mDataFlowInstance;
 }
 
+BResult RCacheFlow::AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    offset = mDataFlowInstance->AllocOffset(len, indexInFlow);
+
+    std::vector<FlowAddr> addr;
+    BResult ret = mDataFlow->GetAddrByOffset(offset, len, addr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        mDataFlowInstance->RollbackOffset(len);
+        return ret;
+    }
+    return BIO_OK;
+}
+
 BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds)
 {
     mPtId = ptId;

@@ -28,6 +28,8 @@ typedef enum {
     RET_CACHE_PT_FAULT = 13,     // cache partition fault
     RET_CACHE_READ_EXCEED = 14,  // read limit is exceeded
     RET_CACHE_EXISTS = 15,       // cache already exists
+    RET_CACHE_DISK_FAULT = 16,   // cache disk fault
+    RET_CACHE_UFS_FAULT = 17,    // cache ufs fault
     RET_CACHE_BUTT
 } CResult;
 
