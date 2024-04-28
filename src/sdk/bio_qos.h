@@ -17,11 +17,8 @@
 
 namespace ock {
 namespace bio {
-enum QosMode {
-    QOS_QUOTA = 0,
-    QOS_CONCURRENCY = 1,
-    QOS_BUTT
-};
+constexpr uint8_t QOS_CONCURRENCY = 0x01;
+constexpr uint8_t QOS_QUOTA = 0x10;
 
 enum QuotaType {
     QUOTA_WRITE = 0,
@@ -99,12 +96,12 @@ public:
 
     void Initialize(uint64_t writeQuota, uint64_t readQuota)
     {
-        mOriQuota[QUOTA_WRITE] = writeQuota;
-        mOriQuota[QUOTA_READ] = readQuota;
-        mBaseQuota[QUOTA_WRITE] = writeQuota;
-        mBaseQuota[QUOTA_READ] = readQuota;
-        mCurrentQuota[QUOTA_WRITE] = writeQuota;
-        mCurrentQuota[QUOTA_READ] = readQuota;
+        mMaxQuota[QUOTA_WRITE] = writeQuota;
+        mMaxQuota[QUOTA_READ] = readQuota;
+        mAdjustQuota[QUOTA_WRITE] = writeQuota;
+        mAdjustQuota[QUOTA_READ] = readQuota;
+        mAllocQuota[QUOTA_WRITE] = 0;
+        mAllocQuota[QUOTA_READ] = 0;
     }
 
     inline void AllocQuota(uint64_t size, QuotaType type)
@@ -112,60 +109,39 @@ public:
         IoWaitEntry entry(size);
         {
             WriteLocker<ReadWriteLock> lock(&mLock[type]);
-            if (LIKELY(mCurrentQuota[type] >= size)) {
-                mCurrentQuota[type] -= size;
-                mConcur[type]++;
+            uint64_t remain = mMaxQuota[type] - mAllocQuota[type];
+            if (LIKELY(remain >= size)) {
+                mAllocQuota[type] += size;
                 return;
             } else {
                 mIoQueue[type].Push(&entry);
-                CLIENT_LOG_WARN("Cache quota not enough, need io hang, base quota:" << mBaseQuota[type] <<
-                    ", remaining quota:" << mCurrentQuota[type] << ", concur:" << mConcur[type] << ".");
+                CLIENT_LOG_WARN("[QOS]Quota not enough, quota:" << mMaxQuota[type] << ", remain:" << remain << ".");
             }
         }
         entry.Wait();
     }
 
-    inline void ReleaseQuota(uint64_t size, QuotaType type)
+    inline void ReleaseQuota(uint64_t size, QuotaType type, uint64_t adjustQuota)
     {
         WriteLocker<ReadWriteLock> lock(&mLock[type]);
-        bool isDispatch = true;
-        Recycle(size, type, isDispatch);
-        if (LIKELY(isDispatch)) {
-            Dispatch(type);
+        mAllocQuota[type] -= size;
+        if (LIKELY(adjustQuota <= mMaxQuota[type])) {
+            int64_t diff = static_cast<int64_t>(mAdjustQuota[type]) - static_cast<int64_t>(adjustQuota);
+            CLIENT_LOG_INFO("[QOS]Client adjust quota, [" << mAdjustQuota[type] << "-->" << adjustQuota << "].");
+            mAllocQuota[type] += diff;
+            mAdjustQuota[type] = adjustQuota;
         }
+        Dispatch(type);
     }
 
-    void UpdateQuota(uint64_t quota, QuotaType type)
-    {
-        WriteLocker<ReadWriteLock> lock(&mLock[type]);
-        if (quota == mCurrentQuota[type]) {
-            return;
-        }
-        if (quota > mBaseQuota[type]) { // 上调配额
-            mCurrentQuota[type] += (quota - mBaseQuota[type]);
-            Dispatch(type);
-        } else if (quota < mBaseQuota[type]) { // 下调配额
-            uint64_t diff = mBaseQuota[type] - quota;
-            if (mCurrentQuota[type] >= diff) {
-                mCurrentQuota[type] -= diff;
-            } else {
-                mCompensationQuota[type] = (diff - mCurrentQuota[type]);
-                mCurrentQuota[type] = 0;
-            }
-        }
-        mBaseQuota[type] = quota;
-    }
-
-    inline void Show(std::vector<uint64_t> &ori, std::vector<uint64_t> &base, std::vector<uint64_t> &quota,
-        std::vector<uint32_t> &concur)
+    inline void Show(std::vector<uint64_t> &max, std::vector<uint64_t> &adjust, std::vector<uint64_t> &alloc)
     {
         for (uint32_t idx = QUOTA_WRITE; idx < QUOTA_BUTT; idx++) {
             {
                 ReadLocker<ReadWriteLock> lock(&mLock[idx]);
-                ori.emplace_back(mOriQuota[idx]);
-                base.emplace_back(mBaseQuota[idx]);
-                quota.emplace_back(mCurrentQuota[idx]);
-                concur.emplace_back(mConcur[idx]);
+                max.emplace_back(mMaxQuota[idx]);
+                adjust.emplace_back(mAdjustQuota[idx]);
+                alloc.emplace_back(mAllocQuota[idx]);
             }
         }
     }
@@ -173,17 +149,13 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    void Recycle(uint64_t size, QuotaType type, bool &isDispatch);
     void Dispatch(QuotaType type);
 
 private:
     ReadWriteLock mLock[QUOTA_BUTT];
-    uint64_t mOriQuota[QUOTA_BUTT] = { 0, 0 };
-    uint64_t mBaseQuota[QUOTA_BUTT] = { 0, 0 };
-    uint64_t mCurrentQuota[QUOTA_BUTT] = { 0, 0 };
-    uint64_t mCompensationQuota[QUOTA_BUTT] = { 0, 0 };
-
-    uint32_t mConcur[QUOTA_BUTT] = { 0, 0};
+    uint64_t mMaxQuota[QUOTA_BUTT] = { 0, 0 };
+    uint64_t mAdjustQuota[QUOTA_BUTT] = { 0, 0 };
+    uint64_t mAllocQuota[QUOTA_BUTT] = { 0, 0 };
     IoHangQueue mIoQueue[QUOTA_BUTT];
     DEFINE_REF_COUNT_VARIABLE;
 };
@@ -200,10 +172,10 @@ public:
 
     void Initialize(uint64_t writeConcur, uint64_t readConcur)
     {
-        mBaseConcur[QUOTA_WRITE] = writeConcur;
-        mBaseConcur[QUOTA_READ] = readConcur;
-        CLIENT_LOG_INFO("Boostio write Concur:" << mBaseConcur[QUOTA_WRITE] << ", read Concur:" <<
-            mBaseConcur[QUOTA_READ] << ".");
+        mOriConcur[QUOTA_WRITE] = writeConcur;
+        mOriConcur[QUOTA_READ] = readConcur;
+        mCurConcur[QUOTA_WRITE] = 0UL;
+        mCurConcur[QUOTA_READ] = 0UL;
     }
 
     void ApplyConcur(QuotaType type)
@@ -211,12 +183,12 @@ public:
         IoWaitEntry entry(0);
         {
             WriteLocker<ReadWriteLock> lock(&mLock[type]);
-            if (LIKELY(mCurrentConcur[type] < mBaseConcur[type])) {
-                mCurrentConcur[type]++;
+            if (LIKELY(mCurConcur[type] < mOriConcur[type])) {
+                mCurConcur[type]++;
                 return;
             } else {
                 mIoQueue[type].Push(&entry);
-                CLIENT_LOG_WARN("Concurrency not enough, Current concur:" << mCurrentConcur[type] << ".");
+                CLIENT_LOG_WARN("[QOS]Concurrency not enough, need io hang, concur:" << mCurConcur[type] << ".");
             }
         }
         entry.Wait();
@@ -225,28 +197,32 @@ public:
     void ReleaseConcur(QuotaType type)
     {
         WriteLocker<ReadWriteLock> lock(&mLock[type]);
-        mCurrentConcur[type]--;
+        mCurConcur[type]--;
         if (mIoQueue[type].Empty()) {
             return;
         }
         auto entry = mIoQueue[type].Top();
-        mCurrentConcur[type]++;
+        mCurConcur[type]++;
         entry->Wake();
         mIoQueue[type].Pop();
     }
 
-    uint32_t RefCount(uint32_t index)
+    void ConcurCount(std::vector<uint64_t> &concur)
     {
-        ReadLocker<ReadWriteLock> lock(&mLock[index]);
-        return mCurrentConcur[index];
+        for (uint32_t idx = QUOTA_WRITE; idx < QUOTA_BUTT; idx++) {
+            {
+                ReadLocker<ReadWriteLock> lock(&mLock[idx]);
+                concur.emplace_back(mCurConcur[idx]);
+            }
+        }
     }
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     ReadWriteLock mLock[QUOTA_BUTT];
-    uint64_t mBaseConcur[QUOTA_BUTT] = { 0, 0 };
-    uint64_t mCurrentConcur[QUOTA_BUTT] = { 0, 0 };
+    uint64_t mOriConcur[QUOTA_BUTT] = { 0, 0 };
+    uint64_t mCurConcur[QUOTA_BUTT] = { 0, 0 };
     IoHangQueue mIoQueue[QUOTA_BUTT];
     DEFINE_REF_COUNT_VARIABLE;
 };
@@ -266,54 +242,51 @@ public:
 
     BResult Initialize(uint64_t writeRes, uint64_t readRes, uint64_t writeConcur, uint64_t readConcur)
     {
-        if (mStart) {
-            return BIO_OK;
+        if (LIKELY(mQuota == nullptr && mConcur == nullptr)) {
+            mQuota = BioQuota::Instance();
+            uint64_t writeQuota = writeRes;
+            uint64_t readQuota = readRes;
+            mQuota->Initialize(writeQuota, readQuota);
+            mConcur = BioConcurrency::Instance();
+            mConcur->Initialize(writeConcur, readConcur);
+            mSwitch = true;
+            CLIENT_LOG_INFO("[QOS]Qos initialize success, write quota:" << writeQuota << ", read quota:" <<
+                readQuota << ", write concur:" << writeConcur << ", read concur:" << readConcur << ".");
+        } else {
+            CLIENT_LOG_WARN("[QOS]Repeated initialization qos module.");
         }
-
-        // 1. 创建资源配额控制
-        mQuota = BioQuota::Instance();
-        uint64_t writeQuota = writeRes;
-        uint64_t readQuota = readRes;
-        mQuota->Initialize(writeQuota, readQuota);
-
-        // 2. 创建并发控制
-        mConcur = BioConcurrency::Instance();
-        mConcur->Initialize(writeConcur, readConcur);
-
-        mStart = true;
-        CLIENT_LOG_INFO("Qos initialize success, write quota:" << writeQuota << ", read quota:" << readQuota <<
-            ", write concur" << writeConcur << ", read concur:" << readConcur << ".");
         return BIO_OK;
     }
 
-    inline void Apply(QosMode mode, QuotaType type, uint64_t size = 0)
+    inline void Apply(uint8_t mode, QuotaType type, uint64_t size = 0)
     {
-        if (UNLIKELY(!mSwitch)) {
-            return;
+        if (LIKELY(mSwitch)) {
+            if (LIKELY(mode & QOS_CONCURRENCY)) {
+                mConcur->ApplyConcur(type);
+            }
+            if (LIKELY(mode & QOS_QUOTA)) {
+                mQuota->AllocQuota(size, type);
+            }
         }
-        (mode == QOS_QUOTA) ? mQuota->AllocQuota(size, type) : mConcur->ApplyConcur(type);
     }
 
-    inline void Release(QosMode mode, QuotaType type, uint64_t size = 0)
+    inline void Release(uint8_t mode, QuotaType type, uint64_t size = 0, uint64_t adjust = UINT64_MAX)
     {
-        if (UNLIKELY(!mSwitch)) {
-            return;
+        if (LIKELY(mSwitch)) {
+            if (LIKELY(mode & QOS_QUOTA)) {
+                mQuota->ReleaseQuota(size, type, adjust);
+            }
+            if (LIKELY(mode & QOS_CONCURRENCY)) {
+                mConcur->ReleaseConcur(type);
+            }
         }
-        (mode == QOS_QUOTA) ? mQuota->ReleaseQuota(size, type) : mConcur->ReleaseConcur(type);
     }
 
-    inline void Update(QuotaType type, uint64_t size = 0)
+    inline void Show(std::vector<uint64_t> &maxQuota, std::vector<uint64_t> &adjustQuota,
+                     std::vector<uint64_t> &allocQuota, std::vector<uint64_t> &concur)
     {
-        if (UNLIKELY(!mSwitch)) {
-            return;
-        }
-        mQuota->UpdateQuota(size, type);
-    }
-
-    inline void Show(std::vector<uint64_t> &oriQuota, std::vector<uint64_t> &baseQuota, std::vector<uint64_t> &quota,
-        std::vector<uint32_t> &concur)
-    {
-        mQuota->Show(oriQuota, baseQuota, quota, concur);
+        mQuota->Show(maxQuota, adjustQuota, allocQuota);
+        mConcur->ConcurCount(concur);
     }
 
     inline bool Switch(const std::string &op = "")
@@ -329,7 +302,6 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    bool mStart = false;
     bool mSwitch = true;
     BioQuotaPtr mQuota = nullptr;
     BioConcurrencyPtr mConcur = nullptr;

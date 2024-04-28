@@ -400,16 +400,17 @@ static void HandleQos(std::vector<std::string> cmds)
             return;
         }
         BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
-        std::vector<uint64_t> oriQuota;
-        std::vector<uint64_t> baseQuota;
-        std::vector<uint64_t> quota;
-        std::vector<uint32_t> concur;
-        qosP->Show(oriQuota, baseQuota, quota, concur);
+        std::vector<uint64_t> maxQuota;
+        std::vector<uint64_t> adjustQuota;
+        std::vector<uint64_t> allocQuota;
+        std::vector<uint64_t> concur;
+        qosP->Show(maxQuota, adjustQuota, allocQuota, concur);
         const std::string typeStr[QUOTA_BUTT] = { "Write", "Read" };
         CLI_PrintBuf("  Quota info, switch:%s \n", qosP->Switch() ? "on" : "off");
-        for (uint32_t idx = 0; idx < baseQuota.size(); idx++) {
-            CLI_PrintBuf("  %s: original quota:%lu, adjust quota:%lu, remain quota:%lu, concur:%u.\n",
-                typeStr[idx], baseQuota[idx], quota[idx], concur[idx]);
+        for (uint32_t idx = 0; idx < maxQuota.size(); idx++) {
+            CLI_PrintBuf("  %s: Max quota:%lu, adjust quota:%lu, alloc quota:%lu, remain quota:%lu, concur:%lu.\n",
+                typeStr[idx], maxQuota[idx], adjustQuota[idx], allocQuota[idx], (maxQuota[idx] - allocQuota[idx]),
+                concur[idx]);
         }
     } else if (op == "switch") {
         if (cmds.size() != 3) {
