@@ -407,7 +407,7 @@ BResult MirrorClient::Put(MirrorPut &param)
     }
 
     BIO_TRACE_START(SDK_TRACE_PUT_APPLY_QOS);
-    mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
+    mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
     BIO_TRACE_END(SDK_TRACE_PUT_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
@@ -415,8 +415,7 @@ BResult MirrorClient::Put(MirrorPut &param)
         ret = PutImpl(param, updateWriteQuota);
         if (LIKELY(ret == BIO_OK)) {
             BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
-            mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
-            mBioQos->Update(QUOTA_WRITE, updateWriteQuota);
+            mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
             BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
             if (isSelf) {
                 free(param.value);
@@ -435,7 +434,7 @@ BResult MirrorClient::Put(MirrorPut &param)
             }
         }
     } while (isRetry);
-    mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
+    mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
     if (isSelf) {
         free(param.value);
         param.value = value;
@@ -514,7 +513,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
     BResult ret = BIO_OK;
 
     BIO_TRACE_START(SDK_TRACE_PUT_APPLY_QOS);
-    mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
+    mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
     BIO_TRACE_END(SDK_TRACE_PUT_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
@@ -522,8 +521,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
         ret = PutImpl(param, spaceInfo, updateWriteQuota);
         if (LIKELY(ret == BIO_OK)) {
             BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
-            mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
-            mBioQos->Update(QUOTA_WRITE, updateWriteQuota);
+            mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
             BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
             return BIO_OK;
         }
@@ -538,7 +536,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
             }
         }
     } while (isRetry);
-    mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
+    mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
 
     return ret;
 }
@@ -584,7 +582,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
     BResult ret = BIO_OK;
 
     BIO_TRACE_START(SDK_TRACE_GET_APPLY_QOS);
-    mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, param.length);
+    mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ);
     BIO_TRACE_END(SDK_TRACE_GET_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
@@ -596,7 +594,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
         }
         if (LIKELY(ret == BIO_OK)) {
             BIO_TRACE_START(SDK_TRACE_GET_RELEASE_QOS);
-            mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ, param.length);
+            mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
             BIO_TRACE_END(SDK_TRACE_GET_RELEASE_QOS, BIO_OK);
             return BIO_OK;
         }
@@ -611,7 +609,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
             }
         }
     } while (isRetry);
-    mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ, param.length);
+    mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
 
     return ret;
 }
