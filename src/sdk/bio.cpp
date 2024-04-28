@@ -48,6 +48,10 @@ inline static CResult ToCResult(const BResult ret)
             return RET_CACHE_READ_EXCEED;
         case BIO_KEY_CONFLICT:
             return RET_CACHE_CONFLICT;
+        case BIO_DISK_IOERR:
+            return RET_CACHE_DISK_FAULT;
+        case BIO_UFS_IOERR:
+            return RET_CACHE_UFS_FAULT;
         default:
             return RET_CACHE_NEED_RETRY;
     }
@@ -148,7 +152,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
     MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
-        const_cast<char *>(value), length, location };
+        const_cast<char *>(value), length, location, 0 };
     BResult ret = gClient->Put(param);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -178,7 +182,7 @@ CResult Bio::Put(const char *key, CacheSpaceInfo &spaceInfo)
 
     uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
     MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
-        nullptr, length, spaceInfo.loc };
+        nullptr, length, spaceInfo.loc, 0 };
     StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
     BResult ret = gClient->Put(param, spaceInfo);
@@ -335,7 +339,8 @@ CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spac
         location = spaceInfo.loc;
     }
 
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, nullptr, nullptr, length, location };
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, nullptr, nullptr,
+        length, location, 0 };
     BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE);
     auto ret = gClient->AllocSpace(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE, ret);

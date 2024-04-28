@@ -32,28 +32,28 @@ BResult UnderFs::Init()
     int ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
     if (ret < 0 || mConn == nullptr) {
         LOG_ERROR("Failed to create, ret:" << ret);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
 
     ret = rados_conf_read_file(mConn, mCfgPath.c_str());
     if (ret < 0) {
         LOG_ERROR("Failed to read config, ret:" << ret);
         rados_shutdown(mConn);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
 
     ret = rados_connect(mConn);
     if (ret < 0) {
         LOG_ERROR("Failed to connect, ret:" << ret);
         rados_shutdown(mConn);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
 
     if (rados_pool_lookup(mConn, mPool.c_str()) < 0) {
         if (rados_pool_create(mConn, mPool.c_str()) < 0) {
             LOG_ERROR("Failed to create pool, ret:" << ret);
             rados_shutdown(mConn);
-            return BIO_ERR;
+            return BIO_UFS_IOERR;
         }
     }
 
@@ -61,7 +61,7 @@ BResult UnderFs::Init()
     if (ret < 0) {
         LOG_ERROR("Failed to create ioctx, ret:" << ret);
         rados_shutdown(mConn);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
 
     LOG_INFO("UnderFS initialize succeed, path:" << mCfgPath << ", cluster:" << mCluster << ", user:" << mUser <<
@@ -81,7 +81,7 @@ void UnderFs::Stop()
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
-    int ret = BIO_ERR;
+    int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs put key:" << key);
 
@@ -92,14 +92,14 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
     BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to write object, ret:" << ret << ".");
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
     return BIO_OK;
 }
 
 BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
-    int ret = BIO_ERR;
+    int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs get key:" << key);
 
@@ -107,7 +107,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -ENOENT)
     ret = rados_read(mIoCtx, key, value, len, off);
     LVOS_TP_END
-    int res = (ret < 0) ? BIO_ERR : BIO_OK;
+    int res = (ret < 0) ? BIO_UFS_IOERR : BIO_OK;
     BIO_TRACE_END(UFS_TRACE_GET, res);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to get object " << key << ", not exist.");
@@ -115,14 +115,14 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     }
     if (ret < 0) {
         LOG_ERROR("Failed to read object " << key << ", ret:" << ret);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
     return BIO_OK;
 }
 
 BResult UnderFs::Delete(const char *key)
 {
-    int ret = BIO_ERR;
+    int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs delete key:" << key);
 
@@ -138,14 +138,14 @@ BResult UnderFs::Delete(const char *key)
     }
     if (ret < 0) {
         LOG_ERROR("Failed to remove object, ret:" << ret);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
     return BIO_OK;
 }
 
 BResult UnderFs::Stat(const char *key, ObjStat &stat)
 {
-    int ret = BIO_ERR;
+    int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_INFO("UnderFs stat key:" << key);
 
@@ -160,7 +160,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
     }
     if (ret < 0) {
         LOG_ERROR("Failed to stat object " << key << ", ret:" << ret);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
     return BIO_OK;
 }
@@ -174,7 +174,7 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
     int ret = rados_nobjects_list_open(mIoCtx, &listCtx);
     if (ret < 0) {
         LOG_ERROR("Failed to list open, ret:" << ret);
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
 
     BIO_TRACE_START(UFS_TRACE_LIST);
@@ -211,13 +211,13 @@ BResult UnderFs::Init()
     LVOS_TP_END;
     if (dir == nullptr) {
         int status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-        LVOS_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_ERR);
+        LVOS_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_UFS_IOERR);
         LVOS_TP_END;
         if (status == 0) {
             LOG_INFO("Succeed to create directory, " << mEmulationCephPath.c_str());
         } else {
             LOG_ERROR("Failed to create directory, " << mEmulationCephPath.c_str() << ", status:" << status);
-            return BIO_ERR;
+            return BIO_UFS_IOERR;
         }
     } else {
         LOG_INFO("Exist to check directory, " << mEmulationCephPath.c_str());
@@ -251,7 +251,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
     LVOS_TP_END
     if (!isOpen) {
         LOG_ERROR("Fail to create file, " << keyPath.c_str());
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
 
     file.write(value, len);
@@ -305,9 +305,9 @@ BResult UnderFs::Delete(const char *key)
     infile.close();
 
     if (remove(keyPath.c_str()) != 0) {
-        BIO_TRACE_END(UFS_TRACE_DEL, BIO_ERR);
+        BIO_TRACE_END(UFS_TRACE_DEL, BIO_UFS_IOERR);
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());
-        return BIO_ERR;
+        return BIO_UFS_IOERR;
     }
     BIO_TRACE_END(UFS_TRACE_DEL, 0);
     return BIO_OK;
@@ -320,8 +320,8 @@ BResult UnderFs::Stat(const char *key, UnderFs::ObjStat &objStat)
 
     BIO_TRACE_START(UFS_TRACE_STAT);
     struct stat file_stat;
-    int ret = BIO_ERR;
-    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, BIO_ERR)
+    int ret = BIO_UFS_IOERR;
+    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, BIO_UFS_IOERR)
     ret = stat(keyPath.c_str(), &file_stat);
     LVOS_TP_END
     if (ret != 0) {
