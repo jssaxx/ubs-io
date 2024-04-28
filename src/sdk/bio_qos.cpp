@@ -6,41 +6,19 @@
 
 using namespace ock::bio;
 
-void BioQuota::Recycle(uint64_t size, QuotaType type, bool &isDispatch)
-{
-    mConcur[type]--;
-    if (mCompensationQuota[type] != 0) {
-        if (mCompensationQuota[type] > size) {
-            mCompensationQuota[type] -= size;
-            isDispatch = false;
-        } else if (mCompensationQuota[type] < size) {
-            mCurrentQuota[type] += (size - mCompensationQuota[type]);
-            mCompensationQuota[type] = 0;
-        } else {
-            mCompensationQuota[type] = 0;
-            isDispatch = false;
-        }
-    } else {
-        mCurrentQuota[type] += size;
-    }
-}
-
 void BioQuota::Dispatch(QuotaType type)
 {
-    if (mIoQueue[type].Empty()) {
-        return;
+    if (LIKELY(!mIoQueue[type].Empty())) {
+        bool isLoop = true;
+        do {
+            auto entry = mIoQueue[type].Top();
+            if ((mMaxQuota[type] - mAllocQuota[type]) >= entry->size) {
+                mAllocQuota[type] += entry->size;
+                entry->Wake();
+                mIoQueue[type].Pop();
+            } else {
+                isLoop = false;
+            }
+        } while (isLoop);
     }
-
-    bool isLoop = true;
-    do {
-        auto entry = mIoQueue[type].Top();
-        if (mCurrentQuota[type] >= entry->size) {
-            mCurrentQuota[type] -= entry->size;
-            mConcur[type]++;
-            entry->Wake();
-            mIoQueue[type].Pop();
-        } else {
-            isLoop = false;
-        }
-    } while (isLoop);
 }

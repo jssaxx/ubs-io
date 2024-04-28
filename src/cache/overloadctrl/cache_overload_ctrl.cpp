@@ -20,103 +20,103 @@
 namespace ock {
 namespace bio {
 /** 低水位过载控制调整策略
- * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调30%, 但不超过初始配额;
- * case2: 前端写入带宽 >= 后端内存淘汰到磁盘的带宽, 则写配额上调20%, 但不超过初始配额;
- * case3: 前端写入带宽 >= 2*后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
- * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调10%, 但不超过配额的2/3;
+ * case1：前端写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调最大值的30%, 但不超过最大配额;
+ * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额上调最大值的20%, 但不超过最大配额;
+ * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额上调最大值的10%, 但不超过最大配额;
+ * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的10%, 但不超过最大配额的2/3;
  */
 uint64_t CacheOverloadCtrl::LowWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
 {
     if (frontWriteBw <= evict2DiskBw) {
         proc = NO_1;
         uint32_t radio = NO_3 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
-    } else if (frontWriteBw <= evict2DiskBw) {
+        uint64_t adjust = mAdjustWQuota + (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::min<uint64_t>(adjust, mMaxWriteQuota));
+    } else if (frontWriteBw <= NO_2 * evict2DiskBw) {
         proc = NO_2;
         uint32_t radio = NO_2 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+        uint64_t adjust = mAdjustWQuota + (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::min<uint64_t>(adjust, mMaxWriteQuota));
     } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
         proc = NO_3;
         uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+        uint64_t adjust = mAdjustWQuota + (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::min<uint64_t>(adjust, mMaxWriteQuota));
     } else {
         proc = NO_4;
-        uint32_t radio = NO_1 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, (mBaseWriteQuota * NO_2 / NO_3));
+        uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, (mMaxWriteQuota * NO_2 / NO_3)));
     }
-    return mUpdateWQuota;
+    return mAdjustWQuota.load();
 }
 
 /** 中水位过载控制调整策略
- * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
- * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额下调20%, 但不超过配额的1/2;
- * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额下调40%, 但不超过配额的1/3;
- * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调60%, 但不超过配额的1/3;
+ * case1：前端写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调最大值的10%, 但不超过最大配额;
+ * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的20%, 但不超过最大配额的1/3;
+ * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的30%, 但不超过最大配额的1/3;
+ * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的40%, 但不超过最大配额的1/3;
  */
 uint64_t CacheOverloadCtrl::MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
 {
     if (frontWriteBw <= evict2DiskBw) {
         proc = NO_1;
         uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+        uint64_t adjust = mAdjustWQuota + (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::min<uint64_t>(adjust, mMaxWriteQuota));
     } else if (frontWriteBw <= NO_2 * evict2DiskBw) {
         proc = NO_2;
         uint32_t radio = NO_2 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_2);
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, mMaxWriteQuota / NO_3));
     } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
         proc = NO_3;
-        uint32_t radio = NO_4 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_3);
+        uint32_t radio = NO_3 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, mMaxWriteQuota / NO_3));
     } else {
         proc = NO_4;
-        uint32_t radio = NO_6 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_3);
+        uint32_t radio = NO_4 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, mMaxWriteQuota / NO_3));
     }
-    return mUpdateWQuota;
+    return mAdjustWQuota.load();
 }
 
 /** 高水位过载控制调整策略
- * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
- * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额下调40%, 但不超过配额的1/3;
- * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额下调60%, 但不超过配额的1/4;
- * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调80%, 但不超过配额的1/5;
+ * case1：前端写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调最大值的10%, 但不超过最大配额
+ * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的20%, 但不超过最大配额的1/5;
+ * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的30%, 但不超过最大配额的1/5;
+ * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调最大值的40%, 但不超过最大配额的1/5;
  */
 uint64_t CacheOverloadCtrl::HighWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
 {
     if (frontWriteBw <= evict2DiskBw) {
         proc = NO_1;
         uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+        uint64_t adjust = mAdjustWQuota + (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::min<uint64_t>(adjust, mMaxWriteQuota));
     } else if (frontWriteBw <= NO_2 * evict2DiskBw) {
         proc = NO_2;
-        uint32_t radio = NO_4 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_3);
+        uint32_t radio = NO_2 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, mMaxWriteQuota / NO_5));
     } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
         proc = NO_3;
-        uint32_t radio = NO_6 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_4);
+        uint32_t radio = NO_3 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, mMaxWriteQuota / NO_5));
     } else {
         proc = NO_4;
-        uint32_t radio = NO_8 * mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_5);
+        uint32_t radio = NO_4 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjust = mAdjustWQuota - (mMaxWriteQuota * radio / NO_100);
+        mAdjustWQuota.store(std::max<uint64_t>(adjust, mMaxWriteQuota / NO_5));
     }
-    return mUpdateWQuota;
+    return mAdjustWQuota.load();
 }
 
 /** 红线水位过载控制调整策略
- * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
+ * case1：前端写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调最大值的10%, 但不超过最大配额;
  * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额调整到1G;
  */
 uint64_t CacheOverloadCtrl::LimitedWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
@@ -124,36 +124,31 @@ uint64_t CacheOverloadCtrl::LimitedWaterLevelQuota(uint64_t frontWriteBw, uint64
     if (frontWriteBw <= evict2DiskBw) {
         proc = NO_1;
         uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
-        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
-        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+        uint64_t adjust = mAdjustWQuota + (mAdjustWQuota * radio / NO_100);
+        mAdjustWQuota.store(std::min<uint64_t>(adjust, mMaxWriteQuota));
     } else {
         proc = NO_2;
-        mUpdateWQuota = mOverloadCtrlConfig.minWriteReportBwWith;
+        mAdjustWQuota.store(mOverloadCtrlConfig.minWriteReportBwWith);
     }
-    return mUpdateWQuota;
+    return mAdjustWQuota.load();
 }
 
 uint64_t CacheOverloadCtrl::CalculateWriteQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint64_t vm)
 {
     uint32_t proc = 0;
-    uint64_t writeQuota = 0;
+    uint64_t adjustWQuota = 0;
     if (vm < NO_30) {
-        writeQuota = LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+        adjustWQuota = LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     } else if (vm < NO_60) {
-        writeQuota = MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+        adjustWQuota = MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     } else if (vm < NO_90) {
-        writeQuota = HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+        adjustWQuota = HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     } else {
-        writeQuota = LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+        adjustWQuota = LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     }
-    LOG_INFO("Calculate write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw <<
-        ", waterLevel:" << vm << ", adjusted writeQuota:" << writeQuota << ", proc:" << proc << ".");
-    return writeQuota;
-}
-
-void CacheOverloadCtrl::AddBandwidth(BwStatType type, uint64_t count)
-{
-    mOverloadCtrlGlbInfo.bwStatObj[type].curValue += count;
+    LOG_INFO("[QOS]Calculate write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw <<
+        ", waterLevel:" << vm << ", adjustWQuota:" << adjustWQuota << ", proc:" << proc << ".");
+    return adjustWQuota;
 }
 
 uint64_t CacheOverloadCtrl::GetWriteQuota()
@@ -162,6 +157,11 @@ uint64_t CacheOverloadCtrl::GetWriteQuota()
     uint64_t evict2DiskBw = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT_TO_DISK].calcBwValue;
     uint64_t vm = GetWmStatDirectValue();
     return CalculateWriteQuota(frontWriteBw, evict2DiskBw, vm);
+}
+
+void CacheOverloadCtrl::AddBandwidth(BwStatType type, uint64_t count)
+{
+    mOverloadCtrlGlbInfo.bwStatObj[type].curValue += count;
 }
 
 uint64_t CacheOverloadCtrl::GetReadQuota()
@@ -211,7 +211,7 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
         obj.calcBwCycleTime = curTime;
         obj.calcBwValue = GetBwStatAverageValue(obj);
         if (obj.calcBwValue != 0) {
-            LOG_INFO("Update bandwidth, " << bwTypeStr[type] << " average value:" << obj.calcBwValue << ".");
+            LOG_INFO("[QOS]Update bandwidth, " << bwTypeStr[type] << " average value:" << obj.calcBwValue << ".");
         }
     } else {
         return;
@@ -234,7 +234,7 @@ void CacheOverloadCtrl::UpdateCacheStatBw(BwStatType type)
 
 void CacheOverloadCtrl::OverloadPeriodStatistics()
 {
-    LOG_INFO("Cache overload ctrl period statistics start.");
+    LOG_INFO("[QOS]Cache overload ctrl period statistics start.");
     constexpr uint64_t period = 1;
     uint64_t startTime = Monotonic::TimeSec();
     while (true) {
@@ -250,7 +250,7 @@ void CacheOverloadCtrl::OverloadPeriodStatistics()
         }
         startTime = Monotonic::TimeSec();
     }
-    LOG_INFO("Cache overload ctrl period statistics end.");
+    LOG_INFO("[QOS]Cache overload ctrl period statistics end.");
 }
 
 void CacheOverloadCtrl::InitOverloadConfig()
@@ -262,13 +262,11 @@ void CacheOverloadCtrl::InitOverloadConfig()
     mOverloadCtrlConfig.remainConcurTryUp = 0;
 }
 
-void CacheOverloadCtrl::InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, bool isStatPage)
+void CacheOverloadCtrl::InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum)
 {
     obj.cycleTime = cycleMs;
     obj.cycleNum = cycleNum;
     obj.curIdx = 0;
-    obj.isStatPage = isStatPage;
-    obj.pageSize = 0;
     obj.curValue.store(0UL);
     obj.curStartTime = 0UL;
     obj.calcBwCycleTime = 0UL;
@@ -283,20 +281,17 @@ void CacheOverloadCtrl::InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t
 
 void CacheOverloadCtrl::InitOverloadGlbInfo()
 {
-    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE], NO_1000, NO_10, false);
-    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT_TO_DISK], NO_1000, NO_10, false);
+    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE], NO_1000, NO_10);
+    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT_TO_DISK], NO_1000, NO_10);
 }
 
 void CacheOverloadCtrl::InitOverloadQuotaInfo()
 {
     CacheResDescription desc = { 0 };
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    mBaseWriteQuota = desc.memCapacity;
-    mUpdateWQuota = mBaseWriteQuota;
-
-    Cache::Instance().GetCacheResources(desc, READ_CACHE);
-    mBaseReadQuota = desc.memCapacity;
-    mUpdateRQuota = mBaseReadQuota;
+    mMaxWriteQuota = desc.memCapacity;
+    mAdjustWQuota.store(mMaxWriteQuota);
+    LOG_INFO("[QOS]Olc init success, write quota:" << mMaxWriteQuota << ", adjust quota:" << mAdjustWQuota << ".");
 }
 
 BResult CacheOverloadCtrl::Initialize()
@@ -310,14 +305,14 @@ BResult CacheOverloadCtrl::Initialize()
 
     // 4. 创建Executor, 用于周期性采集过载信息
     mStatisticExecutor = ExecutorService::Create(NO_1, NO_1024);
-    ChkTrue(mStatisticExecutor != nullptr, BIO_ALLOC_FAIL, "Failed to create overload info statistic executor.");
+    ChkTrue(mStatisticExecutor != nullptr, BIO_ALLOC_FAIL, "[QOS]Failed to create overload info statistic executor.");
     mStatisticExecutor->SetThreadName("cache-overload-stat");
     if (!(mStatisticExecutor->Start())) {
-        LOG_ERROR("Failed to start overload info statistic executor.");
+        LOG_ERROR("[QOS]Failed to start overload info statistic executor.");
         return BIO_INNER_ERR;
     }
     if (!(mStatisticExecutor->Execute([this]() { OverloadPeriodStatistics(); }))) {
-        LOG_ERROR("Set execute function failed.");
+        LOG_ERROR("[QOS]Set execute function failed.");
         return BIO_INNER_ERR;
     }
 
