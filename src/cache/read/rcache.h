@@ -36,6 +36,8 @@ public:
 
     BResult Destroy();
 
+    static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
+
     BResult AllocResources(uint64_t length, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice);

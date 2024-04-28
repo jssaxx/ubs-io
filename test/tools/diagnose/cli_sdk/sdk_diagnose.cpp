@@ -58,6 +58,7 @@ static void HandleList(std::vector<std::string> cmds);
 static void HandleStat(std::vector<std::string> cmds);
 static void HandleLoad(std::vector<std::string> cmds);
 static void HandleDelete(std::vector<std::string> cmds);
+static void HandleQos(std::vector<std::string> cmds);
 static void HandleShow(std::vector<std::string> cmds);
 static void *PerfTestPutImpl(void *param);
 static void *PerfTestGetImpl(void *param);
@@ -389,6 +390,41 @@ static void HandleDelete(std::vector<std::string> cmds)
     }
 }
 
+static void HandleQos(std::vector<std::string> cmds)
+{
+    auto cType = cmds[1].c_str();
+    std::string op(cType);
+    if (op == "show") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
+        std::vector<uint64_t> oriQuota;
+        std::vector<uint64_t> baseQuota;
+        std::vector<uint64_t> quota;
+        std::vector<uint32_t> concur;
+        qosP->Show(oriQuota, baseQuota, quota, concur);
+        const std::string typeStr[QUOTA_BUTT] = { "Write", "Read" };
+        CLI_PrintBuf("  Quota info, switch:%s \n", qosP->Switch() ? "on" : "off");
+        for (uint32_t idx = 0; idx < baseQuota.size(); idx++) {
+            CLI_PrintBuf("  %s: original quota:%lu, adjust quota:%lu, remain quota:%lu, concur:%u.\n",
+                typeStr[idx], baseQuota[idx], quota[idx], concur[idx]);
+        }
+    } else if (op == "switch") {
+        if (cmds.size() != 3) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        cType = cmds[2].c_str();
+        std::string qosSwitch(cType);
+        BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
+        auto ret = qosP->Switch(qosSwitch);
+    } else {
+        CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+    }
+}
+
 static void HandleShow(std::vector<std::string> cmds)
 {
     auto cType = cmds[1].c_str();
@@ -639,6 +675,7 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tlist all object: sdk listall [prefix]\n");
     CLI_PrintBuf("\tload object: sdk load [key] [offset] [length] [location]\n");
     CLI_PrintBuf("\tdelete object: sdk delete [key] [location]\n");
+    CLI_PrintBuf("\tqos operation: sdk qos [show/switch] [on/off]\n");
     CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity/hit]\n");
     CLI_PrintBuf("\ttrace: sdk trace [show/clear]\n");
     CLI_PrintBuf("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
@@ -739,6 +776,12 @@ static void BioSdkDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleDelete(cmds);
+    } else if (cmdType == "qos") {
+        if (cmds.size() < 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleQos(cmds);
     } else if (cmdType == "show") {
         if (cmds.size() < 2) {
             CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());

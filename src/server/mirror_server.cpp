@@ -37,6 +37,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleQueryNodeInfo, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO_BY_PT,
         std::bind(&MirrorServer::HandleQueryNodeInfoByPt, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_RES,
+        std::bind(&MirrorServer::HandleQueryResource, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_VIEW,
         std::bind(&MirrorServer::HandleQueryNodeView, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_PT_VIEW,
@@ -238,6 +240,18 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     return Cache::Instance().GetWCacheSlice(sliceKey, slice);
+}
+
+void MirrorServer::QueryCacheResource(QueryResourceRequest &req, QueryResourceResponse &rsp)
+{
+    CacheResDescription desc = { 0 };
+    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+    rsp.writeRes = desc.memCapacity;
+    LOG_INFO("Query write memory resource:" << desc.memCapacity << ", disk resource:" << desc.diskCapacity << ".");
+
+    Cache::Instance().GetCacheResources(desc, READ_CACHE);
+    rsp.readRes = desc.memCapacity;
+    LOG_INFO("Query read memory resource:" << desc.memCapacity << ", disk resource:" << desc.diskCapacity << ".");
 }
 
 void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp)
@@ -777,6 +791,20 @@ int32_t MirrorServer::HandleQueryNodeInfoByPt(ServiceContext &ctx)
     return MirrorServerQueryNodeInfoByPt(ctx, req);
 }
 
+int32_t MirrorServer::MirrorServerQueryRes(ServiceContext &ctx, QueryResourceRequest *req)
+{
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    QueryResourceResponse rsp;
+    QueryCacheResource(*req, rsp);
+    Reply(ctx, BIO_OK, &rsp, sizeof(QueryResourceResponse));
+    return BIO_OK;
+}
+
 int32_t MirrorServer::MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeViewRequest *req)
 {
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
@@ -789,6 +817,23 @@ int32_t MirrorServer::MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeVi
     QueryNodeView(*req, rsp);
     Reply(ctx, BIO_OK, &rsp, sizeof(QueryNodeViewResponse));
     return BIO_OK;
+}
+
+int32_t MirrorServer::HandleQueryResource(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(QueryResourceRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive query res quota message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<QueryResourceRequest *>(ctx.MessageData());
+    return MirrorServerQueryRes(ctx, req);
 }
 
 int32_t MirrorServer::HandleQueryNodeView(ServiceContext &ctx)
@@ -912,7 +957,10 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
     BResult result = Put(*req, sliceP, ctx);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
-    Reply(ctx, result, nullptr, 0, BIO_OP_SDK_PUT);
+
+    PutResponse rsp;
+    rsp.updateQuota = Cache::Instance().GetAdjustWriteQuota();
+    Reply(ctx, result, &rsp, sizeof(PutResponse), BIO_OP_SDK_PUT);
     return BIO_OK;
 }
 

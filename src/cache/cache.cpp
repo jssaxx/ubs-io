@@ -337,12 +337,18 @@ BResult Cache::ExtraCreateRCache(uint64_t ptId, uint64_t ptv)
     return BIO_OK;
 }
 
-void Cache::GetCacheResources(uint64_t &memTotal, uint64_t &memUsed, uint64_t &diskTotal, uint64_t &diskUsed)
+void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
 {
-    memTotal = 1;
-    memUsed = 0;
-    diskTotal = 1;
-    diskUsed = 0;
+    if (type == WRITE_CACHE) {
+        WCache::GetCacheResource(desc.memCapacity, desc.memUsedSize, desc.diskCapacity, desc.diskUsedSize);
+    } else if (type == READ_CACHE) {
+        RCache::GetCacheResource(desc.memCapacity, desc.memUsedSize, desc.diskCapacity, desc.diskUsedSize);
+    }
+}
+
+uint64_t Cache::GetAdjustWriteQuota()
+{
+    return CacheOverloadCtrl::Instance().GetWriteQuota();
 }
 }
 }

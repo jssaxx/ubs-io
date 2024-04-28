@@ -167,6 +167,26 @@ BResult MirrorClient::LoadAffinityFlow()
     return BIO_OK;
 }
 
+BResult MirrorClient::InitializeBioQos()
+{
+    // 1. query local node write and read resource
+    uint64_t writeRes = 0;
+    uint64_t readRes = 0;
+    auto ret = agent::BioClientAgent::Instance()->GetLocalResourceInfo(writeRes, readRes);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get local resource quota failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    // 2. fill write and read concurrency
+    uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
+    uint64_t readConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
+
+    // 3. start bio qos
+    mBioQos = BioQos::Instance();
+    return mBioQos->Initialize(writeRes, readRes, writeConcur, readConcur);
+}
+
 BResult MirrorClient::LoadOriginView()
 {
     bool isRetry = false;
@@ -306,6 +326,7 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     LVOS_TP_START(SDK_MIRROR_CHECK_PT_FAIL, &(iter->second.state), CM_PT_FAULT);
     LVOS_TP_END;
     if (UNLIKELY(iter->second.state == CM_PT_FAULT)) {
+        CLIENT_LOG_ERROR("Pt stat is fault, pt id:" << ptId << ", state:" << iter->second.state << ".");
         ret = BIO_CHECK_PT_FAIL;
     } else {
         ptEntry = iter->second;
@@ -317,7 +338,6 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
 uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
 {
     uint32_t quota = 0;
-
     for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
             continue;
@@ -329,14 +349,24 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
 
 BResult MirrorClient::Initialize(UpdateView updateView, WorkerScene scene)
 {
-    CLIENT_LOG_INFO("Initialize, scene:" << scene);
-
-    BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
     mUpdateView = updateView;
     mScene = scene;
+    BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
     BResult ret = LoadOriginView();
     BIO_TRACE_END(SDK_TRACE_INIT_LOAD_VIEW, ret);
-    return ret;
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Sdk load origin view failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    ret = InitializeBioQos();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Sdk init qos failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    CLIENT_LOG_INFO("Mirror client initialize success, scene:" << mScene << ".");
+    return BIO_OK;
 }
 
 BResult MirrorClient::Start()
@@ -352,46 +382,41 @@ BResult MirrorClient::Start()
     return LoadAffinityFlow();
 }
 
+static const uint64_t DEFAULT_ALIGNMENT_SIZE = NO_4194304;
 BResult MirrorClient::Put(MirrorPut &param)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
     uint64_t retryCnt = 0;
-    BResult ret;
+    BResult ret = BIO_OK;
 
     bool isSelf = false;
     char *value = param.value;
-    if (param.length != NO_4194304 && mScene == SCENE_BIGDATA) {
-        CLIENT_LOG_INFO("Not Align Io, key:" << param.key << ", length:" << param.length);
+    if (mScene == SCENE_BIGDATA && param.length != DEFAULT_ALIGNMENT_SIZE) {
+        BIO_TRACE_START(SDK_TRACE_PUT_ALIGN_IO);
+        CLIENT_LOG_INFO("Not align io, key:" << param.key << ", length:" << param.length << ".");
         isSelf = true;
-        param.value = (char *)malloc(NO_4194304);
-        if (param.value == nullptr) {
-            return BIO_ERR;
+        if ((param.value = static_cast<char *>(malloc(DEFAULT_ALIGNMENT_SIZE))) == nullptr) {
+            BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_ALLOC_FAIL);
+            return BIO_ALLOC_FAIL;
         }
-        memcpy_s(param.value, NO_4194304, value, param.length);
-        param.length = NO_4194304;
+        memcpy_s(param.value, DEFAULT_ALIGNMENT_SIZE, value, param.length);
+        param.length = DEFAULT_ALIGNMENT_SIZE;
+        BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_OK);
     }
 
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    TaskQueuePtr taskQueue = TaskQueue::Instance();
-    bool isSucceed = taskQueue->Apply(0, &sem);
-    if (!isSucceed) {
-        sem_wait(&sem);
-    }
-
+    BIO_TRACE_START(SDK_TRACE_PUT_APPLY_QOS);
+    mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
+    BIO_TRACE_END(SDK_TRACE_PUT_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
-        ret = PutImpl(param);
-        uint64_t endTime = Monotonic::TimeSec();
-        if ((endTime > startTime) && (endTime - startTime > NO_30)) {
-            CLIENT_LOG_ERROR("Too long, key:" << param.key << ", cost:" << (endTime - startTime) <<
-                ", ret:" << ret << ".");
-        }
+        uint64_t updateWriteQuota = 0;
+        ret = PutImpl(param, updateWriteQuota);
         if (LIKELY(ret == BIO_OK)) {
-            taskQueue->Release(0);
-            sem_destroy(&sem);
+            BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
+            mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
+            mBioQos->Update(QUOTA_WRITE, updateWriteQuota);
+            BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
             if (isSelf) {
                 free(param.value);
                 param.value = value;
@@ -400,7 +425,7 @@ BResult MirrorClient::Put(MirrorPut &param)
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
             LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
-            retryTime = Monotonic::TimeSec() - startTime;
+            uint64_t retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -408,10 +433,7 @@ BResult MirrorClient::Put(MirrorPut &param)
             }
         }
     } while (isRetry);
-
-    taskQueue->Release(0);
-    sem_destroy(&sem);
-
+    mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
     if (isSelf) {
         free(param.value);
         param.value = value;
@@ -451,7 +473,7 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     return BIO_OK;
 }
 
-BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo)
+BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo, uint64_t &updateQuota)
 {
     uint16_t ptId = ParseLocation(spaceInfo.loc);
     CmPtInfo ptEntry;
@@ -472,7 +494,7 @@ BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo)
     }
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
-    ret = SendPutRequestImpl(ptEntry, param, req);
+    ret = SendPutRequestImpl(ptEntry, param, req, updateQuota);
     BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
@@ -485,20 +507,27 @@ BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo)
 BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
     uint64_t retryCnt = 0;
-    BResult ret;
+    BResult ret = BIO_OK;
 
+    BIO_TRACE_START(SDK_TRACE_PUT_APPLY_QOS);
+    mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
+    BIO_TRACE_END(SDK_TRACE_PUT_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
-        ret = PutImpl(param, spaceInfo);
+        uint64_t updateWriteQuota = 0;
+        ret = PutImpl(param, spaceInfo, updateWriteQuota);
         if (LIKELY(ret == BIO_OK)) {
+            BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
+            mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
+            mBioQos->Update(QUOTA_WRITE, updateWriteQuota);
+            BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
             return BIO_OK;
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
             LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
-            retryTime = Monotonic::TimeSec() - startTime;
+            uint64_t retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -506,11 +535,12 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
             }
         }
     } while (isRetry);
+    mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
 
     return ret;
 }
 
-BResult MirrorClient::PutImpl(MirrorPut &param)
+BResult MirrorClient::PutImpl(MirrorPut &param, uint64_t &updateQuota)
 {
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
@@ -533,7 +563,7 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
         return ret;
     }
 
-    ret = SendPutRequest(ptEntry, param);
+    ret = SendPutRequest(ptEntry, param, updateQuota);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId <<
             ", flowId:" << param.flowId << ", key:" << param.key << ".");
@@ -547,19 +577,13 @@ BResult MirrorClient::PutImpl(MirrorPut &param)
 BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
     uint64_t retryCnt = 0;
-    BResult ret;
+    BResult ret = BIO_OK;
 
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    TaskQueuePtr taskQueue = TaskQueue::Instance();
-    bool isSucceed = taskQueue->Apply(NO_1, &sem);
-    if (!isSucceed) {
-        sem_wait(&sem);
-    }
-
+    BIO_TRACE_START(SDK_TRACE_GET_APPLY_QOS);
+    mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, param.length);
+    BIO_TRACE_END(SDK_TRACE_GET_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
         ret = GetImpl(param, realLen);
@@ -569,13 +593,14 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
                 ", ret:" << ret << ".");
         }
         if (LIKELY(ret == BIO_OK)) {
-            taskQueue->Release(NO_1);
-            sem_destroy(&sem);
+            BIO_TRACE_START(SDK_TRACE_GET_RELEASE_QOS);
+            mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ, param.length);
+            BIO_TRACE_END(SDK_TRACE_GET_RELEASE_QOS, BIO_OK);
             return BIO_OK;
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", times:" << ++retryCnt);
-            retryTime = Monotonic::TimeSec() - startTime;
+            uint64_t retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -583,9 +608,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
             }
         }
     } while (isRetry);
-
-    taskQueue->Release(NO_1);
-    sem_destroy(&sem);
+    mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ, param.length);
 
     return ret;
 }
@@ -718,30 +741,7 @@ BResult MirrorClient::LoadImpl(const char *key, uint64_t offset, uint64_t length
 
 BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
-    bool isRetry = false;
-    uint64_t retryTime;
-    uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
-    BResult ret;
-
-    do {
-        isRetry = false;
-        ret = ListAllImpl(prefix, objs);
-        if (LIKELY(ret == BIO_OK)) {
-            return BIO_OK;
-        }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
-            CLIENT_LOG_INFO("Delay retry, prefix:" << prefix << ", times:" << ++retryCnt);
-            retryTime = Monotonic::TimeSec() - startTime;
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
-    } while (isRetry);
-
-    return ret;
+    return ListAllImpl(prefix, objs);
 }
 
 BResult MirrorClient::ListAllImpl(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
@@ -749,11 +749,7 @@ BResult MirrorClient::ListAllImpl(const char *prefix, std::unordered_map<std::st
     ListRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
     CopyKey(req.prefix, prefix, KEY_MAX_SIZE);
-    auto ret = SendListRequest(req, objs);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send list request failed, ret:" << ret << ", prefix:" << prefix << ".");
-    }
-    return ret;
+    return SendListRequest(req, objs);
 }
 
 BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, ObjStat &stat)
@@ -1051,7 +1047,6 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
         req->copyFree = false;
-        BIO_TRACE_ASYNC_BEGIN(SDK_TRACE_PUT_REMOTE_ASYNC);
         BIO_TRACE_START(SDK_TRACE_PUT_REMOTE_SYNC);
         net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT,
             static_cast<void *>(req), sizeof(PutRequest) + req->sliceLen, callback);
@@ -1076,25 +1071,20 @@ void MirrorClient::InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota)
     cbCtx.respLen = 0;
 }
 
-void MirrorClient::SendPutRemoteDone(uint32_t len, int32_t ret, uint64_t ts)
-{
-    if (len != NO_100) { // Tip：使用100去区分是本地回调函数远端回调
-        BIO_TRACE_ASYNC_END(SDK_TRACE_PUT_REMOTE_ASYNC, ret, ts);
-    }
-}
-
-BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req)
+BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req, uint64_t &updateQuota)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
-    uint64_t ts = Monotonic::TimeNs();
-    auto cbFunc = [this, ts](void *ctx, void *resp, uint32_t len, int32_t result) {
+    std::atomic<uint64_t> negoWriteQuota(UINT64_MAX);
+
+    auto cbFunc = [&negoWriteQuota](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         }
-        SendPutRemoteDone(len, cbCtx->result, ts);
+        auto rsp = static_cast<PutResponse *>(resp);
+        negoWriteQuota = (rsp->updateQuota < negoWriteQuota) ? rsp->updateQuota : negoWriteQuota.load();
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
         }
@@ -1119,12 +1109,13 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     net::BioClientNet::Instance()->Free(req->mrAddress);
+    updateQuota = negoWriteQuota.load();
     LVOS_TP_START(SDK_MIRROR_SEND_PUT_FAIL, &(cbCtx.result), BIO_INNER_ERR);
     LVOS_TP_END;
     return cbCtx.result;
 }
 
-BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
+BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t &updateQuota)
 {
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
@@ -1137,7 +1128,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
     }
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
-    ret = SendPutRequestImpl(ptEntry, param, req);
+    ret = SendPutRequestImpl(ptEntry, param, req, updateQuota);
     BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     return ret;
