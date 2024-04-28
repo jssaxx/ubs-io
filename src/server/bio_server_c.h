@@ -20,6 +20,8 @@ uintptr_t GetBioServerNet();
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
+int32_t GetResourceInfo(QueryResourceRequest *req, QueryResourceResponse *rsp);
+
 int32_t GetNodeView(QueryNodeViewRequest *req, QueryNodeViewResponse *rsp);
 
 int32_t GetPtView(QueryPtViewRequest *req, QueryPtViewResponse *rsp);
@@ -32,7 +34,7 @@ int32_t DestroyFlow(DestroyFlowRequest *req);
 
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp);
 
-int32_t Put(PutRequest *req);
+int32_t Put(PutRequest *req, PutResponse *rsp);
 
 int32_t Get(GetRequest *req, GetResponse *rsp);
 

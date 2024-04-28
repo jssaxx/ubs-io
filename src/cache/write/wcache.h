@@ -36,6 +36,8 @@ public:
 
     void Exit();
 
+    static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
+
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,

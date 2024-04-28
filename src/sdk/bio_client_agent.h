@@ -24,13 +24,14 @@ public:
     using BioServerStopFuncPtr = void (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
+    using GetLocalResQuotaFuncPtr = int32_t (*)(QueryResourceRequest *, QueryResourceResponse *);
     using GetNodeViewFuncPtr = int32_t (*)(QueryNodeViewRequest *, QueryNodeViewResponse *);
     using GetPtViewFuncPtr = int32_t (*)(QueryPtViewRequest *, QueryPtViewResponse *);
     using CreateFlowMasterFuncPtr = int32_t (*)(CreateFlowRequest *, CreateFlowResponse *);
     using CreateFlowSlaveFuncPtr = int32_t (*)(CreateFlowRequest *);
     using DestroyFlowFuncPtr = int32_t (*)(DestroyFlowRequest *);
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
-    using PutFuncPtr = int32_t (*)(PutRequest *);
+    using PutFuncPtr = int32_t (*)(PutRequest *, PutResponse *);
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
     using DeleteFuncPtr = int32_t (*)(DeleteRequest *);
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
@@ -58,6 +59,8 @@ public:
     }
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
+
+    BResult GetLocalResourceInfo(uint64_t &writeRes, uint64_t &readRes);
 
     BResult GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
 
@@ -127,6 +130,7 @@ private:
     BioServerStopFuncPtr stopOp = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
+    GetLocalResQuotaFuncPtr getResourceOp = nullptr;
     GetNodeViewFuncPtr getNodeViewOp = nullptr;
     GetPtViewFuncPtr getPtViewOp = nullptr;
     CreateFlowMasterFuncPtr createFlowMasterOp = nullptr;

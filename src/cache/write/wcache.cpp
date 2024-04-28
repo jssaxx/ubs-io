@@ -13,7 +13,6 @@
 #include "cache_overload_ctrl.h"
 #include "bio_config_instance.h"
 #include "bio_server.h"
-#include "flow_manager.h"
 
 namespace ock {
 namespace bio {
@@ -49,6 +48,17 @@ void WCache::RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, cons
 }
 
 void WCache::Exit() {}
+
+void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed)
+{
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+    memCap = (config.memWriteRatio * config.memCap) / NO_10;
+    memUsed = FlowManager::GetCacheUsedSize(NO_1, FLOW_MEMORY);
+    for (auto &item : config.diskCaps) {
+        diskCap += static_cast<uint64_t>(item);
+    }
+    diskUsed = FlowManager::GetCacheUsedSize(NO_1, FLOW_DISK);
+}
 
 BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
@@ -517,6 +527,7 @@ BResult WCache::EvictAllMemSliceToDisk()
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return ret;
         }
+        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
         ++sliceIter;
     }
 
@@ -557,7 +568,6 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
             mRetryCallback(mFlowId, WCACHE_DISK);
             return ret;
         }
-        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT, slice->GetLength());
         ++sliceIter;
     }
 

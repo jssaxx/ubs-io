@@ -47,6 +47,16 @@ typedef struct {
     uint32_t mKey;
 } ShmInitResponse;
 
+/* Query cache resource quota */
+typedef struct {
+    RequestComm comm;
+} QueryResourceRequest;
+
+typedef struct {
+    uint64_t writeRes;
+    uint64_t readRes;
+} QueryResourceResponse;
+
 /* Query node view */
 typedef struct {
     uint16_t diskId;
@@ -190,6 +200,10 @@ typedef struct {
     char sliceBuf[0];
 } PutRequest;
 
+typedef struct {
+    uint64_t updateQuota;
+} PutResponse;
+
 /* Get */
 typedef struct {
     RequestComm comm;
@@ -207,6 +221,7 @@ typedef struct {
 typedef struct {
     bool isAlloc;
     uint32_t num;
+    uint64_t updateQuota;
     uintptr_t address[SLICE_ADDR_SIZE];
     uint64_t addrOffset[SLICE_ADDR_SIZE];
     uint64_t addrLen[SLICE_ADDR_SIZE];

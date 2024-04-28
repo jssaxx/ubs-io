@@ -3,6 +3,8 @@
  */
 
 #include <cstdint>
+#include "flow_manager.h"
+#include "bio_config_instance.h"
 #include "cache_flow.h"
 #include "cache_slice.h"
 #include "rcache_statistic.h"
@@ -310,6 +312,17 @@ BResult RCache::GetSliceFromChunk(RCacheTierType tier, const RCacheChunkPtr &chu
     }
 
     return BIO_OK;
+}
+
+void RCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed)
+{
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+    memCap = (config.memReadRatio * config.memCap) / NO_10;
+    memUsed = FlowManager::GetCacheUsedSize(NO_2, FLOW_MEMORY);
+    for (auto &item : config.diskCaps) {
+        diskCap += static_cast<uint64_t>(item);
+    }
+    diskUsed = FlowManager::GetCacheUsedSize(NO_2, FLOW_DISK);
 }
 
 BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)
