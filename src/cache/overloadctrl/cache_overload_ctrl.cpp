@@ -19,57 +19,186 @@
 
 namespace ock {
 namespace bio {
+/** 低水位过载控制调整策略
+ * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调30%, 但不超过初始配额;
+ * case2: 前端写入带宽 >= 后端内存淘汰到磁盘的带宽, 则写配额上调20%, 但不超过初始配额;
+ * case3: 前端写入带宽 >= 2*后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
+ * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调10%, 但不超过配额的2/3;
+ */
+uint64_t CacheOverloadCtrl::LowWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
+{
+    if (frontWriteBw <= evict2DiskBw) {
+        proc = NO_1;
+        uint32_t radio = NO_3 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+    } else if (frontWriteBw <= evict2DiskBw) {
+        proc = NO_2;
+        uint32_t radio = NO_2 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+    } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
+        proc = NO_3;
+        uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+    } else {
+        proc = NO_4;
+        uint32_t radio = NO_1 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, (mBaseWriteQuota * NO_2 / NO_3));
+    }
+    return mUpdateWQuota;
+}
+
+/** 中水位过载控制调整策略
+ * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
+ * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额下调20%, 但不超过配额的1/2;
+ * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额下调40%, 但不超过配额的1/3;
+ * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调60%, 但不超过配额的1/3;
+ */
+uint64_t CacheOverloadCtrl::MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
+{
+    if (frontWriteBw <= evict2DiskBw) {
+        proc = NO_1;
+        uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+    } else if (frontWriteBw <= NO_2 * evict2DiskBw) {
+        proc = NO_2;
+        uint32_t radio = NO_2 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_2);
+    } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
+        proc = NO_3;
+        uint32_t radio = NO_4 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_3);
+    } else {
+        proc = NO_4;
+        uint32_t radio = NO_6 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_3);
+    }
+    return mUpdateWQuota;
+}
+
+/** 高水位过载控制调整策略
+ * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
+ * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额下调40%, 但不超过配额的1/3;
+ * case3: 前端写入带宽 <= 4*后端内存淘汰到磁盘的带宽, 则写配额下调60%, 但不超过配额的1/4;
+ * case4: 前端写入带宽 >= 4*后端内存淘汰到磁盘的带宽, 则写配额下调80%, 但不超过配额的1/5;
+ */
+uint64_t CacheOverloadCtrl::HighWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
+{
+    if (frontWriteBw <= evict2DiskBw) {
+        proc = NO_1;
+        uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+    } else if (frontWriteBw <= NO_2 * evict2DiskBw) {
+        proc = NO_2;
+        uint32_t radio = NO_4 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_3);
+    } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
+        proc = NO_3;
+        uint32_t radio = NO_6 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_4);
+    } else {
+        proc = NO_4;
+        uint32_t radio = NO_8 * mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t diff = mUpdateWQuota - (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = std::max<uint64_t>(diff, mBaseWriteQuota / NO_5);
+    }
+    return mUpdateWQuota;
+}
+
+/** 红线水位过载控制调整策略
+ * case1：前端IO写入带宽 <= 后端内存淘汰到磁盘的带宽, 则写配额上调10%, 但不超过初始配额;
+ * case2: 前端写入带宽 <= 2*后端内存淘汰到磁盘的带宽, 则写配额调整到1G;
+ */
+uint64_t CacheOverloadCtrl::LimitedWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc)
+{
+    if (frontWriteBw <= evict2DiskBw) {
+        proc = NO_1;
+        uint32_t radio = mOverloadCtrlConfig.adjustBwRatio;
+        uint64_t adjustQuota = mUpdateWQuota + (mUpdateWQuota * radio / NO_100);
+        mUpdateWQuota = (adjustQuota > mBaseWriteQuota) ? mBaseWriteQuota : adjustQuota;
+    } else {
+        proc = NO_2;
+        mUpdateWQuota = mOverloadCtrlConfig.minWriteReportBwWith;
+    }
+    return mUpdateWQuota;
+}
+
+uint64_t CacheOverloadCtrl::CalculateWriteQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint64_t vm)
+{
+    uint32_t proc = 0;
+    uint64_t writeQuota = 0;
+    if (vm < NO_30) {
+        writeQuota = LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    } else if (vm < NO_60) {
+        writeQuota = MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    } else if (vm < NO_90) {
+        writeQuota = HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    } else {
+        writeQuota = LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    }
+    LOG_INFO("Calculate write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw <<
+        ", waterLevel:" << vm << ", adjusted writeQuota:" << writeQuota << ", proc:" << proc << ".");
+    return writeQuota;
+}
+
 void CacheOverloadCtrl::AddBandwidth(BwStatType type, uint64_t count)
 {
     mOverloadCtrlGlbInfo.bwStatObj[type].curValue += count;
 }
 
-void CacheOverloadCtrl::Show(std::vector<uint64_t> &writeBwVec, std::vector<uint64_t> &evictBwVec,
-    std::vector<uint64_t> &vmVec)
+uint64_t CacheOverloadCtrl::GetWriteQuota()
+{
+    uint64_t frontWriteBw = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE].calcBwValue;
+    uint64_t evict2DiskBw = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT_TO_DISK].calcBwValue;
+    uint64_t vm = GetWmStatDirectValue();
+    return CalculateWriteQuota(frontWriteBw, evict2DiskBw, vm);
+}
+
+uint64_t CacheOverloadCtrl::GetReadQuota()
+{
+    return 0;
+}
+
+void CacheOverloadCtrl::Show(std::vector<uint64_t> &writeBwVec, std::vector<uint64_t> &evictBwVec, uint64_t &vmVec)
 {
     BwStatObj &writeObj = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE];
     for (uint32_t idx = 0; idx < MAX_OVERLOAD_STAT_CYCLE_NUM; idx++) {
         writeBwVec.emplace_back(writeObj.hisValue[idx]);
     }
-    BwStatObj &evictObj = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT];
+    BwStatObj &evictObj = mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT_TO_DISK];
     for (uint32_t idx = 0; idx < MAX_OVERLOAD_STAT_CYCLE_NUM; idx++) {
         evictBwVec.emplace_back(evictObj.hisValue[idx]);
     }
-    VmStatObj &vmObj = mOverloadCtrlGlbInfo.wmStatObj;
-    for (uint32_t idx = 0; idx < MAX_OVERLOAD_STAT_CYCLE_NUM; idx++) {
-        vmVec.emplace_back(vmObj.hisValue[idx]);
-    }
+    vmVec = GetWmStatDirectValue();
+}
+
+uint64_t CacheOverloadCtrl::GetWmStatDirectValue()
+{
+    CacheResDescription desc = { 0 };
+    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+    auto mVm = std::min<uint64_t>(PERCENT_100, desc.memUsedSize * CACHE_OLC_PERCENT_BASE / desc.memCapacity / NO_2);
+    auto dVm = std::min<uint64_t>(PERCENT_100, desc.diskUsedSize * CACHE_OLC_PERCENT_BASE / desc.diskCapacity / NO_2);
+    uint64_t retWm = std::max<uint64_t>(mVm, dVm);
+    return retWm;
 }
 
 uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
 {
     uint16_t curIdx = (obj.curIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
-    uint64_t startTime = obj.hisStartTime[curIdx];
-    uint64_t endTime = obj.hisEndTime[curIdx];
-    uint64_t maxValue = 0;
     uint64_t totalValue = 0;
-
     for (uint16_t idx = 0; idx < obj.cycleNum; idx++) {
-        startTime = obj.hisStartTime[curIdx];
         totalValue += obj.hisValue[curIdx];
-        if (endTime < startTime + 5000U) {
-            if (obj.isStatPageCnt) {
-                maxValue = std::max<uint64_t>(maxValue, ((obj.hisValue[curIdx] * 1000U * obj.pageSize) /
-                    std::max<uint64_t>(obj.hisEndTime[curIdx] - obj.hisStartTime[curIdx], 1)));
-            } else {
-                maxValue = obj.hisValue[curIdx];
-            }
-        }
         curIdx = (curIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
-    }
-
-    obj.hisMaxValue = maxValue;
-    if (totalValue == 0) {
-        return 0;
-    }
-
-    if (obj.isStatPageCnt) {
-        totalValue = ((totalValue) * 1000U * obj.pageSize) / (std::max<uint64_t>((endTime - startTime), 1));
     }
     return totalValue;
 }
@@ -81,6 +210,9 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
     if (curTime >= (obj.calcBwCycleTime + obj.calcBwCycle)) {
         obj.calcBwCycleTime = curTime;
         obj.calcBwValue = GetBwStatAverageValue(obj);
+        if (obj.calcBwValue != 0) {
+            LOG_INFO("Update bandwidth, " << bwTypeStr[type] << " average value:" << obj.calcBwValue << ".");
+        }
     } else {
         return;
     }
@@ -100,118 +232,47 @@ void CacheOverloadCtrl::UpdateCacheStatBw(BwStatType type)
     UpdateBwStatValue(mOverloadCtrlGlbInfo.bwStatObj[type], type);
 }
 
-int32_t CacheOverloadCtrl::GetCacheWaterMarkDirect(VmStatObj &obj)
-{
-    uint16_t curIdx = (obj.curIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
-    uint16_t hisIdx = (obj.curIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 2) % MAX_OVERLOAD_STAT_CYCLE_NUM;
-    uint64_t hisMW = 0;
-
-    for (uint16_t idx = 0; idx < obj.cycleNum - 1; idx++) {
-        hisMW += obj.hisValue[hisIdx];
-        hisIdx = (hisIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
-    }
-    if (hisMW == 0) {
-        return 0;
-    }
-
-    int32_t wmDir = 0;
-    hisMW = hisMW / (static_cast<uint64_t>(std::max<uint64_t>((obj.cycleNum - 1), 1)));
-    if (obj.hisValue[curIdx] > hisMW) {
-        wmDir = 1;
-    } else if (obj.hisValue[curIdx] < hisMW) {
-        wmDir = -1;
-    } else {
-        wmDir = 0;
-    }
-    return wmDir;
-}
-
-void CacheOverloadCtrl::UpdateCacheWaterDirect()
-{
-    VmStatObj &obj = mOverloadCtrlGlbInfo.wmStatObj;
-    uint64_t curTime = Monotonic::TimeMs();
-    uint64_t hisIdx;
-
-    if (curTime >= (obj.calcWmCycleTime + obj.calcWmCycle)) {
-        obj.calcWmCycleTime = curTime;
-        obj.calcWmValue = GetCacheWaterMarkDirect(obj);
-    } else {
-        return;
-    }
-
-    hisIdx = obj.curIdx;
-    obj.hisValue[hisIdx] = GetCacheWaterMark();
-    obj.curIdx = (hisIdx + 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
-    obj.curStartTime = curTime;
-}
-
 void CacheOverloadCtrl::OverloadPeriodStatistics()
 {
     LOG_INFO("Cache overload ctrl period statistics start.");
-    constexpr uint64_t period = 5; // 5s
+    constexpr uint64_t period = 1;
     uint64_t startTime = Monotonic::TimeSec();
     while (true) {
         if (!startWorker) {
-            LOG_INFO("Cache overload ctrl period statistics end.");
             break;
         }
         if (Monotonic::TimeSec() - startTime < period) {
-            sleep(NO_1);
+            sleep(1);
             continue;
         }
         for (auto idx = static_cast<uint16_t>(BW_STAT_FRONT_WRITE); idx < BW_STAT_BUTT; idx++) {
             UpdateCacheStatBw(static_cast<BwStatType>(idx));
         }
-        UpdateCacheWaterDirect();
         startTime = Monotonic::TimeSec();
     }
-}
-
-uint64_t CacheOverloadCtrl::GetCacheWriteBandwidth()
-{
-    return mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE].curValue.load();
-}
-
-uint64_t CacheOverloadCtrl::GetCacheWaterMark()
-{
-    uint64_t memTotal = 0;
-    uint64_t memUsed = 0;
-    uint64_t diskTotal = 0;
-    uint64_t diskUsed = 0;
-    Cache::Instance().GetCacheResources(memTotal, memUsed, diskTotal, diskUsed);
-    uint64_t memVm = std::min<uint64_t>(PERCENT_100, (memUsed * CACHE_OLC_PERCENT_BASE / memTotal));
-    uint64_t diskVm = std::min<uint64_t>(PERCENT_100, (diskUsed * CACHE_OLC_PERCENT_BASE / diskTotal));
-    uint64_t retWm = std::max<uint64_t>(memVm, diskVm);
-    return retWm;
+    LOG_INFO("Cache overload ctrl period statistics end.");
 }
 
 void CacheOverloadCtrl::InitOverloadConfig()
 {
-    mOverloadCtrlConfig.downPreBwRatio = NO_5;                                         // 下调百分比5%
-    mOverloadCtrlConfig.overloadAdjustBwRatio = NO_10;                                 // 过载调整百分比10%
-    mOverloadCtrlConfig.minWriteReportBwWith = (static_cast<uint64_t>(NO_1)) << NO_30; // 中低水位写带宽最低上报值，1G
-    mOverloadCtrlConfig.baseAdjustReportBw = (static_cast<uint64_t>(NO_4)) << NO_10; // 基本的带宽调整值，4K
-    mOverloadCtrlConfig.zeroAdjustReportBw = (NO_1024 * NO_1024);                    // 保底的带宽调整值，1M
-    mOverloadCtrlConfig.minReportBw = (NO_1024 * NO_1024);
-    mOverloadCtrlConfig.maxWriteReportBw =
-        (static_cast<uint64_t>(NO_1024 * NO_5)) << NO_10; // 上调带宽时的上限值1GB，避免调太大
-    mOverloadCtrlConfig.remainConcurBound = NO_100;
+    mOverloadCtrlConfig.adjustBwRatio = 10UL;              // 调整百分比10%
+    mOverloadCtrlConfig.minWriteReportBwWith = 1UL << 30U; // 写带宽最低限制1G
+    mOverloadCtrlConfig.maxWriteReportBw = 1UL << 30U;     // 写带宽最大上调值1GB
+    mOverloadCtrlConfig.remainConcurBound = 128UL;
     mOverloadCtrlConfig.remainConcurTryUp = 0;
 }
 
-void CacheOverloadCtrl::InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, uint32_t calcBWCycleMs,
-    bool isStatPageCnt)
+void CacheOverloadCtrl::InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, bool isStatPage)
 {
     obj.cycleTime = cycleMs;
     obj.cycleNum = cycleNum;
     obj.curIdx = 0;
-    obj.isStatPageCnt = isStatPageCnt;
+    obj.isStatPage = isStatPage;
     obj.pageSize = 0;
     obj.curValue.store(0UL);
     obj.curStartTime = 0UL;
-    obj.hisMaxValue = 0UL;
     obj.calcBwCycleTime = 0UL;
-    obj.calcBwCycle = calcBWCycleMs;
+    obj.calcBwCycle = cycleMs;
     obj.calcBwValue = 0UL;
     for (uint16_t index = 0; index < MAX_OVERLOAD_STAT_CYCLE_NUM; index++) {
         obj.hisValue[index] = 0UL;
@@ -220,42 +281,42 @@ void CacheOverloadCtrl::InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t
     }
 }
 
-void CacheOverloadCtrl::InitWmStatObj(VmStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, uint32_t calcBWCycleMs)
-{
-    obj.cycleTime = cycleMs;
-    obj.cycleNum = cycleNum;
-    obj.curIdx = 0;
-    obj.curStartTime = 0UL;
-    obj.calcWmCycleTime = 0UL;
-    obj.calcWmCycle = calcBWCycleMs;
-    obj.calcWmValue = 0;
-    for (uint16_t index = 0; index < MAX_OVERLOAD_STAT_CYCLE_NUM; index++) {
-        obj.hisValue[index] = 0UL;
-    }
-}
-
 void CacheOverloadCtrl::InitOverloadGlbInfo()
 {
-    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE], 1000U, 10U, 1000U, false);
-    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT], 1000U, 10U, 1000U, false);
-    InitWmStatObj(mOverloadCtrlGlbInfo.wmStatObj, 500U, 5U, 1000U);
+    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_FRONT_WRITE], NO_1000, NO_10, false);
+    InitBwStatObj(mOverloadCtrlGlbInfo.bwStatObj[BW_STAT_EVICT_TO_DISK], NO_1000, NO_10, false);
+}
+
+void CacheOverloadCtrl::InitOverloadQuotaInfo()
+{
+    CacheResDescription desc = { 0 };
+    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+    mBaseWriteQuota = desc.memCapacity;
+    mUpdateWQuota = mBaseWriteQuota;
+
+    Cache::Instance().GetCacheResources(desc, READ_CACHE);
+    mBaseReadQuota = desc.memCapacity;
+    mUpdateRQuota = mBaseReadQuota;
 }
 
 BResult CacheOverloadCtrl::Initialize()
 {
+    // 1. 初始化过载调控策略配置信息
     InitOverloadConfig();
+    // 2. 初始化过载采集配置信息
     InitOverloadGlbInfo();
+    // 3. 初始化资源配额
+    InitOverloadQuotaInfo();
 
+    // 4. 创建Executor, 用于周期性采集过载信息
     mStatisticExecutor = ExecutorService::Create(NO_1, NO_1024);
     ChkTrue(mStatisticExecutor != nullptr, BIO_ALLOC_FAIL, "Failed to create overload info statistic executor.");
-    mStatisticExecutor->SetThreadName("cache-overload-statis");
-    auto ret = mStatisticExecutor->Start();
-    if (!ret) {
+    mStatisticExecutor->SetThreadName("cache-overload-stat");
+    if (!(mStatisticExecutor->Start())) {
         LOG_ERROR("Failed to start overload info statistic executor.");
         return BIO_INNER_ERR;
     }
-    ret = mStatisticExecutor->Execute([this]() { OverloadPeriodStatistics(); });
-    if (!ret) {
+    if (!(mStatisticExecutor->Execute([this]() { OverloadPeriodStatistics(); }))) {
         LOG_ERROR("Set execute function failed.");
         return BIO_INNER_ERR;
     }

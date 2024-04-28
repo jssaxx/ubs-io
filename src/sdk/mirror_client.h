@@ -19,6 +19,7 @@
 #include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
+#include "bio_qos.h"
 
 namespace ock {
 namespace bio {
@@ -101,6 +102,11 @@ public:
         return mLocalNid;
     }
 
+    inline BioQosPtr &GetQosPtr()
+    {
+        return mBioQos;
+    }
+
     inline bool CheckIsOnline(uint16_t nodeId, std::string &ip, uint16_t &port)
     {
         CmNodeId node(mLocalNid.groupId, nodeId);
@@ -137,8 +143,8 @@ public:
 
 private:
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo, PutRequest *&req);
-    BResult PutImpl(MirrorPut &param);
-    BResult PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo);
+    BResult PutImpl(MirrorPut &param, uint64_t &updateQuota);
+    BResult PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo, uint64_t &updateQuota);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
 
@@ -157,6 +163,7 @@ private:
     }
 
     BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
+    BResult InitializeBioQos();
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();
     BResult LoadAffinityFlow();
@@ -185,9 +192,8 @@ private:
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, Callback &callback) const;
-    void SendPutRemoteDone(uint32_t len, int32_t ret, uint64_t ts);
-    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
-    BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
+    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req, uint64_t &updateQuota);
+    BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t &updateQuota);
 
     BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
     BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
@@ -277,60 +283,10 @@ private:
     UpdateView mUpdateView { nullptr };
     WorkerScene mScene = SCENE_NONE;
     std::atomic<uint64_t> *mPtHit = nullptr;
+    BioQosPtr mBioQos = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
-
 using MirrorClientPtr = Ref<MirrorClient>;
-
-class TaskQueue;
-using TaskQueuePtr = Ref<TaskQueue>;
-class TaskQueue {
-public:
-    static TaskQueuePtr &Instance()
-    {
-        static auto instance = MakeRef<TaskQueue>();
-        return instance;
-    }
-
-    bool Apply(uint32_t index, sem_t *sem)
-    {
-        WriteLocker<ReadWriteLock> lock(&mLock[index]);
-        mReal[index]++;
-        if (mReal[index] > mCount[index]) {
-            mList[index].push_back(sem);
-            return false;
-        }
-        return true;
-    }
-
-    void Release(uint32_t index)
-    {
-        WriteLocker<ReadWriteLock> lock(&mLock[index]);
-        mReal[index]--;
-        if (mList[index].empty()) {
-            return;
-        }
-        auto it = mList[index].begin();
-        sem_post(*it);
-        mList[index].pop_front();
-    }
-
-    uint32_t RefCount(uint32_t index)
-    {
-        WriteLocker<ReadWriteLock> lock(&mLock[index]);
-        return mReal[index];
-    }
-
-    DEFINE_REF_COUNT_FUNCTIONS;
-
-private:
-    ReadWriteLock mLock[NO_2];
-    std::list<sem_t *> mList[NO_2];
-    uint32_t mCount[NO_2] { NO_32, NO_32 };
-    uint32_t mReal[NO_2] { 0, 0 };
-
-    DEFINE_REF_COUNT_VARIABLE;
-};
 }
 }
 #endif

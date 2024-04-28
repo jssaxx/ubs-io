@@ -323,7 +323,7 @@ protected:
     void BioMirrorServerExit();
     BResult BioCacheInit();
     BResult BioFlowInit();
-    BResult BioIntercepterServerInit();
+    BResult BioInterceptorServerInit();
 #ifdef USE_DEBUG_TOOLS
     BResult BioServerDiagnoseInit();
     BResult BioServerDiagnoseInitInner();

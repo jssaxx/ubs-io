@@ -13,6 +13,19 @@
 
 namespace ock {
 namespace bio {
+enum CacheType {
+    WRITE_CACHE = 0,
+    READ_CACHE,
+    CACHE_BUTT
+};
+
+struct CacheResDescription {
+    uint64_t memCapacity;
+    uint64_t diskCapacity;
+    uint64_t memUsedSize;
+    uint64_t diskUsedSize;
+};
+
 class Cache {
 public:
     BResult Init();
@@ -73,7 +86,9 @@ public:
 
     BResult ExtraCreateRCache(uint64_t ptId, uint64_t ptv);
 
-    void GetCacheResources(uint64_t &memTotal, uint64_t &memUsed, uint64_t &diskTotal, uint64_t &diskUsed);
+    void GetCacheResources(CacheResDescription &desc, CacheType type);
+
+    uint64_t GetAdjustWriteQuota();
 
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };

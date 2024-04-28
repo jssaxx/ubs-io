@@ -59,6 +59,9 @@ BResult BioClientAgent::InitOperation()
     if ((getLocalNidOp = reinterpret_cast<GetLocalNidFuncPtr>(LoadFunction("GetLocalNid"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((getResourceOp = reinterpret_cast<GetLocalResQuotaFuncPtr>(LoadFunction("GetResourceInfo"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((getNodeViewOp = reinterpret_cast<GetNodeViewFuncPtr>(LoadFunction("GetNodeView"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -150,6 +153,24 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     } else {
         ret = SendGetLocalNodeInfoRequest(protocol, localNid);
         mLocalNid = localNid;
+    }
+    return ret;
+}
+
+BResult BioClientAgent::GetLocalResourceInfo(uint64_t &writeRes, uint64_t &readRes)
+{
+    BResult ret = BIO_OK;
+    QueryResourceRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    QueryResourceResponse rsp;
+    if (mMode == CONVERGENCE) {
+        ret = getResourceOp(&req, &rsp);
+    } else {
+        ret = net::BioClientNet::Instance()->SendSync<QueryResourceRequest, QueryResourceResponse>(INVALID_NID,
+            BIO_OP_SDK_GET_RES, req, rsp);
+    }
+    if (ret == BIO_OK) {
+        writeRes = rsp.writeRes;
+        readRes = rsp.readRes;
     }
     return ret;
 }
@@ -343,9 +364,10 @@ void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
 {
     if (mMode == CONVERGENCE) {
         BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
-        auto ret = putOp(req);
+        PutResponse rsp;
+        auto ret = putOp(req, &rsp);
         BIO_TRACE_END(SDK_TRACE_PUT_LOCAL_SYNC, ret);
-        callback.cb(callback.cbCtx, nullptr, NO_100, ret); // Tip：使用100去区分是本地回调函数远端回调
+        callback.cb(callback.cbCtx, &rsp, sizeof(PutResponse), ret);
     } else {
         BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
         SendPutRequestLocal(req, callback);
