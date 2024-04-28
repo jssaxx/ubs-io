@@ -29,8 +29,6 @@ struct BwStatObj {
     uint32_t cycleTime;
     uint32_t cycleNum;
     uint16_t curIdx;
-    bool isStatPage;
-    uint32_t pageSize;
     std::atomic<uint64_t> curValue;
     uint64_t curStartTime;
     uint64_t calcBwCycleTime; // 计算平均带宽的起始时间
@@ -93,7 +91,7 @@ private:
     void UpdateCacheStatBw(BwStatType type);
     void OverloadPeriodStatistics();
 
-    void InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum, bool isStatPage);
+    void InitBwStatObj(BwStatObj &obj, uint32_t cycleMs, uint32_t cycleNum);
     void InitOverloadConfig();
     void InitOverloadGlbInfo();
     void InitOverloadQuotaInfo();
@@ -103,11 +101,8 @@ private:
     OverloadCtrlGlbInfo mOverloadCtrlGlbInfo;
     OverloadCtrlConfig mOverloadCtrlConfig;
     ExecutorServicePtr mStatisticExecutor;
-
-    uint64_t mBaseWriteQuota = 0;
-    uint64_t mUpdateWQuota = 0;
-    uint64_t mBaseReadQuota = 0;
-    uint64_t mUpdateRQuota = 0;
+    uint64_t mMaxWriteQuota = 0;
+    std::atomic<uint64_t> mAdjustWQuota;
 };
 }
 }
