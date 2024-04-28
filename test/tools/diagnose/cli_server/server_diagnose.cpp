@@ -119,17 +119,14 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         }
         std::vector<uint64_t> writeBwVec;
         std::vector<uint64_t> evictBwVec;
-        std::vector<uint64_t> vmVec;
+        uint64_t vmVec;
         CacheOverloadCtrl::Instance().Show(writeBwVec, evictBwVec, vmVec);
         CLI_PrintBuf("  Boostio overload ctrl info: \n");
         CLI_PrintBuf("  Bandwidth: \n");
         for (uint32_t idx = 0; idx < writeBwVec.size(); idx++) {
             CLI_PrintBuf("      idx:%u : %lu -- %lu \n", idx, writeBwVec[idx], evictBwVec[idx]);
         }
-        CLI_PrintBuf("  Water level: \n");
-        for (uint32_t idx = 0; idx < vmVec.size(); idx++) {
-            CLI_PrintBuf("      idx:%u : %lu \n", idx, vmVec[idx]);
-        }
+        CLI_PrintBuf("  Water level:%lu \n", vmVec);
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -150,12 +147,12 @@ static void HandleServerTrace(std::vector<std::string> cmds)
 
 static void BioServerDebugHelp(char *command, int detail) noexcept
 {
-    CLI_PrintBuf("change water level: bioserver chgwlv [tier] [water_level]\n");
-    CLI_PrintBuf("change memory read write ratio: bioserver chgmr [memory ratio]\n");
-    CLI_PrintBuf("change disk read write ratio: bioserver chgdr [disk ratio]\n");
-    CLI_PrintBuf("show: bioserver show [disk/net/olc]\n");
-    CLI_PrintBuf("trace: bioserver trace [show/clear]\n");
-    CLI_PrintBuf("exit: exit console\n");
+    CLI_PrintBuf("\tchange water level: bioserver chgwlv [tier] [water_level]\n");
+    CLI_PrintBuf("\tchange memory read write ratio: bioserver chgmr [memory ratio]\n");
+    CLI_PrintBuf("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
+    CLI_PrintBuf("\tshow: bioserver show [disk/net/olc]\n");
+    CLI_PrintBuf("\ttrace: bioserver trace [show/clear]\n");
+    CLI_PrintBuf("\texit: exit console\n");
 }
 
 static bool CanConvertToUint64(const std::string &str, uint64_t &val)

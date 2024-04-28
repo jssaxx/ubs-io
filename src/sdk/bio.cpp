@@ -295,9 +295,7 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
     BIO_TRACE_START(SDK_TRACE_LISTALL);
     BResult ret = gClient->ListAll(prefix, objs);
     BIO_TRACE_END(SDK_TRACE_LISTALL, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("List all failed, ret:" << ret << ", prefix:" << prefix << ".");
-    } else {
+    if (LIKELY(ret == BIO_OK)) {
         CLIENT_LOG_INFO("List all success, prefix:" << prefix << ", num:" << objs.size() << ".");
     }
     return ToCResult(ret);
@@ -346,7 +344,7 @@ CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spac
 
 std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
 {
-    if (UNLIKELY(desc.tenantId == 0 || desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT ||
+    if (UNLIKELY(desc.affinity >= AFFINITY_BUTT || desc.strategy >= STRATEGY_BUTT ||
         desc.affinity < LOCAL_AFFINITY || desc.strategy < WRITE_BACK)) {
         CLIENT_LOG_ERROR("Invalid cache descriptor, tenantId:" << desc.tenantId << ", affinity:" << desc.affinity <<
             ", strategy:" << desc.strategy << ".");

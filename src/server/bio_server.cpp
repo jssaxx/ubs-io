@@ -42,7 +42,7 @@ BioServer::BioServer() noexcept
         { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
         { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, nullptr },
         { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr, nullptr },
-        { "InterceptorServer", std::bind(&BioServer::BioIntercepterServerInit, this), nullptr, nullptr, nullptr },
+        { "InterceptorServer", std::bind(&BioServer::BioInterceptorServerInit, this), nullptr, nullptr, nullptr },
         { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioMirrorServerExit, this) },
         { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
@@ -404,7 +404,7 @@ BResult BioServer::BioCacheInit()
     return BIO_OK;
 }
 
-BResult BioServer::BioIntercepterServerInit()
+BResult BioServer::BioInterceptorServerInit()
 {
     if (mInterceptorInited) {
         return BIO_OK;
@@ -597,6 +597,12 @@ int32_t GetLocalNid(GetLocalNidResponse *rsp)
     return 0;
 }
 
+int32_t GetResourceInfo(QueryResourceRequest *req, QueryResourceResponse *rsp)
+{
+    BioServer::Instance()->GetMirrorServer()->QueryCacheResource(*req, *rsp);
+    return BIO_OK;
+}
+
 int32_t GetNodeView(QueryNodeViewRequest *req, QueryNodeViewResponse *rsp)
 {
     BioServer::Instance()->GetMirrorServer()->QueryNodeView(*req, *rsp);
@@ -669,7 +675,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     return BIO_OK;
 }
 
-int32_t Put(PutRequest *req)
+int32_t Put(PutRequest *req, PutResponse *rsp)
 {
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
@@ -696,6 +702,7 @@ int32_t Put(PutRequest *req)
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
     int32_t ret = static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx));
+    rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
     return ret;
 }
