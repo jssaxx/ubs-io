@@ -58,6 +58,7 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
             BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
             auto ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
+            ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
             ChkTrue(ret == BIO_OK, ret,
                 "Failed to copy data from memory address:" << from + offset << " to disk address:" <<
@@ -128,6 +129,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
             BIO_TRACE_START(BDM_TRACE_READ_SYNC);
             auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
                 fromAddr.chunkLen);
+            ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
             ChkTrue(ret == BIO_OK, ret,
                 "Failed to copy data from disk address:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
@@ -178,6 +180,7 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
         BIO_TRACE_START(BDM_TRACE_READ_SYNC);
         auto ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
             reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
+        ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
         ChkTrue(ret == BIO_OK, ret,
             "Failed to copy data from disk address:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset <<
@@ -213,6 +216,7 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
         BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
         auto ret = BdmWrite(toIt->chunkId, toIt->chunkOffset + toOffset,
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
+        ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
         LOG_DEBUG("Copy data from disk chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" <<
             toOffset << ", len:" << len);

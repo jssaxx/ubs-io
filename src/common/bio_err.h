@@ -27,10 +27,14 @@ enum Error : int32_t {
     BIO_READ_EXCEED = 13,
 
     BIO_INNER_RETRY = 14,
+    BIO_NEED_WAIT = 15,
 
-    BIO_NEED_WAIT = 12,
     BIO_NET_RETRY = 100,
-    BIO_NET_ERROR = 101,
+
+    BIO_DISK_IOERR = 201,
+
+    BIO_UFS_IOERR = 301,
+
     BIO_MAX,
 };
 }

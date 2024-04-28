@@ -51,10 +51,7 @@ public:
         mDataTruncOffset = off + len;
     }
 
-    inline void AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow)
-    {
-        offset = mDataFlowInstance->AllocOffset(len, indexInFlow);
-    }
+    BResult AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexInFlow);
 
     DEFINE_REF_COUNT_FUNCTIONS
 private:
@@ -69,6 +66,8 @@ private:
     FlowInstancePtr mDataFlowInstance = nullptr;
     uint64_t mDataTruncOffset = 0;
     std::atomic<uint64_t> mindexInFlow{ 0 };
+
+    ReadWriteLock mLock;
 
     DEFINE_REF_COUNT_VARIABLE
 };
