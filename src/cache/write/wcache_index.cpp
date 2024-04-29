@@ -3,6 +3,9 @@
  */
 
 #include "wcache_index.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 
 namespace ock {
 namespace bio {
@@ -128,6 +131,8 @@ WCacheIndexTable *WCacheIndex::GetIndexTable(uint64_t ptId)
             return table->second;
         }
         WCacheIndexTable *inTable = new WCacheIndexTable;
+        LVOS_TP_START(WCACHE_INDEX_TABLE_FAIL, &inTable, nullptr);
+        LVOS_TP_END;
         ChkTrueNot(inTable != nullptr, nullptr);
         mTable.insert(std::make_pair(ptId, inTable));
         return mTable[ptId];

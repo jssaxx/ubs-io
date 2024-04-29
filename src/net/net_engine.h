@@ -23,6 +23,10 @@
 #include "bio_tracepoint_helper.h"
 #endif
 
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
+
 namespace ock {
 namespace bio {
 class NetEngine {
@@ -106,7 +110,11 @@ public:
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
     {
+        LVOS_TP_START(MR_POOL_NULL_FAIL, &mMrBlockPool, nullptr);
+        LVOS_TP_END;
         if (UNLIKELY(mMrBlockPool == nullptr)) {
+            LVOS_TP_START(MR_POOL_NULL_FAIL_RESET, &mMrBlockPool);
+            LVOS_TP_END;
             NET_LOG_ERROR("Net block pool not ready.");
             return BIO_NOT_READY;
         }
@@ -239,6 +247,8 @@ public:
     BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp &resp)
     {
         BIO_TRACE_START(NET_TRACE_SYNC_CALL_V1);
+        LVOS_TP_START(SYNCCALL_OPCODE_FAIL, &opCode, NO_1024);
+        LVOS_TP_END;
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
             NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_INVALID_PARAM);
@@ -247,6 +257,8 @@ public:
 
         ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
+        LVOS_TP_START(SYNCCALL_CHANNEL_FAIL, &ret, BIO_ERR);
+        LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_NET_RETRY);
@@ -655,6 +667,8 @@ private:
 #else
         auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
 #endif
+        LVOS_TP_START(SYNCCALL_FAIL, &result, BIO_ERR);
+        LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " <<
                 NetErrStr(result));

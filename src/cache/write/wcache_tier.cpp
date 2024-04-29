@@ -141,8 +141,10 @@ WCacheSliceRefPtr WCacheTier::GetEvictSlice()
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
     mMetaFlow->GetFlowId();
-    BResult ret;
+    BResult ret = BIO_ERR;
+    LVOS_TP_START(WCACHE_GET_META_SLICE_FAIL, slice, nullptr);
     slice = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), ret);
+    LVOS_TP_END;
     ChkTrue(slice != nullptr, ret,
         "Failed to get meta slice, flowId " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
     return BIO_OK;
