@@ -959,7 +959,9 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
+    BIO_TRACE_START(MIRROR_TRACE_PUT_REMOTE_GET_QUOTA);
     rsp.updateQuota = Cache::Instance().GetAdjustWriteQuota();
+    BIO_TRACE_END(MIRROR_TRACE_PUT_REMOTE_GET_QUOTA, BIO_OK);
     Reply(ctx, result, &rsp, sizeof(PutResponse), BIO_OP_SDK_PUT);
     return BIO_OK;
 }

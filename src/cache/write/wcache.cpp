@@ -10,7 +10,6 @@
 #include "flow_manager.h"
 #include "cache_flow.h"
 #include "bio_trace.h"
-#include "cache_overload_ctrl.h"
 #include "bio_config_instance.h"
 #include "bio_server.h"
 
@@ -527,7 +526,6 @@ BResult WCache::EvictAllMemSliceToDisk()
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return ret;
         }
-        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
         ++sliceIter;
     }
 

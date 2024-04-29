@@ -390,42 +390,6 @@ static void HandleDelete(std::vector<std::string> cmds)
     }
 }
 
-static void HandleQos(std::vector<std::string> cmds)
-{
-    auto cType = cmds[1].c_str();
-    std::string op(cType);
-    if (op == "show") {
-        if (cmds.size() != 2) {
-            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
-            return;
-        }
-        BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
-        std::vector<uint64_t> maxQuota;
-        std::vector<uint64_t> adjustQuota;
-        std::vector<uint64_t> allocQuota;
-        std::vector<uint64_t> concur;
-        qosP->Show(maxQuota, adjustQuota, allocQuota, concur);
-        const std::string typeStr[QUOTA_BUTT] = { "Write", "Read" };
-        CLI_PrintBuf("  Quota info, switch:%s \n", qosP->Switch() ? "on" : "off");
-        for (uint32_t idx = 0; idx < maxQuota.size(); idx++) {
-            CLI_PrintBuf("  %s: Max quota:%lu, adjust quota:%lu, alloc quota:%lu, remain quota:%lu, concur:%lu.\n",
-                typeStr[idx], maxQuota[idx], adjustQuota[idx], allocQuota[idx], (maxQuota[idx] - allocQuota[idx]),
-                concur[idx]);
-        }
-    } else if (op == "switch") {
-        if (cmds.size() != 3) {
-            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
-            return;
-        }
-        cType = cmds[2].c_str();
-        std::string qosSwitch(cType);
-        BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
-        auto ret = qosP->Switch(qosSwitch);
-    } else {
-        CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
-    }
-}
-
 static void HandleShow(std::vector<std::string> cmds)
 {
     auto cType = cmds[1].c_str();
@@ -777,12 +741,6 @@ static void BioSdkDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleDelete(cmds);
-    } else if (cmdType == "qos") {
-        if (cmds.size() < 2) {
-            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
-            return;
-        }
-        HandleQos(cmds);
     } else if (cmdType == "show") {
         if (cmds.size() < 2) {
             CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());

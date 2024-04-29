@@ -19,7 +19,6 @@
 #include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
-#include "bio_qos.h"
 
 namespace ock {
 namespace bio {
@@ -100,11 +99,6 @@ public:
     inline CmNodeId &GetLocalNodeInfo()
     {
         return mLocalNid;
-    }
-
-    inline BioQosPtr &GetQosPtr()
-    {
-        return mBioQos;
     }
 
     inline bool CheckIsOnline(uint16_t nodeId, std::string &ip, uint16_t &port)
@@ -283,7 +277,6 @@ private:
     UpdateView mUpdateView { nullptr };
     WorkerScene mScene = SCENE_NONE;
     std::atomic<uint64_t> *mPtHit = nullptr;
-    BioQosPtr mBioQos = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
 using MirrorClientPtr = Ref<MirrorClient>;
