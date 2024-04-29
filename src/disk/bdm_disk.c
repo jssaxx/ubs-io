@@ -12,6 +12,9 @@
 #include <linux/version.h>
 #include "securec.h"
 #include "dlist.h"
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper_c.h"
+#endif
 #include "cm_c.h"
 #include "bdm_threadpool.h"
 #include "bdm_obj.h"
@@ -129,6 +132,7 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
     uint64_t remain = len;
     int64_t rc = 0;
 
+    LVOS_TP_START(BDM_RW_IO_FAIL, 0);
     while (remain > 0) {
         if (isRead) {
             rc = pread(fd, buff + (len - remain), remain, offset + (len - remain));
@@ -142,6 +146,7 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
         }
         remain -= rc;
     }
+    LVOS_TP_END;
     return (len - remain);
 }
 
@@ -228,7 +233,10 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset,
         return BDM_CODE_INVALID_PARAM;
     }
 
-    int32_t ret = BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
+    int32_t ret = BDM_CODE_OK;
+    LVOS_TP_START(BDM_ALLOC_BLOCK_FAIL, &ret, BDM_CODE_ERR);
+    ret = BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
+    LVOS_TP_END;
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Alloc chunk failed, bdm id(%u) length(%lu).", obj->bdmId, len);
         return ret;

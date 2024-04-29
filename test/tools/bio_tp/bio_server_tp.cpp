@@ -20,6 +20,12 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(SERVER_NET_GET_CHANNEL_NOT_EXIST, "get channel not exist", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP, "failed async call with op", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_GET_DATA_CHANNEL_NOT_EXIST, "get data channel not exist", tp::CommonTp::IntValueCallback);
+
+    LVOS_TP_REG(SERVER_NET_ASYNC_CALL_FAIL, "async call fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_SYNC_CALL_FAIL, "async call fail", tp::CommonTp::IntValueCallback);
+
+    LVOS_TP_REG(SERVER_NET_RDMA_WRITE_FAIL, "rdma write fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", tp::CommonTp::IntValueCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -36,6 +42,12 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_NET_GET_CHANNEL_NOT_EXIST);
     LVOS_TP_UNREG(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP);
     LVOS_TP_UNREG(SERVER_NET_GET_DATA_CHANNEL_NOT_EXIST);
+
+    LVOS_TP_UNREG(SERVER_NET_ASYNC_CALL_FAIL);
+    LVOS_TP_UNREG(SERVER_NET_SYNC_CALL_FAIL);
+
+    LVOS_TP_UNREG(SERVER_NET_RDMA_WRITE_FAIL);
+    LVOS_TP_UNREG(SERVER_NET_RDMA_READ_FAIL);
 }
 #else
 void tp::ServerTp::Register() noexcept {}

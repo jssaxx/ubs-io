@@ -49,7 +49,7 @@ public:
 
     BResult Stop(RCachePtr rCachePtr);
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    DEFINE_REF_COUNT_FUNCTIONS;
 private:
     uint64_t GetEvictDataByTier(const RCachePtr rCache, RCacheTierType tier);
 
@@ -67,7 +67,7 @@ private:
     std::list<RCachePtr> evictRCache[READ_CACHE_EVICT_SERVICE_NUM];
     std::thread *works[READ_CACHE_TIER_BUTT][READ_CACHE_EVICT_SERVICE_NUM];
 
-    DEFINE_REF_COUNT_VARIABLE
+    DEFINE_REF_COUNT_VARIABLE;
 };
 
 using RCacheEvictPtr = Ref<RCacheEvict>;

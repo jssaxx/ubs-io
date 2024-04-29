@@ -1084,6 +1084,8 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
 
     auto cbFunc = [&negoWriteQuota](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
+        LVOS_TP_START(SDK_MIRROR_PUT_RECV_FAIL, &(cbCtx->result), BIO_INNER_RETRY);
+        LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
