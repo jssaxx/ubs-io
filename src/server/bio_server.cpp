@@ -421,6 +421,11 @@ BResult BioServer::BioInterceptorServerInit()
 
 BResult BioServer::BioFlowInit()
 {
+    GetCacheType getCacheType = [](uint64_t flowId) -> FlowCache {
+        return Cache::Instance().GetFlowCache(flowId);
+    };
+    FlowManager::RegisterGetCacheType(getCacheType);
+
     auto flowManager = FlowManager::Instance();
     ChkTrue(flowManager != nullptr, BIO_ERR, "Flow manager instance is nullptr.");
     return flowManager->Init();

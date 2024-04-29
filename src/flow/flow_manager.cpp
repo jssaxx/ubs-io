@@ -12,7 +12,8 @@ namespace ock {
 namespace bio {
 MemAllocator FlowManager::mMemAllocator;
 DiskAllocator FlowManager::mDiskAllocator;
-std::atomic<uint64_t> FlowManager::mUsedRes[NO_2][NO_2];
+GetCacheType FlowManager::mGetCacheType;
+std::atomic<uint64_t> FlowManager::mUsedSize[FLOW_CACHE][FLOW_BUTT];
 BResult FlowManager::Init()
 {
     LVOS_TP_START(ALLOC_TASK_POOL_FAIL, &mTaskPool[FLOW_MEMORY], nullptr);
@@ -44,10 +45,10 @@ BResult FlowManager::Init()
 
     mInited = true;
 
-    mUsedRes[0][0] = 0;  // wcache memory used
-    mUsedRes[0][NO_1] = 0;  // wcache disk used
-    mUsedRes[NO_1][0] = 0;  // rcache memory used
-    mUsedRes[NO_1][NO_1] = 0;  // rcache disk used
+    mUsedSize[FLOW_WCACHE][FLOW_MEMORY] = 0;  // wcache memory used
+    mUsedSize[FLOW_WCACHE][FLOW_DISK] = 0;  // wcache disk used
+    mUsedSize[FLOW_RCACHE][FLOW_MEMORY] = 0;  // rcache memory used
+    mUsedSize[FLOW_RCACHE][FLOW_DISK] = 0;  // rcache disk used
 
     return Recover();
 }

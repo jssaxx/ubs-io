@@ -5,7 +5,7 @@
 #ifndef BOOSTIO_CACHE_FLOW_H
 #define BOOSTIO_CACHE_FLOW_H
 
-#include <cstdint>
+#include "cache_def.h"
 
 /* cache flow prefix generate rule:
 |           ptId        |          type          |     innerType   |
@@ -28,9 +28,6 @@ constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_ID_MASK = 0x1FFF;   // 13
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_PT_SN_MASK = 0x7FF;    // 11
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_TYPE_MASK = 0xF;       // 4
 constexpr uint32_t CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK = 0xF; // 4
-
-constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_WCACHE = 0;
-constexpr uint16_t CACHE_FLOW_ID_PREFIX_TYPE_RCACHE = 1;
 
 constexpr uint32_t WCACHE_FLOW_MEM_META_PREFIX = 1;
 constexpr uint32_t WCACHE_FLOW_MEM_DATA_PREFIX = 2;

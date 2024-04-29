@@ -45,11 +45,11 @@ BResult Cache::Recover()
     for (auto &elem : flowMaps) {
         uint64_t type = CacheFlowIdManager::GetType(elem.first);
         uint64_t innerType = CacheFlowIdManager::GetInnerType(elem.first);
-        if (static_cast<uint16_t>(type) == CACHE_FLOW_ID_PREFIX_TYPE_WCACHE &&
+        if (static_cast<uint16_t>(type) == WRITE_CACHE &&
             static_cast<uint32_t>(innerType) == WCACHE_FLOW_DISK_META_PREFIX) {
             ret = mWCacheManager->RecoverCache(elem.second);
             ChkTrueNot(ret == BIO_OK, ret);
-        } else if (static_cast<uint16_t>(type) == CACHE_FLOW_ID_PREFIX_TYPE_RCACHE &&
+        } else if (static_cast<uint16_t>(type) == READ_CACHE &&
             static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
             ret = mRCacheManager->RecoverCache(elem.second);
             ChkTrueNot(ret == BIO_OK, ret);
@@ -241,6 +241,16 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
         ret = BIO_OK;
     }
     return ret;
+}
+
+FlowCache Cache::GetFlowCache(uint64_t flowId)
+{
+    uint64_t type = CacheFlowIdManager::GetType(flowId);
+    if (static_cast<CacheType>(type) == WRITE_CACHE) {
+        return FLOW_WCACHE;
+    } else {
+        return FLOW_RCACHE;
+    }
 }
 
 void Cache::RegGetLocDiskId(GetLocDiskId getLocDiskId)
