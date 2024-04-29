@@ -22,6 +22,19 @@ using GetLocDiskStatus = std::function<void(uint16_t ptId, uint16_t diskId, bool
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
 using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
 
+enum CacheType : uint16_t {
+    WRITE_CACHE = 0,
+    READ_CACHE = 1,
+    CACHE_BUTT
+};
+
+struct CacheResDescription {
+    uint64_t memCapacity;
+    uint64_t diskCapacity;
+    uint64_t memUsedSize;
+    uint64_t diskUsedSize;
+};
+
 struct CacheAttr {
     bool mCopyFree;
     uint64_t mTenantId;

@@ -26,6 +26,10 @@ struct DiskAllocator {
     std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *)> alloc{ nullptr };
     std::function<void(uint32_t, uint64_t, uint64_t)> free{ nullptr };
 };
+using GetCacheType = std::function<FlowCache(uint64_t flowId)>;
+
+constexpr uint32_t NO_1MB = 1048576; // 1MB
+
 class FlowManager;
 using FlowManagerPtr = Ref<FlowManager>;
 class FlowManager {
@@ -64,36 +68,35 @@ public:
         mDiskAllocator.free = diskAllocator.free;
     }
 
-    static uint64_t GetCacheUsedSize(uint64_t cacheType, FlowType type)
+    static void RegisterGetCacheType(GetCacheType getCacheType)
     {
-        if (type == FLOW_MEMORY) {
-            return mUsedRes[cacheType][0];
-        } else {
-            return mUsedRes[cacheType][NO_1];
-        }
+        mGetCacheType = getCacheType;
     }
 
-    static uint64_t GetCacheType(uint64_t flowId)
+    static uint64_t GetCacheUsedSize(FlowCache cacheType, FlowType type)
     {
-        return (flowId >> (NO_32 + NO_4)) & (NO_16 - NO_1);
+        ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT), NO_MAX_VALUE64, "Check Failed, cacheType:" <<
+            cacheType << " type:" << type);
+
+        return mUsedSize[cacheType][type];
     }
 
     static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset, uint64_t len,
         uint64_t *chunkId)
     {
-        uint64_t cacheType = GetCacheType(flowId);
+        FlowCache cacheType = mGetCacheType(flowId);
+        ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT), BIO_ERR, "Check Failed, cacheType:" <<
+            cacheType << " type:" << type);
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_ALLOC);
             auto ret = mMemAllocator.alloc(len, chunkId);
             BIO_TRACE_END(MEM_TRACE_SEG_ALLOC, ret);
             if (ret == 0) {
-                if (cacheType == 0) {
-                    mUsedRes[0][0] += len;
-                    LOG_INFO("WCACHE MEM: cur used:" << mUsedRes[0][0] / NO_1048576 << ", flowId:" << flowId);
-                }
-                if (cacheType == NO_1) {
-                    mUsedRes[NO_1][0] += len;
-                    LOG_INFO("RCACHE MEM: cur used:" << mUsedRes[NO_1][0] / NO_1048576 << ", flowId:" << flowId);
+                mUsedSize[cacheType][type] += len;
+                if (cacheType == FLOW_WCACHE) {
+                    LOG_INFO("WCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                } else {
+                    LOG_INFO("RCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
                 }
             }
             return ret;
@@ -102,13 +105,11 @@ public:
             auto ret = mDiskAllocator.alloc(mediaId, flowId, flowOffset, len, chunkId);
             BIO_TRACE_END(BDM_TRACE_SEG_ALLOC, ret);
             if (ret == 0) {
+                mUsedSize[cacheType][type] += len;
                 if (cacheType == 0) {
-                    mUsedRes[0][NO_1] += len;
-                    LOG_INFO("WCACHE DISK: cur used:" << mUsedRes[0][NO_1] / NO_1048576 << ", flowId:" << flowId);
-                }
-                if (cacheType == NO_1) {
-                    mUsedRes[NO_1][NO_1] += len;
-                    LOG_INFO("RCACHE DISK: cur used:" << mUsedRes[NO_1][NO_1] / NO_1048576 << ", flowId:" << flowId);
+                    LOG_INFO("WCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                } else {
+                    LOG_INFO("RCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
                 }
             }
             return ret;
@@ -117,30 +118,28 @@ public:
 
     static void MediaFree(FlowType type, uint32_t mediaId, uint64_t len, uint64_t chunkId, uint64_t flowId)
     {
-        uint64_t cacheType = GetCacheType(flowId);
+        FlowCache cacheType = mGetCacheType(flowId);
+        ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT));
+
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_FREE);
             mMemAllocator.free(chunkId);
             BIO_TRACE_END(MEM_TRACE_SEG_FREE, 0);
-            if (cacheType == 0) {
-                mUsedRes[0][0] -= len;
-                LOG_INFO("WCACHE MEM: cur used:" << mUsedRes[0][0] / NO_1048576 << ", flowId:" << flowId);
-            }
-            if (cacheType == NO_1) {
-                mUsedRes[NO_1][0] -= len;
-                LOG_INFO("RCACHE MEM: cur used:" << mUsedRes[NO_1][0] / NO_1048576 << ", flowId:" << flowId);
+            mUsedSize[cacheType][type] -= len;
+            if (cacheType == FLOW_WCACHE) {
+                LOG_INFO("WCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+            } else {
+                LOG_INFO("RCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
             }
         } else {
             BIO_TRACE_START(BDM_TRACE_SEG_FREE);
             mDiskAllocator.free(mediaId, len, chunkId);
             BIO_TRACE_END(BDM_TRACE_SEG_FREE, 0);
+            mUsedSize[cacheType][type] -= len;
             if (cacheType == 0) {
-                mUsedRes[0][NO_1] -= len;
-                LOG_INFO("WCACHE DISK: cur used:" << mUsedRes[0][NO_1] / NO_1048576 << ", flowId:" << flowId);
-            }
-            if (cacheType == NO_1) {
-                mUsedRes[NO_1][NO_1] += len;
-                LOG_INFO("RCACHE DISK: cur used:" << mUsedRes[NO_1][NO_1] / NO_1048576 << ", flowId:" << flowId);
+                LOG_INFO("WCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+            } else {
+                LOG_INFO("RCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
             }
         }
     }
@@ -159,10 +158,11 @@ private:
 
     FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{ nullptr, nullptr };
 
-    static std::atomic<uint64_t> mUsedRes[NO_2][NO_2];
+    static std::atomic<uint64_t> mUsedSize[FLOW_CACHE][FLOW_BUTT];
 
     static MemAllocator mMemAllocator;
     static DiskAllocator mDiskAllocator;
+    static GetCacheType mGetCacheType;
 
     bool mInited{ false };
     DEFINE_REF_COUNT_VARIABLE;
