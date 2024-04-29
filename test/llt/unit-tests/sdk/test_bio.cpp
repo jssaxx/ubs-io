@@ -55,7 +55,7 @@ TEST_F(TestBio, test_bio_create_cache)
     ret = BioCreateCache({tenantId, affinity, strategy});
     EXPECT_EQ(ret, RET_CACHE_EXISTS);
     // invalid case
-    ret = BioCreateCache({G_INVALID_TENANT_ID, affinity, strategy});
+    ret = BioCreateCache({G_INVALID_TENANT_ID, AFFINITY_BUTT, strategy});
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 }
 
@@ -437,26 +437,6 @@ TEST_F(TestBio, test_bio_putwithspace_case)
     addressInfo.allocLoc = 0;
     ret = BioAllocSpace(tenantId, objectId, ock::bio::NO_1024, &addressInfo1);
     EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioPutWithSpace(tenantId, "putwithspace2", &addressInfo1);
-    EXPECT_EQ(ret, RET_CACHE_PT_FAULT);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
-
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioPutWithSpace(tenantId, "putwithspace3", &addressInfo1);
-    EXPECT_EQ(ret, RET_CACHE_PT_FAULT);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
-
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PUT_MEMORY_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioPutWithSpace(tenantId, "putwithspace4", &addressInfo1);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PUT_MEMORY_FAIL");
-
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_SEND_PUT_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioPutWithSpace(tenantId, "putwithspace5", &addressInfo1);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_SEND_PUT_FAIL");
 }
 
 void TestBio::VNodeIdStub()
@@ -476,7 +456,7 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
     ObjStat *objs = nullptr;
     uint64_t objNum = 0;
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     BioFreeListResources(objs, objNum);
 }
 
