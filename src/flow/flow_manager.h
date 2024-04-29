@@ -144,6 +144,28 @@ public:
         }
     }
 
+    static void MediaRecover(FlowType type, uint64_t len, uint64_t flowId)
+    {
+        FlowCache cacheType = mGetCacheType(flowId);
+        ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT));
+
+        if (type == FLOW_MEMORY) {
+            mUsedSize[cacheType][type] += len;
+            if (cacheType == FLOW_WCACHE) {
+                LOG_INFO("WCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+            } else {
+                LOG_INFO("RCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+            }
+        } else {
+            mUsedSize[cacheType][type] += len;
+            if (cacheType == 0) {
+                LOG_INFO("WCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+            } else {
+                LOG_INFO("RCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+            }
+        }
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
