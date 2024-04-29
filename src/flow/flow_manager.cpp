@@ -212,6 +212,7 @@ BResult FlowManager::Recover()
                 LOG_ERROR("Bdm rebuild chunk diskId:" << diskId << ", ret:" << ret);
                 return BIO_ERR;
             }
+            FlowManager::MediaRecover(FLOW_DISK, chunkSize, flowId);
         }
     }
 
