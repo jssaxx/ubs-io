@@ -22,28 +22,25 @@ RCacheEvict::RCacheEvict() : workStatus(false), workIndex(0)
 
 RCacheEvict::~RCacheEvict() {}
 
-static uint64_t GetReadRatio(std::string readWriteRatios)
-{
-    std::vector<std::string> ratios;
-    StrUtil::Split(readWriteRatios, ":", ratios);
-    long readRatio = 0;
-    StrUtil::StrToLong(ratios[0], readRatio);
-    return readRatio;
-}
-
 uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType tier)
 {
+    uint64_t memCapacity;
+    uint64_t memUsedSize;
+    uint64_t diskCapacity;
+    uint64_t diskUsedSize;
+    RCache::GetCacheResource(memCapacity, memUsedSize, diskCapacity, diskUsedSize);
+
+    uint64_t cacheData;
     uint64_t waterData;
-    uint64_t cacheDataV = rCache->GetCacheData(tier);
-    auto config = BioConfig::Instance()->GetDaemonConfig();
     if (tier == READ_CACHE_TIER_MEM) {
-        waterData = (GetReadRatio(config.memReadWriteRatio) * config.memCap * config.evictWaterLevel) / NO_1000;
+        cacheData = memUsedSize;
+        waterData = memCapacity;
     } else {
-        waterData = (GetReadRatio(config.diskReadWriteRatio) *
-            static_cast<uint64_t>(config.diskCaps.at(rCache->GetDiskId())) * config.diskEvictWaterLevel) / NO_1000;
+        cacheData = diskUsedSize;
+        waterData = diskCapacity;
     }
 
-    return cacheDataV > waterData ? cacheDataV - waterData : 0ULL;
+    return cacheData > waterData ? cacheData - waterData : 0ULL;
 }
 
 BResult RCacheEvict::EvictOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)

@@ -381,11 +381,13 @@ public:
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
+        LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
         ret = ch->Read(req, nullptr);
 #else
         ret = NetStub::SyncRead(req);
 #endif
+        LVOS_TP_END;
         return NetResult(ret);
     }
 
@@ -399,11 +401,13 @@ public:
             return BIO_NET_RETRY;
         }
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V1);
+        LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
         ret = ch->Read(req, nullptr);
 #else
         ret = NetStub::SyncRead(req);
 #endif
+        LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V1, ret);
         return NetResult(ret);
     }
@@ -412,11 +416,14 @@ public:
     {
         using namespace ock::hcom;
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V2);
+        int ret;
+        LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
-        auto ret = ch->Read(req, nullptr);
+        ret = ch->Read(req, nullptr);
 #else
-        auto ret = NetStub::SyncRead(req);
+        ret = NetStub::SyncRead(req);
 #endif
+        LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V2, ret);
         return NetResult(ret);
     }
@@ -431,11 +438,13 @@ public:
                 pid << ", result " << ret);
             return BIO_NET_RETRY;
         }
+        LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
         ret = ch->Write(req, nullptr);
 #else
         ret = NetStub::SyncWrite(req);
 #endif
+        LVOS_TP_END;
         return NetResult(ret);
     }
 
@@ -450,11 +459,13 @@ public:
             return BIO_NET_RETRY;
         }
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
+        LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
         ret = ch->Write(req, nullptr);
 #else
         ret = NetStub::SyncWrite(req);
 #endif
+        LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V1, ret);
         return NetResult(ret);
     }
@@ -463,11 +474,14 @@ public:
     {
         using namespace ock::hcom;
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V2);
+        int ret;
+        LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
-        auto ret = ch->Write(req, nullptr);
+        ret = ch->Write(req, nullptr);
 #else
-        auto ret = NetStub::SyncWrite(req);
+        ret = NetStub::SyncWrite(req);
 #endif
+        LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V2, ret);
         return NetResult(ret);
     }
@@ -726,14 +740,17 @@ private:
             std::placeholders::_1);
 
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
+        int result;
+        LVOS_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
 #ifndef USE_HCOM_STUB
-        auto result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
+        result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
-        int result = BIO_ERR;
+        result = BIO_ERR;
         LVOS_TP_START(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP, &result, BIO_ERR);
         result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, callback);
         LVOS_TP_END;
 #endif
+        LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
             BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL, result, ts);
