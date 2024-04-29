@@ -163,7 +163,7 @@ BResult RCache::Initialize()
 
     uint32_t flowPrefix;
     for (uint32_t i = RCACHE_FLOW_MEM_META_PREFIX; i <= RCACHE_FLOW_DISK_DATA_PREFIX; i++) {
-        flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(mPtId, mPtv, CACHE_FLOW_ID_PREFIX_TYPE_RCACHE, i);
+        flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(mPtId, mPtv, READ_CACHE, i);
         prefix.push_back(flowPrefix);
     }
 
@@ -325,11 +325,11 @@ void RCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
     memCap = (config.memReadRatio * config.memCap) / NO_10;
-    memUsed = FlowManager::GetCacheUsedSize(NO_2, FLOW_MEMORY);
+    memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
-    diskUsed = FlowManager::GetCacheUsedSize(NO_2, FLOW_DISK);
+    diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
 }
 
 BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)
