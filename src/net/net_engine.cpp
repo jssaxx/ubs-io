@@ -159,14 +159,19 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
     auto fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, 600);
 #else
-    auto fd = syscall(SYS_memfd_create, name.c_str(), 0);
+    auto fd = -1;
+    LVOS_TP_START(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, &fd, -1);
+    fd = syscall(SYS_memfd_create, name.c_str(), 0);
+    LVOS_TP_END;
 #endif
     if (fd < 0) {
         NET_LOG_ERROR("create memory file " << name << ", failed, error:" << strerror(errno));
         return BIO_INNER_ERR;
     }
-
-    auto ret = ftruncate(fd, static_cast<off_t>(size));
+    auto ret = -1;
+    LVOS_TP_START(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, &ret, -1);
+    ret = ftruncate(fd, static_cast<off_t>(size));
+    LVOS_TP_END;
     if (ret < 0) {
         NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
         close(fd);
@@ -214,7 +219,10 @@ BResult NetEngine::InitShmMemAllocator()
     }
 
     auto offset = static_cast<off_t>(mShareOffset);
-    auto address = mmap(nullptr, mOptions.memorySize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    auto address = MAP_FAILED;
+    LVOS_TP_START(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, &address, MAP_FAILED);
+    address = mmap(nullptr, mOptions.memorySize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    LVOS_TP_END;
     if (address == MAP_FAILED) {
         NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memorySize << " offset " << offset << " failed, error:" <<
             strerror(errno));
