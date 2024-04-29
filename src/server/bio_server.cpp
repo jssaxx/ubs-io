@@ -702,8 +702,10 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
     int32_t ret = static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx));
-    rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
+    BIO_TRACE_START(MIRROR_TRACE_PUT_LOCAL_GET_QUOTA);
+    rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
+    BIO_TRACE_END(MIRROR_TRACE_PUT_LOCAL_GET_QUOTA, BIO_OK);
     return ret;
 }
 
