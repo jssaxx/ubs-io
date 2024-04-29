@@ -15,7 +15,7 @@
 
 namespace ock {
 namespace bio {
-constexpr uint32_t OVERFLOW_LEVEL = 90;
+constexpr uint32_t WCACHE_OVERFLOW_LEVEL = 90;
 BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
@@ -52,11 +52,11 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
     memCap = (config.memWriteRatio * config.memCap) / NO_10;
-    memUsed = FlowManager::GetCacheUsedSize(NO_1, FLOW_MEMORY);
+    memUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
-    diskUsed = FlowManager::GetCacheUsedSize(NO_1, FLOW_DISK);
+    diskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK);
 }
 
 BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
@@ -82,29 +82,27 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
     }
 
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t usedSize = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
-
-    uint64_t cacheSize = FlowManager::GetCacheUsedSize(0, FLOW_MEMORY);
     uint64_t configSize = (config.memWriteRatio * config.memCap) / NO_10;
+    uint64_t usedSize = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
+    uint64_t wcacheSize = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
+    uint64_t rcacheSize = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
 
-    LOG_INFO("usedSize:" << (usedSize / NO_1048576) << ", memCap:" << (config.memCap / NO_1048576) <<
-        ", cacheSize:" << (cacheSize / NO_1048576) << ", configSize:" << (configSize / NO_1048576));
+    LOG_INFO("Total:" << (config.memCap / NO_1MB) << ", used:" << (usedSize / NO_1MB) <<
+        ", wcache:" << (wcacheSize / NO_1MB) << ", rcache:" << (rcacheSize / NO_1MB));
 
     bool isOverflow = false;
-    if ((usedSize >= (config.memCap * OVERFLOW_LEVEL / NO_100)) || (cacheSize >= configSize)) {
+    if ((usedSize >= (config.memCap * WCACHE_OVERFLOW_LEVEL / NO_100)) || (wcacheSize >= configSize)) {
         isOverflow = true;
     }
 
-    LOG_INFO("Current used level:" << (usedSize / NO_1048576) << ", wcache:" << (cacheSize / NO_1048576));
+    memCache->AddEvictQueue(destSliceRef);
 
     if (attr.strategy == WRITE_BACK && !isOverflow) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BACK);
-        memCache->AddEvictQueue(destSliceRef);
         StartEvictTask(WCACHE_MEMORY); // write back
         BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_BACK, 0);
     } else {
         BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_THROUGH);
-        memCache->AddEvictQueue(destSliceRef);
         WCacheSliceRefPtr sliceRef = memCache->GetEvictSlice();
         if (sliceRef != nullptr) {
             EvictFromMemToDisk(sliceRef); // write through
@@ -510,9 +508,9 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
 bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t cacheData = FlowManager::GetCacheUsedSize(NO_1, FLOW_MEMORY);
-    uint64_t configData = (config.memReadRatio * config.memCap) / NO_10;
-    return (cacheData < configData);
+    uint64_t cacheSize = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    uint64_t configSize = (config.memReadRatio * config.memCap) / NO_10;
+    return (cacheSize < configSize);
 }
 
 BResult WCache::EvictAllMemSliceToDisk()

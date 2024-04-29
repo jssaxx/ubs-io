@@ -13,19 +13,6 @@
 
 namespace ock {
 namespace bio {
-enum CacheType {
-    WRITE_CACHE = 0,
-    READ_CACHE,
-    CACHE_BUTT
-};
-
-struct CacheResDescription {
-    uint64_t memCapacity;
-    uint64_t diskCapacity;
-    uint64_t memUsedSize;
-    uint64_t diskUsedSize;
-};
-
 class Cache {
 public:
     BResult Init();
@@ -65,6 +52,8 @@ public:
     BResult List(char *prefix, uint16_t ptId, bool force, std::unordered_map<std::string, CacheObjStat> &objs);
 
     BResult Delete(uint64_t ptId, const Key &key);
+
+    FlowCache GetFlowCache(uint64_t flowId);
 
     void RegGetLocDiskId(GetLocDiskId getLocDiskId);
 
