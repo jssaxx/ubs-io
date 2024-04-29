@@ -111,6 +111,18 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
             option.ipMask.c_str(), option.port, protoStr[option.protocol].c_str(),
             (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, executorNum,
             (option.memorySize / NO_1024 / NO_1024 / NO_1024));
+    } else if (cmdType == "resources") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        CacheResDescription desc;
+        Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+        CLI_PrintBuf("WCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
+            desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
+        Cache::Instance().GetCacheResources(desc, READ_CACHE);
+        CLI_PrintBuf("RCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
+            desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }

@@ -326,9 +326,11 @@ void RCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
     auto config = BioConfig::Instance()->GetDaemonConfig();
     memCap = (config.memReadRatio * config.memCap) / NO_10;
     memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    diskCap = 0;
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
+    diskCap *= config.diskReadRatio;
     diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
 }
 
