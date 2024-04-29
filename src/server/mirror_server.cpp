@@ -22,7 +22,7 @@ bool MirrorServer::CheckAll(RequestComm &reqComm)
     }
     uint64_t base = BioServer::Instance()->GetPtEntry(reqComm.ptId).version;
     if (UNLIKELY(reqComm.ptv != base)) {
-        LOG_ERROR("Check message pt version failed, base:" << base << ", ptv:" << reqComm.ptv << ".");
+        LOG_WARN("Check message pt version failed, base:" << base << ", ptv:" << reqComm.ptv << ".");
         return false;
     }
     return true;
@@ -239,7 +239,11 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
     WCacheSlicePtr &slice)
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
-    return Cache::Instance().GetWCacheSlice(sliceKey, slice);
+    BResult ret;
+    LVOS_TP_START(MIRROR_SERVER_GET_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+    ret = Cache::Instance().GetWCacheSlice(sliceKey, slice);
+    LVOS_TP_END;
+    return ret;
 }
 
 void MirrorServer::QueryCacheResource(QueryResourceRequest &req, QueryResourceResponse &rsp)

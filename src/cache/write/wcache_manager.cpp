@@ -576,7 +576,7 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get wcache flow by id:" << flowId << ".");
+        LOG_WARN("Failed to get wcache flow by id:" << flowId << ".");
         return BIO_NOT_EXISTS;
     }
 

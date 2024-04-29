@@ -57,9 +57,11 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
     auto config = BioConfig::Instance()->GetDaemonConfig();
     memCap = (config.memWriteRatio * config.memCap) / NO_10;
     memUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
+    diskCap = 0;
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
+    diskCap *= config.diskWriteRatio;
     diskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK);
 }
 
@@ -103,6 +105,8 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 
     memCache->AddEvictQueue(destSliceRef);
 
+    BResult ret = BIO_OK;
+
     if (attr.strategy == WRITE_BACK && !isOverflow) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BACK);
         StartEvictTask(WCACHE_MEMORY); // write back
@@ -111,11 +115,11 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
         BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_THROUGH);
         WCacheSliceRefPtr sliceRef = memCache->GetEvictSlice();
         if (sliceRef != nullptr) {
-            EvictFromMemToDisk(sliceRef); // write through
+            ret = EvictFromMemToDisk(sliceRef); // write through
         }
         BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_THROUGH, 0);
     }
-    return BIO_OK;
+    return ret;
 }
 
 BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
@@ -526,9 +530,19 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
 bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t cacheSize = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
-    uint64_t configSize = (config.memReadRatio * config.memCap) / NO_10;
-    return (cacheSize < configSize);
+    uint64_t memCap = (config.memReadRatio * config.memCap) / NO_10;
+    uint64_t memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    uint64_t diskCap = 0;
+    for (auto &item : config.diskCaps) {
+        diskCap += static_cast<uint64_t>(item);
+    }
+    diskCap *= config.diskWriteRatio;
+    uint64_t diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
+    if (memUsed >= memCap || diskUsed >= diskCap) {
+        return false;
+    } else {
+        return true;
+    }
 }
 
 BResult WCache::EvictAllMemSliceToDisk()
