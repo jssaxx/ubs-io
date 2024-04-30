@@ -330,7 +330,7 @@ static int ZooDeallocateStringVector(struct String_vector *strings)
     return ZOK;
 }
 
-int ZookeeperClose(zhandle_t *zh)
+static int ZookeeperClose(zhandle_t *zh)
 {
     return ZOK;
 }
@@ -520,11 +520,11 @@ TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
     free(ptList);
 }
 
-void CmServerCancelNodeFaultStub() {}
+static void CmServerCancelNodeFaultStub() {}
 
-void CmServerMonitorInitMgrStub() {}
+static void CmServerMonitorInitMgrStub() {}
 
-int32_t CmServerMonitorLoadPoolStub()
+static int32_t CmServerMonitorLoadPoolStub()
 {
     return 0;
 }

@@ -83,7 +83,7 @@ private:
     uint64_t MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t HighWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t LimitedWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
-    uint64_t CalculateWriteQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint64_t memVm);
+    uint64_t CalculateWriteQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint64_t vm);
 
     uint64_t GetWmStatDirectValue();
     uint64_t GetBwStatAverageValue(BwStatObj &obj);

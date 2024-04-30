@@ -324,13 +324,13 @@ BResult RCache::GetSliceFromChunk(RCacheTierType tier, const RCacheChunkPtr &chu
 void RCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed)
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    memCap = (config.memReadRatio * config.memCap) / NO_10;
+    memCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
     memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
     diskCap = 0;
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
-    diskCap = diskCap * config.diskReadRatio / NO_10;
+    diskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
     diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
 }
 
