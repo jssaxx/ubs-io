@@ -9,6 +9,7 @@
 #include "bio.h"
 #include "bio_trace.h"
 #include "cm.h"
+#include "cache_overload_ctrl.h"
 #ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
 #endif
@@ -35,6 +36,9 @@ BResult Cache::Init()
     LVOS_TP_START(WCACHE_MANAGER_INIT_FAIL_RESET, &ret, BIO_OK);
     LVOS_TP_END;
     ChkTrue(ret == BIO_OK, ret, "Initialize write cache manager failed, ret:" << ret << ".");
+
+    ret = CacheOverloadCtrl::Instance().Initialize();
+    ChkTrue(ret == BIO_OK, ret, "Initialize overload ctrl failed, ret:" << ret << ".");
 
     return BIO_OK;
 }
@@ -133,6 +137,9 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     ret = mWCacheManager->Put(key, slice, sliceReader, attr, isDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
 
+    if (ret == BIO_OK) {
+        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_FRONT_WRITE, slice->GetLength());
+    }
     return ret;
 }
 
@@ -380,7 +387,7 @@ void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
 
 uint64_t Cache::GetAdjustWriteQuota()
 {
-    return UINT64_MAX;
+    return CacheOverloadCtrl::Instance().GetWriteQuota();
 }
 }
 }

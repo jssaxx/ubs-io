@@ -687,8 +687,8 @@ CResult BioGetFileLocation(ObjLocation location, ObjLocationInfo *locInfo)
     mirror->GetPtEntry(ptId, info);
     FileLocationQueryRsp rsp;
     uint16_t slaveId = 0;
-    int i = 0;
-    for (;i < info.copys.size(); ++i) {
+    uint32_t i = 0;
+    for (; i < info.copys.size(); ++i) {
         if (info.copys[i].nodeId != info.masterNodeId) {
             slaveId = info.copys[i].nodeId;
             break;

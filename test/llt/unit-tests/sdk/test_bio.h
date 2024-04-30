@@ -7,6 +7,8 @@
 
 #include "gtest/gtest.h"
 
+namespace ock {
+namespace bio {
 class TestBio : public testing::Test {
     void SetUp() override;
 
@@ -14,9 +16,12 @@ class TestBio : public testing::Test {
 
 public:
     static void VNodeIdStub();
+
     static void GetPtVersionStub();
 
 private:
     static bool gSetup;
 };
+}
+}
 #endif // BOOSTIO_TEST_BIOSERVER_H

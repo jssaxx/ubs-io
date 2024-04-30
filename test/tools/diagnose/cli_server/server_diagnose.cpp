@@ -16,6 +16,7 @@
 #include "bio_server.h"
 #include "server_diagnose.h"
 #include "bio_functions.h"
+#include "cache_overload_ctrl.h"
 
 using namespace ock::bio;
 
@@ -123,6 +124,21 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         Cache::Instance().GetCacheResources(desc, READ_CACHE);
         CLI_PrintBuf("RCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
             desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
+    } else if (cmdType == "olc") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        std::vector<uint64_t> writeBwVec;
+        std::vector<uint64_t> evictBwVec;
+        uint64_t vmVec;
+        CacheOverloadCtrl::Instance().Show(writeBwVec, evictBwVec, vmVec);
+        CLI_PrintBuf("  Boostio overload ctrl info: \n");
+        CLI_PrintBuf("  Bandwidth: \n");
+        for (uint32_t idx = 0; idx < writeBwVec.size(); idx++) {
+            CLI_PrintBuf("      idx:%u : %lu -- %lu \n", idx, writeBwVec[idx], evictBwVec[idx]);
+        }
+        CLI_PrintBuf("  Water level:%lu \n", vmVec);
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }
