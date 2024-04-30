@@ -281,6 +281,30 @@ void MirrorClient::StatisticPtHit(uint16_t ptId)
 
 uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
 {
+    bool isRetry = false;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t retryCnt = 0;
+    uint16_t ptId = UINT16_MAX;
+
+    do {
+        isRetry = false;
+        ptId = SelectingPtImpl(objectId, affinity);
+        if (ptId == UINT16_MAX) {
+            uint64_t retryTime = Monotonic::TimeSec() - startTime;
+            LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
+            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+                mUpdateView();
+                isRetry = true;
+                sleep(BIO_IO_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    return ptId;
+}
+
+uint16_t MirrorClient::SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity)
+{
     size_t v = std::hash<std::uint64_t>{}(objectId);
     uint16_t ptId = UINT16_MAX;
     if (LIKELY(affinity == LOCAL_AFFINITY)) {
@@ -300,7 +324,7 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
             affinity << ".");
     }
     if (UNLIKELY(ptId == UINT16_MAX)) {
-        CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
+        CLIENT_LOG_WARN("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
     } else {
         StatisticPtHit(ptId);
     }

@@ -136,6 +136,7 @@ public:
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
 
 private:
+    uint16_t SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity);
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo, PutRequest *&req);
     BResult PutImpl(MirrorPut &param, uint64_t &updateQuota);
     BResult PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo, uint64_t &updateQuota);
