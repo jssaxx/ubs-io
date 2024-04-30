@@ -295,8 +295,8 @@ BResult UnderFs::Delete(const char *key)
     BIO_TRACE_START(UFS_TRACE_DEL);
     std::ifstream infile(keyPath.c_str());
     int isGood = static_cast<int>(infile.good());
-    LVOS_TP_START(SERVER_UNDERFS_DELETE, &isGood, 0)
-    LVOS_TP_END
+    LVOS_TP_START(SERVER_UNDERFS_DELETE, &isGood, 1);
+    LVOS_TP_END;
     if (!isGood) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
@@ -304,7 +304,10 @@ BResult UnderFs::Delete(const char *key)
     }
     infile.close();
 
-    if (remove(keyPath.c_str()) != 0) {
+    int ret = remove(keyPath.c_str());
+    LVOS_TP_START(UNDERFS_DELETE_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
+    if (ret != 0) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_UFS_IOERR);
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());
         return BIO_UFS_IOERR;
