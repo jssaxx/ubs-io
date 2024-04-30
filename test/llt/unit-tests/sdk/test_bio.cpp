@@ -19,6 +19,8 @@
 #include "tracepoint.h"
 #include "test_bio.h"
 
+using namespace ock::bio;
+
 bool TestBio::gSetup = false;
 
 static constexpr uint32_t G_TENANT_ID = 5;
@@ -400,7 +402,7 @@ TEST_F(TestBio, test_bio_delete)
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 }
 
-CacheSpaceInfo addressInfo;
+static CacheSpaceInfo addressInfo;
 
 TEST_F(TestBio, test_bio_allocspace)
 {
@@ -888,17 +890,17 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
 }
 
-uint64_t ReadHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
+static uint64_t ReadHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
     return ock::bio::BIO_OK;
 }
 
-uint64_t WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
+static uint64_t WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
     return ock::bio::BIO_OK;
 }
 
-uint64_t WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
+static uint64_t WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
 {
     return ock::bio::BIO_OK;
 }

@@ -526,7 +526,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     LVOS_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         NetRequest rReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
-        uint32_t dstPid = req.isConvDeploy ? 0 : req.comm.pid; // 融合部署场景目的端PID填充0
+        uint32_t dstPid = req.isConvDeploy ? 0 : static_cast<uint32_t>(req.comm.pid); // 融合部署场景目的端PID填充0
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, dstPid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lAddr:" << lMrVec[idx].address <<
@@ -768,7 +768,8 @@ int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLoc
     }
 
     FileLocationQueryRsp rsp;
-    memcpy_s(rsp.hostMaster, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    ret = memcpy_s(rsp.hostMaster, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
     rsp.portMaster = nodeInfo.port;
 
     id.nodeId = req->slavePtId;
@@ -778,7 +779,8 @@ int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLoc
         return ret;
     }
 
-    memcpy_s(rsp.hostSlave, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    ret = memcpy_s(rsp.hostSlave, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
     rsp.portSlave = nodeInfo.port;
 
     Reply(ctx, BIO_OK, &rsp, sizeof(FileLocationQueryRsp));

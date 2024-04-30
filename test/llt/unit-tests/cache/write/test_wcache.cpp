@@ -358,7 +358,7 @@ TEST_F(TestWCache, test_put_nullreader_case_return_fail)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
-std::vector<FlowAddr> addrVec;
+static std::vector<FlowAddr> addrVec;
 TEST_F(TestWCache, test_put_degrate_case_return_ok)
 {
     NetMrInfo bioMrInfo;
@@ -622,7 +622,7 @@ void TestWCache::Stub()
     MOCKER_CPP(&WCache::IsEmptyEvict, bool (*)()).stubs().will(returnValue(false));
 }
 
-int32_t BdmGetNextUsedChunkIdStub(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
+static int32_t BdmGetNextUsedChunkIdStub(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
     uint64_t *bucketOffset)
 {
     *chunkId = 0;
