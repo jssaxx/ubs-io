@@ -23,10 +23,6 @@
 #include "bio_tracepoint_helper.h"
 #endif
 
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
-
 namespace ock {
 namespace bio {
 class NetEngine {

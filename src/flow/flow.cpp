@@ -97,7 +97,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
 BResult Flow::Seal()
 {
-    if (mSealed == true) {
+    if (mSealed) {
         return BIO_OK;
     }
     mSealed = true;

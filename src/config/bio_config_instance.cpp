@@ -43,7 +43,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(WORK_SCENE, VStrEnum::Create(NET_DATA_PROTOCOL.first, "none||bigdata"));
 
     /* load cluster manager config */
-    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 2, NO_256));
+    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_2, NO_256));
     AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
     AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_600));

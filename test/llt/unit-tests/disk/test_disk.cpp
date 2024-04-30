@@ -44,7 +44,7 @@ struct AsyncCbCtx {
     AsyncTaskCtx tsk;
 };
 
-void UtAsyncProcCb(void *ctx, int retCode)
+static void UtAsyncProcCb(void *ctx, int retCode)
 {
     auto *cbCtx = (AsyncCbCtx *)ctx;
     cbCtx->ret = retCode;
