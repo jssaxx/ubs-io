@@ -61,7 +61,7 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
-    diskCap *= config.diskWriteRatio;
+    diskCap = diskCap * config.diskWriteRatio / NO_10;
     diskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK);
 }
 
