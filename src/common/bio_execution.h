@@ -245,6 +245,8 @@ inline void ExecutorService::Stop()
 
     for (uint32_t i = 0; i < mThreads.size(); ++i) {
         RunnablePtr stopTask = new (std::nothrow) Runnable();
+        LVOS_TP_START(EXECUTOR_SERVICE_STOP_TASK_NULL, &stopTask, nullptr);
+        LVOS_TP_END;
         if (stopTask == nullptr) {
             LOG_ERROR("Failed to new stop task, probably out of memory");
             break;
@@ -258,6 +260,7 @@ inline void ExecutorService::Stop()
         }
     }
 
+    LVOS_TP_START(NO_PROCESS_EXECUTOR_SERVICE_JOIN, 0);
     for (auto &thr : mThreads) {
         if (thr != nullptr) {
             thr->join();
@@ -266,6 +269,7 @@ inline void ExecutorService::Stop()
 
     mStopped = true;
     mRunnableQueue.UnInitialize();
+    LVOS_TP_END;
 }
 
 inline void ExecutorService::DoRunnable(bool &flag)

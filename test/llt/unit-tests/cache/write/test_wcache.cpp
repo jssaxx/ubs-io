@@ -286,20 +286,23 @@ TEST_F(TestWCache, test_cache_delete_underfs_err_case_return_err)
     LVOS_HVS_activeTracePoint(0, "WCACHE_DELETE_FLOWID_ERR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_DELETE_ERR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "UNDERFS_DELETE_ERR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_DELETE", 0, 1, userParam);
     auto ret = Cache::Instance().Delete(G_PT_ID, G_KEY);
-    EXPECT_EQ(ret, BIO_ERR);
+    EXPECT_EQ(ret, BIO_UFS_IOERR);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_DELETE_FLOWID_ERR");
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_DELETE_ERR");
     LVOS_HVS_deactiveTracePoint(0, "UNDERFS_DELETE_ERR");
-}
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_DELETE");
 
-TEST_F(TestWCache, test_cache_delete_wcache_get_meta_slice_err_case_return_ok)
-{
-    LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_GET_META_SLICE_FAIL", 0, 1, userParam);
-    auto ret = Cache::Instance().Delete(G_PT_ID, G_KEY);
+    ret = Cache::Instance().Delete(G_PT_ID, G_KEY);
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_GET_META_SLICE_FAIL");
+
+    LVOS_HVS_activeTracePoint(0, "CACHE_DELETE_RCACHE_MANAGER_ERR", 0, 1, userParam);
+    ret = Cache::Instance().Delete(G_PT_ID, "notexists");
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "CACHE_DELETE_RCACHE_MANAGER_ERR");
 }
 
 TEST_F(TestWCache, test_flush_return_err)
@@ -613,7 +616,9 @@ TEST_F(TestWCache, test_start_pool_threadnum_incorrect_return_fail)
 TEST_F(TestWCache, test_start_pool_return_ok)
 {
     FlowTaskPoolPtr flowTaskPool = MakeRef<FlowTaskPool>("testflow");
-    auto ret = flowTaskPool->Start(8, NO_16);
+    auto ret = flowTaskPool->Start(NO_8, NO_16);
+    EXPECT_EQ(ret, BIO_OK);
+    ret = flowTaskPool->Start(NO_8, NO_16);
     EXPECT_EQ(ret, BIO_OK);
 }
 
