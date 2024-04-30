@@ -653,7 +653,7 @@ TEST_F(TestBio, test_pt_entry_list_update_node_finish)
         ptEntryList->ptEntryList[diskIdx].copyList[1].keepAlive = 0;
         ptEntryList->ptEntryList[diskIdx].copyList[1].state = PT_COPY_STATE_RUNNING;
     }
-    auto ptList = (CmPtFinish *) malloc(sizeof(CmPtFinish) * ock::bio::NO_2);
+    auto ptList = (::CmPtFinish *) malloc(sizeof(::CmPtFinish) * ock::bio::NO_2);
     ptList[0].birthVersion = 1;
     ptList[0].ptId = 1;
     ptList[1].birthVersion = 1;

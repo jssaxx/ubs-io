@@ -19,10 +19,29 @@
 #include "flow_manager.h"
 #include "bio_server_c.h"
 
-void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv);
-
 using namespace ock::bio;
 using namespace ock::htracer;
+
+static void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv)
+{
+    Cache::Instance().Recover();
+    TestWCache::Stub();
+    WCacheManager::Instance()->ExpiredClear(ptId, ptv);
+    WCacheManager::Instance()->Flush(ptId, ptv);
+
+    HTracerExit();
+    Cache::Instance().Exit();
+    FlowManager::Instance()->Exit();
+    BdmDestory(0);
+    Logger::ChangeLogLevel(-1);
+    Logger::ChangeLogLevel(NO_3);
+    Logger::Destroy();
+    ZkFreeParaList();
+    CmServerListenDiskFault(0, 0, 0);
+    CmServerMonitorExit();
+    CmServerViewExit();
+    BioServerUninit();
+}
 
 static bool DiskPathInvalid()
 {
@@ -86,25 +105,4 @@ int main(int argc, char *argv[])
     ExitBackgroundThreads(ptId, ptv);
     std::cout << "All background threads exit" << std::endl;
     return runRet;
-}
-
-void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv)
-{
-    Cache::Instance().Recover();
-    TestWCache::Stub();
-    WCacheManager::Instance()->ExpiredClear(ptId, ptv);
-    WCacheManager::Instance()->Flush(ptId, ptv);
-
-    HTracerExit();
-    Cache::Instance().Exit();
-    FlowManager::Instance()->Exit();
-    BdmDestory(0);
-    Logger::ChangeLogLevel(-1);
-    Logger::ChangeLogLevel(NO_3);
-    Logger::Destroy();
-    ZkFreeParaList();
-    CmServerListenDiskFault(0, 0, 0);
-    CmServerMonitorExit();
-    CmServerViewExit();
-    BioServerUninit();
 }
