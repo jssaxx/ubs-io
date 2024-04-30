@@ -7,7 +7,11 @@
 
 using namespace ock::bio;
 
+namespace ock {
+namespace bio {
 void ZkFreeParaList()
 {
     CmClientZkFreeParaList(0);
+}
+}
 }
