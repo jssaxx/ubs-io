@@ -10,7 +10,9 @@
 #include "net_common.h"
 #include "bio_ref.h"
 #include "bio.h"
-
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 namespace ock {
 namespace bio {
 using CheckNodeOnline = std::function<bool(uint16_t nodeId, std::string &ip, uint16_t &port)>;
@@ -71,7 +73,11 @@ public:
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp)
     {
-        return mNetEngine->SyncCall(target, opcode, req, rsp);
+        BResult ret = BIO_INNER_ERR;
+        LVOS_TP_START(SDK_BIO_MIRROR_SEND_SYNC_FAIL, &ret, BIO_INNER_RETRY);
+        ret = mNetEngine->SyncCall(target, opcode, req, rsp);
+        LVOS_TP_END;
+        return ret;
     }
 
     template <typename TReq, typename TResp>

@@ -36,7 +36,10 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
             return BIO_INNER_ERR;
         }
         // Start boostio server for converged deployment mode
-        auto ret = startOp();
+        int32_t ret = BIO_INNER_ERR;
+        LVOS_TP_START(SDK_BIO_AGENT_START_OP_FAIL, &ret, BIO_INNER_ERR);
+        ret = startOp();
+        LVOS_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to start bio server, ret:" << ret << ".");
             return BIO_INNER_ERR;
@@ -106,7 +109,10 @@ BResult BioClientAgent::InitOperation()
 
 void *BioClientAgent::LoadFunction(const char *name)
 {
-    void *ptr = dlsym(handler, name);
+    void *ptr = nullptr;
+    LVOS_TP_START(SDK_BIO_AGENT_LOAD_FUNC_FAIL, &ptr, nullptr);
+    ptr = dlsym(handler, name);
+    LVOS_TP_END;
     if (ptr == nullptr) {
         CLIENT_LOG_ERROR("Failed to load function " << name);
         return nullptr;
@@ -144,6 +150,8 @@ BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t sla
 BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
 {
     BResult ret = BIO_OK;
+    LVOS_TP_START(SDK_BIO_AGENT_NODE_CHANGE_MODE, &mMode, SEPARATES);
+    LVOS_TP_END;
     if (mMode == CONVERGENCE) {
         GetLocalNidResponse getLocalNidRsp{};
         ret = getLocalNidOp(&getLocalNidRsp);
@@ -162,6 +170,8 @@ BResult BioClientAgent::GetLocalResourceInfo(uint64_t &writeRes, uint64_t &readR
     BResult ret = BIO_OK;
     QueryResourceRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryResourceResponse rsp;
+    LVOS_TP_START(SDK_BIO_AGENT_RESOURCE_CHANGE_MODE, &mMode, SEPARATES);
+    LVOS_TP_END;
     if (mMode == CONVERGENCE) {
         ret = getResourceOp(&req, &rsp);
     } else {
@@ -181,6 +191,8 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
     BResult ret = BIO_OK;
     int32_t flag = 0;
     uint32_t progressBar = 0;
+    LVOS_TP_START(SDK_BIO_CLUSTER_CHANGE_MODE, &mMode, SEPARATES);
+    LVOS_TP_END;
     do {
         QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryNodeViewResponse rsp;
@@ -216,6 +228,8 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
     BResult ret = BIO_OK;
     int32_t flag = 0;
     uint32_t progressBar = 0;
+    LVOS_TP_START(SDK_BIO_AGENT_PT_VIEW_CHANGE_MODE, &mMode, SEPARATES);
+    LVOS_TP_END;
     do {
         QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryPtViewResponse rsp;
