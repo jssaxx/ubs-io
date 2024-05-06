@@ -104,7 +104,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
     LOG_INFO("UnderFs get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
-    LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -ENOENT)
+    LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -1)
     ret = rados_read(mIoCtx, key, value, len, off);
     LVOS_TP_END
     int res = (ret < 0) ? BIO_UFS_IOERR : BIO_OK;
@@ -127,7 +127,7 @@ BResult UnderFs::Delete(const char *key)
     LOG_INFO("UnderFs delete key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_DEL);
-    LVOS_TP_START(SERVER_UNDERFS_DELETE, &ret, -ENOENT)
+    LVOS_TP_START(SERVER_UNDERFS_DELETE, &ret, -1)
     ret = rados_remove(mIoCtx, key);
     LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
@@ -150,7 +150,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
     LOG_INFO("UnderFs stat key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_STAT);
-    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, -ENOENT)
+    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, -1)
     ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
     LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
@@ -171,7 +171,10 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
     LOG_INFO("UnderFs list prefix:" << prefix);
 
     rados_list_ctx_t listCtx;
-    int ret = rados_nobjects_list_open(mIoCtx, &listCtx);
+    int ret;
+    LVOS_TP_START(SERVER_UNDERFS_LIST, &ret, -1)
+    ret = rados_nobjects_list_open(mIoCtx, &listCtx);
+    LVOS_TP_END
     if (ret < 0) {
         LOG_ERROR("Failed to list open, ret:" << ret);
         return BIO_UFS_IOERR;
