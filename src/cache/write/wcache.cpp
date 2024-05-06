@@ -418,7 +418,9 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
 
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     WFlowMetaDataSlice diskMetaDataSlice;
+    LVOS_TP_START(WCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = diskCache->GetMetaDataSlice(indexInFlow, offset, length, diskMetaDataSlice);
+    LVOS_TP_END;
     ChkTrueNot(ret == BIO_OK, ret);
 
     ret = mSliceOperator.Copy(memMetaDataSlice.dataSlice.Get(), diskMetaDataSlice.dataSlice.Get());
@@ -600,7 +602,9 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 
     uint64_t globEvictOffset = NO_MAX_VALUE64;
     if (!isMaster && !mIsForced) {
-        auto ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, globEvictOffset);
+        LVOS_TP_START(WCACHE_GET_EVICT_OFFSET_FAIL, &ret, BIO_INNER_RETRY);
+        ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, globEvictOffset);
+        LVOS_TP_END;
         if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
             LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
             mRetryCallback(mFlowId, WCACHE_DISK);
@@ -613,7 +617,10 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     for (auto &sliceRef : evictSliceQueue) {
         auto slice = sliceRef->GetSlice();
         uint64_t sliceEvictOffset = slice->GetOffsetInFlow() + slice->GetLength();
-        bool isSatisfied = EvictDiskSatisfiedCond();
+        bool isSatisfied;
+        LVOS_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
+        isSatisfied = EvictDiskSatisfiedCond();
+        LVOS_TP_END;
         if ((globEvictOffset < sliceEvictOffset) || !isSatisfied) {
             mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
             mRetryCallback(mFlowId, WCACHE_DISK);

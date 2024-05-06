@@ -305,7 +305,10 @@ BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)
 BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
 {
     BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA);
-    auto ret = SendSyncDataReq(ptInfo);
+    BResult ret;
+    LVOS_TP_START(SERVER_CRB_SEND_FLUSH_FAIL, &ret, BIO_INNER_RETRY);
+    ret = SendSyncDataReq(ptInfo);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;

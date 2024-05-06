@@ -347,7 +347,10 @@ BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)
     uint64_t indexInFlow;
     std::vector<FlowAddr> flowAdd;
 
-    auto ret = flow[READ_CACHE_TIER_MEM]->AllocOffset(length, offset, indexInFlow);
+    BResult ret;
+    LVOS_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+    ret = flow[READ_CACHE_TIER_MEM]->AllocOffset(length, offset, indexInFlow);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Get tier:" << READ_CACHE_TIER_MEM << ", offset:" << offset << ", len:" << length <<
             ", flow address failed.");
@@ -517,7 +520,9 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     }
 
     WCacheSlicePtr toSlicePtr = nullptr;
+    LVOS_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = GetSliceFromChunk(READ_CACHE_TIER_MEM, chunk, toSlicePtr);
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK || toSlicePtr == nullptr)) {
         LOG_ERROR("Read cache alloc slice failed, ret:" << ret << ", key:" << key << ".");
         delete[] value;
@@ -644,6 +649,8 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         }
         chunk = truncateQ[READ_CACHE_TIER_MEM].End();
         uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
+        LVOS_TP_START(RCACHE_GET_EVICT_IO_FAIL, &truncateOffset, NO_MAX_VALUE64);
+        LVOS_TP_END;
         if ((chunk->GetValue().flowOffset != truncateOffset) ||
             (chunk->GetValue().length + haveEvictData > needEvictData)) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
@@ -680,7 +687,9 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             return BIO_ALLOC_FAIL;
         }
 
+        LVOS_TP_START(RCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
         ret = GetSliceFromChunk(READ_CACHE_TIER_DISK, newChunk, toSlicePtr);
+        LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK) || (toSlicePtr == nullptr)) {
             LOG_ERROR("RCache alloc disk tier slice failed,  " << newChunk->ToString());
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);

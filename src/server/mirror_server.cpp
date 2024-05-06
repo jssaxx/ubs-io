@@ -972,7 +972,10 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     }
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
-    BResult result = Put(*req, sliceP, ctx);
+    BResult result;
+    LVOS_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
+    result = Put(*req, sliceP, ctx);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
@@ -1009,7 +1012,10 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 
     GetResponse rsp;
     BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
-    BResult result = Get(*req, rsp, ctx);
+    BResult result;
+    LVOS_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
+    result = Get(*req, rsp, ctx);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_GET_HDL, result);
     if (result != BIO_OK) {
         Reply(ctx, result, nullptr, 0);
@@ -1045,7 +1051,10 @@ int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req
     }
 
     BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
-    BResult result = Delete(*req);
+    BResult result;
+    LVOS_TP_START(MIRROR_SERVER_HDL_DELETE_FAIL, &result, BIO_INNER_RETRY);
+    result = Delete(*req);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_DEL_HDL, result);
     Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
     return BIO_OK;
@@ -1077,7 +1086,10 @@ int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
 
     ObjStat objInfo;
     BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
-    BResult ret = Stat(*req, objInfo);
+    BResult ret;
+    LVOS_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
+    ret = Stat(*req, objInfo);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, ret);
     if (ret != BIO_OK) {
         Reply(ctx, ret, nullptr, 0);
@@ -1107,7 +1119,10 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
 int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
 {
     std::unordered_map<std::string, ObjStat> objs;
-    BResult ret = List(*req, objs);
+    BResult ret;
+    LVOS_TP_START(MIRROR_SERVER_HDL_LIST_FAIL, &ret, BIO_INNER_RETRY);
+    ret = List(*req, objs);
+    LVOS_TP_END;
     LVOS_TP_START(MIRROR_LIST_FAIL, &ret, BIO_ERR);
     LVOS_TP_END;
     if (ret != BIO_OK) {
@@ -1148,7 +1163,10 @@ int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
     }
 
     BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
-    BResult ret = Load(*req);
+    BResult ret;
+    LVOS_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
+    ret = Load(*req);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, ret);
     Reply(ctx, ret, nullptr, 0);
     return BIO_OK;

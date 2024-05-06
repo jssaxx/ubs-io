@@ -47,7 +47,10 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     // fill meta flow.
     BResult res;
     auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
-    auto metaSlice = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), res);
+    WCacheSlicePtr metaSlice;
+    LVOS_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &metaSlice, nullptr);
+    metaSlice = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), res);
+    LVOS_TP_END;
     ChkTrue(metaSlice != nullptr, nullptr, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
