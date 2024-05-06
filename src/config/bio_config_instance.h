@@ -34,6 +34,8 @@ const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
+const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.evict_water_level", 0);
+
 const auto RCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.rcache.evict_water_level", 90);
 
 const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio", "5:5");
@@ -79,8 +81,10 @@ public:
         int32_t logLevel = 0;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
-        uint64_t evictWaterLevel = 90;
-        uint64_t diskEvictWaterLevel = 90;
+        uint64_t wcacheMemEvictLevel = 0;
+        uint64_t wcacheDiskEvictLevel = 0;
+        uint64_t rcacheMemEvictLevel = 90;
+        uint64_t rcacheDiskEvictLevel = 90;
         std::string memReadWriteRatio = "5:5";
         long memReadRatio = 5;
         long memWriteRatio = 5;
@@ -89,7 +93,7 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
-        uint16_t scene = 0;
+        uint32_t scene = 0;
     };
 
     struct ClientConfig {

@@ -528,21 +528,42 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     return BIO_OK;
 }
 
+bool WCache::EvictMemSatisfiedCond()
+{
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+    uint64_t wcacheMemCap = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
+    uint64_t wcacheWaterSize = wcacheMemCap * config.wcacheMemEvictLevel / NO_100;
+    uint64_t wcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
+    if (wcacheMemUsed > wcacheWaterSize) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t memCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
-    uint64_t memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
     uint64_t diskCap = 0;
     for (auto &item : config.diskCaps) {
         diskCap += static_cast<uint64_t>(item);
     }
-    diskCap *= static_cast<uint64_t>(config.diskWriteRatio);
-    uint64_t diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
-    if (memUsed >= memCap || diskUsed >= diskCap) {
+
+    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
+    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
+    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
+    if (rcacheMemUsed >= rcacheMemCap || rcacheDiskUsed >= rcacheDiskCap) {
         return false;
-    } else {
+    }
+
+    uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
+    uint64_t wcacheWaterSize = wcacheDiskCap * config.wcacheDiskEvictLevel / NO_100;
+    uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK);
+    if (wcacheDiskUsed > wcacheWaterSize) {
         return true;
+    } else {
+        return false;
     }
 }
 
@@ -551,6 +572,12 @@ BResult WCache::EvictAllMemSliceToDisk()
     auto evictSliceQueue = mCacheTiers[WCACHE_MEMORY]->GetEvictSliceQueue();
     auto sliceIter = evictSliceQueue.begin();
     for (auto &sliceRef : evictSliceQueue) {
+        bool isSatisfied = EvictMemSatisfiedCond();
+        if (!isSatisfied) {
+            mCacheTiers[WCACHE_MEMORY]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mRetryCallback(mFlowId, WCACHE_MEMORY);
+            return BIO_OK;
+        }
         auto ret = EvictFromMemToDisk(sliceRef);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());

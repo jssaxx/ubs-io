@@ -36,6 +36,7 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_1, NO_512));
     AddStrConf(DISK_CONF_PATH);
 
+    AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
@@ -144,7 +145,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     if (scene == "none") {
         mDaemonConfig.scene = 0;
     } else if (scene == "bigdata") {
-        mDaemonConfig.scene = 1;
+        mDaemonConfig.scene = NO_1;
     } else {
         LOG_ERROR("Invalid configuration with scene items: " << scene);
     }
@@ -156,8 +157,10 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
         LOG_ERROR("Failed to set mem cap " << mDaemonConfig.memCap << ", over system free mem cap " << sysFreeMemCap);
         return BIO_ERR;
     }
-    mDaemonConfig.evictWaterLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
-    mDaemonConfig.diskEvictWaterLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
+    mDaemonConfig.wcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
+    mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
+    mDaemonConfig.rcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
+    mDaemonConfig.rcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     std::vector<std::string> ratios;
     mDaemonConfig.memReadWriteRatio = conf->GetStr(MEM_READ_WRITE_RATIO.first);
     StrUtil::Split(mDaemonConfig.memReadWriteRatio, ":", ratios);
@@ -290,14 +293,14 @@ uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
 {
     uint64_t ori;
     if (tier == 0) {
-        ori = mDaemonConfig.evictWaterLevel;
-        mDaemonConfig.evictWaterLevel = level;
+        ori = mDaemonConfig.rcacheMemEvictLevel;
+        mDaemonConfig.rcacheMemEvictLevel = level;
     } else {
-        ori = mDaemonConfig.diskEvictWaterLevel;
-        mDaemonConfig.diskEvictWaterLevel = level;
+        ori = mDaemonConfig.rcacheDiskEvictLevel;
+        mDaemonConfig.rcacheDiskEvictLevel = level;
     }
 
-    LOG_INFO("config changed tier:" << tier << ", evictWaterLevel, " << ori << " => " << level);
+    LOG_INFO("config changed tier:" << tier << ", rcacheMemEvictLevel, " << ori << " => " << level);
     return ori;
 }
 

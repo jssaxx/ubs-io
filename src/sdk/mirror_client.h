@@ -27,6 +27,12 @@ constexpr uint16_t BIO_INIT_TIMEOUT_TIME = 90;
 constexpr uint16_t BIO_IO_TIMEOUT_TIME = 60;
 constexpr uint16_t BIO_IO_INTERAL_TIME = 2;
 using UpdateView = std::function<void(void)>;
+
+enum WorkerScene : uint32_t {
+    SCENE_NONE = 0,
+    SCENE_BIGDATA = 1
+};
+
 class MirrorClient {
 public:
     struct MirrorPut {
@@ -51,7 +57,7 @@ public:
 
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
-    BResult Initialize(UpdateView updateView, WorkerScene scene);
+    BResult Initialize(UpdateView updateView, uint32_t scene);
     BResult Start();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
