@@ -12,7 +12,9 @@
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "bio.h"
-
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 namespace ock {
 namespace bio {
 namespace agent {
@@ -54,7 +56,9 @@ public:
     {
         uintptr_t netPtr = getNetEngineOp();
         NetEnginePtr netEngine = MakeRef<NetEngine>();
+        LVOS_TP_START(SDK_BIO_NET_PRE_START_PRE_FAIL, &netEngine, nullptr);
         netEngine = reinterpret_cast<NetEngine *>(netPtr);
+        LVOS_TP_END;
         return netEngine;
     }
 

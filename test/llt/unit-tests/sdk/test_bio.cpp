@@ -1032,3 +1032,155 @@ TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
     auto ret = BioPutWithSpace(G_TENANT_ID, "putwithspace", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
 }
+
+TEST_F(TestBio, test_bio_agent_init)
+{
+    BioExit();
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_CREAT_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_CREAT_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_START_OP_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_START_OP_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_LOAD_FUNC_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_LOAD_FUNC_FAIL");
+}
+
+TEST_F(TestBio, test_bio_client_log_init)
+{
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_LOG_CREAT_FAIL", 0, 1, userParam);
+    auto ret = BioInitialize(WorkerMode::SEPARATES);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_LOG_CREAT_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_LOG_INIT_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::SEPARATES);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_LOG_INIT_FAIL");
+}
+
+TEST_F(TestBio, test_bio_client_net_pre_init)
+{
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_NET_PRE_CREAT_FAIL", 0, 1, userParam);
+    auto ret = BioInitialize(WorkerMode::SEPARATES);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_NET_PRE_CREAT_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_NET_PRE_START_PRE_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_NET_PRE_START_PRE_FAIL");
+}
+
+TEST_F(TestBio, test_bio_client_mirror_init)
+{
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_MIRROR_CREAT_FAIL", 0, 1, userParam);
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_MIRROR_CREAT_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_CLUSTER_CHANGE_MODE", 0, G_PT_TIMES, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL", 0, G_PT_TIMES, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_CLUSTER_CHANGE_MODE");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_PT_VIEW_CHANGE_MODE", 0, G_PT_TIMES, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL", 0, G_PT_TIMES, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_PT_VIEW_CHANGE_MODE");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_NODE_CHANGE_MODE", 0, G_PT_TIMES, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL", 0, G_PT_TIMES, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_NODE_CHANGE_MODE");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_RESOURCE_CHANGE_MODE", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_MIRROR_SEND_SYNC_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_RESOURCE_CHANGE_MODE");
+}
+
+TEST_F(TestBio, test_bio_client_net_post_init)
+{
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_NET_START_RPC_FAIL", 0, 1, userParam);
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_NET_START_RPC_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_IGNORE_CHECK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_NET_START_CONNECT_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_NET_START_CONNECT_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_IGNORE_CHECK");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE");
+}
+
+TEST_F(TestBio, test_bio_client_start_work_init)
+{
+    BioExit();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_WORK_ALLOC_FAIL", 0, 1, userParam);
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_WORK_ALLOC_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    BioExit();
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_CREAT_FLOW_MASTER_FAIL", 0, 1, userParam);
+    ret = BioInitialize(WorkerMode::CONVERGENCE);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_CREAT_FLOW_MASTER_FAIL");
+}

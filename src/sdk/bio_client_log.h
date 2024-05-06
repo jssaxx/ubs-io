@@ -14,9 +14,10 @@
 #include <sstream>
 #include <string>
 #include <thread>
-
 #include "bio_log.h"
-
+#ifdef USE_DEBUG_TOOLS
+#include "bio_tracepoint_helper.h"
+#endif
 namespace ock {
 namespace bio {
 using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
@@ -44,12 +45,18 @@ public:
             LoggerOptions options;
             options.minLogLevel = level;
             options.path = "/var/log/boostio/bio_sdk_" + std::to_string(getpid()) + ".log";
-            auto logger = Logger::Instance(options);
+            Logger* logger = nullptr;
+            LVOS_TP_START(SDK_BIO_LOG_CREAT_FAIL, &logger, nullptr);
+            logger = Logger::Instance(options);
+            LVOS_TP_END;
             if (logger == nullptr) {
                 std::cout << "Failed to create logger instance." << std::endl;
                 return -1;
             }
-            auto ret = logger->Init();
+            int32_t ret = -1;
+            LVOS_TP_START(SDK_BIO_LOG_INIT_FAIL, &ret, -1);
+            ret = logger->Init();
+            LVOS_TP_END;
             if (ret != 0) {
                 std::cout << "Failed to init log, ret:" << ret << ", log path:" << options.path << "." << std::endl;
                 return -1;
