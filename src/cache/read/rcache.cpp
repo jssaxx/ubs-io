@@ -638,7 +638,8 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         }
         chunk = truncateQ[READ_CACHE_TIER_MEM].End();
         uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
-        if (chunk->GetValue().flowOffset != truncateOffset) {
+        if ((chunk->GetValue().flowOffset != truncateOffset) ||
+            (chunk->GetValue().length + haveEvictData > needEvictData)) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
             LOG_INFO("Wait chunk " << chunk->ToString() << ", cur truncate offset:" << truncateOffset);
             break;
@@ -730,7 +731,8 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         }
         chunk = truncateQ[READ_CACHE_TIER_DISK].End();
         uint64_t truncateOffset = flow[READ_CACHE_TIER_DISK]->GetDataTruncOffset();
-        if (chunk->GetValue().flowOffset != truncateOffset) {
+        if ((chunk->GetValue().flowOffset != truncateOffset) ||
+            (chunk->GetValue().length + haveEvictData > needEvictData)) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
             LOG_INFO("Wait chunk " << chunk->ToString() << ", cur truncate offset:" << truncateOffset);
             break;
