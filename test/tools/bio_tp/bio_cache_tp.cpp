@@ -187,6 +187,29 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(NO_PROCESS_EXECUTOR_SERVICE_JOIN, "no process executor service join", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(EXECUTOR_SERVICE_MSERVICE_FAIL_RESET, "executor service mservice fail reset",
         tp::CommonTp::PointerValueResetCallback);
+
+
+    LVOS_TP_REG(MIRROR_SERVER_GET_SLICE_FAIL, "mirror server get slice err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_PUT_FAIL, "mirror server handle put err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_GET_FAIL, "mirror server handle get err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_DELETE_FAIL, "mirror server handle delete err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_LOAD_FAIL, "mirror server handle load err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_STAT_FAIL, "mirror server handle stat err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_LIST_FAIL, "mirror server handle list err", tp::CommonTp::IntValueCallback);
+
+    LVOS_TP_REG(WCACHE_GET_MEM_SLICE_FAIL, "wcache get mem slice fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_GET_DISK_SLICE_FAIL, "wcache get disk slice fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_GET_EVICT_OFFSET_FAIL, "wcache get evict offset fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_CHECK_RCACHE_LEVEL_FAIL, "wcache check rcache level fail", tp::CommonTp::BoolValueCallback);
+    LVOS_TP_REG(WCACHE_FLUSH_FAIL, "wcache flush fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_EXPIRE_FAIL, "wcache flush fail", tp::CommonTp::IntValueCallback);
+
+    LVOS_TP_REG(RCACHE_GET_MEM_SLICE_FAIL, "rcache get mem slice fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(RCACHE_GET_EVICT_IO_FAIL, "rcache get evict io fail", tp::CommonTp::LongValueCallback);
+    LVOS_TP_REG(RCACHE_GET_DISK_SLICE_FAIL, "rcache get disk slice fail", tp::CommonTp::IntValueCallback);
+
+    LVOS_TP_REG(BDM_RW_IO_FAIL, "bdm io err", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(BDM_ALLOC_BLOCK_FAIL, "bdm alloc block fail", tp::CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -340,6 +363,25 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(NO_PROCESS_ROLLBACK_SERVICE_INIT);
     LVOS_TP_UNREG(NO_PROCESS_CACHE_PROCESS);
     LVOS_TP_UNREG(NO_PROCESS_CACHE_INIT);
+
+    LVOS_TP_UNREG(MIRROR_SERVER_GET_SLICE_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_PUT_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_GET_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_DELETE_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_LOAD_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_STAT_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_LIST_FAIL);
+    LVOS_TP_UNREG(WCACHE_GET_MEM_SLICE_FAIL);
+    LVOS_TP_UNREG(WCACHE_GET_DISK_SLICE_FAIL);
+    LVOS_TP_UNREG(WCACHE_GET_EVICT_OFFSET_FAIL);
+    LVOS_TP_UNREG(WCACHE_CHECK_RCACHE_LEVEL_FAIL);
+    LVOS_TP_UNREG(WCACHE_FLUSH_FAIL);
+    LVOS_TP_UNREG(WCACHE_EXPIRE_FAIL);
+    LVOS_TP_UNREG(RCACHE_GET_MEM_SLICE_FAIL);
+    LVOS_TP_UNREG(RCACHE_GET_EVICT_IO_FAIL);
+    LVOS_TP_UNREG(RCACHE_GET_DISK_SLICE_FAIL);
+    LVOS_TP_UNREG(BDM_RW_IO_FAIL);
+    LVOS_TP_UNREG(BDM_ALLOC_BLOCK_FAIL);
 }
 #else
 void tp::CacheTp::Register() noexcept {}

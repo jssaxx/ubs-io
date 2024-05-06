@@ -1232,6 +1232,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
     CLIENT_LOG_DEBUG("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
     BResult ret;
+    LVOS_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
         ret = agent::BioClientAgent::Instance()->GetLocal(req, value, realLen);
@@ -1241,6 +1242,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
         ret = GetMasterRemote(req, masterNid, value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_REMOTE, ret);
     }
+    LVOS_TP_END;
     return ret;
 }
 
@@ -1268,6 +1270,8 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
     InitCallbackCtx(cbCtx, quota);
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto cbCtx = (ClientCallbackCtx *)ctx;
+        LVOS_TP_START(SDK_MIRROR_DELETE_RECV_FAIL, &result, BIO_INNER_RETRY);
+        LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
@@ -1333,6 +1337,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
     ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
         BIO_OP_SDK_LIST, req, rsp);
     if (ret != BIO_OK) {
+        net::BioClientNet::Instance()->Free(mr.address);
         return ret;
     }
 
@@ -1369,6 +1374,8 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
         } else {
             result = ListRemote(dstNid, req, objs);
         }
+        LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &result, BIO_INNER_RETRY);
+        LVOS_TP_END;
         if (result != BIO_OK) {
             CLIENT_LOG_ERROR("Send list request failed, ret:" << result << ", dstNid:" << dstNid << ", ptId:" <<
                 ptEntry.second.ptId << ".");
@@ -1383,12 +1390,17 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
 {
     if (masterNid == mLocalNid.VNodeId()) {
-        auto ret = agent::BioClientAgent::Instance()->LoadLocal(req);
+        BResult ret;
+        LVOS_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &ret, BIO_INNER_RETRY);
+        ret = agent::BioClientAgent::Instance()->LoadLocal(req);
+        LVOS_TP_END;
         callback(context, ret);
         return BIO_OK;
     }
 
     auto cbFunc = [&callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
+        LVOS_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &result, BIO_INNER_RETRY);
+        LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             callback(context, result);
             return;
