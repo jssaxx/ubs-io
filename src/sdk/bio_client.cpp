@@ -106,7 +106,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 
     mIsUpdating = false;
     UpdateView updateView = [this]() { BioClientUpdateView(); };
-    WorkerScene scene = mNetEngine->GetWorkerScene();
+    uint32_t scene = mNetEngine->GetWorkerScene();
 
     auto ret = mMirror->Initialize(updateView, scene);
     if (ret != BIO_OK) {
