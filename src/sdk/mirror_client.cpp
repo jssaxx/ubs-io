@@ -338,7 +338,7 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
 {
     mLock.LockRead();
     auto iter = mPtView.end();
-    LVOS_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, &iter, mPtView.end());
+    LVOS_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, 0);
     iter = mPtView.find(ptId);
     LVOS_TP_END;
     if (UNLIKELY(iter == mPtView.end())) {
@@ -396,7 +396,9 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene)
 BResult MirrorClient::Start()
 {
     uint32_t ptSize = mPtView.size();
+    LVOS_TP_START(SDK_BIO_START_WORK_ALLOC_FAIL, &mPtHit, nullptr);
     mPtHit = new (std::nothrow) std::atomic<uint64_t>[ptSize];
+    LVOS_TP_END;
     if (mPtHit == nullptr) {
         return BIO_ALLOC_FAIL;
     }
