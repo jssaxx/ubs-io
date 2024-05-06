@@ -119,6 +119,7 @@ register_systemd()
   cat > $BIN_PATH/executeBio.sh << EOF
 #!/bin/bash
 export LD_LIBRARY_PATH=$LIB_PATH
+export HSECEASY_PATH=$LIB_PATH
 cd $BIN_PATH
 ./bio_daemon
 EOF
@@ -185,6 +186,7 @@ set_permissions()
   chown $RUN_USER:$RUN_GROUP $BIN_PATH
   chown $RUN_USER:$RUN_GROUP $BIN_PATH/bio_daemon
   chown $RUN_USER:$RUN_GROUP $BIN_PATH/bio_console
+  chown $RUN_USER:$RUN_GROUP $BIN_PATH/seceasy_encrypt
   chown -R $RUN_USER:$RUN_GROUP $LIB_PATH
   chown -R $RUN_USER:$RUN_GROUP $SCRIPTS_PATH
   chown $RUN_USER:$RUN_GROUP $CONF_PATH

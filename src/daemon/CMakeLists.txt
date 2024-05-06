@@ -7,6 +7,7 @@ if (${DEBUG_UT} MATCHES "OFF")
 	endif()
 
 	target_link_libraries(bio_daemon
+	    -pie
         -Wl,--start-group
         pthread dl
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so

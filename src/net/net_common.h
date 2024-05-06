@@ -101,6 +101,13 @@ struct NetOptions {
     bool regShmMem = false;                              /* register the memory to shared */
     Role role = NET_BUTT;                                /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
+    bool enableTls = false;                              /* tls switch */
+    std::string certificationPath{};                     /* certification path */
+    std::string caCerPath{};                             /* caCer path */
+    std::string privateKeyPath{};                        /* private key path */
+    std::string privateKeyPassword{};                    /* private key password */
+    std::string hseKfsMasterPath{};                      /* hseceasy kfs master path */
+    std::string hseKfsStandbyPath{};                     /* hseceasy kfs standby path  */
 };
 
 const std::string CONN_PAYLOAD_PREFIX_CTRL = "bio-ctrl-";

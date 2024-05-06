@@ -77,6 +77,7 @@ mkdir -p boostio/conf
 \cp bio/lib/libsecurec.so boostio/lib/.
 \cp bio/lib/libbio_interceptor_server.so boostio/lib/.
 \cp bio/lib/libock_iofwd_proxy.so boostio/lib/.
+\cp bio/lib/libhse_cryption.so boostio/lib/.
 
 echo "当前cpu架构：$arch"
 if [[ "$DIAGNOSE_FLAG $arch" == 'true aarch64' ]]; then

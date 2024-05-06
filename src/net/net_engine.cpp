@@ -13,6 +13,7 @@
 #include <linux/version.h>
 
 #include "securec.h"
+#include "bio_file_util.h"
 #include "bio_ip_util.h"
 #include "bio_trace.h"
 #include "net_log.h"
@@ -151,6 +152,11 @@ void NetEngine::StopInner()
     if (mIpcService != nullptr) {
         mIpcService->Stop();
         mIpcService = nullptr;
+    }
+
+    if (mbioCryptorHelper != nullptr) {
+        delete mbioCryptorHelper;
+        mbioCryptorHelper = nullptr;
     }
 }
 
@@ -326,6 +332,8 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
 
 BResult NetEngine::StartIpcService(const NetOptions &opt)
 {
+    int result = BIO_ERR;
+
     if (mIpcService != nullptr) {
         NET_LOG_INFO("Net ipc service has already created.");
         return BIO_OK;
@@ -337,9 +345,17 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         return BIO_ERR;
     }
 
+    if (opt.enableTls) {
+        result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
+        if (result != BIO_OK) {
+            NET_LOG_ERROR("Failed to prepare hseceasy cryptor, result:" << result << ".");
+            return result;
+        }
+    }
+
     NetServiceOptions options{};
     AssignIpcServiceOptions(opt, isOobSvr, options);
-    auto result = mIpcService->Start(options);
+    result = mIpcService->Start(options);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start ipc service, result:" << NetErrStr(result) << ".");
         return BIO_ERR;
@@ -392,6 +408,8 @@ BResult NetEngine::AssignRpcServiceOptions(bool isOobSvr, NetServiceOptions &opt
 
 BResult NetEngine::StartRpcService(const NetOptions &opt)
 {
+    int result = BIO_ERR;
+
     if (mRpcService != nullptr) {
         NET_LOG_INFO("Net rpc service has already created.");
         return BIO_OK;
@@ -404,8 +422,16 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
         return BIO_ERR;
     }
 
+    if (opt.enableTls) {
+        result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
+        if (result != BIO_OK) {
+            NET_LOG_ERROR("Failed to prepare hseceasy cryptor, result:" << result << ".");
+            return result;
+        }
+    }
+
     NetServiceOptions options{};
-    auto result = AssignRpcServiceOptions(isOobSvr, options);
+    result = AssignRpcServiceOptions(isOobSvr, options);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to assign rpc service options, result:" << NetErrStr(result) << ".");
         return BIO_ERR;
@@ -589,6 +615,54 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
     ch->UpCtx(ctx.whole);
     ch->SetOneSideTimeout(mTimeout);
     ch->SetTwoSideTimeout(mTimeout);
+    return BIO_OK;
+}
+
+void HseSeceasyLog(int level, const char *msg)
+{
+    if (msg == nullptr) {
+        return;
+    }
+    switch (level) {
+        case 0:
+            NET_LOG_DEBUG(msg);
+            break;
+        case 1: // 1
+            NET_LOG_INFO(msg);
+            break;
+        case 2: // 2
+            NET_LOG_WARN(msg);
+            break;
+        case 3: // 3
+            NET_LOG_ERROR(msg);
+            break;
+        default:
+            NET_LOG_WARN("invalid level " << level << ", " << msg);
+            break;
+    }
+}
+
+BResult NetEngine::PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby)
+{
+    int ret = BIO_ERR;
+
+    if (mbioCryptorHelper != nullptr) {
+        return BIO_OK;
+    }
+    
+    mbioCryptorHelper = new (std::nothrow) BioCryptorHelper(kfsMaster, kfsStandby);
+    if (mbioCryptorHelper == nullptr) {
+        NET_LOG_ERROR("create hseceasy cyptor helper failed.");
+        return BIO_ERR;
+    }
+    ret = ock::hse::HseCryptor::SetExternalLogger(HseSeceasyLog);
+    if (ret != 0) {
+        NET_LOG_ERROR("set hseceasy log func failed.");
+        delete mbioCryptorHelper;
+        mbioCryptorHelper = nullptr;
+        return BIO_ERR;
+    }
+    NET_LOG_INFO("create hseceasy cyptor helper success.");
     return BIO_OK;
 }
 }

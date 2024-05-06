@@ -10,6 +10,7 @@
 #include "hcom/hcom_service.h"
 #include "bio_trace.h"
 #include "bio_monotonic.h"
+#include "bio_cryptor_helper.h"
 #include "net_common.h"
 #include "net_channel_mgr.h"
 #include "net_connector.h"
@@ -592,6 +593,8 @@ private:
     BResult AssignRpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options);
     BResult StartRpcService(const NetOptions &opt);
 
+    BResult PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby);
+
     std::string GenerateWorkersSetting();
 
     void StopInner();
@@ -813,6 +816,7 @@ private:
     ChannelBrokenHandler mHandlerBroken = nullptr;
     ock::hcom::NetService *mRpcService = nullptr;
     ock::hcom::NetService *mIpcService = nullptr;
+    BioCryptorHelper *mbioCryptorHelper = nullptr;
     std::mutex mMutex;
     NetOptions mOptions;
     NetExecutorPoolPtr mRequestExecutor = nullptr;
