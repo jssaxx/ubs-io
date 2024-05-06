@@ -105,6 +105,7 @@ private:
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster);
 
+    bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
 
     BResult FlushImpl();

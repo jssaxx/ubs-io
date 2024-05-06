@@ -371,10 +371,10 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
     return quota;
 }
 
-BResult MirrorClient::Initialize(UpdateView updateView, WorkerScene scene)
+BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene)
 {
     mUpdateView = updateView;
-    mScene = scene;
+    mScene = static_cast<WorkerScene>(scene);
     BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
     BResult ret = LoadOriginView();
     BIO_TRACE_END(SDK_TRACE_INIT_LOAD_VIEW, ret);

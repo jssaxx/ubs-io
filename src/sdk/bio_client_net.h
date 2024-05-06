@@ -36,7 +36,7 @@ public:
         mCheckOnLine = checkOnLine;
     }
 
-    inline WorkerScene GetWorkerScene() const
+    inline uint32_t GetWorkerScene() const
     {
         return mScene;
     }
@@ -127,7 +127,7 @@ private:
 
 private:
     WorkerMode mMode;
-    WorkerScene mScene;
+    uint32_t mScene;
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
