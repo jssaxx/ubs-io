@@ -30,14 +30,16 @@ uint64_t RCacheEvict::GetEvictDataByTier(const RCachePtr rCache, RCacheTierType 
     uint64_t diskUsedSize;
     RCache::GetCacheResource(memCapacity, memUsedSize, diskCapacity, diskUsedSize);
 
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+
     uint64_t cacheData;
     uint64_t waterData;
     if (tier == READ_CACHE_TIER_MEM) {
         cacheData = memUsedSize;
-        waterData = memCapacity;
+        waterData = memCapacity * config.rcacheMemEvictLevel / NO_100;
     } else {
         cacheData = diskUsedSize;
-        waterData = diskCapacity;
+        waterData = diskCapacity * config.rcacheDiskEvictLevel / NO_100;
     }
 
     return cacheData > waterData ? cacheData - waterData : 0ULL;
