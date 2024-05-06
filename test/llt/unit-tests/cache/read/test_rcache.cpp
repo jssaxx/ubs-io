@@ -364,8 +364,6 @@ TEST_F(TestRCache, test_wcache_slice)
     char* sliceBuf = static_cast<char *>(malloc(length));
     ret = wcacheSlice->Deserialize(sliceBuf, 0);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
-
-    BioClientAgent::Instance.
 }
 
 TEST_F(TestRCache, test_cache_recover_err)
