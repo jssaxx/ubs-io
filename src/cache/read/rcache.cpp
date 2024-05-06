@@ -209,22 +209,27 @@ BResult RCache::Initialize()
 
 BResult RCache::Destroy()
 {
-    BResult ret;
+    BResult ret = BIO_ERR;
 
+    LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_INDEX, 0);
     for (uint32_t i = 0; i < READ_CACHE_META_HASH_BUCKET_NUM; i++) {
         indexLock[i].Lock();
         index[i].clear();
         indexLock[i].UnLock();
     }
+    LVOS_TP_END;
 
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         if (flow[tier] != nullptr) {
+            LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_FLOW, 0);
             ret = flow[tier]->Destroy();
+            LVOS_TP_END;
             if (ret != BIO_OK) {
                 LOG_ERROR("Destroy pt id " << mPtId << " tier type " << tier << " flow failed, error code " << ret);
             }
         }
 
+        LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_QUEUE, 0);
         for (uint32_t i = 0; i < MQ_TYPE_BUTT; i++) {
             evictMqLock[tier][i].Lock();
             while (!evictMq[tier][i].IsEmpty()) {
@@ -238,6 +243,7 @@ BResult RCache::Destroy()
             truncateQ[tier].PopFront();
         }
         truncateLock[tier].UnLock();
+        LVOS_TP_END;
     }
 
     return BIO_OK;

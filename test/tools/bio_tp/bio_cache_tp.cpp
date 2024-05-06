@@ -9,6 +9,13 @@ using namespace ock::bio;
 static uint32_t MY_PID = 102;
 void tp::CacheTp::Register() noexcept
 {
+    LVOS_TP_REG(CACHE_RECOVER_CACHE_FAIL, "cache recover cache err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SLICE_OPERATOR_4_FLOW_MEMORY, "slice operator 4 params flow memory err",
+        tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SLICE_COPY_DISK2MEMORY_OK, "slice copy disk to memory ok", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SLICE_COPY_MEMORY2MEMORY_ERR, "slice copy memory to memory err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SLICE_OPERATOR_FLOW_MEMORY, "slice operator flow memory err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SLICE_OPERATOR_2_FLOW_MEMORY, "slice operator to flow memory err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, "cache recover flowmanager get all object err",
         tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_READ_CALLBACK_FAIL, "wcache read callback err", tp::CommonTp::IntValueCallback);
@@ -37,7 +44,8 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(LIST_MALLOC_RSP_FAIL, "list malloc rsp err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(LIST_MALLOC_RSP_FAIL_RESET, "reset list malloc rsp", tp::CommonTp::PointerValueResetCallback);
     LVOS_TP_REG(PUT_ALLOC_SLICE_FAIL, "put alloc slice err", tp::CommonTp::PointerValueCallback);
-    LVOS_TP_REG(PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL, "put slice len 0 alloc slice err", tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL, "put slice len 0 alloc slice err",
+        tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(WCACHE_FLOW_OFFSET_FAIL, "wcache flow offset err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_FLOW_OFFSET_FAIL_RESET, "reset wcache flow offset", tp::CommonTp::IntValueResetCallback);
     LVOS_TP_REG(WCACHE_HOLD_WAIT_FAIL, "wcache hold wait err", tp::CommonTp::IntValueCallback);
@@ -55,7 +63,8 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(MIRROR_SERVER_JOB_FAIL_RESET, "reset mirror job", tp::CommonTp::PointerValueResetCallback);
     LVOS_TP_REG(QUEUE_INIT_FAIL, "queue init err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(EXECUTOR_THREAD_FAIL, "executor thread err", tp::CommonTp::PointerValueCallback);
-    LVOS_TP_REG(MIRROR_SERVER_TASK_FAIL_RESET_OUTER, "reset mirror task outer", tp::CommonTp::PointerValueResetCallback);
+    LVOS_TP_REG(MIRROR_SERVER_TASK_FAIL_RESET_OUTER, "reset mirror task outer",
+        tp::CommonTp::PointerValueResetCallback);
     LVOS_TP_REG(RCACHE_GC_THREAD_FAIL, "rcache gc thread err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(RCACHE_EVICT_THREAD_FAIL, "rcache evict thread err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(CLI_AGENT_INIT_ERR, "cli agent init err", tp::CommonTp::IntValueCallback);
@@ -68,8 +77,8 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(SYNCCALL_CHANNEL_FAIL, "synccall channel err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SYNCCALL_OPCODE_FAIL, "synccall opcode err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(PUT_SLICE_ZERO_ALLOC_FAIL, "put slice zero alloc err", tp::CommonTp::PointerValueCallback);
-    LVOS_TP_REG(PUT_SLICE_NORMAL_ALLOC_FAIL,  "put slice normal alloc err", tp::CommonTp::PointerValueCallback);
-    LVOS_TP_REG(WRITE_SLICE_NULL_FAIL,  "write slice err", tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(PUT_SLICE_NORMAL_ALLOC_FAIL, "put slice normal alloc err", tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(WRITE_SLICE_NULL_FAIL, "write slice err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(HTRACE_INSTANCE_ERR, "htrace instance err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(HTRACE_INSTANCE_INNER_ERR, "htrace instance inner err", tp::CommonTp::PointerValueCallback);
 
@@ -93,13 +102,15 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(WCACHE_GET_META_SLICE_FAIL, "wcache get meta slice err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(UNDERFS_DELETE_ERR, "underfs delete err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_EXPIRED_CLEAR_OK, "wcahce expired clear err", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(NO_PROCESS_WCACHE_EXPIRED_CLEAR, "no process wcache expired clear err", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_RCACHE_EVICT, "no process rcache evict", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_WCACHE_EXPIRED_CLEAR, "no process wcache expired clear err",
+        tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_RCACHE_STOP_EVICT, "no process rcache stop evict", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(RCACHE_EVICT_ERR, "rcache evict err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_TIER_TYPE_FAIL, "wcache tier type err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_TIER_ALLOC_FAIL, "wcache tier alloc err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(MEMORY_WCACHE_TIER_DESTROY_FAIL, "memory wcache tier destroy err", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET, "reset memory wcache tier destroy", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET, "reset memory wcache tier destroy",
+        tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(DISK_WCACHE_TIER_DESTROY_FAIL, "disk wcache tier destroy err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(RECOVER_CACHE_FLOWID_FAIL, "recover cache flowid err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_STATE_NOT_NORMAL, "wcache state not normal", tp::CommonTp::BoolValueCallback);
@@ -110,31 +121,37 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(NO_PROCESS_RCACHE_EVICT, "no process rcache evict init", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_RCACHE_GC, "no process rcache gc init", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(MIRROR_FLOW_CREATE_WCACHE_FAIL, "mirror flow create wcache err", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(MIRROR_FLOW_CREATE_WCACHE_FAIL_RESET, "reset mirror flow create wcache err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_FLOW_CREATE_WCACHE_FAIL_RESET, "reset mirror flow create wcache err",
+        tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_RCACHE_FIND, "no process rcache find", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(RCACHE_ALLOC_OBJ_FAIL, "rcache alloc obj err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(RCACHE_INIT_OBJ_FAIL, "rcache init obj err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_CACHE_PROCESS, "no process cache process", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_CACHE_INIT, "no process cache init", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_SERVER_START, "no process server start", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_ROLLBACK_SERVICE_START, "no process rollback service start", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_ROLLBACK_SERVICE_START, "no process rollback service start",
+        tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_LOG_INSTANCE, "no process log instance", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_CONFIG, "no process config", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_UNDERFS_INIT, "no process underfs init", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_MIRROR_SERVER_INIT, "no process mirror server init", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_MIRROR_SERVER_CRB_INIT, "no process mirror server crb init", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_MIRROR_SERVER_CRB_INIT, "no process mirror server crb init",
+        tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_EXECUTOR, "no process executor init", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_ROLLBACK_SERVICE_INIT, "no process service init", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_MIRROR_SERVER_TASK_START, "no process mirror server task start", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_MIRROR_SERVER_TASK_START, "no process mirror server task start",
+        tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_WCACHE_PUT, "no process wcache put", tp::CommonTp::NoProcessCallback);
 
-    LVOS_TP_REG(NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT, "no process wcache manager empty evict", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT, "no process wcache manager empty evict",
+        tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(WCACHE_HANDLE_BROCK_FLOWID_FAIL, "wcache handle brock flowid err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(HANDLE_CACHE_BROKE_OK, "handle cache broke ok", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_DESTROY_EVICT_THREAD, "no process destroy evict thread", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_WCACHE_FLUSH, "no process wcache flush", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(WCACHE_HANDLE_BROCK_FLUSH, "wcache handle brock flush", tp::CommonTp::BoolValueCallback);
-    LVOS_TP_REG(NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR, "no process wcache expired clear", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR, "no process wcache expired clear",
+        tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(WCACHE_HANDLE_BROCK_EXPIRED_CLEAR, "wcache handle bock expired clear", tp::CommonTp::BoolValueCallback);
     LVOS_TP_REG(WCACHE_STATE_NORMAL, "wcache state normal", tp::CommonTp::BoolValueCallback);
     LVOS_TP_REG(NO_PROCESS_WCACHE_MANAGER_ERASE, "no process wcache manager erase", tp::CommonTp::NoProcessCallback);
@@ -142,13 +159,56 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(HANDLE_PROC_BROKEN_FAIL, "handle proc broken fail", tp::CommonTp::BoolValueCallback);
     LVOS_TP_REG(NO_PROCESS_WCACHE_VALIDATE, "no process wcache validate", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(HANDLE_PROC_BROKE_OK, "handle proc broken ok", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR, "wcache handle proc broken expired clear", tp::CommonTp::BoolValueCallback);
+    LVOS_TP_REG(WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR, "wcache handle proc broken expired clear",
+        tp::CommonTp::BoolValueCallback);
     LVOS_TP_REG(WCACHE_HANDLE_PROC_BROCK_ROLE_ERR, "wcache handle proc broke role err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_CLEAR_PROC_CACHE, "no process clear proc cache", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(CACHE_DELETE_RCACHE_MANAGER_ERR, "cache delete rcache manager err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(RCACHE_EVICT_OK, "rcache evict ok", tp::CommonTp::BoolValueCallback);
+    LVOS_TP_REG(NO_PROCESS_RCACHE_RELEASE, "no process rcache release", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_RCACHE_DESTROY_INDEX, "no process rcache destroy index", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_RCACHE_DESTROY_FLOW, "no process rcache destroy flow", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_RCACHE_DESTROY_QUEUE, "no process rcache destroy queue", tp::CommonTp::NoProcessCallback);
+
+    LVOS_TP_REG(RCACHE_MANAGER_GET_INSTANCE_FAIL, "rcache manager get instance err",
+        tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(WCACHE_MANAGER_GET_INSTANCE_FAIL, "wcache manager get instance err",
+        tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(CACHE_EXPIRED_ERR, "cache expired rcache err", tp::CommonTp::IntValueCallback);
+
+    LVOS_TP_REG(ALLOC_TASK_POOL_FAIL_RESET_OUTER, "alloc task pool reset outer",
+        tp::CommonTp::PointerValueResetCallback);
+    LVOS_TP_REG(ALLOC_DISK_TASK_POOL_FAIL_RESET_OUTER, "alloc disk task pool reset outer",
+        tp::CommonTp::PointerValueResetCallback);
+    LVOS_TP_REG(NO_PROCESS_EXECUTOR_POOL_START, "no process executor pool start", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(MEXECSERVICE_START_FAIL, "executor service start fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(EXECUTOR_SERVICE_STOP_TASK_NULL, "executor service stop task fail", tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(EXECUTOR_SERVICE_MSERVICE_FAIL, "executor service mservice err", tp::CommonTp::PointerValueCallback);
+    LVOS_TP_REG(NO_PROCESS_EXECUTOR_SERVICE_JOIN, "no process executor service join", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(EXECUTOR_SERVICE_MSERVICE_FAIL_RESET, "executor service mservice fail reset",
+        tp::CommonTp::PointerValueResetCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
 {
+    LVOS_TP_UNREG(ALLOC_TASK_POOL_FAIL_RESET_OUTER);
+    LVOS_TP_UNREG(ALLOC_DISK_TASK_POOL_FAIL_RESET_OUTER);
+    LVOS_TP_UNREG(NO_PROCESS_EXECUTOR_POOL_START);
+    LVOS_TP_UNREG(MEXECSERVICE_START_FAIL);
+    LVOS_TP_UNREG(EXECUTOR_SERVICE_STOP_TASK_NULL);
+    LVOS_TP_UNREG(EXECUTOR_SERVICE_MSERVICE_FAIL);
+    LVOS_TP_UNREG(NO_PROCESS_EXECUTOR_SERVICE_JOIN);
+    LVOS_TP_UNREG(EXECUTOR_SERVICE_MSERVICE_FAIL_RESET);
+    LVOS_TP_UNREG(CACHE_EXPIRED_ERR);
+    LVOS_TP_UNREG(RCACHE_MANAGER_GET_INSTANCE_FAIL);
+    LVOS_TP_UNREG(WCACHE_MANAGER_GET_INSTANCE_FAIL);
+    LVOS_TP_UNREG(CACHE_DELETE_RCACHE_MANAGER_ERR);
+    LVOS_TP_UNREG(CACHE_RECOVER_CACHE_FAIL);
+    LVOS_TP_UNREG(SLICE_OPERATOR_4_FLOW_MEMORY);
+    LVOS_TP_UNREG(SLICE_COPY_DISK2MEMORY_OK);
+    LVOS_TP_UNREG(SLICE_COPY_MEMORY2MEMORY_ERR);
+    LVOS_TP_UNREG(SLICE_OPERATOR_FLOW_MEMORY);
+    LVOS_TP_UNREG(SLICE_OPERATOR_2_FLOW_MEMORY);
     LVOS_TP_UNREG(NO_PROCESS_CLEAR_PROC_CACHE);
     LVOS_TP_UNREG(HANDLE_PROC_BROKEN_FAIL);
     LVOS_TP_UNREG(NO_PROCESS_WCACHE_VALIDATE);
@@ -254,6 +314,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(WCACHE_EXPIRED_CLEAR_OK);
     LVOS_TP_UNREG(NO_PROCESS_RCACHE_EVICT);
     LVOS_TP_UNREG(RCACHE_EVICT_ERR);
+    LVOS_TP_UNREG(NO_PROCESS_RCACHE_STOP_EVICT);
     LVOS_TP_UNREG(WCACHE_TIER_TYPE_FAIL);
     LVOS_TP_UNREG(WCACHE_TIER_ALLOC_FAIL);
     LVOS_TP_UNREG(MEMORY_WCACHE_TIER_DESTROY_FAIL);
@@ -262,6 +323,11 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(RECOVER_CACHE_FLOWID_FAIL);
     LVOS_TP_UNREG(WCACHE_STATE_NOT_NORMAL);
     LVOS_TP_UNREG(NO_PROCESS_WCACHE_PUT);
+    LVOS_TP_UNREG(RCACHE_EVICT_OK);
+    LVOS_TP_UNREG(NO_PROCESS_RCACHE_RELEASE);
+    LVOS_TP_UNREG(NO_PROCESS_RCACHE_DESTROY_INDEX);
+    LVOS_TP_UNREG(NO_PROCESS_RCACHE_DESTROY_FLOW);
+    LVOS_TP_UNREG(NO_PROCESS_RCACHE_DESTROY_QUEUE);
 
     LVOS_TP_UNREG(NO_PROCESS_SERVER_START);
     LVOS_TP_UNREG(NO_PROCESS_ROLLBACK_SERVICE_START);

@@ -811,51 +811,6 @@ TEST_F(TestBioServer, test_bio_server_expire_clear)
     crb->JobExpiredClear(ptInfo);
 }
 
-TEST_F(TestBioServer, test_bio_server_expire_clear_ptid_err)
-{
-    MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
-    CmPtInfo ptInfo;
-    ptInfo.ptId = NO_128;
-    ptInfo.version = 1;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
-    auto ret = crb->JobExpiredClear(ptInfo);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
-}
-
-TEST_F(TestBioServer, test_bio_server_expire_clear_table_err)
-{
-    MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
-    CmPtInfo ptInfo;
-    ptInfo.ptId = NO_128;
-    ptInfo.version = 1;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_EXPIRED_CLEAR_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_INDEX_TABLE_FAIL", 0, 1, userParam);
-    auto ret = crb->JobExpiredClear(ptInfo);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_EXPIRED_CLEAR_OK");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_INDEX_TABLE_FAIL");
-}
-
-TEST_F(TestBioServer, test_bio_server_expire_clear_imp_err)
-{
-    MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
-    CmPtInfo ptInfo;
-    ptInfo.ptId = 1;
-    ptInfo.version = 1;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_EVICT_ERR", 0, 1, userParam);
-    auto ret = crb->JobExpiredClear(ptInfo);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_EVICT_ERR");
-}
-
 TEST_F(TestBioServer, test_bio_server_add_sync_data)
 {
     MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();

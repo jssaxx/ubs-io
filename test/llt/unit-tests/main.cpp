@@ -41,6 +41,18 @@ static void ExitBackgroundThreads(uint64_t ptId, uint64_t ptv)
     CmServerMonitorExit();
     CmServerViewExit();
     BioServerUninit();
+    sleep(NO_24);
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_GET_INSTANCE_FAIL", 0, 1, userParam);
+    Cache::Instance().Init();
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_GET_INSTANCE_FAIL");
+    LVOS_HVS_activeTracePoint(0, "WCACHE_MANAGER_GET_INSTANCE_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_INIT_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_INIT_FAIL_RESET", 0, 1, userParam);
+    Cache::Instance().Init();
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_MANAGER_GET_INSTANCE_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL_RESET");
 }
 
 static bool DiskPathInvalid()
@@ -78,6 +90,7 @@ int main(int argc, char *argv[])
         (void)system("touch test1");
         (void)system("touch test2");
     }
+    (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' ./conf/bio.conf");
     (void)system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
         "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
     (void)system("touch ceph.conf");
@@ -100,7 +113,7 @@ int main(int argc, char *argv[])
     Cache::Instance().ExpiredClear(ptId, ptv);
     Cache::Instance().Flush(ptId, ptv);
 
-    std::cout << "Exiting background threads..." << std::endl;
+    std::cout << "Exiting background threads...maybe cost 80-90s" << std::endl;
     sleep(NO_60);
     ExitBackgroundThreads(ptId, ptv);
     std::cout << "All background threads exit" << std::endl;
