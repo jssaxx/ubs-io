@@ -179,7 +179,7 @@ BResult RCacheEvict::Stop(RCachePtr rCachePtr)
     uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_NUM;
 
     evictRCacheLock[index].Lock();
-    LVOS_TP_START(NO_PROCESS_RCACHE_EVICT, 0);
+    LVOS_TP_START(NO_PROCESS_RCACHE_STOP_EVICT, 0);
     auto iter = std::find(evictRCache[index].begin(), evictRCache[index].end(), rCachePtr);
     if (iter != evictRCache[index].end()) {
         evictRCache[index].erase(iter);

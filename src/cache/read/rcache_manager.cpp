@@ -194,7 +194,9 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
         LOG_ERROR("Destroy ptId " << ptId << " read cache object failed, error code " << ret);
     }
 
+    LVOS_TP_START(NO_PROCESS_RCACHE_RELEASE, 0);
     cache.erase(iter);
+    LVOS_TP_END;
     cacheLock.UnLock();
 
     LOG_INFO("Delete rcache, flowId:" << cachePtr->GetFlowId() << ", ptId:" << ptId << ", ptv:" << cachePtr->GetPtv());
@@ -242,6 +244,8 @@ BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
                 usleep(FLUSH_INTERAL_TIME);
             }
         }
+        LVOS_TP_START(RCACHE_EVICT_OK, &isRetry, false);
+        LVOS_TP_END;
     } while (isRetry);
 
     return DeleteRCache(ptId);
@@ -255,7 +259,6 @@ BResult RCacheManager::ExpiredClearImpl(RCachePtr rCache)
     LVOS_TP_START(RCACHE_EVICT_ERR, &ret, BIO_ERR);
     LVOS_TP_END;
     if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
-        cacheLock.UnLock();
         LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache evict service failed:" << ret);
         return ret;
     }

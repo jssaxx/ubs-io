@@ -18,7 +18,9 @@ namespace ock {
 namespace bio {
 BResult Cache::Init()
 {
+    LVOS_TP_START(RCACHE_MANAGER_GET_INSTANCE_FAIL, &mRCacheManager, nullptr);
     mRCacheManager = RCacheManager::Instance();
+    LVOS_TP_END;
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
     BResult ret = BIO_OK;
     LVOS_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
@@ -29,6 +31,8 @@ BResult Cache::Init()
     ChkTrue(ret == BIO_OK, ret, "Initialize read cache manager failed, ret:" << ret << ".");
 
     mWCacheManager = WCacheManager::Instance();
+    LVOS_TP_START(WCACHE_MANAGER_GET_INSTANCE_FAIL, &mWCacheManager, nullptr);
+    LVOS_TP_END;
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
     LVOS_TP_START(WCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
     ret = mWCacheManager->Init(mRCacheManager);
@@ -69,6 +73,8 @@ BResult Cache::Recover()
         } else if (static_cast<uint16_t>(type) == READ_CACHE &&
             static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
             ret = mRCacheManager->RecoverCache(elem.second);
+            LVOS_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
+            LVOS_TP_END;
             ChkTrueNot(ret == BIO_OK, ret);
         }
     }
@@ -259,14 +265,14 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     BIO_TRACE_START(RCACHE_TRACE_DEL);
     ret = mRCacheManager->Delete(ptId, key);
     BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
+    LVOS_TP_START(CACHE_DELETE_RCACHE_MANAGER_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
         return ret;
     }
 
-    LVOS_TP_START(UNDERFS_DELETE_ERR, &ret, BIO_ERR);
     ret = UnderFs::Instance()->Delete(key);
-    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
         return ret;
@@ -343,6 +349,8 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
     ret = mRCacheManager->ExpiredClear(ptId, ptv);
     BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
+    LVOS_TP_START(CACHE_EXPIRED_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
