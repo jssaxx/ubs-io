@@ -79,6 +79,8 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
         ${PROJECT_3RDPARTY_BIN_DIR}/io_interceptor/include
+        ${PROJECT_3RDPARTY_BIN_DIR}/hseceasy/hse/cryption/include/cryption
+        ${PROJECT_3RDPARTY_BIN_DIR}/hseceasy/hse/utils
 )
 
 if (${DEBUG_UT} MATCHES "ON")
