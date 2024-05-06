@@ -51,6 +51,8 @@ BResult BioClientNet::StartPre(WorkerMode mode)
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView,
     uint16_t protocol)
 {
+    LVOS_TP_START(SDK_BIO_START_POST_CHANGE_MODE, &mMode, SEPARATES);
+    LVOS_TP_END;
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
@@ -78,14 +80,18 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
     }
 
     for (auto &node : nodeView) {
+        LVOS_TP_START(SDK_BIO_START_POST_IGNORE_CHECK, 0);
         if (node.second.id.VNodeId() == localNid) {
             continue;
         }
+        LVOS_TP_END;
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
             ".");
+        LVOS_TP_START(SDK_BIO_NET_START_CONNECT_FAIL, &ret, BIO_INNER_ERR);
         ret = mNetEngine->SyncConnect(info);
+        LVOS_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Connect to bio server failed, result:" << ret << ".");
             return ret;
@@ -238,7 +244,11 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;
-    return mNetEngine->Start(netOptions);
+    BResult ret = BIO_INNER_ERR;
+    LVOS_TP_START(SDK_BIO_NET_START_RPC_FAIL, &ret, BIO_INNER_ERR);
+    ret = mNetEngine->Start(netOptions);
+    LVOS_TP_END;
+    return ret;
 }
 
 BResult BioClientNet::ListenEvent()
