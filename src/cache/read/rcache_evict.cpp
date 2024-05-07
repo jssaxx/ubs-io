@@ -54,24 +54,13 @@ BResult RCacheEvict::EvictOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)
 
     BResult ret;
     uint64_t evictData = 0ULL;
-    while (evictData < evictTotalData) {
-        if (tier == READ_CACHE_TIER_MEM) {
-            ret = rCache->EvictMemData(evictTotalData, evictData);
-        } else {
-            ret = rCache->EvictDiskData(evictTotalData, evictData);
-        }
-        if (ret == BIO_NEED_WAIT) {
-            break;
-        }
-
-        if (evictData == 0ULL) {
-            break;
-        }
-
-        evictTotalData -= evictData;
+    if (tier == READ_CACHE_TIER_MEM) {
+        ret = rCache->EvictMemData(evictTotalData, evictData);
+    } else {
+        ret = rCache->EvictDiskData(evictTotalData, evictData);
     }
 
-    return BIO_OK;
+    return ret;
 }
 
 BResult RCacheEvict::EvictHandle(uint32_t index, RCacheTierType tier)
