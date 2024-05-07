@@ -296,7 +296,7 @@ BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)
 {
     auto ret = Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version);
     if (ret != BIO_OK) {
-        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+        LOG_WARN("Expired clear fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
     }
     return BIO_OK;
@@ -311,6 +311,7 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
     LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
+        LOG_WARN("Send sync data req fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
     }
     LOG_INFO("Sync data succeed:"

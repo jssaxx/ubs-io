@@ -346,17 +346,28 @@ void WCache::Flush()
     LVOS_TP_START(NO_PROCESS_WCACHE_FLUSH, 0);
     mIsForced = true;
 
-    bool expectval = false;
-    if (!mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
-        return;
+    {
+        bool expectval = false;
+        if (mEvictRef[WCACHE_MEMORY].compare_exchange_weak(expectval, true)) {
+            bool isSucceed = mEvictService[WCACHE_MEMORY]->Execute([this]() { FlushMem(); });
+            if (!isSucceed) {
+                mEvictRef[WCACHE_MEMORY] = false;
+            }
+        }
     }
 
-    bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this]() { FlushImpl(); });
-    if (!isSucceed) {
-        mEvictRef[WCACHE_DISK] = false;
+    {
+        bool expectval = false;
+        if (mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
+            bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this]() { FlushDisk(); });
+            if (!isSucceed) {
+                mEvictRef[WCACHE_DISK] = false;
+            }
+        }
     }
-    return;
+
     LVOS_TP_END;
+    return;
 }
 
 void WCache::ExpiredClear()
@@ -575,7 +586,7 @@ BResult WCache::EvictAllMemSliceToDisk()
     auto sliceIter = evictSliceQueue.begin();
     for (auto &sliceRef : evictSliceQueue) {
         bool isSatisfied = EvictMemSatisfiedCond();
-        if (!isSatisfied) {
+        if (!isSatisfied && !mIsForced) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return BIO_OK;
@@ -621,7 +632,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         LVOS_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
         isSatisfied = EvictDiskSatisfiedCond();
         LVOS_TP_END;
-        if ((globEvictOffset < sliceEvictOffset) || !isSatisfied) {
+        if ((globEvictOffset < sliceEvictOffset) || (!isSatisfied && !mIsForced)) {
             mCacheTiers[WCACHE_DISK]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
             mRetryCallback(mFlowId, WCACHE_DISK);
             return BIO_OK;
@@ -639,8 +650,28 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     return BIO_OK;
 }
 
-BResult WCache::FlushImpl()
+BResult WCache::FlushMem()
 {
+    LOG_INFO("Flush mem, flowId:" << mFlowId);
+    auto evictSliceQueue = mCacheTiers[WCACHE_MEMORY]->GetEvictSliceQueue();
+    auto sliceIter = evictSliceQueue.begin();
+    for (auto &sliceRef : evictSliceQueue) {
+        auto ret = EvictFromMemToDisk(sliceRef);
+        if (ret != BIO_OK) {
+            mCacheTiers[WCACHE_MEMORY]->RetryEvictSliceQueue(sliceIter, evictSliceQueue.end());
+            mEvictRef[WCACHE_MEMORY] = false;
+            return ret;
+        }
+        ++sliceIter;
+    }
+
+    mEvictRef[WCACHE_MEMORY].store(false);
+    return BIO_OK;
+}
+
+BResult WCache::FlushDisk()
+{
+    LOG_INFO("Flush disk, flowId:" << mFlowId);
     auto evictSliceQueue = mCacheTiers[WCACHE_DISK]->GetEvictSliceQueue();
     auto sliceIter = evictSliceQueue.begin();
     for (auto &sliceRef : evictSliceQueue) {
