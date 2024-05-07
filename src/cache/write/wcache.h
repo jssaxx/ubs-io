@@ -108,7 +108,8 @@ private:
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
 
-    BResult FlushImpl();
+    BResult FlushMem();
+    BResult FlushDisk();
 
     BResult ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearMem();

@@ -124,6 +124,31 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         Cache::Instance().GetCacheResources(desc, READ_CACHE);
         CLI_PrintBuf("RCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
             desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
+    } else if (cmdType == "pt") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        uint64_t curPtTimes;
+        std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&curPtTimes);
+        CLI_PrintBuf("Pt view:\n");
+        for (auto &ptEntry : ptView) {
+            CLI_PrintBuf("%s\n", ptEntry.second.ToString().c_str());
+        }
+    } else if (cmdType == "node") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        uint64_t curNodeTimes;
+        std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&curNodeTimes);
+        CLI_PrintBuf("Node view:\n");
+        for (auto &nodeEntry : nodeView) {
+            CLI_PrintBuf("%s\n", nodeEntry.second.ToString().c_str());
+        }
+        CLI_PrintBuf("Local Node:");
+        CmNodeId localNode = BioServer::Instance()->GetLocalNid();
+        CLI_PrintBuf("%s\n", localNode.ToString().c_str());
     } else if (cmdType == "olc") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());

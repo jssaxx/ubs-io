@@ -389,7 +389,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
 
     LOG_INFO("Read cache Put, key:" << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
         chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset << ", indexofflow:" <<
-        chunk->GetValue().indexInFlow);
+        chunk->GetValue().indexInFlow << ", flowId:" << mFlowId);
 
     BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_INDEX);
     ret = InsertToIndex(chunk->GetKey(), chunk);
@@ -662,7 +662,10 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         chunk->lock.lock();
         uint64_t flowOffset = 0;
         uint64_t indexInFlow = 0;
-        auto ret = flow[READ_CACHE_TIER_DISK]->AllocOffset(chunk->GetValue().length, flowOffset, indexInFlow);
+        BResult ret;
+        LVOS_TP_START(RCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+        ret = flow[READ_CACHE_TIER_DISK]->AllocOffset(chunk->GetValue().length, flowOffset, indexInFlow);
+        LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Alloc offset for read cache key " << chunk->GetKey() << " failed.");
             chunk->lock.unlock();
@@ -687,11 +690,10 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             return BIO_ALLOC_FAIL;
         }
 
-        LVOS_TP_START(RCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
         ret = GetSliceFromChunk(READ_CACHE_TIER_DISK, newChunk, toSlicePtr);
-        LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK) || (toSlicePtr == nullptr)) {
             LOG_ERROR("RCache alloc disk tier slice failed,  " << newChunk->ToString());
+            chunk->lock.unlock();
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
@@ -699,6 +701,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         ret = mSliceOperator.Copy(fromSlicePtr.Get(), toSlicePtr.Get());
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("RCache copy mem tier slice to disk tier slice failed, " << chunk->ToString());
+            chunk->lock.unlock();
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
