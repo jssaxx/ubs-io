@@ -463,7 +463,9 @@ BResult MirrorClient::Put(MirrorPut &param)
             }
         }
     } while (isRetry);
+    BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
     mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
+    BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
     if (isSelf) {
         free(param.value);
         param.value = value;
@@ -541,17 +543,14 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
     uint64_t retryCnt = 0;
     BResult ret = BIO_OK;
 
-    BIO_TRACE_START(SDK_TRACE_PUT_APPLY_QOS);
-    mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
-    BIO_TRACE_END(SDK_TRACE_PUT_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
         uint64_t updateWriteQuota = 0;
         ret = PutImpl(param, spaceInfo, updateWriteQuota);
         if (LIKELY(ret == BIO_OK)) {
-            BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
+            BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
             mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
-            BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
+            BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
             return BIO_OK;
         }
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
@@ -565,7 +564,9 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
             }
         }
     } while (isRetry);
+    BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
     mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
+    BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
 
     return ret;
 }
@@ -914,12 +915,21 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceI
 
 BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
 {
+    BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_APPLY_QOS);
+    mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
+    BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_APPLY_QOS, BIO_OK);
     BResult ret = AllocSpaceImpl(param, spaceInfo);
     if (LIKELY(ret == BIO_OK)) {
         CLIENT_LOG_INFO("Alloc space key:" << param.key << ", location0:" << spaceInfo.loc.location[0] <<
             ", location1:" << spaceInfo.loc.location[1] << ", address num:" << spaceInfo.addressNum << ", address0:" <<
             spaceInfo.address[0].address << ", address0 size:" << spaceInfo.address[0].size << ", address1:" <<
             spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size << ".");
+    } else {
+        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", key:" << param.key << ", length:" << param.length <<
+            ".");
+        BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
+        mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
+        BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
     }
     return ret;
 }
