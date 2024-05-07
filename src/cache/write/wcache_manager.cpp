@@ -431,11 +431,10 @@ BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
     BResult ret;
 
     LVOS_TP_START(NO_PROCESS_FLUSH, 0);
+    LVOS_TP_START(WCACHE_FLUSH_FAIL, &ret, BIO_INNER_RETRY);
     do {
         isRetry = false;
-        LVOS_TP_START(WCACHE_FLUSH_FAIL, &ret, BIO_INNER_RETRY);
         ret = FlushImpl(ptId, ptv);
-        LVOS_TP_END;
         if (ret != BIO_OK) {
             retryTime = Monotonic::TimeUs() - startTime;
             if (retryTime < FLUSH_RETRY_MAX_TIME) {
@@ -444,7 +443,7 @@ BResult WCacheManager::Flush(uint64_t ptId, uint64_t ptv)
             }
         }
     } while (isRetry);
-
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }
@@ -474,11 +473,10 @@ BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
     BResult ret = BIO_ERR;
 
     LVOS_TP_START(NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR, 0);
+    LVOS_TP_START(WCACHE_EXPIRE_FAIL, &ret, BIO_INNER_RETRY);
     do {
         isRetry = false;
-        LVOS_TP_START(WCACHE_EXPIRE_FAIL, &ret, BIO_INNER_RETRY);
         ret = ExpiredClearImpl(ptId, ptv);
-        LVOS_TP_END;
         if (ret != BIO_OK) {
             retryTime = Monotonic::TimeUs() - startTime;
             if (retryTime < FLUSH_RETRY_MAX_TIME) {
@@ -487,7 +485,7 @@ BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
             }
         }
     } while (isRetry);
-
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }

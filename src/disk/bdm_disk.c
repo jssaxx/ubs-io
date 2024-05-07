@@ -40,7 +40,7 @@
 
 #define BDM_BIND_CPU_START (60UL)
 
-#define BDM_BLOCK_SIZE (512UL)
+#define BDM_BLOCK_SIZE (4096UL)
 
 static uint32_t g_bdmAioIsDirect = FALSE;
 
