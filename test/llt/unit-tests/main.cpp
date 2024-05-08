@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
         "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
     (void)system("touch ceph.conf");
 
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE);
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullprt);
     if (ret != RET_CACHE_OK) {
         std::cout << "boostio initialize failed, result:" << ret << "." << std::endl;
         return -1;

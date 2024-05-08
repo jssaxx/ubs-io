@@ -28,9 +28,10 @@ public:
     }
 
     // Establish an IPC connection with the local bio server
-    BResult StartPre(WorkerMode mode);
+    BResult StartPre(WorkerMode mode, const NetOptions netConf);
     // Establish an RPC connection with the other bio server
-    BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView, uint16_t protocol);
+    BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView, uint16_t protocol,
+        const NetOptions netConf);
     void Stop();
 
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
@@ -123,8 +124,9 @@ private:
     BResult CorrectFd();
     BResult ShmInitInner();
     BResult ShmInit();
-    BResult StartIpcService();
-    BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum);
+    BResult StartIpcService(const NetOptions netConf);
+    BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
+        const NetOptions netConf);
     BResult RecoverIpcService();
     BResult ListenEvent();
     void RecoverIpc();

@@ -21,6 +21,6 @@ if (${DEBUG_UT} MATCHES "OFF")
         pthread dl aio
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
-        bio_sdk
+        bio_sdk bio_conf
         -Wl,--end-group)
 endif()

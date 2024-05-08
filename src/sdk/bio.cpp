@@ -390,9 +390,18 @@ void BioService::DestroyCache(uint64_t tenantId)
     CLIENT_LOG_INFO("Destroy cache instance success, tenantId:" << tenantId << ".");
 }
 
-CResult BioService::Initialize(WorkerMode mode)
+CResult BioService::Initialize(WorkerMode mode, const TlsOptionsConfig optConf)
 {
-    return ToCResult(BioClient::Instance()->Start(mode));
+    NetOptions netconf;
+    netconf.enableTls = optConf.enableTls;                      /* tls switch */
+    netconf.certificationPath = optConf.certificationPath;      /* certification path */
+    netconf.caCerPath = optConf.caCerPath;                      /* caCer path */
+    netconf.caCrlPath = optConf.caCrlPath;                      /* caCrl path */
+    netconf.privateKeyPath = optConf.privateKeyPath;            /* private key path */
+    netconf.privateKeyPassword = optConf.privateKeyPassword;    /* private key password */
+    netconf.hseKfsMasterPath = optConf.hseKfsMasterPath;        /* hseceasy kfs master path */
+    netconf.hseKfsStandbyPath = optConf.hseKfsStandbyPath;      /* hseceasy kfs standby path */
+    return ToCResult(BioClient::Instance()->Start(mode, netconf));
 }
 
 void BioService::Exit()
@@ -408,9 +417,9 @@ using namespace ock::bio;
 static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
 static std::mutex g_lock;
 
-CResult BioInitialize(WorkerMode mode)
+CResult BioInitialize(WorkerMode mode, const TlsOptionsConfig optConf)
 {
-    return BioService::Initialize(mode);
+    return BioService::Initialize(mode, optConf);
 }
 
 void BioExit()
@@ -687,8 +696,8 @@ CResult BioGetFileLocation(ObjLocation location, ObjLocationInfo *locInfo)
     mirror->GetPtEntry(ptId, info);
     FileLocationQueryRsp rsp;
     uint16_t slaveId = 0;
-    uint32_t i = 0;
-    for (; i < info.copys.size(); ++i) {
+    int i = 0;
+    for (;i < info.copys.size(); ++i) {
         if (info.copys[i].nodeId != info.masterNodeId) {
             slaveId = info.copys[i].nodeId;
             break;

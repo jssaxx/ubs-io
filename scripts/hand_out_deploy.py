@@ -139,6 +139,27 @@ def send_files_to_node(node):
     return 0
 
 
+def copy_certificate(install_path):
+    normal_logger.info("Copy the certificate to the installation directory.")
+    tmp_conf_file_path = os.path.normpath(sys.argv[2])
+    security_tls_certs_path = "./security/tls/certs/"
+    ca_crt = "ca.crt"
+    client_crt = "client.crt"
+    client_key = "client.key"
+    server_crt = "server.crt"
+    server_key = "server.key"
+    tls_certs = [ca_crt, client_crt, client_key, server_crt, server_key]
+
+    for cert in tls_certs:
+        source_file = tmp_conf_file_path.replace(os.path.basename(tmp_conf_file_path), cert)
+        dest_file = install_path + security_tls_certs_path + cert
+        os.system("cp -f {} {}".format(source_file, dest_file))
+
+    if os.path.exists(install_path + security_tls_certs_path + ca_crt):
+        normal_logger.info("Copy the certificate to the installation directory ok.")
+    else:
+        normal_logger.info("Copy the certificate to the installation directory failed.")
+
 def check_threads_alive(thread_list):
     # 如果线程结束便移除线程列表
     for thread in thread_list:
