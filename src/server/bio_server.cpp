@@ -239,6 +239,14 @@ BResult BioServer::BioNetInit()
     netOptions.regShmMem = true;
     netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
     netOptions.connCount = netConfig.rpcDataWorkersCnt;
+    netOptions.enableTls = mConfig->GetNetConfig().enableTls;
+    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
+    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
+    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                   /* caCrl path */
+    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;          /* private key path */
+    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath;  /* private key password */
+    netOptions.hseKfsMasterPath = mConfig->GetNetConfig().hseKfsMasterPath;        /* hseceasy kfs master path */
+    netOptions.hseKfsStandbyPath = mConfig->GetNetConfig().hseKfsStandbyPath;      /* hseceasy kfs standby path */
     ret = StartRpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
@@ -247,6 +255,14 @@ BResult BioServer::BioNetInit()
     netOptions.protocol = ServiceProtocol::SHM;
     netOptions.handlerCount = netConfig.ipcDataWorkersCnt;
     netOptions.connCount = netConfig.ipcDataWorkersCnt;
+    netOptions.enableTls = mConfig->GetNetConfig().enableTls;
+    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
+    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
+    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                   /* caCrl path */
+    netOptions.privateKeyPath = mConfig->GetNetConfig().hseKfsMasterPath;          /* private key path */
+    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath;  /* private key password */
+    netOptions.hseKfsMasterPath = mConfig->GetNetConfig().hseKfsMasterPath;        /* hseceasy kfs master path */
+    netOptions.hseKfsStandbyPath = mConfig->GetNetConfig().hseKfsStandbyPath;      /* hseceasy kfs standby path */
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
     mNetEngineInited = true;

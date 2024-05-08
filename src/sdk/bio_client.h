@@ -37,7 +37,7 @@ public:
         return instance;
     }
 
-    BResult Start(WorkerMode mode);
+    BResult Start(WorkerMode mode, const NetOptions netConf);
     void Stop();
 
     inline bool Ready() const
@@ -173,8 +173,9 @@ public:
 private:
     BResult BioClientLoggerInit(WorkerMode mode);
     BResult BioClientAgentInit(WorkerMode mode);
-    BResult BioClientNetPreInit(WorkerMode mode);
-    BResult BioClientNetPostInit();
+    BResult BioClientNetPreInit(WorkerMode mode, const NetOptions netConf);
+    BResult BioClientNetPostInit(const NetOptions netConf);
+    BResult BioClientConfigInit();
     BResult BioClientMirrorInit(WorkerMode mode);
     BResult BioClientStartWork();
     void BioClientUpdateHandle();

@@ -104,6 +104,7 @@ struct NetOptions {
     bool enableTls = false;                              /* tls switch */
     std::string certificationPath{};                     /* certification path */
     std::string caCerPath{};                             /* caCer path */
+    std::string caCrlPath{};                             /* caCer path */
     std::string privateKeyPath{};                        /* private key path */
     std::string privateKeyPassword{};                    /* private key password */
     std::string hseKfsMasterPath{};                      /* hseceasy kfs master path */

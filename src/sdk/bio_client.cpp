@@ -38,7 +38,7 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
     return ret;
 }
 
-BResult BioClient::BioClientNetPreInit(WorkerMode mode)
+BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf)
 {
     LVOS_TP_START(SDK_BIO_NET_PRE_CREAT_FAIL, &mNetEngine, nullptr);
     mNetEngine = net::BioClientNet::Instance();
@@ -47,14 +47,14 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode)
         CLIENT_LOG_ERROR("Failed to create net instance.");
         return BIO_ALLOC_FAIL;
     }
-    auto ret = mNetEngine->StartPre(mode);
+    auto ret = mNetEngine->StartPre(mode, netConf);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to start net service, ret:" << ret << ".");
     }
     return ret;
 }
 
-BResult BioClient::BioClientNetPostInit()
+BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
 {
     CheckNodeOnline checkHandle = [this](uint16_t nodeId, std::string &ip, uint16_t &port) -> bool {
         return mMirror->CheckIsOnline(nodeId, ip, port);
@@ -63,7 +63,7 @@ BResult BioClient::BioClientNetPostInit()
     mNetEngine->RegCheckNodeOnline(checkHandle);
 
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
-        mMirror->GetNetProtocol());
+        mMirror->GetNetProtocol(), netConf);
 }
 
 void BioClient::BioClientUpdateHandle()
@@ -186,7 +186,7 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
 }
 #endif
 
-BResult BioClient::Start(WorkerMode mode)
+BResult BioClient::Start(WorkerMode mode, const NetOptions netConf)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
@@ -211,7 +211,7 @@ BResult BioClient::Start(WorkerMode mode)
     }
 #endif
 
-    if (BioClientNetPreInit(mode) != BIO_OK) {
+    if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;
     }
 
@@ -219,7 +219,7 @@ BResult BioClient::Start(WorkerMode mode)
         return BIO_ERR;
     }
 
-    if (BioClientNetPostInit() != BIO_OK) {
+    if (BioClientNetPostInit(netConf) != BIO_OK) {
         return BIO_ERR;
     }
 

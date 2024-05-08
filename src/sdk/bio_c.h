@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <climits>
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,13 +95,24 @@ typedef struct {
     char descriptorInfo[CACHE_SPACE_DEC_SIZE];
 } CacheSpaceInfo;
 
+typedef struct {
+    bool enableTls = false;                               /* tls switch */
+    char certificationPath[PATH_MAX + 1];                     /* certification path */
+    char caCerPath[PATH_MAX + 1];                             /* caCer path */
+    char caCrlPath[PATH_MAX + 1];                             /* caCer path */
+    char privateKeyPath[PATH_MAX + 1];                        /* private key path */
+    char privateKeyPassword[PATH_MAX + 1];                    /* private key password */
+    char hseKfsMasterPath[PATH_MAX + 1];                      /* hseceasy kfs master path */
+    char hseKfsStandbyPath[PATH_MAX + 1];                     /* hseceasy kfs standby path  */
+} TlsOptionsConfig;
+
 /**
  * @brief: Initialize bio service
  *
  * @param[in]: mode: working mode
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode);
+CResult BioInitialize(WorkerMode mode, const TlsOptionsConfig optConf);
 
 /**
  * @brief: Exit bio service
