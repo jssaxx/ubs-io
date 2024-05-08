@@ -35,7 +35,7 @@ Usage:
 {name:s} [option]
 
 Options:
-    install    [pkg_path] [user] [group] [install_path] [deployment_mod 0/1 0:convergence deployment   1:separates deployment]
+    install    [pkg_path] [user] [group] [install_path]
     uninstall 
     start_boostio    
     stop_boostio    
@@ -60,7 +60,6 @@ STORAGE_DEVICE_TYPE = ""
 MEM_FS_CONFIG_FILE = "memfs.conf"
 INSTALL_USER = ""
 INSTALL_PASSWORD = ""
-DEPLOYMENT_MODE = 0
 DEFAULT_DEPLOY_USER = "boostio"
 DEFAULT_DEPLOY_GROUP = "boostio"
 DEFAULT_INSTALL_PATH = "/opt"
@@ -532,35 +531,29 @@ def node_basic_info_init():
 def install_all_nodes(pkg_path):
     logging.info("pid:{0} start installation.".format(PID))
     # 从配置文件初始化需要的信息
-    echo_to_terminal("(1/6)----------check the configuration file.")
+    echo_to_terminal("(1/5)----------check the configuration file.")
     if install_init(pkg_path) != 0:
         echo_to_terminal("initialization failed.")
         return -1
     # 分发文件到各个节点
-    echo_to_terminal("(2/6)----------send files to all nodes.")
+    echo_to_terminal("(2/5)----------send files to all nodes.")
     if broad_cast(send_files_to_node) != 0:
         echo_to_terminal("send files failed.")
         return -1
     # 解压各节点tar包
-    echo_to_terminal("(3/6)----------decompress files in all nodes.")
+    echo_to_terminal("(3/5)----------decompress files in all nodes.")
     if broad_cast(decompress_pkg) != 0:
         echo_to_terminal("decompress files failed.")
         return -1
     # 安装
-    echo_to_terminal("(4/6)----------install in all nodes.")
+    echo_to_terminal("(4/5)----------install in all nodes.")
     if broad_cast(install) != 0:
         echo_to_terminal("install failed.")
         return -1
     # 各个节点启动进程
     time.sleep(10)
-    if DEPLOYMENT_MODE == "1" :
-        echo_to_terminal("(5/6)----------start boostio in all nodes.")
-        if broad_cast(start_boostio) != 0:
-            echo_to_terminal("start fs failed.")
-            return -1
-        time.sleep(10)
 
-    echo_to_terminal("(6/6)----------success.")
+    echo_to_terminal("(5/5)----------success.")
 
     return 0
 
@@ -638,18 +631,16 @@ def exec_build(args):
         logging.error("invalid password.")
         return False
     global DEFAULT_INSTALL_PATH
-    global DEPLOYMENT_MODE
     if args[1] == "install":
-        if len(args) != 7:
+        if len(args) != 6:
             help_info()
             return -1
-        if len(args) == 7:
+        if len(args) == 6:
             global DEFAULT_DEPLOY_USER
             DEFAULT_DEPLOY_USER = args[3]
             global DEFAULT_DEPLOY_GROUP
             DEFAULT_DEPLOY_GROUP = args[4]
             DEFAULT_INSTALL_PATH = args[5]
-            DEPLOYMENT_MODE = args[6]
             if DEFAULT_INSTALL_PATH.endswith('/'):
                 DEFAULT_INSTALL_PATH = DEFAULT_INSTALL_PATH[0:len(DEFAULT_INSTALL_PATH) - 1]
             INSTALL_SCRIPT_PATH = DEFAULT_INSTALL_PATH + "/boostio/scripts"
@@ -661,15 +652,9 @@ def exec_build(args):
                 DEFAULT_INSTALL_PATH = DEFAULT_INSTALL_PATH[0:len(DEFAULT_INSTALL_PATH) - 1]
             INSTALL_SCRIPT_PATH = DEFAULT_INSTALL_PATH + "/boostio/scripts"
         return uninstall_all_nodes()
-    elif args[1] == "stop_boostio" and len(args) == 3:
-        if args[2] == "0":
-            echo_to_terminal("convergence deployment not support stop service.")
-            return -1
+    elif args[1] == "stop_boostio" and len(args) == 2:
         return stop_all_nodes()
-    elif args[1] == "start_boostio" and len(args) == 3:
-        if args[2] == "0":
-            echo_to_terminal("convergence deployment not support start service.")
-            return -1
+    elif args[1] == "start_boostio" and len(args) == 2:
         return start_all_nodes()
     else:
         help_info()
