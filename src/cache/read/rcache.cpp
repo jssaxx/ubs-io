@@ -497,7 +497,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
         LOG_ERROR("Read data from under fs failed, ret:" << ret << ", key " << key << ", offset:" << offset <<
             ", length:" << realLen << ".");
         delete[] value;
-        return BIO_ALLOC_FAIL;
+        return ret;
     }
 
     RCacheChunkPtr chunk = nullptr;
