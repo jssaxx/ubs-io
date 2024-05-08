@@ -1326,11 +1326,15 @@ BResult MirrorClient::StatLocal(StatRequest &req, ObjStat &objInfo) const
 BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjStat &objInfo)
 {
     uint16_t dstNid = ptEntry.masterNodeId;
+    BResult ret = BIO_OK;
     if (dstNid == mLocalNid.VNodeId()) {
-        return StatLocal(req, objInfo);
+        ret = StatLocal(req, objInfo);
     } else {
-        return StatRemote(dstNid, req, objInfo);
+        ret = StatRemote(dstNid, req, objInfo);
     }
+    LVOS_TP_START(SDK_MIRROR_STAT_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    LVOS_TP_END;
+    return ret;
 }
 
 BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
