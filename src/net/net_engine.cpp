@@ -414,6 +414,9 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         return BIO_OK;
     }
     bool isOobSvr = opt.role != NET_CLIENT;
+    if (!isOobSvr) {
+        mOptions = opt;
+    }
     mIpcService = NetService::Instance(opt.protocol, "BIO_IPC", isOobSvr);
     if (mIpcService == nullptr) {
         NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
@@ -706,16 +709,19 @@ void HseSeceasyLog(int level, const char *msg)
         return;
     }
     switch (level) {
-        case 0:
+        case 0: // 0 TRACE
             NET_LOG_DEBUG(msg);
             break;
-        case 1: // 1
+        case 1: // 1 DEBUG
+            NET_LOG_DEBUG(msg);
+            break;
+        case 2: // 2 INFO
             NET_LOG_INFO(msg);
             break;
-        case 2: // 2
+        case 3: // 3 WARN
             NET_LOG_WARN(msg);
             break;
-        case 3: // 3
+        case 4: // 4 ERROR
             NET_LOG_ERROR(msg);
             break;
         default:

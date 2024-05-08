@@ -60,19 +60,19 @@ int main(int argc, char **argv)
             return BIO_ERR;
         }
         optConf.enableTls = mConfig->GetNetConfig().enableTls;      /* tls switch */
-        strncpy_s(optConf.certificationPath, PATH_MAX + 1, mConfig->GetNetConfig().tlsClientCertPath.c_str(),
+        strncpy_s(optConf.certificationPath, PATH_MAX, mConfig->GetNetConfig().tlsClientCertPath.c_str(),
             mConfig->GetNetConfig().tlsClientCertPath.size());          /* certification path */
-        strncpy_s(optConf.caCerPath, PATH_MAX + 1, mConfig->GetNetConfig().tlsCaCertPath.c_str(),
+        strncpy_s(optConf.caCerPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCertPath.c_str(),
             mConfig->GetNetConfig().tlsCaCertPath.size());              /* caCer path */
-        strncpy_s(optConf.caCrlPath, PATH_MAX + 1, mConfig->GetNetConfig().tlsCaCrlPath.c_str(),
+        strncpy_s(optConf.caCrlPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCrlPath.c_str(),
             mConfig->GetNetConfig().tlsCaCrlPath.size());               /* caCrl path */
-        strncpy_s(optConf.privateKeyPath, PATH_MAX + 1, mConfig->GetNetConfig().tlsClientKeyPath.c_str(),
+        strncpy_s(optConf.privateKeyPath, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPath.c_str(),
             mConfig->GetNetConfig().tlsClientKeyPath.size());           /* private key path */
-        strncpy_s(optConf.privateKeyPassword, PATH_MAX + 1, mConfig->GetNetConfig().tlsClientKeyPassPath.c_str(),
+        strncpy_s(optConf.privateKeyPassword, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPassPath.c_str(),
             mConfig->GetNetConfig().tlsClientKeyPassPath.size());       /* private key password */
-        strncpy_s(optConf.hseKfsMasterPath, PATH_MAX + 1, mConfig->GetNetConfig().hseKfsMasterPath.c_str(),
+        strncpy_s(optConf.hseKfsMasterPath, PATH_MAX, mConfig->GetNetConfig().hseKfsMasterPath.c_str(),
             mConfig->GetNetConfig().hseKfsMasterPath.size());           /* hseceasy kfs master path */
-        strncpy_s(optConf.hseKfsMasterPath, PATH_MAX + 1, mConfig->GetNetConfig().hseKfsStandbyPath.c_str(),
+        strncpy_s(optConf.hseKfsStandbyPath, PATH_MAX, mConfig->GetNetConfig().hseKfsStandbyPath.c_str(),
             mConfig->GetNetConfig().hseKfsStandbyPath.size());          /* hseceasy kfs standby path */
     }
 
