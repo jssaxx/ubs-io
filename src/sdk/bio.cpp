@@ -417,9 +417,14 @@ using namespace ock::bio;
 static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
 static std::mutex g_lock;
 
-CResult BioInitialize(WorkerMode mode, const TlsOptionsConfig optConf)
+CResult BioInitialize(WorkerMode mode, TlsOptionsConfig *optConf)
 {
-    return BioService::Initialize(mode, optConf);
+    if (optConf == nullptr) {
+        TlsOptionsConfig tlsConf;
+        tlsConf.enableTls = false;
+        return BioService::Initialize(mode, tlsConf);
+    }
+    return BioService::Initialize(mode, *optConf);
 }
 
 void BioExit()

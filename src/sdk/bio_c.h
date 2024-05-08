@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 #include <time.h>
-#include <climits>
+#include <limits.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,14 +96,14 @@ typedef struct {
 } CacheSpaceInfo;
 
 typedef struct {
-    bool enableTls = false;                               /* tls switch */
-    char certificationPath[PATH_MAX + 1];                     /* certification path */
-    char caCerPath[PATH_MAX + 1];                             /* caCer path */
-    char caCrlPath[PATH_MAX + 1];                             /* caCer path */
-    char privateKeyPath[PATH_MAX + 1];                        /* private key path */
-    char privateKeyPassword[PATH_MAX + 1];                    /* private key password */
-    char hseKfsMasterPath[PATH_MAX + 1];                      /* hseceasy kfs master path */
-    char hseKfsStandbyPath[PATH_MAX + 1];                     /* hseceasy kfs standby path  */
+    uint8_t enableTls;                                    /* tls switch */
+    char certificationPath[PATH_MAX];                     /* certification path */
+    char caCerPath[PATH_MAX];                             /* caCer path */
+    char caCrlPath[PATH_MAX];                             /* caCer path */
+    char privateKeyPath[PATH_MAX];                        /* private key path */
+    char privateKeyPassword[PATH_MAX];                    /* private key password */
+    char hseKfsMasterPath[PATH_MAX];                      /* hseceasy kfs master path */
+    char hseKfsStandbyPath[PATH_MAX];                     /* hseceasy kfs standby path  */
 } TlsOptionsConfig;
 
 /**
@@ -112,7 +112,7 @@ typedef struct {
  * @param[in]: mode: working mode
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode, const TlsOptionsConfig optConf);
+CResult BioInitialize(WorkerMode mode,TlsOptionsConfig *optConf);
 
 /**
  * @brief: Exit bio service
