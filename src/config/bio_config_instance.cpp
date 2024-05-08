@@ -58,13 +58,13 @@ void BioConfig::LoadDefaultConf()
 
     /* load net config for security */
     AddStrConf(NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(NET_TLS_ENABLE_SWITCH.first));
-    AddStrConf(NET_TLS_CA_CERT_PATH, VStrRealPath::Create(NET_TLS_CA_CERT_PATH.first));
+    AddStrConf(NET_TLS_CA_CERT_PATH);
     AddStrConf(NET_TLS_CA_CRL_PATH);
-    AddStrConf(NET_TLS_SERVER_CERT_PATH, VStrRealPath::Create(NET_TLS_SERVER_CERT_PATH.first));
-    AddStrConf(NET_TLS_SERVER_KEY_PATH, VStrRealPath::Create(NET_TLS_SERVER_KEY_PATH.first));
-    AddStrConf(NET_TLS_SERVER_KEY_PASS_PATH, VStrRealPath::Create(NET_TLS_SERVER_KEY_PASS_PATH.first));
-    AddStrConf(NET_HESC_SERVER_KFS_MASTER_PATH, VStrRealPath::Create(NET_HESC_SERVER_KFS_MASTER_PATH.first));
-    AddStrConf(NET_HESC_SERVER_KFS_STANDBY_PATH, VStrRealPath::Create(NET_HESC_SERVER_KFS_STANDBY_PATH.first));
+    AddStrConf(NET_TLS_SERVER_CERT_PATH);
+    AddStrConf(NET_TLS_SERVER_KEY_PATH);
+    AddStrConf(NET_TLS_SERVER_KEY_PASS_PATH);
+    AddStrConf(NET_HESC_SERVER_KFS_MASTER_PATH);
+    AddStrConf(NET_HESC_SERVER_KFS_STANDBY_PATH);
 }
 
 BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
