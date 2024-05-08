@@ -238,6 +238,7 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
         LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("UnderFS list failed, ret:" << ret << ", prefix:" << prefix << ".");
+            return ret;
         }
         for (auto &info : underStatInfo) {
             if (objs.size() >= 1000U) {
