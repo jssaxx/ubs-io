@@ -12,13 +12,13 @@ void BioSdkConfig::LoadDefaultConf()
     LOG_INFO("Load default conf");
     /* load net config for security */
     AddStrConf(SDK_NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(SDK_NET_TLS_ENABLE_SWITCH.first));
-    AddStrConf(SDK_NET_TLS_CA_CERT_PATH, VStrRealPath::Create(SDK_NET_TLS_CA_CERT_PATH.first));
+    AddStrConf(SDK_NET_TLS_CA_CERT_PATH);
     AddStrConf(SDK_NET_TLS_CA_CRL_PATH);
-    AddStrConf(SDK_NET_TLS_CLIENT_CERT_PATH, VStrRealPath::Create(SDK_NET_TLS_CLIENT_CERT_PATH.first));
-    AddStrConf(SDK_NET_TLS_CLIENT_KEY_PATH, VStrRealPath::Create(SDK_NET_TLS_CLIENT_KEY_PATH.first));
-    AddStrConf(SDK_NET_TLS_CLIENT_KEY_PASS_PATH, VStrRealPath::Create(SDK_NET_TLS_CLIENT_KEY_PASS_PATH.first));
-    AddStrConf(NET_HESC_CLIENT_KFS_MASTER_PATH, VStrRealPath::Create(NET_HESC_CLIENT_KFS_MASTER_PATH.first));
-    AddStrConf(NET_HESC_CLIENT_KFS_STANDBY_PATH, VStrRealPath::Create(NET_HESC_CLIENT_KFS_STANDBY_PATH.first));
+    AddStrConf(SDK_NET_TLS_CLIENT_CERT_PATH);
+    AddStrConf(SDK_NET_TLS_CLIENT_KEY_PATH);
+    AddStrConf(SDK_NET_TLS_CLIENT_KEY_PASS_PATH);
+    AddStrConf(NET_HESC_CLIENT_KFS_MASTER_PATH);
+    AddStrConf(NET_HESC_CLIENT_KFS_STANDBY_PATH);
 }
 
 BResult BioSdkConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
