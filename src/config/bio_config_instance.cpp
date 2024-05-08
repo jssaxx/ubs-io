@@ -55,6 +55,16 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
+
+    /* load net config for security */
+    AddStrConf(NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(NET_TLS_ENABLE_SWITCH.first));
+    AddStrConf(NET_TLS_CA_CERT_PATH, VStrRealPath::Create(NET_TLS_CA_CERT_PATH.first));
+    AddStrConf(NET_TLS_CA_CRL_PATH);
+    AddStrConf(NET_TLS_SERVER_CERT_PATH, VStrRealPath::Create(NET_TLS_SERVER_CERT_PATH.first));
+    AddStrConf(NET_TLS_SERVER_KEY_PATH, VStrRealPath::Create(NET_TLS_SERVER_KEY_PATH.first));
+    AddStrConf(NET_TLS_SERVER_KEY_PASS_PATH, VStrRealPath::Create(NET_TLS_SERVER_KEY_PASS_PATH.first));
+    AddStrConf(NET_HESC_SERVER_KFS_MASTER_PATH, VStrRealPath::Create(NET_HESC_SERVER_KFS_MASTER_PATH.first));
+    AddStrConf(NET_HESC_SERVER_KFS_STANDBY_PATH, VStrRealPath::Create(NET_HESC_SERVER_KFS_STANDBY_PATH.first));
 }
 
 BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
@@ -91,11 +101,20 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     }
     mNetConfig.dataIp = std::move(goodIps[0]);
 
-    mNetConfig.isRpcBusyLoop = conf->GetBool(NET_RPC_DATA_BUSY_POLL_MODE.first);
+    mNetConfig.isRpcBusyLoop = conf->GetStr(NET_RPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.rpcDataWorkersCnt = conf->GetInt(NET_RPC_DATA_WORKERS_COUNT.first);
 
-    mNetConfig.isIpcBusyLoop = conf->GetBool(NET_IPC_DATA_BUSY_POLL_MODE.first);
+    mNetConfig.isIpcBusyLoop = conf->GetStr(NET_IPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
+
+    mNetConfig.enableTls = conf->GetStr(NET_TLS_ENABLE_SWITCH.first) == "true";
+    mNetConfig.tlsCaCertPath = conf->GetStr(NET_TLS_CA_CERT_PATH.first);
+    mNetConfig.tlsCaCrlPath = conf->GetStr(NET_TLS_CA_CRL_PATH.first);
+    mNetConfig.tlsServerCertPath = conf->GetStr(NET_TLS_SERVER_CERT_PATH.first);
+    mNetConfig.tlsServerKeyPath = conf->GetStr(NET_TLS_SERVER_KEY_PATH.first);
+    mNetConfig.tlsServerKeyPassPath = conf->GetStr(NET_TLS_SERVER_KEY_PASS_PATH.first);
+    mNetConfig.hseKfsMasterPath = conf->GetStr(NET_HESC_SERVER_KFS_MASTER_PATH.first);
+    mNetConfig.hseKfsStandbyPath = conf->GetStr(NET_HESC_SERVER_KFS_STANDBY_PATH.first);
 
     std::string protocol = conf->GetStr(NET_DATA_PROTOCOL.first);
     if (protocol == "rdma") {

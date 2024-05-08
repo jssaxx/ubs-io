@@ -107,6 +107,7 @@ install_package()
 
 
   cp "$DEPRESS_PATH"/../bio.conf $CONF_PATH
+  cp  -r "$DEPRESS_PATH"/conf/bio_sdk_test.conf $CONF_PATH
   cp  -r "$DEPRESS_PATH"/bin/* $BIN_PATH
   cp  -r "$DEPRESS_PATH"/lib/* $LIB_PATH
   cp  -r "$DEPRESS_PATH"/include/* $INCLUDE_PATH
@@ -176,6 +177,7 @@ set_permissions()
   chmod -R 700 $SECURITY_PATH
 
   chmod 600 $CONF_PATH/bio.conf
+  chmod 640 $CONF_PATH/bio_sdk_test.conf
 
   chown $RUN_USER:$RUN_GROUP  $LOG_FILE
   chmod 600 $LOG_FILE
@@ -198,6 +200,7 @@ set_permissions()
   chmod 550 $BIN_PATH
   chmod 550 $BIN_PATH/bio_daemon
   chmod 550 $BIN_PATH/bio_console
+  chmod 550 $BIN_PATH/seceasy_encrypt
   chmod 550 $BIN_PATH/cli_client
   chmod 550 $BIN_PATH/cli_server
   chmod -R 550 $LIB_PATH

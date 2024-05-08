@@ -21,6 +21,17 @@ const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/
 const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("bio.net.request.executor.queue.size", 1024);
+const auto NET_TLS_ENABLE_SWITCH = std::make_pair("bio.net.tls.enable.switch", "true");
+const auto NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path", "/path/CA/cacert.pem");
+const auto NET_TLS_CA_CRL_PATH = std::make_pair("bio.net.tls.ca.crl.path", "");
+const auto NET_TLS_SERVER_CERT_PATH = std::make_pair("bio.net.tls.server.cert.path", "/path/server/servercert.pem");
+const auto NET_TLS_SERVER_KEY_PATH = std::make_pair("bio.net.tls.server.key.path", "/path/server/serverkey.pem");
+const auto NET_TLS_SERVER_KEY_PASS_PATH = std::make_pair("bio.net.tls.server.key.pass.path",
+    "/path/server/server.keypass");
+const auto NET_HESC_SERVER_KFS_MASTER_PATH = std::make_pair("bio.net.hesc.server.kfs.master.path",
+    "/path/server/master/kfsa");
+const auto NET_HESC_SERVER_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.server.kfs.pass.standby.path",
+    "/path/server/standby/kfsb");
 
 const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
 const auto CM_PT_NUM = std::make_pair("bio.cm.pts_count", 16);
@@ -65,6 +76,14 @@ public:
         uint16_t ipcDataWorkersCnt = 4;
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
+        bool enableTls = true;
+        std::string tlsCaCertPath = "/path/CA/cacert.pem"; /* CA根证书 */
+        std::string tlsCaCrlPath = "";                     /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
+        std::string tlsServerCertPath = "/path/server/servercert.pem"; /* server工作证书 */
+        std::string tlsServerKeyPath = "/path/server/serverkey.pem"; /* server公钥 */
+        std::string tlsServerKeyPassPath = "/path/server/server.keypass"; /* server端私钥密文文件 */
+        std::string hseKfsMasterPath = "/path/client/master/kfsa"; /* hseceasy kfs master path */
+        std::string hseKfsStandbyPath = "/path/client/standby/kfsb"; /* hseceasy kfs standby path  */
     };
 
     struct CmConfig {

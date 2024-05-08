@@ -133,7 +133,7 @@ public:
      * @param[in]: mode: boostio working mode
      * @return: return initialize result
      */
-    static CResult Initialize(WorkerMode mode);
+    static CResult Initialize(WorkerMode mode, TlsOptionsConfig optConf);
 
     /**
      * @brief: Exit bio service
