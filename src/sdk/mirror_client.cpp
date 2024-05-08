@@ -1285,7 +1285,10 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
-            cbCtx->result = *(static_cast<BResult *>(resp));
+            BResult res = *(static_cast<BResult *>(resp));
+            if (res != BIO_OK) {
+                cbCtx->result = res;
+            }
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
