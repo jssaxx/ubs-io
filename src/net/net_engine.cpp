@@ -278,6 +278,73 @@ BResult NetEngine::InitMemoryAllocator()
     }
 }
 
+BResult ValidateTlsCert(const NetOptions &opt)
+{
+    if (opt.caCerPath.empty() || opt.certificationPath.empty() || opt.privateKeyPath.empty()) {
+        NET_LOG_ERROR("The path or password for TLS cert is empty");
+        return BIO_ERR;
+    }
+    std::string checkCerPath = opt.caCerPath;
+    if (!CanonicalPath(checkCerPath)) {
+        NET_LOG_ERROR("TLS ca cert path check failed " << checkCerPath);
+        return BIO_ERR;
+    }
+    NET_LOG_INFO("TLS cert path check failed " << checkCerPath);
+    checkCerPath = opt.certificationPath;
+    if (!CanonicalPath(checkCerPath)) {
+        NET_LOG_ERROR("TLS cert path check failed " << checkCerPath);
+        return BIO_ERR;
+    }
+    NET_LOG_INFO("TLS cert path check failed " << checkCerPath);
+    checkCerPath = opt.privateKeyPath;
+    if (!CanonicalPath(checkCerPath)) {
+        NET_LOG_ERROR("TLS privateKeyPath check failed " << checkCerPath);
+        return BIO_ERR;
+    }
+    NET_LOG_INFO("TLS cert path check " << checkCerPath);
+    NET_LOG_INFO("TLS cert path check " << opt.privateKeyPassword);
+    return BIO_OK;
+}
+
+void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOptions &options)
+{
+    driver->RegisterTLSCertificationCallback([&options](const std::string &name, std::string &path) {
+        path = options.certificationPath;
+        LOG_INFO("get client cert success.");
+        return true;
+    });
+
+    driver->RegisterTLSCaCallback([&options](const std::string &name, std::string &capath, std::string &crlPath,
+        PeerCertVerifyType &verifyPeerCert, TLSCertVerifyCallback &cb) {
+        capath = options.caCerPath;
+        if (!options.caCrlPath.empty()) {
+            crlPath = options.caCrlPath;
+        }
+        LOG_INFO("get client CA cert success.");
+        verifyPeerCert = PeerCertVerifyType::VERIFY_BY_DEFAULT;
+        cb = [](void *, const char *) { return 0; };
+        return true;
+    });
+
+    driver->RegisterTLSPrivateKeyCallback(
+        [this, &options](const std::string &name, std::string &path, void *&pwd, int &len, TLSEraseKeypass &erase) {
+            std::pair<char *, int> passwordData;
+            auto ret = mbioCryptorHelper->Decrypt(1, options.privateKeyPassword, passwordData);
+            if (ret != 0) {
+                return false;
+            }
+            path = options.privateKeyPath;
+            pwd = passwordData.first;
+            len = passwordData.second;
+            LOG_INFO("get client key success." << options.privateKeyPassword << " path " << path);
+            erase = [](void *pass, int len) {
+                auto data = std::make_pair(static_cast<char *>(pass), len);
+                BioCryptorHelper::EraseDecryptData(data);
+            };
+            return true;
+        });
+}
+
 std::string NetEngine::GenerateWorkersSetting()
 {
     std::ostringstream oss;
@@ -317,6 +384,14 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
         mIpcService->RegisterNewChannelHandler(std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
             std::placeholders::_2, std::placeholders::_3));
     }
+    if (opt.enableTls) {
+        if (ValidateTlsCert(mOptions) != BIO_OK) {
+            NET_LOG_ERROR("Failed to enable Ipc TLS service , enableTls:" << opt.enableTls << ".");
+        }
+        options.enableTls = true;
+        setDriverTlsCallback(mIpcService, mOptions);
+        NET_LOG_INFO("Net tls callback has created.");
+    }
     mIpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
         BROKEN_ALL);
     if (reqExecutorNum > NO_32) {
@@ -344,7 +419,6 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
         return BIO_ERR;
     }
-
     if (opt.enableTls) {
         result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
         if (result != BIO_OK) {
@@ -364,7 +438,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     return BIO_OK;
 }
 
-BResult NetEngine::AssignRpcServiceOptions(bool isOobSvr, NetServiceOptions &options)
+BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr, NetServiceOptions &options)
 {
     std::string ipMask = mOptions.ipMask;
     auto port = mOptions.port;
@@ -397,6 +471,14 @@ BResult NetEngine::AssignRpcServiceOptions(bool isOobSvr, NetServiceOptions &opt
         mRpcService->AddListener(listenOpt);
         mRpcService->RegisterNewChannelHandler(std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
             std::placeholders::_2, std::placeholders::_3));
+    }
+    if (opt.enableTls) {
+        if (ValidateTlsCert(mOptions) != BIO_OK) {
+            return BIO_ERR;
+        }
+        options.enableTls = true;
+        setDriverTlsCallback(mRpcService, mOptions);
+        NET_LOG_INFO("Net tls callback has created.");
     }
     mRpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
         BROKEN_ALL);
@@ -431,7 +513,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
 
     NetServiceOptions options{};
-    result = AssignRpcServiceOptions(isOobSvr, options);
+    result = AssignRpcServiceOptions(opt, isOobSvr, options);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to assign rpc service options, result:" << NetErrStr(result) << ".");
         return BIO_ERR;

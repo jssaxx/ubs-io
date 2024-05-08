@@ -33,7 +33,7 @@ static void Log(int level, const char *msg)
     }
 }
 
-BResult BioClientNet::StartPre(WorkerMode mode)
+BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
 {
     mMode = mode;
     BResult ret = BIO_OK;
@@ -43,13 +43,13 @@ BResult BioClientNet::StartPre(WorkerMode mode)
             ret = BIO_INNER_ERR;
         }
     } else {
-        ret = StartIpcService();
+        ret = StartIpcService(netConf);
     }
     return ret;
 }
 
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView,
-    uint16_t protocol)
+    uint16_t protocol, const NetOptions netConf)
 {
     LVOS_TP_START(SDK_BIO_START_POST_CHANGE_MODE, &mMode, SEPARATES);
     LVOS_TP_END;
@@ -73,7 +73,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         return BIO_OK;
     }
 
-    auto ret = StartRpcService((ipMask + "/24"), port, static_cast<ServiceProtocol>(protocol), NO_4);
+    auto ret = StartRpcService((ipMask + "/24"), port, static_cast<ServiceProtocol>(protocol), NO_4, netConf);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Bio client start rpc service failed, result:" << ret << ".");
         return ret;
@@ -189,7 +189,7 @@ BResult BioClientNet::ShmInit()
     return BIO_OK;
 }
 
-BResult BioClientNet::StartIpcService()
+BResult BioClientNet::StartIpcService(const NetOptions netConf)
 {
     mNetEngine = MakeRef<NetEngine>();
     if (mNetEngine == nullptr) {
@@ -211,6 +211,14 @@ BResult BioClientNet::StartIpcService()
     netOptions.connCount = NO_4;
     netOptions.handlerCount = NO_4;
     netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.enableTls = netConf.enableTls;
+    netOptions.certificationPath = netConf.certificationPath;    /* certification path */
+    netOptions.caCerPath = netConf.caCerPath;                    /* caCer path */
+    netOptions.caCrlPath = netConf.caCrlPath;                    /* caCrl path */
+    netOptions.privateKeyPath = netConf.privateKeyPath;          /* private key path */
+    netOptions.privateKeyPassword = netConf.privateKeyPassword;  /* private key password */
+    netOptions.hseKfsMasterPath = netConf.hseKfsMasterPath;      /* hseceasy kfs master path */
+    netOptions.hseKfsStandbyPath = netConf.hseKfsStandbyPath;    /* hseceasy kfs standby path */
     ret = mNetEngine->Start(netOptions);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Start ipc service failed, result:" << ret << ".");
@@ -232,7 +240,8 @@ BResult BioClientNet::StartIpcService()
     return ret;
 }
 
-BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum)
+BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
+    const NetOptions netConf)
 {
     const uint64_t defaultMemorySize = (128UL * 1024UL * 1024UL); // 128M
     NetOptions netOptions;
@@ -244,11 +253,15 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;
-    BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SDK_BIO_NET_START_RPC_FAIL, &ret, BIO_INNER_ERR);
-    ret = mNetEngine->Start(netOptions);
-    LVOS_TP_END;
-    return ret;
+    netOptions.enableTls = netConf.enableTls;
+    netOptions.certificationPath = netConf.certificationPath;    /* certification path */
+    netOptions.caCerPath = netConf.caCerPath;                    /* caCer path */
+    netOptions.caCrlPath = netConf.caCrlPath;                    /* caCrl path */
+    netOptions.privateKeyPath = netConf.privateKeyPath;          /* private key path */
+    netOptions.privateKeyPassword = netConf.privateKeyPassword;  /* private key password */
+    netOptions.hseKfsMasterPath = netConf.hseKfsMasterPath;      /* hseceasy kfs master path */
+    netOptions.hseKfsStandbyPath = netConf.hseKfsStandbyPath;    /* hseceasy kfs standby path */
+    return mNetEngine->Start(netOptions);
 }
 
 BResult BioClientNet::ListenEvent()

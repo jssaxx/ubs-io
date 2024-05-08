@@ -105,6 +105,8 @@ public:
         return mUsedBlock * mDataPageBytes;
     }
 
+    void setDriverTlsCallback(ock::hcom::NetService *driver, const NetOptions &options);
+
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
     {
         LVOS_TP_START(MR_POOL_NULL_FAIL, &mMrBlockPool, nullptr);
@@ -165,6 +167,30 @@ public:
         mShareOffset = off;
         mShmSize = size;
         mShareAddress = addr;
+    }
+
+   void GetTlsOptions(NetOptions options)
+    {
+        options.enableTls = mOptions.enableTls;
+        options.certificationPath = mOptions.certificationPath;      /* certification path */
+        options.caCerPath = mOptions.caCerPath;                  /* caCert path */
+        options.caCrlPath = mOptions.caCrlPath;                   /* caCrl path */
+        options.privateKeyPath = mOptions.privateKeyPath;          /* private key path */
+        options.privateKeyPassword = mOptions.privateKeyPassword;  /* private key password */
+        options.hseKfsMasterPath = mOptions.hseKfsMasterPath;        /* hseceasy kfs master path */
+        options.hseKfsStandbyPath = mOptions.hseKfsStandbyPath;      /* hseceasy kfs standby path */
+    }
+
+    void SetTlsOptions(NetOptions options)
+    {
+        mOptions.enableTls = options.enableTls;
+        mOptions.certificationPath = options.certificationPath;      /* certification path */
+        mOptions.caCerPath = options.caCerPath;                  /* caCert path */
+        mOptions.caCrlPath = options.caCrlPath;                   /* caCrl path */
+        mOptions.privateKeyPath = options.privateKeyPath;          /* private key path */
+        mOptions.privateKeyPassword = options.privateKeyPassword;  /* private key password */
+        mOptions.hseKfsMasterPath = options.hseKfsMasterPath;        /* hseceasy kfs master path */
+        mOptions.hseKfsStandbyPath = options.hseKfsStandbyPath;      /* hseceasy kfs standby path */
     }
 
     uint8_t *GetShmAddress(uint64_t offset)
@@ -590,7 +616,7 @@ public:
 private:
     void AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options);
     BResult StartIpcService(const NetOptions &opt);
-    BResult AssignRpcServiceOptions(bool isOobSvr, ock::hcom::NetServiceOptions &options);
+    BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options);
     BResult StartRpcService(const NetOptions &opt);
 
     BResult PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby);
