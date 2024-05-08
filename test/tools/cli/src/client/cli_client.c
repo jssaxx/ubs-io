@@ -746,13 +746,16 @@ static void diag_clientClearInputBuf(void)
         FD_ZERO(&fdset);
         FD_SET(STDIN_FILENO, &fdset); //lint !e845 !e835
 
-        ret= select(STDIN_FILENO+1, &fdset, NULL, NULL, &timeout); //lint !e835
+        ret = select(STDIN_FILENO+1, &fdset, NULL, NULL, &timeout); //lint !e835
         if ((ret <= 0) || !FD_ISSET(STDIN_FILENO, &fdset))  //lint !e845 !e835
         {
             break;
         }
 
-        (void)read(STDIN_FILENO, &ch, (size_t)1);
+        ssize_t readRet = read(STDIN_FILENO, &ch, (size_t)1);
+        if (readRet == -1) {
+            break;
+        }
     }
 
     return;
@@ -1275,8 +1278,12 @@ static int32_t diag_clientCheckNum()
         DIAG_LOG(DIAG_LOG_ERROR, "popen fail.");
         return RETURN_ERROR;
     }
-    
-    fgets(buffer, (int32_t)sizeof(buffer), fp);
+
+    char *retPtr = fgets(buffer, (int32_t)sizeof(buffer), fp);
+    if (retPtr == NULL) {
+        DIAG_LOG(DIAG_LOG_ERROR, "fgets fail.");
+        return RETURN_ERROR;
+    }
     pclose(fp);
     if('\0' != buffer[0])
     {
