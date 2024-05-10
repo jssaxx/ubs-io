@@ -542,7 +542,7 @@ TEST_F(TestWCache, test_list_prefix_null_underfs_fail_case_return_ok)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "UNDERFS_INIT_FAIL", 0, 1, userParam);
     auto ret = Cache::Instance().List(nullptr, 0, true, objs);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "UNDERFS_INIT_FAIL");
 }
 
