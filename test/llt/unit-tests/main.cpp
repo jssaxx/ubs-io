@@ -93,9 +93,11 @@ int main(int argc, char *argv[])
     (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' ./conf/bio.conf");
     (void)system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
         "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
+    (void)system("sed -i 's#bio.net.tls.enable.switch = true"
+                 "#bio.net.tls.enable.switch = false#g' ./conf/bio.conf");
     (void)system("touch ceph.conf");
 
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullprt);
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr);
     if (ret != RET_CACHE_OK) {
         std::cout << "boostio initialize failed, result:" << ret << "." << std::endl;
         return -1;
