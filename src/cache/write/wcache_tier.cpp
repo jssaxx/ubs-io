@@ -95,18 +95,17 @@ void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.UnLock();
 }
 
+void WCacheTier::RetryEvictQueue(WCacheSliceRefPtr sliceRef)
+{
+    mEvictSliceQueueLock.Lock();
+    mEvictSliceQueue.push_front(sliceRef);
+    mEvictSliceQueueLock.UnLock();
+}
+
 void WCacheTier::DelEvictQueue(WCacheSliceRefPtr sliceRef)
 {
     mEvictSliceQueueLock.Lock();
     mEvictSliceQueue.remove(sliceRef);
-    mEvictSliceQueueLock.UnLock();
-}
-
-void WCacheTier::RetryEvictSliceQueue(std::list<WCacheSliceRefPtr>::iterator start,
-    std::list<WCacheSliceRefPtr>::iterator end)
-{
-    mEvictSliceQueueLock.Lock();
-    mEvictSliceQueue.insert(mEvictSliceQueue.begin(), start, end);
     mEvictSliceQueueLock.UnLock();
 }
 
@@ -117,14 +116,6 @@ bool WCacheTier::IsEmptyEvictSliceQueue()
     isEmpty = mEvictSliceQueue.empty();
     mEvictSliceQueueLock.UnLock();
     return isEmpty;
-}
-
-std::list<WCacheSliceRefPtr> WCacheTier::GetEvictSliceQueue()
-{
-    mEvictSliceQueueLock.Lock();
-    auto evictSliceQueue = std::move(mEvictSliceQueue);
-    mEvictSliceQueueLock.UnLock();
-    return evictSliceQueue;
 }
 
 WCacheSliceRefPtr WCacheTier::GetEvictSlice()
