@@ -1141,14 +1141,15 @@ TEST_F(TestBio, test_bio_client_net_post_init)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "SDK_BIO_NET_START_RPC_FAIL", 0, 1, userParam);
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr);
+    TlsOptionsConfig *conf = (TlsOptionsConfig *) malloc(sizeof(TlsOptionsConfig));
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE, conf);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_NET_START_RPC_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE");
 
     BioExit();
     LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE", 0, 1, userParam);
-    ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, conf);
     EXPECT_EQ(ret, RET_CACHE_OK);
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE");
 
@@ -1156,7 +1157,7 @@ TEST_F(TestBio, test_bio_client_net_post_init)
     LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_CHANGE_MODE", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "SDK_BIO_START_POST_IGNORE_CHECK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "SDK_BIO_NET_START_CONNECT_FAIL", 0, 1, userParam);
-    ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, conf);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_NET_START_CONNECT_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_START_POST_IGNORE_CHECK");
