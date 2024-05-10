@@ -947,7 +947,7 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         flowInst = Query(ptId);
         if (UNLIKELY(flowInst == nullptr)) {
             CLIENT_LOG_ERROR("Query flow failed, ptId:" << ptId << ".");
-            return BIO_INNER_ERR;
+            return BIO_INNER_RETRY;
         }
     }
 
