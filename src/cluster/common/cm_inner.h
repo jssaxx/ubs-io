@@ -247,6 +247,11 @@ typedef struct {
 } PtViewChangeOpHandle;
 
 typedef struct {
+    int32_t (*notifyDataInfoChange)(const char *key, void *value, uint32_t valLen, void *ctx);
+    void *ctx;
+} DataInfoChangeOpHandle;
+
+typedef struct {
     char *zkIpMask;
     char *ipStr;
     uint32_t regTimeOut;     // 毫秒
@@ -324,6 +329,25 @@ int32_t CM_SetPtFinishStatus(uint16_t poolId, uint16_t ptNum, PtFinish *ptList);
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_RegPtViewChangeOpHandle(uint16_t poolId, PtViewChangeOpHandle *handle);
+
+/*
+ * 功能描述：往指定POOL写入DataInfo数据
+ * 参数说明：poolId: {in}，pool ID
+             key: {in}, 数据索引键值
+             value: {in}, 写入的数据
+             valLen: {in}, 写入数据长度
+ * 返回值：0表示成功，非0表示失败
+ */
+int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen);
+
+/*
+ * 功能描述：注册DataInfo更新通知与回调函数
+ * 参数说明：poolId: {in}，pool ID
+             handle: {in}, DataInfo更新回调函数，在DataInfo更之后，则会调用该回调函数
+ * 返回值：0表示成功，非0表示失败
+ */
+int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint32_t valLen,
+    DataInfoChangeOpHandle *handle);
 
 /*
  * 功能描述：CM模块注销函数

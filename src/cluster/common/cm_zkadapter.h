@@ -49,6 +49,11 @@ int32_t CmClientZkSubStateListChange(uint16_t poolId, stateChangeNotifyFp notify
 
 int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp);
 
+int32_t CmClientZkRecordDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen);
+
+int32_t CmClientZkSubDataInfoChange(uint16_t poolId, const char *key, void *value, uint32_t valLen,
+    DataInfoChangeOpHandle *handle);
+
 uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre);
 
 int32_t CmClientZkPtEntryIsSame(PtEntry *elem1, PtEntry *elem2);
