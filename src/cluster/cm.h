@@ -361,11 +361,19 @@ public:
 
     BResult RegisterPtHandler(const CmPtHandler &ptHandler);
 
+    BResult ReportServiceState(bool isUngrade);
+
+    inline bool GetServiceState()
+    {
+        return mIsUpgrade;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
     static int32_t QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx);
     static int32_t NotifyNodeListChange(NodeStateList *nodeList, void *ctx);
     static int32_t NotifyPtListChange(PtEntryList *ptList, void *ctx);
+    static int32_t NotifyDataInfoChange(const char *key, void *value, uint32_t valLen, void *ctx);
 
     void ScanPtListAffinity();
 
@@ -374,6 +382,8 @@ public:
     CmNodeInfo mNode;
     CmNodeHandler mNodeHandler;
     CmPtHandler mPtHandler;
+
+    bool mIsUpgrade{ false };
 
     CmNodeId mNodeId{ NO_MAX_VALUE32 };
 

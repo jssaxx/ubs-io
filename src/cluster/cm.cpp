@@ -42,6 +42,16 @@ BResult Cm::Start()
     if (ret != 0) {
         return BIO_ERR;
     }
+
+    DataInfoChangeOpHandle handle;
+    handle.notifyDataInfoChange = NotifyDataInfoChange;
+    handle.ctx = reinterpret_cast<void *>(this);
+
+    ret = CM_RegDataInfoHandle(pools.poolId, "service_state", &mIsUpgrade, sizeof(mIsUpgrade), &handle);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+
     mStarted = true;
     return BIO_OK;
 }
@@ -136,6 +146,15 @@ BResult Cm::RegisterPtHandler(const CmPtHandler &ptHandler)
     int ret = CM_RegPtViewChangeOpHandle(mOptions.groups.groupId, &handle);
     if (ret != BIO_OK) {
         return ret;
+    }
+    return BIO_OK;
+}
+
+BResult Cm::ReportServiceState(bool isUngrade)
+{
+    int ret = CM_WriteDataInfo(mOptions.groups.groupId, "service_state", &isUngrade, sizeof(isUngrade));
+    if (ret != 0) {
+        return BIO_ERR;
     }
     return BIO_OK;
 }
@@ -275,6 +294,15 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
     BIO_TRACE_START(CM_TRACE_NOTIFY_PTVIEW);
     cm->mPtHandler(cm->mPtInfos);
     BIO_TRACE_END(CM_TRACE_NOTIFY_PTVIEW, 0);
+    return 0;
+}
+
+int32_t Cm::NotifyDataInfoChange(const char *key, void *value, uint32_t valLen, void *ctx)
+{
+    Cm *cm = static_cast<Cm *>(ctx);
+    cm->mIsUpgrade = *(reinterpret_cast<bool *>(value));
+    std::string state = cm->mIsUpgrade ? "true" : "false";
+    LOG_INFO("Service state, isUpgrade:" << state);
     return 0;
 }
 

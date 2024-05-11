@@ -77,7 +77,10 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 {
     // degraded write through to underfs
     if (UNLIKELY(isDegrade)) {
-        return PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
+        BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BYPASS);
+        auto ret = PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
+        BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_BYPASS, ret);
+        return ret;
     }
 
     // put it memory tier cache.

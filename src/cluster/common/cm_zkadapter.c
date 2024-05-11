@@ -15,6 +15,8 @@ static zhandle_t *g_zh = NULL;
 static const int UNWATCH_ZNODE = 0;
 static const int UNCHECK_VERSION = -1;
 
+#define USER_DATA_MAX_LEN 4096
+
 #if DESC("zk client")
 typedef struct {
     cm_rwlock_t lock;
@@ -29,6 +31,9 @@ typedef struct {
     stateChangeNotifyFp stateChange;
     masterChangeNotifyFp masterChange;
     ptChangeNotifyFp ptChange;
+    char userKey[USER_DATA_MAX_LEN];
+    char userValue[USER_DATA_MAX_LEN];
+    DataInfoChangeOpHandle userHandle;
 } ZkRestoreC;
 
 typedef struct {
@@ -846,6 +851,128 @@ int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
     return CM_OK;
 }
 
+int32_t CmClientZkRecordDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen)
+{
+    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    int32_t ret;
+
+    int32_t len = (int32_t)valLen;
+
+    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s", CM_POOL, poolId, CM_DATA_INFO_PATH, key);
+    if (ret < 0) {
+        CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        return CM_ERR;
+    }
+
+    ret = CmZkExists(g_zh, zkPath, UNWATCH_ZNODE, NULL);
+    if (ret != ZOK) {
+        if (ret == ZNONODE) {
+            ret = CmZkCreate(g_zh, zkPath, (char *)value, len, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);
+            if (ret != ZOK) {
+                CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPath, ret);
+                return CM_ERR;
+            }
+            return CM_OK;
+        } else {
+            CM_LOGERROR("Check znode(%s) exists failed, ret(%d).", zkPath, ret);
+            return CM_ERR;
+        }
+    }
+
+    ret = CmZkSet(g_zh, zkPath, (char *)value, len, UNCHECK_VERSION);
+    if (ret != ZOK) {
+        CM_LOGERROR("Set znode(%s) failed, ret(%d).", zkPath, ret);
+        return CM_ERR;
+    }
+
+    return CM_OK;
+}
+
+static int32_t CmClientZkSubDataHandle(uint16_t poolId);
+
+static void CmClientZkSubDataChangeWatch(zhandle_t *zh, int evtype, int state, const char *path, void *watcherCtx)
+{
+    ZkRestoreC *restore = (ZkRestoreC *)watcherCtx;
+    int32_t ret;
+
+    UNREFERENCE_PARAM(zh);
+    UNREFERENCE_PARAM(state);
+    UNREFERENCE_PARAM(watcherCtx);
+
+    CM_LOGINFO("evtype(%d) state(%d) path(%s).", evtype, state, path);
+
+    if (evtype == ZOO_CHANGED_EVENT) {
+        ret = CmClientZkSubDataHandle(restore->pool->poolId);
+        if (ret != CM_OK) {
+            CM_LOGERROR("Sub datainfo change failed, ret(%d).", ret);
+        }
+    }
+
+    return;
+}
+
+static int32_t CmClientZkSubDataHandle(uint16_t poolId)
+{
+    ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
+    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    int32_t ret;
+    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s", CM_POOL, restore->pool->poolId,
+        CM_DATA_INFO_PATH, restore->userKey);
+    if (ret < 0) {
+        CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        return CM_ERR;
+    }
+    
+    int len;
+    ret = CmZkWget(g_zh, zkPath, CmClientZkSubDataChangeWatch, restore, (char *)restore->userValue, &len, NULL);
+    if (ret != ZOK) {
+        CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        return CM_ERR;
+    }
+    
+    restore->userHandle.notifyDataInfoChange(restore->userKey, restore->userValue, len, restore->userHandle.ctx);
+    return CM_OK;
+}
+
+int32_t CmClientZkSubDataInfoChange(uint16_t poolId, const char *key, void *value, uint32_t valLen,
+    DataInfoChangeOpHandle *handle)
+{
+    ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
+    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    int32_t ret;
+
+    if (strlen(key) >= USER_DATA_MAX_LEN || valLen > USER_DATA_MAX_LEN) {
+        CM_LOGERROR("Invalid, key len(%u) val len(%u).", strlen(key), valLen);
+        return CM_ERR;
+    }
+
+    memcpy_s(restore->userKey, USER_DATA_MAX_LEN, key, strlen(key) + 1ul);
+    restore->userHandle = *handle;
+
+    int32_t len = (int32_t)valLen;
+
+    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s/%s", CM_POOL, poolId, CM_DATA_INFO_PATH, restore->userKey);
+    if (ret < 0) {
+        CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        return CM_ERR;
+    }
+
+    ret = CmZkCreate(g_zh, zkPath, (char *)value, len, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);
+    if (ret != ZOK && ret != ZNODEEXISTS) {
+        CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPath, ret);
+        return CM_ERR;
+    }
+
+    ret = CmZkWget(g_zh, zkPath, CmClientZkSubDataChangeWatch, restore, (char *)value, &len, NULL);
+    if (ret != ZOK) {
+        CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        return CM_ERR;
+    }
+
+    handle->notifyDataInfoChange(key, value, len, handle->ctx);
+    return CM_OK;
+}
+
 static void CmClientZkInitMgr(void)
 {
     uint16_t poolId;
@@ -868,6 +995,7 @@ static void CmClientZkInitMgr(void)
         g_cZkMgr.restore[poolId].stateChange = NULL;
         g_cZkMgr.restore[poolId].ptChange = NULL;
         g_cZkMgr.restore[poolId].masterChange = NULL;
+        g_cZkMgr.restore[poolId].userHandle.notifyDataInfoChange = NULL;
     }
 }
 
@@ -1963,6 +2091,56 @@ int CmZkWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *
 #if DESC("zk initial")
 static int32_t CmZkConnect(void);
 
+static void CmZkClientRestore(void)
+{
+    int32_t ret;
+
+    for (uint16_t poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
+        if (g_cZkMgr.restore[poolId].used == FALSE) {
+            continue;
+        }
+        if (g_cZkMgr.restore[poolId].local.nodeId != NODE_ID_INVALID) {
+            ret = CmClientZkRecordLocalSession(poolId);
+            if (ret != CM_OK) {
+                continue;
+            }
+        }
+        if (g_cZkMgr.restore[poolId].stateChange != NULL) {
+            ret = CmClientZkSubStateListChange(poolId, g_cZkMgr.restore[poolId].stateChange);
+            if (ret != CM_OK) {
+                continue;
+            }
+        }
+        if (g_cZkMgr.restore[poolId].ptChange != NULL) {
+            ret = CmClientZkSubPtListChange(poolId, g_cZkMgr.restore[poolId].ptChange);
+            if (ret != CM_OK) {
+                continue;
+            }
+        }
+        if (g_cZkMgr.restore[poolId].userHandle.notifyDataInfoChange != NULL) {
+            ret = CmClientZkSubDataHandle(poolId);
+            if (ret != CM_OK) {
+                continue;
+            }
+        }
+    }
+}
+
+static void CmZkServerRestore(void)
+{
+    int32_t ret;
+
+    ret = CmServerZkRecordMetaSession();
+    if (ret != CM_OK) {
+        CM_LOGWARN("Record meta session failed, ret(%d) nid(%u).", ret, g_sZkMgr.localId);
+    }
+    
+    ret = CmServerZkSubRoleChange(g_sZkMgr.roleChange); // 恢复订阅
+    if (ret != CM_OK) {
+        return;
+    }
+}
+
 static void CmZkRestore(void)
 {
     int32_t ret;
@@ -1976,41 +2154,11 @@ static void CmZkRestore(void)
     } while (ret != CM_OK);
 
     if (CmConfigHasCfgPoolC() == TRUE) {
-        for (uint16_t poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
-            if (g_cZkMgr.restore[poolId].used == FALSE) {
-                continue;
-            }
-            if (g_cZkMgr.restore[poolId].local.nodeId != NODE_ID_INVALID) {
-                ret = CmClientZkRecordLocalSession(poolId);
-                if (ret != CM_OK) {
-                    continue;
-                }
-            }
-            if (g_cZkMgr.restore[poolId].stateChange != NULL) {
-                ret = CmClientZkSubStateListChange(poolId, g_cZkMgr.restore[poolId].stateChange);
-                if (ret != CM_OK) {
-                    continue;
-                }
-            }
-            if (g_cZkMgr.restore[poolId].ptChange != NULL) {
-                ret = CmClientZkSubPtListChange(poolId, g_cZkMgr.restore[poolId].ptChange);
-                if (ret != CM_OK) {
-                    continue;
-                }
-            }
-        }
+        CmZkClientRestore();
     }
 
     if (CmConfigHasCfgPoolS() == TRUE) {
-        ret = CmServerZkRecordMetaSession();
-        if (ret != CM_OK) {
-            CM_LOGWARN("Record meta session failed, ret(%d) nid(%u).", ret, g_sZkMgr.localId);
-        }
-
-        ret = CmServerZkSubRoleChange(g_sZkMgr.roleChange); // 恢复订阅
-        if (ret != CM_OK) {
-            return;
-        }
+        CmZkServerRestore();
     }
     return;
 }
@@ -2183,6 +2331,17 @@ static int32_t CmZkCreatePoolDir4(PoolInfo *pool)
 {
     char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int32_t ret;
+
+    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, pool->poolId, CM_DATA_INFO_PATH);
+    if (ret < 0) {
+        CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        return CM_ERR;
+    }
+    ret = CmZkCreate(g_zh, zkPath, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);
+    if (ret != ZOK && ret != ZNODEEXISTS) {
+        CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPath, ret);
+        return CM_ERR;
+    }
 
     if (pool->redundance == PT_NONE) {
         return CM_OK;
