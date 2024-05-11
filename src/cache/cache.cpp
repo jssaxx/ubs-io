@@ -127,6 +127,11 @@ BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
     return mWCacheManager->GetWCacheSlice(sliceKey, slice);
 }
 
+BResult Cache::ServiceUngradeFlush()
+{
+    return BIO_OK;
+}
+
 BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
