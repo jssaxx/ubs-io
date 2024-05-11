@@ -125,6 +125,39 @@ int32_t CM_RegPtViewChangeOpHandle(uint16_t poolId, PtViewChangeOpHandle *handle
     return CM_OK;
 }
 
+int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen)
+{
+    if (poolId >= MAX_POOL_NUM || key == NULL || value == NULL || valLen == 0) {
+        CM_LOGERROR("Invalid poolId(%u).", poolId);
+        return CM_ERR;
+    }
+
+    int32_t ret = CmClientZkRecordDataInfo(poolId, key, value, valLen);
+    if (ret != CM_OK) {
+        CM_LOGERROR("Write data failed, ret(%d) poolId(%u).", ret, poolId);
+        return ret;
+    }
+
+    return CM_OK;
+}
+
+int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint32_t valLen,
+    DataInfoChangeOpHandle *handle)
+{
+    if (poolId >= MAX_POOL_NUM || key == NULL || handle == NULL) {
+        CM_LOGERROR("Invalid poolId(%u).", poolId);
+        return CM_ERR;
+    }
+
+    int32_t ret = CmClientZkSubDataInfoChange(poolId, key, value, valLen, handle);
+    if (ret != CM_OK) {
+        CM_LOGERROR("Sub data failed, ret(%d) poolId(%u).", ret, poolId);
+        return ret;
+    }
+
+    return CM_OK;
+}
+
 int32_t CmClientLocalGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 {
     if (g_localOp[poolId].queryLocalNodeInfo == NULL) {
