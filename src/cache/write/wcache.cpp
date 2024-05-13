@@ -38,6 +38,12 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
     mRCacheManager = rCacheManager;
     mUnderFs = UnderFs::Instance();
 
+    auto ret = mLocRole(static_cast<uint16_t>(mPtId), mIsMaster); // 创建时获取当时的副本主备，用于降级场景的PUT流程
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get role fail:" << ret << ", ptId:" << mPtId << " flowId:" << mFlowId);
+        return ret;
+    }
+
     return BIO_OK;
 }
 
@@ -47,8 +53,8 @@ void WCache::RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, cons
     mGetLocDiskStatus = getLocDiskStatus;
     mLocRole = locRole;
     mGlobEvictOffset = evictOffset;
-    mEvictCallback = std::move(evictCallback);
-    mRetryCallback = std::move(retryCallback);
+    mEvictCallback = evictCallback;
+    mRetryCallback = retryCallback;
 }
 
 void WCache::Exit() {}
@@ -73,10 +79,10 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 }
 
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr, bool isDegrade)
+    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
     // degraded write through to underfs
-    if (UNLIKELY(isDegrade)) {
+    if (UNLIKELY(mIsDegrade)) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BYPASS);
         auto ret = PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
         BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_BYPASS, ret);
@@ -129,6 +135,11 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
+    if (!mIsMaster) {
+        LOG_INFO("Degrade in standy node, key:" << key << " flowId:" << mFlowId);
+        return BIO_OK;
+    }
+
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
     destSliceRef = memCache->Write(key, srcSlice, sliceReader, attr);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);

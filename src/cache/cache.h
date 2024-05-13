@@ -32,9 +32,9 @@ public:
         return mWCacheManager->AllocateFlowId(ptId, ptv, flowId);
     }
 
-    BResult CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId);
+    BResult CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade);
 
-    BResult CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId);
+    BResult CreateRCache(uint64_t ptId, uint64_t ptv);
 
     BResult DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId);
 
@@ -61,6 +61,8 @@ public:
 
     void RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus);
 
+    void RegCheckServiceState(CheckServiceState checkService);
+
     void RegCheckDegrade(CheckDegrade checkDegrade);
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
@@ -85,6 +87,7 @@ private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
     GetLocDiskId mGetLocDiskId{ nullptr };
+    CheckServiceState mCheckService{ nullptr };
     CheckDegrade mCheckDegrade{ nullptr };
 };
 }

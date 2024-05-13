@@ -224,6 +224,11 @@ public:
         return false;
     }
 
+    inline bool GetServiceState()
+    {
+        return mCm->GetServiceState();
+    }
+
     inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView(uint64_t *curNodeTimes)
     {
         *curNodeTimes = mCurNodeTimes;
