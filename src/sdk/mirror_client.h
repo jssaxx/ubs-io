@@ -181,9 +181,10 @@ private:
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
         uint64_t &index);
     BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-        uint64_t &flowId);
+        uint64_t &flowId, bool &isDegrade);
     BResult SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
+    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        uint64_t &flowId, bool &isDegrade);
     BResult DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlow(uint16_t ptId);
     BResult DestroyFlow(uint16_t ptId, uint64_t flowId);
@@ -221,7 +222,7 @@ private:
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
 
-    inline BResult Insert(uint16_t ptId, uint64_t ptv, uint64_t flowId)
+    inline BResult Insert(uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
     {
         mLock.LockWrite();
         if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
@@ -237,11 +238,11 @@ private:
             }
             mFlowMap.erase(it);
             delete instance;
-            mFlowMap[ptId] = new FlowInstance(flowId, ptv);
+            mFlowMap[ptId] = new FlowInstance(flowId, ptv, isDegrade);
             mLock.UnLock();
             return BIO_OK;
         }
-        mFlowMap[ptId] = new FlowInstance(flowId, ptv);
+        mFlowMap[ptId] = new FlowInstance(flowId, ptv, isDegrade);
         mLock.UnLock();
         return BIO_OK;
     }

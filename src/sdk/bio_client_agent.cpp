@@ -259,14 +259,15 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
     return BIO_OK;
 }
 
-BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId)
+BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+    uint64_t &flowId, bool &isDegrade)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
     if (opType == 0) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0 };
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0, false };
     } else if (opType == 1) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId };
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
     }
     CreateFlowResponse rsp;
     do {
@@ -286,6 +287,7 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
 
     if (opType == 0) {
         flowId = rsp.flowId;
+        isDegrade = rsp.isDegrade;
     } else if (opType == 1 && rsp.flowId != 0) {
         ret = BIO_ERR;
     }
@@ -309,23 +311,23 @@ BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t 
 }
 
 BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId)
+    uint64_t &flowId, bool &isDegrade)
 {
     if (mMode == CONVERGENCE) {
         if (opType == 0) {
             CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      opType,
-                                      0 };
+                                      opType, 0, false };
             CreateFlowResponse rsp;
             auto ret = createFlowMasterOp(&req, &rsp);
             flowId = rsp.flowId;
+            isDegrade = rsp.isDegrade;
             return ret;
         } else {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, 0, 0, procId }, opType, flowId };
+            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, 0, 0, procId }, opType, flowId, isDegrade };
             return createFlowSlaveOp(&req);
         }
     } else {
-        return SendCreateFlowRequestLocal(ptEntry, ptId, opType, flowId);
+        return SendCreateFlowRequestLocal(ptEntry, ptId, opType, flowId, isDegrade);
     }
 }
 

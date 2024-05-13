@@ -385,6 +385,11 @@ BResult BioServer::BioCacheInit()
     };
     Cache::Instance().RegGetLocDiskStatus(getLocDiskStatus);
 
+    CheckServiceState checkService = []() -> bool {
+        return Cm::Instance()->GetServiceState();
+    };
+    Cache::Instance().RegCheckServiceState(checkService);
+
     CheckDegrade checkDegrade = [](uint16_t ptId, bool &isDegrade) -> BResult {
         return Cm::Instance()->CheckPtDegrade(ptId, isDegrade);
     };
@@ -638,17 +643,15 @@ int32_t GetPtView(QueryPtViewRequest *req, QueryPtViewResponse *rsp)
 
 int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp)
 {
-    uint64_t flowId;
     BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(req->comm.pid, req->comm.ptId,
-        req->comm.ptv, flowId);
-    rsp->flowId = flowId;
+        req->comm.ptv, rsp->flowId, rsp->isDegrade);
     return static_cast<int32_t>(ret);
 }
 
 int32_t CreateFlowSlave(CreateFlowRequest *req)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CreateFlowSlave(req->comm.pid, req->comm.ptId,
-        req->comm.ptv, req->flowId));
+        req->comm.ptv, req->flowId, req->isDegrade));
 }
 
 int32_t DestroyFlow(DestroyFlowRequest *req)
