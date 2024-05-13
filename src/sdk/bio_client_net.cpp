@@ -100,7 +100,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
     return BIO_OK;
 }
 
-void BioClientNet::Stop()
+void BioClientNet::Exit()
 {
     if (mMode == SEPARATES) {
         StopInner();

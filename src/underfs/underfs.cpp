@@ -5,11 +5,12 @@
 #include "bio_log.h"
 #include "bio_trace.h"
 #include "bio_config_instance.h"
+#include <iostream>
+#include <fstream>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <iostream>
-#include <fstream>
+
 #ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
 #endif
@@ -208,9 +209,10 @@ BResult UnderFs::Init()
     }
     LVOS_TP_END;
 
+    DIR *dir = nullptr;
     mEmulationCephPath = CEPH_PATH;
-    DIR *dir = opendir(mEmulationCephPath.c_str());
     LVOS_TP_START(UNDERFS_OPEN_DIR_FAIL, &dir, nullptr);
+    dir = opendir(mEmulationCephPath.c_str());
     LVOS_TP_END;
     if (dir == nullptr) {
         int status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -222,12 +224,11 @@ BResult UnderFs::Init()
             LOG_ERROR("Failed to create directory, " << mEmulationCephPath.c_str() << ", status:" << status);
             return BIO_UFS_IOERR;
         }
-    } else {
-        LOG_INFO("Exist to check directory, " << mEmulationCephPath.c_str());
-        closedir(dir);
+        dir = opendir(mEmulationCephPath.c_str());
     }
 
     LOG_INFO("UnderFS initialize succeed, emulation path:" << mEmulationCephPath << ".");
+    closedir(dir);
     mInited = true;
     return BIO_OK;
 }

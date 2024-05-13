@@ -23,7 +23,7 @@ using BioClientAgentPtr = Ref<BioClientAgent>;
 class BioClientAgent {
 public:
     using BioServerStartFuncPtr = int32_t (*)();
-    using BioServerStopFuncPtr = void (*)();
+    using BioServerExitFuncPtr = void (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
     using GetLocalResQuotaFuncPtr = int32_t (*)(QueryResourceRequest *, QueryResourceResponse *);
@@ -51,6 +51,7 @@ public:
     }
 
     BResult Initialize(WorkerMode mode);
+    void Exit();
 
     NetEnginePtr GetNetService()
     {
@@ -133,7 +134,7 @@ private:
 
     void *handler = nullptr;
     BioServerStartFuncPtr startOp = nullptr;
-    BioServerStopFuncPtr stopOp = nullptr;
+    BioServerExitFuncPtr exitOp = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
     GetLocalResQuotaFuncPtr getResourceOp = nullptr;

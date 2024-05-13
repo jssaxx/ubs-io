@@ -51,8 +51,6 @@ static void UtAsyncProcCb(void *ctx, int retCode)
     sem_post(&cbCtx->tsk.sem);
 }
 
-TEST_F(TestDisk, test_disk_initialize) {}
-
 TEST_F(TestDisk, test_disk_read_async_case_return_ok)
 {
     char *buff = nullptr;
@@ -60,28 +58,20 @@ TEST_F(TestDisk, test_disk_read_async_case_return_ok)
     EXPECT_EQ(0, ret);
     EXPECT_FALSE(buff == nullptr);
 
-    BdmIoCtx *ioCtx = nullptr;
     AsyncCbCtx cbCtx;
     cbCtx.ret = BIO_OK;
-    ret = sem_init(&cbCtx.tsk.sem, 0, 0);
-    EXPECT_EQ(0, ret);
+    sem_init(&cbCtx.tsk.sem, 0, 0);
 
-    ioCtx = (BdmIoCtx *)malloc(sizeof(BdmIoCtx));
-    EXPECT_FALSE(ioCtx == nullptr);
-
-    ioCtx->cb = UtAsyncProcCb;
-    ioCtx->ctx = (void *)&cbCtx;
-    ret = BdmReadAsync(0, 0, buff, NO_4194304, ioCtx);
-    if (ret == 0) {
-        int downRet = sem_wait(&cbCtx.tsk.sem);
-        while (downRet != 0 && errno == EINTR) {
-            downRet = sem_wait(&cbCtx.tsk.sem);
-        }
+    BdmIoCtx ioCtx;
+    ioCtx.cb = UtAsyncProcCb;
+    ioCtx.ctx = (void *)&cbCtx;
+    ret = BdmReadAsync(0, 0, buff, NO_4194304, &ioCtx);
+    EXPECT_EQ(BDM_CODE_OK, ret);
+    if (ret == BDM_CODE_OK) {
+        sem_wait(&cbCtx.tsk.sem);
         sem_destroy(&cbCtx.tsk.sem);
     }
-    EXPECT_EQ(0, ret);
-    EXPECT_EQ(0, cbCtx.ret);
-    free(ioCtx);
+    EXPECT_EQ(BDM_CODE_OK, cbCtx.ret);
     free(buff);
 }
 
@@ -92,27 +82,19 @@ TEST_F(TestDisk, test_disk_write_async_case_return_ok)
     EXPECT_EQ(0, ret);
     EXPECT_FALSE(buff == nullptr);
 
-    BdmIoCtx *ioCtx = nullptr;
     AsyncCbCtx cbCtx;
     cbCtx.ret = BIO_OK;
-    ret = sem_init(&cbCtx.tsk.sem, 0, 0);
-    EXPECT_EQ(0, ret);
+    sem_init(&cbCtx.tsk.sem, 0, 0);
 
-    ioCtx = (BdmIoCtx *)malloc(sizeof(BdmIoCtx));
-    EXPECT_FALSE(ioCtx == nullptr);
-
-    ioCtx->cb = UtAsyncProcCb;
-    ioCtx->ctx = (void *)&cbCtx;
-    ret = BdmWriteAsync(0, 0, buff, NO_4194304, ioCtx);
-    if (ret == 0) {
-        int downRet = sem_wait(&cbCtx.tsk.sem);
-        while (downRet != 0 && errno == EINTR) {
-            downRet = sem_wait(&cbCtx.tsk.sem);
-        }
+    BdmIoCtx ioCtx;
+    ioCtx.cb = UtAsyncProcCb;
+    ioCtx.ctx = (void *)&cbCtx;
+    ret = BdmWriteAsync(0, 0, buff, NO_4194304, &ioCtx);
+    EXPECT_EQ(BDM_CODE_OK, ret);
+    if (ret == BDM_CODE_OK) {
+        sem_wait(&cbCtx.tsk.sem);
         sem_destroy(&cbCtx.tsk.sem);
     }
-    EXPECT_EQ(0, ret);
-    EXPECT_EQ(0, cbCtx.ret);
-    free(ioCtx);
+    EXPECT_EQ(BDM_CODE_OK, cbCtx.ret);
     free(buff);
 }

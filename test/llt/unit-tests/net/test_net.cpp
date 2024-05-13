@@ -166,6 +166,9 @@ TEST_F(TestNet, test_net_sync_call)
     uint64_t rsp2Len = 0;
     ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, req2, &rsp2, rsp2Len);
     EXPECT_EQ(ret, BIO_OK);
+    if (rsp2 != nullptr) {
+        free(rsp2);
+    }
 
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
@@ -193,6 +196,9 @@ TEST_F(TestNet, test_net_async_call)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t req1 = NO_1024;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+        if (resp != nullptr) {
+            free(resp);
+        }
         return;
     };
     Callback callback(cbFunc, nullptr);
@@ -213,11 +219,13 @@ TEST_F(TestNet, test_net_async_call_buff)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t req1 = NO_1024;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+        if (resp != nullptr) {
+            free(resp);
+        }
         return;
     };
     Callback callback(cbFunc, nullptr);
     engine->AsyncCallBuff(1, 1, &req1, 1, callback);
-
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
     engine->AsyncCallBuff(1, 1, &req1, 1, callback);

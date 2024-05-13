@@ -48,12 +48,19 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
     return BIO_OK;
 }
 
+void BioClientAgent::Exit()
+{
+    if (mMode == CONVERGENCE) {
+        exitOp();
+    }
+}
+
 BResult BioClientAgent::InitOperation()
 {
     if ((startOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerInit"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((stopOp = reinterpret_cast<BioServerStopFuncPtr>(LoadFunction("BioServerUninit"))) == nullptr) {
+    if ((exitOp = reinterpret_cast<BioServerExitFuncPtr>(LoadFunction("BioServerExit"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {

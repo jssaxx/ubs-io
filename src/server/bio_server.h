@@ -63,6 +63,12 @@ public:
         return BIO_OK;
     }
 
+    void Exit()
+    {
+        OnServiceShutdown();
+        OnServiceUninitialize();
+    }
+
     BResult OnServiceInitialize()
     {
         for (auto it = mModules.cbegin(); it != mModules.cend(); ++it) {
@@ -110,7 +116,7 @@ public:
         return BIO_OK;
     }
 
-    BResult OnServiceShutdown()
+    void OnServiceShutdown()
     {
         for (auto it = mModules.crbegin(); it != mModules.crend(); ++it) {
             if (it->shutdown == nullptr) {
@@ -121,10 +127,9 @@ public:
             it->shutdown();
             LOG_INFO("Module (" << it->name << ") shutdown finished.");
         }
-        return BIO_OK;
     }
 
-    BResult OnServiceUninitialize()
+    void OnServiceUninitialize()
     {
         for (auto it = mModules.crbegin(); it != mModules.crend(); ++it) {
             if (it->exit == nullptr) {
@@ -135,7 +140,6 @@ public:
             it->exit();
             LOG_INFO("Module (" << it->name << ") exit finished.");
         }
-        return BIO_OK;
     }
 
     DEFINE_REF_COUNT_FUNCTIONS
@@ -176,7 +180,7 @@ public:
     BioServer() noexcept;
 
     BResult Start();
-    void Stop();
+    void Exit();
 
     static BioServerPtr &Instance()
     {
@@ -315,9 +319,11 @@ public:
 protected:
     BResult BioConfigInit();
     BResult BioLoggerInit(std::string pathName);
+    void BioLoggerExit();
     BResult BioTraceInit();
     void BioTraceExit();
     BResult BioUnderFsInit();
+    void BioUnderFsExit();
     BResult BioBdmInit();
     void BioBdmExit();
     BResult BioNetInit();
@@ -327,7 +333,9 @@ protected:
     BResult BioMirrorServerInit();
     void BioMirrorServerExit();
     BResult BioCacheInit();
+    void BioCacheExit();
     BResult BioFlowInit();
+    void BioFlowExit();
     BResult BioInterceptorServerInit();
 #ifdef USE_DEBUG_TOOLS
     BResult BioServerDiagnoseInit();
@@ -347,7 +355,7 @@ private:
     bool mStarted = false;
     std::mutex mStartLock;
     BioServiceProcPtr mService = nullptr;
-
+    Logger *mLogger = nullptr;
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
     CmPtr mCm = nullptr;

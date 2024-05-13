@@ -135,11 +135,14 @@ uint64_t CacheOverloadCtrl::LimitedWaterLevelQuota(uint64_t frontWriteBw, uint64
 
 uint64_t CacheOverloadCtrl::CalculateWriteQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint64_t vm)
 {
+    if (vm <= NO_50) {
+        return mMaxWriteQuota;
+    }
     uint32_t proc = 0;
     uint64_t adjustWQuota = 0;
-    if (vm < NO_30) {
+    if (vm < NO_70) {
         adjustWQuota = LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    } else if (vm < NO_60) {
+    } else if (vm < NO_80) {
         adjustWQuota = MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     } else if (vm < NO_90) {
         adjustWQuota = HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);

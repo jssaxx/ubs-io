@@ -112,7 +112,7 @@ typedef struct {
  * @param[in]: mode: working mode
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode,TlsOptionsConfig *optConf);
+CResult BioInitialize(WorkerMode mode, TlsOptionsConfig *optConf);
 
 /**
  * @brief: Exit bio service

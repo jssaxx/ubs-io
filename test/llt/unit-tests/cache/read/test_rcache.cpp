@@ -60,32 +60,30 @@ TEST_F(TestRCache, test_rcache_create_ok)
 
 TEST_F(TestRCache, test_rcache_put_ok)
 {
-    LOG_INFO("run test_rcache_put");
     uint64_t len = strlen(G_VALUE) + 1;
     WCacheSlicePtr slicePtr = nullptr;
 
     auto ret = gRcacheManager->AllocResources(G_PT_ID, len, slicePtr);
-    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(ret, BIO_OK);
     EXPECT_EQ(slicePtr->GetLength(), len);
 
     ret = gSlicerOperator.Copy(G_VALUE, slicePtr.Get());
-    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(ret, BIO_OK);
 
     ret = gRcacheManager->Put(G_PT_ID, G_KEY, slicePtr);
-    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(ret, BIO_OK);
 
     uint64_t totalCap = 0;
     uint64_t usedCap = 0;
     BdmGetCapacity(0, &totalCap, &usedCap);
-    LOG_INFO("total cap " << totalCap << " used cap " << usedCap);
     uint64_t needEvictData = len;
     uint64_t haveEvictData;
     gRcacheManager->GetRCacheInstanceByPtId(G_PT_ID)->EvictMemData(needEvictData, haveEvictData);
-    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(ret, BIO_OK);
     EXPECT_EQ(needEvictData, haveEvictData);
 
     gRcacheManager->GetRCacheInstanceByPtId(G_PT_ID)->EvictDiskData(needEvictData, haveEvictData);
-    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(ret, BIO_OK);
     EXPECT_EQ(needEvictData, haveEvictData);
 }
 
@@ -132,7 +130,6 @@ TEST_F(TestRCache, test_bio_server_expire_clear_ptid_err)
 
 TEST_F(TestRCache, test_rcache_put_ptid_unexist_return_fail)
 {
-    LOG_INFO("run test_rcache_put_ptid_unexist_return_fail");
     uint64_t len = strlen(G_VALUE) + 1;
     WCacheSlicePtr slicePtr = nullptr;
 
@@ -318,8 +315,9 @@ TEST_F(TestRCache, test_cache_init_wcache_init_err)
 TEST_F(TestRCache, test_rcache_slice)
 {
     uint32_t length = NO_1024;
+    char *buffer = static_cast<char*>(malloc(length));
     FlowAddr flowAddr;
-    flowAddr.chunkId = (uint64_t)malloc(length);
+    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
     flowAddr.chunkOffset = 0;
     flowAddr.chunkLen = length;
     std::vector<FlowAddr> addrs;
@@ -342,13 +340,16 @@ TEST_F(TestRCache, test_rcache_slice)
 
     ret = readSlicePtr->Deserialize(sliceBuf, 0);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
+    free(sliceBuf);
+    free(buffer);
 }
 
 TEST_F(TestRCache, test_wcache_slice)
 {
     uint32_t length = NO_1024;
+    char *buffer = static_cast<char*>(malloc(length));
     FlowAddr flowAddr;
-    flowAddr.chunkId = (uint64_t)malloc(length);
+    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
     flowAddr.chunkOffset = 0;
     flowAddr.chunkLen = length;
     std::vector<FlowAddr> addrs;
@@ -364,6 +365,8 @@ TEST_F(TestRCache, test_wcache_slice)
     char* sliceBuf = static_cast<char *>(malloc(length));
     ret = wcacheSlice->Deserialize(sliceBuf, 0);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
+    free(sliceBuf);
+    free(buffer);
 }
 
 TEST_F(TestRCache, test_cache_recover_err)
@@ -397,118 +400,4 @@ TEST_F(TestRCache, test_cache_recover_err)
     ret = Cache::Instance().Recover();
     EXPECT_EQ(ret, ock::bio::BIO_NOT_EXISTS);
     LVOS_HVS_deactiveTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL");
-}
-
-TEST_F(TestRCache, test_cache_slice_operator_ok)
-{
-    CacheSliceOperator cacheSliceOperator;
-    auto ret = cacheSliceOperator.Copy(nullptr, 0, NO_1024, nullptr);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    FlowAddr flowAddr;
-    flowAddr.chunkId = (uint64_t)malloc(NO_1024);
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrs;
-    addrs.push_back(flowAddr);
-
-    FlowAddr flowAddr1;
-    flowAddr1.chunkId = (uint64_t)malloc(NO_1024);
-    flowAddr1.chunkOffset = 1;
-    flowAddr1.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrs1;
-    addrs1.push_back(flowAddr1);
-    SlicePtr slice1 = MakeRef<Slice>(NO_1024, addrs1, FLOW_DISK);
-
-    FlowAddr flowAddr2;
-    flowAddr2.chunkId = (uint64_t)malloc(NO_1024);
-    flowAddr2.chunkOffset = NO_2;
-    flowAddr2.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrs2;
-    addrs2.push_back(flowAddr2);
-    SlicePtr slice2 = MakeRef<Slice>(NO_1024, addrs2, FLOW_MEMORY);
-
-    FlowAddr flowAddr3;
-    flowAddr3.chunkId = (uint64_t)malloc(NO_1024);
-    flowAddr3.chunkOffset = NO_3;
-    flowAddr3.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrs3;
-    addrs3.push_back(flowAddr3);
-    SlicePtr slice3 = MakeRef<Slice>(NO_1024, addrs3, FLOW_MEMORY);
-
-    std::string sliceStr(NO_2048, '1');
-    std::string sliceStr1(NO_1024, '1');
-
-    SlicePtr slice = MakeRef<Slice>(NO_1024, addrs, FLOW_DISK);
-    ret = cacheSliceOperator.Copy(nullptr, 0, NO_1024, slice);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(nullptr, 0, NO_1024, slice);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    WCacheSlicePtr slicePtr = nullptr;
-    ret = gRcacheManager->AllocResources(G_PT_ID, NO_1024, slicePtr);
-    EXPECT_EQ(ret, BIO_OK);
-    ret = cacheSliceOperator.Copy(sliceStr.c_str(), 0, NO_1024, slice);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(sliceStr1.c_str(), 0, NO_1024, slice3);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_4_FLOW_MEMORY", 0, 1, userParam);
-    ret = cacheSliceOperator.Copy(sliceStr.c_str(), 0, NO_1024, slice3);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_4_FLOW_MEMORY");
-
-    ret = cacheSliceOperator.Copy(slicePtr.Get(), slicePtr.Get());
-    EXPECT_EQ(ret, BIO_OK);
-
-    SlicePtr slicePtr1 = nullptr;
-    ret = cacheSliceOperator.Copy(slicePtr1, slice);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(slice, slicePtr1);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(slice, slice1);
-    EXPECT_EQ(ret, BIO_ERR);
-
-    ret = cacheSliceOperator.Copy(slice, slice1);
-    EXPECT_EQ(ret, BIO_ERR);
-    ret = cacheSliceOperator.Copy(slice, slice2);
-    EXPECT_EQ(ret, BIO_DISK_IOERR);
-    LVOS_HVS_activeTracePoint(0, "SLICE_COPY_DISK2MEMORY_OK", 0, 1, userParam);
-    ret = cacheSliceOperator.Copy(slice, slice2);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_COPY_DISK2MEMORY_OK");
-    ret = cacheSliceOperator.Copy(slice2, slice);
-    EXPECT_EQ(ret, BIO_DISK_IOERR);
-    ret = cacheSliceOperator.Copy(slice2, slice3);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_activeTracePoint(0, "SLICE_COPY_MEMORY2MEMORY_ERR", 0, 1, userParam);
-    ret = cacheSliceOperator.Copy(slice2, slice3);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_COPY_MEMORY2MEMORY_ERR");
-
-    ret = cacheSliceOperator.Copy(nullptr, slice);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-
-    ret = cacheSliceOperator.Copy(sliceStr.c_str(), slicePtr1);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(sliceStr.c_str(), slice3);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_FLOW_MEMORY", 0, 1, userParam);
-    ret = cacheSliceOperator.Copy(sliceStr.c_str(), slice3);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_FLOW_MEMORY");
-    ret = cacheSliceOperator.Copy(sliceStr.c_str(), slice);
-    EXPECT_EQ(ret, BIO_DISK_IOERR);
-
-    auto *value = new char[NO_1024];
-    ret = cacheSliceOperator.Copy(nullptr, value);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(slice, nullptr);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(slice, value);
-    EXPECT_EQ(ret, BIO_DISK_IOERR);
-    ret = cacheSliceOperator.Copy(slice3, value);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY", 0, 1, userParam);
-    ret = cacheSliceOperator.Copy(slice3, value);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY");
 }

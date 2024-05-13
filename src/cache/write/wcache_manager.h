@@ -53,6 +53,8 @@ public:
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
+    void SetDegradeState(const WCacheSlicePtr &slice, bool flag);
+
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr,
         bool isDegrade);
 
