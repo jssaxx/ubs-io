@@ -141,10 +141,12 @@ typedef struct {
     RequestComm comm;
     uint16_t opType;
     uint64_t flowId;
+    bool isDegrade;
 } CreateFlowRequest;
 
 typedef struct {
     uint64_t flowId;
+    bool isDegrade;
 } CreateFlowResponse;
 
 /* Destroy flow */
@@ -195,6 +197,7 @@ typedef struct {
     uint64_t mrSize;
     uint32_t mrKey;
     bool memFromServer;
+    bool isDegrade;
     uint8_t copyFree;
     uint32_t sliceLen;
     char sliceBuf[0];

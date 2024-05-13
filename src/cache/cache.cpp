@@ -87,21 +87,46 @@ void Cache::Exit()
     mRCacheManager->Exit();
 }
 
-BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint16_t diskId, uint64_t flowId)
+BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
+    uint16_t diskId;
+    BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
+    bool isPtDegrade = false;
+    ret = mCheckDegrade(static_cast<uint16_t>(ptId), isPtDegrade);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Check pt degrade failed:" << ret << ", ptId:" << ptId << ".");
+        return ret;
+    }
+
+    LOG_INFO("Create wcache, flowId:" << flowId << ", isDegrade:" << isDegrade << ", isPtDegrade:" << isPtDegrade);
+
+    bool mixDegrade = (isDegrade || isPtDegrade);
+
     BIO_TRACE_START(WCACHE_TRACE_CREATE_OBJ);
-    auto ret = mWCacheManager->CreateWCache(procId, flowId, ptId, ptv, diskId);
+    ret = mWCacheManager->CreateWCache(procId, flowId, ptId, ptv, diskId, mixDegrade);
     BIO_TRACE_END(WCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to create WCache, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
-    LOG_DEBUG("Create wcache success, cacheId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
+
     return BIO_OK;
 }
 
-BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId)
+BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv)
 {
+    uint16_t diskId;
+    BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
+        return ret;
+    }
+
     BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
-    auto ret = mRCacheManager->CreateRCache(ptId, ptv, diskId);
+    ret = mRCacheManager->CreateRCache(ptId, ptv, diskId);
     BIO_TRACE_END(RCACHE_TRACE_CREATE_OBJ, ret);
     ChkTrue(ret == BIO_OK, ret, "Failed to create RCache, ptId:" << ptId);
 
@@ -129,23 +154,25 @@ BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 
 BResult Cache::ServiceUngradeFlush()
 {
-    return BIO_OK;
+    return mWCacheManager->ServiceUngradeFlush();
 }
 
 BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
+    bool isDegrade = mCheckService(); // 升级过程中，IO降级处理
+
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
-    bool isDegrade = false;
-    auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isDegrade);
-    LVOS_TP_START(CACHE_PUT_DEGRADE_FAIL, &isDegrade, true);
+    bool isPtDegrade = false;
+    auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isPtDegrade);
     if (ret != BIO_OK) {
-        LOG_ERROR("Check degrade failed, ret:" << ret << ", ptId:" << ptId << ", isDegrade:" << isDegrade << ".");
+        LOG_ERROR("Check degrade failed:" << ret << ", ptId:" << ptId << ".");
         return ret;
     }
-    LVOS_TP_END;
+
+    bool mixDegrade = (isDegrade || isPtDegrade);
 
     BIO_TRACE_START(WCACHE_TRACE_PUT);
-    ret = mWCacheManager->Put(key, slice, sliceReader, attr, isDegrade);
+    ret = mWCacheManager->Put(key, slice, sliceReader, attr, mixDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
 
     if (ret == BIO_OK) {
@@ -311,6 +338,11 @@ void Cache::RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus)
     mWCacheManager->RegGetLocDiskStatus(getLocDiskStatus);
 }
 
+void Cache::RegCheckServiceState(CheckServiceState checkService)
+{
+    mCheckService = checkService;
+}
+
 void Cache::RegCheckDegrade(CheckDegrade checkDegrade)
 {
     mCheckDegrade = checkDegrade;
@@ -374,14 +406,7 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
 
 BResult Cache::ExtraCreateRCache(uint64_t ptId, uint64_t ptv)
 {
-    uint16_t diskId;
-    BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
-        return ret;
-    }
-
-    ret = CreateRCache(ptId, ptv, diskId);
+    auto ret = CreateRCache(ptId, ptv);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create read cache fail:" << ret << ", ptId:" << ptId);
         return ret;

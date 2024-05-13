@@ -70,7 +70,8 @@ public:
 
     BResult GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView);
 
-    BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
+    BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        uint64_t &flowId, bool &isDegrade);
 
     BResult DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 
@@ -99,7 +100,8 @@ private:
 
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
 
-    BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId);
+    BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        uint64_t &flowId, bool &isDegrade);
 
     BResult SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 

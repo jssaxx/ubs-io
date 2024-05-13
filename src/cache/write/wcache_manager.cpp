@@ -107,9 +107,10 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flo
     return BIO_OK;
 }
 
-BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
+BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv,
+    uint16_t diskId, bool isDegrade)
 {
-    auto wcache = MakeRef<WCache>(procId, flowId, ptId, ptv, diskId);
+    auto wcache = MakeRef<WCache>(procId, flowId, ptId, ptv, diskId, isDegrade);
     LVOS_TP_START(WCACHE_ALLOC_FAIL, &wcache, nullptr);
     LVOS_TP_END;
     ChkTrueNot(wcache != nullptr, BIO_ALLOC_FAIL);
@@ -129,17 +130,18 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
         mRetryManager[cacheTier].push_back(wcache);
     };
 
+    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
+
     auto ret = wcache->Init(mEvictService, mRCacheManager);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
-
-    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
         mWCacheManager.emplace(flowId, wcache);
     }
 
-    LOG_INFO("Create cache, procId:" << procId << ", flowId:" << flowId << ", ptId:" << ptId << ", ptv:" << ptv);
+    LOG_INFO("Create cache, procId:" << procId << ", flowId:" << flowId << ", ptId:" <<
+        ptId << ", ptv:" << ptv << ", isDegrade:" << isDegrade);
 
     return BIO_OK;
 }
@@ -195,7 +197,7 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
 
     BResult ret = BIO_ERR;
     LVOS_TP_START(RECOVER_CACHE_FLOWID_FAIL, &flowId, NO_1536);
-    ret = CreateWCache(0, flowId, ptId, 0, static_cast<uint16_t>(diskId));
+    ret = CreateWCache(0, flowId, ptId, 0, static_cast<uint16_t>(diskId), false);
     ChkTrue(ret == BIO_OK, ret, "Failed to create wcache, flowId:" << flowId);
     LVOS_TP_END;
 
@@ -226,6 +228,74 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
         LOG_ERROR("Recover fail:" << ret << ", flowId:" << flowId);
         return ret;
     }
+
+    return BIO_OK;
+}
+
+BResult WCacheManager::ServiceUngradeFlush()
+{
+    std::list<WCachePtr> flushList;
+
+    ScanUpgradeCache(flushList);
+
+    for (const auto &flow : flushList) {
+        flow->Flush();
+    }
+
+    if (!flushList.empty()) {
+        return BIO_INNER_RETRY;
+    }
+
+    auto ret = ClearUpgradeCache();
+    ChkTrueNot(ret == BIO_OK, ret);
+    return ret;
+}
+
+void WCacheManager::ScanUpgradeCache(std::list<WCachePtr> &list)
+{
+    WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    for (const auto &flowIt : mWCacheManager) {
+        if (flowIt.second->GetDegradeState()) {
+            continue;
+        }
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
+            flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
+            continue;
+        }
+        uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+        LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
+            ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) << ", Disk:" <<
+            flowIt.second->GetCapacity(WCACHE_DISK));
+        list.emplace_back(flowIt.second);
+    }
+
+    return;
+}
+
+BResult WCacheManager::ClearUpgradeCache()
+{
+    bool result = false;
+    uint64_t evictTime = Monotonic::TimeSec() + DESTROY_EVICT_TIMEOUT;
+
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &flowIt : mWCacheManager) {
+            if (flowIt.second->GetDegradeState()) {
+                continue;
+            }
+            uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
+            LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
+                ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) << ", Vir Disk:" <<
+                flowIt.second->GetVirCapacity(WCACHE_DISK));
+            if (flowIt.second->GetState()) {
+                flowIt.second->SetState(false);
+                mDestroyManager.emplace(flowIt.first, evictTime);
+            }
+        }
+    }
+
+    result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    ChkTrueNot(result, BIO_INNER_ERR);
 
     return BIO_OK;
 }
@@ -266,15 +336,22 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     auto wcache = GetWCache(slice->GetFlowId());
     BIO_TRACE_END(WCACHE_TRACE_PUT_GET_WCACHE, (wcache == nullptr) ? BIO_NOT_EXISTS : BIO_OK);
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get wcache flow by id:" << slice->GetFlowId() << ", key:" << key << ".");
+        LOG_ERROR("Failed to get wcache, flowId:" << slice->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
+    }
+
+    bool wcacheDegarde = wcache->GetDegradeState();
+    if (wcacheDegarde != isDegrade) {
+        LOG_WARN("Check degrade fail, flowId:" << slice->GetFlowId() <<
+            ", inner:" << wcacheDegarde << ", outer:" << isDegrade << ", key:" << key << ".");
+        return BIO_INNER_RETRY;
     }
 
     bool isNormal = wcache->GetState();
     LVOS_TP_START(WCACHE_STATE_NOT_NORMAL, &isNormal, false);
     LVOS_TP_END;
     if (!isNormal) {
-        LOG_ERROR("Failed to check wcache flow by id:" << wcache->GetFlowId() << ", key:" << key << ".");
+        LOG_ERROR("Failed to check wcache, flowId:" << wcache->GetFlowId() << ", key:" << key << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -283,15 +360,15 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     LVOS_TP_START(NO_PROCESS_WCACHE_PUT, 0);
     WCacheSliceRefPtr sliceRef = nullptr;
     BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_FLOW);
-    ret = wcache->Put(key, slice, sliceReader, sliceRef, attr, isDegrade);
+    ret = wcache->Put(key, slice, sliceReader, sliceRef, attr);
     BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Write slice to flow failed, ret:" << ret << ", key:" << key << ".");
+        LOG_ERROR("Write slice to cache failed:" << ret << ", key:" << key << ".");
         return ret;
     }
 
     // 3. is degrade
-    if (UNLIKELY(isDegrade)) {
+    if (UNLIKELY(wcacheDegarde)) {
         return BIO_OK;
     }
 
@@ -302,7 +379,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     BIO_TRACE_END(WCACHE_TRACE_PUT_INSERT_INDEX, ret);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
+        LOG_ERROR("Insert slice to index failed:" << ret << ", key:" << key << ".");
     }
     return ret;
 }
