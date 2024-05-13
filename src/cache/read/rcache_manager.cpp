@@ -52,9 +52,17 @@ uint64_t RCacheManager::GetGCData()
 
 void RCacheManager::Exit()
 {
+    cacheLock.LockWrite();
+    for (auto iter = cache.begin(); iter != cache.end(); iter++) {
+        iter->second = nullptr;
+    }
+    cache.clear();
+    cacheLock.UnLock();
+
     rCacheEvict->Destroy();
     rCacheGCPtr->Destroy();
 }
+
 const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint64_t ptId)
 {
     RCachePtr cachePtr = nullptr;

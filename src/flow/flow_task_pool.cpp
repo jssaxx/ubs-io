@@ -41,7 +41,6 @@ void FlowTaskPool::Stop()
     if (!mStarted) {
         return;
     }
-
     StopInner();
     mStarted = false;
 }

@@ -91,19 +91,22 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
 
 BResult NetEngine::Start(const NetOptions &opt)
 {
+    int32_t result = BIO_INNER_ERR;
     if (opt.protocol == ServiceProtocol::SHM || opt.protocol == ServiceProtocol::UDS) {
-        int32_t result = StartIpcService(opt);
+        result = StartIpcService(opt);
         if (result != BIO_OK) {
             return result;
         }
     }
     if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA) {
-        int32_t result = StartRpcService(opt);
+        LVOS_TP_START(SDK_BIO_NET_START_RPC_FAIL, &result, BIO_INNER_ERR);
+        result = StartRpcService(opt);
+        LVOS_TP_END;
         if (result != BIO_OK) {
             return result;
         }
     }
-    return BIO_OK;
+    return result;
 }
 
 void NetEngine::Stop()
@@ -112,7 +115,6 @@ void NetEngine::Stop()
     if (!mStarted) {
         return;
     }
-
     StopInner();
     mStarted = false;
 }
@@ -139,12 +141,11 @@ void NetEngine::StopInner()
         mMrBlockPool = nullptr;
     }
 
-    if (mLocalMr != nullptr) {
-        mRpcService->DestroyMemoryRegion(mLocalMr);
-        mLocalMr = nullptr;
-    }
-
     if (mRpcService != nullptr) {
+        if (mLocalMr != nullptr) {
+            mRpcService->DestroyMemoryRegion(mLocalMr);
+            mLocalMr = nullptr;
+        }
         mRpcService->Stop();
         mRpcService = nullptr;
     }

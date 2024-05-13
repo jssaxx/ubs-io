@@ -31,7 +31,7 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorPreadIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive interceptor read message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
@@ -44,7 +44,7 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
         req->nbytes << " fd:" << req->fd);
     InterceptorPreadOut *resp = static_cast<InterceptorPreadOut *>(malloc(sizeof(InterceptorPreadOut) + req->nbytes));
     if (UNLIKELY(resp == nullptr)) {
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, BIO_ALLOC_FAIL);
         return BIO_OK;
     }
@@ -54,7 +54,7 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     if (UNLIKELY(ret != 0)) {
         free(resp);
         resp = nullptr;
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, BIO_ALLOC_FAIL);
         return BIO_OK;
     }
@@ -63,7 +63,7 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, 0);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_READ_REPLY);
-    BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_OK, static_cast<void *>(resp),
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(resp),
         sizeof(InterceptorPreadOut) + readLen);
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ_REPLY, 0);
     free(resp);
@@ -75,7 +75,7 @@ int32_t InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive interceptor write message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
@@ -90,7 +90,7 @@ int32_t InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 
     resp.dataLen = static_cast<int64_t>(BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL));
     if (UNLIKELY(resp.dataLen < 0)) {
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
@@ -98,7 +98,7 @@ int32_t InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY);
-    BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY, 0);
     return BIO_OK;
@@ -108,7 +108,7 @@ int32_t InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorAllocPageReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive interceptor alloc message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
@@ -121,7 +121,7 @@ int32_t InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
     addressInfo.allocLoc = 1;
     auto ret = BioAllocSpace(tenantId, objectId++, req->length, &addressInfo);
     if (UNLIKELY(ret != 0)) {
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
     }
 
@@ -135,7 +135,7 @@ int32_t InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
     for (uint16_t idx = 0; idx < addressInfo.addressNum; idx++) {
         rsp.addrOffset[idx] = BioServer::Instance()->GetNetEngine()->GetAddressOffset(addressInfo.address[idx].address);
     }
-    BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
         sizeof(InterceptorAllocPageRsp));
     return BIO_OK;
 }
@@ -145,7 +145,7 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorLargePwriteIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive interceptor large write message len:" << ctx.MessageDataLen() <<
             " or message data invalid.");
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
@@ -166,7 +166,7 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     resp.ret = 0;
     resp.dataLen = static_cast<int64_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
     if (UNLIKELY(resp.dataLen < 0)) {
-        BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
@@ -174,7 +174,7 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY);
-    BioServer::Instance()->GetMirrorServer()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY, 0);
     return BIO_OK;

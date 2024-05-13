@@ -32,6 +32,8 @@ public:
 
     void ExpiredClear(uint64_t ptId);
 
+    void Exit();
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

@@ -63,12 +63,11 @@ BResult FlowManager::Init()
     return Recover();
 }
 
-BResult FlowManager::Exit()
+void FlowManager::Exit()
 {
     mTaskPool[FLOW_MEMORY]->Stop();
     mTaskPool[FLOW_DISK]->Stop();
     mInited = false;
-    return BIO_OK;
 }
 
 FlowPtr FlowManager::CreateObject(FlowType type, uint64_t flowId, uint32_t mediaId)

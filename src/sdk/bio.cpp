@@ -406,7 +406,7 @@ CResult BioService::Initialize(WorkerMode mode, const TlsOptionsConfig optConf)
 
 void BioService::Exit()
 {
-    gClient->Stop();
+    gClient->Exit();
 }
 }
 }

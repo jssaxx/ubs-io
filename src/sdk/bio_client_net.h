@@ -32,7 +32,7 @@ public:
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView, uint16_t protocol,
         const NetOptions netConf);
-    void Stop();
+    void Exit();
 
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
     {

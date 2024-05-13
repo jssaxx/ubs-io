@@ -17,7 +17,7 @@ public:
     {
         if (!nameValid) {
             nameValid = true;
-            name = std::move(tpName);
+            name = tpName;
         }
         begin.fetch_add(1u, std::memory_order_relaxed);
     }

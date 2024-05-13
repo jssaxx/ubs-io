@@ -29,12 +29,12 @@ public:
 
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
+
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager);
+    void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
         EvictCallback evictCallback, const RetryCallback retryCallback);
-
-    void Exit();
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 
@@ -48,6 +48,11 @@ public:
     BResult Seal(WCacheTierType type);
 
     BResult Destroy();
+
+    void SetDegradeState(bool flag)
+    {
+        mIsDegrade = flag;
+    }
 
     bool GetDegradeState()
     {

@@ -200,6 +200,7 @@ int HTracerService::PrepareDumpFile(const std::string &dumpDir)
         LVOS_TP_END;
         return RET_ERR;
     }
+    free(canonicalPath);
 
     dumpFilePath = dumpFileDir + "htrace_" + std::to_string(getpid()) + ".dat";
     int fd = open(dumpFilePath.c_str(), O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);

@@ -33,15 +33,13 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     mCacheIndex = MakeRef<WCacheIndex>();
     ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
 
-    BResult result;
-
     mEvictService[WCACHE_MEMORY] = ExecutorService::Create(MEM_EVICT_THREAD_NUM, MEM_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mEvictService[WCACHE_MEMORY] == nullptr)) {
         LOG_ERROR("Failed to start execution service for mem evict, probably out of memory");
         return BIO_ALLOC_FAIL;
     }
     mEvictService[WCACHE_MEMORY]->SetThreadName("wcache-evict-mem");
-    result = mEvictService[WCACHE_MEMORY]->Start();
+    BResult result = mEvictService[WCACHE_MEMORY]->Start();
     ChkTrueNot(result, BIO_INNER_ERR);
 
     mEvictService[WCACHE_DISK] = ExecutorService::Create(DISK_EVICT_THREAD_NUM, DISK_EVICT_QUEUE_SIZE);
@@ -92,6 +90,14 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 void WCacheManager::Exit()
 {
     mRunning = false;
+    mCacheIndex->Exit();
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (auto iter = mWCacheManager.begin(); iter != mWCacheManager.end(); iter++) {
+            iter->second->Exit();
+        }
+        mWCacheManager.clear();
+    }
     mEvictService[WCACHE_MEMORY]->Stop();
     mEvictService[WCACHE_DISK]->Stop();
     mRetryEvictService->Stop();
@@ -142,7 +148,6 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
 
     LOG_INFO("Create cache, procId:" << procId << ", flowId:" << flowId << ", ptId:" <<
         ptId << ", ptv:" << ptv << ", isDegrade:" << isDegrade);
-
     return BIO_OK;
 }
 
@@ -324,6 +329,20 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     return ret;
 }
 
+void WCacheManager::SetDegradeState(const WCacheSlicePtr &slice, bool flag)
+{
+    if (slice == nullptr) {
+        LOG_ERROR("Slice is nullptr.");
+        return;
+    }
+    auto wcache = GetWCache(slice->GetFlowId());
+    if (wcache == nullptr) {
+        LOG_ERROR("Failed to get wcache, flowId:" << slice->GetFlowId() << ".");
+        return;
+    }
+    wcache->SetDegradeState(flag);
+}
+
 BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr,
     bool isDegrade)
 {
@@ -342,8 +361,8 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
 
     bool wcacheDegarde = wcache->GetDegradeState();
     if (wcacheDegarde != isDegrade) {
-        LOG_WARN("Check degrade fail, flowId:" << slice->GetFlowId() <<
-            ", inner:" << wcacheDegarde << ", outer:" << isDegrade << ", key:" << key << ".");
+        LOG_WARN("Check degrade fail, flowId:" << slice->GetFlowId() << ", inner:" << wcacheDegarde << ", outer:" <<
+            isDegrade << ", key:" << key << ".");
         return BIO_INNER_RETRY;
     }
 
