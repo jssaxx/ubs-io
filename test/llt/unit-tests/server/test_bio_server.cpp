@@ -212,10 +212,12 @@ TEST_F(TestBioServer, test_list_malloc_rsp_err_return_fail)
     ListRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, 1, getpid() };
     CopyKey(req.prefix, "a", KEY_MAX_SIZE);
-    auto ret = List(&req, nullptr);
+    ListResponse *listRsp = nullptr;
+    auto ret = List(&req, &listRsp);
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
     LVOS_HVS_deactiveTracePoint(0, "LIST_MALLOC_RSP_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "LIST_MALLOC_RSP_FAIL_RESET");
+    delete[] listRsp;
 }
 
 TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
@@ -601,6 +603,7 @@ TEST_F(TestBioServer, test_bio_server_reader)
     WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     PutRequest req;
+    req.memFromServer = false;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
     EXPECT_EQ(ret, BIO_OK);

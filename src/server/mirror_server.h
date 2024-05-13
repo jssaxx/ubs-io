@@ -67,9 +67,6 @@ public:
 
     BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
-    void ReplyDone(uint32_t opcode, int32_t ret, uint64_t ts);
-    void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize, uint32_t opcode = BIO_OP_BUTT);
-
     bool CheckAll(RequestComm &reqComm);
 
     void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs);

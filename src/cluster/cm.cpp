@@ -58,7 +58,7 @@ BResult Cm::Start()
 
 void Cm::Stop()
 {
-    return;
+    CM_Exit();
 }
 
 BResult Cm::ReportDiskStatus(uint16_t diskId, CmDiskStatus status)

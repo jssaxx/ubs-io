@@ -35,10 +35,9 @@ void TestHtracer::TearDown()
 
 int32_t TestHtracer::HTracerInitMock(const std::string &dumpDir)
 {
-    LOG_INFO("going to htracer mock.");
     char cwd[1024];
     if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-        LOG_INFO("当前工作目录的绝对路径是: " << cwd << ".");
+        LOG_INFO("Current worker path: " << cwd << ".");
     } else {
         return RET_ERR;
     }
@@ -48,15 +47,12 @@ int32_t TestHtracer::HTracerInitMock(const std::string &dumpDir)
 
     g_stubDumpDir = cwd;
     if (service.StartUp(g_stubDumpDir) != RET_OK) {
-        LOG_INFO("fail in htracer mock.");
         return RET_ERR;
     }
     return RET_OK;
 }
 
-void TestHtracer::Stub() noexcept
-{
-}
+void TestHtracer::Stub() noexcept {}
 
 TEST_F(TestHtracer, test_get_trace_info_ok)
 {

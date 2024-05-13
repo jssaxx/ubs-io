@@ -111,8 +111,6 @@ Logger *Logger::Instance(const LoggerOptions &options)
 void Logger::Destroy()
 {
     std::lock_guard<std::mutex> guard(gMutex);
-
-    /* un-initialize and delete logger */
     if (gInstance != nullptr) {
         gInstance->Exit();
         delete gInstance;

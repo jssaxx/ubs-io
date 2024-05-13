@@ -36,16 +36,20 @@ BioServer::BioServer() noexcept
         { "Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr },
 #endif
         { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
-        std::bind(&BioServer::BioTraceExit, this) },
-        { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr, nullptr },
+            std::bind(&BioServer::BioTraceExit, this) },
+        { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
+            std::bind(&BioServer::BioUnderFsExit, this) },
         { "Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this) },
         { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
-        { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, nullptr },
-        { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr, nullptr },
+        { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
+            std::bind(&BioServer::BioFlowExit, this) },
+        { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
+            std::bind(&BioServer::BioCacheExit, this) },
         { "InterceptorServer", std::bind(&BioServer::BioInterceptorServerInit, this), nullptr, nullptr, nullptr },
         { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
-        std::bind(&BioServer::BioMirrorServerExit, this) },
-        { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this) },
+            std::bind(&BioServer::BioMirrorServerExit, this) },
+        { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr,
+            std::bind(&BioServer::BioCmExit, this) },
     };
     mService = MakeRef<BioServiceProc>(modules);
 }
@@ -79,13 +83,20 @@ BResult BioServer::Start()
         sleep(5U);
     }
 
-    LOG_INFO("Boostio Server Started.");
+    LOG_INFO("Boostio server start success.");
     return BIO_OK;
 }
 
-void BioServer::Stop()
+void BioServer::Exit()
 {
-    return;
+    std::lock_guard<std::mutex> lock(mStartLock);
+    if (!mStarted) {
+        return;
+    }
+    mService->Exit();
+    LOG_INFO("Boostio server exit success.");
+    BioLoggerExit();
+    mStarted = false;
 }
 
 BResult BioServer::BioConfigInit()
@@ -120,12 +131,12 @@ BResult BioServer::BioLoggerInit(std::string pathName)
     LoggerOptions loggerOptions;
     loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
     loggerOptions.path = std::move(pathName);
-    auto logger = Logger::Instance(loggerOptions);
-    if (logger == nullptr) {
+    mLogger = Logger::Instance(loggerOptions);
+    if (mLogger == nullptr) {
         std::cout << "Failed to create logger instance." << std::endl;
         return BIO_ERR;
     }
-    auto ret = logger->Init();
+    auto ret = mLogger->Init();
     LVOS_TP_START(LOG_INIT_FAIL, &ret, -1);
     LVOS_TP_END;
     if (ret != BIO_OK) {
@@ -133,6 +144,11 @@ BResult BioServer::BioLoggerInit(std::string pathName)
         return BIO_ERR;
     }
     return BIO_OK;
+}
+
+void BioServer::BioLoggerExit()
+{
+    mLogger->Exit();
 }
 
 BResult BioServer::BioTraceInit()
@@ -151,6 +167,11 @@ void BioServer::BioTraceExit()
 BResult BioServer::BioUnderFsInit()
 {
     return UnderFs::Instance()->Init();
+}
+
+void BioServer::BioUnderFsExit()
+{
+    UnderFs::Instance()->Stop();
 }
 
 BResult BioServer::BioBdmInit()
@@ -323,7 +344,7 @@ BResult BioServer::BioCmInit()
 
 void BioServer::BioCmExit()
 {
-    return;
+    mCm->Stop();
 }
 
 BResult BioServer::BioMirrorServerInit()
@@ -425,6 +446,11 @@ BResult BioServer::BioCacheInit()
     return BIO_OK;
 }
 
+void BioServer::BioCacheExit()
+{
+    Cache::Instance().Exit();
+}
+
 BResult BioServer::BioInterceptorServerInit()
 {
     if (mInterceptorInited) {
@@ -450,6 +476,11 @@ BResult BioServer::BioFlowInit()
     auto flowManager = FlowManager::Instance();
     ChkTrue(flowManager != nullptr, BIO_ERR, "Flow manager instance is nullptr.");
     return flowManager->Init();
+}
+
+void BioServer::BioFlowExit()
+{
+    FlowManager::Instance()->Exit();
 }
 
 #ifdef USE_DEBUG_TOOLS
@@ -600,12 +631,12 @@ using namespace ock::bio;
 
 int32_t BioServerInit()
 {
-    return static_cast<int32_t>(BioServer::Instance()->Start());
+    return BioServer::Instance()->Start();
 }
 
-void BioServerUninit()
+void BioServerExit()
 {
-    BioServer::Instance()->Stop();
+    BioServer::Instance()->Exit();
 }
 
 uintptr_t GetBioServerNet()
@@ -656,8 +687,8 @@ int32_t CreateFlowSlave(CreateFlowRequest *req)
 
 int32_t DestroyFlow(DestroyFlowRequest *req)
 {
-    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId,
-        req->comm.ptv, req->flowId));
+    return BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId,
+                                                                 req->comm.ptv, req->flowId);
 }
 
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)

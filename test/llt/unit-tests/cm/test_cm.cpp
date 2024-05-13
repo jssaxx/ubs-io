@@ -44,7 +44,7 @@ static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQuery
     gLocalQuery.queryLocalNodeInfo = handle->queryLocalNodeInfo;
     gLocalQuery.queryLocalNodeMr = handle->queryLocalNodeMr;
     gLocalQuery.ctx = handle->ctx;
-    return 0;
+    return CM_OK;
 }
 
 static NodeListChangeOpHandle gNodeChange = { nullptr, nullptr };
@@ -53,7 +53,7 @@ static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListCh
 {
     gNodeChange.notifyNodeListChange = handle->notifyNodeListChange;
     gNodeChange.ctx = handle->ctx;
-    return 0;
+    return CM_OK;
 }
 
 static PtViewChangeOpHandle gPtChange = { nullptr, nullptr };
@@ -62,7 +62,7 @@ static int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHa
 {
     gPtChange.notifyPtListChange = handle->notifyPtListChange;
     gPtChange.ctx = handle->ctx;
-    return 0;
+    return CM_OK;
 }
 
 static uint16_t CM_GetLocalNodeId_Stub(uint16_t poolId)
@@ -77,7 +77,7 @@ static int32_t CM_GetNodeInfo_Stub(uint16_t poolId, NodeInfo *nodeInfo)
     uint16_t nodeId = nodeInfo->nodeId;
     memcpy_s(nodeInfo, sizeof(NodeInfo), &gNodeInfo, sizeof(NodeInfo));
     nodeInfo->nodeId = nodeId;
-    return 0;
+    return CM_OK;
 }
 
 static void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t nodeNum)
@@ -101,20 +101,17 @@ static void InitNodeList(PoolInfo *pools, NodeStateList *nodeList, uint16_t node
 
 static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)
 {
-    static constexpr int8_t ERR_2 = -2;
-    static constexpr int8_t ERR_3 = -3;
-
-    LOG_INFO("call CM_Init_Stub");
     if (pools == nullptr || num != 1) {
-        return -1;
+        return CM_ERR;
     }
     if (gNodeChange.notifyNodeListChange == nullptr || gPtChange.notifyPtListChange == nullptr) {
-        return ERR_2;
+        return CM_ERR;
     }
+
     uint16_t nodeNum = 2;
     auto nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
     if (nodeList == nullptr) {
-        return ERR_3;
+        return CM_ERR;
     }
     InitNodeList(pools, nodeList, nodeNum);
     gNodeChange.notifyNodeListChange(nodeList, gNodeChange.ctx);
@@ -122,7 +119,7 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
 
     auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * gNodeInfo.diskList.num);
     if (ptList == nullptr) {
-        return ERR_3;
+        return CM_ERR;
     }
     ptList->poolId = pools->poolId;
     ptList->ptNum = gNodeInfo.diskList.num;
@@ -145,42 +142,34 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
     }
     gPtChange.notifyPtListChange(ptList, gPtChange.ctx);
     free(ptList);
-    return 0;
+    return CM_OK;
 }
 
-static void ZooSetDebugLevel()
-{
-    LOG_INFO("call ZooSetDebugLevel");
-}
+static void ZooSetDebugLevel() {}
 
 static zhandle_t *ZookeeperInit()
 {
-    LOG_INFO("call ZookeeperInit");
     return (zhandle_t *)"zHandle";
 }
 
 static int ZooState()
 {
-    LOG_INFO("call ZooState");
     return ZOO_CONNECTED_STATE;
 }
 
 static int ZooRecvTimeout()
 {
-    LOG_INFO("call ZooRecvTimeout");
     return (int)NO_10;
 }
 
 static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
     int mode, char *pathBuffer, int pathBufferLen)
 {
-    LOG_INFO("call ZooCreate");
     return ZOK;
 }
 
 static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
 {
-    LOG_INFO("call ZooGet");
     if (*bufferLen == (int)sizeof(uint16_t)) {
         if (strcmp(path, "/cm/meta/ip/127.0.0.1") == 0) {
             return ZNONODE;
@@ -210,7 +199,6 @@ static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int 
         nodeInfo->nodeId = nodeId;
         return 0;
     } else if (*bufferLen == (int32_t)(sizeof(PtEntryList) + sizeof(PtEntry) * NO_16)) {
-        LOG_INFO("call ZooGet change pt entry list");
         PtEntryList *ptList = (PtEntryList *)buffer;
         ptList->ptNum = 0;
     } else if (*bufferLen == (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_256)) {
@@ -223,20 +211,17 @@ static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int 
 
 static int ZooExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
 {
-    LOG_INFO("call ZooExists");
     return ZNONODE;
 }
 
 static int ZooSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
 {
-    LOG_INFO("call ZooSet");
     return ZOK;
 }
 
 static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
     struct Stat *stat)
 {
-    LOG_INFO("call ZooWget");
     char *result = nullptr;
     char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
     int ret = strcpy_s(zkPath, CM_ZNODE_PATH_LEN, path);
@@ -255,7 +240,6 @@ static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *wa
         watcher(zh, ZOO_CREATED_EVENT, 1, path, watcherCtx);
     } else if (result = strstr(zkPath, CM_PT_PATH)) {
         PtEntryList *ptList = (PtEntryList *)buffer;
-
         ptList->poolId = 0;
         ptList->ptNum = gNodeInfo.diskList.num;
         ptList->maxCopyNum = 1;
@@ -285,7 +269,6 @@ static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *wa
 
 static int ZooDelete(zhandle_t *zh, const char *path, int version)
 {
-    LOG_INFO("call ZooDelete");
     return ZOK;
 }
 
@@ -293,7 +276,6 @@ static std::vector<std::string> gZkGetChildrenFirst;
 static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
     struct String_vector *strings)
 {
-    LOG_INFO("call ZooWgetChildren" << path);
     auto it = std::find(gZkGetChildrenFirst.begin(), gZkGetChildrenFirst.end(), path);
     if (it != gZkGetChildrenFirst.end()) {
         strings->count = 0;
@@ -304,12 +286,10 @@ static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, 
         char *tmp = (char *)malloc(newLen);
         int ret = strcpy_s(tmp, newLen, path);
         if (ret != BIO_OK) {
-            LOG_ERROR("call ZooWgetChildren cpy_s " << ret);
             return BIO_ERR;
         }
         ret = strcat_s(tmp, newLen, "/0");
         if (ret != BIO_OK) {
-            LOG_ERROR("call ZooWgetChildren cat_s " << ret);
             return BIO_ERR;
         }
         strings->data[0] = tmp;
@@ -372,11 +352,9 @@ TEST_F(TestCm, test_cm_initialize)
     mOptions.hbTempTimeout = NO_30;
     mOptions.hbPermFaultTime = NO_60;
 
-    int32_t ret;
     PoolInfo pools;
-    ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
+    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
     EXPECT_EQ(ret, 0);
-
     pools.poolId = mOptions.groups.groupId;
     pools.type = DISK_TYPE_DRAM;
     pools.redundance = (mOptions.groups.replicaNum == NO_2) ? PT_REP_DOUBLE : PT_REP_TRIPLE;
@@ -406,8 +384,7 @@ TEST_F(TestCm, test_cm_get_mr)
 {
     NodeMetaBuff *mr = (NodeMetaBuff *)malloc(NODE_META_BUFF_LEN);
     mr->nodeId = 0;
-
-    int ret = CM_GetNodeMr(0, mr);
+    int32_t ret = CM_GetNodeMr(0, mr);
     EXPECT_EQ(ret, CM_OK);
     free(mr);
 }
@@ -415,19 +392,19 @@ TEST_F(TestCm, test_cm_get_mr)
 TEST_F(TestCm, test_cm_get_node_session)
 {
     uint64_t sessionId = 0;
-    int ret = CmClientZkGetNodeSession(0, 0, &sessionId);
+    int32_t ret = CmClientZkGetNodeSession(0, 0, &sessionId);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_node_event_check)
 {
-    int ret = CmClientZkNodeEventExistCheck(0, 0);
+    int32_t ret = CmClientZkNodeEventExistCheck(0, 0);
     EXPECT_EQ(ret, CM_NOT_EXIST);
 }
 
 TEST_F(TestCm, test_cm_pt_event_check)
 {
-    int ret = CmClientZkPtEventExistCheck(0, 0);
+    int32_t ret = CmClientZkPtEventExistCheck(0, 0);
     EXPECT_EQ(ret, CM_NOT_EXIST);
 }
 
@@ -436,7 +413,7 @@ TEST_F(TestCm, test_cm_record_node_event)
     CmNodeEvent nodeEvent;
     nodeEvent.poolId = 0;
     nodeEvent.nodeId = 0;
-    int ret = CmClientZkRecordNodeEvent(&nodeEvent);
+    int32_t ret = CmClientZkRecordNodeEvent(&nodeEvent);
     EXPECT_EQ(ret, CM_OK);
 }
 
@@ -446,31 +423,31 @@ TEST_F(TestCm, test_cm_record_pt_event)
     ptEvent.poolId = 0;
     ptEvent.nodeId = 0;
     ptEvent.ptNum = 0;
-    int ret = CmClientZkRecordPtEvent(&ptEvent);
+    int32_t ret = CmClientZkRecordPtEvent(&ptEvent);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_report_disk_status_fault)
 {
-    int ret = CmReportDiskStatus(0, CM_DISK_FAULT);
+    int32_t ret = CmReportDiskStatus(0, CM_DISK_FAULT);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_report_disk_status_normal)
 {
-    int ret = CmReportDiskStatus(0, CM_DISK_NORMAL);
+    int32_t ret = CmReportDiskStatus(0, CM_DISK_NORMAL);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_server_view_role_change_slave)
 {
-    int ret = CmServerViewRoleChange(CM_SERVER_SLAVE);
+    int32_t ret = CmServerViewRoleChange(CM_SERVER_SLAVE);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_server_view_role_change_master)
 {
-    int ret = CmServerViewRoleChange(CM_SERVER_MASTER);
+    int32_t ret = CmServerViewRoleChange(CM_SERVER_MASTER);
     EXPECT_EQ(ret, CM_OK);
 }
 
@@ -479,7 +456,6 @@ TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
     PoolInfo pools;
     int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
     EXPECT_EQ(ret, 0);
-
     pools.poolId = 0;
     pools.type = DISK_TYPE_DRAM;
     pools.redundance = PT_REP_DOUBLE;
@@ -526,25 +502,22 @@ static void CmServerMonitorInitMgrStub() {}
 
 static int32_t CmServerMonitorLoadPoolStub()
 {
-    return 0;
+    return CM_OK;
 }
 
 TEST_F(TestCm, test_cm_server_view_change_case_return_ok)
 {
     CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
-    if (nodeList == nullptr) {
-        return;
-    }
     nodeList->poolId = 0;
     nodeList->nodeNum = NO_256;
     nodeList->nodeList[0] = 0;
-    int ret = CmServerViewNodeListChange(nodeList);
+    int32_t ret = CmServerViewNodeListChange(nodeList);
     EXPECT_EQ(ret, CM_OK);
     free(nodeList);
+
     ret = CmServerMonitorInit();
     EXPECT_EQ(ret, CM_OK);
 }
-
 
 void TestCm::CancelNodeStub()
 {
@@ -557,23 +530,22 @@ TEST_F(TestCm, test_cm_server_monitor_expire_case_return_ok)
 {
     CancelNodeStub();
     CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
-    if (nodeList == nullptr) {
-        return;
-    }
     nodeList->poolId = 0;
     nodeList->nodeNum = NO_256;
     nodeList->nodeList[0] = 0;
-    int ret = CmServerViewNodeListChange(nodeList);
+    int32_t ret = CmServerViewNodeListChange(nodeList);
     EXPECT_EQ(ret, CM_OK);
     free(nodeList);
+
     ret = CmServerMonitorInit();
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
 {
-    auto state = (NodeStateInfo *)malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState) * DISK_LIST_NUM);
-    auto ret = CmServerViewGetNodeState(0, state);
+    NodeStateInfo state;
+    state.nodeId = 0;
+    auto ret = CmServerViewGetNodeState(0, &state);
     EXPECT_EQ(ret, CM_OK);
 }
 
