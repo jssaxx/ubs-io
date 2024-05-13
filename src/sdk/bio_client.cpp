@@ -20,6 +20,11 @@ BResult BioClient::BioClientLoggerInit(WorkerMode mode)
     return BioClientLog::Instance()->Initialize(logMode, defaultLogLevel);
 }
 
+void BioClient::BioClientLoggerExit(WorkerMode mode)
+{
+    BioClientLog::Instance()->Exit(mode);
+}
+
 BResult BioClient::BioClientAgentInit(WorkerMode mode)
 {
     agent::BioClientAgentPtr agentPtr = nullptr;
@@ -36,6 +41,11 @@ BResult BioClient::BioClientAgentInit(WorkerMode mode)
         CLIENT_LOG_ERROR("Failed to Initialize agent, ret:" << ret << ".");
     }
     return ret;
+}
+
+void BioClient::BioClientAgentExit()
+{
+    agent::BioClientAgent::Instance()->Exit();
 }
 
 BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf)
@@ -64,6 +74,11 @@ BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
 
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
         mMirror->GetNetProtocol(), netConf);
+}
+
+void BioClient::BioClientNetExit()
+{
+    mNetEngine->Exit();
 }
 
 void BioClient::BioClientUpdateHandle()
@@ -121,6 +136,11 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
     return ret;
+}
+
+void BioClient::BioClientMirrorExit()
+{
+    return;
 }
 
 BResult BioClient::BioClientStartWork()
@@ -232,7 +252,15 @@ BResult BioClient::Start(WorkerMode mode, const NetOptions netConf)
     return BIO_OK;
 }
 
-void BioClient::Stop()
+void BioClient::Exit()
 {
+    std::lock_guard<std::mutex> lock(mStartLock);
+    if (!mStarted) {
+        return;
+    }
+    BioClientAgentExit();
+    BioClientNetExit();
+    BioClientMirrorExit();
+    BioClientLoggerExit(mMode);
     mStarted = false;
 }

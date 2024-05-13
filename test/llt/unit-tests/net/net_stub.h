@@ -44,6 +44,8 @@ public:
 
     static int32_t SendFds(int fds[], uint32_t len);
 
+    static int32_t Reply(int32_t retCode, void *resp, uint32_t respSize);
+
     static std::atomic<uint64_t> connectCount;
 };
 }

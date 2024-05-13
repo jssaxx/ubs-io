@@ -45,17 +45,16 @@ public:
             LoggerOptions options;
             options.minLogLevel = level;
             options.path = "/var/log/boostio/bio_sdk_" + std::to_string(getpid()) + ".log";
-            Logger* logger = nullptr;
-            LVOS_TP_START(SDK_BIO_LOG_CREAT_FAIL, &logger, nullptr);
-            logger = Logger::Instance(options);
+            LVOS_TP_START(SDK_BIO_LOG_CREAT_FAIL, &mLogger, nullptr);
+            mLogger = Logger::Instance(options);
             LVOS_TP_END;
-            if (logger == nullptr) {
+            if (mLogger == nullptr) {
                 std::cout << "Failed to create logger instance." << std::endl;
                 return -1;
             }
             int32_t ret = -1;
             LVOS_TP_START(SDK_BIO_LOG_INIT_FAIL, &ret, -1);
-            ret = logger->Init();
+            ret = mLogger->Init();
             LVOS_TP_END;
             if (ret != 0) {
                 std::cout << "Failed to init log, ret:" << ret << ", log path:" << options.path << "." << std::endl;
@@ -65,6 +64,13 @@ public:
         auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level + 1, message); };
         func = logFunc;
         return 0;
+    }
+
+    void Exit(int32_t mode)
+    {
+        if (mode == 1) {
+            mLogger->Exit();
+        }
     }
 
     inline int32_t GetMinLogLevel() const
@@ -94,6 +100,7 @@ public:
 private:
     LogFunc func = nullptr;
     int32_t minLogLevel = 1;
+    Logger* mLogger = nullptr;
 };
 
 #ifndef BIO_CLIENT_LOG_FILENAME

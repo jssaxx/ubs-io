@@ -29,10 +29,7 @@ namespace bio {
 class NetEngine {
 public:
     NetEngine() = default;
-    ~NetEngine()
-    {
-        Stop();
-    }
+    ~NetEngine() = default;
 
     BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func);
     BResult Start(const NetOptions &opt);
@@ -509,6 +506,40 @@ public:
         return NetResult(ret);
     }
 
+    void ReplyDone(int32_t ret, uint64_t ts)
+    {
+        BIO_TRACE_ASYNC_END(NET_TRACE_REPLY_ASYNC, ret, ts);
+    }
+
+    void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize)
+    {
+        using namespace ock::hcom;
+        int32_t result = BIO_ERR;
+
+#ifndef USE_HCOM_STUB
+        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_REPLY_ASYNC);
+        uint64_t ts = Monotonic::TimeNs();
+        NetCallback *callback = NewCallback([this, ts](NetServiceContext &context) {
+            ReplyDone(context.Result(), ts);
+            }, std::placeholders::_1);
+
+        BIO_TRACE_START(NET_TRACE_REPLY_SYNC);
+        NetServiceOpInfo opInfo{};
+        opInfo.errorCode = static_cast<int16_t>(retCode);
+        if (resp != nullptr) {
+            result = ctx.ReplySend(opInfo, { resp, respSize }, callback);
+        } else {
+            result = ctx.ReplySend(opInfo, { &retCode, sizeof(retCode) }, callback);
+        }
+        BIO_TRACE_END(NET_TRACE_REPLY_SYNC, result);
+#else
+        result = NetStub::Reply(retCode, resp, respSize);
+#endif
+        if (UNLIKELY(result != BIO_OK)) {
+            LOG_ERROR("Reply Send failed, ret:" << result << ".");
+        }
+    }
+
     BResult RegisterNewRequestHandler(uint32_t opCode, const NewRequestHandler &h)
     {
         std::lock_guard<std::mutex> guard(mMutex);
@@ -728,15 +759,17 @@ private:
     template <typename TReq> BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
     {
         using namespace ock::hcom;
+        int32_t result = BIO_ERR;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
-        auto *netCallback = NewCallback([](NetServiceContext &context) { return; }, std::placeholders::_1);
+
 #ifndef USE_HCOM_STUB
-        auto result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
+        auto *netCallback = NewCallback([](NetServiceContext &context) { return; }, std::placeholders::_1);
+        result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
-        CbFunc cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result){ return; };
+        CbFunc cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result){ free(resp); };
         Callback cb = Callback(cbFunc, nullptr);
-        auto result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, cb);
+        result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, cb);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
@@ -753,21 +786,19 @@ private:
     template <typename TReq> void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
+        int32_t result = BIO_ERR;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
         uint64_t ts = Monotonic::TimeNs();
 
+        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
+        LVOS_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
+#ifndef USE_HCOM_STUB
         auto *netCallback = NewCallback(
             [this, ts, callback](NetServiceContext &context) {
                 AsyncCallDone(context.Result(), ts);
                 callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.Result());
-            },
-            std::placeholders::_1);
-
-        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
-        int result;
-        LVOS_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+            }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
         result = BIO_ERR;
@@ -791,29 +822,28 @@ private:
     void AsyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
+        int32_t result = BIO_ERR;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
         uint64_t ts = Monotonic::TimeNs();
 
+        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL_BUFF);
+#ifndef USE_HCOM_STUB
         auto *netCallback = NewCallback(
             [this, ts, callback](NetServiceContext &context) {
                 if (context.Result() != SER_OK) {
                     AsyncCallBuffDone(context.Result(), ts);
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(),
-                        NetResult(context.Result()));
+                                NetResult(context.Result()));
                 } else {
                     NetServiceOpInfo rspOpInfo = context.OpInfo();
                     AsyncCallBuffDone(rspOpInfo.errorCode, ts);
                     callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), rspOpInfo.errorCode);
-                }
-            },
-            std::placeholders::_1);
-
-        BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL_BUFF);
-#ifndef USE_HCOM_STUB
-        auto result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);
+                    }
+        }, std::placeholders::_1);
+        result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);
 #else
-        auto result = NetStub::AsyncCall(reqOpInfo, { req, reqLen }, callback);
+        result = NetStub::AsyncCall(reqOpInfo, { req, reqLen }, callback);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));

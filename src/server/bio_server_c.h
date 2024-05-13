@@ -14,7 +14,7 @@ extern "C" {
 
 int32_t BioServerInit();
 
-void BioServerUninit();
+void BioServerExit();
 
 uintptr_t GetBioServerNet();
 

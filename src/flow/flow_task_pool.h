@@ -37,10 +37,7 @@ public:
         mName = "Evt" + name;
     }
 
-    ~FlowTaskPool()
-    {
-        Stop();
-    }
+    ~FlowTaskPool() = default;
 
     BResult Start(uint32_t coreThreadNum, uint32_t queueSiz);
 

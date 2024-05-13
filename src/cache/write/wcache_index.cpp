@@ -115,6 +115,16 @@ void WCacheIndex::ExpiredClear(uint64_t ptId)
     return;
 }
 
+void WCacheIndex::Exit()
+{
+    ReadLocker<ReadWriteLock> lock(&mTableLock);
+    for (auto iter = mTable.begin(); iter != mTable.end(); iter++) {
+        WCacheIndexTable *inTable = iter->second;
+        delete inTable;
+    }
+    mTable.clear();
+}
+
 WCacheIndexTable *WCacheIndex::GetIndexTable(uint64_t ptId)
 {
     {

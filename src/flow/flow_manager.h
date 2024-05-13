@@ -45,7 +45,7 @@ public:
 
     BResult Init();
 
-    BResult Exit();
+    void Exit();
 
     FlowPtr CreateObject(FlowType type, uint64_t flowId, uint32_t mediaId);
 
@@ -177,7 +177,6 @@ private:
     std::map<uint64_t, FlowPtr> mDiskObjManager;
 
     std::mutex mMutex;
-
     FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{ nullptr, nullptr };
 
     static std::atomic<uint64_t> mUsedSize[FLOW_CACHE][FLOW_BUTT];

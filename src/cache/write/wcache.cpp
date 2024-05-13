@@ -57,7 +57,11 @@ void WCache::RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, cons
     mRetryCallback = retryCallback;
 }
 
-void WCache::Exit() {}
+void WCache::Exit()
+{
+    mCacheTiers[WCACHE_MEMORY] = nullptr;
+    mCacheTiers[WCACHE_DISK] = nullptr;
+}
 
 void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed)
 {

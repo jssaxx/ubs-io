@@ -38,11 +38,17 @@ public:
     }
 
     BResult Start(WorkerMode mode, const NetOptions netConf);
-    void Stop();
+    void Exit();
 
     inline bool Ready() const
     {
         return mStarted;
+    }
+
+    inline void SetStartWorker(bool value)
+    {
+        std::lock_guard<std::mutex> lock(mStartLock);
+        mStarted = value;
     }
 
     inline BResult CalculateLocation(const uint64_t objectId, AffinityStrategy affinity, ObjLocation &location)
@@ -168,18 +174,20 @@ public:
         return mNetEngine;
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS;
-
-private:
     BResult BioClientLoggerInit(WorkerMode mode);
+    void BioClientLoggerExit(WorkerMode mode);
     BResult BioClientAgentInit(WorkerMode mode);
+    void BioClientAgentExit();
     BResult BioClientNetPreInit(WorkerMode mode, const NetOptions netConf);
     BResult BioClientNetPostInit(const NetOptions netConf);
-    BResult BioClientConfigInit();
+    void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
+    void BioClientMirrorExit();
     BResult BioClientStartWork();
     void BioClientUpdateHandle();
     void BioClientUpdateView();
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 
 #ifdef USE_DEBUG_TOOLS
 protected:
