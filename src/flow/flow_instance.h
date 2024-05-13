@@ -16,7 +16,8 @@ class FlowInstance;
 using FlowInstancePtr = Ref<FlowInstance>;
 class FlowInstance {
 public:
-    FlowInstance(const uint64_t flowId, uint64_t version = 0) : mFlowId(flowId), mVersion(version) {}
+    FlowInstance(const uint64_t flowId, uint64_t version = 0, bool isDegrade = false)
+        : mFlowId(flowId), mVersion(version), mIsDegrade(isDegrade) {}
     ~FlowInstance() = default;
 
     inline uint64_t FlowId() const
@@ -27,6 +28,11 @@ public:
     inline uint64_t Version() const
     {
         return mVersion;
+    }
+
+    inline bool IsDegrade() const
+    {
+        return mIsDegrade;
     }
 
     inline uint64_t AllocOffset(uint64_t len, uint64_t &offset)
@@ -53,6 +59,7 @@ public:
 private:
     uint64_t mFlowId;
     uint64_t mVersion;
+    bool mIsDegrade;
     uint64_t mIndex{ 0 };
     uint64_t mOffset{ 0 };
     SpinLock lock;

@@ -21,14 +21,14 @@
 using namespace ock::bio;
 
 BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId)
+    uint64_t &flowId, bool &isDegrade)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
     if (opType == 0) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0 };
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0, false };
     } else if (opType == 1) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId };
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
     }
     CreateFlowResponse rsp;
     do {
@@ -48,6 +48,7 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
 
     if (opType == 0) {
         flowId = rsp.flowId;
+        isDegrade = rsp.isDegrade;
     } else if (opType == 1 && rsp.flowId != 0) {
         ret = BIO_ERR;
     }
@@ -72,12 +73,13 @@ BResult MirrorClient::SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &pt
 }
 
 BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId)
+    uint64_t &flowId, bool &isDegrade)
 {
     if (LIKELY(nodeId == mLocalNid.VNodeId())) {
-        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, ptId, opType, flowId);
+        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, ptId, opType,
+            flowId, isDegrade);
     } else {
-        return SendCreateFlowRequestRemote(nodeId, ptEntry, ptId, opType, flowId);
+        return SendCreateFlowRequestRemote(nodeId, ptEntry, ptId, opType, flowId, isDegrade);
     }
 }
 
@@ -100,7 +102,8 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     }
 
     uint64_t flowId = UINT64_MAX;
-    ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, ptId, 0, flowId);
+    bool isDegrade = false;
+    ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, ptId, 0, flowId, isDegrade);
     if (UNLIKELY(ret != BIO_OK || flowId == UINT64_MAX)) {
         CLIENT_LOG_ERROR("Create master flow failed, ret:" << ret << ", ptId:" << ptId << ", masterNid:" <<
             ptEntry.masterNodeId << ".");
@@ -114,7 +117,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
             continue;
         }
-        ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, ptId, 1, flowId);
+        ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, ptId, 1, flowId, isDegrade);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
                 ptEntry.copys[idx].nodeId << ".");
@@ -123,9 +126,9 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         }
     }
 
-    Insert(ptId, ptEntry.version, flowId);
+    Insert(ptId, ptEntry.version, flowId, isDegrade);
     CLIENT_LOG_INFO("Create flow instance success, ptId:" << ptId << ", ptv:" << ptEntry.version << ", flowId:" <<
-        flowId << ".");
+        flowId << ", isDegrade:" << isDegrade << ".");
     return BIO_OK;
 }
 

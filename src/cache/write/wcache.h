@@ -23,8 +23,8 @@ class WCache;
 using WCachePtr = Ref<WCache>;
 class WCache {
 public:
-    WCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId)
-        : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId)
+    WCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
+        : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
     {}
 
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
@@ -41,13 +41,18 @@ public:
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr, bool isDegrade);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
     BResult Seal(WCacheTierType type);
 
     BResult Destroy();
+
+    bool GetDegradeState()
+    {
+        return mIsDegrade;
+    }
 
     void SetState(bool isNormal)
     {
@@ -126,6 +131,8 @@ private:
     uint64_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
+    bool mIsDegrade;
+    bool mIsMaster;
     bool mIsNormal{ true };
     bool mIsForced { false };
     EvictCallback mEvictCallback;

@@ -40,13 +40,16 @@ public:
 public:
     BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
-    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId);
+    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv,
+        uint16_t diskId, bool isDegrade);
 
     BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv);
 
     BResult DeleteWCache(uint64_t flowId);
 
     BResult RecoverCache(FlowPtr metaFlow);
+
+    BResult ServiceUngradeFlush();
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
@@ -89,6 +92,9 @@ private:
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
     BResult HandleCacheBrokenImpl(WCachePtr wcache);
     BResult HandleProcBrokenImpl(uint64_t procId);
+
+    void ScanUpgradeCache(std::list<WCachePtr> &list);
+    BResult ClearUpgradeCache();
 
     void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
     BResult ClearOldCache(uint64_t ptId, uint64_t ptv);

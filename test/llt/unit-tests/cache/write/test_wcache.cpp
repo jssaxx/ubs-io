@@ -72,7 +72,7 @@ TEST_F(TestWCache, test_cacheId_case_return_ok)
 
 TEST_F(TestWCache, test_createcache_case_return_ok)
 {
-    auto ret = gWcacheManager->CreateWCache(0, g_cacheId, 0, 0, 0);
+    auto ret = gWcacheManager->CreateWCache(0, g_cacheId, 0, 0, 0, false);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -383,7 +383,7 @@ TEST_F(TestWCache, test_wcache_alloc_case_return_fail)
 {
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_ALLOC_FAIL", 0, 1, userParam);
-    auto ret = Cache::Instance().CreateWCache(0, g_cacheId, 0, 0, 0);
+    auto ret = Cache::Instance().CreateWCache(0, g_cacheId, 0, 0, false);
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_ALLOC_FAIL");
 }
@@ -704,9 +704,7 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     req.mrSize = 0;
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WRITE_SLICE_NULL_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "CACHE_PUT_DEGRADE_FAIL", 0, 1, userParam);
     auto ret = mirror->MirrorServerPut(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "WRITE_SLICE_NULL_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "CACHE_PUT_DEGRADE_FAIL");
 }
