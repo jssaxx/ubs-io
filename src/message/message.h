@@ -198,13 +198,14 @@ typedef struct {
     uint32_t mrKey;
     bool memFromServer;
     bool isDegrade;
-    uint8_t copyFree;
+    uint32_t ioStratege;
     uint32_t sliceLen;
     char sliceBuf[0];
 } PutRequest;
 
 typedef struct {
     uint64_t updateQuota;
+    uint32_t ioStratege;
 } PutResponse;
 
 /* Get */

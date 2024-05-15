@@ -30,7 +30,8 @@ public:
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
 
-    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager);
+    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
+        bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
@@ -41,6 +42,9 @@ public:
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+
+    BResult PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
@@ -112,8 +116,10 @@ private:
     BResult EvictAllMemSliceToDisk();
     BResult EvictAllDiskSliceToUnderFs();
 
-    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef);
-    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster);
+    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false);
+    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false);
+
+    BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
 
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
@@ -126,6 +132,8 @@ private:
 
     BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearDisk();
+
+    void PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
@@ -157,6 +165,8 @@ private:
     RCacheManagerPtr mRCacheManager;
 
     UnderFsPtr mUnderFs;
+
+    std::atomic<uint64_t> mOnFlyRef;
 
     DEFINE_REF_COUNT_VARIABLE;
 };

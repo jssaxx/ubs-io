@@ -41,7 +41,7 @@ public:
     BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
     BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv,
-        uint16_t diskId, bool isDegrade);
+        uint16_t diskId, bool isDegrade, bool isRecover = false);
 
     BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv);
 
@@ -110,7 +110,7 @@ private:
 private:
     ReadWriteLock mWCacheManagerLock;
     std::unordered_map<uint64_t, WCachePtr> mWCacheManager;
-    std::vector<WCachePtr> mRetryManager[MAX_WCACHE_TIER];
+    std::vector<uint64_t> mRetryManager[MAX_WCACHE_TIER];
     std::unordered_map<uint64_t, uint64_t> mDestroyManager;
     RCacheManagerPtr mRCacheManager;
 
