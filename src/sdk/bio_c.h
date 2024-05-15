@@ -240,6 +240,30 @@ void BioFreeListResources(ObjStat *objs, uint64_t objNum);
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
 
 /**
+ * @brief: Notify boostio update prepare
+ *
+ * @param[in]: tenantId: tenant id
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioNotifyUpdatePrepare(uint64_t tenantId);
+
+/**
+ * @brief: Notify boostio update finish
+ *
+ * @param[in]: tenantId: tenant id
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioNotifyUpdateFinish(uint64_t tenantId);
+
+/**
+ * @brief: Check whether boostio update is ready
+ *
+ * @param[in]: tenantId: tenant id
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioCheckUpdateReady(uint64_t tenantId);
+
+/**
  * @brief: alloc write space for write copy free
  *
  * @param[in]: tenantId: tenant id
