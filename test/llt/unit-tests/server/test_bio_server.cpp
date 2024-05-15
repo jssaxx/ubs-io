@@ -103,7 +103,7 @@ TEST_F(TestBioServer, test_bio_server_put)
     req.length = 128U;
     req.mrKey = 1;
     req.sliceLen = 128U;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -124,7 +124,7 @@ TEST_F(TestBioServer, test_bio_server_put_slice_alloc_fail_reply_ok)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -148,7 +148,7 @@ TEST_F(TestBioServer, test_bio_server_put_slice_normal_alloc_fail_reply_ok)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = NO_128;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -231,7 +231,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -251,7 +251,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_alloc_slice_err_return_fail)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -274,7 +274,7 @@ TEST_F(TestBioServer, test_put_slice_alloc_slice_err_return_fail)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = NO_128;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;

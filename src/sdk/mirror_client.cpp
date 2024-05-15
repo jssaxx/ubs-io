@@ -20,6 +20,8 @@
 #endif
 using namespace ock::bio;
 
+static const uint32_t IO_EXTRATEGE_TIME = 3; // IO策略3s过期
+
 BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     uint64_t &flowId, bool &isDegrade)
 {
@@ -249,6 +251,17 @@ BResult MirrorClient::LoadOriginViewImpl()
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get local node info failed, ret:" << ret << ".");
         return ret;
+    }
+
+    for (auto &item : mPtView) {
+        IoStratege *ioStratege = new (std::nothrow) IoStratege();
+        if (UNLIKELY(ioStratege == nullptr)) {
+            CLIENT_LOG_ERROR("Alloc ioStratege failed.");
+            return BIO_ALLOC_FAIL;
+        }
+        ioStratege->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
+        ioStratege->stratege = 0;
+        mIoStratege[item.first] = ioStratege;
     }
 
     if (mNodeView.empty() || mPtView.empty()) {
@@ -498,7 +511,11 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     req->length = param.length;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = spaceInfo.descriptorSize;
-    req->copyFree = true;
+    if (mIoStratege[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
+        req->ioStratege = mIoStratege[ptEntry.ptId]->stratege;
+    } else {
+        req->ioStratege = 0;
+    }
     req->memFromServer = true;
     req->mrAddress = 0ULL;
     memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
@@ -986,7 +1003,7 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
 }
 
 void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
-    uint64_t flowOffset, uint64_t flowIndex, GetSliceResponse *rsp) const
+    uint64_t flowOffset, uint64_t flowIndex, GetSliceResponse *rsp)
 {
     req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     req->tenantId = param.attr.mTenantId;
@@ -1001,12 +1018,16 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = 0;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = rsp->sliceLen;
-    req->copyFree = false;
+    if (mIoStratege[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
+        req->ioStratege = mIoStratege[ptEntry.ptId]->stratege;
+    } else {
+        req->ioStratege = 0;
+    }
     memcpy_s(req->sliceBuf, rsp->sliceLen, rsp->sliceBuf, rsp->sliceLen);
 }
 
 void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
-    uint64_t flowOffset, uint64_t flowIndex, NetMrInfo &mr) const
+    uint64_t flowOffset, uint64_t flowIndex, NetMrInfo &mr)
 {
     req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     req->tenantId = param.attr.mTenantId;
@@ -1021,6 +1042,11 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = mr.size;
     req->mrKey = mr.key;
     req->sliceLen = 0;
+    if (mIoStratege[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
+        req->ioStratege = mIoStratege[ptEntry.ptId]->stratege;
+    } else {
+        req->ioStratege = 0;
+    }
 }
 
 BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum)
@@ -1134,7 +1160,6 @@ void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uin
 {
     for (uint32_t i = 0; i < index.size(); i++) {
         uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
-        req->copyFree = false;
         BIO_TRACE_START(SDK_TRACE_PUT_REMOTE_SYNC);
         net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT,
             static_cast<void *>(req), sizeof(PutRequest) + req->sliceLen, callback);
@@ -1165,16 +1190,18 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
     std::atomic<uint64_t> negoWriteQuota(UINT64_MAX);
+    std::atomic<uint32_t> ioStratege(0);
 
-    auto cbFunc = [&negoWriteQuota](void *ctx, void *resp, uint32_t len, int32_t result) {
+    auto cbFunc = [&negoWriteQuota, &ioStratege](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         LVOS_TP_START(SDK_MIRROR_PUT_RECV_FAIL, &(cbCtx->result), BIO_INNER_RETRY);
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
-            auto rsp = static_cast<PutResponse *>(resp);
+            PutResponse *rsp = static_cast<PutResponse *>(resp);
             negoWriteQuota = (rsp->updateQuota < negoWriteQuota) ? rsp->updateQuota : negoWriteQuota.load();
+            ioStratege = (rsp->ioStratege > ioStratege) ? rsp->ioStratege : ioStratege.load();
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
@@ -1200,7 +1227,11 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     net::BioClientNet::Instance()->Free(req->mrAddress);
-    updateQuota = negoWriteQuota.load();
+    if (cbCtx.result == BIO_OK) {
+        updateQuota = negoWriteQuota.load();
+        mIoStratege[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
+        mIoStratege[ptEntry.ptId]->stratege = ioStratege.load();
+    }
     LVOS_TP_START(SDK_MIRROR_SEND_PUT_FAIL, &(cbCtx.result), BIO_INNER_ERR);
     LVOS_TP_END;
     return cbCtx.result;

@@ -41,8 +41,8 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t dis
     return BIO_OK;
 }
 
-WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
-    CacheAttr &attr)
+BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
+    WCacheSliceRefPtr &destSliceRef)
 {
     // fill meta flow.
     BResult res;
@@ -51,41 +51,31 @@ WCacheSliceRefPtr WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice,
     LVOS_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &metaSlice, nullptr);
     metaSlice = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), res);
     LVOS_TP_END;
-    ChkTrue(metaSlice != nullptr, nullptr, "Failed to get meta slice, flowId" <<
+    ChkTrue(metaSlice != nullptr, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
     auto ret = memcpy_s(sliceMeta.key, NO_512, key, strlen(key));
     if (ret != 0) {
-        return nullptr;
+        return BIO_INNER_RETRY;
     }
     sliceMeta.offset = slice->GetOffsetInFlow();
     sliceMeta.length = slice->GetLength();
     sliceMeta.magic = slice->GetFlowId();
     sliceMeta.hasEvict = 0;
     ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
-    ChkTrueNot(ret == BIO_OK, nullptr);
+    ChkTrueNot(ret == BIO_OK, ret);
 
     // fill data flow.
-    WCacheSlicePtr dataSlice = nullptr;
-    WCacheSliceRefPtr sliceRef = nullptr;
-    if (attr.mCopyFree) {
-        LOG_INFO("Copy free write flowId:" << slice->GetFlowId() << ", flowOffset:" << slice->GetOffsetInFlow() <<
-            ", flowIndex:" << slice->GetIndexInFlow() << ", length:" << slice->GetLength() << ", chunkId:" <<
-            slice->GetAddrs()[0].chunkId << ", chunkOffset:" << slice->GetAddrs()[0].chunkOffset << ", chunkSize:" <<
-            slice->GetAddrs()[0].chunkLen);
-        dataSlice = slice;
-    } else {
-        dataSlice = GetSlice(mDataFlow, slice->GetOffsetInFlow(), slice->GetIndexInFlow(), slice->GetLength(), res);
-        ChkTrue(dataSlice != nullptr, nullptr, "Failed to get data slice, flowId" <<
-            mDataFlow->GetFlowId() << " ret:" << res);
-        ret = sliceReader(slice.Get(), dataSlice.Get());
-        ChkTrueNot(ret == BIO_OK, nullptr);
-    }
+    WCacheSlicePtr dataSlice = GetSlice(mDataFlow, slice->GetOffsetInFlow(), slice->GetIndexInFlow(),
+        slice->GetLength(), res);
+    ChkTrue(dataSlice != nullptr, res, "Failed to get data slice, flowId" <<
+        mDataFlow->GetFlowId() << " ret:" << res);
+    ret = sliceReader(slice.Get(), dataSlice.Get());
+    ChkTrueNot(ret == BIO_OK, ret);
 
-    sliceRef = MakeRef<WCacheSliceRef>(dataSlice);
-    ChkTrueNot(sliceRef != nullptr, nullptr);
-
-    return sliceRef;
+    destSliceRef = MakeRef<WCacheSliceRef>(dataSlice);
+    ChkTrueNot(destSliceRef != nullptr, BIO_INNER_RETRY);
+    return BIO_OK;
 }
 
 void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)

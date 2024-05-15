@@ -701,7 +701,7 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     req.flowId = g_cacheId;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.copyFree = false;
+    req.ioStratege = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;

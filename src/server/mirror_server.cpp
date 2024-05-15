@@ -378,7 +378,7 @@ BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, Put
     return ret;
 }
 
-BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx)
+BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStratege)
 {
     LOG_INFO("Mirror server put, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
         sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
@@ -394,13 +394,15 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
     };
 
     BIO_TRACE_START(MIRROR_TRACE_PUT);
-    CacheAttr attr(req.copyFree, req.tenantId, static_cast<AffinityStrategy>(req.affinity),
-        static_cast<WriteStrategy>(req.strategy));
+    CacheAttr attr(static_cast<RealIoStrategy>(req.ioStratege), req.tenantId,
+        static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
     BResult ret = Cache::Instance().Put(req.key, sliceP, reader, attr);
     BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
+        return ret;
     }
+    ioStratege = static_cast<uint32_t>(attr.ioStratege); // 将下一个IO的写策略带回SDK端
     return ret;
 }
 
@@ -988,14 +990,16 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
     BResult result;
+    uint32_t ioStratege = 0;
     LVOS_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
-    result = Put(*req, sliceP, ctx);
+    result = Put(*req, sliceP, ctx, ioStratege);
     LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
     BIO_TRACE_START(MIRROR_TRACE_PUT_REMOTE_GET_QUOTA);
     rsp.updateQuota = Cache::Instance().GetAdjustWriteQuota();
+    rsp.ioStratege = ioStratege;
     BIO_TRACE_END(MIRROR_TRACE_PUT_REMOTE_GET_QUOTA, BIO_OK);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, &rsp, sizeof(PutResponse));
     return BIO_OK;

@@ -114,7 +114,7 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flo
 }
 
 BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv,
-    uint16_t diskId, bool isDegrade)
+    uint16_t diskId, bool isDegrade, bool isRecover)
 {
     auto wcache = MakeRef<WCache>(procId, flowId, ptId, ptv, diskId, isDegrade);
     LVOS_TP_START(WCACHE_ALLOC_FAIL, &wcache, nullptr);
@@ -127,18 +127,13 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
     };
 
     WCache::RetryCallback retryCallback = [this](uint64_t flowId, WCacheTierType cacheTier) -> void {
-        auto wcache = GetWCache(flowId);
-        if (UNLIKELY(wcache == nullptr)) {
-            LOG_ERROR("Failed to get flow by id:" << flowId);
-            return;
-        }
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
-        mRetryManager[cacheTier].push_back(wcache);
+        mRetryManager[cacheTier].push_back(flowId);
     };
 
     wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
 
-    auto ret = wcache->Init(mEvictService, mRCacheManager);
+    auto ret = wcache->Init(mEvictService, mRCacheManager, isRecover);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
     {
@@ -202,7 +197,7 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
 
     BResult ret = BIO_ERR;
     LVOS_TP_START(RECOVER_CACHE_FLOWID_FAIL, &flowId, NO_1536);
-    ret = CreateWCache(0, flowId, ptId, 0, static_cast<uint16_t>(diskId), false);
+    ret = CreateWCache(0, flowId, ptId, 0, static_cast<uint16_t>(diskId), false, true);
     ChkTrue(ret == BIO_OK, ret, "Failed to create wcache, flowId:" << flowId);
     LVOS_TP_END;
 
@@ -263,6 +258,7 @@ void WCacheManager::ScanUpgradeCache(std::list<WCachePtr> &list)
         if (flowIt.second->GetDegradeState()) {
             continue;
         }
+        flowIt.second->SetState(false);
         if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
@@ -292,10 +288,7 @@ BResult WCacheManager::ClearUpgradeCache()
             LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) << ", Vir Disk:" <<
                 flowIt.second->GetVirCapacity(WCACHE_DISK));
-            if (flowIt.second->GetState()) {
-                flowIt.second->SetState(false);
-                mDestroyManager.emplace(flowIt.first, evictTime);
-            }
+            mDestroyManager.emplace(flowIt.first, evictTime);
         }
     }
 
@@ -312,14 +305,6 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     auto wcache = GetWCache(sliceKey.flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
-        return BIO_NOT_EXISTS;
-    }
-
-    bool isNormal = wcache->GetState();
-    LVOS_TP_START(WCACHE_STATE_NORMAL, &isNormal, true);
-    LVOS_TP_END;
-    if (!isNormal) {
-        LOG_ERROR("Failed to check wcache flow by id:" << wcache->GetFlowId() << ".");
         return BIO_NOT_EXISTS;
     }
 
@@ -366,14 +351,6 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
         return BIO_INNER_RETRY;
     }
 
-    bool isNormal = wcache->GetState();
-    LVOS_TP_START(WCACHE_STATE_NOT_NORMAL, &isNormal, false);
-    LVOS_TP_END;
-    if (!isNormal) {
-        LOG_ERROR("Failed to check wcache, flowId:" << wcache->GetFlowId() << ", key:" << key << ".");
-        return BIO_NOT_EXISTS;
-    }
-
     // 2. write slice to flow
     BResult ret = BIO_ERR;
     LVOS_TP_START(NO_PROCESS_WCACHE_PUT, 0);
@@ -386,12 +363,10 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
         return ret;
     }
 
-    // 3. is degrade
+    // 3. Insert slice to index.
     if (UNLIKELY(wcacheDegarde)) {
         return BIO_OK;
     }
-
-    // 4. Insert slice to index.
     BIO_TRACE_START(WCACHE_TRACE_PUT_INSERT_INDEX);
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     ret = mCacheIndex->Insert(ptId, key, sliceRef);
@@ -507,7 +482,7 @@ BResult WCacheManager::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
 {
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get flow by id:" << flowId);
+        LOG_WARN("Failed to get flow by id:" << flowId);
         return BIO_NOT_EXISTS;
     }
 
@@ -621,6 +596,7 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
         if (flowIt.second->GetPtv() >= ptv) {
             continue;
         }
+        flowIt.second->SetState(false);
         if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
@@ -653,10 +629,7 @@ BResult WCacheManager::ClearOldCache(uint64_t ptId, uint64_t ptv)
             LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
                 ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) << ", Vir Disk:" <<
                 flowIt.second->GetVirCapacity(WCACHE_DISK));
-            if (flowIt.second->GetState()) {
-                flowIt.second->SetState(false);
-                mDestroyManager.emplace(flowIt.first, evictTime);
-            }
+            mDestroyManager.emplace(flowIt.first, evictTime);
         }
     }
 
@@ -677,7 +650,7 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
         LOG_WARN("Failed to get wcache flow by id:" << flowId << ".");
         return BIO_NOT_EXISTS;
     }
-
+    wcache->SetState(false);
     do {
         ret = HandleCacheBrokenImpl(wcache);
         if (ret != BIO_OK) {
@@ -689,8 +662,8 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 
     LVOS_TP_START(NO_PROCESS_DESTROY_EVICT_THREAD, 0);
     uint64_t evictTime = Monotonic::TimeSec() + DESTROY_EVICT_TIMEOUT;
-    if (wcache->GetState()) {
-        wcache->SetState(false);
+    {
+        WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
         mDestroyManager.emplace(flowId, evictTime);
     }
 
@@ -803,10 +776,10 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
     WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
     for (const auto &flowIt : mWCacheManager) {
         uint64_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
-        LVOS_TP_START(NO_PROCESS_WCACHE_VALIDATE, 0);
         if (procId != flowIt.second->GetProcId()) {
             continue;
         }
+        flowIt.second->SetState(false);
         if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY)) {
             flowIt.second->Seal(WCACHE_MEMORY);
         }
@@ -814,7 +787,6 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
-        LVOS_TP_END;
         LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
             ", procId:" << procId << ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) << ", Disk:" <<
             flowIt.second->GetCapacity(WCACHE_DISK));
@@ -840,10 +812,7 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
             LOG_INFO("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
                 ", procId:" << procId << ", Vir Mem:" << flowIt.second->GetVirCapacity(WCACHE_MEMORY) <<
                 ", Vir Disk:" << flowIt.second->GetVirCapacity(WCACHE_DISK));
-            if (flowIt.second->GetState()) {
-                flowIt.second->SetState(false);
-                mDestroyManager.emplace(flowIt.first, evictTime);
-            }
+            mDestroyManager.emplace(flowIt.first, evictTime);
         }
     }
 
@@ -861,7 +830,19 @@ inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
     if (UNLIKELY(wflowIt == mWCacheManager.end())) {
         return nullptr;
     }
-    return wflowIt->second;
+
+    WCachePtr wcache = wflowIt->second;
+    bool isNormal = wcache->GetState();
+    LVOS_TP_START(WCACHE_STATE_NORMAL, &isNormal, true);
+    LVOS_TP_END;
+    LVOS_TP_START(WCACHE_STATE_NOT_NORMAL, &isNormal, false);
+    LVOS_TP_END;
+    if (!isNormal) {
+        LOG_WARN("Failed to check wcache flow by id:" << wcache->GetFlowId() << ".");
+        return nullptr;
+    }
+
+    return wcache;
 }
 
 BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
@@ -892,15 +873,20 @@ BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, con
 
 void WCacheManager::RetryEvictThread()
 {
-    std::vector<WCachePtr> retryFlows;
+    std::vector<uint64_t> retryFlows;
     while (mRunning) {
         {
             WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
             retryFlows = std::move(mRetryManager[WCACHE_MEMORY]);
         }
 
-        for (const auto &flow : retryFlows) {
-            flow->RetryEvictTask(WCACHE_MEMORY);
+        for (const auto &flowId : retryFlows) {
+            auto wflowIt = mWCacheManager.find(flowId);
+            if (UNLIKELY(wflowIt == mWCacheManager.end())) {
+                LOG_WARN("Failed to get flow by id:" << flowId);
+                continue;
+            }
+            wflowIt->second->RetryEvictTask(WCACHE_MEMORY);
         }
         retryFlows.clear();
         {
@@ -908,8 +894,13 @@ void WCacheManager::RetryEvictThread()
             retryFlows = std::move(mRetryManager[WCACHE_DISK]);
         }
 
-        for (const auto &flow : retryFlows) {
-            flow->RetryEvictTask(WCACHE_DISK);
+        for (const auto &flowId : retryFlows) {
+            auto wflowIt = mWCacheManager.find(flowId);
+            if (UNLIKELY(wflowIt == mWCacheManager.end())) {
+                LOG_WARN("Failed to get flow by id:" << flowId);
+                continue;
+            }
+            wflowIt->second->RetryEvictTask(WCACHE_DISK);
         }
         retryFlows.clear();
         sleep(1);
