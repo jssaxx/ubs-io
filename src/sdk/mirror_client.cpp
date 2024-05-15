@@ -861,6 +861,24 @@ BResult MirrorClient::StatObjectImpl(const char *key, const ObjLocation &locatio
     return ret;
 }
 
+BResult MirrorClient::NotifyUpdate(bool &flag)
+{
+    auto ret = SendNotifyUpdateRequest(flag);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send update request failed, ret:" << ret << ".");
+    }
+    return ret;
+}
+
+BResult MirrorClient::CheckUpdateReady()
+{
+    auto ret = SendCheckUpdateReadyRequest();
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Check update request failed, ret:" << ret << ".");
+    }
+    return ret;
+}
+
 BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
 {
     uint16_t ptId = ParseLocation(param.location);
@@ -1336,6 +1354,24 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
         ret = StatRemote(dstNid, req, objInfo);
     }
     LVOS_TP_START(SDK_MIRROR_STAT_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    LVOS_TP_END;
+    return ret;
+}
+
+BResult MirrorClient::SendNotifyUpdateRequest(bool &flag)
+{
+    BResult ret = BIO_INNER_ERR;
+    LVOS_TP_START(SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    ret = agent::BioClientAgent::Instance()->NotifyUpdate(flag);
+    LVOS_TP_END;
+    return ret;
+}
+
+BResult MirrorClient::SendCheckUpdateReadyRequest()
+{
+    BResult ret = BIO_INNER_ERR;
+    LVOS_TP_START(SDK_MIRROR_CHECK_UPDATE_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    ret = agent::BioClientAgent::Instance()->CheckUpdateReady();
     LVOS_TP_END;
     return ret;
 }

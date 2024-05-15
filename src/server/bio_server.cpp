@@ -823,6 +823,16 @@ int32_t Load(LoadRequest *req)
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Load(*req));
 }
 
+int32_t NotifyUpdate(NotifyUpdateRequest *req)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->NotifyUpdate(*req));
+}
+
+int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse *rsp)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CheckUpdateReady(*req, *rsp));
+}
+
 int32_t ReportHb(uint64_t *curNodeTimes, uint64_t *curPtTimes)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetHbInfo(curNodeTimes, curPtTimes));

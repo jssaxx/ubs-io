@@ -32,6 +32,8 @@ public:
     using CreateFlowMasterFuncPtr = int32_t (*)(CreateFlowRequest *, CreateFlowResponse *);
     using CreateFlowSlaveFuncPtr = int32_t (*)(CreateFlowRequest *);
     using DestroyFlowFuncPtr = int32_t (*)(DestroyFlowRequest *);
+    using NotifyUpdateFuncPtr = int32_t (*)(NotifyUpdateRequest *);
+    using CheckUpdateReadyFuncPtr = int32_t (*)(CheckUpdateReadyRequest *, CheckUpdateReadyResponse *);
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
     using PutFuncPtr = int32_t (*)(PutRequest *, PutResponse *);
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
@@ -89,6 +91,14 @@ public:
 
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
 
+    BResult NotifyUpdate(bool &flag);
+
+    BResult SendNotifyUpdateRequestLocal(NotifyUpdateRequest &req);
+
+    BResult CheckUpdateReady();
+
+    BResult SendCheckUpdateReadyRequestLocal(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp);
+
     BResult LoadLocal(LoadRequest &req);
 
     BResult ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes);
@@ -96,6 +106,7 @@ public:
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
 private:
+    BResult InitUpgradeOperation();
     BResult InitOperation();
     void *LoadFunction(const char *name);
 
@@ -143,6 +154,8 @@ private:
     CreateFlowMasterFuncPtr createFlowMasterOp = nullptr;
     CreateFlowSlaveFuncPtr createFlowSlaveOp = nullptr;
     DestroyFlowFuncPtr destroyFlowOp = nullptr;
+    NotifyUpdateFuncPtr notifyUpdateOp = nullptr;
+    CheckUpdateReadyFuncPtr checkUpdateReadyOp = nullptr;
     GetSliceFuncPtr getSliceOp = nullptr;
     PutFuncPtr putOp = nullptr;
     GetFuncPtr getOp = nullptr;

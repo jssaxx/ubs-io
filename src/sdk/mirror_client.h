@@ -94,6 +94,10 @@ public:
 
     BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
 
+    BResult NotifyUpdate(bool &flag);
+
+    BResult CheckUpdateReady();
+
     DEFINE_REF_COUNT_FUNCTIONS
 
     std::vector<uint16_t> ListLocalAffinityPt();
@@ -163,6 +167,10 @@ private:
     BResult ListAllImpl(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatObjectImpl(const char *key, const ObjLocation &location, ObjStat &stat);
+
+    BResult SendNotifyUpdateRequest(bool &flag);
+
+    BResult SendCheckUpdateReadyRequest();
 
     inline int32_t Copy(const void *src, void *dst, const uint64_t len)
     {
