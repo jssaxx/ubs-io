@@ -56,6 +56,7 @@ constexpr uint64_t NO_U64_0 = 0;
 constexpr uint64_t NO_U64_1 = 1;
 
 constexpr uint32_t IP_SIZE = 32;
+constexpr uint32_t DEVICE_SIZE = 16;
 }
 }
 

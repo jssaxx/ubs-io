@@ -560,6 +560,8 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
 
     NetChannelUpCtx ctx(netPayload.srcNodeId, isCtrl, true);
     newChannel->UpCtx(ctx.whole);
+    newChannel->SetOneSideTimeout(mTimeout);
+    newChannel->SetTwoSideTimeout(mTimeout);
 
     if (netPayload.srcNodeId.pid == 0) {
         NET_LOG_INFO("No needed add channel " << newChannel->Id() << ", peer connected nid " <<

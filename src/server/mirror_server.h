@@ -55,7 +55,7 @@ public:
     void QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp);
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
-    BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx);
+    BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStratege);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);

@@ -206,6 +206,11 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
         mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
     }
 
+    if (mDaemonConfig.diskCaps.size() > DEVICE_SIZE) { // 参考 DISK_LIST_NUM
+        LOG_ERROR("Disk num limit:" << DEVICE_SIZE << ", input:" << mDaemonConfig.diskCaps.size());
+            return BIO_ERR;
+    }
+
     return BIO_OK;
 }
 

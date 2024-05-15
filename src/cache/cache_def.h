@@ -29,6 +29,13 @@ enum CacheType : uint16_t {
     CACHE_BUTT
 };
 
+typedef enum : uint32_t {
+    WRITE_DEFALUT = 0,
+    WRITE_MEM_BACK = 1,
+    WRITE_DISK_BACK = 2,
+    WRITE_UNDERFS_BACK = 3,
+} RealIoStrategy;
+
 struct CacheResDescription {
     uint64_t memCapacity;
     uint64_t diskCapacity;
@@ -37,22 +44,24 @@ struct CacheResDescription {
 };
 
 struct CacheAttr {
-    bool mCopyFree;
+    RealIoStrategy ioStratege;
     uint64_t mTenantId;
     AffinityStrategy affinity;
     WriteStrategy strategy;
 
     CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : mCopyFree(false), mTenantId(id), affinity(aff), strategy(str)
+        : ioStratege(WRITE_DEFALUT), mTenantId(id), affinity(aff), strategy(str)
     {}
-    CacheAttr(bool copyFree, uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : mCopyFree(copyFree), mTenantId(id), affinity(aff), strategy(str)
+    CacheAttr(RealIoStrategy iostr, uint64_t id, AffinityStrategy aff, WriteStrategy str)
+        : ioStratege(iostr), mTenantId(id), affinity(aff), strategy(str)
     {}
     CacheAttr(CacheAttr &other)
-        : mCopyFree(other.mCopyFree), mTenantId(other.mTenantId), affinity(other.affinity), strategy(other.strategy)
+        : ioStratege(other.ioStratege), mTenantId(other.mTenantId), affinity(other.affinity),
+        strategy(other.strategy)
     {}
     inline CacheAttr &operator = (const CacheAttr &other)
     {
+        ioStratege = other.ioStratege;
         mTenantId = other.mTenantId;
         affinity = other.affinity;
         strategy = other.strategy;
