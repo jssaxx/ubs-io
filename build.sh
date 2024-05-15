@@ -8,7 +8,7 @@ BUILD_DIR=${PROJ_DIR}/build
 BUILD_TYPE=debug
 DIAGNOSE_FLAG=true
 DIAGNOSE=on
-CMAKE_FLAGS=
+CMAKE_FLAGS=""
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
   mkdir -p ${BUILD_DIR}
@@ -98,4 +98,4 @@ fi
 cd boostio/scripts
 touch host_ip_list
 cd ${PROJ_DIR}/output
-tar -czvf BoostIO_1.0.0_$(uname -s)-`arch`_${BUILD_TYPE}.tar.gz boostio
+tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio

@@ -17,11 +17,11 @@ import getpass
 import configparser
 import subprocess
 
-sp = subprocess.Popen("touch /var/log/boostio_hand_out_py.log;chmod 600 /var/log/boostio_hand_out_py.log", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+sp = subprocess.Popen("touch ./boostio_hand_out_py.log;chmod 600 ./boostio_hand_out_py.log", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
 sp.communicate()
 sp.wait()
 logging.basicConfig(level=logging.INFO,
-                    filename="/var/log/boostio_hand_out_py.log",
+                    filename="./boostio_hand_out_py.log",
                     format="[%(asctime)s][%(levelname)s][%(filename)s, %(lineno)d][%(message)s]",
                     datefmt="%Y-%m-%d %H:%M:%S")
 
@@ -152,7 +152,11 @@ def copy_certificate(install_path):
     for cert in tls_certs:
         source_file = tmp_conf_file_path.replace(os.path.basename(tmp_conf_file_path), cert)
         dest_file = install_path + security_tls_certs_path + cert
-        os.system("cp -f {} {}".format(source_file, dest_file))
+        source_file_str = str(source_file)
+        dest_file_str = str(dest_file)
+        command = ["cp", "-f", source_file_str, dest_file_str]
+        subprocess.run(command)
+        # os.system("cp -f {} {}".format(source_file, dest_file))
 
     if os.path.exists(install_path + security_tls_certs_path + ca_crt):
         normal_logger.info("Copy the certificate to the installation directory ok.")

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright: (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
-
+set -e
 ROOT_PATH=/opt
 RUN_USER=hwMindX
 RUN_GROUP=HwHiAiUser
@@ -20,12 +20,11 @@ BIN_PATH=$INSTALL_PATH/bin
 SCRIPTS_PATH=$INSTALL_PATH/scripts
 INCLUDE_PATH=$INSTALL_PATH/include
 LIB_PATH=$INSTALL_PATH/lib
-CONF_PATH=$BIN_PATH/conf
+CONF_PATH=$INSTALL_PATH/bin/conf
 SECURITY_PATH=$INSTALL_PATH/security
 LOG_PATH=${INSTALL_PATH}/logs
-LOG_FILE=${LOG_PATH}/boostio_start.log
+LOG_FILE=${INSTALL_PATH}/logs/boostio_start.log
 
-DEPRESS_PATH=/home/boostio
 SYSTEMD_SERVICE_PATH=/lib/systemd/system/boostio.service
 BOOSTIO_HTRACE_LOG_PATH=/var/log/boostio
 
@@ -46,6 +45,7 @@ print_log()
 #清理环境
 clear_env()
 {
+  set +e
 #  erase_keys
   stop_boostio
   sleep 10
@@ -54,23 +54,24 @@ clear_env()
 #      #清理zk
 #      echo "清理zk."
 #  fi
-  BioID=`ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}'`
-  for id in $BioID
+  bio_id=$(ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}')
+  for id in $bio_id
   do
    kill -9 $id
   done
-  BioConsoleID=`ps -ef | grep bio_console  | grep -v grep | awk '{print $2}'`
-  for id in $BioConsoleID
+  bio_console_id=$(ps -ef | grep bio_console  | grep -v grep | awk '{print $2}')
+  for id in $bio_console_id
   do
    kill -9 $id
   done
   systemctl disable boostio
   sleep 10
   rm -f $SYSTEMD_SERVICE_PATH
-  rm -rf $BOOSTIO_HTRACE_LOG_PATH
+  [ -d "${BOOSTIO_HTRACE_LOG_PATH}" ] && rm -rf $BOOSTIO_HTRACE_LOG_PATH
   systemctl daemon-reload
   semanage fcontext -D $INSTALL_PATH > /dev/null 2>&1
   [ -d "$INSTALL_PATH" ] && rm -rf $INSTALL_PATH/
+  set -e
 }
 
 
@@ -181,9 +182,11 @@ set_permissions()
 
   chown $RUN_USER:$RUN_GROUP  $LOG_FILE
   chmod 600 $LOG_FILE
-  chcon -R -t home_root_t $INSTALL_PATH > /dev/null 2>&1
-  semanage fcontext -a -t home_root_t $INSTALL_PATH > /dev/null 2>&1
 
+  chcon -R -t home_root_t $INSTALL_PATH > /dev/null 2>&1
+  set +e
+  semanage fcontext -a -t home_root_t $INSTALL_PATH > /dev/null 2>&1
+  set -e
   chown $RUN_USER:$RUN_GROUP $INSTALL_PATH
   chown $RUN_USER:$RUN_GROUP $BIN_PATH
   chown $RUN_USER:$RUN_GROUP $BIN_PATH/bio_daemon
@@ -206,7 +209,7 @@ set_permissions()
   chmod -R 550 $LIB_PATH
   chmod -R 550 $SCRIPTS_PATH
   chmod 640 /etc/ceph/ceph.client.admin.keyring
-  print_log "info" "set logfile permission."
+  print_log "info" "set_permissions finish."
 }
 
 
