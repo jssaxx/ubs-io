@@ -39,6 +39,8 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_MIRROR_LOAD_RECV_FAIL, "sdk mirror recv load request failed, rturn BIO_INNER_RETRY", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_STAT_RECV_FAIL, "sdk mirror recv stat request failed, rturn BIO_INNER_RETRY", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_LIST_RECV_FAIL, "sdk mirror recv list request failed, rturn BIO_INNER_RETRY", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL, "sdk mirror notify update request failed, rturn BIO_INNER_RETRY", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_CHECK_UPDATE_RECV_FAIL, "sdk mirror check update request failed, rturn BIO_INNER_RETRY", tp::CommonTp::IntValueCallback);
 
     LVOS_TP_REG(SERVER_NET_ASYNC_CALL_FAIL, "async call fail", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_SYNC_CALL_FAIL, "async call fail", tp::CommonTp::IntValueCallback);
@@ -80,6 +82,8 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_MIRROR_LOAD_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_STAT_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_LIST_RECV_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_CHECK_UPDATE_RECV_FAIL);
 
     LVOS_TP_UNREG(SERVER_NET_ASYNC_CALL_FAIL);
     LVOS_TP_UNREG(SERVER_NET_SYNC_CALL_FAIL);

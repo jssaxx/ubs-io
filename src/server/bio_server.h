@@ -203,6 +203,11 @@ public:
         return mMirrorCrb;
     }
 
+    inline CmPtr GetCm()
+    {
+        return mCm;
+    }
+
     inline CmNodeId GetLocalNid()
     {
         return mLocalNid;

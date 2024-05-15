@@ -60,6 +60,9 @@ static void HandleLoad(std::vector<std::string> cmds);
 static void HandleDelete(std::vector<std::string> cmds);
 static void HandleQos(std::vector<std::string> cmds);
 static void HandleShow(std::vector<std::string> cmds);
+static void HandleNotifyUpdatePrepare(std::vector<std::string> cmds);
+static void HandleNotifyUpdateFinish(std::vector<std::string> cmds);
+static void HandleCheckUpdateReady(std::vector<std::string> cmds);
 static void *PerfTestPutImpl(void *param);
 static void *PerfTestGetImpl(void *param);
 static void HandlePerf(std::vector<std::string> cmds);
@@ -286,6 +289,57 @@ static void HandleList(std::vector<std::string> cmds)
                          idx, objs[idx].key, objs[idx].size, ctime(&objs[idx].time));
         }
         BioFreeListResources(objs, objNum);
+    }
+}
+
+static void HandleNotifyUpdatePrepare(std::vector<std::string> cmds)
+{
+    uint32_t tenantId = 0;
+        try {
+        tenantId = std::stoul(cmds[1]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+    auto ret = BioNotifyUpdatePrepare(tenantId);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to notify update, result:%d.\n", ret);
+    } else {
+        CLI_PrintBuf("Notify update prepare success, result:%d.\n", ret);
+    }
+}
+
+static void HandleNotifyUpdateFinish(std::vector<std::string> cmds)
+{
+    uint32_t tenantId = 0;
+        try {
+        tenantId = std::stoul(cmds[1]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+    auto ret = BioNotifyUpdateFinish(tenantId);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to notify update, result:%d.\n", ret);
+    } else {
+        CLI_PrintBuf("Notify update finish success, result:%d.\n", ret);
+    }
+}
+
+static void HandleCheckUpdateReady(std::vector<std::string> cmds)
+{
+    uint32_t tenantId = 0;
+    try {
+        tenantId = std::stoul(cmds[1]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+    auto ret = BioCheckUpdateReady(tenantId);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to check update, result:%d.\n", ret);
+    } else {
+        CLI_PrintBuf("Check update ready success, result:%d.\n");
     }
 }
 
@@ -680,6 +734,9 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity/hit]\n");
     CLI_PrintBuf("\ttrace: sdk trace [show/clear]\n");
     CLI_PrintBuf("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
+    CLI_PrintBuf("\tupdate prepare: sdk notifyupdate [tenantId]\n");
+    CLI_PrintBuf("\tupdate check: sdk checkupdate [tenantId]\n");
+    CLI_PrintBuf("\tupdate finish: sdk finishupdate [tenantId]\n");
     CLI_PrintBuf("\texit: exit console\n");
 }
 
@@ -801,6 +858,24 @@ static void BioSdkDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandlePerf(cmds);
+    } else if (cmdType == "notifyupdate") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleNotifyUpdatePrepare(cmds);
+    } else if (cmdType == "finishupdate") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleNotifyUpdateFinish(cmds);
+    } else if (cmdType == "checkupdate") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleCheckUpdateReady(cmds);
     } else if (cmdType == "exit") {
         return;
     } else {

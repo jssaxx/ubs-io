@@ -97,6 +97,27 @@ public:
     CResult Stat(const char *key, const ObjLocation &location, ObjStat &stat);
 
     /**
+     * @brief: Notify update finished
+     *
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult NotifyUpdateFinish();
+
+    /**
+     * @brief: Notify prepare for update
+     *
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult NotifyUpdatePrepare();
+
+     /**
+     * @brief: Notify prepare for update
+     *
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult CheckUpdateReady();
+
+    /**
      * @brief: alloc write space
      *
      * @param[in]: objectId: object id for alloc space

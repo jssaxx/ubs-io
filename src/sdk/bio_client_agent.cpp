@@ -55,6 +55,17 @@ void BioClientAgent::Exit()
     }
 }
 
+BResult BioClientAgent::InitUpgradeOperation()
+{
+    if ((notifyUpdateOp = reinterpret_cast<NotifyUpdateFuncPtr>(LoadFunction("NotifyUpdate"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((checkUpdateReadyOp = reinterpret_cast<CheckUpdateReadyFuncPtr>(LoadFunction("CheckUpdateReady"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    return BIO_OK;
+}
+
 BResult BioClientAgent::InitOperation()
 {
     if ((startOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerInit"))) == nullptr) {
@@ -111,7 +122,8 @@ BResult BioClientAgent::InitOperation()
     if ((hbOp = reinterpret_cast<ReportHbPtr>(LoadFunction("ReportHb"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    return BIO_OK;
+
+    return InitUpgradeOperation();
 }
 
 void *BioClientAgent::LoadFunction(const char *name)
@@ -464,6 +476,7 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, Callback &callback)
         return SendDeleteRequestLocal(req, callback);
     }
 }
+
 BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     req.address = 0;
@@ -543,6 +556,44 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
     } else {
         return SendStatRequestLocal(req, objInfo);
     }
+}
+
+BResult BioClientAgent::SendNotifyUpdateRequestLocal(NotifyUpdateRequest &req)
+{
+    return net::BioClientNet::Instance()->SendAsync<NotifyUpdateRequest>(INVALID_NID, BIO_OP_SDK_NOTIFY_UPDATE, req);
+}
+
+BResult BioClientAgent::NotifyUpdate(bool &flag)
+{
+    NotifyUpdateRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() }, flag };
+    if (mMode == CONVERGENCE) {
+        return notifyUpdateOp(&req);
+    } else {
+        return SendNotifyUpdateRequestLocal(req);
+    }
+}
+
+BResult BioClientAgent::SendCheckUpdateReadyRequestLocal(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp)
+{
+    return net::BioClientNet::Instance()->SendSync<CheckUpdateReadyRequest, CheckUpdateReadyResponse>(
+        INVALID_NID, BIO_OP_SDK_CHECK_UPDATE_READY, req, rsp);
+}
+
+BResult BioClientAgent::CheckUpdateReady()
+{
+    BResult ret = BIO_INNER_ERR;
+    CheckUpdateReadyRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() } };
+    CheckUpdateReadyResponse rsp;
+    if (mMode == CONVERGENCE) {
+        ret = checkUpdateReadyOp(&req, &rsp);
+    } else {
+        ret = SendCheckUpdateReadyRequestLocal(req, rsp);
+    }
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send check update ready request failed, ret:" << ret << ".");
+        return ret;
+    }
+    return rsp.flag ? BIO_OK : BIO_ERR;
 }
 
 BResult BioClientAgent::ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)

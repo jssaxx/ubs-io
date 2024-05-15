@@ -322,6 +322,59 @@ CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     return ToCResult(ret);
 }
 
+CResult Bio::NotifyUpdatePrepare()
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    bool flag = true;
+    BIO_TRACE_START(SDK_TRACE_STAT);
+    auto ret = gClient->NotifyUpdate(flag);
+    BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Boostio notify upgrade prepare failed, ret:" << ret << ".");
+    } else {
+        CLIENT_LOG_INFO("Boostio notify upgrade prepare success.");
+    }
+    return ToCResult(ret);
+}
+
+CResult Bio::NotifyUpdateFinish()
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    bool flag = false;
+    BIO_TRACE_START(SDK_TRACE_STAT);
+    auto ret = gClient->NotifyUpdate(flag);
+    BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Boostio notify upgrade finish failed, ret:" << ret << ".");
+    } else {
+        CLIENT_LOG_INFO("Boostio notify upgrade finish success.");
+    }
+    return ToCResult(ret);
+}
+
+CResult Bio::CheckUpdateReady()
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_STAT);
+    auto ret = gClient->CheckUpdateReady();
+    BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_WARN("Boostio upgrade check not ready, ret:" << ret << ".");
+    } else {
+        CLIENT_LOG_INFO("Boostio upgrade check is ready.");
+    }
+    return ToCResult(ret);
+}
+
 CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spaceInfo)
 {
     if (UNLIKELY(!gClient->Ready())) {
@@ -656,6 +709,55 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
     if (LIKELY(ret == RET_CACHE_OK)) {
         *stat = statInfo;
     }
+    return ret;
+}
+
+
+CResult BioNotifyUpdatePrepare(uint64_t tenantId)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    auto ret = bioInstance->NotifyUpdatePrepare();
+    return ret;
+}
+
+CResult BioNotifyUpdateFinish(uint64_t tenantId)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    auto ret = bioInstance->NotifyUpdateFinish();
+    return ret;
+}
+
+CResult BioCheckUpdateReady(uint64_t tenantId)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    auto ret = bioInstance->CheckUpdateReady();
     return ret;
 }
 
