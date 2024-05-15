@@ -73,30 +73,31 @@ public:
         mGetCacheType = getCacheType;
     }
 
-    static uint64_t GetCacheUsedSize(FlowCache cacheType, FlowType type)
+    static uint64_t GetCacheUsedSize(FlowCache cacheType, FlowType type, uint32_t mediaId)
     {
-        ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT), NO_MAX_VALUE64, "Check Failed, cacheType:" <<
-            cacheType << " type:" << type);
+        ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE), NO_MAX_VALUE64,
+            "Check Failed, cacheType:" << cacheType << " type:" << type);
 
-        return mUsedSize[cacheType][type];
+        return mUsedSize[cacheType][type][mediaId];
     }
 
     static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset, uint64_t len,
         uint64_t *chunkId)
     {
         FlowCache cacheType = mGetCacheType(flowId);
-        ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT), BIO_ERR, "Check Failed, cacheType:" <<
-            cacheType << " type:" << type);
+        ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE), BIO_ERR,
+            "Check Failed, cacheType:" << cacheType << " type:" << type);
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_ALLOC);
             auto ret = mMemAllocator.alloc(len, chunkId);
             BIO_TRACE_END(MEM_TRACE_SEG_ALLOC, ret);
             if (ret == 0) {
-                mUsedSize[cacheType][type] += len;
+                mUsedSize[cacheType][type][mediaId] += len;
+                uint64_t useSize = mUsedSize[cacheType][type][mediaId];
                 if (cacheType == FLOW_WCACHE) {
-                    LOG_INFO("WCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                    LOG_INFO("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 } else {
-                    LOG_INFO("RCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                    LOG_INFO("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 }
             }
             return ret;
@@ -105,11 +106,12 @@ public:
             auto ret = mDiskAllocator.alloc(mediaId, flowId, flowOffset, len, chunkId);
             BIO_TRACE_END(BDM_TRACE_SEG_ALLOC, ret);
             if (ret == 0) {
-                mUsedSize[cacheType][type] += len;
+                mUsedSize[cacheType][type][mediaId] += len;
+                uint64_t useSize = mUsedSize[cacheType][type][mediaId];
                 if (cacheType == 0) {
-                    LOG_INFO("WCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                    LOG_INFO("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 } else {
-                    LOG_INFO("RCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                    LOG_INFO("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 }
             }
             return ret;
@@ -119,49 +121,53 @@ public:
     static void MediaFree(FlowType type, uint32_t mediaId, uint64_t len, uint64_t chunkId, uint64_t flowId)
     {
         FlowCache cacheType = mGetCacheType(flowId);
-        ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT));
+        ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE));
 
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_FREE);
             mMemAllocator.free(chunkId);
             BIO_TRACE_END(MEM_TRACE_SEG_FREE, 0);
-            mUsedSize[cacheType][type] -= len;
+            mUsedSize[cacheType][type][mediaId] -= len;
+            uint64_t useSize = mUsedSize[cacheType][type][mediaId];
             if (cacheType == FLOW_WCACHE) {
-                LOG_INFO("WCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_INFO("RCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         } else {
             BIO_TRACE_START(BDM_TRACE_SEG_FREE);
             mDiskAllocator.free(mediaId, len, chunkId);
             BIO_TRACE_END(BDM_TRACE_SEG_FREE, 0);
-            mUsedSize[cacheType][type] -= len;
+            mUsedSize[cacheType][type][mediaId] -= len;
+            uint64_t useSize = mUsedSize[cacheType][type][mediaId];
             if (cacheType == 0) {
-                LOG_INFO("WCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_INFO("RCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         }
     }
 
-    static void MediaRecover(FlowType type, uint64_t len, uint64_t flowId)
+    static void MediaRecover(FlowType type, uint32_t mediaId, uint64_t len, uint64_t flowId)
     {
         FlowCache cacheType = mGetCacheType(flowId);
-        ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT));
+        ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE));
 
         if (type == FLOW_MEMORY) {
-            mUsedSize[cacheType][type] += len;
+            mUsedSize[cacheType][type][mediaId] += len;
+            uint64_t useSize = mUsedSize[cacheType][type][mediaId];
             if (cacheType == FLOW_WCACHE) {
-                LOG_INFO("WCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_INFO("RCACHE MEM: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         } else {
-            mUsedSize[cacheType][type] += len;
+            mUsedSize[cacheType][type][mediaId] += len;
+            uint64_t useSize = mUsedSize[cacheType][type][mediaId];
             if (cacheType == 0) {
-                LOG_INFO("WCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_INFO("RCACHE DISK: used:" << mUsedSize[cacheType][type] / NO_1MB << ", flowId:" << flowId);
+                LOG_INFO("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         }
     }
@@ -179,7 +185,7 @@ private:
     std::mutex mMutex;
     FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{ nullptr, nullptr };
 
-    static std::atomic<uint64_t> mUsedSize[FLOW_CACHE][FLOW_BUTT];
+    static std::atomic<uint64_t> mUsedSize[FLOW_CACHE][FLOW_BUTT][DEVICE_SIZE];
 
     static MemAllocator mMemAllocator;
     static DiskAllocator mDiskAllocator;

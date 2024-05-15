@@ -52,8 +52,8 @@ class WCacheTier {
 public:
     BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
 
-    WCacheSliceRefPtr Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
-        CacheAttr &attr);
+    BResult Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
+        WCacheSliceRefPtr &destSliceRef);
 
     void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 

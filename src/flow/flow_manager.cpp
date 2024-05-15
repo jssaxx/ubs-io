@@ -13,7 +13,7 @@ namespace bio {
 MemAllocator FlowManager::mMemAllocator;
 DiskAllocator FlowManager::mDiskAllocator;
 GetCacheType FlowManager::mGetCacheType;
-std::atomic<uint64_t> FlowManager::mUsedSize[FLOW_CACHE][FLOW_BUTT];
+std::atomic<uint64_t> FlowManager::mUsedSize[FLOW_CACHE][FLOW_BUTT][DEVICE_SIZE];
 BResult FlowManager::Init()
 {
     LVOS_TP_START(ALLOC_TASK_POOL_FAIL, &mTaskPool[FLOW_MEMORY], nullptr);
@@ -55,10 +55,13 @@ BResult FlowManager::Init()
 
     mInited = true;
 
-    mUsedSize[FLOW_WCACHE][FLOW_MEMORY] = 0;  // wcache memory used
-    mUsedSize[FLOW_WCACHE][FLOW_DISK] = 0;  // wcache disk used
-    mUsedSize[FLOW_RCACHE][FLOW_MEMORY] = 0;  // rcache memory used
-    mUsedSize[FLOW_RCACHE][FLOW_DISK] = 0;  // rcache disk used
+    for (uint16_t cacheType = FLOW_WCACHE; cacheType < FLOW_CACHE; cacheType++) {
+        for (uint16_t flowtype = FLOW_MEMORY; flowtype < FLOW_BUTT; flowtype++) {
+            for (uint32_t mediaId = 0; mediaId < DEVICE_SIZE; mediaId++) {
+                mUsedSize[cacheType][flowtype][mediaId] = 0;
+            }
+        }
+    }
 
     return Recover();
 }
@@ -221,7 +224,7 @@ BResult FlowManager::Recover()
                 LOG_ERROR("Bdm rebuild chunk diskId:" << diskId << ", ret:" << ret);
                 return BIO_ERR;
             }
-            FlowManager::MediaRecover(FLOW_DISK, chunkSize, flowId);
+            FlowManager::MediaRecover(FLOW_DISK, diskId, chunkSize, flowId);
         }
     }
 

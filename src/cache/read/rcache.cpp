@@ -331,13 +331,14 @@ void RCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
     memCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
-    memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    memUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
     diskCap = 0;
-    for (auto &item : config.diskCaps) {
-        diskCap += static_cast<uint64_t>(item);
+    diskUsed = 0;
+    for (uint32_t diskId = 0; diskId < config.diskCaps.size(); diskId++) {
+        diskCap += static_cast<uint64_t>(config.diskCaps[diskId]);
+        diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, diskId);
     }
     diskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
-    diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
 }
 
 BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)

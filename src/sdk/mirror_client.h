@@ -33,6 +33,11 @@ enum WorkerScene : uint32_t {
     SCENE_BIGDATA = 1
 };
 
+struct IoStratege {
+    std::atomic<uint64_t> expired;
+    std::atomic<uint32_t> stratege;
+};
+
 class MirrorClient {
 public:
     struct MirrorPut {
@@ -198,9 +203,9 @@ private:
     BResult DestroyFlow(uint16_t ptId, uint64_t flowId);
 
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
-        uint64_t flowIndex, GetSliceResponse *rsp) const;
+        uint64_t flowIndex, GetSliceResponse *rsp);
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
-        uint64_t flowIndex, NetMrInfo &mr) const;
+        uint64_t flowIndex, NetMrInfo &mr);
     BResult DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
     bool IsExistLocalCopy(CmPtInfo &ptEntry);
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
@@ -293,6 +298,7 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
+    std::map<uint16_t, IoStratege *> mIoStratege;
     uint64_t mCurNodeTimes;
     uint64_t mCurPtTimes;
     uint16_t mNetProtocol;

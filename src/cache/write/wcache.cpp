@@ -16,8 +16,11 @@
 
 namespace ock {
 namespace bio {
-constexpr uint32_t WCACHE_OVERFLOW_LEVEL = 90;
-BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager)
+constexpr uint32_t EVICT_MEM_HLEVEL = 90;
+constexpr uint32_t EVICT_DISK_HLEVEL = 98;
+
+BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
+    bool isRecover)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
@@ -35,8 +38,14 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
     mEvictService[WCACHE_DISK] = evictService[WCACHE_DISK];
     mEvictRef[WCACHE_MEMORY] = false;
     mEvictRef[WCACHE_DISK] = false;
+    mOnFlyRef = 0;
     mRCacheManager = rCacheManager;
     mUnderFs = UnderFs::Instance();
+
+    if (isRecover) {
+        mIsMaster = false; // 用于识别Put流程特殊处理
+        return BIO_OK;
+    }
 
     auto ret = mLocRole(static_cast<uint16_t>(mPtId), mIsMaster); // 创建时获取当时的副本主备，用于降级场景的PUT流程
     if (UNLIKELY(ret != BIO_OK)) {
@@ -67,13 +76,14 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
     memCap = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
-    memUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
+    memUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     diskCap = 0;
-    for (auto &item : config.diskCaps) {
-        diskCap += static_cast<uint64_t>(item);
+    diskUsed = 0;
+    for (uint32_t diskId = 0; diskId < config.diskCaps.size(); diskId++) {
+        diskCap += static_cast<uint64_t>(config.diskCaps[diskId]);
+        diskUsed += FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, diskId);
     }
     diskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
-    diskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK);
 }
 
 BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
@@ -85,55 +95,115 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
+    mOnFlyRef += NO_1;
+    auto ret = PutImpl(key, srcSlice, sliceReader, destSliceRef, attr);
+    mOnFlyRef -= NO_1;
+    return ret;
+}
+
+BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
+    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
+{
+    BResult ret;
+
     // degraded write through to underfs
     if (UNLIKELY(mIsDegrade)) {
-        BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BYPASS);
-        auto ret = PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
-        BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_BYPASS, ret);
+        BIO_TRACE_START(WCACHE_TRACE_PUT_BYPASS);
+        ret = PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
+        BIO_TRACE_END(WCACHE_TRACE_PUT_BYPASS, ret);
         return ret;
     }
 
     // put it memory tier cache.
-    auto &memCache = mCacheTiers[WCACHE_MEMORY];
-    LVOS_TP_START(WRITE_SLICE_NULL_FAIL, &destSliceRef, nullptr);
-    destSliceRef = memCache->Write(key, srcSlice, sliceReader, attr);
+    LVOS_TP_START(WRITE_SLICE_NULL_FAIL, &ret, BIO_INNER_RETRY);
+    ret = mCacheTiers[WCACHE_MEMORY]->Write(key, srcSlice, sliceReader, destSliceRef);
     LVOS_TP_END;
-    if (UNLIKELY(destSliceRef == nullptr)) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Memory cache write failed.");
-        return BIO_INNER_RETRY;
+        return ret;
+    }
+    mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(destSliceRef);
+
+    RealIoStrategy ioStratege;
+    PutSetIoStratege(ioStratege, attr);
+
+    // put it disk tier cache.
+    if (ioStratege <= WRITE_MEM_BACK) {
+        BIO_TRACE_START(WCACHE_TRACE_PUT_MEM_BACK);
+        StartEvictTask(WCACHE_MEMORY); // write back
+        BIO_TRACE_END(WCACHE_TRACE_PUT_MEM_BACK, 0);
+        return BIO_OK;
+    }
+    WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
+    if (sliceRef != nullptr) {
+        BIO_TRACE_START(WCACHE_TRACE_PUT_DISK_BACK);
+        ret = EvictFromMemToDisk(sliceRef, true);
+        BIO_TRACE_END(WCACHE_TRACE_PUT_DISK_BACK, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
+            return ret;
+        }
+    }
+
+    // put it underfs tier.
+    if (ioStratege <= WRITE_DISK_BACK) {
+        return BIO_OK;
+    }
+    sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
+    if (sliceRef != nullptr) {
+        BIO_TRACE_START(WCACHE_TRACE_PUT_UNDERFS_BACK);
+        ret = EvictFromDiskToUnderFs(sliceRef, mIsMaster, true);
+        BIO_TRACE_END(WCACHE_TRACE_PUT_UNDERFS_BACK, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+            return ret;
+        }
+    }
+    return BIO_OK;
+}
+
+void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
+{
+    ioStratege = attr.ioStratege;
+
+    if (ioStratege == WRITE_DEFALUT) {
+        if (attr.strategy == WRITE_BACK) {
+            ioStratege = WRITE_MEM_BACK;
+        } else {
+            ioStratege = WRITE_DISK_BACK;
+        }
     }
 
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t configSize = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
-    uint64_t usedSize = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
-    uint64_t wcacheSize = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
-    uint64_t rcacheSize = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    uint64_t memConfig = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
+    uint64_t memUsed = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
+    uint64_t memWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
+    uint64_t memRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
 
-    LOG_INFO("Total:" << (config.memCap / NO_1MB) << ", used:" << (usedSize / NO_1MB) <<
-        ", wcache:" << (wcacheSize / NO_1MB) << ", rcache:" << (rcacheSize / NO_1MB));
+    LOG_INFO("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
+        ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", stratege:" << ioStratege);
 
-    bool isOverflow = false;
-    if ((usedSize >= (config.memCap * WCACHE_OVERFLOW_LEVEL / NO_100)) || (wcacheSize >= configSize)) {
-        isOverflow = true;
+    if ((memUsed < (config.memCap * EVICT_MEM_HLEVEL / NO_100)) && (memWcache < memConfig) &&
+        (attr.strategy == WRITE_BACK)) {
+        attr.ioStratege = WRITE_MEM_BACK;
+        return;
     }
 
-    memCache->AddEvictQueue(destSliceRef);
+    uint64_t diskConfig = (static_cast<uint64_t>(config.diskWriteRatio) * config.diskCaps[mDiskId]) / NO_10;
+    uint64_t diskWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
+    uint64_t diskRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
+    uint64_t diskUsed = diskWcache + diskRcache;
 
-    BResult ret = BIO_OK;
+    LOG_INFO("Total disk:" << (config.diskCaps[mDiskId] / NO_1MB) << ", used:" << (diskUsed / NO_1MB) <<
+        ", wcache:" << (diskWcache / NO_1MB) << ", rcache:" << (diskRcache / NO_1MB) << ", stratege:" <<
+        ioStratege << ", diskId:" << mDiskId);
 
-    if (attr.strategy == WRITE_BACK && !isOverflow) {
-        BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_BACK);
-        StartEvictTask(WCACHE_MEMORY); // write back
-        BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_BACK, 0);
-    } else {
-        BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_THROUGH);
-        WCacheSliceRefPtr sliceRef = memCache->GetEvictSlice();
-        if (sliceRef != nullptr) {
-            ret = EvictFromMemToDisk(sliceRef); // write through
-        }
-        BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_THROUGH, 0);
+    if (diskWcache < (diskConfig * EVICT_DISK_HLEVEL / NO_100)) {
+        attr.ioStratege = WRITE_DISK_BACK;
+        return;
     }
-    return ret;
+    attr.ioStratege = WRITE_UNDERFS_BACK;
+    return;
 }
 
 BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
@@ -141,17 +211,18 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
 {
     if (!mIsMaster) {
         LOG_INFO("Degrade in standy node, key:" << key << " flowId:" << mFlowId);
+        destSliceRef = nullptr;
         return BIO_OK;
     }
 
     auto &memCache = mCacheTiers[WCACHE_MEMORY];
-    destSliceRef = memCache->Write(key, srcSlice, sliceReader, attr);
+    auto ret = memCache->Write(key, srcSlice, sliceReader, destSliceRef);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
     auto *value = new char[srcSlice->GetLength()];
     ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
-    auto ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value);
+    ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value);
     if (UNLIKELY(ret != BIO_OK)) {
         delete[] value;
         LOG_ERROR("Failed to copy slice to value, key:" << key << " flowId:" << mFlowId);
@@ -165,6 +236,7 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     ret = memCache->Evict(destSliceRef->GetSlice());
     ChkTrue(ret == BIO_OK, ret, "Failed to evict, key:" << key << " flowId:" << mFlowId);
 
+    destSliceRef = nullptr;
     return BIO_OK;
 }
 
@@ -417,6 +489,11 @@ void WCache::ExpiredClear()
 
 bool WCache::IsEmptyEvict(WCacheTierType type)
 {
+    if (mOnFlyRef != 0) {
+        LOG_INFO("OnFly io cnt:" << mOnFlyRef << ", flowId:" << mFlowId);
+        return false;
+    }
+
     if (!mCacheTiers[type]->IsEmptyEvictSliceQueue() ||
         mEvictRef[type] == true) {
         LOG_INFO("Evict slice queue status:" << !mCacheTiers[type]->IsEmptyEvictSliceQueue() <<
@@ -429,7 +506,7 @@ bool WCache::IsEmptyEvict(WCacheTierType type)
     return true;
 }
 
-BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
+BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
 {
     auto slice = sliceRef->GetSlice();
     auto indexInFlow = slice->GetIndexInFlow();
@@ -459,7 +536,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     ChkTrueNot(ret == BIO_OK, ret);
 
     LOG_INFO("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
-        offset << ", length:" << length << ", Glob:" << mFlowId);
+        offset << ", length:" << length << ", Glob:" << mFlowId << ", isFront:" << isFront);
 
     // when update slice finished, then release resource of flow.
     IncreaseRef();
@@ -478,7 +555,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef)
     return BIO_OK;
 }
 
-BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster)
+BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
 {
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     auto slice = sliceRef->GetSlice();
@@ -491,7 +568,7 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     BIO_TRACE_START(WCACHE_TRACE_EVICT2UNDERFS);
 
     LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" <<
-        slice->GetOffsetInFlow() << ", Glob:" << mFlowId);
+        slice->GetOffsetInFlow() << ", Glob:" << mFlowId << ", isFront:" << isFront);
 
     auto sliceMeta = std::make_shared<WFlowSliceMeta>();
     ChkTrueNot(sliceMeta != nullptr, BIO_ALLOC_FAIL);
@@ -501,36 +578,29 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     if (sliceRef->GetState() == SLICE_VALID && isMaster) {
         auto &key = sliceMeta->key;
         ChkTrueNot(sliceMeta->length == slice->GetLength(), BIO_INNER_ERR);
-        uint64_t value;
-        ret = BioServer::Instance()->MemAlloc(sliceMeta->length, &value);
-        ChkTrueNot(ret == BIO_OK, BIO_ALLOC_FAIL);
+        void *value = aligned_alloc(NO_4096, NO_4194304);
+        ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
         ret = mSliceOperator.Copy(slice.Get(), reinterpret_cast<char *>(value));
         if (UNLIKELY(ret != BIO_OK)) {
-            BioServer::Instance()->MemFree(value);
+            free(value);
             LOG_ERROR("failed to copy slice to value. ret:" << ret << ", slice:" << slice->ToString());
             return ret;
         }
         ret = mUnderFs->Put(key, reinterpret_cast<char *>(value), sliceMeta->length);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
-            BioServer::Instance()->MemFree(value);
+            free(value);
             return ret;
         }
 
         LOG_INFO("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
 
         BIO_TRACE_START(WCACHE_TRACE_PUT_RCACHE);
-        // malloc memory from read cache, and copy slice to this slice.
-        uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
-        WCacheSlicePtr writeSlice = nullptr;
-        mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
-        ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());
-        BioServer::Instance()->MemFree(value);
-        ChkTrueNot(ret == BIO_OK, ret);
-        ret = mRCacheManager->Put(ptId, key, writeSlice);
-        ChkTrue(ret == BIO_OK, ret, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key);
-        BIO_TRACE_END(WCACHE_TRACE_PUT_RCACHE, 0);
+        ret = EvictToRcache(slice, key, value); // 淘汰到读Cache失败时，不做中止
+        BIO_TRACE_END(WCACHE_TRACE_PUT_RCACHE, ret);
+
+        free(value);
     }
 
     // when update slice finished, then release resource of flow.
@@ -559,12 +629,25 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     return BIO_OK;
 }
 
+BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value)
+{
+    // malloc memory from read cache, and copy slice to this slice.
+    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
+    WCacheSlicePtr writeSlice = nullptr;
+    mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
+    auto ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());
+    ChkTrueNot(ret == BIO_OK, ret);
+    ret = mRCacheManager->Put(ptId, key, writeSlice);
+    ChkTrue(ret == BIO_OK, ret, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key);
+    return BIO_OK;
+}
+
 bool WCache::EvictMemSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
     uint64_t wcacheMemCap = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
     uint64_t wcacheWaterSize = wcacheMemCap * config.wcacheMemEvictLevel / NO_100;
-    uint64_t wcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY);
+    uint64_t wcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     if (wcacheMemUsed > wcacheWaterSize) {
         return true;
     } else {
@@ -575,22 +658,19 @@ bool WCache::EvictMemSatisfiedCond()
 bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t diskCap = 0;
-    for (auto &item : config.diskCaps) {
-        diskCap += static_cast<uint64_t>(item);
-    }
+    uint64_t diskCap = config.diskCaps[mDiskId];
 
     uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
-    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY);
+    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
     uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
-    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK);
+    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
     if (rcacheMemUsed >= rcacheMemCap || rcacheDiskUsed >= rcacheDiskCap) {
         return false;
     }
 
     uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
     uint64_t wcacheWaterSize = wcacheDiskCap * config.wcacheDiskEvictLevel / NO_100;
-    uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK);
+    uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
     if (wcacheDiskUsed > wcacheWaterSize) {
         return true;
     } else {
