@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# Copyright: (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
+set -e
 # 尝试执行 ibdev2netdev 命令
 output=$(ibdev2netdev 2>&1)
 status=$?
