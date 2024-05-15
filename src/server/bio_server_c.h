@@ -46,6 +46,10 @@ int32_t Stat(StatRequest *req, StatResponse *rsp);
 
 int32_t Load(LoadRequest *req);
 
+int32_t NotifyUpdate(NotifyUpdateRequest *req);
+
+int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse *rsp);
+
 int32_t ReportHb(uint64_t *curNodeTimes, uint64_t *curPtTimes);
 
 #ifdef __cplusplus

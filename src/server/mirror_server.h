@@ -61,6 +61,8 @@ public:
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult Stat(StatRequest &req, ObjStat &objInfo);
     BResult Load(LoadRequest &req);
+    BResult NotifyUpdate(NotifyUpdateRequest &req);
+    BResult CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp);
     BResult SyncData(SyncDataRequest &req);
 
     BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
@@ -89,6 +91,9 @@ public:
     int32_t MirrorServerGet(ServiceContext &ctx, GetRequest *req);
     int32_t MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req);
     int32_t MirrorServerStat(ServiceContext &ctx, StatRequest *req);
+    int32_t MirrorServerNotifyUpdate(ServiceContext &ctx, NotifyUpdateRequest *req);
+    int32_t MirrorServerCheckUpdateReady(ServiceContext &ctx, CheckUpdateReadyRequest *req);
+    int32_t MirrorServerCheckRemoteUpdateReady(ServiceContext &ctx, CheckRemoteUpdateReadyRequest *req);
     int32_t MirrorServerList(ServiceContext &ctx, ListRequest *req);
     int32_t MirrorServerLoad(ServiceContext &ctx, LoadRequest *req);
     int32_t MirrorServerReportHb(ServiceContext &ctx);
@@ -109,6 +114,9 @@ public:
     int32_t HandleGet(ServiceContext &ctx);
     int32_t HandleDelete(ServiceContext &ctx);
     int32_t HandleStat(ServiceContext &ctx);
+    int32_t HandleNotifyUpdate(ServiceContext &ctx);
+    int32_t HandleCheckUpdateReady(ServiceContext &ctx);
+    int32_t HandleCheckRemoteUpdateReady(ServiceContext &ctx);
     int32_t HandleList(ServiceContext &ctx);
     int32_t HandleLoad(ServiceContext &ctx);
     int32_t HandleReportHb(ServiceContext &ctx);

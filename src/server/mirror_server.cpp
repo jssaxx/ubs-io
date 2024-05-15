@@ -69,6 +69,12 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleGetEvictOffset, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_FREE_MEM,
         std::bind(&MirrorServer::HandleFreeMem, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_NOTIFY_UPDATE,
+        std::bind(&MirrorServer::HandleNotifyUpdate, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CHECK_UPDATE_READY,
+        std::bind(&MirrorServer::HandleCheckUpdateReady, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_CHECK_REMOTE_UPDATE_READY,
+        std::bind(&MirrorServer::HandleCheckRemoteUpdateReady, this, std::placeholders::_1));
 }
 
 void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs)
@@ -164,8 +170,7 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
     return ret;
 }
 
-BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv,
-    uint64_t &flowId, bool &isDegrade)
+BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId, bool &isDegrade)
 {
     isDegrade = BioServer::Instance()->GetServiceState(); // 升级过程中，创建降级Cache实例
 
@@ -181,8 +186,7 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
     return ret;
 }
 
-BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv,
-    uint64_t flowId, bool isDegrade)
+BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
     auto ret = CreateFlow(procId, ptId, ptv, flowId, isDegrade);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -618,6 +622,50 @@ BResult MirrorServer::Load(LoadRequest &req)
     BResult ret = Cache::Instance().Load(req.comm.ptId, req.key, req.offset, req.length, realLen);
     BIO_TRACE_END(MIRROR_TRACE_LOAD, ret);
     return ret;
+}
+
+BResult MirrorServer::NotifyUpdate(NotifyUpdateRequest &req)
+{
+    return BioServer::Instance()->GetCm()->ReportServiceState(req.flag);
+}
+
+BResult MirrorServer::CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp)
+{
+    auto rpcEngine = BioServer::Instance()->GetNetEngine();
+    uint64_t curNodeTimes = 0;
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&curNodeTimes);
+    uint16_t localNid = BioServer::Instance()->GetCm()->GetCmLocalNodeId().VNodeId();
+    rsp.flag = true;
+
+    for (auto &nodeEntry : nodeView) {
+        uint16_t dstNid = nodeEntry.second.id.VNodeId();
+        if (localNid == dstNid) {
+            auto chkRet = Cache::Instance().ServiceUngradeFlush();
+            if (chkRet != BIO_OK) {
+                rsp.flag = false;
+                LOG_WARN("Check local node update not ready, localNid:" << localNid << ", chkRet: " << chkRet << ".");
+            }
+        } else {
+            CheckRemoteUpdateReadyRequest ckRemoteReq = { { MESSAGE_MAGIC, req.comm.ptId, req.comm.ptv, localNid,
+                                                            getpid() } };
+            CheckRemoteUpdateReadyResponse *ckRemoteRsp = nullptr;
+            uint64_t ckRemoteRspLen = 0;
+            auto ret = rpcEngine->SyncCall<CheckRemoteUpdateReadyRequest, CheckRemoteUpdateReadyResponse>(dstNid,
+                BIO_OP_SERVER_CHECK_REMOTE_UPDATE_READY, ckRemoteReq, &ckRemoteRsp, ckRemoteRspLen);
+            if (UNLIKELY(ret != BIO_OK || ckRemoteRsp == nullptr)) {
+                LOG_ERROR("Send check remote node update request failed, ret:" << ret << ", dstNid:" << dstNid << ".");
+                rsp.flag = false;
+                break;
+            }
+            rsp.flag = ckRemoteRsp->flag;
+            if (!rsp.flag) {
+                LOG_WARN("Check remote node update not ready, dstNid:" << dstNid << ".");
+            }
+            free(ckRemoteRsp);
+        }
+    }
+
+    return BIO_OK;
 }
 
 BResult MirrorServer::SyncData(SyncDataRequest &req)
@@ -1216,7 +1264,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
     }
     BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, BIO_OK);
 
-    CreateFlowResponse rsp { flowId, req->isDegrade };
+    CreateFlowResponse rsp{ flowId, req->isDegrade };
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
     return BIO_OK;
 }
@@ -1434,4 +1482,85 @@ int32_t MirrorServer::HandleFreeMem(ServiceContext &ctx)
 
     auto req = static_cast<FreeMemRequest *>(ctx.MessageData());
     return MirrorServerFreeMem(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerNotifyUpdate(ServiceContext &ctx, NotifyUpdateRequest *req)
+{
+    auto ret = NotifyUpdate(*req);
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleNotifyUpdate(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(NotifyUpdateRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<NotifyUpdateRequest *>(ctx.MessageData());
+    return MirrorServerNotifyUpdate(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerCheckUpdateReady(ServiceContext &ctx, CheckUpdateReadyRequest *req)
+{
+    CheckUpdateReadyResponse rsp;
+    auto ret = CheckUpdateReady(*req, rsp);
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(CheckUpdateReadyResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleCheckUpdateReady(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CheckUpdateReadyRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<CheckUpdateReadyRequest *>(ctx.MessageData());
+    return MirrorServerCheckUpdateReady(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerCheckRemoteUpdateReady(ServiceContext &ctx, CheckRemoteUpdateReadyRequest *req)
+{
+    CheckRemoteUpdateReadyResponse rsp;
+    auto chkRet = Cache::Instance().ServiceUngradeFlush();
+    if (chkRet != BIO_OK) {
+        rsp.flag = false;
+        LOG_WARN("Check remote update ready failed, chkRet: " << chkRet << ".");
+    } else {
+        rsp.flag = true;
+    }
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(CheckRemoteUpdateReadyResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleCheckRemoteUpdateReady(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CheckRemoteUpdateReadyRequest)) ||
+        UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<CheckRemoteUpdateReadyRequest *>(ctx.MessageData());
+    return MirrorServerCheckRemoteUpdateReady(ctx, req);
 }

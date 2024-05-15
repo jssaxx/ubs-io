@@ -321,6 +321,29 @@ typedef struct {
     ObjLocation location;
 } AllocSpaceRequest;
 
+/* Notify Update */
+typedef struct {
+    RequestComm comm;
+    bool flag;
+} NotifyUpdateRequest;
+
+/* Check Update Ready */
+typedef struct {
+    RequestComm comm;
+} CheckUpdateReadyRequest;
+
+typedef struct {
+    bool flag;
+} CheckUpdateReadyResponse;
+
+typedef struct {
+    RequestComm comm;
+} CheckRemoteUpdateReadyRequest;
+
+typedef struct {
+    bool flag;
+} CheckRemoteUpdateReadyResponse;
+
 typedef struct {
     uint32_t pid;
     uint64_t length;

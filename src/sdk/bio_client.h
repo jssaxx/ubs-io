@@ -103,6 +103,16 @@ public:
         return mMirror->StatObject(key, location, stat);
     }
 
+    inline BResult NotifyUpdate(bool &flag)
+    {
+        return mMirror->NotifyUpdate(flag);
+    }
+
+    inline BResult CheckUpdateReady()
+    {
+        return mMirror->CheckUpdateReady();
+    }
+
     inline BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
     {
         return mMirror->AllocSpace(param, spaceInfo);
