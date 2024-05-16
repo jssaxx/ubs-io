@@ -696,7 +696,7 @@ BResult WCache::EvictAllMemSliceToDisk()
         isSatisfied = EvictMemSatisfiedCond();
     }
 
-    RetryEvictTask(WCACHE_MEMORY);
+    mEvictRef[WCACHE_MEMORY].store(false);
     return BIO_OK;
 }
 
@@ -705,6 +705,16 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     bool isMaster;
     auto ret = mLocRole(static_cast<uint16_t>(mPtId), isMaster);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << mPtId);
+
+    bool isSatisfied;
+    LVOS_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
+    isSatisfied = EvictDiskSatisfiedCond();
+    LVOS_TP_END;
+
+    if (!isSatisfied && !mIsForced) {
+        mRetryCallback(mFlowId, WCACHE_DISK);
+        return BIO_OK;
+    }
 
     uint64_t globEvictOffset = NO_MAX_VALUE64;
     if (!isMaster && !mIsForced) {
@@ -718,10 +728,6 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         }
     }
 
-    bool isSatisfied;
-    LVOS_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
-    isSatisfied = EvictDiskSatisfiedCond();
-    LVOS_TP_END;
     while (isSatisfied || mIsForced) {
         WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
         if (sliceRef == nullptr) {
@@ -743,7 +749,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         isSatisfied = EvictDiskSatisfiedCond();
     }
 
-    RetryEvictTask(WCACHE_DISK);
+    mEvictRef[WCACHE_DISK].store(false);
     return BIO_OK;
 }
 
