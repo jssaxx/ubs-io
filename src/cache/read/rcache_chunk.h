@@ -121,7 +121,7 @@ private:
     Key mKey;
     RCacheValue mValue;
     uint32_t aTime;
-    uint8_t hitCount{ 0 };
+    uint16_t hitCount{ 0 };
     RCacheTierType tierType;
     MqType mMqType;
     uint64_t mState{ 0 };

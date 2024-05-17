@@ -94,7 +94,6 @@ BResult RCacheManager::AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePt
 
 BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &slice)
 {
-    LOG_INFO("Put key:" << key);
     BIO_TRACE_START(RCACHE_TRACE_PUT);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {

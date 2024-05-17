@@ -127,7 +127,7 @@ public:
         mAllocQuota[type] -= size;
         if (LIKELY(adjustQuota <= mMaxQuota[type])) {
             int64_t diff = static_cast<int64_t>(mAdjustQuota[type]) - static_cast<int64_t>(adjustQuota);
-            CLIENT_LOG_INFO("[QOS]Client adjust quota, [" << mAdjustQuota[type] << "-->" << adjustQuota << "].");
+            CLIENT_LOG_DEBUG("[QOS]Client adjust quota, [" << mAdjustQuota[type] << "-->" << adjustQuota << "].");
             mAllocQuota[type] += diff;
             mAdjustQuota[type] = adjustQuota;
         }
