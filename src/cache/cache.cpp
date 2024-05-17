@@ -374,7 +374,7 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
     auto ret = mWCacheManager->Flush(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_FLUSH, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        LOG_WARN("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
     }
     return BIO_OK;

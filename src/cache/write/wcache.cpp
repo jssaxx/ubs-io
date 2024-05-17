@@ -180,7 +180,7 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     uint64_t memWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     uint64_t memRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
 
-    LOG_INFO("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
+    LOG_DEBUG("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
         ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", stratege:" << ioStratege);
 
     if ((memUsed < (config.memCap * EVICT_MEM_HLEVEL / NO_100)) && (memWcache < memConfig) &&
@@ -194,7 +194,7 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     uint64_t diskRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
     uint64_t diskUsed = diskWcache + diskRcache;
 
-    LOG_INFO("Total disk:" << (config.diskCaps[mDiskId] / NO_1MB) << ", used:" << (diskUsed / NO_1MB) <<
+    LOG_DEBUG("Total disk:" << (config.diskCaps[mDiskId] / NO_1MB) << ", used:" << (diskUsed / NO_1MB) <<
         ", wcache:" << (diskWcache / NO_1MB) << ", rcache:" << (diskRcache / NO_1MB) << ", stratege:" <<
         ioStratege << ", diskId:" << mDiskId);
 
@@ -496,9 +496,9 @@ bool WCache::IsEmptyEvict(WCacheTierType type)
 
     if (!mCacheTiers[type]->IsEmptyEvictSliceQueue() ||
         mEvictRef[type] == true) {
-        LOG_INFO("Evict slice queue status:" << !mCacheTiers[type]->IsEmptyEvictSliceQueue() <<
+        LOG_DEBUG("Evict slice queue status:" << !mCacheTiers[type]->IsEmptyEvictSliceQueue() <<
             ", type:" << type << ", flowId:" << mFlowId);
-        LOG_INFO("Evict task status:" << mEvictRef[type] <<
+        LOG_DEBUG("Evict task status:" << mEvictRef[type] <<
             ", type:" << type << ", flowId:" << mFlowId);
         return false;
     }
@@ -755,7 +755,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 
 BResult WCache::FlushMem()
 {
-    LOG_INFO("Flush mem, flowId:" << mFlowId);
+    LOG_DEBUG("Flush mem, flowId:" << mFlowId);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = EvictFromMemToDisk(sliceRef);
@@ -773,7 +773,7 @@ BResult WCache::FlushMem()
 
 BResult WCache::FlushDisk()
 {
-    LOG_INFO("Flush disk, flowId:" << mFlowId);
+    LOG_DEBUG("Flush disk, flowId:" << mFlowId);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = EvictFromDiskToUnderFs(sliceRef, true);
