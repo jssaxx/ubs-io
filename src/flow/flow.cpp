@@ -64,7 +64,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 {
     std::vector<uint64_t> cleanList;
 
-    LOG_INFO("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
+    LOG_DEBUG("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
 
     if (offset > mPreLoadOffset || offset > mWritenOffset) {
         LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", writen:" << mWritenOffset);
@@ -197,7 +197,7 @@ BResult Flow::HoldWait(uint64_t needOffset)
     if (mWritenOffset < needOffset) {
         mWritenOffset = needOffset;
     }
-    if (mPreLoadOffset > needOffset) {
+    if (mPreLoadOffset >= needOffset) {
         mLock.UnLock();
         BIO_TRACE_END(FLOW_TRACE_HOLDWAIT, 0);
         return BIO_OK;
@@ -220,7 +220,7 @@ BResult Flow::RecoverChunk(uint64_t offset, uint64_t chunkId)
         LOG_ERROR("Repeat confict, flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
         return BIO_ERR;
     }
-    LOG_INFO("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
+    LOG_DEBUG("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
     mRecoverList[offset] = chunkId;
     return BIO_OK;
 }

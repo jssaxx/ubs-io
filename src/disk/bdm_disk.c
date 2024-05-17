@@ -38,7 +38,7 @@
 
 #define BDM_DEFAULT_THREAD_NUM (1UL)
 
-#define BDM_BIND_CPU_START (60UL)
+#define BDM_BIND_CPU_DEFAULT (-1)
 
 #define BDM_BLOCK_SIZE (4096UL)
 
@@ -959,7 +959,7 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
         BDM_LOGERROR(0, "Epoll ctl failed, errno(%s).", strerror(errno));
         return BDM_CODE_ERR;
     }
-    bdmPool->cpus[index] = BDM_BIND_CPU_START + (int32_t)index;
+    bdmPool->cpus[index] = BDM_BIND_CPU_DEFAULT;
     return ret;
 }
 
