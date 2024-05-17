@@ -25,10 +25,10 @@ using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
 class BioClientLog {
 public:
     enum class Level {
-        LOG_LEVEL_DEBUG = 0,
-        LOG_LEVEL_INFO = 1,
-        LOG_LEVEL_WARN = 2,
-        LOG_LEVEL_ERROR = 3,
+        LOG_LEVEL_DEBUG = 1,
+        LOG_LEVEL_INFO = 2,
+        LOG_LEVEL_WARN = 3,
+        LOG_LEVEL_ERROR = 4,
         LOG_LEVEL_BUTT
     };
 
@@ -61,7 +61,7 @@ public:
                 return -1;
             }
         }
-        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level + 1, message); };
+        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
         func = logFunc;
         return 0;
     }

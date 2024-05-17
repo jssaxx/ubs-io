@@ -677,7 +677,7 @@ BResult MirrorServer::SyncData(SyncDataRequest &req)
     BResult ret = Cache::Instance().Flush(req.comm.ptId, req.comm.ptv);
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Sync data failed:" << ret << ", ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
+        LOG_WARN("Sync data failed:" << ret << ", ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
     }
     return ret;
 }
