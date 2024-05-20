@@ -51,7 +51,7 @@ public:
 
     BResult Seal(WCacheTierType type);
 
-    BResult Destroy();
+    void Destroy();
 
     void SetDegradeState(bool flag)
     {

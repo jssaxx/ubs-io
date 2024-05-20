@@ -1340,8 +1340,9 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
         return BIO_OK;
     }
     uint32_t sliceLen = sliceP->GetSerializeLen();
-    auto *tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
+    uint8_t *tmp = nullptr;
     LVOS_TP_START(GET_SLICE_ALLOC_FAIL, &tmp, nullptr);
+    tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
     LVOS_TP_END;
     if (UNLIKELY(tmp == nullptr)) {
         LOG_ERROR("Alloc memory failed, len:" << sizeof(GetSliceResponse) + sliceLen << ".");
@@ -1352,7 +1353,8 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
 
     std::vector<FlowAddr> addrVec = sliceP->GetAddrs();
     if (addrVec.size() > SLICE_ADDR_MAX_SIZE) {
-        LOG_ERROR("Slice addr num " << addrVec.size() << " exceed 32.");
+        LOG_ERROR("Slice addr num " << addrVec.size() << " exceed " << SLICE_ADDR_MAX_SIZE << ".");
+        delete[] tmp;
         return static_cast<int32_t>(BIO_INNER_ERR);
     }
     rsp->addrNum = addrVec.size();

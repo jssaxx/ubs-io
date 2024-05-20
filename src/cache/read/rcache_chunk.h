@@ -58,8 +58,8 @@ public:
 
     ~RCacheChunk();
 
-    RCacheChunkPtr prev[RCACHE_TRUNK_LIST_TYPE_BUTT] = {nullptr};
-    RCacheChunkPtr next[RCACHE_TRUNK_LIST_TYPE_BUTT] = {nullptr};
+    RCacheChunkPtr prev[RCACHE_TRUNK_LIST_TYPE_BUTT] = { nullptr };
+    RCacheChunkPtr next[RCACHE_TRUNK_LIST_TYPE_BUTT] = { nullptr };
 
     inline Key GetKey()
     {
