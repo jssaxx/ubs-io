@@ -28,9 +28,9 @@ const auto NET_TLS_SERVER_CERT_PATH = std::make_pair("bio.net.tls.server.cert.pa
 const auto NET_TLS_SERVER_KEY_PATH = std::make_pair("bio.net.tls.server.key.path", "/path/server/serverkey.pem");
 const auto NET_TLS_SERVER_KEY_PASS_PATH = std::make_pair("bio.net.tls.server.key.pass.path",
     "/path/server/server.keypass");
-const auto NET_HESC_SERVER_KFS_MASTER_PATH = std::make_pair("bio.net.hesc.server.kfs.master.path",
+const auto NET_HESC_SERVER_KFS_MASTER_PATH = std::make_pair("bio.net.hesc.server.tls.kfs.master.path",
     "/path/server/master/kfsa");
-const auto NET_HESC_SERVER_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.server.kfs.pass.standby.path",
+const auto NET_HESC_SERVER_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.server.tls.kfs.pass.standby.path",
     "/path/server/standby/kfsb");
 
 const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
