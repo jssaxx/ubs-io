@@ -652,7 +652,7 @@ private:
 
     BResult PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby);
 
-    std::string GenerateWorkersSetting();
+    std::string GenerateWorkersSetting(const NetOptions& opt);
 
     void StopInner();
 

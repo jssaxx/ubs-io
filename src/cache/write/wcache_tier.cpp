@@ -198,7 +198,7 @@ BResult WCacheTier::Seal()
     return BIO_OK;
 }
 
-BResult WCacheTier::Destroy()
+void WCacheTier::Destroy()
 {
     if (mMetaFlow != nullptr) {
         mMetaFlow->Seal();
@@ -211,8 +211,6 @@ BResult WCacheTier::Destroy()
         FlowManager::Instance()->DestroyObject(mDataFlow->GetFlowType(), mDataFlow->GetFlowId());
         mDataFlow = nullptr;
     }
-
-    return BIO_OK;
 }
 
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)

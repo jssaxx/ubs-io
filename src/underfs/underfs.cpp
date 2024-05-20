@@ -184,7 +184,6 @@ BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderF
     BIO_TRACE_START(UFS_TRACE_LIST);
     char *entry = nullptr;
     while (rados_nobjects_list_next(listCtx, const_cast<const char **>(&entry), nullptr, nullptr) != (-ENOENT)) {
-        LOG_INFO("List result, entry:" << entry);
         if (memcmp(entry, prefix, strlen(prefix)) == 0) {
             ObjStat objectStat;
             ret = this->Stat(entry, objectStat);

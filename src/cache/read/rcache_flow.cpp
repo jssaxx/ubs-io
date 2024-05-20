@@ -45,14 +45,12 @@ BResult RCacheFlow::AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexI
 {
     WriteLocker<ReadWriteLock> lock(&mLock);
     offset = mDataFlowInstance->AllocOffset(len, indexInFlow);
-
     std::vector<FlowAddr> addr;
     BResult ret = mDataFlow->GetAddrByOffset(offset, len, addr);
     if (UNLIKELY(ret != BIO_OK)) {
         mDataFlowInstance->RollbackOffset(len);
-        return ret;
     }
-    return BIO_OK;
+    return ret;
 }
 
 BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds)
@@ -100,7 +98,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
     return BIO_OK;
 }
 
-BResult RCacheFlow::Destroy()
+void RCacheFlow::Destroy()
 {
     if (mMetaFlow != nullptr) {
         mMetaFlow->Seal();
@@ -113,6 +111,4 @@ BResult RCacheFlow::Destroy()
         FlowManager::Instance()->DestroyObject(mDataFlow->GetFlowType(), mDataFlow->GetFlowId());
         mDataFlow = nullptr;
     }
-
-    return BIO_OK;
 }

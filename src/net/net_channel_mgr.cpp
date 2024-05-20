@@ -7,7 +7,7 @@
 
 namespace ock {
 namespace bio {
-BResult NetChannelMgr::Initialize()
+BResult NetChannelMgr::Initialize(uint8_t role)
 {
     if (UNLIKELY(mInited)) {
         NET_LOG_WARN("Net engine channel manager has been initialized already");
@@ -16,6 +16,7 @@ BResult NetChannelMgr::Initialize()
 
     mChannelMgr.clear();
     mChannelNodeMap.clear();
+    mRole = role;
     mInited = true;
     NET_LOG_INFO("Net engine channel manager initialize success.");
     return BIO_OK;
@@ -58,7 +59,8 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch)
         return BIO_ALLOC_FAIL;
     }
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
-    NET_LOG_INFO("Added channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() << ".");
+    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() <<
+        ", role:" << mRole << ".");
     return BIO_OK;
 }
 

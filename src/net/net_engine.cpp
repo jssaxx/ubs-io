@@ -27,10 +27,8 @@ namespace ock {
 namespace bio {
 using namespace ock::hcom;
 
-constexpr uint16_t WKR_GRP_INDEX_CTRL_SERVER = 0L;
-constexpr uint16_t WKR_GRP_INDEX_DATA_SERVER = 1L;
-constexpr uint16_t WKR_GRP_INDEX_CTRL_CLIENT = 2L;
-constexpr uint16_t WKR_GRP_INDEX_DATA_CLIENT = 3L;
+constexpr uint16_t WKR_GRP_INDEX_CTRL = 0L;
+constexpr uint16_t WKR_GRP_INDEX_DATA = 1L;
 
 BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func)
 {
@@ -50,14 +48,14 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         NET_LOG_ERROR("Make ctrl channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
-    mCtrlChannelMgr->Initialize();
+    mCtrlChannelMgr->Initialize(0);
 
     mDataChannelMgr = MakeRef<NetChannelMgr>();
     if (mDataChannelMgr == nullptr) {
         NET_LOG_ERROR("Make data channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
-    mDataChannelMgr->Initialize();
+    mDataChannelMgr->Initialize(1);
 
     mConnector = MakeRef<NetConnector>(this);
     if (mConnector == nullptr) {
@@ -346,25 +344,18 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
         });
 }
 
-std::string NetEngine::GenerateWorkersSetting()
+std::string NetEngine::GenerateWorkersSetting(const NetOptions& opt)
 {
     std::ostringstream oss;
-    /*
-     * server side two groups: ctrl panel and data panel
-     * client side two groups: ctrl panel and data panel
-     * so, 4 groups in total
-     *
-     * server side groups */
-    oss << std::to_string(mOptions.handlerCount) << "," << std::to_string(mOptions.handlerCount);
-    /* client side groups */
-    oss << "," << std::to_string(mOptions.handlerCount) << "," << std::to_string(mOptions.handlerCount);
+    /* total two groups: ctrl panel and data panel */
+    oss << std::to_string(opt.handlerCount) << "," << std::to_string(opt.handlerCount);
     return oss.str();
 }
 
 void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options)
 {
     options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
-    options.SetWorkerGroups(GenerateWorkersSetting());
+    options.SetWorkerGroups(GenerateWorkersSetting(opt));
     options.mrSendReceiveSegSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.mrSendReceiveSegCount = NO_1024;
     options.heartBeatIdleTime = NO_5;
@@ -467,7 +458,7 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr,
     options.heartBeatProbeTimes = NO_1;
     options.heartBeatProbeInterval = NO_1;
     options.SetNetDeviceIpMask(ipMask);
-    options.SetWorkerGroups(GenerateWorkersSetting());
+    options.SetWorkerGroups(GenerateWorkersSetting(opt));
     if (isOobSvr) {
         options.oobType = NET_OOB_TCP;
         NetServiceOobListenerOptions listenOpt;
@@ -645,12 +636,12 @@ void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &p
 {
     op.epSize = mOptions.connCount;
     if (isCtrl) {
-        op.clientGrpNo = WKR_GRP_INDEX_CTRL_CLIENT;
-        op.serverGrpNo = WKR_GRP_INDEX_CTRL_SERVER;
+        op.clientGrpNo = WKR_GRP_INDEX_CTRL;
+        op.serverGrpNo = WKR_GRP_INDEX_CTRL;
         prefix = CONN_PAYLOAD_PREFIX_CTRL;
     } else {
-        op.clientGrpNo = WKR_GRP_INDEX_DATA_CLIENT;
-        op.serverGrpNo = WKR_GRP_INDEX_DATA_SERVER;
+        op.clientGrpNo = WKR_GRP_INDEX_DATA;
+        op.serverGrpNo = WKR_GRP_INDEX_DATA;
         prefix = CONN_PAYLOAD_PREFIX_DATA;
     }
     if (info.isSelfPoll) {
@@ -668,6 +659,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
         NET_LOG_ERROR("Net service not ready.");
         return BIO_ERR;
     }
+
     NetServiceConnectOptions options;
     std::string prefix;
     FillConnectOption(info, isCtrlPanel, prefix, options);
@@ -688,7 +680,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 #endif
         }
         if (result == 0) {
-            NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", nid " <<
+            NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid " <<
                 info.peerId.nid << ", payload " << payload.ToPayloadStr(prefix) << ".");
             break;
         }

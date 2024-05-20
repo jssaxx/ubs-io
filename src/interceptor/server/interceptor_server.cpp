@@ -35,15 +35,18 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_READ);
     auto *req = static_cast<InterceptorPreadIn *>(ctx.MessageData());
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_READ_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_READ_START, 0, req->startTime);
 
     LOG_INFO("Receive interceptor read message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
+
+    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_READ);
     InterceptorPreadOut *resp = static_cast<InterceptorPreadOut *>(malloc(sizeof(InterceptorPreadOut) + req->nbytes));
     if (UNLIKELY(resp == nullptr)) {
+        LOG_ERROR("Alloc memory failed, inode:" << req->inode << " offset:" << req->offset << " len:" <<
+            req->nbytes << " fd:" << req->fd << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, BIO_ALLOC_FAIL);
         return BIO_OK;
@@ -52,10 +55,12 @@ int32_t InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     int readLen = static_cast<int>(req->nbytes);
     auto ret = BioReadHook(req->inode, resp->data, req->nbytes, req->offset, &readLen);
     if (UNLIKELY(ret != 0)) {
-        free(resp);
-        resp = nullptr;
+        LOG_ERROR("Read hook failed, inode:" << req->inode << " offset:" << req->offset << " len:" <<
+            req->nbytes << " fd:" << req->fd << ", readLen:" << readLen << ", ret:" << ret << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_READ, BIO_ALLOC_FAIL);
+        free(resp);
+        resp = nullptr;
         return BIO_OK;
     }
 
