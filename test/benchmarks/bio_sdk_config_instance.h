@@ -22,9 +22,9 @@ const auto SDK_NET_TLS_CLIENT_KEY_PATH = std::make_pair("bio.net.tls.client.key.
     "/path/client/clientkey.pem");
 const auto SDK_NET_TLS_CLIENT_KEY_PASS_PATH = std::make_pair("bio.net.tls.client.key.pass.path",
     "/path/client/client.keypass");
-const auto NET_HESC_CLIENT_KFS_MASTER_PATH = std::make_pair("bio.net.hesc.client.kfs.master.path",
+const auto NET_HESC_CLIENT_KFS_MASTER_PATH = std::make_pair("bio.net.hesc.client.tls.kfs.master.path",
     "/path/client/master/kfsa");
-const auto NET_HESC_CLIENT_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.client.kfs.pass.standby.path",
+const auto NET_HESC_CLIENT_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.client.tls.kfs.pass.standby.path",
     "/path/client/standby/kfsb");
 
 class BioSdkConfig;

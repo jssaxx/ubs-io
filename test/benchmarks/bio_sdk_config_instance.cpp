@@ -102,13 +102,14 @@ void BioSdkConfig::DumpToLog()
 
     std::lock_guard<std::mutex> guard(mMutex);
     std::ostringstream ossTmp;
-    ossTmp << "Configuration Dump:" << std::endl;
 
     for (uint32_t i = 0; i < reader.Size(); i++) {
         std::string key;
         std::string value;
         reader.GetI(i, key, value);
-        ossTmp << " " << key << " = " << value << std::endl;
+        if (key.find("tls") == std::string::npos) {
+            ossTmp << " " << key << " = " << value << std::endl;
+        }
     }
     std::cout << ossTmp.str() << std::endl;
 }
