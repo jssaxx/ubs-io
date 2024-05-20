@@ -780,17 +780,17 @@ void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh)
     g_writeCopyFreeHook = wh;
 }
 
-uint64_t BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
+int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
     return g_readHook(inode, buff, count, offset, readLen);
 }
 
-uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
+int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
     return g_writeHook(inode, buff, count, offset, fh);
 }
 
-uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
+int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
 {
     return g_writeCopyFreeHook(inode, offset, count, spaceInfo);
 }

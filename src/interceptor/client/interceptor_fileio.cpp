@@ -43,9 +43,9 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     request.startTime = Monotonic::TimeNs();
 
     InterceptorPreadOut *resp = nullptr;
-    uint64_t rspsLen;
+    uint64_t rspLen = 0;
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_READ, request, &resp, rspsLen);
+        BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("Send read failed inode:" << request.inode << ", offset:" << request.offset << ", length:" <<
             request.nbytes << ".");
@@ -54,14 +54,16 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
 
     CLOG_DEBUG("Read inode:" << request.inode << ", offset:" << request.offset << ", length:" << request.nbytes <<
         "rsp len:" << resp->dataLen << ".");
+
     ret = memcpy_s(buf, count, resp->data, resp->dataLen);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("Memory copy read data:" << resp->dataLen << ", buff size:" << count << " failed:" << ret);
         free(resp);
         return -1;
     }
+    ssize_t retLen = resp->dataLen;
     free(resp);
-    return resp->dataLen;
+    return retLen;
 }
 
 ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
@@ -216,6 +218,8 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
     if (UNLIKELY(ret != 0)) {
+        CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", req->offset" << request->offset << ", count" <<
+            count << ", rsp len:" << resp.dataLen << ".");
         free(request);
         request = nullptr;
         return -1;

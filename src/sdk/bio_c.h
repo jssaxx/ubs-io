@@ -284,13 +284,13 @@ CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, Cac
  */
 CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spaceInfo);
 
-typedef uint64_t (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
-typedef uint64_t (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
-typedef uint64_t (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceInfo *);
+typedef int (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
+typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
+typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceInfo *);
 
-uint64_t BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
-uint64_t BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh);
-uint64_t BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo);
+int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
+int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh);
+int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo);
 
 void BioRegisterJuiceFSRead(ReadHook rh);
 void BioRegisterJuiceFSWrite(WriteHook wh);
