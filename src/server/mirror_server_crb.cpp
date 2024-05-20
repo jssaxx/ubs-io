@@ -294,12 +294,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
 
 BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)
 {
-    auto ret = Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version);
-    if (ret != BIO_OK) {
-        LOG_WARN("Expired clear fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
-        return ret;
-    }
-    return BIO_OK;
+    return Cache::Instance().ExpiredClear(ptInfo.ptId, ptInfo.version);
 }
 
 BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)

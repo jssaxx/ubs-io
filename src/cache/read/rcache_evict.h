@@ -24,7 +24,7 @@ public:
 
     BResult Initialize();
 
-    BResult Destroy();
+    void Destroy();
 
     inline bool GetWorkStatus() noexcept
     {
@@ -41,7 +41,6 @@ public:
         if (cacheData < len) {
             return;
         }
-
         cacheData -= len;
     }
 
@@ -50,6 +49,7 @@ public:
     BResult Stop(RCachePtr rCachePtr);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     uint64_t GetEvictDataByTier(const RCachePtr rCache, RCacheTierType tier);
 

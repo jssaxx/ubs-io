@@ -21,7 +21,7 @@ public:
 
     BResult Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds);
 
-    BResult Destroy();
+    void Destroy();
 
     FlowPtr &GetMetaFlow();
 

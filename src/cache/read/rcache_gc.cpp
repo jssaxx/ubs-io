@@ -29,16 +29,13 @@ BResult RCacheGC::GCOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)
 
 BResult RCacheGC::GcHandle(uint32_t index, RCacheTierType tier)
 {
-    BResult result;
-    RCachePtr rCache = nullptr;
-
     GCRCacheLock[index].Lock();
     std::list<RCachePtr> list = GCRCache[index];
     GCRCacheLock[index].UnLock();
 
     for (auto iter = list.begin(); iter != list.end(); iter++) {
-        rCache = *iter;
-        result = GCOneRCacheHandle(rCache, tier);
+        RCachePtr rCache = *iter;
+        BResult result = GCOneRCacheHandle(rCache, tier);
         if (result != BIO_OK) {
             LOG_ERROR("Gc handle read cache pt " << rCache->GetPtId() << " failed, error code" << result);
         }
@@ -57,7 +54,7 @@ void *RCacheGC::Worker(void *context)
         result = rCacheGc->GcHandle(para->index, para->tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
             LOG_ERROR("Gc handle read cache index " << para->index << " tier " << para->tier <<
-            " failed, error code " << result);
+                " failed, error code " << result);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_GC_INTERVAL_MS));
@@ -105,18 +102,15 @@ BResult RCacheGC::Initialize()
 BResult RCacheGC::Start(RCachePtr rCachePtr)
 {
     uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_GC_SERVICE_MASK;
-
     GCRCacheLock[index].Lock();
     GCRCache[index].push_back(rCachePtr);
     GCRCacheLock[index].UnLock();
-
     return BIO_OK;
 }
 
 BResult RCacheGC::Stop(RCachePtr rCachePtr)
 {
     uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_GC_SERVICE_MASK;
-
     GCRCacheLock[index].Lock();
     auto iter = std::find(GCRCache[index].begin(), GCRCache[index].end(), rCachePtr);
     if (iter != GCRCache[index].end()) {
@@ -124,12 +118,11 @@ BResult RCacheGC::Stop(RCachePtr rCachePtr)
         GCRCacheLock[index].UnLock();
         return BIO_OK;
     }
-
     GCRCacheLock[index].UnLock();
     return BIO_NOT_EXISTS;
 }
 
-BResult RCacheGC::Destroy()
+void RCacheGC::Destroy()
 {
     workStatus.store(false);
     for (auto &work : works) {
@@ -140,5 +133,4 @@ BResult RCacheGC::Destroy()
             }
         }
     }
-    return BIO_OK;
 }

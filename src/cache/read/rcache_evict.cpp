@@ -65,16 +65,13 @@ BResult RCacheEvict::EvictOneRCacheHandle(RCachePtr rCache, RCacheTierType tier)
 
 BResult RCacheEvict::EvictHandle(uint32_t index, RCacheTierType tier)
 {
-    BResult result;
-    RCachePtr rCache = nullptr;
-
     evictRCacheLock[index].Lock();
     std::list<RCachePtr> list = evictRCache[index];
     evictRCacheLock[index].UnLock();
 
     for (auto iter = list.begin(); iter != list.end(); iter++) {
-        rCache = *iter;
-        result = EvictOneRCacheHandle(rCache, tier);
+        RCachePtr rCache = *iter;
+        BResult result = EvictOneRCacheHandle(rCache, tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
             LOG_ERROR("Evict handle read cache pt " << rCache->GetPtId() << " failed, error code " << result);
         }
@@ -93,7 +90,7 @@ void *RCacheEvict::Worker(void *context)
         result = rCacheEvict->EvictHandle(para->index, para->tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
             LOG_ERROR("Gc handle read cache index " << para->index << " tier " << para->tier <<
-            " failed, error code " << result);
+                " failed, error code " << result);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_EVICT_INTERVAL_MS));
@@ -138,7 +135,7 @@ BResult RCacheEvict::Initialize()
     return BIO_OK;
 }
 
-BResult RCacheEvict::Destroy()
+void RCacheEvict::Destroy()
 {
     workStatus.store(false);
     for (auto &work : works) {
@@ -149,25 +146,22 @@ BResult RCacheEvict::Destroy()
             }
         }
     }
-    return BIO_OK;
 }
 
 BResult RCacheEvict::Start(RCachePtr rCachePtr)
 {
     uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_NUM;
-
     evictRCacheLock[index].Lock();
     evictRCache[index].push_back(rCachePtr);
     evictRCacheLock[index].UnLock();
-
     return BIO_OK;
 }
 
 BResult RCacheEvict::Stop(RCachePtr rCachePtr)
 {
     uint32_t index = rCachePtr->GetWorkIndex() % READ_CACHE_EVICT_SERVICE_NUM;
-
     evictRCacheLock[index].Lock();
+
     LVOS_TP_START(NO_PROCESS_RCACHE_STOP_EVICT, 0);
     auto iter = std::find(evictRCache[index].begin(), evictRCache[index].end(), rCachePtr);
     if (iter != evictRCache[index].end()) {
@@ -175,8 +169,8 @@ BResult RCacheEvict::Stop(RCachePtr rCachePtr)
         evictRCacheLock[index].UnLock();
         return BIO_OK;
     }
-
     LVOS_TP_END;
+
     evictRCacheLock[index].UnLock();
     return BIO_NOT_EXISTS;
 }

@@ -130,11 +130,7 @@ uint32_t RCache::GetHashBucketByKey(const Key &key)
 
 FlowType RCache::GetFlowTypeByTierType(RCacheTierType tierType)
 {
-    if (tierType == READ_CACHE_TIER_MEM) {
-        return FLOW_MEMORY;
-    } else {
-        return FLOW_DISK;
-    }
+    return (tierType == READ_CACHE_TIER_MEM) ? FLOW_MEMORY : FLOW_DISK;
 }
 
 BResult RCache::CreateRCacheFlow(RCacheTierType tier, std::vector<uint64_t> flowIds)
@@ -203,14 +199,11 @@ BResult RCache::Initialize()
     }
 
     mFlowId = CacheFlowIdManager::GenOutFlowId(tempIds[0]);
-
     return BIO_OK;
 }
 
-BResult RCache::Destroy()
+void RCache::Destroy()
 {
-    BResult ret = BIO_ERR;
-
     LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_INDEX, 0);
     for (uint32_t i = 0; i < READ_CACHE_META_HASH_BUCKET_NUM; i++) {
         indexLock[i].Lock();
@@ -221,12 +214,7 @@ BResult RCache::Destroy()
 
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         if (flow[tier] != nullptr) {
-            LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_FLOW, 0);
-            ret = flow[tier]->Destroy();
-            LVOS_TP_END;
-            if (ret != BIO_OK) {
-                LOG_ERROR("Destroy pt id " << mPtId << " tier type " << tier << " flow failed, error code " << ret);
-            }
+            flow[tier]->Destroy();
         }
 
         LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_QUEUE, 0);
@@ -245,8 +233,6 @@ BResult RCache::Destroy()
         truncateLock[tier].UnLock();
         LVOS_TP_END;
     }
-
-    return BIO_OK;
 }
 
 BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPtr &chunk)
@@ -348,7 +334,7 @@ BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)
     uint64_t indexInFlow;
     std::vector<FlowAddr> flowAdd;
 
-    BResult ret;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = flow[READ_CACHE_TIER_MEM]->AllocOffset(length, offset, indexInFlow);
     LVOS_TP_END;
@@ -555,7 +541,6 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
 BResult RCache::Delete(const Key &key)
 {
     uint32_t bucket = GetHashBucketByKey(key);
-    RCacheChunkPtr chunk = nullptr;
 
     BIO_TRACE_START(RCACHE_TRACE_DEL_QUERY_INDEX);
     indexLock[bucket].Lock();
@@ -566,7 +551,7 @@ BResult RCache::Delete(const Key &key)
         BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
         return BIO_NOT_EXISTS;
     }
-    chunk = iter->second;
+    RCacheChunkPtr chunk = iter->second;
     chunk->SetState(1);
     indexLock[bucket].UnLock();
     BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
@@ -582,14 +567,13 @@ BResult RCache::EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictDa
         return BIO_OK;
     }
 
-    bool expectval = false;
-    if (!mMemEvict.compare_exchange_weak(expectval, true)) {
+    bool expectValue = false;
+    if (!mMemEvict.compare_exchange_weak(expectValue, true)) {
         haveEvictData = 0ULL;
         return BIO_OK;
     }
 
     BResult ret = EvictMemDataImpl(needEvictData, haveEvictData);
-
     mMemEvict.store(false);
     return ret;
 }
@@ -601,14 +585,13 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
         return BIO_OK;
     }
 
-    bool expectval = false;
-    if (!mDiskEvict.compare_exchange_weak(expectval, true)) {
+    bool expectValue = false;
+    if (!mDiskEvict.compare_exchange_weak(expectValue, true)) {
         haveEvictData = 0ULL;
         return BIO_OK;
     }
 
     BResult ret = EvictDiskDataImpl(needEvictData, haveEvictData);
-
     mDiskEvict.store(false);
     return ret;
 }
@@ -631,13 +614,10 @@ bool RCache::IsEmptyEvict()
 BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData)
 {
     haveEvictData = 0ULL;
-
     RCacheChunkPtr chunk;
     RCacheChunkPtr newChunk;
     WCacheSlicePtr fromSlicePtr = nullptr;
     WCacheSlicePtr toSlicePtr = nullptr;
-    SlicePtr from;
-    SlicePtr to;
 
     while (haveEvictData < needEvictData) {
         if (!mIsNormal) {
@@ -740,7 +720,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
 BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEvictData)
 {
     haveEvictData = 0ULL;
-
     RCacheChunkPtr chunk;
     while (haveEvictData < needEvictData) {
         if (!mIsNormal) {

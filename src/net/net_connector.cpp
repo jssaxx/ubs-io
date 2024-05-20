@@ -33,13 +33,11 @@ BResult ConnectTask::DoConnect()
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, true, ctrlChanel);
         LVOS_TP_END;
         if (ret != BIO_OK) {
-            NET_LOG_ERROR("Failed to connect ctrl plane to peer target node id " << mConnectInfo.peerId.nid <<
+            NET_LOG_ERROR("Failed to connect ctrl plane to peer, dstNid:" << mConnectInfo.peerId.nid <<
                 ", pid:" << mConnectInfo.peerId.pid << ".");
             return BIO_ERR;
         }
         mEngine->GetCtrlChannelMgr()->AddChannel(mConnectInfo.peerId, ctrlChanel);
-        NET_LOG_INFO("Connect ctrl succeed, channel id:" << ctrlChanel->Id() << ", target node id:" <<
-            mConnectInfo.peerId.nid << ", pid:" << mConnectInfo.peerId.pid << ".");
     } else {
         NET_LOG_INFO("Exist connect ctrl plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
             mConnectInfo.peerId.pid << ".");
@@ -49,13 +47,11 @@ BResult ConnectTask::DoConnect()
     if ((ret = mEngine->GetDataChannelMgr()->GetChannel(mConnectInfo.peerId, dataChanel)) == BIO_NOT_EXISTS) {
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, false, dataChanel);
         if (ret != BIO_OK) {
-            NET_LOG_ERROR("Failed to connect data plane to peer target node id " << mConnectInfo.peerId.nid <<
+            NET_LOG_ERROR("Failed to connect data plane to peer, dstNid:" << mConnectInfo.peerId.nid <<
                 ", pid:" << mConnectInfo.peerId.pid << ".");
             return BIO_ERR;
         }
         mEngine->GetDataChannelMgr()->AddChannel(mConnectInfo.peerId, dataChanel);
-        NET_LOG_INFO("Connect data succeed, channel id:" << dataChanel->Id() << ", target node id:" <<
-            mConnectInfo.peerId.nid << ", pid:" << mConnectInfo.peerId.pid << ".");
     } else if (ret != BIO_OK) {
         NET_LOG_INFO("Exist connect data plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
             mConnectInfo.peerId.pid << ".");
