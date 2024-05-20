@@ -7,5 +7,9 @@ target_link_libraries(ock_iofwd_proxy
         -Wl,--start-group
         pthread dl aio
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
-        bio_common bio_net
+        bio_common bio_net htracer
         -Wl,--end-group)
+if (DOPEN_TEST_TP_TOOLS STREQUAL "ON" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    target_link_libraries(ock_iofwd_proxy
+            tracepoint_shared)
+endif()
