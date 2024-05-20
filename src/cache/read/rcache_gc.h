@@ -44,7 +44,7 @@ public:
 
     BResult Initialize();
 
-    BResult Destroy();
+    void Destroy();
 
     BResult Start(RCachePtr rCachePtr);
 

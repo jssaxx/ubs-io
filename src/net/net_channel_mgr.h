@@ -36,7 +36,7 @@ public:
     NetChannelMgr() = default;
     ~NetChannelMgr() = default;
 
-    BResult Initialize();
+    BResult Initialize(uint8_t role);
     void UnInitialize();
 
     BResult AddChannel(NetNode dstNid, ChannelPtr &ch);
@@ -90,6 +90,7 @@ private:
     std::unordered_map<uint64_t, ChannelInfo *> mChannelMgr;
     std::unordered_map<uint64_t, ChannelNode *> mChannelNodeMap;
     std::mutex lock;
+    uint8_t mRole = 0;
 
     DEFINE_REF_COUNT_VARIABLE
 };

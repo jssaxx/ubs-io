@@ -22,6 +22,7 @@ BResult Cache::Init()
     mRCacheManager = RCacheManager::Instance();
     LVOS_TP_END;
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
+
     BResult ret = BIO_OK;
     LVOS_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
     ret = mRCacheManager->Init();
@@ -49,10 +50,10 @@ BResult Cache::Init()
 
 BResult Cache::Recover()
 {
+    BResult ret = BIO_INNER_ERR;
     std::map<uint64_t, FlowPtr> flowMaps;
-
-    auto ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
-    LVOS_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_ERR);
+    LVOS_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_NOT_READY);
+    ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
     LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Get flow list fail:" << ret);
@@ -116,6 +117,17 @@ BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64
     return BIO_OK;
 }
 
+BResult Cache::DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId)
+{
+    BResult ret = BIO_INNER_ERR;
+    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
+    ret = mWCacheManager->DestroyWCache(procId, flowId, ptId, ptv);
+    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, ret);
+    LOG_DEBUG("Destroy wcache finish, ret:" << ret << ", cacheId:" << procId << ", ptId:" << ptId << ", flowId:" <<
+        flowId << ".");
+    return ret;
+}
+
 BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv)
 {
     uint16_t diskId;
@@ -133,18 +145,9 @@ BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv)
     return BIO_OK;
 }
 
-BResult Cache::DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId)
+BResult Cache::DestroyRCache(uint64_t ptId)
 {
-    BResult ret = BIO_OK;
-    LVOS_TP_START(NO_PROCESS_DESTROY_WCACHE, 0);
-    BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
-    ret = mWCacheManager->DestroyWCache(procId, flowId, ptId, ptv);
-    BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, ret);
-    LVOS_TP_END;
-    ChkTrue(ret == BIO_OK, ret,
-        "Failed to destroy WCache, procId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
-    LOG_DEBUG("Destroy wcache success, cacheId:" << procId << ", ptId:" << ptId << ", flowId:" << flowId << ".");
-    return BIO_OK;
+    return mRCacheManager->DeleteRCache(ptId);
 }
 
 BResult Cache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
@@ -374,10 +377,9 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
     auto ret = mWCacheManager->Flush(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_FLUSH, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_WARN("Flush failed:" << ret << ", ptId:" << ptId << ", version:" << ptv);
-        return ret;
+        LOG_WARN("Flush failed:" << ret << ", ptId:" << ptId << ", pt version:" << ptv << ".");
     }
-    return BIO_OK;
+    return ret;
 }
 
 BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
@@ -390,7 +392,7 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     LVOS_TP_START(CACHE_EXPIRED_ERR, &ret, BIO_ERR);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        LOG_ERROR("Rcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
     }
 
@@ -398,7 +400,7 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     ret = mWCacheManager->ExpiredClear(ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+        LOG_ERROR("Wcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
     }
     return BIO_OK;
@@ -406,13 +408,7 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
 
 BResult Cache::ExtraCreateRCache(uint64_t ptId, uint64_t ptv)
 {
-    auto ret = CreateRCache(ptId, ptv);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Create read cache fail:" << ret << ", ptId:" << ptId);
-        return ret;
-    }
-
-    return BIO_OK;
+    return CreateRCache(ptId, ptv);
 }
 
 void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)

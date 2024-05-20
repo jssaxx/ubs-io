@@ -79,7 +79,7 @@ public:
 
     BResult Seal();
 
-    BResult Destroy();
+    void Destroy();
 
     BResult Evict(const WCacheSlicePtr &slice);
 

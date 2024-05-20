@@ -35,8 +35,8 @@ public:
 
     void Exit();
 
-    BResult AllocResources(uint64_t ptId, uint64_t len,
-        WCacheSlicePtr &slice); // alloc resources for write cache evict data
+    // alloc resources for write cache evict data
+    BResult AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePtr &slice);
 
     BResult Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &slice);
 

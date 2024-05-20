@@ -34,7 +34,7 @@ public:
 
     BResult Initialize();
 
-    BResult Destroy();
+    void Destroy();
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 

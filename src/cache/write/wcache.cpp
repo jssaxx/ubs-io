@@ -283,29 +283,10 @@ BResult WCache::Seal(WCacheTierType type)
     return BIO_OK;
 }
 
-BResult WCache::Destroy()
+void WCache::Destroy()
 {
-    BResult ret;
-
-    LVOS_TP_START(MEMORY_WCACHE_TIER_DESTROY_FAIL, &ret, BIO_ERR);
-    ret = mCacheTiers[WCACHE_MEMORY]->Destroy();
-    LVOS_TP_END;
-    LVOS_TP_START(MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET, &ret, BIO_OK);
-    LVOS_TP_END;
-    if (ret != BIO_OK) {
-        LOG_ERROR("Seal mem cacheTier fail:" << ret << ", flowId:" << mFlowId);
-        return ret;
-    }
-
-    LVOS_TP_START(DISK_WCACHE_TIER_DESTROY_FAIL, &ret, BIO_ERR);
-    ret = mCacheTiers[WCACHE_DISK]->Destroy();
-    LVOS_TP_END;
-    if (ret != BIO_OK) {
-        LOG_ERROR("Seal disk cacheTier fail:" << ret << ", flowId:" << mFlowId);
-        return ret;
-    }
-
-    return BIO_OK;
+    mCacheTiers[WCACHE_MEMORY]->Destroy();
+    mCacheTiers[WCACHE_DISK]->Destroy();
 }
 
 void WCache::StartEvictTask(WCacheTierType type)
