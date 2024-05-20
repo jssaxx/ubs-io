@@ -285,23 +285,22 @@ BResult ValidateTlsCert(const NetOptions &opt)
     }
     std::string checkCerPath = opt.caCerPath;
     if (!CanonicalPath(checkCerPath)) {
-        NET_LOG_ERROR("TLS ca cert path check failed " << checkCerPath);
+        NET_LOG_ERROR("TLS cacert path check failed ");
         return BIO_ERR;
     }
-    NET_LOG_INFO("TLS cert path check failed " << checkCerPath);
+    NET_LOG_INFO("TLS cacert path check success");
     checkCerPath = opt.certificationPath;
     if (!CanonicalPath(checkCerPath)) {
-        NET_LOG_ERROR("TLS cert path check failed " << checkCerPath);
+        NET_LOG_ERROR("TLS cert path check failed ");
         return BIO_ERR;
     }
-    NET_LOG_INFO("TLS cert path check failed " << checkCerPath);
+    NET_LOG_INFO("TLS cert path check success ");
     checkCerPath = opt.privateKeyPath;
     if (!CanonicalPath(checkCerPath)) {
-        NET_LOG_ERROR("TLS privateKeyPath check failed " << checkCerPath);
+        NET_LOG_ERROR("TLS privateKey path check failed ");
         return BIO_ERR;
     }
-    NET_LOG_INFO("TLS cert path check " << checkCerPath);
-    NET_LOG_INFO("TLS cert path check " << opt.privateKeyPassword);
+    NET_LOG_INFO("TLS privateKey path check success");
     return BIO_OK;
 }
 
@@ -318,8 +317,9 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
         capath = options.caCerPath;
         if (!options.caCrlPath.empty()) {
             crlPath = options.caCrlPath;
+            LOG_INFO("get cacrl cert path success.");
         }
-        LOG_INFO("get client CA cert success.");
+        LOG_INFO("get CA cert success.");
         verifyPeerCert = PeerCertVerifyType::VERIFY_BY_DEFAULT;
         cb = [](void *, const char *) { return 0; };
         return true;
@@ -335,7 +335,7 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
             path = options.privateKeyPath;
             pwd = passwordData.first;
             len = passwordData.second;
-            LOG_INFO("get client key success." << options.privateKeyPassword << " path " << path);
+            LOG_INFO("get privateKey path success.");
             erase = [](void *pass, int len) {
                 auto data = std::make_pair(static_cast<char *>(pass), len);
                 BioCryptorHelper::EraseDecryptData(data);

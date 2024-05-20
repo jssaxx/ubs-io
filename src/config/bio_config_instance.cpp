@@ -307,7 +307,9 @@ void BioConfig::DumpToLog()
         std::string key;
         std::string value;
         reader.GetI(i, key, value);
-        ossTmp << " " << key << " = " << value << std::endl;
+        if (key.find("tls") == std::string::npos) {
+            ossTmp << " " << key << " = " << value << std::endl;
+        }
     }
 
     LOG_INFO(ossTmp.str());
