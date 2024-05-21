@@ -80,11 +80,9 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
     }
 
     for (auto &node : nodeView) {
-        LVOS_TP_START(SDK_BIO_START_POST_IGNORE_CHECK, 0);
         if (node.second.id.VNodeId() == localNid) {
             continue;
         }
-        LVOS_TP_END;
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
@@ -198,7 +196,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
     }
 
     // 1. Initialize net engine
-    int16_t timeoutSec = NO_32; // 32s
+    int16_t timeoutSec = NO_16; // 16s
     auto ret = mNetEngine->Initialize(timeoutSec, NO_128, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");

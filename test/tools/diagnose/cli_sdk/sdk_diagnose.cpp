@@ -623,7 +623,7 @@ static void HandlePerf(std::vector<std::string> cmds)
 
     uint32_t bs = 0;
     uint32_t ioDepth = 0;
-    uint32_t size = 0;
+    uint64_t size = 0;
     auto rw = cmds[1].c_str();
     try {
         bs = (std::stoul(cmds[2]) * 1024);
