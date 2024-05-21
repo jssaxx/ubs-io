@@ -94,13 +94,13 @@ public:
     BResult OnServiceStart()
     {
         for (auto it = mModules.cbegin(); it != mModules.cend(); ++it) {
-            int32_t ret = 0;
-            LVOS_TP_START(SERVICE_START_FAIL, &ret, -1);
             if (it->start == nullptr) {
                 LOG_INFO("Module (" << it->name << ") no start function, skip.");
                 continue;
             }
             LOG_INFO("Module (" << it->name << ") start begin...");
+            int32_t ret = 0;
+            LVOS_TP_START(SERVICE_START_FAIL, &ret, -1);
             ret = it->start();
             LVOS_TP_END;
             if (ret == BIO_OK) {
