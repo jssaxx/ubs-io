@@ -923,7 +923,7 @@ static int32_t CmClientZkSubDataHandle(uint16_t poolId)
         return CM_ERR;
     }
     
-    int len;
+    int len = USER_DATA_MAX_LEN;
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubDataChangeWatch, restore, (char *)restore->userValue, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
