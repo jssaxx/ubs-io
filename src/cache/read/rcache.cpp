@@ -210,14 +210,12 @@ void RCache::Destroy()
         index[i].clear();
         indexLock[i].UnLock();
     }
-    LVOS_TP_END;
 
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         if (flow[tier] != nullptr) {
             flow[tier]->Destroy();
         }
 
-        LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_QUEUE, 0);
         for (uint32_t i = 0; i < MQ_TYPE_BUTT; i++) {
             evictMqLock[tier][i].Lock();
             while (!evictMq[tier][i].IsEmpty()) {
@@ -231,8 +229,8 @@ void RCache::Destroy()
             truncateQ[tier].PopFront();
         }
         truncateLock[tier].UnLock();
-        LVOS_TP_END;
     }
+    LVOS_TP_END;
 }
 
 BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPtr &chunk)

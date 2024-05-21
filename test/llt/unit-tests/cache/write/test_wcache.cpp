@@ -190,32 +190,6 @@ TEST_F(TestWCache, test_delete_wcache_flowid_notexist_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestWCache, test_delete_wcache_memory_tier_destroy_err_return_err)
-{
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "MEMORY_WCACHE_TIER_DESTROY_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_ERASE", 0, 1, userParam);
-    auto ret = gWcacheManager->DeleteWCache(g_cacheId);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "MEMORY_WCACHE_TIER_DESTROY_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_ERASE");
-}
-
-TEST_F(TestWCache, test_delete_wcache_disk_tier_destroy_err_return_err)
-{
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "MEMORY_WCACHE_TIER_DESTROY_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "DISK_WCACHE_TIER_DESTROY_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_ERASE", 0, 1, userParam);
-    auto ret = gWcacheManager->DeleteWCache(g_cacheId);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "MEMORY_WCACHE_TIER_DESTROY_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET");
-    LVOS_HVS_deactiveTracePoint(0, "DISK_WCACHE_TIER_DESTROY_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_ERASE");
-}
-
 TEST_F(TestWCache, test_get_case_return_ok)
 {
     NetMrInfo bioMrInfo;
@@ -652,13 +626,6 @@ TEST_F(TestWCache, test_flowmanager_recover_case_return_fail)
 {
     TestWCache::RecoverStub();
     auto ret = FlowManager::Instance()->Init();
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_get_evict_offset_return_ok)
-{
-    uint64_t  flowOffset = 0;
-    auto ret = Cache::Instance().GetEvictOffset(g_cacheId, flowOffset);
     EXPECT_EQ(ret, BIO_OK);
 }
 

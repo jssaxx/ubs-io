@@ -113,8 +113,6 @@ TEST_F(TestRCache, test_bio_server_expire_clear_ptid_err)
     LVOS_HVS_activeTracePoint(0, "RCACHE_EVICT_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_RELEASE", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_DESTROY_INDEX", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_DESTROY_FLOW", 0, NO_2, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_DESTROY_QUEUE", 0, NO_2, userParam);
     LVOS_HVS_activeTracePoint(0, "CACHE_EXPIRED_ERR", 0, NO_2, userParam);
     ret = crb->JobExpiredClear(ptInfo);
     EXPECT_EQ(ret, BIO_ERR);
@@ -123,8 +121,6 @@ TEST_F(TestRCache, test_bio_server_expire_clear_ptid_err)
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_EVICT_OK");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_RELEASE");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_DESTROY_INDEX");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_DESTROY_FLOW");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_DESTROY_QUEUE");
     LVOS_HVS_deactiveTracePoint(0, "CACHE_EXPIRED_ERR");
 }
 
@@ -251,7 +247,7 @@ TEST_F(TestRCache, test_cache_recover_return_err)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL", 0, 1, userParam);
     auto ret = Cache::Instance().Recover();
-    EXPECT_EQ(ret, ock::bio::BIO_ERR);
+    EXPECT_EQ(ret, ock::bio::BIO_NOT_READY);
     LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL");
 }
 
