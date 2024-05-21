@@ -429,7 +429,7 @@ BResult MirrorClient::Put(MirrorPut &param)
 
     bool isSelf = false;
     char *value = param.value;
-    if (mScene == SCENE_BIGDATA && param.length != DEFAULT_ALIGNMENT_SIZE) {
+    if (mScene == SCENE_BIGDATA && param.length < DEFAULT_ALIGNMENT_SIZE) {
         BIO_TRACE_START(SDK_TRACE_PUT_ALIGN_IO);
         CLIENT_LOG_INFO("Not align io, key:" << param.key << ", length:" << param.length << ".");
         isSelf = true;
@@ -1017,7 +1017,7 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     } else {
         req->ioStratege = 0;
     }
-    memcpy_s(req->sliceBuf, rsp->sliceLen, rsp->sliceBuf, rsp->sliceLen);
+    memcpy_s(req->sliceBuf, req->sliceLen, rsp->sliceBuf, rsp->sliceLen);
 }
 
 void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
@@ -1059,7 +1059,7 @@ BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *
         }
         auto ret = memcpy_s(realAddr, addr[i].chunkLen, (from + off), addr[i].chunkLen);
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Failed to copy data from addr:" << (from + off) << " to addr:" << realAddr << ".");
+            CLIENT_LOG_ERROR("Failed to copy data, len:" << addr[i].chunkLen << ".");
             return BIO_INNER_ERR;
         }
         off += addr[i].chunkLen;
@@ -1272,6 +1272,10 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
         realLen = rsp.realLen;
+        if (realLen > mrInfo.size) {
+            CLIENT_LOG_ERROR("Read length greater than value size, realLen:" << realLen << ", size:" << mrInfo.size);
+            return BIO_INNER_ERR;
+        }
         BIO_TRACE_START(SDK_TRACE_GET_COPY2U);
         ret = Copy(reinterpret_cast<void *>(mrInfo.address), value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, ret);

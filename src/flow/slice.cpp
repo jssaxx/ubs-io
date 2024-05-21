@@ -86,20 +86,25 @@ uint32_t Slice::GetSerializeLen()
     return len;
 }
 
-BResult Slice::Serialize(char *data, uint32_t &length)
+BResult Slice::Serialize(char *data, uint32_t dataLen, uint32_t &length)
 {
     uint32_t pos = 0;
+    uint32_t cpyLen = dataLen;
     ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-    memcpy_s(data + pos, sizeof(mFlowType), &mFlowType, sizeof(mFlowType));
+    memcpy_s(data + pos, cpyLen, &mFlowType, sizeof(mFlowType));
     pos += sizeof(mFlowType);
-    memcpy_s(data + pos, sizeof(mLength), &mLength, sizeof(mLength));
+    cpyLen -= sizeof(mFlowType);
+    memcpy_s(data + pos, cpyLen, &mLength, sizeof(mLength));
     pos += sizeof(mLength);
+    cpyLen -= sizeof(mLength);
     size_t vsize = mAddrs.size();
-    memcpy_s(data + pos, sizeof(vsize), &vsize, sizeof(vsize));
+    memcpy_s(data + pos, cpyLen, &vsize, sizeof(vsize));
     pos += sizeof(vsize);
+    cpyLen -= sizeof(vsize);
     for (size_t i = 0; i < vsize; i++) {
-        memcpy_s(data + pos, sizeof(FlowAddr), &mAddrs[i], sizeof(FlowAddr));
+        memcpy_s(data + pos, cpyLen, &mAddrs[i], sizeof(FlowAddr));
         pos += sizeof(FlowAddr);
+        cpyLen -= sizeof(FlowAddr);
     }
     length = pos;
     return BIO_OK;

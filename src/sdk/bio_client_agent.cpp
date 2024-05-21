@@ -419,17 +419,23 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
     } else {
         realLen = rsp.realLen;
+        if (realLen > req.length) {
+            CLIENT_LOG_ERROR("Real read length greater than value size, realLen:" << realLen << ", size:" << req.size);
+            return BIO_INNER_ERR;
+        }
         uint64_t off = 0;
+        uint64_t cpyLength = req.length;
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
-            ret = memcpy_s(static_cast<void *>(value + off), rsp.addrLen[idx], reinterpret_cast<void *>(addr),
-                rsp.addrLen[idx]);
+            ret = memcpy_s(static_cast<void *>(value + off), cpyLength,
+                           reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
             if (UNLIKELY(ret != 0)) {
-                CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
+                CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
                     rsp.addrLen[idx] << ".");
                 break;
             }
             off += rsp.addrLen[idx];
+            cpyLength -= rsp.addrLen[idx];
         }
 
         if (rsp.isAlloc) {

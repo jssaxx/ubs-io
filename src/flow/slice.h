@@ -29,7 +29,7 @@ public:
 
     virtual uint32_t GetSerializeLen() = 0;
 
-    virtual BResult Serialize(char *data, uint32_t &length) = 0;
+    virtual BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) = 0;
 
     virtual BResult Deserialize(char *data, uint32_t length) = 0;
 };
@@ -67,7 +67,7 @@ public:
 
     uint32_t GetSerializeLen() override;
 
-    BResult Serialize(char *data, uint32_t &length) override;
+    BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) override;
 
     BResult Deserialize(char *data, uint32_t length) override;
 
