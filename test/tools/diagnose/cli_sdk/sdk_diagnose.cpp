@@ -301,7 +301,7 @@ static void HandleNotifyUpdatePrepare(std::vector<std::string> cmds)
         CLI_PrintBuf("Invalid input.\n");
         return;
     }
-    auto ret = BioNotifyUpdatePrepare(tenantId);
+    auto ret = BioNotifyUpgradePrepare(tenantId);
     if (ret != RET_CACHE_OK) {
         CLI_PrintBuf("Failed to notify update, result:%d.\n", ret);
     } else {
@@ -318,7 +318,7 @@ static void HandleNotifyUpdateFinish(std::vector<std::string> cmds)
         CLI_PrintBuf("Invalid input.\n");
         return;
     }
-    auto ret = BioNotifyUpdateFinish(tenantId);
+    auto ret = BioNotifyUpgradeFinish(tenantId);
     if (ret != RET_CACHE_OK) {
         CLI_PrintBuf("Failed to notify update, result:%d.\n", ret);
     } else {
@@ -335,7 +335,7 @@ static void HandleCheckUpdateReady(std::vector<std::string> cmds)
         CLI_PrintBuf("Invalid input.\n");
         return;
     }
-    auto ret = BioCheckUpdateReady(tenantId);
+    auto ret = BioCheckUpgradeReady(tenantId);
     if (ret != RET_CACHE_OK) {
         CLI_PrintBuf("Failed to check update, result:%d.\n", ret);
     } else {

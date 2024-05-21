@@ -122,9 +122,9 @@ int32_t InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 
     uint64_t tenantId = 1;
     static uint64_t objectId = 1;
-    CacheSpaceInfo addressInfo;
+    CacheSpaceDesc addressInfo;
     addressInfo.allocLoc = 1;
-    auto ret = BioAllocSpace(tenantId, objectId++, req->length, &addressInfo);
+    auto ret = BioAllocCacheSpace(tenantId, objectId++, req->length, &addressInfo);
     if (UNLIKELY(ret != 0)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
@@ -163,7 +163,7 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         req->nbytes << " fd:" << req->fd);
     InterceptorPwriteOut resp;
 
-    CacheSpaceInfo addressInfo = req->address;
+    CacheSpaceDesc addressInfo = req->address;
     LOG_INFO("Alloc put value with space length:" << req->nbytes << ", location0:" << addressInfo.loc.location[0] <<
         ", location1:" << addressInfo.loc.location[1] << ", address0:" << addressInfo.address[0].address <<
         ", address0 size:" << addressInfo.address[0].size << ", address1:" << addressInfo.address[1].address <<

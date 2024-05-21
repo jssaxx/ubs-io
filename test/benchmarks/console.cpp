@@ -46,7 +46,7 @@ int main(int argc, char **argv)
     termSa.sa_handler = &ConsoleHandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 
-    TlsOptionsConfig optConf;
+    SecurityOptions option;
     WorkerMode mode = static_cast<WorkerMode>(std::stoul(argv[1]));
     if (mode == SEPARATES) {
         BioSdkConfigPtr mConfig = BioSdkConfig::Instance();
@@ -59,24 +59,24 @@ int main(int argc, char **argv)
             std::cout << "Failed to initialize sdk configuration, result: " << result << "."<< std::endl;
             return BIO_ERR;
         }
-        optConf.enableTls = mConfig->GetNetConfig().enableTls;      /* tls switch */
-        strncpy_s(optConf.certificationPath, PATH_MAX, mConfig->GetNetConfig().tlsClientCertPath.c_str(),
+        option.enable = mConfig->GetNetConfig().enableTls;      /* tls switch */
+        strncpy_s(option.certificationPath, PATH_MAX, mConfig->GetNetConfig().tlsClientCertPath.c_str(),
             mConfig->GetNetConfig().tlsClientCertPath.size());          /* certification path */
-        strncpy_s(optConf.caCerPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCertPath.c_str(),
+        strncpy_s(option.caCerPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCertPath.c_str(),
             mConfig->GetNetConfig().tlsCaCertPath.size());              /* caCer path */
-        strncpy_s(optConf.caCrlPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCrlPath.c_str(),
+        strncpy_s(option.caCrlPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCrlPath.c_str(),
             mConfig->GetNetConfig().tlsCaCrlPath.size());               /* caCrl path */
-        strncpy_s(optConf.privateKeyPath, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPath.c_str(),
+        strncpy_s(option.privateKeyPath, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPath.c_str(),
             mConfig->GetNetConfig().tlsClientKeyPath.size());           /* private key path */
-        strncpy_s(optConf.privateKeyPassword, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPassPath.c_str(),
+        strncpy_s(option.privateKeyPassword, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPassPath.c_str(),
             mConfig->GetNetConfig().tlsClientKeyPassPath.size());       /* private key password */
-        strncpy_s(optConf.hseKfsMasterPath, PATH_MAX, mConfig->GetNetConfig().hseKfsMasterPath.c_str(),
+        strncpy_s(option.hseKfsMasterPath, PATH_MAX, mConfig->GetNetConfig().hseKfsMasterPath.c_str(),
             mConfig->GetNetConfig().hseKfsMasterPath.size());           /* hseceasy kfs master path */
-        strncpy_s(optConf.hseKfsStandbyPath, PATH_MAX, mConfig->GetNetConfig().hseKfsStandbyPath.c_str(),
+        strncpy_s(option.hseKfsStandbyPath, PATH_MAX, mConfig->GetNetConfig().hseKfsStandbyPath.c_str(),
             mConfig->GetNetConfig().hseKfsStandbyPath.size());          /* hseceasy kfs standby path */
     }
 
-    auto ret = BioService::Initialize(mode, optConf);
+    auto ret = BioService::Initialize(mode, option);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;
         return -1;

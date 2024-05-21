@@ -222,13 +222,7 @@ BResult MirrorClient::LoadOriginView()
 BResult MirrorClient::GetFileLocation(uint16_t masterPtId, uint16_t slavePtId,
     FileLocationQueryRsp &fileLocationQueryRsp)
 {
-    auto ret = agent::BioClientAgent::Instance()->SendGetNodeInfoRequest(masterPtId, slavePtId,
-        fileLocationQueryRsp);
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Get Node Info failed, ret:" << ret << ", masterPtId:"<< masterPtId <<
-            ", slavePtId:"<< slavePtId << ".");
-    }
-    return ret;
+    return agent::BioClientAgent::Instance()->SendGetNodeInfoRequest(masterPtId, slavePtId, fileLocationQueryRsp);
 }
 
 BResult MirrorClient::LoadOriginViewImpl()
@@ -490,7 +484,7 @@ BResult MirrorClient::Put(MirrorPut &param)
     return ret;
 }
 
-BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo,
+BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo,
     PutRequest *&req)
 {
     uint8_t *reqTmp = nullptr;
@@ -525,7 +519,7 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     return BIO_OK;
 }
 
-BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo, uint64_t &updateQuota)
+BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &updateQuota)
 {
     uint16_t ptId = ParseLocation(spaceInfo.loc);
     CmPtInfo ptEntry;
@@ -556,7 +550,7 @@ BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo, uint6
     return ret;
 }
 
-BResult MirrorClient::Put(MirrorPut &param, CacheSpaceInfo &spaceInfo)
+BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
@@ -896,7 +890,7 @@ BResult MirrorClient::CheckUpdateReady()
     return ret;
 }
 
-BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
@@ -951,7 +945,7 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceI
     return BIO_OK;
 }
 
-BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
     BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_APPLY_QOS);
     mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
