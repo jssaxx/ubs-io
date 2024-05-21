@@ -15,6 +15,7 @@
 #include <string>
 #include <thread>
 #include "bio_log.h"
+#include "bio_file_util.h"
 #ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
 #endif
@@ -38,13 +39,24 @@ public:
         func = nullptr;
     }
 
-    int32_t Initialize(int32_t mode, int32_t level)
+    int32_t Initialize(int32_t mode, int32_t level, uint8_t logType, std::string logFilePath)
     {
         minLogLevel = level;
         if (mode == 1) {
             LoggerOptions options;
+            options.logType = (uint8_t)logType;
             options.minLogLevel = level;
-            options.path = "/var/log/boostio/bio_sdk_" + std::to_string(getpid()) + ".log";
+
+            if (options.logType == 1) { // file
+                auto logDir = logFilePath;
+                bool result = FileUtil::CanonicalPath(logDir);
+                if (!result) {
+                    std::cout << "Failed to check log dir." << std::endl;
+                    return -1;
+                }
+                options.path = logDir + "/bio_sdk_" + std::to_string(getpid()) + ".log";
+            }
+
             LVOS_TP_START(SDK_BIO_LOG_CREAT_FAIL, &mLogger, nullptr);
             mLogger = Logger::Instance(options);
             LVOS_TP_END;
@@ -57,7 +69,7 @@ public:
             ret = mLogger->Init();
             LVOS_TP_END;
             if (ret != 0) {
-                std::cout << "Failed to init log, ret:" << ret << ", log path:" << options.path << "." << std::endl;
+                std::cout << "Failed to init log, ret:" << ret << "." << std::endl;
                 return -1;
             }
         }

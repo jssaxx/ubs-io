@@ -51,6 +51,12 @@ typedef enum {
     SEPARATES
 } WorkerMode;
 
+typedef enum {
+    STDOUT_TYPE,
+    FILE_TYPE,
+    STDERR_TYPE
+} LogType;
+
 #define MAX_KEY_SIZE (256)
 #define LOCATION_SIZE (2)
 #define NODE_DESC_SIZE (16)
@@ -97,6 +103,8 @@ typedef struct {
 } CacheSpaceDesc;
 
 typedef struct {
+	LogType logType;                   // STDOUT_TYPE/FILE_TYPE/STDERR_TYPE
+    char logFilePath[PATH_MAX];        // log file path, if log type use FILE_TYPE, need to set this param
     uint8_t enable;                    // switch
     char certificationPath[PATH_MAX];  // certification path
     char caCerPath[PATH_MAX];          // caCer path
@@ -105,16 +113,16 @@ typedef struct {
     char privateKeyPassword[PATH_MAX]; // private key password
     char hseKfsMasterPath[PATH_MAX];   // hseceasy kfs master path
     char hseKfsStandbyPath[PATH_MAX];  // hseceasy kfs standby path
-} SecurityOptions;
+} ClientOptionsConfig;
 
 /**
  * @brief: Initialize boostio service
  *
  * @param[in]: mode: working mode
- * @param[in]: option: security options
+ * @param[in]: option: log options and security options
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode, SecurityOptions *option);
+CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
 
 /**
  * @brief: Exit boostio service

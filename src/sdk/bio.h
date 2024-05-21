@@ -152,10 +152,10 @@ public:
      * @brief: Initialize bio service
      *
      * @param[in]: mode: boostio working mode
-     * @param[in]: option: security options
+     * @param[in]: option: log and security options
      * @return: return initialize result
      */
-    static CResult Initialize(WorkerMode mode, SecurityOptions option);
+    static CResult Initialize(WorkerMode mode, ClientOptionsConfig optConf);
 
     /**
      * @brief: Exit bio service

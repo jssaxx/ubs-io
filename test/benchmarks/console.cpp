@@ -34,6 +34,31 @@ static void ConsoleHandleSigterm(int signum)
     gDaemonRunning = false;
 }
 
+int ConsoleGetSdkConfig(BioSdkConfigPtr sdkConf, ClientOptionsConfig *optConf)
+{
+    optConf->logType = (LogType)sdkConf->GetLogTypeConfig();
+    strncpy_s(optConf->logFilePath, PATH_MAX, sdkConf->GetLogFilePathConfig().c_str(),
+        sdkConf->GetLogFilePathConfig().size());               /* log file path */
+
+    optConf->enable = sdkConf->GetNetConfig().enableTls;      /* tls switch */
+    strncpy_s(optConf->certificationPath, PATH_MAX, sdkConf->GetNetConfig().tlsClientCertPath.c_str(),
+        sdkConf->GetNetConfig().tlsClientCertPath.size());          /* certification path */
+    strncpy_s(optConf->caCerPath, PATH_MAX, sdkConf->GetNetConfig().tlsCaCertPath.c_str(),
+        sdkConf->GetNetConfig().tlsCaCertPath.size());              /* caCer path */
+    strncpy_s(optConf->caCrlPath, PATH_MAX, sdkConf->GetNetConfig().tlsCaCrlPath.c_str(),
+        sdkConf->GetNetConfig().tlsCaCrlPath.size());               /* caCrl path */
+    strncpy_s(optConf->privateKeyPath, PATH_MAX, sdkConf->GetNetConfig().tlsClientKeyPath.c_str(),
+        sdkConf->GetNetConfig().tlsClientKeyPath.size());           /* private key path */
+    strncpy_s(optConf->privateKeyPassword, PATH_MAX, sdkConf->GetNetConfig().tlsClientKeyPassPath.c_str(),
+        sdkConf->GetNetConfig().tlsClientKeyPassPath.size());       /* private key password */
+    strncpy_s(optConf->hseKfsMasterPath, PATH_MAX, sdkConf->GetNetConfig().hseKfsMasterPath.c_str(),
+        sdkConf->GetNetConfig().hseKfsMasterPath.size());           /* hseceasy kfs master path */
+    strncpy_s(optConf->hseKfsStandbyPath, PATH_MAX, sdkConf->GetNetConfig().hseKfsStandbyPath.c_str(),
+        sdkConf->GetNetConfig().hseKfsStandbyPath.size());          /* hseceasy kfs standby path */
+
+    return BIO_OK;
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2U) {
@@ -46,7 +71,7 @@ int main(int argc, char **argv)
     termSa.sa_handler = &ConsoleHandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 
-    SecurityOptions option;
+    ClientOptionsConfig optConf;
     WorkerMode mode = static_cast<WorkerMode>(std::stoul(argv[1]));
     if (mode == SEPARATES) {
         BioSdkConfigPtr mConfig = BioSdkConfig::Instance();
@@ -56,27 +81,17 @@ int main(int argc, char **argv)
         }
         auto result = mConfig->Initialize(".");
         if (result != BIO_OK) {
-            std::cout << "Failed to initialize sdk configuration, result: " << result << "."<< std::endl;
+            std::cout << "Failed to initialize sdk configuration, result: " << result << "." << std::endl;
             return BIO_ERR;
         }
-        option.enable = mConfig->GetNetConfig().enableTls;      /* tls switch */
-        strncpy_s(option.certificationPath, PATH_MAX, mConfig->GetNetConfig().tlsClientCertPath.c_str(),
-            mConfig->GetNetConfig().tlsClientCertPath.size());          /* certification path */
-        strncpy_s(option.caCerPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCertPath.c_str(),
-            mConfig->GetNetConfig().tlsCaCertPath.size());              /* caCer path */
-        strncpy_s(option.caCrlPath, PATH_MAX, mConfig->GetNetConfig().tlsCaCrlPath.c_str(),
-            mConfig->GetNetConfig().tlsCaCrlPath.size());               /* caCrl path */
-        strncpy_s(option.privateKeyPath, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPath.c_str(),
-            mConfig->GetNetConfig().tlsClientKeyPath.size());           /* private key path */
-        strncpy_s(option.privateKeyPassword, PATH_MAX, mConfig->GetNetConfig().tlsClientKeyPassPath.c_str(),
-            mConfig->GetNetConfig().tlsClientKeyPassPath.size());       /* private key password */
-        strncpy_s(option.hseKfsMasterPath, PATH_MAX, mConfig->GetNetConfig().hseKfsMasterPath.c_str(),
-            mConfig->GetNetConfig().hseKfsMasterPath.size());           /* hseceasy kfs master path */
-        strncpy_s(option.hseKfsStandbyPath, PATH_MAX, mConfig->GetNetConfig().hseKfsStandbyPath.c_str(),
-            mConfig->GetNetConfig().hseKfsStandbyPath.size());          /* hseceasy kfs standby path */
+        result = ConsoleGetSdkConfig(mConfig, &optConf);
+        if (result != BIO_OK) {
+            std::cout << "Failed to get sdk configuration." << std::endl;
+            return BIO_ERR;
+        }
     }
 
-    auto ret = BioService::Initialize(mode, option);
+    auto ret = BioService::Initialize(mode, optConf);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;
         return -1;
