@@ -904,17 +904,17 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     free(notifyList);
 }
 
-static uint64_t ReadHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
+static int ReadHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
     return ock::bio::BIO_OK;
 }
 
-static uint64_t WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
+static int WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
     return ock::bio::BIO_OK;
 }
 
-static uint64_t WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *spaceInfo)
+static int WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
 {
     return ock::bio::BIO_OK;
 }
