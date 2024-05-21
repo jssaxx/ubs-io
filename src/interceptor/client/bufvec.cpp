@@ -29,10 +29,12 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
         return -1;
     }
     size_t copyBytes = 0;
+    size_t cpyLength = length;
     while (copyBytes < length && index < count) {
         if (innerOffset < iov[index].iov_len) {
             auto bytes = std::min(length - copyBytes, iov[index].iov_len - innerOffset);
-            int ret = memcpy_s(buf + copyBytes, bytes, (const uint8_t *)iov[index].iov_base + innerOffset, bytes);
+            int ret = memcpy_s(buf + copyBytes, cpyLength,
+                               (const uint8_t *)iov[index].iov_base + innerOffset, bytes);
             if (UNLIKELY(ret != 0)) {
                 CLOG_ERROR("Memmcpy copy failed, ret:" << ret);
                 return -1;
@@ -43,6 +45,7 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
             copyBytes += bytes;
             innerOffset += bytes;
             totalOffset += bytes;
+            cpyLength -= bytes;
         } else {
             index++;
             innerOffset = 0;

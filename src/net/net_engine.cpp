@@ -209,8 +209,7 @@ BResult NetEngine::InitCommMemAllocator()
         NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:" <<
             mLocalMr->GetLKey() << ".");
     }
-    LOG_INFO("Regist mem: addr:" << mLocalMr->GetAddress() << ", size:" << mOptions.memorySize << ", Key:" <<
-        mLocalMr->GetLKey());
+    LOG_INFO("Register common memory success, size:" << mOptions.memorySize << ", Key:" << mLocalMr->GetLKey());
     return result;
 }
 
@@ -245,9 +244,6 @@ BResult NetEngine::InitShmMemAllocator()
         return result;
     }
 
-    LOG_INFO("Register mem: addr:" << (uintptr_t)(mShareAddress) << ", size:" << mOptions.memorySize << ", Key:" <<
-        mLocalMr->GetLKey());
-
     mMrBlockPool = MakeRef<NetBlockPool>();
     if (mMrBlockPool == nullptr) {
         NET_LOG_ERROR("Make block pool ptr failed.");
@@ -261,9 +257,8 @@ BResult NetEngine::InitShmMemAllocator()
         close(mShmFd);
         mShmFd = -1;
     } else {
-        NET_LOG_INFO("Succeed to start shm memory pool success, size:" << mOptions.memorySize << " , shmOffset:" <<
-            mShareOffset << ", shmFd:" << mShmFd << ", shmAddr:" << reinterpret_cast<uintptr_t>(mShareAddress) <<
-            ", key:" << mLocalMr->GetLKey() << ".");
+        NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize << ", shmOffset:" <<
+            mShareOffset << ", shmFd:" << mShmFd  << ", key:" << mLocalMr->GetLKey() << ".");
     }
     return result;
 }

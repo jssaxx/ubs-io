@@ -721,7 +721,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     }
     (*rsp)->sliceLen = sliceLen;
     uint32_t outSliceLen = 0;
-    sliceP->Serialize((*rsp)->sliceBuf, outSliceLen);
+    sliceP->Serialize((*rsp)->sliceBuf, (*rsp)->sliceLen, outSliceLen);
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
         return static_cast<int32_t>(BIO_INNER_ERR);
