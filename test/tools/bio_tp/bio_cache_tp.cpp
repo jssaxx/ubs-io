@@ -108,13 +108,9 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(RCACHE_EVICT_ERR, "rcache evict err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_TIER_TYPE_FAIL, "wcache tier type err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_TIER_ALLOC_FAIL, "wcache tier alloc err", tp::CommonTp::PointerValueCallback);
-    LVOS_TP_REG(MEMORY_WCACHE_TIER_DESTROY_FAIL, "memory wcache tier destroy err", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET, "reset memory wcache tier destroy",
-        tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(DISK_WCACHE_TIER_DESTROY_FAIL, "disk wcache tier destroy err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(RECOVER_CACHE_FLOWID_FAIL, "recover cache flowid err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_STATE_NOT_NORMAL, "wcache state not normal", tp::CommonTp::BoolValueCallback);
-
 
     LVOS_TP_REG(RCACHE_EVICT_PARAM_FAIL, "rcache gc evict err", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(RCACHE_GC_PARAM_FAIL, "rcache gc param err", tp::CommonTp::NoProcessCallback);
@@ -167,8 +163,6 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(RCACHE_EVICT_OK, "rcache evict ok", tp::CommonTp::BoolValueCallback);
     LVOS_TP_REG(NO_PROCESS_RCACHE_RELEASE, "no process rcache release", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_RCACHE_DESTROY_INDEX, "no process rcache destroy index", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_RCACHE_DESTROY_FLOW, "no process rcache destroy flow", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_RCACHE_DESTROY_QUEUE, "no process rcache destroy queue", tp::CommonTp::NoProcessCallback);
 
     LVOS_TP_REG(RCACHE_MANAGER_GET_INSTANCE_FAIL, "rcache manager get instance err",
         tp::CommonTp::PointerValueCallback);
@@ -340,8 +334,6 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(NO_PROCESS_RCACHE_STOP_EVICT);
     LVOS_TP_UNREG(WCACHE_TIER_TYPE_FAIL);
     LVOS_TP_UNREG(WCACHE_TIER_ALLOC_FAIL);
-    LVOS_TP_UNREG(MEMORY_WCACHE_TIER_DESTROY_FAIL);
-    LVOS_TP_UNREG(MEMORY_WCACHE_TIER_DESTROY_FAIL_RESET);
     LVOS_TP_UNREG(DISK_WCACHE_TIER_DESTROY_FAIL);
     LVOS_TP_UNREG(RECOVER_CACHE_FLOWID_FAIL);
     LVOS_TP_UNREG(WCACHE_STATE_NOT_NORMAL);
@@ -349,8 +341,6 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(RCACHE_EVICT_OK);
     LVOS_TP_UNREG(NO_PROCESS_RCACHE_RELEASE);
     LVOS_TP_UNREG(NO_PROCESS_RCACHE_DESTROY_INDEX);
-    LVOS_TP_UNREG(NO_PROCESS_RCACHE_DESTROY_FLOW);
-    LVOS_TP_UNREG(NO_PROCESS_RCACHE_DESTROY_QUEUE);
 
     LVOS_TP_UNREG(NO_PROCESS_SERVER_START);
     LVOS_TP_UNREG(NO_PROCESS_ROLLBACK_SERVICE_START);
