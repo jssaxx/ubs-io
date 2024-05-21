@@ -125,7 +125,7 @@ public:
      * @param[out]: spaceInfo: alloc space info
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spaceInfo);
+    CResult AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceDesc &spaceInfo);
 
     /**
      * @brief: put for copy free
@@ -134,7 +134,7 @@ public:
      * @param[in]: spaceInfo : alloc space info
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult Put(const char *key, CacheSpaceInfo &spaceInfo);
+    CResult Put(const char *key, CacheSpaceDesc &spaceInfo);
 
     Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
         : mTenantId(id), mAffinity(affinity), mStrategy(strategy){};
@@ -152,9 +152,10 @@ public:
      * @brief: Initialize bio service
      *
      * @param[in]: mode: boostio working mode
+     * @param[in]: option: security options
      * @return: return initialize result
      */
-    static CResult Initialize(WorkerMode mode, TlsOptionsConfig optConf);
+    static CResult Initialize(WorkerMode mode, SecurityOptions option);
 
     /**
      * @brief: Exit bio service

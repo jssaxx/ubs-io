@@ -359,7 +359,7 @@ typedef struct {
 typedef struct {
     uint32_t pid;
     uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
-    CacheSpaceInfo address;
+    CacheSpaceDesc address;
 } InterceptorAllocPageRsp;
 
 typedef struct {
@@ -395,7 +395,7 @@ typedef struct {
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
-    CacheSpaceInfo address;
+    CacheSpaceDesc address;
 } InterceptorLargePwriteIn;
 
 typedef struct {

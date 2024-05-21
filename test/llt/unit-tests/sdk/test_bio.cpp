@@ -410,20 +410,20 @@ TEST_F(TestBio, test_bio_delete)
     delete[] value;
 }
 
-static CacheSpaceInfo addressInfo;
+static CacheSpaceDesc addressInfo;
 
 TEST_F(TestBio, test_bio_allocspace)
 {
     static uint64_t objectId = 1;
     addressInfo.allocLoc = 0;
-    auto ret = BioAllocSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
+    auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     addressInfo.allocLoc = 1;
-    ret = BioAllocSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
+    ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    ret = BioAllocSpace(G_INVALID_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
+    ret = BioAllocCacheSpace(G_INVALID_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 }
 
@@ -445,10 +445,10 @@ TEST_F(TestBio, test_bio_putwithspace_case)
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     static uint64_t objectId = 11UL;
-    CacheSpaceInfo spaceInfo;
+    CacheSpaceDesc spaceInfo;
     spaceInfo.allocLoc = 0;
     spaceInfo.loc = { 0, 0 };
-    ret = BioAllocSpace(tenantId, objectId, ock::bio::NO_1024, &spaceInfo);
+    ret = BioAllocCacheSpace(tenantId, objectId, ock::bio::NO_1024, &spaceInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
@@ -914,7 +914,7 @@ static uint64_t WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64
     return ock::bio::BIO_OK;
 }
 
-static uint64_t WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
+static uint64_t WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *spaceInfo)
 {
     return ock::bio::BIO_OK;
 }
@@ -1024,7 +1024,7 @@ TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     static uint64_t objectId = 1;
     addressInfo.allocLoc = 1;
-    auto ret = BioAllocSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
+    auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
