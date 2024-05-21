@@ -321,15 +321,17 @@ TEST_F(TestRCache, test_rcache_slice)
     RCacheSlicePtr readSlicePtr = MakeRef<RCacheSlice>(G_PT_ID, length, addrs, FLOW_MEMORY);
     readSlicePtr->GetSerializeLen();
 
-    auto ret = readSlicePtr->Serialize(nullptr, length);
+    auto ret = readSlicePtr->Serialize(nullptr, 0, length);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
     ret = readSlicePtr->Deserialize(nullptr, length);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
+    uint32_t outLength = 0;
     char* sliceBuf = static_cast<char *>(malloc(length));
-    ret = readSlicePtr->Serialize(sliceBuf, length);
+    ret = readSlicePtr->Serialize(sliceBuf, length, outLength);
     EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(length, outLength);
 
     ret = readSlicePtr->Deserialize(sliceBuf, length);
     EXPECT_EQ(ret, BIO_OK);
@@ -352,7 +354,7 @@ TEST_F(TestRCache, test_wcache_slice)
     addrs.push_back(flowAddr);
     WCacheSlicePtr wcacheSlice = MakeRef<WCacheSlice>(G_PT_ID, 0, 1, NO_1024, addrs);
 
-    auto ret = wcacheSlice->Serialize(nullptr, length);
+    auto ret = wcacheSlice->Serialize(nullptr, 0, length);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
     ret = wcacheSlice->Deserialize(nullptr, length);

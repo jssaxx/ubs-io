@@ -297,17 +297,14 @@ BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo>
     BResult ret = BIO_OK;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
-        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrVec[idx].address <<
-            ", lKey:" << lMrVec[idx].key << ", rKey:" << rMrVec[idx].key << ", size:" << lMrVec[idx].size << ".");
         if (req.memFromServer) {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
         }
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
-                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[idx].address << ", rKey:" << rMrVec[idx].key <<
-                ", size:" << lMrVec[idx].size << ".");
+            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lKey:" << lMrVec[idx].key <<
+                ", rKey:" << rMrVec[idx].key << ", size:" << lMrVec[idx].size << ".");
             break;
         }
     }
@@ -325,17 +322,14 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         rMrAddr += off;
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
-        LOG_INFO("Sync read start, lMrAddr:" << lMrVec[idx].address << ", rMrAddr:" << rMrAddr << ", lKey:" <<
-            lMrVec[idx].key << ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
         if (req.memFromServer) {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
         }
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lAddr:" << lMrVec[idx].address <<
-                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrAddr << ", rKey:" << rMrKey << ", size:" <<
-                lMrVec[idx].size << ".");
+            LOG_ERROR("One side read failed, ret:" << ret << ", idx:" << idx << ", lKey:" << lMrVec[idx].key <<
+                ", rKey:" << rMrKey << ", size:" << lMrVec[idx].size << ".");
             break;
         }
         off += lMrVec[idx].size;
@@ -502,9 +496,8 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
         uint32_t dstPid = req.isConvDeploy ? 0 : static_cast<uint32_t>(req.comm.pid); // 融合部署场景目的端PID填充0
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, dstPid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lAddr:" << lMrVec[idx].address <<
-                ", lKey:" << lMrVec[idx].key << ", rAddr:" << rMrVec[0].address + off << ", rKey:" << rMrVec[0].key <<
-                ", size:" << lMrVec[idx].size << ".");
+            LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lKey:" << lMrVec[idx].key <<
+                ", rKey:" << rMrVec[0].key << ", size:" << lMrVec[idx].size << ".");
             break;
         }
         off += lMrVec[idx].size;
@@ -785,7 +778,7 @@ int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLoc
     }
 
     FileLocationQueryRsp rsp;
-    ret = memcpy_s(rsp.hostMaster, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    ret = memcpy_s(rsp.hostMaster, NODE_DESC_SIZE, nodeInfo.ip.c_str(), nodeInfo.ip.length());
     ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
     rsp.portMaster = nodeInfo.port;
 
@@ -796,7 +789,7 @@ int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLoc
         return ret;
     }
 
-    ret = memcpy_s(rsp.hostSlave, NO_16, nodeInfo.ip.c_str(), nodeInfo.ip.length());
+    ret = memcpy_s(rsp.hostSlave, NODE_DESC_SIZE, nodeInfo.ip.c_str(), nodeInfo.ip.length());
     ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
     rsp.portSlave = nodeInfo.port;
 
@@ -1367,7 +1360,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     }
     rsp->sliceLen = sliceLen;
     uint32_t outSliceLen = 0;
-    sliceP->Serialize(rsp->sliceBuf, outSliceLen);
+    sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);

@@ -199,15 +199,16 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    size_t reqLen = sizeof(InterceptorPwriteIn) + std::min(count, INTERCEPTOR_RDWR_BUFFER_SIZE);
+    size_t realCount = std::min(count, INTERCEPTOR_RDWR_BUFFER_SIZE);
+    size_t reqLen = sizeof(InterceptorPwriteIn) + realCount;
     InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(malloc(reqLen));
     request->pid = static_cast<uint32_t>(getpid());
     request->fd = static_cast<uint64_t>(fd);
     request->inode = file->GetInode();
     request->offset = offset;
-    request->nbytes = count;
+    request->nbytes = realCount;
     request->startTime = Monotonic::TimeNs();
-    auto ret = memcpy_s(request->data, count, (const char *)buf, count);
+    auto ret = memcpy_s(request->data, realCount, (const char *)buf, realCount);
     if (UNLIKELY(ret != 0)) {
         free(request);
         request = nullptr;
