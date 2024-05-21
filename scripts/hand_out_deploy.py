@@ -35,7 +35,7 @@ Usage:
 {name:s} [option]
 
 Options:
-    install    [pkg_path] [user] [group] [install_path]
+    install    [pkg_path] [user] [group]
     uninstall 
     start_boostio    
     stop_boostio    
@@ -136,32 +136,6 @@ def send_files_to_node(node):
             logging.error("pid:{0} Failed to execute SCP. (cmd:{1}), reason:{2}".format(PID, cmd, stderr))
             return -1
     return 0
-
-
-def copy_certificate(install_path):
-    normal_logger.info("Copy the certificate to the installation directory.")
-    tmp_conf_file_path = os.path.normpath(sys.argv[2])
-    security_tls_certs_path = "./security/tls/certs/"
-    ca_crt = "ca.crt"
-    client_crt = "client.crt"
-    client_key = "client.key"
-    server_crt = "server.crt"
-    server_key = "server.key"
-    tls_certs = [ca_crt, client_crt, client_key, server_crt, server_key]
-
-    for cert in tls_certs:
-        source_file = tmp_conf_file_path.replace(os.path.basename(tmp_conf_file_path), cert)
-        dest_file = install_path + security_tls_certs_path + cert
-        source_file_str = str(source_file)
-        dest_file_str = str(dest_file)
-        command = ["cp", "-f", source_file_str, dest_file_str]
-        subprocess.run(command)
-        # os.system("cp -f {} {}".format(source_file, dest_file))
-
-    if os.path.exists(install_path + security_tls_certs_path + ca_crt):
-        normal_logger.info("Copy the certificate to the installation directory ok.")
-    else:
-        normal_logger.info("Copy the certificate to the installation directory failed.")
 
 def check_threads_alive(thread_list):
     # 如果线程结束便移除线程列表
@@ -295,28 +269,6 @@ def delete_temp_file(node):
 def error_log(string):
     echo_to_terminal(string)
     logging.error(string)
-
-
-def password_is_valid(log_in_password):
-    if len(log_in_password) < 8:
-        logging.error("password is too short.")
-        return False
-    # 检查密码中是否包含至少大写字母、小写字母、数字和特殊字符中的两种组合
-    combination_num = 0
-    if re.search(r'[A-Z]', log_in_password):
-        combination_num += 1
-    if re.search(r'[a-z]', log_in_password):
-        combination_num += 1
-    if re.search(r'\d', log_in_password):
-        combination_num += 1
-    if re.search(r'[!@#$%^&*(),.?":{}|<>]', log_in_password):
-        combination_num += 1
-    if combination_num < 2:
-        logging.error("The password is too simple. It must contain at least two types of the \
-following characters: uppercase letters, lowercase letters, digits, and special characters.")
-        return False
-    return True
-
 
 def is_valid_ip_address(ip_address):
     pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
@@ -628,33 +580,20 @@ def exec_build(args):
         return False
 
     # 检查password
-    global INSTALL_PASSWORD
-    global INSTALL_SCRIPT_PATH
+
     INSTALL_PASSWORD = getpass.getpass('input login password:')
-    if not password_is_valid(INSTALL_PASSWORD):
-        logging.error("invalid password.")
-        return False
     global DEFAULT_INSTALL_PATH
     if args[1] == "install":
-        if len(args) != 6:
+        if len(args) != 5:
             help_info()
             return -1
-        if len(args) == 6:
+        if len(args) == 5:
             global DEFAULT_DEPLOY_USER
             DEFAULT_DEPLOY_USER = args[3]
             global DEFAULT_DEPLOY_GROUP
             DEFAULT_DEPLOY_GROUP = args[4]
-            DEFAULT_INSTALL_PATH = args[5]
-            if DEFAULT_INSTALL_PATH.endswith('/'):
-                DEFAULT_INSTALL_PATH = DEFAULT_INSTALL_PATH[0:len(DEFAULT_INSTALL_PATH) - 1]
-            INSTALL_SCRIPT_PATH = DEFAULT_INSTALL_PATH + "/boostio/scripts"
         return install_all_nodes(args[2])
-    elif args[1] == "uninstall":
-        if len(args) == 3:
-            DEFAULT_INSTALL_PATH = args[2]
-            if DEFAULT_INSTALL_PATH.endswith('/'):
-                DEFAULT_INSTALL_PATH = DEFAULT_INSTALL_PATH[0:len(DEFAULT_INSTALL_PATH) - 1]
-            INSTALL_SCRIPT_PATH = DEFAULT_INSTALL_PATH + "/boostio/scripts"
+    elif args[1] == "uninstall" and len(args) == 2:
         return uninstall_all_nodes()
     elif args[1] == "stop_boostio" and len(args) == 2:
         return stop_all_nodes()
