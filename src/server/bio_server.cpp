@@ -116,7 +116,7 @@ BResult BioServer::BioConfigInit()
         LOG_ERROR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
-    auto result = mConfig->Initialize(".");
+    auto result = mConfig->Initialize("/opt/boostio/bin");
     LVOS_TP_START(CONFIG_INIT_FAIL, &result, -1);
     LVOS_TP_END;
     if (result != BIO_OK) {
