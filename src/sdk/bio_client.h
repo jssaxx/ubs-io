@@ -37,7 +37,7 @@ public:
         return instance;
     }
 
-    BResult Start(WorkerMode mode, const NetOptions netConf);
+    BResult Start(WorkerMode mode, const ClientOptionsConfig optConf);
     void Exit();
 
     inline bool Ready() const
@@ -184,7 +184,7 @@ public:
         return mNetEngine;
     }
 
-    BResult BioClientLoggerInit(WorkerMode mode);
+    BResult BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath);
     void BioClientLoggerExit(WorkerMode mode);
     BResult BioClientAgentInit(WorkerMode mode);
     void BioClientAgentExit();
