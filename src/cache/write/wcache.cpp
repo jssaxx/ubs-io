@@ -183,12 +183,6 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     LOG_DEBUG("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
         ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", stratege:" << ioStratege);
 
-    if ((memUsed < (config.memCap * EVICT_MEM_HLEVEL / NO_100)) && (memWcache < memConfig) &&
-        (attr.strategy == WRITE_BACK)) {
-        attr.ioStratege = WRITE_MEM_BACK;
-        return;
-    }
-
     uint64_t diskConfig = (static_cast<uint64_t>(config.diskWriteRatio) * config.diskCaps[mDiskId]) / NO_10;
     uint64_t diskWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
     uint64_t diskRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
@@ -198,10 +192,20 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
         ", wcache:" << (diskWcache / NO_1MB) << ", rcache:" << (diskRcache / NO_1MB) << ", stratege:" <<
         ioStratege << ", diskId:" << mDiskId);
 
-    if (diskWcache < (diskConfig * EVICT_DISK_HLEVEL / NO_100)) {
+    bool isMemSatisfied = ((memUsed < (config.memCap * EVICT_MEM_HLEVEL / NO_100)) &&
+        (memWcache < (memConfig * EVICT_MEM_HLEVEL / NO_100)));
+    bool idDiskSatisfied = (diskWcache < (diskConfig * EVICT_DISK_HLEVEL / NO_100));
+
+    if (isMemSatisfied && idDiskSatisfied && (attr.strategy == WRITE_BACK)) {
+        attr.ioStratege = WRITE_MEM_BACK;
+        return;
+    }
+
+    if (!isMemSatisfied && idDiskSatisfied) {
         attr.ioStratege = WRITE_DISK_BACK;
         return;
     }
+
     attr.ioStratege = WRITE_UNDERFS_BACK;
     return;
 }
@@ -612,6 +616,18 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
 
 BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value)
 {
+    // check read cache resources used
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+    uint64_t diskCap = config.diskCaps[mDiskId];
+
+    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
+    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
+    uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
+    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
+    if (rcacheMemUsed >= rcacheMemCap || rcacheDiskUsed >= rcacheDiskCap) {
+        return BIO_ERR;
+    }
+
     // malloc memory from read cache, and copy slice to this slice.
     uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     WCacheSlicePtr writeSlice = nullptr;
@@ -626,10 +642,15 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 bool WCache::EvictMemSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
+    uint64_t diskCap = config.diskCaps[mDiskId];
+
     uint64_t wcacheMemCap = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
-    uint64_t wcacheWaterSize = wcacheMemCap * config.wcacheMemEvictLevel / NO_100;
+    uint64_t wcacheMemWaterSize = wcacheMemCap * config.wcacheMemEvictLevel / NO_100;
     uint64_t wcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
-    if (wcacheMemUsed > wcacheWaterSize) {
+
+    uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
+    uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
+    if ((wcacheMemUsed > wcacheMemWaterSize) && (wcacheDiskUsed < wcacheDiskCap)) {
         return true;
     } else {
         return false;
@@ -650,9 +671,9 @@ bool WCache::EvictDiskSatisfiedCond()
     }
 
     uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
-    uint64_t wcacheWaterSize = wcacheDiskCap * config.wcacheDiskEvictLevel / NO_100;
+    uint64_t wcacheDiskWaterSize = wcacheDiskCap * config.wcacheDiskEvictLevel / NO_100;
     uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
-    if (wcacheDiskUsed > wcacheWaterSize) {
+    if (wcacheDiskUsed > wcacheDiskWaterSize) {
         return true;
     } else {
         return false;
