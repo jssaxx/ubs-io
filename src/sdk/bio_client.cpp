@@ -13,11 +13,12 @@
 #endif
 using namespace ock::bio;
 
-BResult BioClient::BioClientLoggerInit(WorkerMode mode)
+BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath)
 {
     auto logMode = static_cast<int32_t>(mode);
     auto defaultLogLevel = static_cast<int32_t>(BioClientLog::Level::LOG_LEVEL_INFO);
-    return BioClientLog::Instance()->Initialize(logMode, defaultLogLevel);
+    auto type = static_cast<uint8_t>(logType);
+    return BioClientLog::Instance()->Initialize(logMode, defaultLogLevel, type, logFilePath);
 }
 
 void BioClient::BioClientLoggerExit(WorkerMode mode)
@@ -206,7 +207,7 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
 }
 #endif
 
-BResult BioClient::Start(WorkerMode mode, const NetOptions netConf)
+BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig optConf)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
@@ -214,7 +215,7 @@ BResult BioClient::Start(WorkerMode mode, const NetOptions netConf)
     }
     mMode = mode;
 
-    if (BioClientLoggerInit(mode) != BIO_OK) {
+    if (BioClientLoggerInit(mode, optConf.logType, optConf.logFilePath) != BIO_OK) {
         return BIO_ERR;
     }
 
@@ -230,6 +231,16 @@ BResult BioClient::Start(WorkerMode mode, const NetOptions netConf)
         return BIO_ERR;
     }
 #endif
+
+    NetOptions netConf;
+    netConf.enableTls = optConf.enable;                      /* tls switch */
+    netConf.certificationPath = optConf.certificationPath;      /* certification path */
+    netConf.caCerPath = optConf.caCerPath;                      /* caCer path */
+    netConf.caCrlPath = optConf.caCrlPath;                      /* caCrl path */
+    netConf.privateKeyPath = optConf.privateKeyPath;            /* private key path */
+    netConf.privateKeyPassword = optConf.privateKeyPassword;    /* private key password */
+    netConf.hseKfsMasterPath = optConf.hseKfsMasterPath;        /* hseceasy kfs master path */
+    netConf.hseKfsStandbyPath = optConf.hseKfsStandbyPath;      /* hseceasy kfs standby path */
 
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;

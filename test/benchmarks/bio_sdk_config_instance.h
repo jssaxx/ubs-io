@@ -12,6 +12,9 @@ namespace ock {
 namespace bio {
 const auto SDK_LOG_LEVEL = std::make_pair("bio.log.level", "info");
 
+const auto SDK_LOG_TYPE = std::make_pair("bio.log.type", 0);
+const auto SDK_LOG_FILE_PATH = std::make_pair("bio.sdk.log.path", "");
+
 const auto SDK_NET_TLS_ENABLE_SWITCH = std::make_pair("bio.net.tls.enable.switch", "true");
 const auto SDK_NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path",
     "/path/CA/cacert.pem");
@@ -59,6 +62,16 @@ public:
         return mNetConfig;
     }
 
+    const uint8_t &GetLogTypeConfig() const noexcept
+    {
+        return mlogType;
+    }
+
+    const std::string &GetLogFilePathConfig() const noexcept
+    {
+        return mlogFilePath;
+    }
+
 private:
     void DumpToLog();
 
@@ -66,8 +79,12 @@ private:
 
     BResult AutoConfigNet(const ConfigurationPtr &conf);
 
+    BResult AutoConfigLog(const ConfigurationPtr &conf);
+
 private:
     NetConfig mNetConfig;
+    uint8_t mlogType;
+    std::string mlogFilePath = "";
     bool mInited{ false };
 };
 }
