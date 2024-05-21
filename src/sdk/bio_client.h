@@ -72,7 +72,7 @@ public:
         return mMirror->Put(param);
     }
 
-    inline BResult Put(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+    inline BResult Put(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
     {
         return mMirror->Put(param, spaceInfo);
     }
@@ -113,7 +113,7 @@ public:
         return mMirror->CheckUpdateReady();
     }
 
-    inline BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo)
+    inline BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
     {
         return mMirror->AllocSpace(param, spaceInfo);
     }

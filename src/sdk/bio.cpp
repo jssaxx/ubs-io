@@ -165,7 +165,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     return ToCResult(ret);
 }
 
-CResult Bio::Put(const char *key, CacheSpaceInfo &spaceInfo)
+CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
@@ -375,7 +375,7 @@ CResult Bio::CheckUpdateReady()
     return ToCResult(ret);
 }
 
-CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceInfo &spaceInfo)
+CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceDesc &spaceInfo)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
@@ -443,17 +443,17 @@ void BioService::DestroyCache(uint64_t tenantId)
     CLIENT_LOG_INFO("Destroy cache instance success, tenantId:" << tenantId << ".");
 }
 
-CResult BioService::Initialize(WorkerMode mode, const TlsOptionsConfig optConf)
+CResult BioService::Initialize(WorkerMode mode, SecurityOptions option)
 {
     NetOptions netconf;
-    netconf.enableTls = optConf.enableTls;                      /* tls switch */
-    netconf.certificationPath = optConf.certificationPath;      /* certification path */
-    netconf.caCerPath = optConf.caCerPath;                      /* caCer path */
-    netconf.caCrlPath = optConf.caCrlPath;                      /* caCrl path */
-    netconf.privateKeyPath = optConf.privateKeyPath;            /* private key path */
-    netconf.privateKeyPassword = optConf.privateKeyPassword;    /* private key password */
-    netconf.hseKfsMasterPath = optConf.hseKfsMasterPath;        /* hseceasy kfs master path */
-    netconf.hseKfsStandbyPath = optConf.hseKfsStandbyPath;      /* hseceasy kfs standby path */
+    netconf.enableTls = option.enable;
+    netconf.certificationPath = option.certificationPath;
+    netconf.caCerPath = option.caCerPath;
+    netconf.caCrlPath = option.caCrlPath;
+    netconf.privateKeyPath = option.privateKeyPath;
+    netconf.privateKeyPassword = option.privateKeyPassword;
+    netconf.hseKfsMasterPath = option.hseKfsMasterPath;
+    netconf.hseKfsStandbyPath = option.hseKfsStandbyPath;
     return ToCResult(BioClient::Instance()->Start(mode, netconf));
 }
 
@@ -470,14 +470,14 @@ using namespace ock::bio;
 static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
 static std::mutex g_lock;
 
-CResult BioInitialize(WorkerMode mode, TlsOptionsConfig *optConf)
+CResult BioInitialize(WorkerMode mode, SecurityOptions *option)
 {
-    if (optConf == nullptr) {
-        TlsOptionsConfig tlsConf;
-        tlsConf.enableTls = false;
-        return BioService::Initialize(mode, tlsConf);
+    if (option == nullptr) {
+        SecurityOptions innerOpt;
+        innerOpt.enable = false;
+        return BioService::Initialize(mode, innerOpt);
     }
-    return BioService::Initialize(mode, *optConf);
+    return BioService::Initialize(mode, *option);
 }
 
 void BioExit()
@@ -540,16 +540,14 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
         }
         bioInstance = iter->second;
     }
-    ObjLocation outLocation;
+    ObjLocation outLocation = { 0 };
     auto ret = bioInstance->CalculateLocation(objectId, outLocation);
     location->location[0] = outLocation.location[0];
     location->location[1] = outLocation.location[1];
-    CLIENT_LOG_INFO("Get location success, tenantId:" << tenantId << ", objectId:" << objectId << ", location0:" <<
-        location->location[0] << ", location1:" << location->location[1] << ".");
     return ret;
 }
 
-CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceInfo *spaceInfo)
+CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -561,10 +559,10 @@ CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, Cac
         bioInstance = iter->second;
     }
 
-    return bioInstance->AllocSpace(objectId, length, *spaceInfo);
+    return bioInstance->AllocSpace(objectId, length, *space);
 }
 
-CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spaceInfo)
+CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -575,7 +573,7 @@ CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spac
         }
         bioInstance = iter->second;
     }
-    return bioInstance->Put(key, *spaceInfo);
+    return bioInstance->Put(key, *space);
 }
 
 CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location)
@@ -713,7 +711,7 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
 }
 
 
-CResult BioNotifyUpdatePrepare(uint64_t tenantId)
+CResult BioNotifyUpgradePrepare(uint64_t tenantId)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -724,12 +722,10 @@ CResult BioNotifyUpdatePrepare(uint64_t tenantId)
         }
         bioInstance = iter->second;
     }
-
-    auto ret = bioInstance->NotifyUpdatePrepare();
-    return ret;
+    return bioInstance->NotifyUpdatePrepare();
 }
 
-CResult BioNotifyUpdateFinish(uint64_t tenantId)
+CResult BioNotifyUpgradeFinish(uint64_t tenantId)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -740,12 +736,10 @@ CResult BioNotifyUpdateFinish(uint64_t tenantId)
         }
         bioInstance = iter->second;
     }
-
-    auto ret = bioInstance->NotifyUpdateFinish();
-    return ret;
+    return bioInstance->NotifyUpdateFinish();
 }
 
-CResult BioCheckUpdateReady(uint64_t tenantId)
+CResult BioCheckUpgradeReady(uint64_t tenantId)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
@@ -756,29 +750,12 @@ CResult BioCheckUpdateReady(uint64_t tenantId)
         }
         bioInstance = iter->second;
     }
-
-    auto ret = bioInstance->CheckUpdateReady();
-    return ret;
+    return bioInstance->CheckUpdateReady();
 }
 
 ReadHook g_readHook = nullptr;
 WriteHook g_writeHook = nullptr;
 WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
-
-void BioRegisterJuiceFSRead(ReadHook rh)
-{
-    g_readHook = rh;
-}
-
-void BioRegisterJuiceFSWrite(WriteHook wh)
-{
-    g_writeHook = wh;
-}
-
-void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh)
-{
-    g_writeCopyFreeHook = wh;
-}
 
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
@@ -790,40 +767,64 @@ int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, ui
     return g_writeHook(inode, buff, count, offset, fh);
 }
 
-int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
+int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space)
 {
-    return g_writeCopyFreeHook(inode, offset, count, spaceInfo);
+    return g_writeCopyFreeHook(inode, offset, count, space);
 }
 
-CResult BioGetFileLocation(ObjLocation location, ObjLocationInfo *locInfo)
+void BioRegisterInterceptorRead(ReadHook rh)
 {
-    auto mirror = gClient->GetMirror();
+    g_readHook = rh;
+}
+
+void BioRegisterInterceptorWrite(WriteHook wh)
+{
+    g_writeHook = wh;
+}
+
+void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh)
+{
+    g_writeCopyFreeHook = wh;
+}
+
+CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
     auto ptId = static_cast<uint16_t>(location.location[0]);
     ock::bio::CmPtInfo info;
-    mirror->GetPtEntry(ptId, info);
+    BResult ret = gClient->GetMirror()->GetPtEntry(ptId, info);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to get pt entry, ptId:" << ptId << ".");
+        return RET_CACHE_EPERM;
+    }
+
     FileLocationQueryRsp rsp;
     uint16_t slaveId = 0;
-    int i = 0;
-    for (;i < info.copys.size(); ++i) {
-        if (info.copys[i].nodeId != info.masterNodeId) {
-            slaveId = info.copys[i].nodeId;
+    int idx = 0;
+    for (; idx < info.copys.size(); ++idx) {
+        if (info.copys[idx].nodeId != info.masterNodeId) {
+            slaveId = info.copys[idx].nodeId;
             break;
         }
     }
 
-    if (i == info.copys.size()) {
-        CLIENT_LOG_ERROR("failed to get file location for ptId:" << ptId << ", no copy found");
+    if (idx == info.copys.size()) {
+        CLIENT_LOG_ERROR("Failed to get slave node, ptId:" << ptId << ".");
         return RET_CACHE_ERROR;
     }
 
-    auto ret = mirror->GetFileLocation(info.masterNodeId, slaveId, rsp);
+    ret = gClient->GetMirror()->GetFileLocation(info.masterNodeId, slaveId, rsp);
     if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed get file location, ret:" << ret << ", slaveId:"<< slaveId << ".");
         return RET_CACHE_ERROR;
     }
-    memcpy_s(locInfo->hostMaster, NO_16, rsp.hostMaster, NO_16);
-    memcpy_s(locInfo->hostSlave, NO_16, rsp.hostSlave, NO_16);
 
-    locInfo->portMaster = rsp.portMaster;
-    locInfo->portSlave = rsp.portSlave;
+    memcpy_s(detailLoc->hostMaster, NODE_DESC_SIZE, rsp.hostMaster, NODE_DESC_SIZE);
+    memcpy_s(detailLoc->hostSlave, NODE_DESC_SIZE, rsp.hostSlave, NODE_DESC_SIZE);
+    detailLoc->portMaster = rsp.portMaster;
+    detailLoc->portSlave = rsp.portSlave;
     return RET_CACHE_OK;
 }

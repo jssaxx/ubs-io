@@ -82,7 +82,7 @@ public:
 
     BResult Put(MirrorPut &param);
 
-    BResult Put(MirrorPut &param, CacheSpaceInfo &spaceInfo);
+    BResult Put(MirrorPut &param, CacheSpaceDesc &spaceInfo);
 
     BResult Get(MirrorGet &param, uint64_t &realLen);
 
@@ -97,7 +97,7 @@ public:
 
     BResult GetFileLocation(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &fileLocationQueryRsp);
 
-    BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
+    BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo);
 
     BResult NotifyUpdate(bool &flag);
 
@@ -158,9 +158,9 @@ public:
 
 private:
     uint16_t SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity);
-    BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceInfo &spaceInfo, PutRequest *&req);
+    BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo, PutRequest *&req);
     BResult PutImpl(MirrorPut &param, uint64_t &updateQuota);
-    BResult PutImpl(MirrorPut &param, CacheSpaceInfo &spaceInfo, uint64_t &updateQuota);
+    BResult PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &updateQuota);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
 
@@ -182,7 +182,7 @@ private:
         return memcpy_s(dst, len, src, len);
     }
 
-    BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceInfo &spaceInfo);
+    BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo);
     BResult InitializeBioQos();
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();
