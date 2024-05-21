@@ -58,13 +58,16 @@ public:
         return len;
     }
 
-    BResult Serialize(char *data, uint32_t &length) override
+    BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) override
     {
-        uint32_t pos = 0;
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-        memcpy_s(data + pos, sizeof(mPtId), &mPtId, sizeof(mPtId));
+        uint32_t pos = 0;
+        uint32_t cpyLen = dataLen;
+        auto ret = memcpy_s(data + pos, cpyLen, &mPtId, sizeof(mPtId));
+        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mPtId);
-        auto ret = Slice::Serialize(data + pos, length);
+        cpyLen -= sizeof(mPtId);
+        ret = Slice::Serialize(data + pos, cpyLen, length);
         if (ret != BIO_OK) {
             return ret;
         }
@@ -140,17 +143,24 @@ public:
         return len;
     }
 
-    BResult Serialize(char *data, uint32_t &length) override
+    BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) override
     {
-        uint32_t pos = 0;
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-        memcpy_s(data + pos, sizeof(mFlowId), &mFlowId, sizeof(mFlowId));
+        uint32_t pos = 0;
+        uint32_t cpyLen = dataLen;
+        auto ret = memcpy_s(data + pos, cpyLen, &mFlowId, sizeof(mFlowId));
+        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mFlowId);
-        memcpy_s(data + pos, sizeof(mOffsetInFlow), &mOffsetInFlow, sizeof(mOffsetInFlow));
+        cpyLen -= sizeof(mFlowId);
+        ret = memcpy_s(data + pos, cpyLen, &mOffsetInFlow, sizeof(mOffsetInFlow));
+        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mOffsetInFlow);
-        memcpy_s(data + pos, sizeof(mIndexInFlow), &mIndexInFlow, sizeof(mIndexInFlow));
+        cpyLen -= sizeof(mOffsetInFlow);
+        ret = memcpy_s(data + pos, cpyLen, &mIndexInFlow, sizeof(mIndexInFlow));
+        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mIndexInFlow);
-        auto ret = Slice::Serialize(data + pos, length);
+        cpyLen -= sizeof(mIndexInFlow);
+        ret = Slice::Serialize(data + pos, cpyLen, length);
         if (ret != BIO_OK) {
             return ret;
         }

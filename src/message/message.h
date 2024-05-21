@@ -107,8 +107,8 @@ typedef struct {
 } FileLocationQueryReq;
 
 typedef struct {
-    char hostMaster[16];
-    char hostSlave[16];
+    char hostMaster[NODE_DESC_SIZE];
+    char hostSlave[NODE_DESC_SIZE];
     uint16_t portMaster;
     uint16_t portSlave;
 } FileLocationQueryRsp;

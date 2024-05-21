@@ -54,7 +54,7 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     ChkTrue(metaSlice != nullptr, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
-    auto ret = memcpy_s(sliceMeta.key, NO_512, key, strlen(key));
+    auto ret = memcpy_s(sliceMeta.key, (NO_512 - NO_32), key, strlen(key));
     if (ret != 0) {
         return BIO_INNER_RETRY;
     }
