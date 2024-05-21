@@ -53,6 +53,10 @@ typedef enum {
 
 #define MAX_KEY_SIZE (256)
 #define LOCATION_SIZE (2)
+#define NODE_DESC_SIZE (16)
+#define CACHE_SPACE_ADDRESS_SIZE (2)
+#define CACHE_SPACE_DEC_SIZE (64)
+
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 
 typedef struct {
@@ -66,20 +70,17 @@ typedef struct {
 } ObjLocation;
 
 typedef struct {
-    char hostMaster[16];
-    char hostSlave[16];
+    char hostMaster[NODE_DESC_SIZE];
+    char hostSlave[NODE_DESC_SIZE];
     uint16_t portMaster;
     uint16_t portSlave;
-} ObjLocationInfo;
+} ObjLocationDetail;
 
 typedef struct {
     uint64_t tenantId;
     AffinityStrategy affinity;
     WriteStrategy strategy;
 } CacheDescriptor;
-
-#define CACHE_SPACE_ADDRESS_SIZE (2)
-#define CACHE_SPACE_DEC_SIZE (64)
 
 typedef struct {
     uint64_t address;
@@ -93,29 +94,30 @@ typedef struct {
     ObjLocation loc;
     CacheAddress address[CACHE_SPACE_ADDRESS_SIZE];
     char descriptorInfo[CACHE_SPACE_DEC_SIZE];
-} CacheSpaceInfo;
+} CacheSpaceDesc;
 
 typedef struct {
-    uint8_t enableTls;                                    /* tls switch */
-    char certificationPath[PATH_MAX];                     /* certification path */
-    char caCerPath[PATH_MAX];                             /* caCer path */
-    char caCrlPath[PATH_MAX];                             /* caCer path */
-    char privateKeyPath[PATH_MAX];                        /* private key path */
-    char privateKeyPassword[PATH_MAX];                    /* private key password */
-    char hseKfsMasterPath[PATH_MAX];                      /* hseceasy kfs master path */
-    char hseKfsStandbyPath[PATH_MAX];                     /* hseceasy kfs standby path  */
-} TlsOptionsConfig;
+    uint8_t enable;                    // switch
+    char certificationPath[PATH_MAX];  // certification path
+    char caCerPath[PATH_MAX];          // caCer path
+    char caCrlPath[PATH_MAX];          // caCer path
+    char privateKeyPath[PATH_MAX];     // private key path
+    char privateKeyPassword[PATH_MAX]; // private key password
+    char hseKfsMasterPath[PATH_MAX];   // hseceasy kfs master path
+    char hseKfsStandbyPath[PATH_MAX];  // hseceasy kfs standby path
+} SecurityOptions;
 
 /**
- * @brief: Initialize bio service
+ * @brief: Initialize boostio service
  *
  * @param[in]: mode: working mode
+ * @param[in]: option: security options
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode, TlsOptionsConfig *optConf);
+CResult BioInitialize(WorkerMode mode, SecurityOptions *option);
 
 /**
- * @brief: Exit bio service
+ * @brief: Exit boostio service
  *
  * @return: void
  */
@@ -142,12 +144,12 @@ CResult BioGetCache(uint64_t tenantId, CacheDescriptor *desc);
  * @brief: Destroy cache instance
  *
  * @param[in]: tenantId: tenant id
- * @return: void
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioDestroyCache(uint64_t tenantId);
 
 /**
- * @brief: Calculate location
+ * @brief: Calculate object location info
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: objectId: object id
@@ -184,7 +186,7 @@ CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t len
     uint64_t *realLength);
 
 /**
- * @brief: Delete key
+ * @brief: Delete object
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: key: key
@@ -194,7 +196,7 @@ CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t len
 CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location);
 
 /**
- * @brief: Load value
+ * @brief: Load object value
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: key: key
@@ -209,7 +211,7 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
     BioLoadCallback callback, void *context);
 
 /**
- * @brief: List all key that meets the prefix condition
+ * @brief: List all object that meets the prefix condition
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: prefix: key prefix
@@ -220,16 +222,16 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum);
 
 /**
- * @brief: Free list all returned resources
+ * @brief: Free list object resources
  *
- * @param[out]: objs: object array
+ * @param[out]: objs: object list pointer
  * @param[out]: objNum: object number
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 void BioFreeListResources(ObjStat *objs, uint64_t objNum);
 
 /**
- * @brief: Get object info
+ * @brief: Stat object
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: key: key
@@ -240,63 +242,121 @@ void BioFreeListResources(ObjStat *objs, uint64_t objNum);
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
 
 /**
- * @brief: Notify boostio update prepare
+ * @brief: Notify boostio upgrade prepare
  *
  * @param[in]: tenantId: tenant id
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioNotifyUpdatePrepare(uint64_t tenantId);
+CResult BioNotifyUpgradePrepare(uint64_t tenantId);
 
 /**
- * @brief: Notify boostio update finish
+ * @brief: Notify boostio upgrade finish
  *
  * @param[in]: tenantId: tenant id
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioNotifyUpdateFinish(uint64_t tenantId);
+CResult BioNotifyUpgradeFinish(uint64_t tenantId);
 
 /**
- * @brief: Check whether boostio update is ready
+ * @brief: Check whether boostio upgrade is ready
  *
  * @param[in]: tenantId: tenant id
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioCheckUpdateReady(uint64_t tenantId);
+CResult BioCheckUpgradeReady(uint64_t tenantId);
 
 /**
- * @brief: alloc write space for write copy free
+ * @brief: Alloc cache space for copy free write
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: objectId: object id for generate location
  * @param[in]: length : alloc space length
- * @param[out]: stat: object stat info
+ * @param[out]: space: cache space describe
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioAllocSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceInfo *spaceInfo);
+CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
 
 /**
- * @brief: put with space
+ * @brief: Put with copy free
  *
  * @param[in]: tenantId: tenant id
  * @param[in]: key: write key
- * @param[in]: addressInfo : write alloc space
+ * @param[in]: space : cache space describe
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioPutWithSpace(uint64_t tenantId, const char *key, CacheSpaceInfo *spaceInfo);
+CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space);
 
 typedef int (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
 typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
-typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceInfo *);
+typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *);
 
+/**
+ * @brief: Interceptor read hook
+ *
+ * @param[in]: inode: inode number
+ * @param[in]: buff: data buffer
+ * @param[in]: count : data count
+ * @param[in]: offset : read data offset
+ * @param[out]: readLen : real read length
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
+
+/**
+ * @brief: Interceptor write hook
+ *
+ * @param[in]: inode: inode number
+ * @param[in]: buff: data buffer
+ * @param[in]: count : data count
+ * @param[in]: offset : read data offset
+ * @param[in]: fh : file handler
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh);
-int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo);
 
-void BioRegisterJuiceFSRead(ReadHook rh);
-void BioRegisterJuiceFSWrite(WriteHook wh);
-void BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHook wh);
+/**
+ * @brief: Interceptor write with copy free hook
+ *
+ * @param[in]: inode: inode number
+ * @param[in]: offset : write data offset
+ * @param[in]: count : data count
+ * @param[in]: space : cache space describe
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space);
 
-CResult BioGetFileLocation(ObjLocation location, ObjLocationInfo *locInfo);
+/**
+ * @brief: Register interceptor read interface
+ *
+ * @param[in]: rh: read hook
+ * @return: void
+ */
+void BioRegisterInterceptorRead(ReadHook rh);
+
+/**
+ * @brief: Register interceptor write interface
+ *
+ * @param[in]: wh: write hook
+ * @return: void
+ */
+void BioRegisterInterceptorWrite(WriteHook wh);
+
+/**
+ * @brief: Register interceptor write interface with copy free
+ *
+ * @param[in]: wh: write hook
+ * @return: void
+ */
+void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh);
+
+/**
+ * @brief: Convert location information
+ *
+ * @param[in]: location: origin location
+ * @param[out]: detailLoc: detail location information
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc);
 
 #ifdef __cplusplus
 }
