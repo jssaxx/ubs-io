@@ -133,7 +133,6 @@ BResult UnderFs::Delete(const char *key)
     LVOS_TP_END
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret == -ENOENT) {
-        BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << key);
         return BIO_NOT_EXISTS;
     }
