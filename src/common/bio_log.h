@@ -79,6 +79,7 @@ namespace bio {
     } while (0)
 
 struct LoggerOptions {
+    uint8_t logType = 0;
     int32_t minLogLevel = 0;
     uint32_t rotationFileSizeInMB = 50;
     uint32_t rotationFileCount = 20;

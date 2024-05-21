@@ -443,18 +443,9 @@ void BioService::DestroyCache(uint64_t tenantId)
     CLIENT_LOG_INFO("Destroy cache instance success, tenantId:" << tenantId << ".");
 }
 
-CResult BioService::Initialize(WorkerMode mode, SecurityOptions option)
+CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig optConf)
 {
-    NetOptions netconf;
-    netconf.enableTls = option.enable;
-    netconf.certificationPath = option.certificationPath;
-    netconf.caCerPath = option.caCerPath;
-    netconf.caCrlPath = option.caCrlPath;
-    netconf.privateKeyPath = option.privateKeyPath;
-    netconf.privateKeyPassword = option.privateKeyPassword;
-    netconf.hseKfsMasterPath = option.hseKfsMasterPath;
-    netconf.hseKfsStandbyPath = option.hseKfsStandbyPath;
-    return ToCResult(BioClient::Instance()->Start(mode, netconf));
+    return ToCResult(BioClient::Instance()->Start(mode, optConf));
 }
 
 void BioService::Exit()
@@ -470,14 +461,14 @@ using namespace ock::bio;
 static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
 static std::mutex g_lock;
 
-CResult BioInitialize(WorkerMode mode, SecurityOptions *option)
+CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
 {
-    if (option == nullptr) {
-        SecurityOptions innerOpt;
-        innerOpt.enable = false;
-        return BioService::Initialize(mode, innerOpt);
+    if (optConf == nullptr) {
+        ClientOptionsConfig clientConf;
+        clientConf.enable = false;
+        return BioService::Initialize(mode, clientConf);
     }
-    return BioService::Initialize(mode, *option);
+    return BioService::Initialize(mode, *optConf);
 }
 
 void BioExit()

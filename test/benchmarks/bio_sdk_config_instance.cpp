@@ -10,6 +10,9 @@ namespace bio {
 void BioSdkConfig::LoadDefaultConf()
 {
     LOG_INFO("Load default conf");
+    /* load log config */
+    AddIntConf(SDK_LOG_TYPE, VIntRange::Create(SDK_LOG_TYPE.first, 0, NO_2));
+    AddStrConf(SDK_LOG_FILE_PATH);
     /* load net config for security */
     AddStrConf(SDK_NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(SDK_NET_TLS_ENABLE_SWITCH.first));
     AddStrConf(SDK_NET_TLS_CA_CERT_PATH);
@@ -23,7 +26,10 @@ void BioSdkConfig::LoadDefaultConf()
 
 BResult BioSdkConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
 {
-    auto ret = AutoConfigNet(conf);
+    auto ret = AutoConfigLog(conf);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    ret = AutoConfigNet(conf);
     ChkTrueNot(ret == BIO_OK, ret);
     return ret;
 }
@@ -38,6 +44,13 @@ BResult BioSdkConfig::AutoConfigNet(const ConfigurationPtr &conf)
     mNetConfig.tlsClientKeyPassPath = conf->GetStr(SDK_NET_TLS_CLIENT_KEY_PASS_PATH.first);
     mNetConfig.hseKfsMasterPath = conf->GetStr(NET_HESC_CLIENT_KFS_MASTER_PATH.first);
     mNetConfig.hseKfsStandbyPath = conf->GetStr(NET_HESC_CLIENT_KFS_STANDBY_PATH.first);
+    return BIO_OK;
+}
+
+BResult BioSdkConfig::AutoConfigLog(const ConfigurationPtr &conf)
+{
+    mlogType = conf->GetInt(SDK_LOG_TYPE.first);
+    mlogFilePath = conf->GetStr(SDK_LOG_FILE_PATH.first);
     return BIO_OK;
 }
 
@@ -107,7 +120,7 @@ void BioSdkConfig::DumpToLog()
         std::string key;
         std::string value;
         reader.GetI(i, key, value);
-        if (key.find("tls") == std::string::npos) {
+        if ((key.find("tls") == std::string::npos) && (key.find("log.path") == std::string::npos)) {
             ossTmp << " " << key << " = " << value << std::endl;
         }
     }

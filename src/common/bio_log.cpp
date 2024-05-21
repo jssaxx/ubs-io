@@ -3,6 +3,7 @@
  */
 
 #include <iostream>
+#include "spdlog/sinks/stdout_sinks.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "bio_log.h"
 #ifdef USE_DEBUG_TOOLS
@@ -14,6 +15,10 @@ namespace bio {
 Logger *Logger::gInstance = nullptr;
 std::mutex Logger::gMutex;
 bool Logger::gInited = false;
+
+const int STDOUT_TYPE = 0;
+const int FILE_TYPE = 1;
+const int STDERR_TYPE = 2;
 
 constexpr int MIN_LOG_LEVEL_MAX = 5;
 constexpr int SIZE_MB_SHIFT = 20;
@@ -55,6 +60,10 @@ bool Logger::ValidateParams(const LoggerOptions &options)
         LVOS_TP_END;
         BIO_LOG_STD_ERR("Invalid min log level for logger, which should be 0,1,2,3,4,5");
         return false;
+    }
+
+    if (options.logType != FILE_TYPE) {
+        return true;
     }
 
     if (options.path.empty()) {
@@ -154,22 +163,30 @@ int32_t Logger::Init()
         return 0;
     }
     try {
-        std::string logName = std::string("ns:0").append(";log:normal");
-        mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path, mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT,
-            mOptions.rotationFileCount);
-        mSpdLogger->set_pattern("%v");
-        mSpdLogger->info("", "");
-        mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
-        mSpdLogger->info("Log started at [{}] level",
-            spdlog::level::to_string_view(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel)).data());
-        mSpdLogger->info("Log default format: yyyy-mm-dd hh:mm:ss.uuuuuu threadid loglevel msg");
-        mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
-        spdlog::flush_every(std::chrono::seconds(1));
+        if (mOptions.logType == STDOUT_TYPE) { // stdout
+            mSpdLogger = spdlog::stdout_logger_mt("console");
+            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
+        } else if (mOptions.logType == FILE_TYPE) { // file
+            std::string logName = std::string("ns:0").append(";log:normal");
+            mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path,
+                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount);
+            mSpdLogger->set_pattern("%v");
+            mSpdLogger->info("", "");
+            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
+            mSpdLogger->info("Log started at [{}] level",
+                spdlog::level::to_string_view(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel)).data());
+            mSpdLogger->info("Log default format: yyyy-mm-dd hh:mm:ss.uuuuuu threadid loglevel msg");
+            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
+            spdlog::flush_every(std::chrono::seconds(1));
+        } else if (mOptions.logType == STDERR_TYPE) { // stderr
+            mSpdLogger = spdlog::stderr_logger_mt("console");
+            mSpdLogger->set_pattern("%C/%m/%d %H:%M:%S.%f %t %l %v");
+        }
         mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
         mSpdLogger->flush_on(spdlog::level::err);
     } catch (const spdlog::spdlog_ex &ex) {
         mSpdLogger = nullptr;
-        BIO_LOG_STD_ERR("Failed to create log: " << ex.what());
+        BIO_LOG_STD_ERR("Failed to create log.");
         return -1L;
     }
     gInited = true;
