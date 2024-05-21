@@ -194,14 +194,14 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
 
     bool isMemSatisfied = ((memUsed < (config.memCap * EVICT_MEM_HLEVEL / NO_100)) &&
         (memWcache < (memConfig * EVICT_MEM_HLEVEL / NO_100)));
-    bool idDiskSatisfied = (diskWcache < (diskConfig * EVICT_DISK_HLEVEL / NO_100));
+    bool isDiskSatisfied = (diskWcache < (diskConfig * EVICT_DISK_HLEVEL / NO_100));
 
-    if (isMemSatisfied && idDiskSatisfied && (attr.strategy == WRITE_BACK)) {
+    if (isMemSatisfied && isDiskSatisfied && (attr.strategy == WRITE_BACK)) {
         attr.ioStratege = WRITE_MEM_BACK;
         return;
     }
 
-    if (!isMemSatisfied && idDiskSatisfied) {
+    if (!isMemSatisfied && isDiskSatisfied) {
         attr.ioStratege = WRITE_DISK_BACK;
         return;
     }
