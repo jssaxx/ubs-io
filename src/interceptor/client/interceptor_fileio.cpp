@@ -61,7 +61,7 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
         free(resp);
         return -1;
     }
-    ssize_t retLen = resp->dataLen;
+    auto retLen = static_cast<ssize_t>(resp->dataLen);
     free(resp);
     return retLen;
 }
@@ -98,7 +98,7 @@ ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
 
     off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
     if (UNLIKELY(offset == -1)) {
-        CLOG_ERROR("Read seek:" << fd << " failed.");
+        CLOG_ERROR("Lseek:" << fd << " failed.");
         errno = EIO;
         return -1;
     }
@@ -123,12 +123,11 @@ ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
 
     off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
     if (UNLIKELY(offset == -1)) {
-        CLOG_ERROR("Readv seek:" << fd << " failed.");
+        CLOG_ERROR("Seek:" << fd << " failed.");
         errno = EIO;
         return -1;
     }
 
-    ssize_t result = 0;
     BufVec bufVec(vector, count);
     if (UNLIKELY(bufVec.size == 0)) {
         return -1;
@@ -160,7 +159,6 @@ ssize_t ProxyOperations::preadv64(int fd, const struct iovec *vector, int iovcnt
         return CONTEXT.GetOperations()->preadv64(fd, vector, iovcnt, offset);
     }
 
-    ssize_t result = 0;
     BufVec bufVec(vector, iovcnt);
     if (UNLIKELY(bufVec.size == 0)) {
         return -1;
@@ -228,7 +226,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
 
     free(request);
     request = nullptr;
-    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rsp len:" << resp.dataLen << ".");
+    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << resp.dataLen << ".");
     return count;
 }
 
@@ -284,15 +282,13 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rsp len:" << writeResp.dataLen <<
-        ".");
+    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << writeResp.dataLen);
     return count;
 }
 
 ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
 {
     CLOG_DEBUG("Write fd:" << fd << ", count" << nbytes << ".");
-
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
         return CONTEXT.GetOperations()->write(fd, buf, nbytes);

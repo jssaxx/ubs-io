@@ -102,8 +102,7 @@ BResult InterceptorClientNetService::CheckShmFd()
     }
 
     if (UNLIKELY(mShmOffset + mShmLength > static_cast<uint64_t>(buffer.st_size))) {
-        CLOG_ERROR("Share memory size:" << mShmOffset + mShmLength << " not equal to file size:" << buffer.st_size <<
-            ".");
+        CLOG_ERROR("Share memory size:" << mShmOffset + mShmLength << " not equal to file size:" << buffer.st_size);
         return BIO_ERR;
     }
     return BIO_OK;
@@ -155,7 +154,7 @@ BResult InterceptorClientNetService::ShmInit()
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
-    CLOG_DEBUG("Interceptor init share memory offset:" << mShmOffset << ", length:" << mShmLength << " fd:" << mShmFd <<
-        ", address:" << mShmAddr << "success.");
+    CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength <<
+        " fd:" << mShmFd << "success.");
     return BIO_OK;
 }
