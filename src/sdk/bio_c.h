@@ -103,7 +103,7 @@ typedef struct {
 } CacheSpaceDesc;
 
 typedef struct {
-	LogType logType;                   // STDOUT_TYPE/FILE_TYPE/STDERR_TYPE
+    LogType logType;                   // STDOUT_TYPE/FILE_TYPE/STDERR_TYPE
     char logFilePath[PATH_MAX];        // log file path, if log type use FILE_TYPE, need to set this param
     uint8_t enable;                    // switch
     char certificationPath[PATH_MAX];  // certification path
