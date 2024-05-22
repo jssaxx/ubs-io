@@ -183,7 +183,7 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     LOG_DEBUG("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
         ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", stratege:" << ioStratege);
 
-    uint64_t diskConfig = (static_cast<uint64_t>(config.diskWriteRatio) * config.diskCaps[mDiskId]) / NO_10;
+    uint64_t diskConfig = (static_cast<uint64_t>(config.diskWriteRatio * config.diskCaps[mDiskId])) / NO_10;
     uint64_t diskWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
     uint64_t diskRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
     uint64_t diskUsed = diskWcache + diskRcache;
@@ -642,7 +642,7 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 bool WCache::EvictMemSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t diskCap = config.diskCaps[mDiskId];
+    uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
 
     uint64_t wcacheMemCap = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
     uint64_t wcacheMemWaterSize = wcacheMemCap * config.wcacheMemEvictLevel / NO_100;

@@ -91,8 +91,8 @@ int32_t InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 
     LOG_INFO("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
-    InterceptorPwriteOut resp;
 
+    InterceptorPwriteOut resp;
     resp.dataLen = static_cast<int64_t>(BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL));
     if (UNLIKELY(resp.dataLen < 0)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -130,12 +130,12 @@ int32_t InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    InterceptorAllocPageRsp rsp;
     LOG_INFO("Alloc put value with space length:" << req->length << ", location0:" << addressInfo.loc.location[0] <<
         ", location1:" << addressInfo.loc.location[1] << ", address0:" << addressInfo.address[0].address <<
         ", address0 size:" << addressInfo.address[0].size << ", address1:" << addressInfo.address[1].address <<
         ", address1 size:" << addressInfo.address[1].size << ", address num:" << addressInfo.addressNum << ".");
 
+    InterceptorAllocPageRsp rsp;
     rsp.address = addressInfo;
     for (uint16_t idx = 0; idx < addressInfo.addressNum; idx++) {
         rsp.addrOffset[idx] = BioServer::Instance()->GetNetEngine()->GetAddressOffset(addressInfo.address[idx].address);
@@ -161,13 +161,13 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 
     LOG_INFO("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
-    InterceptorPwriteOut resp;
 
     CacheSpaceDesc addressInfo = req->address;
     LOG_INFO("Alloc put value with space length:" << req->nbytes << ", location0:" << addressInfo.loc.location[0] <<
         ", location1:" << addressInfo.loc.location[1] << ", address0:" << addressInfo.address[0].address <<
         ", address0 size:" << addressInfo.address[0].size << ", address1:" << addressInfo.address[1].address <<
         ", address1 size:" << addressInfo.address[1].size << ".");
+    InterceptorPwriteOut resp;
     resp.ret = 0;
     resp.dataLen = static_cast<int64_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
     if (UNLIKELY(resp.dataLen < 0)) {
@@ -175,7 +175,6 @@ int32_t InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
-
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY);

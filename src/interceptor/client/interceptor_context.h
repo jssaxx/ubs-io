@@ -36,5 +36,4 @@ struct BioInterceptorContext {
 }
 }
 
-
 #endif // BOOST_IO_INTERCEPTOR_CONTEXT_H

@@ -281,14 +281,14 @@ BResult BioClientNet::ListenEvent()
 
 void BioClientNet::RecoverIpc()
 {
-    constexpr uint16_t RECOVER_INTERAL = 2;
+    constexpr uint16_t recoverInterval = 2;
     uint32_t retryCnt = 0;
     BResult ret;
     do {
         ret = RecoverIpcService();
         if (ret != BIO_OK) {
             CLIENT_LOG_WARN("Delay retry connect, retry cnt:" << retryCnt++);
-            sleep(RECOVER_INTERAL);
+            sleep(recoverInterval);
         }
     } while (ret != BIO_OK);
 }

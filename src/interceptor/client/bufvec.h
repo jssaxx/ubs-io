@@ -40,5 +40,4 @@ struct BufVec {
 };
 }
 }
-
 #endif // BOOSTIO_BUFVEC_H

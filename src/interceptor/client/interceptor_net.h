@@ -83,5 +83,4 @@ private:
 };
 }
 }
-
 #endif // BOOSTIO_INTERCEPTOR_NET_H

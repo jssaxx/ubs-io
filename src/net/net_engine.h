@@ -166,28 +166,28 @@ public:
         mShareAddress = addr;
     }
 
-   void GetTlsOptions(NetOptions options)
+    void GetTlsOptions(NetOptions options)
     {
         options.enableTls = mOptions.enableTls;
-        options.certificationPath = mOptions.certificationPath;      /* certification path */
-        options.caCerPath = mOptions.caCerPath;                  /* caCert path */
+        options.certificationPath = mOptions.certificationPath;   /* certification path */
+        options.caCerPath = mOptions.caCerPath;                   /* caCert path */
         options.caCrlPath = mOptions.caCrlPath;                   /* caCrl path */
-        options.privateKeyPath = mOptions.privateKeyPath;          /* private key path */
-        options.privateKeyPassword = mOptions.privateKeyPassword;  /* private key password */
-        options.hseKfsMasterPath = mOptions.hseKfsMasterPath;        /* hseceasy kfs master path */
-        options.hseKfsStandbyPath = mOptions.hseKfsStandbyPath;      /* hseceasy kfs standby path */
+        options.privateKeyPath = mOptions.privateKeyPath;         /* private key path */
+        options.privateKeyPassword = mOptions.privateKeyPassword; /* private key password */
+        options.hseKfsMasterPath = mOptions.hseKfsMasterPath;     /* hseceasy kfs master path */
+        options.hseKfsStandbyPath = mOptions.hseKfsStandbyPath;   /* hseceasy kfs standby path */
     }
 
     void SetTlsOptions(NetOptions options)
     {
         mOptions.enableTls = options.enableTls;
-        mOptions.certificationPath = options.certificationPath;      /* certification path */
-        mOptions.caCerPath = options.caCerPath;                  /* caCert path */
+        mOptions.certificationPath = options.certificationPath;   /* certification path */
+        mOptions.caCerPath = options.caCerPath;                   /* caCert path */
         mOptions.caCrlPath = options.caCrlPath;                   /* caCrl path */
-        mOptions.privateKeyPath = options.privateKeyPath;          /* private key path */
-        mOptions.privateKeyPassword = options.privateKeyPassword;  /* private key password */
-        mOptions.hseKfsMasterPath = options.hseKfsMasterPath;        /* hseceasy kfs master path */
-        mOptions.hseKfsStandbyPath = options.hseKfsStandbyPath;      /* hseceasy kfs standby path */
+        mOptions.privateKeyPath = options.privateKeyPath;         /* private key path */
+        mOptions.privateKeyPassword = options.privateKeyPassword; /* private key password */
+        mOptions.hseKfsMasterPath = options.hseKfsMasterPath;     /* hseceasy kfs master path */
+        mOptions.hseKfsStandbyPath = options.hseKfsStandbyPath;   /* hseceasy kfs standby path */
     }
 
     uint8_t *GetShmAddress(uint64_t offset)
@@ -767,7 +767,9 @@ private:
         auto *netCallback = NewCallback([](NetServiceContext &context) { return; }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
-        CbFunc cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result){ free(resp); };
+        CbFunc cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+            free(resp);
+        };
         Callback cb = Callback(cbFunc, nullptr);
         result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, cb);
 #endif
