@@ -443,7 +443,7 @@ void BioService::DestroyCache(uint64_t tenantId)
     CLIENT_LOG_INFO("Destroy cache instance success, tenantId:" << tenantId << ".");
 }
 
-CResult BioService::Initialize(WorkerMode mode, ClientOptionsConfig optConf)
+CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf)
 {
     return ToCResult(BioClient::Instance()->Start(mode, optConf));
 }
@@ -464,9 +464,14 @@ static std::mutex g_lock;
 CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
 {
     if (optConf == nullptr) {
-        ClientOptionsConfig clientConf;
-        clientConf.enable = false;
-        return BioService::Initialize(mode, clientConf);
+        auto clientConf = new (std::nothrow)ClientOptionsConfig();
+        if (clientConf == nullptr) {
+            return RET_CACHE_NO_SPACE;
+        }
+        clientConf->enable = false;
+        auto ret = BioService::Initialize(mode, *clientConf);
+        delete clientConf;
+        return ret;
     }
     return BioService::Initialize(mode, *optConf);
 }

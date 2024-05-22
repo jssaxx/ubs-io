@@ -155,7 +155,7 @@ public:
      * @param[in]: option: log and security options
      * @return: return initialize result
      */
-    static CResult Initialize(WorkerMode mode, ClientOptionsConfig optConf);
+    static CResult Initialize(WorkerMode mode, const ClientOptionsConfig &optConf);
 
     /**
      * @brief: Exit bio service

@@ -91,18 +91,22 @@ BResult Slice::Serialize(char *data, uint32_t dataLen, uint32_t &length)
     uint32_t pos = 0;
     uint32_t cpyLen = dataLen;
     ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-    memcpy_s(data + pos, cpyLen, &mFlowType, sizeof(mFlowType));
+    auto ret = memcpy_s(data + pos, cpyLen, &mFlowType, sizeof(mFlowType));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
     pos += sizeof(mFlowType);
     cpyLen -= sizeof(mFlowType);
-    memcpy_s(data + pos, cpyLen, &mLength, sizeof(mLength));
+    ret = memcpy_s(data + pos, cpyLen, &mLength, sizeof(mLength));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
     pos += sizeof(mLength);
     cpyLen -= sizeof(mLength);
     size_t vsize = mAddrs.size();
-    memcpy_s(data + pos, cpyLen, &vsize, sizeof(vsize));
+    ret = memcpy_s(data + pos, cpyLen, &vsize, sizeof(vsize));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
     pos += sizeof(vsize);
     cpyLen -= sizeof(vsize);
     for (size_t i = 0; i < vsize; i++) {
-        memcpy_s(data + pos, cpyLen, &mAddrs[i], sizeof(FlowAddr));
+        ret = memcpy_s(data + pos, cpyLen, &mAddrs[i], sizeof(FlowAddr));
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(FlowAddr);
         cpyLen -= sizeof(FlowAddr);
     }

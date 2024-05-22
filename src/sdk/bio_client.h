@@ -37,7 +37,7 @@ public:
         return instance;
     }
 
-    BResult Start(WorkerMode mode, const ClientOptionsConfig optConf);
+    BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf);
     void Exit();
 
     inline bool Ready() const
