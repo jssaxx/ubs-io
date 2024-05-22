@@ -148,6 +148,9 @@ void HTracerService::GenerateTraceStream(std::stringstream &ss, bool needTotal)
         return;
     }
     int traceCount = 0;
+    if (headline.size() == 0) {
+        CreateHeadLine();
+    }
     ss << headline << std::endl;
     for (int i = 0; i < MAX_SERVICE_NUM; ++i) {
         for (int j = 0; j < MAX_INNER_ID_NUM; ++j) {
