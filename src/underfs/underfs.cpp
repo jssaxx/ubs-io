@@ -5,6 +5,7 @@
 #include "bio_log.h"
 #include "bio_trace.h"
 #include "bio_config_instance.h"
+#include "bio_str_util.h"
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
@@ -242,6 +243,18 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
     keyPath += key;
 
     using namespace std;
+
+    std::vector<std::string> list;
+    StrUtil::Split(keyPath, "/", list);
+
+    if (list.size() > NO_3) {
+        std::string prefix = mEmulationCephPath;
+        for (uint32_t i = NO_2; i < list.size() - NO_1; i++) {
+            prefix += list[i];
+            prefix += "/";
+            mkdir(prefix.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        }
+    }
 
     LOG_INFO("Put key:" << key);
 
