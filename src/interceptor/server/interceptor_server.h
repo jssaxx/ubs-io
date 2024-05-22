@@ -32,5 +32,4 @@ private:
 };
 }
 }
-
 #endif // BOOSTIO_INTERCEPTOR_SERVER_H

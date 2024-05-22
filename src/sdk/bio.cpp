@@ -443,7 +443,7 @@ void BioService::DestroyCache(uint64_t tenantId)
     CLIENT_LOG_INFO("Destroy cache instance success, tenantId:" << tenantId << ".");
 }
 
-CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig optConf)
+CResult BioService::Initialize(WorkerMode mode, ClientOptionsConfig optConf)
 {
     return ToCResult(BioClient::Instance()->Start(mode, optConf));
 }
@@ -794,7 +794,7 @@ CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
 
     FileLocationQueryRsp rsp;
     uint16_t slaveId = 0;
-    int idx = 0;
+    uint32_t idx = 0;
     for (; idx < info.copys.size(); ++idx) {
         if (info.copys[idx].nodeId != info.masterNodeId) {
             slaveId = info.copys[idx].nodeId;

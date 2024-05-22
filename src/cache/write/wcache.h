@@ -145,7 +145,7 @@ private:
     uint64_t mPtv;
     uint16_t mDiskId;
     bool mIsDegrade;
-    bool mIsMaster;
+    bool mIsMaster{ true };
     bool mIsNormal{ true };
     bool mIsForced { false };
     EvictCallback mEvictCallback;

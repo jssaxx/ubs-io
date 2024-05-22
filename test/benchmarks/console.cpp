@@ -71,29 +71,36 @@ int main(int argc, char **argv)
     termSa.sa_handler = &ConsoleHandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 
-    ClientOptionsConfig optConf;
+    ClientOptionsConfig *optConf = new (std::nothrow) ClientOptionsConfig();
+    if (optConf == nullptr) {
+        return BIO_ERR;
+    }
     WorkerMode mode = static_cast<WorkerMode>(std::stoul(argv[1]));
     if (mode == SEPARATES) {
         BioSdkConfigPtr mConfig = BioSdkConfig::Instance();
         if (mConfig == nullptr) {
             std::cout << "Create bio sdk configuration instance failed." << std::endl;
+            delete optConf;
             return BIO_ERR;
         }
         auto result = mConfig->Initialize(".");
         if (result != BIO_OK) {
             std::cout << "Failed to initialize sdk configuration, result: " << result << "." << std::endl;
+            delete optConf;
             return BIO_ERR;
         }
-        result = ConsoleGetSdkConfig(mConfig, &optConf);
+        result = ConsoleGetSdkConfig(mConfig, optConf);
         if (result != BIO_OK) {
             std::cout << "Failed to get sdk configuration." << std::endl;
+            delete optConf;
             return BIO_ERR;
         }
     }
 
-    auto ret = BioService::Initialize(mode, optConf);
+    auto ret = BioService::Initialize(mode, *optConf);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;
+        delete optConf;
         return -1;
     }
 
@@ -102,5 +109,6 @@ int main(int argc, char **argv)
     while (gDaemonRunning) {
         sleep(NO_5);
     }
+    delete optConf;
     return 0;
 }
