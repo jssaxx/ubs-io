@@ -34,7 +34,7 @@ static void ConsoleHandleSigterm(int signum)
     gDaemonRunning = false;
 }
 
-int ConsoleGetSdkConfig(BioSdkConfigPtr sdkConf, ClientOptionsConfig *optConf)
+static int ConsoleGetSdkConfig(BioSdkConfigPtr sdkConf, ClientOptionsConfig *optConf)
 {
     optConf->logType = (LogType)sdkConf->GetLogTypeConfig();
     strncpy_s(optConf->logFilePath, PATH_MAX, sdkConf->GetLogFilePathConfig().c_str(),
