@@ -36,7 +36,7 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
             int ret = memcpy_s(buf + copyBytes, cpyLength,
                                (const uint8_t *)iov[index].iov_base + innerOffset, bytes);
             if (UNLIKELY(ret != 0)) {
-                CLOG_ERROR("Memmcpy copy failed, ret:" << ret);
+                CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;
             }
             size_t oldCopyBytes = copyBytes;
@@ -64,7 +64,7 @@ ssize_t BufVec::Write(const uint8_t *buf, size_t length) noexcept
             int ret = memcpy_s((uint8_t *)iov[index].iov_base + innerOffset, iov[index].iov_len - innerOffset,
                 buf + copyBytes, bytes);
             if (UNLIKELY(ret != 0)) {
-                CLOG_ERROR("Memmcpy copy failed, ret:" << ret);
+                CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;
             }
             size_t oldCopyBytes = copyBytes;
@@ -85,7 +85,7 @@ ssize_t BufVec::Write(const uint8_t *buf, size_t length) noexcept
 size_t BufVec::ComputeSize(const iovec *vec, int cnt) noexcept
 {
     if (UNLIKELY(vec == nullptr)) {
-        CLOG_ERROR("param invalid.");
+        CLOG_ERROR("Input param vec is nullptr.");
         errno = ENOMEM;
         return 0;
     }

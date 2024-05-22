@@ -60,5 +60,4 @@ private:
 };
 }
 }
-
 #endif // BOOST_IO_PROXY_OPERATIONS_H
