@@ -618,7 +618,7 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 {
     // check read cache resources used
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t diskCap = config.diskCaps[mDiskId];
+    uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
 
     uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
     uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
@@ -660,7 +660,7 @@ bool WCache::EvictMemSatisfiedCond()
 bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t diskCap = config.diskCaps[mDiskId];
+    uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
 
     uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
     uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);

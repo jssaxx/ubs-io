@@ -59,6 +59,7 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unorder
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_INVALID_PARAM);
 
+    std::vector<WCacheSliceRefPtr> listSliceVec;
     for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; bucket++) {
         ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
         for (auto &info : table->sliceIndex[bucket]) {
@@ -69,13 +70,17 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unorder
                 auto sliceRef = info.second;
                 if (sliceRef->Aquire()) {
                     auto sliceLen = static_cast<uint32_t>(sliceRef->GetSlice()->GetLength());
-                    sliceRef->Release();
+                    listSliceVec.push_back(sliceRef);
                     LOG_INFO("Wcache list success, key:" << info.first << ", slice length:" << sliceLen << ", time:" <<
                         time(nullptr) << ".");
                     objs.insert({ info.first, { sliceLen, time(nullptr) } });
                 }
             }
         }
+    }
+
+    for (const auto &slice : listSliceVec) {
+        slice->Release();
     }
     return BIO_OK;
 }

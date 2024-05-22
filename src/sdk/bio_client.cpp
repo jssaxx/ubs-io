@@ -207,7 +207,7 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
 }
 #endif
 
-BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig optConf)
+BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
