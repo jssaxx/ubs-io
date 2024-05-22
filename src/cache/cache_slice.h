@@ -64,7 +64,7 @@ public:
         uint32_t pos = 0;
         uint32_t cpyLen = dataLen;
         auto ret = memcpy_s(data + pos, cpyLen, &mPtId, sizeof(mPtId));
-        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mPtId);
         cpyLen -= sizeof(mPtId);
         ret = Slice::Serialize(data + pos, cpyLen, length);
@@ -149,15 +149,15 @@ public:
         uint32_t pos = 0;
         uint32_t cpyLen = dataLen;
         auto ret = memcpy_s(data + pos, cpyLen, &mFlowId, sizeof(mFlowId));
-        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mFlowId);
         cpyLen -= sizeof(mFlowId);
         ret = memcpy_s(data + pos, cpyLen, &mOffsetInFlow, sizeof(mOffsetInFlow));
-        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mOffsetInFlow);
         cpyLen -= sizeof(mOffsetInFlow);
         ret = memcpy_s(data + pos, cpyLen, &mIndexInFlow, sizeof(mIndexInFlow));
-        ChkTrue(ret = BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mIndexInFlow);
         cpyLen -= sizeof(mIndexInFlow);
         ret = Slice::Serialize(data + pos, cpyLen, length);
