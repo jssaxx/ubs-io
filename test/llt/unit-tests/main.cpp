@@ -24,7 +24,7 @@ using namespace ock::htracer;
 
 static bool DiskPathInvalid()
 {
-    std::string filename = "./conf/bio.conf";
+    std::string filename = "/opt/boostio/bin/conf/bio.conf";
     std::string target = "/dev/sdxx:/dev/sdyy";
     std::ifstream file(filename);
     std::string line;
@@ -44,21 +44,25 @@ int main(int argc, char *argv[])
     (void)system("rm -rf test2");
     (void)system("rm -rf ceph");
     (void)system("rm -rf conf");
-    (void)system("mkdir conf");
-    (void)system("cp ../configs/* conf");
-    (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' ./conf/bio.conf");
-    (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' ./conf/bio.conf");
+    (void)system("mkdir -p /opt/boostio/bin/conf/");
+    (void)system("cp ../configs/* /opt/boostio/bin/conf");
+    (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' /opt/boostio/bin/conf/bio.conf");
+    (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' /opt/boostio/bin/conf/bio.conf");
     if (DiskPathInvalid()) {
         TestDisk::Stub();
-        (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' ./conf/bio.conf");
+        (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' /opt/boostio/bin/conf/bio.conf");
         (void)system("touch test1");
         (void)system("touch test2");
     }
-    (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' ./conf/bio.conf");
+    (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' /opt/boostio/bin/conf/bio.conf");
     (void)system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
-        "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./conf/bio.conf");
+        "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' /opt/boostio/bin/conf/bio.conf");
     (void)system("sed -i 's#bio.net.tls.enable.switch = true"
-                 "#bio.net.tls.enable.switch = false#g' ./conf/bio.conf");
+                 "#bio.net.tls.enable.switch = false#g' /opt/boostio/bin/conf/bio.conf");
+    (void)system("sed -i 's#bio.net.hesc.server.tls.kfs.master.path = /path/server/master/kfsa"
+                 "##g' /opt/boostio/bin/conf/bio.conf");
+    (void)system("sed -i 's#bio.net.hesc.server.tls.kfs.pass.standby.path = /path/server/standby/kfsb"
+                 "##g' /opt/boostio/bin/conf/bio.conf");
     (void)system("touch ceph.conf");
 
     std::cout << "Boostio tester start." << std::endl;

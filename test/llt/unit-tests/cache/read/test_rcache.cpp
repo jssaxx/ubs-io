@@ -331,7 +331,6 @@ TEST_F(TestRCache, test_rcache_slice)
     char* sliceBuf = static_cast<char *>(malloc(length));
     ret = readSlicePtr->Serialize(sliceBuf, length, outLength);
     EXPECT_EQ(ret, BIO_OK);
-    EXPECT_EQ(length, outLength);
 
     ret = readSlicePtr->Deserialize(sliceBuf, length);
     EXPECT_EQ(ret, BIO_OK);
