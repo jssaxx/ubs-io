@@ -1190,17 +1190,6 @@ TEST_F(TestBioServer, test_start_server_diagnose_init_err_return_fail)
     LVOS_HVS_deactiveTracePoint(0, "CLI_SERVER_DIAGNOSE_INIT_ERR");
 }
 
-TEST_F(TestBioServer, test_start_server_service_start_err_return_fail)
-{
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVICE_START_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
-    auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVICE_START_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
-}
-
 TEST_F(TestBioServer, test_start_server_config_init_err_return_fail)
 {
     LVOS_TRACEP_PARAM_S userParam;

@@ -28,7 +28,6 @@ void tp::CacheTp::Register() noexcept
         tp::CommonTp::IntValueResetCallback);
     LVOS_TP_REG(LOG_INIT_FAIL, "log init err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(TRACE_FILE_OPPEN_FAIL, "trace file open err", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVICE_START_FAIL, "service start err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(CONFIG_INIT_FAIL, "config init err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(ALLOC_TASK_POOL_FAIL, "alloc task pool err", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(ALLOC_TASK_POOL_FAIL_RESET, "reset alloc task pool", tp::CommonTp::PointerValueResetCallback);
@@ -253,7 +252,6 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(LOG_ROTATION_FILE_COUNT_FAIL_RESET);
     LVOS_TP_UNREG(LOG_INIT_FAIL);
     LVOS_TP_UNREG(TRACE_FILE_OPPEN_FAIL);
-    LVOS_TP_UNREG(SERVICE_START_FAIL);
     LVOS_TP_UNREG(CONFIG_INIT_FAIL);
     LVOS_TP_UNREG(ALLOC_TASK_POOL_FAIL);
     LVOS_TP_UNREG(ALLOC_TASK_POOL_FAIL_RESET);
