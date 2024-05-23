@@ -429,13 +429,13 @@ TEST_F(TestBio, test_bio_allocspace)
 
 TEST_F(TestBio, test_bio_putwithspace_case)
 {
-    auto ret = BioPutWithSpace(G_TENANT_ID, "putwithspace", &addressInfo);
+    auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    ret = BioPutWithSpace(G_TENANT_ID, nullptr, &addressInfo);
+    ret = BioPutWithCopyFree(G_TENANT_ID, nullptr, &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    ret = BioPutWithSpace(G_INVALID_TENANT_ID, "putwithspace1", &addressInfo);
+    ret = BioPutWithCopyFree(G_INVALID_TENANT_ID, "putwithspace1", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
     constexpr uint64_t tenantId = 10001UL;
@@ -914,28 +914,28 @@ static int WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t of
     return ock::bio::BIO_OK;
 }
 
-static int WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceInfo *spaceInfo)
+static int WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *spaceInfo)
 {
     return ock::bio::BIO_OK;
 }
 
 TEST_F(TestBio, test_juicefs_callback_read_case_return_ok)
 {
-    BioRegisterJuiceFSRead(ReadHookFunc);
+    BioRegisterInterceptorRead(ReadHookFunc);
     auto ret = BioReadHook(0, nullptr, 0, 0, nullptr);
     EXPECT_EQ(ret, ock::bio::BIO_OK);
 }
 
 TEST_F(TestBio, test_juicefs_callback_write_case_return_ok)
 {
-    BioRegisterJuiceFSWrite(WriteHookFunc);
+    BioRegisterInterceptorWrite(WriteHookFunc);
     auto ret = BioWriteHook(0, nullptr, 0, 0, 0);
     EXPECT_EQ(ret, ock::bio::BIO_OK);
 }
 
 TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
 {
-    BioRegisterJuiceFSWriteCopyFree(WriteCopyFreeHookFunc);
+    BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHookFunc);
     auto ret = BioWriteCopyFreeHook(0, 0, 0, nullptr);
     EXPECT_EQ(ret, ock::bio::BIO_OK);
 }
@@ -1033,7 +1033,7 @@ TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
 {
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     static uint64_t objectId = 1;
-    auto ret = BioPutWithSpace(G_TENANT_ID, "putwithspace", &addressInfo);
+    auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }

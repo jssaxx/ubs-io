@@ -99,17 +99,12 @@ public:
                 continue;
             }
             LOG_INFO("Module (" << it->name << ") start begin...");
-            int32_t ret = 0;
-            LVOS_TP_START(SERVICE_START_FAIL, &ret, -1);
-            ret = it->start();
-            LVOS_TP_END;
+            int32_t ret = it->start();
             if (ret == BIO_OK) {
                 LOG_INFO("Module (" << it->name << ") start success.");
             } else {
                 LOG_ERROR("Module (" << it->name << ") start failed, result:" << ret << ".");
-                LVOS_TP_START(NO_PROCESS_ROLLBACK_SERVICE_START, 0);
                 RollbackStart(it);
-                LVOS_TP_END;
                 return BIO_ERR;
             }
         }
