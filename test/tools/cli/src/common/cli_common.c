@@ -1115,10 +1115,7 @@ int32_t diag_switchThreadAsync(void (*handle)(void *data), void *data, pthread_a
     if (ret != RETURN_OK) {
         return ret;
     }
-    ret = prctl(PR_SET_NAME, (unsigned long)"switchTAsnc");
-    if (ret != RETURN_OK) {
-        syslog(LOG_ERR, "Set thread name fail %d, errno %d", ret, errno);
-    }
+
     pthread_detach(threadId);
     return RETURN_OK;
 }

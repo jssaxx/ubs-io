@@ -193,6 +193,7 @@ public:
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
     void BioClientMirrorExit();
+    BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
     void BioClientUpdateHandle();
     void BioClientUpdateView();

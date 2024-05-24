@@ -184,8 +184,8 @@ BResult MirrorClient::InitializeBioQos()
     }
 
     // 2. fill write and read concurrency
-    uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
-    uint64_t readConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
+    uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : (NO_1024 * NO_3);
+    uint64_t readConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_1024;
 
     // 3. start bio qos
     mBioQos = BioQos::Instance();
@@ -951,14 +951,8 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
     mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
     BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_APPLY_QOS, BIO_OK);
     BResult ret = AllocSpaceImpl(param, spaceInfo);
-    if (LIKELY(ret == BIO_OK)) {
-        CLIENT_LOG_INFO("Alloc space key:" << param.key << ", location0:" << spaceInfo.loc.location[0] <<
-            ", location1:" << spaceInfo.loc.location[1] << ", address num:" << spaceInfo.addressNum << ", address0:" <<
-            spaceInfo.address[0].address << ", address0 size:" << spaceInfo.address[0].size << ", address1:" <<
-            spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size << ".");
-    } else {
-        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", key:" << param.key << ", length:" << param.length <<
-            ".");
+    if (LIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", key:" << param.key << ", length:" << param.length);
         BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
         mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
         BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
