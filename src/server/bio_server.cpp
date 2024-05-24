@@ -45,7 +45,6 @@ BioServer::BioServer() noexcept
             std::bind(&BioServer::BioFlowExit, this) },
         { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
             std::bind(&BioServer::BioCacheExit, this) },
-        { "InterceptorServer", std::bind(&BioServer::BioInterceptorServerInit, this), nullptr, nullptr, nullptr },
         { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
             std::bind(&BioServer::BioMirrorServerExit, this) },
         { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr,
@@ -450,21 +449,6 @@ BResult BioServer::BioCacheInit()
 void BioServer::BioCacheExit()
 {
     Cache::Instance().Exit();
-}
-
-BResult BioServer::BioInterceptorServerInit()
-{
-    if (mInterceptorInited) {
-        return BIO_OK;
-    }
-    auto ret = InterceptorServer::GetInstance().StartServer();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init interceptor server, ret:" << ret << ".");
-        return BIO_ERR;
-    }
-
-    mInterceptorInited = true;
-    return BIO_OK;
 }
 
 BResult BioServer::BioFlowInit()
