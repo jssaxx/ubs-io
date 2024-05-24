@@ -6,6 +6,7 @@
 #include "bio_client_log.h"
 #include "bio_client_net.h"
 #include "bio_client_agent.h"
+#include "interceptor_server.h"
 #include "bio_client.h"
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
@@ -144,6 +145,11 @@ void BioClient::BioClientMirrorExit()
     return;
 }
 
+BResult BioClient::BioInterceptorServerInit(WorkerMode mode)
+{
+    return (mode == CONVERGENCE) ? InterceptorServer::GetInstance().Initialize() : BIO_OK;
+}
+
 BResult BioClient::BioClientStartWork()
 {
     auto ret = mMirror->Start();
@@ -251,6 +257,10 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
 
     if (BioClientNetPostInit(netConf) != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    if (BioInterceptorServerInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 

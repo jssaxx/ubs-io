@@ -44,6 +44,11 @@ public:
         return mScene;
     }
 
+    inline NetEnginePtr GetNetEngine() const
+    {
+        return mNetEngine;
+    }
+
     inline uint32_t GetDataPage() const
     {
         return mNetEngine->GetDataPage();

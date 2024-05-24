@@ -336,7 +336,6 @@ protected:
     void BioCacheExit();
     BResult BioFlowInit();
     void BioFlowExit();
-    BResult BioInterceptorServerInit();
 #ifdef USE_DEBUG_TOOLS
     BResult BioServerDiagnoseInit();
     BResult BioServerDiagnoseInitInner();
@@ -369,7 +368,6 @@ private:
 
     bool mNetEngineInited = false;
     bool mCacheInited = false;
-    bool mInterceptorInited = false;
     bool mMirrorInited = false;
     DEFINE_REF_COUNT_VARIABLE;
 };

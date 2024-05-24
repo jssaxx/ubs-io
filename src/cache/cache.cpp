@@ -73,10 +73,10 @@ BResult Cache::Recover()
             ChkTrueNot(ret == BIO_OK, ret);
         } else if (static_cast<uint16_t>(type) == READ_CACHE &&
             static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
-            ret = mRCacheManager->RecoverCache(elem.second);
             LVOS_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
+            ret = mRCacheManager->RecoverCache(elem.second);
             LVOS_TP_END;
-            ChkTrueNot(ret == BIO_OK, ret);
+            ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         }
     }
     return BIO_OK;

@@ -1,6 +1,7 @@
 file(GLOB_RECURSE BIO_SDK_SRCS *.cpp *.h)
 
 install(FILES bio.h DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}/)
+install(FILES bio_c.h DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}/)
 
 add_library(bio_sdk SHARED ${BIO_SDK_SRCS})
 install(TARGETS bio_sdk DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
@@ -19,5 +20,5 @@ target_link_libraries(bio_sdk
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/lib/libsecurec.a
-        htracer bio_common bio_net
+        htracer bio_common bio_net bio_interceptor_server
         -Wl,--end-group)

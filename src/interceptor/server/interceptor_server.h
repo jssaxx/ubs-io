@@ -7,8 +7,9 @@
 
 #include <utility>
 #include <cstdint>
-#include "net_engine.h"
-#include "net_common.h"
+
+#include "bio_err.h"
+#include "bio_client_net.h"
 
 namespace ock {
 namespace bio {
@@ -20,15 +21,15 @@ public:
         return instance;
     }
 
-    int32_t StartServer();
+    BResult Initialize();
 
-    int32_t HandleInterceptorRead(ServiceContext &ctx);
-    int32_t HandleInterceptorWrite(ServiceContext &ctx);
-    int32_t HandleInterceptorAllocPage(ServiceContext &ctx);
-    int32_t HandleInterceptorLargeWrite(ServiceContext &ctx);
+    BResult HandleInterceptorRead(ServiceContext &ctx);
+    BResult HandleInterceptorWrite(ServiceContext &ctx);
+    BResult HandleInterceptorAllocPage(ServiceContext &ctx);
+    BResult HandleInterceptorLargeWrite(ServiceContext &ctx);
 
 private:
-    void RegisterOpcode();
+    BResult RegisterOpcode();
 };
 }
 }
