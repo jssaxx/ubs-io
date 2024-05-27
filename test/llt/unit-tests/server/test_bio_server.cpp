@@ -31,6 +31,7 @@ void TestBioServer::TearDown()
 
 TEST_F(TestBioServer, test_bio_server_check_all)
 {
+    LOG_INFO("test_bio_server_check_all");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     RequestComm reqComm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     auto ret = mirror->CheckAll(reqComm);
@@ -47,6 +48,7 @@ TEST_F(TestBioServer, test_bio_server_check_all)
 
 TEST_F(TestBioServer, test_bio_server_shm_init)
 {
+    LOG_INFO("test_bio_server_shm_init");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() } };
@@ -56,6 +58,7 @@ TEST_F(TestBioServer, test_bio_server_shm_init)
 
 TEST_F(TestBioServer, test_bio_server_qry_node_info)
 {
+    LOG_INFO("test_bio_server_qry_node_info");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetLocalNidRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
@@ -65,6 +68,7 @@ TEST_F(TestBioServer, test_bio_server_qry_node_info)
 
 TEST_F(TestBioServer, test_bio_server_qry_node_info_pt)
 {
+    LOG_INFO("test_bio_server_qry_node_info_pt");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     FileLocationQueryReq req = { 1, 2 };
@@ -74,6 +78,7 @@ TEST_F(TestBioServer, test_bio_server_qry_node_info_pt)
 
 TEST_F(TestBioServer, test_bio_server_qry_node_view)
 {
+    LOG_INFO("test_bio_server_qry_node_view");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, 0 };
@@ -83,6 +88,7 @@ TEST_F(TestBioServer, test_bio_server_qry_node_view)
 
 TEST_F(TestBioServer, test_bio_server_qry_pt_view)
 {
+    LOG_INFO("test_bio_server_qry_pt_view");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, 0 };
@@ -92,6 +98,7 @@ TEST_F(TestBioServer, test_bio_server_qry_pt_view)
 
 TEST_F(TestBioServer, test_bio_server_put)
 {
+    LOG_INFO("test_bio_server_put");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     PutRequest req;
@@ -113,6 +120,7 @@ TEST_F(TestBioServer, test_bio_server_put)
 
 TEST_F(TestBioServer, test_bio_server_put_slice_alloc_fail_reply_ok)
 {
+    LOG_INFO("test_bio_server_put_slice_alloc_fail_reply_ok");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     PutRequest req;
@@ -137,6 +145,7 @@ TEST_F(TestBioServer, test_bio_server_put_slice_alloc_fail_reply_ok)
 
 TEST_F(TestBioServer, test_bio_server_put_slice_normal_alloc_fail_reply_ok)
 {
+    LOG_INFO("test_bio_server_put_slice_normal_alloc_fail_reply_ok");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     PutRequest req;
@@ -161,6 +170,7 @@ TEST_F(TestBioServer, test_bio_server_put_slice_normal_alloc_fail_reply_ok)
 
 TEST_F(TestBioServer, test_bio_server_get)
 {
+    LOG_INFO("test_bio_server_get");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetRequest req;
@@ -175,6 +185,7 @@ TEST_F(TestBioServer, test_bio_server_get)
 
 TEST_F(TestBioServer, test_bio_server_get_read_err_reply_return_ok)
 {
+    LOG_INFO("test_bio_server_get_read_err_reply_return_ok");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetRequest req;
@@ -194,6 +205,7 @@ TEST_F(TestBioServer, test_bio_server_get_read_err_reply_return_ok)
 
 TEST_F(TestBioServer, test_list_list_err_return_fail)
 {
+    LOG_INFO("test_list_list_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "LIST_LIST_FAIL", 0, 1, userParam);
     ListRequest req;
@@ -206,6 +218,7 @@ TEST_F(TestBioServer, test_list_list_err_return_fail)
 
 TEST_F(TestBioServer, test_list_malloc_rsp_err_return_fail)
 {
+    LOG_INFO("test_list_malloc_rsp_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "LIST_MALLOC_RSP_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "LIST_MALLOC_RSP_FAIL_RESET", 0, 1, userParam);
@@ -222,6 +235,7 @@ TEST_F(TestBioServer, test_list_malloc_rsp_err_return_fail)
 
 TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
 {
+    LOG_INFO("test_put_slice_length_eq_zero_return_fail");
     PutRequest req;
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     req.tenantId = 1;
@@ -242,6 +256,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
 
 TEST_F(TestBioServer, test_put_slice_length_eq_zero_alloc_slice_err_return_fail)
 {
+    LOG_INFO("test_put_slice_length_eq_zero_alloc_slice_err_return_fail");
     PutRequest req;
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     req.tenantId = 1;
@@ -265,6 +280,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_alloc_slice_err_return_fail)
 
 TEST_F(TestBioServer, test_put_slice_alloc_slice_err_return_fail)
 {
+    LOG_INFO("test_put_slice_alloc_slice_err_return_fail");
     PutRequest req;
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     req.tenantId = 1;
@@ -288,6 +304,7 @@ TEST_F(TestBioServer, test_put_slice_alloc_slice_err_return_fail)
 
 TEST_F(TestBioServer, test_get_slice_flowid_unexists_return_fail)
 {
+    LOG_INFO("test_get_slice_flowid_unexists_return_fail");
     GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, NO_4194304, 0, 1, NO_128 };
     auto ret = GetSlice(&req, nullptr);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
@@ -296,6 +313,7 @@ TEST_F(TestBioServer, test_get_slice_flowid_unexists_return_fail)
 
 TEST_F(TestBioServer, test_bio_server_stat)
 {
+    LOG_INFO("test_bio_server_stat");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     StatRequest req;
@@ -307,6 +325,7 @@ TEST_F(TestBioServer, test_bio_server_stat)
 
 TEST_F(TestBioServer, test_bio_server_list)
 {
+    LOG_INFO("test_bio_server_list");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     ListRequest req;
@@ -318,6 +337,7 @@ TEST_F(TestBioServer, test_bio_server_list)
 
 TEST_F(TestBioServer, test_bio_server_list_prefix_null_reply_ok)
 {
+    LOG_INFO("test_bio_server_list_prefix_null_reply_ok");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     ListRequest req;
@@ -335,6 +355,7 @@ TEST_F(TestBioServer, test_bio_server_list_prefix_null_reply_ok)
 
 TEST_F(TestBioServer, test_bio_server_list_inner)
 {
+    LOG_INFO("test_bio_server_list_inner");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     std::unordered_map<std::string, ObjStat> objs;
@@ -348,6 +369,7 @@ TEST_F(TestBioServer, test_bio_server_list_inner)
 
 TEST_F(TestBioServer, test_bio_server_list_inner_objs_notempty)
 {
+    LOG_INFO("test_bio_server_list_inner_objs_notempty");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     ObjStat stat;
@@ -363,6 +385,7 @@ TEST_F(TestBioServer, test_bio_server_list_inner_objs_notempty)
 
 TEST_F(TestBioServer, test_mirror_master_create_flow_wcache_err)
 {
+    LOG_INFO("test_mirror_master_create_flow_wcache_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 1, 1, getpid() }, 0, 1 };
@@ -374,6 +397,7 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_wcache_err)
 
 TEST_F(TestBioServer, test_mirror_slave_create_flow_wcache_err)
 {
+    LOG_INFO("test_mirror_slave_create_flow_wcache_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 1, 1, getpid() }, 1, 1 };
@@ -385,6 +409,7 @@ TEST_F(TestBioServer, test_mirror_slave_create_flow_wcache_err)
 
 TEST_F(TestBioServer, test_slave_create_flow_ok)
 {
+    LOG_INFO("test_slave_create_flow_ok");
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, NO_128, NO_10, getpid() }, 1, 1 };
     auto ret = CreateFlowSlave(&req);
     EXPECT_EQ(ret, BIO_OK);
@@ -392,6 +417,7 @@ TEST_F(TestBioServer, test_slave_create_flow_ok)
 
 TEST_F(TestBioServer, destroy_flow_OK)
 {
+    LOG_INFO("destroy_flow_OK");
     DestroyFlowRequest req = { { MESSAGE_MAGIC, 0, NO_128, NO_10, getpid() }, 1 };
     auto ret = DestroyFlow(&req);
     EXPECT_EQ(ret, BIO_OK);
@@ -399,6 +425,7 @@ TEST_F(TestBioServer, destroy_flow_OK)
 
 TEST_F(TestBioServer, report_hb_ok)
 {
+    LOG_INFO("report_hb_ok");
     uint64_t curNodeTimes = 0;
     uint64_t curPtTimes = 0;
     auto ret = ReportHb(&curNodeTimes, &curPtTimes);
@@ -407,6 +434,7 @@ TEST_F(TestBioServer, report_hb_ok)
 
 TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_alloc_obj_err)
 {
+    LOG_INFO("test_mirror_master_create_flow_rcache_alloc_obj_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 1, 1, getpid() }, 0, 1 };
@@ -424,6 +452,7 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_alloc_obj_err)
 
 TEST_F(TestBioServer, test_mirror_server_destroy_flow_rcache_alloc_obj_err)
 {
+    LOG_INFO("test_mirror_server_destroy_flow_rcache_alloc_obj_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     DestroyFlowRequest req = { { MESSAGE_MAGIC, 0, 1, 1, getpid() }, 0 };
@@ -436,6 +465,7 @@ TEST_F(TestBioServer, test_mirror_server_destroy_flow_rcache_alloc_obj_err)
 
 TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_err)
 {
+    LOG_INFO("test_mirror_server_get_offset_synccall_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     uint64_t offset = 0;
     LVOS_TRACEP_PARAM_S userParam;
@@ -447,6 +477,7 @@ TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_err)
 
 TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_channel_err)
 {
+    LOG_INFO("test_mirror_server_get_offset_synccall_channel_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     uint64_t offset = 0;
     LVOS_TRACEP_PARAM_S userParam;
@@ -458,6 +489,7 @@ TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_channel_err)
 
 TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_opcode_err)
 {
+    LOG_INFO("test_mirror_server_get_offset_synccall_opcode_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     uint64_t offset = 0;
     LVOS_TRACEP_PARAM_S userParam;
@@ -469,6 +501,7 @@ TEST_F(TestBioServer, test_mirror_server_get_offset_synccall_opcode_err)
 
 TEST_F(TestBioServer, test_mirror_other_create_flow_err)
 {
+    LOG_INFO("test_mirror_other_create_flow_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 0, 1, getpid() }, 3, 1 };
@@ -477,6 +510,7 @@ TEST_F(TestBioServer, test_mirror_other_create_flow_err)
 
 TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_init_obj_err)
 {
+    LOG_INFO("test_mirror_master_create_flow_rcache_init_obj_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 0, 1, getpid() }, 0, 1 };
@@ -494,6 +528,7 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_init_obj_err)
 
 TEST_F(TestBioServer, test_bio_server_load)
 {
+    LOG_INFO("test_bio_server_load");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     LoadRequest req;
@@ -505,6 +540,7 @@ TEST_F(TestBioServer, test_bio_server_load)
 
 TEST_F(TestBioServer, test_bio_server_delete_disk_err)
 {
+    LOG_INFO("test_bio_server_delete_disk_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     DeleteRequest req;
@@ -519,6 +555,7 @@ TEST_F(TestBioServer, test_bio_server_delete_disk_err)
 
 TEST_F(TestBioServer, test_bio_server_delete_key_null_err)
 {
+    LOG_INFO("test_bio_server_delete_key_null_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     DeleteRequest req;
@@ -533,6 +570,7 @@ TEST_F(TestBioServer, test_bio_server_delete_key_null_err)
 
 TEST_F(TestBioServer, test_bio_server_delete)
 {
+    LOG_INFO("test_bio_server_delete");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     DeleteRequest req;
@@ -544,6 +582,7 @@ TEST_F(TestBioServer, test_bio_server_delete)
 
 TEST_F(TestBioServer, test_bio_server_report_hb)
 {
+    LOG_INFO("test_bio_server_report_hb");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     auto ret = mirror->MirrorServerReportHb(ctx);
@@ -552,6 +591,7 @@ TEST_F(TestBioServer, test_bio_server_report_hb)
 
 TEST_F(TestBioServer, test_bio_server_get_slice)
 {
+    LOG_INFO("test_bio_server_get_slice");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1, 0, 1, 128 };
@@ -561,6 +601,7 @@ TEST_F(TestBioServer, test_bio_server_get_slice)
 
 TEST_F(TestBioServer, test_bio_server_sync_data)
 {
+    LOG_INFO("test_bio_server_sync_data");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     SyncDataRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() } };
@@ -570,6 +611,7 @@ TEST_F(TestBioServer, test_bio_server_sync_data)
 
 TEST_F(TestBioServer, test_bio_server_get_evict_off)
 {
+    LOG_INFO("test_bio_server_get_evict_off");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetEvictRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1 };
@@ -579,6 +621,7 @@ TEST_F(TestBioServer, test_bio_server_get_evict_off)
 
 TEST_F(TestBioServer, test_bio_server_get_evict_off_check_fail)
 {
+    LOG_INFO("test_bio_server_get_evict_off_check_fail");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetEvictRequest req = { { MESSAGE_MAGIC, 1, 2, 1, getpid() }, 1 };
@@ -588,6 +631,7 @@ TEST_F(TestBioServer, test_bio_server_get_evict_off_check_fail)
 
 TEST_F(TestBioServer, test_bio_server_get_evict_off_flowid_err)
 {
+    LOG_INFO("test_bio_server_get_evict_off_flowid_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     GetEvictRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, NO_128 };
@@ -597,6 +641,7 @@ TEST_F(TestBioServer, test_bio_server_get_evict_off_flowid_err)
 
 TEST_F(TestBioServer, test_bio_server_reader)
 {
+    LOG_INFO("test_bio_server_reader");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -611,6 +656,7 @@ TEST_F(TestBioServer, test_bio_server_reader)
 
 TEST_F(TestBioServer, test_bio_server_reader_not_equal)
 {
+    LOG_INFO("test_bio_server_reader_not_equal");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -628,6 +674,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal)
 
 TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
 {
+    LOG_INFO("test_bio_server_reader_not_equal_server_false");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -646,6 +693,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
 
 TEST_F(TestBioServer, test_bio_server_reader_not_equal_to_err)
 {
+    LOG_INFO("test_bio_server_reader_not_equal_to_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -664,6 +712,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal_to_err)
 
 TEST_F(TestBioServer, test_bio_server_writer)
 {
+    LOG_INFO("test_bio_server_writer");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -693,6 +742,7 @@ TEST_F(TestBioServer, test_bio_server_writer)
 
 TEST_F(TestBioServer, test_bio_server_writer_mr_pool_null)
 {
+    LOG_INFO("test_bio_server_writer_mr_pool_null");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -715,6 +765,7 @@ TEST_F(TestBioServer, test_bio_server_writer_mr_pool_null)
 
 TEST_F(TestBioServer, test_bio_server_writer_copy_slice_fail)
 {
+    LOG_INFO("test_bio_server_writer_copy_slice_fail");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     std::vector<FlowAddr> addr;
     addr.emplace_back(FlowAddr(1, 0, NO_128));
@@ -732,6 +783,7 @@ TEST_F(TestBioServer, test_bio_server_writer_copy_slice_fail)
 
 TEST_F(TestBioServer, test_bio_server_handle)
 {
+    LOG_INFO("test_bio_server_handle");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     auto ret = mirror->HandleQueryNodeInfoByPt(ctx);
@@ -791,6 +843,7 @@ TEST_F(TestBioServer, test_bio_server_handle)
 
 TEST_F(TestBioServer, test_bio_server_add_finish_list)
 {
+    LOG_INFO("test_bio_server_add_finish_list");
     MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
     CmPtTaskPtr ptTask = MakeRef<CmPtTask>();
     CmPtInfo ptInfo;
@@ -799,6 +852,7 @@ TEST_F(TestBioServer, test_bio_server_add_finish_list)
 
 TEST_F(TestBioServer, test_bio_server_add_retry_list)
 {
+    LOG_INFO("test_bio_server_add_retry_list");
     MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
     CmPtTaskPtr ptTask = MakeRef<CmPtTask>();
     CmPtInfo ptInfo;
@@ -807,6 +861,7 @@ TEST_F(TestBioServer, test_bio_server_add_retry_list)
 
 TEST_F(TestBioServer, test_bio_server_expire_clear)
 {
+    LOG_INFO("test_bio_server_expire_clear");
     MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
     CmPtInfo ptInfo;
     ptInfo.ptId = 1;
@@ -816,6 +871,7 @@ TEST_F(TestBioServer, test_bio_server_expire_clear)
 
 TEST_F(TestBioServer, test_bio_server_add_sync_data)
 {
+    LOG_INFO("test_bio_server_add_sync_data");
     MirrorServerCrbPtr crb = BioServer::Instance()->GetMirrorCrb();
     CmPtInfo ptInfo;
     ptInfo.ptId = 1;
@@ -825,6 +881,7 @@ TEST_F(TestBioServer, test_bio_server_add_sync_data)
 
 TEST_F(TestBioServer, test_start_server_log_options_err_return_fail)
 {
+    LOG_INFO("test_start_server_log_options_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "MIN_LOG_LEVEL_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "MIN_LOG_LEVEL_FAIL_RESET", 0, 1, userParam);
@@ -840,6 +897,7 @@ TEST_F(TestBioServer, test_start_server_log_options_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_log_options_err1_return_fail)
 {
+    LOG_INFO("test_start_server_log_options_err1_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "LOG_ROTATION_FILE_SIZE_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "LOG_ROTATION_FILE_SIZE_FAIL_RESET", 0, 1, userParam);
@@ -855,6 +913,7 @@ TEST_F(TestBioServer, test_start_server_log_options_err1_return_fail)
 
 TEST_F(TestBioServer, test_start_server_log_options_err2_return_fail)
 {
+    LOG_INFO("test_start_server_log_options_err2_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "LOG_ROTATION_FILE_COUNT_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "LOG_ROTATION_FILE_COUNT_FAIL_RESET", 0, 1, userParam);
@@ -870,6 +929,7 @@ TEST_F(TestBioServer, test_start_server_log_options_err2_return_fail)
 
 TEST_F(TestBioServer, test_start_server_log_init_err_return_fail)
 {
+    LOG_INFO("test_start_server_log_init_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "LOG_INIT_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -881,6 +941,7 @@ TEST_F(TestBioServer, test_start_server_log_init_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_config_err_return_fail)
 {
+    LOG_INFO("test_start_server_config_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "CONFIG_INSTANCE_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "CONFIG_INSTANCE_FAIL_RESET", 0, 1, userParam);
@@ -896,6 +957,7 @@ TEST_F(TestBioServer, test_start_server_config_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_service_tracer_init_open_file_err_return_fail)
 {
+    LOG_INFO("test_start_server_service_tracer_init_open_file_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "TRACE_FILE_OPPEN_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -907,6 +969,7 @@ TEST_F(TestBioServer, test_start_server_service_tracer_init_open_file_err_return
 
 TEST_F(TestBioServer, test_start_server_service_tracer_init_create_dir_err_return_fail)
 {
+    LOG_INFO("test_start_server_service_tracer_init_create_dir_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "TRACE_CREATE_DIR_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -918,6 +981,7 @@ TEST_F(TestBioServer, test_start_server_service_tracer_init_create_dir_err_retur
 
 TEST_F(TestBioServer, test_start_server_service_tracer_init_path_real_err_return_fail)
 {
+    LOG_INFO("test_start_server_service_tracer_init_path_real_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "TRACE_PATH_REAL_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "TRACE_PATH_REAL_FAIL_RESET", 0, 1, userParam);
@@ -931,6 +995,7 @@ TEST_F(TestBioServer, test_start_server_service_tracer_init_path_real_err_return
 
 TEST_F(TestBioServer, test_start_server_underfs_init_dir_exist_return_ok)
 {
+    LOG_INFO("test_start_server_underfs_init_dir_exist_return_ok");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_UNDERFS_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -942,6 +1007,7 @@ TEST_F(TestBioServer, test_start_server_underfs_init_dir_exist_return_ok)
 
 TEST_F(TestBioServer, test_start_server_underfs_init_make_dir_err_return_fail)
 {
+    LOG_INFO("test_start_server_underfs_init_make_dir_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_UNDERFS_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -957,6 +1023,7 @@ TEST_F(TestBioServer, test_start_server_underfs_init_make_dir_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_mirror_err_return_fail)
 {
+    LOG_INFO("test_start_server_mirrorserver_init_mirror_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_INIT_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
@@ -972,6 +1039,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_mirror_err_return_fail
 
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_mirror_task_err_return_fail)
 {
+    LOG_INFO("test_start_server_mirrorserver_init_mirror_task_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_CRB_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
@@ -991,6 +1059,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_mirror_task_err_return
 
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_mirror_job_err_return_fail)
 {
+    LOG_INFO("test_start_server_mirrorserver_init_mirror_job_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_CRB_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
@@ -1016,6 +1085,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_mirror_job_err_return_
 
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_queue_init_err_return_fail)
 {
+    LOG_INFO("test_start_server_mirrorserver_init_executor_queue_init_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_CRB_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
@@ -1039,6 +1109,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_queue_init_er
 
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_thread_init_err_return_fail)
 {
+    LOG_INFO("test_start_server_mirrorserver_init_executor_thread_init_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_CRB_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
@@ -1062,6 +1133,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_thread_init_e
 
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_param_err_return_fail)
 {
+    LOG_INFO("test_start_server_cache_init_rcache_evict_param_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1080,6 +1152,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_param_err_return
 
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_thread_err_return_fail)
 {
+    LOG_INFO("test_start_server_cache_init_rcache_evict_thread_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1097,6 +1170,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_thread_err_retur
 
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_param_err_return_fail)
 {
+    LOG_INFO("test_start_server_cache_init_rcache_gc_param_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1116,6 +1190,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_param_err_return_fa
 
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_thread_err_return_fail)
 {
+    LOG_INFO("test_start_server_cache_init_rcache_gc_thread_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1135,6 +1210,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_thread_err_return_f
 
 TEST_F(TestBioServer, test_start_server_cache_init_cache_recover_err_return_fail)
 {
+    LOG_INFO("test_start_server_cache_init_cache_recover_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1153,6 +1229,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_cache_recover_err_return_fail
 
 TEST_F(TestBioServer, test_start_server_diagnose_cliagent_err_return_fail)
 {
+    LOG_INFO("test_start_server_diagnose_cliagent_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1166,6 +1243,7 @@ TEST_F(TestBioServer, test_start_server_diagnose_cliagent_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_diagnose_handler_err_return_fail)
 {
+    LOG_INFO("test_start_server_diagnose_handler_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1179,6 +1257,7 @@ TEST_F(TestBioServer, test_start_server_diagnose_handler_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_diagnose_init_err_return_fail)
 {
+    LOG_INFO("test_start_server_diagnose_init_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
@@ -1192,6 +1271,7 @@ TEST_F(TestBioServer, test_start_server_diagnose_init_err_return_fail)
 
 TEST_F(TestBioServer, test_start_server_config_init_err_return_fail)
 {
+    LOG_INFO("test_start_server_config_init_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "CONFIG_INIT_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);

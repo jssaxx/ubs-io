@@ -65,12 +65,13 @@ int main(int argc, char *argv[])
                  "##g' /opt/boostio/bin/conf/bio.conf");
     (void)system("touch ceph.conf");
 
-    std::cout << "Boostio tester start." << std::endl;
+    std::cout << "Start boostio tester begin..." << std::endl;
     auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr);
     if (ret != RET_CACHE_OK) {
         std::cout << "boostio initialize failed, result:" << ret << "." << std::endl;
         return -1;
     }
+    std::cout << "Start boostio tester success." << std::endl;
 
     ::testing::InitGoogleTest(&argc, argv);
     int runRet = RUN_ALL_TESTS();
@@ -80,6 +81,6 @@ int main(int argc, char *argv[])
     sleep(NO_60);
 
     BioExit();
-    std::cout << "Boostio tester exit success." << std::endl;
+    std::cout << "Exit boostio tester success." << std::endl;
     return runRet;
 }

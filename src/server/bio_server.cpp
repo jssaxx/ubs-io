@@ -55,8 +55,8 @@ BioServer::BioServer() noexcept
 
 BResult BioServer::Start()
 {
-    LVOS_TP_START(NO_PROCESS_SERVER_START, 0);
     std::lock_guard<std::mutex> lock(mStartLock);
+    LVOS_TP_START(NO_PROCESS_SERVER_START, 0);
     if (mStarted) {
         return BIO_OK;
     }
@@ -698,6 +698,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
         return static_cast<int32_t>(BIO_INNER_ERR);
     }
     *rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
+    (*rsp)->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     (*rsp)->addrNum = addrVec.size();
     for (uint32_t i = 0; i < addrVec.size(); i++) {
         (*rsp)->addr[i].chunkId = addrVec[i].chunkId;

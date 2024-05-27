@@ -182,7 +182,7 @@ private:
         return memcpy_s(dst, len, src, len);
     }
 
-    BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo);
+    BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &adjustWriteQuota);
     BResult InitializeBioQos();
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();

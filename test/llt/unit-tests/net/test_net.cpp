@@ -32,6 +32,7 @@ void TestNet::TearDown()
 
 TEST_F(TestNet, test_net_get_data_channel)
 {
+    LOG_INFO("test_net_get_data_channel");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     BioNodeId targetNodeId = 0;
     uint32_t pid = 0;
@@ -46,6 +47,7 @@ TEST_F(TestNet, test_net_get_data_channel)
 
 TEST_F(TestNet, test_net_init_common_allocator)
 {
+    LOG_INFO("test_net_init_common_allocator");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     BResult ret = engine->InitCommMemAllocator();
     EXPECT_EQ(ret, BIO_OK);
@@ -59,6 +61,7 @@ TEST_F(TestNet, test_net_init_common_allocator)
 
 TEST_F(TestNet, test_net_init_shm_allocator)
 {
+    LOG_INFO("test_net_init_shm_allocator");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_REGISTER_BY_SIZE", 0, 1, userParam);
@@ -84,6 +87,7 @@ TEST_F(TestNet, test_net_init_shm_allocator)
 
 TEST_F(TestNet, test_net_new_channel)
 {
+    LOG_INFO("test_net_new_channel");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
     int32_t ret = engine->NewChannel("127.0.0.1", channel, "bio-ctrl-2");
@@ -92,6 +96,7 @@ TEST_F(TestNet, test_net_new_channel)
 
 TEST_F(TestNet, test_net_broken_channel)
 {
+    LOG_INFO("test_net_broken_channel");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
     engine->ChannelBroken(channel);
@@ -104,17 +109,16 @@ int32_t TestNet::TestMsgHandle(ServiceContext &ctx)
 
 TEST_F(TestNet, test_receive_handle)
 {
+    LOG_INFO("test_receive_handle");
     auto netEngine = BioServer::Instance()->GetNetEngine();
-    auto ret = netEngine->RegisterNewRequestHandler(NO_100,
-        std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
+    auto ret =
+        netEngine->RegisterNewRequestHandler(NO_100, std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
     EXPECT_EQ(ret, BIO_OK);
 
-    ret = netEngine->RegisterNewRequestHandler(NO_100,
-        std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
+    ret = netEngine->RegisterNewRequestHandler(NO_100, std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
     EXPECT_EQ(ret, BIO_ALREADY_DONE);
 
-    ret = netEngine->RegisterNewRequestHandler(NO_256,
-        std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
+    ret = netEngine->RegisterNewRequestHandler(NO_256, std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
     ServiceContext ctx;
@@ -127,6 +131,7 @@ TEST_F(TestNet, test_receive_handle)
 
 TEST_F(TestNet, test_net_show)
 {
+    LOG_INFO("test_net_show");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint32_t executorNum = 0;
     NetOptions option;
@@ -141,6 +146,7 @@ TEST_F(TestNet, test_net_show)
 
 TEST_F(TestNet, test_net_check_connect)
 {
+    LOG_INFO("test_net_check_connect");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     BioNodeId targetNodeId = 1;
     BResult ret = engine->CheckConnect(targetNodeId);
@@ -155,6 +161,7 @@ TEST_F(TestNet, test_net_check_connect)
 
 TEST_F(TestNet, test_net_sync_call)
 {
+    LOG_INFO("test_net_sync_call");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t req1 = NO_1024;
     uint64_t rsp1 = 0;
@@ -179,6 +186,7 @@ TEST_F(TestNet, test_net_sync_call)
 
 TEST_F(TestNet, test_net_async_call_without_resp)
 {
+    LOG_INFO("test_net_async_call_without_resp");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t req1 = NO_1024;
     BResult ret = engine->AsyncCallWithoutResponse<uint64_t>(1, 1, req1);
@@ -193,6 +201,7 @@ TEST_F(TestNet, test_net_async_call_without_resp)
 
 TEST_F(TestNet, test_net_async_call)
 {
+    LOG_INFO("test_net_async_call");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t req1 = NO_1024;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
@@ -216,6 +225,7 @@ TEST_F(TestNet, test_net_async_call)
 
 TEST_F(TestNet, test_net_async_call_buff)
 {
+    LOG_INFO("test_net_async_call_buff");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t req1 = NO_1024;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
@@ -234,6 +244,7 @@ TEST_F(TestNet, test_net_async_call_buff)
 
 TEST_F(TestNet, test_net_read)
 {
+    LOG_INFO("test_net_read");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     NetRequest req;
     auto ret = engine->SyncRead(1, 0, req);
@@ -245,6 +256,7 @@ TEST_F(TestNet, test_net_read)
 
 TEST_F(TestNet, test_net_write)
 {
+    LOG_INFO("test_net_write");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     NetRequest req;
     auto ret = engine->SyncWrite(1, 0, req);
@@ -272,6 +284,7 @@ TEST_F(TestNet, test_net_write)
 
 TEST_F(TestNet, test_net_sync_connect)
 {
+    LOG_INFO("test_net_sync_connect");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint32_t mPid = 0;
     ConnectInfo mConnectInfo(INVALID_NID, mPid, INVALID_NID);
@@ -284,6 +297,7 @@ TEST_F(TestNet, test_net_sync_connect)
 
 TEST_F(TestNet, test_net_receive_fds)
 {
+    LOG_INFO("test_net_receive_fds");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     BioNodeId targetNodeId = 1;
     int32_t realFd = 1;
@@ -299,6 +313,7 @@ TEST_F(TestNet, test_net_receive_fds)
 
 TEST_F(TestNet, test_net_set_shminfo)
 {
+    LOG_INFO("test_net_set_shminfo");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     int32_t mShmFd = -1;
     uint8_t *mShmAddr = nullptr;
@@ -309,6 +324,7 @@ TEST_F(TestNet, test_net_set_shminfo)
 
 TEST_F(TestNet, test_net_get_shmaddress)
 {
+    LOG_INFO("test_net_get_shmaddress");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t mShmOffset = 0;
     engine->GetShmAddress(mShmOffset);

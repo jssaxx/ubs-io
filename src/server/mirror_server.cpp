@@ -1350,6 +1350,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
         delete[] tmp;
         return static_cast<int32_t>(BIO_INNER_ERR);
     }
+    rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     rsp->addrNum = addrVec.size();
     for (uint32_t i = 0; i < addrVec.size(); i++) {
         rsp->addr[i].chunkId = addrVec[i].chunkId;

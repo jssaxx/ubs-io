@@ -63,7 +63,6 @@ target_link_libraries(bio_test bio_sdk bio_server
         pthread dl rt aio
         -Wl,--end-group)
 
-
 set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")
 set_target_properties(bio_test PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 set_target_properties(bio_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
