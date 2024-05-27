@@ -175,6 +175,7 @@ typedef struct {
 } SliceAddrDesc;
 
 typedef struct {
+    uint64_t updateQuota;
     uint64_t addrNum;
     SliceAddrDesc addr[SLICE_ADDR_MAX_SIZE];
     uint64_t addrOffset[SLICE_ADDR_MAX_SIZE];

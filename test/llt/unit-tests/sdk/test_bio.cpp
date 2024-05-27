@@ -48,6 +48,7 @@ void TestBio::TearDown()
 
 TEST_F(TestBio, test_bio_create_cache)
 {
+    LOG_INFO("test_bio_create_cache");
     uint64_t tenantId = 12341;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
@@ -60,6 +61,7 @@ TEST_F(TestBio, test_bio_create_cache)
 
 TEST_F(TestBio, test_bio_get_cache)
 {
+    LOG_INFO("test_bio_get_cache");
     uint64_t tenantId = 12343;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
@@ -86,6 +88,7 @@ TEST_F(TestBio, test_bio_get_cache)
 
 TEST_F(TestBio, test_bio_destroy_cache)
 {
+    LOG_INFO("test_bio_destroy_cache");
     uint64_t tenantId = 12344;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
@@ -111,6 +114,7 @@ TEST_F(TestBio, test_bio_destroy_cache)
 
 TEST_F(TestBio, test_list_cache)
 {
+    LOG_INFO("test_list_cache");
     uint64_t tenantId = 12345;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
@@ -129,6 +133,7 @@ TEST_F(TestBio, test_list_cache)
 
 TEST_F(TestBio, test_bio_calc_location)
 {
+    LOG_INFO("test_bio_calc_location");
     CacheDescriptor desc = { G_TENANT_ID, AffinityStrategy::LOCAL_AFFINITY, WriteStrategy::WRITE_BACK };
     auto ret = BioCreateCache(desc);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -147,6 +152,7 @@ TEST_F(TestBio, test_bio_calc_location)
 
 TEST_F(TestBio, test_bio_put)
 {
+    LOG_INFO("test_bio_put");
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
@@ -164,6 +170,7 @@ TEST_F(TestBio, test_bio_put)
 
 TEST_F(TestBio, test_bio_get)
 {
+    LOG_INFO("test_bio_get");
     (void)system("touch bio_get_file");
     FILE *fp = fopen("./bio_get_file", "w");
     EXPECT_NE(fp, nullptr);
@@ -191,6 +198,7 @@ TEST_F(TestBio, test_bio_get)
 
 TEST_F(TestBio, test_bio_put_diff_size_case_return_ok)
 {
+    LOG_INFO("test_bio_put_diff_size_case_return_ok");
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
     uint64_t length = 6000UL;
@@ -239,6 +247,7 @@ TEST_F(TestBio, test_bio_put_diff_size_case_return_ok)
 
 TEST_F(TestBio, test_bio_get_diff_size)
 {
+    LOG_INFO("test_bio_get_diff_size");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
     ObjLocation locationInfo0{ 0, 0 };
@@ -291,6 +300,7 @@ TEST_F(TestBio, test_bio_get_diff_size)
 
 TEST_F(TestBio, test_bio_get_case_return_fail)
 {
+    LOG_INFO("test_bio_get_case_return_fail");
     uint64_t realLen = 3300000UL;
     char *value = new char[realLen];
     ObjLocation locationInfo6{ 0, 0 };
@@ -308,6 +318,7 @@ TEST_F(TestBio, test_bio_get_case_return_fail)
 
 TEST_F(TestBio, test_bio_list_all)
 {
+    LOG_INFO("test_bio_list_all");
     auto prefix = "456";
     ObjStat *objs = nullptr;
     uint64_t objNum = 0;
@@ -328,6 +339,7 @@ TEST_F(TestBio, test_bio_list_all)
 
 TEST_F(TestBio, test_bio_stat)
 {
+    LOG_INFO("test_bio_stat");
     ObjLocation locationInfo{ 0, 0 };
     ObjStat keyStat;
     auto ret = BioStat(G_TENANT_ID, G_KEY, locationInfo, &keyStat);
@@ -369,6 +381,7 @@ static void TestCallback(void *context, int32_t result)
 
 TEST_F(TestBio, test_bio_load)
 {
+    LOG_INFO("test_bio_load");
     ObjLocation locationInfo{ 0, 0 };
     LoadContext loadCtx;
     sem_init(&(loadCtx.sem), 0, 0);
@@ -393,6 +406,7 @@ TEST_F(TestBio, test_bio_load)
 
 TEST_F(TestBio, test_bio_delete)
 {
+    LOG_INFO("test_bio_delete");
     ObjLocation locationInfo{ 0, 0 };
     auto ret = BioDelete(G_TENANT_ID, G_KEY, locationInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -414,6 +428,7 @@ static CacheSpaceDesc addressInfo;
 
 TEST_F(TestBio, test_bio_allocspace)
 {
+    LOG_INFO("test_bio_allocspace");
     static uint64_t objectId = 1;
     addressInfo.allocLoc = 0;
     auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
@@ -429,6 +444,7 @@ TEST_F(TestBio, test_bio_allocspace)
 
 TEST_F(TestBio, test_bio_putwithspace_case)
 {
+    LOG_INFO("test_bio_putwithspace_case");
     auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressInfo);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
@@ -464,6 +480,7 @@ void TestBio::GetPtVersionStub()
 
 TEST_F(TestBio, test_list_remote_case_return_ok)
 {
+    LOG_INFO("test_list_remote_case_return_ok");
     TestBio::VNodeIdStub();
     auto prefix = "456";
     ObjStat *objs = nullptr;
@@ -475,6 +492,7 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
 
 TEST_F(TestBio, test_bio_put_remote_case_return_fail)
 {
+    LOG_INFO("test_bio_put_remote_case_return_fail");
     TestBio::VNodeIdStub();
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
@@ -487,6 +505,7 @@ TEST_F(TestBio, test_bio_put_remote_case_return_fail)
 
 TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
 {
+    LOG_INFO("test_bio_put_remote_ptv_error_case_return_fail");
     TestBio::VNodeIdStub();
     TestBio::GetPtVersionStub();
     FILE *fp = fopen("./bio_test", "r");
@@ -500,6 +519,7 @@ TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
 
 TEST_F(TestBio, test_bio_get_remote_case_return_fail)
 {
+    LOG_INFO("test_bio_get_remote_case_return_fail");
     TestBio::VNodeIdStub();
     char *value = new char[G_LENGTH];
     ObjLocation locationInfo{ 0, 0 };
@@ -511,6 +531,7 @@ TEST_F(TestBio, test_bio_get_remote_case_return_fail)
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_down)
 {
+    LOG_INFO("test_pt_entry_list_update_node_state_down");
     auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * 2UL);
     ptList->poolId = 0;
     ptList->ptNum = ock::bio::NO_2;
@@ -539,6 +560,7 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_down)
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
 {
+    LOG_INFO("test_pt_entry_list_update_node_state_up_down");
     auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
     ptList->poolId = 0;
     ptList->ptNum = ock::bio::NO_2;
@@ -571,6 +593,7 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_up_running)
 {
+    LOG_INFO("test_pt_entry_list_update_node_state_up_running");
     auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * 2UL);
     ptList->poolId = 0;
     ptList->ptNum = ock::bio::NO_2;
@@ -603,6 +626,7 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_running)
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_up_recovery)
 {
+    LOG_INFO("test_pt_entry_list_update_node_state_up_recovery");
     auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
     ptList->poolId = 0;
     ptList->ptNum = ock::bio::NO_2;
@@ -635,6 +659,7 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_recovery)
 
 TEST_F(TestBio, test_pt_entry_list_update_node_finish)
 {
+    LOG_INFO("test_pt_entry_list_update_node_finish");
     auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
     ptEntryList->poolId = 0;
     ptEntryList->ptNum = ock::bio::NO_2;
@@ -673,12 +698,14 @@ TEST_F(TestBio, test_pt_entry_list_update_node_finish)
 
 TEST_F(TestBio, test_create_view_caculator)
 {
+    LOG_INFO("test_create_view_caculator");
     CreateViewCalculator(1, 1, 1, 1);
     EXPECT_EQ(0, ock::bio::BIO_OK);
 }
 
 TEST_F(TestBio, test_view_caculator_initial)
 {
+    LOG_INFO("test_view_caculator_initial");
     Calculator calculator = CreateViewCalculator(1, 1, 1, 1);
     auto notifyList = static_cast<NodeInfoList *>(malloc(sizeof(NodeInfoList) + sizeof(NodeInfo)));
     auto nodeInfo = (NodeInfo *)malloc(sizeof(NodeInfo));
@@ -733,6 +760,7 @@ TEST_F(TestBio, test_view_caculator_initial)
 
 TEST_F(TestBio, test_caculator_need_rebalance)
 {
+    LOG_INFO("test_caculator_need_rebalance");
     Calculator calculator = CreateViewCalculator(1, 1, 1, 1);
     auto notifyList = static_cast<NodeInfoList *>(malloc(sizeof(NodeInfoList) + sizeof(NodeInfo)));
     auto nodeInfo = (NodeInfo *)malloc(sizeof(NodeInfo));
@@ -791,6 +819,7 @@ TEST_F(TestBio, test_caculator_need_rebalance)
 
 TEST_F(TestBio, test_caculator_rebalance)
 {
+    LOG_INFO("test_caculator_rebalance");
     Calculator calculator = CreateViewCalculator(1, 1, 1, 1);
     auto notifyList = static_cast<NodeInfoList *>(malloc(sizeof(NodeInfoList) + sizeof(NodeInfo)));
     auto nodeInfo = (NodeInfo *)malloc(sizeof(NodeInfo));
@@ -849,6 +878,7 @@ TEST_F(TestBio, test_caculator_rebalance)
 
 TEST_F(TestBio, test_caculator_rebalance_state_init)
 {
+    LOG_INFO("test_caculator_rebalance_state_init");
     Calculator calculator = CreateViewCalculator(1, 1, 1, 1);
     auto notifyList = static_cast<NodeInfoList *>(malloc(sizeof(NodeInfoList) + sizeof(NodeInfo)));
     auto nodeInfo = (NodeInfo *)malloc(sizeof(NodeInfo));
@@ -921,6 +951,7 @@ static int WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count
 
 TEST_F(TestBio, test_juicefs_callback_read_case_return_ok)
 {
+    LOG_INFO("test_juicefs_callback_read_case_return_ok");
     BioRegisterInterceptorRead(ReadHookFunc);
     auto ret = BioReadHook(0, nullptr, 0, 0, nullptr);
     EXPECT_EQ(ret, ock::bio::BIO_OK);
@@ -928,6 +959,7 @@ TEST_F(TestBio, test_juicefs_callback_read_case_return_ok)
 
 TEST_F(TestBio, test_juicefs_callback_write_case_return_ok)
 {
+    LOG_INFO("test_juicefs_callback_write_case_return_ok");
     BioRegisterInterceptorWrite(WriteHookFunc);
     auto ret = BioWriteHook(0, nullptr, 0, 0, 0);
     EXPECT_EQ(ret, ock::bio::BIO_OK);
@@ -935,6 +967,7 @@ TEST_F(TestBio, test_juicefs_callback_write_case_return_ok)
 
 TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
 {
+    LOG_INFO("test_juicefs_callback_write_copy_case_return_ok");
     BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHookFunc);
     auto ret = BioWriteCopyFreeHook(0, 0, 0, nullptr);
     EXPECT_EQ(ret, ock::bio::BIO_OK);
@@ -942,6 +975,7 @@ TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
 
 TEST_F(TestBio, test_bio_calculateLocation_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_calculateLocation_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     uint32_t sliceId = 1;
     auto ret = BioCalcLocation(G_TENANT_ID, sliceId, &g_Location);
@@ -951,6 +985,7 @@ TEST_F(TestBio, test_bio_calculateLocation_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_put_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_put_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
@@ -964,6 +999,7 @@ TEST_F(TestBio, test_bio_put_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_get_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_get_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     uint64_t realLen = 6000UL;
     char *value = new char[realLen];
@@ -976,6 +1012,7 @@ TEST_F(TestBio, test_bio_get_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_delete_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_delete_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     ObjLocation locationInfo{ 0, 0 };
     auto ret = BioDelete(G_TENANT_ID, G_KEY, locationInfo);
@@ -985,6 +1022,7 @@ TEST_F(TestBio, test_bio_delete_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_load_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_load_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     ObjLocation locationInfo{ 0, 0 };
     LoadContext loadCtx;
@@ -999,6 +1037,7 @@ TEST_F(TestBio, test_bio_load_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_list_all_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_list_all_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     auto prefix = "456";
     ObjStat *objs = nullptr;
@@ -1011,6 +1050,7 @@ TEST_F(TestBio, test_bio_list_all_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_stat_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_stat_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     ObjLocation locationInfo{ 0, 0 };
     ObjStat keyStat;
@@ -1021,6 +1061,7 @@ TEST_F(TestBio, test_bio_stat_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_allocspace_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     static uint64_t objectId = 1;
     addressInfo.allocLoc = 1;
@@ -1031,6 +1072,7 @@ TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
 
 TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
 {
+    LOG_INFO("test_bio_putwithspace_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     static uint64_t objectId = 1;
     auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressInfo);

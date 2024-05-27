@@ -184,7 +184,7 @@ BResult MirrorClient::InitializeBioQos()
     }
 
     // 2. fill write and read concurrency
-    uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : (NO_1024 * NO_3);
+    uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
     uint64_t readConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_1024;
 
     // 3. start bio qos
@@ -557,13 +557,16 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
     uint64_t retryCnt = 0;
     BResult ret = BIO_OK;
 
+    BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_APPLY_QOS);
+    mBioQos->Apply(QOS_CONCURRENCY, QUOTA_WRITE);
+    BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
         uint64_t updateWriteQuota = 0;
         ret = PutImpl(param, spaceInfo, updateWriteQuota);
         if (LIKELY(ret == BIO_OK)) {
             BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
-            mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
+            mBioQos->Release(QOS_CONCURRENCY, QUOTA_WRITE);
             BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
             return BIO_OK;
         }
@@ -579,7 +582,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
         }
     } while (isRetry);
     BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
-    mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
+    mBioQos->Release(QOS_CONCURRENCY, QUOTA_WRITE);
     BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
 
     return ret;
@@ -890,7 +893,8 @@ BResult MirrorClient::CheckUpdateReady()
     return ret;
 }
 
-BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
+BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo,
+    uint64_t &adjustWriteQuota)
 {
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
@@ -941,23 +945,30 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
         spaceInfo.address[idx].size = rsp->addr[idx].chunkLen;
     }
 
+    adjustWriteQuota = rsp->updateQuota;
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
 }
 
 BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
-    BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_APPLY_QOS);
-    mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
-    BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_APPLY_QOS, BIO_OK);
-    BResult ret = AllocSpaceImpl(param, spaceInfo);
+    BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_APPLY_QOS);
+    mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
+    BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_APPLY_QOS, BIO_OK);
+    uint64_t updateWriteQuota = 0;
+    BResult ret = AllocSpaceImpl(param, spaceInfo, updateWriteQuota);
     if (LIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", key:" << param.key << ", length:" << param.length);
-        BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
-        mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
-        BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
+        BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS);
+        mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
+        BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS, BIO_OK);
+        return ret;
     }
-    return ret;
+
+    BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS);
+    mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
+    BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS, BIO_OK);
+    return BIO_OK;
 }
 
 BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,

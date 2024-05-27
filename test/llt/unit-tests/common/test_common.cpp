@@ -5,6 +5,7 @@
 #include "test_common.h"
 #include "bio_str_util.h"
 #include "bio_file_util.h"
+#include "bio_log.h"
 
 using namespace ock::bio;
 
@@ -26,6 +27,7 @@ void TestCommon::TearDown()
 
 TEST_F(TestCommon, test_strtofloat_return_ok)
 {
+    LOG_INFO("test_strtofloat_return_ok");
     float value = 0.0f;
     auto ret = StrUtil::StrToFloat("123.5", value);
     EXPECT_EQ(ret, true);
@@ -34,6 +36,7 @@ TEST_F(TestCommon, test_strtofloat_return_ok)
 
 TEST_F(TestCommon, test_strstartwith_return_ok)
 {
+    LOG_INFO("test_strstartwith_return_ok");
     auto ret = StrUtil::StartWith("123.5", "1");
     EXPECT_EQ(ret, true);
 }
