@@ -341,6 +341,7 @@ void TestCm::Stub()
 
 TEST_F(TestCm, test_cm_initialize)
 {
+    LOG_INFO("test_cm_initialize");
     CmOptions mOptions;
     mOptions.role = ROLE_TOGETHER;
     mOptions.zkIpMask = "127.0.0.1:2181";
@@ -382,6 +383,7 @@ TEST_F(TestCm, test_cm_initialize)
 
 TEST_F(TestCm, test_cm_get_mr)
 {
+    LOG_INFO("test_cm_get_mr");
     NodeMetaBuff *mr = (NodeMetaBuff *)malloc(NODE_META_BUFF_LEN);
     mr->nodeId = 0;
     int32_t ret = CM_GetNodeMr(0, mr);
@@ -391,6 +393,7 @@ TEST_F(TestCm, test_cm_get_mr)
 
 TEST_F(TestCm, test_cm_get_node_session)
 {
+    LOG_INFO("test_cm_get_node_session");
     uint64_t sessionId = 0;
     int32_t ret = CmClientZkGetNodeSession(0, 0, &sessionId);
     EXPECT_EQ(ret, CM_OK);
@@ -398,18 +401,21 @@ TEST_F(TestCm, test_cm_get_node_session)
 
 TEST_F(TestCm, test_cm_node_event_check)
 {
+    LOG_INFO("test_cm_node_event_check");
     int32_t ret = CmClientZkNodeEventExistCheck(0, 0);
     EXPECT_EQ(ret, CM_NOT_EXIST);
 }
 
 TEST_F(TestCm, test_cm_pt_event_check)
 {
+    LOG_INFO("test_cm_pt_event_check");
     int32_t ret = CmClientZkPtEventExistCheck(0, 0);
     EXPECT_EQ(ret, CM_NOT_EXIST);
 }
 
 TEST_F(TestCm, test_cm_record_node_event)
 {
+    LOG_INFO("test_cm_record_node_event");
     CmNodeEvent nodeEvent;
     nodeEvent.poolId = 0;
     nodeEvent.nodeId = 0;
@@ -419,6 +425,7 @@ TEST_F(TestCm, test_cm_record_node_event)
 
 TEST_F(TestCm, test_cm_record_pt_event)
 {
+    LOG_INFO("test_cm_record_pt_event");
     CmPtEvent ptEvent;
     ptEvent.poolId = 0;
     ptEvent.nodeId = 0;
@@ -429,30 +436,35 @@ TEST_F(TestCm, test_cm_record_pt_event)
 
 TEST_F(TestCm, test_cm_report_disk_status_fault)
 {
+    LOG_INFO("test_cm_report_disk_status_fault");
     int32_t ret = CmReportDiskStatus(0, CM_DISK_FAULT);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_report_disk_status_normal)
 {
+    LOG_INFO("test_cm_report_disk_status_normal");
     int32_t ret = CmReportDiskStatus(0, CM_DISK_NORMAL);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_server_view_role_change_slave)
 {
+    LOG_INFO("test_cm_server_view_role_change_slave");
     int32_t ret = CmServerViewRoleChange(CM_SERVER_SLAVE);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_server_view_role_change_master)
 {
+    LOG_INFO("test_cm_server_view_role_change_master");
     int32_t ret = CmServerViewRoleChange(CM_SERVER_MASTER);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
 {
+    LOG_INFO("test_cm_server_view_role_change_master_ptnum_0");
     PoolInfo pools;
     int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
     EXPECT_EQ(ret, 0);
@@ -507,6 +519,7 @@ static int32_t CmServerMonitorLoadPoolStub()
 
 TEST_F(TestCm, test_cm_server_view_change_case_return_ok)
 {
+    LOG_INFO("test_cm_server_view_change_case_return_ok");
     CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
     nodeList->poolId = 0;
     nodeList->nodeNum = NO_256;
@@ -528,6 +541,7 @@ void TestCm::CancelNodeStub()
 
 TEST_F(TestCm, test_cm_server_monitor_expire_case_return_ok)
 {
+    LOG_INFO("test_cm_server_monitor_expire_case_return_ok");
     CancelNodeStub();
     CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
     nodeList->poolId = 0;
@@ -543,6 +557,7 @@ TEST_F(TestCm, test_cm_server_monitor_expire_case_return_ok)
 
 TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
 {
+    LOG_INFO("test_cm_server_get_node_state_case_return_ok");
     NodeStateInfo state;
     state.nodeId = 0;
     auto ret = CmServerViewGetNodeState(0, &state);
@@ -551,6 +566,7 @@ TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
 
 TEST_F(TestCm, test_cm_get_node_info)
 {
+    LOG_INFO("test_cm_get_node_info");
     NodeInfo nodeInfo;
     auto ret = CM_GetNodeInfo(0, &nodeInfo);
     EXPECT_EQ(ret, CM_OK);
@@ -563,6 +579,7 @@ static int32_t StubNodeChgHandler(NodeStateList *nodeList, void *ctx)
 
 TEST_F(TestCm, test_cm_register_node_chg)
 {
+    LOG_INFO("test_cm_register_node_chg");
     NodeListChangeOpHandle handle = { StubNodeChgHandler, nullptr };
     auto ret = CM_RegNodeListChangeNotifyHandle(0, &handle);
     EXPECT_EQ(ret, CM_OK);
@@ -570,6 +587,7 @@ TEST_F(TestCm, test_cm_register_node_chg)
 
 TEST_F(TestCm, test_cm_set_pt_finish)
 {
+    LOG_INFO("test_cm_set_pt_finish");
     PtFinish eventList = { 1, 1, 0 };
     auto ret = CM_SetPtFinishStatus(0, 1, &eventList);
     EXPECT_EQ(ret, CM_OK);
@@ -577,6 +595,7 @@ TEST_F(TestCm, test_cm_set_pt_finish)
 
 TEST_F(TestCm, test_cm_is_pt_same)
 {
+    LOG_INFO("test_cm_is_pt_same");
     PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
         {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
     PtEntry elem2 = elem1;
@@ -586,6 +605,7 @@ TEST_F(TestCm, test_cm_is_pt_same)
 
 TEST_F(TestCm, test_cm_get_node_id_by_path)
 {
+    LOG_INFO("test_cm_get_node_id_by_path");
     std::string path = "/zk/123";
     std::string pre = "/zk/";
     auto ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
@@ -594,6 +614,7 @@ TEST_F(TestCm, test_cm_get_node_id_by_path)
 
 TEST_F(TestCm, test_cm_is_zk_pt_same)
 {
+    LOG_INFO("test_cm_is_zk_pt_same");
     PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
         {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
     PtEntry elem2 = elem1;
