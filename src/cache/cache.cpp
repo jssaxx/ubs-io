@@ -384,12 +384,11 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 
 BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
-    BResult ret;
-
+    BResult ret = BIO_INNER_ERR;
+    LVOS_TP_START(CACHE_EXPIRED_ERR, &ret, BIO_ERR);
     BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
     ret = mRCacheManager->ExpiredClear(ptId, ptv);
     BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
-    LVOS_TP_START(CACHE_EXPIRED_ERR, &ret, BIO_ERR);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Rcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);

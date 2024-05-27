@@ -9,6 +9,7 @@
 #include "bio_types.h"
 #include "bdm_core.h"
 #include "bio_err.h"
+#include "bio_log.h"
 #include "test_disk.h"
 
 using namespace ock::bio;
@@ -53,6 +54,7 @@ static void UtAsyncProcCb(void *ctx, int retCode)
 
 TEST_F(TestDisk, test_disk_read_async_case_return_ok)
 {
+    LOG_INFO("test_disk_read_async_case_return_ok");
     char *buff = nullptr;
     int32_t ret = posix_memalign((void **)&buff, NO_4194304, NO_4194304);
     EXPECT_EQ(0, ret);
@@ -77,6 +79,7 @@ TEST_F(TestDisk, test_disk_read_async_case_return_ok)
 
 TEST_F(TestDisk, test_disk_write_async_case_return_ok)
 {
+    LOG_INFO("test_disk_write_async_case_return_ok");
     char *buff = nullptr;
     int32_t ret = posix_memalign((void **)&buff, NO_4194304, NO_4194304);
     EXPECT_EQ(0, ret);
