@@ -69,18 +69,19 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
     }
 
     reqExecutorNum = coreThreadNum;
-    mRequestExecutor = MakeRef<NetExecutorPool>("NetExecutor");
-    if (mRequestExecutor == nullptr) {
-        NET_LOG_ERROR("Make net request executor failed.");
-        return BIO_ALLOC_FAIL;
-    }
+    if (reqExecutorNum != 0) {
+        mRequestExecutor = MakeRef<NetExecutorPool>("NetExecutor");
+        if (mRequestExecutor == nullptr) {
+            NET_LOG_ERROR("Make net request executor failed.");
+            return BIO_ALLOC_FAIL;
+        }
 
-    ret = mRequestExecutor->Start(reqExecutorNum, queueSize);
-    if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to start request executor, ret:" << ret << ".");
-        return ret;
+        ret = mRequestExecutor->Start(reqExecutorNum, queueSize);
+        if (ret != BIO_OK) {
+            NET_LOG_ERROR("Failed to start request executor, ret:" << ret << ".");
+            return ret;
+        }
     }
-
     auto serviceLog = NetOutLogger::Instance();
     serviceLog->SetExternalLogFunction(func);
     mStarted = true;
@@ -351,11 +352,11 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
 {
     options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
     options.SetWorkerGroups(GenerateWorkersSetting(opt));
-    options.mrSendReceiveSegSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
-    options.mrSendReceiveSegCount = NO_1024;
+    options.mrSendReceiveSegSize = (NO_256 * NO_1024); // shm场景的是ep级
+    options.mrSendReceiveSegCount = NO_1024; // shm场景未使用
     options.heartBeatIdleTime = NO_5;
     options.heartBeatProbeInterval = NO_1;
-    options.qpSendQueueSize = NO_512;
+    options.qpSendQueueSize = NO_64; // shm场景的是ep级
     options.pollingBatchSize = NO_16;
     options.prePostReceiveSizePerQP = NO_64;
     options.oobType = NET_OOB_UDS;

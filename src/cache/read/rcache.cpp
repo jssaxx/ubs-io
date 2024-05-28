@@ -369,6 +369,8 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
         LOG_ERROR("Alloc chunk for read cache key " << key << " failed.");
         return BIO_ERR;
     }
+
+    chunk->lock.lock();
     chunk->SetMqType(MQ_COLD);
     chunk->SetTierType(READ_CACHE_TIER_MEM);
 
@@ -380,6 +382,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     ret = InsertToIndex(chunk->GetKey(), chunk);
     BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_INDEX, ret);
     if (UNLIKELY((ret != BIO_OK) && (ret != BIO_EXISTS))) {
+        chunk->lock.unlock();
         LOG_ERROR("Insert read cache key " << key << " to index failed.");
         return BIO_ERR;
     }
@@ -390,6 +393,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_TRUNC);
     AddToTruncateList(READ_CACHE_TIER_MEM, chunk);
     BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_TRUNC, 0);
+    chunk->lock.unlock();
 
     IncCacheData(READ_CACHE_TIER_MEM, chunk->GetValue().length);
     return BIO_OK;
@@ -440,7 +444,6 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
         chunk->lock.unlock();
         return ret;
     }
-    chunk->lock.unlock();
 
     BIO_TRACE_START(RCACHE_TRACE_GET_UPDATE_EVICT);
     auto mqType = chunk->GetMqType();
@@ -449,6 +452,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     evictMq[tier][mqType].PushBack(chunk);
     evictMqLock[tier][mqType].UnLock();
     BIO_TRACE_END(RCACHE_TRACE_GET_UPDATE_EVICT, BIO_OK);
+    chunk->lock.unlock();
     return BIO_OK;
 }
 
@@ -522,16 +526,19 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     }
     delete[] value;
 
+    chunk->lock.lock();
     chunk->SetMqType(MQ_COLD);
     chunk->SetTierType(READ_CACHE_TIER_MEM);
     ret = InsertToIndex(chunk->GetKey(), chunk);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_EXISTS)) {
+        chunk->lock.unlock();
         LOG_ERROR("Read cache insert index failed, ret:" << ret << ", key " << key << ".");
         return BIO_INNER_ERR;
     }
 
     AddToEvictList(READ_CACHE_TIER_MEM, MQ_COLD, chunk);
     AddToTruncateList(READ_CACHE_TIER_MEM, chunk);
+    chunk->lock.unlock();
     IncCacheData(READ_CACHE_TIER_MEM, chunk->GetValue().length);
     return BIO_OK;
 }

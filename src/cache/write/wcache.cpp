@@ -688,13 +688,13 @@ BResult WCache::EvictAllMemSliceToDisk()
         if (sliceRef == nullptr) {
             break;
         }
+        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
         auto ret = EvictFromMemToDisk(sliceRef);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return ret;
         }
-        CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
         isSatisfied = EvictMemSatisfiedCond();
     }
 
