@@ -15,11 +15,11 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
 {
     LOG_DEBUG("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
 
-    LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL, &mTruncateOffset, NO_4194304);
+    bool isInvalidRange = false;
+    LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL, &isInvalidRange, true);
+    isInvalidRange = (offset < mTruncateOffset);
     LVOS_TP_END;
-    if (offset < mTruncateOffset) {
-        LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL_RESET, &mTruncateOffset);
-        LVOS_TP_END;
+    if (UNLIKELY(isInvalidRange)) {
         LOG_ERROR("Invalid offset:" << offset << ", flowId:" << mFlowId << ", truncate:" << mTruncateOffset);
         return BIO_ERR;
     }

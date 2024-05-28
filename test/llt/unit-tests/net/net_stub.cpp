@@ -80,6 +80,12 @@ int32_t NetStub::SendFds(int fds[], uint32_t len)
     return BIO_OK;
 }
 
+int32_t NetStub::ReceiveFds(int fds[], uint32_t len, int32_t ts)
+{
+    LOG_INFO("ReceiveFds stub.");
+    return BIO_OK;
+}
+
 int32_t NetStub::Reply(int32_t retCode, void *resp, uint32_t respSize)
 {
     LOG_INFO("Reply stub.");

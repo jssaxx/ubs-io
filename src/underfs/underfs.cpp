@@ -214,10 +214,11 @@ BResult UnderFs::Init()
     dir = opendir(mEmulationCephPath.c_str());
     LVOS_TP_END;
     if (dir == nullptr) {
-        int status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        int status = BIO_UFS_IOERR;
         LVOS_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_UFS_IOERR);
+        status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         LVOS_TP_END;
-        if (status == 0) {
+        if (status == BIO_OK) {
             LOG_INFO("Succeed to create directory, " << mEmulationCephPath.c_str());
         } else {
             LOG_ERROR("Failed to create directory, " << mEmulationCephPath.c_str() << ", status:" << status);

@@ -648,10 +648,7 @@ void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &p
 
 BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
-    NetService *netService = nullptr;
-    LVOS_TP_START(SERVER_NET_FAIL_TO_CONNECT_CTRL_PLANE, &netService, nullptr);
-    netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
-    LVOS_TP_END;
+    NetService *netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
     if (netService == nullptr) {
         NET_LOG_ERROR("Net service not ready.");
         return BIO_ERR;
