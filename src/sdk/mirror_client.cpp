@@ -347,26 +347,30 @@ uint16_t MirrorClient::SelectingPtImpl(uint64_t objectId, AffinityStrategy affin
 BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
 {
     mLock.LockRead();
-    auto iter = mPtView.end();
-    LVOS_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, 0);
-    iter = mPtView.find(ptId);
+    auto iter = mPtView.find(ptId);
+    bool isFind = false;
+    LVOS_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, &isFind, false);
+    isFind = (iter != mPtView.end());
     LVOS_TP_END;
-    if (UNLIKELY(iter == mPtView.end())) {
+    if (UNLIKELY(!isFind)) {
         mLock.UnLock();
         CLIENT_LOG_ERROR("Invalid pt id:" << ptId << ".");
         return BIO_INVALID_PARAM;
     }
-    BResult ret = BIO_OK;
-    LVOS_TP_START(SDK_MIRROR_CHECK_PT_FAIL, &(iter->second.state), CM_PT_FAULT);
+
+    bool isPtNormal = false;
+    LVOS_TP_START(SDK_MIRROR_CHECK_PT_FAIL, &isPtNormal, false);
+    isPtNormal = (iter->second.state != CM_PT_FAULT);
     LVOS_TP_END;
-    if (UNLIKELY(iter->second.state == CM_PT_FAULT)) {
+    if (UNLIKELY(!isPtNormal)) {
+        mLock.UnLock();
         CLIENT_LOG_ERROR("Pt stat is fault, pt id:" << ptId << ", state:" << iter->second.state << ".");
-        ret = BIO_CHECK_PT_FAIL;
-    } else {
-        ptEntry = iter->second;
+        return BIO_CHECK_PT_FAIL;
     }
+
+    ptEntry = iter->second;
     mLock.UnLock();
-    return ret;
+    return BIO_OK;
 }
 
 uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
@@ -900,7 +904,8 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc space failed, ret: " << ret << ", ptId:" << ptId << ".");
+        CLIENT_LOG_ERROR("Get py entry failed, ret: " << ret << ", ptId:" << ptId << ", location:" <<
+            param.location.location[0] << ".");
         return ret;
     }
 
@@ -908,7 +913,8 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
     ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
+        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", ptv:" << ptEntry.version
+            << ", length:" << param.length << ".");
         return ret;
     }
 
@@ -918,8 +924,8 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
         param.flowIndex, param.length, &rsp);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_GET_SLICE, BIO_OK);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc put space failed, ret:" << ret << ", key:" << param.key << ", flowId:" <<
-            param.flowId << ", flowOffset:" << param.flowOffset << ", length:" << param.length << ".");
+        CLIENT_LOG_ERROR("Alloc put space failed, ret:" << ret << ", flowId:" << param.flowId << ", flowOffset:" <<
+            param.flowOffset << ", length:" << param.length << ".");
         Delete(ptId, param.flowId);
         return ret;
     }
@@ -927,8 +933,7 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
     spaceInfo.descriptorSize = rsp->sliceLen;
     ret = memcpy_s(spaceInfo.descriptorInfo, CACHE_SPACE_DEC_SIZE, rsp->sliceBuf, rsp->sliceLen);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Failed to copy cache space info src size:" << rsp->sliceLen << " to size:" <<
-            CACHE_SPACE_DEC_SIZE << ".");
+        CLIENT_LOG_ERROR("Failed to data copy, sliceLen:" << rsp->sliceLen << ".");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         Delete(ptId, param.flowId);
         return BIO_INNER_ERR;
@@ -958,7 +963,7 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
     uint64_t updateWriteQuota = 0;
     BResult ret = AllocSpaceImpl(param, spaceInfo, updateWriteQuota);
     if (LIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", key:" << param.key << ", length:" << param.length);
+        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", length:" << param.length << ".");
         BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS);
         mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
         BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS, BIO_OK);

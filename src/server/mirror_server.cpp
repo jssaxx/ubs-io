@@ -148,12 +148,9 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
 
 BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
-    BResult ret;
-
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL, &ret, BIO_ERR);
     ret = Cache::Instance().CreateWCache(procId, ptId, ptv, flowId, isDegrade);
-    LVOS_TP_END;
-    LVOS_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL_RESET, &ret, BIO_OK);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
@@ -172,18 +169,14 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
 
 BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId, bool &isDegrade)
 {
-    isDegrade = BioServer::Instance()->GetServiceState(); // 升级过程中，创建降级Cache实例
-
     auto ret = Cache::Instance().AllocateFlowId(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc flow id failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
         return ret;
     }
-    ret = CreateFlow(procId, ptId, ptv, flowId, isDegrade);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
-    }
-    return ret;
+
+    isDegrade = BioServer::Instance()->GetServiceState(); // 升级过程中，创建降级Cache实例
+    return CreateFlow(procId, ptId, ptv, flowId, isDegrade);
 }
 
 BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
@@ -524,11 +517,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        LVOS_TP_START(NO_PROCESS_WCACHE_READ_CALLBACK, 0);
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
             return WriterLocalSameProcess(from, to, req.mrKey);
         }
-        LVOS_TP_END;
 
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
@@ -548,7 +539,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     BIO_TRACE_START(MIRROR_TRACE_GET);
     BResult ret = Cache::Instance().Get(req.key, req.offset, sliceP, writer, rsp.realLen);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get from write cache failed, ret:" << ret << ", key:" << req.key << ".");
+        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
     }
     BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     return ret;
@@ -557,10 +548,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 BResult MirrorServer::Delete(DeleteRequest &req)
 {
     BIO_TRACE_START(MIRROR_TRACE_DEL);
-    BResult ret = BIO_ERR;
-    LVOS_TP_START(NO_PROCESS_MIRROR_DELETE, 0);
-    ret = Cache::Instance().Delete(req.comm.ptId, req.key);
-    LVOS_TP_END;
+    BResult ret = Cache::Instance().Delete(req.comm.ptId, req.key);
     BIO_TRACE_END(MIRROR_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << req.key << ", ptId:" << req.comm.ptId << ".");
@@ -961,8 +949,8 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-        sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         LVOS_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
+        sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
@@ -970,8 +958,8 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             return BIO_OK;
         }
     } else {
-        sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
+        sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
@@ -1132,11 +1120,9 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
 int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
 {
     std::unordered_map<std::string, ObjStat> objs;
-    BResult ret;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_LIST_FAIL, &ret, BIO_INNER_RETRY);
     ret = List(*req, objs);
-    LVOS_TP_END;
-    LVOS_TP_START(MIRROR_LIST_FAIL, &ret, BIO_ERR);
     LVOS_TP_END;
     if (ret != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
