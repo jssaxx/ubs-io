@@ -150,17 +150,11 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
 BResult WCacheManager::DestroyWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv)
 {
     LOG_INFO("Handle cache broken:" << procId << ", flowId:" << flowId);
-
     bool isSucceed = true;
     LVOS_TP_START(DESTROY_WCACHE_FAIL, &isSucceed, false);
     isSucceed = mGcEvictService->Execute([this, procId, flowId]() { HandleCacheBrokenHdl(procId, flowId); });
     LVOS_TP_END;
-    if (!isSucceed) {
-        LOG_ERROR("Sche proc broken:" << procId << ", failed");
-        return BIO_ERR;
-    }
-
-    return BIO_OK;
+    return (isSucceed) ? BIO_OK : BIO_ERR;
 }
 
 BResult WCacheManager::DeleteWCache(uint64_t flowId)

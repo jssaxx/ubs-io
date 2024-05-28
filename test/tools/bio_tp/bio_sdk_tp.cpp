@@ -8,8 +8,8 @@ using namespace ock::bio;
 static uint32_t MY_PID = 102;
 void tp::SdkTp::Register() noexcept
 {
-    LVOS_TP_REG(SDK_MIRROR_PT_VIEW_FIND_FAIL, "sdk mirror mPtView find failed, rturn BIO_INVALID_PARAM", tp::CommonTp::NoProcessCallback);
-    LVOS_TP_REG(SDK_MIRROR_CHECK_PT_FAIL, "sdk mirror check pt failed, rturn BIO_CHECK_PT_FAIL", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_PT_VIEW_FIND_FAIL, "sdk mirror pt entry find failed.", tp::CommonTp::BoolValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_CHECK_PT_FAIL, "sdk mirror check pt failed, rturn BIO_CHECK_PT_FAIL", tp::CommonTp::BoolValueCallback);
     LVOS_TP_REG(SDK_MIRROR_PUT_MEMORY_FAIL, "sdk mirror alloc put memory failed, rturn BIO_INNER_ERR", tp::CommonTp::PointerValueCallback);
     LVOS_TP_REG(SDK_MIRROR_SEND_PUT_FAIL, "sdk mirror send put request failed, rturn BIO_INNER_ERR", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_BIO_AGENT_CREAT_FAIL, "sdk agent creat fail, rturn BIO_ALLOC_FAIL", tp::CommonTp::PointerValueCallback);

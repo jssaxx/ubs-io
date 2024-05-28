@@ -489,10 +489,8 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
         return ret;
     }
 
-    RCacheChunkPtr chunk = nullptr;
-    uint64_t flowOffset;
-    uint64_t indexInFlow;
-
+    uint64_t flowOffset = 0;
+    uint64_t indexInFlow = 0;
     ret = flow[READ_CACHE_TIER_MEM]->AllocOffset(realLen, flowOffset, indexInFlow);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read cache alloc offset failed, ret:" << ret << ",  key " << key << ".");
@@ -501,6 +499,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     }
 
     RCacheValue chunkValue(indexInFlow, flowOffset, realLen);
+    RCacheChunkPtr chunk = nullptr;
     ret = AllocChunk(key, chunkValue, chunk);
     if (UNLIKELY(ret != BIO_OK || chunk == nullptr)) {
         LOG_ERROR("Read cache alloc chunk failed, ret:" << ret << ",  key " << key << ".");

@@ -155,8 +155,9 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId
         return BIO_ALLOC_FAIL;
     }
 
-    auto ret = cacheObj->Initialize();
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(RCACHE_INIT_OBJ_FAIL, &ret, BIO_ERR);
+    ret = cacheObj->Initialize();
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Initialize read cache object ptId:" << ptId << " failed, error code " << ret);

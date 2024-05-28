@@ -576,11 +576,9 @@ TEST_F(TestWCache, test_rcache_get_flow_offset_err_case_return_fail)
     sleep(NO_5);
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL_RESET", 0, 1, userParam);
     BResult ret = Cache::Instance().Get(G_KEY, 0, slicePtr, wwriter, realLen);
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL_RESET");
 }
 
 TEST_F(TestWCache, test_start_pool_threadnum_incorrect_return_fail)
@@ -633,12 +631,10 @@ TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
 {
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL_RESET", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
     auto ret = GetSlice(g_cacheId, 0, NO_1024);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL_RESET");
     EXPECT_EQ(ret, BIO_ERR);
 }
 

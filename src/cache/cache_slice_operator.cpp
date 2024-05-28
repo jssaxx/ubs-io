@@ -41,18 +41,17 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
 {
     ChkTrueNot(Validate(to), BIO_INVALID_PARAM);
     ChkTrueNot(from != nullptr, BIO_INVALID_PARAM);
+    BResult ret = BIO_INNER_ERR;
 
     if (to->GetFlowType() == FLOW_MEMORY) {
         auto &toAddrs = to->GetAddrs();
         uint64_t offset = 0;
         for (auto toAddr : toAddrs) {
-            auto ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset), toAddr.chunkLen,
-                reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
             LVOS_TP_START(SLICE_OPERATOR_FLOW_MEMORY, &ret, BIO_ERR);
+            ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset), toAddr.chunkLen,
+                reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
             LVOS_TP_END;
-            ChkTrue(ret == BIO_OK, ret,
-                "Failed to copy data from memory address:" << from + offset << " to memory address:" <<
-                toAddr.chunkId + toAddr.chunkOffset << " by length:" << toAddr.chunkLen);
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << toAddr.chunkLen);
             offset += toAddr.chunkLen;
         }
         return BIO_OK;
@@ -61,13 +60,11 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
         uint64_t offset = 0;
         for (auto toAddr : toAddrs) {
             BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
-            auto ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
+            ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
             ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
-            ChkTrue(ret == BIO_OK, ret,
-                "Failed to copy data from memory address:" << from + offset << " to disk address:" <<
-                toAddr.chunkId + toAddr.chunkOffset << " by length:" << toAddr.chunkLen);
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy length:" << toAddr.chunkLen);
             offset += toAddr.chunkLen;
         }
         return BIO_OK;

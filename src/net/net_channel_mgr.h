@@ -46,10 +46,7 @@ public:
     {
         std::unique_lock<std::mutex> locker(lock);
         NetNode rDstNid(dstNid, pid);
-        auto iter = mChannelMgr.end();
-        LVOS_TP_START(SERVER_NET_GET_DATA_CHANNEL_NOT_EXIST, &iter, mChannelMgr.end());
-        iter = mChannelMgr.find(rDstNid.whole);
-        LVOS_TP_END;
+        auto iter = mChannelMgr.find(rDstNid.whole);
         if (UNLIKELY(iter == mChannelMgr.end())) {
             return BIO_NOT_EXISTS;
         }
@@ -61,10 +58,7 @@ public:
     {
         std::unique_lock<std::mutex> locker(lock);
         NetNode rDstNid(dstNid, 0);
-        auto iter = mChannelMgr.end();
-        LVOS_TP_START(SERVER_NET_GET_CHANNEL_NOT_EXIST, &iter, mChannelMgr.end());
-        iter = mChannelMgr.find(rDstNid.whole);
-        LVOS_TP_END;
+        auto iter = mChannelMgr.find(rDstNid.whole);
         if (UNLIKELY(iter == mChannelMgr.end())) {
             return BIO_NOT_EXISTS;
         }

@@ -106,11 +106,7 @@ public:
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
     {
-        LVOS_TP_START(MR_POOL_NULL_FAIL, &mMrBlockPool, nullptr);
-        LVOS_TP_END;
         if (UNLIKELY(mMrBlockPool == nullptr)) {
-            LVOS_TP_START(MR_POOL_NULL_FAIL_RESET, &mMrBlockPool);
-            LVOS_TP_END;
             NET_LOG_ERROR("Net block pool not ready.");
             return BIO_NOT_READY;
         }
@@ -210,8 +206,7 @@ public:
 
     BResult CheckConnect(const BioNodeId targetNodeId)
     {
-        using namespace ock::hcom;
-        ChannelPtr ch{ nullptr };
+        ChannelPtr ch;
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK)) {
             return BIO_NET_RETRY;
@@ -260,24 +255,31 @@ public:
             return BIO_NET_RETRY;
         }
         int32_t timeoutSec = -1;
+#ifndef USE_HCOM_STUB
         return NetResult(ch->ReceiveFds(fds, count, timeoutSec));
+#else
+        return NetStub::ReceiveFds(fds, count, timeoutSec);
+#endif
     }
 
     template <typename TReq, typename TResp>
     BResult SyncCall(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req, TResp &resp)
     {
         BIO_TRACE_START(NET_TRACE_SYNC_CALL_V1);
-        LVOS_TP_START(SYNCCALL_OPCODE_FAIL, &opCode, NO_1024);
+        bool isValidOp = true;
+        LVOS_TP_START(SYNCCALL_OPCODE_FAIL, &isValidOp, false);
+        isValidOp = (opCode < MAX_NEW_REQ_HANDLER);
         LVOS_TP_END;
-        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+        if (UNLIKELY(!isValidOp)) {
             NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_INVALID_PARAM);
             return BIO_INVALID_PARAM;
         }
 
         ChannelPtr ch{ nullptr };
-        auto ret = GetCtrlChanel(targetNodeId, ch);
+        BResult ret = BIO_INNER_ERR;
         LVOS_TP_START(SYNCCALL_CHANNEL_FAIL, &ret, BIO_ERR);
+        ret = GetCtrlChanel(targetNodeId, ch);
         LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -728,16 +730,18 @@ private:
     BResult SyncCall(uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen, ChannelPtr &ch)
     {
         using namespace ock::hcom;
+        BResult result = BIO_INNER_ERR;
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg{};
-#ifndef USE_HCOM_STUB
-        auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
-#else
-        auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
-#endif
+
         LVOS_TP_START(SYNCCALL_FAIL, &result, BIO_ERR);
+#ifndef USE_HCOM_STUB
+        result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+#else
+        result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+#endif
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " <<
@@ -803,7 +807,6 @@ private:
             }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
-        result = BIO_ERR;
         LVOS_TP_START(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP, &result, BIO_ERR);
         result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, callback);
         LVOS_TP_END;

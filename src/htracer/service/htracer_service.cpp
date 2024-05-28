@@ -189,29 +189,33 @@ int HTracerService::PrepareDumpFile(const std::string &dumpDir)
     if (dumpFileDir.back() != '/') {
         dumpFileDir += "/";
     }
-    int32_t ret = HTracerUtils::CreateDirectory(dumpFileDir);
+
+    int32_t ret = RET_ERR;
     LVOS_TP_START(TRACE_CREATE_DIR_FAIL, &ret, RET_ERR);
+    ret = HTracerUtils::CreateDirectory(dumpFileDir);
     LVOS_TP_END;
     if (ret != RET_OK) {
         return RET_ERR;
     }
-    char *canonicalPath = realpath(dumpFileDir.c_str(), nullptr);
+
+    char *canonicalPath = nullptr;
     LVOS_TP_START(TRACE_PATH_REAL_FAIL, &canonicalPath, nullptr);
+    canonicalPath = realpath(dumpFileDir.c_str(), nullptr);
     LVOS_TP_END;
     if (canonicalPath == nullptr) {
-        LVOS_TP_START(TRACE_PATH_REAL_FAIL_RESET, &canonicalPath);
-        LVOS_TP_END;
         return RET_ERR;
     }
     free(canonicalPath);
 
     dumpFilePath = dumpFileDir + "htrace_" + std::to_string(getpid()) + ".dat";
-    int fd = open(dumpFilePath.c_str(), O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
-    LVOS_TP_START(TRACE_FILE_OPPEN_FAIL, &fd, RET_ERR);
+    int fd = -1;
+    LVOS_TP_START(TRACE_FILE_OPPEN_FAIL, &fd, -1);
+    fd = open(dumpFilePath.c_str(), O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
     LVOS_TP_END;
     if (fd < 0) {
         return RET_ERR;
     }
+
     close(fd);
     return RET_OK;
 }
