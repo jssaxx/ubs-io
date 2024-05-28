@@ -57,7 +57,7 @@ TEST_F(TestDisk, test_disk_read_async_case_return_ok)
     LOG_INFO("test_disk_read_async_case_return_ok");
     char *buff = nullptr;
     int32_t ret = posix_memalign((void **)&buff, NO_4194304, NO_4194304);
-    EXPECT_EQ(0, ret);
+    EXPECT_EQ(ret, 0);
     EXPECT_FALSE(buff == nullptr);
 
     AsyncCbCtx cbCtx;
@@ -82,7 +82,7 @@ TEST_F(TestDisk, test_disk_write_async_case_return_ok)
     LOG_INFO("test_disk_write_async_case_return_ok");
     char *buff = nullptr;
     int32_t ret = posix_memalign((void **)&buff, NO_4194304, NO_4194304);
-    EXPECT_EQ(0, ret);
+    EXPECT_EQ(ret, 0);
     EXPECT_FALSE(buff == nullptr);
 
     AsyncCbCtx cbCtx;

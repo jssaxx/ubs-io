@@ -107,11 +107,7 @@ BResult BioServer::BioConfigInit()
     LVOS_TP_END;
 
     mConfig = BioConfig::Instance();
-    LVOS_TP_START(CONFIG_INSTANCE_FAIL, &mConfig, nullptr);
-    LVOS_TP_END;
     if (mConfig == nullptr) {
-        LVOS_TP_START(CONFIG_INSTANCE_FAIL_RESET, &mConfig);
-        LVOS_TP_END;
         LOG_ERROR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
@@ -136,8 +132,10 @@ BResult BioServer::BioLoggerInit(std::string pathName)
         std::cout << "Failed to create logger instance." << std::endl;
         return BIO_ERR;
     }
-    auto ret = mLogger->Init();
-    LVOS_TP_START(LOG_INIT_FAIL, &ret, -1);
+
+    BResult ret = BIO_INNER_ERR;
+    LVOS_TP_START(LOG_INIT_FAIL, &ret, BIO_ERR);
+    ret = mLogger->Init();
     LVOS_TP_END;
     if (ret != BIO_OK) {
         std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
@@ -356,9 +354,8 @@ BResult BioServer::BioMirrorServerInit()
     LVOS_TP_END;
     mMirror = MirrorServer::Instance();
     ChkTrue(mMirror != nullptr, BIO_ERR, "Mirror server instance is nullptr.");
+
     BResult ret = mMirror->Initialize();
-    LVOS_TP_START(MIRROR_SERVER_INIT_FAIL, &ret, BIO_ERR);
-    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init mirror server, ret:" << ret << ".");
         return BIO_ERR;
@@ -722,16 +719,16 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-        sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         LVOS_TP_START(PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL, &sliceP, nullptr);
+        sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
         }
     } else {
-        sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_START(PUT_ALLOC_SLICE_FAIL, &sliceP, nullptr);
+        sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
@@ -742,10 +739,10 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
 
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
-    uint32_t ioStratege;
-    int32_t ret = static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP,
-        netCtx, ioStratege));
+    uint32_t ioStratege = 0;
+    auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStratege);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
+
     BIO_TRACE_START(MIRROR_TRACE_PUT_LOCAL_GET_QUOTA);
     rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     rsp->ioStratege = ioStratege;
@@ -767,19 +764,19 @@ int32_t Delete(DeleteRequest *req)
 int32_t List(ListRequest *req, ListResponse **rsp)
 {
     std::unordered_map<std::string, ObjStat> objs;
-    BResult ret = BioServer::Instance()->GetMirrorServer()->List(*req, objs);
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(LIST_LIST_FAIL, &ret, BIO_ERR);
+    ret = BioServer::Instance()->GetMirrorServer()->List(*req, objs);
     LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }
 
-    char *tmp = new (std::nothrow) char[sizeof(ListResponse) + sizeof(ObjStat) * objs.size()];
+    char *tmp = nullptr;
     LVOS_TP_START(LIST_MALLOC_RSP_FAIL, &tmp, nullptr);
+    tmp = new (std::nothrow) char[sizeof(ListResponse) + sizeof(ObjStat) * objs.size()];
     LVOS_TP_END;
     if (UNLIKELY(tmp == nullptr)) {
-        LVOS_TP_START(LIST_MALLOC_RSP_FAIL_RESET, &tmp);
-        LVOS_TP_END;
         LOG_ERROR("Alloc memory failed, len:" << (sizeof(ListResponse) + sizeof(ObjStat) * objs.size()) << ".");
         return BIO_ALLOC_FAIL;
     }

@@ -210,7 +210,8 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     LVOS_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Get key " << key << " from read cache failed, ret:" << ret);
+        LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+            (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return ret;
     } else if (ret == BIO_OK) {
         LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");

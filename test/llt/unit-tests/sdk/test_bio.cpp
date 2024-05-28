@@ -59,9 +59,9 @@ TEST_F(TestBio, test_bio_create_cache)
     EXPECT_EQ(ret, RET_CACHE_EXISTS);
 }
 
-TEST_F(TestBio, test_bio_get_cache)
+TEST_F(TestBio, test_bio_query_cache_instance)
 {
-    LOG_INFO("test_bio_get_cache");
+    LOG_INFO("test_bio_query_cache_instance");
     uint64_t tenantId = 12343;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
@@ -74,6 +74,7 @@ TEST_F(TestBio, test_bio_get_cache)
     EXPECT_EQ(tenantId, desc.tenantId);
     EXPECT_EQ(affinity, desc.affinity);
     EXPECT_EQ(strategy, desc.strategy);
+
     auto cacheInstance = ock::bio::BioService::GetCache(tenantId);
     EXPECT_EQ(tenantId, cacheInstance.tenantId);
     EXPECT_EQ(affinity, cacheInstance.affinity);
@@ -134,7 +135,7 @@ TEST_F(TestBio, test_list_cache)
 TEST_F(TestBio, test_bio_calc_location)
 {
     LOG_INFO("test_bio_calc_location");
-    CacheDescriptor desc = { G_TENANT_ID, AffinityStrategy::LOCAL_AFFINITY, WriteStrategy::WRITE_BACK };
+    CacheDescriptor desc = { G_TENANT_ID, LOCAL_AFFINITY, WRITE_BACK };
     auto ret = BioCreateCache(desc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
@@ -168,37 +169,9 @@ TEST_F(TestBio, test_bio_put)
     fclose(fp);
 }
 
-TEST_F(TestBio, test_bio_get)
+TEST_F(TestBio, test_bio_put_diff_size_case)
 {
-    LOG_INFO("test_bio_get");
-    (void)system("touch bio_get_file");
-    FILE *fp = fopen("./bio_get_file", "w");
-    EXPECT_NE(fp, nullptr);
-    char *value = new char[G_LENGTH];
-    ObjLocation locationInfo{ 0, 0 };
-    uint64_t realLen = G_LENGTH;
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
-    EXPECT_EQ(fwrite(value, sizeof(char), realLen, fp), realLen);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, nullptr);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-
-    ret = BioGet(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
-    delete[] value;
-    fclose(fp);
-}
-
-TEST_F(TestBio, test_bio_put_diff_size_case_return_ok)
-{
-    LOG_INFO("test_bio_put_diff_size_case_return_ok");
+    LOG_INFO("test_bio_put_diff_size_case");
     FILE *fp = fopen("./bio_test", "r");
     EXPECT_NE(fp, nullptr);
     uint64_t length = 6000UL;
@@ -245,57 +218,74 @@ TEST_F(TestBio, test_bio_put_diff_size_case_return_ok)
     fclose(fp);
 }
 
+TEST_F(TestBio, test_bio_get)
+{
+    LOG_INFO("test_bio_get");
+    char *value = new char[G_LENGTH];
+    uint64_t realLen = 0;
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(G_LENGTH, realLen);
+
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    ret = BioGet(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    delete[] value;
+}
+
 TEST_F(TestBio, test_bio_get_diff_size)
 {
     LOG_INFO("test_bio_get_diff_size");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
-    ObjLocation locationInfo0{ 0, 0 };
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, locationInfo0, value0, &realLen0);
-    delete[] value0;
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value0;
 
     uint64_t realLen = 10000UL;
     char *value = new char[realLen];
-    ObjLocation locationInfo{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen, locationInfo, value, &realLen);
-    delete[] value;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value;
 
     uint64_t realLen1 = 100000UL;
     char *value1 = new char[realLen1];
-    ObjLocation locationInfo1{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen1, locationInfo1, value1, &realLen1);
-    delete[] value1;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen1, g_Location, value1, &realLen1);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value1;
 
     uint64_t realLen2 = 160000UL;
     char *value2 = new char[realLen2];
-    ObjLocation locationInfo2{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen2, locationInfo2, value2, &realLen2);
-    delete[] value2;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen2, g_Location, value2, &realLen2);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value2;
 
     uint64_t realLen3 = 300000UL;
     char *value3 = new char[realLen3];
-    ObjLocation locationInfo3{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen3, locationInfo3, value3, &realLen3);
-    delete[] value3;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen3, g_Location, value3, &realLen3);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value3;
 
     uint64_t realLen4 = 1500000UL;
     char *value4 = new char[realLen4];
-    ObjLocation locationInfo4{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen4, locationInfo4, value4, &realLen4);
-    delete[] value4;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen4, g_Location, value4, &realLen4);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value4;
 
     uint64_t realLen5 = 3300000UL;
     char *value5 = new char[realLen5];
-    ObjLocation locationInfo5{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen5, locationInfo5, value5, &realLen5);
-    delete[] value5;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen5, g_Location, value5, &realLen5);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value5;
 }
 
 TEST_F(TestBio, test_bio_get_case_return_fail)
@@ -303,17 +293,15 @@ TEST_F(TestBio, test_bio_get_case_return_fail)
     LOG_INFO("test_bio_get_case_return_fail");
     uint64_t realLen = 3300000UL;
     char *value = new char[realLen];
-    ObjLocation locationInfo6{ 0, 0 };
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, 0, locationInfo6, value, &realLen);
-    delete[] value;
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, 0, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
+    delete[] value;
 
     uint64_t realLen1 = 4194305UL;
     char *value1 = new char[realLen1];
-    ObjLocation locationInfo7{ 0, 0 };
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen1, locationInfo7, value1, &realLen1);
-    delete[] value1;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen1, g_Location, value1, &realLen1);
     EXPECT_EQ(ret, RET_CACHE_READ_EXCEED);
+    delete[] value1;
 }
 
 TEST_F(TestBio, test_bio_list_all)
@@ -340,27 +328,27 @@ TEST_F(TestBio, test_bio_list_all)
 TEST_F(TestBio, test_bio_stat)
 {
     LOG_INFO("test_bio_stat");
-    ObjLocation locationInfo{ 0, 0 };
     ObjStat keyStat;
-    auto ret = BioStat(G_TENANT_ID, G_KEY, locationInfo, &keyStat);
-    EXPECT_EQ(keyStat.size, G_LENGTH);
+    auto ret = BioStat(G_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(keyStat.size, G_LENGTH);
 
-    ret = BioStat(G_TENANT_ID, nullptr, locationInfo, &keyStat);
+    ret = BioStat(G_TENANT_ID, nullptr, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
+
     std::string invalidKey(KEY_MAX_SIZE + 1, ' ');
-    ret = BioStat(G_TENANT_ID, invalidKey.c_str(), locationInfo, &keyStat);
+    ret = BioStat(G_TENANT_ID, invalidKey.c_str(), g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    ret = BioStat(G_TENANT_ID, G_KEY, locationInfo, nullptr);
+    ret = BioStat(G_TENANT_ID, G_KEY, g_Location, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    ret = BioStat(G_INVALID_TENANT_ID, G_KEY, locationInfo, &keyStat);
+    ret = BioStat(G_INVALID_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioStat(G_TENANT_ID, G_KEY, locationInfo, &keyStat);
+    ret = BioStat(G_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_PT_FAULT);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
 }
@@ -382,22 +370,21 @@ static void TestCallback(void *context, int32_t result)
 TEST_F(TestBio, test_bio_load)
 {
     LOG_INFO("test_bio_load");
-    ObjLocation locationInfo{ 0, 0 };
     LoadContext loadCtx;
     sem_init(&(loadCtx.sem), 0, 0);
     loadCtx.result = RET_CACHE_OK;
-    auto ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, TestCallback, &loadCtx);
+    auto ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    ret = BioLoad(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, TestCallback, &loadCtx);
+    ret = BioLoad(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
-    ret = BioLoad(G_TENANT_ID, nullptr, 0, G_LENGTH, locationInfo, TestCallback, &loadCtx);
+    ret = BioLoad(G_TENANT_ID, nullptr, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
-    ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, TestCallback, &loadCtx);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
     sem_wait(&(loadCtx.sem));
@@ -407,51 +394,47 @@ TEST_F(TestBio, test_bio_load)
 TEST_F(TestBio, test_bio_delete)
 {
     LOG_INFO("test_bio_delete");
-    ObjLocation locationInfo{ 0, 0 };
-    auto ret = BioDelete(G_TENANT_ID, G_KEY, locationInfo);
+    auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     char *value = new char[G_LENGTH];
     uint64_t realLen = G_LENGTH;
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, locationInfo, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-
-    ret = BioDelete(G_TENANT_ID, nullptr, locationInfo);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-
-    ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, locationInfo);
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
     delete[] value;
-}
 
-static CacheSpaceDesc addressInfo;
+    ret = BioDelete(G_TENANT_ID, nullptr, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-TEST_F(TestBio, test_bio_allocspace)
-{
-    LOG_INFO("test_bio_allocspace");
-    static uint64_t objectId = 1;
-    addressInfo.allocLoc = 0;
-    auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-
-    addressInfo.allocLoc = 1;
-    ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-
-    ret = BioAllocCacheSpace(G_INVALID_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
+    ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 }
 
-TEST_F(TestBio, test_bio_putwithspace_case)
+TEST_F(TestBio, test_bio_put_copy_free)
 {
-    LOG_INFO("test_bio_putwithspace_case");
-    auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressInfo);
+    LOG_INFO("test_bio_put_copy_free");
+    uint64_t objectId = 0;
+    CacheSpaceDesc addressDesc;
+    addressDesc.allocLoc = 0;
+    addressDesc.loc.location[0] = 0;
+    auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    ret = BioPutWithCopyFree(G_TENANT_ID, nullptr, &addressInfo);
+    ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    addressDesc.allocLoc = 1;
+    objectId = NO_10;
+    ret = BioAllocCacheSpace(G_TENANT_ID, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ret = BioAllocCacheSpace(G_INVALID_TENANT_ID, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    ret = BioPutWithCopyFree(G_TENANT_ID, nullptr, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    ret = BioPutWithCopyFree(G_INVALID_TENANT_ID, "putwithspace1", &addressInfo);
+    ret = BioPutWithCopyFree(G_INVALID_TENANT_ID, "putwithspace1", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
     constexpr uint64_t tenantId = 10001UL;
@@ -460,11 +443,9 @@ TEST_F(TestBio, test_bio_putwithspace_case)
     ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    static uint64_t objectId = 11UL;
-    CacheSpaceDesc spaceInfo;
-    spaceInfo.allocLoc = 0;
-    spaceInfo.loc = { 0, 0 };
-    ret = BioAllocCacheSpace(tenantId, objectId, ock::bio::NO_1024, &spaceInfo);
+    objectId = 11UL;
+    addressDesc.loc = { 0, 0 };
+    ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
@@ -513,8 +494,8 @@ TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
     std::string value(G_LENGTH, ' ');
     EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
     auto ret = BioPut(G_TENANT_ID, "putremoteptverror", value.c_str(), G_LENGTH, g_Location);
-    fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    fclose(fp);
 }
 
 TEST_F(TestBio, test_bio_get_remote_case_return_fail)
@@ -522,24 +503,23 @@ TEST_F(TestBio, test_bio_get_remote_case_return_fail)
     LOG_INFO("test_bio_get_remote_case_return_fail");
     TestBio::VNodeIdStub();
     char *value = new char[G_LENGTH];
-    ObjLocation locationInfo{ 0, 0 };
     uint64_t realLen = G_LENGTH;
-    auto ret = BioGet(G_TENANT_ID, "getremote", 0, G_LENGTH, locationInfo, value, &realLen);
-    delete[] value;
+    auto ret = BioGet(G_TENANT_ID, "getremote", 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    delete[] value;
 }
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_down)
 {
     LOG_INFO("test_pt_entry_list_update_node_state_down");
-    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * 2UL);
+    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptList->poolId = 0;
-    ptList->ptNum = ock::bio::NO_2;
+    ptList->ptNum = NO_2;
     ptList->maxCopyNum = 1;
     ptList->minCopyNum = 1;
     ptList->globalVersion = 1;
     ptList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptList->ptEntryList[diskIdx].birthVersion = 1;
         ptList->ptEntryList[diskIdx].ptId = diskIdx;
         ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -554,21 +534,20 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_down)
     }
     auto pgChange = std::make_unique<int>(sizeof(int32_t));
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_DOWN, nullptr, ptList, pgChange.get());
-    EXPECT_EQ(0, ock::bio::BIO_OK);
     free(ptList);
 }
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
 {
     LOG_INFO("test_pt_entry_list_update_node_state_up_down");
-    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptList->poolId = 0;
-    ptList->ptNum = ock::bio::NO_2;
+    ptList->ptNum = NO_2;
     ptList->maxCopyNum = 1;
     ptList->minCopyNum = 1;
     ptList->globalVersion = 1;
     ptList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptList->ptEntryList[diskIdx].birthVersion = 1;
         ptList->ptEntryList[diskIdx].ptId = diskIdx;
         ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -587,21 +566,20 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
     nodeInfo.diskList.list[0].state = DISK_STATE_NORMAL;
     nodeInfo.diskList.list[1].state = DISK_STATE_NORMAL;
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_UP, &nodeInfo, ptList, pgChange.get());
-    EXPECT_EQ(0, ock::bio::BIO_OK);
     free(ptList);
 }
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_up_running)
 {
     LOG_INFO("test_pt_entry_list_update_node_state_up_running");
-    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * 2UL);
+    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptList->poolId = 0;
-    ptList->ptNum = ock::bio::NO_2;
+    ptList->ptNum = NO_2;
     ptList->maxCopyNum = 1;
     ptList->minCopyNum = 1;
     ptList->globalVersion = 1;
     ptList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptList->ptEntryList[diskIdx].birthVersion = 1;
         ptList->ptEntryList[diskIdx].ptId = diskIdx;
         ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -620,21 +598,20 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_running)
     nodeInfo.diskList.list[0].state = DISK_STATE_FAULT;
     nodeInfo.diskList.list[1].state = DISK_STATE_FAULT;
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_UP, &nodeInfo, ptList, pgChange.get());
-    EXPECT_EQ(0, ock::bio::BIO_OK);
     free(ptList);
 }
 
 TEST_F(TestBio, test_pt_entry_list_update_node_state_up_recovery)
 {
     LOG_INFO("test_pt_entry_list_update_node_state_up_recovery");
-    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptList->poolId = 0;
-    ptList->ptNum = ock::bio::NO_2;
+    ptList->ptNum = NO_2;
     ptList->maxCopyNum = 1;
     ptList->minCopyNum = 1;
     ptList->globalVersion = 1;
     ptList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptList->ptEntryList[diskIdx].birthVersion = 1;
         ptList->ptEntryList[diskIdx].ptId = diskIdx;
         ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -653,21 +630,20 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_recovery)
     nodeInfo.diskList.list[0].state = DISK_STATE_FAULT;
     nodeInfo.diskList.list[1].state = DISK_STATE_FAULT;
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_UP, &nodeInfo, ptList, pgChange.get());
-    EXPECT_EQ(0, ock::bio::BIO_OK);
     free(ptList);
 }
 
 TEST_F(TestBio, test_pt_entry_list_update_node_finish)
 {
     LOG_INFO("test_pt_entry_list_update_node_finish");
-    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptEntryList->poolId = 0;
-    ptEntryList->ptNum = ock::bio::NO_2;
+    ptEntryList->ptNum = NO_2;
     ptEntryList->maxCopyNum = 1;
     ptEntryList->minCopyNum = -1;
     ptEntryList->globalVersion = 1;
     ptEntryList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptEntryList->ptEntryList[diskIdx].birthVersion = 1;
         ptEntryList->ptEntryList[diskIdx].ptId = diskIdx;
         ptEntryList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -684,14 +660,13 @@ TEST_F(TestBio, test_pt_entry_list_update_node_finish)
         ptEntryList->ptEntryList[diskIdx].copyList[1].keepAlive = 0;
         ptEntryList->ptEntryList[diskIdx].copyList[1].state = PT_COPY_STATE_RUNNING;
     }
-    auto ptList = (::CmPtFinish *)malloc(sizeof(::CmPtFinish) * ock::bio::NO_2);
+    auto ptList = (::CmPtFinish *)malloc(sizeof(::CmPtFinish) * NO_2);
     ptList[0].birthVersion = 1;
     ptList[0].ptId = 1;
     ptList[1].birthVersion = 1;
     ptList[1].ptId = 1;
     auto pgChange = std::make_unique<int>(sizeof(int32_t));
-    ViewPtEntryListUpdateNodeFinish(0, ptList, ock::bio::NO_2, ptEntryList, pgChange.get(), 1, 1);
-    EXPECT_EQ(0, ock::bio::BIO_OK);
+    ViewPtEntryListUpdateNodeFinish(0, ptList, NO_2, ptEntryList, pgChange.get(), 1, 1);
     free(ptList);
     free(ptEntryList);
 }
@@ -700,7 +675,7 @@ TEST_F(TestBio, test_create_view_caculator)
 {
     LOG_INFO("test_create_view_caculator");
     CreateViewCalculator(1, 1, 1, 1);
-    EXPECT_EQ(0, ock::bio::BIO_OK);
+    EXPECT_EQ(0, BIO_OK);
 }
 
 TEST_F(TestBio, test_view_caculator_initial)
@@ -716,14 +691,14 @@ TEST_F(TestBio, test_view_caculator_initial)
     notifyList->nodeList[0] = *nodeInfo;
     notifyList->nodeNum++;
 
-    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptEntryList->poolId = 0;
-    ptEntryList->ptNum = ock::bio::NO_2;
+    ptEntryList->ptNum = NO_2;
     ptEntryList->maxCopyNum = 1;
     ptEntryList->minCopyNum = 1;
     ptEntryList->globalVersion = 1;
     ptEntryList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptEntryList->ptEntryList[diskIdx].birthVersion = 1;
         ptEntryList->ptEntryList[diskIdx].ptId = diskIdx;
         ptEntryList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -750,7 +725,6 @@ TEST_F(TestBio, test_view_caculator_initial)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorInitial(calculator, notifyList, stateList, ptEntryList);
-    EXPECT_EQ(0, ock::bio::BIO_OK);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -771,9 +745,9 @@ TEST_F(TestBio, test_caculator_need_rebalance)
     notifyList->nodeList[0] = *nodeInfo;
     notifyList->nodeNum++;
 
-    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptEntryList->poolId = 0;
-    ptEntryList->ptNum = ock::bio::NO_2;
+    ptEntryList->ptNum = NO_2;
     ptEntryList->maxCopyNum = 1;
     ptEntryList->minCopyNum = 1;
     ptEntryList->globalVersion = 1;
@@ -830,14 +804,14 @@ TEST_F(TestBio, test_caculator_rebalance)
     notifyList->nodeList[0] = *nodeInfo;
     notifyList->nodeNum++;
 
-    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptEntryList->poolId = 0;
-    ptEntryList->ptNum = ock::bio::NO_2;
+    ptEntryList->ptNum = NO_2;
     ptEntryList->maxCopyNum = 1;
     ptEntryList->minCopyNum = 1;
     ptEntryList->globalVersion = 1;
     ptEntryList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptEntryList->ptEntryList[diskIdx].birthVersion = 1;
         ptEntryList->ptEntryList[diskIdx].ptId = diskIdx;
         ptEntryList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -856,7 +830,6 @@ TEST_F(TestBio, test_caculator_rebalance)
     }
 
     auto len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo));
-
     NodeDiskState nodeDiskState{ 0, DISK_CLUSTER_STATE_IN };
     auto nodeStateInfo = static_cast<NodeStateInfo *>(malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState)));
     nodeStateInfo->diskNum = 1;
@@ -889,14 +862,14 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     notifyList->nodeList[0] = *nodeInfo;
     notifyList->nodeNum++;
 
-    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * ock::bio::NO_2);
+    auto ptEntryList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * NO_2);
     ptEntryList->poolId = 0;
-    ptEntryList->ptNum = ock::bio::NO_2;
+    ptEntryList->ptNum = NO_2;
     ptEntryList->maxCopyNum = 1;
     ptEntryList->minCopyNum = 1;
     ptEntryList->globalVersion = 1;
     ptEntryList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < ock::bio::NO_2; diskIdx++) {
+    for (uint16_t diskIdx = 0; diskIdx < NO_2; diskIdx++) {
         ptEntryList->ptEntryList[diskIdx].birthVersion = 1;
         ptEntryList->ptEntryList[diskIdx].ptId = diskIdx;
         ptEntryList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
@@ -936,17 +909,17 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
 
 static int ReadHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
-    return ock::bio::BIO_OK;
+    return BIO_OK;
 }
 
 static int WriteHookFunc(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
-    return ock::bio::BIO_OK;
+    return BIO_OK;
 }
 
 static int WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *spaceInfo)
 {
-    return ock::bio::BIO_OK;
+    return BIO_OK;
 }
 
 TEST_F(TestBio, test_juicefs_callback_read_case_return_ok)
@@ -954,7 +927,7 @@ TEST_F(TestBio, test_juicefs_callback_read_case_return_ok)
     LOG_INFO("test_juicefs_callback_read_case_return_ok");
     BioRegisterInterceptorRead(ReadHookFunc);
     auto ret = BioReadHook(0, nullptr, 0, 0, nullptr);
-    EXPECT_EQ(ret, ock::bio::BIO_OK);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBio, test_juicefs_callback_write_case_return_ok)
@@ -962,7 +935,7 @@ TEST_F(TestBio, test_juicefs_callback_write_case_return_ok)
     LOG_INFO("test_juicefs_callback_write_case_return_ok");
     BioRegisterInterceptorWrite(WriteHookFunc);
     auto ret = BioWriteHook(0, nullptr, 0, 0, 0);
-    EXPECT_EQ(ret, ock::bio::BIO_OK);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
@@ -970,7 +943,7 @@ TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
     LOG_INFO("test_juicefs_callback_write_copy_case_return_ok");
     BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHookFunc);
     auto ret = BioWriteCopyFreeHook(0, 0, 0, nullptr);
-    EXPECT_EQ(ret, ock::bio::BIO_OK);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBio, test_bio_calculateLocation_not_ready_case_return_fail)
@@ -992,8 +965,8 @@ TEST_F(TestBio, test_bio_put_not_ready_case_return_fail)
     std::string value(G_LENGTH, ' ');
     EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
     auto ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
-    fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    fclose(fp);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
 
@@ -1005,8 +978,8 @@ TEST_F(TestBio, test_bio_get_not_ready_case_return_fail)
     char *value = new char[realLen];
     ObjLocation locationInfo{ 0, 0 };
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen, locationInfo, value, &realLen);
-    delete[] value;
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    delete[] value;
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
 
@@ -1064,8 +1037,9 @@ TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
     LOG_INFO("test_bio_allocspace_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     static uint64_t objectId = 1;
-    addressInfo.allocLoc = 1;
-    auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &addressInfo);
+    CacheSpaceDesc spaceDesc;
+    spaceDesc.allocLoc = 1;
+    auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &spaceDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
@@ -1074,8 +1048,8 @@ TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
 {
     LOG_INFO("test_bio_putwithspace_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
-    static uint64_t objectId = 1;
-    auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &addressInfo);
+    CacheSpaceDesc spaceDesc;
+    auto ret = BioPutWithCopyFree(G_TENANT_ID, "putwithspace", &spaceDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }

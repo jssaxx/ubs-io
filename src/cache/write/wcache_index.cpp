@@ -57,7 +57,7 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
 BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ChkTrueNot(table != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get wcache index table failed.");
 
     std::vector<WCacheSliceRefPtr> listSliceVec;
     for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; bucket++) {
@@ -149,10 +149,11 @@ WCacheIndexTable *WCacheIndex::GetIndexTable(uint64_t ptId)
         if (table != mTable.end()) {
             return table->second;
         }
-        WCacheIndexTable *inTable = new WCacheIndexTable;
+        WCacheIndexTable *inTable = nullptr;
         LVOS_TP_START(WCACHE_INDEX_TABLE_FAIL, &inTable, nullptr);
+        inTable = new WCacheIndexTable;
         LVOS_TP_END;
-        ChkTrueNot(inTable != nullptr, nullptr);
+        ChkTrue(inTable != nullptr, nullptr, "Alloc memory failed.");
         mTable.insert(std::make_pair(ptId, inTable));
         return mTable[ptId];
     }

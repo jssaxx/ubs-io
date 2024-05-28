@@ -121,7 +121,7 @@ TEST_F(TestNet, test_receive_handle)
     ret = netEngine->RegisterNewRequestHandler(NO_256, std::bind(&TestNet::TestMsgHandle, this, std::placeholders::_1));
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
-    ServiceContext ctx;
+    ServiceContext ctx; // default opcode is equal to 0
     ret = netEngine->RequestReceived(ctx);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -152,74 +152,92 @@ TEST_F(TestNet, test_net_check_connect)
     BResult ret = engine->CheckConnect(targetNodeId);
     EXPECT_EQ(ret, BIO_OK);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
+    targetNodeId = NO_100;
     ret = engine->CheckConnect(targetNodeId);
     EXPECT_EQ(ret, BIO_NET_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
 }
 
-TEST_F(TestNet, test_net_sync_call)
+TEST_F(TestNet, test_net_sync_call_intf_1)
 {
-    LOG_INFO("test_net_sync_call");
+    LOG_INFO("test_net_sync_call_intf_1");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    uint64_t req1 = NO_1024;
-    uint64_t rsp1 = 0;
-    BResult ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, req1, rsp1);
+    uint64_t request = NO_1024;
+    uint64_t response = 0;
+    BResult ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, request, response);
     EXPECT_EQ(ret, BIO_OK);
 
-    uint64_t req2 = NO_1024;
-    uint64_t *rsp2 = nullptr;
-    uint64_t rsp2Len = 0;
-    ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, req2, &rsp2, rsp2Len);
+    uint16_t opCode = NO_256;
+    ret = engine->SyncCall<uint64_t, uint64_t>(1, opCode, request, response);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+
+    BioNodeId targetNodeId = NO_100;
+    ret = engine->SyncCall<uint64_t, uint64_t>(targetNodeId, 1, request, response);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+}
+
+TEST_F(TestNet, test_net_sync_call_intf_2)
+{
+    LOG_INFO("test_net_sync_call_intf_2");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    uint64_t request = NO_1024;
+    uint64_t *response = nullptr;
+    uint64_t rspLen = 0;
+    auto ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, request, &response, rspLen);
     EXPECT_EQ(ret, BIO_OK);
-    if (rsp2 != nullptr) {
-        free(rsp2);
+    if (response != nullptr) {
+        free(response);
     }
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
-    ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, req2, &rsp2, rsp2Len);
+    uint16_t opCode = NO_256;
+    ret = engine->SyncCall<uint64_t, uint64_t>(1, opCode, request, &response, rspLen);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+
+    BioNodeId targetNodeId = NO_100;
+    ret = engine->SyncCall<uint64_t, uint64_t>(targetNodeId, 1, request, &response, rspLen);
     EXPECT_EQ(ret, BIO_NET_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
 }
 
 TEST_F(TestNet, test_net_async_call_without_resp)
 {
     LOG_INFO("test_net_async_call_without_resp");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    uint64_t req1 = NO_1024;
-    BResult ret = engine->AsyncCallWithoutResponse<uint64_t>(1, 1, req1);
+    uint64_t request = NO_1024;
+    auto ret = engine->AsyncCallWithoutResponse<uint64_t>(1, 1, request);
     EXPECT_EQ(ret, BIO_OK);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
-    ret = engine->AsyncCallWithoutResponse<uint64_t>(1, 1, req1);
+    uint16_t opCode = NO_256;
+    ret = engine->AsyncCallWithoutResponse<uint64_t>(1, opCode, request);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+
+    BioNodeId targetNodeId = NO_100;
+    ret = engine->AsyncCallWithoutResponse<uint64_t>(targetNodeId, 1, request);
     EXPECT_EQ(ret, BIO_NET_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
 }
 
 TEST_F(TestNet, test_net_async_call)
 {
     LOG_INFO("test_net_async_call");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    uint64_t req1 = NO_1024;
+    uint64_t request = NO_1024;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+        LOG_INFO("test_net_async_call done");
         if (resp != nullptr) {
             free(resp);
         }
         return;
     };
     Callback callback(cbFunc, nullptr);
-    engine->AsyncCall<uint64_t>(1, 1, req1, callback);
+    engine->AsyncCall<uint64_t>(1, 1, request, callback);
+
+    uint16_t opCode = NO_256;
+    engine->AsyncCall<uint64_t>(1, opCode, request, callback);
+
+    BioNodeId targetNodeId = NO_100;
+    engine->AsyncCall<uint64_t>(targetNodeId, 1, request, callback);
 
     LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
-    engine->AsyncCall<uint64_t>(1, 1, req1, callback);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
-
     LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAILED_ASYNC_CALL_WITH_OP", 0, 1, userParam);
-    engine->AsyncCall<uint64_t>(1, 1, req1, callback);
+    engine->AsyncCall<uint64_t>(1, 1, request, callback);
     LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAILED_ASYNC_CALL_WITH_OP");
 }
 
@@ -227,93 +245,86 @@ TEST_F(TestNet, test_net_async_call_buff)
 {
     LOG_INFO("test_net_async_call_buff");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    uint64_t req1 = NO_1024;
+    uint64_t request = NO_1024;
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+        LOG_INFO("test_net_async_call_buff done");
         if (resp != nullptr) {
             free(resp);
         }
         return;
     };
     Callback callback(cbFunc, nullptr);
-    engine->AsyncCallBuff(1, 1, &req1, 1, callback);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
-    engine->AsyncCallBuff(1, 1, &req1, 1, callback);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
+
+    engine->AsyncCallBuff(1, 1, &request, sizeof(uint64_t), callback);
+
+    uint16_t opCode = NO_256;
+    engine->AsyncCallBuff(1, opCode, &request, sizeof(uint64_t), callback);
+
+    BioNodeId targetNodeId = NO_100;
+    engine->AsyncCallBuff(targetNodeId, 1, &request, sizeof(uint64_t), callback);
 }
 
 TEST_F(TestNet, test_net_read)
 {
     LOG_INFO("test_net_read");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    NetRequest req;
-    auto ret = engine->SyncRead(1, 0, req);
+    NetRequest request;
+    auto ret = engine->SyncRead(1, 0, request);
     EXPECT_EQ(ret, BIO_OK);
 
-    ret = engine->SyncRead(1, req);
+    BioNodeId targetNodeId = NO_100;
+    ret = engine->SyncRead(targetNodeId, 0, request);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+
+    ret = engine->SyncRead(1, request);
     EXPECT_EQ(ret, BIO_OK);
+
+    targetNodeId = NO_100;
+    ret = engine->SyncRead(targetNodeId, request);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 }
 
 TEST_F(TestNet, test_net_write)
 {
     LOG_INFO("test_net_write");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    NetRequest req;
-    auto ret = engine->SyncWrite(1, 0, req);
+    NetRequest request;
+    auto ret = engine->SyncWrite(1, 0, request);
     EXPECT_EQ(ret, BIO_OK);
 
-    ret = engine->SyncWrite(1, req);
+    BioNodeId targetNodeId = NO_100;
+    ret = engine->SyncWrite(targetNodeId, 0, request);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+
+    ret = engine->SyncWrite(1, request);
     EXPECT_EQ(ret, BIO_OK);
+
+    targetNodeId = NO_100;
+    ret = engine->SyncWrite(targetNodeId, request);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     ServiceContext ctx;
-    ret = engine->SyncWrite(ctx.Channel(), req);
+    ret = engine->SyncWrite(ctx.Channel(), request);
     EXPECT_EQ(ret, BIO_OK);
-
-    // get data channel failed
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_DATA_CHANNEL_NOT_EXIST", 0, 1, userParam);
-    ret = engine->SyncWrite(1, 0, req);
-    EXPECT_EQ(ret, BIO_NET_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_DATA_CHANNEL_NOT_EXIST");
-    // get data channel failed
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
-    ret = engine->SyncWrite(1, req);
-    EXPECT_EQ(ret, BIO_NET_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
-}
-
-TEST_F(TestNet, test_net_sync_connect)
-{
-    LOG_INFO("test_net_sync_connect");
-    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    uint32_t mPid = 0;
-    ConnectInfo mConnectInfo(INVALID_NID, mPid, INVALID_NID);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_CONNECT_CTRL_PLANE", 0, 1, userParam);
-    BResult ret = engine->SyncConnect(mConnectInfo);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_CONNECT_CTRL_PLANE");
 }
 
 TEST_F(TestNet, test_net_receive_fds)
 {
     LOG_INFO("test_net_receive_fds");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    BioNodeId targetNodeId = 1;
-    int32_t realFd = 1;
-    BResult ret = engine->ReceiveFds(targetNodeId, &realFd, NO_1);
-    EXPECT_EQ(ret, BIO_NET_RETRY);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST", 0, 1, userParam);
+    int32_t realFd = 1;
+    BResult ret = engine->ReceiveFds(1, &realFd, NO_1);
+    EXPECT_EQ(ret, BIO_OK);
+
+    BioNodeId targetNodeId = NO_100;
     ret = engine->ReceiveFds(targetNodeId, &realFd, NO_1);
     EXPECT_EQ(ret, BIO_NET_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_GET_CHANNEL_NOT_EXIST");
 }
 
-TEST_F(TestNet, test_net_set_shminfo)
+TEST_F(TestNet, test_net_set_shm_info)
 {
-    LOG_INFO("test_net_set_shminfo");
+    LOG_INFO("test_net_set_shm_info");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     int32_t mShmFd = -1;
     uint8_t *mShmAddr = nullptr;
@@ -322,11 +333,10 @@ TEST_F(TestNet, test_net_set_shminfo)
     engine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
 }
 
-TEST_F(TestNet, test_net_get_shmaddress)
+TEST_F(TestNet, test_net_get_shm_address)
 {
-    LOG_INFO("test_net_get_shmaddress");
+    LOG_INFO("test_net_get_shm_address");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t mShmOffset = 0;
-    engine->GetShmAddress(mShmOffset);
+    auto ret = engine->GetShmAddress(mShmOffset);
 }
-

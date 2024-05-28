@@ -59,4 +59,6 @@ TEST_F(TestHtracer, test_get_trace_info_ok)
     LOG_INFO("test_get_trace_info_ok");
     auto info = GetTraceInfo();
     EXPECT_NE(info, "");
+
+    ClearTraceInfo();
 }

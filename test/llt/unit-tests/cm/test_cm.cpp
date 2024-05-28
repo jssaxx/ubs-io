@@ -108,7 +108,7 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
         return CM_ERR;
     }
 
-    uint16_t nodeNum = 2;
+    uint16_t nodeNum = NO_2;
     auto nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * nodeNum);
     if (nodeList == nullptr) {
         return CM_ERR;
@@ -339,9 +339,9 @@ void TestCm::Stub()
     MOCKER(deallocate_String_vector).stubs().will(invoke(ZooDeallocateStringVector));
 }
 
-TEST_F(TestCm, test_cm_initialize)
+TEST_F(TestCm, test_cm_inner_init)
 {
-    LOG_INFO("test_cm_initialize");
+    LOG_INFO("test_cm_inner_init");
     CmOptions mOptions;
     mOptions.role = ROLE_TOGETHER;
     mOptions.zkIpMask = "127.0.0.1:2181";
@@ -354,7 +354,7 @@ TEST_F(TestCm, test_cm_initialize)
     mOptions.hbPermFaultTime = NO_60;
 
     PoolInfo pools;
-    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
+    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio_tester");
     EXPECT_EQ(ret, 0);
     pools.poolId = mOptions.groups.groupId;
     pools.type = DISK_TYPE_DRAM;
@@ -381,9 +381,9 @@ TEST_F(TestCm, test_cm_initialize)
     EXPECT_EQ(ret, CM_OK);
 }
 
-TEST_F(TestCm, test_cm_get_mr)
+TEST_F(TestCm, test_cm_get_node_mr)
 {
-    LOG_INFO("test_cm_get_mr");
+    LOG_INFO("test_cm_get_node_mr");
     NodeMetaBuff *mr = (NodeMetaBuff *)malloc(NODE_META_BUFF_LEN);
     mr->nodeId = 0;
     int32_t ret = CM_GetNodeMr(0, mr);
@@ -402,14 +402,18 @@ TEST_F(TestCm, test_cm_get_node_session)
 TEST_F(TestCm, test_cm_node_event_check)
 {
     LOG_INFO("test_cm_node_event_check");
-    int32_t ret = CmClientZkNodeEventExistCheck(0, 0);
+    uint16_t poolId = 0;
+    uint16_t nodeId = 0;
+    int32_t ret = CmClientZkNodeEventExistCheck(poolId, nodeId);
     EXPECT_EQ(ret, CM_NOT_EXIST);
 }
 
 TEST_F(TestCm, test_cm_pt_event_check)
 {
     LOG_INFO("test_cm_pt_event_check");
-    int32_t ret = CmClientZkPtEventExistCheck(0, 0);
+    uint16_t poolId = 0;
+    uint16_t nodeId = 0;
+    int32_t ret = CmClientZkPtEventExistCheck(poolId, nodeId);
     EXPECT_EQ(ret, CM_NOT_EXIST);
 }
 
@@ -437,14 +441,16 @@ TEST_F(TestCm, test_cm_record_pt_event)
 TEST_F(TestCm, test_cm_report_disk_status_fault)
 {
     LOG_INFO("test_cm_report_disk_status_fault");
-    int32_t ret = CmReportDiskStatus(0, CM_DISK_FAULT);
+    uint16_t diskId = 0;
+    int32_t ret = CmReportDiskStatus(diskId, CM_DISK_FAULT);
     EXPECT_EQ(ret, CM_OK);
 }
 
 TEST_F(TestCm, test_cm_report_disk_status_normal)
 {
     LOG_INFO("test_cm_report_disk_status_normal");
-    int32_t ret = CmReportDiskStatus(0, CM_DISK_NORMAL);
+    uint16_t diskId = 0;
+    int32_t ret = CmReportDiskStatus(diskId, CM_DISK_NORMAL);
     EXPECT_EQ(ret, CM_OK);
 }
 
@@ -466,7 +472,7 @@ TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
 {
     LOG_INFO("test_cm_server_view_role_change_master_ptnum_0");
     PoolInfo pools;
-    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
+    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio_tester");
     EXPECT_EQ(ret, 0);
     pools.poolId = 0;
     pools.type = DISK_TYPE_DRAM;
@@ -508,9 +514,15 @@ TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
     free(ptList);
 }
 
-static void CmServerCancelNodeFaultStub() {}
+static void CmServerCancelNodeFaultStub()
+{
+    return;
+}
 
-static void CmServerMonitorInitMgrStub() {}
+static void CmServerMonitorInitMgrStub()
+{
+    return;
+}
 
 static int32_t CmServerMonitorLoadPoolStub()
 {
@@ -542,7 +554,7 @@ void TestCm::CancelNodeStub()
 TEST_F(TestCm, test_cm_server_monitor_expire_case_return_ok)
 {
     LOG_INFO("test_cm_server_monitor_expire_case_return_ok");
-    CancelNodeStub();
+    TestCm::CancelNodeStub();
     CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
     nodeList->poolId = 0;
     nodeList->nodeNum = NO_256;
@@ -560,7 +572,7 @@ TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
     LOG_INFO("test_cm_server_get_node_state_case_return_ok");
     NodeStateInfo state;
     state.nodeId = 0;
-    auto ret = CmServerViewGetNodeState(0, &state);
+    int32_t ret = CmServerViewGetNodeState(0, &state);
     EXPECT_EQ(ret, CM_OK);
 }
 
@@ -581,7 +593,7 @@ TEST_F(TestCm, test_cm_register_node_chg)
 {
     LOG_INFO("test_cm_register_node_chg");
     NodeListChangeOpHandle handle = { StubNodeChgHandler, nullptr };
-    auto ret = CM_RegNodeListChangeNotifyHandle(0, &handle);
+    int32_t ret = CM_RegNodeListChangeNotifyHandle(0, &handle);
     EXPECT_EQ(ret, CM_OK);
 }
 
@@ -589,7 +601,7 @@ TEST_F(TestCm, test_cm_set_pt_finish)
 {
     LOG_INFO("test_cm_set_pt_finish");
     PtFinish eventList = { 1, 1, 0 };
-    auto ret = CM_SetPtFinishStatus(0, 1, &eventList);
+    int32_t ret = CM_SetPtFinishStatus(0, 1, &eventList);
     EXPECT_EQ(ret, CM_OK);
 }
 
@@ -599,8 +611,8 @@ TEST_F(TestCm, test_cm_is_pt_same)
     PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
         {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
     PtEntry elem2 = elem1;
-    auto ret = ViewStorePtEntryIsSame(&elem1, &elem2);
-    EXPECT_EQ(ret, 1);
+    int32_t ret = ViewStorePtEntryIsSame(&elem1, &elem2);
+    EXPECT_EQ(ret, TRUE);
 }
 
 TEST_F(TestCm, test_cm_get_node_id_by_path)
@@ -608,7 +620,7 @@ TEST_F(TestCm, test_cm_get_node_id_by_path)
     LOG_INFO("test_cm_get_node_id_by_path");
     std::string path = "/zk/123";
     std::string pre = "/zk/";
-    auto ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
+    int32_t ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
     EXPECT_EQ(ret, 123U);
 }
 
@@ -618,6 +630,6 @@ TEST_F(TestCm, test_cm_is_zk_pt_same)
     PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
         {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
     PtEntry elem2 = elem1;
-    auto ret = CmClientZkPtEntryIsSame(&elem1, &elem2);
-    EXPECT_EQ(ret, 1);
+    int32_t ret = CmClientZkPtEntryIsSame(&elem1, &elem2);
+    EXPECT_EQ(ret, TRUE);
 }
