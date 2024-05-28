@@ -545,7 +545,7 @@ static void *PerfTestPutImpl(void *param)
 {
     auto *getParam = (PerfTestParam *)param;
     static std::atomic<uint32_t> sliceId(0);
-    static std::atomic<int32_t> keyIndex(1);
+    std::atomic<int32_t> keyIndex(1);
 
     ObjLocation location{};
     auto ret = BioCalcLocation(gTenantId, (++sliceId), &location);
@@ -584,7 +584,7 @@ static void *PerfTestGetImpl(void *param)
     auto *getParam = (PerfTestParam *)param;
     char *value = new char[getParam->length];
     char key[128];
-    static std::atomic<int32_t> keyIndex(1);
+    std::atomic<int32_t> keyIndex(1);
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         sprintf(key, "file_%u_%d", getParam->tid, keyIndex.load());

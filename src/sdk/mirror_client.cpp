@@ -1138,7 +1138,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         return BIO_ALLOC_FAIL;
     }
 
-    auto tmp = new uint8_t[sizeof(GetSliceResponse)];
+    auto tmp = new uint8_t[sizeof(PutRequest)];
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
     req->memFromServer = false;

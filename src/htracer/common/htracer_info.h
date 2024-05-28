@@ -15,8 +15,8 @@ class HtracerInfo {
 public:
     __always_inline void DelayBegin(std::string &tpName)
     {
-        if (!nameValid) {
-            nameValid = true;
+        bool expectval = false;
+        if (nameValid.compare_exchange_weak(expectval, true)) {
             name = tpName;
         }
         begin.fetch_add(1u, std::memory_order_relaxed);
