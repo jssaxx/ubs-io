@@ -96,10 +96,17 @@ BResult MirrorClient::DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16
 
 BResult MirrorClient::CreateFlow(uint16_t ptId)
 {
+    BResult ret = Insert(ptId); // 多并发IO情况下，防止重入
+    if (ret != BIO_OK) {
+        CLIENT_LOG_WARN("Insert failed, ret:" << ret << ", ptId:" << ptId << ".");
+        return BIO_INNER_RETRY; // 延迟重试
+    }
+
     CmPtInfo ptEntry;
-    BResult ret = GetPtEntry(ptId, ptEntry);
+    ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get pt entry failed, ret:" << ret << ", ptId:" << ptId << ".");
+        Delete(ptId, 0);
         return ret;
     }
 
@@ -109,6 +116,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     if (UNLIKELY(ret != BIO_OK || flowId == UINT64_MAX)) {
         CLIENT_LOG_ERROR("Create master flow failed, ret:" << ret << ", ptId:" << ptId << ", masterNid:" <<
             ptEntry.masterNodeId << ".");
+        Delete(ptId, 0);
         return ret;
     }
 
@@ -123,12 +131,13 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
                 ptEntry.copys[idx].nodeId << ".");
-            DestroyFlow(ptId, flowId);
+            Delete(ptId, 0);
             return ret;
         }
     }
 
-    Insert(ptId, ptEntry.version, flowId, isDegrade);
+    Update(ptId, ptEntry.version, flowId, isDegrade);
+
     CLIENT_LOG_INFO("Create flow instance success, ptId:" << ptId << ", ptv:" << ptEntry.version << ", flowId:" <<
         flowId << ", isDegrade:" << isDegrade << ".");
     return BIO_OK;
@@ -979,21 +988,30 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
 BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
     uint64_t &index)
 {
-    FlowInstance *flowInst = Query(ptId);
+    BResult ret;
+
+    FlowInstancePtr flowInst = Query(ptId);
     if (UNLIKELY(flowInst == nullptr)) {
-        BResult ret = CreateFlow(ptId);
+        ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Create flow instance failed, ret: " << ret << ", ptId:" << ptId << ".");
+            CLIENT_LOG_WARN("Create flow instance failed, ret: " << ret << ", ptId:" << ptId << ".");
             return ret;
         }
         flowInst = Query(ptId);
         if (UNLIKELY(flowInst == nullptr)) {
-            CLIENT_LOG_ERROR("Query flow failed, ptId:" << ptId << ".");
+            CLIENT_LOG_WARN("Query flow failed, ptId:" << ptId << ".");
             return BIO_INNER_RETRY;
         }
     }
 
-    if (flowInst->Version() != ptv) {
+    bool isNormal = flowInst->IsNormal();
+    if (UNLIKELY(!isNormal)) {
+        CLIENT_LOG_WARN("Check flow failed, ptId:" << ptId << ".");
+        return BIO_INNER_RETRY;
+    }
+
+    if (UNLIKELY(flowInst->Version() != ptv)) {
+        Delete(ptId, flowInst->FlowId()); // 销毁老版本实例
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create flow instance failed, need retry, ret: " << ret << ", ptId:" << ptId << ".");

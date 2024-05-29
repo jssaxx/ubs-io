@@ -26,6 +26,7 @@ namespace bio {
 constexpr uint16_t BIO_INIT_TIMEOUT_TIME = 90;
 constexpr uint16_t BIO_IO_TIMEOUT_TIME = 60;
 constexpr uint16_t BIO_IO_INTERAL_TIME = 2;
+constexpr uint16_t BIO_IO_DELAY_TIME = 1;
 using UpdateView = std::function<void(void)>;
 
 enum WorkerScene : uint32_t {
@@ -235,7 +236,7 @@ private:
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
 
-    inline BResult Insert(uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
+    inline BResult Insert(uint16_t ptId)
     {
         mLock.LockWrite();
         if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
@@ -244,24 +245,40 @@ private:
         }
         auto it = mFlowMap.find(ptId);
         if (it != mFlowMap.end()) {
-            FlowInstance *instance = it->second;
-            if (instance->Version() == ptv) {
-                mLock.UnLock();
-                return BIO_OK;
-            }
-            mFlowMap.erase(it);
-            delete instance;
-            mFlowMap[ptId] = new FlowInstance(flowId, ptv, isDegrade);
             mLock.UnLock();
-            return BIO_OK;
+            return BIO_EXISTS;
         }
-        mFlowMap[ptId] = new FlowInstance(flowId, ptv, isDegrade);
+        FlowInstancePtr instance = MakeRef<FlowInstance>();
+        if (instance == nullptr) {
+            mLock.UnLock();
+            return BIO_ALLOC_FAIL;
+        }
+        mFlowMap[ptId] = instance;
         mLock.UnLock();
         return BIO_OK;
     }
 
+    inline BResult Update(uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
+    {
+        mLock.LockWrite();
+        if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
+            mLock.UnLock();
+            return BIO_ERR;
+        }
+        auto it = mFlowMap.find(ptId);
+        if (it != mFlowMap.end()) {
+            FlowInstancePtr instance = it->second;
+            instance->Update(flowId, ptv, isDegrade);
+            mLock.UnLock();
+            return BIO_OK;
+        }
+        mLock.UnLock();
+        return BIO_NOT_EXISTS;
+    }
+
     inline void Delete(uint16_t ptId, uint64_t flowId)
     {
+        sleep(BIO_IO_DELAY_TIME);
         mLock.LockWrite();
         auto it = mFlowMap.find(ptId);
         if (UNLIKELY(it == mFlowMap.end())) {
@@ -272,14 +289,13 @@ private:
             mLock.UnLock();
             return;
         }
-        delete it->second;
         mFlowMap.erase(it);
         mLock.UnLock();
 
         DestroyFlow(ptId, flowId);
     }
 
-    inline FlowInstance *Query(uint16_t ptId)
+    inline FlowInstancePtr Query(uint16_t ptId)
     {
         mLock.LockRead();
         auto it = mFlowMap.find(ptId);
@@ -292,7 +308,7 @@ private:
     }
 
 private:
-    std::unordered_map<uint16_t, FlowInstance *> mFlowMap;
+    std::unordered_map<uint16_t, FlowInstancePtr> mFlowMap;
     ReadWriteLock mLock;
     WorkerMode mMode;
     CmNodeId mLocalNid;
