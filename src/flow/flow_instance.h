@@ -17,7 +17,8 @@ using FlowInstancePtr = Ref<FlowInstance>;
 class FlowInstance {
 public:
     FlowInstance(const uint64_t flowId, uint64_t version = 0, bool isDegrade = false)
-        : mFlowId(flowId), mVersion(version), mIsDegrade(isDegrade) {}
+        : mFlowId(flowId), mVersion(version), mIsDegrade(isDegrade), mIsNormal(true) {}
+    FlowInstance() : mIsNormal(false) {}
     ~FlowInstance() = default;
 
     inline uint64_t FlowId() const
@@ -33,6 +34,19 @@ public:
     inline bool IsDegrade() const
     {
         return mIsDegrade;
+    }
+
+    inline bool IsNormal() const
+    {
+        return mIsNormal.load();
+    }
+
+    inline void Update(uint64_t flowId, uint64_t version, bool isDegrade)
+    {
+        mFlowId = flowId;
+        mVersion = version;
+        mIsDegrade = isDegrade;
+        mIsNormal = true;
     }
 
     inline uint64_t AllocOffset(uint64_t len, uint64_t &offset)
@@ -57,9 +71,10 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    uint64_t mFlowId;
-    uint64_t mVersion;
+    uint64_t mFlowId{ 0 };
+    uint64_t mVersion{ 0 };
     bool mIsDegrade;
+    std::atomic<bool> mIsNormal;
     uint64_t mIndex{ 0 };
     uint64_t mOffset{ 0 };
     SpinLock lock;
