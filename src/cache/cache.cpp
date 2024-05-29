@@ -94,7 +94,7 @@ BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64
     BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
     if (ret != BIO_OK) {
         LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
-        return ret;
+        return BIO_CHECK_PT_FAIL;
     }
 
     bool isPtDegrade = false;
@@ -134,7 +134,7 @@ BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv)
     BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
     if (ret != BIO_OK) {
         LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
-        return ret;
+        return BIO_CHECK_PT_FAIL;
     }
 
     BIO_TRACE_START(RCACHE_TRACE_CREATE_OBJ);
