@@ -662,13 +662,13 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         NetConnPayload payload(info.srcId);
         if (mode == CONNECT_IPC) {
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
             result = netService->Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
 #else
             result = NetStub::Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
 #endif
         } else {
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
             result = netService->Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
 #else
             result = NetStub::Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
