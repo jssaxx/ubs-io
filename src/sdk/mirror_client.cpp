@@ -500,10 +500,7 @@ BResult MirrorClient::Put(MirrorPut &param)
 BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo,
     PutRequest *&req)
 {
-    uint8_t *reqTmp = nullptr;
-    LVOS_TP_START(SDK_MIRROR_PUT_MEMORY_FAIL, &reqTmp, nullptr);
-    reqTmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
-    LVOS_TP_END;
+    uint8_t *reqTmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
     if (UNLIKELY(reqTmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put memory failed, len:" << sizeof(PutRequest) + spaceInfo.descriptorSize << ".");
         return BIO_INNER_ERR;
@@ -1319,7 +1316,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
 {
     CLIENT_LOG_DEBUG("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
-    BResult ret;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
@@ -1404,13 +1401,13 @@ BResult MirrorClient::StatLocal(StatRequest &req, ObjStat &objInfo) const
 BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjStat &objInfo)
 {
     uint16_t dstNid = ptEntry.masterNodeId;
-    BResult ret = BIO_OK;
+    BResult ret = BIO_INNER_ERR;
+    LVOS_TP_START(SDK_MIRROR_STAT_RECV_FAIL, &ret, BIO_INNER_RETRY);
     if (dstNid == mLocalNid.VNodeId()) {
         ret = StatLocal(req, objInfo);
     } else {
         ret = StatRemote(dstNid, req, objInfo);
     }
-    LVOS_TP_START(SDK_MIRROR_STAT_RECV_FAIL, &ret, BIO_INNER_RETRY);
     LVOS_TP_END;
     return ret;
 }
@@ -1475,19 +1472,19 @@ BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string
 
 BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult result = BIO_OK;
+    BResult result = BIO_INNER_ERR;
     uint32_t index = 0;
     for (auto &ptEntry : mPtView) {
         uint16_t dstNid = ptEntry.second.masterNodeId;
         req.isListUnderFs = (index == 0) ? true : false;
         req.comm.ptId = ptEntry.second.ptId;
         req.comm.ptv = ptEntry.second.version;
+        LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &result, BIO_INNER_RETRY);
         if (dstNid == mLocalNid.VNodeId()) {
             result = ListLocal(req, objs);
         } else {
             result = ListRemote(dstNid, req, objs);
         }
-        LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &result, BIO_INNER_RETRY);
         LVOS_TP_END;
         if (result != BIO_OK) {
             CLIENT_LOG_ERROR("Send list request failed, ret:" << result << ", dstNid:" << dstNid << ", ptId:" <<
@@ -1503,7 +1500,7 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)
 {
     if (masterNid == mLocalNid.VNodeId()) {
-        BResult ret;
+        BResult ret = BIO_INNER_ERR;
         LVOS_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &ret, BIO_INNER_RETRY);
         ret = agent::BioClientAgent::Instance()->LoadLocal(req);
         LVOS_TP_END;

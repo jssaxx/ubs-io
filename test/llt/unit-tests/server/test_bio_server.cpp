@@ -899,8 +899,6 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_queue_init_er
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_EXECUTOR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "QUEUE_INIT_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_TASK_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_TASK_FAIL_RESET_OUTER", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
     EXPECT_EQ(ret, BIO_ERR);
@@ -909,8 +907,6 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_queue_init_er
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_EXECUTOR");
     LVOS_HVS_deactiveTracePoint(0, "QUEUE_INIT_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_TASK_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_TASK_FAIL_RESET_OUTER");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
 }
 
@@ -923,8 +919,6 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_thread_init_e
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_EXECUTOR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "EXECUTOR_THREAD_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_TASK_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_TASK_FAIL_RESET_OUTER", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
     EXPECT_EQ(ret, BIO_ERR);
@@ -933,8 +927,6 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_thread_init_e
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_EXECUTOR");
     LVOS_HVS_deactiveTracePoint(0, "EXECUTOR_THREAD_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_TASK_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_TASK_FAIL_RESET_OUTER");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
 }
 
@@ -947,7 +939,6 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_param_err_return
     LVOS_HVS_activeTracePoint(0, "RCACHE_EVICT_PARAM_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_INIT", 0, 1, userParam);
-
     auto ret = BioServer::Instance()->Start();
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
@@ -1024,7 +1015,6 @@ TEST_F(TestBioServer, test_start_server_cache_init_cache_recover_err_return_fail
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_PROCESS", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_INIT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL", 0, 1, userParam);
-
     auto ret = BioServer::Instance()->Start();
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");

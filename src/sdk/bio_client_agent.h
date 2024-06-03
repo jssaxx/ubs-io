@@ -59,9 +59,7 @@ public:
     {
         uintptr_t netPtr = getNetEngineOp();
         NetEnginePtr netEngine = MakeRef<NetEngine>();
-        LVOS_TP_START(SDK_BIO_NET_PRE_START_PRE_FAIL, &netEngine, nullptr);
         netEngine = reinterpret_cast<NetEngine *>(netPtr);
-        LVOS_TP_END;
         return netEngine;
     }
 

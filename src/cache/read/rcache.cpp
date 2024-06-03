@@ -204,7 +204,6 @@ BResult RCache::Initialize()
 
 void RCache::Destroy()
 {
-    LVOS_TP_START(NO_PROCESS_RCACHE_DESTROY_INDEX, 0);
     for (uint32_t i = 0; i < READ_CACHE_META_HASH_BUCKET_NUM; i++) {
         indexLock[i].Lock();
         index[i].clear();
@@ -230,7 +229,6 @@ void RCache::Destroy()
         }
         truncateLock[tier].UnLock();
     }
-    LVOS_TP_END;
 }
 
 BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPtr &chunk)
@@ -633,8 +631,10 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             break;
         }
         chunk = truncateQ[READ_CACHE_TIER_MEM].End();
-        uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
+
+        uint64_t truncateOffset = 0;
         LVOS_TP_START(RCACHE_GET_EVICT_IO_FAIL, &truncateOffset, NO_MAX_VALUE64);
+        truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
         LVOS_TP_END;
         if ((chunk->GetValue().flowOffset != truncateOffset) ||
             (chunk->GetValue().length + haveEvictData > needEvictData)) {
@@ -646,7 +646,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         chunk->lock.lock();
         uint64_t flowOffset = 0;
         uint64_t indexInFlow = 0;
-        BResult ret;
+        BResult ret = BIO_INNER_ERR;
         LVOS_TP_START(RCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
         ret = flow[READ_CACHE_TIER_DISK]->AllocOffset(chunk->GetValue().length, flowOffset, indexInFlow);
         LVOS_TP_END;

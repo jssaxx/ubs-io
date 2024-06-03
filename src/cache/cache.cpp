@@ -18,28 +18,19 @@ namespace ock {
 namespace bio {
 BResult Cache::Init()
 {
-    LVOS_TP_START(RCACHE_MANAGER_GET_INSTANCE_FAIL, &mRCacheManager, nullptr);
     mRCacheManager = RCacheManager::Instance();
-    LVOS_TP_END;
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
 
-    BResult ret = BIO_OK;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
     ret = mRCacheManager->Init();
-    LVOS_TP_END;
-    LVOS_TP_START(RCACHE_MANAGER_INIT_FAIL_RESET, &ret, BIO_OK);
     LVOS_TP_END;
     ChkTrue(ret == BIO_OK, ret, "Initialize read cache manager failed, ret:" << ret << ".");
 
     mWCacheManager = WCacheManager::Instance();
-    LVOS_TP_START(WCACHE_MANAGER_GET_INSTANCE_FAIL, &mWCacheManager, nullptr);
-    LVOS_TP_END;
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
-    LVOS_TP_START(WCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
+
     ret = mWCacheManager->Init(mRCacheManager);
-    LVOS_TP_END;
-    LVOS_TP_START(WCACHE_MANAGER_INIT_FAIL_RESET, &ret, BIO_OK);
-    LVOS_TP_END;
     ChkTrue(ret == BIO_OK, ret, "Initialize write cache manager failed, ret:" << ret << ".");
 
     ret = CacheOverloadCtrl::Instance().Initialize();
@@ -60,17 +51,19 @@ BResult Cache::Recover()
         return ret;
     }
 
+    uint64_t type = 0;
+    uint64_t innerType = 0;
     for (auto &elem : flowMaps) {
-        uint64_t type = CacheFlowIdManager::GetType(elem.first);
-        uint64_t innerType = CacheFlowIdManager::GetInnerType(elem.first);
         LVOS_TP_START(CACHE_RECOVER_TYPE_FAIL, &type, READ_CACHE);
+        type = CacheFlowIdManager::GetType(elem.first);
         LVOS_TP_END;
         LVOS_TP_START(CACHE_RECOVER_TYPE_INNER_FAIL, &innerType, RCACHE_FLOW_DISK_DATA_PREFIX);
+        innerType = CacheFlowIdManager::GetInnerType(elem.first);
         LVOS_TP_END;
         if (static_cast<uint16_t>(type) == WRITE_CACHE &&
             static_cast<uint32_t>(innerType) == WCACHE_FLOW_DISK_META_PREFIX) {
             ret = mWCacheManager->RecoverCache(elem.second);
-            ChkTrueNot(ret == BIO_OK, ret);
+            ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         } else if (static_cast<uint16_t>(type) == READ_CACHE &&
             static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
             LVOS_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
@@ -79,6 +72,7 @@ BResult Cache::Recover()
             ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         }
     }
+
     return BIO_OK;
 }
 
@@ -187,11 +181,12 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
 BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
     uint64_t &realLen)
 {
+    BResult ret = BIO_INNER_ERR;
     BIO_TRACE_START(WCACHE_TRACE_GET);
-    auto ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
     LVOS_TP_START(WCACHE_GET_OK, &ret, BIO_OK);
-    LVOS_TP_END;
     LVOS_TP_START(WCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
+    ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
+    LVOS_TP_END;
     LVOS_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
@@ -206,8 +201,6 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
 
     BIO_TRACE_START(RCACHE_TRACE_GET);
     ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
-    LVOS_TP_START(RCACHE_GET_ERR, &ret, BIO_ERR);
-    LVOS_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
@@ -300,10 +293,10 @@ BResult Cache::Delete(uint64_t ptId, const Key &key)
     }
 
     BIO_TRACE_START(RCACHE_TRACE_DEL);
-    ret = mRCacheManager->Delete(ptId, key);
-    BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
     LVOS_TP_START(CACHE_DELETE_RCACHE_MANAGER_ERR, &ret, BIO_ERR);
+    ret = mRCacheManager->Delete(ptId, key);
     LVOS_TP_END;
+    BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
         return ret;
@@ -385,12 +378,9 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
 
 BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
 {
-    BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(CACHE_EXPIRED_ERR, &ret, BIO_ERR);
     BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
-    ret = mRCacheManager->ExpiredClear(ptId, ptv);
+    BResult ret = mRCacheManager->ExpiredClear(ptId, ptv);
     BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
-    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Rcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
         return ret;
@@ -401,9 +391,8 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     BIO_TRACE_END(WCACHE_TRACE_CLEAR_EXPIRED, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Wcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
-        return ret;
     }
-    return BIO_OK;
+    return ret;
 }
 
 BResult Cache::ExtraCreateRCache(uint64_t ptId, uint64_t ptv)

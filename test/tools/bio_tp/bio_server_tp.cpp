@@ -4,30 +4,26 @@
 #include "bio_server_tp.h"
 
 using namespace ock::bio;
+using namespace ock::bio::tp;
+
 #ifdef __aarch64__
 static uint32_t MY_PID = 102;
+
 void tp::ServerTp::Register() noexcept
 {
-    LVOS_TP_REG(SERVER_UNDERFS_PUT, "server underfs put error", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_UNDERFS_GET, "server underfs get error", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_UNDERFS_DELETE, "server underfs delete error", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_UNDERFS_STAT, "server underfs stat error", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_UNDERFS_LIST, "server underfs list error", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NET_FAIL_TO_REGISTER_BY_SIZE, "failed to register by size", tp::CommonTp::PointerValueCallback);
-    LVOS_TP_REG(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, "failed to create memory file", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, "truncate file with size failed", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, "Mmap bio_shm size failed", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP, "failed async call with op", tp::CommonTp::IntValueCallback);
-
-    LVOS_TP_REG(SERVER_CRB_SEND_FLUSH_FAIL, "connect fail", tp::CommonTp::IntValueCallback);
-
-    LVOS_TP_REG(SERVER_NET_CONNECT_FAIL, "connect fail", tp::CommonTp::IntValueCallback);
-
-    LVOS_TP_REG(SERVER_NET_ASYNC_CALL_FAIL, "async call fail", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NET_SYNC_CALL_FAIL, "async call fail", tp::CommonTp::IntValueCallback);
-
-    LVOS_TP_REG(SERVER_NET_RDMA_WRITE_FAIL, "rdma write fail", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_UNDERFS_PUT, "server underfs put error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_UNDERFS_GET, "server underfs get error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_UNDERFS_DELETE, "server underfs delete error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_UNDERFS_STAT, "server underfs stat error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_UNDERFS_LIST, "server underfs list error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, "failed to create memory file", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, "truncate file with size failed", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, "Mmap bio_shm size failed", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_CRB_SEND_FLUSH_FAIL, "connect fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_CONNECT_FAIL, "connect fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_ASYNC_CALL_FAIL, "async call fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_RDMA_WRITE_FAIL, "rdma write fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", CommonTp::IntValueCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -37,18 +33,12 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_UNDERFS_DELETE);
     LVOS_TP_UNREG(SERVER_UNDERFS_STAT);
     LVOS_TP_UNREG(SERVER_UNDERFS_LIST);
-    LVOS_TP_UNREG(SERVER_NET_FAIL_TO_REGISTER_BY_SIZE);
     LVOS_TP_UNREG(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE);
     LVOS_TP_UNREG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE);
     LVOS_TP_UNREG(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE);
-    LVOS_TP_UNREG(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP);
-
     LVOS_TP_UNREG(SERVER_CRB_SEND_FLUSH_FAIL);
     LVOS_TP_UNREG(SERVER_NET_CONNECT_FAIL);
-
     LVOS_TP_UNREG(SERVER_NET_ASYNC_CALL_FAIL);
-    LVOS_TP_UNREG(SERVER_NET_SYNC_CALL_FAIL);
-
     LVOS_TP_UNREG(SERVER_NET_RDMA_WRITE_FAIL);
     LVOS_TP_UNREG(SERVER_NET_RDMA_READ_FAIL);
 }

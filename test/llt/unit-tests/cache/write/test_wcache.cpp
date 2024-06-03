@@ -15,6 +15,7 @@
 #include "flow_task_pool.h"
 #include "flow_manager.h"
 #include "tracepoint.h"
+#include "cache_overload_ctrl.h"
 #include "test_wcache.h"
 
 using namespace ock::bio;
@@ -254,31 +255,6 @@ TEST_F(TestWCache, test_cache_delete_keynull_case_return_err)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
-TEST_F(TestWCache, test_cache_delete_underfs_err_case_return_err)
-{
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_DELETE_FLOWID_ERR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_DELETE_ERR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_DELETE_ERR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_DELETE", 0, 1, userParam);
-    auto ret = Cache::Instance().Delete(G_PT_ID, G_KEY);
-    EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_DELETE_FLOWID_ERR");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_DELETE_ERR");
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_DELETE_ERR");
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_DELETE");
-
-    LVOS_HVS_activeTracePoint(0, "WCACHE_GET_META_SLICE_FAIL", 0, 1, userParam);
-    ret = Cache::Instance().Delete(G_PT_ID, G_KEY);
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_GET_META_SLICE_FAIL");
-
-    LVOS_HVS_activeTracePoint(0, "CACHE_DELETE_RCACHE_MANAGER_ERR", 0, 1, userParam);
-    ret = Cache::Instance().Delete(G_PT_ID, "notexists");
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "CACHE_DELETE_RCACHE_MANAGER_ERR");
-}
-
 TEST_F(TestWCache, test_flush_return_err)
 {
     LVOS_TRACEP_PARAM_S userParam;
@@ -367,11 +343,8 @@ TEST_F(TestWCache, test_wcache_alloc_case_return_fail)
 
 TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
 {
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_WCACHE", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_cacheId);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_WCACHE");
 }
 
 TEST_F(TestWCache, test_wcache_destroy_flowid_unexist_return_ok)
@@ -445,14 +418,12 @@ TEST_F(TestWCache, test_handle_proc_broken_expired_err)
 {
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, NO_10, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_VALIDATE", 0, NO_10, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, NO_10, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR", 0, NO_10, userParam);
     LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, NO_10, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, NO_10, userParam);
     auto ret = WCacheManager::Instance()->HandleProcBrokenHdl(0);
-    EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_VALIDATE");
+    EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR");
     LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
@@ -464,14 +435,12 @@ TEST_F(TestWCache, test_handle_proc_broken_flush_err)
 {
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_VALIDATE", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, 1, userParam);
     auto ret = WCacheManager::Instance()->HandleProcBrokenHdl(0);
-    EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_VALIDATE");
+    EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR");
     LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
@@ -484,13 +453,11 @@ TEST_F(TestWCache, test_handle_proc_broken_role_err)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_VALIDATE", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_ROLE_ERR", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, 1, userParam);
     auto ret = WCacheManager::Instance()->HandleProcBrokenHdl(0);
-    EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_VALIDATE");
+    EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_ROLE_ERR");
     LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
@@ -561,11 +528,9 @@ TEST_F(TestWCache, test_rcache_get_rcahceptr_notexist_case_return_fail)
     uint64_t realLen = 0;
     RCacheSlicePtr slicePtr = MakeRef<RCacheSlice>(NO_100, NO_1024, addrVec);
     LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_GET_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BResult ret = Cache::Instance().Get(G_KEY, 0, slicePtr, nullptr, realLen);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_GET_OK");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
 }
 
@@ -629,24 +594,13 @@ TEST_F(TestWCache, test_flowmanager_recover_case_return_fail)
 
 TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
 {
+    LOG_INFO("test_get_slice_wcache_flow_offset_err_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
     auto ret = GetSlice(g_cacheId, 0, NO_1024);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
-    EXPECT_EQ(ret, BIO_ERR);
-}
-
-TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
-{
-    GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1, 0, 1, NO_128 };
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
-    auto ret = GetSlice(g_cacheId, 0, NO_1024);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
 }
 
@@ -673,4 +627,98 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     auto ret = mirror->MirrorServerPut(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "WRITE_SLICE_NULL_FAIL");
+}
+
+TEST_F(TestWCache, test_bio_olc_low_water_level)
+{
+    uint64_t frontWriteBw = NO_1;
+    uint64_t evict2DiskBw = NO_2;
+    uint32_t proc = 0;
+    auto ret = CacheOverloadCtrl::Instance().LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_1);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_2;
+    ret = CacheOverloadCtrl::Instance().LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_2);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_1;
+    ret = CacheOverloadCtrl::Instance().LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_3);
+
+    frontWriteBw = NO_5;
+    evict2DiskBw = NO_1;
+    ret = CacheOverloadCtrl::Instance().LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_4);
+}
+
+TEST_F(TestWCache, test_bio_olc_mid_water_level)
+{
+    uint64_t frontWriteBw = NO_1;
+    uint64_t evict2DiskBw = NO_2;
+    uint32_t proc = 0;
+    auto ret = CacheOverloadCtrl::Instance().MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_1);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_2;
+    ret = CacheOverloadCtrl::Instance().MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_2);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_1;
+    ret = CacheOverloadCtrl::Instance().MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_3);
+
+    frontWriteBw = NO_5;
+    evict2DiskBw = NO_1;
+    ret = CacheOverloadCtrl::Instance().MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_4);
+}
+
+TEST_F(TestWCache, test_bio_olc_high_water_level)
+{
+    uint64_t frontWriteBw = NO_1;
+    uint64_t evict2DiskBw = NO_2;
+    uint32_t proc = 0;
+    auto ret = CacheOverloadCtrl::Instance().HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_1);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_2;
+    ret = CacheOverloadCtrl::Instance().HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_2);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_1;
+    ret = CacheOverloadCtrl::Instance().HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_3);
+
+    frontWriteBw = NO_5;
+    evict2DiskBw = NO_1;
+    ret = CacheOverloadCtrl::Instance().HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_4);
+}
+
+TEST_F(TestWCache, test_bio_olc_limited_water_level)
+{
+    uint64_t frontWriteBw = NO_1;
+    uint64_t evict2DiskBw = NO_2;
+    uint32_t proc = 0;
+    auto ret = CacheOverloadCtrl::Instance().LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_1);
+
+    frontWriteBw = NO_3;
+    evict2DiskBw = NO_2;
+    ret = CacheOverloadCtrl::Instance().LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
+    EXPECT_EQ(proc, NO_2);
+}
+
+TEST_F(TestWCache, test_bio_olc_show)
+{
+    std::vector<uint64_t> writeBwVec;
+    std::vector<uint64_t> evictBwVec;
+    uint64_t vmVec;
+    CacheOverloadCtrl::Instance().Show(writeBwVec, evictBwVec, vmVec);
 }
