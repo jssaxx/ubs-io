@@ -240,14 +240,12 @@ void UnderFs::Stop()
 
 BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
-    std::string keyPath = mEmulationCephPath;
-    keyPath += key;
-
     using namespace std;
 
+    std::string keyPath = mEmulationCephPath;
+    keyPath += key;
     std::vector<std::string> list;
     StrUtil::Split(keyPath, "/", list);
-
     if (list.size() > NO_3) {
         std::string prefix = mEmulationCephPath;
         for (uint32_t i = NO_2; i < list.size() - NO_1; i++) {
@@ -320,10 +318,11 @@ BResult UnderFs::Delete(const char *key)
     }
     infile.close();
 
-    int ret = remove(keyPath.c_str());
+    int ret = -1;
     LVOS_TP_START(UNDERFS_DELETE_ERR, &ret, BIO_ERR);
+    ret = remove(keyPath.c_str());
     LVOS_TP_END;
-    if (ret != 0) {
+    if (ret != BIO_OK) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_UFS_IOERR);
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());
         return BIO_UFS_IOERR;

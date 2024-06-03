@@ -184,11 +184,11 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
 
     LOG_INFO("Recover wcache, ptId:" << ptId << ", flowId:" << flowId);
 
-    BResult ret = BIO_ERR;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(RECOVER_CACHE_FLOWID_FAIL, &flowId, NO_1536);
     ret = CreateWCache(0, flowId, ptId, 0, static_cast<uint16_t>(diskId), false, true);
-    ChkTrue(ret == BIO_OK, ret, "Failed to create wcache, flowId:" << flowId);
     LVOS_TP_END;
+    ChkTrue(ret == BIO_OK, ret, "Failed to create wcache, ret:" << ret << ", flowId:" << flowId);
 
     // 2. Get write flow
     auto wcache = GetWCache(flowId);
@@ -531,7 +531,7 @@ BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
     bool isRetry = false;
     uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeUs();
-    BResult ret = BIO_ERR;
+    BResult ret = BIO_INNER_ERR;
 
     LVOS_TP_START(NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR, 0);
     LVOS_TP_START(WCACHE_EXPIRE_FAIL, &ret, BIO_INNER_RETRY);
@@ -552,13 +552,10 @@ BResult WCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
     }
 
     ret = ClearOldCache(ptId, ptv);
+    ChkTrue(ret == BIO_OK, ret, "Clear old cache failed, ret:" << ret << ".");
     LVOS_TP_END;
-    LVOS_TP_START(WCACHE_EXPIRED_CLEAR_OK, &ret, BIO_OK);
-    LVOS_TP_END;
-    ChkTrueNot(ret == BIO_OK, ret);
 
     mCacheIndex->ExpiredClear(ptId);
-
     return ret;
 }
 
@@ -624,28 +621,27 @@ BResult WCacheManager::ClearOldCache(uint64_t ptId, uint64_t ptv)
 
     result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
     LVOS_TP_END;
-    ChkTrueNot(result, BIO_INNER_ERR);
+    ChkTrue(result, BIO_INNER_ERR, "Execute destroy evict service failed.");
 
     return BIO_OK;
 }
 
 BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 {
-    BResult ret;
-    bool result = false;
-
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_WARN("Failed to get wcache flow by id:" << flowId << ".");
         return BIO_NOT_EXISTS;
     }
     wcache->SetState(false);
+
+    BResult ret = BIO_INNER_ERR;
     do {
+        LVOS_TP_START(HANDLE_CACHE_BROKE_OK, &ret, BIO_OK);
         ret = HandleCacheBrokenImpl(wcache);
         if (ret != BIO_OK) {
             usleep(BROKEN_INTERAL_TIME);
         }
-        LVOS_TP_START(HANDLE_CACHE_BROKE_OK, &ret, BIO_OK);
         LVOS_TP_END;
     } while (ret != BIO_OK);
 
@@ -656,9 +652,9 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
         mDestroyManager.emplace(flowId, evictTime);
     }
 
-    result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    bool result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    ChkTrue(result, BIO_INNER_ERR, "Execute destroy evict service failed.");
     LVOS_TP_END;
-    ChkTrueNot(result, BIO_INNER_ERR);
 
     return BIO_OK;
 }
@@ -672,10 +668,11 @@ BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
     }
     LVOS_TP_END;
 
-    uint64_t flowPtId = wcache->GetPtId();
-    LVOS_TP_START(WCACHE_HANDLE_BROCK_FLOWID_FAIL, &flowPtId, NO_1024);
-    LVOS_TP_END;
     bool isMaster = false;
+    uint64_t flowPtId = 0;
+    LVOS_TP_START(WCACHE_HANDLE_BROCK_FLOWID_FAIL, &flowPtId, NO_1024);
+    flowPtId = wcache->GetPtId();
+    LVOS_TP_END;
     auto ret = mLocRole(static_cast<uint16_t>(flowPtId), isMaster);
     if (ret != BIO_OK) {
         LOG_ERROR("Get local role fail:" << ret << ", ptId:" << flowPtId << ", flowId:" <<
@@ -698,52 +695,43 @@ BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
 BResult WCacheManager::HandleProcBroken(uint64_t procId)
 {
     LOG_INFO("Handle proc broken:" << procId);
-
     bool isSucceed = false;
     LVOS_TP_START(HANDLE_PROC_BROKEN_FAIL, &isSucceed, false);
     isSucceed = mGcEvictService->Execute([this, procId]() { HandleProcBrokenHdl(procId); });
     LVOS_TP_END;
-    if (!isSucceed) {
-        LOG_ERROR("Sche proc broken:" << procId << ", failed");
-        return BIO_ERR;
-    }
-
-    return BIO_OK;
+    return (isSucceed) ? BIO_OK : BIO_ERR;
 }
 
 BResult WCacheManager::HandleProcBrokenHdl(uint64_t procId)
 {
-    BResult ret;
-
+    BResult ret = BIO_INNER_ERR;
     do {
+        LVOS_TP_START(HANDLE_PROC_BROKE_OK, &ret, BIO_OK);
         ret = HandleProcBrokenImpl(procId);
+        LVOS_TP_END;
         if (ret != BIO_OK) {
             usleep(BROKEN_INTERAL_TIME);
         }
-        LVOS_TP_START(HANDLE_PROC_BROKE_OK, &ret, BIO_OK);
-        LVOS_TP_END;
     } while (ret != BIO_OK);
 
     ret = ClearProcCache(procId);
     ChkTrueNot(ret == BIO_OK, ret);
-
     return ret;
 }
 
 BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId)
 {
+    BResult ret = BIO_INNER_ERR;
     std::list<WCachePtr> brokenList;
-    bool isMaster;
+    bool isMaster = false;
 
     ScanProcCache(procId, brokenList);
-
     for (const auto &flow : brokenList) {
-        uint64_t flowPtId = flow->GetPtId();
-        auto ret = mLocRole(static_cast<uint16_t>(flowPtId), isMaster);
         LVOS_TP_START(WCACHE_HANDLE_PROC_BROCK_ROLE_ERR, &ret, BIO_ERR);
+        ret = mLocRole(static_cast<uint16_t>(flow->GetPtId()), isMaster);
         LVOS_TP_END;
         if (ret != BIO_OK) {
-            LOG_ERROR("Get local role fail:" << ret << ", ptId:" << flowPtId);
+            LOG_ERROR("Get local role failed, ret:" << ret << ", ptId:" << flow->GetPtId() << ".");
             continue;
         }
         LVOS_TP_START(WCACHE_HANDLE_PROC_BROCK_FLUSH, &isMaster, true);
@@ -757,7 +745,7 @@ BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId)
         }
     }
 
-    return (brokenList.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
+    return (brokenList.empty()) ? BIO_OK : BIO_INNER_RETRY;
 }
 
 void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
@@ -806,8 +794,8 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
     }
 
     result = mDestroyEvictService->Execute([this]() { DestroyEvictThread(); });
+    ChkTrue(result, BIO_INNER_ERR, "Execute destroy evict service failed.");
     LVOS_TP_END;
-    ChkTrueNot(result, BIO_INNER_ERR);
 
     return BIO_OK;
 }
@@ -823,9 +811,9 @@ inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
     WCachePtr wcache = wflowIt->second;
     bool isNormal = true;
     LVOS_TP_START(WCACHE_STATE_NORMAL, &isNormal, true);
+    LVOS_TP_START(WCACHE_STATE_NOT_NORMAL, &isNormal, false);
     isNormal = wcache->GetState();
     LVOS_TP_END;
-    LVOS_TP_START(WCACHE_STATE_NOT_NORMAL, &isNormal, false);
     LVOS_TP_END;
     if (!isNormal) {
         LOG_WARN("Check wcache state failed, flowId:" << flowId << ", state:" << isNormal << ".");

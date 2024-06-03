@@ -354,7 +354,6 @@ private:
     bool mStarted = false;
     std::mutex mStartLock;
     BioServiceProcPtr mService = nullptr;
-    Logger *mLogger = nullptr;
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
     CmPtr mCm = nullptr;

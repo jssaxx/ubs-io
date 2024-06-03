@@ -25,7 +25,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
     }
 
     if (offset + len > mPreLoadOffset) {
-        BResult ret = BIO_OK;
+        BResult ret = BIO_INNER_ERR;
         LVOS_TP_START(WCACHE_HOLD_WAIT_FAIL, &ret, BIO_ERR);
         ret = HoldWait(offset + len);
         LVOS_TP_END;

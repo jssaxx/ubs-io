@@ -7,7 +7,6 @@ namespace ock {
 namespace bio {
 BResult FlowTaskPool::Start(uint32_t coreThreadNum, uint32_t queueSize)
 {
-    LVOS_TP_START(NO_PROCESS_EXECUTOR_POOL_START, 0);
     std::lock_guard<std::mutex> guard(mMutex);
     if (mStarted) {
         LOG_WARN("Flow executor " << mName << " has been already started");
@@ -19,12 +18,9 @@ BResult FlowTaskPool::Start(uint32_t coreThreadNum, uint32_t queueSize)
         LOG_ERROR("Failed to start execution service for " << mName << ", probably out of memory");
         return BIO_ALLOC_FAIL;
     }
-
     mExeService->SetThreadName(mName);
-    LVOS_TP_END;
+
     auto result = mExeService->Start();
-    LVOS_TP_START(MEXECSERVICE_START_FAIL, &result, BIO_ERR);
-    LVOS_TP_END;
     if (!result) {
         StopInner();
         LOG_ERROR("Failed to start execution service for " << mName);

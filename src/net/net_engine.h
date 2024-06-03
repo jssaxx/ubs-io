@@ -37,8 +37,6 @@ public:
 
     inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
     {
-        LVOS_TP_START(SERVER_NET_FAIL_TO_REGISTER_BY_SIZE, &mRpcService, nullptr);
-        LVOS_TP_END;
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
             return BIO_NOT_READY;
@@ -54,8 +52,6 @@ public:
 
     inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
     {
-        LVOS_TP_START(SERVER_NET_FAIL_TO_REGISTER_BY_SIZE, &mRpcService, nullptr);
-        LVOS_TP_END;
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
             return BIO_NOT_READY;
@@ -807,9 +803,7 @@ private:
             }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
-        LVOS_TP_START(SERVER_NET_FAILED_ASYNC_CALL_WITH_OP, &result, BIO_ERR);
         result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, callback);
-        LVOS_TP_END;
 #endif
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {

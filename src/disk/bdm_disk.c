@@ -131,7 +131,6 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
 {
     uint64_t remain = len;
     int64_t rc = 0;
-
     LVOS_TP_START(BDM_RW_IO_FAIL, 0);
     while (remain > 0) {
         if (isRead) {

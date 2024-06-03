@@ -69,7 +69,6 @@ BResult RCacheGC::Initialize()
     RCacheGCWorkerParam *para = nullptr;
 
     workStatus.store(true);
-
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         for (uint32_t i = 0; i < READ_CACHE_GC_SERVICE_NUM; i++) {
             LVOS_TP_START(RCACHE_GC_PARAM_FAIL, 0);
@@ -83,8 +82,9 @@ BResult RCacheGC::Initialize()
             para->tier = static_cast<RCacheTierType>(tier);
             para->index = i;
             para->rCacheEvict = this;
-            auto *th = new std::thread(Worker, static_cast<void *>(para));
+            std::thread *th = nullptr;
             LVOS_TP_START(RCACHE_GC_THREAD_FAIL, &th, nullptr);
+            th = new std::thread(Worker, static_cast<void *>(para));
             LVOS_TP_END;
             if (th) {
                 pthread_setname_np(th->native_handle(), "GcWorker");

@@ -78,13 +78,13 @@ public:
 
     void Show(std::vector<uint64_t> &writeBwVec, std::vector<uint64_t> &evictBwVec, uint64_t &vmVec);
 
-private:
     uint64_t LowWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t HighWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t LimitedWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t CalculateWriteQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint64_t vm);
 
+private:
     uint64_t GetWmStatDirectValue();
     uint64_t GetBwStatAverageValue(BwStatObj &obj);
     void UpdateBwStatValue(BwStatObj &obj, BwStatType type);

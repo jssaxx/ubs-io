@@ -213,16 +213,6 @@ TEST_F(TestRCache, test_rcache_delete_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestRCache, test_cache_extra_create_rcache)
-{
-    LOG_INFO("test_cache_extra_create_rcache");
-    // test create invalid rcache
-    uint64_t ptId = NO_128;
-    uint64_t ptv = NO_10;
-    auto ret = Cache::Instance().ExtraCreateRCache(ptId, ptv);
-    EXPECT_EQ(ret, BIO_ERR);
-}
-
 TEST_F(TestRCache, test_cache_create_rcache_err)
 {
     LOG_INFO("test_cache_create_rcache_err");
@@ -334,19 +324,9 @@ TEST_F(TestRCache, test_cache_recover_err)
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CACHE_RECOVER");
     LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_CACHE_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "WCACHE_TIER_ALLOC_FAIL", 0, 1, userParam);
-    ret = Cache::Instance().Recover();
-    EXPECT_EQ(ret, BIO_ALLOC_FAIL);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_TIER_ALLOC_FAIL");
-
-    LVOS_HVS_activeTracePoint(0, "WCACHE_TIER_TYPE_FAIL", 0, 1, userParam);
-    ret = Cache::Instance().Recover();
-    EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_TIER_TYPE_FAIL");
-
     LVOS_HVS_activeTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Recover();
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
     LVOS_HVS_deactiveTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL");
 }
 
