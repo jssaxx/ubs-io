@@ -17,7 +17,7 @@
 #include "net_block_pool.h"
 #include "net_executor_pool.h"
 
-#ifdef USE_HCOM_STUB
+#ifdef DEBUG_UT
 #include "../../test/llt/unit-tests/net/net_stub.h"
 #endif
 #ifdef USE_DEBUG_TOOLS
@@ -234,7 +234,7 @@ public:
 
     BResult SendFds(ChannelPtr ch, int32_t fds[], uint32_t count)
     {
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         auto ret = ch->SendFds(fds, count);
 #else
         auto ret = NetStub::SendFds(fds, count);
@@ -251,7 +251,7 @@ public:
             return BIO_NET_RETRY;
         }
         int32_t timeoutSec = -1;
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         return NetResult(ch->ReceiveFds(fds, count, timeoutSec));
 #else
         return NetStub::ReceiveFds(fds, count, timeoutSec);
@@ -400,7 +400,7 @@ public:
             return BIO_NET_RETRY;
         }
         LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         ret = ch->Read(req, nullptr);
 #else
         ret = NetStub::SyncRead(req);
@@ -420,7 +420,7 @@ public:
         }
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V1);
         LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         ret = ch->Read(req, nullptr);
 #else
         ret = NetStub::SyncRead(req);
@@ -436,7 +436,7 @@ public:
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V2);
         int ret;
         LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         ret = ch->Read(req, nullptr);
 #else
         ret = NetStub::SyncRead(req);
@@ -457,7 +457,7 @@ public:
             return BIO_NET_RETRY;
         }
         LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         ret = ch->Write(req, nullptr);
 #else
         ret = NetStub::SyncWrite(req);
@@ -478,7 +478,7 @@ public:
         }
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
         LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         ret = ch->Write(req, nullptr);
 #else
         ret = NetStub::SyncWrite(req);
@@ -494,7 +494,7 @@ public:
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V2);
         int ret;
         LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         ret = ch->Write(req, nullptr);
 #else
         ret = NetStub::SyncWrite(req);
@@ -514,7 +514,7 @@ public:
         using namespace ock::hcom;
         int32_t result = BIO_ERR;
 
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_REPLY_ASYNC);
         uint64_t ts = Monotonic::TimeNs();
         NetCallback *callback = NewCallback([this, ts](NetServiceContext &context) {
@@ -678,7 +678,7 @@ private:
         reqOpInfo.timeout = mTimeout;
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg(&resp, sizeof(TResp));
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
 #else
         auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
@@ -704,7 +704,7 @@ private:
         reqOpInfo.timeout = mTimeout;
         NetServiceOpInfo rspOpInfo{};
         NetServiceMessage respMsg(&resp, sizeof(TResp));
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen }, rspOpInfo, respMsg);
 #else
         auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen }, rspOpInfo, respMsg);
@@ -733,7 +733,7 @@ private:
         NetServiceMessage respMsg{};
 
         LVOS_TP_START(SYNCCALL_FAIL, &result, BIO_ERR);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
 #else
         result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
@@ -763,7 +763,7 @@ private:
         NetServiceOpInfo reqOpInfo(opCode);
         reqOpInfo.timeout = mTimeout;
 
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         auto *netCallback = NewCallback([](NetServiceContext &context) { return; }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
@@ -795,7 +795,7 @@ private:
 
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
         LVOS_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         auto *netCallback = NewCallback(
             [this, ts, callback](NetServiceContext &context) {
                 AsyncCallDone(context.Result(), ts);
@@ -827,7 +827,7 @@ private:
         uint64_t ts = Monotonic::TimeNs();
 
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL_BUFF);
-#ifndef USE_HCOM_STUB
+#ifndef DEBUG_UT
         auto *netCallback = NewCallback(
             [this, ts, callback](NetServiceContext &context) {
                 if (context.Result() != SER_OK) {
