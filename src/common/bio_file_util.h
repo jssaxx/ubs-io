@@ -212,5 +212,4 @@ inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
 }
 }
 }
-
 #endif // HDAGGER_DAGGER_FILE_H

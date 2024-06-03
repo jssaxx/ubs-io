@@ -52,11 +52,7 @@ private:
     {
         if (mExeService != nullptr) {
             mExeService->Stop();
-            LVOS_TP_START(EXECUTOR_SERVICE_MSERVICE_FAIL, &mExeService, nullptr);
-            LVOS_TP_END;
             mExeService = nullptr;
-            LVOS_TP_START(EXECUTOR_SERVICE_MSERVICE_FAIL_RESET, &mExeService);
-            LVOS_TP_END;
         }
     };
 

@@ -38,6 +38,7 @@ BResult RCacheManager::Init()
 
     rCacheGCPtr = MakeRef<RCacheGC>();
     LVOS_TP_END;
+
     ret = rCacheGCPtr->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init rcache GC, ret:" << ret << ".");
@@ -198,9 +199,7 @@ BResult RCacheManager::DeleteRCache(uint64_t ptId)
     RCachePtr cachePtr = iter->second;
     cachePtr->Destroy();
 
-    LVOS_TP_START(NO_PROCESS_RCACHE_RELEASE, 0);
     cache.erase(iter);
-    LVOS_TP_END;
     cacheLock.UnLock();
 
     LOG_INFO("Delete rcache, flowId:" << cachePtr->GetFlowId() << ", ptId:" << ptId << ", ptv:" << cachePtr->GetPtv());
@@ -246,8 +245,6 @@ BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
                 usleep(FLUSH_INTERAL_TIME);
             }
         }
-        LVOS_TP_START(RCACHE_EVICT_OK, &isRetry, false);
-        LVOS_TP_END;
     } while (isRetry);
 
     return DeleteRCache(ptId);
@@ -256,10 +253,7 @@ BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
 BResult RCacheManager::ExpiredClearImpl(RCachePtr rCache)
 {
     rCache->SetDelete();
-
     auto ret = rCacheEvict->Stop(rCache);
-    LVOS_TP_START(RCACHE_EVICT_ERR, &ret, BIO_ERR);
-    LVOS_TP_END;
     if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache evict service failed:" << ret);
         return ret;

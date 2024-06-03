@@ -218,8 +218,9 @@ inline bool ExecutorService::Start()
 
     for (uint16_t i = 0; i < mThreadNum; i++) {
         auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
-        auto *thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
+        std::thread *thr = nullptr;
         LVOS_TP_START(EXECUTOR_THREAD_FAIL, &thr, nullptr);
+        thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
         LVOS_TP_END;
         if (thr == nullptr) {
             LOG_ERROR("Failed to create executor thread " << i);
@@ -245,8 +246,6 @@ inline void ExecutorService::Stop()
 
     for (uint32_t i = 0; i < mThreads.size(); ++i) {
         RunnablePtr stopTask = new (std::nothrow) Runnable();
-        LVOS_TP_START(EXECUTOR_SERVICE_STOP_TASK_NULL, &stopTask, nullptr);
-        LVOS_TP_END;
         if (stopTask == nullptr) {
             LOG_ERROR("Failed to new stop task, probably out of memory");
             break;
@@ -260,7 +259,6 @@ inline void ExecutorService::Stop()
         }
     }
 
-    LVOS_TP_START(NO_PROCESS_EXECUTOR_SERVICE_JOIN, 0);
     for (auto &thr : mThreads) {
         if (thr != nullptr) {
             thr->join();
@@ -269,7 +267,6 @@ inline void ExecutorService::Stop()
 
     mStopped = true;
     mRunnableQueue.UnInitialize();
-    LVOS_TP_END;
 }
 
 inline void ExecutorService::DoRunnable(bool &flag)

@@ -52,9 +52,7 @@ void BioClient::BioClientAgentExit()
 
 BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf)
 {
-    LVOS_TP_START(SDK_BIO_NET_PRE_CREAT_FAIL, &mNetEngine, nullptr);
     mNetEngine = net::BioClientNet::Instance();
-    LVOS_TP_END;
     if (mNetEngine == nullptr) {
         CLIENT_LOG_ERROR("Failed to create net instance.");
         return BIO_ALLOC_FAIL;
@@ -121,9 +119,7 @@ void BioClient::BioClientUpdateView()
 
 BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 {
-    LVOS_TP_START(SDK_BIO_MIRROR_CREAT_FAIL, &mMirror, nullptr);
     mMirror = MakeRef<MirrorClient>(mode);
-    LVOS_TP_END;
     if (mMirror == nullptr) {
         CLIENT_LOG_ERROR("Create mirror client instance failed.");
         return BIO_ALLOC_FAIL;

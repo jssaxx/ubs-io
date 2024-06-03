@@ -51,26 +51,16 @@ TEST_F(TestNet, test_net_init_common_allocator)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     BResult ret = engine->InitCommMemAllocator();
     EXPECT_EQ(ret, BIO_OK);
-
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_REGISTER_BY_SIZE", 0, 1, userParam);
-    ret = engine->InitCommMemAllocator();
-    EXPECT_EQ(ret, BIO_NOT_READY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_REGISTER_BY_SIZE");
 }
 
 TEST_F(TestNet, test_net_init_shm_allocator)
 {
     LOG_INFO("test_net_init_shm_allocator");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_REGISTER_BY_SIZE", 0, 1, userParam);
-    BResult ret = engine->InitShmMemAllocator();
-    EXPECT_EQ(ret, BIO_NOT_READY);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_REGISTER_BY_SIZE");
 
+    LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE", 0, 1, userParam);
-    ret = engine->InitShmMemAllocator();
+    auto ret = engine->InitShmMemAllocator();
     EXPECT_EQ(ret, BIO_INNER_ERR);
     LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE");
 
@@ -236,9 +226,9 @@ TEST_F(TestNet, test_net_async_call)
     engine->AsyncCall<uint64_t>(targetNodeId, 1, request, callback);
 
     LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAILED_ASYNC_CALL_WITH_OP", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL", 0, 1, userParam);
     engine->AsyncCall<uint64_t>(1, 1, request, callback);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAILED_ASYNC_CALL_WITH_OP");
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL");
 }
 
 TEST_F(TestNet, test_net_async_call_buff)

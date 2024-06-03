@@ -84,13 +84,10 @@ bool Logger::ValidateParams(const LoggerOptions &options)
 Logger *Logger::Instance(const LoggerOptions &options)
 {
     std::lock_guard<std::mutex> guard(gMutex);
-
-    LVOS_TP_START(NO_PROCESS_LOG_INSTANCE, 0);
     /* already created */
     if (gInstance != nullptr) {
         return gInstance;
     }
-    LVOS_TP_END;
 
     /* create */
     if (!ValidateParams(options)) {
@@ -113,35 +110,6 @@ void Logger::Destroy()
         delete gInstance;
         gInstance = nullptr;
     }
-}
-
-int32_t Logger::ChangeLogLevel(int32_t newLogLevel)
-{
-    std::lock_guard<std::mutex> guard(gMutex);
-    if (gInstance == nullptr) {
-        BIO_LOG_STD_ERR("Failed to change logger level as it is not created");
-        return -1L;
-    }
-
-    /* validate level */
-    if (!ValidateLogLevel(newLogLevel)) {
-        return -1L;
-    }
-
-    /* check if level is the same */
-    if (gInstance->mOptions.minLogLevel == newLogLevel) {
-        return 0;
-    }
-
-    /* set level of hlog */
-    gInstance->mOptions.minLogLevel = newLogLevel;
-
-    /* set spd log level */
-    if (gInstance->mSpdLogger != nullptr) {
-        gInstance->mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(newLogLevel));
-    }
-
-    return 0;
 }
 
 int32_t Logger::Init()
@@ -201,13 +169,6 @@ int32_t Logger::Log(int level, const std::string &message) const
 
     mSpdLogger->log(static_cast<spdlog::level::level_enum>(level), "{}", message);
     return 0L;
-}
-
-void Logger::Flush()
-{
-    if (mSpdLogger != nullptr) {
-        mSpdLogger->flush();
-    }
 }
 
 void Logger::ResetLogLevel(int32_t logLevel)

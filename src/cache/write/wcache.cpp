@@ -24,11 +24,8 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
-        LVOS_TP_START(WCACHE_TIER_ALLOC_FAIL, &cacheTier, nullptr);
-        LVOS_TP_END;
-        ChkTrueNot(cacheTier != nullptr, BIO_ALLOC_FAIL);
-        LVOS_TP_START(WCACHE_TIER_TYPE_FAIL, &i, MAX_WCACHE_TIER);
-        LVOS_TP_END;
+        ChkTrue(cacheTier != nullptr, BIO_ALLOC_FAIL, "Make wcache tier failed.");
+
         auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, mDiskId);
         ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << mFlowId);
         mCacheTiers[i] = cacheTier;
@@ -420,7 +417,6 @@ void WCache::Flush()
 {
     LVOS_TP_START(NO_PROCESS_WCACHE_FLUSH, 0);
     mIsForced = true;
-
     {
         bool expectval = false;
         if (mEvictRef[WCACHE_MEMORY].compare_exchange_weak(expectval, true)) {
@@ -440,7 +436,6 @@ void WCache::Flush()
             }
         }
     }
-
     LVOS_TP_END;
     return;
 }
@@ -449,7 +444,6 @@ void WCache::ExpiredClear()
 {
     LVOS_TP_START(NO_PROCESS_WCACHE_EXPIRED_CLEAR, 0);
     mIsForced = true;
-
     {
         bool expectval = false;
         if (mEvictRef[WCACHE_MEMORY].compare_exchange_weak(expectval, true)) {
@@ -708,11 +702,10 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     auto ret = mLocRole(static_cast<uint16_t>(mPtId), isMaster);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << mPtId);
 
-    bool isSatisfied;
+    bool isSatisfied = false;
     LVOS_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
     isSatisfied = EvictDiskSatisfiedCond();
     LVOS_TP_END;
-
     if (!isSatisfied && !mIsForced) {
         mRetryCallback(mFlowId, WCACHE_DISK);
         return BIO_OK;
