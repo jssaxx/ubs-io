@@ -14,37 +14,25 @@ MemAllocator FlowManager::mMemAllocator;
 DiskAllocator FlowManager::mDiskAllocator;
 GetCacheType FlowManager::mGetCacheType;
 std::atomic<uint64_t> FlowManager::mUsedSize[FLOW_CACHE][FLOW_BUTT][DEVICE_SIZE];
+
 BResult FlowManager::Init()
 {
-    LVOS_TP_START(ALLOC_TASK_POOL_FAIL, &mTaskPool[FLOW_MEMORY], nullptr);
     if (mInited) {
         return BIO_OK;
     }
+
     mTaskPool[FLOW_MEMORY] = MakeRef<FlowTaskPool>("flow_mem");
-    LVOS_TP_END;
-    BResult ret = BIO_ERR;
-    LVOS_TP_START(ALLOC_TASK_POOL_FAIL_RESET_OUTER, &mTaskPool[FLOW_MEMORY]);
     if (mTaskPool[FLOW_MEMORY] == nullptr) {
-        LVOS_TP_START(ALLOC_TASK_POOL_FAIL_RESET, &mTaskPool[FLOW_MEMORY]);
-        LVOS_TP_END;
         LOG_ERROR("Failed to start flow task pool, probably out of memory");
         return BIO_ERR;
     }
-    ret = mTaskPool[FLOW_MEMORY]->Start(NO_4, NO_4096);
+    BResult ret = mTaskPool[FLOW_MEMORY]->Start(NO_4, NO_4096);
     if (ret != BIO_OK) {
         return ret;
     }
 
     mTaskPool[FLOW_DISK] = MakeRef<FlowTaskPool>("flow_disk");
-    LVOS_TP_END;
-
-    LVOS_TP_START(ALLOC_DISK_TASK_POOL_FAIL, &mTaskPool[FLOW_DISK], nullptr);
-    LVOS_TP_END;
-    LVOS_TP_START(ALLOC_DISK_TASK_POOL_FAIL_RESET_OUTER, &mTaskPool[FLOW_DISK]);
-    LVOS_TP_END;
     if (mTaskPool[FLOW_DISK] == nullptr) {
-        LVOS_TP_START(ALLOC_DISK_TASK_POOL_FAIL_RESET, &mTaskPool[FLOW_DISK]);
-        LVOS_TP_END;
         LOG_ERROR("Failed to start flow task pool, probably out of memory");
         return BIO_ERR;
     }

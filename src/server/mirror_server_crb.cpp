@@ -33,12 +33,9 @@ BResult MirrorServerCrb::Init()
         return BIO_ERR;
     }
 
-    bool result = false;
-    LVOS_TP_START(NO_PROCESS_MIRROR_SERVER_TASK_START, 0);
     mTaskService->SetThreadName("crb-task");
-    result = mTaskService->Start();
+    auto result = mTaskService->Start();
     ChkTrue(result, BIO_INNER_ERR, "Mirror server crb task start failed.");
-    LVOS_TP_END;
 
     mJobService = ExecutorService::Create(CRB_JOB_THREAD_NUM, CRB_JOB_QUEUE_SIZE);
     if (UNLIKELY(mJobService == nullptr)) {
@@ -289,7 +286,7 @@ BResult MirrorServerCrb::JobExpiredClear(CmPtInfo &ptInfo)
 BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
 {
     BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA);
-    BResult ret;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(SERVER_CRB_SEND_FLUSH_FAIL, &ret, BIO_INNER_RETRY);
     ret = SendSyncDataReq(ptInfo);
     LVOS_TP_END;
@@ -298,15 +295,13 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
         LOG_WARN("Send sync data req fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
     }
-    LOG_INFO("Sync data succeed:"
-        << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+    LOG_INFO("Sync data succeed:" << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     ret = JobExpiredClear(ptInfo);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
-    LOG_INFO("Expired clear succeed:"
-        << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+    LOG_INFO("Expired clear succeed:" << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     return BIO_OK;
 }

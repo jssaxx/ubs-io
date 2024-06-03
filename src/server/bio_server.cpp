@@ -111,13 +111,16 @@ BResult BioServer::BioConfigInit()
         LOG_ERROR("Create bio configuration instance failed.");
         return BIO_ERR;
     }
-    auto result = mConfig->Initialize("/opt/boostio/bin");
+
+    BResult result = BIO_INNER_ERR;
     LVOS_TP_START(CONFIG_INIT_FAIL, &result, -1);
+    result = mConfig->Initialize("/opt/boostio/bin");
     LVOS_TP_END;
     if (result != BIO_OK) {
         LOG_ERROR("Failed to initialize configuration, result: " << result << ".");
         return BIO_ERR;
     }
+
     return BIO_OK;
 }
 
@@ -127,15 +130,15 @@ BResult BioServer::BioLoggerInit(std::string pathName)
     loggerOptions.logType = FILE_TYPE;
     loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
     loggerOptions.path = std::move(pathName);
-    mLogger = Logger::Instance(loggerOptions);
-    if (mLogger == nullptr) {
+    Logger *logger = Logger::Instance(loggerOptions);
+    if (logger == nullptr) {
         std::cout << "Failed to create logger instance." << std::endl;
         return BIO_ERR;
     }
 
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(LOG_INIT_FAIL, &ret, BIO_ERR);
-    ret = mLogger->Init();
+    ret = logger->Init();
     LVOS_TP_END;
     if (ret != BIO_OK) {
         std::cout << "Failed to init logger, result:" << ret << ", log path:" << loggerOptions.path << "." << std::endl;
@@ -146,7 +149,7 @@ BResult BioServer::BioLoggerInit(std::string pathName)
 
 void BioServer::BioLoggerExit()
 {
-    mLogger->Exit();
+    Logger::Destroy();
 }
 
 BResult BioServer::BioTraceInit()
@@ -352,6 +355,7 @@ BResult BioServer::BioMirrorServerInit()
         return BIO_OK;
     }
     LVOS_TP_END;
+
     mMirror = MirrorServer::Instance();
     ChkTrue(mMirror != nullptr, BIO_ERR, "Mirror server instance is nullptr.");
 
@@ -385,6 +389,7 @@ BResult BioServer::BioCacheInit()
         return BIO_OK;
     }
     LVOS_TP_END;
+
     BResult ret = BIO_OK;
     LVOS_TP_START(NO_PROCESS_CACHE_PROCESS, 0);
     ret = Cache::Instance().Init();
@@ -470,35 +475,39 @@ BResult BioServer::BioServerDiagnoseInit()
 {
     uint32_t procPid = 456U;
     std::string diagName = "bio_server";
-    auto ret = CLI_AgentInit(procPid, const_cast<char *>(diagName.c_str()));
+    int32_t ret = BIO_INNER_ERR;
     LVOS_TP_START(CLI_AGENT_INIT_ERR, &ret, BIO_ERR);
+    ret = CLI_AgentInit(procPid, const_cast<char *>(diagName.c_str()));
     LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("init bio server diagnose fail.");
         return BIO_ERR;
     }
+
     ret = this->BioServerDiagnoseInitInner();
     if (ret != BIO_OK) {
         LOG_ERROR("inner init bio server diagnose fail.");
-        return BIO_ERR;
     }
-    return BIO_OK;
+    return ret;
 }
 
 using ServerDiagnose = int (*)();
 BResult BioServer::BioServerDiagnoseInitInner()
 {
     const char *soFileName = "libserver_diagnose.so";
-    void *handler = dlopen(soFileName, RTLD_NOW);
+    void *handler = nullptr;
     LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
+    handler = dlopen(soFileName, RTLD_NOW);
     LVOS_TP_END;
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_ERR;
     }
+
     ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
-    BResult ret = serverInitFunc();
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(CLI_SERVER_DIAGNOSE_INIT_ERR, &ret, BIO_ERR);
+    ret = serverInitFunc();
     LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");

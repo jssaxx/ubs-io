@@ -162,19 +162,20 @@ void NetEngine::StopInner()
 
 BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
-    auto fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, 600);
-#else
-    auto fd = -1;
+    int fd = -1;
     LVOS_TP_START(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, &fd, -1);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
+    fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, 600UL);
+#else
     fd = syscall(SYS_memfd_create, name.c_str(), 0);
-    LVOS_TP_END;
 #endif
+    LVOS_TP_END;
     if (fd < 0) {
         NET_LOG_ERROR("create memory file " << name << ", failed, error:" << strerror(errno));
         return BIO_INNER_ERR;
     }
-    auto ret = -1;
+
+    int ret = -1;
     LVOS_TP_START(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, &ret, -1);
     ret = ftruncate(fd, static_cast<off_t>(size));
     LVOS_TP_END;

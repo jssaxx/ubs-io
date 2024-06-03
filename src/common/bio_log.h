@@ -91,17 +91,13 @@ public:
     static Logger *Instance(const LoggerOptions &options);
     static void Destroy();
 
-    static int32_t ChangeLogLevel(int32_t newLogLevel);
-
-public:
     explicit Logger(LoggerOptions options) : mOptions(std::move(options)) {}
-    ~Logger() = default;
 
     int32_t Init();
     void Exit();
 
     int32_t Log(int level, const std::string &message) const;
-    void Flush();
+
     void ResetLogLevel(int32_t logLevel);
 
     inline bool IsHigherLevel(int nowLevel) const
@@ -114,11 +110,6 @@ public:
 private:
     static bool ValidateParams(const LoggerOptions &options);
     static void LogToStdErr(const std::ostringstream &oss);
-
-    static bool ValidateLogLevel(int32_t logLevel)
-    {
-        return logLevel <= SPDLOG_LEVEL_OFF && logLevel >= SPDLOG_LEVEL_TRACE;
-    }
 
 private:
     std::shared_ptr<spdlog::logger> mSpdLogger; /* spd logger for normal log */

@@ -94,13 +94,12 @@ BResult CacheSliceOperator::Copy(const char *from, uint64_t start, uint32_t len,
             break;
         }
         len1 -= blen;
-        auto ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset + boff), blen,
-            reinterpret_cast<void *>(const_cast<char *>(from + offset2)), blen);
+        int32_t ret = BIO_INNER_ERR;
         LVOS_TP_START(SLICE_OPERATOR_4_FLOW_MEMORY, &ret, BIO_ERR);
+        ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset + boff), blen,
+            reinterpret_cast<void *>(const_cast<char *>(from + offset2)), blen);
         LVOS_TP_END;
-        ChkTrue(ret == BIO_OK, ret,
-            "Failed to copy data from memory address:" << from + offset2 << " to memory address:" <<
-            toAddr.chunkId + toAddr.chunkOffset + boff << " by length:" << blen);
+        ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << blen << ".");
         offset += toAddr.chunkLen;
         offset1 = offset;
         offset2 += blen;
@@ -112,18 +111,17 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
 {
     ChkTrueNot(Validate(from), BIO_INVALID_PARAM);
     ChkTrueNot(to != nullptr, BIO_INVALID_PARAM);
+    BResult ret = BIO_INNER_ERR;
 
     if (from->GetFlowType() == FLOW_MEMORY) {
         auto &fromAddrs = from->GetAddrs();
         uint64_t offset = 0;
         for (auto fromAddr : fromAddrs) {
-            auto ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), fromAddr.chunkLen,
-                reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
             LVOS_TP_START(SLICE_OPERATOR_2_FLOW_MEMORY, &ret, BIO_ERR);
+            ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), fromAddr.chunkLen,
+                reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
             LVOS_TP_END;
-            ChkTrue(ret == BIO_OK, ret,
-                "Failed to copy data from memory address:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
-                " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
@@ -138,8 +136,8 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
             ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
             ChkTrue(ret == BIO_OK, ret,
-                "Failed to copy data from disk address:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
-                " to memory address:" << to + offset << " by length:" << fromAddr.chunkLen);
+                "Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
+                " to memory chunkId:" << to + offset << " by length:" << fromAddr.chunkLen);
             offset += fromAddr.chunkLen;
         }
         return BIO_OK;
@@ -171,12 +169,11 @@ BResult CacheSliceOperator::CopyFromDiskToDisk(const SlicePtr &from, const Slice
 
 BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const SlicePtr &to)
 {
+    BResult ret = BIO_INNER_ERR;
     auto &fromAddrs = from->GetAddrs();
     auto &toAddrs = to->GetAddrs();
-
     auto fromIt = fromAddrs.begin();
     auto toIt = toAddrs.begin();
-
     uint64_t fromOffset = 0;
     uint64_t toOffset = 0;
 
@@ -184,15 +181,15 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
         BIO_TRACE_START(BDM_TRACE_READ_SYNC);
-        auto ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
-            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
-        ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         LVOS_TP_START(SLICE_COPY_DISK2MEMORY_OK, &ret, BIO_OK);
+        ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
+            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
         LVOS_TP_END;
+        ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
         ChkTrue(ret == BIO_OK, ret,
-            "Failed to copy data from disk address:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset <<
-            " to memory address:" << toIt->chunkId + toIt->chunkOffset + toOffset << " by length:" << len);
+            "Failed to copy data from disk checkId:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset <<
+            " to memory checkId:" << toIt->chunkId + toIt->chunkOffset + toOffset << " by length:" << len);
         fromOffset += len;
         if (fromOffset == fromIt->chunkLen) {
             fromOffset = 0;
@@ -259,15 +256,11 @@ BResult CacheSliceOperator::CopyFromMemoryToMemory(const SlicePtr &from, const S
 
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
-        LOG_DEBUG("Copy data from memory chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset <<
-            ", to off:" << toOffset << ", len:" << len);
         LVOS_TP_START(SLICE_COPY_MEMORY2MEMORY_ERR, &ret, BIO_ERR);
         ret = memcpy_s(reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len,
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
         LVOS_TP_END;
-        ChkTrue(ret == BIO_OK, ret,
-            "Failed to copy data from memory address:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset <<
-            " to  memory address:" << toIt->chunkId + toIt->chunkOffset + toOffset << " by length:" << len);
+        ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << len);
         fromOffset += len;
         if (fromOffset == fromIt->chunkLen) {
             fromOffset = 0;

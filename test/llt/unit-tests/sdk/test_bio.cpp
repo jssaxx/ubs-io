@@ -1053,3 +1053,27 @@ TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
+
+TEST_F(TestBio, test_bio_qos_switch)
+{
+    LOG_INFO("test_bio_qos_switch");
+    BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
+    std::string opOn = "on";
+    auto ret = qosP->Switch(opOn);
+    EXPECT_EQ(ret, true);
+
+    std::string opOff = "off";
+    ret = qosP->Switch(opOff);
+    EXPECT_EQ(ret, false);
+}
+
+TEST_F(TestBio, test_bio_qos_show)
+{
+    LOG_INFO("test_bio_qos_show");
+    BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
+    std::vector<uint64_t> maxQuota;
+    std::vector<uint64_t> adjustQuota;
+    std::vector<uint64_t> allocQuota;
+    std::vector<uint64_t> concur;
+    qosP->Show(maxQuota, adjustQuota, allocQuota, concur);
+}

@@ -51,8 +51,6 @@ BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView,
     uint16_t protocol, const NetOptions netConf)
 {
-    LVOS_TP_START(SDK_BIO_START_POST_CHANGE_MODE, &mMode, SEPARATES);
-    LVOS_TP_END;
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
