@@ -63,7 +63,11 @@ BResult BioServer::Start()
     LVOS_TP_END;
 
     // 1. Initialize infrastructure
-    std::string logPath = "/var/log/boostio/bio.log";
+    std::string path = "/var/log/boostio/";
+#ifdef DEBUG_UT
+    path = "./";
+#endif
+    std::string logPath = path + "bio.log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
