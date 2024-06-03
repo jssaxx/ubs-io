@@ -91,8 +91,9 @@ public:
 
 private:
     BResult ToFlowType(WCacheTierType tier, FlowType &flowType);
-    static WCacheSlicePtr GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, BResult &ret);
-    static WCacheSlicePtr GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length, BResult &ret);
+    static BResult GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice);
+    static BResult GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length,
+        WCacheSlicePtr &slice);
 
 private:
     FlowPtr mMetaFlow;
