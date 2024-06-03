@@ -85,7 +85,7 @@ include_directories(
 
 if (${DEBUG_UT} MATCHES "ON")
     add_compile_options(-ftest-coverage -fprofile-arcs)
-	add_compile_definitions(USE_HCOM_STUB)
+	add_compile_definitions(DEBUG_UT)
     link_libraries(gcov)
 endif()
 
