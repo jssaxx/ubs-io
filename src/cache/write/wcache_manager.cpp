@@ -345,7 +345,9 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     LVOS_TP_START(NO_PROCESS_WCACHE_PUT, 0);
     WCacheSliceRefPtr sliceRef = nullptr;
     BIO_TRACE_START(WCACHE_TRACE_PUT_WRITE_FLOW);
+    LVOS_TP_START(WCACHE_PUT_FAIL, &ret, BIO_ERR);
     ret = wcache->Put(key, slice, sliceReader, sliceRef, attr);
+    LVOS_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Write slice to cache failed:" << ret << ", key:" << key << ".");
