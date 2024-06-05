@@ -9,7 +9,6 @@ namespace ock {
 namespace bio {
 void BioSdkConfig::LoadDefaultConf()
 {
-    LOG_INFO("Load default conf");
     /* load log config */
     AddIntConf(SDK_LOG_TYPE, VIntRange::Create(SDK_LOG_TYPE.first, 0, NO_2));
     AddStrConf(SDK_LOG_FILE_PATH);
@@ -57,8 +56,6 @@ BResult BioSdkConfig::AutoConfigLog(const ConfigurationPtr &conf)
 BResult BioSdkConfig::Initialize(const std::string &homePath)
 {
     std::string configurePath = homePath + "/conf/bio_sdk_test.conf";
-    std::cout << "start to read config file : " << configurePath << std::endl;
-
     if (mInited) {
         return BIO_OK;
     }
@@ -73,8 +70,6 @@ BResult BioSdkConfig::Initialize(const std::string &homePath)
         std::cout << "read config file " << configurePath << std::endl;
         return BIO_ERR;
     }
-
-    DumpToLog();
 
     std::ostringstream ossTmp;
     /* validate based on validation */
@@ -100,31 +95,6 @@ BResult BioSdkConfig::Initialize(const std::string &homePath)
     std::vector<std::string> moreErrors;
     mInited = true;
     return BIO_OK;
-}
-
-void BioSdkConfig::DumpToLog()
-{
-    ConfigurationPtr conf = Configuration::GetInstance<BioSdkConfig>();
-    if (conf.Get() == nullptr) {
-        std::cout << "Load config object failed" << std::endl;
-        return;
-    }
-
-    KVReader reader;
-    conf->Dump(reader);
-
-    std::lock_guard<std::mutex> guard(mMutex);
-    std::ostringstream ossTmp;
-
-    for (uint32_t i = 0; i < reader.Size(); i++) {
-        std::string key;
-        std::string value;
-        reader.GetI(i, key, value);
-        if ((key.find("tls") == std::string::npos) && (key.find("log.path") == std::string::npos)) {
-            ossTmp << " " << key << " = " << value << std::endl;
-        }
-    }
-    std::cout << ossTmp.str() << std::endl;
 }
 }
 }

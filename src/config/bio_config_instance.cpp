@@ -11,8 +11,6 @@ constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
 void BioConfig::LoadDefaultConf()
 {
-    LOG_INFO("Load default conf");
-
     /* load net config for fs */
     AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma"));
     AddStrConf(NET_RPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_DATA_BUSY_POLL_MODE.first));
@@ -31,7 +29,7 @@ void BioConfig::LoadDefaultConf()
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
 
     /* load log info */
-    AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug"));
+    AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_1, NO_512));
     AddStrConf(DISK_CONF_PATH);
@@ -147,7 +145,9 @@ BResult BioConfig::AutoConfigCm(const ConfigurationPtr &conf)
 BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 {
     auto logLevel = conf->GetStr(LOG_LEVEL.first);
-    if (logLevel == "debug") {
+    if (logLevel == "trace") {
+        mDaemonConfig.logLevel = SPDLOG_LEVEL_TRACE;
+    } else if (logLevel == "debug") {
         mDaemonConfig.logLevel = SPDLOG_LEVEL_DEBUG;
     } else if (logLevel == "info") {
         mDaemonConfig.logLevel = SPDLOG_LEVEL_INFO;
@@ -300,19 +300,16 @@ void BioConfig::DumpToLog()
     conf->Dump(reader);
 
     std::lock_guard<std::mutex> guard(mMutex);
-    std::ostringstream ossTmp;
-    ossTmp << "Configuration Dump:" << std::endl;
-
+    LOG_INFO("Configuration Dump:");
     for (uint32_t i = 0; i < reader.Size(); i++) {
         std::string key;
         std::string value;
         reader.GetI(i, key, value);
         if (key.find("tls") == std::string::npos) {
-            ossTmp << " " << key << " = " << value << std::endl;
+            LOG_INFO("" << key << " = " << value);
         }
     }
-
-    LOG_INFO(ossTmp.str());
+    return;
 }
 
 uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
