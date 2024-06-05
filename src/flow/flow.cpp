@@ -13,7 +13,7 @@ namespace ock {
 namespace bio {
 BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr)
 {
-    LOG_DEBUG("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
+    LOG_TRACE("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
 
     bool isInvalidRange = false;
     LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL, &isInvalidRange, true);
@@ -64,7 +64,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 {
     std::vector<uint64_t> cleanList;
 
-    LOG_DEBUG("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
+    LOG_TRACE("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
 
     if (offset > mPreLoadOffset || offset > mWritenOffset) {
         LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", writen:" << mWritenOffset);
@@ -153,7 +153,7 @@ void Flow::PreLoadSchedule()
     mLock.UnLock();
 
     if (preloadFlag) {
-        LOG_DEBUG("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
+        LOG_TRACE("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
         return;
     }
 
@@ -220,7 +220,7 @@ BResult Flow::RecoverChunk(uint64_t offset, uint64_t chunkId)
         LOG_ERROR("Repeat confict, flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
         return BIO_ERR;
     }
-    LOG_DEBUG("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
+    LOG_TRACE("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
     mRecoverList[offset] = chunkId;
     return BIO_OK;
 }

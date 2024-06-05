@@ -73,8 +73,6 @@ public:
     }
 
 private:
-    void DumpToLog();
-
     BResult AutoConfAfterLoadFromFile(const ConfigurationPtr &conf);
 
     BResult AutoConfigNet(const ConfigurationPtr &conf);

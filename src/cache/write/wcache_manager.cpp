@@ -200,7 +200,7 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
     WCache::RecoverCallback recoverCallback = [this](uint64_t ptId, const Key &key,
         const WCacheSliceRefPtr &sliceRef) -> BResult {
         BIO_TRACE_START(WCACHE_TRACE_RECOVER);
-        LOG_DEBUG("Recover key:" << key << ", pt:" << ptId << ", flowId:" << sliceRef->GetSlice()->GetFlowId() <<
+        LOG_TRACE("Recover key:" << key << ", pt:" << ptId << ", flowId:" << sliceRef->GetSlice()->GetFlowId() <<
             ", flowOffset:" << sliceRef->GetSlice()->GetOffsetInFlow() << ", length:" <<
             sliceRef->GetSlice()->GetLength());
         auto ret = mCacheIndex->Insert(ptId, key, sliceRef);
@@ -590,7 +590,7 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
-        LOG_DEBUG("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
+        LOG_TRACE("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
             ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) << ", Disk:" <<
             flowIt.second->GetCapacity(WCACHE_DISK));
         list.emplace_back(flowIt.second);
@@ -766,7 +766,7 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
-        LOG_DEBUG("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
+        LOG_TRACE("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
             ", procId:" << procId << ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) << ", Disk:" <<
             flowIt.second->GetCapacity(WCACHE_DISK));
         list.emplace_back(flowIt.second);

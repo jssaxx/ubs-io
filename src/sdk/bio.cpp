@@ -159,7 +159,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
         CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_INFO("Put value success, key:" << key << ", length:" << length << ", location0:" <<
+        CLIENT_LOG_DEBUG("Put value success, key:" << key << ", length:" << length << ", location0:" <<
             location.location[0] << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
@@ -175,7 +175,7 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
         return RET_CACHE_EPERM;
     }
 
-    CLIENT_LOG_INFO("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
+    CLIENT_LOG_DEBUG("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
         ", location1:" << spaceInfo.loc.location[1] << ", address num:" << spaceInfo.addressNum << ", address0:" <<
         spaceInfo.address[0].address << ", address0 size:" << spaceInfo.address[0].size << ", address1:" <<
         spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size << ".");
@@ -191,7 +191,7 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
         CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
     } else {
-        CLIENT_LOG_INFO("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
+        CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
             spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
     }
     return ToCResult(ret);
@@ -223,7 +223,7 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_INFO("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
+        CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
             ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
             location.location[1] << ".");
     }
@@ -247,7 +247,7 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << key << ".");
     } else {
-        CLIENT_LOG_INFO("Delete key success, key:" << key << ".");
+        CLIENT_LOG_DEBUG("Delete key success, key:" << key << ".");
     }
     return ToCResult(ret);
 }
@@ -269,7 +269,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         if (result != BIO_OK) {
             CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ".");
         } else {
-            CLIENT_LOG_INFO("Load success, key:" << key << ".");
+            CLIENT_LOG_DEBUG("Load success, key:" << key << ".");
         }
         if (callback != nullptr) {
             callback(context, ToCResult(result));
@@ -300,7 +300,7 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
     BResult ret = gClient->ListAll(prefix, objs);
     BIO_TRACE_END(SDK_TRACE_LISTALL, ret);
     if (LIKELY(ret == BIO_OK)) {
-        CLIENT_LOG_INFO("List all success, prefix:" << prefix << ", num:" << objs.size() << ".");
+        CLIENT_LOG_DEBUG("List all success, prefix:" << prefix << ", num:" << objs.size() << ".");
     }
     return ToCResult(ret);
 }
@@ -335,7 +335,7 @@ CResult Bio::NotifyUpdatePrepare()
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Boostio notify upgrade prepare failed, ret:" << ret << ".");
     } else {
-        CLIENT_LOG_INFO("Boostio notify upgrade prepare success.");
+        CLIENT_LOG_DEBUG("Boostio notify upgrade prepare success.");
     }
     return ToCResult(ret);
 }
@@ -370,7 +370,7 @@ CResult Bio::CheckUpdateReady()
     if (ret != BIO_OK) {
         CLIENT_LOG_WARN("Boostio upgrade check not ready, ret:" << ret << ".");
     } else {
-        CLIENT_LOG_INFO("Boostio upgrade check is ready.");
+        CLIENT_LOG_DEBUG("Boostio upgrade check is ready.");
     }
     return ToCResult(ret);
 }

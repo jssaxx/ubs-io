@@ -54,7 +54,7 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_READ_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_READ_START, 0, req->startTime);
 
-    CLIENT_LOG_INFO("Receive interceptor read message inode:" << req->inode << " offset:" << req->offset << " len:" <<
+    CLIENT_LOG_DEBUG("Receive interceptor read message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_READ);
@@ -104,7 +104,7 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_WRITE_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
 
-    CLIENT_LOG_INFO("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
+    CLIENT_LOG_DEBUG("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
 
     InterceptorPwriteOut resp;
@@ -133,7 +133,7 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
     }
 
     auto *req = static_cast<InterceptorAllocPageReq *>(ctx.MessageData());
-    CLIENT_LOG_INFO("Receive interceptor alloc message pid:" << req->pid << " length:" << req->length);
+    CLIENT_LOG_DEBUG("Receive interceptor alloc message pid:" << req->pid << " length:" << req->length);
 
     uint64_t tenantId = 1;
     static uint64_t objectId = 1;
@@ -145,7 +145,7 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    CLIENT_LOG_INFO("Alloc put value with space length:" << req->length << ", location0:" <<
+    CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->length << ", location0:" <<
         addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0:" <<
         addressInfo.address[0].address << ", address0 size:" << addressInfo.address[0].size << ", address1:" <<
         addressInfo.address[1].address << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
@@ -176,11 +176,11 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_WRITE_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
 
-    CLIENT_LOG_INFO("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
+    CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd);
 
     CacheSpaceDesc addressInfo = req->address;
-    CLIENT_LOG_INFO("Alloc put value with space length:" << req->nbytes << ", location0:" <<
+    CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->nbytes << ", location0:" <<
         addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0:" <<
         addressInfo.address[0].address << ", address0 size:" << addressInfo.address[0].size << ", address1:" <<
         addressInfo.address[1].address << ", address1 size:" << addressInfo.address[1].size << ".");

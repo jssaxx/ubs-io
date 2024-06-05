@@ -129,7 +129,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         auto &fromAddrs = from->GetAddrs();
         uint64_t offset = 0;
         for (auto fromAddr : fromAddrs) {
-            LOG_DEBUG("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
+            LOG_TRACE("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
             BIO_TRACE_START(BDM_TRACE_READ_SYNC);
             auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
                 fromAddr.chunkLen);
@@ -223,7 +223,7 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
         ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
-        LOG_DEBUG("Copy data from disk chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" <<
+        LOG_TRACE("Copy data from disk chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" <<
             toOffset << ", len:" << len);
         ChkTrue(ret == BIO_OK, ret,
             "Failed to copy data from memory address:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset <<
@@ -238,7 +238,7 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
             toOffset = 0;
             toIt++;
         }
-        LOG_DEBUG("next from off:" << fromOffset << ", to off:" << toOffset);
+        LOG_TRACE("next from off:" << fromOffset << ", to off:" << toOffset);
     }
     return BIO_OK;
 }
