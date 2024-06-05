@@ -69,7 +69,7 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     WCacheSlicePtr dataSlice;
     res = GetSlice(mDataFlow, slice->GetOffsetInFlow(), slice->GetIndexInFlow(),
         slice->GetLength(), dataSlice);
-    ChkTrue(res == BIO_OK, res, "Failed to get data slice, flowId" <<
+    ChkTrue(res == BIO_OK, res, "Failed to get data slice, flowId:" <<
         mDataFlow->GetFlowId() << " ret:" << res);
     ret = sliceReader(slice.Get(), dataSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
