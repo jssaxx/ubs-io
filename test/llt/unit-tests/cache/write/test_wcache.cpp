@@ -40,8 +40,8 @@ void TestWCache::TearDown()
 
 static constexpr uint16_t G_PT_ID = 0;
 static constexpr uint16_t G_PT_V = 1;
-static uint64_t gFlowId = 0;
-FlowInstance *gFlowInst = nullptr;
+static uint64_t g_flowId = 0;
+static FlowInstance *g_flowInst = nullptr;
 
 static auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
@@ -68,17 +68,17 @@ TEST_F(TestWCache, test_create_flow_return_ok)
     LOG_INFO("test_create_flow_return_ok");
     bool isDegrade = false;
     uint64_t cacheId = 123;
-    auto ret = Cache::Instance().AllocateFlowId(cacheId, G_PT_ID, G_PT_V, gFlowId);
+    auto ret = Cache::Instance().AllocateFlowId(cacheId, G_PT_ID, G_PT_V, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
 
-    ret = Cache::Instance().CreateWCache(cacheId, G_PT_ID, G_PT_V, gFlowId, isDegrade);
+    ret = Cache::Instance().CreateWCache(cacheId, G_PT_ID, G_PT_V, g_flowId, isDegrade);
     EXPECT_EQ(ret, BIO_OK);
 
     ret = Cache::Instance().CreateRCache(G_PT_ID, G_PT_V);
     EXPECT_EQ(ret, BIO_OK);
 
-    gFlowInst = new FlowInstance(gFlowId, G_PT_V, isDegrade);
-    EXPECT_NE(gFlowInst, nullptr);
+    g_flowInst = new FlowInstance(g_flowId, G_PT_V, isDegrade);
+    EXPECT_NE(g_flowInst, nullptr);
 }
 
 TEST_F(TestWCache, test_get_slice_param_invalid)
@@ -90,7 +90,7 @@ TEST_F(TestWCache, test_get_slice_param_invalid)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     EXPECT_EQ(wSlice, nullptr);
 
-    sliceKey.flowId = gFlowId;
+    sliceKey.flowId = g_flowId;
     sliceKey.flowOffset = NO_MAX_VALUE64;
     sliceKey.length = 0;
     ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
@@ -109,8 +109,8 @@ TEST_F(TestWCache, test_put_case_return_ok)
     LOG_INFO("test_put_case_return_ok");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -132,7 +132,7 @@ TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
     EXPECT_EQ(ret, BIO_OK);
     MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-    WCacheSlicePtr wSlice = MakeRef<WCacheSlice>(gFlowId, 0, 1, NO_1024, addrVec);
+    WCacheSlicePtr wSlice = MakeRef<WCacheSlice>(g_flowId, 0, 1, NO_1024, addrVec);
     EXPECT_NE(wSlice, nullptr);
 
     Key key = "test_put_state_not_normal_case_return_fail";
@@ -156,7 +156,7 @@ TEST_F(TestWCache, test_put_wcache_put_err_case_return_fail)
     EXPECT_EQ(ret, BIO_OK);
     MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-    WCacheSlicePtr wSlice = MakeRef<WCacheSlice>(gFlowId, 0, 1, NO_1024, addrVec);
+    WCacheSlicePtr wSlice = MakeRef<WCacheSlice>(g_flowId, 0, 1, NO_1024, addrVec);
     EXPECT_NE(wSlice, nullptr);
 
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
@@ -177,8 +177,8 @@ TEST_F(TestWCache, test_put_repeat_case_return_ok)
     LOG_INFO("test_put_repeat_case_return_ok");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -218,8 +218,8 @@ TEST_F(TestWCache, test_put_degrate_case_return_ok)
     LOG_INFO("test_put_degrate_case_return_ok");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -240,8 +240,8 @@ TEST_F(TestWCache, test_get_case_return_ok)
     LOG_INFO("test_get_case_return_ok");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -270,8 +270,8 @@ TEST_F(TestWCache, test_get_offset_over_case_return_err)
     LOG_INFO("test_get_offset_over_case_return_err");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -300,8 +300,8 @@ TEST_F(TestWCache, test_get_offset_err_case_return_err)
     LOG_INFO("test_get_offset_err_case_return_err");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -330,8 +330,8 @@ TEST_F(TestWCache, test_cache_get_nullkey_case_return_err)
     LOG_INFO("test_cache_get_nullkey_case_return_err");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -362,8 +362,8 @@ TEST_F(TestWCache, test_cache_get_nullslice_case_return_err)
     LOG_INFO("test_cache_get_nullslice_case_return_err");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -394,8 +394,8 @@ TEST_F(TestWCache, test_rcache_get_rcahceptr_notexist_case_return_fail)
     LOG_INFO("test_rcache_get_rcahceptr_notexist_case_return_fail");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -426,8 +426,8 @@ TEST_F(TestWCache, test_rcache_get_flow_offset_err_case_return_fail)
     LOG_INFO("test_rcache_get_flow_offset_err_case_return_fail");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -455,8 +455,8 @@ TEST_F(TestWCache, test_cache_get_nullslicewriter_case_return_err)
     LOG_INFO("test_cache_get_nullslicewriter_case_return_err");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -485,8 +485,8 @@ TEST_F(TestWCache, test_stat_case_return_ok)
     LOG_INFO("test_stat_case_return_ok");
     uint64_t length = NO_1024;
     uint64_t flowIndex = 0;
-    uint64_t flowOffset = gFlowInst->AllocOffset(length, flowIndex);
-    SliceKey sliceKey(gFlowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     WCacheSlicePtr wSlice = nullptr;
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
@@ -570,11 +570,18 @@ TEST_F(TestWCache, test_flush_return_err)
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_FLUSH");
 }
 
+TEST_F(TestWCache, test_expired_flush_return_ok)
+{
+    LOG_INFO("test_expired_flush_return_ok");
+    auto ret = gWCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
 {
     LOG_INFO("test_wcache_destroy_case_return_ok");
     LVOS_TRACEP_PARAM_S userParam;
-    auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, gFlowId);
+    auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -593,7 +600,7 @@ TEST_F(TestWCache, test_wcache_destroy_flowid_err_return_ok)
     LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
-    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, gFlowId);
+    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
     sleep(NO_5);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
@@ -611,7 +618,7 @@ TEST_F(TestWCache, test_wcache_destroy_flush_return_ok)
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
-    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, gFlowId);
+    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
     sleep(NO_5);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
@@ -630,7 +637,7 @@ TEST_F(TestWCache, test_wcache_destroy_expire_return_ok)
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
-    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, gFlowId);
+    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
     sleep(NO_5);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
@@ -732,7 +739,7 @@ static int32_t BdmGetNextUsedChunkIdStub(uint32_t bdmId, uint64_t *chunkId, uint
 {
     *chunkId = 0;
     *chunkSize = NO_4194304;
-    *bucketId = gFlowId;
+    *bucketId = g_flowId;
     *bucketOffset = 0;
     return BIO_OK;
 }
@@ -749,7 +756,7 @@ TEST_F(TestWCache, test_get_evict_offset_return_ok)
 {
     LOG_INFO("test_get_evict_offset_return_ok");
     uint64_t flowOffset = 0;
-    auto ret = Cache::Instance().GetEvictOffset(gFlowId, flowOffset);
+    auto ret = Cache::Instance().GetEvictOffset(g_flowId, flowOffset);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
@@ -759,7 +766,7 @@ TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
-    auto ret = GetSlice(gFlowId, 0, NO_1024);
+    auto ret = GetSlice(g_flowId, 0, NO_1024);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
@@ -772,7 +779,7 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
-    auto ret = GetSlice(gFlowId, 0, NO_1024);
+    auto ret = GetSlice(g_flowId, 0, NO_1024);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
@@ -780,6 +787,7 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
 
 TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
 {
+    LOG_INFO("test_bio_server_put_write_slice_null_reply_ok");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     PutRequest req;
@@ -805,6 +813,7 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
 
 TEST_F(TestWCache, test_bio_olc_low_water_level)
 {
+    LOG_INFO("test_bio_olc_low_water_level");
     uint64_t frontWriteBw = NO_1;
     uint64_t evict2DiskBw = NO_2;
     uint32_t proc = 0;
@@ -829,6 +838,7 @@ TEST_F(TestWCache, test_bio_olc_low_water_level)
 
 TEST_F(TestWCache, test_bio_olc_mid_water_level)
 {
+    LOG_INFO("test_bio_olc_mid_water_level");
     uint64_t frontWriteBw = NO_1;
     uint64_t evict2DiskBw = NO_2;
     uint32_t proc = 0;
@@ -853,6 +863,7 @@ TEST_F(TestWCache, test_bio_olc_mid_water_level)
 
 TEST_F(TestWCache, test_bio_olc_high_water_level)
 {
+    LOG_INFO("test_bio_olc_high_water_level");
     uint64_t frontWriteBw = NO_1;
     uint64_t evict2DiskBw = NO_2;
     uint32_t proc = 0;
@@ -877,6 +888,7 @@ TEST_F(TestWCache, test_bio_olc_high_water_level)
 
 TEST_F(TestWCache, test_bio_olc_limited_water_level)
 {
+    LOG_INFO("test_bio_olc_limited_water_level");
     uint64_t frontWriteBw = NO_1;
     uint64_t evict2DiskBw = NO_2;
     uint32_t proc = 0;
@@ -891,6 +903,7 @@ TEST_F(TestWCache, test_bio_olc_limited_water_level)
 
 TEST_F(TestWCache, test_bio_olc_show)
 {
+    LOG_INFO("test_bio_olc_show");
     std::vector<uint64_t> writeBwVec;
     std::vector<uint64_t> evictBwVec;
     uint64_t vmVec;

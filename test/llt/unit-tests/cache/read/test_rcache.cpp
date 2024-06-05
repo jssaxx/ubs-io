@@ -439,3 +439,17 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     free(buffer1);
     free(buffer2);
 }
+
+TEST_F(TestRCache, test_expired_clear_return_ok)
+{
+    LOG_INFO("test_expired_clear_return_ok");
+    auto ret = gRCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestRCache, test_rcache_destroy_ok)
+{
+    LOG_INFO("test_rcache_destroy_ok");
+    auto ret = Cache::Instance().DestroyRCache(G_PT_ID);
+    EXPECT_EQ(ret, BIO_OK);
+}

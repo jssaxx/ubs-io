@@ -353,6 +353,25 @@ TEST_F(TestBio, test_bio_stat)
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
 }
 
+TEST_F(TestBio, test_bio_update_return_ok)
+{
+    LOG_INFO("test_bio_update_return_ok");
+    constexpr uint64_t tenantId = 1234UL;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ret = BioNotifyUpgradePrepare(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ret = BioNotifyUpgradeFinish(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ret = BioDestroyCache(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
 namespace {
 struct LoadContext {
     sem_t sem;

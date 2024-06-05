@@ -329,9 +329,9 @@ CResult Bio::NotifyUpdatePrepare()
     }
 
     bool flag = true;
-    BIO_TRACE_START(SDK_TRACE_STAT);
+    BIO_TRACE_START(SDK_TRACE_NOTIFYUPDATE);
     auto ret = gClient->NotifyUpdate(flag);
-    BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    BIO_TRACE_END(SDK_TRACE_NOTIFYUPDATE, ret);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Boostio notify upgrade prepare failed, ret:" << ret << ".");
     } else {
@@ -347,9 +347,9 @@ CResult Bio::NotifyUpdateFinish()
     }
 
     bool flag = false;
-    BIO_TRACE_START(SDK_TRACE_STAT);
+    BIO_TRACE_START(SDK_TRACE_UPDATEFINISH);
     auto ret = gClient->NotifyUpdate(flag);
-    BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    BIO_TRACE_END(SDK_TRACE_UPDATEFINISH, ret);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Boostio notify upgrade finish failed, ret:" << ret << ".");
     } else {
@@ -364,9 +364,9 @@ CResult Bio::CheckUpdateReady()
         return RET_CACHE_NOT_READY;
     }
 
-    BIO_TRACE_START(SDK_TRACE_STAT);
+    BIO_TRACE_START(SDK_TRACE_CHECKREADY);
     auto ret = gClient->CheckUpdateReady();
-    BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    BIO_TRACE_END(SDK_TRACE_CHECKREADY, ret);
     if (ret != BIO_OK) {
         CLIENT_LOG_WARN("Boostio upgrade check not ready, ret:" << ret << ".");
     } else {
