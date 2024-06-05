@@ -73,7 +73,7 @@ public:
 private:
     uint64_t mFlowId{ 0 };
     uint64_t mVersion{ 0 };
-    bool mIsDegrade;
+    bool mIsDegrade{ false };
     std::atomic<bool> mIsNormal;
     uint64_t mIndex{ 0 };
     uint64_t mOffset{ 0 };
