@@ -1077,3 +1077,56 @@ TEST_F(TestBio, test_bio_qos_show)
     std::vector<uint64_t> concur;
     qosP->Show(maxQuota, adjustQuota, allocQuota, concur);
 }
+
+TEST_F(TestBio, test_bio_update_return_fail)
+{
+    LOG_INFO("test_bio_update_return_fail");
+    constexpr uint64_t tenantId = 123UL;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ret = BioNotifyUpgradePrepare(G_INVALID_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    ret = BioNotifyUpgradePrepare(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
+    ret = BioNotifyUpgradePrepare(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL");
+
+    ret = BioCheckUpgradeReady(G_INVALID_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    ret = BioCheckUpgradeReady(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_UPDATE_RECV_FAIL", 0, 1, userParam);
+    ret = BioCheckUpgradeReady(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_UPDATE_RECV_FAIL");
+
+    ret = BioNotifyUpgradeFinish(G_INVALID_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    ret = BioNotifyUpgradeFinish(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
+    ret = BioNotifyUpgradeFinish(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL");
+
+    ret = BioDestroyCache(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
