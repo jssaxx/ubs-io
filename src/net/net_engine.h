@@ -799,7 +799,8 @@ private:
         auto *netCallback = NewCallback(
             [this, ts, callback](NetServiceContext &context) {
                 AsyncCallDone(context.Result(), ts);
-                callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.Result());
+                callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(),
+                    NetResult(context.Result()));
             }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else

@@ -60,7 +60,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(WCACHE_GET_OK, "wcache get ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_NOT_EXIST, "wcache alloc err", CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_INIT_FAIL, "under fs init err", CommonTp::IntValueCallback);
-    LVOS_TP_REG(WCACHE_GET_META_SLICE_FAIL, "wcache get meta slice err", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(WCACHE_GET_META_SLICE_FAIL, "wcache get meta slice err", CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_DELETE_ERR, "underfs delete err", CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_WCACHE_EXPIRED_CLEAR, "no process wcache expired clear", CommonTp::NoProcessCallback);
     LVOS_TP_REG(RECOVER_CACHE_FLOWID_FAIL, "recover cache flowid err", CommonTp::IntValueCallback);
@@ -112,6 +112,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(RCACHE_GET_DISK_SLICE_FAIL, "rcache get disk slice fail", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(BDM_RW_IO_FAIL, "bdm io err", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(BDM_ALLOC_BLOCK_FAIL, "bdm alloc block fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_PUT_FAIL, "wcache put fail", tp::CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -128,7 +129,6 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(TRACE_FILE_OPPEN_FAIL);
     LVOS_TP_UNREG(CONFIG_INIT_FAIL);
     LVOS_TP_UNREG(DESTROY_WCACHE_FAIL);
-    LVOS_TP_UNREG(WCACHE_DELETE_FLOWID_ERR);
     LVOS_TP_UNREG(RCACHE_MANAGER_DELETE_ERR);
     LVOS_TP_UNREG(NO_PROCESS_CLEAR_OLD_CACHE);
     LVOS_TP_UNREG(NO_PROCESS_FLUSH);
@@ -165,6 +165,9 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(WCACHE_GET_OK);
     LVOS_TP_UNREG(WCACHE_NOT_EXIST);
     LVOS_TP_UNREG(UNDERFS_INIT_FAIL);
+    LVOS_TP_UNREG(WCACHE_DELETE_FLOWID_ERR);
+    LVOS_TP_UNREG(WCACHE_PUT_FAIL);
+    LVOS_TP_UNREG(RCACHE_MANAGER_DELETE_ERR);
     LVOS_TP_UNREG(WCACHE_GET_META_SLICE_FAIL);
     LVOS_TP_UNREG(UNDERFS_DELETE_ERR);
     LVOS_TP_UNREG(NO_PROCESS_WCACHE_EXPIRED_CLEAR);

@@ -77,6 +77,8 @@ BResult BioServer::Start()
     // 2. Initialize boostio service
     ChkTrue(mService != nullptr, BIO_ERR, "Boostio service not created.");
     auto ret = mService->Process();
+    LVOS_TP_START(SERVICE_START_FAIL, &ret, BIO_ERR);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }
