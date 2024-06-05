@@ -222,7 +222,7 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         return BIO_OK;
     }
 
-    LOG_INFO("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
+    LOG_DEBUG("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
         ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" <<
         truncateSlice->GetLength());
 
@@ -273,7 +273,7 @@ WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice
 {
     std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
 
-    LOG_DEBUG("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
+    LOG_TRACE("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
         slice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" << slice->GetLength());
 
     // insert to set and sort by indexInFlow.

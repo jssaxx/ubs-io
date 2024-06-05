@@ -23,12 +23,14 @@ using namespace ock::bio::net;
 static void Log(int level, const char *msg)
 {
     if (level == 0) {
-        CLIENT_LOG_DEBUG(msg);
+        CLIENT_LOG_TRACE(msg);
     } else if (level == 1U) {
-        CLIENT_LOG_INFO(msg);
+        CLIENT_LOG_DEBUG(msg);
     } else if (level == 2U) {
-        CLIENT_LOG_WARN(msg);
+        CLIENT_LOG_INFO(msg);
     } else if (level == 3U) {
+        CLIENT_LOG_WARN(msg);
+    } else if (level == 4U) {
         CLIENT_LOG_ERROR(msg);
     }
 }

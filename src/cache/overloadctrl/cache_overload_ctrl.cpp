@@ -149,7 +149,7 @@ uint64_t CacheOverloadCtrl::CalculateWriteQuota(uint64_t frontWriteBw, uint64_t 
     } else {
         adjustWQuota = LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     }
-    LOG_INFO("[QOS]Calculate write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw <<
+    LOG_DEBUG("[QOS]Calculate write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw <<
         ", waterLevel:" << vm << ", adjustWQuota:" << adjustWQuota << ", proc:" << proc << ".");
     return adjustWQuota;
 }
@@ -224,7 +224,7 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
         obj.calcBwCycleTime = curTime;
         obj.calcBwValue = GetBwStatAverageValue(obj);
         if (obj.calcBwValue != 0) {
-            LOG_INFO("[QOS]Update bandwidth, " << bwTypeStr[type] << " average value:" << obj.calcBwValue << ".");
+            LOG_DEBUG("[QOS]Update bandwidth, " << bwTypeStr[type] << " average value:" << obj.calcBwValue << ".");
         }
     } else {
         return;
@@ -247,7 +247,7 @@ void CacheOverloadCtrl::UpdateCacheStatBw(BwStatType type)
 
 void CacheOverloadCtrl::OverloadPeriodStatistics()
 {
-    LOG_INFO("[QOS]Cache overload ctrl period statistics start.");
+    LOG_DEBUG("[QOS]Cache overload ctrl period statistics start.");
     constexpr uint64_t period = 1;
     uint64_t startTime = Monotonic::TimeSec();
     while (true) {
@@ -263,7 +263,7 @@ void CacheOverloadCtrl::OverloadPeriodStatistics()
         }
         startTime = Monotonic::TimeSec();
     }
-    LOG_INFO("[QOS]Cache overload ctrl period statistics end.");
+    LOG_DEBUG("[QOS]Cache overload ctrl period statistics end.");
 }
 
 void CacheOverloadCtrl::InitOverloadConfig()
@@ -306,7 +306,7 @@ void CacheOverloadCtrl::InitOverloadQuotaInfo()
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
     mMaxWriteQuota = desc.memCapacity;
     mAdjustWQuota.store(mMaxWriteQuota);
-    LOG_INFO("[QOS]Olc init success, write quota:" << mMaxWriteQuota << ", adjust quota:" << mAdjustWQuota << ".");
+    LOG_DEBUG("[QOS]Olc init success, write quota:" << mMaxWriteQuota << ", adjust quota:" << mAdjustWQuota << ".");
 }
 
 BResult CacheOverloadCtrl::Initialize()

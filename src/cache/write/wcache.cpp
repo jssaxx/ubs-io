@@ -177,7 +177,7 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     uint64_t memWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     uint64_t memRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
 
-    LOG_DEBUG("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
+    LOG_TRACE("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
         ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", stratege:" << ioStratege);
 
     uint64_t diskConfig = (static_cast<uint64_t>(config.diskWriteRatio * config.diskCaps[mDiskId])) / NO_10;
@@ -185,7 +185,7 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     uint64_t diskRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
     uint64_t diskUsed = diskWcache + diskRcache;
 
-    LOG_DEBUG("Total disk:" << (config.diskCaps[mDiskId] / NO_1MB) << ", used:" << (diskUsed / NO_1MB) <<
+    LOG_TRACE("Total disk:" << (config.diskCaps[mDiskId] / NO_1MB) << ", used:" << (diskUsed / NO_1MB) <<
         ", wcache:" << (diskWcache / NO_1MB) << ", rcache:" << (diskRcache / NO_1MB) << ", stratege:" <<
         ioStratege << ", diskId:" << mDiskId);
 
@@ -211,7 +211,7 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
     if (!mIsMaster) {
-        LOG_INFO("Degrade in standy node, key:" << key << " flowId:" << mFlowId);
+        LOG_DEBUG("Degrade in standy node, key:" << key << " flowId:" << mFlowId);
         destSliceRef = nullptr;
         return BIO_OK;
     }
@@ -259,7 +259,7 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
             ", flowOffset:" << slice->GetOffsetInFlow());
     }
 
-    LOG_INFO("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:" << slice->GetIndexInFlow() <<
+    LOG_DEBUG("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:" << slice->GetIndexInFlow() <<
         ", flowOffset:" << slice->GetOffsetInFlow());
     WFlowSliceMeta sliceMeta;
     auto ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
@@ -469,15 +469,15 @@ void WCache::ExpiredClear()
 bool WCache::IsEmptyEvict(WCacheTierType type)
 {
     if (mOnFlyRef != 0) {
-        LOG_INFO("OnFly io cnt:" << mOnFlyRef << ", flowId:" << mFlowId);
+        LOG_DEBUG("OnFly io cnt:" << mOnFlyRef << ", flowId:" << mFlowId);
         return false;
     }
 
     if (!mCacheTiers[type]->IsEmptyEvictSliceQueue() ||
         mEvictRef[type] == true) {
-        LOG_DEBUG("Evict slice queue status:" << !mCacheTiers[type]->IsEmptyEvictSliceQueue() <<
+        LOG_TRACE("Evict slice queue status:" << !mCacheTiers[type]->IsEmptyEvictSliceQueue() <<
             ", type:" << type << ", flowId:" << mFlowId);
-        LOG_DEBUG("Evict task status:" << mEvictRef[type] <<
+        LOG_TRACE("Evict task status:" << mEvictRef[type] <<
             ", type:" << type << ", flowId:" << mFlowId);
         return false;
     }
@@ -514,7 +514,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
     ret = mSliceOperator.Copy(memMetaDataSlice.metaSlice.Get(), diskMetaDataSlice.metaSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
 
-    LOG_INFO("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
+    LOG_DEBUG("Evict memory to disk, flowId:" << slice->GetFlowId() << ", indexInFlow:" << indexInFlow << ", offset:" <<
         offset << ", length:" << length << ", Glob:" << mFlowId << ", isFront:" << isFront);
 
     // when update slice finished, then release resource of flow.
@@ -546,7 +546,7 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
 
     BIO_TRACE_START(WCACHE_TRACE_EVICT2UNDERFS);
 
-    LOG_INFO("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" <<
+    LOG_DEBUG("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" <<
         slice->GetOffsetInFlow() << ", Glob:" << mFlowId << ", isFront:" << isFront);
 
     auto sliceMeta = std::make_shared<WFlowSliceMeta>();
@@ -573,7 +573,7 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
             return ret;
         }
 
-        LOG_INFO("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
+        LOG_DEBUG("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
 
         BIO_TRACE_START(WCACHE_TRACE_PUT_RCACHE);
         ret = EvictToRcache(slice, key, value); // 淘汰到读Cache失败时，不做中止
@@ -750,7 +750,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 
 BResult WCache::FlushMem()
 {
-    LOG_DEBUG("Flush mem, flowId:" << mFlowId);
+    LOG_TRACE("Flush mem, flowId:" << mFlowId);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = EvictFromMemToDisk(sliceRef);
@@ -768,7 +768,7 @@ BResult WCache::FlushMem()
 
 BResult WCache::FlushDisk()
 {
-    LOG_DEBUG("Flush disk, flowId:" << mFlowId);
+    LOG_TRACE("Flush disk, flowId:" << mFlowId);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = EvictFromDiskToUnderFs(sliceRef, true);

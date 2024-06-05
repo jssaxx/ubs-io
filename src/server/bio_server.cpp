@@ -24,7 +24,7 @@ namespace bio {
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
-        Logger::gInstance->Log(level + 1U, msg);
+        Logger::gInstance->Log(level, msg);
     }
 }
 

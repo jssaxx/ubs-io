@@ -117,7 +117,7 @@ BResult Cache::DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint6
     BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
     ret = mWCacheManager->DestroyWCache(procId, flowId, ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, ret);
-    LOG_DEBUG("Destroy wcache finish, ret:" << ret << ", cacheId:" << procId << ", ptId:" << ptId << ", flowId:" <<
+    LOG_TRACE("Destroy wcache finish, ret:" << ret << ", cacheId:" << procId << ", ptId:" << ptId << ", flowId:" <<
         flowId << ".");
     return ret;
 }
@@ -194,7 +194,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return ret;
     } else if (ret == BIO_OK) {
-        LOG_INFO("Write cache hit, key:" << key << ", offset:" << offset << ", len:" <<
+        LOG_DEBUG("Write cache hit, key:" << key << ", offset:" << offset << ", len:" <<
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return BIO_OK;
     }
@@ -207,7 +207,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return ret;
     } else if (ret == BIO_OK) {
-        LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
+        LOG_DEBUG("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
         return BIO_OK;
     }
 
@@ -217,7 +217,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     } else {
         ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
         if (LIKELY(ret == BIO_OK)) {
-            LOG_INFO("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
+            LOG_DEBUG("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
         }
     }
     return ret;
@@ -244,7 +244,7 @@ BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     } else {
         cacheObjStat.time = stat.time;
         cacheObjStat.size = stat.size;
-        LOG_INFO("UnderFS stat success, key:" << key << ", size:" << cacheObjStat.size << ", time:" <<
+        LOG_DEBUG("UnderFS stat success, key:" << key << ", size:" << cacheObjStat.size << ", time:" <<
             cacheObjStat.time << ".");
     }
     return ret;
@@ -273,7 +273,7 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
             if (objs.size() >= 1000U) {
                 return BIO_OK;
             }
-            LOG_INFO("UnderFS list success, key:" << info.first << ", size:" << info.second.size << ", time:" <<
+            LOG_DEBUG("UnderFS list success, key:" << info.first << ", size:" << info.second.size << ", time:" <<
                 info.second.time << ".");
             objs.insert({ info.first, { info.second.size, info.second.time } });
         }
