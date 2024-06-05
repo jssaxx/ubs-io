@@ -26,6 +26,7 @@ using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
 class BioClientLog {
 public:
     enum class Level {
+        LOG_LEVEL_TRACE = 0,
         LOG_LEVEL_DEBUG = 1,
         LOG_LEVEL_INFO = 2,
         LOG_LEVEL_WARN = 3,
@@ -127,6 +128,7 @@ private:
         }                                                                                                        \
     } while (0)
 
+#define CLIENT_LOG_TRACE(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_TRACE), args)
 #define CLIENT_LOG_DEBUG(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_DEBUG), args)
 #define CLIENT_LOG_INFO(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_INFO), args)
 #define CLIENT_LOG_WARN(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_WARN), args)

@@ -63,7 +63,7 @@ BResult RCache::DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk)
     auto iter = index[bucket].find(key);
     if (iter == index[bucket].end()) {
         indexLock[bucket].UnLock();
-        LOG_INFO("Delete read cache key:" << key << " have not exist.");
+        LOG_DEBUG("Delete read cache key:" << key << " have not exist.");
         return BIO_NOT_EXISTS;
     }
     RCacheChunkPtr ichunk = iter->second;
@@ -71,7 +71,7 @@ BResult RCache::DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk)
         (ichunk->GetValue().flowOffset != chunk->GetValue().flowOffset) ||
         (ichunk->GetValue().length != chunk->GetValue().length)) {
         indexLock[bucket].UnLock();
-        LOG_INFO("Expired chunk, key:" << key);
+        LOG_DEBUG("Expired chunk, key:" << key);
         return BIO_OK;
     }
     index[bucket].erase(iter);
@@ -372,7 +372,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     chunk->SetMqType(MQ_COLD);
     chunk->SetTierType(READ_CACHE_TIER_MEM);
 
-    LOG_INFO("Read cache Put, key:" << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
+    LOG_DEBUG("Read cache Put, key:" << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
         chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset << ", indexofflow:" <<
         chunk->GetValue().indexInFlow << ", flowId:" << mFlowId);
 
@@ -549,7 +549,7 @@ BResult RCache::Delete(const Key &key)
     auto iter = index[bucket].find(key);
     if (UNLIKELY(iter == index[bucket].end())) {
         indexLock[bucket].UnLock();
-        LOG_INFO("Get read cache key:" << key << " have not exist.");
+        LOG_DEBUG("Get read cache key:" << key << " have not exist.");
         BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
         return BIO_NOT_EXISTS;
     }
@@ -601,12 +601,12 @@ BResult RCache::EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictD
 bool RCache::IsEmptyEvict()
 {
     if (mMemEvict) {
-        LOG_INFO("Mem: task:" << mMemEvict);
+        LOG_DEBUG("Mem: task:" << mMemEvict);
         return false;
     }
 
     if (mDiskEvict) {
-        LOG_INFO("Disk: task:" << mDiskEvict);
+        LOG_DEBUG("Disk: task:" << mDiskEvict);
         return false;
     }
 
@@ -698,7 +698,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         AddToTruncateList(READ_CACHE_TIER_DISK, chunk);
         flow[READ_CACHE_TIER_MEM]->UpdateDataTruncOffset(chunk->GetValue().flowOffset, chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
-        LOG_INFO("RCache evict chunk to disk tier success, " << chunk->ToString());
+        LOG_DEBUG("RCache evict chunk to disk tier success, " << chunk->ToString());
         delete[] newChunk->GetKey();
         chunk->lock.unlock();
         BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, BIO_OK);
@@ -746,7 +746,7 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         chunk->lock.lock();
         auto ret = DeleteFromIndex(chunk->GetKey(), chunk);
         if (UNLIKELY(ret != BIO_OK)) {
-            LOG_INFO("Get read cache key:" << chunk->GetKey() << " not exist.");
+            LOG_DEBUG("Get read cache key:" << chunk->GetKey() << " not exist.");
             chunk->lock.unlock();
             BIO_TRACE_END(RCACHE_TRACE_EVICT2NULL, 0);
             continue;
@@ -756,7 +756,7 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         DelFromEvictList(chunk->GetTierType(), chunk.Get()->GetMqType(), chunk);
         flow[READ_CACHE_TIER_DISK]->UpdateDataTruncOffset(chunk->GetValue().flowOffset, chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
-        LOG_INFO("Delete chunk, key: " << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
+        LOG_DEBUG("Delete chunk, key: " << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
             chunk->GetValue().length << ", flowOffset:" << chunk->GetValue().flowOffset << ", indexInFlow:" <<
             chunk->GetValue().indexInFlow);
         chunk->lock.unlock();

@@ -71,7 +71,7 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unorder
                 if (sliceRef->Aquire()) {
                     auto sliceLen = static_cast<uint32_t>(sliceRef->GetSlice()->GetLength());
                     listSliceVec.push_back(sliceRef);
-                    LOG_INFO("Wcache list success, key:" << info.first << ", slice length:" << sliceLen << ", time:" <<
+                    LOG_DEBUG("Wcache list success, key:" << info.first << ", slice length:" << sliceLen << ", time:" <<
                         time(nullptr) << ".");
                     objs.insert({ info.first, { sliceLen, time(nullptr) } });
                 }
@@ -93,15 +93,15 @@ BResult WCacheIndex::Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sli
     WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto iter = table->sliceIndex[bucket].find(key);
     if (iter == table->sliceIndex[bucket].end()) {
-        LOG_INFO("Delete write cache key:" << key << " have not exist.");
+        LOG_DEBUG("Delete write cache key:" << key << " have not exist.");
         return BIO_NOT_EXISTS;
     }
     if (iter->second != sliceRef) {
-        LOG_INFO("Expired slice, key:" << key);
+        LOG_DEBUG("Expired slice, key:" << key);
         return BIO_OK;
     }
     table->sliceIndex[bucket].erase(key);
-    LOG_INFO("Delete key:" << key << " success.");
+    LOG_DEBUG("Delete key:" << key << " success.");
     return BIO_OK;
 }
 
@@ -114,7 +114,7 @@ void WCacheIndex::ExpiredClear(uint64_t ptId)
         WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
         for (auto it = table->sliceIndex[bucket].begin(); it != table->sliceIndex[bucket].end();) {
             if (it->second->GetSlice() == nullptr) {
-                LOG_INFO("Expired clear, ptId:" << ptId << ", key:" << it->first);
+                LOG_DEBUG("Expired clear, ptId:" << ptId << ", key:" << it->first);
                 it = table->sliceIndex[bucket].erase(it);
             } else {
                 ++it;

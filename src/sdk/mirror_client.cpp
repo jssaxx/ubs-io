@@ -313,7 +313,7 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
         ptId = SelectingPtImpl(objectId, affinity);
         if (ptId == UINT16_MAX) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -444,7 +444,7 @@ BResult MirrorClient::Put(MirrorPut &param)
     char *value = param.value;
     if (mScene == SCENE_BIGDATA && param.length < DEFAULT_ALIGNMENT_SIZE) {
         BIO_TRACE_START(SDK_TRACE_PUT_ALIGN_IO);
-        CLIENT_LOG_INFO("Not align io, key:" << param.key << ", length:" << param.length << ".");
+        CLIENT_LOG_DEBUG("Not align io, key:" << param.key << ", length:" << param.length << ".");
         isSelf = true;
         if ((param.value = static_cast<char *>(malloc(DEFAULT_ALIGNMENT_SIZE))) == nullptr) {
             BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_ALLOC_FAIL);
@@ -478,7 +478,7 @@ BResult MirrorClient::Put(MirrorPut &param)
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -524,7 +524,7 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     req->mrAddress = 0ULL;
     memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
 
-    CLIENT_LOG_INFO("Put copy free request key:" << req->key << ", length:" << ", index:" << req->flowIndex <<
+    CLIENT_LOG_DEBUG("Put copy free request key:" << req->key << ", length:" << ", index:" << req->flowIndex <<
         ", sliceLen:" << req->sliceLen << ", mrkey:" << req->mrKey << ".");
     return BIO_OK;
 }
@@ -583,7 +583,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -658,7 +658,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -714,7 +714,7 @@ BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -764,7 +764,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -816,7 +816,7 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
-            LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < BIO_IO_TIMEOUT_TIME) {
                 mUpdateView();
                 isRetry = true;
@@ -1314,7 +1314,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
 
 BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
-    CLIENT_LOG_DEBUG("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
+    CLIENT_LOG_TRACE("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);

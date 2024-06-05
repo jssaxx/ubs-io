@@ -85,7 +85,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
 {
     int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
-    LOG_INFO("UnderFs put key:" << key);
+    LOG_DEBUG("UnderFs put key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_PUT);
     LVOS_TP_START(SERVER_UNDERFS_PUT, &ret, -1)
@@ -103,7 +103,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 {
     int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
-    LOG_INFO("UnderFs get key:" << key);
+    LOG_DEBUG("UnderFs get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
     LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -1)
@@ -126,7 +126,7 @@ BResult UnderFs::Delete(const char *key)
 {
     int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
-    LOG_INFO("UnderFs delete key:" << key);
+    LOG_DEBUG("UnderFs delete key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_DEL);
     LVOS_TP_START(SERVER_UNDERFS_DELETE, &ret, -1)
@@ -148,7 +148,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
 {
     int ret = BIO_UFS_IOERR;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
-    LOG_INFO("UnderFs stat key:" << key);
+    LOG_DEBUG("UnderFs stat key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_STAT);
     LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, -1)
@@ -169,7 +169,7 @@ BResult UnderFs::Stat(const char *key, ObjStat &stat)
 BResult UnderFs::List(const char *prefix, std::unordered_map<std::string, UnderFs::ObjStat> &objStat)
 {
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
-    LOG_INFO("UnderFs list prefix:" << prefix);
+    LOG_DEBUG("UnderFs list prefix:" << prefix);
 
     rados_list_ctx_t listCtx;
     int ret;
@@ -255,7 +255,7 @@ BResult UnderFs::Put(const char *key, const char *value, const size_t len)
         }
     }
 
-    LOG_INFO("Put key:" << key);
+    LOG_DEBUG("Put key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_PUT);
     fstream file;
@@ -281,7 +281,7 @@ BResult UnderFs::Get(const char *key, char *value, const size_t len, const uint6
 
     using namespace std;
 
-    LOG_INFO("Get key:" << key);
+    LOG_DEBUG("Get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
     fstream file;

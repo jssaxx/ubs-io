@@ -95,9 +95,9 @@ public:
                 mUsedSize[cacheType][type][0] += len;
                 uint64_t useSize = mUsedSize[cacheType][type][0];
                 if (cacheType == FLOW_WCACHE) {
-                    LOG_DEBUG("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                    LOG_TRACE("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 } else {
-                    LOG_DEBUG("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                    LOG_TRACE("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 }
             }
             return ret;
@@ -109,9 +109,9 @@ public:
                 mUsedSize[cacheType][type][mediaId] += len;
                 uint64_t useSize = mUsedSize[cacheType][type][mediaId];
                 if (cacheType == 0) {
-                    LOG_DEBUG("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                    LOG_TRACE("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 } else {
-                    LOG_DEBUG("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                    LOG_TRACE("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
                 }
             }
             return ret;
@@ -130,9 +130,9 @@ public:
             mUsedSize[cacheType][type][0] -= len;
             uint64_t useSize = mUsedSize[cacheType][type][0];
             if (cacheType == FLOW_WCACHE) {
-                LOG_DEBUG("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_DEBUG("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         } else {
             BIO_TRACE_START(BDM_TRACE_SEG_FREE);
@@ -141,9 +141,9 @@ public:
             mUsedSize[cacheType][type][mediaId] -= len;
             uint64_t useSize = mUsedSize[cacheType][type][mediaId];
             if (cacheType == 0) {
-                LOG_DEBUG("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_DEBUG("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         }
     }
@@ -157,17 +157,17 @@ public:
             mUsedSize[cacheType][type][0] += len;
             uint64_t useSize = mUsedSize[cacheType][type][0];
             if (cacheType == FLOW_WCACHE) {
-                LOG_DEBUG("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("WCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_DEBUG("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("RCACHE MEM: used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         } else {
             mUsedSize[cacheType][type][mediaId] += len;
             uint64_t useSize = mUsedSize[cacheType][type][mediaId];
             if (cacheType == 0) {
-                LOG_DEBUG("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("WCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             } else {
-                LOG_DEBUG("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
+                LOG_TRACE("RCACHE DISK:" << mediaId << ", used:" << useSize / NO_1MB << ", flowId:" << flowId);
             }
         }
     }

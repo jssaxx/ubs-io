@@ -363,7 +363,7 @@ BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, Put
 
 BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStratege)
 {
-    LOG_INFO("Mirror server put, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
+    LOG_DEBUG("Mirror server put, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
         sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
         sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() <<
         ".");
@@ -510,7 +510,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr sliceP = MakeRef<RCacheSlice>(req.ptId, req.length, addrVec);
 
-    LOG_INFO("Mirror server get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
+    LOG_DEBUG("Mirror server get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
         ", length:" << req.length << ", mr address:" << req.address << ", mr size:" << req.size << ", mr key:" <<
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
@@ -551,7 +551,7 @@ BResult MirrorServer::Delete(DeleteRequest &req)
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << req.key << ", ptId:" << req.comm.ptId << ".");
     } else {
-        LOG_INFO("Mirror server delete success, key:" << req.key << ", ptId:" << req.comm.ptId << ".");
+        LOG_DEBUG("Mirror server delete success, key:" << req.key << ", ptId:" << req.comm.ptId << ".");
     }
     return ret;
 }
@@ -573,7 +573,7 @@ BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, Obj
             stat.time = info.second.time;
             objs.insert({ info.first, stat });
         }
-        LOG_INFO("Mirror server List success, prefix:" << req.prefix << ", ptId:" << req.comm.ptId << ", num:" <<
+        LOG_DEBUG("Mirror server List success, prefix:" << req.prefix << ", ptId:" << req.comm.ptId << ", num:" <<
             objs.size() << ".");
     }
     return ret;
@@ -651,7 +651,7 @@ BResult MirrorServer::CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdate
 
 BResult MirrorServer::SyncData(SyncDataRequest &req)
 {
-    LOG_INFO("Master sync data, ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
+    LOG_DEBUG("Master sync data, ptId:" << req.comm.ptId << ", version:" << req.comm.ptv);
     BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA);
     BResult ret = Cache::Instance().Flush(req.comm.ptId, req.comm.ptv);
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
@@ -897,7 +897,7 @@ BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uin
 {
     auto ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
-    LOG_INFO("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" << flowOffset);
+    LOG_DEBUG("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" << flowOffset);
     return BIO_OK;
 }
 
@@ -910,7 +910,7 @@ BResult MirrorServer::GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset)
         LOG_WARN("Get evict offset failed:" << ret << ", ptId:" << req.comm.ptId << ", flowId:" << req.flowId);
         return ret;
     }
-    LOG_INFO("Master get evict offset, ptId:" << req.comm.ptId << ", flowId:" << req.flowId << ", flowOffset:" <<
+    LOG_DEBUG("Master get evict offset, ptId:" << req.comm.ptId << ", flowId:" << req.flowId << ", flowOffset:" <<
         flowOffset);
     return BIO_OK;
 }

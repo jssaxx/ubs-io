@@ -60,11 +60,11 @@ SlicePtr Slice::Split(uint64_t offset, uint64_t length)
             uint64_t splitLen = rangeEnd - splitStart;
             if (splitLen >= length - (splitStart - offset)) {
                 newAddrs.emplace_back(addr.chunkId, addr.chunkOffset + splitOffset, length - (splitStart - offset));
-                LOG_INFO("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" <<
+                LOG_DEBUG("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" <<
                     length - (splitStart - offset));
                 break;
             } else {
-                LOG_INFO("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" << splitLen);
+                LOG_DEBUG("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" << splitLen);
                 newAddrs.emplace_back(addr.chunkId, addr.chunkOffset + splitOffset, splitLen);
             }
             splitStart += splitLen;
