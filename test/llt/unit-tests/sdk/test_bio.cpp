@@ -166,6 +166,13 @@ TEST_F(TestBio, test_bio_put)
 
     ret = BioPut(G_TENANT_ID, nullptr, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
     fclose(fp);
 }
 
@@ -1061,6 +1068,12 @@ TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
     auto ret = BioAllocCacheSpace(G_TENANT_ID, objectId++, ock::bio::NO_1024, &spaceDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL", 0, 1, userParam);
+    ret = BioAllocCacheSpace(G_TENANT_ID, objectId, ock::bio::NO_1024, &spaceDesc);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL");
 }
 
 TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
