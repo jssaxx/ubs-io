@@ -64,6 +64,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(UNDERFS_DELETE_ERR, "underfs delete err", CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_WCACHE_EXPIRED_CLEAR, "no process wcache expired clear", CommonTp::NoProcessCallback);
     LVOS_TP_REG(RECOVER_CACHE_FLOWID_FAIL, "recover cache flowid err", CommonTp::IntValueCallback);
+    LVOS_TP_REG(NO_PROCESS_UPGRADE_FLUSH, "no procesee upgrate flush", CommonTp::NoProcessCallback);
     LVOS_TP_REG(WCACHE_STATE_NOT_NORMAL, "wcache state not normal", CommonTp::BoolValueCallback);
     LVOS_TP_REG(RCACHE_EVICT_PARAM_FAIL, "rcache gc evict err", CommonTp::NoProcessCallback);
     LVOS_TP_REG(RCACHE_GC_PARAM_FAIL, "rcache gc param err", CommonTp::NoProcessCallback);
@@ -172,6 +173,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(UNDERFS_DELETE_ERR);
     LVOS_TP_UNREG(NO_PROCESS_WCACHE_EXPIRED_CLEAR);
     LVOS_TP_UNREG(RECOVER_CACHE_FLOWID_FAIL);
+    LVOS_TP_UNREG(NO_PROCESS_UPGRADE_FLUSH);
     LVOS_TP_UNREG(WCACHE_STATE_NOT_NORMAL);
     LVOS_TP_UNREG(RCACHE_EVICT_PARAM_FAIL);
     LVOS_TP_UNREG(RCACHE_GC_PARAM_FAIL);

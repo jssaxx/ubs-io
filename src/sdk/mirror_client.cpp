@@ -502,7 +502,10 @@ BResult MirrorClient::Put(MirrorPut &param)
 BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo,
     PutRequest *&req)
 {
-    uint8_t *reqTmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
+    uint8_t *reqTmp = nullptr;
+    LVOS_TP_START(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, 0);
+    reqTmp = new(std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
+    LVOS_TP_END;
     if (UNLIKELY(reqTmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put memory failed, len:" << sizeof(PutRequest) + spaceInfo.descriptorSize << ".");
         return BIO_INNER_ERR;
