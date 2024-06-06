@@ -35,6 +35,7 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SERVER_NET_RDMA_WRITE_FAIL, "rdma write fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_SET_PT_ID_FAIL, "sdk mirror ptId failed, rturn UINT16_MAX", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, "prepare put with space fail", CommonTp::NoProcessCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
@@ -63,6 +64,7 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_NET_RDMA_WRITE_FAIL);
     LVOS_TP_UNREG(SERVER_NET_RDMA_READ_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_SET_PT_ID_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL);
 }
 #else
 void tp::SdkTp::Register() noexcept {}

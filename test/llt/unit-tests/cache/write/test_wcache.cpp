@@ -729,6 +729,16 @@ TEST_F(TestWCache, test_start_pool_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestWCache, test_service_update_return_retry)
+{
+    LOG_INFO("test_service_update_return_retry");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
+    auto ret = gWCacheManager->ServiceUngradeFlush();
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 void TestWCache::Stub()
 {
     MOCKER_CPP(&WCache::IsEmptyEvict, bool (*)()).stubs().will(returnValue(false));
