@@ -345,6 +345,8 @@ uint16_t MirrorClient::SelectingPtImpl(uint64_t objectId, AffinityStrategy affin
         CLIENT_LOG_ERROR("Invalid affinity type or pt view is empty, objectId:" << objectId << ", affinity:" <<
             affinity << ".");
     }
+    LVOS_TP_START(SDK_MIRROR_SET_PT_ID_FAIL, &ptId, UINT16_MAX);
+    LVOS_TP_END;
     if (UNLIKELY(ptId == UINT16_MAX)) {
         CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
     } else {
