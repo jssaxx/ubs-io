@@ -67,6 +67,8 @@ TEST_F(TestDisk, test_disk_read_async_case_return_ok)
     BdmIoCtx ioCtx;
     ioCtx.cb = UtAsyncProcCb;
     ioCtx.ctx = (void *)&cbCtx;
+    ret = BdmReadAsync(NO_MAX_VALUE64, 0, buff, NO_4194304, &ioCtx);
+    EXPECT_EQ(BDM_CODE_NOT_EXIST, ret);
     ret = BdmReadAsync(0, 0, buff, NO_4194304, &ioCtx);
     EXPECT_EQ(BDM_CODE_OK, ret);
     if (ret == BDM_CODE_OK) {
@@ -92,6 +94,8 @@ TEST_F(TestDisk, test_disk_write_async_case_return_ok)
     BdmIoCtx ioCtx;
     ioCtx.cb = UtAsyncProcCb;
     ioCtx.ctx = (void *)&cbCtx;
+    ret = BdmWriteAsync(NO_MAX_VALUE64, 0, buff, NO_4194304, &ioCtx);
+    EXPECT_EQ(BDM_CODE_NOT_EXIST, ret);
     ret = BdmWriteAsync(0, 0, buff, NO_4194304, &ioCtx);
     EXPECT_EQ(BDM_CODE_OK, ret);
     if (ret == BDM_CODE_OK) {
