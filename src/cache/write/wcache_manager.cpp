@@ -227,6 +227,7 @@ BResult WCacheManager::ServiceUngradeFlush()
 
     ScanUpgradeCache(flushList);
 
+    LVOS_TP_START(NO_PROCESS_UPGRADE_FLUSH, 0);
     for (const auto &flow : flushList) {
         flow->Flush();
     }
@@ -234,7 +235,7 @@ BResult WCacheManager::ServiceUngradeFlush()
     if (!flushList.empty()) {
         return BIO_INNER_RETRY;
     }
-
+    LVOS_TP_END
     auto ret = ClearUpgradeCache();
     ChkTrueNot(ret == BIO_OK, ret);
     return ret;
