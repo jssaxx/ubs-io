@@ -573,8 +573,9 @@ TEST_F(TestWCache, test_flush_return_err)
 TEST_F(TestWCache, test_expired_flush_return_ok)
 {
     LOG_INFO("test_expired_flush_return_ok");
-    auto ret = gWCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
+    auto ret = Cache::Instance().ExpiredClear(G_PT_ID, G_PT_V);
     EXPECT_EQ(ret, BIO_OK);
+    ret = gWCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
 }
 
 TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
