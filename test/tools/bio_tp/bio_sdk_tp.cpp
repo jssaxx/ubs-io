@@ -13,7 +13,6 @@ void tp::SdkTp::Register() noexcept
 {
     LVOS_TP_REG(SDK_MIRROR_PT_VIEW_FIND_FAIL, "sdk mirror pt entry find failed.", CommonTp::BoolValueCallback);
     LVOS_TP_REG(SDK_MIRROR_CHECK_PT_FAIL, "sdk mirror check pt failed, rturn BIO_CHECK_PT_FAIL", CommonTp::BoolValueCallback);
-    LVOS_TP_REG(SDK_MIRROR_SEND_PUT_FAIL, "sdk mirror send put request failed, rturn BIO_INNER_ERR", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_BIO_AGENT_CREAT_FAIL, "sdk agent creat fail, rturn BIO_ALLOC_FAIL", CommonTp::PointerValueCallback);
     LVOS_TP_REG(SDK_BIO_LOG_CREAT_FAIL, "sdk log creat fail, rturn -1", CommonTp::PointerValueCallback);
     LVOS_TP_REG(SDK_BIO_LOG_INIT_FAIL, "sdk log init fail, rturn -1", CommonTp::IntValueCallback);
@@ -35,14 +34,15 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SERVER_NET_RDMA_WRITE_FAIL, "rdma write fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_SET_PT_ID_FAIL, "sdk mirror ptId failed, rturn UINT16_MAX", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL, "sdk mirror alloc put offset fail, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, "prepare put with space fail", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_FAIL, "mirror client query fail, retuen nullptr", CommonTp::NoProcessCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
 {
     LVOS_TP_UNREG(SDK_MIRROR_PT_VIEW_FIND_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_CHECK_PT_FAIL);
-    LVOS_TP_UNREG(SDK_MIRROR_SEND_PUT_FAIL);
     LVOS_TP_UNREG(SDK_BIO_AGENT_CREAT_FAIL);
     LVOS_TP_UNREG(SDK_BIO_LOG_CREAT_FAIL);
     LVOS_TP_UNREG(SDK_BIO_LOG_INIT_FAIL);
@@ -65,6 +65,8 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_NET_RDMA_READ_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_SET_PT_ID_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL);
 }
 #else
 void tp::SdkTp::Register() noexcept {}
