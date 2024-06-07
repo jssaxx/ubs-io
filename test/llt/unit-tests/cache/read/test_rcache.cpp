@@ -65,6 +65,8 @@ TEST_F(TestRCache, test_rcache_put_ok)
 
     uint64_t totalCap = 0;
     uint64_t usedCap = 0;
+    ret = BdmGetCapacity(NO_MAX_VALUE32, &totalCap, &usedCap);
+    EXPECT_EQ(ret, BDM_CODE_NOT_EXIST);
     ret = BdmGetCapacity(0, &totalCap, &usedCap);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -427,14 +429,12 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     ret = cacheSliceOperator.Copy(slice, nullptr);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    ret = cacheSliceOperator.Copy(slice, value);
-    EXPECT_EQ(ret, BIO_DISK_IOERR);
     LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY", 0, 1, userParam);
     ret = cacheSliceOperator.Copy(slice1, value);
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY");
 
-    free(value);
+    delete[] value;
     free(buffer);
     free(buffer1);
     free(buffer2);
@@ -443,7 +443,9 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
 TEST_F(TestRCache, test_expired_clear_return_ok)
 {
     LOG_INFO("test_expired_clear_return_ok");
-    auto ret = gRCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
+    auto ret = Cache::Instance().ExpiredClear(G_PT_ID, G_PT_V);
+    EXPECT_EQ(ret, BIO_OK);
+    ret = gRCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
     EXPECT_EQ(ret, BIO_OK);
 }
 

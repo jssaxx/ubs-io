@@ -374,25 +374,6 @@ TEST_F(TestBio, test_bio_stat)
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_STAT_RECV_FAIL");
 }
 
-TEST_F(TestBio, test_bio_update_return_ok)
-{
-    LOG_INFO("test_bio_update_return_ok");
-    constexpr uint64_t tenantId = 1234UL;
-    AffinityStrategy affinity = LOCAL_AFFINITY;
-    WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({ tenantId, affinity, strategy });
-    EXPECT_EQ(ret, RET_CACHE_OK);
-
-    ret = BioNotifyUpgradePrepare(tenantId);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-
-    ret = BioNotifyUpgradeFinish(tenantId);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-
-    ret = BioDestroyCache(tenantId);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-}
-
 namespace {
 struct LoadContext {
     sem_t sem;
@@ -514,6 +495,31 @@ TEST_F(TestBio, test_bio_put_copy_free)
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
+
+    ret = BioDestroyCache(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
+TEST_F(TestBio, test_bio_update_return_ok)
+{
+    LOG_INFO("test_bio_update_return_ok");
+    constexpr uint64_t tenantId = 1234UL;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ret = BioNotifyUpgradePrepare(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
+    ret = BioCheckUpgradeReady(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
+
+    ret = BioNotifyUpgradeFinish(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
