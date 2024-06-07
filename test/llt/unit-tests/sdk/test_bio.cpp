@@ -49,7 +49,7 @@ void TestBio::TearDown()
 TEST_F(TestBio, test_bio_create_cache)
 {
     LOG_INFO("test_bio_create_cache");
-    uint64_t tenantId = 12341U;
+    uint64_t tenantId = 12341UL;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
     auto ret = BioCreateCache({ tenantId, affinity, strategy });
@@ -58,7 +58,7 @@ TEST_F(TestBio, test_bio_create_cache)
     ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_EXISTS);
 
-    tenantId = 121U;
+    tenantId = 121UL;
     ret = BioCreateCache({ tenantId, AFFINITY_BUTT, strategy });
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 }
@@ -437,6 +437,41 @@ TEST_F(TestBio, test_bio_load)
     sem_destroy(&(loadCtx.sem));
 }
 
+TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
+{
+    uint64_t objectId = 2UL;
+    CacheSpaceDesc addressDesc;
+    addressDesc.loc = { 0, 0 };
+    addressDesc.allocLoc = 1;
+
+    constexpr uint64_t tenantId = 10000UL;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_FAIL");
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL", 0, 1, userParam);
+    ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL");
+
+    ret = BioDestroyCache(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
 TEST_F(TestBio, test_bio_put_copy_free)
 {
     LOG_INFO("test_bio_put_copy_free");
@@ -449,10 +484,7 @@ TEST_F(TestBio, test_bio_put_copy_free)
     auto ret = BioAllocCacheSpace(G_INVALID_TENANT_ID, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
-    ret = BioPutWithCopyFree(G_TENANT_ID, nullptr, &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-
-    ret = BioPutWithCopyFree(G_INVALID_TENANT_ID, "putwithspace1", &addressDesc);
+    ret = BioPutWithCopyFree(G_INVALID_TENANT_ID, "putwithcopyfree", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
     constexpr uint64_t tenantId = 10001UL;
@@ -461,29 +493,58 @@ TEST_F(TestBio, test_bio_put_copy_free)
     ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
+    ret = BioPutWithCopyFree(tenantId, nullptr, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
     objectId = 11UL;
     addressDesc.loc = { 0, 0 };
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree1", &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree2", &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
+
+    ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
 TEST_F(TestBio, test_bio_delete)
 {
     LOG_INFO("test_bio_delete");
-    auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_OK);
 
-    char *value = new char[G_LENGTH];
-    uint64_t realLen = G_LENGTH;
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-    delete[] value;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioDelete(G_TENANT_ID, nullptr, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_DELETE_RECV_FAIL", 0, 1, userParam);
+    ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    char *value = new char[G_LENGTH];
+    uint64_t realLen = G_LENGTH;
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+    delete[] value;
 }
 
 void TestBio::VNodeIdStub()

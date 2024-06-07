@@ -1006,7 +1006,10 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         }
     }
 
-    bool isNormal = flowInst->IsNormal();
+    bool isNormal = false;
+    LVOS_TP_START(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL, &isNormal, false);
+    isNormal = flowInst->IsNormal();
+    LVOS_TP_END;
     if (UNLIKELY(!isNormal)) {
         CLIENT_LOG_WARN("Check flow failed, ptId:" << ptId << ".");
         return BIO_INNER_RETRY;
@@ -1256,8 +1259,6 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
         mIoStratege[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
         mIoStratege[ptEntry.ptId]->stratege = ioStratege.load();
     }
-    LVOS_TP_START(SDK_MIRROR_SEND_PUT_FAIL, &(cbCtx.result), BIO_INNER_ERR);
-    LVOS_TP_END;
     return cbCtx.result;
 }
 
