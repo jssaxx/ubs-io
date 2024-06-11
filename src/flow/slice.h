@@ -124,6 +124,20 @@ public:
         }
     }
 
+    inline bool OpLock()
+    {
+        bool expectval = false;
+        if (mOpLock.compare_exchange_weak(expectval, true)) {
+            return true;
+        }
+        return false;
+    }
+
+    inline void OpUnLock()
+    {
+        mOpLock = false;
+    }
+
     inline void SetState(SliceState state)
     {
         mState = state;
@@ -174,6 +188,7 @@ private:
     S mNewSlice{ nullptr };
     SetSliceCallback mSetSliceCallback{ nullptr };
     std::atomic<uint64_t> mRef{ 0 };
+    std::atomic<bool> mOpLock{ false };
     std::atomic<SliceState> mState{ SLICE_VALID };
     DEFINE_REF_COUNT_VARIABLE;
 };

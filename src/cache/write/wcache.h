@@ -119,6 +119,9 @@ private:
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false);
 
+    BResult EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront);
+    BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront);
+
     BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
 
     bool EvictMemSatisfiedCond();

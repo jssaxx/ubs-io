@@ -84,8 +84,8 @@ BResult RCacheManager::AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePt
     BIO_TRACE_START(RCACHE_TRACE_PUT_GET_SLICE);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
-        BIO_TRACE_END(RCACHE_TRACE_PUT_GET_SLICE, BIO_NOT_EXISTS);
-        return BIO_NOT_EXISTS;
+        BIO_TRACE_END(RCACHE_TRACE_PUT_GET_SLICE, BIO_INNER_RETRY);
+        return BIO_INNER_RETRY;
     }
     auto ret = cachePtr->AllocResources(len, slice);
     BIO_TRACE_END(RCACHE_TRACE_PUT_GET_SLICE, ret);
@@ -97,8 +97,8 @@ BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &
     BIO_TRACE_START(RCACHE_TRACE_PUT);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     if (UNLIKELY(cachePtr == nullptr)) {
-        BIO_TRACE_END(RCACHE_TRACE_PUT, BIO_NOT_EXISTS);
-        return BIO_NOT_EXISTS;
+        BIO_TRACE_END(RCACHE_TRACE_PUT, BIO_INNER_RETRY);
+        return BIO_INNER_RETRY;
     }
     auto ret = cachePtr->Put(key, slice);
     BIO_TRACE_END(RCACHE_TRACE_PUT, ret);
@@ -109,7 +109,7 @@ BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
+    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
     return cachePtr->Get(key, offset, slice, sliceWriter, realLen);
 }
 
@@ -117,7 +117,7 @@ BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint
 {
     BIO_TRACE_START(RCACHE_TRACE_LOAD);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
+    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
     auto ret = cachePtr->Load(key, offset, len, realLen);
     BIO_TRACE_END(RCACHE_TRACE_LOAD, ret);
     return ret;
@@ -129,7 +129,7 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
     LVOS_TP_START(RCACHE_MANAGER_DELETE_ERR, &cachePtr, nullptr);
     cachePtr = GetRCacheInstanceByPtId(ptId);
     LVOS_TP_END;
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
+    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
     return cachePtr->Delete(key);
 }
 
