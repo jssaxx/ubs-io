@@ -1240,3 +1240,20 @@ TEST_F(TestBio, test_bio_update_return_fail)
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
+
+TEST_F(TestBio, test_bio_convert_location_return_fail)
+{
+    LOG_INFO("test_bio_convert_location_return_fail");
+    ObjLocation location{0, 0};
+    ObjLocationDetail detailLoc;
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    auto ret = BioConvertLocation(location, &detailLoc);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    ret = BioConvertLocation(location, &detailLoc);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+}
