@@ -140,7 +140,7 @@ TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NOT_NORMAL", 0, 1, userParam);
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NOT_NORMAL");
 
     ret = gWCacheManager->Delete(G_PT_ID, key);

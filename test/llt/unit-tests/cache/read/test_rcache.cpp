@@ -119,10 +119,10 @@ TEST_F(TestRCache, test_rcache_put_ptid_not_exist)
 
     uint64_t ptId = NO_10;
     ret = gRCacheManager->Put(ptId, G_KEY, slicePtr);
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
 
     ret = gRCacheManager->Delete(ptId, G_KEY);
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
 }
 
 TEST_F(TestRCache, test_rcache_get_ok)
