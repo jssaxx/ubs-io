@@ -485,7 +485,7 @@ bool WCache::IsEmptyEvict(WCacheTierType type)
     return true;
 }
 
-BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
+BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
 {
     auto slice = sliceRef->GetSlice();
     auto indexInFlow = slice->GetIndexInFlow();
@@ -534,7 +534,7 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
     return BIO_OK;
 }
 
-BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
+BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
 {
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     auto slice = sliceRef->GetSlice();
@@ -606,6 +606,26 @@ BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster
     sliceRef->SetSlice(nullptr, callback);
     BIO_TRACE_END(WCACHE_TRACE_EVICT2UNDERFS, 0);
     return BIO_OK;
+}
+
+BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
+{
+    if (!isFront && !sliceRef->OpLock()) {
+        return BIO_INNER_RETRY;
+    }
+    BResult ret = EvictFromMemToDiskImpl(sliceRef, isFront);
+    sliceRef->OpUnLock();
+    return ret;
+}
+
+BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
+{
+    if (!isFront && !sliceRef->OpLock()) {
+        return BIO_INNER_RETRY;
+    }
+    BResult ret = EvictFromDiskToUnderFsImpl(sliceRef, isMaster, isFront);
+    sliceRef->OpUnLock();
+    return ret;
 }
 
 BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value)
