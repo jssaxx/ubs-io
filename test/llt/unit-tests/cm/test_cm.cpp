@@ -384,10 +384,18 @@ TEST_F(TestCm, test_cm_inner_init)
 TEST_F(TestCm, test_cm_get_node_mr)
 {
     LOG_INFO("test_cm_get_node_mr");
-    NodeMetaBuff *mr = (NodeMetaBuff *)malloc(NODE_META_BUFF_LEN);
+    NodeMetaBuff *mr = (NodeMetaBuff *) malloc(NODE_META_BUFF_LEN);
+    mr->nodeId = UINT16_MAX;
+    int32_t ret = CM_GetNodeMr(NO_512, mr);
+    EXPECT_EQ(ret, CM_ERR);
+
+    ret = CM_GetNodeMr(0, mr);
+    EXPECT_EQ(ret, CM_ERR);
+
     mr->nodeId = 0;
-    int32_t ret = CM_GetNodeMr(0, mr);
+    ret = CM_GetNodeMr(0, mr);
     EXPECT_EQ(ret, CM_OK);
+
     free(mr);
 }
 
