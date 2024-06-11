@@ -247,7 +247,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
     req.mrSize = 0;
     PutResponse response;
     auto ret = Put(&req, &response);
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
 }
 
 TEST_F(TestBioServer, test_put_slice_length_eq_zero_alloc_slice_err_return_fail)
@@ -303,7 +303,7 @@ TEST_F(TestBioServer, test_get_slice_flowid_unexists_return_fail)
     LOG_INFO("test_get_slice_flowid_unexists_return_fail");
     GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, NO_4194304, 0, 1, NO_128 };
     auto ret = GetSlice(&req, nullptr);
-    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    EXPECT_EQ(ret, BIO_INNER_RETRY);
 }
 
 TEST_F(TestBioServer, test_bio_server_stat)

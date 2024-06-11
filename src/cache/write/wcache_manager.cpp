@@ -295,7 +295,7 @@ BResult WCacheManager::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &
     auto wcache = GetWCache(sliceKey.flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("failed to get flow by id:" << sliceKey.flowId);
-        return BIO_NOT_EXISTS;
+        return BIO_INNER_RETRY;
     }
 
     BIO_TRACE_START(WCACHE_TRACE_GET_SLICE);
@@ -328,10 +328,10 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     // 1. Get write flow
     BIO_TRACE_START(WCACHE_TRACE_PUT_GET_WCACHE);
     auto wcache = GetWCache(slice->GetFlowId());
-    BIO_TRACE_END(WCACHE_TRACE_PUT_GET_WCACHE, (wcache == nullptr) ? BIO_NOT_EXISTS : BIO_OK);
+    BIO_TRACE_END(WCACHE_TRACE_PUT_GET_WCACHE, (wcache == nullptr) ? BIO_INNER_RETRY : BIO_OK);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("Failed to get wcache, flowId:" << slice->GetFlowId() << ", key:" << key << ".");
-        return BIO_NOT_EXISTS;
+        return BIO_INNER_RETRY;
     }
 
     bool wcacheDegarde = wcache->GetDegradeState();
@@ -423,6 +423,11 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
         LOG_WARN("Write cache aquire slice failed, key:" << key << ", ptId:" << ptId << ".");
         return BIO_NOT_EXISTS;
     }
+    if (!sliceRef->OpLock()) {
+        LOG_WARN("Write cache oplock slice failed, key:" << key << ", ptId:" << ptId << ".");
+        sliceRef->Release();
+        return BIO_INNER_RETRY;
+    }
 
     auto slice = sliceRef->GetSlice();
     uint64_t flowId = -1;
@@ -432,23 +437,29 @@ BResult WCacheManager::Delete(uint64_t ptId, const Key &key)
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_ERROR("Failed to get flow, flowId:" << flowId << ", key:" << key << ".");
-        return BIO_NOT_EXISTS;
+        sliceRef->OpUnLock();
+        sliceRef->Release();
+        return BIO_INNER_RETRY;
     }
 
     auto ret = wcache->Delete(key, sliceRef);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Delete slice from flow failed, ret:" << ret << ", key:" << key << ".");
+        sliceRef->OpUnLock();
+        sliceRef->Release();
         return ret;
     }
 
     ret = mCacheIndex->Delete(ptId, key, sliceRef);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to delete. key:" << key << ", ret:" << ret);
+        sliceRef->OpUnLock();
         sliceRef->Release();
         return ret;
     }
 
     sliceRef->SetState(SLICE_INVALID);
+    sliceRef->OpUnLock();
     sliceRef->Release();
     return BIO_OK;
 }

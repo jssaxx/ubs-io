@@ -239,6 +239,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
     uint16_t index;
 
     bool oldExist = false;
+    bool oldMaster = false;
 
     mLock.LockRead();
     if (mPtInfos.find(ptInfo.ptId) != mPtInfos.end()) {
@@ -248,6 +249,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
                 break;
             }
         }
+        oldMaster = (mPtInfos[ptInfo.ptId].masterNodeId == localNodeId) ? true : false;
     } else {
         isFirst = true;
     }
@@ -260,8 +262,9 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
             break;
         }
     }
+    bool curMaster = (ptInfo.masterNodeId == localNodeId) ? true : false;
 
-    if (!oldExist && curExist) {
+    if (!oldMaster && curMaster) {
         auto ret = Cache::Instance().ExtraCreateRCache(ptInfo.ptId, ptInfo.version);
         if (ret != BIO_OK) {
             return BIO_INNER_RETRY;
