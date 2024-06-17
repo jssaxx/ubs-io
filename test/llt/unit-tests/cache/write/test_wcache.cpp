@@ -584,6 +584,9 @@ TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
     LVOS_TRACEP_PARAM_S userParam;
     auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
+
+    ret = Cache::Instance().DestroyRCache(G_PT_ID);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestWCache, test_wcache_destroy_flowid_unexist_return_ok)
