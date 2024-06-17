@@ -122,7 +122,7 @@ TEST_F(TestRCache, test_rcache_put_ptid_not_exist)
     EXPECT_EQ(ret, BIO_INNER_RETRY);
 
     ret = gRCacheManager->Delete(ptId, G_KEY);
-    EXPECT_EQ(ret, BIO_INNER_RETRY);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
 TEST_F(TestRCache, test_rcache_get_ok)

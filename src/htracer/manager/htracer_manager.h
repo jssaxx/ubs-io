@@ -59,6 +59,9 @@ public:
         return mEnable;
     }
 
+public:
+    static bool mEnable;
+
 private:
     static __always_inline HtracerInfo **CreateInstance()
     {
@@ -100,9 +103,6 @@ private:
     {
         return (tpId & 0xFFFF);
     }
-
-private:
-    static bool mEnable;
 };
 }
 }

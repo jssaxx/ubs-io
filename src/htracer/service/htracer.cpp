@@ -35,5 +35,10 @@ void ClearTraceInfo()
     auto &service = HTracerService::GetInstance();
     return service.ClearTraceInfo();
 }
+
+void HTracerSetEnable(bool isEnable)
+{
+    HtracerManager::mEnable = isEnable;
+}
 }
 }
