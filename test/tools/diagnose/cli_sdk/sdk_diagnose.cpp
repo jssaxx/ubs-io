@@ -538,6 +538,12 @@ static void HandleSdkTrace(std::vector<std::string> cmds)
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         CLI_PrintBuf("clearing statistics sdk records succeeded.\n");
+    } else if (viewType == "open") {
+        ock::htracer::HTracerSetEnable(true);
+        CLI_PrintBuf("open statistics sdk records succeeded.\n");
+    } else if (viewType == "close") {
+        ock::htracer::HTracerSetEnable(false);
+        CLI_PrintBuf("close statistics sdk records succeeded.\n");
     }
 }
 
