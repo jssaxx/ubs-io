@@ -165,12 +165,27 @@ BResult BioClientNet::ShmInit()
         return ret;
     }
 
-    mScene = rsp.scene;
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
     mShmLength = rsp.length;
     mShmKey = rsp.mKey;
+    mWorkScene = rsp.scene;
+    mWorkIoAlignSize = rsp.alignSize;
+    mWorkIoTimeOut = rsp.ioTimeOut;
+    mWorkNetTimeOut = rsp.netTimeOut;
+    mLogLevel = rsp.logLevel;
+
+    CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignsize:" << mWorkIoAlignSize << ", io timeout:" <<
+        mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
+
+    mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut));
+    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Update channel timeout failed, ret:" << ret << ".");
+        return ret;
+    }
+
     if (mShmOffset != 0 || mShmLength > defaultMaxShmSize) {
         CLIENT_LOG_ERROR("Get share memory para failed, offset:" << mShmOffset << ", length:" << mShmLength << ".");
         return BIO_ERR;
@@ -199,7 +214,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
     }
 
     // 1. Initialize net engine
-    int16_t timeoutSec = NO_16; // 16s
+    int16_t timeoutSec = NO_16; // 16s，分离部署会被重置
     auto ret = mNetEngine->Initialize(timeoutSec, 0, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
