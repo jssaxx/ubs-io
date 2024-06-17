@@ -778,8 +778,10 @@ TEST_F(TestBio, test_pt_entry_list_update_node_finish)
 TEST_F(TestBio, test_create_view_caculator)
 {
     LOG_INFO("test_create_view_caculator");
-    CreateViewCalculator(1, 1, 1, 1);
+    Calculator calc = nullptr;
+    calc = CreateViewCalculator(1, 1, 1, 1);
     EXPECT_EQ(0, BIO_OK);
+    DestoryViewCalculator(calc);
 }
 
 TEST_F(TestBio, test_view_caculator_initial)
@@ -829,6 +831,7 @@ TEST_F(TestBio, test_view_caculator_initial)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorInitial(calculator, notifyList, stateList, ptEntryList);
+    DestoryViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -888,6 +891,7 @@ TEST_F(TestBio, test_caculator_need_rebalance)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorNeedRebalance(calculator, notifyList, stateList, ptEntryList);
+    DestoryViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -946,6 +950,7 @@ TEST_F(TestBio, test_caculator_rebalance)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
+    DestoryViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -1004,6 +1009,7 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
+    DestoryViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);

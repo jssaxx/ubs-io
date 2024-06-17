@@ -294,6 +294,7 @@ static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, 
         }
         strings->data[0] = tmp;
         gZkGetChildrenFirst.push_back(path);
+        free(tmp);
     }
     watcher(zh, ZOO_CREATED_EVENT, 1, path, watcherCtx);
     return ZOK;
