@@ -129,7 +129,7 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
     LVOS_TP_START(RCACHE_MANAGER_DELETE_ERR, &cachePtr, nullptr);
     cachePtr = GetRCacheInstanceByPtId(ptId);
     LVOS_TP_END;
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
+    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
     return cachePtr->Delete(key);
 }
 
