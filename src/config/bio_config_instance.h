@@ -54,6 +54,9 @@ const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio
 const auto DISK_READ_WRITE_RATIO = std::make_pair("bio.cache.disk_read_write_ratio", "5:5");
 
 const auto WORK_SCENE = std::make_pair("bio.work.scene", "none");
+const auto WORK_IO_ALIGNSIZE = std::make_pair("bio.work.io.alignsize", 1);
+const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
+const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
 
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
@@ -112,7 +115,10 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
-        uint32_t scene = 0;
+        uint32_t workScene = 0;
+        uint32_t workIoAlignSize = 1;
+        uint32_t workIoTimeOut = 60;
+        uint32_t workNetTimeOut = 20;
     };
 
     struct ClientConfig {

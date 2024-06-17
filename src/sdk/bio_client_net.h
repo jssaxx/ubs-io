@@ -39,9 +39,29 @@ public:
         mCheckOnLine = checkOnLine;
     }
 
-    inline uint32_t GetWorkerScene() const
+    inline uint32_t GetNegoWorkScene() const
     {
-        return mScene;
+        return mWorkScene;
+    }
+
+    inline uint32_t GetNegoWorkIoAlignSize() const
+    {
+        return mWorkIoAlignSize;
+    }
+
+    inline uint32_t GetNegoWorkIoTimeOut() const
+    {
+        return mWorkIoTimeOut;
+    }
+
+    inline uint32_t GetNegoWorkNetTimeOut() const
+    {
+        return mWorkNetTimeOut;
+    }
+
+    inline int32_t GetNegoLogLevel() const
+    {
+        return mLogLevel;
     }
 
     inline NetEnginePtr GetNetEngine() const
@@ -140,7 +160,11 @@ private:
 
 private:
     WorkerMode mMode;
-    uint32_t mScene;
+    uint32_t mWorkScene = 0;
+    uint32_t mWorkIoAlignSize = 1;
+    uint32_t mWorkIoTimeOut = 60;
+    uint32_t mWorkNetTimeOut = 16;
+    int32_t mLogLevel = 1;
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;

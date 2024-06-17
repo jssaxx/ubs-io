@@ -314,7 +314,7 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
         if (ptId == UINT16_MAX) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -396,10 +396,12 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
     return quota;
 }
 
-BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene)
+BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut)
 {
     mUpdateView = updateView;
     mScene = static_cast<WorkerScene>(scene);
+    mAlignSize = alignSize;
+    mTimeOut = timeOut;
     BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
     BResult ret = LoadOriginView();
     BIO_TRACE_END(SDK_TRACE_INIT_LOAD_VIEW, ret);
@@ -414,7 +416,8 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene)
         return ret;
     }
 
-    CLIENT_LOG_INFO("Mirror client initialize success, scene:" << mScene << ".");
+    CLIENT_LOG_INFO("Mirror client initialize, scene:" << mScene << ", alignSize:" << mAlignSize <<
+        ", timeOut:" << mTimeOut << ".");
     return BIO_OK;
 }
 
@@ -433,8 +436,6 @@ BResult MirrorClient::Start()
     return LoadAffinityFlow();
 }
 
-static const uint64_t DEFAULT_ALIGNMENT_SIZE = NO_4194304;
-
 BResult MirrorClient::Put(MirrorPut &param)
 {
     bool isRetry = false;
@@ -444,19 +445,20 @@ BResult MirrorClient::Put(MirrorPut &param)
 
     bool isSelf = false;
     char *value = param.value;
-    if (mScene == SCENE_BIGDATA && param.length < DEFAULT_ALIGNMENT_SIZE) {
+    if ((mScene == SCENE_BIGDATA) && (param.length % mAlignSize != 0)) {
+        uint64_t length = (((param.length) + (mAlignSize)-1) & ~((mAlignSize)-1));
         BIO_TRACE_START(SDK_TRACE_PUT_ALIGN_IO);
         CLIENT_LOG_DEBUG("Not align io, key:" << param.key << ", length:" << param.length << ".");
         isSelf = true;
-        if ((param.value = static_cast<char *>(malloc(DEFAULT_ALIGNMENT_SIZE))) == nullptr) {
+        if ((param.value = static_cast<char *>(malloc(length))) == nullptr) {
             BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_ALLOC_FAIL);
             return BIO_ALLOC_FAIL;
         }
-        ret = memcpy_s(param.value, DEFAULT_ALIGNMENT_SIZE, value, param.length);
+        ret = memcpy_s(param.value, length, value, param.length);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Memory copy failed.");
         }
-        param.length = DEFAULT_ALIGNMENT_SIZE;
+        param.length = length;
         BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_OK);
     }
 
@@ -481,7 +483,7 @@ BResult MirrorClient::Put(MirrorPut &param)
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -589,7 +591,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -664,7 +666,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -720,7 +722,7 @@ BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -770,7 +772,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -822,7 +824,7 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
             CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
@@ -859,7 +861,7 @@ BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, O
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
             retryTime = Monotonic::TimeSec() - startTime;
-            if (retryTime < BIO_IO_TIMEOUT_TIME) {
+            if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
                 sleep(BIO_IO_INTERAL_TIME);
