@@ -353,11 +353,11 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
 {
     options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
     options.SetWorkerGroups(GenerateWorkersSetting(opt));
-    options.mrSendReceiveSegSize = (NO_256 * NO_1024); // shm场景的是ep级
+    options.mrSendReceiveSegSize = (NO_64 * NO_1024); // shm场景的是ep级
     options.mrSendReceiveSegCount = NO_1024; // shm场景未使用
     options.heartBeatIdleTime = NO_5;
     options.heartBeatProbeInterval = NO_1;
-    options.qpSendQueueSize = NO_64; // shm场景的是ep级
+    options.qpSendQueueSize = NO_128; // shm场景的是ep级
     options.pollingBatchSize = NO_16;
     options.prePostReceiveSizePerQP = NO_64;
     options.oobType = NET_OOB_UDS;
