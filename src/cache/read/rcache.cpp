@@ -249,7 +249,7 @@ BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPt
         LOG_ERROR("Alloc chunk for read cache key failed.");
         return BIO_ALLOC_FAIL;
     }
-
+    
     return BIO_OK;
 }
 

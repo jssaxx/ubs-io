@@ -2379,6 +2379,7 @@ static int32_t CmZkCreatePoolDir4(PoolInfo *pool)
         free(ptEntryList);
         return CM_ERR;
     }
+    free(ptEntryList);
     return CM_OK;
 }
 
