@@ -41,10 +41,14 @@ typedef struct {
 typedef struct {
     int32_t memFd;
     int32_t serverPid;
-    uint32_t scene;
     uint64_t offset;
     uint64_t length;
     uint32_t mKey;
+    uint32_t scene;
+    uint32_t alignSize;
+    uint32_t ioTimeOut;
+    uint32_t netTimeOut;
+    int32_t logLevel;
 } ShmInitResponse;
 
 /* Query cache resource quota */

@@ -43,6 +43,7 @@ public:
     int32_t Initialize(int32_t mode, int32_t level, uint8_t logType, std::string logFilePath)
     {
         minLogLevel = level;
+        mMode = mode;
         if (mode == 1) {
             LoggerOptions options;
             options.logType = (uint8_t)logType;
@@ -58,17 +59,16 @@ public:
                 options.path = logDir + "/bio_sdk_" + std::to_string(getpid()) + ".log";
             }
 
-            Logger *logger = nullptr;
-            LVOS_TP_START(SDK_BIO_LOG_CREAT_FAIL, &logger, nullptr);
-            logger = Logger::Instance(options);
+            LVOS_TP_START(SDK_BIO_LOG_CREAT_FAIL, &mLogger, nullptr);
+            mLogger = Logger::Instance(options);
             LVOS_TP_END;
-            if (logger == nullptr) {
+            if (mLogger == nullptr) {
                 std::cout << "Failed to create logger instance." << std::endl;
                 return -1;
             }
             int32_t ret = -1;
             LVOS_TP_START(SDK_BIO_LOG_INIT_FAIL, &ret, -1);
-            ret = logger->Init();
+            ret = mLogger->Init();
             LVOS_TP_END;
             if (ret != 0) {
                 std::cout << "Failed to init log, ret:" << ret << "." << std::endl;
@@ -105,6 +105,16 @@ public:
         }
     }
 
+    void ResetLogLevel(int32_t level)
+    {
+        minLogLevel = level;
+        if (mMode == 1) {
+            if (mLogger != nullptr) {
+                mLogger->ResetLogLevel(level);
+            }
+        }
+    }
+
     static BioClientLog *Instance()
     {
         static auto *instance = new BioClientLog();
@@ -114,6 +124,8 @@ public:
 private:
     LogFunc func = nullptr;
     int32_t minLogLevel = 1;
+    int32_t mMode = 0;
+    Logger *mLogger = nullptr;
 };
 
 #ifndef BIO_CLIENT_LOG_FILENAME

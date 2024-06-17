@@ -63,7 +63,7 @@ public:
 
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
-    BResult Initialize(UpdateView updateView, uint32_t scene);
+    BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut);
     BResult Start();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
@@ -322,6 +322,8 @@ private:
     uint16_t mNetProtocol;
     UpdateView mUpdateView { nullptr };
     WorkerScene mScene = SCENE_NONE;
+    uint32_t mAlignSize = NO_1;
+    uint32_t mTimeOut = NO_60;
     std::atomic<uint64_t> *mPtHit = nullptr;
     BioQosPtr mBioQos = nullptr;
     DEFINE_REF_COUNT_VARIABLE

@@ -158,6 +158,32 @@ public:
         mShareAddress = addr;
     }
 
+    void UpdateTimeOut(int16_t timeoutSec)
+    {
+        mTimeout = timeoutSec;
+    }
+
+    BResult UpdateChannelTimeOut(const BioNodeId &targetNodeId)
+    {
+        ChannelPtr ch{ nullptr };
+
+        auto ret = GetCtrlChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            return BIO_ERR;
+        }
+        ch->SetOneSideTimeout(mTimeout);
+        ch->SetTwoSideTimeout(mTimeout);
+        ret = GetDataChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            return BIO_ERR;
+        }
+        ch->SetOneSideTimeout(mTimeout);
+        ch->SetTwoSideTimeout(mTimeout);
+        return BIO_OK;
+    }
+
     void GetTlsOptions(NetOptions options)
     {
         options.enableTls = mOptions.enableTls;

@@ -691,8 +691,12 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
 {
     ShmInitResponse rsp;
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    rsp.scene = config.scene;
     rsp.serverPid = getpid();
+    rsp.scene = config.workScene;
+    rsp.alignSize = config.workIoAlignSize;
+    rsp.ioTimeOut = config.workIoTimeOut;
+    rsp.netTimeOut = config.workNetTimeOut;
+    rsp.logLevel = config.logLevel;
     BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
     auto ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
     if (ret != BIO_OK) {

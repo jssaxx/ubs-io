@@ -39,7 +39,10 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
 
-    AddStrConf(WORK_SCENE, VStrEnum::Create(NET_DATA_PROTOCOL.first, "none||bigdata"));
+    AddStrConf(WORK_SCENE, VStrEnum::Create(WORK_SCENE.first, "none||bigdata"));
+    AddIntConf(WORK_IO_ALIGNSIZE, VIntRange::Create(WORK_IO_ALIGNSIZE.first, NO_1, NO_4194304));
+    AddIntConf(WORK_IO_TIMEOUT, VIntRange::Create(WORK_IO_ALIGNSIZE.first, NO_60, NO_300));
+    AddIntConf(WORK_NET_TIMEOUT, VIntRange::Create(WORK_NET_TIMEOUT.first, NO_16, NO_128));
 
     /* load cluster manager config */
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_2, NO_256));
@@ -162,12 +165,15 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 
     std::string scene = conf->GetStr(WORK_SCENE.first);
     if (scene == "none") {
-        mDaemonConfig.scene = 0;
+        mDaemonConfig.workScene = 0;
     } else if (scene == "bigdata") {
-        mDaemonConfig.scene = NO_1;
+        mDaemonConfig.workScene = NO_1;
     } else {
         LOG_ERROR("Invalid configuration with scene items: " << scene);
     }
+    mDaemonConfig.workIoAlignSize = conf->GetInt(WORK_IO_ALIGNSIZE.first);
+    mDaemonConfig.workIoTimeOut = conf->GetInt(WORK_IO_TIMEOUT.first);
+    mDaemonConfig.workNetTimeOut = conf->GetInt(WORK_NET_TIMEOUT.first);
 
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
