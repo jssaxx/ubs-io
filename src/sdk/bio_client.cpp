@@ -60,8 +60,12 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf
     auto ret = mNetEngine->StartPre(mode, netConf);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to start net service, ret:" << ret << ".");
+        return ret;
     }
-    return ret;
+
+    int32_t logLevel = mNetEngine->GetNegoLogLevel();
+    BioClientLog::Instance()->ResetLogLevel(logLevel);
+    return BIO_OK;
 }
 
 BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
@@ -127,9 +131,11 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 
     mIsUpdating = false;
     UpdateView updateView = [this]() { BioClientUpdateView(); };
-    uint32_t scene = mNetEngine->GetWorkerScene();
+    uint32_t scene = mNetEngine->GetNegoWorkScene();
+    uint32_t alignSize = mNetEngine->GetNegoWorkIoAlignSize();
+    uint32_t timeOut = mNetEngine->GetNegoWorkIoTimeOut();
 
-    auto ret = mMirror->Initialize(updateView, scene);
+    auto ret = mMirror->Initialize(updateView, scene, alignSize, timeOut);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
