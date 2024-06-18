@@ -318,7 +318,7 @@ void RCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
     diskUsed = 0;
     for (uint32_t diskId = 0; diskId < config.diskCaps.size(); diskId++) {
         diskCap += static_cast<uint64_t>(config.diskCaps[diskId]);
-        diskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, diskId);
+        diskUsed += FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, diskId);
     }
     diskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
 }
