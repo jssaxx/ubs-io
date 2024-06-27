@@ -770,6 +770,7 @@ int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLoc
     FileLocationQueryRsp rsp;
     ret = memcpy_s(rsp.hostMaster, NODE_DESC_SIZE, nodeInfo.ip.c_str(), nodeInfo.ip.length());
     ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.hostMaster[nodeInfo.ip.length()] = '\0';
     rsp.portMaster = nodeInfo.port;
 
     id.nodeId = req->slavePtId;
