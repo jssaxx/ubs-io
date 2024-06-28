@@ -1,6 +1,7 @@
 file(GLOB_RECURSE BIO_INTERCEPTOR_CLIENT_SRCS *.cpp *.h)
 
 add_library(ock_iofwd_proxy SHARED ${BIO_INTERCEPTOR_CLIENT_SRCS})
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../../io_interceptor/include)
 install(TARGETS ock_iofwd_proxy DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 target_link_libraries(ock_iofwd_proxy
