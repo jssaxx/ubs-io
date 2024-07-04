@@ -19,4 +19,6 @@ hdt build -s ${asan} -c on \
 && cp -r ../../configs/ . \
 && cp ../../output/boostio/lib/* build/ \
 && hdt run -s ${asan} -c on "--args=\"--gtest_output=xml:report.xml\"" \
-&& hdt report
+&& hdt report \
+&& pwd \
+&& cp ./build/report.xml ../../build/hdt_report
