@@ -36,10 +36,10 @@ public:
     NetChannelMgr() = default;
     ~NetChannelMgr() = default;
 
-    BResult Initialize(uint8_t role);
+    BResult Initialize();
     void UnInitialize();
 
-    BResult AddChannel(NetNode dstNid, ChannelPtr &ch);
+    BResult AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane);
     BResult RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch);
 
     inline BResult GetChannel(uint32_t dstNid, uint32_t pid, ChannelPtr &ch)
@@ -84,7 +84,6 @@ private:
     std::unordered_map<uint64_t, ChannelInfo *> mChannelMgr;
     std::unordered_map<uint64_t, ChannelNode *> mChannelNodeMap;
     std::mutex lock;
-    uint8_t mRole = 0;
 
     DEFINE_REF_COUNT_VARIABLE
 };

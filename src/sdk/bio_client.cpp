@@ -223,6 +223,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
     mMode = mode;
 
+    uint64_t startTime = Monotonic::TimeSec();
     if (BioClientLoggerInit(mode, optConf.logType, optConf.logFilePath) != BIO_OK) {
         return BIO_ERR;
     }
@@ -271,7 +272,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
 
     mStarted = true;
-    CLIENT_LOG_INFO("Boostio client start success.");
+    CLIENT_LOG_INFO("Boostio client start success, cost tine:" << (Monotonic::TimeSec() - startTime) << ".");
     return BIO_OK;
 }
 
