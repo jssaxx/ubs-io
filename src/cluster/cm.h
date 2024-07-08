@@ -70,7 +70,12 @@ union CmNodeId {
     uint32_t whole = 0;
 
     CmNodeId() = default;
-    explicit CmNodeId(uint32_t w) : whole(w) {}
+
+    explicit CmNodeId(uint32_t w) : whole(w)
+    {
+        groupId = (w >> NO_16) & NO_65535;
+        nodeId = w & NO_65535;
+    }
 
     CmNodeId(uint16_t gId, uint16_t vId)
     {
