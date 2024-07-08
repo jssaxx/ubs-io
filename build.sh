@@ -80,7 +80,6 @@ if [[ "$BUILD_TYPE" != 'true' ]];then
     \cp bio/lib/libbio_server.so boostio/lib/.
     \cp bio/lib/libsecurec.so boostio/lib/.
     \cp bio/lib/libbio_interceptor_server.so boostio/lib/.
-    \cp bio/lib/libock_interceptor.so boostio/lib/.
     \cp bio/lib/libock_iofwd_proxy.so boostio/lib/.
     \cp bio/lib/libhse_cryption.so boostio/lib/.
 
