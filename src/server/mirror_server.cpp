@@ -536,10 +536,10 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 
     BIO_TRACE_START(MIRROR_TRACE_GET);
     BResult ret = Cache::Instance().Get(req.key, req.offset, sliceP, writer, rsp.realLen);
+    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
     }
-    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     return ret;
 }
 
@@ -978,10 +978,8 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
-    BIO_TRACE_START(MIRROR_TRACE_PUT_REMOTE_GET_QUOTA);
     rsp.updateQuota = Cache::Instance().GetAdjustWriteQuota();
     rsp.ioStratege = ioStratege;
-    BIO_TRACE_END(MIRROR_TRACE_PUT_REMOTE_GET_QUOTA, BIO_OK);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, &rsp, sizeof(PutResponse));
     return BIO_OK;
 }
@@ -1011,9 +1009,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
     }
 
     GetResponse rsp;
-    BIO_TRACE_START(MIRROR_TRACE_GET_HDL);
     BResult result = Get(*req, rsp, ctx);
-    BIO_TRACE_END(MIRROR_TRACE_GET_HDL, result);
     if (result != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, result, nullptr, 0);
         return BIO_OK;
@@ -1047,9 +1043,7 @@ int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req
         return BIO_CHECK_PT_FAIL;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_DEL_HDL);
     BResult result = Delete(*req);
-    BIO_TRACE_END(MIRROR_TRACE_DEL_HDL, result);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
     return BIO_OK;
 }
@@ -1079,12 +1073,10 @@ int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
     }
 
     ObjStat objInfo;
-    BIO_TRACE_START(MIRROR_TRACE_STAT_HDL);
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
     ret = Stat(*req, objInfo);
     LVOS_TP_END;
-    BIO_TRACE_END(MIRROR_TRACE_STAT_HDL, ret);
     if (ret != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
@@ -1155,12 +1147,10 @@ int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
         return BIO_CHECK_PT_FAIL;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_LOAD_HDL);
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
     ret = Load(*req);
     LVOS_TP_END;
-    BIO_TRACE_END(MIRROR_TRACE_LOAD_HDL, ret);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
     return BIO_OK;
 }
@@ -1221,7 +1211,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
 
     BResult result;
     uint64_t flowId = UINT64_MAX;
-    BIO_TRACE_START(MIRROR_TRACE_CREATEFLOW_HDL);
+    BIO_TRACE_START(MIRROR_TRACE_CREATE_FLOW);
     if (req->opType == 0) {
         result = CreateFlowMaster(req->comm.pid, req->comm.ptId, req->comm.ptv, flowId, req->isDegrade);
         if (UNLIKELY(result != BIO_OK)) {
@@ -1239,7 +1229,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
     } else {
         LOG_ERROR("Invalid op type, opType:" << req->opType << ", ptId:" << req->comm.ptId << ".");
     }
-    BIO_TRACE_END(MIRROR_TRACE_CREATEFLOW_HDL, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_CREATE_FLOW, BIO_OK);
 
     CreateFlowResponse rsp{ flowId, req->isDegrade };
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
@@ -1270,9 +1260,9 @@ int32_t MirrorServer::MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRe
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_DESTROYFLOW_HDL);
+    BIO_TRACE_START(MIRROR_TRACE_DESTROY_FLOW);
     auto result = DestroyFlow(req->comm.pid, req->comm.ptId, req->comm.ptv, req->flowId);
-    BIO_TRACE_END(MIRROR_TRACE_DESTROYFLOW_HDL, result);
+    BIO_TRACE_END(MIRROR_TRACE_DESTROY_FLOW, result);
     if (UNLIKELY(result != BIO_OK)) {
         LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
     }
@@ -1376,9 +1366,7 @@ int32_t MirrorServer::MirrorServerSyncData(ServiceContext &ctx, SyncDataRequest 
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA_HDL);
     BResult ret = SyncData(*req);
-    BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA_HDL, ret);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&ret), sizeof(BResult));
     return BIO_OK;
 }

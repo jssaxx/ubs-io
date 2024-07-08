@@ -728,6 +728,38 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     return BIO_OK;
 }
 
+inline static void StatisticPutIoSize(uint64_t length)
+{
+    if (length <= IO_SIZE_4K) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_1_4K);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_1_4K, BIO_OK);
+    } else if (length <= IO_SIZE_8K) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_4_8K);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_4_8K, BIO_OK);
+    } else if (length <= IO_SIZE_64K) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_8_64K);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_8_64K, BIO_OK);
+    } else if (length <= IO_SIZE_128K) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_64_128K);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_64_128K, BIO_OK);
+    } else if (length <= IO_SIZE_256K) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_128_256K);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_128_256K, BIO_OK);
+    } else if (length <= IO_SIZE_1M) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_256K_1M);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_256K_1M, BIO_OK);
+    } else if (length <= IO_SIZE_2M) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_1_2M);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_1_2M, BIO_OK);
+    } else if (length <= IO_SIZE_4M) {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_2_4M);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_2_4M, BIO_OK);
+    } else {
+        BIO_TRACE_START(MIRROR_TRACE_W_S_4M);
+        BIO_TRACE_END(MIRROR_TRACE_W_S_4M, BIO_OK);
+    }
+}
+
 int32_t Put(PutRequest *req, PutResponse *rsp)
 {
     WCacheSlicePtr sliceP = nullptr;
@@ -752,21 +784,53 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
         sliceP->Deserialize(req->sliceBuf, req->sliceLen);
     }
 
+    StatisticPutIoSize(req->length);
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
     uint32_t ioStratege = 0;
     auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStratege);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
 
-    BIO_TRACE_START(MIRROR_TRACE_PUT_LOCAL_GET_QUOTA);
     rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     rsp->ioStratege = ioStratege;
-    BIO_TRACE_END(MIRROR_TRACE_PUT_LOCAL_GET_QUOTA, BIO_OK);
     return ret;
+}
+
+inline static void StatisticGetIoSize(uint64_t length)
+{
+    if (length <= IO_SIZE_4K) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_1_4K);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_1_4K, BIO_OK);
+    } else if (length <= IO_SIZE_8K) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_4_8K);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_4_8K, BIO_OK);
+    } else if (length <= IO_SIZE_64K) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_8_64K);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_8_64K, BIO_OK);
+    } else if (length <= IO_SIZE_128K) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_64_128K);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_64_128K, BIO_OK);
+    } else if (length <= IO_SIZE_256K) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_128_256K);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_128_256K, BIO_OK);
+    } else if (length <= IO_SIZE_1M) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_256K_1M);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_256K_1M, BIO_OK);
+    } else if (length <= IO_SIZE_2M) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_1_2M);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_1_2M, BIO_OK);
+    } else if (length <= IO_SIZE_4M) {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_2_4M);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_2_4M, BIO_OK);
+    } else {
+        BIO_TRACE_START(MIRROR_TRACE_R_S_4M);
+        BIO_TRACE_END(MIRROR_TRACE_R_S_4M, BIO_OK);
+    }
 }
 
 int32_t Get(GetRequest *req, GetResponse *rsp)
 {
+    StatisticGetIoSize(req->length);
     ServiceContext netCtx;
     return BioServer::Instance()->GetMirrorServer()->Get(*req, *rsp, netCtx);
 }
