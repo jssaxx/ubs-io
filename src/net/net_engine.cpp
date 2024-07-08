@@ -48,14 +48,14 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         NET_LOG_ERROR("Make ctrl channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
-    mCtrlChannelMgr->Initialize(0);
+    mCtrlChannelMgr->Initialize();
 
     mDataChannelMgr = MakeRef<NetChannelMgr>();
     if (mDataChannelMgr == nullptr) {
         NET_LOG_ERROR("Make data channel manager failed.");
         return BIO_ALLOC_FAIL;
     }
-    mDataChannelMgr->Initialize(1);
+    mDataChannelMgr->Initialize();
 
     mConnector = MakeRef<NetConnector>(this);
     if (mConnector == nullptr) {
@@ -553,16 +553,16 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     newChannel->SetTwoSideTimeout(mTimeout);
 
     if (netPayload.srcNodeId.pid == 0) {
-        NET_LOG_INFO("No needed add channel " << newChannel->Id() << ", peer connected nid " <<
+        NET_LOG_INFO("Receive new channel, not needed add,  channel " << newChannel->Id() << ", peer connected nid " <<
             netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " << ipPort << ", payload " <<
-            payload);
+            payload << ".");
         return BIO_OK;
     }
 
     if (isCtrl) {
-        mCtrlChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
+        mCtrlChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), 0);
     } else {
-        mDataChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel));
+        mDataChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), 1);
     }
     NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", peer connected from:" << netPayload.srcNodeId.nid <<
         "-" << netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload " << payload << ".");
@@ -572,7 +572,8 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
 void NetEngine::ChannelBroken(const ChannelPtr &ch)
 {
     NetChannelUpCtx ctx(ch->UpCtx());
-    NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << ctx.peerId << ".");
+    NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << ctx.peerId << ", panel:" <<
+        ctx.IsCtrlPanel() << ".");
 
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
     if (ctx.IsCtrlPanel()) {
