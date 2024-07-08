@@ -37,7 +37,7 @@ BResult ConnectTask::DoConnect()
                 ", pid:" << mConnectInfo.peerId.pid << ".");
             return BIO_ERR;
         }
-        mEngine->GetCtrlChannelMgr()->AddChannel(mConnectInfo.peerId, ctrlChanel);
+        mEngine->GetCtrlChannelMgr()->AddChannel(mConnectInfo.peerId, ctrlChanel, 0);
     } else {
         NET_LOG_INFO("Exist connect ctrl plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
             mConnectInfo.peerId.pid << ".");
@@ -51,7 +51,7 @@ BResult ConnectTask::DoConnect()
                 ", pid:" << mConnectInfo.peerId.pid << ".");
             return BIO_ERR;
         }
-        mEngine->GetDataChannelMgr()->AddChannel(mConnectInfo.peerId, dataChanel);
+        mEngine->GetDataChannelMgr()->AddChannel(mConnectInfo.peerId, dataChanel, 1);
     } else if (ret != BIO_OK) {
         NET_LOG_INFO("Exist connect data plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
             mConnectInfo.peerId.pid << ".");

@@ -57,6 +57,15 @@ constexpr uint64_t NO_U64_1 = 1;
 
 constexpr uint32_t IP_SIZE = 32;
 constexpr uint32_t DEVICE_SIZE = 16;
+
+constexpr size_t IO_SIZE_4K = 4 * 1024;
+constexpr size_t IO_SIZE_8K = 8 * 1024;
+constexpr size_t IO_SIZE_64K = 64 * 1024;
+constexpr size_t IO_SIZE_128K = 128 * 1024;
+constexpr size_t IO_SIZE_256K = 256 * 1024;
+constexpr size_t IO_SIZE_1M = 1024 * 1024;
+constexpr size_t IO_SIZE_2M = 2 * 1024 * 1024;
+constexpr size_t IO_SIZE_4M = 4 * 1024 * 1024;
 }
 }
 

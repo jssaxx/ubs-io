@@ -101,8 +101,7 @@ BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceR
 BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
-    BResult ret;
-
+    BResult ret = BIO_OK;
     // degraded write through to underfs
     if (UNLIKELY(mIsDegrade)) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_BYPASS);
@@ -119,18 +118,21 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
         LOG_ERROR("Memory cache write failed.");
         return ret;
     }
+
+    // Add evict queue.
     mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(destSliceRef);
 
-    RealIoStrategy ioStratege;
-    PutSetIoStratege(ioStratege, attr);
-
     // put it disk tier cache.
+    RealIoStrategy ioStratege = WRITE_DEFALUT;
+    PutSetIoStratege(ioStratege, attr);
     if (ioStratege <= WRITE_MEM_BACK) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_MEM_BACK);
-        StartEvictTask(WCACHE_MEMORY); // write back
+        StartEvictTask(WCACHE_MEMORY);
         BIO_TRACE_END(WCACHE_TRACE_PUT_MEM_BACK, 0);
         return BIO_OK;
     }
+
+    // write thought
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     if (sliceRef != nullptr) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_DISK_BACK);
