@@ -64,6 +64,11 @@ public:
         return mLogLevel;
     }
 
+    inline bool GetCrcFlag() const
+    {
+        return mEnableCrc;
+    }
+
     inline NetEnginePtr GetNetEngine() const
     {
         return mNetEngine;
@@ -165,6 +170,7 @@ private:
     uint32_t mWorkIoTimeOut = 60;
     uint32_t mWorkNetTimeOut = 16;
     int32_t mLogLevel = 1;
+    bool mEnableCrc = { false };
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;

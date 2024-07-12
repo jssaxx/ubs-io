@@ -12,6 +12,7 @@
 #include "bio_trace.h"
 #include "cache_overload_ctrl.h"
 #include "bio_config_instance.h"
+#include "bio_crc_util.h"
 #include "bio_server.h"
 
 namespace ock {
@@ -531,6 +532,7 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
         ChkTrueExNot(ret == BIO_OK);
     };
 
+    diskMetaDataSlice.dataSlice->SetDataCrc(slice->GetDataCrc());
     sliceRef->SetSlice(diskMetaDataSlice.dataSlice, callback);
     BIO_TRACE_END(WCACHE_TRACE_EVICT2DISK, 0);
     return BIO_OK;
@@ -650,6 +652,15 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
     mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
     auto ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
+
+    if (config.enableCrc) {
+        ret = writeSlice->VerifyDataCrc(slice->GetDataCrc(), 0, writeSlice->GetLength(), writeSlice.Get());
+        if (ret != BIO_OK) {
+            LOG_ERROR("Evict to Rcache verify the CRC fail, key: " << key << ", ret: "<< ret);
+            return ret;
+        }
+    }
+
     ret = mRCacheManager->Put(ptId, key, writeSlice);
     ChkTrue(ret == BIO_OK, ret, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key);
     return BIO_OK;

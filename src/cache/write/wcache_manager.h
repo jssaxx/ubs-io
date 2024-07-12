@@ -115,6 +115,7 @@ private:
     RCacheManagerPtr mRCacheManager;
 
     bool mRunning = true;
+    bool mEnableCrc = false;
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
     ExecutorServicePtr mGcEvictService{ nullptr };
     ExecutorServicePtr mRetryEvictService{ nullptr };

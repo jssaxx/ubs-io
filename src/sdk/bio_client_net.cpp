@@ -175,6 +175,7 @@ BResult BioClientNet::ShmInit()
     mWorkIoTimeOut = rsp.ioTimeOut;
     mWorkNetTimeOut = rsp.netTimeOut;
     mLogLevel = rsp.logLevel;
+    mEnableCrc = rsp.enableCrc;
 
     CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignsize:" << mWorkIoAlignSize << ", io timeout:" <<
         mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");

@@ -163,7 +163,7 @@ private:
     std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
 
     bool mIsNormal{ true };
-
+    bool mCrcEnable{ true };
     uint64_t mFlowId;
     uint64_t mPtId;
     uint64_t mPtv;

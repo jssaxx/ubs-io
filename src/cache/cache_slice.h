@@ -50,19 +50,19 @@ public:
         return Slice::ToString();
     }
 
-    uint32_t GetSerializeLen() override
+    uint64_t GetSerializeLen() override
     {
-        uint32_t len = 0;
+        uint64_t len = 0;
         len += sizeof(mPtId);
         len += Slice::GetSerializeLen();
         return len;
     }
 
-    BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) override
+    BResult Serialize(char *data, uint64_t dataLen, uint64_t &length) override
     {
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-        uint32_t pos = 0;
-        uint32_t cpyLen = dataLen;
+        uint64_t pos = 0;
+        uint64_t cpyLen = dataLen;
         auto ret = memcpy_s(data + pos, cpyLen, &mPtId, sizeof(mPtId));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mPtId);
@@ -75,9 +75,9 @@ public:
         return BIO_OK;
     }
 
-    BResult Deserialize(char *data, uint32_t length) override
+    BResult Deserialize(char *data, uint64_t length) override
     {
-        uint32_t pos = 0;
+        uint64_t pos = 0;
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         ChkTrue(length >= pos + sizeof(mPtId), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mPtId):" << pos + sizeof(mPtId));
@@ -133,9 +133,9 @@ public:
         return Slice::ToString();
     }
 
-    uint32_t GetSerializeLen() override
+    uint64_t GetSerializeLen() override
     {
-        uint32_t len = 0;
+        uint64_t len = 0;
         len += sizeof(mFlowId);
         len += sizeof(mOffsetInFlow);
         len += sizeof(mIndexInFlow);
@@ -143,11 +143,11 @@ public:
         return len;
     }
 
-    BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) override
+    BResult Serialize(char *data, uint64_t dataLen, uint64_t &length) override
     {
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-        uint32_t pos = 0;
-        uint32_t cpyLen = dataLen;
+        uint64_t pos = 0;
+        uint64_t cpyLen = dataLen;
         auto ret = memcpy_s(data + pos, cpyLen, &mFlowId, sizeof(mFlowId));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mFlowId);
@@ -168,9 +168,9 @@ public:
         return BIO_OK;
     }
 
-    BResult Deserialize(char *data, uint32_t length) override
+    BResult Deserialize(char *data, uint64_t length) override
     {
-        uint32_t pos = 0;
+        uint64_t pos = 0;
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         ChkTrue(length >= pos + sizeof(mFlowId), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowId):" << pos + sizeof(mFlowId));

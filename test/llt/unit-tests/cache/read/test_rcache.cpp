@@ -251,7 +251,7 @@ TEST_F(TestRCache, test_cache_init_rcache_init_err)
 TEST_F(TestRCache, test_rcache_slice)
 {
     LOG_INFO("test_rcache_slice");
-    uint32_t length = NO_1024;
+    uint64_t length = NO_1024;
     char *buffer = static_cast<char*>(malloc(length));
     FlowAddr flowAddr;
     flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
@@ -268,7 +268,7 @@ TEST_F(TestRCache, test_rcache_slice)
     ret = readSlicePtr->Deserialize(nullptr, length);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
-    uint32_t outLength = 0;
+    uint64_t outLength = 0;
     char* sliceBuf = static_cast<char *>(malloc(length));
     ret = readSlicePtr->Serialize(sliceBuf, length, outLength);
     EXPECT_EQ(ret, BIO_OK);
@@ -285,7 +285,7 @@ TEST_F(TestRCache, test_rcache_slice)
 TEST_F(TestRCache, test_wcache_slice)
 {
     LOG_INFO("test_wcache_slice");
-    uint32_t length = NO_1024;
+    uint64_t length = NO_1024;
     char *buffer = static_cast<char*>(malloc(length));
     FlowAddr flowAddr;
     flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);

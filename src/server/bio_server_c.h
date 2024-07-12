@@ -18,6 +18,8 @@ void BioServerExit();
 
 uintptr_t GetBioServerNet();
 
+bool GetCrcFlag();
+
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
 int32_t GetResourceInfo(QueryResourceRequest *req, QueryResourceResponse *rsp);
