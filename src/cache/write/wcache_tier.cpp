@@ -6,6 +6,8 @@
 #include "flow_manager.h"
 #include "securec.h"
 #include "cache_flow.h"
+#include "bio_crc_util.h"
+#include "bio_config_instance.h"
 #include "cm.h"
 
 namespace ock {
@@ -73,6 +75,14 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
         mDataFlow->GetFlowId() << " ret:" << res);
     ret = sliceReader(slice.Get(), dataSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
+
+    if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
+        ret = dataSlice->VerifyDataCrc(slice->GetDataCrc(), 0, dataSlice->GetLength(), dataSlice.Get());
+        if (ret != BIO_OK) {
+            LOG_ERROR("Server put failed to verify the CRC fail, key:" << key << ", ret:" << ret);
+            return ret;
+        }
+    }
 
     destSliceRef = MakeRef<WCacheSliceRef>(dataSlice);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_RETRY);

@@ -28,7 +28,7 @@ enum Error : int32_t {
 
     BIO_INNER_RETRY = 14,
     BIO_NEED_WAIT = 15,
-
+    BIO_CRC_ERR = 16,
     BIO_NET_RETRY = 100,
 
     BIO_DISK_IOERR = 201,
