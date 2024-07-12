@@ -13,11 +13,12 @@
 #include "bio_client_agent.h"
 #include "bio_client_net.h"
 #include "bio_monotonic.h"
+#include "bio_crc_util.h"
 #include "mirror_client.h"
 #ifdef USE_DEBUG_TOOLS
 #include <dlfcn.h>
-#include "bio_tracepoint_helper.h"
 #endif
+
 using namespace ock::bio;
 
 static const uint32_t IO_EXTRATEGE_TIME = 3; // IO策略3s过期
@@ -396,8 +397,13 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
     return quota;
 }
 
-BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut)
+BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize,
+    uint32_t timeOut, bool enableCrc)
 {
+    mEnableCrc = enableCrc;
+    if (mEnableCrc) {
+        CLIENT_LOG_INFO("Crc verify start-up.");
+    }
     mUpdateView = updateView;
     mScene = static_cast<WorkerScene>(scene);
     mAlignSize = alignSize;
@@ -695,6 +701,7 @@ BResult MirrorClient::GetImpl(MirrorGet &param, uint64_t &realLen)
     req.offset = param.offset;
     req.length = param.length;
     req.isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
+    req.enableCrc = mEnableCrc;
     BIO_TRACE_START(SDK_TRACE_GET_SEND);
     ret = SendGetRequest(ptEntry, req, param.value, realLen);
     BIO_TRACE_END(SDK_TRACE_GET_SEND, ret);
@@ -1275,6 +1282,11 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
             param.length << ", flowId:" << param.flowId << ", flowOffset:" << param.flowOffset << ".");
         return ret;
     }
+    if (mEnableCrc) {
+        req->dataCrc = BioCrcUtil::Crc32(param.value, param.length);
+    } else {
+        req->dataCrc = 0;
+    }
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
     ret = SendPutRequestImpl(ptEntry, param, req, updateQuota);
@@ -1314,6 +1326,14 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, ret);
         if (UNLIKELY(ret != 0)) {
             CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
+        }
+        if (req.enableCrc) {
+            uint32_t currentCrc = rsp.dataCrc != BioCrcUtil::Crc32(value, realLen);
+            if (currentCrc != rsp.dataCrc) {
+                CLIENT_LOG_ERROR("Client Get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
+                rsp.dataCrc << ", current crc:" << currentCrc);
+                return BIO_CRC_ERR;
+            }
         }
     }
     net::BioClientNet::Instance()->Free(mrInfo.address);

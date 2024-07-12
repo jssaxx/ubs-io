@@ -134,8 +134,14 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     uint32_t scene = mNetEngine->GetNegoWorkScene();
     uint32_t alignSize = mNetEngine->GetNegoWorkIoAlignSize();
     uint32_t timeOut = mNetEngine->GetNegoWorkIoTimeOut();
+    bool enableCrc = false;
+    if (mode == CONVERGENCE) {
+        enableCrc = agent::BioClientAgent::Instance()->GetConfigCrcFlag();
+    } else {
+        enableCrc = mNetEngine->GetCrcFlag();
+    }
 
-    auto ret = mMirror->Initialize(updateView, scene, alignSize, timeOut);
+    auto ret = mMirror->Initialize(updateView, scene, alignSize, timeOut, enableCrc);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }

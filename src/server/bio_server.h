@@ -203,6 +203,16 @@ public:
         return mCm;
     }
 
+    inline bool GetCrcFlag()
+    {
+        return mConfig->GetDaemonConfig().enableCrc;
+    }
+
+    inline BioConfigPtr GetConfig()
+    {
+        return mConfig;
+    }
+
     inline CmNodeId GetLocalNid()
     {
         return mLocalNid;

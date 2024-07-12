@@ -24,6 +24,7 @@ class BioClientAgent {
 public:
     using BioServerStartFuncPtr = int32_t (*)();
     using BioServerExitFuncPtr = void (*)();
+    using GetBioServerCrcFlagFuncPtr = bool (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
     using GetLocalResQuotaFuncPtr = int32_t (*)(QueryResourceRequest *, QueryResourceResponse *);
@@ -62,6 +63,8 @@ public:
         netEngine = reinterpret_cast<NetEngine *>(netPtr);
         return netEngine;
     }
+
+    bool GetConfigCrcFlag();
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
 
@@ -144,6 +147,7 @@ private:
     void *handler = nullptr;
     BioServerStartFuncPtr startOp = nullptr;
     BioServerExitFuncPtr exitOp = nullptr;
+    GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
     GetLocalResQuotaFuncPtr getResourceOp = nullptr;
