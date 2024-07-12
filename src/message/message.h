@@ -49,6 +49,7 @@ typedef struct {
     uint32_t ioTimeOut;
     uint32_t netTimeOut;
     int32_t logLevel;
+    bool enableCrc;
 } ShmInitResponse;
 
 /* Query cache resource quota */
@@ -204,7 +205,8 @@ typedef struct {
     bool memFromServer;
     bool isDegrade;
     uint32_t ioStratege;
-    uint32_t sliceLen;
+    uint64_t sliceLen;
+    uint32_t dataCrc;
     char sliceBuf[0];
 } PutRequest;
 
@@ -224,6 +226,7 @@ typedef struct {
     uintptr_t address;
     uint64_t size;
     uint32_t mrKey;
+    bool enableCrc;
     bool isConvDeploy;
 } GetRequest;
 
@@ -235,6 +238,7 @@ typedef struct {
     uint64_t addrOffset[SLICE_ADDR_SIZE];
     uint64_t addrLen[SLICE_ADDR_SIZE];
     uint64_t realLen;
+    uint32_t dataCrc;
 } GetResponse;
 
 /* Delete */

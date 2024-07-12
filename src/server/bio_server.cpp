@@ -13,6 +13,7 @@
 #include "flow_manager.h"
 #include "bio_server_c.h"
 #include "interceptor_server.h"
+#include "bio_crc_util.h"
 #include "bio_server.h"
 #ifdef USE_DEBUG_TOOLS
 #include "cli.h"
@@ -642,6 +643,12 @@ uintptr_t GetBioServerNet()
     return reinterpret_cast<uintptr_t>(netEngine.Get());
 }
 
+bool GetCrcFlag()
+{
+    return BioServer::Instance()->GetCrcFlag();
+}
+
+
 int32_t GetLocalNid(GetLocalNidResponse *rsp)
 {
     CmNodeId localNid = BioServer::Instance()->GetLocalNid();
@@ -703,7 +710,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
         return static_cast<int32_t>(BIO_INNER_ERR);
     }
 
-    uint32_t sliceLen = sliceP->GetSerializeLen();
+    uint64_t sliceLen = sliceP->GetSerializeLen();
     auto *tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
     if (UNLIKELY(tmp == nullptr)) {
         LOG_ERROR("Alloc memory failed, len:" << sizeof(GetSliceResponse) + sliceLen << ".");
@@ -718,7 +725,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
         (*rsp)->addr[i].chunkLen = addrVec[i].chunkLen;
     }
     (*rsp)->sliceLen = sliceLen;
-    uint32_t outSliceLen = 0;
+    uint64_t outSliceLen = 0;
     sliceP->Serialize((*rsp)->sliceBuf, (*rsp)->sliceLen, outSliceLen);
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
@@ -773,6 +780,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
         }
+        sliceP->SetDataCrc(req->dataCrc);
     } else {
         LVOS_TP_START(PUT_ALLOC_SLICE_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
@@ -782,6 +790,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
             return BIO_ALLOC_FAIL;
         }
         sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        sliceP->SetDataCrc(req->dataCrc);
     }
 
     StatisticPutIoSize(req->length);

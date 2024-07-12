@@ -9,6 +9,7 @@
 #include "message_op.h"
 #include "bio_trace.h"
 #include "bio_client_net.h"
+#include "bio_crc_util.h"
 #include "bio_client_agent.h"
 #ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
@@ -70,6 +71,9 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((exitOp = reinterpret_cast<BioServerExitFuncPtr>(LoadFunction("BioServerExit"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getCrcFlag = reinterpret_cast<GetBioServerCrcFlagFuncPtr>(LoadFunction("GetCrcFlag"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {
@@ -162,6 +166,11 @@ BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t sla
     }
 
     return BIO_OK;
+}
+
+bool BioClientAgent::GetConfigCrcFlag()
+{
+    return getCrcFlag();
 }
 
 BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
@@ -443,6 +452,14 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
                 CLIENT_LOG_ERROR("Send async free request failed, ret:" << ret << ".");
             }
         }
+        if (req.enableCrc && ret == BIO_OK) {
+            uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
+            if (rsp.dataCrc != currentCrc) {
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, << key:"<< req.key << ", origin crc:" <<
+                    rsp.dataCrc << ", current crc:" << currentCrc);
+                ret =  BIO_CRC_ERR;
+            }
+        }
     }
     return ret;
 }
@@ -456,6 +473,14 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
         realLen = rsp.realLen;
+        if (req.enableCrc && ret == BIO_OK) {
+            uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
+            if (rsp.dataCrc != currentCrc) {
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key <<
+                    ", origin crc:" << rsp.dataCrc << ", current crc:" << currentCrc);
+                ret = BIO_CRC_ERR;
+            }
+        }
         return ret;
     } else {
         return SendGetRequestLocal(req, value, realLen);

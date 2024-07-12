@@ -2,9 +2,11 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
 
-#include "slice.h"
 #include "bio_log.h"
+#include "bio_crc_util.h"
+#include "bdm_core.h"
 #include "securec.h"
+#include "slice.h"
 
 namespace ock {
 namespace bio {
@@ -75,9 +77,10 @@ SlicePtr Slice::Split(uint64_t offset, uint64_t length)
     return MakeRef<Slice>(length, newAddrs, mFlowType);
 }
 
-uint32_t Slice::GetSerializeLen()
+uint64_t Slice::GetSerializeLen()
 {
-    uint32_t len = 0;
+    uint64_t len = 0;
+    len += sizeof(mdataCrc);
     len += sizeof(mFlowType);
     len += sizeof(mLength);
     size_t vsize = mAddrs.size();
@@ -86,12 +89,17 @@ uint32_t Slice::GetSerializeLen()
     return len;
 }
 
-BResult Slice::Serialize(char *data, uint32_t dataLen, uint32_t &length)
+BResult Slice::Serialize(char *data, uint64_t dataLen, uint64_t &length)
 {
-    uint32_t pos = 0;
-    uint32_t cpyLen = dataLen;
+    uint64_t pos = 0;
+    uint64_t cpyLen = dataLen;
     ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
-    auto ret = memcpy_s(data + pos, cpyLen, &mFlowType, sizeof(mFlowType));
+    BResult ret = BIO_OK;
+    ret = memcpy_s(data + pos, cpyLen, &mdataCrc, sizeof(mdataCrc));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
+    pos += sizeof(mdataCrc);
+    cpyLen -= sizeof(mdataCrc);
+    ret = memcpy_s(data + pos, cpyLen, &mFlowType, sizeof(mFlowType));
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
     pos += sizeof(mFlowType);
     cpyLen -= sizeof(mFlowType);
@@ -114,10 +122,14 @@ BResult Slice::Serialize(char *data, uint32_t dataLen, uint32_t &length)
     return BIO_OK;
 }
 
-BResult Slice::Deserialize(char *data, uint32_t length)
+BResult Slice::Deserialize(char *data, uint64_t length)
 {
-    uint32_t pos = 0;
+    uint64_t pos = 0;
     ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
+    ChkTrue(length >= pos + sizeof(mdataCrc), BIO_INVALID_PARAM,
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mdataCrc));
+    memcpy_s(&mdataCrc, sizeof(mdataCrc), data + pos, sizeof(mdataCrc));
+    pos += sizeof(mdataCrc);
     ChkTrue(length >= pos + sizeof(mFlowType), BIO_INVALID_PARAM,
         "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mFlowType));
     memcpy_s(&mFlowType, sizeof(mFlowType), data + pos, sizeof(mFlowType));
@@ -151,6 +163,59 @@ std::string Slice::ToString()
         ss << "(" << addr.chunkId << "," << addr.chunkOffset << "," << addr.chunkLen << ")";
     }
     return ss.str();
+}
+
+BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_t dataLength)
+{
+    char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, mLength));
+    ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
+    uint64_t offset = 0;
+    if (mFlowType == FLOW_MEMORY) {
+        for (auto fromAddr : mAddrs) {
+            auto ret = memcpy_s(reinterpret_cast<void *>(value + offset), fromAddr.chunkLen,
+                reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Failed to copy data, length:" << fromAddr.chunkLen);
+                free(value);
+                value = nullptr;
+                return ret;
+            }
+            offset += fromAddr.chunkLen;
+        }
+    } else {
+        for (auto fromAddr : mAddrs) {
+            auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(value + offset),
+                fromAddr.chunkLen);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
+                    " to memory chunkId:" << value + offset << " by length:" << fromAddr.chunkLen);
+                free(value);
+                value = nullptr;
+                return BIO_DISK_IOERR;
+            }
+            offset += fromAddr.chunkLen;
+        }
+    }
+
+    valueCrc = BioCrcUtil::Crc32(value + dataOffset, dataLength);
+    free(value);
+    value = nullptr;
+    return BIO_OK;
+}
+
+BResult Slice::VerifyDataCrc(uint32_t originCrc, uint64_t dataOffset, uint64_t dataLength, Slice *slice)
+{
+    uint32_t currentCrc = 0;
+    auto ret = CalculateDataCrc(currentCrc, dataOffset, dataLength);
+    if (ret != BIO_OK || originCrc != currentCrc) {
+        LOG_ERROR("slice verify the CRC fail, ret:" << ret << " origin crc:" <<
+            originCrc << ", current crc:" << currentCrc);
+        return ret != BIO_OK ? ret : BIO_CRC_ERR;
+    }
+    if (slice != nullptr) {
+        slice->SetDataCrc(currentCrc);
+    }
+    return BIO_OK;
 }
 }
 }

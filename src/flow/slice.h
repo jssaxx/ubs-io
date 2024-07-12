@@ -27,11 +27,11 @@ public:
 
     virtual std::string ToString() = 0;
 
-    virtual uint32_t GetSerializeLen() = 0;
+    virtual uint64_t GetSerializeLen() = 0;
 
-    virtual BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) = 0;
+    virtual BResult Serialize(char *data, uint64_t dataLen, uint64_t &length) = 0;
 
-    virtual BResult Deserialize(char *data, uint32_t length) = 0;
+    virtual BResult Deserialize(char *data, uint64_t length) = 0;
 };
 
 class Slice : public SliceSerializer {
@@ -65,11 +65,25 @@ public:
 
     std::string ToString() override;
 
-    uint32_t GetSerializeLen() override;
+    uint64_t GetSerializeLen() override;
 
-    BResult Serialize(char *data, uint32_t dataLen, uint32_t &length) override;
+    BResult Serialize(char *data, uint64_t dataLen, uint64_t &length) override;
 
-    BResult Deserialize(char *data, uint32_t length) override;
+    BResult Deserialize(char *data, uint64_t length) override;
+
+    inline uint32_t GetDataCrc() const
+    {
+        return mdataCrc;
+    }
+
+    inline void SetDataCrc(uint32_t crc)
+    {
+        mdataCrc = crc;
+    }
+
+    BResult CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_t dataLength);
+
+    BResult VerifyDataCrc(uint32_t originCrc, uint64_t dataOffset, uint64_t dataLength, Slice *slice);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -77,6 +91,7 @@ protected:
     DEFINE_REF_COUNT_VARIABLE;
 
 private:
+    uint32_t mdataCrc{ 0 };
     FlowType mFlowType{ FLOW_MEMORY };
     uint64_t mLength{ 0 };
     std::vector<FlowAddr> mAddrs;

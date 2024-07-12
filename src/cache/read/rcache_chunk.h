@@ -116,8 +116,19 @@ public:
         return oss.str();
     }
 
+    inline void SetDataCrc(uint32_t crc)
+    {
+        dataCrc = crc;
+    }
+
+    inline uint32_t GetDataCrc()
+    {
+        return dataCrc;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS
 private:
+    uint32_t dataCrc{ 0 };
     Key mKey;
     RCacheValue mValue;
     uint32_t aTime;

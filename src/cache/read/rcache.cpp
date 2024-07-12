@@ -10,6 +10,7 @@
 #include "rcache_statistic.h"
 #include "underfs.h"
 #include "bio_trace.h"
+#include "bio_crc_util.h"
 #include "rcache.h"
 
 using namespace ock::bio;
@@ -199,6 +200,7 @@ BResult RCache::Initialize()
     }
 
     mFlowId = CacheFlowIdManager::GenOutFlowId(tempIds[0]);
+    mCrcEnable = BioConfig::Instance()->GetDaemonConfig().enableCrc;
     return BIO_OK;
 }
 
@@ -371,10 +373,11 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     chunk->lock.lock();
     chunk->SetMqType(MQ_COLD);
     chunk->SetTierType(READ_CACHE_TIER_MEM);
+    chunk->SetDataCrc(slice->GetDataCrc());
 
     LOG_DEBUG("Read cache Put, key:" << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
         chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset << ", indexofflow:" <<
-        chunk->GetValue().indexInFlow << ", flowId:" << mFlowId);
+        chunk->GetValue().indexInFlow << ", flowId:" << mFlowId << ", crc:" << chunk->GetDataCrc());
 
     BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_INDEX);
     ret = InsertToIndex(chunk->GetKey(), chunk);
@@ -432,6 +435,28 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
             chunk->GetValue().indexInFlow << ".");
         chunk->lock.unlock();
         return ret;
+    }
+
+    if (mCrcEnable) {
+        uint32_t readCrc = 0;
+        WCacheSlicePtr completeSlice = nullptr;
+        ret = GetSliceFromChunk(chunk->GetTierType(), chunk, completeSlice);
+        if (UNLIKELY(ret != BIO_OK || completeSlice == nullptr)) {
+            LOG_ERROR("Server rcache get verify the Crc fail, read cache alloc slice failed, ret:" <<
+                ret << ", key:" << key << ".");
+            return BIO_ALLOC_FAIL;
+        }
+        ret = completeSlice->VerifyDataCrc(chunk->GetDataCrc(), 0, completeSlice->GetLength(), nullptr);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Server rcache get verify the Crc fail, ret:" << ret << ", key:" << key << ".");
+            return ret;
+        }
+        ret = newSlicePtr->CalculateDataCrc(readCrc, offset, realLen);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Server rcache get verify the CRC fail, key:"<< chunk->GetKey() <<", ret: " << ret);
+            return ret;
+        }
+        slice->SetDataCrc(readCrc);
     }
 
     BIO_TRACE_START(RCACHE_TRACE_GET_WRITE_DATA);
@@ -521,11 +546,15 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
         delete[] value;
         return BIO_ALLOC_FAIL;
     }
-    delete[] value;
 
+    if (mCrcEnable) {
+        chunk->SetDataCrc(BioCrcUtil::Crc32(value, realLen));
+    }
     chunk->lock.lock();
     chunk->SetMqType(MQ_COLD);
     chunk->SetTierType(READ_CACHE_TIER_MEM);
+
+    delete[] value;
     ret = InsertToIndex(chunk->GetKey(), chunk);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_EXISTS)) {
         chunk->lock.unlock();
@@ -690,6 +719,7 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             return BIO_ALLOC_FAIL;
         }
 
+        newChunk->SetDataCrc(chunk->GetDataCrc());
         DelFromTruncateList(READ_CACHE_TIER_MEM, chunk);
         DelFromEvictList(READ_CACHE_TIER_MEM, chunk.Get()->GetMqType(), chunk);
         chunk->SetValue(newChunk->GetValue());

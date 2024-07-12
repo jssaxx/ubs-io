@@ -82,6 +82,9 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/hseceasy/hse/cryption/include/cryption
         ${PROJECT_3RDPARTY_BIN_DIR}/hseceasy/hse/utils
 )
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    add_compile_options(-march=armv8-a+crc)
+endif()
 
 if (${DEBUG_UT} MATCHES "ON")
     add_compile_options(-ftest-coverage -fprofile-arcs)

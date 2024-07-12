@@ -7,6 +7,8 @@
 #include "bio_trace.h"
 #include "bio_monotonic.h"
 #include "flow_id_allocator.h"
+#include "bio_crc_util.h"
+#include "bio_config_instance.h"
 #include "cache_flow.h"
 #ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
@@ -30,6 +32,7 @@ constexpr uint32_t BROKEN_INTERAL_TIME = 1000000;
 
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
+    mEnableCrc = BioConfig::Instance()->GetDaemonConfig().enableCrc;
     mCacheIndex = MakeRef<WCacheIndex>();
     ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
 
@@ -384,14 +387,33 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     if (UNLIKELY(sliceRef == nullptr)) {
         return BIO_NOT_EXISTS;
     }
+    BResult ret = BIO_OK;
+    if (mEnableCrc) {
+        WCacheSlicePtr originSlice = sliceRef->GetSlice();
+        ret = originSlice->VerifyDataCrc(originSlice->GetDataCrc(), 0, originSlice->GetLength(), nullptr);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Server wcache get verify the CRC fail, key:"<< key << ", ret:" << ret);
+            return ret;
+        }
+    }
 
     BIO_TRACE_START(WCACHE_TRACE_GET_READ_DATA);
-    auto ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
+    ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
     BIO_TRACE_END(WCACHE_TRACE_GET_READ_DATA, ret);
     sliceRef->Release();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("WCache Read data failed, key :" << key << ", offset:" << offset << ", length:" <<
             sliceRef->GetSlice()->GetLength() << ".");
+    } else {
+        if (mEnableCrc) {
+            uint32_t readCrc;
+            ret = sliceRef->GetSlice()->CalculateDataCrc(readCrc, offset, realLen);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Server rcache get verify the CRC fail, key:"<< key <<", ret: " << ret);
+                return ret;
+            }
+            slice->SetDataCrc(readCrc);
+        }
     }
     return ret;
 }

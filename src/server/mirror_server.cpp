@@ -9,6 +9,7 @@
 #include "bio_trace.h"
 #include "bio_functions.h"
 #include "message_op.h"
+#include "bio_crc_util.h"
 #include "mirror_server.h"
 
 using namespace ock::bio;
@@ -539,6 +540,10 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
+    } else {
+        if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
+            rsp.dataCrc = BioCrcUtil::Crc32(reinterpret_cast<void*>(req.address), rsp.realLen);
+        }
     }
     return ret;
 }
@@ -697,6 +702,7 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.ioTimeOut = config.workIoTimeOut;
     rsp.netTimeOut = config.workNetTimeOut;
     rsp.logLevel = config.logLevel;
+    rsp.enableCrc = config.enableCrc;
     BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
     auto ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
     if (ret != BIO_OK) {
@@ -960,6 +966,7 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
             return BIO_OK;
         }
+        sliceP->SetDataCrc(req->dataCrc);
     } else {
         LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
@@ -970,6 +977,7 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             return BIO_OK;
         }
         sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        sliceP->SetDataCrc(req->dataCrc);
     }
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
@@ -1302,7 +1310,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
     }
-    uint32_t sliceLen = sliceP->GetSerializeLen();
+    uint64_t sliceLen = sliceP->GetSerializeLen();
     uint8_t *tmp = nullptr;
     LVOS_TP_START(GET_SLICE_ALLOC_FAIL, &tmp, nullptr);
     tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
@@ -1330,7 +1338,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
             BioServer::Instance()->GetNetEngine()->GetAddressOffset(addrVec[i].chunkId + addrVec[i].chunkOffset);
     }
     rsp->sliceLen = sliceLen;
-    uint32_t outSliceLen = 0;
+    uint64_t outSliceLen = 0;
     sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
