@@ -82,6 +82,10 @@ int32_t InterceptorClientNetService::StartNetService()
 
 BResult InterceptorClientNetService::CorrectFd()
 {
+    //分离部署mShmFd=-1，直接返回
+    if(mShmFd == -1){
+        return BIO_OK;
+    }
     int32_t realFd = -1;
     auto result = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
     if (UNLIKELY(result != BIO_OK)) {
@@ -110,6 +114,11 @@ BResult InterceptorClientNetService::CheckShmFd()
 
 BResult InterceptorClientNetService::ShmInitInner()
 {
+    //mShmFd = -1，分离部署server端未初始化shm，直接返回
+    if (mShmFd == -1) {
+        CLOG_INFO("mShmFd is -1,not need ShmInitInner.");
+        return BIO_OK;
+    }
     if (UNLIKELY(CheckShmFd() != BIO_OK)) {
         mShmFd = -1;
         return BIO_ERR;
@@ -140,7 +149,8 @@ BResult InterceptorClientNetService::ShmInit()
     mShmFd = rsp.memFd;
     mShmOffset = rsp.offset;
     mShmLength = rsp.length;
-    if (UNLIKELY(mShmOffset != 0 || mShmLength > defaultMaxShmSize)) {
+    //return ok 且 mShmFd=-1,属于分离部署server端未初始化shm
+    if (mShmFd != -1 && (UNLIKELY(mShmOffset != 0 || mShmLength > defaultMaxShmSize))) {
         CLOG_ERROR("Get share memory offset:" << mShmOffset << ", length:" << mShmLength << " wrong.");
         return BIO_ERR;
     }
