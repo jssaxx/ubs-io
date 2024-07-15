@@ -83,7 +83,7 @@ int32_t InterceptorClientNetService::StartNetService()
 BResult InterceptorClientNetService::CorrectFd()
 {
     //分离部署mShmFd=-1，直接返回
-    if(mShmFd == -1){
+    if (mShmFd == -1) {
         return BIO_OK;
     }
     int32_t realFd = -1;
