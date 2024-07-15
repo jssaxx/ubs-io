@@ -8,11 +8,9 @@
 #include "flow_manager.h"
 #include "bio.h"
 #include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 #include "cm.h"
 #include "cache_overload_ctrl.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
 
 namespace ock {
 namespace bio {

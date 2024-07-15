@@ -24,5 +24,7 @@ else()
     exec_program(make ${SOURCE_DIR} ARGS -j8)
     exec_program(make ${SOURCE_DIR} ARGS install)
 
-    exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/lib/*.so ${TARGET_INSTALL_LIB_DIR})
+    if (NOT OPEN_RELEASE STREQUAL "ON")
+        exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/lib/*.so ${TARGET_INSTALL_LIB_DIR})
+    endif()
 endif()

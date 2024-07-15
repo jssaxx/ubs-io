@@ -4,10 +4,9 @@
 #include "flow.h"
 #include "flow_manager.h"
 #include "bio_types.h"
-#include "bio_trace.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "bio_trace.h"
+
 
 namespace ock {
 namespace bio {

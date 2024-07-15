@@ -23,3 +23,5 @@ set_target_properties(ock_interceptor_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
 add_library(ock_interceptor_shared SHARED $<TARGET_OBJECTS:ock_interceptor_object>)
 set_target_properties(ock_interceptor_shared PROPERTIES OUTPUT_NAME "ock_interceptor")
+
+install(TARGETS ock_interceptor_shared DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)

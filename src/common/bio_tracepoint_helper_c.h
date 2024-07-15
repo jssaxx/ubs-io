@@ -4,7 +4,7 @@
 #ifndef BIO_TRACEPOINT_HELPER_C_H
 #define BIO_TRACEPOINT_HELPER_C_H
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_DEBUG_TP_TOOLS
 
 #ifdef __aarch64__
 #include "tracepoint.h"

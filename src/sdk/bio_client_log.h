@@ -15,10 +15,9 @@
 #include <string>
 #include <thread>
 #include "bio_log.h"
-#include "bio_file_util.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "bio_file_util.h"
+
 namespace ock {
 namespace bio {
 using LogFunc = std::function<void(int32_t level, const char *logBuf)>;

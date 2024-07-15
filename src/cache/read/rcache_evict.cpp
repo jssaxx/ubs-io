@@ -3,11 +3,10 @@
  */
 
 #include "bio_log.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_config_instance.h"
 #include "rcache_evict.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
+
 
 using namespace ock::bio;
 

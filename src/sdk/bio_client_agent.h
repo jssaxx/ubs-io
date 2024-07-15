@@ -10,11 +10,10 @@
 #include "message.h"
 #include "cache_slice.h"
 #include "bio_err.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_ref.h"
 #include "bio.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
+
 namespace ock {
 namespace bio {
 namespace agent {

@@ -9,10 +9,9 @@
 #include "net_engine.h"
 #include "net_common.h"
 #include "bio_ref.h"
-#include "bio.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "bio.h"
+
 namespace ock {
 namespace bio {
 using CheckNodeOnline = std::function<bool(uint16_t nodeId, std::string &ip, uint16_t &port)>;

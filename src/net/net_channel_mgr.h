@@ -7,11 +7,8 @@
 #include <unordered_map>
 #include <utility>
 #include <list>
-
-#include "net_common.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "net_common.h"
 
 namespace ock {
 namespace bio {
