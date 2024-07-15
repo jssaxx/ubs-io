@@ -31,7 +31,7 @@ void BioConfig::LoadDefaultConf()
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
-    AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_1, NO_512));
+    AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_U64_0, NO_512));
     AddStrConf(DISK_CONF_PATH);
 
     AddStrConf(DATA_CRC_ENABLE, VStrBoolRange::Create(DATA_CRC_ENABLE.first));
@@ -220,6 +220,9 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     if (mDaemonConfig.diskCaps.size() > DEVICE_SIZE) { // 参考 DISK_LIST_NUM
         LOG_ERROR("Disk num limit:" << DEVICE_SIZE << ", input:" << mDaemonConfig.diskCaps.size());
             return BIO_ERR;
+    }
+    if (mDaemonConfig.diskCaps.size() == 0) {
+        LOG_INFO("this server config  disk num is zero.");
     }
 
     return BIO_OK;

@@ -192,6 +192,12 @@ BResult MirrorClient::InitializeBioQos()
         CLIENT_LOG_ERROR("Get local resource quota failed, ret:" << ret << ".");
         return ret;
     }
+    CLIENT_LOG_INFO("InitializeBioQos writeRes : " << writeRes << " ,readRes : " << readRes <<".");
+    // 分离部署server端可能没有资源配置， 先设置max，后续io通信时会同步新的阈值
+    if (writeRes == 0 && readRes == 0) {
+        writeRes = UINT64_MAX;
+        readRes = UINT64_MAX;
+    }
 
     // 2. fill write and read concurrency
     uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
