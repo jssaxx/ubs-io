@@ -110,6 +110,10 @@ void BioClientNet::Exit()
 
 BResult BioClientNet::CorrectFd()
 {
+    // 分离部署mShmFd=-1，直接返回
+    if (mShmFd == -1) {
+        return BIO_OK;
+    }
     int32_t realFd = -1;
     auto result = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
     if (result != BIO_OK) {
@@ -137,6 +141,11 @@ BResult BioClientNet::CheckShmFd()
 
 BResult BioClientNet::ShmInitInner()
 {
+    // mShmFd = -1，分离部署server端未初始化shm，直接返回
+    if (mShmFd == -1) {
+        CLIENT_LOG_INFO("mShmFd is -1,not need ShmInitInner.");
+        return BIO_OK;
+    }
     if (CheckShmFd() != BIO_OK) {
         mShmFd = -1;
         return BIO_ERR;
@@ -186,8 +195,8 @@ BResult BioClientNet::ShmInit()
         CLIENT_LOG_ERROR("Update channel timeout failed, ret:" << ret << ".");
         return ret;
     }
-
-    if (mShmOffset != 0 || mShmLength > defaultMaxShmSize) {
+    // return ok 且 mShmFd=-1,属于分离部署server端未初始化shm
+    if (mShmFd != -1 && (mShmOffset != 0 || mShmLength > defaultMaxShmSize)) {
         CLIENT_LOG_ERROR("Get share memory para failed, offset:" << mShmOffset << ", length:" << mShmLength << ".");
         return BIO_ERR;
     }

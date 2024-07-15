@@ -217,6 +217,10 @@ BResult NetEngine::InitCommMemAllocator()
 
 BResult NetEngine::InitShmMemAllocator()
 {
+    if (mOptions.memorySize == 0) {
+        NET_LOG_INFO("mOption memorySize :" << mOptions.memorySize << ", not need init shm.");
+        return BIO_OK;
+    }
     std::string shmName = "bio_shm";
     auto result = CreateShmFdWithName(mShmFd, mOptions.memorySize, shmName);
     if (result != BIO_OK) {
