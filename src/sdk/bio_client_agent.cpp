@@ -266,7 +266,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         }
         for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmPtCopy> copys;
-            for (uint32_t j = 0; j < PT_COPY_MAX_SIZE; j++) {
+            for (uint32_t j = 0; j < rsp.copyNum; j++) {
                 copys.push_back({ rsp.desc[i].copys[j].nodeId, rsp.desc[i].copys[j].diskId,
                     static_cast<CmCopyState>(rsp.desc[i].copys[j].state) });
             }

@@ -312,7 +312,7 @@ BResult BioServer::BioCmInit()
     cmOptions.role = ROLE_TOGETHER;
     cmOptions.zkIpMask = mConfig->GetCmConfig().zkHost;
     cmOptions.groups.groupId = static_cast<uint16_t>(mConfig->GetCmConfig().groupId);
-    cmOptions.groups.replicaNum = NO_2;
+    cmOptions.groups.replicaNum = static_cast<uint16_t>(mConfig->GetCmConfig().copyNum);
     cmOptions.groups.initialNodeNum = static_cast<uint16_t>(mConfig->GetCmConfig().initialNodeNum);
     cmOptions.groups.maxNodeNum = static_cast<uint16_t>(mConfig->GetCmConfig().nodeNum);
     cmOptions.groups.maxPtNum = static_cast<uint16_t>(mConfig->GetCmConfig().ptNum);
