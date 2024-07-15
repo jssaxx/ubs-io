@@ -4,10 +4,8 @@
 
 #include "cache_slice_operator.h"
 #include "bdm_core.h"
-#include "bio_trace.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "bio_trace.h"
 
 namespace ock {
 namespace bio {

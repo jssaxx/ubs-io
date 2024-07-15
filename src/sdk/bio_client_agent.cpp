@@ -8,12 +8,10 @@
 #include "bio_client_log.h"
 #include "message_op.h"
 #include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_client_net.h"
 #include "bio_crc_util.h"
 #include "bio_client_agent.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
 
 using namespace ock::bio;
 using namespace ock::bio::agent;

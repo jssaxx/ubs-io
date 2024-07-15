@@ -9,14 +9,12 @@
 #include <utility>
 #include "bio_err.h"
 #include "bio_ref.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_config_instance.h"
 #include "net_engine.h"
 #include "cm.h"
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
 
 namespace ock {
 namespace bio {
@@ -346,7 +344,7 @@ protected:
     void BioCacheExit();
     BResult BioFlowInit();
     void BioFlowExit();
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
     BResult BioServerDiagnoseInit();
     BResult BioServerDiagnoseInitInner();
     BResult BioServerTracePointInit();

@@ -23,7 +23,6 @@ if(NOT EXISTS ${LIBS_BUILT_SECURE_C})
     exec_program(ar ${INSTALL_DIR}/lib ARGS crv ${INSTALL_DIR}/lib/libsecurec.a ${BUILD_DIR}/huawei_secure_c/obj/*.o)
 
     # cp include and lib
-    exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${BUILD_DIR}/huawei_secure_c/lib/libsecurec.so ${TARGET_INSTALL_LIB_DIR})
     exec_program(cp ${INSTALL_DIR} ARGS -rf ${BUILD_DIR}/huawei_secure_c/include ${INSTALL_DIR})
 
 else()

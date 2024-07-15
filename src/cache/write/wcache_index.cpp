@@ -2,10 +2,8 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
 
-#include "wcache_index.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "wcache_index.h"
 
 namespace ock {
 namespace bio {

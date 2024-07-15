@@ -10,7 +10,8 @@ target_link_libraries(ock_iofwd_proxy
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
         bio_common bio_net htracer
         -Wl,--end-group)
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+if (OPEN_TP STREQUAL "ON")
+    message("interceptor client success")
     target_link_libraries(ock_iofwd_proxy
             tracepoint_shared)
 endif()

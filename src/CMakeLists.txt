@@ -1,4 +1,4 @@
-if (${OPEN_TEST_TOOLS} MATCHES "ON")
+if (${OPEN_TP} MATCHES "ON")
 include_directories(
         ${SRC_DIR}/../test/tools/bio_tp/
         ${SRC_DIR}/../test/tools/tracepoint/include)

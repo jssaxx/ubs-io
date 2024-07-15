@@ -14,10 +14,9 @@
 #include "htracer_monotonic.h"
 #include "htracer_utils.h"
 #include "htracer_manager.h"
-#include "htracer_service.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "htracer_service.h"
+
 
 namespace ock {
 namespace htracer {
