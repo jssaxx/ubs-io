@@ -147,7 +147,11 @@ public:
         fd = mShmFd;
         offset = mShareOffset;
         length = mOptions.memorySize;
-        mKey = mLocalMr->GetLKey();
+        mKey = 0;
+        if (mOptions.memorySize > 0) {
+            // 配置内存小于等于0，未初始化内存
+            mKey = mLocalMr->GetLKey();
+        }
     }
 
     void SetShmInfo(int32_t fd, uint8_t *addr, uint64_t off, uint64_t size)
@@ -261,6 +265,10 @@ public:
     BResult SendFds(ChannelPtr ch, int32_t fds[], uint32_t count)
     {
 #ifndef DEBUG_UT
+        // 内存设置0，未初始化fd,fds[0] == -1直接返回即可
+        if (count == NO_1 && fds[0] == -1) {
+            return BIO_OK;
+        }
         auto ret = ch->SendFds(fds, count);
 #else
         auto ret = NetStub::SendFds(fds, count);
