@@ -34,6 +34,7 @@ const auto NET_HESC_SERVER_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.serve
     "/path/server/standby/kfsb");
 
 const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
+const auto CM_COPY_NUM = std::make_pair("bio.cm.copy_num", 2);
 const auto CM_PT_NUM = std::make_pair("bio.cm.pts_count", 16);
 const auto CM_ZK_HOST = std::make_pair("bio.cm.zk_host", "127.0.0.1:2181");
 const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("bio.cm.register_timeout_sec", 30);
@@ -93,6 +94,7 @@ public:
 
     struct CmConfig {
         int32_t initialNodeNum = 2;
+        int32_t copyNum = NO_2;
         int32_t nodeNum = 2;
         int32_t ptNum = 2;
         int32_t registeredTimeoutSec = 30;
