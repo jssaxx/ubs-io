@@ -12,11 +12,14 @@ SET(BOOSTIO_TOOLS_INCLUDE_DIR
 
 link_directories(${TARGET_INSTALL_LIB_DIR})
 
-add_subdirectory(cli)
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-    add_subdirectory(tracepoint)
+if (OPEN_CLI STREQUAL "ON" )
+    add_subdirectory(cli)
+    add_subdirectory(diagnose)
 endif()
 
-add_subdirectory(bio_tp)
-add_subdirectory(diagnose)
-
+if (OPEN_TP STREQUAL "ON")
+    add_subdirectory(bio_tp)
+    if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+        add_subdirectory(tracepoint)
+    endif()
+endif ()

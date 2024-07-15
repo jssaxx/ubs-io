@@ -4,10 +4,8 @@
 
 #include <thread>
 #include <chrono>
-#include "rcache_gc.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "rcache_gc.h"
 
 using namespace ock::bio;
 

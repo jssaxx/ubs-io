@@ -6,7 +6,7 @@ install(FILES bio_c.h DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}/)
 add_library(bio_sdk SHARED ${BIO_SDK_SRCS})
 install(TARGETS bio_sdk DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
-if (OPEN_TEST_TOOLS STREQUAL "ON")
+if (OPEN_CLI STREQUAL "ON")
     include_directories(
             ${SRC_DIR}/../test/tools/cli/include/
             ${SRC_DIR}/../test/tools/diagnose/cli_sdk/

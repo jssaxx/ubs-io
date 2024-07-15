@@ -18,7 +18,7 @@
 #include "mirror_client.h"
 #include "bio_client_net.h"
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include "sdk_diagnose.h"
 #endif
@@ -200,7 +200,7 @@ public:
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);

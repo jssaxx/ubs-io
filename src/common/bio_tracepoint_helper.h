@@ -4,7 +4,7 @@
 #ifndef BIO_TRACEPOINT_HELPER_H
 #define BIO_TRACEPOINT_HELPER_H
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_DEBUG_TP_TOOLS
 #include "bio_tracepoint.h"
 #ifndef __aarch64__
 #define LVOS_TP_START(name, ...)

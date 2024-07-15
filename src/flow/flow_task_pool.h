@@ -5,10 +5,8 @@
 #define BOOSTIO_FLOW_TASK_POOL_H
 
 #include "bio_execution.h"
-#include "bio_err.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "bio_err.h"
 
 namespace ock {
 namespace bio {

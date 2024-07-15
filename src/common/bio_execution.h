@@ -10,14 +10,11 @@
 #include <unistd.h>
 #include <vector>
 #include <functional>
-
 #include "bio_log.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_ref.h"
 #include "bio_def.h"
 #include "bio_ring_buffer.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
 
 namespace ock {
 namespace bio {

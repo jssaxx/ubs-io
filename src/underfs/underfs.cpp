@@ -4,6 +4,7 @@
 #include "underfs.h"
 #include "bio_log.h"
 #include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_config_instance.h"
 #include "bio_str_util.h"
 #include <iostream>
@@ -11,10 +12,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
 
 namespace ock {
 namespace bio {
