@@ -270,6 +270,7 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
             rsp.desc[index].copys[j].diskId = ptEntry.second.copys[j].diskId;
             rsp.desc[index].copys[j].state = static_cast<uint16_t>(ptEntry.second.copys[j].state);
         }
+        rsp.copyNum = ptEntry.second.copys.size();
         index++;
     }
     rsp.num = index;
