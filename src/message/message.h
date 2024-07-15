@@ -20,7 +20,7 @@ const uint32_t KEY_MAX_SIZE = 256;
 const uint32_t IP_MAX_SIZE = 32;
 const uint32_t DISK_MAX_SIZE = 8;
 const uint32_t CLUSTER_NODE_SIZE = 32;
-const uint32_t PT_COPY_MAX_SIZE = 2;
+const uint32_t PT_COPY_MAX_SIZE = 3;
 const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
@@ -127,6 +127,7 @@ typedef struct {
     int32_t flag;
     uint64_t curPtTimes;
     uint32_t num;
+    uint32_t copyNum;
     PtInfoDesc desc[PT_SIZE];
 } QueryPtViewResponse; // size:2072
 
