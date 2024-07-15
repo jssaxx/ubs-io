@@ -92,11 +92,12 @@ if (${DEBUG_UT} MATCHES "ON")
     link_libraries(gcov)
 endif()
 
-if (OPEN_TEST_TOOLS STREQUAL "ON")
-    add_compile_definitions(USE_DEBUG_TOOLS)
-	if (OPEN_TEST_TP_TOOLS STREQUAL "ON")
-		add_compile_definitions(USE_DEBUG_TP_TOOLS)
-	endif()
+if (OPEN_TP STREQUAL "ON")
+    add_compile_definitions(USE_DEBUG_TP_TOOLS)
+endif()
+
+if (OPEN_CLI STREQUAL "ON")
+    add_compile_definitions(USE_CLI_TOOLS)
 endif()
 
 if (OPEN_UNDERFS_CEPH STREQUAL "ON")

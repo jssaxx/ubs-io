@@ -15,7 +15,7 @@
 #include "interceptor_server.h"
 #include "bio_crc_util.h"
 #include "bio_server.h"
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include <dlfcn.h>
 #endif
@@ -32,7 +32,7 @@ static void Log(int level, const char *msg)
 BioServer::BioServer() noexcept
 {
     std::vector<ModuleDesc> modules = {
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
         { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
         { "Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr },
 #endif
@@ -477,7 +477,7 @@ void BioServer::BioFlowExit()
     FlowManager::Instance()->Exit();
 }
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
 BResult BioServer::BioServerDiagnoseInit()
 {
     uint32_t procPid = 456U;

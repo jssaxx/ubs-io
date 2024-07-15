@@ -12,9 +12,9 @@
 #include <linux/version.h>
 #include "securec.h"
 #include "dlist.h"
-#ifdef USE_DEBUG_TOOLS
+
 #include "bio_tracepoint_helper_c.h"
-#endif
+
 #include "cm_c.h"
 #include "bdm_threadpool.h"
 #include "bdm_obj.h"

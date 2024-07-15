@@ -5,10 +5,8 @@
 #include <iostream>
 #include "spdlog/sinks/stdout_sinks.h"
 #include "spdlog/sinks/rotating_file_sink.h"
-#include "bio_log.h"
-#ifdef USE_DEBUG_TOOLS
 #include "bio_tracepoint_helper.h"
-#endif
+#include "bio_log.h"
 
 namespace ock {
 namespace bio {

@@ -9,6 +9,7 @@
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
 #include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_monotonic.h"
 #include "bio_cryptor_helper.h"
 #include "net_common.h"
@@ -19,9 +20,6 @@
 
 #ifdef DEBUG_UT
 #include "../../test/llt/unit-tests/net/net_stub.h"
-#endif
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
 #endif
 
 namespace ock {

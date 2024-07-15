@@ -5,6 +5,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <dlfcn.h>
+#include "bio_tracepoint_helper.h"
 #include "bio_client_log.h"
 #include "bio_trace.h"
 #include "message_op.h"
@@ -15,9 +17,6 @@
 #include "bio_monotonic.h"
 #include "bio_crc_util.h"
 #include "mirror_client.h"
-#ifdef USE_DEBUG_TOOLS
-#include <dlfcn.h>
-#endif
 
 using namespace ock::bio;
 

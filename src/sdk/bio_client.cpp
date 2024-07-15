@@ -2,16 +2,16 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
  */
 
-#include <dlfcn.h>
 #include "bio_client_log.h"
 #include "bio_client_net.h"
 #include "bio_client_agent.h"
 #include "interceptor_server.h"
-#include "bio_client.h"
-#ifdef USE_DEBUG_TOOLS
-#include <dlfcn.h>
 #include "bio_tracepoint_helper.h"
+#include "bio_client.h"
+#ifdef USE_CLI_TOOLS
+#include <dlfcn.h>
 #endif
+
 using namespace ock::bio;
 
 BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath)
@@ -168,7 +168,7 @@ BResult BioClient::BioClientStartWork()
     return ret;
 }
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
 using SdkDiagnose = int (*)();
 BResult BioClient::BioDiagnoseSdkInit()
 {
@@ -238,7 +238,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
-#ifdef USE_DEBUG_TOOLS
+#ifdef USE_CLI_TOOLS
     if (this->BioClientDiagnoseInit(mode) != BIO_OK) {
         return BIO_ERR;
     }

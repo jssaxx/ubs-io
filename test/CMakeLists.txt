@@ -1,5 +1,7 @@
-add_subdirectory(benchmarks)
-if (OPEN_TEST_TOOLS STREQUAL "ON")
+if (NOT OPEN_RELEASE STREQUAL "ON")
+    add_subdirectory(benchmarks)
+endif()
+if (OPEN_CLI STREQUAL "ON" OR OPEN_TP STREQUAL "ON")
     add_subdirectory(tools)
 endif()
 

@@ -28,6 +28,4 @@ else()
     exec_program(make ${BUILD_DIR} ARGS -j8)
     exec_program(make ${BUILD_DIR} ARGS install)
 
-    exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/hse/cryption/lib/libhse_cryption.so ${TARGET_INSTALL_LIB_DIR})
-	exec_program(cp ${TARGET_INSTALL_BIN_DIR} ARGS -rf ${INSTALL_DIR}/hse/cryption_tool/bin/seceasy_encrypt ${TARGET_INSTALL_BIN_DIR})
 endif()

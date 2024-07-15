@@ -10,7 +10,7 @@ project:
 pipeline:
   build:
     - task: "cmake_test"
-      exec: "bash ../../../build.sh Debug Ut"
+      exec: "bash ../../../build.sh -t debug --ut"
   run:
     - task: "run_test"
   report:

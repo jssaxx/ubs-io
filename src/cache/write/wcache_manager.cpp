@@ -5,14 +5,12 @@
 #include "wcache_manager.h"
 #include "bio_log.h"
 #include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_monotonic.h"
 #include "flow_id_allocator.h"
 #include "bio_crc_util.h"
 #include "bio_config_instance.h"
 #include "cache_flow.h"
-#ifdef USE_DEBUG_TOOLS
-#include "bio_tracepoint_helper.h"
-#endif
 
 namespace ock {
 namespace bio {

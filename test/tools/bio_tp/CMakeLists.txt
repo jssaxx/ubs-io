@@ -7,7 +7,7 @@ target_link_libraries(bio_tp_shared PUBLIC tracepoint_shared)
 endif()
 target_include_directories(bio_tp_shared PUBLIC ${CMAKE_SOURCE_DIR}/test/tools/tracepoint/include)
 
-if (OPEN_TEST_TOOLS STREQUAL "ON")
+if (OPEN_TP STREQUAL "ON")
     target_link_libraries(bio_server bio_tp_shared)
     target_link_libraries(bio_sdk bio_tp_shared)
     TARGET_INCLUDE_DIRECTORIES(bio_sdk PUBLIC ${BOOSTIO_TOOLS_INCLUDE_DIR})
