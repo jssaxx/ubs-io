@@ -61,10 +61,14 @@ const auto WORK_IO_ALIGNSIZE = std::make_pair("bio.work.io.alignsize", 1);
 const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
 const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
 
+const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("bio.underfs.file_system_type", "local");
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
 const auto UNDERFS_CEPH_USER = std::make_pair("bio.underfs.ceph.user", "client.admin");
 const auto UNDERFS_CEPH_POOL = std::make_pair("bio.underfs.ceph.pool", "0:jfspool1,1:jfspool2");
+
+const auto UNDERFS_HDFS_NAMENODE = std::make_pair("bio.underfs.hdfs.name_node", "default:0");
+const auto UNDERFS_HDFS_WORKING_PATH = std::make_pair("bio.underfs.hdfs.working_path", "/hdfs");
 
 class BioConfig;
 using BioConfigPtr = Ref<BioConfig>;
@@ -130,17 +134,22 @@ public:
         uint64_t localMrSize = 0;
     };
 
-    enum UnderFsType {
-        UNDER_FS_LOCAL_FILE,
-        UNDER_FS_CEPH
-    };
-
-    struct UnderFsConfig {
-        UnderFsType underFsType;
+    struct CephConfig {
         std::string cfgPath;
         std::string cluster;
         std::string user;
         std::unordered_map<uint64_t, std::string> pools;
+    };
+
+    struct HdfsConfig {
+        std::string nameNode;
+        std::string workingPath;
+    };
+
+    struct UnderFsConfig {
+        std::string underFsType;
+        CephConfig cephConfig;
+        HdfsConfig hdfsConfig;
     };
 
 public:
