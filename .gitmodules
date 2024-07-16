@@ -18,3 +18,7 @@
 	path = 3rdparty/hseceasy/hseceasy
 	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hseceasy.git
 	branch = master
+[submodule "3rdparty/hadoop/hadoop"]
+	path = 3rdparty/hadoop/hadoop
+	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/hadoop.git
+	branch = huawei/3.3.1

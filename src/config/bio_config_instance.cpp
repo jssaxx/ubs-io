@@ -54,10 +54,13 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(CM_ZK_HOST, VStrNotNull::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||local"));
     AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrRealPath::Create(UNDERFS_CEPH_CFG_PATH.first));
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
+    AddStrConf(UNDERFS_HDFS_NAMENODE);
+    AddStrConf(UNDERFS_HDFS_WORKING_PATH);
 
     /* load net config for security */
     AddStrConf(NET_TLS_ENABLE_SWITCH, VStrBoolRange::Create(NET_TLS_ENABLE_SWITCH.first));
@@ -236,9 +239,12 @@ BResult BioConfig::AutoConfigClient(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 {
-    mUnderFsConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
-    mUnderFsConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
-    mUnderFsConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
+    mUnderFsConfig.underFsType = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first);
+    mUnderFsConfig.cephConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
+    mUnderFsConfig.cephConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
+    mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
+    mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);
+    mUnderFsConfig.hdfsConfig.workingPath = conf->GetStr(UNDERFS_HDFS_WORKING_PATH.first);
 
     std::vector<std::string> idWithPoolNames;
     StrUtil::Split(conf->GetStr(UNDERFS_CEPH_POOL.first), ",", idWithPoolNames);
@@ -247,7 +253,7 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
         StrUtil::Split(idWithPoolName, ":", idAndPoolName);
         long poolId = 0;
         if (StrUtil::StrToLong(idAndPoolName[0], poolId)) {
-            mUnderFsConfig.pools.emplace(poolId, idAndPoolName[1]);
+            mUnderFsConfig.cephConfig.pools.emplace(poolId, idAndPoolName[1]);
         }
     }
 

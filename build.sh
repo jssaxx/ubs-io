@@ -2,12 +2,11 @@
 # Copyright: (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
 
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ceph=Ceph] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint]"
     echo "build_type: [debug, release, clean]"
-    echo "ceph: Boostio connects to the real Ceph"
     echo "Examples:"
-    echo " 1 ./build.sh -t release [--ceph] [--cli] // 禁止添加tp功能，对外发布包禁止添加cli功能"
-    echo " 2 ./build.sh -t debug [--ceph] // 默认添加cli和tp功能"
+    echo " 1 ./build.sh -t release [--cli] // 禁止添加tp功能，对外发布包禁止添加cli功能"
+    echo " 2 ./build.sh -t debug // 默认添加cli和tp功能"
     echo " 3 ./build.sh -t debug [--ut] // 限制仅DT构建脚本使用"
     echo
     exit 1;
@@ -17,7 +16,6 @@ CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BUILD_DIR=${PROJ_DIR}/build
 BUILD_UT=OFF
-CEPH_FLAG=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
 BUILD_TYPE=Debug
@@ -48,9 +46,6 @@ while true; do
 			      BUILD_UT=ON
             CLI_FLAG=ON
 			      TP_FLAG=ON
-            shift ;;
-        --ceph )
-			      CEPH_FLAG=ON
             shift ;;
         --cli )
 			      CLI_FLAG=ON
@@ -88,12 +83,6 @@ if [ "$BUILD_TYPE" == "Release" ]; then
     CMAKE_FLAGS+='-DOPEN_RELEASE=ON '
 else
     CMAKE_FLAGS+='-DOPEN_RELEASE=OFF '
-fi
-
-if [ "$CEPH_FLAG" == "ON" ]; then
-	  CMAKE_FLAGS+='-DOPEN_UNDERFS_CEPH=ON '
-else
-    CMAKE_FLAGS+='-DOPEN_UNDERFS_CEPH=OFF '
 fi
 
 if [ "$CLI_FLAG" == "ON" ]; then
