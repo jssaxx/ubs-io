@@ -3,9 +3,6 @@ project(boostio CXX C)
 
 set(CMAKE_CXX_STANDARD 11)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE release)
-endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 SET(BOOSTIO_COMMON_FLAGS "")
