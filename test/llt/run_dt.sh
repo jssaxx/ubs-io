@@ -17,7 +17,7 @@ hdt build -s ${asan} -c on \
 && cp -r ../../build/* build/ \
 && cp build/3rdparty/secure/huawei_secure_c/lib/* build/ \
 && cp -r ../../configs/ . \
-&& cp ../../output/bio/lib/* build/ \
+&& \cp ../../output/boostio/lib/* build/ \
 && hdt run -s ${asan} -c on "--args=\"--gtest_output=xml:report.xml\"" \
 && hdt report \
 && pwd \
