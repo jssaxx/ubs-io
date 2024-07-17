@@ -205,6 +205,11 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     StrUtil::StrToLong(ratios[0], mDaemonConfig.diskReadRatio);
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.diskWriteRatio);
 
+    if (mDaemonConfig.memCap == 0) {
+        LOG_INFO("this server config  memory is 0, disk config is invalid , server can not join pt.");
+        return BIO_OK;
+    }
+
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > NO_4) {
@@ -220,14 +225,16 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
         mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
     }
 
+    if (mDaemonConfig.diskCaps.size() == 0) {
+        mDaemonConfig.memCap = 0;
+        LOG_INFO("this server config  disk is null, ,memory reset to 0 , server can not join pt.");
+        return BIO_OK;
+    }
+
     if (mDaemonConfig.diskCaps.size() > DEVICE_SIZE) { // 参考 DISK_LIST_NUM
         LOG_ERROR("Disk num limit:" << DEVICE_SIZE << ", input:" << mDaemonConfig.diskCaps.size());
             return BIO_ERR;
     }
-    if (mDaemonConfig.diskCaps.size() == 0) {
-        LOG_INFO("this server config  disk num is zero.");
-    }
-
     return BIO_OK;
 }
 
