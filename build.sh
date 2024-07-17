@@ -18,7 +18,7 @@ BUILD_DIR=${PROJ_DIR}/build
 BUILD_UT=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
-BUILD_TYPE=Debug
+BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
     mkdir -p ${BUILD_DIR}
@@ -32,13 +32,13 @@ while true; do
             type=${type,,}
             [[ $type != "debug" && $type != "release" && $type != "clean" ]] && echo "Invalid build type $2" && usage
             if [[ $type == 'debug' ]]; then
-                BUILD_TYPE=Debug
+                BUILD_TYPE=debug
 			          TP_FLAG=ON
 			          CLI_FLAG=ON
             elif [[ $type == 'release' ]]; then
-                BUILD_TYPE=Release
+                BUILD_TYPE=release
             elif [[ $type == 'clean' ]]; then
-                BUILD_TYPE=Clean
+                BUILD_TYPE=clean
             fi
             shift 2
             ;;
@@ -63,7 +63,7 @@ while true; do
     esac
 done
 
-if [ "$BUILD_TYPE" == "Clean" ]; then
+if [ "$BUILD_TYPE" == "clean" ]; then
     cd $BUILD_DIR
     BUILD_CMD="make clean"
     echo
@@ -78,7 +78,7 @@ if [ "$BUILD_TYPE" == "Clean" ]; then
     exit 0
 fi
 
-if [ "$BUILD_TYPE" == "Release" ]; then
+if [ "$BUILD_TYPE" == "release" ]; then
     TP_FLAG=OFF
     CMAKE_FLAGS+='-DOPEN_RELEASE=ON '
 else
@@ -118,7 +118,7 @@ $BUILD_CMD || {
 	  exit -1
 }
 cd ${PROJ_DIR}/output
-if [[ "$BUILD_TYPE" == "Debug" ]];then
+if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp 3rdparty/zookeeper/lib/* bio/lib/.
 	  \cp 3rdparty/spdlog/lib64/libspdlog.a bio/lib/.
 	  \cp 3rdparty/hcom/lib/securec/* bio/lib/.
@@ -130,6 +130,7 @@ fi
 
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list
-tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz bio
+mv bio boostio
+tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
 
 
