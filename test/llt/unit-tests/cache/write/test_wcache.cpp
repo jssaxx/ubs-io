@@ -119,9 +119,6 @@ TEST_F(TestWCache, test_put_case_return_ok)
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
-
-    ret = gWCacheManager->Delete(G_PT_ID, key);
-    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
