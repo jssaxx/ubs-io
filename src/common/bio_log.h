@@ -28,6 +28,10 @@ namespace bio {
 #define SPDLOG_LEVEL_CRITICAL 5
 #define SPDLOG_LEVEL_OFF 6
 
+#ifdef DEBUG_UT
+#define BIO_LOG_RESET_LEVEL(level)
+#define BIO_LOG_INTERNAL(level, file, line, func, msg)
+#else
 #define BIO_LOG_RESET_LEVEL(level)                         \
     do {                                                   \
         ock::bio::Logger::gInstance->ResetLogLevel(level); \
@@ -46,6 +50,7 @@ namespace bio {
             ock::bio::Logger::gInstance->Log(level, oss.str());                    \
         }                                                                          \
     } while (0)
+#endif
 
 #define LOG_CRITICAL(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_CRITICAL, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 #define LOG_ERROR(msg) BIO_LOG_INTERNAL(SPDLOG_LEVEL_ERROR, BIO_LOG_FILENAME, __LINE__, __FUNCTION__, msg)

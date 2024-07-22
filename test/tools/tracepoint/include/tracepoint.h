@@ -558,7 +558,7 @@ do                                                                              
      lvos_tracepoint.h
     @since V100R001C00
 */  
-#define LVOS_TP_START(name, ...)                                                              \
+#define LVOS_TP_START_ALL(name, ...)                                                              \
           do                                                                                  \
           {                                                                                   \
             static LVOS_TRACEP_NEW_S *_pstTp = NULL;                                          \
@@ -592,7 +592,23 @@ do                                                                              
                     }                                                                         \
                 }                                                                             \
 
-
+#define LVOS_TP_START(name, ...)                                                              \
+          do                                                                                  \
+          {                                                                                   \
+            static LVOS_TRACEP_NEW_S *_pstTp = NULL;                                          \
+            static OSP_S32 _tracepointNotRegistered = 0;                                      \
+            OSP_S32 _ret = LVOS_TpStartStub(#name, &_pstTp, &_tracepointNotRegistered);       \
+            if (_ret >= 0 && _pstTp->type != LVOS_TP_TYPE_PAUSE) {                            \
+                if (_pstTp->type == LVOS_TP_TYPE_CALLBACK)                                    \
+                {                                                                             \
+                    _pstTp->fnHook(&_pstTp->stParam, __VA_ARGS__);                            \
+                    _pstTp->timeCalled++;                                                     \
+                }                                                                             \
+                if(_ret == 0) {                                                               \
+                    LVOS_HVS_deactiveTracePoint(PID_OSP_NULL, #name);                         \
+                }                                                                             \
+            }                                                                                 \
+            else {
 
 /*插入故障点(当无回调函数或回调函数只有用户参数时)*/
 /** @ingroup VOS_TRACEP 

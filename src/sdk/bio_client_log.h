@@ -130,6 +130,10 @@ private:
 #ifndef BIO_CLIENT_LOG_FILENAME
 #define BIO_CLIENT_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
+
+#ifdef DEBUG_UT
+#define BASE_LOG(level, args)
+#else
 #define BASE_LOG(level, args)                                                                                    \
     do {                                                                                                         \
         if ((level) >= BioClientLog::Instance()->GetMinLogLevel()) {                                             \
@@ -138,6 +142,7 @@ private:
             BioClientLog::Instance()->Log(level, oss);                                                           \
         }                                                                                                        \
     } while (0)
+#endif
 
 #define CLIENT_LOG_TRACE(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_TRACE), args)
 #define CLIENT_LOG_DEBUG(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_DEBUG), args)
