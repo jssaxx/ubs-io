@@ -81,6 +81,10 @@ private:
 #ifndef NET_LOG_FILENAME
 #define NET_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
+
+#ifdef DEBUG_UT
+#define NET_BASE_LOG(level, args)
+#else
 #define NET_BASE_LOG(level, args)                                                                         \
     do {                                                                                                  \
         if (((level) + 1) >= NetLog::Instance()->GetMinLogLevel()) {                                      \
@@ -89,6 +93,7 @@ private:
             NetLog::Instance()->Log(level, oss);                                                          \
         }                                                                                                 \
     } while (0)
+#endif
 
 #define NET_LOG_DEBUG(args) NET_BASE_LOG(static_cast<int>(NetLog::Level::LOG_LEVEL_DEBUG), args)
 #define NET_LOG_INFO(args) NET_BASE_LOG(static_cast<int>(NetLog::Level::LOG_LEVEL_INFO), args)
