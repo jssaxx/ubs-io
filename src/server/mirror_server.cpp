@@ -170,6 +170,11 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
 
 BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId, bool &isDegrade)
 {
+    uint64_t base = BioServer::Instance()->GetPtEntry(ptId).version;
+    if (UNLIKELY(ptv != base)) {
+        LOG_WARN("Check message pt version failed, base:" << base << ", ptv:" << ptv << ".");
+        return BIO_CHECK_PT_FAIL;
+    }
     auto ret = Cache::Instance().AllocateFlowId(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc flow id failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
@@ -182,6 +187,11 @@ BResult MirrorServer::CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t 
 
 BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
+    uint64_t base = BioServer::Instance()->GetPtEntry(ptId).version;
+    if (UNLIKELY(ptv != base)) {
+        LOG_WARN("Check message pt version failed, base:" << base << ", ptv:" << ptv << ".");
+        return BIO_CHECK_PT_FAIL;
+    }
     auto ret = CreateFlow(procId, ptId, ptv, flowId, isDegrade);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
@@ -365,6 +375,10 @@ BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, Put
 
 BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStratege)
 {
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
+
     LOG_DEBUG("Mirror server put, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
         sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
         sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() <<
@@ -507,6 +521,9 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
 
 BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx)
 {
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
     InitGetResponse(rsp);
     MrInfo mrInfo = { req.address, static_cast<uint32_t>(req.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
@@ -551,6 +568,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 
 BResult MirrorServer::Delete(DeleteRequest &req)
 {
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
     BIO_TRACE_START(MIRROR_TRACE_DEL);
     BResult ret = Cache::Instance().Delete(req.comm.ptId, req.key);
     BIO_TRACE_END(MIRROR_TRACE_DEL, ret);
@@ -587,6 +607,9 @@ BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, Obj
 
 BResult MirrorServer::Stat(StatRequest &req, ObjStat &objInfo)
 {
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
     std::string key(req.key);
     CacheObjStat objStat;
     BIO_TRACE_START(MIRROR_TRACE_STAT);
@@ -604,6 +627,9 @@ BResult MirrorServer::Stat(StatRequest &req, ObjStat &objInfo)
 
 BResult MirrorServer::Load(LoadRequest &req)
 {
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
     BIO_TRACE_START(MIRROR_TRACE_LOAD);
     uint64_t realLen = 0;
     BResult ret = Cache::Instance().Load(req.comm.ptId, req.key, req.offset, req.length, realLen);
@@ -950,11 +976,6 @@ BResult MirrorServer::SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uin
 
 int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_OK;
-    }
-
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
@@ -1012,11 +1033,6 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_OK;
-    }
-
     GetResponse rsp;
     BResult result = Get(*req, rsp, ctx);
     if (result != BIO_OK) {
@@ -1047,11 +1063,6 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
-    }
-
     BResult result = Delete(*req);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
     return BIO_OK;
@@ -1076,11 +1087,6 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_OK;
-    }
-
     ObjStat objInfo;
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
@@ -1151,11 +1157,6 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
-    }
-
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
     ret = Load(*req);
@@ -1213,7 +1214,8 @@ int32_t MirrorServer::HandleReportHb(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
     }
