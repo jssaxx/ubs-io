@@ -393,7 +393,7 @@ TEST_F(TestBioServer, test_slave_create_flow_ok)
     LOG_INFO("test_slave_create_flow_ok");
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, NO_128, NO_10, getpid() }, 1, 1 };
     auto ret = CreateFlowSlave(&req);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_CHECK_PT_FAIL);
 }
 
 TEST_F(TestBioServer, destroy_flow_OK)

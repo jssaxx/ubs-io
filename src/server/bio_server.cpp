@@ -697,6 +697,11 @@ int32_t DestroyFlow(DestroyFlowRequest *req)
 
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
 {
+    uint64_t base = BioServer::Instance()->GetPtEntry(req->comm.ptId).version;
+    if (UNLIKELY(req->comm.ptv != base)) {
+        LOG_WARN("Check message pt version failed, base:" << base << ", ptv:" << req->comm.ptv << ".");
+        return BIO_CHECK_PT_FAIL;
+    }
     WCacheSlicePtr sliceP = nullptr;
     BResult ret = BioServer::Instance()->GetMirrorServer()->GetSlice(req->flowId, req->flowOffset, req->flowIndex,
         req->length, sliceP);
