@@ -61,7 +61,7 @@ const auto WORK_IO_ALIGNSIZE = std::make_pair("bio.work.io.alignsize", 1);
 const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
 const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
 
-const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("bio.underfs.file_system_type", "local");
+const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("bio.underfs.file_system_type", "ceph");
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
 const auto UNDERFS_CEPH_USER = std::make_pair("bio.underfs.ceph.user", "client.admin");
