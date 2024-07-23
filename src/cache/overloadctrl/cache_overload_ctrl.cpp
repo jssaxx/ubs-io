@@ -199,8 +199,8 @@ uint64_t CacheOverloadCtrl::GetWmStatDirectValue()
 {
     CacheResDescription desc = { 0 };
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    auto mVm = std::min<uint64_t>(PERCENT_100, desc.memUsedSize * CACHE_OLC_PERCENT_BASE / desc.memCapacity / NO_2);
-    auto dVm = std::min<uint64_t>(PERCENT_100, desc.diskUsedSize * CACHE_OLC_PERCENT_BASE / desc.diskCapacity / NO_2);
+    auto mVm = std::min<uint64_t>(PERCENT_100, desc.memUsedSize * CACHE_OLC_PERCENT_BASE / desc.memCapacity);
+    auto dVm = std::min<uint64_t>(PERCENT_100, desc.diskUsedSize * CACHE_OLC_PERCENT_BASE / desc.diskCapacity);
     uint64_t retWm = std::max<uint64_t>(mVm, dVm);
     return retWm;
 }
