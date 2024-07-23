@@ -26,7 +26,11 @@ public:
 private:
     static std::string GetUnderFsType()
     {
+#ifdef DEBUG_UT
+        return LOCAL_SYSTEM;
+#else
         return BioConfig::Instance()->GetUnderFsConfig().underFsType;
+#endif
     }
 };
 }
