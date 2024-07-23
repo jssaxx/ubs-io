@@ -142,6 +142,7 @@ private:
     BResult EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront);
     BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront);
 
+    BResult EvictSlice( WCacheSliceRefPtr &sliceRef);
     BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
 
     void EvictNegotiate();
@@ -200,6 +201,8 @@ private:
     std::atomic<uint64_t> mOnFlyRef;
 
     DEFINE_REF_COUNT_VARIABLE;
+
+
 };
 }
 }
