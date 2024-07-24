@@ -114,6 +114,9 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(BDM_RW_IO_FAIL, "bdm io err", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(BDM_ALLOC_BLOCK_FAIL, "bdm alloc block fail", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_PUT_FAIL, "wcache put fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_CREAT_FAIL, "ceph creat fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_SET_IOCTX_TRUE, "set ioctx not null", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_SET_BUILDER_NULL, "set hdfs builder null", CommonTp::PointerValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -222,6 +225,9 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(RCACHE_GET_DISK_SLICE_FAIL);
     LVOS_TP_UNREG(BDM_RW_IO_FAIL);
     LVOS_TP_UNREG(BDM_ALLOC_BLOCK_FAIL);
+    LVOS_TP_UNREG(UNDERFS_CEPH_CREAT_FAIL);
+    LVOS_TP_UNREG(UNDERFS_SET_IOCTX_TRUE);
+    LVOS_TP_UNREG(UNDERFS_SET_BUILDER_NULL);
 }
 #else
 void tp::CacheTp::Register() noexcept {}
