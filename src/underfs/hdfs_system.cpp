@@ -7,6 +7,7 @@
 #include "bio_err.h"
 #include "bio_log.h"
 #include "bio_config_instance.h"
+#include "bio_tracepoint_helper.h"
 
 namespace ock {
 namespace bio {
@@ -147,7 +148,10 @@ BResult HdfsSystem::Put(const char *key, const char *value, const size_t len)
         }
     }
 
-    hdfsStreamBuilder *builder = streamBuilderAllocOp(mHdfsFs, key, O_WRONLY | O_CREAT);
+    hdfsStreamBuilder *builder;
+    LVOS_TP_START(UNDERFS_SET_BUILDER_NULL, &builder, nullptr);
+    builder = streamBuilderAllocOp(mHdfsFs, key, O_WRONLY | O_CREAT);
+    LVOS_TP_END;
     if (!builder) {
         LOG_ERROR("Failed to allocate hdfs file builder, file:" << key << ".");
         return BIO_UFS_IOERR;
@@ -188,7 +192,10 @@ BResult HdfsSystem::Get(const char *key, char *value, const size_t len, const ui
         return BIO_UFS_IOERR;
     }
 
-    hdfsStreamBuilder *builder = streamBuilderAllocOp(mHdfsFs, key, O_RDONLY);
+    hdfsStreamBuilder *builder;
+    LVOS_TP_START(UNDERFS_SET_BUILDER_NULL, &builder, nullptr);
+    builder = streamBuilderAllocOp(mHdfsFs, key, O_RDONLY);
+    LVOS_TP_END;
     if (!builder) {
         LOG_ERROR("Failed to allocate hdfs file builder, file:" << key << ".");
         return BIO_UFS_IOERR;

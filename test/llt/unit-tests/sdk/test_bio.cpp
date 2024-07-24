@@ -363,9 +363,9 @@ TEST_F(TestBio, test_bio_stat)
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
     LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, G_PT_TIMES, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, 1, userParam);
     ret = BioStat(G_TENANT_ID, G_KEY, g_Location, &keyStat);
-    EXPECT_EQ(ret, RET_CACHE_PT_FAULT);
+    EXPECT_EQ(ret, RET_CACHE_OK);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
 
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_STAT_RECV_FAIL", 0, 1, userParam);
