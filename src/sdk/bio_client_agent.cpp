@@ -343,7 +343,8 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_
             isDegrade = rsp.isDegrade;
             return ret;
         } else {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, 0, 0, procId }, opType, flowId, isDegrade };
+            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
+                opType, flowId, isDegrade };
             return createFlowSlaveOp(&req);
         }
     } else {
