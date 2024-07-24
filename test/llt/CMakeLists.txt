@@ -19,6 +19,7 @@ include_directories(${SRC_DIR}/common
         ${TEST_DIR}/mock
         ${TEST_DIR}/htracer
         ${TEST_DIR}/server
+		${TEST_DIR}/underfs
         ${TEST_DIR}/cm
         ${TEST_DIR}/disk
         ${TEST_DIR}/sdk
