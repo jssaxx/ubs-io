@@ -78,7 +78,7 @@ public:
     struct NetConfig {
         std::string dataIpMask = "127.0.0.1/24";
         std::string dataIp = "127.0.0.1";
-        uint16_t dataPort = 9998;
+        uint16_t dataPort = 7300;
         uint16_t protocol = 1;
         bool isRpcBusyLoop = false;
         uint16_t rpcDataWorkersCnt = 4;
