@@ -398,7 +398,6 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     BIO_TRACE_START(WCACHE_TRACE_GET_READ_DATA);
     ret = Read(offset, sliceRef->GetSlice(), slice, sliceWriter, realLen);
     BIO_TRACE_END(WCACHE_TRACE_GET_READ_DATA, ret);
-    sliceRef->Release();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("WCache Read data failed, key :" << key << ", offset:" << offset << ", length:" <<
             sliceRef->GetSlice()->GetLength() << ".");
@@ -408,11 +407,13 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
             ret = sliceRef->GetSlice()->CalculateDataCrc(readCrc, offset, realLen);
             if (ret != BIO_OK) {
                 LOG_ERROR("Server rcache get verify the CRC fail, key:"<< key <<", ret: " << ret);
+                sliceRef->Release();
                 return ret;
             }
             slice->SetDataCrc(readCrc);
         }
     }
+    sliceRef->Release();
     return ret;
 }
 
