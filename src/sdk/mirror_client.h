@@ -178,11 +178,6 @@ private:
 
     BResult SendCheckUpdateReadyRequest();
 
-    inline int32_t Copy(const void *src, void *dst, const uint64_t len)
-    {
-        return memcpy_s(dst, len, src, len);
-    }
-
     BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &adjustWriteQuota);
     BResult InitializeBioQos();
     BResult LoadOriginView();

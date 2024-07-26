@@ -1327,7 +1327,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             return BIO_INNER_ERR;
         }
         BIO_TRACE_START(SDK_TRACE_GET_COPY2U);
-        ret = Copy(reinterpret_cast<void *>(mrInfo.address), value, realLen);
+        ret =  memcpy_s(reinterpret_cast<void *>(mrInfo.address), realLen, value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, ret);
         if (UNLIKELY(ret != 0)) {
             CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
