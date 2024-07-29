@@ -8,6 +8,9 @@
 #include "bio_log.h"
 #include "bio_config_instance.h"
 #include "bio_tracepoint_helper.h"
+#include "ceptor_env.h"
+
+using namespace ock::interceptor;
 
 namespace ock {
 namespace bio {
@@ -504,7 +507,7 @@ BResult HdfsSystem::InitOperations()
 
 BResult HdfsSystem::LoadHdfsLibrary()
 {
-    std::string hadoopHome = std::getenv("HADOOP_HOME");
+    std::string hadoopHome = env::GetEnv("HADOOP_HOME", "");
     if (hadoopHome.empty()) {
         LOG_ERROR("Failed to check HADOOP_HOME.");
         return BIO_INNER_ERR;
