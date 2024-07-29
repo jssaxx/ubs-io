@@ -576,7 +576,7 @@ def exec_build(args):
     INSTALL_USER = input('input login user:')
     user_pattern = r'^[a-zA-Z][a-zA-Z0-9_-]{0,31}$'
     if re.match(user_pattern, INSTALL_USER) is None:
-        error_log("invalid login user name.")
+        error_log("invalid login username or password.")
         return False
 
     # 检查password

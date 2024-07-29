@@ -1,5 +1,6 @@
 set(HDFS_INCLUDE_PATH ${PROJECT_3RDPARTY_SRC_DIR}/hadoop/hadoop/hadoop-hdfs-project/hadoop-hdfs-native-client/src/main/native/libhdfs/include/hdfs/hdfs.h)
+include_directories(../io_interceptor/common)
 file(COPY ${HDFS_INCLUDE_PATH} DESTINATION ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include)
-file(GLOB_RECURSE BIO_UNDERFS_SRCS *.cpp *.h)
+file(GLOB_RECURSE BIO_UNDERFS_SRCS *.cpp *.h ${CMAKE_CURRENT_LIST_DIR}/../io_interceptor/common/ceptor_env.cpp)
 add_library(bio_underfs STATIC ${BIO_UNDERFS_SRCS})
 target_link_libraries(bio_underfs PRIVATE dl)
