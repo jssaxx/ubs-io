@@ -37,9 +37,9 @@ private:
     static const std::unordered_map<std::string, FileSystemCreator> &GetFileSystemMap()
     {
         static const std::unordered_map<std::string, FileSystemCreator> fileSystemMap = {
-                {CEPH_SYSTEM, []() { return std::make_shared<CephSystem>(); }},
-                {HDFS_SYSTEM, []() { return std::make_shared<HdfsSystem>(); }},
-                {LOCAL_SYSTEM, []() { return std::make_shared<LocalSystem>(); }}
+            {CEPH_SYSTEM, []() { return std::make_shared<CephSystem>(); }},
+            {HDFS_SYSTEM, []() { return std::make_shared<HdfsSystem>(); }},
+            {LOCAL_SYSTEM, []() { return std::make_shared<LocalSystem>(); }}
         };
         return fileSystemMap;
     }
