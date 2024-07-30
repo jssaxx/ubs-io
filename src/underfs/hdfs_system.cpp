@@ -42,11 +42,12 @@ BResult HdfsSystem::Init()
         LOG_ERROR("Failed to load hdfs config.");
         return BIO_UFS_IOERR;
     }
-
+    LVOS_TP_START(UNDERFS_HDFS_CONNECT_FAIL, &mHdfsFs, nullptr);
     hdfsBuilder *builder = newBuilderOp();
     builderSetNameNodeOp(builder, mNameNodeIp.c_str());
     builderSetNameNodePortOp(builder, mNameNodePort);
     mHdfsFs = builderConnectOp(builder);
+    LVOS_TP_END;
     if (!mHdfsFs) {
         LOG_ERROR("Failed to connect to hdfs, ip:" << mNameNodeIp << ", port:" << mNameNodePort << ".");
         return BIO_UFS_IOERR;
@@ -507,6 +508,10 @@ BResult HdfsSystem::InitOperations()
 
 BResult HdfsSystem::LoadHdfsLibrary()
 {
+#ifdef DEBUG_UT
+    return BIO_OK;
+#endif
+    
     std::string hadoopHome = env::GetEnv("HADOOP_HOME", "");
     if (hadoopHome.empty()) {
         LOG_ERROR("Failed to check HADOOP_HOME.");
