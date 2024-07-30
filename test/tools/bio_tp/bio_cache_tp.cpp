@@ -115,8 +115,14 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(BDM_ALLOC_BLOCK_FAIL, "bdm alloc block fail", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_PUT_FAIL, "wcache put fail", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_CEPH_CREAT_FAIL, "ceph creat fail", tp::CommonTp::IntValueCallback);
-    LVOS_TP_REG(UNDERFS_SET_IOCTX_TRUE, "set ioctx not null", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_SET_BUILDER_NULL, "set hdfs builder null", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(UNDERFS_HDFS_CONNECT_FAIL, "hdfs connect fail", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_READ_FILE_FAIL, "ceph read file fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_CONNECT_FAIL, "ceph connect fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_IOCTX_CREAT_FAIL, "ceph ioctx creat fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_GET_FAIL, "ceph get object fail", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_DELETE_NOT_EXIST, "ceph delete not exist", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(UNDERFS_CEPH_STAT_NOT_EXIST, "ceph stat not exist", tp::CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -226,8 +232,14 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(BDM_RW_IO_FAIL);
     LVOS_TP_UNREG(BDM_ALLOC_BLOCK_FAIL);
     LVOS_TP_UNREG(UNDERFS_CEPH_CREAT_FAIL);
-    LVOS_TP_UNREG(UNDERFS_SET_IOCTX_TRUE);
     LVOS_TP_UNREG(UNDERFS_SET_BUILDER_NULL);
+    LVOS_TP_UNREG(UNDERFS_CEPH_READ_FILE_FAIL);
+    LVOS_TP_UNREG(UNDERFS_CEPH_CONNECT_FAIL);
+    LVOS_TP_UNREG(UNDERFS_CEPH_IOCTX_CREAT_FAIL);
+    LVOS_TP_UNREG(UNDERFS_CEPH_GET_FAIL);
+    LVOS_TP_UNREG(UNDERFS_CEPH_DELETE_NOT_EXIST);
+    LVOS_TP_UNREG(UNDERFS_CEPH_STAT_NOT_EXIST);
+    LVOS_TP_UNREG(UNDERFS_HDFS_CONNECT_FAIL);
 }
 #else
 void tp::CacheTp::Register() noexcept {}

@@ -39,4 +39,4 @@ protected:
 };
 }
 }
-#endif //BOOSTIO_FILESYSTEM_H
+#endif // BOOSTIO_FILESYSTEM_H

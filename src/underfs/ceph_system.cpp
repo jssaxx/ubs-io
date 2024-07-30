@@ -18,7 +18,7 @@ BResult CephSystem::Init()
     }
 
     LoadCephConfig();
-    int ret = 0;
+    int ret = BIO_UFS_IOERR;
     LVOS_TP_START(UNDERFS_CEPH_CREAT_FAIL, &ret, -1);
     ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
     LVOS_TP_END;
@@ -26,8 +26,9 @@ BResult CephSystem::Init()
         LOG_ERROR("Failed to create, ret:" << ret);
         return BIO_UFS_IOERR;
     }
-
     ret = rados_conf_read_file(mConn, mCfgPath.c_str());
+    LVOS_TP_START(UNDERFS_CEPH_READ_FILE_FAIL, &ret, -1);
+    LVOS_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to read config, ret:" << ret);
         rados_shutdown(mConn);
@@ -35,6 +36,8 @@ BResult CephSystem::Init()
     }
 
     ret = rados_connect(mConn);
+    LVOS_TP_START(UNDERFS_CEPH_CONNECT_FAIL, &ret, -1);
+    LVOS_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to connect, ret:" << ret);
         rados_shutdown(mConn);
@@ -50,6 +53,8 @@ BResult CephSystem::Init()
     }
 
     ret = rados_ioctx_create(mConn, mPool.c_str(), &mIoCtx);
+    LVOS_TP_START(UNDERFS_CEPH_IOCTX_CREAT_FAIL, &ret, -1);
+    LVOS_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to create ioctx, ret:" << ret);
         rados_shutdown(mConn);
@@ -74,8 +79,6 @@ void CephSystem::Stop()
 BResult CephSystem::Put(const char *key, const char *value, const size_t len)
 {
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(UNDERFS_SET_IOCTX_TRUE, &mIoCtx, reinterpret_cast<rados_ioctx_t>(&ret));
-    LVOS_TP_END;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs put key:" << key);
 
@@ -94,14 +97,14 @@ BResult CephSystem::Put(const char *key, const char *value, const size_t len)
 BResult CephSystem::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(UNDERFS_SET_IOCTX_TRUE, &mIoCtx, reinterpret_cast<rados_ioctx_t>(&ret));
-    LVOS_TP_END;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
     LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -1);
     ret = rados_read(mIoCtx, key, value, len, off);
+    LVOS_TP_END;
+    LVOS_TP_START(UNDERFS_CEPH_GET_FAIL, &ret, (-ENOENT));
     LVOS_TP_END;
     int res = (ret < 0) ? BIO_UFS_IOERR : BIO_OK;
     BIO_TRACE_END(UFS_TRACE_GET, res);
@@ -119,14 +122,14 @@ BResult CephSystem::Get(const char *key, char *value, const size_t len, const ui
 BResult CephSystem::Delete(const char *key)
 {
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(UNDERFS_SET_IOCTX_TRUE, &mIoCtx, reinterpret_cast<rados_ioctx_t>(&ret));
-    LVOS_TP_END;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs delete key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_DEL);
     LVOS_TP_START(SERVER_UNDERFS_DELETE, &ret, -1);
     ret = rados_remove(mIoCtx, key);
+    LVOS_TP_END;
+    LVOS_TP_START(UNDERFS_CEPH_DELETE_NOT_EXIST, &ret, (-ENOENT));
     LVOS_TP_END;
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret == -ENOENT) {
@@ -143,14 +146,14 @@ BResult CephSystem::Delete(const char *key)
 BResult CephSystem::Stat(const char *key, ObjStat &stat)
 {
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(UNDERFS_SET_IOCTX_TRUE, &mIoCtx, reinterpret_cast<rados_ioctx_t>(&ret));
-    LVOS_TP_END;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs stat key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_STAT);
     LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, -1);
     ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
+    LVOS_TP_END;
+    LVOS_TP_START(UNDERFS_CEPH_STAT_NOT_EXIST, &ret, (-ENOENT));
     LVOS_TP_END;
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret == -ENOENT) {
@@ -167,8 +170,6 @@ BResult CephSystem::Stat(const char *key, ObjStat &stat)
 BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, CephSystem::ObjStat> &objStat)
 {
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(UNDERFS_SET_IOCTX_TRUE, &mIoCtx, reinterpret_cast<rados_ioctx_t>(&ret));
-    LVOS_TP_END;
     ChkTrue(mIoCtx != nullptr, BIO_NOT_READY, "Io context is nullptr, because of underFS not ready.");
     LOG_DEBUG("UnderFs list prefix:" << prefix);
 
