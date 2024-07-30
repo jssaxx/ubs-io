@@ -327,7 +327,8 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
             }
         }
     } while (isRetry);
-
+    LVOS_TP_START(SDK_MIRROR_SELECT_PT_FAIL, &ptId, UINT16_MAX);
+    LVOS_TP_END;
     return ptId;
 }
 
@@ -351,7 +352,7 @@ uint16_t MirrorClient::SelectingPtImpl(uint64_t objectId, AffinityStrategy affin
         CLIENT_LOG_ERROR("Invalid affinity type or pt view is empty, objectId:" << objectId << ", affinity:" <<
             affinity << ".");
     }
-    LVOS_TP_START(SDK_MIRROR_SET_PT_ID_FAIL, &ptId, UINT16_MAX);
+    LVOS_TP_START(SDK_MIRROR_SET_PT_ID_FAIL, &ptId, 0);
     LVOS_TP_END;
     if (UNLIKELY(ptId == UINT16_MAX)) {
         CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
@@ -493,6 +494,8 @@ BResult MirrorClient::Put(MirrorPut &param)
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
+            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut+1));
+            LVOS_TP_END;
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < mTimeOut) {
                 mUpdateView();
@@ -676,6 +679,8 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
+            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut+1));
+            LVOS_TP_END;
             CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < mTimeOut) {
                 mUpdateView();
@@ -835,6 +840,8 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
         if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
             ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
             retryTime = Monotonic::TimeSec() - startTime;
+            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut+1));
+            LVOS_TP_END;
             CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
             if (retryTime < mTimeOut) {
                 mUpdateView();

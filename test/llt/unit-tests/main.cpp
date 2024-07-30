@@ -11,6 +11,7 @@
 #include "test_net.h"
 #include "test_htracer.h"
 #include "test_disk.h"
+#include "test_underfs.h"
 #include "bdm_core.h"
 #include "test_wcache.h"
 #include "server/cm_server_view.h"
@@ -40,6 +41,7 @@ int main(int argc, char *argv[])
 {
     TestCm::Stub();
     TestHtracer::Stub();
+    TestUnderFs::Stub();
     (void)system("rm -rf test1");
     (void)system("rm -rf test2");
     (void)system("rm -rf ceph");
