@@ -5,6 +5,7 @@
 #include "bdm_threadpool.h"
 #include "bdm_common.h"
 #include "securec.h"
+#include "bdm_core.h"
 
 #define THREAD_SLEEP_INTERVAL 200
 
@@ -127,14 +128,14 @@ static int BdmThreadParaCheck(uint32_t threadNum, uint32_t queueSize)
 {
     if (threadNum == 0 || threadNum > BDM_THREAD_MAX_THREADS) {
         BDM_LOGERROR(0, "Invalid param, threadNum = %u.", threadNum);
-        return -1;
+        return BDM_CODE_ERR;
     }
 
     if (queueSize == 0 || queueSize > BDM_THREAD_MAX_QUEUE_SIZE) {
         BDM_LOGERROR(0, "Invalid param, queueSize = %u.", queueSize);
-        return -1;
+        return BDM_CODE_ERR;
     }
-    return 0;
+    return BDM_CODE_OK;
 }
 
 static void BdmThreadFreeRes(BDM_THREAD_S *thread)
@@ -156,7 +157,7 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
 
     if (((thread->queueTail + 1) % thread->queueSize) == thread->queueHead) {
         pthread_mutex_unlock(&thread->queueMutex);
-        return -1;
+        return BDM_CODE_ERR;
     }
 
     thread->queue[thread->queueTail].handle = handle;
@@ -170,12 +171,25 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
 
     pthread_mutex_unlock(&thread->queueMutex);
 
-    return 0;
+    return BDM_CODE_OK;
 }
 
 static int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t cpuid, const char *poolName,
     BDM_BATCH_CTX_S *batchCtx)
 {
+    if(thread == NULL) {
+        BDM_LOGERROR(0, "Invalid parameters, thread is nullptr.");
+        return BDM_CODE_ERR;
+    }
+    if(poolName == NULL) {
+        BDM_LOGERROR(0, "Invalid parameters, poolName is nullptr.");
+        return BDM_CODE_ERR;
+    }
+    if(batchCtx == NULL) {
+        BDM_LOGERROR(0, "Invalid parameters, batchCtx is nullptr.");
+        return BDM_CODE_ERR;
+    }
+
     thread->queueSize = queueSize;
     strncpy_s(thread->name, sizeof(thread->name), poolName, sizeof(thread->name) - 1);
     thread->batchHandle = batchCtx->batchHandle;
@@ -194,7 +208,7 @@ static int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t
     thread->queue = (BDM_THREAD_QUEUE_S *)malloc(sizeof(BDM_THREAD_QUEUE_S) * queueSize);
     if (thread->queue == NULL) {
         BdmThreadFreeRes(thread);
-        return -1;
+        return BDM_CODE_ERR;
     }
     memset_s(&thread->tid, sizeof(pthread_t), 0, sizeof(pthread_t));
     size_t len = sizeof(BDM_THREAD_QUEUE_S) * queueSize;
@@ -209,11 +223,11 @@ static int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t
 
     if (pthread_create(&(thread->tid), NULL, threadHandle, (void *)thread) != 0) {
         BdmThreadFreeRes(thread);
-        return -1;
+        return BDM_CODE_ERR;
     }
     pthread_setname_np(thread->tid, poolName);
     thread->init = TRUE;
-    return 0;
+    return BDM_CODE_OK;
 }
 
 BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, BDM_BIND_CPU_S *binds,
@@ -256,13 +270,13 @@ BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, B
 int32_t BdmThreadPoolAdd(BDM_THREAD_POOL_S *threadPool, BDM_THREAD_HANDLE handle, void *ctx)
 {
     if (threadPool == NULL) {
-        return -1;
+        return BDM_CODE_ERR;
     }
 
     uint64_t index = ATOMIC_INC(&threadPool->index) % threadPool->threadNum;
     BDM_THREAD_S *thread = &threadPool->threadList[index];
 
-    int32_t ret = -1;
+    int32_t ret = BDM_CODE_ERR;
     while (ret != 0) {
         ret = BdmThreadPoolEnqueue(thread, handle, ctx);
         if (ret == 0) {
@@ -306,7 +320,7 @@ static void BdmThreadDestroy(BDM_THREAD_S *thread, int32_t flags)
 int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadPool, int32_t flags)
 {
     if (threadPool == NULL) {
-        return -1;
+        return BDM_CODE_ERR;
     }
 
     uint32_t index;
@@ -318,5 +332,5 @@ int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadPool, int32_t flags)
     }
 
     free(threadPool);
-    return 0;
+    return BDM_CODE_OK;
 }
