@@ -308,7 +308,11 @@ BResult HdfsSystem::Stat(const char *key, ObjStat &objStat)
         return BIO_NOT_EXISTS;
     }
 
-    objStat.size = fileInfo->mSize;
+    if (fileInfo->mSize < 0) {
+        LOG_ERROR("invalid file size: " << fileInfo->mSize << ".");
+        return BIO_NOT_EXISTS;
+    }
+    objStat.size = static_cast<uint64_t>(fileInfo->mSize);
     objStat.time = fileInfo->mLastMod;
 
     constexpr int fileInfoCount = 1;
@@ -597,7 +601,12 @@ BResult HdfsSystem::LoadHdfsConfig()
         return BIO_UFS_IOERR;
     }
     mNameNodeIp = ipPort.first;
-    mNameNodePort = atoi(ipPort.second.c_str());
+    try {
+        mNameNodePort = static_cast<uint16_t>(stoi(ipPort.second));
+    } catch (...) {
+        LOG_ERROR("Failed to convert the type, port: " << ipPort.second << ".");
+        return BIO_UFS_IOERR;
+    }
     mHdfsWorkingPath = hdfsConfig.workingPath;
     return BIO_OK;
 }

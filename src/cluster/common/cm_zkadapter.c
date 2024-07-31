@@ -946,7 +946,11 @@ int32_t CmClientZkSubDataInfoChange(uint16_t poolId, const char *key, void *valu
         return CM_ERR;
     }
 
-    memcpy_s(restore->userKey, USER_DATA_MAX_LEN, key, strlen(key) + 1ul);
+    ret = memcpy_s(restore->userKey, USER_DATA_MAX_LEN, key, strlen(key) + 1ul);
+    if (ret != CM_OK) {
+        CM_LOGERROR("Memory copy failed, ret(%d).", ret);
+        return CM_ERR;
+    }
     restore->userHandle = *handle;
 
     int32_t len = (int32_t)valLen;

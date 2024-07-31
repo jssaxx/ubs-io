@@ -114,7 +114,7 @@ typedef struct {
     uint64_t chunkId;
     uint64_t offset;
     uint32_t retryNum;
-    uint32_t isRead;
+    bool isRead;
     BdmIoCb cb;
     void *ctx;
     void *item;
@@ -143,7 +143,7 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
                 strerror(errno), fd, rc, len, offset, remain);
             break;
         }
-        remain -= rc;
+        remain -= (uint64_t)rc;
     }
     LVOS_TP_END;
     return (len - remain);
@@ -396,7 +396,7 @@ int32_t BdmDiskSubmitAIO(void **argList, uint32_t argNum, void *ctx)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskHandleAIO(BdmAsyncOpsReq *req, int32_t isRead)
+int32_t BdmDiskHandleAIO(BdmAsyncOpsReq *req, bool isRead)
 {
     BdmObj *obj = (BdmObj *)req->objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
