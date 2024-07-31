@@ -179,9 +179,11 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     } else {
         LOG_ERROR("Invalid configuration with scene items: " << scene);
     }
-    mDaemonConfig.workIoAlignSize = conf->GetInt(WORK_IO_ALIGNSIZE.first);
-    mDaemonConfig.workIoTimeOut = conf->GetInt(WORK_IO_TIMEOUT.first);
-    mDaemonConfig.workNetTimeOut = conf->GetInt(WORK_NET_TIMEOUT.first);
+
+    // The value range of related parameters is verified during configuration parsing.
+    mDaemonConfig.workIoAlignSize = static_cast<uint32_t>(conf->GetInt(WORK_IO_ALIGNSIZE.first));
+    mDaemonConfig.workIoTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_IO_TIMEOUT.first));
+    mDaemonConfig.workNetTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_NET_TIMEOUT.first));
 
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
