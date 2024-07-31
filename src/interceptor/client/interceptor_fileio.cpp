@@ -200,6 +200,10 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     size_t realCount = std::min(count, INTERCEPTOR_RDWR_BUFFER_SIZE);
     size_t reqLen = sizeof(InterceptorPwriteIn) + realCount;
     InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(malloc(reqLen));
+    if (UNLIKELY(request == nullptr)) {
+        CLOG_ERROR("Memory allocation failed.");
+        return -1;
+    }
     request->pid = static_cast<uint32_t>(getpid());
     request->fd = static_cast<uint64_t>(fd);
     request->inode = file->GetInode();

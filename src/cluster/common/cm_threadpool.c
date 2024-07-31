@@ -105,7 +105,7 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t thread_num, uint16_t queue_size, u
         FreeRes(pool);
         return NULL;
     }
-    int len = sizeof(pthread_t) * thread_num;
+    size_t len = sizeof(pthread_t) * thread_num;
     memset_s(pool->tid, len, 0, len);
     len = sizeof(CM_THREAD_QUEUE_S) * queue_size;
     memset_s(pool->queue, len, 0, len);

@@ -166,7 +166,12 @@ BResult LocalSystem::Stat(const char *key, ObjStat &objStat)
         BIO_TRACE_END(UFS_TRACE_STAT, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
-    objStat.size = fileStat.st_size;
+
+    if (fileStat.st_size < 0) {
+        LOG_ERROR("invalid file size: " << fileStat.st_size << ".");
+        return BIO_NOT_EXISTS;
+    }
+    objStat.size = static_cast<uint64_t>(fileStat.st_size);
     objStat.time = fileStat.st_ctime;
     BIO_TRACE_END(UFS_TRACE_STAT, 0);
     return BIO_OK;
