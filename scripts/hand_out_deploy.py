@@ -67,10 +67,8 @@ INSTALL_SCRIPT_PATH = "/opt/boostio/scripts"
 
 
 BOOSTIO_CONF = "bio.conf"
-ZK_IP = ""
 HOST_IP_LIST = "host_ip_list"
 NODE_COUNT=0
-DEFAULT_ZK_PORT = 2181
 DEFAULT_HCOM_PORT = 9898
 CONFIG_OBJ = {}
 
@@ -101,7 +99,6 @@ def send_files_to_node(node):
         logging.info("pid:{0} create install dir /home/{1} fails. The dir already exist".format(PID, node[ip_str]))
     config = configparser.ConfigParser()
     config.read(CONFIG_PATH, encoding='utf-8')
-    config["bio"]["bio.cm.zk_host"] = ZK_IP + ":" + str(DEFAULT_ZK_PORT)
     config["bio"]["bio.net.data.ip_mask"] = str(node[net_str]) + "/24"
     config["bio"]["bio.disk.path"] = str(node[disk_str])
     folder_path = os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "{0}".format(node[node_id])))
@@ -411,15 +408,12 @@ def check_config(conf_path):
 def get_nodes_info_no_conf():
     user_str = "user"
     password_str = "password"
-    global ZK_IP
     global NODE_COUNT
     with open(HOST_IP_LIST) as host_file:
         count = 0
         for temp in host_file:
             ip_disk = temp.split("::")
             host_ip = ip_disk[0].strip()
-            if count == 0 :
-                ZK_IP = host_ip
             net_ip = ip_disk[1].strip()
             disk_path = ip_disk[2].strip()
             echo_to_terminal("node{0} net: {1} disk_path: {2}.".format(count, net_ip, disk_path))
@@ -442,15 +436,12 @@ def get_nodes_info_no_conf():
 def get_nodes_info():
     user_str = "user"
     password_str = "password"
-    global ZK_IP
     global NODE_COUNT
     with open(HOST_IP_LIST) as host_file:
         count = 0
         for temp in host_file:
             ip_disk = temp.split("::")
             host_ip = ip_disk[0].strip()
-            if count == 0 :
-                ZK_IP = host_ip
             net_ip = ip_disk[1].strip()
             disk_path = ip_disk[2].strip()
             echo_to_terminal("node{0} net: {1} disk_path: {2}.".format(count, net_ip, disk_path))
