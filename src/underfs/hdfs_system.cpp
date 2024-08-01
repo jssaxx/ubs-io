@@ -570,7 +570,8 @@ bool IsValidIP(const std::string &ip)
 
 bool IsValidWorkingPath(std::string &path)
 {
-    return ((!path.empty()) && (path.size() <= MAX_FILENAME_LENGTH));
+    const std::regex pattern("^/(?:[a-zA-Z0-9_]+(?:/[a-zA-Z0-9_]+)*)$");
+    return ((!path.empty()) && (path.size() <= MAX_FILENAME_LENGTH) && (std::regex_match(path, pattern)));
 }
 
 bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string &workingPath)
