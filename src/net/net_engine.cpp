@@ -365,6 +365,7 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
     options.oobType = NET_OOB_UDS;
     options.completionQueueDepth = NO_8192;
     options.eventPollingTimeout = NO_1000;
+    options.maxConnectionNum = NO_4096 * NO_1024;
     const static int DEFAULT_THREAD_PRIORITY = 0;
     options.workerThreadPriority = DEFAULT_THREAD_PRIORITY;
     if (isOobSvr) {

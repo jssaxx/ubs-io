@@ -40,7 +40,7 @@ int32_t InterceptorClientNetService::StartNetService()
         return BIO_ALLOC_FAIL;
     }
 
-    int16_t timeoutSec = NO_5 * NO_60; // 5min
+    int16_t timeoutSec = NO_60;
     uint32_t coreThreadNum = 1;
     uint32_t queueSize = NO_128;
     auto ret = mNetEngine->Initialize(timeoutSec, coreThreadNum, queueSize, Log);
