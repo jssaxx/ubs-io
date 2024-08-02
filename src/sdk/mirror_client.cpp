@@ -51,8 +51,6 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
     if (opType == 0) {
         flowId = rsp.flowId;
         isDegrade = rsp.isDegrade;
-    } else if (opType == 1 && rsp.flowId != 0) {
-        ret = BIO_ERR;
     }
     return ret;
 }

@@ -1243,7 +1243,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
     BIO_TRACE_END(MIRROR_TRACE_CREATE_FLOW, BIO_OK);
 
     CreateFlowResponse rsp{ flowId, req->isDegrade };
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
     return BIO_OK;
 }
 
