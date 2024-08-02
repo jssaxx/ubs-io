@@ -446,7 +446,7 @@ TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
 
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    EXPECT_EQ(ret, RET_CACHE_OK);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL");
 
     ret = BioDestroyCache(tenantId);

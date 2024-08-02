@@ -987,16 +987,35 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
 
 BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
+    bool isRetry = false;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t retryCnt = 0;
+    BResult ret = BIO_OK;
     BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_APPLY_QOS);
     mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
     BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_APPLY_QOS, BIO_OK);
     uint64_t updateWriteQuota = 0;
-    BResult ret = AllocSpaceImpl(param, spaceInfo, updateWriteQuota);
-    if (LIKELY(ret != BIO_OK)) {
+    do {
+        isRetry = false;
+        ret = AllocSpaceImpl(param, spaceInfo, updateWriteQuota);
+        if (LIKELY(ret == BIO_OK)) {
+            break;
+        }
+
         CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", length:" << param.length << ".");
-        BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS);
+        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
+            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
+            uint64_t retryTime = Monotonic::TimeSec() - startTime;
+            CLIENT_LOG_INFO("Delay retry, free copy alloc space  costs:" << retryTime << ", times:" << ++retryCnt);
+            if (retryTime < mTimeOut) {
+                mUpdateView();
+                isRetry = true;
+                sleep(1);
+            }
+        }
+    } while (isRetry);
+    if (ret != BIO_OK) {
         mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
-        BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS, BIO_OK);
         return ret;
     }
 
