@@ -214,7 +214,11 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
     WCacheSlicePtr &slice)
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
-    return Cache::Instance().GetWCacheSlice(sliceKey, slice);
+    BResult ret;
+    LVOS_TP_START(MIRROR_SERVER_GET_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+    ret = Cache::Instance().GetWCacheSlice(sliceKey, slice);
+    LVOS_TP_END;
+    return ret;
 }
 
 void MirrorServer::QueryCacheResource(QueryResourceRequest &req, QueryResourceResponse &rsp)
@@ -1003,8 +1007,11 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     }
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
+    BResult result;
     uint32_t ioStratege = 0;
-    BResult result = Put(*req, sliceP, ctx, ioStratege);
+    LVOS_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
+    result = Put(*req, sliceP, ctx, ioStratege);
+    LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
@@ -1034,7 +1041,10 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 {
     GetResponse rsp;
-    BResult result = Get(*req, rsp, ctx);
+    BResult result;
+    LVOS_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
+    result = Get(*req, rsp, ctx);
+    LVOS_TP_END;
     if (result != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, result, nullptr, 0);
         return BIO_OK;
@@ -1063,7 +1073,10 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)
 {
-    BResult result = Delete(*req);
+    BResult result;
+    LVOS_TP_START(MIRROR_SERVER_HDL_DELETE_FAIL, &result, BIO_INNER_RETRY);
+    result = Delete(*req);
+    LVOS_TP_END;
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
     return BIO_OK;
 }

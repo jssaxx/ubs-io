@@ -123,6 +123,10 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(UNDERFS_CEPH_GET_FAIL, "ceph get object fail", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_CEPH_DELETE_NOT_EXIST, "ceph delete not exist", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_CEPH_STAT_NOT_EXIST, "ceph stat not exist", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_GET_SLICE_FAIL, "mirror server get slice err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_PUT_FAIL, "mirror server handle put err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_GET_FAIL, "mirror server handle get err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_HDL_DELETE_FAIL, "mirror server handle delete err", tp::CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -240,6 +244,10 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(UNDERFS_CEPH_DELETE_NOT_EXIST);
     LVOS_TP_UNREG(UNDERFS_CEPH_STAT_NOT_EXIST);
     LVOS_TP_UNREG(UNDERFS_HDFS_CONNECT_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_GET_SLICE_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_PUT_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_GET_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_HDL_DELETE_FAIL);
 }
 #else
 void tp::CacheTp::Register() noexcept {}
