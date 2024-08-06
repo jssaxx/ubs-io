@@ -1357,7 +1357,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
         }
         if (req.enableCrc) {
-            uint32_t currentCrc = rsp.dataCrc != BioCrcUtil::Crc32(value, realLen);
+            uint32_t currentCrc = BioCrcUtil::Crc32(value, realLen);
             if (currentCrc != rsp.dataCrc) {
                 CLIENT_LOG_ERROR("Client Get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
                 rsp.dataCrc << ", current crc:" << currentCrc);
