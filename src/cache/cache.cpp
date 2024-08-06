@@ -415,5 +415,10 @@ void Cache::ShowEvictNegotiateQueue()
 {
     mWCacheManager->GetEvictNegotiateInfo();
 }
+
+BResult Cache::WCacheConsultEvict(uint64_t &flowId, const std::vector<WCacheSlicePtr> slices,std::vector<bool> result)
+{
+    return mWCacheManager->ConsultEvict(flowId, slices, result);
+}
 }
 }
