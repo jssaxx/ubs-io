@@ -519,19 +519,27 @@ BResult HdfsSystem::LoadHdfsLibrary()
     std::string hadoopHome = env::GetEnv("HADOOP_HOME", "");
     if (hadoopHome.empty()) {
         LOG_ERROR("Failed to check HADOOP_HOME.");
-        return BIO_INNER_ERR;
+        return BIO_UFS_IOERR;
     }
 
     std::string soFileName = hadoopHome + "/lib/native/libhdfs.so";
-    handler = dlopen(soFileName.c_str(), RTLD_NOW);
+    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    handler = dlopen(canonicalPath, RTLD_NOW);
+    free(canonicalPath);
+    canonicalPath = nullptr;
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library: " << soFileName << " , dlopen error: " << dlerror() << ".");
-        return BIO_INNER_ERR;
+        return BIO_UFS_IOERR;
     }
 
     if (InitOperations() != BIO_OK) {
         LOG_ERROR("Failed to init operations.");
-        return BIO_INNER_ERR;
+        return BIO_UFS_IOERR;
     }
 
     return BIO_OK;
