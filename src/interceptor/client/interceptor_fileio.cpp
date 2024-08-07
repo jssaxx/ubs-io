@@ -199,11 +199,13 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
 
     size_t realCount = std::min(count, INTERCEPTOR_RDWR_BUFFER_SIZE);
     size_t reqLen = sizeof(InterceptorPwriteIn) + realCount;
-    InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(malloc(reqLen));
-    if (UNLIKELY(request == nullptr)) {
+    char *tmpPtr = new (std::nothrow) char[reqLen];
+    if (UNLIKELY(tmpPtr == nullptr)) {
         CLOG_ERROR("Memory allocation failed.");
         return -1;
     }
+
+    InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
     request->pid = static_cast<uint32_t>(getpid());
     request->fd = static_cast<uint64_t>(fd);
     request->inode = file->GetInode();
@@ -212,7 +214,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     request->startTime = Monotonic::TimeNs();
     auto ret = memcpy_s(request->data, realCount, (const char *)buf, realCount);
     if (UNLIKELY(ret != 0)) {
-        free(request);
+        delete[] tmpPtr;
         request = nullptr;
         return -1;
     }
@@ -223,12 +225,12 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     if (UNLIKELY(ret != 0)) {
         CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", req->offset" << request->offset << ", count" <<
             count << ", rsp len:" << resp.dataLen << ".");
-        free(request);
+        delete[] tmpPtr;
         request = nullptr;
         return -1;
     }
 
-    free(request);
+    delete[] tmpPtr;
     request = nullptr;
     CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << resp.dataLen << ".");
     return count;
