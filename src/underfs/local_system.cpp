@@ -98,13 +98,21 @@ BResult LocalSystem::Get(const char *key, char *value, const size_t len, const u
     std::string keyPath = mEmulationCephPath;
     keyPath += key;
 
+    char *canonicalPath = realpath(keyPath.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
+        return BIO_NOT_EXISTS;
+    }
+
     using namespace std;
 
     LOG_DEBUG("Get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
     fstream file;
-    file.open(keyPath.c_str(), ios::in);
+    file.open(canonicalPath, ios::in);
+    free(canonicalPath);
+    canonicalPath = nullptr;
     int isOpen = static_cast<int>(file.is_open());
     LVOS_TP_START(SERVER_UNDERFS_GET, &isOpen, 0)
     LVOS_TP_END;
@@ -125,22 +133,32 @@ BResult LocalSystem::Delete(const char *key)
     std::string keyPath = mEmulationCephPath;
     keyPath += key;
 
+    char *canonicalPath = realpath(keyPath.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
+        return BIO_NOT_EXISTS;
+    }
+
     BIO_TRACE_START(UFS_TRACE_DEL);
-    std::ifstream infile(keyPath.c_str());
+    std::ifstream infile(canonicalPath);
     int isGood = static_cast<int>(infile.good());
     LVOS_TP_START(SERVER_UNDERFS_DELETE, &isGood, 1);
     LVOS_TP_END;
     if (!isGood) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
+        free(canonicalPath);
+        canonicalPath = nullptr;
         return BIO_NOT_EXISTS;
     }
     infile.close();
 
     int ret = -1;
     LVOS_TP_START(UNDERFS_DELETE_ERR, &ret, BIO_ERR);
-    ret = remove(keyPath.c_str());
+    ret = remove(canonicalPath);
     LVOS_TP_END;
+    free(canonicalPath);
+    canonicalPath = nullptr;
     if (ret != BIO_OK) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_UFS_IOERR);
         LOG_ERROR("Fail to delete file, " << keyPath.c_str());
