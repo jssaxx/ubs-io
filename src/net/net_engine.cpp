@@ -454,9 +454,10 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr,
     options.maxPostSendCountPerQP = NO_1024;
     options.dontStartWorkers = false;
     options.completionQueueDepth = NO_2048;
-    options.heartBeatIdleTime = NO_5;
+    options.heartBeatIdleTime = NO_1;  // 保证空闲时，网卡down能在1秒断开
     options.heartBeatProbeTimes = NO_1;
     options.heartBeatProbeInterval = NO_1;
+    options.tcpUserTimeout = NO_3;
     options.SetNetDeviceIpMask(ipMask);
     options.SetWorkerGroups(GenerateWorkersSetting(opt));
     if (isOobSvr) {
