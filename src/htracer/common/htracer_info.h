@@ -13,7 +13,7 @@ namespace ock {
 namespace htracer {
 class HtracerInfo {
 public:
-    __always_inline void DelayBegin(std::string &tpName)
+    inline void DelayBegin(std::string &tpName)
     {
         bool expectval = false;
         if (nameValid.compare_exchange_weak(expectval, true)) {
@@ -22,7 +22,7 @@ public:
         begin.fetch_add(1u, std::memory_order_relaxed);
     }
 
-    __always_inline void DelayEnd(uint64_t diff, int32_t retCode)
+    inline void DelayEnd(uint64_t diff, int32_t retCode)
     {
         if (retCode != 0) {
             badEnd.fetch_add(1u, std::memory_order_relaxed);
@@ -48,7 +48,7 @@ public:
         goodEnd.fetch_add(1u, std::memory_order_relaxed);
     }
 
-    __always_inline void Reset()
+    inline void Reset()
     {
         begin = 0;
         goodEnd = 0;
@@ -58,42 +58,42 @@ public:
         total = 0;
     }
 
-    __always_inline const std::string &GetName() const
+    inline const std::string &GetName() const
     {
         return name;
     }
 
-    __always_inline uint64_t GetBegin() const
+    inline uint64_t GetBegin() const
     {
         return begin.load(std::memory_order_relaxed);
     }
 
-    __always_inline uint64_t GetGoodEnd() const
+    inline uint64_t GetGoodEnd() const
     {
         return goodEnd.load(std::memory_order_relaxed);
     }
 
-    __always_inline uint64_t GetBadEnd() const
+    inline uint64_t GetBadEnd() const
     {
         return badEnd.load(std::memory_order_relaxed);
     }
 
-    __always_inline uint64_t GetMin() const
+    inline uint64_t GetMin() const
     {
         return min.load(std::memory_order_relaxed);
     }
 
-    __always_inline uint64_t GetMax() const
+    inline uint64_t GetMax() const
     {
         return max.load(std::memory_order_relaxed);
     }
 
-    __always_inline uint64_t GetTotal() const
+    inline uint64_t GetTotal() const
     {
         return total.load(std::memory_order_relaxed);
     }
 
-    __always_inline bool NameValid() const
+    inline bool NameValid() const
     {
         return nameValid;
     }
