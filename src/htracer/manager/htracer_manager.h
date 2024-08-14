@@ -13,16 +13,17 @@ namespace ock {
 namespace htracer {
 constexpr int32_t MAX_SERVICE_NUM = 64;
 constexpr int32_t MAX_INNER_ID_NUM = 1024;
+constexpr uint32_t SHIFT_AMOUNT = 16;
 
 class HtracerManager {
 public:
-    static __always_inline HtracerInfo **GetTracePoints()
+    static inline HtracerInfo **GetTracePoints()
     {
         static HtracerInfo **tracePoints = CreateInstance();
         return tracePoints;
     }
 
-    static __always_inline HtracerInfo *GetPointPtr(int32_t tpId)
+    static inline HtracerInfo *GetPointPtr(int32_t tpId)
     {
         auto tracePoints = GetTracePoints();
         if (tracePoints == nullptr) {
@@ -36,7 +37,7 @@ public:
         return &tracePoints[serviceId][innerId];
     }
 
-    static __always_inline void DelayBegin(int32_t tpId, std::string tpName)
+    static inline void DelayBegin(int32_t tpId, std::string tpName)
     {
         auto ptr = GetPointPtr(tpId);
         if (ptr == nullptr) {
@@ -45,7 +46,7 @@ public:
         ptr->DelayBegin(tpName);
     }
 
-    static __always_inline void DelayEnd(int32_t tpId, const uint64_t &diff, int32_t retCode)
+    static inline void DelayEnd(int32_t tpId, const uint64_t &diff, int32_t retCode)
     {
         auto ptr = GetPointPtr(tpId);
         if (ptr == nullptr) {
@@ -54,7 +55,7 @@ public:
         ptr->DelayEnd(diff, retCode);
     }
 
-    static __always_inline bool IsEnable()
+    static inline bool IsEnable()
     {
         return mEnable;
     }
@@ -63,7 +64,7 @@ public:
     static bool mEnable;
 
 private:
-    static __always_inline HtracerInfo **CreateInstance()
+    static inline HtracerInfo **CreateInstance()
     {
         auto **instance = new (std::nothrow) HtracerInfo *[MAX_SERVICE_NUM];
         if (instance == nullptr) {
@@ -94,12 +95,12 @@ private:
         return instance;
     }
 
-    static __always_inline uint32_t GetServiceId(uint32_t tpId)
+    static inline uint32_t GetServiceId(uint32_t tpId)
     {
-        return ((tpId >> 16) & 0xFFFF);
+        return ((tpId >> SHIFT_AMOUNT) & 0xFFFF);
     }
 
-    static __always_inline uint32_t GetInnerId(uint32_t tpId)
+    static inline uint32_t GetInnerId(uint32_t tpId)
     {
         return (tpId & 0xFFFF);
     }
