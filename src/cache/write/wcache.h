@@ -136,7 +136,7 @@ private:
     BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearDisk();
 
-    void PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr);
+    void PutSetIoStratege(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);

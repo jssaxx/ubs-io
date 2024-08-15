@@ -17,6 +17,7 @@
 #include "bio_lock.h"
 #include "mirror_client.h"
 #include "bio_client_net.h"
+#include "underfs.h"
 
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
@@ -69,7 +70,13 @@ public:
 
     inline BResult Put(MirrorClient::MirrorPut &param)
     {
-        return mMirror->Put(param);
+        BResult ret = mMirror->Put(param);
+        if (UNLIKELY(ret == BIO_QUOTA_NOT_ENOUGH)) {
+            BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
+            ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
+            BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
+        }
+        return ret;
     }
 
     inline BResult Put(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
@@ -193,6 +200,7 @@ public:
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
     void BioClientMirrorExit();
+    BResult BioClientUnderfsInit(WorkerMode mode);
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
     void BioClientUpdateHandle();

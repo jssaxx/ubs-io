@@ -8,7 +8,7 @@
 #include <memory>
 #include "file_system.h"
 #include "bio_ref.h"
-#include "bio_config_instance.h"
+#include "underfs_config.h"
 
 namespace ock {
 namespace bio {
@@ -16,6 +16,11 @@ using UnderFsPtr = std::shared_ptr<FileSystem>;
 class UnderFs {
 public:
     using ObjStat = FileSystem::ObjStat;
+
+    static void InitUnderFsConfig(BioConfig::UnderFsConfig config)
+    {
+        UnderFsConfig::Initialize(config);
+    }
 
     static std::shared_ptr<FileSystem> &Instance()
     {
@@ -29,7 +34,7 @@ private:
 #ifdef DEBUG_UT
         return LOCAL_SYSTEM;
 #else
-        return BioConfig::Instance()->GetUnderFsConfig().underFsType;
+        return UnderFsConfig::Instance()->GetUnderFsConfig().underFsType;
 #endif
     }
 };

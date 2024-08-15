@@ -110,7 +110,7 @@ TEST_F(TestBioServer, test_bio_server_put)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = NO_128;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0UL;
     req.mrSize = 0;
@@ -132,7 +132,7 @@ TEST_F(TestBioServer, test_bio_server_put_slice_alloc_fail_reply_ok)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0UL;
     req.mrSize = 0;
@@ -157,7 +157,7 @@ TEST_F(TestBioServer, test_bio_server_put_slice_normal_alloc_fail_reply_ok)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = NO_128;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -241,7 +241,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_return_fail)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0UL;
     req.mrSize = 0;
@@ -262,7 +262,7 @@ TEST_F(TestBioServer, test_put_slice_length_eq_zero_alloc_slice_err_return_fail)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -286,7 +286,7 @@ TEST_F(TestBioServer, test_put_slice_alloc_slice_err_return_fail)
     req.length = NO_128;
     req.mrKey = 1;
     req.sliceLen = NO_128;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -1090,4 +1090,29 @@ TEST_F(TestBioServer, test_start_server_config_init_err_return_fail)
     LVOS_HVS_deactiveTracePoint(0, "CONFIG_INIT_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CONFIG");
+}
+
+TEST_F(TestBioServer, test_start_server_quota_handle)
+{
+    ServiceContext ctx;
+    AllocQuotaRequest allocReq = { { MESSAGE_MAGIC, NO_1, NO_1, NO_1, getpid() }, NO_1, NO_1024, NO_4194304 };
+    auto ret = BioServer::Instance()->GetMirrorServer()->MirrorServerAllocQuota(ctx, &allocReq);
+    EXPECT_EQ(ret, BIO_OK);
+
+    FreeQuotaRequest freeReq = { { MESSAGE_MAGIC, NO_1, NO_1, NO_1, getpid() }, NO_1, NO_1024, NO_4194304 };
+    ret = BioServer::Instance()->GetMirrorServer()->MirrorServerFreeQuota(ctx, &freeReq);
+    EXPECT_EQ(ret, BIO_OK);
+
+    QueryQuotaRequest queryReq = { { MESSAGE_MAGIC, NO_1, NO_1, NO_1, getpid() }, NO_1};
+    ret = BioServer::Instance()->GetMirrorServer()->MirrorServerQueryQuota(ctx, &queryReq);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_get_underfs_config_return_fial)
+{
+    LOG_INFO("test_get_underfs_config_return_fial");
+    GetUnderFsConfigRequest req{ { MESSAGE_MAGIC, 1, 1, 1, 1 } };
+    ServiceContext ctx;
+    auto ret = MirrorServer::Instance()->MirrorServerGetUnderFsConfig(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
 }

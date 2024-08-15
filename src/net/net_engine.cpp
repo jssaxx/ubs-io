@@ -568,24 +568,23 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     } else {
         mDataChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), 1);
     }
-    NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", peer connected from:" << netPayload.srcNodeId.nid <<
-        "-" << netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload " << payload << ".");
+    NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", nodeId:" << netPayload.srcNodeId.nid << ", pid:" <<
+        netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload " << payload << ".");
     return BIO_OK;
 }
 
 void NetEngine::ChannelBroken(const ChannelPtr &ch)
 {
     NetChannelUpCtx ctx(ch->UpCtx());
-    NET_LOG_WARN("Net Engine channel " << ch->Id() << " broken, node id " << ctx.peerId << ", panel:" <<
-        ctx.IsCtrlPanel() << ".");
-
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
+    NET_LOG_WARN("Receive broken channel " << ch->Id() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid <<
+        ", panel:" << ctx.IsCtrlPanel() << ".");
     if (ctx.IsCtrlPanel()) {
         mCtrlChannelMgr->RemoveChannel(dstNid, ch);
     } else {
         mDataChannelMgr->RemoveChannel(dstNid, ch);
         if (mHandlerBroken != nullptr) {
-            mHandlerBroken(dstNid.nid, dstNid.pid); // 去重
+            mHandlerBroken(dstNid.nid, dstNid.pid);
         }
     }
 }

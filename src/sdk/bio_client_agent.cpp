@@ -80,7 +80,13 @@ BResult BioClientAgent::InitOperation()
     if ((getLocalNidOp = reinterpret_cast<GetLocalNidFuncPtr>(LoadFunction("GetLocalNid"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((getResourceOp = reinterpret_cast<GetLocalResQuotaFuncPtr>(LoadFunction("GetResourceInfo"))) == nullptr) {
+    if ((getQuotaInfoOp = reinterpret_cast<GetQuotaInfoFuncPtr>(LoadFunction("GetQuotaInfo"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((allocQuotaOp = reinterpret_cast<AllocQuotaFuncPtr>(LoadFunction("AllocQuota"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((freeQuotaOp = reinterpret_cast<FreeQuotaFuncPtr>(LoadFunction("FreeQuota"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNodeViewOp = reinterpret_cast<GetNodeViewFuncPtr>(LoadFunction("GetNodeView"))) == nullptr) {
@@ -187,20 +193,50 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     return ret;
 }
 
-BResult BioClientAgent::GetLocalResourceInfo(uint64_t &writeRes, uint64_t &readRes)
+BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t &preloadSize)
 {
     BResult ret = BIO_OK;
-    QueryResourceRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    QueryResourceResponse rsp;
+    QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, scene };
+    QueryQuotaResponse rsp;
     if (mMode == CONVERGENCE) {
-        ret = getResourceOp(&req, &rsp);
+        ret = getQuotaInfoOp(&req, &rsp);
     } else {
-        ret = net::BioClientNet::Instance()->SendSync<QueryResourceRequest, QueryResourceResponse>(INVALID_NID,
-            BIO_OP_SDK_GET_RES, req, rsp);
+        ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
+            BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
     if (ret == BIO_OK) {
-        writeRes = rsp.writeRes;
-        readRes = rsp.readRes;
+        enable = rsp.enable;
+        preloadSize = rsp.preloadSize;
+    }
+    return ret;
+}
+
+BResult BioClientAgent::AllocQuota(AllocQuotaRequest &req, uint64_t &expectPreloadSize)
+{
+    BResult ret = BIO_INNER_ERR;
+    AllocQuotaResponse rsp = { 0 };
+    if (mMode == CONVERGENCE) {
+        ret = allocQuotaOp(&req, &rsp);
+    } else {
+        ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(INVALID_NID,
+            BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
+    }
+    expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);
+    return ret;
+}
+
+BResult BioClientAgent::FreeQuota(FreeQuotaRequest &req)
+{
+    BResult ret = BIO_INNER_ERR;
+    if (mMode == CONVERGENCE) {
+        ret = freeQuotaOp(&req);
+    } else {
+        BResult hdlRet = BIO_INNER_ERR;
+        ret = net::BioClientNet::Instance()->SendSync<FreeQuotaRequest, BResult>(INVALID_NID,
+            BIO_OP_SDK_FREE_QUOTA, req, hdlRet);
+        if (ret == BIO_OK && hdlRet != BIO_OK) {
+            ret = hdlRet;
+        }
     }
     return ret;
 }
@@ -400,8 +436,8 @@ void BioClientAgent::SendPutRequestLocal(PutRequest *req, Callback &callback)
 void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
 {
     if (mMode == CONVERGENCE) {
-        BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
         PutResponse rsp;
+        BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
         auto ret = putOp(req, &rsp);
         BIO_TRACE_END(SDK_TRACE_PUT_LOCAL_SYNC, ret);
         callback.cb(callback.cbCtx, &rsp, sizeof(PutResponse), ret);
@@ -475,8 +511,8 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
-                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key <<
-                    ", origin crc:" << rsp.dataCrc << ", current crc:" << currentCrc);
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
+                    rsp.dataCrc << ", current crc:" << currentCrc << ".");
                 ret = BIO_CRC_ERR;
             }
         }

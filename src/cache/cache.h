@@ -83,8 +83,6 @@ public:
 
     void GetCacheResources(CacheResDescription &desc, CacheType type);
 
-    uint64_t GetAdjustWriteQuota();
-
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };

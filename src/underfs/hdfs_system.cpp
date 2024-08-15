@@ -9,6 +9,7 @@
 #include "bio_config_instance.h"
 #include "bio_tracepoint_helper.h"
 #include "ceptor_env.h"
+#include "underfs_config.h"
 
 using namespace ock::interceptor;
 
@@ -357,6 +358,10 @@ BResult HdfsSystem::ListDirectoryRecursive(const char *path,
         return BIO_UFS_IOERR;
     }
 
+    if (!files) {
+        return BIO_OK;
+    }
+
     std::string fileName{};
     BResult ret = BIO_OK;
     for (int i = 0; i < numEntries; ++i) {
@@ -390,6 +395,10 @@ BResult HdfsSystem::ListFilesInDirectory(const char *prefix,
     if (!files && (errno != BIO_OK)) {
         LOG_ERROR("Failed to list directory, directory:" << mHdfsWorkingPath << ".");
         return BIO_UFS_IOERR;
+    }
+
+    if (!files) {
+        return BIO_OK;
     }
 
     for (int i = 0; i < numEntries; ++i) {
@@ -601,9 +610,8 @@ bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string 
 
 BResult HdfsSystem::LoadHdfsConfig()
 {
-    BioConfigPtr config = BioConfig::Instance();
-    BioConfig::HdfsConfig hdfsConfig = { config->GetUnderFsConfig().hdfsConfig.nameNode,
-                                         config->GetUnderFsConfig().hdfsConfig.workingPath };
+    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+    BioConfig::HdfsConfig hdfsConfig = { config.hdfsConfig.nameNode, config.hdfsConfig.workingPath };
     std::pair<std::string, std::string> ipPort = ParseIpPort(hdfsConfig.nameNode);
     if (!IsValidHdfsConfig(ipPort, hdfsConfig.workingPath)) {
         LOG_ERROR("invalid hdfs config.");

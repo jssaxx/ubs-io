@@ -88,7 +88,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
     for (uint32_t i = 0; i < cleanList.size(); i++) {
         uint64_t chunkId = cleanList[i];
-        FlowManager::MediaFree(mType, mMediaId, mChunkSize, chunkId, mFlowId);
+        FlowManager::MediaFree(mRole, mType, mMediaId, mChunkSize, chunkId, mFlowId);
     }
     BIO_TRACE_END(FLOW_TRACE_TRUNCATE, 0);
     return BIO_OK;
