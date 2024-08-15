@@ -14,7 +14,9 @@
 #include "bio_server_c.h"
 #include "interceptor_server.h"
 #include "bio_crc_util.h"
+#include "cache_overload_ctrl.h"
 #include "bio_server.h"
+
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include <dlfcn.h>
@@ -72,6 +74,8 @@ BResult BioServer::Start()
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
+
+    UnderFs::InitUnderFsConfig(mConfig->GetUnderFsConfig());
     auto &daemonConfig = mConfig->GetDaemonConfig();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
 
@@ -441,6 +445,9 @@ BResult BioServer::BioCacheInit()
         } else {
             ReConnect(nodeId);
         }
+        nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
+        QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
+        CacheOverloadCtrl::Instance().RecycleQuota(holder);
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     LVOS_TP_END;
@@ -658,10 +665,20 @@ int32_t GetLocalNid(GetLocalNidResponse *rsp)
     return 0;
 }
 
-int32_t GetResourceInfo(QueryResourceRequest *req, QueryResourceResponse *rsp)
+int32_t GetQuotaInfo(QueryQuotaRequest *req, QueryQuotaResponse *rsp)
 {
-    BioServer::Instance()->GetMirrorServer()->QueryCacheResource(*req, *rsp);
+    BioServer::Instance()->GetMirrorServer()->QueryCacheQuota(*req, *rsp);
     return BIO_OK;
+}
+
+int32_t AllocQuota(AllocQuotaRequest *req, AllocQuotaResponse *rsp)
+{
+    return BioServer::Instance()->GetMirrorServer()->AllocCacheQuota(*req, *rsp);
+}
+
+int32_t FreeQuota(FreeQuotaRequest *req)
+{
+    return BioServer::Instance()->GetMirrorServer()->FreeCacheQuota(*req);
 }
 
 int32_t GetNodeView(QueryNodeViewRequest *req, QueryNodeViewResponse *rsp)
@@ -722,7 +739,6 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
         return static_cast<int32_t>(BIO_INNER_ERR);
     }
     *rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
-    (*rsp)->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     (*rsp)->addrNum = addrVec.size();
     for (uint32_t i = 0; i < addrVec.size(); i++) {
         (*rsp)->addr[i].chunkId = addrVec[i].chunkId;
@@ -801,12 +817,10 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     StatisticPutIoSize(req->length);
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
-    uint32_t ioStratege = 0;
-    auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStratege);
+    uint32_t ioStrategy = 0;
+    auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
-
-    rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
-    rsp->ioStratege = ioStratege;
+    rsp->ioStrategy = ioStrategy;
     return ret;
 }
 

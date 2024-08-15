@@ -8,9 +8,9 @@
 #include "bio_server.h"
 #include "net_stub.h"
 #include "tracepoint.h"
-#include "test_net.h"
-
+#include "bio_client_net.h"
 #include "bio_client_log.h"
+#include "test_net.h"
 
 using namespace ock::bio;
 
@@ -329,4 +329,13 @@ TEST_F(TestNet, test_net_get_shm_address)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t mShmOffset = 0;
     auto ret = engine->GetShmAddress(mShmOffset);
+}
+
+TEST_F(TestNet, test_net_get_underfs_config)
+{
+    LOG_INFO("test_net_get_underfs_config");
+    net::BioClientNetPtr clientNet = net::BioClientNet::Instance();
+    BioConfig::UnderFsConfig config;
+    auto ret = clientNet->GetUnderFsConfig(config);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 }

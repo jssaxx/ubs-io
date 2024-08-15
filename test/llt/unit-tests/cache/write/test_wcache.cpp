@@ -811,7 +811,7 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     req.flowId = 0;
     req.mrKey = 1;
     req.sliceLen = 0;
-    req.ioStratege = 0;
+    req.ioStrategy = 0;
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
@@ -839,12 +839,12 @@ TEST_F(TestWCache, test_bio_olc_low_water_level)
     frontWriteBw = NO_3;
     evict2DiskBw = NO_1;
     ret = CacheOverloadCtrl::Instance().LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_3);
+    EXPECT_EQ(proc, NO_2);
 
     frontWriteBw = NO_5;
     evict2DiskBw = NO_1;
     ret = CacheOverloadCtrl::Instance().LowWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_4);
+    EXPECT_EQ(proc, NO_3);
 }
 
 TEST_F(TestWCache, test_bio_olc_mid_water_level)
@@ -864,12 +864,12 @@ TEST_F(TestWCache, test_bio_olc_mid_water_level)
     frontWriteBw = NO_3;
     evict2DiskBw = NO_1;
     ret = CacheOverloadCtrl::Instance().MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_3);
+    EXPECT_EQ(proc, NO_2);
 
     frontWriteBw = NO_5;
     evict2DiskBw = NO_1;
     ret = CacheOverloadCtrl::Instance().MidWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_4);
+    EXPECT_EQ(proc, NO_3);
 }
 
 TEST_F(TestWCache, test_bio_olc_high_water_level)
@@ -889,34 +889,35 @@ TEST_F(TestWCache, test_bio_olc_high_water_level)
     frontWriteBw = NO_3;
     evict2DiskBw = NO_1;
     ret = CacheOverloadCtrl::Instance().HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_3);
+    EXPECT_EQ(proc, NO_2);
 
     frontWriteBw = NO_5;
     evict2DiskBw = NO_1;
     ret = CacheOverloadCtrl::Instance().HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_4);
-}
-
-TEST_F(TestWCache, test_bio_olc_limited_water_level)
-{
-    LOG_INFO("test_bio_olc_limited_water_level");
-    uint64_t frontWriteBw = NO_1;
-    uint64_t evict2DiskBw = NO_2;
-    uint32_t proc = 0;
-    auto ret = CacheOverloadCtrl::Instance().LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
-    EXPECT_EQ(proc, NO_1);
-
-    frontWriteBw = NO_3;
-    evict2DiskBw = NO_2;
-    ret = CacheOverloadCtrl::Instance().LimitedWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     EXPECT_EQ(proc, NO_2);
 }
 
 TEST_F(TestWCache, test_bio_olc_show)
 {
     LOG_INFO("test_bio_olc_show");
-    std::vector<uint64_t> writeBwVec;
-    std::vector<uint64_t> evictBwVec;
-    uint64_t vmVec;
-    CacheOverloadCtrl::Instance().Show(writeBwVec, evictBwVec, vmVec);
+    uint64_t vmVec = 0;
+    uint64_t totalQuota = 0;
+    uint64_t remainQuota = 0;
+    std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> holders;
+    CacheOverloadCtrl::Instance().Show(vmVec, totalQuota, remainQuota, holders);
+}
+
+TEST_F(TestWCache, test_bio_olc_recycle)
+{
+    LOG_INFO("test_bio_olc_recycle");
+    QuotaHolder holder = { NO_1, NO_1024 };
+    auto holdMap = CacheOverloadCtrl::Instance().GetHolders();
+    auto iter = holdMap->find(holder);
+    if (iter == holdMap->end()) {
+        holdMap->emplace(holder, NO_4194304);
+    }
+
+    CacheOverloadCtrl::Instance().RecycleQuota(holder);
+    iter = holdMap->find(holder);
+    EXPECT_EQ(iter, holdMap->end());
 }

@@ -39,12 +39,12 @@ BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
 {
     mMode = mode;
     BResult ret = BIO_OK;
-    if (mode == CONVERGENCE) {
+    if (mode == CONVERGENCE) { // 融合部署场景获取server端的net引擎实例, client和server共用一个net引擎.
         mNetEngine = BioClientAgent::Instance()->GetNetService();
         if (mNetEngine == nullptr) {
             ret = BIO_INNER_ERR;
         }
-    } else {
+    } else { // 分离部署场景创建IPC服务.
         ret = StartIpcService(netConf);
     }
     return ret;
@@ -88,8 +88,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_1);
-        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
-            ".");
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port);
         LVOS_TP_START(SDK_BIO_NET_START_CONNECT_FAIL, &ret, BIO_INNER_ERR);
         ret = mNetEngine->SyncConnect(info);
         LVOS_TP_END;
@@ -224,7 +223,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
     }
 
     // 1. Initialize net engine
-    int16_t timeoutSec = NO_16; // 16s，分离部署会被重置
+    int16_t timeoutSec = NO_16;
     auto ret = mNetEngine->Initialize(timeoutSec, 0, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
@@ -233,28 +232,19 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
 
     // 2. start ipc service
     NetOptions netOptions;
-    netOptions.role = NET_CLIENT;
-    netOptions.connCount = NO_4;
-    netOptions.handlerCount = NO_4;
-    netOptions.protocol = ServiceProtocol::SHM;
-    netOptions.enableTls = netConf.enableTls;
-    netOptions.certificationPath = netConf.certificationPath;    /* certification path */
-    netOptions.caCerPath = netConf.caCerPath;                    /* caCer path */
-    netOptions.caCrlPath = netConf.caCrlPath;                    /* caCrl path */
-    netOptions.privateKeyPath = netConf.privateKeyPath;          /* private key path */
-    netOptions.privateKeyPassword = netConf.privateKeyPassword;  /* private key password */
-    netOptions.hseKfsMasterPath = netConf.hseKfsMasterPath;      /* hseceasy kfs master path */
-    netOptions.hseKfsStandbyPath = netConf.hseKfsStandbyPath;    /* hseceasy kfs standby path */
+    netOptions.FillNetBaseConfigs(NO_4, NO_4, NET_CLIENT, ServiceProtocol::SHM);
+    netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
+        netConf.privateKeyPath, netConf.privateKeyPassword, netConf.hseKfsMasterPath, netConf.hseKfsStandbyPath);
     ret = mNetEngine->Start(netOptions);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Start ipc service failed, result:" << ret << ".");
         return ret;
     }
 
-    // 3. listen channel broken event
-    ret = ListenEvent();
+    // 3. set channel broken handler
+    ret = SetChannelBrokenHandler();
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Listen event failed, result:" << ret << ".");
+        CLIENT_LOG_ERROR("Set net channel broken handler failed, result:" << ret << ".");
         return ret;
     }
 
@@ -290,20 +280,19 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     return mNetEngine->Start(netOptions);
 }
 
-BResult BioClientNet::ListenEvent()
+BResult BioClientNet::SetChannelBrokenHandler()
 {
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         std::thread t([this, nodeId]() {
-            if (nodeId == INVALID_NID) {
+            if (nodeId == INVALID_NID) { // 本地server进程退出, 则恢复IPC.
                 RecoverIpc();
-            } else {
+            } else { // 远端server进程退出, 则恢复RPC.
                 RecoverRpc(nodeId);
             }
         });
         t.detach();
     };
     mNetEngine->RegisterChannelBrokenHandler(channelBroken);
-
     return BIO_OK;
 }
 
@@ -323,7 +312,7 @@ void BioClientNet::RecoverIpc()
 
 BResult BioClientNet::RecoverIpcService()
 {
-    // 1. connection to local bio server
+    // 1. connection to local bio server.
     ConnectInfo info(INVALID_NID, static_cast<uint32_t>(getpid()), INVALID_NID);
     auto ret = mNetEngine->SyncConnect(info);
     if (ret != BIO_OK) {
@@ -331,13 +320,12 @@ BResult BioClientNet::RecoverIpcService()
         return ret;
     }
 
-    // 2. shm init
+    // 2. init shm pool.
     ret = ShmInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get shm info fail, result:" << ret << ".");
-        return ret;
     }
-    return BIO_OK;
+    return ret;
 }
 
 void BioClientNet::StopInner()
@@ -388,8 +376,9 @@ void BioClientNet::RecoverRpc(uint32_t peerId)
         CLIENT_LOG_WARN("Target peer id:" << peerId << " is offline.");
         return;
     }
-    CLIENT_LOG_INFO("ReConnect to remote node:" << peerId << ", ip:" << ip << ", port:" << port << ".");
+    CLIENT_LOG_INFO("Reconnect to remote node:" << peerId << ", ip:" << ip << ", port:" << port << ".");
     sleep(NO_2);
+
     ConnectInfo info(mLocalNid, static_cast<uint32_t>(getpid()), peerId, ip, port, NO_1);
     auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
         if (ret != BIO_OK) {
@@ -401,4 +390,25 @@ void BioClientNet::RecoverRpc(uint32_t peerId)
         CLIENT_LOG_ERROR("Connect to " << info.peerId.nid << " failed, ret: " << result << ".");
     }
     return;
+}
+
+BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
+{
+    GetUnderFsConfigRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    GetUnderFsConfigResponse rsp;
+    BResult ret = mNetEngine->SyncCall<GetUnderFsConfigRequest, GetUnderFsConfigResponse>(INVALID_NID,
+        BIO_OP_SDK_GET_UFS_CONFIG, req, rsp);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send get underfs configs request failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    config.underFsType = rsp.underFsType;
+    config.hdfsConfig.nameNode = rsp.hdfsConfig.nameNode;
+    config.hdfsConfig.workingPath = rsp.hdfsConfig.workingPath;
+    config.cephConfig.user = rsp.cephConfig.user;
+    config.cephConfig.cluster = rsp.cephConfig.cluster;
+    config.cephConfig.cfgPath = rsp.cephConfig.cfgPath;
+    config.cephConfig.pools.insert({ 0, rsp.cephConfig.pool });
+    return BIO_OK;
 }

@@ -7,6 +7,14 @@
 
 namespace ock {
 namespace bio {
+#ifndef ROUND_UP
+#define ROUND_UP(x, align) (((x) + (align)-1) & ~((align)-1))
+#endif
+
+#ifndef ROUND_DOWN
+#define ROUND_DOWN(x, align) ((x) & ~((align)-1))
+#endif
+
 #ifndef LIKELY
 #define LIKELY(x) (__builtin_expect(!!(x), 1) != 0)
 #endif

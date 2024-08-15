@@ -51,11 +51,13 @@ public:
     BResult DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
     BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t flowIndex, uint64_t length, WCacheSlicePtr &slice);
 
-    void QueryCacheResource(QueryResourceRequest &req, QueryResourceResponse &rsp);
+    void QueryCacheQuota(QueryQuotaRequest &req, QueryQuotaResponse &rsp);
+    BResult AllocCacheQuota(AllocQuotaRequest &req, AllocQuotaResponse &rsp);
+    BResult FreeCacheQuota(FreeQuotaRequest &req);
     void QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp);
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
-    BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStratege);
+    BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
@@ -84,7 +86,9 @@ public:
     int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
     int32_t MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req);
     int32_t MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLocationQueryReq *req);
-    int32_t MirrorServerQueryRes(ServiceContext &ctx, QueryResourceRequest *req);
+    int32_t MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequest *req);
+    int32_t MirrorServerAllocQuota(ServiceContext &ctx, AllocQuotaRequest *req);
+    int32_t MirrorServerFreeQuota(ServiceContext &ctx, FreeQuotaRequest *req);
     int32_t MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeViewRequest *req);
     int32_t MirrorServerQueryPtView(ServiceContext &ctx, QueryPtViewRequest *req);
     int32_t MirrorServerPut(ServiceContext &ctx, PutRequest *req);
@@ -103,11 +107,14 @@ public:
     int32_t MirrorServerSyncData(ServiceContext &ctx, SyncDataRequest *req);
     int32_t MirrorServerGetEvictOffset(ServiceContext &ctx, GetEvictRequest *req);
     int32_t MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req);
+    int32_t MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnderFsConfigRequest *req);
 
     int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
     int32_t HandleQueryNodeInfoByPt(ServiceContext &ctx);
-    int32_t HandleQueryResource(ServiceContext &ctx);
+    int32_t HandleQueryQuota(ServiceContext &ctx);
+    int32_t HandleAllocQuota(ServiceContext &ctx);
+    int32_t HandleFreeQuota(ServiceContext &ctx);
     int32_t HandleQueryNodeView(ServiceContext &ctx);
     int32_t HandleQueryPtView(ServiceContext &ctx);
     int32_t HandlePut(ServiceContext &ctx);
@@ -126,10 +133,12 @@ public:
     int32_t HandleSyncData(ServiceContext &ctx);
     int32_t HandleGetEvictOffset(ServiceContext &ctx);
     int32_t HandleFreeMem(ServiceContext &ctx);
+    int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
+    void RegisterOpcodeStep2(NetEnginePtr &netEngine);
     void RegisterOpcode();
     BResult SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
     BResult GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset);

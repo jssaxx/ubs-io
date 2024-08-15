@@ -35,6 +35,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(DISK_CONF_PATH);
 
     AddStrConf(DATA_CRC_ENABLE, VStrBoolRange::Create(DATA_CRC_ENABLE.first));
+    AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
@@ -170,6 +171,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     }
 
     mDaemonConfig.enableCrc = conf->GetStr(DATA_CRC_ENABLE.first) == "true";
+    mDaemonConfig.enableQos = conf->GetStr(BIO_CACHE_QOS_ENABLE.first) == "true";
 
     std::string scene = conf->GetStr(WORK_SCENE.first);
     if (scene == "none") {

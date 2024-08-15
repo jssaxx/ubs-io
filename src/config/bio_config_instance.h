@@ -42,6 +42,8 @@ const auto CM_NODE_REGISTER_PERM_TIMEOUT = std::make_pair("bio.cm.register_perm_
 
 const auto DATA_CRC_ENABLE = std::make_pair("bio.data.crc.enable", "false");
 
+const auto BIO_CACHE_QOS_ENABLE = std::make_pair("bio.cache.qos.enable", "true");
+
 const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
@@ -128,6 +130,7 @@ public:
         uint32_t workIoTimeOut = 60;
         uint32_t workNetTimeOut = 20;
         bool enableCrc = false;
+        bool enableQos = true;
     };
 
     struct ClientConfig {

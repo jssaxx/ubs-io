@@ -63,7 +63,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
         return BIO_ERR;
     }
 
-    mMetaFlow = FlowManager::Instance()->CreateObject(flowType, flowIds[0], diskId);
+    mMetaFlow = FlowManager::Instance()->CreateObject(FLOW_META, flowType, flowIds[0], diskId);
     if (UNLIKELY(mMetaFlow == nullptr)) {
         LOG_ERROR("Create pt id " << ptId << " flow type " << flowType << " meta flow failed.");
         Destroy();
@@ -79,7 +79,7 @@ BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType
         return BIO_ERR;
     }
 
-    mDataFlow = FlowManager::Instance()->CreateObject(flowType, flowIds[1], diskId);
+    mDataFlow = FlowManager::Instance()->CreateObject(FLOW_DATA, flowType, flowIds[1], diskId);
     if (UNLIKELY(mDataFlow == nullptr)) {
         LOG_ERROR("Create pt id " << ptId << " flow type " << flowType << " data flow failed.");
         Destroy();

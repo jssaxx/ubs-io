@@ -9,11 +9,13 @@
 #include "bio_crc_util.h"
 #include "bio_config_instance.h"
 #include "cm.h"
+#include "cache_overload_ctrl.h"
 
 namespace ock {
 namespace bio {
 BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId)
 {
+    type = cacheTier;
     FlowType flowType;
     auto ret = ToFlowType(cacheTier, flowType);
     ChkTrueNot(ret == BIO_OK, ret);
@@ -24,14 +26,14 @@ BResult WCacheTier::Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t dis
     auto &flowManager = FlowManager::Instance();
 
     uint64_t metaFlowId = flowId | (metaInnerType << CACHE_FLOW_ID_PREFIX_SHIFT); /* meta */
-    mMetaFlow = flowManager->CreateObject(flowType, metaFlowId, diskId);
+    mMetaFlow = flowManager->CreateObject(FLOW_META, flowType, metaFlowId, diskId);
     ChkTrue(mMetaFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create metaflow, flowType:" << flowType << " metaFlowId" << metaFlowId);
 
     LOG_INFO("Meta flowId:" << metaFlowId << ", flowType:" << flowType);
 
     uint64_t dataFlowId = flowId | (dataInnerType << CACHE_FLOW_ID_PREFIX_SHIFT); /* data */
-    mDataFlow = flowManager->CreateObject(flowType, dataFlowId, diskId);
+    mDataFlow = flowManager->CreateObject(FLOW_DATA, flowType, dataFlowId, diskId);
     ChkTrue(mDataFlow != nullptr, BIO_ALLOC_FAIL,
         "Failed to create dataflow, flowType:" << flowType << " dataFlowId" << dataFlowId);
 

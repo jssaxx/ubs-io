@@ -21,7 +21,6 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_BIO_MIRROR_SEND_SYNC_FAIL, "sdk mirror sendsync fail, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_BIO_NET_START_RPC_FAIL, "start net post rpc fail, rturn BIO_INNER_ERR", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_BIO_NET_START_CONNECT_FAIL, "net post connect fail, rturn BIO_INNER_ERR", CommonTp::IntValueCallback);
-    LVOS_TP_REG(SDK_BIO_START_WORK_ALLOC_FAIL, "start work alloc fail, rturn BIO_ALLOC_FAIL", CommonTp::PointerValueCallback);
     LVOS_TP_REG(SDK_MIRROR_PUT_RECV_FAIL, "sdk mirror recv put request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_GET_RECV_FAIL, "sdk mirror recv get request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_DELETE_RECV_FAIL, "sdk mirror recv delete request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
@@ -53,7 +52,6 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_BIO_MIRROR_SEND_SYNC_FAIL);
     LVOS_TP_UNREG(SDK_BIO_NET_START_RPC_FAIL);
     LVOS_TP_UNREG(SDK_BIO_NET_START_CONNECT_FAIL);
-    LVOS_TP_UNREG(SDK_BIO_START_WORK_ALLOC_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_PUT_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_GET_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_DELETE_RECV_FAIL);

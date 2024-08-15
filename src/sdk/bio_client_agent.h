@@ -26,7 +26,9 @@ public:
     using GetBioServerCrcFlagFuncPtr = bool (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
-    using GetLocalResQuotaFuncPtr = int32_t (*)(QueryResourceRequest *, QueryResourceResponse *);
+    using GetQuotaInfoFuncPtr = int32_t (*)(QueryQuotaRequest *, QueryQuotaResponse *);
+    using AllocQuotaFuncPtr = int32_t (*)(AllocQuotaRequest *, AllocQuotaResponse *);
+    using FreeQuotaFuncPtr = int32_t (*)(FreeQuotaRequest *);
     using GetNodeViewFuncPtr = int32_t (*)(QueryNodeViewRequest *, QueryNodeViewResponse *);
     using GetPtViewFuncPtr = int32_t (*)(QueryPtViewRequest *, QueryPtViewResponse *);
     using CreateFlowMasterFuncPtr = int32_t (*)(CreateFlowRequest *, CreateFlowResponse *);
@@ -67,7 +69,11 @@ public:
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
 
-    BResult GetLocalResourceInfo(uint64_t &writeRes, uint64_t &readRes);
+    BResult GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t &preloadSize);
+
+    BResult AllocQuota(AllocQuotaRequest &req, uint64_t &expectPreloadSize);
+
+    BResult FreeQuota(FreeQuotaRequest &req);
 
     BResult GetClusterNodeView(uint64_t &curNodeTimes, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
 
@@ -149,7 +155,9 @@ private:
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
-    GetLocalResQuotaFuncPtr getResourceOp = nullptr;
+    GetQuotaInfoFuncPtr getQuotaInfoOp = nullptr;
+    AllocQuotaFuncPtr allocQuotaOp = nullptr;
+    FreeQuotaFuncPtr freeQuotaOp = nullptr;
     GetNodeViewFuncPtr getNodeViewOp = nullptr;
     GetPtViewFuncPtr getPtViewOp = nullptr;
     CreateFlowMasterFuncPtr createFlowMasterOp = nullptr;

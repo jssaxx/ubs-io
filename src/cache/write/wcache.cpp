@@ -124,9 +124,9 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
     mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(destSliceRef);
 
     // put it disk tier cache.
-    RealIoStrategy ioStratege = WRITE_DEFALUT;
-    PutSetIoStratege(ioStratege, attr);
-    if (ioStratege <= WRITE_MEM_BACK) {
+    RealIoStrategy ioStrategy = WRITE_DEFALUT;
+    PutSetIoStratege(ioStrategy, attr);
+    if (ioStrategy <= WRITE_MEM_BACK) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_MEM_BACK);
         StartEvictTask(WCACHE_MEMORY);
         BIO_TRACE_END(WCACHE_TRACE_PUT_MEM_BACK, 0);
@@ -146,7 +146,7 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
     }
 
     // put it underfs tier.
-    if (ioStratege <= WRITE_DISK_BACK) {
+    if (ioStrategy <= WRITE_DISK_BACK) {
         return BIO_OK;
     }
     sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
@@ -162,15 +162,14 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
     return BIO_OK;
 }
 
-void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
+void WCache::PutSetIoStratege(RealIoStrategy &ioStrategy, CacheAttr &attr)
 {
-    ioStratege = attr.ioStratege;
-
-    if (ioStratege == WRITE_DEFALUT) {
+    ioStrategy = attr.ioStrategy;
+    if (ioStrategy == WRITE_DEFALUT) {
         if (attr.strategy == WRITE_BACK) {
-            ioStratege = WRITE_MEM_BACK;
+            ioStrategy = WRITE_MEM_BACK;
         } else {
-            ioStratege = WRITE_DISK_BACK;
+            ioStrategy = WRITE_DISK_BACK;
         }
     }
 
@@ -181,7 +180,7 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     uint64_t memRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
 
     LOG_TRACE("Total mem:" << (config.memCap / NO_1MB) << ", used:" << (memUsed / NO_1MB) <<
-        ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", stratege:" << ioStratege);
+        ", wcache:" << (memWcache / NO_1MB) << ", rcache:" << (memRcache / NO_1MB) << ", strategy:" << ioStrategy);
 
     uint64_t diskConfig = (static_cast<uint64_t>(config.diskWriteRatio * config.diskCaps[mDiskId])) / NO_10;
     uint64_t diskWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
@@ -189,24 +188,24 @@ void WCache::PutSetIoStratege(RealIoStrategy &ioStratege, CacheAttr &attr)
     uint64_t diskUsed = diskWcache + diskRcache;
 
     LOG_TRACE("Total disk:" << (config.diskCaps[mDiskId] / NO_1MB) << ", used:" << (diskUsed / NO_1MB) <<
-        ", wcache:" << (diskWcache / NO_1MB) << ", rcache:" << (diskRcache / NO_1MB) << ", stratege:" <<
-        ioStratege << ", diskId:" << mDiskId);
+        ", wcache:" << (diskWcache / NO_1MB) << ", rcache:" << (diskRcache / NO_1MB) << ", strategy:" <<
+        ioStrategy << ", diskId:" << mDiskId);
 
     bool isMemSatisfied = ((memUsed < (config.memCap * EVICT_MEM_HLEVEL / NO_100)) &&
         (memWcache < (memConfig * EVICT_MEM_HLEVEL / NO_100)));
     bool isDiskSatisfied = (diskWcache < (diskConfig * EVICT_DISK_HLEVEL / NO_100));
 
     if (isMemSatisfied && isDiskSatisfied && (attr.strategy == WRITE_BACK)) {
-        attr.ioStratege = WRITE_MEM_BACK;
+        attr.ioStrategy = WRITE_MEM_BACK;
         return;
     }
 
     if (!isMemSatisfied && isDiskSatisfied) {
-        attr.ioStratege = WRITE_DISK_BACK;
+        attr.ioStrategy = WRITE_DISK_BACK;
         return;
     }
 
-    attr.ioStratege = WRITE_UNDERFS_BACK;
+    attr.ioStrategy = WRITE_UNDERFS_BACK;
     return;
 }
 

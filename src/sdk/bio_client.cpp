@@ -14,6 +14,27 @@
 
 using namespace ock::bio;
 
+BResult BioClient::BioClientUnderfsInit(WorkerMode mode)
+{
+    if (mode == SEPARATES) {
+        BioConfig::UnderFsConfig config;
+        BResult ret = mNetEngine->GetUnderFsConfig(config);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to get underfs configs from server, ret:" << ret << ".");
+            return ret;
+        }
+
+        UnderFs::InitUnderFsConfig(config);
+        ret = UnderFs::Instance()->Init();
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to init underfs, ret:" << ret << ".");
+            return ret;
+        }
+    }
+    CLIENT_LOG_INFO("Initialize client underfs success.");
+    return BIO_OK;
+}
+
 BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath)
 {
     auto logMode = static_cast<int32_t>(mode);
@@ -52,6 +73,7 @@ void BioClient::BioClientAgentExit()
 
 BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf)
 {
+    // 创建client net引擎实例, 并且执行前置初始化.
     mNetEngine = net::BioClientNet::Instance();
     if (mNetEngine == nullptr) {
         CLIENT_LOG_ERROR("Failed to create net instance.");
@@ -63,8 +85,8 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf
         return ret;
     }
 
-    int32_t logLevel = mNetEngine->GetNegoLogLevel();
-    BioClientLog::Instance()->ResetLogLevel(logLevel);
+    // 根据配置文件中的日志等级重新设置Client端的日志打印等级.
+    BioClientLog::Instance()->ResetLogLevel(mNetEngine->GetNegoLogLevel());
     return BIO_OK;
 }
 
@@ -73,7 +95,6 @@ BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
     CheckNodeOnline checkHandle = [this](uint16_t nodeId, std::string &ip, uint16_t &port) -> bool {
         return mMirror->CheckIsOnline(nodeId, ip, port);
     };
-
     mNetEngine->RegCheckNodeOnline(checkHandle);
 
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
@@ -123,25 +144,20 @@ void BioClient::BioClientUpdateView()
 
 BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 {
+    //  创建Mirror实例.
     mMirror = MakeRef<MirrorClient>(mode);
     if (mMirror == nullptr) {
         CLIENT_LOG_ERROR("Create mirror client instance failed.");
         return BIO_ALLOC_FAIL;
     }
 
+    // 初始化Mirror client
     mIsUpdating = false;
     UpdateView updateView = [this]() { BioClientUpdateView(); };
-    uint32_t scene = mNetEngine->GetNegoWorkScene();
-    uint32_t alignSize = mNetEngine->GetNegoWorkIoAlignSize();
-    uint32_t timeOut = mNetEngine->GetNegoWorkIoTimeOut();
-    bool enableCrc = false;
-    if (mode == CONVERGENCE) {
-        enableCrc = agent::BioClientAgent::Instance()->GetConfigCrcFlag();
-    } else {
-        enableCrc = mNetEngine->GetCrcFlag();
-    }
-
-    auto ret = mMirror->Initialize(updateView, scene, alignSize, timeOut, enableCrc);
+    bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
+        mNetEngine->GetCrcFlag();
+    auto ret = mMirror->Initialize(updateView, mNetEngine->GetNegoWorkScene(), mNetEngine->GetNegoWorkIoAlignSize(),
+        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
@@ -228,16 +244,19 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_OK;
     }
     mMode = mode;
-
     uint64_t startTime = Monotonic::TimeSec();
+
+    // 1. 初始化client端Logger.
     if (BioClientLoggerInit(mode, optConf.logType, optConf.logFilePath) != BIO_OK) {
         return BIO_ERR;
     }
 
+    // 2. 初始化client端Agent, 融合部署场景会初始化bio server.
     if (BioClientAgentInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 
+    // 3. 初始化client端的CLI和TP功能, 仅debug生效.
 #ifdef USE_CLI_TOOLS
     if (this->BioClientDiagnoseInit(mode) != BIO_OK) {
         return BIO_ERR;
@@ -247,38 +266,41 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
 #endif
 
+    // 4. 初始化Net第一步, 分离部署场景: 1)创建IPC服务; 2)与本地sever建立连接; 3)创建shm pool; 4)获取配置项.
     NetOptions netConf;
-    netConf.enableTls = optConf.enable;                      /* tls switch */
-    netConf.certificationPath = optConf.certificationPath;      /* certification path */
-    netConf.caCerPath = optConf.caCerPath;                      /* caCer path */
-    netConf.caCrlPath = optConf.caCrlPath;                      /* caCrl path */
-    netConf.privateKeyPath = optConf.privateKeyPath;            /* private key path */
-    netConf.privateKeyPassword = optConf.privateKeyPassword;    /* private key password */
-    netConf.hseKfsMasterPath = optConf.hseKfsMasterPath;        /* hseceasy kfs master path */
-    netConf.hseKfsStandbyPath = optConf.hseKfsStandbyPath;      /* hseceasy kfs standby path */
-
+    netConf.FillNetTlsConfigs(optConf.enable, optConf.certificationPath, optConf.caCerPath, optConf.caCrlPath,
+        optConf.privateKeyPath, optConf.privateKeyPassword, optConf.hseKfsMasterPath, optConf.hseKfsStandbyPath);
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;
     }
 
+    // 5. 初始化Mirror client.
     if (BioClientMirrorInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 
+    // 6. 初始化Net第二步, 分离部署场景: 1)创建RPC服务; 2)与远端所有server建立连接.
     if (BioClientNetPostInit(netConf) != BIO_OK) {
         return BIO_ERR;
     }
 
+    // 7. 初始化interceptor server.
     if (BioInterceptorServerInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 
+    // 8. 初始化sdk端underfs
+    if (BioClientUnderfsInit(mode) != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    // 9. bio client开工, mirror client开工去创建亲和的Flow实例.
     if (BioClientStartWork() != BIO_OK) {
         return BIO_ERR;
     }
 
     mStarted = true;
-    CLIENT_LOG_INFO("Boostio client start success, cost tine:" << (Monotonic::TimeSec() - startTime) << ".");
+    CLIENT_LOG_INFO("Boostio client start success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
     return BIO_OK;
 }
 
@@ -288,9 +310,11 @@ void BioClient::Exit()
     if (!mStarted) {
         return;
     }
+    uint64_t startTime = Monotonic::TimeSec();
     BioClientAgentExit();
     BioClientNetExit();
     BioClientMirrorExit();
     BioClientLoggerExit(mMode);
     mStarted = false;
+    CLIENT_LOG_INFO("Boostio client exit success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
 }
