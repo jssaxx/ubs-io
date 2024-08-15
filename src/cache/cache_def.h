@@ -44,24 +44,24 @@ struct CacheResDescription {
 };
 
 struct CacheAttr {
-    RealIoStrategy ioStratege;
+    RealIoStrategy ioStrategy;
     uint64_t mTenantId;
     AffinityStrategy affinity;
     WriteStrategy strategy;
 
     CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : ioStratege(WRITE_DEFALUT), mTenantId(id), affinity(aff), strategy(str)
+        : ioStrategy(WRITE_DEFALUT), mTenantId(id), affinity(aff), strategy(str)
     {}
     CacheAttr(RealIoStrategy iostr, uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : ioStratege(iostr), mTenantId(id), affinity(aff), strategy(str)
+        : ioStrategy(iostr), mTenantId(id), affinity(aff), strategy(str)
     {}
     CacheAttr(CacheAttr &other)
-        : ioStratege(other.ioStratege), mTenantId(other.mTenantId), affinity(other.affinity),
+        : ioStrategy(other.ioStrategy), mTenantId(other.mTenantId), affinity(other.affinity),
         strategy(other.strategy)
     {}
     inline CacheAttr &operator = (const CacheAttr &other)
     {
-        ioStratege = other.ioStratege;
+        ioStrategy = other.ioStrategy;
         mTenantId = other.mTenantId;
         affinity = other.affinity;
         strategy = other.strategy;

@@ -11,6 +11,7 @@
 #include "bio_ref.h"
 #include "bio_tracepoint_helper.h"
 #include "bio.h"
+#include "bio_config_instance.h"
 
 namespace ock {
 namespace bio {
@@ -31,6 +32,7 @@ public:
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView, uint16_t protocol,
         const NetOptions netConf);
+    BResult GetUnderFsConfig(BioConfig::UnderFsConfig &config);
     void Exit();
 
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
@@ -157,7 +159,7 @@ private:
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
         const NetOptions netConf);
     BResult RecoverIpcService();
-    BResult ListenEvent();
+    BResult SetChannelBrokenHandler();
     void RecoverIpc();
     void RecoverRpc(uint32_t peerId);
     void StopInner();

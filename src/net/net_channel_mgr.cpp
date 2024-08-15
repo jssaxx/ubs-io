@@ -59,7 +59,7 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane)
     }
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
     NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() <<
-        ", plane:" << plane << ".");
+        ", plane:" << static_cast<uint32_t>(plane) << ".");
     return BIO_OK;
 }
 

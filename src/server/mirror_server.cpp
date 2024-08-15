@@ -10,6 +10,7 @@
 #include "bio_functions.h"
 #include "message_op.h"
 #include "bio_crc_util.h"
+#include "cache_overload_ctrl.h"
 #include "mirror_server.h"
 
 using namespace ock::bio;
@@ -29,33 +30,8 @@ bool MirrorServer::CheckAll(RequestComm &reqComm)
     return true;
 }
 
-void MirrorServer::RegisterOpcode()
+void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
 {
-    auto netEngine = BioServer::Instance()->GetNetEngine();
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_SHM_INIT,
-        std::bind(&MirrorServer::HandleShmInit, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO,
-        std::bind(&MirrorServer::HandleQueryNodeInfo, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO_BY_PT,
-        std::bind(&MirrorServer::HandleQueryNodeInfoByPt, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_RES,
-        std::bind(&MirrorServer::HandleQueryResource, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_VIEW,
-        std::bind(&MirrorServer::HandleQueryNodeView, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_PT_VIEW,
-        std::bind(&MirrorServer::HandleQueryPtView, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_PUT,
-        std::bind(&MirrorServer::HandlePut, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET,
-        std::bind(&MirrorServer::HandleGet, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DELETE,
-        std::bind(&MirrorServer::HandleDelete, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_STAT,
-        std::bind(&MirrorServer::HandleStat, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LIST,
-        std::bind(&MirrorServer::HandleList, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LOAD,
-        std::bind(&MirrorServer::HandleLoad, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CREATE_FLOW,
         std::bind(&MirrorServer::HandleCreateFlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DESTROY_FLOW,
@@ -76,6 +52,43 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleCheckUpdateReady, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_CHECK_REMOTE_UPDATE_READY,
         std::bind(&MirrorServer::HandleCheckRemoteUpdateReady, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_UFS_CONFIG,
+        std::bind(&MirrorServer::HandleGetUnderFsConfig, this, std::placeholders::_1));
+}
+
+void MirrorServer::RegisterOpcode()
+{
+    auto netEngine = BioServer::Instance()->GetNetEngine();
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_SHM_INIT,
+        std::bind(&MirrorServer::HandleShmInit, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO,
+        std::bind(&MirrorServer::HandleQueryNodeInfo, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_INFO_BY_PT,
+        std::bind(&MirrorServer::HandleQueryNodeInfoByPt, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_QUOTA_INFO,
+        std::bind(&MirrorServer::HandleQueryQuota, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_ALLOC_QUOTA,
+        std::bind(&MirrorServer::HandleAllocQuota, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_FREE_QUOTA,
+        std::bind(&MirrorServer::HandleFreeQuota, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_NODE_VIEW,
+        std::bind(&MirrorServer::HandleQueryNodeView, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_PT_VIEW,
+        std::bind(&MirrorServer::HandleQueryPtView, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_PUT,
+        std::bind(&MirrorServer::HandlePut, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET,
+        std::bind(&MirrorServer::HandleGet, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DELETE,
+        std::bind(&MirrorServer::HandleDelete, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_STAT,
+        std::bind(&MirrorServer::HandleStat, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LIST,
+        std::bind(&MirrorServer::HandleList, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LOAD,
+        std::bind(&MirrorServer::HandleLoad, this, std::placeholders::_1));
+
+    RegisterOpcodeStep2(netEngine);
 }
 
 void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs)
@@ -221,16 +234,47 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
     return ret;
 }
 
-void MirrorServer::QueryCacheResource(QueryResourceRequest &req, QueryResourceResponse &rsp)
+void MirrorServer::QueryCacheQuota(QueryQuotaRequest &req, QueryQuotaResponse &rsp)
 {
-    CacheResDescription desc = { 0 };
-    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    rsp.writeRes = desc.memCapacity;
-    LOG_INFO("Query write memory resource:" << desc.memCapacity << ", disk resource:" << desc.diskCapacity << ".");
+    static uint64_t defaultPreloadSize = NO_128 * NO_1024 * NO_1024; // 128M
+    uint64_t totalQuota = CacheOverloadCtrl::Instance().GetAvailableQuota();
+    rsp.preloadSize = std::min<uint64_t>(defaultPreloadSize, ROUND_UP((totalQuota / NO_10), NO_4096));
+    rsp.enable = BioConfig::Instance()->GetDaemonConfig().enableQos;
+    LOG_INFO("Query quota info success, write cache quota:" << totalQuota << ", scene:" << req.scene <<
+        ", preload size:" << (rsp.preloadSize / NO_1024 / NO_1024) << "M, enable:" << rsp.enable << ".");
+}
 
-    Cache::Instance().GetCacheResources(desc, READ_CACHE);
-    rsp.readRes = desc.memCapacity;
-    LOG_INFO("Query read memory resource:" << desc.memCapacity << ", disk resource:" << desc.diskCapacity << ".");
+BResult MirrorServer::AllocCacheQuota(AllocQuotaRequest &req, AllocQuotaResponse &rsp)
+{
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        rsp.exceptQuota = 0;
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    QuotaHolder holder = { req.nid, req.cid };
+    BIO_TRACE_START(MIRROR_TRACE_QOS_ALLOC);
+    auto ret = CacheOverloadCtrl::Instance().AllocQuota(holder, req.allocQuota, rsp.exceptQuota);
+    BIO_TRACE_END(MIRROR_TRACE_QOS_ALLOC, ret);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Alloc quota failed, ret:" << ret << ", holder:" << req.nid << "-" << req.cid << ", size:" <<
+            req.allocQuota << ".");
+    }
+    return ret;
+}
+
+BResult MirrorServer::FreeCacheQuota(FreeQuotaRequest &req)
+{
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
+    QuotaHolder holder = { req.nid, req.cid };
+    std::string innerKey = "RollbackCacheQuota";
+    BIO_TRACE_START(MIRROR_TRACE_QOS_ROLLBACK);
+    CacheOverloadCtrl::Instance().ReleaseQuota(innerKey.c_str(), holder, req.quota, 1);
+    CacheOverloadCtrl::Instance().FreeQuota(req.quota, 1);
+    BIO_TRACE_END(MIRROR_TRACE_QOS_ROLLBACK, BIO_OK);
+    LOG_INFO("Rollback cache quota success, holder: " << req.nid << "-" << req.cid << ", size:" << req.quota << ".");
+    return BIO_OK;
 }
 
 void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp)
@@ -377,7 +421,7 @@ BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, Put
     return ret;
 }
 
-BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStratege)
+BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy)
 {
     if (UNLIKELY(!CheckAll(req.comm))) {
         return BIO_CHECK_PT_FAIL;
@@ -396,16 +440,21 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
         }
     };
 
-    BIO_TRACE_START(MIRROR_TRACE_PUT);
-    CacheAttr attr(static_cast<RealIoStrategy>(req.ioStratege), req.tenantId,
+    CacheAttr attr(static_cast<RealIoStrategy>(req.ioStrategy), req.tenantId,
         static_cast<AffinityStrategy>(req.affinity), static_cast<WriteStrategy>(req.strategy));
+    BIO_TRACE_START(MIRROR_TRACE_PUT);
     BResult ret = Cache::Instance().Put(req.key, sliceP, reader, attr);
     BIO_TRACE_END(MIRROR_TRACE_PUT, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
         return ret;
+    } else {
+        QuotaHolder holder = { static_cast<uint32_t>(req.quotaNid), req.quotaCid };
+        BIO_TRACE_START(MIRROR_TRACE_QOS_RELEASE);
+        CacheOverloadCtrl::Instance().ReleaseQuota(req.key, holder, req.length, 0);
+        BIO_TRACE_END(MIRROR_TRACE_QOS_RELEASE, BIO_OK);
     }
-    ioStratege = static_cast<uint32_t>(attr.ioStratege); // 将下一个IO的写策略带回SDK端
+    ioStrategy = static_cast<uint32_t>(attr.ioStrategy); // 修改sdk端IO写策略
     return ret;
 }
 
@@ -564,7 +613,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
     } else {
         if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
-            rsp.dataCrc = BioCrcUtil::Crc32(reinterpret_cast<void*>(req.address), rsp.realLen);
+            rsp.dataCrc = BioCrcUtil::Crc32(reinterpret_cast<void *>(req.address), rsp.realLen);
         }
     }
     return ret;
@@ -842,7 +891,7 @@ int32_t MirrorServer::HandleQueryNodeInfoByPt(ServiceContext &ctx)
     return MirrorServerQueryNodeInfoByPt(ctx, req);
 }
 
-int32_t MirrorServer::MirrorServerQueryRes(ServiceContext &ctx, QueryResourceRequest *req)
+int32_t MirrorServer::MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequest *req)
 {
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
@@ -850,9 +899,36 @@ int32_t MirrorServer::MirrorServerQueryRes(ServiceContext &ctx, QueryResourceReq
         return BIO_CHECK_PT_FAIL;
     }
 
-    QueryResourceResponse rsp;
-    QueryCacheResource(*req, rsp);
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(QueryResourceResponse));
+    QueryQuotaResponse rsp;
+    QueryCacheQuota(*req, rsp);
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(QueryQuotaResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::MirrorServerAllocQuota(ServiceContext &ctx, AllocQuotaRequest *req)
+{
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    AllocQuotaResponse rsp;
+    auto ret = AllocCacheQuota(*req, rsp);
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &rsp, sizeof(AllocQuotaResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::MirrorServerFreeQuota(ServiceContext &ctx, FreeQuotaRequest *req)
+{
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    auto ret = FreeCacheQuota(*req);
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &ret, sizeof(BResult));
     return BIO_OK;
 }
 
@@ -870,21 +946,55 @@ int32_t MirrorServer::MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeVi
     return BIO_OK;
 }
 
-int32_t MirrorServer::HandleQueryResource(ServiceContext &ctx)
+int32_t MirrorServer::HandleQueryQuota(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
 
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(QueryResourceRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive query res quota message len:" << ctx.MessageDataLen() << " or message data invalid.");
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(QueryQuotaRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive query quota message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
-    auto req = static_cast<QueryResourceRequest *>(ctx.MessageData());
-    return MirrorServerQueryRes(ctx, req);
+    auto req = static_cast<QueryQuotaRequest *>(ctx.MessageData());
+    return MirrorServerQueryQuota(ctx, req);
+}
+
+int32_t MirrorServer::HandleAllocQuota(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(AllocQuotaRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive alloc quota message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<AllocQuotaRequest *>(ctx.MessageData());
+    return MirrorServerAllocQuota(ctx, req);
+}
+
+int32_t MirrorServer::HandleFreeQuota(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(FreeQuotaRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive free quota message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<FreeQuotaRequest *>(ctx.MessageData());
+    return MirrorServerFreeQuota(ctx, req);
 }
 
 int32_t MirrorServer::HandleQueryNodeView(ServiceContext &ctx)
@@ -1008,15 +1118,14 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
     BResult result;
-    uint32_t ioStratege = 0;
+    uint32_t ioStrategy = 0;
     LVOS_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
-    result = Put(*req, sliceP, ctx, ioStratege);
+    result = Put(*req, sliceP, ctx, ioStrategy);
     LVOS_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
-    rsp.updateQuota = Cache::Instance().GetAdjustWriteQuota();
-    rsp.ioStratege = ioStratege;
+    rsp.ioStrategy = ioStrategy;
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, &rsp, sizeof(PutResponse));
     return BIO_OK;
 }
@@ -1344,7 +1453,6 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
         delete[] tmp;
         return static_cast<int32_t>(BIO_INNER_ERR);
     }
-    rsp->updateQuota = Cache::Instance().GetAdjustWriteQuota();
     rsp->addrNum = addrVec.size();
     for (uint32_t i = 0; i < addrVec.size(); i++) {
         rsp->addr[i].chunkId = addrVec[i].chunkId;
@@ -1555,4 +1663,69 @@ int32_t MirrorServer::HandleCheckRemoteUpdateReady(ServiceContext &ctx)
 
     auto req = static_cast<CheckRemoteUpdateReadyRequest *>(ctx.MessageData());
     return MirrorServerCheckRemoteUpdateReady(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnderFsConfigRequest *req)
+{
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    GetUnderFsConfigResponse rsp;
+    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+
+    int32_t ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.underFsType[config.underFsType.size()] = '\0';
+
+    ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE, config.hdfsConfig.nameNode.c_str(),
+        config.hdfsConfig.nameNode.size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.hdfsConfig.nameNode[config.hdfsConfig.nameNode.size()] = '\0';
+
+    ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE, config.hdfsConfig.workingPath.c_str(),
+        config.hdfsConfig.workingPath.size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
+
+    ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE, config.cephConfig.user.c_str(), config.cephConfig.user.size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.cephConfig.user[config.cephConfig.user.size()] = '\0';
+
+    ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE, config.cephConfig.cfgPath.c_str(),
+        config.cephConfig.cfgPath.size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.cephConfig.cfgPath[config.cephConfig.cfgPath.size()] = '\0';
+
+    ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE, config.cephConfig.cluster.c_str(),
+        config.cephConfig.cluster.size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.cephConfig.cluster[config.cephConfig.cluster.size()] = '\0';
+
+    ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE, config.cephConfig.pools.at(0).c_str(),
+        config.cephConfig.pools.at(0).size());
+    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    rsp.cephConfig.pool[config.cephConfig.pools.at(0).size()] = '\0';
+
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(GetUnderFsConfigResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleGetUnderFsConfig(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetUnderFsConfigRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<GetUnderFsConfigRequest *>(ctx.MessageData());
+    return MirrorServerGetUnderFsConfig(ctx, req);
 }

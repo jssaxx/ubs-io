@@ -8,6 +8,7 @@
 #include "bio_config_instance.h"
 #include "bio_log.h"
 #include "bio_trace.h"
+#include "underfs_config.h"
 
 namespace ock {
 namespace bio {
@@ -202,11 +203,11 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
 
 void CephSystem::LoadCephConfig()
 {
-    BioConfigPtr config = BioConfig::Instance();
-    mCfgPath = config->GetUnderFsConfig().cephConfig.cfgPath;
-    mCluster = config->GetUnderFsConfig().cephConfig.cluster;
-    mUser = config->GetUnderFsConfig().cephConfig.user;
-    mPool = config->GetUnderFsConfig().cephConfig.pools.at(0);
+    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+    mCfgPath = config.cephConfig.cfgPath;
+    mCluster = config.cephConfig.cluster;
+    mUser = config.cephConfig.user;
+    mPool = config.cephConfig.pools.at(0);
 }
 }
 }

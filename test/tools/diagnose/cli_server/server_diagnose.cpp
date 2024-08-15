@@ -154,16 +154,16 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
             CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
             return;
         }
-        std::vector<uint64_t> writeBwVec;
-        std::vector<uint64_t> evictBwVec;
-        uint64_t vmVec;
-        CacheOverloadCtrl::Instance().Show(writeBwVec, evictBwVec, vmVec);
+        uint64_t vmVec = 0;
+        uint64_t totalQuota = 0;
+        uint64_t currentQuota = 0;
+        std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> holders;
+        CacheOverloadCtrl::Instance().Show(vmVec, totalQuota, currentQuota, holders);
         CLI_PrintBuf("  Boostio overload ctrl info: \n");
-        CLI_PrintBuf("  Bandwidth: \n");
-        for (uint32_t idx = 0; idx < writeBwVec.size(); idx++) {
-            CLI_PrintBuf("      idx:%u : %lu -- %lu \n", idx, writeBwVec[idx], evictBwVec[idx]);
+        CLI_PrintBuf("  Water level:%lu, Total quota:%lu, Remain Quota:%lu\n", vmVec, totalQuota, currentQuota);
+        for (auto iter = holders.begin(); iter != holders.end(); iter++) {
+            CLI_PrintBuf("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
-        CLI_PrintBuf("  Water level:%lu \n", vmVec);
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }

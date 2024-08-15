@@ -181,28 +181,12 @@ BResult MirrorClient::LoadAffinityFlow()
 
 BResult MirrorClient::InitializeBioQos()
 {
-    // 1. query local node write and read resource
-    uint64_t writeRes = 0;
-    uint64_t readRes = 0;
-    auto ret = agent::BioClientAgent::Instance()->GetLocalResourceInfo(writeRes, readRes);
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Get local resource quota failed, ret:" << ret << ".");
-        return ret;
-    }
-    CLIENT_LOG_INFO("InitializeBioQos writeRes : " << writeRes << " ,readRes : " << readRes <<".");
-    // 分离部署server端可能没有资源配置， 先设置max，后续io通信时会同步新的阈值
-    if (writeRes == 0 && readRes == 0) {
-        writeRes = UINT64_MAX;
-        readRes = UINT64_MAX;
-    }
-
-    // 2. fill write and read concurrency
-    uint64_t writeConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_128;
-    uint64_t readConcur = (mScene == SCENE_BIGDATA) ? NO_32 : NO_1024;
-
-    // 3. start bio qos
     mBioQos = BioQos::Instance();
-    return mBioQos->Initialize(writeRes, readRes, writeConcur, readConcur);
+    if (UNLIKELY(mBioQos == nullptr)) {
+        CLIENT_LOG_ERROR("Boostio client qos instance failed.");
+        return BIO_INNER_ERR;
+    }
+    return mBioQos->Initialize(static_cast<uint32_t>(mLocalNid.VNodeId()), mMode, mScene);
 }
 
 BResult MirrorClient::LoadOriginView()
@@ -261,14 +245,14 @@ BResult MirrorClient::LoadOriginViewImpl()
     }
 
     for (auto &item : mPtView) {
-        IoStratege *ioStratege = new (std::nothrow) IoStratege();
-        if (UNLIKELY(ioStratege == nullptr)) {
-            CLIENT_LOG_ERROR("Alloc ioStratege failed.");
+        IoStrategy *ioStrategy = new (std::nothrow) IoStrategy();
+        if (UNLIKELY(ioStrategy == nullptr)) {
+            CLIENT_LOG_ERROR("Alloc io strategy failed.");
             return BIO_ALLOC_FAIL;
         }
-        ioStratege->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
-        ioStratege->stratege = 0;
-        mIoStratege[item.first] = ioStratege;
+        ioStrategy->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
+        ioStrategy->strategy = 0;
+        mIoStrategy[item.first] = ioStrategy;
     }
 
     if (mNodeView.empty() || mPtView.empty()) {
@@ -291,33 +275,18 @@ std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
     return ans;
 }
 
-std::vector<uint64_t> MirrorClient::ShowPtHit()
-{
-    std::vector<uint64_t> res;
-    for (uint32_t idx = 0; idx < mPtView.size(); idx++) {
-        res.emplace_back(mPtHit[idx].load());
-    }
-    return res;
-}
-
-void MirrorClient::StatisticPtHit(uint16_t ptId)
-{
-    mPtHit[ptId]++;
-}
-
 uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
 {
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
     uint64_t retryCnt = 0;
     uint16_t ptId = UINT16_MAX;
-
     do {
         isRetry = false;
         ptId = SelectingPtImpl(objectId, affinity);
         if (ptId == UINT16_MAX) {
             uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
+            CLIENT_LOG_INFO("Select pt delay retry, cost time:" << retryTime << ", times:" << ++retryCnt <<".");
             if (retryTime < mTimeOut) {
                 mUpdateView();
                 isRetry = true;
@@ -354,8 +323,6 @@ uint16_t MirrorClient::SelectingPtImpl(uint64_t objectId, AffinityStrategy affin
     LVOS_TP_END;
     if (UNLIKELY(ptId == UINT16_MAX)) {
         CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
-    } else {
-        StatisticPtHit(ptId);
     }
     return ptId;
 }
@@ -405,13 +372,12 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t
     uint32_t timeOut, bool enableCrc)
 {
     mEnableCrc = enableCrc;
-    if (mEnableCrc) {
-        CLIENT_LOG_INFO("Crc verify start-up.");
-    }
     mUpdateView = updateView;
     mScene = static_cast<WorkerScene>(scene);
     mAlignSize = alignSize;
     mTimeOut = timeOut;
+
+    // 加载视图信息
     BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
     BResult ret = LoadOriginView();
     BIO_TRACE_END(SDK_TRACE_INIT_LOAD_VIEW, ret);
@@ -420,96 +386,61 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t
         return ret;
     }
 
+    // 初始化client端的QOS控制
     ret = InitializeBioQos();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Sdk init qos failed, ret:" << ret << ".");
         return ret;
     }
 
-    CLIENT_LOG_INFO("Mirror client initialize, scene:" << mScene << ", alignSize:" << mAlignSize <<
-        ", timeOut:" << mTimeOut << ".");
+    CLIENT_LOG_INFO("Mirror client initialize, clcEnable: " << mEnableCrc << "， scene:" << mScene << ", alignSize:" <<
+        mAlignSize << ", timeOut:" << mTimeOut << ".");
     return BIO_OK;
 }
 
 BResult MirrorClient::Start()
 {
-    uint32_t ptSize = mPtView.size();
-    LVOS_TP_START(SDK_BIO_START_WORK_ALLOC_FAIL, &mPtHit, nullptr);
-    mPtHit = new (std::nothrow) std::atomic<uint64_t>[ptSize];
-    LVOS_TP_END;
-    if (mPtHit == nullptr) {
-        return BIO_ALLOC_FAIL;
-    }
-    for (uint32_t idx = 0; idx < ptSize; idx++) {
-        mPtHit[idx].store(0);
-    }
     return LoadAffinityFlow();
 }
 
 BResult MirrorClient::Put(MirrorPut &param)
 {
-    bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
-    BResult ret = BIO_OK;
-
-    bool isSelf = false;
+    bool isAllocMem = false;
     char *value = param.value;
-    if ((mScene == SCENE_BIGDATA) && (param.length % mAlignSize != 0)) {
-        uint64_t length = (((param.length) + (mAlignSize)-1) & ~((mAlignSize)-1));
-        BIO_TRACE_START(SDK_TRACE_PUT_ALIGN_IO);
-        CLIENT_LOG_DEBUG("Not align io, key:" << param.key << ", length:" << param.length << ".");
-        isSelf = true;
-        if ((param.value = static_cast<char *>(malloc(length))) == nullptr) {
-            BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_ALLOC_FAIL);
-            return BIO_ALLOC_FAIL;
-        }
-        ret = memcpy_s(param.value, length, value, param.length);
-        if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Memory copy failed.");
-        }
-        param.length = length;
-        BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_OK);
+    BResult ret = PutAlignSize(value, param, isAllocMem);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Align size failed, ret: " << ret << ", key:" << param.key << ".");
+        return ret;
     }
 
-    BIO_TRACE_START(SDK_TRACE_PUT_APPLY_QOS);
-    mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
-    BIO_TRACE_END(SDK_TRACE_PUT_APPLY_QOS, BIO_OK);
+    uint16_t ptId = ParseLocation(param.location);
+    CmPtInfo ptEntry;
+    bool isRetry = false;
+    uint64_t startTime = Monotonic::TimeSec();
     do {
         isRetry = false;
-        uint64_t updateWriteQuota = 0;
-        ret = PutImpl(param, updateWriteQuota);
+        // 1. Get pt view entry.
+        if (UNLIKELY((ret = GetPtEntry(ptId, ptEntry)) != BIO_OK)) {
+            break;
+        }
+
+        // 2. Apply for write cache quota.
+        ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.key, &ptEntry, param.length);
         if (LIKELY(ret == BIO_OK)) {
-            BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
-            mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
-            BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
-            if (isSelf) {
-                free(param.value);
-                param.value = value;
-            }
-            return BIO_OK;
-        }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut+1));
-            LVOS_TP_END;
-            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
+            // 3. Put value to write cache.
+            ret = PutImpl(param, ptId, ptEntry);
+            mBioQos->Release(QOS_CONCURRENCY, QUOTA_WRITE);
+            if (LIKELY(ret == BIO_OK)) {
+                break;
             }
         }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-    BIO_TRACE_START(SDK_TRACE_PUT_RELEASE_QOS);
-    mBioQos->Release(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.length);
-    BIO_TRACE_END(SDK_TRACE_PUT_RELEASE_QOS, BIO_OK);
-    if (isSelf) {
+
+    if (isAllocMem) {
         free(param.value);
         param.value = value;
     }
-
     return ret;
 }
 
@@ -534,30 +465,32 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     req->length = param.length;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = spaceInfo.descriptorSize;
-    if (mIoStratege[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
-        req->ioStratege = mIoStratege[ptEntry.ptId]->stratege;
+    mBioQos->GetKey(req->quotaNid, req->quotaCid);
+    if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
+        req->ioStrategy = mIoStrategy[ptEntry.ptId]->strategy;
     } else {
-        req->ioStratege = 0;
+        req->ioStrategy = 0;
     }
     req->memFromServer = true;
     req->mrAddress = 0ULL;
-    memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
-
-    CLIENT_LOG_DEBUG("Put copy free request key:" << req->key << ", length:" << ", index:" << req->flowIndex <<
-        ", sliceLen:" << req->sliceLen << ", mrkey:" << req->mrKey << ".");
-    return BIO_OK;
+    auto ret = memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+    }
+    return ret;
 }
 
-BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &updateQuota)
+BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
     uint16_t ptId = ParseLocation(spaceInfo.loc);
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
-        return BIO_CHECK_PT_FAIL;
+        return ret;
     }
 
+    // 填充请求request.
     PutRequest *req = nullptr;
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     ret = PreparePutWithSpace(param, ptEntry, spaceInfo, req);
@@ -569,84 +502,108 @@ BResult MirrorClient::PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo, uint6
     }
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
-    ret = SendPutRequestImpl(ptEntry, param, req, updateQuota);
+    ret = SendPutRequestImpl(ptEntry, param, req);
     BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
     }
-
     delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     return ret;
+}
+
+BResult MirrorClient::PutAlignSize(const char *value, MirrorPut &param, bool &isAllocMem)
+{
+    if (UNLIKELY((mScene == SCENE_BIGDATA) && (param.length % mAlignSize != 0))) {
+        uint64_t length = (((param.length) + (mAlignSize)-1) & ~((mAlignSize)-1));
+        BIO_TRACE_START(SDK_TRACE_PUT_ALIGN_IO);
+        if ((param.value = static_cast<char *>(malloc(length))) == nullptr) {
+            BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_ALLOC_FAIL);
+            CLIENT_LOG_ERROR("Alloc memory failed, size:" << length << ".");
+            return BIO_ALLOC_FAIL;
+        }
+        auto ret = memcpy_s(param.value, length, value, param.length);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+            free(param.value);
+            param.value = nullptr;
+            return BIO_INNER_ERR;
+        }
+        param.length = length;
+        isAllocMem = true;
+        BIO_TRACE_END(SDK_TRACE_PUT_ALIGN_IO, BIO_OK);
+    }
+    return BIO_OK;
+}
+
+bool MirrorClient::FailHandler(const BResult result, uint64_t startTime)
+{
+    uint64_t costTime = Monotonic::TimeSec() - startTime;
+    LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &costTime, (mTimeOut+1));
+    LVOS_TP_END;
+    if (UNLIKELY(costTime >= mTimeOut)) { // 超过重试时间则不再进行重试.
+        return false;
+    }
+
+    bool isRetry = false;
+    uint16_t sleepTime = 0;
+    switch (result) {
+        case BIO_ALLOC_FAIL:
+        case BIO_INNER_RETRY:
+        case BIO_NET_RETRY:
+        case BIO_CHECK_PT_FAIL:
+        case BIO_DISK_IOERR:
+            isRetry = true;
+            sleepTime = BIO_IO_INTERAL_TIME;
+            mUpdateView(); // 更新视图.
+            break;
+        case BIO_QUOTA_NOT_ENOUGH:
+            isRetry = true;
+            sleepTime = NO_1;
+            break;
+        default:
+            isRetry = false;
+            break;
+    }
+
+    sleep(sleepTime);
+    return isRetry;
 }
 
 BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
     BResult ret = BIO_OK;
-
-    BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_APPLY_QOS);
-    mBioQos->Apply(QOS_CONCURRENCY, QUOTA_WRITE);
-    BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
-        uint64_t updateWriteQuota = 0;
-        ret = PutImpl(param, spaceInfo, updateWriteQuota);
+        ret = PutImpl(param, spaceInfo);
         if (LIKELY(ret == BIO_OK)) {
-            BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
-            mBioQos->Release(QOS_CONCURRENCY, QUOTA_WRITE);
-            BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
-            return BIO_OK;
+            break;
         }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-    BIO_TRACE_START(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS);
-    mBioQos->Release(QOS_CONCURRENCY, QUOTA_WRITE);
-    BIO_TRACE_END(SDK_TRACE_PUT_CPYFREE_RELEASE_QOS, BIO_OK);
-
     return ret;
 }
 
-BResult MirrorClient::PutImpl(MirrorPut &param, uint64_t &updateQuota)
+BResult MirrorClient::PutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry)
 {
-    uint16_t ptId = ParseLocation(param.location);
-    CmPtInfo ptEntry;
-    BIO_TRACE_START(SDK_TRACE_PUT_GET_PT);
-    BResult ret = GetPtEntry(ptId, ptEntry);
-    BIO_TRACE_END(SDK_TRACE_PUT_GET_PT, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << param.key << ".");
-        return ret;
-    }
-
     BIO_TRACE_START(SDK_TRACE_PUT_ALLOC_OFF);
-    ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
+    auto ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId <<
-            ", flowId:" << param.flowId << ", key:" << param.key << ".");
-        ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret;
+        CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", flowId:" << param.flowId <<
+            ", key:" << param.key << ".");
+        ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret; // Flow实例不存在则内部重试.
         return ret;
     }
 
-    ret = SendPutRequest(ptEntry, param, updateQuota);
+    ret = SendPutRequest(ptEntry, param);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId <<
             ", flowId:" << param.flowId << ", key:" << param.key << ".");
-        Delete(ptId, param.flowId);
+        Delete(ptId, param.flowId); // Put请求失败则删除该Flow, 不允许在此Flow上继续写.
         ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret;
     }
-
     return ret;
 }
 
@@ -654,41 +611,17 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
 {
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
     BResult ret = BIO_OK;
-
-    BIO_TRACE_START(SDK_TRACE_GET_APPLY_QOS);
-    mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ);
-    BIO_TRACE_END(SDK_TRACE_GET_APPLY_QOS, BIO_OK);
     do {
         isRetry = false;
+        ret = mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, param.key);
         ret = GetImpl(param, realLen);
-        uint64_t endTime = Monotonic::TimeSec();
-        if ((endTime > startTime) && (endTime - startTime > NO_30)) {
-            CLIENT_LOG_ERROR("Too long, key:" << param.key << ", cost:" << (endTime - startTime) <<
-                ", ret:" << ret << ".");
-        }
+        mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
         if (LIKELY(ret == BIO_OK)) {
-            BIO_TRACE_START(SDK_TRACE_GET_RELEASE_QOS);
-            mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
-            BIO_TRACE_END(SDK_TRACE_GET_RELEASE_QOS, BIO_OK);
-            return BIO_OK;
+            break;
         }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut+1));
-            LVOS_TP_END;
-            CLIENT_LOG_INFO("Delay retry, key:" << param.key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-    mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
-
     return ret;
 }
 
@@ -722,29 +655,16 @@ BResult MirrorClient::GetImpl(MirrorGet &param, uint64_t &realLen)
 BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
-    BResult ret;
-
+    BResult ret = BIO_OK;
     do {
         isRetry = false;
         ret = DeleteKeyImpl(key, location);
         if (LIKELY(ret == BIO_OK)) {
-            return BIO_OK;
+            break;
         }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            retryTime = Monotonic::TimeSec() - startTime;
-            CLIENT_LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-
     return ret;
 }
 
@@ -772,29 +692,16 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
     const Bio::LoadCallback &callback, void *context)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
-    BResult ret;
-
+    BResult ret = BIO_OK;
     do {
         isRetry = false;
         ret = LoadImpl(key, offset, length, location, callback, context);
         if (LIKELY(ret == BIO_OK)) {
-            return BIO_OK;
+            break;
         }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            retryTime = Monotonic::TimeSec() - startTime;
-            CLIENT_LOG_INFO("Delay retry, key:" << key << ", costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-
     return ret;
 }
 
@@ -824,31 +731,16 @@ BResult MirrorClient::LoadImpl(const char *key, uint64_t offset, uint64_t length
 BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
-    BResult ret;
-
+    BResult ret = BIO_OK;
     do {
         isRetry = false;
         ret = ListAllImpl(prefix, objs);
         if (LIKELY(ret == BIO_OK)) {
-            return BIO_OK;
+            break;
         }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            retryTime = Monotonic::TimeSec() - startTime;
-            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut+1));
-            LVOS_TP_END;
-            CLIENT_LOG_INFO("Delay retry, costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-
     return ret;
 }
 
@@ -863,29 +755,16 @@ BResult MirrorClient::ListAllImpl(const char *prefix, std::unordered_map<std::st
 BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, ObjStat &stat)
 {
     bool isRetry = false;
-    uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
-    BResult ret;
-
+    BResult ret = BIO_OK;
     do {
         isRetry = false;
         ret = StatObjectImpl(key, location, stat);
         if (LIKELY(ret == BIO_OK)) {
-            return BIO_OK;
+            break;
         }
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            CLIENT_LOG_INFO("Delay retry, key:" << key << ", times:" << ++retryCnt);
-            retryTime = Monotonic::TimeSec() - startTime;
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(BIO_IO_INTERAL_TIME);
-            }
-        }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
-
     return ret;
 }
 
@@ -927,20 +806,11 @@ BResult MirrorClient::CheckUpdateReady()
     return ret;
 }
 
-BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo,
-    uint64_t &adjustWriteQuota)
+BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
-    uint16_t ptId = ParseLocation(param.location);
-    CmPtInfo ptEntry;
-    BResult ret = GetPtEntry(ptId, ptEntry);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get py entry failed, ret: " << ret << ", ptId:" << ptId << ", location:" <<
-            param.location.location[0] << ".");
-        return ret;
-    }
-
+    // 1. 申请Flow偏移
     BIO_TRACE_START(SDK_TRACE_PUT_ALLOC_OFF);
-    ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
+    auto ret = AllocPutOffset(ptId, ptEntry.version, param.length, param.flowId, param.flowOffset, param.flowIndex);
     BIO_TRACE_END(SDK_TRACE_PUT_ALLOC_OFF, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc put offset failed, ret:" << ret << ", ptId:" << ptId << ", ptv:" << ptEntry.version
@@ -948,6 +818,7 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
         return ret;
     }
 
+    // 2. 申请写资源
     GetSliceResponse *rsp = nullptr;
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
     ret = agent::BioClientAgent::Instance()->PrepareResource(ptEntry, param.flowId, param.flowOffset,
@@ -956,19 +827,19 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc put space failed, ret:" << ret << ", flowId:" << param.flowId << ", flowOffset:" <<
             param.flowOffset << ", length:" << param.length << ".");
-        Delete(ptId, param.flowId);
+        Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
         return ret;
     }
 
+    // 3. 拷贝空间地址信息
     spaceInfo.descriptorSize = rsp->sliceLen;
     ret = memcpy_s(spaceInfo.descriptorInfo, CACHE_SPACE_DEC_SIZE, rsp->sliceBuf, rsp->sliceLen);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Failed to data copy, sliceLen:" << rsp->sliceLen << ".");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
-        Delete(ptId, param.flowId);
+        Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_INNER_ERR;
     }
-
     spaceInfo.addressNum = rsp->addrNum;
     for (uint32_t idx = 0; idx < spaceInfo.addressNum; idx++) {
         if (mMode == CONVERGENCE) {
@@ -980,59 +851,48 @@ BResult MirrorClient::AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceD
         spaceInfo.address[idx].size = rsp->addr[idx].chunkLen;
     }
 
-    adjustWriteQuota = rsp->updateQuota;
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
     return BIO_OK;
 }
 
 BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
+    uint16_t ptId = ParseLocation(param.location);
+    CmPtInfo ptEntry;
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
-    uint64_t retryCnt = 0;
     BResult ret = BIO_OK;
-    BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_APPLY_QOS);
-    mBioQos->Apply(QOS_QUOTA, QUOTA_WRITE, param.length);
-    BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_APPLY_QOS, BIO_OK);
-    uint64_t updateWriteQuota = 0;
+
     do {
         isRetry = false;
-        ret = AllocSpaceImpl(param, spaceInfo, updateWriteQuota);
-        if (LIKELY(ret == BIO_OK)) {
+        // 1. Get pt view entry.
+        if (UNLIKELY((ret = GetPtEntry(ptId, ptEntry)) != BIO_OK)) {
             break;
         }
 
-        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", length:" << param.length << ".");
-        if (ret == BIO_ALLOC_FAIL || ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY ||
-            ret == BIO_CHECK_PT_FAIL || ret == BIO_DISK_IOERR) {
-            uint64_t retryTime = Monotonic::TimeSec() - startTime;
-            CLIENT_LOG_INFO("Delay retry, free copy alloc space  costs:" << retryTime << ", times:" << ++retryCnt);
-            if (retryTime < mTimeOut) {
-                mUpdateView();
-                isRetry = true;
-                sleep(1);
+        // 2. Apply for write cache quota.
+        static std::atomic<uint64_t> ref(1);
+        std::string innerKey = "BioAllocSpace" + std::to_string(ref++);
+        ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, innerKey.c_str(), &ptEntry, param.length);
+        if (LIKELY(ret == BIO_OK)) {
+            // 3. Alloc write cache space.
+            ret = AllocSpaceImpl(ptId, ptEntry, param, spaceInfo);
+            mBioQos->Release(QOS_CONCURRENCY, QUOTA_WRITE);
+            if (LIKELY(ret == BIO_OK)) {
+                break;
             }
         }
     } while (isRetry);
-    if (ret != BIO_OK) {
-        mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length);
-        return ret;
-    }
 
-    BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS);
-    mBioQos->Release(QOS_QUOTA, QUOTA_WRITE, param.length, updateWriteQuota);
-    BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE_RELEASE_QOS, BIO_OK);
-    return BIO_OK;
+    return ret;
 }
 
 BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
     uint64_t &index)
 {
-    BResult ret;
-
+    // 1. 查找到该PT对应的FLOW.
     FlowInstancePtr flowInst = Query(ptId);
     if (UNLIKELY(flowInst == nullptr)) {
-        ret = CreateFlow(ptId);
+        BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_WARN("Create flow instance failed, ret: " << ret << ", ptId:" << ptId << ".");
             return ret;
@@ -1044,6 +904,7 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         }
     }
 
+    // 2. 检查FLOW状态.
     bool isNormal = false;
     LVOS_TP_START(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL, &isNormal, false);
     isNormal = flowInst->IsNormal();
@@ -1052,9 +913,8 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         CLIENT_LOG_WARN("Check flow failed, ptId:" << ptId << ".");
         return BIO_INNER_RETRY;
     }
-
     if (UNLIKELY(flowInst->Version() != ptv)) {
-        Delete(ptId, flowInst->FlowId()); // 销毁老版本实例
+        Delete(ptId, flowInst->FlowId()); // Flow版本号不一致则需要删除Flow, 再重新创建Flow.
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create flow instance failed, need retry, ret: " << ret << ", ptId:" << ptId << ".");
@@ -1062,6 +922,7 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
         return BIO_INNER_RETRY;
     }
 
+    // 3. 申请Flow偏移
     flowId = flowInst->FlowId();
     offset = flowInst->AllocOffset(len, index);
     return BIO_OK;
@@ -1083,10 +944,11 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = 0;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = rsp->sliceLen;
-    if (mIoStratege[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
-        req->ioStratege = mIoStratege[ptEntry.ptId]->stratege;
+    mBioQos->GetKey(req->quotaNid, req->quotaCid);
+    if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
+        req->ioStrategy = mIoStrategy[ptEntry.ptId]->strategy;
     } else {
-        req->ioStratege = 0;
+        req->ioStrategy = 0;
     }
     memcpy_s(req->sliceBuf, req->sliceLen, rsp->sliceBuf, rsp->sliceLen);
 }
@@ -1107,10 +969,11 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = mr.size;
     req->mrKey = mr.key;
     req->sliceLen = 0;
-    if (mIoStratege[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
-        req->ioStratege = mIoStratege[ptEntry.ptId]->stratege;
+    mBioQos->GetKey(req->quotaNid, req->quotaCid);
+    if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
+        req->ioStrategy = mIoStrategy[ptEntry.ptId]->strategy;
     } else {
-        req->ioStratege = 0;
+        req->ioStrategy = 0;
     }
 }
 
@@ -1214,17 +1077,16 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
 BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
     if (IsExistLocalCopy(ptEntry)) {
-        return PrepareFromServer(ptEntry, param, req);
+        return PrepareFromServer(ptEntry, param, req); // 写资源从本地server申请.
     } else {
-        return PrepareFromClient(ptEntry, param, req);
+        return PrepareFromClient(ptEntry, param, req); // 写资源从client端申请.
     }
 }
 
-void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index,
-    Callback &callback)
+void MirrorClient::PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &indexVec, Callback &callback)
 {
-    for (uint32_t i = 0; i < index.size(); i++) {
-        uint16_t dstNid = ptEntry.copys[index[i]].nodeId;
+    for (uint32_t i = 0; i < indexVec.size(); i++) {
+        uint16_t dstNid = ptEntry.copys[indexVec[i]].nodeId;
         BIO_TRACE_START(SDK_TRACE_PUT_REMOTE_SYNC);
         net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(dstNid), BIO_OP_SDK_PUT,
             static_cast<void *>(req), sizeof(PutRequest) + req->sliceLen, callback);
@@ -1249,24 +1111,22 @@ void MirrorClient::InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota)
     cbCtx.respLen = 0;
 }
 
-BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req, uint64_t &updateQuota)
+BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
-    std::atomic<uint64_t> negoWriteQuota(UINT64_MAX);
-    std::atomic<uint32_t> ioStratege(0);
+    std::atomic<uint32_t> ioStrategy(0);
 
-    auto cbFunc = [&negoWriteQuota, &ioStratege](void *ctx, void *resp, uint32_t len, int32_t result) {
+    auto cbFunc = [&ioStrategy](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
         LVOS_TP_START(SDK_MIRROR_PUT_RECV_FAIL, &(cbCtx->result), BIO_INNER_RETRY);
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
-            PutResponse *rsp = static_cast<PutResponse *>(resp);
-            negoWriteQuota = (rsp->updateQuota < negoWriteQuota) ? rsp->updateQuota : negoWriteQuota.load();
-            ioStratege = (rsp->ioStratege > ioStratege) ? rsp->ioStratege : ioStratege.load();
+            auto rsp = static_cast<PutResponse *>(resp);
+            ioStrategy = (rsp->ioStrategy > ioStrategy) ? rsp->ioStrategy : ioStrategy.load();
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
@@ -1293,14 +1153,13 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_destroy(&cbCtx.sem);
     net::BioClientNet::Instance()->Free(req->mrAddress);
     if (cbCtx.result == BIO_OK) {
-        updateQuota = negoWriteQuota.load();
-        mIoStratege[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
-        mIoStratege[ptEntry.ptId]->stratege = ioStratege.load();
+        mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
+        mIoStrategy[ptEntry.ptId]->strategy = ioStrategy.load();
     }
     return cbCtx.result;
 }
 
-BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t &updateQuota)
+BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 {
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
@@ -1311,14 +1170,10 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64
             param.length << ", flowId:" << param.flowId << ", flowOffset:" << param.flowOffset << ".");
         return ret;
     }
-    if (mEnableCrc) {
-        req->dataCrc = BioCrcUtil::Crc32(param.value, param.length);
-    } else {
-        req->dataCrc = 0;
-    }
+    req->dataCrc = mEnableCrc ? BioCrcUtil::Crc32(param.value, param.length) : 0;
 
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
-    ret = SendPutRequestImpl(ptEntry, param, req, updateQuota);
+    ret = SendPutRequestImpl(ptEntry, param, req);
     BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(req));
     return ret;
@@ -1360,7 +1215,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             uint32_t currentCrc = BioCrcUtil::Crc32(value, realLen);
             if (currentCrc != rsp.dataCrc) {
                 CLIENT_LOG_ERROR("Client Get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
-                rsp.dataCrc << ", current crc:" << currentCrc);
+                    rsp.dataCrc << ", current crc:" << currentCrc);
                 return BIO_CRC_ERR;
             }
         }
@@ -1371,7 +1226,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
 
 BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
-    CLIENT_LOG_TRACE("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
+    CLIENT_LOG_DEBUG("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
@@ -1410,6 +1265,7 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
     uint32_t quota = CalcPtQuota(ptEntry);
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
+
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto cbCtx = (ClientCallbackCtx *)ctx;
         LVOS_TP_START(SDK_MIRROR_DELETE_RECV_FAIL, &result, BIO_INNER_RETRY);
@@ -1529,29 +1385,31 @@ BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string
 
 BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult result = BIO_INNER_ERR;
+    BResult ret = BIO_OK;
     uint32_t index = 0;
+
     for (auto &ptEntry : mPtView) {
         uint16_t dstNid = ptEntry.second.masterNodeId;
-        req.isListUnderFs = (index == 0) ? true : false;
+        req.isListUnderFs = (index == 0);
         req.comm.ptId = ptEntry.second.ptId;
         req.comm.ptv = ptEntry.second.version;
-        LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &result, BIO_INNER_RETRY);
+        LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &ret, BIO_INNER_RETRY);
         if (dstNid == mLocalNid.VNodeId()) {
-            result = ListLocal(req, objs);
+            ret = ListLocal(req, objs);
         } else {
-            result = ListRemote(dstNid, req, objs);
+            ret = ListRemote(dstNid, req, objs);
         }
         LVOS_TP_END;
-        if (result != BIO_OK) {
-            CLIENT_LOG_ERROR("Send list request failed, ret:" << result << ", dstNid:" << dstNid << ", ptId:" <<
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Send list request failed, ret:" << ret << ", dstNid:" << dstNid << ", ptId:" <<
                 ptEntry.second.ptId << ".");
             objs.clear();
-            return result;
+            break;
         }
         index++;
     }
-    return BIO_OK;
+
+    return ret;
 }
 
 BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context)

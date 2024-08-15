@@ -166,15 +166,17 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
         return RET_CACHE_EPERM;
     }
 
-    CLIENT_LOG_DEBUG("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
-        ", location1:" << spaceInfo.loc.location[1] << ", address num:" << spaceInfo.addressNum << ", address0:" <<
-        spaceInfo.address[0].address << ", address0 size:" << spaceInfo.address[0].size << ", address1:" <<
-        spaceInfo.address[1].address << ", address1 size:" << spaceInfo.address[1].size << ".");
-
+    // 计算本次写的总数据大小
     uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
+    CLIENT_LOG_TRACE("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
+        ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0:" <<
+        spaceInfo.address[0].address << ", addr0 size:" << spaceInfo.address[0].size << ", addr1:" <<
+        spaceInfo.address[1].address << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
+
+    uint64_t startTime = Monotonic::TimeSec();
+    StatisticPutIoSize(length);
     MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
         nullptr, length, spaceInfo.loc, 0 };
-    StatisticPutIoSize(length);
     BIO_TRACE_START(SDK_TRACE_PUT);
     BResult ret = gClient->Put(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
@@ -238,7 +240,8 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Delete key failed, ret:" << ret << ", key:" << key << ".");
     } else {
-        CLIENT_LOG_DEBUG("Delete key success, key:" << key << ".");
+        CLIENT_LOG_DEBUG("Delete key success, key:" << key << ", location0:" << location.location[0] <<
+            ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
 }
@@ -256,16 +259,19 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_EPERM;
     }
 
-    LoadCallback cb = [key, callback](void *context, BResult result) {
+    LoadCallback cb = [&location, key, callback](void *context, BResult result) {
         if (result != BIO_OK) {
-            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ".");
+            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ", location0:" <<
+                location.location[0] << ", location1:" << location.location[1] << ".");
         } else {
-            CLIENT_LOG_DEBUG("Load success, key:" << key << ".");
+            CLIENT_LOG_DEBUG("Load success, key:" << key << ", location0:" << location.location[0] << ", location1:" <<
+                location.location[1] << ".");
         }
         if (callback != nullptr) {
             callback(context, ToCResult(result));
         }
     };
+
     BIO_TRACE_START(SDK_TRACE_LOAD);
     BResult ret = gClient->Load(key, offset, length, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
@@ -290,7 +296,9 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
     BIO_TRACE_START(SDK_TRACE_LISTALL);
     BResult ret = gClient->ListAll(prefix, objs);
     BIO_TRACE_END(SDK_TRACE_LISTALL, ret);
-    if (LIKELY(ret == BIO_OK)) {
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("List all failed, ret:" << ret << ", prefix:" << prefix << ".");
+    } else {
         CLIENT_LOG_DEBUG("List all success, prefix:" << prefix << ", num:" << objs.size() << ".");
     }
     return ToCResult(ret);
@@ -383,11 +391,17 @@ CResult Bio::AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceDesc &spac
         location = spaceInfo.loc;
     }
 
-    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, nullptr, nullptr,
-        length, location, 0 };
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, nullptr, nullptr, length, location, 0 };
     BIO_TRACE_START(SDK_TRACE_ALLOC_SPACE);
     auto ret = gClient->AllocSpace(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_ALLOC_SPACE, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Alloc space failed, ret:" << ret << ", objectId:" << objectId << ", length:" << length <<
+            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Alloc space success, objectId:" << objectId << ", length:" << length << ", location0:" <<
+            location.location[0] << ", location1:" << location.location[1] << ".");
+    }
     return ToCResult(ret);
 }
 
@@ -455,14 +469,9 @@ static std::mutex g_lock;
 CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
 {
     if (optConf == nullptr) {
-        auto clientConf = new (std::nothrow)ClientOptionsConfig();
-        if (clientConf == nullptr) {
-            return RET_CACHE_NO_SPACE;
-        }
-        clientConf->enable = false;
-        auto ret = BioService::Initialize(mode, *clientConf);
-        delete clientConf;
-        return ret;
+        ClientOptionsConfig config;
+        config.enable = false;
+        return BioService::Initialize(mode, config);
     }
     return BioService::Initialize(mode, *optConf);
 }
@@ -545,7 +554,6 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
         }
         bioInstance = iter->second;
     }
-
     return bioInstance->AllocSpace(objectId, length, *space);
 }
 

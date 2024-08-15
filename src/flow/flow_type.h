@@ -15,6 +15,12 @@ enum FlowType : uint16_t {
     FLOW_BUTT
 };
 
+enum FlowRole : uint16_t {
+    FLOW_META = 0,
+    FLOW_DATA = 1,
+    FLOW_ROLE_BUTT
+};
+
 enum FlowCache : uint16_t {
     FLOW_WCACHE = 0,
     FLOW_RCACHE = 1,

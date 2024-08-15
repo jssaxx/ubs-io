@@ -446,7 +446,7 @@ TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
 
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL");
 
     ret = BioDestroyCache(tenantId);
@@ -485,7 +485,7 @@ TEST_F(TestBio, test_bio_put_copy_free)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree1", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree2", &addressDesc);
@@ -1184,30 +1184,6 @@ TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
 
-TEST_F(TestBio, test_bio_qos_switch)
-{
-    LOG_INFO("test_bio_qos_switch");
-    BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
-    std::string opOn = "on";
-    auto ret = qosP->Switch(opOn);
-    EXPECT_EQ(ret, true);
-
-    std::string opOff = "off";
-    ret = qosP->Switch(opOff);
-    EXPECT_EQ(ret, false);
-}
-
-TEST_F(TestBio, test_bio_qos_show)
-{
-    LOG_INFO("test_bio_qos_show");
-    BioQosPtr qosP = BioClient::Instance()->GetMirror()->GetQosPtr();
-    std::vector<uint64_t> maxQuota;
-    std::vector<uint64_t> adjustQuota;
-    std::vector<uint64_t> allocQuota;
-    std::vector<uint64_t> concur;
-    qosP->Show(maxQuota, adjustQuota, allocQuota, concur);
-}
-
 TEST_F(TestBio, test_bio_update_return_fail)
 {
     LOG_INFO("test_bio_update_return_fail");
@@ -1276,4 +1252,71 @@ TEST_F(TestBio, test_bio_convert_location_return_fail)
     ret = BioConvertLocation(location, &detailLoc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+}
+
+TEST_F(TestBio, test_bio_qos_wake_force)
+{
+    LOG_INFO("test_bio_qos_wake_force");
+    auto map = BioQos::Instance()->GetQuotaPtr()->GetIoQueueMap();
+    uint16_t nodeSet = NO_50;
+    auto iter = map->find(nodeSet);
+    if (UNLIKELY(iter == map->end())) {
+        map->emplace(nodeSet, IoHangQueue());
+        iter = map->find(nodeSet);
+    }
+
+    auto taskFlag = BioQos::Instance()->GetQuotaPtr()->GetTaskRunFlag();
+    auto iter2 = taskFlag->find(nodeSet);
+    if (UNLIKELY(iter2 == taskFlag->end())) {
+        taskFlag->emplace(nodeSet, true);
+    }
+
+    IoWaitEntry entry1("test_bio_qos_wake_force_1", NO_4194304);
+    IoWaitEntry entry2("test_bio_qos_wake_force_2", NO_4194304);
+    iter->second.Push(&entry1);
+    iter->second.Push(&entry2);
+    BioQos::Instance()->GetQuotaPtr()->WakeForce(nodeSet, false);
+    EXPECT_EQ(entry1.Result(), BIO_INNER_RETRY);
+    EXPECT_EQ(entry2.Result(), BIO_INNER_RETRY);
+}
+
+TEST_F(TestBio, test_bio_qos_rollback)
+{
+    LOG_INFO("test_bio_qos_rollback");
+    CmPtInfo ptEntry;
+    uint16_t ptId = 1;
+    auto ret = BioClient::Instance()->GetMirror()->GetPtEntry(ptId, ptEntry);
+    EXPECT_EQ(ret, BIO_OK);
+
+    std::vector<uint16_t> successNodeVec = { 0 };
+    std::vector<uint64_t> successQuotaVec = { NO_4194304 };
+    BioQos::Instance()->GetQuotaPtr()->RollbackAllocQuotaReq(&ptEntry, successNodeVec, successQuotaVec);
+}
+
+TEST_F(TestBio, test_bio_qos_put_align_size)
+{
+    LOG_INFO("test_bio_qos_put_align_size");
+    CmPtInfo ptEntry;
+    uint16_t ptId = 1;
+    auto ret = BioClient::Instance()->GetMirror()->GetPtEntry(ptId, ptEntry);
+    EXPECT_EQ(ret, BIO_OK);
+
+    BioClient::Instance()->GetMirror()->SetScene(SCENE_BIGDATA);
+
+    uint64_t length = NO_1024 - NO_1;
+    char *dataBuff = new char[length];
+    ObjLocation location = { 1, 0 };
+    MirrorClient::MirrorPut param = { { NO_1, LOCAL_AFFINITY, WRITE_BACK }, "test_bio_qos_put_align_size", dataBuff,
+                                      length, location, 0 };
+    bool isAllocMem = false;
+    char *value = param.value;
+    ret = BioClient::Instance()->GetMirror()->PutAlignSize(value, param, isAllocMem);
+    EXPECT_EQ(ret, BIO_OK);
+
+    if (isAllocMem) {
+        free(param.value);
+        param.value = value;
+    }
+    delete[] dataBuff;
+    BioClient::Instance()->GetMirror()->SetScene(SCENE_NONE);
 }
