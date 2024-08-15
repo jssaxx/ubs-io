@@ -96,11 +96,11 @@ private:
         WCacheSlicePtr &slice);
 
 private:
+    WCacheTierType type;
     FlowPtr mMetaFlow;
     FlowPtr mDataFlow;
 
     CacheSliceOperator mSliceOperator;
-
     WFlowTruncateCursorPtr mFlowTruncateCursor;
 
     SpinLock mEvictSliceQueueLock;

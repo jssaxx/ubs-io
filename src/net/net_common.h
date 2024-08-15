@@ -92,6 +92,7 @@ enum Role {
 };
 
 struct NetOptions {
+    // Net base configs
     std::string ipMask;                                  /* ip mask */
     uint16_t port = 0;                                   /* listen port */
     uint16_t handlerCount = 1;                           /* handler count */
@@ -101,6 +102,7 @@ struct NetOptions {
     bool regShmMem = false;                              /* register the memory to shared */
     Role role = NET_BUTT;                                /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
+    // Net TLS configs
     bool enableTls = false;                              /* tls switch */
     std::string certificationPath{};                     /* certification path */
     std::string caCerPath{};                             /* caCer path */
@@ -109,6 +111,30 @@ struct NetOptions {
     std::string privateKeyPassword{};                    /* private key password */
     std::string hseKfsMasterPath{};                      /* hseceasy kfs master path */
     std::string hseKfsStandbyPath{};                     /* hseceasy kfs standby path  */
+
+    NetOptions() = default;
+    ~NetOptions() = default;
+
+    void FillNetBaseConfigs(uint16_t hdlCnt, uint16_t connCnt, Role netRole, ServiceProtocol netProtocol)
+    {
+        handlerCount = hdlCnt;
+        connCount = connCnt;
+        role = netRole;
+        protocol = netProtocol;
+    }
+
+    void FillNetTlsConfigs(bool enable, std::string certPath, std::string tlsCaCerPath, std::string tlsCaCrlPath,
+        std::string priKeyPath, std::string priKeyPw, std::string hseMstPath, std::string hseStandbyPath)
+    {
+        enableTls = enable;
+        certificationPath = certPath;
+        caCerPath = tlsCaCerPath;
+        caCrlPath = tlsCaCrlPath;
+        privateKeyPath = priKeyPath;
+        privateKeyPassword = priKeyPw;
+        hseKfsMasterPath = hseMstPath;
+        hseKfsStandbyPath = hseStandbyPath;
+    }
 };
 
 const std::string CONN_PAYLOAD_PREFIX_CTRL = "bio-ctrl-";

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include "bio_c.h"
+#include "bio_config_instance.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,12 +56,33 @@ typedef struct {
 /* Query cache resource quota */
 typedef struct {
     RequestComm comm;
-} QueryResourceRequest;
+    uint32_t scene;
+} QueryQuotaRequest;
 
 typedef struct {
-    uint64_t writeRes;
-    uint64_t readRes;
-} QueryResourceResponse;
+    bool enable;
+    uint64_t preloadSize;
+} QueryQuotaResponse;
+
+/* Alloc cache quota */
+typedef struct {
+    RequestComm comm;
+    uint32_t nid;
+    uint64_t cid;
+    uint64_t allocQuota;
+} AllocQuotaRequest;
+
+typedef struct {
+    uint64_t exceptQuota;
+} AllocQuotaResponse;
+
+/* Free cache quota */
+typedef struct {
+    RequestComm comm;
+    uint32_t nid;
+    uint64_t cid;
+    uint64_t quota;
+} FreeQuotaRequest;
 
 /* Query node view */
 typedef struct {
@@ -181,7 +203,6 @@ typedef struct {
 } SliceAddrDesc;
 
 typedef struct {
-    uint64_t updateQuota;
     uint64_t addrNum;
     SliceAddrDesc addr[SLICE_ADDR_MAX_SIZE];
     uint64_t addrOffset[SLICE_ADDR_MAX_SIZE];
@@ -205,15 +226,16 @@ typedef struct {
     uint32_t mrKey;
     bool memFromServer;
     bool isDegrade;
-    uint32_t ioStratege;
+    uint32_t ioStrategy;
     uint64_t sliceLen;
+    uint64_t quotaNid;
+    uint64_t quotaCid;
     uint32_t dataCrc;
     char sliceBuf[0];
 } PutRequest;
 
 typedef struct {
-    uint64_t updateQuota;
-    uint32_t ioStratege;
+    uint32_t ioStrategy;
 } PutResponse;
 
 /* Get */
@@ -413,6 +435,29 @@ typedef struct {
     uint32_t unused;
     int64_t dataLen;
 } InterceptorPwriteOut;
+
+typedef struct {
+    RequestComm comm;
+} GetUnderFsConfigRequest;
+
+typedef struct {
+    char cfgPath[KEY_MAX_SIZE];
+    char cluster[KEY_MAX_SIZE];
+    char user[KEY_MAX_SIZE];
+    char pool[KEY_MAX_SIZE];
+} CephConfigResponse;
+
+typedef struct {
+    char nameNode[KEY_MAX_SIZE];
+    char workingPath[KEY_MAX_SIZE];
+} HdfsConfigResponse;
+
+typedef struct {
+    char underFsType[KEY_MAX_SIZE];
+    CephConfigResponse cephConfig;
+    HdfsConfigResponse hdfsConfig;
+} GetUnderFsConfigResponse;
+
 #ifdef __cplusplus
 }
 #endif

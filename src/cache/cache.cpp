@@ -169,7 +169,6 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     BIO_TRACE_START(WCACHE_TRACE_PUT);
     ret = mWCacheManager->Put(key, slice, sliceReader, attr, mixDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
-
     if (ret == BIO_OK) {
         CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_FRONT_WRITE, slice->GetLength());
     }
@@ -405,11 +404,6 @@ void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
     } else if (type == READ_CACHE) {
         RCache::GetCacheResource(desc.memCapacity, desc.memUsedSize, desc.diskCapacity, desc.diskUsedSize);
     }
-}
-
-uint64_t Cache::GetAdjustWriteQuota()
-{
-    return CacheOverloadCtrl::Instance().GetWriteQuota();
 }
 }
 }

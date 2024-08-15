@@ -33,8 +33,8 @@ class Flow;
 using FlowPtr = Ref<Flow>;
 class Flow {
 public:
-    Flow(FlowType type, uint64_t flowId, uint32_t mediaId, uint64_t chunkSize, uint64_t preLoadSize)
-        : mType(type), mFlowId(flowId), mMediaId(mediaId), mChunkSize(chunkSize), mPreLoadSize(preLoadSize)
+    Flow(FlowRole role, FlowType type, uint64_t flowId, uint32_t mediaId, uint64_t chunkSize, uint64_t preLoadSize)
+        : mRole(role), mType(type), mFlowId(flowId), mMediaId(mediaId), mChunkSize(chunkSize), mPreLoadSize(preLoadSize)
     {}
     ~Flow() = default;
 
@@ -91,6 +91,7 @@ private:
     BResult HoldWait(uint64_t offset);
 
 private:
+    FlowRole mRole;
     FlowType mType;
     uint64_t mFlowId;
     uint32_t mMediaId;

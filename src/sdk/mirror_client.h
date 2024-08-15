@@ -34,9 +34,9 @@ enum WorkerScene : uint32_t {
     SCENE_BIGDATA = 1
 };
 
-struct IoStratege {
+struct IoStrategy {
     std::atomic<uint64_t> expired;
-    std::atomic<uint32_t> stratege;
+    std::atomic<uint32_t> strategy;
 };
 
 class MirrorClient {
@@ -67,13 +67,8 @@ public:
     BResult Start();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
-    ~MirrorClient()
-    {
-        delete[] mPtHit;
-    }
+    ~MirrorClient() {}
 
-    std::vector<uint64_t> ShowPtHit();
-    void StatisticPtHit(uint16_t ptId);
     uint16_t SelectingPt(uint64_t objectId, AffinityStrategy affinity);
 
     inline uint16_t ParseLocation(ObjLocation location)
@@ -108,12 +103,12 @@ public:
 
     std::vector<uint16_t> ListLocalAffinityPt();
 
-    inline uint16_t GetNetProtocol()
+    inline uint16_t GetNetProtocol() const
     {
         return mNetProtocol;
     }
 
-    inline CmNodeId &GetLocalNodeInfo()
+    inline CmNodeId GetLocalNodeInfo() const
     {
         return mLocalNid;
     }
@@ -151,17 +146,26 @@ public:
         return mPtView;
     }
 
+    inline void SetScene(WorkerScene s)
+    {
+        mScene = s;
+    }
+
     BResult RebuildNodeView();
 
     BResult RebuildPtView();
 
     BResult GetPtEntry(uint16_t ptId, ock::bio::CmPtInfo &ptEntry);
 
+    BResult PutAlignSize(const char *value, MirrorPut &param, bool &isAllocMem);
+
 private:
+    bool FailHandler(BResult result, uint64_t startTime);
+
     uint16_t SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity);
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo, PutRequest *&req);
-    BResult PutImpl(MirrorPut &param, uint64_t &updateQuota);
-    BResult PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &updateQuota);
+    BResult PutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry);
+    BResult PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
 
@@ -178,7 +182,7 @@ private:
 
     BResult SendCheckUpdateReadyRequest();
 
-    BResult AllocSpaceImpl(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo, uint64_t &adjustWriteQuota);
+    BResult AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut &param, CacheSpaceDesc &spaceInfo);
     BResult InitializeBioQos();
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();
@@ -207,10 +211,10 @@ private:
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
-    void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &index, Callback &callback);
+    void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &indexVec, Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, Callback &callback) const;
-    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req, uint64_t &updateQuota);
-    BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param, uint64_t &updateQuota);
+    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
+    BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
 
     BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
     BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
@@ -311,7 +315,7 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
-    std::map<uint16_t, IoStratege *> mIoStratege;
+    std::map<uint16_t, IoStrategy *> mIoStrategy;
     uint64_t mCurNodeTimes;
     uint64_t mCurPtTimes;
     uint16_t mNetProtocol;
@@ -320,7 +324,6 @@ private:
     uint32_t mAlignSize = NO_1;
     uint32_t mTimeOut = NO_60;
     bool mEnableCrc { false };
-    std::atomic<uint64_t> *mPtHit = nullptr;
     BioQosPtr mBioQos = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };

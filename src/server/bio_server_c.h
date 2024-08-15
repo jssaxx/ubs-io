@@ -22,7 +22,11 @@ bool GetCrcFlag();
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
-int32_t GetResourceInfo(QueryResourceRequest *req, QueryResourceResponse *rsp);
+int32_t GetQuotaInfo(QueryQuotaRequest *req, QueryQuotaResponse *rsp);
+
+int32_t AllocQuota(AllocQuotaRequest *req, AllocQuotaResponse *rsp);
+
+int32_t FreeQuota(FreeQuotaRequest *req);
 
 int32_t GetNodeView(QueryNodeViewRequest *req, QueryNodeViewResponse *rsp);
 
