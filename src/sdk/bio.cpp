@@ -246,7 +246,7 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
     return ToCResult(ret);
 }
 
-CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation location,
     const BioLoadCallback callback, void *context)
 {
     if (UNLIKELY(!gClient->Ready())) {
@@ -259,7 +259,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_EPERM;
     }
 
-    LoadCallback cb = [&location, key, callback](void *context, BResult result) {
+    LoadCallback cb = [location, key, callback](void *context, BResult result) {
         if (result != BIO_OK) {
             CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ", location0:" <<
                 location.location[0] << ", location1:" << location.location[1] << ".");

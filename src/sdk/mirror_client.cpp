@@ -403,6 +403,15 @@ BResult MirrorClient::Start()
     return LoadAffinityFlow();
 }
 
+BResult MirrorClient::PutCheckPtState(CmPtInfo ptEntry)
+{
+    if (ptEntry.state == CM_PT_NORMAL) {
+        return BIO_OK;
+    }
+    mUpdateView();
+    return BIO_CHECK_PT_FAIL;
+}
+
 BResult MirrorClient::Put(MirrorPut &param)
 {
     bool isAllocMem = false;
@@ -424,7 +433,12 @@ BResult MirrorClient::Put(MirrorPut &param)
             break;
         }
 
-        // 2. Apply for write cache quota.
+        // 2. Check pt view state
+        if (UNLIKELY((ret = PutCheckPtState(ptEntry)) != BIO_OK)) {
+            break;
+        }
+
+        // 3. Apply for write cache quota.
         ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.key, &ptEntry, param.length);
         if (LIKELY(ret == BIO_OK)) {
             // 3. Put value to write cache.
