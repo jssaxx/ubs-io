@@ -166,6 +166,7 @@ private:
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo, PutRequest *&req);
     BResult PutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry);
     BResult PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo);
+    BResult PutCheckPtState(CmPtInfo ptEntry);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
 
