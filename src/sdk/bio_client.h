@@ -71,7 +71,7 @@ public:
     inline BResult Put(MirrorClient::MirrorPut &param)
     {
         BResult ret = mMirror->Put(param);
-        if (UNLIKELY(ret == BIO_QUOTA_NOT_ENOUGH)) {
+        if (UNLIKELY(ret == BIO_QUOTA_NOT_ENOUGH || ret == BIO_CHECK_PT_FAIL)) {
             BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
             ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
             BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
