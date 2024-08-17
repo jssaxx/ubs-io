@@ -74,7 +74,7 @@ public:
      * @param[in]: context: callback context
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+    CResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation location,
         const BioLoadCallback callback, void *context);
 
     /**
