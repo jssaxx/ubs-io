@@ -9,6 +9,7 @@
 #include "bio_crc_util.h"
 #include "bio_config_instance.h"
 #include "cm.h"
+#include "bio_trace.h"
 #include "cache_overload_ctrl.h"
 
 namespace ock {
@@ -98,6 +99,51 @@ void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.UnLock();
 }
 
+void WCacheTier::AddEvictNegotiateQueue(WCacheReplicaSlicePtr &repSlicePtr)
+{
+    uint32_t proc = 0;
+    mEvictNegotiateQueueLock.Lock();
+    if (mEvictNegotiateQueue.empty() ||
+            mEvictNegotiateQueue.front()->GeNegotiateOffset() > repSlicePtr->GeNegotiateOffset()) {
+        mEvictNegotiateQueue.push_front(repSlicePtr);
+        proc = NO_1;
+    } else if (mEvictNegotiateQueue.back()->GeNegotiateOffset() < repSlicePtr->GeNegotiateOffset()) {
+        mEvictNegotiateQueue.push_back(repSlicePtr);
+        proc = NO_2;
+    } else {
+        for (auto pos = mEvictNegotiateQueue.rbegin(); pos != mEvictNegotiateQueue.rend(); ++pos) {
+            if ((*pos)->GeNegotiateOffset() < repSlicePtr->GeNegotiateOffset()) {
+                mEvictNegotiateQueue.insert((--pos).base(), repSlicePtr);
+                proc = NO_3;
+                break;
+            }
+        }
+    }
+    LOG_DEBUG("Add evict negotiate queue, proc:" << proc << ", negoOffset:" << repSlicePtr->GeNegotiateOffset() << ".");
+    mEvictNegotiateQueueLock.UnLock();
+}
+
+void WCacheTier::DelEvictNegotiateQueue(WCacheReplicaSlicePtr repSlicePtr)
+{
+    mEvictNegotiateQueueLock.Lock();
+    mEvictNegotiateQueue.remove(repSlicePtr);
+    mEvictNegotiateQueueLock.UnLock();
+}
+
+void WCacheTier::AddEvictNegotiateMap(WCacheReplicaSlicePtr &repSlicePtr)
+{
+    mEvictNegotiateMapLock.Lock();
+    mEvictNegotiateMap.emplace(repSlicePtr->GeNegotiateOffset(), repSlicePtr);
+    mEvictNegotiateMapLock.UnLock();
+}
+
+void WCacheTier::DelEvictNegotiateMap(WCacheReplicaSlicePtr repSlicePtr)
+{
+    mEvictNegotiateMapLock.Lock();
+    mEvictNegotiateMap.erase(repSlicePtr->GeNegotiateOffset());
+    mEvictNegotiateMapLock.UnLock();
+}
+
 void WCacheTier::RetryEvictQueue(WCacheSliceRefPtr sliceRef)
 {
     mEvictSliceQueueLock.Lock();
@@ -133,6 +179,23 @@ WCacheSliceRefPtr WCacheTier::GetEvictSlice()
     mEvictSliceQueue.pop_front();
     mEvictSliceQueueLock.UnLock();
     return sliceRef;
+}
+
+void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &offsetVec, uint32_t limit)
+{
+    mEvictNegotiateQueueLock.Lock();
+    for (const auto &item: mEvictNegotiateQueue) {
+        if (item->GetState() || item->GetEvictRef() == 0) {
+            continue;
+        }
+        item->SetState(true);
+        offsetVec.emplace_back(item->GeNegotiateOffset());
+        LOG_DEBUG("Select this slice success, negoOffset:" << item->GeNegotiateOffset() << ".");
+        if (offsetVec.size() >= limit) {
+            break;
+        }
+    }
+    mEvictNegotiateQueueLock.UnLock();
 }
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
@@ -233,10 +296,9 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
     if (truncateSlice == nullptr) {
         return BIO_OK;
     }
-
-    LOG_DEBUG("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
-        ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" <<
-        truncateSlice->GetLength());
+    LOG_INFO("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
+        ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() <<
+        ", len:" << truncateSlice->GetLength());
 
     auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * sizeof(WFlowSliceMeta));
     ChkTrue(ret == BIO_OK, ret,
@@ -309,6 +371,48 @@ WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice
     }
 
     return truncateSlice;
+}
+
+BResult WCacheTier::UpdateNegotiateState(uint64_t offsetInflow, bool negotiateRet)
+{
+    mEvictNegotiateMapLock.Lock();
+    auto sliceRef = mEvictNegotiateMap.find(offsetInflow);
+    if (sliceRef == mEvictNegotiateMap.end()) {
+        LOG_ERROR("Not found replica slice ptr, flowOffset:" << offsetInflow << ".");
+        mEvictNegotiateMapLock.UnLock();
+        return BIO_NOT_EXISTS;
+    }
+    mEvictNegotiateMapLock.UnLock();
+
+    if (negotiateRet) {
+        uint32_t curEvictRef = sliceRef->second->DecEvictRef();
+        if (curEvictRef == 0) {
+            LOG_DEBUG("Delete replica slice ptr, negoOffset:" << sliceRef->second->GeNegotiateOffset() << ".");
+            AddEvictQueue(sliceRef->second->GetSlice());
+            BIO_TRACE_START(WCACHE_TRACE_POP_NEGOTIATE_QUE)
+            DelEvictNegotiateQueue(sliceRef->second);
+            DelEvictNegotiateMap(sliceRef->second);
+            BIO_TRACE_END(WCACHE_TRACE_POP_NEGOTIATE_QUE, BIO_OK)
+        }
+    } else {
+        sliceRef->second->SetState(false);
+    }
+
+    return BIO_OK;
+}
+
+void WCacheTier::FlushNegotiateQueue()
+{
+    mEvictNegotiateQueueLock.Lock();
+    auto size = mEvictNegotiateQueue.size();
+    while (!mEvictNegotiateQueue.empty()) {
+        WCacheReplicaSlicePtr repSlicePtr = mEvictNegotiateQueue.front();
+        mEvictNegotiateQueue.pop_front();
+        AddEvictQueue(repSlicePtr->GetSlice());
+        DelEvictNegotiateMap(repSlicePtr);
+    }
+    mEvictNegotiateQueueLock.UnLock();
+    LOG_DEBUG("Flush mEvictNegotiateQueue ,size :" << size << ".");
 }
 }
 }

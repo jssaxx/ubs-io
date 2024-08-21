@@ -108,6 +108,7 @@ public:
     int32_t MirrorServerGetEvictOffset(ServiceContext &ctx, GetEvictRequest *req);
     int32_t MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req);
     int32_t MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnderFsConfigRequest *req);
+    int32_t MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req);
 
     int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
@@ -134,6 +135,7 @@ public:
     int32_t HandleGetEvictOffset(ServiceContext &ctx);
     int32_t HandleFreeMem(ServiceContext &ctx);
     int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
+    int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
 
     DEFINE_REF_COUNT_FUNCTIONS
 

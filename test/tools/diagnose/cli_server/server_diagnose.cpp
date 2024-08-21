@@ -164,6 +164,9 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         for (auto iter = holders.begin(); iter != holders.end(); iter++) {
             CLI_PrintBuf("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
+    } else if (cmdType == "evict") {
+        Cache::Instance().ShowEvictNegotiateQueue();
+        CLI_PrintBuf("Show evict negotiate queue success, please see log file.\n");
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -193,7 +196,7 @@ static void BioServerDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tchange water level: bioserver chgwlv [tier] [water_level]\n");
     CLI_PrintBuf("\tchange memory read write ratio: bioserver chgmr [memory ratio]\n");
     CLI_PrintBuf("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
-    CLI_PrintBuf("\tshow: bioserver show [disk/net/olc]\n");
+    CLI_PrintBuf("\tshow: bioserver show [disk/net/olc/evict]\n");
     CLI_PrintBuf("\ttrace: bioserver trace [show/clear]\n");
     CLI_PrintBuf("\texit: exit console\n");
 }

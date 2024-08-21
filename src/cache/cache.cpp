@@ -154,18 +154,18 @@ BResult Cache::ServiceUngradeFlush()
 
 BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr)
 {
-    bool isDegrade = mCheckService(); // 升级过程中，IO降级处理
-
-    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
+    // 1. 获取PT视图状态和服务状态, 综合得到本次Put的IO是否需要降级处理.
+    bool isDegrade = mCheckService();
     bool isPtDegrade = false;
+    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isPtDegrade);
     if (ret != BIO_OK) {
-        LOG_ERROR("Check degrade failed:" << ret << ", ptId:" << ptId << ".");
+        LOG_ERROR("Check degrade failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
         return ret;
     }
-
     bool mixDegrade = (isDegrade || isPtDegrade);
 
+    // 2. 写入到write cache中.
     BIO_TRACE_START(WCACHE_TRACE_PUT);
     ret = mWCacheManager->Put(key, slice, sliceReader, attr, mixDegrade);
     BIO_TRACE_END(WCACHE_TRACE_PUT, ret);
@@ -404,6 +404,16 @@ void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
     } else if (type == READ_CACHE) {
         RCache::GetCacheResource(desc.memCapacity, desc.memUsedSize, desc.diskCapacity, desc.diskUsedSize);
     }
+}
+
+BResult Cache::EvictNegotiate(uint64_t &flowId, uint64_t slices[], std::vector<bool> &result, uint32_t count)
+{
+    return mWCacheManager->MasterEvictNegotiate(flowId, slices, result, count);
+}
+
+void Cache::ShowEvictNegotiateQueue()
+{
+    mWCacheManager->GetEvictNegotiateInfo();
 }
 }
 }

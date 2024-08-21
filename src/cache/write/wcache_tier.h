@@ -57,9 +57,22 @@ public:
 
     void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 
+    void AddEvictNegotiateQueue(WCacheReplicaSlicePtr &repSlicePtr);
+
+    void DelEvictNegotiateQueue(WCacheReplicaSlicePtr repSlicePtr);
+
+    void AddEvictNegotiateMap(WCacheReplicaSlicePtr &repSlicePtr);
+
+    void DelEvictNegotiateMap(WCacheReplicaSlicePtr repSlicePtr);
+
     void RetryEvictQueue(WCacheSliceRefPtr sliceRef);
 
     void DelEvictQueue(WCacheSliceRefPtr sliceRef);
+
+    std::list<WCacheReplicaSlicePtr> *GetEvictQueuePtr()
+    {
+        return &mEvictNegotiateQueue;
+    }
 
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);
 
@@ -87,6 +100,11 @@ public:
 
     WCacheSliceRefPtr GetEvictSlice();
 
+    void GetNegotiateSlice(std::vector<uint64_t> &offsetVec, uint32_t limit);
+
+    BResult UpdateNegotiateState(uint64_t offsetInflow, bool negotiateRet);
+    void FlushNegotiateQueue();
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -105,6 +123,12 @@ private:
 
     SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;
+
+    SpinLock mEvictNegotiateQueueLock;
+    std::list<WCacheReplicaSlicePtr> mEvictNegotiateQueue;
+
+    SpinLock mEvictNegotiateMapLock;
+    std::unordered_map<uint64_t, WCacheReplicaSlicePtr> mEvictNegotiateMap;
 
     DEFINE_REF_COUNT_VARIABLE;
 };

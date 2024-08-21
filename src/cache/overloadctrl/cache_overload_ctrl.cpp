@@ -156,9 +156,6 @@ void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
     if (curTime >= (obj.calcBwCycleTime + obj.calcBwCycle)) {
         obj.calcBwCycleTime = curTime;
         obj.calcBwValue = GetBwStatAverageValue(obj);
-        if (obj.calcBwValue != 0) {
-            LOG_DEBUG("[QOS]Update bandwidth, " << bwTypeStr[type] << " average value:" << obj.calcBwValue << ".");
-        }
     } else {
         return;
     }
