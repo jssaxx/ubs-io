@@ -8,7 +8,6 @@
 #include "bio_server.h"
 #include "tracepoint.h"
 #include "bio_server_c.h"
-#include "bdm_obj.h"
 #include "test_bio_server.h"
 
 using namespace ock::bio;

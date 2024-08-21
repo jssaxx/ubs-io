@@ -7,6 +7,7 @@
 #include "htracer.h"
 #include "bio_log.h"
 #include "bdm_core.h"
+#include "cm_c.h"
 #include "bio_functions.h"
 #include "bio_config_instance.h"
 #include "bio_monotonic.h"
@@ -188,10 +189,9 @@ void BioServer::BioUnderFsExit()
 
 BResult BioServer::BioBdmInit()
 {
-    auto ret = BdmInit();
-    ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
-
     auto &daemonConfig = mConfig->GetDaemonConfig();
+    auto ret = BdmInit(daemonConfig.logLevel, Log, CmReportDiskStatus);
+    ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
     DiskDevices diskList;
     diskList.num = 0;
     for (auto diskPathStr : daemonConfig.diskList) {
