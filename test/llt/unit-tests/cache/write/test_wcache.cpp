@@ -121,6 +121,35 @@ TEST_F(TestWCache, test_put_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestWCache, test_slave_send_negotiate_case_return_ok)
+{
+    LOG_INFO("test_master_negotiate_case_return_ok");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    auto ret = gWCacheManager->EvictNegotiateThread();
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_master_negotiate_case_return_ok)
+{
+    LOG_INFO("test_master_negotiate_case_return_ok");
+    uint32_t count = NO_1;
+    uint64_t offsets[] = {0};
+    std::vector<bool> result(count);
+    auto ret = gWCacheManager->MasterEvictNegotiate(g_flowId, offsets, result, count);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_get_evict_negotiate_info_case)
+{
+    LOG_INFO("test_get_evict_negotiate_info_case");
+    auto ret = gWCacheManager->GetEvictNegotiateInfo();
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
 {
     LOG_INFO("test_put_state_not_normal_case_return_fail");
@@ -790,7 +819,7 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
-    auto ret = GetSlice(g_flowId, 0, NO_1024);
+    auto ret = GetSlice(g_flowId, 0, NO_MAX_VALUE64-1);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
