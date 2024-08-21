@@ -500,6 +500,22 @@ TEST_F(TestBio, test_bio_put_copy_free)
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
+TEST_F(TestBio, test_bio_delete)
+{
+    LOG_INFO("test_bio_delete");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    ret = BioDelete(G_TENANT_ID, nullptr, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+}
+
 TEST_F(TestBio, test_bio_update_return_ok)
 {
     LOG_INFO("test_bio_update_return_ok");
@@ -523,22 +539,6 @@ TEST_F(TestBio, test_bio_update_return_ok)
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
-}
-
-TEST_F(TestBio, test_bio_delete)
-{
-    LOG_INFO("test_bio_delete");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
-    auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
-
-    ret = BioDelete(G_TENANT_ID, nullptr, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-
-    ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 }
 
 void TestBio::VNodeIdStub()
