@@ -25,6 +25,7 @@ const uint32_t PT_COPY_MAX_SIZE = 3;
 const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
+const uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 
 typedef struct {
     uint16_t magic;
@@ -457,6 +458,16 @@ typedef struct {
     CephConfigResponse cephConfig;
     HdfsConfigResponse hdfsConfig;
 } GetUnderFsConfigResponse;
+
+typedef struct {
+    uint64_t flowId;
+    uint32_t count;
+    uint64_t data[MAX_EVICT_CONSULT_SIZE];
+} EvictNegotiateRequest;
+
+typedef struct {
+    bool negoResult[MAX_EVICT_CONSULT_SIZE];
+} EvictNegotiateResponse;
 
 #ifdef __cplusplus
 }

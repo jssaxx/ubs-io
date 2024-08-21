@@ -20,6 +20,8 @@ constexpr uint16_t DISK_EVICT_THREAD_NUM = 8;
 constexpr uint32_t DISK_EVICT_QUEUE_SIZE = 8192;
 constexpr uint16_t RETRY_EVICT_THREAD_NUM = 1;
 constexpr uint32_t RETRY_EVICT_QUEUE_SIZE = 8192;
+constexpr uint16_t NEGOTIATE_EVICT_THREAD_NUM = 4;
+constexpr uint32_t NEGOTIATE_QUEUE_SIZE = 8192;
 constexpr uint16_t DESTROY_EVICT_THREAD_NUM = 1;
 constexpr uint32_t DESTROY_EVICT_QUEUE_SIZE = 8192;
 constexpr uint32_t DESTROY_EVICT_TIMEOUT = 60;
@@ -32,35 +34,98 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
     mEnableCrc = BioConfig::Instance()->GetDaemonConfig().enableCrc;
     mCacheIndex = MakeRef<WCacheIndex>();
-    ChkTrueNot(mCacheIndex != nullptr, BIO_ALLOC_FAIL);
+    ChkTrue(mCacheIndex != nullptr, BIO_ALLOC_FAIL, "Make write cache index instance failed.");
 
+    if (EvictNegotiateExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    if (MemoryEvictExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    if (DiskEvictExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    if (GcEvictExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    if (RetryEvictExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    if (DelayDestroyExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    mRCacheManager = rCacheManager;
+    return BIO_OK;
+}
+
+BResult WCacheManager::EvictNegotiateExecutorInit()
+{
+    mEvictNegotiateService = ExecutorService::Create(NEGOTIATE_EVICT_THREAD_NUM, NEGOTIATE_QUEUE_SIZE);
+    if (UNLIKELY(mEvictNegotiateService == nullptr)) {
+        LOG_ERROR("Failed to start execution service for consult evict, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+    mEvictNegotiateService->SetThreadName("wcache-negotiate-evict");
+    auto result = mEvictNegotiateService->Start();
+    ChkTrue(result, BIO_INNER_ERR, "Start evict negotiate service failed.");
+    result = mEvictNegotiateService->Execute([this]() { EvictNegotiateThread(); });
+    ChkTrue(result, BIO_INNER_ERR, "Execute evict negotiate service failed.");
+    return BIO_OK;
+}
+
+BResult WCacheManager::MemoryEvictExecutorInit()
+{
     mEvictService[WCACHE_MEMORY] = ExecutorService::Create(MEM_EVICT_THREAD_NUM, MEM_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mEvictService[WCACHE_MEMORY] == nullptr)) {
         LOG_ERROR("Failed to start execution service for mem evict, probably out of memory");
         return BIO_ALLOC_FAIL;
     }
+
     mEvictService[WCACHE_MEMORY]->SetThreadName("wcache-evict-mem");
     BResult result = mEvictService[WCACHE_MEMORY]->Start();
-    ChkTrueNot(result, BIO_INNER_ERR);
+    ChkTrue(result, BIO_INNER_ERR, "Start memory evict service failed.");
 
+    return BIO_OK;
+}
+
+BResult WCacheManager::DiskEvictExecutorInit()
+{
     mEvictService[WCACHE_DISK] = ExecutorService::Create(DISK_EVICT_THREAD_NUM, DISK_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mEvictService[WCACHE_DISK] == nullptr)) {
         LOG_ERROR("Failed to start execution service for disk evict, probably out of memory");
         return BIO_ALLOC_FAIL;
     }
-    mEvictService[WCACHE_DISK]->SetThreadName("wcache-evict-disk");
-    result = mEvictService[WCACHE_DISK]->Start();
-    ChkTrueNot(result, BIO_INNER_ERR);
 
+    mEvictService[WCACHE_DISK]->SetThreadName("wcache-evict-disk");
+    auto result = mEvictService[WCACHE_DISK]->Start();
+    ChkTrue(result, BIO_INNER_ERR, "Start disk evict service failed.");
+
+    return BIO_OK;
+}
+
+BResult WCacheManager::GcEvictExecutorInit()
+{
     mGcEvictService = ExecutorService::Create(DISK_EVICT_THREAD_NUM, DISK_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mGcEvictService == nullptr)) {
         LOG_ERROR("Failed to start execution service for gc evict, probably out of memory");
         return BIO_ALLOC_FAIL;
     }
-    mGcEvictService->SetThreadName("wcache-evict-gc");
-    result = mGcEvictService->Start();
-    ChkTrueNot(result, BIO_INNER_ERR);
 
+    mGcEvictService->SetThreadName("wcache-evict-gc");
+    auto result = mGcEvictService->Start();
+    ChkTrue(result, BIO_INNER_ERR, "Start gc evict service failed.");
+
+    return BIO_OK;
+}
+
+BResult WCacheManager::RetryEvictExecutorInit()
+{
     mRetryEvictService = ExecutorService::Create(RETRY_EVICT_THREAD_NUM, RETRY_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mRetryEvictService == nullptr)) {
         LOG_ERROR("Failed to start execution service for retry evict, probably out of memory");
@@ -68,12 +133,17 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     }
 
     mRetryEvictService->SetThreadName("wcache-retry-evict");
-    result = mRetryEvictService->Start();
-    ChkTrueNot(result, BIO_INNER_ERR);
+    auto result = mRetryEvictService->Start();
+    ChkTrue(result, BIO_INNER_ERR, "Start gc evict service failed.");
 
     result = mRetryEvictService->Execute([this]() { RetryEvictThread(); });
-    ChkTrueNot(result, BIO_INNER_ERR);
+    ChkTrue(result, BIO_INNER_ERR, "Execute gc evict service failed.");
 
+    return BIO_OK;
+}
+
+BResult WCacheManager::DelayDestroyExecutorInit()
+{
     mDestroyEvictService = ExecutorService::Create(DESTROY_EVICT_THREAD_NUM, DESTROY_EVICT_QUEUE_SIZE);
     if (UNLIKELY(mDestroyEvictService == nullptr)) {
         LOG_ERROR("Failed to start execution service for delay destroy, probably out of memory");
@@ -81,16 +151,16 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     }
 
     mDestroyEvictService->SetThreadName("wcache-delay-destroy");
-    result = mDestroyEvictService->Start();
-    ChkTrueNot(result, BIO_INNER_ERR);
+    auto result = mDestroyEvictService->Start();
+    ChkTrue(result, BIO_INNER_ERR, "Start delay destroy service failed.");
 
-    mRCacheManager = rCacheManager;
     return BIO_OK;
 }
 
 void WCacheManager::Exit()
 {
     mRunning = false;
+    mNegotiateFlag = false;
     mCacheIndex->Exit();
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -135,7 +205,7 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint64_t p
 
     wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
 
-    auto ret = wcache->Init(mEvictService, mRCacheManager, isRecover);
+    auto ret = wcache->Init(mEvictNegotiateService, mEvictService, mRCacheManager, isRecover);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
     {
@@ -325,24 +395,24 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
     ChkTrue(slice != nullptr, BIO_INVALID_PARAM, "Slice is nullptr.");
     ChkTrue(sliceReader != nullptr, BIO_INVALID_PARAM, "Slice reader is nullptr.");
-
-    // 1. Get write flow
+    // 1. Get write cache flow instance.
     BIO_TRACE_START(WCACHE_TRACE_PUT_GET_WCACHE);
     auto wcache = GetWCache(slice->GetFlowId());
     BIO_TRACE_END(WCACHE_TRACE_PUT_GET_WCACHE, (wcache == nullptr) ? BIO_INNER_RETRY : BIO_OK);
     if (UNLIKELY(wcache == nullptr)) {
-        LOG_ERROR("Failed to get wcache, flowId:" << slice->GetFlowId() << ", key:" << key << ".");
+        LOG_ERROR("Failed to get write cache flow, flowId:" << slice->GetFlowId() << ", key:" << key << ".");
         return BIO_INNER_RETRY;
     }
 
+    // 2. Get flow instance state, and check whether the status is consistent.
     bool wcacheDegarde = wcache->GetDegradeState();
-    if (wcacheDegarde != isDegrade) {
+    if (UNLIKELY(wcacheDegarde != isDegrade)) {
         LOG_WARN("Check degrade fail, flowId:" << slice->GetFlowId() << ", inner:" << wcacheDegarde << ", outer:" <<
             isDegrade << ", key:" << key << ".");
         return BIO_INNER_RETRY;
     }
 
-    // 2. write slice to flow
+    // 3. write slice to flow instance.
     BResult ret = BIO_ERR;
     LVOS_TP_START(NO_PROCESS_WCACHE_PUT, 0);
     WCacheSliceRefPtr sliceRef = nullptr;
@@ -352,21 +422,20 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     LVOS_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_PUT_WRITE_FLOW, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Write slice to cache failed:" << ret << ", key:" << key << ".");
+        LOG_ERROR("Put slice to write cache failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
-
-    // 3. Insert slice to index.
     if (UNLIKELY(wcacheDegarde)) {
         return BIO_OK;
     }
+
+    // 4. Insert slice reference to write cache index manager.
     BIO_TRACE_START(WCACHE_TRACE_PUT_INSERT_INDEX);
-    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
-    ret = mCacheIndex->Insert(ptId, key, sliceRef);
+    ret = mCacheIndex->Insert(CacheFlowIdManager::GetPtId(slice->GetFlowId()), key, sliceRef);
     BIO_TRACE_END(WCACHE_TRACE_PUT_INSERT_INDEX, ret);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Insert slice to index failed:" << ret << ", key:" << key << ".");
+        LOG_ERROR("Insert slice reference to write cache index manager failed, ret:" << ret << ", key:" << key << ".");
     }
     return ret;
 }
@@ -907,7 +976,7 @@ void WCacheManager::RetryEvictThread()
             retryFlows = std::move(mRetryManager[WCACHE_DISK]);
         }
 
-        for (const auto &flowId : retryFlows) {
+        for (const auto &flowId: retryFlows) {
             auto wflowIt = mWCacheManager.find(flowId);
             if (UNLIKELY(wflowIt == mWCacheManager.end())) {
                 LOG_WARN("Failed to get flow by id:" << flowId);
@@ -918,6 +987,20 @@ void WCacheManager::RetryEvictThread()
         retryFlows.clear();
         sleep(1);
     }
+}
+
+BResult WCacheManager::EvictNegotiateThread()
+{
+    static uint32_t defaultDelay = NO_1;
+    while (mNegotiateFlag) {
+        for (const auto &item: mWCacheManager) {
+            item.second->StartEvictNegotiateTask();
+        }
+        LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_CLEAR, &mNegotiateFlag, false);
+        LVOS_TP_END;
+        sleep(defaultDelay);
+    }
+    return BIO_OK;
 }
 
 void WCacheManager::DestroyEvictThread()
@@ -940,12 +1023,40 @@ void WCacheManager::DestroyEvictThread()
                 }
                 it = destroyManager.erase(it);
             } else {
-                LOG_INFO("Delay, flowId:" << it->first << ", expired:" << it->second << ", current:" << curTime);
+                LOG_INFO("Delay destroy, flowId:" << it->first << ", expire:" << it->second << ", curTime:" << curTime);
                 ++it;
             }
         }
         sleep(DESTROY_EVICT_INTERAL);
     }
+}
+
+BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], std::vector<bool> &result,
+    uint32_t count)
+{
+    WCachePtr wCache = GetWCache(flowId);
+    if (UNLIKELY(wCache == nullptr)) {
+        LOG_ERROR("Failed to get WCache. flowId:" << flowId << ".");
+        return BIO_OK;
+    }
+    wCache->MasterEvictNegotiate(slices, result, count);
+    return BIO_OK;
+}
+
+BResult WCacheManager::GetEvictNegotiateInfo()
+{
+    LOG_INFO("Current evict negotiate info.");
+    for (const auto &item: mWCacheManager) {
+        uint32_t flowId = item.first;
+        auto queuePtr = item.second->GetEvictNegotiateQueue();
+        LOG_INFO("FlowId " << flowId << " :");
+        uint64_t idx = 0;
+        for (auto &node : (*queuePtr)) {
+            LOG_INFO("  " << idx << ", negotiate offset:" << node->GeNegotiateOffset() << ".");
+            idx++;
+        }
+    }
+    return BIO_OK;
 }
 }
 }

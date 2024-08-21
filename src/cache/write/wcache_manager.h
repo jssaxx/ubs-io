@@ -38,6 +38,13 @@ public:
     void Exit();
 
 public:
+    BResult EvictNegotiateExecutorInit();
+    BResult MemoryEvictExecutorInit();
+    BResult DiskEvictExecutorInit();
+    BResult GcEvictExecutorInit();
+    BResult RetryEvictExecutorInit();
+    BResult DelayDestroyExecutorInit();
+
     BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
     BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv,
@@ -83,6 +90,12 @@ public:
 
     BResult HandleProcBrokenHdl(uint64_t procId);
 
+    BResult MasterEvictNegotiate(uint64_t flowId, uint64_t offsets[], std::vector<bool> &result, uint32_t count);
+
+    BResult GetEvictNegotiateInfo();
+
+    BResult EvictNegotiateThread();
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -120,6 +133,9 @@ private:
     ExecutorServicePtr mGcEvictService{ nullptr };
     ExecutorServicePtr mRetryEvictService{ nullptr };
     ExecutorServicePtr mDestroyEvictService{ nullptr };
+
+    bool mNegotiateFlag = true;
+    ExecutorServicePtr mEvictNegotiateService{ nullptr };
 
     GetLocDiskStatus mGetLocDiskStatus{ nullptr };
     GetGlobEvictOffset mEvictOffset{ nullptr };

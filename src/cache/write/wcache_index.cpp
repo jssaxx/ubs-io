@@ -23,7 +23,7 @@ inline uint32_t WCacheIndex::Hash(const Key &key)
 BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
-    ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get wcache index table failed, invalid ptId:" << ptId << ".");
+    ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get write cache index table fail, ptId:" << ptId << ", key:" << key);
     auto bucket = Hash(key);
     WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
     auto sliceMeta = table->sliceIndex[bucket].find(key);

@@ -83,6 +83,10 @@ public:
 
     void GetCacheResources(CacheResDescription &desc, CacheType type);
 
+    BResult EvictNegotiate(uint64_t &flowId, uint64_t slices[], std::vector<bool> &result, uint32_t count);
+
+    void ShowEvictNegotiateQueue();
+
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };

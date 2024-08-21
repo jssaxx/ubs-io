@@ -55,7 +55,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(CM_ZK_HOST, VStrNotNull::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs"));
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||local"));
     AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrRealPath::Create(UNDERFS_CEPH_CFG_PATH.first));
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));

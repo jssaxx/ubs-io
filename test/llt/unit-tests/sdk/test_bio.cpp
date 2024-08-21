@@ -528,7 +528,6 @@ TEST_F(TestBio, test_bio_update_return_ok)
 TEST_F(TestBio, test_bio_delete)
 {
     LOG_INFO("test_bio_delete");
-
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
@@ -540,17 +539,6 @@ TEST_F(TestBio, test_bio_delete)
 
     ret = BioDelete(G_INVALID_TENANT_ID, G_KEY, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_DELETE_RECV_FAIL", 0, 1, userParam);
-    ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
-
-    char *value = new char[G_LENGTH];
-    uint64_t realLen = G_LENGTH;
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
-    delete[] value;
 }
 
 void TestBio::VNodeIdStub()

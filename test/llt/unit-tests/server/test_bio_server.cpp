@@ -1116,3 +1116,27 @@ TEST_F(TestBioServer, test_get_underfs_config_return_fial)
     auto ret = MirrorServer::Instance()->MirrorServerGetUnderFsConfig(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
 }
+
+TEST_F(TestBioServer, test_wcache_negotiate)
+{
+    LOG_INFO("test_wcache_negotiate");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    std::vector<uint64_t> offsetVec;
+    offsetVec.emplace_back(0);
+    EvictNegotiateRequest req = { 0, static_cast<uint32_t>(offsetVec.size()) };
+    for (uint32_t idx = 0; idx < req.count; idx++) {
+        req.data[idx] = offsetVec[idx];
+    }
+    auto ret = mirror->MirrorServerEvictNegotiate(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_handl_negotiate)
+{
+    LOG_INFO("test_handl_negotiate");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    auto ret = mirror->HandleEvictNegotiateRequest(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}

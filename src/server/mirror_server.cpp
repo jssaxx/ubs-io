@@ -54,6 +54,8 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
         std::bind(&MirrorServer::HandleCheckRemoteUpdateReady, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_UFS_CONFIG,
         std::bind(&MirrorServer::HandleGetUnderFsConfig, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_NEGOTIATE_EVICT,
+        std::bind(&MirrorServer::HandleEvictNegotiateRequest, this, std::placeholders::_1));
 }
 
 void MirrorServer::RegisterOpcode()
@@ -1049,7 +1051,7 @@ BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uin
 {
     auto ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
-    LOG_DEBUG("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" << flowOffset);
+    LOG_TRACE("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" << flowOffset);
     return BIO_OK;
 }
 
@@ -1728,4 +1730,35 @@ int32_t MirrorServer::HandleGetUnderFsConfig(ServiceContext &ctx)
 
     auto req = static_cast<GetUnderFsConfigRequest *>(ctx.MessageData());
     return MirrorServerGetUnderFsConfig(ctx, req);
+}
+
+int32_t MirrorServer::HandleEvictNegotiateRequest(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(EvictNegotiateRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive consult evict message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<EvictNegotiateRequest *>(ctx.MessageData());
+    return MirrorServerEvictNegotiate(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req)
+{
+    EvictNegotiateResponse rsp;
+    std::vector<bool> result(req->count);
+    auto ret = Cache::Instance().EvictNegotiate(req->flowId, req->data, result, req->count);
+    if (ret == BIO_OK) {
+        for (uint32_t idx = 0; idx < result.size(); idx++) {
+            rsp.negoResult[idx] = result[idx];
+        }
+    }
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &rsp, sizeof(EvictNegotiateResponse));
+    return BIO_OK;
 }
