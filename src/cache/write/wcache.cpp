@@ -19,9 +19,10 @@ namespace ock {
 namespace bio {
 constexpr uint32_t EVICT_MEM_HLEVEL = 90;
 constexpr uint32_t EVICT_DISK_HLEVEL = 98;
+constexpr uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 
-BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
-    bool isRecover)
+BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
+    const RCacheManagerPtr rCacheManager, bool isRecover)
 {
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
@@ -34,12 +35,12 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
 
     mEvictService[WCACHE_MEMORY] = evictService[WCACHE_MEMORY];
     mEvictService[WCACHE_DISK] = evictService[WCACHE_DISK];
+    mEvictNegotiateService = evictNegoService;
     mEvictRef[WCACHE_MEMORY] = false;
     mEvictRef[WCACHE_DISK] = false;
     mOnFlyRef = 0;
     mRCacheManager = rCacheManager;
     mUnderFs = UnderFs::Instance();
-
     if (isRecover) {
         mIsMaster = false; // 用于识别Put流程特殊处理
         return BIO_OK;
@@ -51,6 +52,8 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
         return ret;
     }
 
+    mCopyNum = BioConfig::Instance()->GetCmConfig().copyNum;
+    LOG_INFO("init wcache success, ptId:" << mPtId << ", flowId:" << mFlowId << ", isMaster:" << mIsMaster << ".");
     return BIO_OK;
 }
 
@@ -93,9 +96,9 @@ BResult WCache::GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice)
 BResult WCache::Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
-    mOnFlyRef += NO_1;
+    IncFlyIo();
     auto ret = PutImpl(key, srcSlice, sliceReader, destSliceRef, attr);
-    mOnFlyRef -= NO_1;
+    DecFlyIo();
     return ret;
 }
 
@@ -103,7 +106,7 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
     WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
     BResult ret = BIO_OK;
-    // degraded write through to underfs
+    // 1. degraded write through to underFS.
     if (UNLIKELY(mIsDegrade)) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_BYPASS);
         ret = PutByPass(key, srcSlice, sliceReader, destSliceRef, attr);
@@ -111,7 +114,7 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
         return ret;
     }
 
-    // put it memory tier cache.
+    // 2. put it to memory tier cache.
     LVOS_TP_START(WRITE_SLICE_NULL_FAIL, &ret, BIO_INNER_RETRY);
     ret = mCacheTiers[WCACHE_MEMORY]->Write(key, srcSlice, sliceReader, destSliceRef);
     LVOS_TP_END;
@@ -120,12 +123,33 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
         return ret;
     }
 
-    // Add evict queue.
-    mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(destSliceRef);
+    // 3. start evict slice.
+    ret = StartEvictSlice(key, destSliceRef, attr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Start evict slice failed, ret:" << ret << ", key:" << key << ".");
+    }
+    return ret;
+}
 
-    // put it disk tier cache.
+BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
+{
+    // 1. 计算IO写入策略.
     RealIoStrategy ioStrategy = WRITE_DEFALUT;
-    PutSetIoStratege(ioStrategy, attr);
+    PutSetIoStrategy(ioStrategy, attr);
+
+    // 2. Add evict negotiate queue.
+    uint32_t refNum = mIsMaster ? (mCopyNum - NO_1) : NO_1;
+    uint64_t flowOffset = destSliceRef->GetSlice()->GetIndexInFlow();
+    WCacheReplicaSlicePtr repSlicePtr = MakeRef<WCacheReplicaSlice>(destSliceRef, ioStrategy, flowOffset, refNum);
+    if (UNLIKELY(repSlicePtr == nullptr)) {
+        LOG_ERROR("Make replica slice instance failed, key:" << key << ".");
+        return BIO_ALLOC_FAIL;
+    }
+    BIO_TRACE_START(WCACHE_TRACE_PUT_NEGOTIATE_QUE);
+    AddEvictNegotiateQueue(repSlicePtr);
+    BIO_TRACE_END(WCACHE_TRACE_PUT_NEGOTIATE_QUE, BIO_OK);
+
+    // 3. put it disk tier cache.
     if (ioStrategy <= WRITE_MEM_BACK) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_MEM_BACK);
         StartEvictTask(WCACHE_MEMORY);
@@ -133,7 +157,8 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
         return BIO_OK;
     }
 
-    // write thought
+    // 4. write thought
+    BResult ret;
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     if (sliceRef != nullptr) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_DISK_BACK);
@@ -162,7 +187,7 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
     return BIO_OK;
 }
 
-void WCache::PutSetIoStratege(RealIoStrategy &ioStrategy, CacheAttr &attr)
+void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
 {
     ioStrategy = attr.ioStrategy;
     if (ioStrategy == WRITE_DEFALUT) {
@@ -317,6 +342,11 @@ void WCache::StartEvictTask(WCacheTierType type)
         mEvictRef[type].store(false);
     }
     return;
+}
+
+void WCache::StartEvictNegotiateTask()
+{
+    mEvictNegotiateService->Execute([this]() { EvictNegotiate(); });
 }
 
 void WCache::RetryEvictTask(WCacheTierType type)
@@ -501,7 +531,7 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
     auto ret = memCache->GetMetaDataSlice(indexInFlow, offset, length, memMetaDataSlice);
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get meta data slice in WCACHE_MEMORY, indexInFlow:" << indexInFlow << " offset:" << offset <<
-        " length:" << length);
+        " length:" << length << ", flowId:" << mFlowId << ".");
 
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     WFlowMetaDataSlice diskMetaDataSlice;
@@ -665,6 +695,51 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
     return BIO_OK;
 }
 
+void WCache::AddEvictNegotiateQueue(WCacheReplicaSlicePtr &repSlice)
+{
+    mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateMap(repSlice);
+    mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateQueue(repSlice);
+}
+
+void WCache::EvictNegotiate()
+{
+    LVOS_TP_START(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, 0);
+    if (mIsMaster) {
+        return;
+    }
+    LVOS_TP_END;
+    std::vector<uint64_t> offsetVec;
+    auto memoryTier = mCacheTiers[WCACHE_MEMORY];
+    memoryTier->GetNegotiateSlice(offsetVec, MAX_EVICT_CONSULT_SIZE);
+    if (offsetVec.empty()) {
+        return;
+    }
+
+    uint32_t masterNid;
+    if (UNLIKELY(GetPtMasterNode(masterNid) != BIO_OK)) {
+        return;
+    }
+    EvictNegotiateRequest req = { mFlowId, static_cast<uint32_t>(offsetVec.size()) };
+    for (uint32_t idx = 0; idx < req.count; idx++) {
+        req.data[idx] = offsetVec[idx];
+    }
+    EvictNegotiateResponse resp;
+    auto rpcEngine = BioServer::Instance()->GetNetEngine();
+    BIO_TRACE_START(WCACHE_TRACE_GET_NEGOTIATE)
+    auto ret = rpcEngine->SyncCall<EvictNegotiateRequest, EvictNegotiateResponse>(masterNid,
+        BIO_OP_SERVER_NEGOTIATE_EVICT, req, resp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Send evict negotiate request failed, ret:" << ret << ", dstNid:" << masterNid << ".");
+        return;
+    }
+    BIO_TRACE_END(WCACHE_TRACE_GET_NEGOTIATE, BIO_OK)
+
+    for (uint32_t idx = 0; idx < offsetVec.size(); ++idx) {
+        memoryTier->UpdateNegotiateState(offsetVec[idx], resp.negoResult[idx]);
+    }
+    StartEvictTask(WCACHE_MEMORY);
+}
+
 bool WCache::EvictMemSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
@@ -783,6 +858,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 BResult WCache::FlushMem()
 {
     LOG_TRACE("Flush mem, flowId:" << mFlowId);
+    mCacheTiers[WCACHE_MEMORY]->FlushNegotiateQueue();
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = EvictFromMemToDisk(sliceRef);
@@ -836,6 +912,7 @@ BResult WCache::ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef)
 
 BResult WCache::ExpiredClearMem()
 {
+    mCacheTiers[WCACHE_MEMORY]->FlushNegotiateQueue();
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = ExpiredClearMemImpl(sliceRef);
@@ -898,6 +975,31 @@ BResult WCacheTier::ToFlowType(WCacheTierType tier, FlowType &flowType)
         default:
             return BIO_ERR;
     }
+}
+
+BResult WCache::GetPtMasterNode(uint32_t &masterNid)
+{
+    CmPtInfo ptInfo;
+    auto ret = Cm::Instance()->GetPtInfo(mPtId, ptInfo);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get pt entry failed, ret:" << ret << ", ptId:" << mPtId << ".");
+        return ret;
+    }
+    masterNid = ptInfo.masterNodeId;
+    return BIO_OK;
+};
+
+void WCache::MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count)
+{
+    for (uint32_t idx = 0; idx < count; idx++) {
+        auto ret = mCacheTiers[WCACHE_MEMORY]->UpdateNegotiateState(offsets[idx], true);
+        LOG_DEBUG("Master dec evict ref success, flowId:" << mFlowId << ", flowOffset:" << offsets[idx] << ", ret:" <<
+            ret << ".");
+        result[idx] = (ret == BIO_OK);
+    }
+    LVOS_TP_START(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT, 0);
+    StartEvictTask(WCACHE_MEMORY);
+    LVOS_TP_END;
 }
 }
 }

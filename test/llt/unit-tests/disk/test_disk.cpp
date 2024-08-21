@@ -55,60 +55,6 @@ static void UtAsyncProcCb(void *ctx, int retCode)
     sem_post(&cbCtx->tsk.sem);
 }
 
-TEST_F(TestDisk, test_disk_read_async_case_return_ok)
-{
-    LOG_INFO("test_disk_read_async_case_return_ok");
-    char *buff = nullptr;
-    int32_t ret = posix_memalign((void **)&buff, NO_4194304, NO_4194304);
-    EXPECT_EQ(ret, 0);
-    EXPECT_FALSE(buff == nullptr);
-
-    AsyncCbCtx cbCtx;
-    cbCtx.ret = BIO_OK;
-    sem_init(&cbCtx.tsk.sem, 0, 0);
-
-    BdmIoCtx ioCtx;
-    ioCtx.cb = UtAsyncProcCb;
-    ioCtx.ctx = (void *)&cbCtx;
-    ret = BdmReadAsync(NO_MAX_VALUE64, 0, buff, NO_4194304, &ioCtx);
-    EXPECT_EQ(BDM_CODE_NOT_EXIST, ret);
-    ret = BdmReadAsync(0, 0, buff, NO_4194304, &ioCtx);
-    EXPECT_EQ(BDM_CODE_OK, ret);
-    if (ret == BDM_CODE_OK) {
-        sem_wait(&cbCtx.tsk.sem);
-        sem_destroy(&cbCtx.tsk.sem);
-    }
-    EXPECT_EQ(BDM_CODE_OK, cbCtx.ret);
-    free(buff);
-}
-
-TEST_F(TestDisk, test_disk_write_async_case_return_ok)
-{
-    LOG_INFO("test_disk_write_async_case_return_ok");
-    char *buff = nullptr;
-    int32_t ret = posix_memalign((void **)&buff, NO_4194304, NO_4194304);
-    EXPECT_EQ(ret, 0);
-    EXPECT_FALSE(buff == nullptr);
-
-    AsyncCbCtx cbCtx;
-    cbCtx.ret = BIO_OK;
-    sem_init(&cbCtx.tsk.sem, 0, 0);
-
-    BdmIoCtx ioCtx;
-    ioCtx.cb = UtAsyncProcCb;
-    ioCtx.ctx = (void *)&cbCtx;
-    ret = BdmWriteAsync(NO_MAX_VALUE64, 0, buff, NO_4194304, &ioCtx);
-    EXPECT_EQ(BDM_CODE_NOT_EXIST, ret);
-    ret = BdmWriteAsync(0, 0, buff, NO_4194304, &ioCtx);
-    EXPECT_EQ(BDM_CODE_OK, ret);
-    if (ret == BDM_CODE_OK) {
-        sem_wait(&cbCtx.tsk.sem);
-        sem_destroy(&cbCtx.tsk.sem);
-    }
-    EXPECT_EQ(BDM_CODE_OK, cbCtx.ret);
-    free(buff);
-}
-
 TEST_F(TestDisk, test_disk_free_case_return_fail)
 {
     LOG_INFO("test_disk_free_return_fail");

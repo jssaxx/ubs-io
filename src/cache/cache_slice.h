@@ -5,9 +5,11 @@
 #ifndef BOOSTIO_CACHE_SLICE_H
 #define BOOSTIO_CACHE_SLICE_H
 
+#include <utility>
 #include "bio_log.h"
 #include "securec.h"
 #include "slice.h"
+#include "cache_def.h"
 
 namespace ock {
 namespace bio {
@@ -202,7 +204,6 @@ using WCacheSlicePtr = Ref<WCacheSlice>;
 
 using WCacheSliceRef = SliceRef<WCacheSlicePtr>;
 using WCacheSliceRefPtr = Ref<WCacheSliceRef>;
-
 class WCacheSliceCmp {
 public:
     bool operator () (const WCacheSlicePtr &first, const WCacheSlicePtr &second)
@@ -213,6 +214,60 @@ public:
         return first->GetIndexInFlow() < second->GetIndexInFlow();
     }
 };
+
+class WCacheReplicaSlice {
+public:
+    WCacheReplicaSlice() = default;
+    ~WCacheReplicaSlice()  = default;
+
+    WCacheReplicaSlice(WCacheSliceRefPtr slice, RealIoStrategy strategy, uint64_t offset, uint32_t refCount,
+        bool state = false)
+        : sliceRefPtr(std::move(slice)), mStrategy(strategy), mNegoOffset(offset), mEvictRef(refCount), mState(state)
+    {}
+
+    inline WCacheSliceRefPtr GetSlice()
+    {
+        return sliceRefPtr;
+    }
+
+    inline uint64_t GeNegotiateOffset() const
+    {
+        return mNegoOffset;
+    }
+
+    inline uint32_t GetEvictRef() const
+    {
+        return mEvictRef;
+    }
+
+    inline uint32_t DecEvictRef()
+    {
+        return (--mEvictRef);
+    }
+
+    inline bool GetState() const
+    {
+        return mState;
+    };
+
+    inline void SetState(bool state)
+    {
+        mState = state;
+    }
+
+    DEFINE_REF_COUNT_FUNCTIONS;
+
+private:
+    WCacheSliceRefPtr sliceRefPtr;
+    RealIoStrategy mStrategy;
+    uint64_t mNegoOffset = 0;
+    uint32_t mEvictRef = 1;
+    bool mState = false;
+
+    DEFINE_REF_COUNT_VARIABLE
+};
+using WCacheReplicaSlicePtr = Ref<WCacheReplicaSlice>;
+
 }
 }
 

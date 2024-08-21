@@ -16,6 +16,7 @@
 #include "underfs.h"
 #include "wcache_tier.h"
 #include "rcache_manager.h"
+#include "cm.h"
 
 namespace ock {
 namespace bio {
@@ -30,8 +31,8 @@ public:
     using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
 
-    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
-        bool isRecover);
+    BResult Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
+        const RCacheManagerPtr rCacheManager, bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
@@ -53,27 +54,29 @@ public:
 
     void Destroy();
 
-    void SetDegradeState(bool flag)
+    inline void SetDegradeState(bool flag)
     {
         mIsDegrade = flag;
     }
 
-    bool GetDegradeState()
+    inline bool GetDegradeState() const
     {
         return mIsDegrade;
     }
 
-    void SetState(bool isNormal)
+    inline void SetState(bool isNormal)
     {
         mIsNormal = isNormal;
     }
 
-    bool GetState()
+    inline bool GetState() const
     {
         return mIsNormal;
     }
 
     void StartEvictTask(WCacheTierType type);
+
+    void StartEvictNegotiateTask();
 
     void RetryEvictTask(WCacheTierType type);
 
@@ -83,24 +86,39 @@ public:
 
     uint64_t GetEvictOffset();
 
-    uint64_t GetProcId()
+    inline uint64_t GetProcId() const
     {
         return mProcId;
     }
 
-    uint64_t GetFlowId()
+    inline uint64_t GetFlowId() const
     {
         return mFlowId;
     }
 
-    uint64_t GetPtId()
+    inline uint64_t GetPtId() const
     {
         return mPtId;
     }
 
-    uint64_t GetPtv()
+    inline uint64_t GetPtv() const
     {
         return mPtv;
+    }
+
+    inline void IncFlyIo()
+    {
+        mOnFlyRef += 1;
+    }
+
+    inline void DecFlyIo()
+    {
+        mOnFlyRef -= 1;
+    }
+
+    std::list<WCacheReplicaSlicePtr> *GetEvictNegotiateQueue()
+    {
+        return mCacheTiers[WCACHE_MEMORY]->GetEvictQueuePtr();
     }
 
     using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
@@ -109,6 +127,8 @@ public:
     void Flush();
     void ExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
+
+    void MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -124,6 +144,9 @@ private:
 
     BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
 
+    void EvictNegotiate();
+    void AddEvictNegotiateQueue(WCacheReplicaSlicePtr &repSlice);
+
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
 
@@ -136,10 +159,14 @@ private:
     BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearDisk();
 
-    void PutSetIoStratege(RealIoStrategy &ioStrategy, CacheAttr &attr);
+    void PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+
+    BResult GetPtMasterNode(uint32_t &masterNid);
+
+    BResult StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
 private:
     uint64_t mProcId;
@@ -147,6 +174,7 @@ private:
     uint64_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
+    uint16_t mCopyNum;
     bool mIsDegrade;
     bool mIsMaster{ true };
     bool mIsNormal{ true };
@@ -159,6 +187,7 @@ private:
     CacheSliceOperator mSliceOperator;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
+    ExecutorServicePtr mEvictNegotiateService;
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
     GetLocDiskStatus mGetLocDiskStatus{ nullptr };
@@ -166,7 +195,6 @@ private:
     GetGlobEvictOffset mGlobEvictOffset{ nullptr };
 
     RCacheManagerPtr mRCacheManager;
-
     UnderFsPtr mUnderFs;
 
     std::atomic<uint64_t> mOnFlyRef;
