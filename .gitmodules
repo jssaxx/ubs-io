@@ -22,3 +22,7 @@
 	path = 3rdparty/hadoop/hadoop
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/hadoop.git
 	branch = huawei/3.3.1
+[submodule "3rdparty/bdm/BDM"]
+	path = 3rdparty/bdm/BDM
+	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-kunpeng-domain/BDM.git
+	branch = master

@@ -10,9 +10,9 @@
 #include "test_cm.h"
 #include "test_net.h"
 #include "test_htracer.h"
-#include "test_disk.h"
 #include "test_underfs.h"
 #include "bdm_core.h"
+#include "test_common.h"
 #include "test_wcache.h"
 #include "server/cm_server_view.h"
 #include "server/cm_server_monitor.h"
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' /opt/boostio/bin/conf/bio.conf");
     (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' /opt/boostio/bin/conf/bio.conf");
     if (DiskPathInvalid()) {
-        TestDisk::Stub();
+        TestCommon::Stub();
         (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' /opt/boostio/bin/conf/bio.conf");
         (void)system("touch test1");
         (void)system("touch test2");

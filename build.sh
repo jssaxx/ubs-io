@@ -127,6 +127,7 @@ if [[ "$BUILD_TYPE" == "debug" ]];then
 fi
 
 \cp 3rdparty/hseceasy/hse/cryption/lib/* bio/lib/.
+\cp 3rdparty/bdm/lib/libbdm.so bio/lib/.
 
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list
