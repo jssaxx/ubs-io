@@ -195,7 +195,7 @@ struct CmPtInfo {
     {
         std::ostringstream oss;
         oss << "ptid " << ptId << ", version " << version << ", state " << state << ", master " << masterNodeId <<
-            ", copynum " << copys.size() << ", refNum" << referNum;
+            ", copynum " << copys.size();
         for (uint32_t idx = 0; idx < copys.size(); idx++) {
             oss << ", node " << copys[idx].nodeId << ", disk " << copys[idx].diskId << ", state " << copys[idx].state;
         }
