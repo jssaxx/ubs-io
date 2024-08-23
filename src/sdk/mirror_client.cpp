@@ -1371,16 +1371,25 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
     req.size = maxSize;
     req.mrKey = mr.key;
     ListResponse rsp;
+    LVOS_TP_START(LISTALL_REMOTE_RSP_OVER_LIMIT, &rsp.num, 1500U);
     ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
         BIO_OP_SDK_LIST, req, rsp);
+    LVOS_TP_END;
     if (ret != BIO_OK) {
         net::BioClientNet::Instance()->Free(mr.address);
         return ret;
     }
 
     if (rsp.num != 0) {
+        int objSize = 0;
         auto statInfo = reinterpret_cast<ObjStat *>(mr.address);
         for (uint32_t i = 0; i < rsp.num; i++) {
+            objSize = objs.size();
+            LVOS_TP_START(LISTALL_REMOTE_OVER_1000, &objSize, 1500U);
+            LVOS_TP_END;
+            if (objSize >= 1000U) {
+                break;
+            }
             ObjStat stat;
             CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
             stat.size = statInfo[i].size;
@@ -1418,6 +1427,8 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
             CLIENT_LOG_ERROR("Send list request failed, ret:" << ret << ", dstNid:" << dstNid << ", ptId:" <<
                 ptEntry.second.ptId << ".");
             objs.clear();
+            break;
+        } else if (objs.size() > NO_1000) {
             break;
         }
         index++;

@@ -582,6 +582,9 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
         uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
         auto statInfo = static_cast<ObjStat *>(static_cast<void *>(addr));
         for (uint32_t i = 0; i < rsp.num; i++) {
+            if (objs.size() >= 1000U) {
+                break;
+            }
             ObjStat stat;
             CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
             stat.size = statInfo[i].size;
