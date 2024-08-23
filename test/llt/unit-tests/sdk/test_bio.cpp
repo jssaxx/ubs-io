@@ -566,6 +566,23 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
     BioFreeListResources(objs, objNum);
 }
 
+TEST_F(TestBio, test_list_remote_remote_over_limit)
+{
+    LOG_INFO("test_list_remote_remote_over_limit");
+    TestBio::VNodeIdStub();
+    auto prefix = "456";
+    ObjStat *objs = nullptr;
+    uint64_t objNum = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "LISTALL_REMOTE_OVER_1000", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT", 0, 1, userParam);
+    auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_OVER_1000");
+    LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT");
+    BioFreeListResources(objs, objNum);
+}
+
 TEST_F(TestBio, test_bio_put_remote_case_return_fail)
 {
     LOG_INFO("test_bio_put_remote_case_return_fail");
