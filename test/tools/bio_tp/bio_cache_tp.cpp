@@ -13,6 +13,8 @@ void tp::CacheTp::Register() noexcept
 {
     LVOS_TP_REG(CACHE_RECOVER_CACHE_FAIL, "cache recover cache err", CommonTp::IntValueCallback);
     LVOS_TP_REG(SLICE_OPERATOR_4_FLOW_MEMORY, "slice operator 4 params flow memory err", CommonTp::IntValueCallback);
+    LVOS_TP_REG(LISTALL_REMOTE_OVER_1000, "listall remote return data over 1000", CommonTp::IntValueCallback);
+    LVOS_TP_REG(LISTALL_REMOTE_RSP_OVER_LIMIT, "listall remote return data over 1000", CommonTp::IntValueCallback);
     LVOS_TP_REG(SLICE_COPY_DISK2MEMORY_OK, "slice copy disk to memory ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(SLICE_COPY_MEMORY2MEMORY_ERR, "slice copy memory to memory err", CommonTp::IntValueCallback);
     LVOS_TP_REG(SLICE_OPERATOR_FLOW_MEMORY, "slice operator flow memory err", CommonTp::IntValueCallback);
@@ -137,6 +139,8 @@ void tp::CacheTp::Deregister() noexcept
 {
     LVOS_TP_UNREG(CACHE_RECOVER_CACHE_FAIL);
     LVOS_TP_UNREG(SLICE_OPERATOR_4_FLOW_MEMORY);
+    LVOS_TP_UNREG(LISTALL_REMOTE_OVER_1000);
+    LVOS_TP_UNREG(LISTALL_REMOTE_RSP_OVER_LIMIT);
     LVOS_TP_UNREG(SLICE_COPY_DISK2MEMORY_OK);
     LVOS_TP_UNREG(SLICE_COPY_MEMORY2MEMORY_ERR);
     LVOS_TP_UNREG(SLICE_OPERATOR_FLOW_MEMORY);
