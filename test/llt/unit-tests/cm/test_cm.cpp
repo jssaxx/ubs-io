@@ -642,3 +642,26 @@ TEST_F(TestCm, test_cm_is_zk_pt_same)
     int32_t ret = CmClientZkPtEntryIsSame(&elem1, &elem2);
     EXPECT_EQ(ret, TRUE);
 }
+
+TEST_F(TestCm, test_cm_get_pt_info)
+{
+    LOG_INFO("test_cm_get_pt_info");
+    CmPtInfo ptInfo;
+    ptInfo.ptId = 0;
+    ptInfo.version = 1;
+    ptInfo.state = CM_PT_NORMAL;
+    ptInfo.masterNodeId = 0;
+    ptInfo.copys = std::vector<CmPtCopy>();
+    CmPtCopy copy1 = {0, 1, CM_COPY_RUNNING};
+    CmPtCopy copy2 = {1, 1, CM_COPY_RUNNING};
+    CmPtCopy copy3 = {1, 0, CM_COPY_RUNNING};
+    ptInfo.copys.emplace_back(copy1);
+    ptInfo.copys.emplace_back(copy2);
+    ptInfo.copys.emplace_back(copy3);
+    LOG_INFO("pt:%s" << ptInfo.ToString());
+    LOG_INFO("test_cm_get_node_id_by_path");
+    std::string path = "/zk/123";
+    std::string pre = "/zk/";
+    int32_t ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
+    EXPECT_EQ(ret, 123U);
+}
