@@ -174,7 +174,7 @@ private:
     uint64_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
-    uint16_t mCopyNum;
+    uint16_t mCopyNum{ 0 };
     bool mIsDegrade;
     bool mIsMaster{ true };
     bool mIsNormal{ true };
