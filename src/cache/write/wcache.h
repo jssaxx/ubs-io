@@ -127,6 +127,7 @@ public:
     void Flush();
     void ExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
+    bool IsEmptyNegotiate();
 
     void MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count);
 
@@ -179,6 +180,7 @@ private:
     bool mIsMaster{ true };
     bool mIsNormal{ true };
     bool mIsForced { false };
+    std::atomic<bool> mIsStartEvictNegotiate{ false };
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
