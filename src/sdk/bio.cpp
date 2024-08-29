@@ -201,6 +201,16 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
     }
+    if (UNLIKELY(offset > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Read offset exceed limit, offset" << offset << ", limits:" <<
+            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        return RET_CACHE_READ_EXCEED;
+    }
+    if (UNLIKELY(length > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Read length exceed limit, length" << length << ", limits:" <<
+            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        return RET_CACHE_READ_EXCEED;
+    }
     if (UNLIKELY((offset + length) > BIO_IO_MAX_LEN)) {
         CLIENT_LOG_ERROR("Read length exceed limit, offset" << offset << "length:" << length << ", limits:" <<
             (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
