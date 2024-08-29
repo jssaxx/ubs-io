@@ -127,19 +127,43 @@ TEST_F(TestWCache, test_slave_send_negotiate_case_return_ok)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
     auto ret = gWCacheManager->EvictNegotiateThread();
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestWCache, test_master_negotiate_case_return_ok)
+TEST_F(TestWCache, test_slave_send_negotiate_get_masternode_file)
 {
-    LOG_INFO("test_master_negotiate_case_return_ok");
-    uint32_t count = NO_1;
-    uint64_t offsets[] = {0};
-    std::vector<bool> result(count);
-    auto ret = gWCacheManager->MasterEvictNegotiate(g_flowId, offsets, result, count);
+    LOG_INFO("test_slave_send_negotiate_get_masternode_file");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
+    auto ret = gWCacheManager->EvictNegotiateThread();
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
+    LVOS_HVS_deactiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
+{
+    LOG_INFO("test_slave_send_negotiate_get_vectory_empty");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
+    auto ret = gWCacheManager->EvictNegotiateThread();
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
+    LVOS_HVS_deactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
     EXPECT_EQ(ret, BIO_OK);
 }
 
