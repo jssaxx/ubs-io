@@ -320,7 +320,7 @@ void WCacheManager::ScanUpgradeCache(std::list<WCachePtr> &list)
             continue;
         }
         flowIt.second->SetState(false);
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate() &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
@@ -688,7 +688,7 @@ void WCacheManager::ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePt
             continue;
         }
         flowIt.second->SetState(false);
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate() &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
@@ -766,7 +766,7 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
 {
     LVOS_TP_START(NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT, 0);
-    if (wcache->IsEmptyEvict(WCACHE_MEMORY) &&
+    if (wcache->IsEmptyEvict(WCACHE_MEMORY) && wcache->IsEmptyNegotiate() &&
         wcache->IsEmptyEvict(WCACHE_DISK)) {
         return BIO_OK;
     }
@@ -861,10 +861,10 @@ void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
             continue;
         }
         flowIt.second->SetState(false);
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY)) {
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate()) {
             flowIt.second->Seal(WCACHE_MEMORY);
         }
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate() &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
@@ -992,6 +992,8 @@ void WCacheManager::RetryEvictThread()
 BResult WCacheManager::EvictNegotiateThread()
 {
     static uint32_t defaultDelay = NO_1;
+    LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_TRUE, &mNegotiateFlag, true);
+    LVOS_TP_END;
     while (mNegotiateFlag) {
         for (const auto &item: mWCacheManager) {
             item.second->StartEvictNegotiateTask();
