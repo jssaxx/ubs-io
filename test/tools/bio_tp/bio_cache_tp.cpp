@@ -23,6 +23,8 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(WCACHE_READ_CALLBACK_FAIL, "wcache read callback err", CommonTp::IntValueCallback);
     LVOS_TP_REG(LOG_INIT_FAIL, "log init err", CommonTp::IntValueCallback);
     LVOS_TP_REG(TRACE_FILE_OPPEN_FAIL, "trace file open err", CommonTp::IntValueCallback);
+    LVOS_TP_REG(EVICT_NEGOTIATE_VECTOR_EMPTY, "evict negotiate vectort is empty", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(EVICT_NEGOTIATE_GET_MASTERNODE, "evict negotiate get master node ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(CONFIG_INIT_FAIL, "config init err", CommonTp::IntValueCallback);
     LVOS_TP_REG(DESTROY_WCACHE_FAIL, "destroy wcache err", CommonTp::BoolValueCallback);
     LVOS_TP_REG(WCACHE_DELETE_FLOWID_ERR, "wcache delete flowid err", CommonTp::IntValueCallback);
@@ -132,6 +134,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, "no process wcache judge master", CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_SEND, "no process wcache send negotiate", CommonTp::NoProcessCallback);
     LVOS_TP_REG(WCACHE_NEGOTIATE_FLAG_CLEAR, "wcache negotiate flag clear", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(WCACHE_NEGOTIATE_FLAG_TRUE, "wcache negotiate flag true", CommonTp::BoolValueCallback);
     LVOS_TP_REG(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT, "no process wcache evict ", CommonTp::NoProcessCallback);
 }
 
@@ -149,6 +152,8 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(WCACHE_READ_CALLBACK_FAIL);
     LVOS_TP_UNREG(LOG_INIT_FAIL);
     LVOS_TP_UNREG(TRACE_FILE_OPPEN_FAIL);
+    LVOS_TP_UNREG(EVICT_NEGOTIATE_VECTOR_EMPTY);
+    LVOS_TP_UNREG(EVICT_NEGOTIATE_GET_MASTERNODE);
     LVOS_TP_UNREG(CONFIG_INIT_FAIL);
     LVOS_TP_UNREG(DESTROY_WCACHE_FAIL);
     LVOS_TP_UNREG(RCACHE_MANAGER_DELETE_ERR);
@@ -259,6 +264,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER);
     LVOS_TP_UNREG(NO_PROCESS_SLAVE_NEGOTIATE_NO_SEND);
     LVOS_TP_UNREG(WCACHE_NEGOTIATE_FLAG_CLEAR);
+    LVOS_TP_UNREG(WCACHE_NEGOTIATE_FLAG_TRUE);
     LVOS_TP_UNREG(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT);
 }
 #else
