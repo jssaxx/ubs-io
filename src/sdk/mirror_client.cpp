@@ -1385,7 +1385,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
     }
 
     if (rsp.num != 0) {
-        size_t objSize = 0;
+        int objSize = 0;
         auto statInfo = reinterpret_cast<ObjStat *>(mr.address);
         for (uint32_t i = 0; i < rsp.num; i++) {
             objSize = objs.size();
