@@ -158,6 +158,15 @@ void WCacheTier::DelEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.UnLock();
 }
 
+bool WCacheTier::IsEmptyNegotiateQueue()
+{
+    bool isEmpty;
+    mEvictNegotiateQueueLock.Lock();
+    isEmpty = mEvictNegotiateQueue.empty();
+    mEvictNegotiateQueueLock.UnLock();
+    return isEmpty;
+}
+
 bool WCacheTier::IsEmptyEvictSliceQueue()
 {
     bool isEmpty;
@@ -389,6 +398,9 @@ BResult WCacheTier::UpdateNegotiateState(uint64_t offsetInflow, bool negotiateRe
         if (curEvictRef == 0) {
             LOG_DEBUG("Delete replica slice ptr, negoOffset:" << sliceRef->second->GeNegotiateOffset() << ".");
             AddEvictQueue(sliceRef->second->GetSlice());
+            LOG_DEBUG("Update mEvictNegotiateQueue, put evictQueue ,flowId:" <<
+                sliceRef->second->GetSlice()->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
+                sliceRef->second->GetSlice()->GetSlice()->GetIndexInFlow());
             BIO_TRACE_START(WCACHE_TRACE_POP_NEGOTIATE_QUE)
             DelEvictNegotiateQueue(sliceRef->second);
             DelEvictNegotiateMap(sliceRef->second);
@@ -409,6 +421,9 @@ void WCacheTier::FlushNegotiateQueue()
         WCacheReplicaSlicePtr repSlicePtr = mEvictNegotiateQueue.front();
         mEvictNegotiateQueue.pop_front();
         AddEvictQueue(repSlicePtr->GetSlice());
+        LOG_DEBUG("Flush mEvictNegotiateQueue, put evictQueue ,flowId:" <<
+            repSlicePtr->GetSlice()->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
+            repSlicePtr->GetSlice()->GetSlice()->GetIndexInFlow());
         DelEvictNegotiateMap(repSlicePtr);
     }
     mEvictNegotiateQueueLock.UnLock();

@@ -844,7 +844,9 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
         return ret;
     }
-
+    if (rsp == nullptr) {
+        return BIO_ERR;
+    }
     // 3. 拷贝空间地址信息
     spaceInfo.descriptorSize = rsp->sliceLen;
     ret = memcpy_s(spaceInfo.descriptorInfo, CACHE_SPACE_DEC_SIZE, rsp->sliceBuf, rsp->sliceLen);
@@ -1038,7 +1040,9 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
             param.flowId << ", flowOffset:" << param.flowOffset << ", length:" << param.length << ".");
         return ret;
     }
-
+    if (rsp == nullptr) {
+        return BIO_ERR;
+    }
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
     ret = DataCopy(param.value, rsp->addr, rsp->addrOffset, rsp->addrNum);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
