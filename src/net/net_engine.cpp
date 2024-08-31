@@ -366,6 +366,7 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
     options.completionQueueDepth = NO_8192;
     options.eventPollingTimeout = NO_1000;
     options.maxConnectionNum = NO_4096 * NO_1024;
+    options.enableTls = false;
     const static int DEFAULT_THREAD_PRIORITY = 0;
     options.workerThreadPriority = DEFAULT_THREAD_PRIORITY;
     if (isOobSvr) {
@@ -458,6 +459,7 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr,
     options.heartBeatProbeTimes = NO_1;
     options.heartBeatProbeInterval = NO_1;
     options.tcpUserTimeout = NO_3;
+    options.enableTls = false;
     options.SetNetDeviceIpMask(ipMask);
     options.SetWorkerGroups(GenerateWorkersSetting(opt));
     if (isOobSvr) {
