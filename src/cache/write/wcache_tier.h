@@ -98,6 +98,8 @@ public:
 
     bool IsEmptyEvictSliceQueue();
 
+    bool IsEmptyNegotiateQueue();
+
     WCacheSliceRefPtr GetEvictSlice();
 
     void GetNegotiateSlice(std::vector<uint64_t> &offsetVec, uint32_t limit);
