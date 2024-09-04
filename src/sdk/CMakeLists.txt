@@ -1,6 +1,5 @@
 file(GLOB_RECURSE BIO_SDK_SRCS *.cpp *.h)
 
-install(FILES bio.h DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}/)
 install(FILES bio_c.h DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}/)
 
 add_library(bio_sdk SHARED ${BIO_SDK_SRCS})
