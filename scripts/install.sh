@@ -167,21 +167,30 @@ check_user_group()
 set_permissions()
 {
   chown -R $RUN_USER:$RUN_GROUP $INSTALL_PATH
+  sudo -u $RUN_USER bash << EOF
   chmod -R 750 $INSTALL_PATH
   chmod -R 700 $INSTALL_PATH/tools
-  chmod -R 500 $CONF_PATH
-  chmod -R 750 $BIN_PATH
+  chmod 550 $CONF_PATH
+  chmod 550 $BIN_PATH
+  chmod 550 $BIN_PATH/bio_daemon
+  chmod 550 $BIN_PATH/bio_console
+  chmod 550 $BIN_PATH/seceasy_encrypt
+  chmod 550 $BIN_PATH/cli_client
+  chmod 550 $BIN_PATH/cli_server
   chmod -R 500 $LIB_PATH
   chmod -R 500 $INCLUDE_PATH
   chmod -R 500 $SCRIPTS_PATH
   chmod -R 700 $LOG_PATH
   chmod -R 700 $SECURITY_PATH
 
-  chmod 600 $CONF_PATH/bio.conf
+  chmod 640 $CONF_PATH/bio.conf
   chmod 640 $CONF_PATH/bio_sdk_test.conf
 
+  chmod 750 $BOOSTIO_HTRACE_LOG_PATH
+  chmod 640 /etc/ceph/ceph.client.admin.keyring
+EOF
   chown $RUN_USER:$RUN_GROUP  $LOG_FILE
-  chmod 600 $LOG_FILE
+  su - $RUN_USER -c 'chmod 600 $LOG_FILE'
 
   chcon -R -t home_root_t $INSTALL_PATH > /dev/null 2>&1
   set +e
@@ -197,18 +206,6 @@ set_permissions()
   chown $RUN_USER:$RUN_GROUP $CONF_PATH
   chown $RUN_USER:$RUN_GROUP $CONF_PATH/bio.conf
   chown -R $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
-  chmod 750 $BOOSTIO_HTRACE_LOG_PATH
-  chmod 550 $CONF_PATH
-  chmod 640 $CONF_PATH/bio.conf
-  chmod 550 $BIN_PATH
-  chmod 550 $BIN_PATH/bio_daemon
-  chmod 550 $BIN_PATH/bio_console
-  chmod 550 $BIN_PATH/seceasy_encrypt
-  chmod 550 $BIN_PATH/cli_client
-  chmod 550 $BIN_PATH/cli_server
-  chmod -R 550 $LIB_PATH
-  chmod -R 550 $SCRIPTS_PATH
-  chmod 640 /etc/ceph/ceph.client.admin.keyring
   print_log "info" "set_permissions finish."
 }
 
