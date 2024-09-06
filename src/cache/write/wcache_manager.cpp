@@ -1041,6 +1041,10 @@ BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], 
         LOG_ERROR("Failed to get WCache. flowId:" << flowId << ".");
         return BIO_OK;
     }
+    if (UNLIKELY(wCache->GetState() == false)) {
+        return BIO_OK;
+    }
+
     wCache->MasterEvictNegotiate(slices, result, count);
     return BIO_OK;
 }
