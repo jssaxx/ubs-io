@@ -147,6 +147,8 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
     }
     BIO_TRACE_START(WCACHE_TRACE_PUT_NEGOTIATE_QUE);
     AddEvictNegotiateQueue(repSlicePtr);
+    LOG_DEBUG("Put add Negotiate queue, key:" << key << ", flowId:" << destSliceRef->GetSlice()->GetFlowId() <<
+        ", indexInFlow:" << destSliceRef->GetSlice()->GetIndexInFlow());
     BIO_TRACE_END(WCACHE_TRACE_PUT_NEGOTIATE_QUE, BIO_OK);
 
     // 3. put it disk tier cache.
@@ -517,7 +519,8 @@ bool WCache::IsEmptyNegotiate()
         return false;
     }
 
-    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateQueue() || mIsStartEvictNegotiate.load() == true) {
+    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateQueue() || mIsStartEvictNegotiate.load() == true ||
+        mIsMasterStartEvictNegotiate.load() == true) {
         LOG_TRACE("Negotiate slice queue status:" << !mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateQueue()
             << ", flowId:" << mFlowId);
         LOG_TRACE("Negotiate task status:" << mIsStartEvictNegotiate.load() << ", flowId:" << mFlowId);
@@ -902,15 +905,17 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 
 BResult WCache::FlushMem()
 {
-    while (mIsStartEvictNegotiate.load() == true) {}
-    LOG_TRACE("Flush mem, flowId:" << mFlowId);
+    while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {}
+    LOG_DEBUG("Flush mem, flowId:" << mFlowId);
     mCacheTiers[WCACHE_MEMORY]->FlushNegotiateQueue();
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
+        LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
+            sliceRef->GetSlice()->GetIndexInFlow());
         auto ret = EvictFromMemToDisk(sliceRef);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
-            LOG_DEBUG("Flush memory, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
+            LOG_DEBUG("Flush memory fail, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
                 ", IndexInFlow:" << sliceRef->GetSlice()->GetIndexInFlow());
             mEvictRef[WCACHE_MEMORY] = false;
             return ret;
@@ -960,18 +965,21 @@ BResult WCache::ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef)
 
 BResult WCache::ExpiredClearMem()
 {
-    while (mIsStartEvictNegotiate.load() == true) {}
+    while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {}
     mCacheTiers[WCACHE_MEMORY]->FlushNegotiateQueue();
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
+        LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
+            sliceRef->GetSlice()->GetIndexInFlow());
         auto ret = ExpiredClearMemImpl(sliceRef);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
-            LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
+            LOG_DEBUG("Expired clear memory fail, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
                 ", IndexInFlow:" << sliceRef->GetSlice()->GetIndexInFlow());
             mEvictRef[WCACHE_MEMORY] = false;
             return ret;
         }
+
         sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     }
 
@@ -1042,12 +1050,17 @@ BResult WCache::GetPtMasterNode(uint32_t &masterNid)
 
 void WCache::MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count)
 {
+    bool expectFlag = false;
+    if (!mIsMasterStartEvictNegotiate.compare_exchange_weak(expectFlag, true)) {
+        return;
+    }
     for (uint32_t idx = 0; idx < count; idx++) {
         auto ret = mCacheTiers[WCACHE_MEMORY]->UpdateNegotiateState(offsets[idx], true);
         LOG_DEBUG("Master dec evict ref success, flowId:" << mFlowId << ", flowOffset:" << offsets[idx] << ", ret:" <<
             ret << ".");
         result[idx] = (ret == BIO_OK);
     }
+    mIsMasterStartEvictNegotiate.store(false);
     LVOS_TP_START(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT, 0);
     StartEvictTask(WCACHE_MEMORY);
     LVOS_TP_END;
