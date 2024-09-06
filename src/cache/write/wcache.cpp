@@ -1050,6 +1050,8 @@ BResult WCache::GetPtMasterNode(uint32_t &masterNid)
 
 void WCache::MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count)
 {
+    LVOS_TP_START(NEGOTIATE_MASTER_FLAG, &mIsMasterStartEvictNegotiate, true);
+    LVOS_TP_END;
     bool expectFlag = false;
     if (!mIsMasterStartEvictNegotiate.compare_exchange_weak(expectFlag, true)) {
         return;
