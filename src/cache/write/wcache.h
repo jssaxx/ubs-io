@@ -181,6 +181,7 @@ private:
     bool mIsNormal{ true };
     bool mIsForced { false };
     std::atomic<bool> mIsStartEvictNegotiate{ false };
+    std::atomic<bool> mIsMasterStartEvictNegotiate{ false };
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
