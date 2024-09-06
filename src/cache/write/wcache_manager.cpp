@@ -1044,7 +1044,6 @@ BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], 
     if (UNLIKELY(wCache->GetState() == false)) {
         return BIO_OK;
     }
-
     wCache->MasterEvictNegotiate(slices, result, count);
     return BIO_OK;
 }
