@@ -264,12 +264,14 @@ public:
 
     inline std::map<uint16_t, CmPtInfo> GetPtView(uint64_t *curPtTimes)
     {
+        std::lock_guard<std::mutex> lock(mPtViewMutex);
         *curPtTimes = mCurPtTimes;
         return mPtView;
     }
 
     inline CmPtInfo GetPtEntry(uint64_t ptId)
     {
+        std::lock_guard<std::mutex> lock(mPtViewMutex);
         if (mPtView.find(ptId) == mPtView.end()) {
             return CmPtInfo();
         }
@@ -370,6 +372,7 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
+    std::mutex mPtViewMutex;
     uint64_t mCurNodeTimes = 0;
     uint64_t mCurPtTimes = 0;
 
