@@ -16,7 +16,7 @@ else()
     exec_program(mkdir ${BUILD_DIR} ARGS -p ${INSTALL_DIR})
 
     # configure
-    exec_program(cmake ${BUILD_DIR} ARGS  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_DEPENDS_USE_COMPILER=false -DBUILD_TESTS=off -DBUILD_EXAMPLE=off -DBUILD_PERF=off -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR})
+    exec_program(cmake ${BUILD_DIR} ARGS  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_DEPENDS_USE_COMPILER=false -DBUILD_TESTS=off -DBUILD_WITH_RDMA_CX5=on -DBUILD_EXAMPLE=off -DBUILD_PERF=off -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR})
 
     # execute make && make install
     exec_program(make ${BUILD_DIR} ARGS clean)

@@ -16,7 +16,7 @@ constexpr uint16_t CRB_JOB_RETRY_MAX_TIME = 5;
 constexpr uint16_t CRB_JOB_INTERAL_TIME = 1;
 constexpr uint16_t CRB_TASK_THREAD_NUM = 1;
 constexpr uint32_t CRB_TASK_QUEUE_SIZE = 8192;
-constexpr uint16_t CRB_JOB_THREAD_NUM = 4;
+constexpr uint16_t CRB_JOB_THREAD_NUM = 8;
 constexpr uint32_t CRB_JOB_QUEUE_SIZE = 8192;
 
 BResult MirrorServerCrb::Init()

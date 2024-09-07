@@ -1829,7 +1829,7 @@ static void *CmServerZkSubPtEventHandle(void *ctx)
     for (index = 0; index < nodeList->nodeNum; index++) {
         ret = CmServerZkDeletePtEvent(nodeList->poolId, nodeList->nodeList[index]);
         if (ret != CM_OK) {
-            CM_LOGERROR("Delete pt event failed, ret(%d) nodeId(%u) poolId(%u).", ret, event->nodeId, nodeList->poolId);
+            CM_LOGERROR("Delete pt event failed, ret(%d) nodeId(%u) poolId(%u).", ret, nodeList->poolId);
             free(nodeList);
             return NULL;
         }

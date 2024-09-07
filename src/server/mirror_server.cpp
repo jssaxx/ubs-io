@@ -615,7 +615,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
     } else {
         if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
-            rsp.dataCrc = BioCrcUtil::Crc32(reinterpret_cast<void *>(req.address), rsp.realLen);
+            rsp.dataCrc = sliceP->GetDataCrc();
         }
     }
     return ret;
