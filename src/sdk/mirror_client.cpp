@@ -244,7 +244,8 @@ BResult MirrorClient::LoadOriginViewImpl()
         return ret;
     }
 
-    for (auto &item : mPtView) {
+    auto tempPtView = mPtView;
+    for (auto &item : tempPtView) {
         IoStrategy *ioStrategy = new (std::nothrow) IoStrategy();
         if (UNLIKELY(ioStrategy == nullptr)) {
             CLIENT_LOG_ERROR("Alloc io strategy failed.");
@@ -266,7 +267,8 @@ std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
 {
     std::vector<uint16_t> ans;
     mLock.LockRead();
-    for (auto &item : mPtView) {
+    auto tempPtView = mPtView;
+    for (auto &item : tempPtView) {
         if (mLocalNid.VNodeId() == item.second.masterNodeId) {
             ans.emplace_back(item.first);
         }
@@ -439,7 +441,8 @@ BResult MirrorClient::Put(MirrorPut &param)
         }
 
         // 3. Apply for write cache quota.
-        ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, param.key, &ptEntry, param.length);
+        QosApplyParam applyParam{startTime, param.key, param.length};
+        ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, applyParam, &ptEntry);
         if (LIKELY(ret == BIO_OK)) {
             // 3. Put value to write cache.
             ret = PutImpl(param, ptId, ptEntry);
@@ -628,7 +631,8 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
     BResult ret = BIO_OK;
     do {
         isRetry = false;
-        ret = mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, param.key);
+        QosApplyParam applyParam{startTime, param.key};
+        ret = mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, applyParam);
         ret = GetImpl(param, realLen);
         mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
         if (LIKELY(ret == BIO_OK)) {
@@ -877,7 +881,7 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
     CmPtInfo ptEntry;
     bool isRetry = false;
     BResult ret = BIO_OK;
-
+    uint64_t startTime = Monotonic::TimeSec();
     do {
         isRetry = false;
         // 1. Get pt view entry.
@@ -888,7 +892,8 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
         // 2. Apply for write cache quota.
         static std::atomic<uint64_t> ref(1);
         std::string innerKey = "BioAllocSpace" + std::to_string(ref++);
-        ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, innerKey.c_str(), &ptEntry, param.length);
+        QosApplyParam applyParam{startTime, innerKey.c_str(), param.length};
+        ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, applyParam, &ptEntry);
         if (LIKELY(ret == BIO_OK)) {
             // 3. Alloc write cache space.
             ret = AllocSpaceImpl(ptId, ptEntry, param, spaceInfo);
@@ -897,6 +902,7 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
                 break;
             }
         }
+        isRetry = FailHandler(ret, startTime);
     } while (isRetry);
 
     return ret;
@@ -1415,7 +1421,8 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
     BResult ret = BIO_OK;
     uint32_t index = 0;
 
-    for (auto &ptEntry : mPtView) {
+    auto tempPtView = mPtView;
+    for (auto &ptEntry : tempPtView) {
         uint16_t dstNid = ptEntry.second.masterNodeId;
         req.isListUnderFs = (index == 0);
         req.comm.ptId = ptEntry.second.ptId;
