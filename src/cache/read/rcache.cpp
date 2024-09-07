@@ -451,7 +451,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
             LOG_ERROR("Server rcache get verify the Crc fail, ret:" << ret << ", key:" << key << ".");
             return ret;
         }
-        ret = newSlicePtr->CalculateDataCrc(readCrc, offset, realLen);
+        ret = newSlicePtr->CalculateDataCrc(readCrc, 0, realLen);
         if (ret != BIO_OK) {
             LOG_ERROR("Server rcache get verify the CRC fail, key:"<< chunk->GetKey() <<", ret: " << ret);
             return ret;

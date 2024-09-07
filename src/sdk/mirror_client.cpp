@@ -244,7 +244,8 @@ BResult MirrorClient::LoadOriginViewImpl()
         return ret;
     }
 
-    for (auto &item : mPtView) {
+    auto tempPtView = mPtView;
+    for (auto &item : tempPtView) {
         IoStrategy *ioStrategy = new (std::nothrow) IoStrategy();
         if (UNLIKELY(ioStrategy == nullptr)) {
             CLIENT_LOG_ERROR("Alloc io strategy failed.");
@@ -266,7 +267,8 @@ std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
 {
     std::vector<uint16_t> ans;
     mLock.LockRead();
-    for (auto &item : mPtView) {
+    auto tempPtView = mPtView;
+    for (auto &item : tempPtView) {
         if (mLocalNid.VNodeId() == item.second.masterNodeId) {
             ans.emplace_back(item.first);
         }
@@ -1419,7 +1421,8 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
     BResult ret = BIO_OK;
     uint32_t index = 0;
 
-    for (auto &ptEntry : mPtView) {
+    auto tempPtView = mPtView;
+    for (auto &ptEntry : tempPtView) {
         uint16_t dstNid = ptEntry.second.masterNodeId;
         req.isListUnderFs = (index == 0);
         req.comm.ptId = ptEntry.second.ptId;
