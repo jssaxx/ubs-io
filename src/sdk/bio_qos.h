@@ -27,6 +27,15 @@ enum QuotaType {
     QUOTA_BUTT
 };
 
+struct QosApplyParam {
+    uint64_t startTime;
+    const char* key;
+    uint64_t size;
+    QosApplyParam(uint64_t time, const char *keyName, uint64_t dataSize) : startTime(time),
+        key(keyName), size(dataSize) {}
+    QosApplyParam(uint64_t time, const char *keyName) : startTime(time), key(keyName), size(0) {}
+};
+
 struct IoWaitEntry {
     const std::string key;
     BResult result;
@@ -334,20 +343,26 @@ public:
         return mQuota;
     }
 
-    inline BResult Apply(uint8_t mode, QuotaType type, const char *key, CmPtInfo *ptEntry = nullptr, uint64_t size = 0)
+    inline BResult Apply(uint8_t mode, QuotaType type, QosApplyParam applyParam, CmPtInfo *ptEntry = nullptr)
     {
         if (UNLIKELY(!mQuota->Enable())) {
             return BIO_OK;
         }
+
         BResult ret = BIO_OK;
+        if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45)) {
+            CLIENT_LOG_WARN("QOS apply timeout, key:" << applyParam.key << ", time:" <<
+                Monotonic::TimeSec() - applyParam.startTime);
+            return BIO_QUOTA_TIMEOUT;
+        }
         bool isAllocConcur = false;
         BIO_TRACE_START(SDK_TRACE_QOS_APPLY);
         if (LIKELY(mode & QOS_CONCURRENCY)) {
-            ret = mConcur->ApplyConcur(type, key);
+            ret = mConcur->ApplyConcur(type, applyParam.key);
             isAllocConcur = true;
         }
         if (LIKELY(mode & QOS_QUOTA)) {
-            ret = mQuota->AllocQuota(key, ptEntry, size);
+            ret = mQuota->AllocQuota(applyParam.key, ptEntry, applyParam.size);
             if (ret != BIO_OK && isAllocConcur) {
                 mConcur->ReleaseConcur(type);
             }

@@ -427,7 +427,8 @@ void WCacheTier::FlushNegotiateQueue()
         DelEvictNegotiateMap(repSlicePtr);
     }
     mEvictNegotiateQueueLock.UnLock();
-    LOG_DEBUG("Flush mEvictNegotiateQueue ,size :" << size << ".");
+    LOG_DEBUG("Flush mEvictNegotiateQueue ,size :" << size << "dataFlowId:" <<
+        mDataFlow->GetFlowId() << ", metaFlowId:" << mMetaFlow->GetFlowId() << ".");
 }
 }
 }
