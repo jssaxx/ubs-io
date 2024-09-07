@@ -130,7 +130,7 @@ public:
             LOG_WARN("Not found holder record, holder: " << holder.nodeId << "-" << holder.clientId << ".");
             return;
         }
-        iter->second -= size;
+        iter->second = (iter->second > size) ? iter->second - size : 0;
         LOG_DEBUG("Release quota success, holder: " << holder.nodeId << "-" << holder.clientId << ", size:" << size <<
             ", hold quota:" << iter->second << ", proc:" << proc << ", key:" << key << ".");
     }

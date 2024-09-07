@@ -615,6 +615,7 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
 
 BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
 {
+    std::lock_guard<std::mutex> lock(mPtViewMutex);
     mPtView = ptInfos;
     for (auto it = mPtView.begin(); it != mPtView.end(); ++it) {
         LOG_INFO("Recv ptId:" << it->second.ptId << ", " << it->second.ToString());
