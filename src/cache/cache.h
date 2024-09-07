@@ -87,6 +87,8 @@ public:
 
     void ShowEvictNegotiateQueue();
 
+    BResult WCacheConsultEvict(uint64_t &flowId,  std::vector<uint64_t> slices, std::vector<bool> result);
+
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
