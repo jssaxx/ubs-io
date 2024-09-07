@@ -991,7 +991,7 @@ void WCacheManager::RetryEvictThread()
 
 BResult WCacheManager::EvictNegotiateThread()
 {
-    static uint32_t defaultDelay = NO_1;
+    static uint32_t defaultDelay = NO_150000;
     LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_TRUE, &mNegotiateFlag, true);
     LVOS_TP_END;
     while (mNegotiateFlag) {
@@ -1000,8 +1000,8 @@ BResult WCacheManager::EvictNegotiateThread()
         }
         LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_CLEAR, &mNegotiateFlag, false);
         LVOS_TP_END;
-        sleep(defaultDelay);
     }
+    usleep(defaultDelay);
     return BIO_OK;
 }
 
@@ -1036,6 +1036,7 @@ void WCacheManager::DestroyEvictThread()
 BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], std::vector<bool> &result,
     uint32_t count)
 {
+    LOG_DEBUG("Get negotiate message,flow:" << flowId);
     WCachePtr wCache = GetWCache(flowId);
     if (UNLIKELY(wCache == nullptr)) {
         LOG_ERROR("Failed to get WCache. flowId:" << flowId << ".");
@@ -1053,11 +1054,16 @@ BResult WCacheManager::GetEvictNegotiateInfo()
     LOG_INFO("Current evict negotiate info.");
     for (const auto &item: mWCacheManager) {
         uint32_t flowId = item.first;
-        auto queuePtr = item.second->GetEvictNegotiateQueue();
+        auto mapPtr = item.second->GetEvictNegotiateIndexMap();
         LOG_INFO("FlowId " << flowId << " :");
         uint64_t idx = 0;
-        for (auto &node : (*queuePtr)) {
-            LOG_INFO("  " << idx << ", negotiate offset:" << node->GeNegotiateOffset() << ".");
+        uint64_t indexInMap = 0;
+        for (auto pair: (*mapPtr)) {
+            uint8_t indexInArray = 0;
+            for (const auto array: pair.second) {
+                LOG_INFO("  " << idx << ", negotiate indexInMap:" << indexInMap << ",indexInArray :" << indexInArray++);
+            }
+            indexInMap++;
             idx++;
         }
     }

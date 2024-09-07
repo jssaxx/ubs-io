@@ -415,5 +415,6 @@ void Cache::ShowEvictNegotiateQueue()
 {
     mWCacheManager->GetEvictNegotiateInfo();
 }
+
 }
 }

@@ -133,6 +133,8 @@ private:
     ExecutorServicePtr mGcEvictService{ nullptr };
     ExecutorServicePtr mRetryEvictService{ nullptr };
     ExecutorServicePtr mDestroyEvictService{ nullptr };
+    ExecutorServicePtr mMemoryEvictTransService{ nullptr };
+    ExecutorServicePtr mMemoryEvictConsultService{ nullptr };
 
     bool mNegotiateFlag = true;
     ExecutorServicePtr mEvictNegotiateService{ nullptr };
