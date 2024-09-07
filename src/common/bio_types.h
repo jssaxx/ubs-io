@@ -24,6 +24,9 @@ constexpr uint32_t NO_2048 = 2048;
 constexpr uint32_t NO_1536 = 1536;
 constexpr uint32_t NO_1024 = 1024;
 constexpr uint32_t NO_1000 = 1000;
+constexpr uint32_t NO_5000 = 5000;
+constexpr uint32_t NO_50000 = 50000;
+constexpr uint32_t NO_150000 = 150000;
 constexpr uint32_t NO_600 = 600;
 constexpr uint32_t NO_512 = 512;
 constexpr uint32_t NO_500 = 500;
@@ -56,6 +59,7 @@ constexpr uint32_t NO_1 = 1;
 
 constexpr uint64_t NO_U64_0 = 0;
 constexpr uint64_t NO_U64_1 = 1;
+constexpr uint8_t NO_U8_255 = 255;
 
 constexpr uint32_t IP_SIZE = 32;
 constexpr uint32_t DEVICE_SIZE = 16;
