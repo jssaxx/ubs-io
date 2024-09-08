@@ -188,9 +188,10 @@ set_permissions()
 
   chmod 750 $BOOSTIO_HTRACE_LOG_PATH
   chmod 640 /etc/ceph/ceph.client.admin.keyring
-  chmod 600 $LOG_FILE
 EOF
   chown $RUN_USER:$RUN_GROUP  $LOG_FILE
+  su - $RUN_USER -c 'chmod 600 '$LOG_FILE''
+
   chcon -R -t home_root_t $INSTALL_PATH > /dev/null 2>&1
   set +e
   semanage fcontext -a -t home_root_t $INSTALL_PATH > /dev/null 2>&1
