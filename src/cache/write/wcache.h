@@ -116,9 +116,9 @@ public:
         mOnFlyRef -= 1;
     }
 
-    std::list<WCacheReplicaSlicePtr> *GetEvictNegotiateQueue()
+    std::map<uint64_t, std::array<uint8_t, NO_256>> *GetEvictNegotiateIndexMap()
     {
-        return mCacheTiers[WCACHE_MEMORY]->GetEvictQueuePtr();
+        return mCacheTiers[WCACHE_MEMORY]->GetEvictMapPtr();
     }
 
     using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
@@ -129,7 +129,7 @@ public:
     bool IsEmptyEvict(WCacheTierType type);
     bool IsEmptyNegotiate();
 
-    void MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count);
+    void MasterEvictNegotiate(uint64_t indexs[], std::vector<bool> &result, uint32_t count);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -143,11 +143,12 @@ private:
     BResult EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront);
     BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront);
 
-    BResult EvictSlice( WCacheSliceRefPtr &sliceRef);
+    BResult EvictSlice(WCacheSliceRefPtr &sliceRef);
     BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
 
     void EvictNegotiate();
-    void AddEvictNegotiateQueue(WCacheReplicaSlicePtr &repSlice);
+
+    void AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum);
 
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
@@ -204,8 +205,6 @@ private:
     std::atomic<uint64_t> mOnFlyRef;
 
     DEFINE_REF_COUNT_VARIABLE;
-
-
 };
 }
 }
