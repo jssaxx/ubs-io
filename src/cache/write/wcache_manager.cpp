@@ -792,7 +792,7 @@ BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
     if (isMaster) {
         wcache->Flush();
     } else {
-        wcache->ExpiredClear();
+        wcache->ProcAndCacheBrokenExpiredClear();
     }
 
     return BIO_INNER_RETRY;
@@ -847,7 +847,7 @@ BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId)
         if (isMaster) {
             flow->Flush();
         } else {
-            flow->ExpiredClear();
+            flow->ProcAndCacheBrokenExpiredClear();
         }
     }
 
