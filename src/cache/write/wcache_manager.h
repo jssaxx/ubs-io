@@ -129,6 +129,7 @@ private:
 
     bool mRunning = true;
     bool mEnableCrc = false;
+    uint32_t mNegotiateDelay { NO_100 * NO_1000 };
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
     ExecutorServicePtr mGcEvictService{ nullptr };
     ExecutorServicePtr mRetryEvictService{ nullptr };
