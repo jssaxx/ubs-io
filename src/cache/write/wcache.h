@@ -76,7 +76,7 @@ public:
 
     void StartEvictTask(WCacheTierType type);
 
-    void StartEvictNegotiateTask();
+    BResult StartEvictNegotiateTask();
 
     void RetryEvictTask(WCacheTierType type);
 
