@@ -243,12 +243,14 @@ public:
 
     inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView(uint64_t *curNodeTimes)
     {
+        std::lock_guard<std::mutex> lock(mNodeViewMutex);
         *curNodeTimes = mCurNodeTimes;
         return mNodeView;
     }
 
     BResult GetDiskStatusFromNodeView(uint16_t diskId, CmDiskStatus &diskStatus)
     {
+        std::lock_guard<std::mutex> lock(mNodeViewMutex);
         if (mNodeView.find(mLocalNid) != mNodeView.end()) {
             CmNodeInfo nodeInfo = mNodeView[mLocalNid];
             for (uint32_t idx = 0; idx < nodeInfo.disks.size(); idx++) {
@@ -372,6 +374,7 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
+    std::mutex mNodeViewMutex;
     std::mutex mPtViewMutex;
     uint64_t mCurNodeTimes = 0;
     uint64_t mCurPtTimes = 0;
