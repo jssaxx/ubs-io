@@ -16,6 +16,7 @@ constexpr uint32_t NO_4194304 = 4194304; // 4M
 constexpr uint32_t NO_1048576 = 1048576; // 1M
 constexpr uint32_t NO_65535 = 65535;
 constexpr uint32_t NO_10240 = 10240;
+constexpr uint32_t NO_10000 = 10000;
 constexpr uint32_t NO_8192 = 8192;
 constexpr uint32_t NO_7800 = 7800;
 constexpr uint32_t NO_7201 = 7201;
