@@ -585,9 +585,9 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
         mCtrlChannelMgr->RemoveChannel(dstNid, ch);
     } else {
         mDataChannelMgr->RemoveChannel(dstNid, ch);
-        if (mHandlerBroken != nullptr) {
-            mHandlerBroken(dstNid.nid, dstNid.pid);
-        }
+    }
+    if (mHandlerBroken != nullptr) {
+        mHandlerBroken(dstNid.nid, dstNid.pid);
     }
 }
 

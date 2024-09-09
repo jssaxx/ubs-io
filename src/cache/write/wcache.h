@@ -126,6 +126,7 @@ public:
 
     void Flush();
     void ExpiredClear();
+    void ProcAndCacheBrokenExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
     bool IsEmptyNegotiate();
 
