@@ -605,6 +605,7 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
         mStarted = true;
     }
 
+    std::lock_guard<std::mutex> lock(mNodeViewMutex);
     mNodeView = nodeInfos;
     Connection();
 
