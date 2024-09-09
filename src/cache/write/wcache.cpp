@@ -506,6 +506,25 @@ void WCache::ExpiredClear()
             }
         }
     }
+
+    LVOS_TP_END;
+}
+
+void WCache::ProcAndCacheBrokenExpiredClear()
+{
+    LVOS_TP_START(NO_PROCESS_WCACHE_EXPIRED_CLEAR, 0);
+    while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {
+        usleep(NO_10000);
+    }
+    if (IsEmptyNegotiate()) {
+        mCacheTiers[WCACHE_MEMORY]->FlushNegotiateMap();
+    }
+
+    if (IsEmptyEvict(WCACHE_MEMORY)) {
+        StartEvictTask(WCACHE_MEMORY);
+    } else if (IsEmptyEvict(WCACHE_DISK)) {
+        StartEvictTask(WCACHE_MEMORY);
+    }
     LVOS_TP_END;
 }
 
