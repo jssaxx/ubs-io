@@ -340,19 +340,24 @@ void WCache::StartEvictTask(WCacheTierType type)
     return;
 }
 
-void WCache::StartEvictNegotiateTask()
+BResult WCache::StartEvictNegotiateTask()
 {
     if (!mIsNormal) {
-        return;
+        return BIO_OK;
     }
+
+    if (mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateMap()) {
+        return BIO_NEED_WAIT;
+    }
+
     bool expectFlag = false;
     if (!mIsStartEvictNegotiate.compare_exchange_weak(expectFlag, true)) {
-        return;
+        return BIO_OK;
     }
     if (!mEvictNegotiateService->Execute([this]() { EvictNegotiate(); })) {
         mIsStartEvictNegotiate.store(false);
     }
-    return;
+    return BIO_OK;
 }
 
 void WCache::RetryEvictTask(WCacheTierType type)

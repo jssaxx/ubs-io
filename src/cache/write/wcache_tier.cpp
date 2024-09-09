@@ -431,17 +431,21 @@ void WCacheTier::EvictNegotiateMapToQueue(uint64_t indexInFlow)
         mEvictNegotiateMapLock.UnLock();
         return;
     }
+    BIO_TRACE_START(WCACHE_ADD_EVICT_QUEUE)
     AddEvictQueue(it->second);
+    BIO_TRACE_END(WCACHE_ADD_EVICT_QUEUE, BIO_OK)
     mEvictNegotiateMap.erase(it);
     mEvictNegotiateMapLock.UnLock();
 }
 
 void WCacheTier::DelEvictIndexArray(uint64_t indexInMap)
 {
+    BIO_TRACE_START(WCACHE_DEL_NEGOTIATE_ARRAY)
     mNegotiateIndexMapLock.Lock();
     mNegotiateIndexMap.erase(indexInMap);
     LOG_DEBUG("Del array in map, index: " << indexInMap << ",flow:"<<mDataFlow->GetFlowId());
     mNegotiateIndexMapLock.UnLock();
+    BIO_TRACE_END(WCACHE_DEL_NEGOTIATE_ARRAY, BIO_OK)
 }
 }
 }
