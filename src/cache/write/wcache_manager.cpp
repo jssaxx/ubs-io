@@ -29,7 +29,6 @@ constexpr uint32_t DESTROY_EVICT_INTERAL = 15;
 constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
 constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 constexpr uint32_t BROKEN_INTERAL_TIME = 1000000;
-constexpr uint32_t MIN_NEGOTIATE_DELAY = 100000;
 constexpr uint32_t MAX_NEGOTIATE_DELAY = 1000000;
 
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
@@ -63,6 +62,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     }
 
     mRCacheManager = rCacheManager;
+    mNegotiateDelay = BioConfig::Instance()->GetDaemonConfig().negotiateDelay;
     return BIO_OK;
 }
 
@@ -993,7 +993,7 @@ void WCacheManager::RetryEvictThread()
 
 BResult WCacheManager::EvictNegotiateThread()
 {
-    static uint32_t delayInUs = MIN_NEGOTIATE_DELAY;
+    static uint32_t delayInUs = mNegotiateDelay;
     LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_TRUE, &mNegotiateFlag, true);
     LVOS_TP_END;
     while (mNegotiateFlag) {
@@ -1006,9 +1006,9 @@ BResult WCacheManager::EvictNegotiateThread()
             }
         }
         if (wcacheSize == waitSize) {
-            delayInUs = std::min(MIN_NEGOTIATE_DELAY, delayInUs * NO_2);
+            delayInUs = std::min(MAX_NEGOTIATE_DELAY, delayInUs * NO_2);
         } else {
-            delayInUs = MIN_NEGOTIATE_DELAY;
+            delayInUs = mNegotiateDelay;
         }
         LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_CLEAR, &mNegotiateFlag, false);
         LVOS_TP_END;
