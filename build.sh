@@ -129,6 +129,7 @@ fi
 \cp 3rdparty/bdm/lib/libbdm.so bio/lib/.
 \cp 3rdparty/hcom/include/hcom/*.h bio/include/.
 \cp 3rdparty/hcom/include/hcom/go/*.go bio/include/.
+\cp 3rdparty/hcom/include/hcom/capi/*.h bio/include/.
 \cp 3rdparty/bdm/include/bdm_core.h bio/include/.
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list
