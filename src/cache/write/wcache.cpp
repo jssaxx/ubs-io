@@ -138,17 +138,9 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
     PutSetIoStrategy(ioStrategy, attr);
 
     // 2. Add evict negotiate queue.
-    uint32_t refNum = mIsMaster ? (mCopyNum - NO_1) : NO_1;
-    uint64_t flowOffset = destSliceRef->GetSlice()->GetIndexInFlow();
-    WCacheReplicaSlicePtr repSlicePtr = MakeRef<WCacheReplicaSlice>(destSliceRef, ioStrategy, flowOffset, refNum);
-    if (UNLIKELY(repSlicePtr == nullptr)) {
-        LOG_ERROR("Make replica slice instance failed, key:" << key << ".");
-        return BIO_ALLOC_FAIL;
-    }
+    uint8_t refNum = mIsMaster ? (mCopyNum - NO_1) : NO_1;
     BIO_TRACE_START(WCACHE_TRACE_PUT_NEGOTIATE_QUE);
-    AddEvictNegotiateQueue(repSlicePtr);
-    LOG_DEBUG("Put add Negotiate queue, key:" << key << ", flowId:" << destSliceRef->GetSlice()->GetFlowId() <<
-        ", indexInFlow:" << destSliceRef->GetSlice()->GetIndexInFlow());
+    AddEvictNegotiateQueue(destSliceRef, refNum);
     BIO_TRACE_END(WCACHE_TRACE_PUT_NEGOTIATE_QUE, BIO_OK);
 
     // 3. put it disk tier cache.
@@ -348,19 +340,24 @@ void WCache::StartEvictTask(WCacheTierType type)
     return;
 }
 
-void WCache::StartEvictNegotiateTask()
+BResult WCache::StartEvictNegotiateTask()
 {
     if (!mIsNormal) {
-        return;
+        return BIO_OK;
     }
+
+    if (mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateMap()) {
+        return BIO_NEED_WAIT;
+    }
+
     bool expectFlag = false;
     if (!mIsStartEvictNegotiate.compare_exchange_weak(expectFlag, true)) {
-        return;
+        return BIO_OK;
     }
     if (!mEvictNegotiateService->Execute([this]() { EvictNegotiate(); })) {
         mIsStartEvictNegotiate.store(false);
     }
-    return;
+    return BIO_OK;
 }
 
 void WCache::RetryEvictTask(WCacheTierType type)
@@ -509,6 +506,25 @@ void WCache::ExpiredClear()
             }
         }
     }
+
+    LVOS_TP_END;
+}
+
+void WCache::ProcAndCacheBrokenExpiredClear()
+{
+    LVOS_TP_START(NO_PROCESS_WCACHE_EXPIRED_CLEAR, 0);
+    while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {
+        usleep(NO_10000);
+    }
+    if (IsEmptyNegotiate()) {
+        mCacheTiers[WCACHE_MEMORY]->FlushNegotiateMap();
+    }
+
+    if (IsEmptyEvict(WCACHE_MEMORY)) {
+        StartEvictTask(WCACHE_MEMORY);
+    } else if (IsEmptyEvict(WCACHE_DISK)) {
+        StartEvictTask(WCACHE_MEMORY);
+    }
     LVOS_TP_END;
 }
 
@@ -519,9 +535,9 @@ bool WCache::IsEmptyNegotiate()
         return false;
     }
 
-    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateQueue() || mIsStartEvictNegotiate.load() == true ||
+    if (!mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateMap() || mIsStartEvictNegotiate.load() == true ||
         mIsMasterStartEvictNegotiate.load() == true) {
-        LOG_TRACE("Negotiate slice queue status:" << !mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateQueue()
+        LOG_TRACE("Negotiate slice map status:" << !mCacheTiers[WCACHE_MEMORY]->IsEmptyNegotiateMap()
             << ", flowId:" << mFlowId);
         LOG_TRACE("Negotiate task status:" << mIsStartEvictNegotiate.load() << ", flowId:" << mFlowId);
         return false;
@@ -727,10 +743,10 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
     return BIO_OK;
 }
 
-void WCache::AddEvictNegotiateQueue(WCacheReplicaSlicePtr &repSlice)
+void WCache::AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum)
 {
-    mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateMap(repSlice);
-    mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateQueue(repSlice);
+    mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateMap(sliceRef);
+    mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateIndexMap(sliceRef->GetSlice()->GetIndexInFlow(), refNum);
 }
 
 void WCache::EvictNegotiate()
@@ -742,17 +758,17 @@ void WCache::EvictNegotiate()
         return;
     }
     LVOS_TP_END;
-    std::vector<uint64_t> offsetVec;
+    std::vector<uint64_t> indexVec;
     auto memoryTier = mCacheTiers[WCACHE_MEMORY];
-    memoryTier->GetNegotiateSlice(offsetVec, MAX_EVICT_CONSULT_SIZE);
-    bool isEmptyNegoTiate = offsetVec.empty();
-    LVOS_TP_START(EVICT_NEGOTIATE_VECTOR_EMPTY, &isEmptyNegoTiate, BIO_OK);
+    memoryTier->GetNegotiateSlice(indexVec, MAX_EVICT_CONSULT_SIZE);
+    LOG_DEBUG("Salve send negotiate,flow:"<<mFlowId <<",size:"<< indexVec.size());
+    bool isEmptyNegotiate = indexVec.empty();
+    LVOS_TP_START(EVICT_NEGOTIATE_VECTOR_EMPTY, &isEmptyNegotiate, BIO_OK);
     LVOS_TP_END;
-    if (isEmptyNegoTiate) {
+    if (isEmptyNegotiate) {
         mIsStartEvictNegotiate.store(false);
         return;
     }
-
     uint32_t masterNid;
     LVOS_TP_START(EVICT_NEGOTIATE_GET_MASTERNODE, &ret, BIO_INNER_RETRY);
     ret = GetPtMasterNode(masterNid);
@@ -761,11 +777,10 @@ void WCache::EvictNegotiate()
         mIsStartEvictNegotiate.store(false);
         return;
     }
-    EvictNegotiateRequest req = { mFlowId, static_cast<uint32_t>(offsetVec.size()) };
+    EvictNegotiateRequest req = { mFlowId, static_cast<uint32_t>(indexVec.size()) };
     for (uint32_t idx = 0; idx < req.count; idx++) {
-        req.data[idx] = offsetVec[idx];
+        req.data[idx] = indexVec[idx];
     }
-
     EvictNegotiateResponse resp;
     auto rpcEngine = BioServer::Instance()->GetNetEngine();
     BIO_TRACE_START(WCACHE_TRACE_GET_NEGOTIATE)
@@ -777,9 +792,11 @@ void WCache::EvictNegotiate()
         return;
     }
     BIO_TRACE_END(WCACHE_TRACE_GET_NEGOTIATE, BIO_OK)
-
-    for (uint32_t idx = 0; idx < offsetVec.size(); ++idx) {
-        memoryTier->UpdateNegotiateState(offsetVec[idx], resp.negoResult[idx]);
+    for (uint32_t idx = 0; idx < indexVec.size(); ++idx) {
+        if (!resp.negoResult[idx]) {
+            break;
+        }
+        memoryTier->UpdateNegotiateState(indexVec[idx]);
     }
     StartEvictTask(WCACHE_MEMORY);
     mIsStartEvictNegotiate.store(false);
@@ -906,8 +923,8 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 BResult WCache::FlushMem()
 {
     while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {}
-    LOG_DEBUG("Flush mem, flowId:" << mFlowId);
-    mCacheTiers[WCACHE_MEMORY]->FlushNegotiateQueue();
+    LOG_TRACE("Flush mem, flowId:" << mFlowId);
+    mCacheTiers[WCACHE_MEMORY]->FlushNegotiateMap();
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
@@ -966,7 +983,7 @@ BResult WCache::ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef)
 BResult WCache::ExpiredClearMem()
 {
     while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {}
-    mCacheTiers[WCACHE_MEMORY]->FlushNegotiateQueue();
+    mCacheTiers[WCACHE_MEMORY]->FlushNegotiateMap();
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
@@ -1048,7 +1065,7 @@ BResult WCache::GetPtMasterNode(uint32_t &masterNid)
     return BIO_OK;
 };
 
-void WCache::MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result, uint32_t count)
+void WCache::MasterEvictNegotiate(uint64_t indexs[], std::vector<bool> &result, uint32_t count)
 {
     LVOS_TP_START(NEGOTIATE_MASTER_FLAG, &mIsMasterStartEvictNegotiate, true);
     LVOS_TP_END;
@@ -1057,10 +1074,13 @@ void WCache::MasterEvictNegotiate(uint64_t offsets[], std::vector<bool> &result,
         return;
     }
     for (uint32_t idx = 0; idx < count; idx++) {
-        auto ret = mCacheTiers[WCACHE_MEMORY]->UpdateNegotiateState(offsets[idx], true);
-        LOG_DEBUG("Master dec evict ref success, flowId:" << mFlowId << ", flowOffset:" << offsets[idx] << ", ret:" <<
-            ret << ".");
+        auto ret = mCacheTiers[WCACHE_MEMORY]->UpdateNegotiateState(indexs[idx]);
+        LOG_DEBUG("Master dec evict ref success, flowId:" << mFlowId << ", flowIndex:" << indexs[idx] << ", ret:" <<
+                                                          ret << ".");
         result[idx] = (ret == BIO_OK);
+        if (ret != BIO_OK) {
+            break;
+        }
     }
     mIsMasterStartEvictNegotiate.store(false);
     LVOS_TP_START(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT, 0);
