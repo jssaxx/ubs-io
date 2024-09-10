@@ -164,13 +164,15 @@ TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
     LVOS_HVS_deactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
-    LVOS_HVS_activeTracePoint(0, "NEGOTIATE_MASTER_FLAG", 0, 1, userParam);
-    uint64_t slices[1];
+    uint64_t slices[NO_3];
+    slices[0] = 0;
+    slices[NO_1] = NO_1;
+    slices[NO_2] = NO_2;
     std::vector<bool> reslut;
     reslut.push_back(false);
-    WCachePtr wCache = MakeRef<WCache>(0, 0, 0, 1, 0, 0);
-    wCache->MasterEvictNegotiate(slices, reslut, 1);
-    LVOS_HVS_deactiveTracePoint(0, "NEGOTIATE_MASTER_FLAG");
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
+    gWCacheManager->MasterEvictNegotiate(g_flowId, slices, reslut, NO_3);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
     EXPECT_EQ(ret, BIO_OK);
 }
 
