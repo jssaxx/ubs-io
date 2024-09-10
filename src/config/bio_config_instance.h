@@ -44,6 +44,8 @@ const auto DATA_CRC_ENABLE = std::make_pair("bio.data.crc.enable", "false");
 
 const auto BIO_CACHE_QOS_ENABLE = std::make_pair("bio.cache.qos.enable", "true");
 
+const auto BIO_WCACHE_NEGOTIATE_DELAY = std::make_pair("bio.wcache.negotiate.delay", 100);
+
 const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
@@ -111,6 +113,7 @@ public:
 
     struct DaemonConfig {
         int32_t logLevel = 0;
+        uint32_t negotiateDelay = 100;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
         uint64_t wcacheMemEvictLevel = 0;
