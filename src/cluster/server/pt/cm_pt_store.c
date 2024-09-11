@@ -80,7 +80,7 @@ static Storer ViewCreateStorer(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t 
     store->nodeListBak = (DList *)malloc(sizeof(DList) * maxNodeNum);
     store->ptList = (PtEntryList *)malloc(sizeof(PtEntry) * maxPtNum + sizeof(PtEntryList));
 
-    uint16_t elemNum = maxPtNum * maxCopyNum * CM_PT_STORE_EXPAND_NUM;
+    uint32_t elemNum = maxPtNum * maxCopyNum * CM_PT_STORE_EXPAND_NUM;
     store->cache = (NodeElem *)malloc(sizeof(NodeElem) * elemNum);
     if (store->nodeList == NULL || store->nodeListBak == NULL || store->ptList == NULL || store->cache == NULL) {
         CM_LOGERROR("Malloc cacheList buff failed.");
