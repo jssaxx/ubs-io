@@ -102,6 +102,7 @@ void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
     ptTask->jobNum = 0;
 
     for (auto &elem : ptTask->ptList) {
+        LOG_INFO("Job pre: ptId:" << elem.ptId << ", version:" << elem.version);
         auto ret = mJobService->Execute([this, ptTask, elem]() { RunJobThread(ptTask, elem); });
         if (ret == false) {
             LOG_INFO("Delay retry ptId:" << elem.ptId);

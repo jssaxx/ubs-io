@@ -160,7 +160,7 @@ public:
     BResult PutAlignSize(const char *value, MirrorPut &param, bool &isAllocMem);
 
 private:
-    bool FailHandler(BResult result, uint64_t startTime);
+    bool FailHandler(BResult result, uint64_t startTime, uint64_t timeOut);
 
     uint16_t SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity);
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo, PutRequest *&req);
