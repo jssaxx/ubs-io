@@ -350,7 +350,7 @@ public:
         }
 
         BResult ret = BIO_OK;
-        if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45)) {
+        if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45 && applyParam.size != 0)) {
             CLIENT_LOG_WARN("QOS apply timeout, key:" << applyParam.key << ", time:" <<
                 Monotonic::TimeSec() - applyParam.startTime);
             return BIO_QUOTA_TIMEOUT;
