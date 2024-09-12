@@ -671,8 +671,13 @@ TEST_F(TestBioServer, test_bio_server_writer)
 {
     LOG_INFO("test_bio_server_writer");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    size_t size = NO_128;
+    void *src = malloc(size);
+    memset(src, 0, size);
+    uintptr_t ptr_as_uintptr = (uintptr_t)src;
+    uint64_t ptr_as_uint64 = (uint64_t)ptr_as_uintptr;
     std::vector<FlowAddr> addr;
-    addr.emplace_back(FlowAddr(1, 0, NO_128));
+    addr.emplace_back(FlowAddr(ptr_as_uint64, 0, NO_128));
     WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     std::vector<NetMrInfo> rMrVec;
@@ -682,6 +687,7 @@ TEST_F(TestBioServer, test_bio_server_writer)
     uint32_t rKey = 1;
     bool isAlloc = true;
     auto ret = mirror->WriterParseMrInfo(from.Get(), to.Get(), rMrVec, lMrVec, rKey, isAlloc);
+    free(src);
     EXPECT_EQ(ret, BIO_OK);
 
     GetResponse rsp;
