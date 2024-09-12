@@ -504,28 +504,20 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
     }
 
     // 2. parse local mr info
-    if (from->GetFlowType() == FLOW_MEMORY) {
-        for (auto addr : from->GetAddrs()) {
-            MrInfo mr;
-            addr.ToMrInfo(mr);
-            lMrVec.emplace_back(NetMrInfo(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey()));
-        }
-    } else {
-        NetMrInfo bioMr;
-        BResult ret = BioServer::Instance()->MemAlloc(totalLen, bioMr);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
-            return ret;
-        }
-        ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address));
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Slice copy failed, ret:" << ret << ".");
-            BioServer::Instance()->MemFree(bioMr.address);
-            return ret;
-        }
-        isAlloc = true;
-        lMrVec.emplace_back(bioMr);
+    NetMrInfo bioMr;
+    BResult ret = BioServer::Instance()->MemAlloc(totalLen, bioMr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
+        return ret;
     }
+    ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address));
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+        BioServer::Instance()->MemFree(bioMr.address);
+        return ret;
+    }
+    isAlloc = true;
+    lMrVec.emplace_back(bioMr);
     return BIO_OK;
 }
 
