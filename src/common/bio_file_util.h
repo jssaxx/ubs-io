@@ -198,7 +198,9 @@ inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
         return 0;
     }
     // get the capacity of this device
-    int fd = open(diskPath.c_str(), (O_RDWR | O_SYNC));
+    int fd = open(canonicalPath, (O_RDWR | O_SYNC));
+    free(canonicalPath);
+    canonicalPath = nullptr;
     if (fd < 0) {
         return 0;
     }
