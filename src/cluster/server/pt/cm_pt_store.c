@@ -88,7 +88,8 @@ static Storer ViewCreateStorer(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t 
         return NULL;
     }
 
-    uint16_t nodeId, index;
+    uint16_t nodeId;
+    uint32_t index;
     for (nodeId = 0; nodeId < maxNodeNum; nodeId++) {
         D_INIT_LIST_HEAD(&store->nodeList[nodeId]);
         D_INIT_LIST_HEAD(&store->nodeListBak[nodeId]);
