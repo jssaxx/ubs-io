@@ -259,6 +259,22 @@ TEST_F(TestBio, test_bio_get)
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
+
+    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK");
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_SIZE", 0, 1, userParam);
+    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_SIZE");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
     delete[] value;
 }
 
