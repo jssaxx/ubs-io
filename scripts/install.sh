@@ -50,10 +50,6 @@ clear_env()
   stop_boostio
   sleep 10
 
-#  if [ "$ZKCLEAN" = "true" ]; then
-#      #清理zk
-#      echo "清理zk."
-#  fi
   bio_id=$(ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}')
   for id in $bio_id
   do
