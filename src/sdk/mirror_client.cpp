@@ -493,6 +493,8 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     auto ret = memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        delete[] reqTmp;
+        req = nullptr;
     }
     return ret;
 }
