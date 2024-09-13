@@ -122,7 +122,7 @@ cd $BIN_PATH
 ./bio_daemon
 EOF
   chmod 550 $BIN_PATH/executeBio.sh
-  chown $RUN_GROUP:$RUN_USER $BIN_PATH/executeBio.sh
+  chown $RUN_USER:$RUN_GROUP $BIN_PATH/executeBio.sh
   service_config=$SYSTEMD_SERVICE_PATH
   cat > $service_config << EOF
 [Unit]
