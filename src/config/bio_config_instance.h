@@ -40,6 +40,8 @@ const auto CM_ZK_HOST = std::make_pair("bio.cm.zk_host", "127.0.0.1:2181");
 const auto CM_NODE_REGISTER_TIMEOUT = std::make_pair("bio.cm.register_timeout_sec", 30);
 const auto CM_NODE_REGISTER_PERM_TIMEOUT = std::make_pair("bio.cm.register_perm_timeout_sec", 60);
 
+const auto BIO_TRACE_ENABLE = std::make_pair("bio.trace.enable", "true");
+
 const auto DATA_CRC_ENABLE = std::make_pair("bio.data.crc.enable", "false");
 
 const auto BIO_CACHE_QOS_ENABLE = std::make_pair("bio.cache.qos.enable", "true");
@@ -133,6 +135,7 @@ public:
         uint32_t workIoTimeOut = 60;
         uint32_t workNetTimeOut = 20;
         bool enableCrc = false;
+        bool enableTrace = true;
         bool enableQos = true;
     };
 
