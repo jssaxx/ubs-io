@@ -464,6 +464,12 @@ BResult MirrorClient::Put(MirrorPut &param)
 BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo,
     PutRequest *&req)
 {
+    if (spaceInfo.descriptorSize > CACHE_SPACE_DEC_SIZE) {
+        CLIENT_LOG_ERROR("Too large descriptorSize:" << spaceInfo.descriptorSize << ", it should be less than " <<
+            CACHE_SPACE_DEC_SIZE << ".");
+        return BIO_INNER_ERR;
+    }
+
     uint8_t *reqTmp = nullptr;
     LVOS_TP_START(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, 0);
     reqTmp = new(std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
