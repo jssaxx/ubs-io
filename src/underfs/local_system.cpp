@@ -201,6 +201,10 @@ BResult LocalSystem::List(const char *prefix, std::unordered_map<std::string, Ob
     struct dirent *ptr;
 
     DIR *dir = opendir(keyPath.c_str());
+    if (dir == nullptr) {
+        LOG_ERROR("Fail to open directory: " << keyPath.c_str() << ".");
+        return BIO_UFS_IOERR;
+    }
     while ((ptr = readdir(dir)) != nullptr) {
         if (memcmp(ptr->d_name, prefix, strlen(prefix)) == 0) {
             struct stat fileStat;

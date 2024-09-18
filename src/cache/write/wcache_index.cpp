@@ -64,7 +64,7 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unorder
             if (UNLIKELY(objs.size() >= 1000U)) {
                 return BIO_OK;
             }
-            if (memcmp(prefix, info.first.c_str(), strlen(prefix)) == 0) {
+            if (info.first.find(prefix) == 0) {
                 auto sliceRef = info.second;
                 if (sliceRef->Aquire()) {
                     auto sliceLen = static_cast<uint32_t>(sliceRef->GetSlice()->GetLength());
