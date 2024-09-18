@@ -32,7 +32,7 @@ extern "C" {
 #define MAX_DIAG_U16_VALUE     ((s32)(u16)(-1))
 #define DIAG_INVALID_FD        (-1)
 /*定义执行命令超时时间，单位ms*/
-#define DIAG_CMD_EXEC_TIMOUT   (300000)
+#define DIAG_CMD_EXEC_TIMOUT   (800000)
 
 #define DIAG_CLIENT_FORMAT_TIME_STRING_LEN (25)
 #define DIAG_CLIENT_FORMAT_TIME_STRING_LEN_MAX (50)
