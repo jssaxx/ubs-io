@@ -518,7 +518,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read cache alloc offset failed, ret:" << ret << ",  key " << key << ".");
         delete[] value;
-        return BIO_ALLOC_FAIL;
+        return BIO_LOAD_ALLOC_FAIL;
     }
 
     RCacheValue chunkValue(indexInFlow, flowOffset, realLen);

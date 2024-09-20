@@ -451,7 +451,7 @@ BResult MirrorClient::Put(MirrorPut &param)
                 break;
             }
         }
-        isRetry = FailHandler(ret, startTime, mTimeOut);
+        isRetry = FailHandler(ret, startTime, NO_44);
     } while (isRetry);
 
     if (isAllocMem) {
