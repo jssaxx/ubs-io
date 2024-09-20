@@ -451,7 +451,7 @@ BResult MirrorClient::Put(MirrorPut &param)
                 break;
             }
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, NO_44);
     } while (isRetry);
 
     if (isAllocMem) {
@@ -464,6 +464,12 @@ BResult MirrorClient::Put(MirrorPut &param)
 BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo,
     PutRequest *&req)
 {
+    if (spaceInfo.descriptorSize > CACHE_SPACE_DEC_SIZE) {
+        CLIENT_LOG_ERROR("Too large descriptorSize:" << spaceInfo.descriptorSize << ", it should be less than " <<
+            CACHE_SPACE_DEC_SIZE << ".");
+        return BIO_INNER_ERR;
+    }
+
     uint8_t *reqTmp = nullptr;
     LVOS_TP_START(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, 0);
     reqTmp = new(std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
@@ -493,6 +499,8 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     auto ret = memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        delete[] reqTmp;
+        req = nullptr;
     }
     return ret;
 }
@@ -552,12 +560,12 @@ BResult MirrorClient::PutAlignSize(const char *value, MirrorPut &param, bool &is
     return BIO_OK;
 }
 
-bool MirrorClient::FailHandler(const BResult result, uint64_t startTime)
+bool MirrorClient::FailHandler(const BResult result, uint64_t startTime, uint64_t timeOut)
 {
     uint64_t costTime = Monotonic::TimeSec() - startTime;
     LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &costTime, (mTimeOut+1));
     LVOS_TP_END;
-    if (UNLIKELY(costTime >= mTimeOut)) { // 超过重试时间则不再进行重试.
+    if (UNLIKELY(costTime >= timeOut)) { // 超过重试时间则不再进行重试.
         return false;
     }
 
@@ -597,7 +605,7 @@ BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
     return ret;
 }
@@ -638,7 +646,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, NO_55);
     } while (isRetry);
     return ret;
 }
@@ -681,7 +689,7 @@ BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
     return ret;
 }
@@ -718,7 +726,7 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
     return ret;
 }
@@ -757,7 +765,7 @@ BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
     return ret;
 }
@@ -781,7 +789,7 @@ BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, O
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
     return ret;
 }
@@ -902,7 +910,7 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
                 break;
             }
         }
-        isRetry = FailHandler(ret, startTime);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
 
     return ret;

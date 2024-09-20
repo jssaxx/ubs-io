@@ -80,7 +80,6 @@ def echo_to_terminal(message):
 
 def help_info():
     echo_to_terminal(USAGE)
-    # logging.info(USAGE)
     return
 
 
@@ -233,7 +232,6 @@ def install(node):
                                                             DEFAULT_INSTALL_PATH)) != 0:
         failed_times.append(1)
         return -1
-    # delete_temp_file(node)
     return 0
 
 
@@ -319,7 +317,6 @@ def check_package(pkg_path):
     if os.path.exists(pkg_path):
         global PACKAGE_PATH
         PACKAGE_PATH = pkg_path
-        #
         if check_cms(pkg_path) != 0:
             echo_to_terminal("cms check failed!")
             return -1
