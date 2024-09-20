@@ -211,6 +211,9 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     ret = mRCacheManager->Load(slice->GetPtId(), key, 0, BIO_IO_MAX_LEN, realLen);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read cache load failed, ret:" << ret << ", key " << key << ".");
+        if (UNLIKELY(ret == BIO_LOAD_ALLOC_FAIL)) {
+            return ret;
+        }
     } else {
         ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
         if (LIKELY(ret == BIO_OK)) {
