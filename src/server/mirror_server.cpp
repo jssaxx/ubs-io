@@ -681,7 +681,7 @@ BResult MirrorServer::Load(LoadRequest &req)
     uint64_t realLen = 0;
     BResult ret = Cache::Instance().Load(req.comm.ptId, req.key, req.offset, req.length, realLen);
     BIO_TRACE_END(MIRROR_TRACE_LOAD, ret);
-    return ret;
+    return ret == BIO_LOAD_ALLOC_FAIL ? BIO_ALLOC_FAIL : ret;
 }
 
 BResult MirrorServer::NotifyUpdate(NotifyUpdateRequest &req)

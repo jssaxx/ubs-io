@@ -44,6 +44,7 @@ constexpr uint32_t NO_60 = 60;
 constexpr uint32_t NO_50 = 50;
 constexpr uint32_t NO_55 = 55;
 constexpr uint32_t NO_45 = 45;
+constexpr uint32_t NO_44 = 44;
 constexpr uint32_t NO_32 = 32;
 constexpr uint32_t NO_30 = 30;
 constexpr uint32_t NO_24 = 24;
