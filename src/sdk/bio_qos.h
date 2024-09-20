@@ -49,6 +49,12 @@ struct IoWaitEntry {
         sem_init(&sem, 0, 0);
     }
 
+    IoWaitEntry(std::string k, uint64_t allocSize, uint64_t originTime) : key(k), result(BIO_OK),
+        size(allocSize), time(originTime)
+    {
+        sem_init(&sem, 0, 0);
+    }
+
     ~IoWaitEntry()
     {
         sem_destroy(&sem);
@@ -92,6 +98,7 @@ public:
 
     inline void Pop()
     {
+        auto temp = mTaskList.begin();
         mTaskList.pop_front();
     }
 
@@ -157,7 +164,7 @@ public:
         return nodeSet;
     }
 
-    BResult HangIO(const char *key, CmPtInfo *ptEntry, uint16_t nodeSet, IoWaitEntry &entry)
+    BResult HangIO(const char *key, CmPtInfo *ptEntry, uint16_t nodeSet, IoWaitEntry *entry)
     {
         // 1. 判断是否触发过载熔断.
         auto iter = mIoQueueMap.find(nodeSet);
@@ -173,7 +180,7 @@ public:
 
         // 2. 加入悬挂队列.
         BIO_TRACE_START(SDK_TRACE_QOS_HANG_IO);
-        iter->second.Push(&entry);
+        iter->second.Push(entry);
         BIO_TRACE_END(SDK_TRACE_QOS_HANG_IO, BIO_OK);
 
         // 3. 启动加载写资源配额任务
@@ -181,9 +188,9 @@ public:
         return BIO_OK;
     }
 
-    BResult AllocQuota(const char *key, CmPtInfo *ptEntry, uint64_t size)
+    BResult AllocQuota(const char *key, CmPtInfo *ptEntry, uint64_t size, uint64_t startTime)
     {
-        IoWaitEntry entry(key, size);
+        IoWaitEntry entry(key, size, startTime);
         uint16_t nodeSet = GenerateNodeSet(ptEntry);
         {
             WriteLocker<ReadWriteLock> lock(&mLock);
@@ -196,7 +203,7 @@ public:
             }
 
             CLIENT_LOG_DEBUG("Add IO hang queue, nodeSet:" << nodeSet << ", key:" << key << ", size:" << size << ".");
-            auto ret = HangIO(key, ptEntry, nodeSet, entry);
+            auto ret = HangIO(key, ptEntry, nodeSet, &entry);
             if (UNLIKELY(ret != BIO_OK)) {
                 return ret;
             }
@@ -350,7 +357,7 @@ public:
         }
 
         BResult ret = BIO_OK;
-        if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45)) {
+        if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45 && applyParam.size != 0)) {
             CLIENT_LOG_WARN("QOS apply timeout, key:" << applyParam.key << ", time:" <<
                 Monotonic::TimeSec() - applyParam.startTime);
             return BIO_QUOTA_TIMEOUT;
@@ -362,7 +369,7 @@ public:
             isAllocConcur = true;
         }
         if (LIKELY(mode & QOS_QUOTA)) {
-            ret = mQuota->AllocQuota(applyParam.key, ptEntry, applyParam.size);
+            ret = mQuota->AllocQuota(applyParam.key, ptEntry, applyParam.size, applyParam.startTime);
             if (ret != BIO_OK && isAllocConcur) {
                 mConcur->ReleaseConcur(type);
             }

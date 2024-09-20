@@ -12,18 +12,22 @@ using namespace ock::bio;
 void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
 {
     if (!isLock) {
-        WriteLocker<ReadWriteLock> lock(&mLock);
+        mLock.LockWrite();
     }
     mTaskRunFlag.find(nodeSet)->second = false;
 
     auto iter = mIoQueueMap.find(nodeSet);
     if (UNLIKELY(iter == mIoQueueMap.end())) {
+        if (!isLock) {
+            mLock.UnLock();
+        }
         return;
     }
     uint64_t currentTime = Monotonic::TimeSec();
     do {
         auto entry = iter->second.Top();
         if (LIKELY(entry != nullptr)) {
+            iter->second.Pop();
             if (UNLIKELY((currentTime - entry->time) >= NO_45)) {
                 CLIENT_LOG_WARN("IO hang time is too long, nodeSet:" << nodeSet << ", key:" << entry->key << ".");
                 BIO_TRACE_START(SDK_TRACE_QOS_WAKE_BUSY);
@@ -35,11 +39,13 @@ void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
                 entry->Wake(BIO_INNER_RETRY);
                 BIO_TRACE_END(SDK_TRACE_QOS_WAKE_RETRY, BIO_OK);
             }
-            iter->second.Pop();
         } else {
             break;
         }
     } while (true);
+    if (!isLock) {
+        mLock.UnLock();
+    }
 }
 
 void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allocQuota)
@@ -71,17 +77,17 @@ void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allo
             if (UNLIKELY((currentTime - entry->time) >= NO_45)) {
                 CLIENT_LOG_WARN("IO hang time is too long, nodeSet:" << nodeSet << ", key:" << entry->key << ".");
                 BIO_TRACE_START(SDK_TRACE_QOS_WAKE_BUSY);
+                iter2->second.Pop();
                 entry->Wake(BIO_QUOTA_NOT_ENOUGH);
                 BIO_TRACE_END(SDK_TRACE_QOS_WAKE_BUSY, BIO_OK);
-                iter2->second.Pop();
             } else if (LIKELY(iter->second >= entry->size)) {
                 iter->second -= entry->size;
                 CLIENT_LOG_DEBUG("Put go on, nodeSet:" << nodeSet << ", key:" << entry->key << ", size:" <<
                     entry->size << ", remain quota:" << iter->second << ".");
                 BIO_TRACE_START(SDK_TRACE_QOS_WAKE_OK);
+                iter2->second.Pop();
                 entry->Wake(BIO_OK);
                 BIO_TRACE_END(SDK_TRACE_QOS_WAKE_OK, BIO_OK);
-                iter2->second.Pop();
             } else {
                 CLIENT_LOG_DEBUG("IO wake execute preload task, nodeSet:" << nodeSet << ", key:" << entry->key <<
                     ", size:" << entry->size << ", remain quota:" << iter->second << ".");

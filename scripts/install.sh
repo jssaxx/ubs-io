@@ -50,10 +50,6 @@ clear_env()
   stop_boostio
   sleep 10
 
-#  if [ "$ZKCLEAN" = "true" ]; then
-#      #清理zk
-#      echo "清理zk."
-#  fi
   bio_id=$(ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}')
   for id in $bio_id
   do
@@ -126,7 +122,7 @@ cd $BIN_PATH
 ./bio_daemon
 EOF
   chmod 550 $BIN_PATH/executeBio.sh
-  chown $RUN_GROUP:$RUN_USER $BIN_PATH/executeBio.sh
+  chown $RUN_USER:$RUN_GROUP $BIN_PATH/executeBio.sh
   service_config=$SYSTEMD_SERVICE_PATH
   cat > $service_config << EOF
 [Unit]
@@ -167,6 +163,7 @@ check_user_group()
 set_permissions()
 {
   chown -R $RUN_USER:$RUN_GROUP $INSTALL_PATH
+  chown -R $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
   sudo -u $RUN_USER bash << EOF
   chmod -R 750 $INSTALL_PATH
   chmod -R 700 $INSTALL_PATH/tools
@@ -187,25 +184,13 @@ set_permissions()
   chmod 640 $CONF_PATH/bio_sdk_test.conf
 
   chmod 750 $BOOSTIO_HTRACE_LOG_PATH
-  chmod 640 /etc/ceph/ceph.client.admin.keyring
+  chmod 600 $LOG_FILE
 EOF
-  chown $RUN_USER:$RUN_GROUP  $LOG_FILE
-  su - $RUN_USER -c 'chmod 600 '$LOG_FILE''
-
+  chmod 640 /etc/ceph/ceph.client.admin.keyring
   chcon -R -t home_root_t $INSTALL_PATH > /dev/null 2>&1
   set +e
   semanage fcontext -a -t home_root_t $INSTALL_PATH > /dev/null 2>&1
   set -e
-  chown $RUN_USER:$RUN_GROUP $INSTALL_PATH
-  chown $RUN_USER:$RUN_GROUP $BIN_PATH
-  chown $RUN_USER:$RUN_GROUP $BIN_PATH/bio_daemon
-  chown $RUN_USER:$RUN_GROUP $BIN_PATH/bio_console
-  chown $RUN_USER:$RUN_GROUP $BIN_PATH/seceasy_encrypt
-  chown -R $RUN_USER:$RUN_GROUP $LIB_PATH
-  chown -R $RUN_USER:$RUN_GROUP $SCRIPTS_PATH
-  chown $RUN_USER:$RUN_GROUP $CONF_PATH
-  chown $RUN_USER:$RUN_GROUP $CONF_PATH/bio.conf
-  chown -R $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
   print_log "info" "set_permissions finish."
 }
 
