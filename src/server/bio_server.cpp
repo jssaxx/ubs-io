@@ -168,6 +168,7 @@ BResult BioServer::BioTraceInit()
 {
     const std::string dumpDir = "/var/log/boostio/trace/";
     auto ret = ock::htracer::HTracerInit(dumpDir);
+    ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");
     return ret;
 }

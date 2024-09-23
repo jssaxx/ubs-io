@@ -90,7 +90,7 @@ public:
         BResult ret = mMirror->Get(param, length);
         LVOS_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
         LVOS_TP_END;
-        if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL)) {
+        if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
             BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
             UnderFs::ObjStat stat;
             auto underFsRet = UnderFs::Instance()->Stat(param.key, stat);
