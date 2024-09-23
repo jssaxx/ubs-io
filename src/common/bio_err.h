@@ -30,6 +30,7 @@ enum Error : int32_t {
     BIO_CRC_ERR = 16,
     BIO_QUOTA_NOT_ENOUGH = 17,
     BIO_QUOTA_TIMEOUT = 18,
+    BIO_LOAD_ALLOC_FAIL = 19,
     BIO_NET_RETRY = 100,
     BIO_DISK_IOERR = 201,
     BIO_UFS_IOERR = 301,
