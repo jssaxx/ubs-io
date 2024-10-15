@@ -798,6 +798,7 @@ inline static void StatisticPutIoSize(uint64_t length)
 
 int32_t Put(PutRequest *req, PutResponse *rsp)
 {
+    BResult ret;
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
@@ -818,7 +819,11 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
         }
-        sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        ret = sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Deserialize slice failed, ret:" << ret << ".");
+            return ret;
+        }
         sliceP->SetDataCrc(req->dataCrc);
     }
 
@@ -826,7 +831,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
     uint32_t ioStrategy = 0;
-    auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
+    ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
     rsp->ioStrategy = ioStrategy;
     return ret;

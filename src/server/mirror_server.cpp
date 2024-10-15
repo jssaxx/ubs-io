@@ -1110,7 +1110,12 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
             return BIO_OK;
         }
-        sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        auto ret = sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Deserialize slice failed, ret:" << ret << ".");
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+            return BIO_OK;
+        }
         sliceP->SetDataCrc(req->dataCrc);
     }
 
