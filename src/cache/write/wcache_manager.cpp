@@ -399,6 +399,7 @@ BResult WCacheManager::Put(const Key &key, const WCacheSlicePtr &slice, const Sl
     bool isDegrade)
 {
     ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
+    ChkTrue(strlen(key) < NO_256, BIO_INVALID_PARAM, "Key length more 256.");
     ChkTrue(slice != nullptr, BIO_INVALID_PARAM, "Slice is nullptr.");
     ChkTrue(sliceReader != nullptr, BIO_INVALID_PARAM, "Slice reader is nullptr.");
     // 1. Get write cache flow instance.

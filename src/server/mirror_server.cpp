@@ -1102,6 +1102,12 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
         }
         sliceP->SetDataCrc(req->dataCrc);
     } else {
+        if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest) + req->sliceLen)) {
+            LOG_ERROR("Invalid param message data length: " << ctx.MessageDataLen() <<
+                ", param data length:" << sizeof(PutRequest) + req->sliceLen);
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+            return BIO_OK;
+        }
         LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_END;
@@ -1562,6 +1568,11 @@ int32_t MirrorServer::HandleGetEvictOffset(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req)
 {
+    if (req->num > SLICE_ADDR_SIZE) {
+        LOG_ERROR("Invalid param num: " << req->num << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
     for (uint32_t idx = 0; idx < req->num; idx++) {
         auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx]);
         BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
@@ -1752,6 +1763,11 @@ int32_t MirrorServer::HandleEvictNegotiateRequest(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req)
 {
+    if (req->count > MAX_EVICT_CONSULT_SIZE) {
+        LOG_ERROR("Invalid param count: " << req->count << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
     EvictNegotiateResponse rsp;
     std::vector<bool> result(req->count);
     auto ret = Cache::Instance().EvictNegotiate(req->flowId, req->data, result, req->count);

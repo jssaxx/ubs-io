@@ -868,6 +868,12 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_INNER_ERR;
     }
+    if (rsp->addrNum > SLICE_ADDR_MAX_SIZE) {
+        CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+        return BIO_INNER_ERR;
+    }
     spaceInfo.addressNum = rsp->addrNum;
     for (uint32_t idx = 0; idx < spaceInfo.addressNum; idx++) {
         if (mMode == CONVERGENCE) {
