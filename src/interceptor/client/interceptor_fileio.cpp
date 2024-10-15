@@ -51,7 +51,11 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
             request.nbytes << ".");
         return -1;
     }
-
+    if (rspLen < sizeof(InterceptorPreadOut) + resp->dataLen) {
+        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " <<
+            sizeof(InterceptorPreadOut) << " and datalen: " << resp->dataLen << ".");
+        return -1;
+    }
     CLOG_DEBUG("Read inode:" << request.inode << ", offset:" << request.offset << ", length:" << request.nbytes <<
         "rsp len:" << resp->dataLen << ".");
 
@@ -256,7 +260,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     InterceptorAllocPageRsp resp;
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorAllocPageReq, InterceptorAllocPageRsp>(
         INVALID_NID, BIO_OP_INTERCEPTOR_ALLOC_BUFF, req, resp);
-    if (UNLIKELY(ret != 0)) {
+    if (UNLIKELY(ret != 0 || resp.address.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
         CLOG_ERROR("Send large write io request failed:" << ret << ".");
         return -1;
     }

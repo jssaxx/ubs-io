@@ -783,9 +783,6 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         auto ret = DeleteFromIndex(chunk->GetKey(), chunk);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_DEBUG("Get read cache key:" << chunk->GetKey() << " not exist.");
-            chunk->lock.unlock();
-            BIO_TRACE_END(RCACHE_TRACE_EVICT2NULL, 0);
-            continue;
         }
 
         DelFromTruncateList(READ_CACHE_TIER_DISK, chunk);
