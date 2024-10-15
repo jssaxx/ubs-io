@@ -828,15 +828,6 @@ bool WCache::EvictDiskSatisfiedCond()
     auto config = BioConfig::Instance()->GetDaemonConfig();
     uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
 
-    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
-    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
-    uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
-    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
-    if ((rcacheMemUsed >= rcacheMemCap && rcacheMemCap != 0) ||
-        (rcacheDiskUsed >= rcacheDiskCap && rcacheDiskCap != 0)) {
-        return false;
-    }
-
     uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
     uint64_t wcacheDiskWaterSize = wcacheDiskCap * config.wcacheDiskEvictLevel / NO_100;
     uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);

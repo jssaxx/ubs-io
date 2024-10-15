@@ -263,7 +263,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     }
 
     if (UNLIKELY(!KeyValid(key) || context == nullptr || offset != 0 || length == 0 ||
-        (offset + length) > BIO_IO_MAX_LEN)) {
+        offset > BIO_IO_MAX_LEN || length > BIO_IO_MAX_LEN || (offset + length) > BIO_IO_MAX_LEN)) {
         CLIENT_LOG_ERROR("Invalid load parameter, key:" << key << ".");
         return RET_CACHE_EPERM;
     }
@@ -297,8 +297,9 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(prefix == nullptr)) {
-        CLIENT_LOG_ERROR("Invalid list parameter, prefix:" << prefix << ".");
+    if (UNLIKELY(prefix == nullptr || strlen(prefix) >= KEY_MAX_SIZE)) {
+        CLIENT_LOG_ERROR("Invalid list parameter, prefix is null or length prefix: " <<
+            strlen(prefix) << " is invalid");
         return RET_CACHE_EPERM;
     }
 
