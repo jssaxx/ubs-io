@@ -639,7 +639,12 @@ using namespace ock::bio;
 
 int32_t BioServerInit()
 {
-    return BioServer::Instance()->Start();
+    auto bioServer = BioServer::Instance();
+    if (UNLIKELY(bioServer == nullptr)) {
+        LOG_ERROR("Make bio server instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    return bioServer->Start();
 }
 
 void BioServerExit()

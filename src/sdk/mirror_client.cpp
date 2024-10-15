@@ -1099,7 +1099,12 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         return BIO_ALLOC_FAIL;
     }
 
-    auto tmp = new uint8_t[sizeof(PutRequest)];
+    auto tmp = new (std::nothrow) uint8_t[sizeof(PutRequest)];
+    if (tmp == nullptr) {
+        CLIENT_LOG_ERROR("Alloc memory failed.");
+        net::BioClientNet::Instance()->Free(mr.address);
+        return BIO_ALLOC_FAIL;
+    }
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
     req->memFromServer = false;

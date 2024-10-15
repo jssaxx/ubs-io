@@ -164,7 +164,12 @@ BResult RCache::Initialize()
         prefix.push_back(flowPrefix);
     }
 
-    FlowIdAllocator::Instance()->GenerateFlowIds(prefix, flowIds);
+    auto flowIdAllocator = FlowIdAllocator::Instance();
+    if (UNLIKELY(flowIdAllocator == nullptr)) {
+        LOG_ERROR("Make flow id allocator instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    flowIdAllocator->GenerateFlowIds(prefix, flowIds);
     if (UNLIKELY(flowIds.empty())) {
         LOG_ERROR("Generate ptId " << mPtId << " flow ids failed.");
         return BIO_ERR;

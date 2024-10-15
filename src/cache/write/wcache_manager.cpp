@@ -180,6 +180,10 @@ BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flo
 {
     BIO_TRACE_START(WCACHE_TRACE_ALLOC_ID);
     auto flowIdAllocator = FlowIdAllocator::Instance();
+    if (UNLIKELY(flowIdAllocator == nullptr)) {
+        LOG_ERROR("Make flow id allocator instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
     uint64_t flowPrefix = CacheFlowIdManager::GenerateCacheFlowIdPrefix(ptId, ptv, WRITE_CACHE, 0);
     flowId = flowIdAllocator->GenerateFlowId(flowPrefix);
     BIO_TRACE_END(WCACHE_TRACE_ALLOC_ID, 0);

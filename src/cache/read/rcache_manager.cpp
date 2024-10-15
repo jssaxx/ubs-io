@@ -24,6 +24,10 @@ BResult RCacheManager::Init()
 {
     LVOS_TP_START(NO_PROCESS_RCACHE_EVICT, 0);
     rCacheEvict = MakeRef<RCacheEvict>();
+    if (UNLIKELY(rCacheEvict == nullptr)) {
+        LOG_ERROR("Failed to make rcache evict.");
+        return BIO_ALLOC_FAIL;
+    }
     LVOS_TP_END;
 
     BResult ret = BIO_OK;
@@ -35,6 +39,10 @@ BResult RCacheManager::Init()
     }
 
     rCacheGCPtr = MakeRef<RCacheGC>();
+    if (UNLIKELY(rCacheGCPtr == nullptr)) {
+        LOG_ERROR("Failed to make rcache gc.");
+        return BIO_ALLOC_FAIL;
+    }
     LVOS_TP_END;
 
     ret = rCacheGCPtr->Initialize();
