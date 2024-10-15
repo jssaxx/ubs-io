@@ -169,9 +169,8 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     // 计算本次写的总数据大小
     uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
     CLIENT_LOG_TRACE("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
-        ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0:" <<
-        spaceInfo.address[0].address << ", addr0 size:" << spaceInfo.address[0].size << ", addr1:" <<
-        spaceInfo.address[1].address << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
+        ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0 size:" <<
+        spaceInfo.address[0].size << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
 
     uint64_t startTime = Monotonic::TimeSec();
     StatisticPutIoSize(length);
