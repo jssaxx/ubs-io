@@ -278,7 +278,7 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 BResult BioConfig::Initialize(const std::string &homePath)
 {
     std::string configurePath = homePath + "/conf/bio.conf";
-    LOG_INFO("start to read config file : " << configurePath);
+    LOG_INFO("Start to read config file.");
 
     if (mInited) {
         return BIO_OK;
@@ -286,12 +286,12 @@ BResult BioConfig::Initialize(const std::string &homePath)
 
     ConfigurationPtr conf = Configuration::GetInstance<BioConfig>();
     if (conf.Get() == nullptr) {
-        LOG_INFO("create config object failed");
+        LOG_INFO("Create config object failed.");
         return BIO_ERR;
     }
 
     if (!conf->ReadConf<BioConfig>(configurePath)) {
-        LOG_ERROR("read config file " << configurePath << " failed");
+        LOG_ERROR("Read config file failed.");
         return BIO_ERR;
     }
 

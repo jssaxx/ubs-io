@@ -128,7 +128,7 @@ BResult BioClientNet::CheckShmFd()
     struct stat buffer {};
     auto ret = fstat(mShmFd, &buffer);
     if (ret < 0) {
-        CLIENT_LOG_ERROR("Read file fd " << mShmFd << " failed, ret:" << strerror(errno) << ".");
+        CLIENT_LOG_ERROR("Read file failed, ret:" << strerror(errno) << ".");
         return BIO_ERR;
     }
     if (mShmOffset + mShmLength > static_cast<uint64_t>(buffer.st_size)) {
@@ -209,8 +209,7 @@ BResult BioClientNet::ShmInit()
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
-    CLIENT_LOG_INFO("Bio client shm init success. offset:" << mShmOffset << ", length:" << mShmLength << ", fd:" <<
-        mShmFd << ".");
+    CLIENT_LOG_INFO("Bio client shm init success. offset:" << mShmOffset << ", length:" << mShmLength << ".");
     return BIO_OK;
 }
 
