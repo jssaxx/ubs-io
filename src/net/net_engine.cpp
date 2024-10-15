@@ -262,7 +262,7 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
     } else {
         NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize << ", shmOffset:" <<
-            mShareOffset << ", shmFd:" << mShmFd  << ", key:" << mLocalMr->GetLKey() << ".");
+            mShareOffset << ", key:" << mLocalMr->GetLKey() << ".");
     }
     return result;
 }
@@ -307,7 +307,7 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
 {
     driver->RegisterTLSCertificationCallback([&options](const std::string &name, std::string &path) {
         path = options.certificationPath;
-        NET_LOG_INFO("get client cert success.");
+        NET_LOG_INFO("Get client cert success.");
         return true;
     });
 
@@ -316,9 +316,9 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
         capath = options.caCerPath;
         if (!options.caCrlPath.empty()) {
             crlPath = options.caCrlPath;
-            NET_LOG_INFO("get cacrl cert path success, crlpath : " << crlPath << ".");
+            NET_LOG_INFO("Get cacrl cert path success.");
         }
-        NET_LOG_INFO("get CA cert success.");
+        NET_LOG_INFO("Get CA cert success.");
         verifyPeerCert = PeerCertVerifyType::VERIFY_BY_DEFAULT;
         cb = [](void *, const char *) { return 0; };
         return true;
@@ -334,7 +334,7 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
             path = options.privateKeyPath;
             pwd = passwordData.first;
             len = passwordData.second;
-            NET_LOG_INFO("get privateKey path success.");
+            NET_LOG_INFO("Get privateKey path success.");
             erase = [](void *pass, int len) {
                 auto data = std::make_pair(static_cast<char *>(pass), len);
                 BioCryptorHelper::EraseDecryptData(data);

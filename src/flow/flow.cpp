@@ -216,10 +216,10 @@ BResult Flow::HoldWait(uint64_t needOffset)
 BResult Flow::RecoverChunk(uint64_t offset, uint64_t chunkId)
 {
     if (mRecoverList.find(offset) != mRecoverList.end()) {
-        LOG_ERROR("Repeat confict, flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
+        LOG_ERROR("Repeat confict, flowId:" << mFlowId << ", flowOffset:" << offset << ".");
         return BIO_ERR;
     }
-    LOG_TRACE("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ", chunkId:" << chunkId);
+    LOG_TRACE("Recover chunk: flowId:" << mFlowId << ", flowOffset:" << offset << ".");
     mRecoverList[offset] = chunkId;
     return BIO_OK;
 }
