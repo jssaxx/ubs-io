@@ -575,6 +575,10 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     MrInfo mrInfo = { req.address, static_cast<uint32_t>(req.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr sliceP = MakeRef<RCacheSlice>(req.ptId, req.length, addrVec);
+    if (UNLIKELY(sliceP == nullptr)) {
+        LOG_ERROR("Make rcache slice failed.");
+        return BIO_ALLOC_FAIL;
+    }
 
     LOG_DEBUG("Mirror server get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
         ", length:" << req.length << ", mr address:" << req.address << ", mr size:" << req.size << ", mr key:" <<

@@ -459,7 +459,12 @@ void BioService::DestroyCache(uint64_t tenantId)
 
 CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf)
 {
-    return ToCResult(BioClient::Instance()->Start(mode, optConf));
+    auto bioClient = BioClient::Instance();
+    if (UNLIKELY(bioClient == nullptr)) {
+        CLIENT_LOG_ERROR("Make bio client instance failed.");
+        return RET_CACHE_ERROR;
+    }
+    return ToCResult(bioClient->Start(mode, optConf));
 }
 
 void BioService::Exit()
@@ -646,6 +651,11 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
 
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum)
 {
+    if (objs == nullptr) {
+        CLIENT_LOG_ERROR("Invalid input parameter, objs is nullptr.");
+        return RET_CACHE_EPERM;
+    }
+
     if (UNLIKELY(objNum == nullptr)) {
         return RET_CACHE_EPERM;
     }
@@ -763,16 +773,28 @@ WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
 
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
+    if (g_readHook == nullptr) {
+        CLIENT_LOG_ERROR("g_readHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
     return g_readHook(inode, buff, count, offset, readLen);
 }
 
 int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
+    if (g_writeHook == nullptr) {
+        CLIENT_LOG_ERROR("g_writeHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
     return g_writeHook(inode, buff, count, offset, fh);
 }
 
 int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space)
 {
+    if (g_writeCopyFreeHook == nullptr) {
+        CLIENT_LOG_ERROR("g_writeCopyFreeHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
     return g_writeCopyFreeHook(inode, offset, count, space);
 }
 
@@ -793,6 +815,11 @@ void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh)
 
 CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
 {
+    if (UNLIKELY(detailLoc == nullptr)) {
+        CLIENT_LOG_ERROR("Invalid input parameter, detailLoc is nullptr.");
+        return RET_CACHE_EPERM;
+    }
+
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
