@@ -263,8 +263,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     char *copyBuff = static_cast<char *>(const_cast<void *>(buf));
     CLOG_DEBUG("Alloc write large space:" << count << ", location0:" << resp.address.loc.location[0] <<
-        ", location1:" << resp.address.loc.location[1] << ", address0:" << resp.address.address[0].address <<
-        ", address0 size:" << resp.address.address[0].size << ", address1:" << resp.address.address[1].address <<
+        ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<
         ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
         void *dataBuff = InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i]);
