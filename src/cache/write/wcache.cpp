@@ -773,7 +773,9 @@ void WCache::EvictNegotiate()
     LVOS_TP_START(EVICT_NEGOTIATE_GET_MASTERNODE, &ret, BIO_INNER_RETRY);
     ret = GetPtMasterNode(masterNid);
     LVOS_TP_END;
-    if (UNLIKELY(ret != BIO_OK)) {
+
+    if (UNLIKELY(ret != BIO_OK || indexVec.size() > UINT32_MAX)) {
+        LOG_ERROR("ret: " << ret << ". Or indexVec too big, indexVec size: " << indexVec.size());
         mIsStartEvictNegotiate.store(false);
         return;
     }
@@ -781,6 +783,7 @@ void WCache::EvictNegotiate()
     for (uint32_t idx = 0; idx < req.count; idx++) {
         req.data[idx] = indexVec[idx];
     }
+
     EvictNegotiateResponse resp;
     auto rpcEngine = BioServer::Instance()->GetNetEngine();
     BIO_TRACE_START(WCACHE_TRACE_GET_NEGOTIATE)
