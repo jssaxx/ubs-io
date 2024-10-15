@@ -28,7 +28,10 @@ namespace bio {
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
-        Logger::gInstance->Log(level, msg);
+        int32_t ret = Logger::gInstance->Log(level, msg);
+        if (ret < 0) {
+            LOG_ERROR("Logger inner error!!!");
+        }
     }
 }
 
