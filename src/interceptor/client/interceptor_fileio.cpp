@@ -137,7 +137,7 @@ ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
         return -1;
     }
 
-    uint8_t *buf = new uint8_t[bufVec.size];
+    uint8_t *buf = new (std::nothrow) uint8_t[bufVec.size];
     if (UNLIKELY(buf == nullptr)) {
         return -1;
     }
@@ -168,7 +168,7 @@ ssize_t ProxyOperations::preadv64(int fd, const struct iovec *vector, int iovcnt
         return -1;
     }
 
-    uint8_t *buf = new uint8_t[bufVec.size];
+    uint8_t *buf = new (std::nothrow) uint8_t[bufVec.size];
     if (UNLIKELY(buf == nullptr)) {
         return -1;
     }

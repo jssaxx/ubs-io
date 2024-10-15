@@ -243,7 +243,7 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     auto ret = memCache->Write(key, srcSlice, sliceReader, destSliceRef);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
-    auto *value = new char[srcSlice->GetLength()];
+    auto *value = new (std::nothrow) char[srcSlice->GetLength()];
     ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
     ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value);
