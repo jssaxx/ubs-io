@@ -242,6 +242,10 @@ BResult FlowManager::RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t f
     }
 
     auto idAllocator = FlowIdAllocator::Instance();
+    if (UNLIKELY(idAllocator == nullptr)) {
+        LOG_ERROR("Make flow id allocator instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
     idAllocator->SyncFlowId(flowId);
 
     return BIO_OK;

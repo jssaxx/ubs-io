@@ -535,6 +535,11 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
 
 int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload)
 {
+    if (newChannel == nullptr) {
+        NET_LOG_ERROR("Invalid input parameter, newChannel is nullptr.");
+        return BIO_ERR;
+    }
+
     NewChannelResp resp;
     if (mHandleNewChannel != nullptr) {
         mHandleNewChannel(newChannel, ipPort, resp);
@@ -577,6 +582,11 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
 
 void NetEngine::ChannelBroken(const ChannelPtr &ch)
 {
+    if (ch == nullptr) {
+        NET_LOG_ERROR("Invalid input parameter, ch is nullptr.");
+        return;
+    }
+
     NetChannelUpCtx ctx(ch->UpCtx());
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
     NET_LOG_WARN("Receive broken channel " << ch->Id() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid <<
