@@ -28,7 +28,10 @@ namespace bio {
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
-        Logger::gInstance->Log(level, msg);
+        int32_t ret = Logger::gInstance->Log(level, msg);
+        if (ret < 0) {
+            LOG_ERROR("Logger inner error!!!");
+        }
     }
 }
 
@@ -639,7 +642,12 @@ using namespace ock::bio;
 
 int32_t BioServerInit()
 {
-    return BioServer::Instance()->Start();
+    auto bioServer = BioServer::Instance();
+    if (UNLIKELY(bioServer == nullptr)) {
+        LOG_ERROR("Make bio server instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    return bioServer->Start();
 }
 
 void BioServerExit()
@@ -793,6 +801,7 @@ inline static void StatisticPutIoSize(uint64_t length)
 
 int32_t Put(PutRequest *req, PutResponse *rsp)
 {
+    BResult ret;
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
@@ -813,7 +822,11 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
         }
-        sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        ret = sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Deserialize slice failed, ret:" << ret << ".");
+            return ret;
+        }
         sliceP->SetDataCrc(req->dataCrc);
     }
 
@@ -821,7 +834,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
     uint32_t ioStrategy = 0;
-    auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
+    ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
     rsp->ioStrategy = ioStrategy;
     return ret;

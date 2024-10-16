@@ -80,7 +80,7 @@ void Cache::Exit()
     mRCacheManager->Exit();
 }
 
-BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
+BResult Cache::CreateWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
     uint16_t diskId;
     BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
@@ -90,7 +90,7 @@ BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64
     }
 
     bool isPtDegrade = false;
-    ret = mCheckDegrade(static_cast<uint16_t>(ptId), isPtDegrade);
+    ret = mCheckDegrade(ptId, isPtDegrade);
     if (ret != BIO_OK) {
         LOG_ERROR("Check pt degrade failed:" << ret << ", ptId:" << ptId << ".");
         return ret;
@@ -109,7 +109,7 @@ BResult Cache::CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64
     return BIO_OK;
 }
 
-BResult Cache::DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId)
+BResult Cache::DestroyWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
 {
     BResult ret = BIO_INNER_ERR;
     BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
@@ -120,10 +120,10 @@ BResult Cache::DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint6
     return ret;
 }
 
-BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv)
+BResult Cache::CreateRCache(uint16_t ptId, uint64_t ptv)
 {
     uint16_t diskId;
-    BResult ret = mGetLocDiskId(static_cast<uint16_t>(ptId), diskId);
+    BResult ret = mGetLocDiskId(ptId, diskId);
     if (ret != BIO_OK) {
         LOG_ERROR("Get loc disk fail:" << ret << ", ptId:" << ptId);
         return BIO_CHECK_PT_FAIL;
@@ -137,7 +137,7 @@ BResult Cache::CreateRCache(uint64_t ptId, uint64_t ptv)
     return BIO_OK;
 }
 
-BResult Cache::DestroyRCache(uint64_t ptId)
+BResult Cache::DestroyRCache(uint16_t ptId)
 {
     return mRCacheManager->DeleteRCache(ptId);
 }
@@ -157,7 +157,7 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     // 1. 获取PT视图状态和服务状态, 综合得到本次Put的IO是否需要降级处理.
     bool isDegrade = mCheckService();
     bool isPtDegrade = false;
-    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
+    uint16_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     auto ret = mCheckDegrade(static_cast<uint16_t>(ptId), isPtDegrade);
     if (ret != BIO_OK) {
         LOG_ERROR("Check degrade failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
@@ -223,12 +223,12 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     return ret;
 }
 
-BResult Cache::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
+BResult Cache::Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     return mRCacheManager->Load(ptId, key, 0, BIO_IO_MAX_LEN, realLen);
 }
 
-BResult Cache::Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat)
+BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 {
     BIO_TRACE_START(WCACHE_TRACE_STAT);
     auto ret = mWCacheManager->Stat(ptId, key, cacheObjStat);
@@ -282,7 +282,7 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
     return BIO_OK;
 }
 
-BResult Cache::Delete(uint64_t ptId, const Key &key)
+BResult Cache::Delete(uint16_t ptId, const Key &key)
 {
     BIO_TRACE_START(WCACHE_TRACE_DEL);
     BResult ret = mWCacheManager->Delete(ptId, key);
@@ -365,7 +365,7 @@ BResult Cache::HandleProcBroken(uint32_t procId)
     return mWCacheManager->HandleProcBroken(procId);
 }
 
-BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
+BResult Cache::Flush(uint16_t ptId, uint64_t ptv)
 {
     BIO_TRACE_START(WCACHE_TRACE_FLUSH);
     auto ret = mWCacheManager->Flush(ptId, ptv);
@@ -376,7 +376,7 @@ BResult Cache::Flush(uint64_t ptId, uint64_t ptv)
     return ret;
 }
 
-BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
+BResult Cache::ExpiredClear(uint16_t ptId, uint64_t ptv)
 {
     BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
     BResult ret = mRCacheManager->ExpiredClear(ptId, ptv);
@@ -395,7 +395,7 @@ BResult Cache::ExpiredClear(uint64_t ptId, uint64_t ptv)
     return ret;
 }
 
-BResult Cache::ExtraCreateRCache(uint64_t ptId, uint64_t ptv)
+BResult Cache::ExtraCreateRCache(uint16_t ptId, uint64_t ptv)
 {
     return CreateRCache(ptId, ptv);
 }

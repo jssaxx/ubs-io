@@ -160,7 +160,7 @@ std::string Slice::ToString()
     ss << "type:" << mFlowType << ",length:" << mLength;
     ss << ",addr:";
     for (const auto &addr : mAddrs) {
-        ss << "(" << addr.chunkId << "," << addr.chunkOffset << "," << addr.chunkLen << ")";
+        ss << "(" << addr.chunkOffset << "," << addr.chunkLen << ")";
     }
     return ss.str();
 }
@@ -188,7 +188,7 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
                 fromAddr.chunkLen);
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
-                    " to memory chunkId:" << value + offset << " by length:" << fromAddr.chunkLen);
+                    " to memory by length:" << fromAddr.chunkLen << ".");
                 free(value);
                 value = nullptr;
                 return BIO_DISK_IOERR;

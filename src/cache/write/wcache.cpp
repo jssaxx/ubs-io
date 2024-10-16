@@ -243,7 +243,7 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     auto ret = memCache->Write(key, srcSlice, sliceReader, destSliceRef);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_ERR);
 
-    auto *value = new char[srcSlice->GetLength()];
+    auto *value = new (std::nothrow) char[srcSlice->GetLength()];
     ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
     ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value);
@@ -674,7 +674,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
             return;
         }
         if (sliceRef->GetState() == SLICE_VALID) {
-            uint64_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
+            uint16_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
             mEvictCallback(ptId, sliceMeta->key, sliceRef);
         }
         DecreaseRef();
@@ -724,7 +724,7 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
     }
 
     // malloc memory from read cache, and copy slice to this slice.
-    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
+    uint16_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     WCacheSlicePtr writeSlice = nullptr;
     mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
     auto ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());
@@ -773,7 +773,9 @@ void WCache::EvictNegotiate()
     LVOS_TP_START(EVICT_NEGOTIATE_GET_MASTERNODE, &ret, BIO_INNER_RETRY);
     ret = GetPtMasterNode(masterNid);
     LVOS_TP_END;
-    if (UNLIKELY(ret != BIO_OK)) {
+
+    if (UNLIKELY(ret != BIO_OK || indexVec.size() > UINT32_MAX)) {
+        LOG_ERROR("ret: " << ret << ". Or indexVec too big, indexVec size: " << indexVec.size());
         mIsStartEvictNegotiate.store(false);
         return;
     }
@@ -781,6 +783,7 @@ void WCache::EvictNegotiate()
     for (uint32_t idx = 0; idx < req.count; idx++) {
         req.data[idx] = indexVec[idx];
     }
+
     EvictNegotiateResponse resp;
     auto rpcEngine = BioServer::Instance()->GetNetEngine();
     BIO_TRACE_START(WCACHE_TRACE_GET_NEGOTIATE)
@@ -824,15 +827,6 @@ bool WCache::EvictDiskSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
     uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
-
-    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
-    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
-    uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
-    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, mDiskId);
-    if ((rcacheMemUsed >= rcacheMemCap && rcacheMemCap != 0) ||
-        (rcacheDiskUsed >= rcacheDiskCap && rcacheDiskCap != 0)) {
-        return false;
-    }
 
     uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
     uint64_t wcacheDiskWaterSize = wcacheDiskCap * config.wcacheDiskEvictLevel / NO_100;

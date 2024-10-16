@@ -219,7 +219,7 @@ TEST_F(TestRCache, test_cache_create_rcache_err)
 {
     LOG_INFO("test_cache_create_rcache_err");
     // case1: test destroy invalid rcache
-    uint64_t ptId = NO_2;
+    uint16_t ptId = NO_2;
     auto ret = Cache::Instance().DestroyRCache(ptId);
     EXPECT_EQ(ret, BIO_OK);
 

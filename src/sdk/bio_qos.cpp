@@ -227,7 +227,7 @@ BResult BioQos::Initialize(uint32_t nodeId, WorkerMode mode, uint32_t scene)
     }
 
     mConcur = BioConcurrency::Instance();
-    if (UNLIKELY(mQuota == nullptr)) {
+    if (UNLIKELY(mConcur == nullptr)) {
         CLIENT_LOG_ERROR("Bio concurrency instance failed.");
         return BIO_INNER_ERR;
     }
