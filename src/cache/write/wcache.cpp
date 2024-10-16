@@ -674,7 +674,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
             return;
         }
         if (sliceRef->GetState() == SLICE_VALID) {
-            uint64_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
+            uint16_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
             mEvictCallback(ptId, sliceMeta->key, sliceRef);
         }
         DecreaseRef();
@@ -724,7 +724,7 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
     }
 
     // malloc memory from read cache, and copy slice to this slice.
-    uint64_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
+    uint16_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     WCacheSlicePtr writeSlice = nullptr;
     mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
     auto ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());

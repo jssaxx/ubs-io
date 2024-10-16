@@ -24,11 +24,11 @@ class WCache;
 using WCachePtr = Ref<WCache>;
 class WCache {
 public:
-    WCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
+    WCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
         : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
     {}
 
-    using EvictCallback = std::function<BResult(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
+    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
 
     BResult Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
@@ -96,7 +96,7 @@ public:
         return mFlowId;
     }
 
-    inline uint64_t GetPtId() const
+    inline uint16_t GetPtId() const
     {
         return mPtId;
     }
@@ -121,7 +121,7 @@ public:
         return mCacheTiers[WCACHE_MEMORY]->GetEvictMapPtr();
     }
 
-    using RecoverCallback = std::function<BResult(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
+    using RecoverCallback = std::function<BResult(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 
     void Flush();
@@ -175,7 +175,7 @@ private:
 private:
     uint64_t mProcId;
     uint64_t mFlowId;
-    uint64_t mPtId;
+    uint16_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
     uint16_t mCopyNum{ 0 };

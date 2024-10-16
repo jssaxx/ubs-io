@@ -71,7 +71,7 @@ void RCacheManager::Exit()
     rCacheGCPtr->Destroy();
 }
 
-const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint64_t ptId)
+const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
 {
     cacheLock.LockRead();
     auto iter = cache.find(ptId);
@@ -85,7 +85,7 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint64_t ptId)
     return cachePtr;
 }
 
-BResult RCacheManager::AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePtr &slice)
+BResult RCacheManager::AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice)
 {
     BIO_TRACE_START(RCACHE_TRACE_PUT_GET_SLICE);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
@@ -98,7 +98,7 @@ BResult RCacheManager::AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePt
     return ret;
 }
 
-BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &slice)
+BResult RCacheManager::Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &slice)
 {
     BIO_TRACE_START(RCACHE_TRACE_PUT);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
@@ -111,7 +111,7 @@ BResult RCacheManager::Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &
     return ret;
 };
 
-BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+BResult RCacheManager::Get(uint16_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
@@ -119,7 +119,7 @@ BResult RCacheManager::Get(uint64_t ptId, const Key &key, uint64_t offset, const
     return cachePtr->Get(key, offset, slice, sliceWriter, realLen);
 }
 
-BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
+BResult RCacheManager::Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     BIO_TRACE_START(RCACHE_TRACE_LOAD);
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
@@ -129,7 +129,7 @@ BResult RCacheManager::Load(uint64_t ptId, const Key &key, uint64_t offset, uint
     return ret;
 }
 
-BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
+BResult RCacheManager::Delete(uint16_t ptId, const Key &key)
 {
     RCachePtr cachePtr = nullptr;
     LVOS_TP_START(RCACHE_MANAGER_DELETE_ERR, &cachePtr, nullptr);
@@ -139,7 +139,7 @@ BResult RCacheManager::Delete(uint64_t ptId, const Key &key)
     return cachePtr->Delete(key);
 }
 
-BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId)
+BResult RCacheManager::CreateRCache(uint16_t ptId, uint64_t ptv, uint16_t diskId)
 {
     cacheLock.LockWrite();
     LVOS_TP_START(NO_PROCESS_RCACHE_FIND, 0);
@@ -193,7 +193,7 @@ BResult RCacheManager::CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId
     return BIO_OK;
 }
 
-BResult RCacheManager::DeleteRCache(uint64_t ptId)
+BResult RCacheManager::DeleteRCache(uint16_t ptId)
 {
     cacheLock.LockWrite();
     auto iter = cache.find(ptId);
@@ -222,7 +222,7 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
     return BIO_OK;
 }
 
-BResult RCacheManager::ExpiredClear(uint64_t ptId, uint64_t ptv)
+BResult RCacheManager::ExpiredClear(uint16_t ptId, uint64_t ptv)
 {
     LOG_INFO("RCache expired clear, ptId:" << ptId << ", ptv:" << ptv << ".");
     RCachePtr rCache = GetRCacheInstanceByPtId(ptId);
