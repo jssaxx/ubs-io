@@ -36,13 +36,13 @@ public:
 
 class RCacheSlice : public Slice {
 public:
-    RCacheSlice(uint64_t ptId, uint64_t length, std::vector<FlowAddr> &addrs, FlowType flowType = FLOW_MEMORY)
+    RCacheSlice(uint16_t ptId, uint64_t length, std::vector<FlowAddr> &addrs, FlowType flowType = FLOW_MEMORY)
         : Slice(length, addrs, flowType), mPtId(ptId)
     {}
 
     ~RCacheSlice() override = default;
 
-    uint64_t GetPtId() const
+    uint16_t GetPtId() const
     {
         return mPtId;
     }
@@ -93,7 +93,7 @@ public:
     }
 
 private:
-    uint64_t mPtId;
+    uint16_t mPtId;
 };
 using RCacheSlicePtr = Ref<RCacheSlice>;
 using RCacheSliceRef = SliceRef<RCacheSlice>;

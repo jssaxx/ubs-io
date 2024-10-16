@@ -261,8 +261,21 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
             nodeView.clear();
             return ret;
         }
+
+        if (rsp.num > CLUSTER_NODE_SIZE) {
+            CLIENT_LOG_ERROR("rsp num: " << rsp.num << " is invalid.");
+            nodeView.clear();
+            return BIO_INVALID_PARAM;
+        }
+
         for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmDiskInfo> disks;
+            if (rsp.desc[i].num > DISK_MAX_SIZE) {
+                CLIENT_LOG_ERROR("rsp nodeid(" << rsp.desc[i].nodeId << ") num: " <<
+                    rsp.desc[i].num << " is invalid.");
+                nodeView.clear();
+                return BIO_INVALID_PARAM;
+            }
             for (uint32_t j = 0; j < rsp.desc[i].num; j++) {
                 disks.push_back(
                     { rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus) });
@@ -297,6 +310,11 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         if (ret != BIO_OK) {
             ptView.clear();
             return ret;
+        }
+        if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
+            CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
+            ptView.clear();
+            return BIO_INVALID_PARAM;
         }
         for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmPtCopy> copys;
@@ -408,8 +426,15 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
                             index,
                             length };
     uint64_t rspLen = 0;
-    return net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID, BIO_OP_SDK_GET_SLICE,
-        req, rsp, rspLen);
+    auto ret = net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
+        BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
+    if (ret != BIO_OK) {
+        return ret;
+    } else if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
+        return BIO_INVALID_PARAM;
+    }
+
+    return BIO_OK;
 }
 
 BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
@@ -458,11 +483,13 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
     } else {
         realLen = rsp.realLen;
         if (realLen > req.length) {
-            CLIENT_LOG_ERROR("Real read length greater than value size, realLen:" << realLen << ", size:" << req.size);
             return BIO_INNER_ERR;
         }
         uint64_t off = 0;
         uint64_t cpyLength = req.length;
+        if (rsp.num > SLICE_ADDR_SIZE) {
+            return BIO_INNER_ERR;
+        }
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
             ret = memcpy_s(static_cast<void *>(value + off), cpyLength,
@@ -586,6 +613,9 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
                 break;
             }
             ObjStat stat;
+            if (strlen(statInfo[i].key) >= MAX_KEY_SIZE) {
+                continue;
+            }
             CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
             stat.size = statInfo[i].size;
             stat.time = statInfo[i].time;
