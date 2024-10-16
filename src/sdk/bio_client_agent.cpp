@@ -20,8 +20,21 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
 {
     mMode = mode;
     if (mMode == CONVERGENCE) {
+#ifdef DEBUG_UT
         const char *soFileName = "libbio_server.so";
         handler = dlopen(soFileName, RTLD_NOW);
+#else
+        std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libbio_server.so";
+        char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+        if (canonicalPath == nullptr) {
+            CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+            return BIO_NOT_EXISTS;
+        }
+
+        handler = dlopen(canonicalPath, RTLD_NOW);
+        free(canonicalPath);
+        canonicalPath = nullptr;
+#endif
         if (handler == nullptr) {
             CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
             return BIO_INNER_ERR;
