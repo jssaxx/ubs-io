@@ -271,7 +271,7 @@ public:
         return mPtView;
     }
 
-    inline CmPtInfo GetPtEntry(uint64_t ptId)
+    inline CmPtInfo GetPtEntry(uint16_t ptId)
     {
         std::lock_guard<std::mutex> lock(mPtViewMutex);
         if (mPtView.find(ptId) == mPtView.end()) {

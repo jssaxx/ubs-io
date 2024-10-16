@@ -47,10 +47,10 @@ public:
 
     BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
-    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv,
+    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv,
         uint16_t diskId, bool isDegrade, bool isRecover = false);
 
-    BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint64_t ptId, uint64_t ptv);
+    BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv);
 
     BResult DeleteWCache(uint64_t flowId);
 
@@ -68,11 +68,11 @@ public:
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
         uint64_t &realLen);
 
-    BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
+    BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
     BResult List(char *prefix, uint16_t ptId, std::unordered_map<std::string, CacheObjStat> &objs);
 
-    BResult Delete(uint64_t ptId, const Key &key);
+    BResult Delete(uint16_t ptId, const Key &key);
 
     void RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus);
 
@@ -82,9 +82,9 @@ public:
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
-    BResult Flush(uint64_t ptId, uint64_t ptv);
+    BResult Flush(uint16_t ptId, uint64_t ptv);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
+    BResult ExpiredClear(uint16_t ptId, uint64_t ptv);
 
     BResult HandleProcBroken(uint64_t procId);
 
@@ -102,8 +102,8 @@ private:
     WCachePtr GetWCache(uint64_t flowId);
     BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
         const SliceWriter &sliceWriter, uint64_t &realLen);
-    BResult FlushImpl(uint64_t ptId, uint64_t ptv);
-    BResult ExpiredClearImpl(uint64_t ptId, uint64_t ptv);
+    BResult FlushImpl(uint16_t ptId, uint64_t ptv);
+    BResult ExpiredClearImpl(uint16_t ptId, uint64_t ptv);
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
     BResult HandleCacheBrokenImpl(WCachePtr wcache);
     BResult HandleProcBrokenImpl(uint64_t procId);
@@ -111,10 +111,10 @@ private:
     void ScanUpgradeCache(std::list<WCachePtr> &list);
     BResult ClearUpgradeCache();
 
-    void ScanOldCache(uint64_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
-    BResult ClearOldCache(uint64_t ptId, uint64_t ptv);
+    void ScanOldCache(uint16_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
+    BResult ClearOldCache(uint16_t ptId, uint64_t ptv);
 
-    void ScanProcCache(uint64_t procId, std::list<WCachePtr> &list);
+    void ScanProcCache(uint64_t  procId, std::list<WCachePtr> &list);
     BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
