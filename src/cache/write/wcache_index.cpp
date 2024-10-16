@@ -20,7 +20,7 @@ inline uint32_t WCacheIndex::Hash(const Key &key)
     return std::hash<std::string>{}(key) % HASH_BUCKET_NUM;
 }
 
-BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
+BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get write cache index table fail, ptId:" << ptId << ", key:" << key);
@@ -34,7 +34,7 @@ BResult WCacheIndex::Insert(uint64_t ptId, const Key &key, const WCacheSliceRefP
     return BIO_OK;
 }
 
-WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
+WCacheSliceRefPtr WCacheIndex::Aquire(uint16_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrue(table != nullptr, nullptr, "Invalid table, ptId:" << ptId << ".");
@@ -52,7 +52,7 @@ WCacheSliceRefPtr WCacheIndex::Aquire(uint64_t ptId, const Key &key)
     }
 }
 
-BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs)
+BResult WCacheIndex::FuzzyAquire(uint16_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get wcache index table failed.");
@@ -83,7 +83,7 @@ BResult WCacheIndex::FuzzyAquire(uint64_t ptId, const char *prefix, std::unorder
     return BIO_OK;
 }
 
-BResult WCacheIndex::Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)
+BResult WCacheIndex::Delete(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueNot(table != nullptr, BIO_ALLOC_FAIL);
@@ -103,7 +103,7 @@ BResult WCacheIndex::Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sli
     return BIO_OK;
 }
 
-void WCacheIndex::ExpiredClear(uint64_t ptId)
+void WCacheIndex::ExpiredClear(uint16_t ptId)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);
     ChkTrueExNot(table != nullptr);
@@ -132,7 +132,7 @@ void WCacheIndex::Exit()
     mTable.clear();
 }
 
-WCacheIndexTable *WCacheIndex::GetIndexTable(uint64_t ptId)
+WCacheIndexTable *WCacheIndex::GetIndexTable(uint16_t ptId)
 {
     {
         ReadLocker<ReadWriteLock> lock(&mTableLock);

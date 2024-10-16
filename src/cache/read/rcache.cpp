@@ -17,7 +17,7 @@ using namespace ock::bio;
 
 static constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
 
-RCache::RCache(uint64_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
+RCache::RCache(uint16_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
     : mFlowId(0), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mWorkIndex(workIndex)
 {
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
