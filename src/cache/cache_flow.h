@@ -52,9 +52,9 @@ public:
             (typeP << CACHE_FLOW_ID_PREFIX_TYPE_SHIFT) | (innerTypeP);
     }
 
-    inline static uint64_t GetPtId(uint64_t flowId)
+    inline static uint16_t GetPtId(uint64_t flowId)
     {
-        return flowId >> (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT);
+        return static_cast<uint16_t>(flowId >> (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT));
     }
     inline static uint64_t GetType(uint64_t flowId)
     {
