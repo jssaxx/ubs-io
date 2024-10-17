@@ -64,6 +64,7 @@ DEFAULT_DEPLOY_USER = "boostio"
 DEFAULT_DEPLOY_GROUP = "boostio"
 DEFAULT_INSTALL_PATH = "/opt"
 INSTALL_SCRIPT_PATH = "/opt/boostio/scripts"
+config = configparser.ConfigParser()
 
 
 BOOSTIO_CONF = "bio.conf"
@@ -96,8 +97,7 @@ def send_files_to_node(node):
     if ssh_cmd(node, home_path_of(node["user"]),
                "rm -rf /home/{0};mkdir /home/{1}".format(node[ip_str], node[ip_str])) != 0:
         logging.info("pid:{0} create install dir /home/{1} fails. The dir already exist".format(PID, node[ip_str]))
-    config = configparser.ConfigParser()
-    config.read(CONFIG_PATH, encoding='utf-8')
+    global config
     config["bio"]["bio.net.data.ip_mask"] = str(node[net_str]) + "/24"
     config["bio"]["bio.disk.path"] = str(node[disk_str])
     folder_path = os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "{0}".format(node[node_id])))
@@ -345,7 +345,7 @@ def check_resource_list(host_path):
 
 
 def check_config(conf_path):
-    config = configparser.ConfigParser()
+    global config
     config.read(conf_path, encoding='utf-8')
     if "bio.log.level" not in config["bio"]:
         echo_to_terminal("config does not contain bio.log.level.")

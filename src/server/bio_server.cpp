@@ -16,6 +16,7 @@
 #include "interceptor_server.h"
 #include "bio_crc_util.h"
 #include "cache_overload_ctrl.h"
+#include "expire_checker.h"
 #include "bio_server.h"
 
 #ifdef USE_CLI_TOOLS
@@ -97,6 +98,13 @@ BResult BioServer::Start()
         sleep(5U);
     }
 
+    if (mConfig->GetNetConfig().enableTls) {
+        ret = ExpireChecker::Instance()->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
+            mConfig->GetNetConfig().tlsServerCertPath);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
     LOG_INFO("Boostio server start success.");
     return BIO_OK;
 }

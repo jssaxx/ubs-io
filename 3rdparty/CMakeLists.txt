@@ -1,4 +1,5 @@
 add_subdirectory(secure)
+add_subdirectory(openssl)
 add_subdirectory(hcom)
 add_subdirectory(bdm)
 add_subdirectory(spdlog)
