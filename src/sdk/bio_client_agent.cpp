@@ -324,7 +324,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
-        if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
+        if (rsp.num > PT_SIZE || (rsp.flag == 1 && rsp.copyNum > PT_COPY_MAX_SIZE)) {
             CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
             ptView.clear();
             return BIO_INVALID_PARAM;
