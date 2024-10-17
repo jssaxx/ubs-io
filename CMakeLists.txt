@@ -75,6 +75,8 @@ include_directories(
         ${SRC_DIR}/io_interceptor
         ${SRC_DIR}/interceptor
         ${SRC_DIR}/interceptor/server
+        ${SRC_DIR}/security/certificate
+        ${SRC_DIR}/security/expiration_check
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/include
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/include
         ${PROJECT_3RDPARTY_BIN_DIR}/bdm/include
