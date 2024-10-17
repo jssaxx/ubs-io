@@ -7,6 +7,7 @@
 #include "bio_client_agent.h"
 #include "interceptor_server.h"
 #include "bio_tracepoint_helper.h"
+#include "expire_checker.h"
 #include "bio_client.h"
 #ifdef USE_CLI_TOOLS
 #include <dlfcn.h>
@@ -312,6 +313,12 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
+    if (mode == SEPARATES && optConf.enable) {
+        auto ret = ExpireChecker::Instance()->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
     mStarted = true;
     CLIENT_LOG_INFO("Boostio client start success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
     return BIO_OK;

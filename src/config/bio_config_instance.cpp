@@ -340,7 +340,7 @@ void BioConfig::DumpToLog()
         std::string key;
         std::string value;
         reader.GetI(i, key, value);
-        if (key.find("tls") == std::string::npos) {
+        if (key.find("tls") == std::string::npos && key.find("cfg") == std::string::npos) {
             LOG_INFO("" << key << " = " << value);
         }
     }
