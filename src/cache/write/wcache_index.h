@@ -23,22 +23,22 @@ class WCacheIndex {
 public:
     ~WCacheIndex();
 
-    BResult Insert(uint64_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef);
+    BResult Insert(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef);
 
-    WCacheSliceRefPtr Aquire(uint64_t ptId, const Key &key);
+    WCacheSliceRefPtr Aquire(uint16_t ptId, const Key &key);
 
-    BResult FuzzyAquire(uint64_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs);
+    BResult FuzzyAquire(uint16_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs);
 
-    BResult Delete(uint64_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
+    BResult Delete(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 
-    void ExpiredClear(uint64_t ptId);
+    void ExpiredClear(uint16_t ptId);
 
     void Exit();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    WCacheIndexTable *GetIndexTable(uint64_t ptId);
+    WCacheIndexTable *GetIndexTable(uint16_t ptId);
     static uint32_t Hash(const Key &key);
 
 private:

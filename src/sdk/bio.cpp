@@ -169,9 +169,8 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     // 计算本次写的总数据大小
     uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
     CLIENT_LOG_TRACE("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
-        ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0:" <<
-        spaceInfo.address[0].address << ", addr0 size:" << spaceInfo.address[0].size << ", addr1:" <<
-        spaceInfo.address[1].address << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
+        ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0 size:" <<
+        spaceInfo.address[0].size << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
 
     uint64_t startTime = Monotonic::TimeSec();
     StatisticPutIoSize(length);
@@ -264,7 +263,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     }
 
     if (UNLIKELY(!KeyValid(key) || context == nullptr || offset != 0 || length == 0 ||
-        (offset + length) > BIO_IO_MAX_LEN)) {
+        offset > BIO_IO_MAX_LEN || length > BIO_IO_MAX_LEN || (offset + length) > BIO_IO_MAX_LEN)) {
         CLIENT_LOG_ERROR("Invalid load parameter, key:" << key << ".");
         return RET_CACHE_EPERM;
     }
@@ -298,8 +297,9 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(prefix == nullptr)) {
-        CLIENT_LOG_ERROR("Invalid list parameter, prefix:" << prefix << ".");
+    if (UNLIKELY(prefix == nullptr || strlen(prefix) >= KEY_MAX_SIZE)) {
+        CLIENT_LOG_ERROR("Invalid list parameter, prefix is null or length prefix: " <<
+            strlen(prefix) << " is invalid");
         return RET_CACHE_EPERM;
     }
 
@@ -460,7 +460,12 @@ void BioService::DestroyCache(uint64_t tenantId)
 
 CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf)
 {
-    return ToCResult(BioClient::Instance()->Start(mode, optConf));
+    auto bioClient = BioClient::Instance();
+    if (UNLIKELY(bioClient == nullptr)) {
+        CLIENT_LOG_ERROR("Make bio client instance failed.");
+        return RET_CACHE_ERROR;
+    }
+    return ToCResult(bioClient->Start(mode, optConf));
 }
 
 void BioService::Exit()
@@ -647,6 +652,11 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
 
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum)
 {
+    if (objs == nullptr) {
+        CLIENT_LOG_ERROR("Invalid input parameter, objs is nullptr.");
+        return RET_CACHE_EPERM;
+    }
+
     if (UNLIKELY(objNum == nullptr)) {
         return RET_CACHE_EPERM;
     }
@@ -764,16 +774,28 @@ WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
 
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
+    if (g_readHook == nullptr) {
+        CLIENT_LOG_ERROR("g_readHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
     return g_readHook(inode, buff, count, offset, readLen);
 }
 
 int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, uint64_t fh)
 {
+    if (g_writeHook == nullptr) {
+        CLIENT_LOG_ERROR("g_writeHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
     return g_writeHook(inode, buff, count, offset, fh);
 }
 
 int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space)
 {
+    if (g_writeCopyFreeHook == nullptr) {
+        CLIENT_LOG_ERROR("g_writeCopyFreeHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
     return g_writeCopyFreeHook(inode, offset, count, space);
 }
 
@@ -794,6 +816,11 @@ void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh)
 
 CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
 {
+    if (UNLIKELY(detailLoc == nullptr)) {
+        CLIENT_LOG_ERROR("Invalid input parameter, detailLoc is nullptr.");
+        return RET_CACHE_EPERM;
+    }
+
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }

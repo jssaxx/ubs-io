@@ -7,6 +7,7 @@
 #include "bio_client_agent.h"
 #include "interceptor_server.h"
 #include "bio_tracepoint_helper.h"
+#include "expire_checker.h"
 #include "bio_client.h"
 #ifdef USE_CLI_TOOLS
 #include <dlfcn.h>
@@ -188,8 +189,21 @@ BResult BioClient::BioClientStartWork()
 using SdkDiagnose = int (*)();
 BResult BioClient::BioDiagnoseSdkInit()
 {
+#ifdef DEBUG_UT
     const char *soFileName = "libsdk_diagnose.so";
     void *handler = dlopen(soFileName, RTLD_NOW);
+#else
+    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libsdk_diagnose.so";
+    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    void *handler = dlopen(canonicalPath, RTLD_NOW);
+    free(canonicalPath);
+    canonicalPath = nullptr;
+#endif
     if (handler == nullptr) {
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_INNER_ERR;
@@ -299,6 +313,12 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
+    if (mode == SEPARATES && optConf.enable) {
+        auto ret = ExpireChecker::Instance()->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
     mStarted = true;
     CLIENT_LOG_INFO("Boostio client start success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
     return BIO_OK;

@@ -97,7 +97,7 @@ BResult InterceptorClientNetService::CheckShmFd()
     struct stat buffer {};
     auto ret = fstat(mShmFd, &buffer);
     if (UNLIKELY(ret < 0)) {
-        CLOG_ERROR("Read file fd:" << mShmFd << " failed:" << ret << ".");
+        CLOG_ERROR("Read file failed, ret:" << ret << ".");
         return BIO_ERR;
     }
 

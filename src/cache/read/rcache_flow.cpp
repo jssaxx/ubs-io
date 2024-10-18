@@ -53,7 +53,7 @@ BResult RCacheFlow::AllocOffset(uint64_t len, uint64_t &offset, uint64_t &indexI
     return ret;
 }
 
-BResult RCacheFlow::Initialize(uint64_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds)
+BResult RCacheFlow::Initialize(uint16_t ptId, uint16_t diskId, FlowType flowType, std::vector<uint64_t> flowIds)
 {
     mPtId = ptId;
     mDiskId = diskId;

@@ -868,6 +868,15 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_INNER_ERR;
     }
+
+    LVOS_TP_START(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, &rsp->addrNum, (SLICE_ADDR_MAX_SIZE + 1));
+    LVOS_TP_END;
+    if (rsp->addrNum > SLICE_ADDR_MAX_SIZE) {
+        CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+        return BIO_INNER_ERR;
+    }
     spaceInfo.addressNum = rsp->addrNum;
     for (uint32_t idx = 0; idx < spaceInfo.addressNum; idx++) {
         if (mMode == CONVERGENCE) {
@@ -1033,12 +1042,14 @@ BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *
 
 bool MirrorClient::IsExistLocalCopy(CmPtInfo &ptEntry)
 {
+    LVOS_TP_START(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, 0);
     for (uint32_t i = 0; i < ptEntry.copys.size(); i++) {
         if (ptEntry.copys[i].nodeId == mLocalNid.VNodeId() &&
             (ptEntry.copys[i].state == CM_COPY_RUNNING || ptEntry.copys[i].state == CM_COPY_RECOVERY)) {
             return true;
         }
     }
+    LVOS_TP_END;
     return false;
 }
 
@@ -1099,7 +1110,15 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         return BIO_ALLOC_FAIL;
     }
 
-    auto tmp = new uint8_t[sizeof(PutRequest)];
+    uint8_t* tmp = nullptr;
+    LVOS_TP_START(SDK_MIRROR_CLIENT_PREPARE_FAIL, 0);
+    tmp = new (std::nothrow) uint8_t[sizeof(PutRequest)];
+    LVOS_TP_END;
+    if (tmp == nullptr) {
+        CLIENT_LOG_ERROR("Alloc memory failed.");
+        net::BioClientNet::Instance()->Free(mr.address);
+        return BIO_ALLOC_FAIL;
+    }
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
     req->memFromServer = false;

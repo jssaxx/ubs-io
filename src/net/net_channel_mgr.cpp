@@ -46,13 +46,13 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane)
         return BIO_INNER_ERR;
     }
     std::unique_lock<std::mutex> locker(lock);
-    auto chNode = new ChannelNode(dstNid, ch);
+    auto chNode = new (std::nothrow) ChannelNode(dstNid, ch);
     if (UNLIKELY(chNode == nullptr)) {
         NET_LOG_ERROR("Alloc memory failed.");
         return BIO_ALLOC_FAIL;
     }
     mChannelNodeMap.emplace(std::make_pair(ch->Id(), chNode));
-    auto chInfo = new ChannelInfo(dstNid, ch);
+    auto chInfo = new (std::nothrow) ChannelInfo(dstNid, ch);
     if (UNLIKELY(chInfo == nullptr)) {
         NET_LOG_ERROR("Alloc memory failed.");
         return BIO_ALLOC_FAIL;

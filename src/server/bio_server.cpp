@@ -16,6 +16,7 @@
 #include "interceptor_server.h"
 #include "bio_crc_util.h"
 #include "cache_overload_ctrl.h"
+#include "expire_checker.h"
 #include "bio_server.h"
 
 #ifdef USE_CLI_TOOLS
@@ -28,7 +29,10 @@ namespace bio {
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
-        Logger::gInstance->Log(level, msg);
+        int32_t ret = Logger::gInstance->Log(level, msg);
+        if (ret < 0) {
+            LOG_ERROR("Logger inner error!!!");
+        }
     }
 }
 
@@ -94,6 +98,13 @@ BResult BioServer::Start()
         sleep(5U);
     }
 
+    if (mConfig->GetNetConfig().enableTls) {
+        ret = ExpireChecker::Instance()->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
+            mConfig->GetNetConfig().tlsServerCertPath);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
     LOG_INFO("Boostio server start success.");
     return BIO_OK;
 }
@@ -509,10 +520,24 @@ BResult BioServer::BioServerDiagnoseInit()
 using ServerDiagnose = int (*)();
 BResult BioServer::BioServerDiagnoseInitInner()
 {
-    const char *soFileName = "libserver_diagnose.so";
     void *handler = nullptr;
+#ifdef DEBUG_UT
+    const char *soFileName = "libserver_diagnose.so";
     LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
     handler = dlopen(soFileName, RTLD_NOW);
+#else
+    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libserver_diagnose.so";
+    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
+    handler = dlopen(canonicalPath, RTLD_NOW);
+    free(canonicalPath);
+    canonicalPath = nullptr;
+#endif
     LVOS_TP_END;
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
@@ -639,7 +664,12 @@ using namespace ock::bio;
 
 int32_t BioServerInit()
 {
-    return BioServer::Instance()->Start();
+    auto bioServer = BioServer::Instance();
+    if (UNLIKELY(bioServer == nullptr)) {
+        LOG_ERROR("Make bio server instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    return bioServer->Start();
 }
 
 void BioServerExit()
@@ -793,6 +823,7 @@ inline static void StatisticPutIoSize(uint64_t length)
 
 int32_t Put(PutRequest *req, PutResponse *rsp)
 {
+    BResult ret;
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
@@ -813,7 +844,11 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
             LOG_ERROR("Make wcache slice failed.");
             return BIO_ALLOC_FAIL;
         }
-        sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        ret = sliceP->Deserialize(req->sliceBuf, req->sliceLen);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Deserialize slice failed, ret:" << ret << ".");
+            return ret;
+        }
         sliceP->SetDataCrc(req->dataCrc);
     }
 
@@ -821,7 +856,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     ServiceContext netCtx;
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_LOCAL);
     uint32_t ioStrategy = 0;
-    auto ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
+    ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
     rsp->ioStrategy = ioStrategy;
     return ret;

@@ -37,10 +37,16 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_MIRROR_SELECT_PT_FAIL, "sdk select pt fail, rturn UINT16_MAX", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_SET_RETRY_TIME, "sdk mirror client set retry time zero", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, "prepare put with space fail", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(SDK_MIRROR_CLIENT_PREPARE_FAIL, "prepare fail", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, "not exsit local copy", CommonTp::NoProcessCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_FAIL, "mirror client query fail, retuen nullptr", CommonTp::NoProcessCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_GET_RETRY, "sdk mirror client get return retry", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_CLIENT_GET_CEPH_STAT_OK, "sdk mirror client get ceph stat ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_CLIENT_GET_CEPH_STAT_SIZE, "sdk mirror client get ceph stat size unequit zero", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID, "sdk mirror client get cluster view fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID, "sdk mirror client get cluster view fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID, "sdk mirror client get pt view fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, "sdk mirror client alloc space fail", CommonTp::IntValueCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
@@ -75,6 +81,12 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_GET_RETRY);
     LVOS_TP_UNREG(SDK_CLIENT_GET_CEPH_STAT_OK);
     LVOS_TP_UNREG(SDK_CLIENT_GET_CEPH_STAT_SIZE);
+    LVOS_TP_UNREG(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID);
+    LVOS_TP_UNREG(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID);
+    LVOS_TP_UNREG(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID);
+    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID);
+    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_PREPARE_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY);
 }
 #else
 void tp::SdkTp::Register() noexcept {}

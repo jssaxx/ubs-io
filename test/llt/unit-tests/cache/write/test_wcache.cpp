@@ -602,7 +602,7 @@ TEST_F(TestWCache, test_wcache_alloc_case_return_fail)
     LOG_INFO("test_wcache_alloc_case_return_fail");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_ALLOC_FAIL", 0, 1, userParam);
-    uint64_t ptId = 1;
+    uint16_t ptId = 1;
     auto ret = Cache::Instance().CreateWCache(0, ptId, 0, 0, false);
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_ALLOC_FAIL");

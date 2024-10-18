@@ -28,7 +28,7 @@ constexpr uint32_t READ_CACHE_META_HASH_BUCKET_MASK = READ_CACHE_META_HASH_BUCKE
 
 class RCache {
 public:
-    RCache(uint64_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex);
+    RCache(uint16_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex);
 
     ~RCache();
 
@@ -54,7 +54,7 @@ public:
         return mFlowId;
     }
 
-    inline uint64_t GetPtId()
+    inline uint16_t GetPtId()
     {
         return mPtId;
     }
@@ -165,7 +165,7 @@ private:
     bool mIsNormal{ true };
     bool mCrcEnable{ true };
     uint64_t mFlowId;
-    uint64_t mPtId;
+    uint16_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
     uint32_t mWorkIndex;

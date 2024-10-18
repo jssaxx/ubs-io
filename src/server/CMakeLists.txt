@@ -13,7 +13,7 @@ target_link_libraries(bio_server -Wl,--start-group rados -Wl,--end-group)
 
 target_link_libraries(bio_server
         -Wl,--start-group
-        pthread dl aio
+        pthread dl aio expire_checker
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/bdm/lib/libbdm.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
