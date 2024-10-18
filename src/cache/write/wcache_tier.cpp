@@ -383,8 +383,8 @@ WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice
 BResult WCacheTier::UpdateNegotiateState(uint64_t indexInFlow)
 {
     BIO_TRACE_START(WCACHE_TRACE_NEGOTIATE_UPDATE)
-    uint64_t indexInMap = mCurNegotiateIndex / ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    uint64_t indexInArray = mCurNegotiateIndex % ARRAY_SIZE_IN_NEGOTIATE_MAP;
+    uint64_t indexInMap = indexInFlow / ARRAY_SIZE_IN_NEGOTIATE_MAP;
+    uint64_t indexInArray = indexInFlow % ARRAY_SIZE_IN_NEGOTIATE_MAP;
     auto it = mNegotiateIndexMap.find(indexInMap);
     if (it == mNegotiateIndexMap.end()) {
         LOG_DEBUG("Not find slice,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);

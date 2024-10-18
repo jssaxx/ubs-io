@@ -2,6 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
 
+#include <map>
 #include <mockcpp/mockcpp.hpp>
 #include <semaphore.h>
 #include "gtest/gtest.h"
@@ -19,6 +20,7 @@
 #include "server/interceptor_server.h"
 #include "tracepoint.h"
 #include "test_bio.h"
+#include "bio_client_agent.h"
 
 using namespace ock::bio;
 
@@ -181,6 +183,24 @@ TEST_F(TestBio, test_bio_put)
     ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    uint64_t tenantId = 187UL;
+    static ObjLocation location{};
+    CacheDescriptor desc = { tenantId, LOCAL_AFFINITY, WRITE_BACK };
+    ret = BioCreateCache(desc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_PREPARE_FAIL", 0, 1, userParam);
+    ret = BioPut(tenantId, "key187", "testvalue", 2UL, location);
+    EXPECT_EQ(ret, BIO_ALLOC_FAIL);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_PREPARE_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+
+    ret = BioDestroyCache(tenantId);
+    EXPECT_EQ(ret, RET_CACHE_OK);
 
     fclose(fp);
 }
@@ -359,6 +379,9 @@ TEST_F(TestBio, test_bio_list_all)
 
     ret = BioListAll(G_TENANT_ID, nullptr, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    ret = BioListAll(G_TENANT_ID, nullptr, nullptr, &objNum);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
 }
 
 TEST_F(TestBio, test_bio_stat)
@@ -468,6 +491,11 @@ TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL");
+
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_ADDRNUM_INVALID", 0, 1, userParam);
+    ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_ADDRNUM_INVALID");
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -1069,27 +1097,39 @@ static int WriteCopyFreeHookFunc(uint64_t inode, uint64_t offset, uint64_t count
     return BIO_OK;
 }
 
-TEST_F(TestBio, test_juicefs_callback_read_case_return_ok)
+TEST_F(TestBio, test_juicefs_callback_read_case)
 {
-    LOG_INFO("test_juicefs_callback_read_case_return_ok");
-    BioRegisterInterceptorRead(ReadHookFunc);
+    LOG_INFO("test_juicefs_callback_read_case");
+    BioRegisterInterceptorRead(nullptr);
     auto ret = BioReadHook(0, nullptr, 0, 0, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+
+    BioRegisterInterceptorRead(ReadHookFunc);
+    ret = BioReadHook(0, nullptr, 0, 0, nullptr);
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestBio, test_juicefs_callback_write_case_return_ok)
+TEST_F(TestBio, test_juicefs_callback_write_case)
 {
-    LOG_INFO("test_juicefs_callback_write_case_return_ok");
-    BioRegisterInterceptorWrite(WriteHookFunc);
+    LOG_INFO("test_juicefs_callback_write_case");
+    BioRegisterInterceptorWrite(nullptr);
     auto ret = BioWriteHook(0, nullptr, 0, 0, 0);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+
+    BioRegisterInterceptorWrite(WriteHookFunc);
+    ret = BioWriteHook(0, nullptr, 0, 0, 0);
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestBio, test_juicefs_callback_write_copy_case_return_ok)
+TEST_F(TestBio, test_juicefs_callback_write_copy_case)
 {
-    LOG_INFO("test_juicefs_callback_write_copy_case_return_ok");
-    BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHookFunc);
+    LOG_INFO("test_juicefs_callback_write_copy_case");
+    BioRegisterInterceptorWriteCopyFree(nullptr);
     auto ret = BioWriteCopyFreeHook(0, 0, 0, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+
+    BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHookFunc);
+    ret = BioWriteCopyFreeHook(0, 0, 0, nullptr);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -1277,6 +1317,9 @@ TEST_F(TestBio, test_bio_convert_location_return_fail)
     ret = BioConvertLocation(location, &detailLoc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+
+    ret = BioConvertLocation(location, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
 }
 
 TEST_F(TestBio, test_bio_qos_wake_force)
@@ -1344,4 +1387,33 @@ TEST_F(TestBio, test_bio_qos_put_align_size)
     }
     delete[] dataBuff;
     BioClient::Instance()->GetMirror()->SetScene(SCENE_NONE);
+}
+
+TEST_F(TestBio, test_bio_client_agent_get_cluster_node_view)
+{
+    LOG_INFO("test_bio_client_agent_get_cluster_node_view");
+    uint64_t curNodeTimes;
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID", 0, 1, userParam);
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetClusterNodeView(curNodeTimes, nodeView);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID");
+
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID", 0, 1, userParam);
+    ret = ock::bio::agent::BioClientAgent::Instance()->GetClusterNodeView(curNodeTimes, nodeView);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID");
+}
+
+TEST_F(TestBio, test_bio_client_agent_get_pt_view)
+{
+    LOG_INFO("test_bio_client_agent_get_pt_view");
+    uint64_t curNodeTimes;
+    std::map<uint16_t, CmPtInfo> ptView;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID", 0, 1, userParam);
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetPtView(curNodeTimes, ptView);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID");
 }
