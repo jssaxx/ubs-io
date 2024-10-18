@@ -46,6 +46,9 @@ set(TARGET_INSTALL_BIN_DIR ${TARGET_INSTALL_DIR}/bin)
 set(TARGET_INSTALL_INCLUDE_DIR ${TARGET_INSTALL_DIR}/include)
 set(TARGET_INSTALL_LIB_DIR ${TARGET_INSTALL_DIR}/lib)
 
+set(PROJECT_PATH_PREFIX "/opt/boostio")
+add_definitions(-DPROJECT_PATH_PREFIX="${PROJECT_PATH_PREFIX}")
+
 message(STATUS "3rdparty src dir ${PROJECT_3RDPARTY_SRC_DIR}")
 message(STATUS "3rdparty bin dir ${PROJECT_3RDPARTY_BIN_DIR}")
 message(STATUS "target install dir ${TARGET_INSTALL_DIR}")
@@ -72,6 +75,8 @@ include_directories(
         ${SRC_DIR}/io_interceptor
         ${SRC_DIR}/interceptor
         ${SRC_DIR}/interceptor/server
+        ${SRC_DIR}/security/certificate
+        ${SRC_DIR}/security/expiration_check
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/include
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/include
         ${PROJECT_3RDPARTY_BIN_DIR}/bdm/include

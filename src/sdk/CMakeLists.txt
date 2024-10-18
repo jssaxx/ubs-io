@@ -17,7 +17,7 @@ target_link_libraries(bio_sdk -Wl,--start-group rados -Wl,--end-group)
 
 target_link_libraries(bio_sdk
         -Wl,--start-group
-        pthread dl
+        pthread dl expire_checker
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/lib/libsecurec.a
