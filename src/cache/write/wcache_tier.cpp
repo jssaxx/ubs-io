@@ -59,7 +59,7 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     ChkTrue(res == BIO_OK, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
-    auto ret = memcpy_s(sliceMeta.key, (NO_512 - NO_32), key, strlen(key));
+    auto ret = memcpy_s(sliceMeta.key, (NO_512 - NO_32), key, (strlen(key) + 1UL));
     if (ret != 0) {
         return BIO_INNER_RETRY;
     }
@@ -383,8 +383,8 @@ WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice
 BResult WCacheTier::UpdateNegotiateState(uint64_t indexInFlow)
 {
     BIO_TRACE_START(WCACHE_TRACE_NEGOTIATE_UPDATE)
-    uint64_t indexInMap = mCurNegotiateIndex / ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    uint64_t indexInArray = mCurNegotiateIndex % ARRAY_SIZE_IN_NEGOTIATE_MAP;
+    uint64_t indexInMap = indexInFlow / ARRAY_SIZE_IN_NEGOTIATE_MAP;
+    uint64_t indexInArray = indexInFlow % ARRAY_SIZE_IN_NEGOTIATE_MAP;
     auto it = mNegotiateIndexMap.find(indexInMap);
     if (it == mNegotiateIndexMap.end()) {
         LOG_DEBUG("Not find slice,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);

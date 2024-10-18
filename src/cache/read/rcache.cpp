@@ -17,7 +17,7 @@ using namespace ock::bio;
 
 static constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
 
-RCache::RCache(uint64_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
+RCache::RCache(uint16_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
     : mFlowId(0), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mWorkIndex(workIndex)
 {
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
@@ -164,7 +164,12 @@ BResult RCache::Initialize()
         prefix.push_back(flowPrefix);
     }
 
-    FlowIdAllocator::Instance()->GenerateFlowIds(prefix, flowIds);
+    auto flowIdAllocator = FlowIdAllocator::Instance();
+    if (UNLIKELY(flowIdAllocator == nullptr)) {
+        LOG_ERROR("Make flow id allocator instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    flowIdAllocator->GenerateFlowIds(prefix, flowIds);
     if (UNLIKELY(flowIds.empty())) {
         LOG_ERROR("Generate ptId " << mPtId << " flow ids failed.");
         return BIO_ERR;
@@ -778,9 +783,6 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         auto ret = DeleteFromIndex(chunk->GetKey(), chunk);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_DEBUG("Get read cache key:" << chunk->GetKey() << " not exist.");
-            chunk->lock.unlock();
-            BIO_TRACE_END(RCACHE_TRACE_EVICT2NULL, 0);
-            continue;
         }
 
         DelFromTruncateList(READ_CACHE_TIER_DISK, chunk);

@@ -36,30 +36,30 @@ public:
     void Exit();
 
     // alloc resources for write cache evict data
-    BResult AllocResources(uint64_t ptId, uint64_t len, WCacheSlicePtr &slice);
+    BResult AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice);
 
-    BResult Put(uint64_t ptId, const Key &key, const WCacheSlicePtr &slice);
+    BResult Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &slice);
 
-    BResult Get(uint64_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+    BResult Get(uint16_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
         const SliceWriter &sliceWriter, uint64_t &realLen);
 
-    BResult Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
+    BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
-    BResult Delete(uint64_t ptId, const Key &key);
+    BResult Delete(uint16_t ptId, const Key &key);
 
-    BResult CreateRCache(uint64_t ptId, uint64_t ptv, uint16_t diskId);
+    BResult CreateRCache(uint16_t ptId, uint64_t ptv, uint16_t diskId);
 
-    BResult DeleteRCache(uint64_t ptId);
+    BResult DeleteRCache(uint16_t ptId);
 
     BResult RecoverCache(FlowPtr dataFlow);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
+    BResult ExpiredClear(uint16_t ptId, uint64_t ptv);
 
     BResult ExpiredClearImpl(RCachePtr rCache);
 
     uint64_t GetGCData();
 
-    const RCachePtr GetRCacheInstanceByPtId(uint64_t ptId);
+    const RCachePtr GetRCacheInstanceByPtId(uint16_t ptId);
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

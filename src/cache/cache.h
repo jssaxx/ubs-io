@@ -32,13 +32,13 @@ public:
         return mWCacheManager->AllocateFlowId(ptId, ptv, flowId);
     }
 
-    BResult CreateWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade);
+    BResult CreateWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade);
 
-    BResult DestroyWCache(uint64_t procId, uint64_t ptId, uint64_t ptv, uint64_t flowId);
+    BResult DestroyWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
 
-    BResult CreateRCache(uint64_t ptId, uint64_t ptv);
+    BResult CreateRCache(uint16_t ptId, uint64_t ptv);
 
-    BResult DestroyRCache(uint64_t ptId);
+    BResult DestroyRCache(uint16_t ptId);
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
@@ -49,13 +49,13 @@ public:
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
         uint64_t &realLen);
 
-    BResult Load(uint64_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
+    BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
-    BResult Stat(uint64_t ptId, const Key &key, CacheObjStat &cacheObjStat);
+    BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
     BResult List(char *prefix, uint16_t ptId, bool force, std::unordered_map<std::string, CacheObjStat> &objs);
 
-    BResult Delete(uint64_t ptId, const Key &key);
+    BResult Delete(uint16_t ptId, const Key &key);
 
     FlowCache GetFlowCache(uint64_t flowId);
 
@@ -75,11 +75,11 @@ public:
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
-    BResult Flush(uint64_t ptId, uint64_t ptv);
+    BResult Flush(uint16_t ptId, uint64_t ptv);
 
-    BResult ExpiredClear(uint64_t ptId, uint64_t ptv);
+    BResult ExpiredClear(uint16_t ptId, uint64_t ptv);
 
-    BResult ExtraCreateRCache(uint64_t ptId, uint64_t ptv);
+    BResult ExtraCreateRCache(uint16_t ptId, uint64_t ptv);
 
     void GetCacheResources(CacheResDescription &desc, CacheType type);
 

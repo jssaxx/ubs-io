@@ -124,10 +124,11 @@ void RCacheGC::Destroy()
 {
     workStatus.store(false);
     for (auto &work : works) {
-        for (auto th : work) {
+        for (auto &th : work) {
             if (th) {
                 th->join();
                 delete th;
+                th = nullptr;
             }
         }
     }

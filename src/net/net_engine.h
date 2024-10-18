@@ -213,7 +213,7 @@ public:
     uint8_t *GetShmAddress(uint64_t offset)
     {
         if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mShmSize)) {
-            NET_LOG_ERROR("Shm info, fd:" << mShmFd << ", offset:" << mShareOffset << ", size:" << mShmSize << ".");
+            NET_LOG_ERROR("Shm info, offset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }
         return (mShareAddress + (offset - mShareOffset));

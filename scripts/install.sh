@@ -46,7 +46,6 @@ print_log()
 clear_env()
 {
   set +e
-#  erase_keys
   stop_boostio
   sleep 10
 

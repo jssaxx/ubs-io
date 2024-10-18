@@ -401,9 +401,9 @@ BResult HdfsSystem::ListFilesInDirectory(const char *prefix,
         return BIO_OK;
     }
 
+    size_t prefixLength = std::strlen(prefix);
     for (int i = 0; i < numEntries; ++i) {
         std::string fileName = GetFileNameFromHdfsPath(files[i].mName);
-        size_t prefixLength = std::strlen(prefix);
         constexpr size_t startPosition = 0;
         if ((files[i].mKind == DIRECTORY) || (fileName.size() < prefixLength) ||
             (fileName.compare(startPosition, prefixLength, prefix) != 0)) {

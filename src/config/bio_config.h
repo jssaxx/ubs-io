@@ -192,6 +192,10 @@ inline bool Configuration::SetWithTypeAutoConvert(const std::string &key, const 
                 std::cout << "<" << key << ">, it was empty or in wrong type, it should be a int number." << std::endl;
                 return false;
             }
+            if (tmp > static_cast<long>(INTMAX_MAX)) {
+                std::cout << "<" << key << ">, it was too long." << std::endl;
+                return false;
+            }
             mIntItems[key] = static_cast<int32_t>(tmp);
         } else if (valueType == ConfValueType::VFLOAT) {
             if (!StrUtil::StrToFloat(value, mFloatItems[key])) {

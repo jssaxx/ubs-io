@@ -62,7 +62,13 @@ int BioCryptorHelper::Decrypt(int domainId, const std::string &filePath, std::pa
         return -1;
     }
 
-    auto dataLength = static_cast<int>(encryptedText.length());
+    auto encryptLength = encryptedText.length();
+    if (encryptLength > INTMAX_MAX) {
+        LOG_ERROR("EncryptedText length too long");
+        delete[] buffer;
+        return -1;
+    }
+    auto dataLength = static_cast<int>(encryptLength);
     ret = HseCryptor::Decrypt(domainId, encryptedText, buffer, dataLength);
     if (ret != 0) {
         LOG_ERROR("Decrypt tls key password failed: " << ret << " for file.");
