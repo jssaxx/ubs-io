@@ -16,6 +16,7 @@ import re
 import getpass
 import configparser
 import subprocess
+import copy
 
 sp = subprocess.Popen("touch ./boostio_hand_out_py.log;chmod 600 ./boostio_hand_out_py.log", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
 sp.communicate()
@@ -42,6 +43,7 @@ Options:
 """.format(name=os.path.basename(__file__))
 
 nodes_info = []
+configs = []
 failed_times = []
 under_fs_info = {}
 PACKAGE_PATH = ""
@@ -64,7 +66,7 @@ DEFAULT_DEPLOY_USER = "boostio"
 DEFAULT_DEPLOY_GROUP = "boostio"
 DEFAULT_INSTALL_PATH = "/opt"
 INSTALL_SCRIPT_PATH = "/opt/boostio/scripts"
-config = configparser.ConfigParser()
+g_config = configparser.ConfigParser()
 
 
 BOOSTIO_CONF = "bio.conf"
@@ -97,7 +99,7 @@ def send_files_to_node(node):
     if ssh_cmd(node, home_path_of(node["user"]),
                "rm -rf /home/{0};mkdir /home/{1}".format(node[ip_str], node[ip_str])) != 0:
         logging.info("pid:{0} create install dir /home/{1} fails. The dir already exist".format(PID, node[ip_str]))
-    global config
+    config = copy.deepcopy(g_config);
     config["bio"]["bio.net.data.ip_mask"] = str(node[net_str]) + "/24"
     config["bio"]["bio.disk.path"] = str(node[disk_str])
     folder_path = os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "{0}".format(node[node_id])))
@@ -232,7 +234,10 @@ def install(node):
                                                             DEFAULT_INSTALL_PATH)) != 0:
         failed_times.append(1)
         return -1
-    return 0
+    if ssh_cmd(node, home_path_of(node["user"]),
+               "rm -rf /home/{0}".format(node[ip_str], node[ip_str])) != 0:
+        logging.info("pid:{0} remove install dir /home/{1} fails. The dir not exist".format(PID, node[ip_str]))
+
 
 
 def wait_for_threads_end(thread_list, mission):
@@ -345,61 +350,59 @@ def check_resource_list(host_path):
 
 
 def check_config(conf_path):
-    global config
-    config.read(conf_path, encoding='utf-8')
-    if "bio.log.level" not in config["bio"]:
+    g_config.read(conf_path, encoding='utf-8')
+    if "bio.log.level" not in g_config["bio"]:
         echo_to_terminal("config does not contain bio.log.level.")
         return -1
     else:
-        boostio_log_level = config["bio"]["bio.log.level"]
+        boostio_log_level = g_config["bio"]["bio.log.level"]
         if boostio_log_level.strip() == "":
             echo_to_terminal("bio.log.level is null.")
             return -1
 
-    if "bio.cm.pts_count" not in config["bio"]:
+    if "bio.cm.pts_count" not in g_config["bio"]:
         echo_to_terminal("config does not contain bio.cmc.pts_count.")
         return -1
     else:
-        cm_pt_count = int(config["bio"]["bio.cm.pts_count"])
+        cm_pt_count = int(g_config["bio"]["bio.cm.pts_count"])
         if cm_pt_count < 1 or cm_pt_count > 8192:
             echo_to_terminal("max_open_files is not in range 1 - 8192.")
             return -1
 
-    if "bio.cm.register_timeout_sec" not in config["bio"]:
+    if "bio.cm.register_timeout_sec" not in g_config["bio"]:
         echo_to_terminal("config does not contain bio.cm.register_timeout_sec.")
         return -1
     else:
-        cm_register_timeout_sec = config["bio"]["bio.cm.register_timeout_sec"]
+        cm_register_timeout_sec = g_config["bio"]["bio.cm.register_timeout_sec"]
         if cm_register_timeout_sec.strip() == "":
             echo_to_terminal("bio.cm.register_timeout_sec is null.")
             return -1
 
-    if "bio.cm.register_perm_timeout_sec" not in config["bio"]:
+    if "bio.cm.register_perm_timeout_sec" not in g_config["bio"]:
         echo_to_terminal("config does not contain bio.cm.register_perm_timeout_sec.")
         return -1
     else:
-        cm_register_perm_timeout_sec = config["bio"]["bio.cm.register_perm_timeout_sec"]
+        cm_register_perm_timeout_sec = g_config["bio"]["bio.cm.register_perm_timeout_sec"]
         if cm_register_perm_timeout_sec.strip() == "":
             echo_to_terminal("bio.cm.register_perm_timeout_sec is null.")
             return -1
 
-    if "bio.net.data.protocol" not in config["bio"]:
+    if "bio.net.data.protocol" not in g_config["bio"]:
         echo_to_terminal("config does not contain bio.net.data.protocol.")
         return -1
     else:
-        net_data_protocol = (config["bio"]["bio.net.data.protocol"])
+        net_data_protocol = (g_config["bio"]["bio.net.data.protocol"])
         if net_data_protocol.strip() != "rdma" and net_data_protocol.strip() != "tcp":
             echo_to_terminal("bio.net.data.protocol is not in rdma/tcp")
             return -1
 
-    if "bio.segment.size_in_mb" not in config["bio"]:
+    if "bio.segment.size_in_mb" not in g_config["bio"]:
         echo_to_terminal("config does not bio.segment.size_in_mb.")
         return -1
 
-    if "bio.mem.size_in_gb" not in config["bio"]:
+    if "bio.mem.size_in_gb" not in g_config["bio"]:
         echo_to_terminal("config does not contain bio.mem.size_in_gb.")
         return -1
-
     return 0
 
 def get_nodes_info_no_conf():
