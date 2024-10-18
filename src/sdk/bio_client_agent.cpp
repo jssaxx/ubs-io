@@ -20,8 +20,21 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
 {
     mMode = mode;
     if (mMode == CONVERGENCE) {
+#ifdef DEBUG_UT
         const char *soFileName = "libbio_server.so";
         handler = dlopen(soFileName, RTLD_NOW);
+#else
+        std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libbio_server.so";
+        char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+        if (canonicalPath == nullptr) {
+            CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+            return BIO_NOT_EXISTS;
+        }
+
+        handler = dlopen(canonicalPath, RTLD_NOW);
+        free(canonicalPath);
+        canonicalPath = nullptr;
+#endif
         if (handler == nullptr) {
             CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
             return BIO_INNER_ERR;
@@ -311,7 +324,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
-        if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
+        if (rsp.num > PT_SIZE || (rsp.flag == 1 && rsp.copyNum > PT_COPY_MAX_SIZE)) {
             CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
             ptView.clear();
             return BIO_INVALID_PARAM;

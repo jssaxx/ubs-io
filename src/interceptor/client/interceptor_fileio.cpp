@@ -264,7 +264,6 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         CLOG_ERROR("Send large write io request failed:" << ret << ".");
         return -1;
     }
-
     char *copyBuff = static_cast<char *>(const_cast<void *>(buf));
     CLOG_DEBUG("Alloc write large space:" << count << ", location0:" << resp.address.loc.location[0] <<
         ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<

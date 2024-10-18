@@ -16,6 +16,7 @@
 #include "interceptor_server.h"
 #include "bio_crc_util.h"
 #include "cache_overload_ctrl.h"
+#include "expire_checker.h"
 #include "bio_server.h"
 
 #ifdef USE_CLI_TOOLS
@@ -97,6 +98,13 @@ BResult BioServer::Start()
         sleep(5U);
     }
 
+    if (mConfig->GetNetConfig().enableTls) {
+        ret = ExpireChecker::Instance()->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
+            mConfig->GetNetConfig().tlsServerCertPath);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
     LOG_INFO("Boostio server start success.");
     return BIO_OK;
 }
@@ -512,10 +520,24 @@ BResult BioServer::BioServerDiagnoseInit()
 using ServerDiagnose = int (*)();
 BResult BioServer::BioServerDiagnoseInitInner()
 {
-    const char *soFileName = "libserver_diagnose.so";
     void *handler = nullptr;
+#ifdef DEBUG_UT
+    const char *soFileName = "libserver_diagnose.so";
     LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
     handler = dlopen(soFileName, RTLD_NOW);
+#else
+    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libserver_diagnose.so";
+    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
+    handler = dlopen(canonicalPath, RTLD_NOW);
+    free(canonicalPath);
+    canonicalPath = nullptr;
+#endif
     LVOS_TP_END;
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
