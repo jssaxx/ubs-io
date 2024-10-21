@@ -9,6 +9,7 @@
 #include "tracepoint.h"
 #include "bio_server_c.h"
 #include "test_bio_server.h"
+#include "expire_checker.h"
 
 using namespace ock::bio;
 
@@ -1144,4 +1145,31 @@ TEST_F(TestBioServer, test_handl_negotiate)
     ServiceContext ctx;
     auto ret = mirror->HandleEvictNegotiateRequest(ctx);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bioserver_Channel)
+{
+    LOG_INFO("test_bioserver_Channel");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    std::string ipPort{"ipPort"};
+    std::string payload{"payload"};
+    auto ret = engine->NewChannel(ipPort, nullptr, payload);
+    EXPECT_EQ(ret, BIO_ERR);
+    engine->ChannelBroken(nullptr);
+}
+
+TEST_F(TestBioServer, test_server_exception)
+{
+    LOG_INFO("test_server_exception");
+    FreeMemRequest freeMemReq;
+    freeMemReq.num = NO_24;
+    ServiceContext ctx;
+    auto ret = MirrorServer::Instance()->MirrorServerFreeMem(ctx, &freeMemReq);
+    EXPECT_EQ(ret, BIO_OK);
+    EvictNegotiateRequest negoReq;
+    negoReq.count = NO_1024;
+    ret = MirrorServer::Instance()->MirrorServerEvictNegotiate(ctx, &negoReq);
+    EXPECT_EQ(ret, BIO_OK);
+    ret = ExpireChecker::Instance()->ExpireCheckerInit("./test.pem", "./test1.pem");
+    EXPECT_EQ(ret, BIO_ERR);
 }
