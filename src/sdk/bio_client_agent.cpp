@@ -275,6 +275,8 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
             return ret;
         }
 
+        LVOS_TP_START(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID, &rsp.num, (CLUSTER_NODE_SIZE + 1));
+        LVOS_TP_END;
         if (rsp.num > CLUSTER_NODE_SIZE) {
             CLIENT_LOG_ERROR("rsp num: " << rsp.num << " is invalid.");
             nodeView.clear();
@@ -283,9 +285,10 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
 
         for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmDiskInfo> disks;
+            LVOS_TP_START(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID, &rsp.desc[0].num, (DISK_MAX_SIZE + 1));
+            LVOS_TP_END;
             if (rsp.desc[i].num > DISK_MAX_SIZE) {
-                CLIENT_LOG_ERROR("rsp nodeid(" << rsp.desc[i].nodeId << ") num: " <<
-                    rsp.desc[i].num << " is invalid.");
+                CLIENT_LOG_ERROR("rsp nodeid(" << rsp.desc[i].nodeId << ") num: " << rsp.desc[i].num << " is invalid.");
                 nodeView.clear();
                 return BIO_INVALID_PARAM;
             }
@@ -324,6 +327,9 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
+
+        LVOS_TP_START(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID, &rsp.num, (PT_SIZE + 1));
+        LVOS_TP_END;
         if (rsp.num > PT_SIZE || (rsp.flag == 1 && rsp.copyNum > PT_COPY_MAX_SIZE)) {
             CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
             ptView.clear();
