@@ -13,7 +13,7 @@
 [submodule "3rdparty/hcom/hcom"]
 	path = 3rdparty/hcom/hcom
 	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hcom.git
-	branch = br_release_BeiMing_I_24.4.0_20240930
+	tag = tag_BeiMing_24.4.RC3_release
 [submodule "3rdparty/hseceasy/hseceasy"]
 	path = 3rdparty/hseceasy/hseceasy
 	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hseceasy.git
