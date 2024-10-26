@@ -388,12 +388,14 @@ int32_t CmClientZkGetNodeState(uint16_t poolId, uint16_t nodeId, NodeStateInfo *
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_STATE_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        free(stateList);
         return CM_ERR;
     }
 
     ret = CmZkGet(g_zh, zkPath, UNWATCH_ZNODE, (char *)stateList, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        free(stateList);
         return CM_ERR;
     }
 
@@ -587,12 +589,14 @@ static int32_t CmClientZkSubNodeList(uint16_t poolId)
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_NODE_LIST_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        free(nodeList);
         return CM_ERR;
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubNodeListWatch, restore, (char *)nodeList, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        free(nodeList);
         return CM_ERR;
     }
 
@@ -630,6 +634,7 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
             ret = CmClientZkGetNodeSession(changeList->poolId, nodeId, &changeList->nodeList[nodeId].sessionId);
             if (ret != CM_OK) {
                 cm_rwlock_unlock(&restore->lock);
+                free(notifyList);
                 return;
             }
         } else {
@@ -693,12 +698,14 @@ static int32_t CmClientZkSubStateList(uint16_t poolId)
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_STATE_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        free(stateList);
         return CM_ERR;
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubStateListWatch, restore, (char *)stateList, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        free(stateList);
         return CM_ERR;
     }
 

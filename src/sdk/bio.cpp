@@ -299,7 +299,7 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
 
     if (UNLIKELY(prefix == nullptr || strlen(prefix) >= KEY_MAX_SIZE)) {
         CLIENT_LOG_ERROR("Invalid list parameter, prefix is null or length prefix: " <<
-            strlen(prefix) << " is invalid");
+            (prefix ? strlen(prefix) : 0) << " is invalid");
         return RET_CACHE_EPERM;
     }
 
