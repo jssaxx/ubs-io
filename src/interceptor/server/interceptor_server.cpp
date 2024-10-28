@@ -146,9 +146,8 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
     }
 
     CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->length << ", location0:" <<
-        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0:" <<
-        addressInfo.address[0].address << ", address0 size:" << addressInfo.address[0].size << ", address1:" <<
-        addressInfo.address[1].address << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
+        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
+        addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
         addressInfo.addressNum << ".");
 
     InterceptorAllocPageRsp rsp;
@@ -181,9 +180,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 
     CacheSpaceDesc addressInfo = req->address;
     CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->nbytes << ", location0:" <<
-        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0:" <<
-        addressInfo.address[0].address << ", address0 size:" << addressInfo.address[0].size << ", address1:" <<
-        addressInfo.address[1].address << ", address1 size:" << addressInfo.address[1].size << ".");
+        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
+        addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ".");
     InterceptorPwriteOut resp;
     resp.ret = 0;
     resp.dataLen = static_cast<int64_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
