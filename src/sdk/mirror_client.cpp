@@ -871,7 +871,7 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
 
     LVOS_TP_START(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, &rsp->addrNum, (SLICE_ADDR_MAX_SIZE + 1));
     LVOS_TP_END;
-    if (rsp->addrNum > SLICE_ADDR_MAX_SIZE) {
+    if (rsp->addrNum > CACHE_SPACE_ADDRESS_SIZE) {
         CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
@@ -1068,6 +1068,12 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
     if (rsp == nullptr) {
         return BIO_ERR;
     }
+    if (UNLIKELY(rsp->addrNum > SLICE_ADDR_MAX_SIZE)) {
+        CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        return BIO_INNER_ERR;
+    }
+
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
     ret = DataCopy(param.value, rsp->addr, rsp->addrOffset, rsp->addrNum);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
