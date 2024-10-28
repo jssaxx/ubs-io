@@ -205,8 +205,9 @@ BResult LocalSystem::List(const char *prefix, std::unordered_map<std::string, Ob
         LOG_ERROR("Fail to open directory: " << keyPath.c_str() << ".");
         return BIO_UFS_IOERR;
     }
+    size_t prefixLen = strlen(prefix);
     while ((ptr = readdir(dir)) != nullptr) {
-        if (memcmp(ptr->d_name, prefix, strlen(prefix)) == 0) {
+        if (memcmp(ptr->d_name, prefix, prefixLen) == 0) {
             struct stat fileStat;
             if (stat(((keyPath + ptr->d_name).c_str()), &fileStat) != 0) {
                 LOG_ERROR("Fail to stat file " << (keyPath + ptr->d_name) << ", errorno " << errno << ".");

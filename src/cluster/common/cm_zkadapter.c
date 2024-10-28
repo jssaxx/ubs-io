@@ -628,6 +628,7 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
     if (stateList->masterNodeId != changeList->masterNodeId) {
         stateList->masterNodeId = masterNodeId = changeList->masterNodeId;
     }
+    size_t nodeInfoLen = sizeof(NodeStateInfo);
     for (nodeId = 0; nodeId < stateList->nodeNum; nodeId++) {
         if ((stateList->nodeList[nodeId].state != NODE_STATE_UP) &&
             (changeList->nodeList[nodeId].state == NODE_STATE_UP)) {
@@ -640,7 +641,7 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
         } else {
             changeList->nodeList[nodeId].sessionId = stateList->nodeList[nodeId].sessionId; // 补齐
         }
-        if (memcmp(&stateList->nodeList[nodeId], &changeList->nodeList[nodeId], sizeof(NodeStateInfo)) != 0) {
+        if (memcmp(&stateList->nodeList[nodeId], &changeList->nodeList[nodeId], nodeInfoLen) != 0) {
             stateList->nodeList[nodeId] = changeList->nodeList[nodeId];
             notifyList->nodeList[notifyList->nodeNum] = stateList->nodeList[nodeId];
             notifyList->nodeNum++;
@@ -1048,13 +1049,13 @@ static int32_t CmClientZkCreatePoolImpl(uint16_t poolId)
         restore->stateList->poolId = poolId;
         restore->stateList->masterNodeId = NODE_ID_INVALID;
         restore->stateList->nodeNum = pool->maxNodeNum;
+        size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
         for (index = 0; index < pool->maxNodeNum; index++) {
             restore->stateList->nodeList[index].sessionId = 0;
             restore->stateList->nodeList[index].nodeId = index;
             restore->stateList->nodeList[index].state = NODE_STATE_INVALID;
             restore->stateList->nodeList[index].clusterState = NODE_CLUSTER_STATE_INVALID;
             restore->stateList->nodeList[index].diskNum = 0;
-            size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
             memset_s(restore->stateList->nodeList[index].diskList, dlen, 0, dlen);
         }
     }
@@ -2442,12 +2443,12 @@ static int32_t CmZkCreatePoolDir2(PoolInfo *pool)
     stateList->masterNodeId = NODE_ID_INVALID;
     stateList->resv = 0;
     uint16_t nodeId;
+    size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
     for (nodeId = 0; nodeId < pool->maxNodeNum; nodeId++) {
         stateList->nodeList[nodeId].nodeId = nodeId;
         stateList->nodeList[nodeId].state = NODE_STATE_INVALID;
         stateList->nodeList[nodeId].clusterState = NODE_STATE_INVALID;
         stateList->nodeList[nodeId].diskNum = 0;
-        size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
         memset_s(stateList->nodeList[nodeId].diskList, dlen, 0, dlen);
     }
 
