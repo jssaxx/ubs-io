@@ -144,6 +144,11 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
     }
+    if (UNLIKELY(addressInfo.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
+        CLIENT_LOG_ERROR("addressNum: " << addressInfo.addressNum << " is invalid.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
 
     CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->length << ", location0:" <<
         addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
