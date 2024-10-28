@@ -65,11 +65,11 @@ static void CmServerViewResetPool(uint16_t poolId)
 
     spool->stateList->poolId = pool->poolId;
     spool->stateList->nodeNum = pool->maxNodeNum;
+    size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
     for (nodeId = 0; nodeId < pool->maxNodeNum; nodeId++) {
         spool->stateList->nodeList[nodeId].state = NODE_STATE_INVALID;
         spool->stateList->nodeList[nodeId].clusterState = NODE_CLUSTER_STATE_INVALID;
         spool->stateList->nodeList[nodeId].diskNum = 0;
-        size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
         memset_s(spool->stateList->nodeList[nodeId].diskList, dlen, 0, dlen);
     }
 }
