@@ -124,6 +124,7 @@ if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp 3rdparty/hcom/lib/securec/* bio/lib/.
 	  \cp 3rdparty/huawei_secure_c/lib/* bio/lib/.
 fi
+\cp 3rdparty/hcom/lib/libhcom.so bio/lib/.
 \cp 3rdparty/hseceasy/hse/cryption_tool/bin/* bio/bin/.
 \cp 3rdparty/hseceasy/hse/cryption/lib/* bio/lib/.
 \cp 3rdparty/bdm/lib/libbdm.so bio/lib/.
