@@ -1068,6 +1068,9 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
     if (rsp == nullptr) {
         return BIO_ERR;
     }
+
+    LVOS_TP_START(SDK_MIRROR_RSP_NUM_ERROR, &(rsp->addrNum), (SLICE_ADDR_MAX_SIZE + 1));
+    LVOS_TP_END;
     if (UNLIKELY(rsp->addrNum > SLICE_ADDR_MAX_SIZE)) {
         CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));

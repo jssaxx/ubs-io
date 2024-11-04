@@ -10,6 +10,7 @@
 #include "bio_server_c.h"
 #include "test_bio_server.h"
 #include "expire_checker.h"
+#include "interceptor_server.h"
 
 using namespace ock::bio;
 
@@ -1172,4 +1173,12 @@ TEST_F(TestBioServer, test_server_exception)
     EXPECT_EQ(ret, BIO_OK);
     ret = ExpireChecker::Instance()->ExpireCheckerInit("./test.pem", "./test1.pem");
     EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestBioServer, test_handle_interceptor_alloc_page)
+{
+    LOG_INFO("test_handle_interceptor_alloc_page");
+    ServiceContext ctx;
+    auto ret = InterceptorServer::GetInstance().HandleInterceptorAllocPage(ctx);
+    EXPECT_EQ(ret, BIO_OK);
 }
