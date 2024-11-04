@@ -199,6 +199,13 @@ TEST_F(TestBio, test_bio_put)
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY");
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
 
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_RSP_NUM_ERROR", 0, 1, userParam);
+    ret = BioPut(tenantId, "key204", "testvalue204", 4UL, location);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_RSP_NUM_ERROR");
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
@@ -474,6 +481,9 @@ TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
     auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
+    ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
@@ -522,6 +532,9 @@ TEST_F(TestBio, test_bio_put_copy_free)
     ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree1", nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
     ret = BioPutWithCopyFree(tenantId, nullptr, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
@@ -532,15 +545,15 @@ TEST_F(TestBio, test_bio_put_copy_free)
 
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
-    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree1", &addressDesc);
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree2", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
-    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree2", &addressDesc);
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
-    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
+    ret = BioPutWithCopyFree(tenantId, "putwithcopyfree4", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
 

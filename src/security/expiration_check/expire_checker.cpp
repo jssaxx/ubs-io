@@ -18,7 +18,14 @@ namespace bio {
 // 加载证书
 X509* LoadCertificate(const char* filename)
 {
-    FILE* fp = fopen(filename, "r");
+    char *canonicalPath = realpath(filename, nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_ERROR("CERT failed to check certificate file: " << filename << ".");
+        return nullptr;
+    }
+    FILE* fp = fopen(canonicalPath, "r");
+    free(canonicalPath);
+    canonicalPath = nullptr;
     if (!fp) {
         LOG_ERROR("CERT Failed to open certificate file: " << filename);
         return nullptr;
@@ -136,18 +143,18 @@ void IsExpiredCheck(int period, std::string tlsCaCertFile, std::string tlsWorkCe
     LOG_INFO("CERT Cert check is stopped.");
 }
 
-void ExpireChecker::TimingManagement(const std::string caCertFile, const std::string workCertFile, int period) const
+void ExpireChecker::TimingManagement(const std::string caCertFile, const std::string serverCertFile, int period) const
 {
     LOG_INFO("CERT TimingManagement started to create thread cert time.");
     if (caCertFile.empty()) {
         LOG_WARN("CERT The caCertFile is null!");
         return;
     }
-    if (workCertFile.empty()) {
+    if (serverCertFile.empty()) {
         LOG_WARN("CERT The workCertFile is null!");
         return;
     }
-    std::thread checkManager(IsExpiredCheck, period, caCertFile, workCertFile);
+    std::thread checkManager(IsExpiredCheck, period, caCertFile, serverCertFile);
     if (pthread_setname_np(checkManager.native_handle(), "expireChecker") != 0) {
         LOG_WARN("CERT Change checkManager thread name failed.");
     }

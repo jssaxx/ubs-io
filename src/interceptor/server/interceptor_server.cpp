@@ -126,12 +126,12 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 
 BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 {
+#ifndef DEBUG_UT
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorAllocPageReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         CLIENT_LOG_ERROR("Receive interceptor alloc message len:" << ctx.MessageDataLen() << " or message is invalid.");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-
     auto *req = static_cast<InterceptorAllocPageReq *>(ctx.MessageData());
     CLIENT_LOG_DEBUG("Receive interceptor alloc message pid:" << req->pid << " length:" << req->length);
 
@@ -144,11 +144,20 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
     }
+#endif
+#ifdef DEBUG_UT
+    CacheSpaceDesc addressInfo;
+    addressInfo.addressNum = CACHE_SPACE_ADDRESS_SIZE + 1;
+#endif
+    if (UNLIKELY(addressInfo.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
+        CLIENT_LOG_ERROR("addressNum: " << addressInfo.addressNum << " is invalid.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
 
     CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->length << ", location0:" <<
-        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0:" <<
-        addressInfo.address[0].address << ", address0 size:" << addressInfo.address[0].size << ", address1:" <<
-        addressInfo.address[1].address << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
+        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
+        addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
         addressInfo.addressNum << ".");
 
     InterceptorAllocPageRsp rsp;
@@ -181,9 +190,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 
     CacheSpaceDesc addressInfo = req->address;
     CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->nbytes << ", location0:" <<
-        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0:" <<
-        addressInfo.address[0].address << ", address0 size:" << addressInfo.address[0].size << ", address1:" <<
-        addressInfo.address[1].address << ", address1 size:" << addressInfo.address[1].size << ".");
+        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
+        addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ".");
     InterceptorPwriteOut resp;
     resp.ret = 0;
     resp.dataLen = static_cast<int64_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));

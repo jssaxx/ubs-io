@@ -24,8 +24,6 @@ CONF_PATH=$INSTALL_PATH/bin/conf
 SECURITY_PATH=$INSTALL_PATH/security
 LOG_PATH=${INSTALL_PATH}/logs
 LOG_FILE=${INSTALL_PATH}/logs/boostio_start.log
-
-SYSTEMD_SERVICE_PATH=/lib/systemd/system/boostio.service
 BOOSTIO_HTRACE_LOG_PATH=/var/log/boostio
 
 #日志打印
@@ -38,17 +36,12 @@ print_log()
 
   local log_level="$1"
   local log_message="$2"
-
   echo "[$timestamp] [$pid] [$log_level] [$script_name:$line_number] $log_message" >> ${LOG_FILE}
 }
 
 #清理环境
 clear_env()
 {
-  set +e
-  stop_boostio
-  sleep 10
-
   bio_id=$(ps -ef | grep bio_daemon  | grep -v grep | awk '{print $2}')
   for id in $bio_id
   do
@@ -59,14 +52,20 @@ clear_env()
   do
    kill -9 $id
   done
-  systemctl disable boostio
-  sleep 10
-  rm -f $SYSTEMD_SERVICE_PATH
-  [ -d "${BOOSTIO_HTRACE_LOG_PATH}" ] && rm -rf $BOOSTIO_HTRACE_LOG_PATH
-  systemctl daemon-reload
-  semanage fcontext -D $INSTALL_PATH > /dev/null 2>&1
-  [ -d "$INSTALL_PATH" ] && rm -rf $INSTALL_PATH/
-  set -e
+
+  if [ -d "${BOOSTIO_HTRACE_LOG_PATH}" ]; then
+      set +e
+      chmod -R 700 $INSTALL_PATH/*
+      rm -rf $BOOSTIO_HTRACE_LOG_PATH/*
+      set -e
+  fi
+
+  if [ -d "$INSTALL_PATH" ]; then
+    set +e
+    chmod -R 700 $INSTALL_PATH/*
+    rm -rf $INSTALL_PATH/*
+    set -e
+  fi
 }
 
 
@@ -76,17 +75,14 @@ install(){
   check_user_group
   install_package
   set_permissions
-  register_systemd
 }
 
 #拷贝软件包
 install_package()
 {
   DEPRESS_PATH=$(cd $(dirname "$0")/..; pwd)
-  mkdir -p $INSTALL_PATH
   rm -rf $INSTALL_PATH/*
   cd $INSTALL_PATH
-  mkdir -p $INSTALL_PATH
   mkdir -p $INSTALL_PATH/tools
   mkdir -p $BIN_PATH
   mkdir -p $LIB_PATH
@@ -94,8 +90,7 @@ install_package()
   mkdir -p $CONF_PATH
   mkdir -p $LOG_PATH
   mkdir -p $SCRIPTS_PATH
-  rm -f $BOOSTIO_HTRACE_LOG_PATH
-  mkdir -p $BOOSTIO_HTRACE_LOG_PATH
+  rm -f $BOOSTIO_HTRACE_LOG_PATH/*
   mkdir -p $SECURITY_PATH/authorization
 
   touch $LOG_FILE
@@ -108,42 +103,6 @@ install_package()
   cp  -r "$DEPRESS_PATH"/lib/* $LIB_PATH
   cp  -r "$DEPRESS_PATH"/include/* $INCLUDE_PATH
   cp  -r "$DEPRESS_PATH"/scripts/* $SCRIPTS_PATH
-}
-
-register_systemd()
-{
-  touch $BIN_PATH/executeBio.sh
-  cat > $BIN_PATH/executeBio.sh << EOF
-#!/bin/bash
-export LD_LIBRARY_PATH=$LIB_PATH
-export HSECEASY_PATH=$LIB_PATH
-cd $BIN_PATH
-./bio_daemon
-EOF
-  chmod 550 $BIN_PATH/executeBio.sh
-  chown $RUN_USER:$RUN_GROUP $BIN_PATH/executeBio.sh
-  service_config=$SYSTEMD_SERVICE_PATH
-  cat > $service_config << EOF
-[Unit]
-Description=boostio service
-After=network.target
-[Service]
-User=$RUN_USER
-Group=$RUN_GROUP
-Type=simple
-NotifyAccess=main
-Environment=LD_LIBRARY_PATH=$LIB_PATH
-AmbientCapabilities=CAP_SETUID CAP_SETGID CAP_IPC_LOCK
-CapabilityBoundingSet=CAP_IPC_LOCK
-ExecStart=$BIN_PATH/executeBio.sh
-Restart=always
-RestartSec=1
-[Install]
-WantedBy=multi-user.target
-EOF
-chmod 640 $service_config
-systemctl daemon-reload
-systemctl enable boostio
 }
 
 check_user_group()
@@ -161,10 +120,7 @@ check_user_group()
 
 set_permissions()
 {
-  chown -R $RUN_USER:$RUN_GROUP $INSTALL_PATH
-  chown -R $RUN_USER:$RUN_GROUP $BOOSTIO_HTRACE_LOG_PATH
-  sudo -u $RUN_USER bash << EOF
-  chmod -R 750 $INSTALL_PATH
+  set +e
   chmod -R 700 $INSTALL_PATH/tools
   chmod 550 $CONF_PATH
   chmod 550 $BIN_PATH
@@ -182,41 +138,14 @@ set_permissions()
   chmod 640 $CONF_PATH/bio.conf
   chmod 640 $CONF_PATH/bio_sdk_test.conf
 
-  chmod 750 $BOOSTIO_HTRACE_LOG_PATH
   chmod 600 $LOG_FILE
-EOF
-  chmod 640 /etc/ceph/ceph.client.admin.keyring
-  chcon -R -t home_root_t $INSTALL_PATH > /dev/null 2>&1
-  set +e
-  semanage fcontext -a -t home_root_t $INSTALL_PATH > /dev/null 2>&1
   set -e
   print_log "info" "set_permissions finish."
 }
 
-
-#init node
-stop_boostio(){
-  systemctl stop boostio
-  sleep 10
-}
- 
-#init node
-start_boostio(){
-    # 拉起进程
-  systemctl start boostio >> ${LOG_FILE}
-}
- 
-
 case "$1" in
     install)
       install
-      ;;
-    start_boostio)
-      stop_boostio
-      start_boostio
-      ;;
-    stop_boostio)
-      stop_boostio
       ;;
     uninstall)
      clear_env

@@ -155,6 +155,6 @@ BResult InterceptorClientNetService::ShmInit()
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
     CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength <<
-        " fd:" << mShmFd << "success.");
+        "success.");
     return BIO_OK;
 }
