@@ -388,12 +388,14 @@ int32_t CmClientZkGetNodeState(uint16_t poolId, uint16_t nodeId, NodeStateInfo *
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_STATE_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        free(stateList);
         return CM_ERR;
     }
 
     ret = CmZkGet(g_zh, zkPath, UNWATCH_ZNODE, (char *)stateList, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        free(stateList);
         return CM_ERR;
     }
 
@@ -587,12 +589,14 @@ static int32_t CmClientZkSubNodeList(uint16_t poolId)
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_NODE_LIST_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        free(nodeList);
         return CM_ERR;
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubNodeListWatch, restore, (char *)nodeList, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        free(nodeList);
         return CM_ERR;
     }
 
@@ -624,18 +628,20 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
     if (stateList->masterNodeId != changeList->masterNodeId) {
         stateList->masterNodeId = masterNodeId = changeList->masterNodeId;
     }
+    size_t nodeInfoLen = sizeof(NodeStateInfo);
     for (nodeId = 0; nodeId < stateList->nodeNum; nodeId++) {
         if ((stateList->nodeList[nodeId].state != NODE_STATE_UP) &&
             (changeList->nodeList[nodeId].state == NODE_STATE_UP)) {
             ret = CmClientZkGetNodeSession(changeList->poolId, nodeId, &changeList->nodeList[nodeId].sessionId);
             if (ret != CM_OK) {
                 cm_rwlock_unlock(&restore->lock);
+                free(notifyList);
                 return;
             }
         } else {
             changeList->nodeList[nodeId].sessionId = stateList->nodeList[nodeId].sessionId; // 补齐
         }
-        if (memcmp(&stateList->nodeList[nodeId], &changeList->nodeList[nodeId], sizeof(NodeStateInfo)) != 0) {
+        if (memcmp(&stateList->nodeList[nodeId], &changeList->nodeList[nodeId], nodeInfoLen) != 0) {
             stateList->nodeList[nodeId] = changeList->nodeList[nodeId];
             notifyList->nodeList[notifyList->nodeNum] = stateList->nodeList[nodeId];
             notifyList->nodeNum++;
@@ -693,12 +699,14 @@ static int32_t CmClientZkSubStateList(uint16_t poolId)
     ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_STATE_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
+        free(stateList);
         return CM_ERR;
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubStateListWatch, restore, (char *)stateList, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
+        free(stateList);
         return CM_ERR;
     }
 
@@ -1041,13 +1049,13 @@ static int32_t CmClientZkCreatePoolImpl(uint16_t poolId)
         restore->stateList->poolId = poolId;
         restore->stateList->masterNodeId = NODE_ID_INVALID;
         restore->stateList->nodeNum = pool->maxNodeNum;
+        size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
         for (index = 0; index < pool->maxNodeNum; index++) {
             restore->stateList->nodeList[index].sessionId = 0;
             restore->stateList->nodeList[index].nodeId = index;
             restore->stateList->nodeList[index].state = NODE_STATE_INVALID;
             restore->stateList->nodeList[index].clusterState = NODE_CLUSTER_STATE_INVALID;
             restore->stateList->nodeList[index].diskNum = 0;
-            size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
             memset_s(restore->stateList->nodeList[index].diskList, dlen, 0, dlen);
         }
     }
@@ -2435,12 +2443,12 @@ static int32_t CmZkCreatePoolDir2(PoolInfo *pool)
     stateList->masterNodeId = NODE_ID_INVALID;
     stateList->resv = 0;
     uint16_t nodeId;
+    size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
     for (nodeId = 0; nodeId < pool->maxNodeNum; nodeId++) {
         stateList->nodeList[nodeId].nodeId = nodeId;
         stateList->nodeList[nodeId].state = NODE_STATE_INVALID;
         stateList->nodeList[nodeId].clusterState = NODE_STATE_INVALID;
         stateList->nodeList[nodeId].diskNum = 0;
-        size_t dlen = sizeof(NodeDiskState) * DISK_LIST_NUM;
         memset_s(stateList->nodeList[nodeId].diskList, dlen, 0, dlen);
     }
 

@@ -581,7 +581,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     }
 
     LOG_DEBUG("Mirror server get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
-        ", length:" << req.length << ", mr address:" << req.address << ", mr size:" << req.size << ", mr key:" <<
+        ", length:" << req.length << ", mr size:" << req.size << ", mr key:" <<
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {

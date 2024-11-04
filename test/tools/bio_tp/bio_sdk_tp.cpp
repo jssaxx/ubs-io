@@ -47,6 +47,7 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID, "sdk mirror client get cluster view fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID, "sdk mirror client get pt view fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, "sdk mirror client alloc space fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_RSP_NUM_ERROR, "set mirror rsp num error", CommonTp::IntValueCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
@@ -87,6 +88,7 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_PREPARE_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY);
+    LVOS_TP_UNREG(SDK_MIRROR_RSP_NUM_ERROR);
 }
 #else
 void tp::SdkTp::Register() noexcept {}
