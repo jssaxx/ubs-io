@@ -665,3 +665,12 @@ TEST_F(TestCm, test_cm_get_pt_info)
     int32_t ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
     EXPECT_EQ(ret, 123U);
 }
+
+TEST_F(TestCm, test_cm_get_zk_node_state)
+{
+    LOG_INFO("test_cm_get_zk_node_state");
+    NodeStateInfo cmState;
+    MOCKER(CmZkGet).stubs().will(returnValue(-1));
+    auto ret = CmClientZkGetNodeState(0, 0, &cmState);
+    EXPECT_EQ(ret, CM_ERR);
+}
