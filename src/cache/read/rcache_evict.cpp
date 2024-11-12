@@ -126,6 +126,7 @@ BResult RCacheEvict::Initialize()
                 works[tier][i] = th;
             } else {
                 LOG_ERROR("Create thread for read cache evict failed");
+                delete para;
                 return BIO_ALLOC_FAIL;
             }
         }
