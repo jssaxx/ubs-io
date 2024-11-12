@@ -89,6 +89,7 @@ BResult RCacheGC::Initialize()
                 works[tier][i] = th;
             } else {
                 LOG_ERROR("Create thread for read cache GC failed");
+                delete para;
                 return BIO_ALLOC_FAIL;
             }
         }
