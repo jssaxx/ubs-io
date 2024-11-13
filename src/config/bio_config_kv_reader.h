@@ -67,7 +67,12 @@ inline KVReader::~KVReader()
 
 inline bool KVReader::FromFile(const std::string &filePath)
 {
-    char path[PATH_MAX + 1] = {0x00};
+    char* path = new(std::nothrow) char[PATH_MAX + 1];
+    if (path == nullptr) {
+        printf("Memory allocation failed.\n");
+        return false;
+    }
+    std::fill(path, path + PATH_MAX + 1, 0x00);
     if (strlen(filePath.c_str()) > PATH_MAX || realpath(filePath.c_str(), path) == nullptr) {
         return false;
     }

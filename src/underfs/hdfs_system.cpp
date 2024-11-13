@@ -332,9 +332,8 @@ std::string GetFileNameFromHdfsPath(const std::string path)
     size_t pos = path.find_last_of('/');
     if (pos == std::string::npos) {
         return path;
-    } else {
-        return path.substr(pos + 1);
     }
+    return path.substr(pos + 1);
 }
 
 BResult HdfsSystem::ListDirectoryRecursive(const char *path,

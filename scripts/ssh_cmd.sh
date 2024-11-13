@@ -36,7 +36,7 @@ expect <<-EOF
     spawn ssh ${username}@${ip_addr} -p${ip_port}
     sleep 1
         expect {
-       "*yes/no" { send "no\r"; exit 1; }
+       "*yes/no" { send "yes\r"; exp_continue }
        "*password:" { send "${password}\r"; exp_continue }
        "Permission denied, please try again.*" { exit 1;}
        "]*" { send "export HISTFILE=/dev/null\r" }
