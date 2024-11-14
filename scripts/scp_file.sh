@@ -36,7 +36,7 @@ expect <<-EOF
     spawn scp -P${ip_port} ${file_path} ${username}@${ip_addr}:${target_path}
     sleep 1
 	expect {
-       "*yes/no" { send "no\r"; exit 1; }
+       "*yes/no" { send "yes\r"; exp_continue }
        "*password:" { send "${password}\r" }
        "*100%*"
     }

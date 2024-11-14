@@ -119,13 +119,14 @@ BResult RCacheEvict::Initialize()
             para->rCacheEvict = this;
             std::thread *th = nullptr;
             LVOS_TP_START(RCACHE_EVICT_THREAD_FAIL, &th, nullptr);
-            th = new std::thread(Worker, static_cast<void *>(para));
+            th = new (std::nothrow) std::thread(Worker, static_cast<void *>(para));
             LVOS_TP_END;
-            if (th) {
+            if (th != nullptr) {
                 pthread_setname_np(th->native_handle(), "evictWorker");
                 works[tier][i] = th;
             } else {
                 LOG_ERROR("Create thread for read cache evict failed");
+                delete para;
                 return BIO_ALLOC_FAIL;
             }
         }

@@ -54,6 +54,7 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     if (rspLen < sizeof(InterceptorPreadOut) + resp->dataLen) {
         CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " <<
             sizeof(InterceptorPreadOut) << " and datalen: " << resp->dataLen << ".");
+        free(resp);
         return -1;
     }
     CLOG_DEBUG("Read inode:" << request.inode << ", offset:" << request.offset << ", length:" << request.nbytes <<
