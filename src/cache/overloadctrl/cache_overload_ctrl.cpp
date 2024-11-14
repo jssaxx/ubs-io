@@ -86,11 +86,6 @@ uint64_t CacheOverloadCtrl::CalculateWriteQuota(uint64_t frontWriteBw, uint64_t 
 
 uint64_t CacheOverloadCtrl::GetAdjustWriteQuota(uint64_t allocSize)
 {
-    static bool dynamicAdjust = true;
-    if (!dynamicAdjust) {
-        return allocSize;
-    }
-
     // 1. 间隔1秒钟做一次申请配额资源大小的动态调整, 避免动态调整频率过高.
     bool isAdjust = false;
     {

@@ -82,13 +82,14 @@ BResult RCacheGC::Initialize()
             para->rCacheEvict = this;
             std::thread *th = nullptr;
             LVOS_TP_START(RCACHE_GC_THREAD_FAIL, &th, nullptr);
-            th = new std::thread(Worker, static_cast<void *>(para));
+            th = new (std::nothrow) std::thread(Worker, static_cast<void *>(para));
             LVOS_TP_END;
-            if (th) {
+            if (th != nullptr) {
                 pthread_setname_np(th->native_handle(), "GcWorker");
                 works[tier][i] = th;
             } else {
                 LOG_ERROR("Create thread for read cache GC failed");
+                delete para;
                 return BIO_ALLOC_FAIL;
             }
         }
