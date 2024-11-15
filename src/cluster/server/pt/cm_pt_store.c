@@ -76,6 +76,7 @@ static Storer ViewCreateStorer(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t 
     store->ptList = (PtEntryList *)malloc(sizeof(PtEntry) * maxPtNum + sizeof(PtEntryList));
     if (maxPtNum > UINT32_MAX / (CM_PT_STORE_EXPAND_NUM * maxCopyNum)){
         CM_LOGERROR("Invalid parameter, maxPtNum or maxCopyNum exceed.");
+        ViewDestoryStorer((Storer)store);
         return NULL;
     }
     uint32_t elemNum = maxPtNum * maxCopyNum * CM_PT_STORE_EXPAND_NUM;
