@@ -17,6 +17,7 @@ import getpass
 import configparser
 import subprocess
 import copy
+import shutil
 
 sp = subprocess.Popen("touch ./boostio_hand_out_py.log;chmod 600 ./boostio_hand_out_py.log", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
 sp.communicate()
@@ -97,8 +98,8 @@ def send_files_to_node(node):
     disk_str = "disk"
     node_id = "node id"
     if ssh_cmd(node, home_path_of(node["user"]),
-               "rm -rf /home/{0};mkdir /home/{1}".format(node[ip_str], node[ip_str])) != 0:
-        logging.info("pid:{0} create install dir /home/{1} fails. The dir already exist".format(PID, node[ip_str]))
+               "rm -rf /home/{0}/*;".format(node[ip_str], node[ip_str])) != 0:
+        logging.info("pid:{0} clear /home/{1} fails. ".format(PID, node[ip_str]))
     config = copy.deepcopy(g_config);
     config["bio"]["bio.net.data.ip_mask"] = str(node[net_str]) + "/24"
     config["bio"]["bio.disk.path"] = str(node[disk_str])
@@ -132,7 +133,11 @@ def send_files_to_node(node):
                 .format(SCP_FILE_SHELL_PATH, node[ip_str], node["user"], node[port_str], sent_file,
                         "/home/{0}".format(node[ip_str]))
             logging.error("pid:{0} Failed to execute SCP. (cmd:{1}), reason:{2}".format(PID, cmd, stderr))
+            if os.path.exists(folder_path):
+                shutil.rmtree(folder_path)
             return -1
+    if os.path.exists(folder_path):
+        shutil.rmtree(folder_path)
     return 0
 
 def check_threads_alive(thread_list):
@@ -197,7 +202,8 @@ def ssh_cmd(node, path, command):
 def decompress_pkg(node):
     ip_str = "ip"
     if ssh_cmd(node, home_path_of(node["user"]) + "/{0}".format(node[ip_str]),
-               "tar -xvf /home/{0}/{1} -C /home/{2}".format(node[ip_str], PACKAGE_NAME, node[ip_str])) != 0:
+               "tar -xvf /home/{0}/{1} -C /home/{2};chown -R {3}:{4} /home/{2}/*;chmod -R 700 /home/{2}/*".format(node[ip_str],
+               PACKAGE_NAME, node[ip_str], INSTALL_USER, INSTALL_USER)) != 0:
         logging.error("pid:{0} decompress package fails.".format(PID))
         return -1
     return 0
@@ -235,7 +241,7 @@ def install(node):
         failed_times.append(1)
         return -1
     if ssh_cmd(node, home_path_of(node["user"]),
-               "rm -rf /home/{0}".format(node[ip_str], node[ip_str])) != 0:
+               "rm -rf /home/{0}/*".format(node[ip_str], node[ip_str])) != 0:
         logging.info("pid:{0} remove install dir /home/{1} fails. The dir not exist".format(PID, node[ip_str]))
 
 
@@ -521,41 +527,6 @@ def uninstall_all_nodes():
     echo_to_terminal("(3/3)----------success.")
     return 0
 
-
-def stop_all_nodes():
-    # 从配置文件初始化需要的信息
-    logging.info("pid:{0} start stop fs.".format(PID))
-    echo_to_terminal("(1/3)----------check the configuration file.")
-    if node_basic_info_init() != 0:
-        echo_to_terminal("initialization failed.")
-        return -1
-    time.sleep(5)
-    echo_to_terminal("(2/3)----------stop in all nodes.")
-    if broad_cast(stop_boostio) != 0:
-        echo_to_terminal("stop failed.")
-        return -1
-    time.sleep(10)
-    echo_to_terminal("(3/3)----------success.")
-    return 0
-
-
-def start_all_nodes():
-    # 从配置文件初始化需要的信息
-    logging.info("pid:{0} start start fs.".format(PID))
-    echo_to_terminal("(1/3)----------check the configuration file.")
-    if node_basic_info_init() != 0:
-        echo_to_terminal("initialization failed.")
-        return -1
-    time.sleep(5)
-    echo_to_terminal("(2/3)----------start in all nodes.")
-    if broad_cast(start_boostio) != 0:
-        echo_to_terminal("start failed.")
-        return -1
-    time.sleep(10)
-    echo_to_terminal("(3/3)----------success.")
-    return 0
-
-
 def exec_build(args):
     if len(args) < 2:
         help_info()
@@ -571,7 +542,7 @@ def exec_build(args):
         return False
 
     # 检查password
-
+    global INSTALL_PASSWORD
     INSTALL_PASSWORD = getpass.getpass('input login password:')
     global DEFAULT_INSTALL_PATH
     if args[1] == "install":
@@ -586,10 +557,6 @@ def exec_build(args):
         return install_all_nodes(args[2])
     elif args[1] == "uninstall" and len(args) == 2:
         return uninstall_all_nodes()
-    elif args[1] == "stop_boostio" and len(args) == 2:
-        return stop_all_nodes()
-    elif args[1] == "start_boostio" and len(args) == 2:
-        return start_all_nodes()
     else:
         help_info()
         return -1

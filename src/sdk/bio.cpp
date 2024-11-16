@@ -299,7 +299,7 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
 
     if (UNLIKELY(prefix == nullptr || strlen(prefix) >= KEY_MAX_SIZE)) {
         CLIENT_LOG_ERROR("Invalid list parameter, prefix is null or length prefix: " <<
-            strlen(prefix) << " is invalid");
+            (prefix ? strlen(prefix) : 0) << " is invalid");
         return RET_CACHE_EPERM;
     }
 
@@ -560,6 +560,9 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
 
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space)
 {
+    if (UNLIKELY(space == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
         std::unique_lock<std::mutex> locker(g_lock);
@@ -574,6 +577,9 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
 
 CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space)
 {
+    if (UNLIKELY(space == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
     std::shared_ptr<Bio> bioInstance = nullptr;
     {
         std::unique_lock<std::mutex> locker(g_lock);

@@ -33,11 +33,6 @@ static int32_t CmServerZkRecordSubPtEntryList(uint16_t poolId, uint16_t nodeId, 
     return CM_OK;
 }
 
-static int32_t CmServerZkGetSubPtEntryList(uint16_t poolId, uint16_t nodeId, PtEntryList *ptEntryList)
-{
-    return CM_NOT_EXIST;
-}
-
 static void ViewDestoryStorer(Storer storer)
 {
     StoreCore *store = (StoreCore *)storer;
@@ -79,7 +74,11 @@ static Storer ViewCreateStorer(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t 
     store->nodeList = (DList *)malloc(sizeof(DList) * maxNodeNum);
     store->nodeListBak = (DList *)malloc(sizeof(DList) * maxNodeNum);
     store->ptList = (PtEntryList *)malloc(sizeof(PtEntry) * maxPtNum + sizeof(PtEntryList));
-
+    if (maxPtNum > UINT32_MAX / (CM_PT_STORE_EXPAND_NUM * maxCopyNum)){
+        CM_LOGERROR("Invalid parameter, maxPtNum or maxCopyNum exceed.");
+        ViewDestoryStorer((Storer)store);
+        return NULL;
+    }
     uint32_t elemNum = maxPtNum * maxCopyNum * CM_PT_STORE_EXPAND_NUM;
     store->cache = (NodeElem *)malloc(sizeof(NodeElem) * elemNum);
     if (store->nodeList == NULL || store->nodeListBak == NULL || store->ptList == NULL || store->cache == NULL) {
@@ -293,14 +292,7 @@ static int32_t ViewStoreCheckSubPtView(StoreCore *store, PtEntryList *ptList)
 
     for (nodeId = 0; nodeId < store->maxNodeNum; nodeId++) {
         store->ptList->ptNum = store->maxPtNum;
-        ret = CmServerZkGetSubPtEntryList(ptList->poolId, nodeId, store->ptList);
-        if (ret != CM_OK && ret != CM_NOT_EXIST) {
-            CM_LOGERROR("Get sub ptEntryList failed, ret(%d) nodeId(%d) poolId(%u).", ret, nodeId, ptList->poolId);
-            return ret;
-        }
-        if (ret == CM_NOT_EXIST) {
-            store->ptList->ptNum = 0;
-        }
+        store->ptList->ptNum = 0;
         if (D_LIST_EMPTY(&store->nodeList[nodeId]) && store->ptList->ptNum == 0) {
             continue;
         }

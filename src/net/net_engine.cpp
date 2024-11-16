@@ -179,6 +179,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     LVOS_TP_END;
     if (ret < 0) {
         NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
+        shm_unlink(name.c_str());
         close(fd);
         return BIO_INNER_ERR;
     }
@@ -271,9 +272,8 @@ BResult NetEngine::InitMemoryAllocator()
 {
     if (mOptions.regShmMem == true) {
         return InitShmMemAllocator();
-    } else {
-        return InitCommMemAllocator();
     }
+    return InitCommMemAllocator();
 }
 
 BResult ValidateTlsCert(const NetOptions &opt)
@@ -751,7 +751,7 @@ BResult NetEngine::PrepareHseCryptor(std::string kfsMaster, std::string kfsStand
     }
     ret = ock::hse::HseCryptor::SetExternalLogger(HseSeceasyLog);
     if (ret != 0) {
-        NET_LOG_ERROR("set hseceasy log func failed.");
+        NET_LOG_ERROR("set hseceasy log func failed, ret:" << ret << ".");
         delete mbioCryptorHelper;
         mbioCryptorHelper = nullptr;
         return BIO_ERR;

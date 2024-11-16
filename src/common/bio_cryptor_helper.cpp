@@ -14,6 +14,7 @@ std::mutex BioCryptorHelper::globalMutex;
 
 static constexpr int MIN_VALID_KEY = 0x20161111;
 static constexpr int MAX_VALID_KEY = 0x20169999;
+static constexpr int64_t MAX_KEY_LENGTH = 10L * 1024L * 1024L;
 
 BioCryptorHelper::BioCryptorHelper(std::string kfsMaster, std::string kfsStandby) noexcept
     : kfsMasterPath{ std::move(kfsMaster) }, kfsStandbyPath{ std::move(kfsStandby) }
@@ -35,8 +36,18 @@ static int ReadFile(const std::string &path, std::string &content) noexcept
 
 int BioCryptorHelper::Decrypt(int domainId, const std::string &filePath, std::pair<char *, int> &result) noexcept
 {
+    struct stat fileStat {};
+    auto ret = stat(filePath.c_str(), &fileStat);
+    if (ret != 0) {
+        LOG_ERROR("Stat for private key file failed: " << errno << " : " << strerror(errno) << ".");
+        return -1;
+    }
+    if (fileStat.st_size > MAX_KEY_LENGTH) {
+        LOG_ERROR("Stat for private key file is abnormal, size too large: " << fileStat.st_size << ".");
+        return -1;
+    }
     std::string encryptedText;
-    auto ret = ReadFile(filePath, encryptedText);
+    ret = ReadFile(filePath, encryptedText);
     if (ret != 0) {
         LOG_ERROR("Read private key file error: " << ret);
         return -1;
