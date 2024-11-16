@@ -678,6 +678,6 @@ TEST_F(TestCm, test_cm_get_zk_node_state)
 TEST_F(TestCm, test_cm_view_create_store)
 {
 LOG_INFO("test_cm_view_create_store");
-auto ret = CmClientZkGetNodeState(3, UINT32_MAX,2);
+auto ret = ViewCreateStorer(3, UINT32_MAX,2);
 EXPECT_EQ(ret, NULL);
 }
