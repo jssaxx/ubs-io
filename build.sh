@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright: (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
-
+set -e
 usage() {
     echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint]"
     echo "build_type: [debug, release, clean]"
@@ -30,14 +30,14 @@ while true; do
         -t | --type )
             type=$2
             type=${type,,}
-            [[ $type != "debug" && $type != "release" && $type != "clean" ]] && echo "Invalid build type $2" && usage
-            if [[ $type == 'debug' ]]; then
+            [[ "$type" != "debug" && "$type" != "release" && "$type" != "clean" ]] && echo "Invalid build type $2" && usage
+            if [[ "$type" == 'debug' ]]; then
                 BUILD_TYPE=debug
 			          TP_FLAG=ON
 			          CLI_FLAG=ON
-            elif [[ $type == 'release' ]]; then
+            elif [[ "$type" == 'release' ]]; then
                 BUILD_TYPE=release
-            elif [[ $type == 'clean' ]]; then
+            elif [[ "$type" == 'clean' ]]; then
                 BUILD_TYPE=clean
             fi
             shift 2
@@ -119,11 +119,12 @@ $BUILD_CMD || {
 }
 cd ${PROJ_DIR}/output
 if [[ "$BUILD_TYPE" == "debug" ]];then
-	  \cp 3rdparty/zookeeper/lib/* bio/lib/.
+	  \cp -d 3rdparty/zookeeper/lib/* bio/lib/.
 	  \cp 3rdparty/spdlog/lib64/libspdlog.a bio/lib/.
 	  \cp 3rdparty/hcom/lib/securec/* bio/lib/.
 	  \cp 3rdparty/huawei_secure_c/lib/* bio/lib/.
 fi
+\cp 3rdparty/hcom/lib/libhcom.so bio/lib/.
 \cp 3rdparty/hseceasy/hse/cryption_tool/bin/* bio/bin/.
 \cp 3rdparty/hseceasy/hse/cryption/lib/* bio/lib/.
 \cp 3rdparty/bdm/lib/libbdm.so bio/lib/.
