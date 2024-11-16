@@ -674,3 +674,14 @@ TEST_F(TestCm, test_cm_get_zk_node_state)
     auto ret = CmClientZkGetNodeState(0, 0, &cmState);
     EXPECT_EQ(ret, CM_ERR);
 }
+
+TEST_F(TestCm, test_cm_view_create_store)
+{
+LOG_INFO("test_cm_view_create_store");
+auto ops = CmPtStoreOpsGet();
+ops->createStorer(NO_3, NO_65535, NO_65535);
+NodeStateInfo cmState;
+MOCKER(CmZkGet).stubs().will(returnValue(-1));
+auto ret = CmClientZkGetNodeState(0, 0, &cmState);
+EXPECT_EQ(ret, CM_ERR);
+}
