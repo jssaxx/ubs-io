@@ -774,7 +774,7 @@ void WCache::EvictNegotiate()
     ret = GetPtMasterNode(masterNid);
     LVOS_TP_END;
 
-    if (UNLIKELY(ret != BIO_OK || indexVec.size() > UINT32_MAX)) {
+    if (UNLIKELY(ret != BIO_OK || indexVec.size() > MAX_EVICT_CONSULT_SIZE)) {
         LOG_ERROR("ret: " << ret << ". Or indexVec too big, indexVec size: " << indexVec.size());
         mIsStartEvictNegotiate.store(false);
         return;

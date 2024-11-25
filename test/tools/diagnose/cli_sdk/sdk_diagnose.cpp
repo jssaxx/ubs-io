@@ -579,6 +579,10 @@ static void HandlePerf(std::vector<std::string> cmds)
             return;
         }
     }
+    if (std::stoul(cmds[2]) == 0) {
+        CLI_PrintBuf("Invalid param, bs:%s\n", cmds[2].c_str());
+        return;
+    }
     if (gTenantId == UINT64_MAX) {
         CLI_PrintBuf("Create and open a cache first!\n");
         return;
