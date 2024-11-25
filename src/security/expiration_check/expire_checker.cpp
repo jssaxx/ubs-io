@@ -20,14 +20,14 @@ X509* LoadCertificate(const char* filename)
 {
     char *canonicalPath = realpath(filename, nullptr);
     if (canonicalPath == nullptr) {
-        LOG_ERROR("CERT failed to check certificate file: " << filename << ".");
+        LOG_ERROR("CERT failed to check certificate file.");
         return nullptr;
     }
     FILE* fp = fopen(canonicalPath, "r");
     free(canonicalPath);
     canonicalPath = nullptr;
     if (!fp) {
-        LOG_ERROR("CERT Failed to open certificate file: " << filename);
+        LOG_ERROR("CERT Failed to open certificate file.");
         return nullptr;
     }
 
@@ -35,7 +35,7 @@ X509* LoadCertificate(const char* filename)
     fclose(fp);
 
     if (!x509) {
-        LOG_ERROR("CERT Failed to read certificate from file: " << filename);
+        LOG_ERROR("CERT Failed to read certificate from file.");
     }
 
     return x509;
