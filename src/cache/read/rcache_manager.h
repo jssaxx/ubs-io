@@ -13,7 +13,6 @@
 #include "rcache.h"
 #include "cache_def.h"
 #include "rcache_evict.h"
-#include "rcache_gc.h"
 
 namespace ock {
 namespace bio {
@@ -70,7 +69,6 @@ private:
 
     RCacheEvictPtr rCacheEvict; // read cache evict service
 
-    RCacheGCPtr rCacheGCPtr; // read cache gc service
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

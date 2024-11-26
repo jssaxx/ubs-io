@@ -16,6 +16,10 @@ namespace ock {
 namespace bio {
 inline void CopyKey(char *dstKey, const char *srcKey, uint32_t maxLen)
 {
+    if (UNLIKELY(srcKey == nullptr)) {
+        LOG_ERROR("Invalid param, srcKey is null");
+        return;
+    }
     auto keyLen = strlen(srcKey);
     auto ret = memcpy_s(dstKey, maxLen, srcKey, keyLen);
     dstKey[keyLen] = '\0';
