@@ -207,7 +207,6 @@ void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t lim
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
-    mMetaFlow->GetFlowId();
     BResult ret = BIO_ERR;
     LVOS_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
     ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), slice);

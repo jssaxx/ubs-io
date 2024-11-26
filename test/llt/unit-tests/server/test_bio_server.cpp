@@ -979,7 +979,6 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_param_err_return_fa
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_GC_PARAM_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_GC", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_INIT", 0, 1, userParam);
@@ -987,7 +986,6 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_param_err_return_fa
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_GC_PARAM_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_EVICT");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_GC");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CACHE_INIT");
@@ -999,7 +997,6 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_thread_err_return_f
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_GC_THREAD_FAIL", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_GC", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_INIT", 0, 1, userParam);
@@ -1007,7 +1004,6 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_thread_err_return_f
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_GC_THREAD_FAIL");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_EVICT");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_GC");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CACHE_INIT");

@@ -31,25 +31,13 @@ BResult RCacheManager::Init()
     LVOS_TP_END;
 
     BResult ret = BIO_OK;
-    LVOS_TP_START(NO_PROCESS_RCACHE_GC, 0);
+    LVOS_TP_START(NO_PROCESS_RCACHE_GC, &ret, BIO_ALLOC_FAIL);
     ret = rCacheEvict->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init rcache evict, ret:" << ret << ".");
         return ret;
     }
-
-    rCacheGCPtr = MakeRef<RCacheGC>();
-    if (UNLIKELY(rCacheGCPtr == nullptr)) {
-        LOG_ERROR("Failed to make rcache gc.");
-        return BIO_ALLOC_FAIL;
-    }
     LVOS_TP_END;
-
-    ret = rCacheGCPtr->Initialize();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init rcache GC, ret:" << ret << ".");
-        return ret;
-    }
     return ret;
 }
 
@@ -68,7 +56,6 @@ void RCacheManager::Exit()
     cacheLock.UnLock();
 
     rCacheEvict->Destroy();
-    rCacheGCPtr->Destroy();
 }
 
 const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
@@ -182,13 +169,6 @@ BResult RCacheManager::CreateRCache(uint16_t ptId, uint64_t ptv, uint16_t diskId
         return BIO_ALLOC_FAIL;
     }
 
-    ret = rCacheGCPtr->Start(cacheObj);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Start ptId:" << ptId << " read cache to GC service failed, error code " << ret);
-        DeleteRCache(ptId);
-        return BIO_ALLOC_FAIL;
-    }
-
     LOG_INFO("Create cache, flowId:" << cacheObj->GetFlowId() << ", ptId:" << ptId << ", ptv:" << ptv);
     return BIO_OK;
 }
@@ -262,12 +242,6 @@ BResult RCacheManager::ExpiredClearImpl(RCachePtr rCache)
     auto ret = rCacheEvict->Stop(rCache);
     if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache evict service failed:" << ret);
-        return ret;
-    }
-
-    ret = rCacheGCPtr->Stop(rCache);
-    if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Stop ptId " << rCache->GetPtId() << " read cache GC service failed:" << ret);
         return ret;
     }
 

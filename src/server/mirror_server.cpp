@@ -337,11 +337,6 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
     rsp.flag = (index == 0) ? 0 : 1;
 }
 
-BResult MirrorServer::ReaderLocal(const SlicePtr &from, const SlicePtr &to)
-{
-    return BIO_OK;
-}
-
 BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec,
     std::vector<NetMrInfo> &rMrVec, ServiceContext &netCtx)
 {
@@ -436,7 +431,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
 
     auto reader = [&req, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) {
-            return ReaderLocal(from, to);
+            return BIO_OK; // read local
         } else {
             return ReaderRemote(from, to, req, netCtx);
         }

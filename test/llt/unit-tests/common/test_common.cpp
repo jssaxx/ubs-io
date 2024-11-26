@@ -6,6 +6,8 @@
 #include <mockcpp/mockcpp.hpp>
 #include "securec.h"
 #include "bio_str_util.h"
+#include "bio_functions.h"
+#include "message.h"
 #include "bio_file_util.h"
 #include "bio_log.h"
 #include "bio_mock.h"
@@ -66,4 +68,13 @@ TEST_F(TestCommon, test_decrypt_return_fail)
     path = "libbio_sdk.so";
     ret = mbioCryptorHelper->Decrypt(1, path, result);
     EXPECT_EQ(ret, -1);
+}
+
+TEST_F(TestCommon, test_copy_key_fail)
+{
+    LOG_INFO("test_copy_key_fail");
+    CopyKey(nullptr, nullptr, KEY_MAX_SIZE);
+
+    auto ret = StrUtil::StartWith("123.5", "1");
+    EXPECT_EQ(ret, true);
 }
