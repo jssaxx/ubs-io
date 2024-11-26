@@ -73,7 +73,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(RCACHE_EVICT_PARAM_FAIL, "rcache gc evict err", CommonTp::NoProcessCallback);
     LVOS_TP_REG(RCACHE_GC_PARAM_FAIL, "rcache gc param err", CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_RCACHE_EVICT, "no process rcache evict init", CommonTp::NoProcessCallback);
-    LVOS_TP_REG(NO_PROCESS_RCACHE_GC, "no process rcache gc init", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(NO_PROCESS_RCACHE_GC, "no process rcache gc init", CommonTp::IntValueCallback);
     LVOS_TP_REG(MIRROR_FLOW_CREATE_WCACHE_FAIL, "mirror flow create wcache err", CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_RCACHE_FIND, "no process rcache find", CommonTp::NoProcessCallback);
     LVOS_TP_REG(RCACHE_ALLOC_OBJ_FAIL, "rcache alloc obj err", CommonTp::PointerValueCallback);
