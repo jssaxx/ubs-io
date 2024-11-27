@@ -83,7 +83,7 @@ public:
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx, GetRequest &req);
 
-    int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
+    int32_t MirrorServerShmInit(ServiceContext &ctx);
     int32_t MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req);
     int32_t MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLocationQueryReq *req);
     int32_t MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequest *req);

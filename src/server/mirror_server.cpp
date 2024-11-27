@@ -765,7 +765,7 @@ BResult MirrorServer::Initialize()
     return BIO_OK;
 }
 
-int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req)
+int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx)
 {
     ShmInitResponse rsp;
     auto config = BioConfig::Instance()->GetDaemonConfig();
@@ -793,15 +793,14 @@ int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
-
+    LVOS_TP_START(SERVER_NO_PROCESS_SHM_INIT_SKIP, 0);
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(ShmInitRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive shm init message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-
-    auto req = static_cast<ShmInitRequest *>(ctx.MessageData());
-    return MirrorServerShmInit(ctx, req);
+    LVOS_TP_END;
+    return MirrorServerShmInit(ctx);
 }
 
 int32_t MirrorServer::MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req)

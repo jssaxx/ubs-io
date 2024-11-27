@@ -25,6 +25,7 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(SERVER_NET_RDMA_WRITE_FAIL, "rdma write fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVICE_START_FAIL, "server start fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NO_PROCESS_SHM_INIT_SKIP, "server handle shm init skip", CommonTp::NoProcessCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -43,6 +44,7 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_NET_RDMA_WRITE_FAIL);
     LVOS_TP_UNREG(SERVER_NET_RDMA_READ_FAIL);
     LVOS_TP_UNREG(SERVICE_START_FAIL);
+    LVOS_TP_UNREG(SERVER_NO_PROCESS_SHM_INIT_SKIP);
 }
 #else
 void tp::ServerTp::Register() noexcept {}
