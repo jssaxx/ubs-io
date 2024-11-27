@@ -52,9 +52,11 @@ TEST_F(TestBioServer, test_bio_server_shm_init)
     LOG_INFO("test_bio_server_shm_init");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
-    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() } };
-    auto ret = mirror->MirrorServerShmInit(ctx, &req);
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_NO_PROCESS_SHM_INIT_SKIP", 0, 1, userParam);
+    auto ret = mirror->HandleShmInit(ctx);
     EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_NO_PROCESS_SHM_INIT_SKIP");
 }
 
 TEST_F(TestBioServer, test_bio_server_qry_node_info)
