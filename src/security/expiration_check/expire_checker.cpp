@@ -103,6 +103,7 @@ static inline void HandleCheckCert(std::string caCertFile, std::string workCertF
     X509* workX509 = LoadCertificate(workCertFile.c_str());
     if (!workX509) {
         LOG_ERROR("CERT Server Certificate load fail.");
+        X509_free(caX509);
         return;
     }
     // 校验证书的有效时间
