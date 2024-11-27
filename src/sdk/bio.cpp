@@ -262,8 +262,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || context == nullptr || offset != 0 || length == 0 ||
-        offset > BIO_IO_MAX_LEN || length > BIO_IO_MAX_LEN || (offset + length) > BIO_IO_MAX_LEN)) {
+    if (UNLIKELY(!KeyValid(key) || context == nullptr || offset != 0 || length == 0 || length > BIO_IO_MAX_LEN)) {
         CLIENT_LOG_ERROR("Invalid load parameter, key:" << key << ".");
         return RET_CACHE_EPERM;
     }
