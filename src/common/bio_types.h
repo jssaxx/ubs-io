@@ -64,6 +64,7 @@ constexpr uint32_t NO_1 = 1;
 
 constexpr uint64_t NO_U64_0 = 0;
 constexpr uint64_t NO_U64_1 = 1;
+constexpr uint64_t NO_U64_10 = 10;
 constexpr uint8_t NO_U8_255 = 255;
 
 constexpr uint32_t IP_SIZE = 32;
