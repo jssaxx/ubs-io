@@ -117,6 +117,10 @@ inline static bool KeyValid(const char *key)
     if (UNLIKELY(key == nullptr || strlen(key) >= KEY_MAX_SIZE)) {
         return false;
     }
+    std::string keyStr(key);
+    if (keyStr.find("..") != std::string::npos) {
+        return false;
+    }
     return true;
 }
 
