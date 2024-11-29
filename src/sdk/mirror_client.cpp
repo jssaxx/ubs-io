@@ -1327,6 +1327,14 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
     InitCallbackCtx(cbCtx, quota);
 
     auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+        if (ctx == nullptr) {
+            LOG_ERROR("Send delete request callback ctx null");
+            return;
+        }
+        if (resp == nullptr) {
+            LOG_ERROR("Send delete request resp null");
+            return;
+        }
         auto cbCtx = (ClientCallbackCtx *)ctx;
         LVOS_TP_START(SDK_MIRROR_DELETE_RECV_FAIL, &result, BIO_INNER_RETRY);
         LVOS_TP_END;
