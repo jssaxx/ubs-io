@@ -132,6 +132,7 @@ fi
 \cp 3rdparty/hcom/include/hcom/go/*.go bio/include/.
 \cp 3rdparty/hcom/include/hcom/capi/*.h bio/include/.
 \cp 3rdparty/bdm/include/bdm_core.h bio/include/.
+chmod 550 -R ../scripts/*
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list
 mv bio boostio
