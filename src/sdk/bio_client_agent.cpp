@@ -211,14 +211,23 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
     BResult ret = BIO_OK;
     QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, scene };
     QueryQuotaResponse rsp;
+    LVOS_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
     if (mMode == CONVERGENCE) {
         ret = getQuotaInfoOp(&req, &rsp);
     } else {
         ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
+    LVOS_TP_END;
     if (ret == BIO_OK) {
         enable = rsp.enable;
+        uint64_t preSize = rsp.preloadSize;
+        LVOS_TP_START(GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE, &preSize, 135, 266, 304);
+        LVOS_TP_END;
+        if (preSize > NO_128 * IO_SIZE_1M) {
+            CLIENT_LOG_ERROR("Too large size " << rsp.preloadSize << ".");
+            return BIO_ERR;
+        }
         preloadSize = rsp.preloadSize;
     }
     return ret;
@@ -234,7 +243,10 @@ BResult BioClientAgent::AllocQuota(AllocQuotaRequest &req, uint64_t &expectPrelo
         ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
     }
-    expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);
+    expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);\
+    if (expectPreloadSize > NO_1024 * IO_SIZE_1M) {
+        return BIO_ERR;
+    }
     return ret;
 }
 
@@ -511,6 +523,10 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         }
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
+            if (addr == nullptr) {
+                CLIENT_LOG_ERROR("Send sync request get shm addr failed.");
+                break;
+            }
             ret = memcpy_s(static_cast<void *>(value + off), cpyLength,
                            reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
             if (UNLIKELY(ret != 0)) {
@@ -626,6 +642,10 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
 
     if (rsp.num != 0) {
         uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
+        if (addr == nullptr) {
+            CLIENT_LOG_ERROR("Send list request get shm addr failed.");
+            return BIO_INNER_ERR;
+        }
         auto statInfo = static_cast<ObjStat *>(static_cast<void *>(addr));
         for (uint32_t i = 0; i < rsp.num; i++) {
             if (objs.size() >= 1000U) {

@@ -109,6 +109,13 @@ public:
         mWriteQuota -= allocSize;
         auto iter = mHolders.find(holder);
         if (UNLIKELY(iter == mHolders.end())) {
+            uint64_t size = mHolders.size();
+            LVOS_TP_START(QUOTA_HOLDER_SIZE_MAX, &size, 65535);
+            LVOS_TP_END;
+            if (size > MAX_HOLDER_SIZE) {
+                LOG_WARN("Quota holder is oversize , holder:" << holder.nodeId << "-" << holder.clientId << ".");
+                return BIO_QUOTA_NOT_ENOUGH;
+            }
             mHolders.emplace(holder, allocSize);
             iter = mHolders.find(holder);
         } else {
@@ -139,6 +146,7 @@ public:
     {
         WriteLocker<ReadWriteLock> lock(&mLock);
         mWriteQuota += size;
+        mWriteQuota = std::min(mWriteQuota, mLimitWriteQuota);
         LOG_DEBUG("Free quota success, size:" << size << ", remain quota:" << mWriteQuota << ", proc:" << proc << ".");
     }
 
@@ -188,6 +196,7 @@ private:
     uint64_t mWriteQuota = 0;
     ReadWriteLock mLock;
     std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> mHolders;
+    uint64_t MAX_HOLDER_SIZE = NO_4096;
 
     // overload ctrl
     std::atomic<uint64_t> mAdjustWQuota;

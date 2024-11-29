@@ -325,6 +325,7 @@ public:
         }
         return mCm->GetNodeInfo(nid, nodeInfo);
     }
+    BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -354,7 +355,6 @@ protected:
     BResult BioServerTracePointInit();
 #endif
     void Connection();
-    BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
     BResult HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
 
 private:
