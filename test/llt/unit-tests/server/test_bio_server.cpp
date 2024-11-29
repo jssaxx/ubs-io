@@ -100,6 +100,204 @@ TEST_F(TestBioServer, test_bio_server_qry_pt_view)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestBioServer, test_bio_server_put_check_ok)
+{
+    LOG_INFO("test_bio_server_put_check_ok");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_affinity)
+{
+    LOG_INFO("test_bio_server_put_check_affinity");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = AFFINITY_BUTT + 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_strategy)
+{
+    LOG_INFO("test_bio_server_put_check_strategy");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = STRATEGY_BUTT + 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_key)
+{
+    LOG_INFO("test_bio_server_put_check_key");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "..abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_ioStrategy)
+{
+    LOG_INFO("test_bio_server_put_check_ioStrategy");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = WRITE_UNDERFS_BACK + 1;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_length)
+{
+    LOG_INFO("test_bio_server_put_check_length");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = 0;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_slen)
+{
+    LOG_INFO("test_bio_server_put_check_slen");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 100;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_mr)
+{
+    LOG_INFO("test_bio_server_put_check_mr");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 3UL;
+    req.mrSize = BIO_IO_MAX_LEN + 1;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_check_addr)
+{
+    LOG_INFO("test_bio_server_put_check_addr");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req.tenantId = 1;
+    req.affinity = 1;
+    req.strategy = 1;
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.length = NO_128;
+    req.mrKey = 1;
+    req.sliceLen = 0;
+    req.ioStrategy = 0;
+    req.memFromServer = false;
+    req.mrAddress = 0UL;
+    req.mrSize = 88UL;
+    auto ret = mirror->MirrorServerPut(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestBioServer, test_bio_server_put)
 {
     LOG_INFO("test_bio_server_put");
@@ -180,6 +378,51 @@ TEST_F(TestBioServer, test_bio_server_get)
     GetRequest req;
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.ptId = 1;
+    req.offset = 0;
+    req.length = NO_128;
+    auto ret = mirror->MirrorServerGet(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_get_offset_length)
+{
+    LOG_INFO("test_bio_server_get_offset_length");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    GetRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.ptId = 1;
+    req.offset = BIO_IO_MAX_LEN / NO_2;
+    req.length = BIO_IO_MAX_LEN / NO_2 + 1;
+    auto ret = mirror->MirrorServerGet(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_get_check_offset)
+{
+    LOG_INFO("test_bio_server_get_check_offset");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    GetRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    req.ptId = 1;
+    req.offset = BIO_IO_MAX_LEN + 1;
+    req.length = NO_128;
+    auto ret = mirror->MirrorServerGet(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_get_check_key)
+{
+    LOG_INFO("test_bio_server_get_check_key");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    GetRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "..abcd", KEY_MAX_SIZE);
     req.ptId = 1;
     req.offset = 0;
     req.length = NO_128;
@@ -318,6 +561,18 @@ TEST_F(TestBioServer, test_bio_server_stat)
     StatRequest req;
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    auto ret = mirror->MirrorServerStat(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_stat_check_key)
+{
+    LOG_INFO("test_bio_server_stat_check_key");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    StatRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "..abcd", KEY_MAX_SIZE);
     auto ret = mirror->MirrorServerStat(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
 }
@@ -503,6 +758,33 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_init_obj_err)
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_INIT_OBJ_FAIL");
 }
 
+TEST_F(TestBioServer, test_bio_server_load_check_success)
+{
+    LOG_INFO("test_bio_server_load_check_success");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    LoadRequest req;
+    req.offset = 0;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    auto ret = mirror->MirrorServerLoad(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_load_check_length)
+{
+    LOG_INFO("test_bio_server_load_check_length");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    LoadRequest req;
+    req.offset = 0;
+    req.length = BIO_IO_MAX_LEN + 1;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "abcd", KEY_MAX_SIZE);
+    auto ret = mirror->MirrorServerLoad(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestBioServer, test_bio_server_load)
 {
     LOG_INFO("test_bio_server_load");
@@ -528,6 +810,18 @@ TEST_F(TestBioServer, test_bio_server_delete_disk_err)
     auto ret = mirror->Delete(req);
     EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_DISK_FAIL");
+}
+
+TEST_F(TestBioServer, test_bio_server_delete_check)
+{
+    LOG_INFO("test_bio_server_delete_check");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    DeleteRequest req;
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    CopyKey(req.key, "..abcd", KEY_MAX_SIZE);
+    auto ret = mirror->MirrorServerDelete(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBioServer, test_bio_server_delete)

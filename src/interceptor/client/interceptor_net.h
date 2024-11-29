@@ -26,9 +26,9 @@ public:
     BResult ShmInitInner();
     BResult ShmInit();
 
-    uint8_t *GetShmAddress(uint64_t offset)
+    uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
-        return mNetEngine->GetShmAddress(offset);
+        return mNetEngine->GetShmAddress(offset, len);
     }
 
     template <typename TReq, typename TResp>
