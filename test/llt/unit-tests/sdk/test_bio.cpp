@@ -1493,3 +1493,19 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
     LVOS_HVS_deactiveTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE");
 }
+
+TEST_F(TestBio, test_bio_client_agent_check_update_local)
+{
+    LOG_INFO("test_bio_client_agent_check_update_local");
+    CheckUpdateReadyRequest req;
+    CheckUpdateReadyResponse rsp;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->SendCheckUpdateReadyRequestLocal(req, rsp);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+}
+
+TEST_F(TestBio, test_bio_client_get_shm_address)
+{
+    LOG_INFO("test_bio_client_get_shm_address");
+    auto ret = ock::bio::net::BioClientNet::Instance()->GetShmAddress(0, NO_60) == nullptr ? BIO_OK : BIO_ERR;
+    EXPECT_EQ(ret, BIO_OK);
+}
