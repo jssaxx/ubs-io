@@ -128,26 +128,31 @@ BResult Slice::Deserialize(char *data, uint64_t length)
     ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
     ChkTrue(length >= pos + sizeof(mdataCrc), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mdataCrc));
-    memcpy_s(&mdataCrc, sizeof(mdataCrc), data + pos, sizeof(mdataCrc));
+    int ret = memcpy_s(&mdataCrc, sizeof(mdataCrc), data + pos, sizeof(mdataCrc));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "datacrc memory copy failed.");
     pos += sizeof(mdataCrc);
     ChkTrue(length >= pos + sizeof(mFlowType), BIO_INVALID_PARAM,
         "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mFlowType));
-    memcpy_s(&mFlowType, sizeof(mFlowType), data + pos, sizeof(mFlowType));
+    ret = memcpy_s(&mFlowType, sizeof(mFlowType), data + pos, sizeof(mFlowType));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "flow data memory copy failed.");
     pos += sizeof(mFlowType);
     ChkTrue(length >= pos + sizeof(mLength), BIO_INVALID_PARAM,
         "Failed to deserialize data, length:" << length << "  pos + sizeof(mLength):" << pos + sizeof(mLength));
-    memcpy_s(&mLength, sizeof(mLength), data + pos, sizeof(mLength));
+    ret = memcpy_s(&mLength, sizeof(mLength), data + pos, sizeof(mLength));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "length memory copy failed.");
     pos += sizeof(mLength);
     size_t vsize = 0;
     ChkTrue(length >= pos + sizeof(vsize), BIO_INVALID_PARAM,
         "Failed to deserialize data, length:" << length << "  pos + sizeof(vsize):" << pos + sizeof(vsize));
-    memcpy_s(&vsize, sizeof(vsize), data + pos, sizeof(vsize));
+    ret = memcpy_s(&vsize, sizeof(vsize), data + pos, sizeof(vsize));
+    ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "vsize memory copy failed.");
     pos += sizeof(vsize);
     for (size_t i = 0; i < vsize; i++) {
         FlowAddr flowAddr;
         ChkTrue(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << " pos + sizeof(FlowAddr):" << pos + sizeof(FlowAddr));
-        memcpy_s(&flowAddr, sizeof(FlowAddr), data + pos, sizeof(FlowAddr));
+        ret = memcpy_s(&flowAddr, sizeof(FlowAddr), data + pos, sizeof(FlowAddr));
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "flow addr memory copy failed.");
         mAddrs.push_back(flowAddr);
         pos += sizeof(FlowAddr);
     }
