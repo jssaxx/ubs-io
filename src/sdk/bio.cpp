@@ -276,7 +276,7 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
             CLIENT_LOG_DEBUG("Load success, key:" << key << ", location0:" << location.location[0] << ", location1:" <<
                 location.location[1] << ".");
         }
-        if (callback != nullptr) {
+        if (callback != nullptr && context != nullptr) {
             callback(context, ToCResult(result));
         }
     };
