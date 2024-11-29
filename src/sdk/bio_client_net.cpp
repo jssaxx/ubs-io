@@ -173,6 +173,12 @@ BResult BioClientNet::ShmInit()
         return ret;
     }
 
+    if (!CheckShmInitResp(rsp)) {
+        CLIENT_LOG_ERROR("Invalid rsp, mKey:" << rsp.mKey << ", alignSize:" << rsp.alignSize << ", ioTimeOut:"
+            << rsp.ioTimeOut << ", netTimeOut: " << rsp.ioTimeOut << ", netTimeOut:" << rsp.netTimeOut << ", logLevel:"
+            << rsp.logLevel << ", scene:" << rsp.scene << ".");
+        return BIO_ERR;
+    }
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
@@ -410,4 +416,14 @@ BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
     config.cephConfig.cfgPath = rsp.cephConfig.cfgPath;
     config.cephConfig.pools.insert({ 0, rsp.cephConfig.pool });
     return BIO_OK;
+}
+
+bool BioClientNet::CheckShmInitResp(ShmInitResponse rsp)
+{
+    bool validAlignSize = rsp.alignSize <= NO_4194304 && rsp.alignSize >= NO_1;
+    bool validIoTimeOut = rsp.ioTimeOut >= NO_60 && rsp.ioTimeOut <= NO_300;
+    bool validNetTimeOut = rsp.netTimeOut >= NO_16 && rsp.netTimeOut <= NO_128;
+    bool validLogLevel = rsp.logLevel <= NO_4;
+    bool validScene = rsp.scene <= NO_1;
+    return validAlignSize && validIoTimeOut && validNetTimeOut && validLogLevel && validScene;
 }

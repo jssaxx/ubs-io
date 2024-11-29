@@ -271,6 +271,10 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
         void *dataBuff = InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i]);
+        if (dataBuff == nullptr) {
+            CLOG_ERROR("Send large write get shm addr failed.");
+            return -1;
+        }
         ret = memcpy_s(dataBuff, resp.address.address[i].size, (const char *)copyBuff, resp.address.address[i].size);
         if (UNLIKELY(ret != 0)) {
             return -1;

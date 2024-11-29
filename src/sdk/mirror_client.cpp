@@ -883,6 +883,10 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
             spaceInfo.address[idx].address = rsp->addr[idx].chunkId + rsp->addr[idx].chunkOffset;
         } else {
             uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx]);
+            if (realAddr == nullptr) {
+                CLIENT_LOG_ERROR("Alloc space get shm addr failed.");
+                return BIO_INNER_ERR;
+            }
             spaceInfo.address[idx].address = reinterpret_cast<uintptr_t>(realAddr);
         }
         spaceInfo.address[idx].size = rsp->addr[idx].chunkLen;
