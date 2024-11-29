@@ -11,6 +11,7 @@
 #include "test_bio_server.h"
 #include "expire_checker.h"
 #include "interceptor_server.h"
+#include "cache_overload_ctrl.h"
 
 using namespace ock::bio;
 
@@ -1179,4 +1180,27 @@ TEST_F(TestBioServer, test_handle_interceptor_alloc_page)
     ServiceContext ctx;
     auto ret = InterceptorServer::GetInstance().HandleInterceptorAllocPage(ctx);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_alloc_quota_error)
+{
+    LOG_INFO("test_alloc_quota_error");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "QUOTA_HOLDER_SIZE_MAX", 0, 1, userParam);
+    QuotaHolder holder{NO_256, NO_1024};
+    uint64_t expectAllocSize = NO_1024;
+    auto ret = CacheOverloadCtrl::Instance().AllocQuota(holder, NO_128, expectAllocSize);
+    LVOS_HVS_deactiveTracePoint(0, "QUOTA_HOLDER_SIZE_MAX");
+    EXPECT_EQ(ret, BIO_QUOTA_NOT_ENOUGH);
+}
+
+TEST_F(TestBioServer, test_large_node_list)
+{
+    LOG_INFO("test_large_node_list");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "LARGE_NODE_LIST", 0, 1, userParam);
+    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeInfos;
+    auto ret = BioServer::Instance()->HandleCmNodeEvent(nodeInfos);
+    LVOS_HVS_deactiveTracePoint(0, "LARGE_NODE_LIST");
+    EXPECT_EQ(ret, BIO_ERR);
 }

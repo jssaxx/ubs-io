@@ -1430,3 +1430,25 @@ TEST_F(TestBio, test_bio_client_agent_get_pt_view)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID");
 }
+
+TEST_F(TestBio, test_bio_client_net_shm_init)
+{
+    LOG_INFO("test_bio_client_net_shm_init");
+    ShmInitResponse rsp{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    auto ret = ock::bio::net::BioClientNet::Instance()->CheckShmInitResp(rsp);
+    EXPECT_EQ(ret, false);
+}
+
+TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
+{
+    LOG_INFO("test_bio_client_agent_get_local_quota_info");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE", 0, 1, userParam);
+    bool enable = true;
+    uint64_t load = 1;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(1, enable, load);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
+    LVOS_HVS_deactiveTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE");
+}

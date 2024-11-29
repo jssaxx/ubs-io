@@ -12,6 +12,7 @@
 #include "bio_tracepoint_helper.h"
 #include "bio.h"
 #include "bio_config_instance.h"
+#include "message.h"
 
 namespace ock {
 namespace bio {
@@ -34,7 +35,8 @@ public:
         const NetOptions netConf);
     BResult GetUnderFsConfig(BioConfig::UnderFsConfig &config);
     void Exit();
-
+    BResult ShmInit();
+    bool CheckShmInitResp(ShmInitResponse rsp);
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
     {
         mCheckOnLine = checkOnLine;
@@ -148,13 +150,12 @@ public:
 
     BResult Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
 
-    DEFINE_REF_COUNT_FUNCTIONS;
+    DEFINE_REF_COUNT_FUNCTIONS
 
 private:
     BResult CheckShmFd();
     BResult CorrectFd();
     BResult ShmInitInner();
-    BResult ShmInit();
     BResult StartIpcService(const NetOptions netConf);
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
         const NetOptions netConf);
