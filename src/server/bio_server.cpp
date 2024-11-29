@@ -970,8 +970,3 @@ int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse 
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CheckUpdateReady(*req, *rsp));
 }
-
-int32_t ReportHb(uint64_t *curNodeTimes, uint64_t *curPtTimes)
-{
-    return static_cast<int32_t>(BioServer::Instance()->GetHbInfo(curNodeTimes, curPtTimes));
-}

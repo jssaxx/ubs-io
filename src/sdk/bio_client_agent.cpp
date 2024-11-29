@@ -138,9 +138,6 @@ BResult BioClientAgent::InitOperation()
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((hbOp = reinterpret_cast<ReportHbPtr>(LoadFunction("ReportHb"))) == nullptr) {
-        return BIO_INNER_ERR;
-    }
 
     return InitUpgradeOperation();
 }
@@ -468,6 +465,21 @@ BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16
     }
 }
 
+bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
+{
+    if (((*rsp)->addrNum > SLICE_ADDR_MAX_SIZE) || ((*rsp)->sliceLen >= NO_512)) {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < (*rsp)->addrNum; i++) {
+        if ((*rsp)->addr[i].chunkLen > IO_SIZE_4M) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
     uint64_t length, GetSliceResponse **rsp)
 {
@@ -483,6 +495,9 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
         return ret;
     } else if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
         return BIO_INVALID_PARAM;
+    }
+    if (!CheckGetSliceRsp(rsp)) {
+        return BIO_INNER_ERR;
     }
 
     return BIO_OK;
@@ -799,33 +814,5 @@ BResult BioClientAgent::LoadLocal(LoadRequest &req)
         return loadOp(&req);
     } else {
         return SendLoadRequestLocal(req);
-    }
-}
-
-BResult BioClientAgent::SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTimes)
-{
-    HbRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    HbResponse rsp;
-    auto ret =
-        net::BioClientNet::Instance()->SendSync<HbRequest, HbResponse>(INVALID_NID, BIO_OP_SDK_REPORT_HB, req, rsp);
-    if (ret != BIO_OK) {
-        return ret;
-    }
-
-    curNodeTimes = rsp.curNodeTimes;
-    curPtTimes = rsp.curPtTimes;
-    return BIO_OK;
-}
-
-BResult BioClientAgent::ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes)
-{
-    if (mMode == CONVERGENCE) {
-        HbResponse rsp{};
-        auto ret = hbOp(&rsp.curNodeTimes, &rsp.curPtTimes);
-        curNodeTimes = rsp.curNodeTimes;
-        curPtTimes = rsp.curPtTimes;
-        return ret;
-    } else {
-        return SendHbRequest(curNodeTimes, curPtTimes);
     }
 }
