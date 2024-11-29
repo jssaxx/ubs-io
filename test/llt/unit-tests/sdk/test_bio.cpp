@@ -1431,6 +1431,47 @@ TEST_F(TestBio, test_bio_client_agent_get_pt_view)
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID");
 }
 
+TEST_F(TestBio, test_check_get_underfs_config_resp)
+{
+    LOG_INFO("test_check_get_underfs_config_resp");
+    GetUnderFsConfigResponse rsp;
+    char *type = "hdfs";
+    char *nameNode = "192.168.100.171:9000";
+    char *path = "/hdfs";
+    char *user = "ceph";
+    char *cluster = "ceph";
+    char *cfgPath = "/etc/conf";
+    char *pool = "pool0";
+    std::strcpy(rsp.underFsType, type);
+
+    CephConfigResponse cephConfig;
+    std::strcpy(cephConfig.cfgPath, cfgPath);
+    std::strcpy(cephConfig.cluster, cluster);
+    std::strcpy(cephConfig.user, user);
+    std::strcpy(cephConfig.pool, pool);
+
+    HdfsConfigResponse hdfsConfig;
+    std::strcpy(hdfsConfig.workingPath, path);
+    std::strcpy(hdfsConfig.nameNode, nameNode);
+
+    rsp.cephConfig = cephConfig;
+    rsp.hdfsConfig = hdfsConfig;
+
+    auto ret = ock::bio::net::BioClientNet::Instance()->CheckGetUnderFsConfigResp(rsp);
+    EXPECT_EQ(ret, true);
+}
+
+TEST_F(TestBio, test_get_underfs_config)
+{
+    LOG_INFO("test_get_underfs_config");
+    BioConfig::UnderFsConfig config;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL", 0, 1, userParam);
+    auto ret = ock::bio::net::BioClientNet::Instance()->GetUnderFsConfig(config);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL");
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+}
+
 TEST_F(TestBio, test_bio_client_net_shm_init)
 {
     LOG_INFO("test_bio_client_net_shm_init");

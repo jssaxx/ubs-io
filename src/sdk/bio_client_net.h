@@ -150,7 +150,9 @@ public:
 
     BResult Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView);
 
-    DEFINE_REF_COUNT_FUNCTIONS
+    bool CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp);
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     BResult CheckShmFd();

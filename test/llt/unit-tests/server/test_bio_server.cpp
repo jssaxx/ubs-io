@@ -1182,6 +1182,68 @@ TEST_F(TestBioServer, test_handle_interceptor_alloc_page)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestBioServer, test_check_interceptor_alloc_page_req)
+{
+    LOG_INFO("test_check_interceptor_alloc_page");
+    InterceptorAllocPageReq *req = new InterceptorAllocPageReq();
+    req->length =IO_SIZE_4M;
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorAllocPageReq(&req);
+    EXPECT_EQ(ret, true);
+    free(req);
+}
+
+TEST_F(TestBioServer, test_check_interceptor_large_write_req)
+{
+    LOG_INFO("test_check_interceptor_large_write_req");
+    InterceptorLargePwriteIn *req = new InterceptorLargePwriteIn();
+    req->offset = 0;
+    req->nbytes = 1;
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(&req);
+    EXPECT_EQ(ret, false);
+    req->nbytes = IO_SIZE_4M;
+    ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(&req);
+    EXPECT_EQ(ret, true);
+    free(req);
+}
+
+TEST_F(TestBioServer, test_check_interceptor_write_req)
+{
+    LOG_INFO("test_check_interceptor_write_req");
+    InterceptorPwriteIn *req = (InterceptorPwriteIn *) new char[sizeof(InterceptorPwriteIn) + 128];
+    req->nbytes = IO_SIZE_8K + 1;
+    req->offset = IO_SIZE_4M + 1;
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(&req);
+    EXPECT_EQ(ret, false);
+    req->offset = 0;
+    ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(&req);
+    EXPECT_EQ(ret, true);
+    free(req);
+}
+
+TEST_F(TestBioServer, test_check_interceptor_read_req)
+{
+    LOG_INFO("test_check_interceptor_read_req");
+    InterceptorPreadIn *req = new InterceptorPreadIn();
+    req->nbytes = 0;
+    req->offset = IO_SIZE_4M;
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(&req);
+    EXPECT_EQ(ret, false);
+    req->nbytes = 1;
+    ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(&req);
+    EXPECT_EQ(ret, true);
+    free(req);
+}
+
+TEST_F(TestBioServer, test_mirror_server_check_remote_update_ready)
+{
+    LOG_INFO("test_mirror_server_check_remote_update_ready");
+    ServiceContext ctx;
+    CheckRemoteUpdateReadyRequest req;
+    RequestComm comm = { 0, 0, 0, 0, 0 };
+    req.comm = comm;
+    auto ret = MirrorServer::Instance()->MirrorServerCheckRemoteUpdateReady(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
 TEST_F(TestBioServer, test_alloc_quota_error)
 {
     LOG_INFO("test_alloc_quota_error");
