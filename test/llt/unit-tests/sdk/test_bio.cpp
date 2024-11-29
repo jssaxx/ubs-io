@@ -167,6 +167,9 @@ TEST_F(TestBio, test_bio_put)
     auto ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
+    ret = BioPut(G_TENANT_ID, "...abc", value.c_str(), G_LENGTH, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
     ret = BioPut(G_INVALID_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
