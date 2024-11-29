@@ -71,6 +71,7 @@ public:
 
     BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
+    bool CheckMagic(RequestComm &reqComm);
     bool CheckAll(RequestComm &reqComm);
 
     void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs);
@@ -100,7 +101,6 @@ public:
     int32_t MirrorServerCheckRemoteUpdateReady(ServiceContext &ctx, CheckRemoteUpdateReadyRequest *req);
     int32_t MirrorServerList(ServiceContext &ctx, ListRequest *req);
     int32_t MirrorServerLoad(ServiceContext &ctx, LoadRequest *req);
-    int32_t MirrorServerReportHb(ServiceContext &ctx);
     int32_t MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req);
     int32_t MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRequest *req);
     int32_t MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest *req);
@@ -127,7 +127,6 @@ public:
     int32_t HandleCheckRemoteUpdateReady(ServiceContext &ctx);
     int32_t HandleList(ServiceContext &ctx);
     int32_t HandleLoad(ServiceContext &ctx);
-    int32_t HandleReportHb(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
     int32_t HandleDestroyFlow(ServiceContext &ctx);
     int32_t HandleGetSlice(ServiceContext &ctx);
@@ -136,6 +135,11 @@ public:
     int32_t HandleFreeMem(ServiceContext &ctx);
     int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
     int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
+
+    bool CheckUpdateReadyReq(CheckUpdateReadyRequest *req);
+    bool CheckNotifyUpdateReq(NotifyUpdateRequest *req);
+    bool CheckFreeMemReq(FreeMemRequest *req);
+    bool CheckGetSliceReq(GetSliceRequest *req);
 
     DEFINE_REF_COUNT_FUNCTIONS
 

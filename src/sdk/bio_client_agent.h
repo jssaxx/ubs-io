@@ -43,7 +43,6 @@ public:
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
-    using ReportHbPtr = int32_t (*)(uint64_t *, uint64_t *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -107,9 +106,9 @@ public:
 
     BResult LoadLocal(LoadRequest &req);
 
-    BResult ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes);
-
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
+
+    bool CheckGetSliceRsp(GetSliceResponse **rsp);
 
 private:
     BResult InitUpgradeOperation();
@@ -178,7 +177,6 @@ private:
     StatFuncPtr statOp = nullptr;
     ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;
-    ReportHbPtr hbOp = nullptr;
 };
 }
 }

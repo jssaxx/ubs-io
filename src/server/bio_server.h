@@ -311,13 +311,6 @@ public:
         mNetEngine->FreeLocalMrSingle(addr);
     }
 
-    BResult GetHbInfo(uint64_t *curNodeTimes, uint64_t *curPtTimes)
-    {
-        *curNodeTimes = mCurNodeTimes;
-        *curPtTimes = mCurPtTimes;
-        return BIO_OK;
-    }
-
     inline BResult GetNodeInfo(CmNodeId nid, CmNodeInfo &nodeInfo)
     {
         if (UNLIKELY(mCm == nullptr)) {
