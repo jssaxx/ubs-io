@@ -663,15 +663,6 @@ TEST_F(TestBioServer, destroy_flow_OK)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestBioServer, report_hb_ok)
-{
-    LOG_INFO("report_hb_ok");
-    uint64_t curNodeTimes = 0;
-    uint64_t curPtTimes = 0;
-    auto ret = ReportHb(&curNodeTimes, &curPtTimes);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_alloc_obj_err)
 {
     LOG_INFO("test_mirror_master_create_flow_rcache_alloc_obj_err");
@@ -833,15 +824,6 @@ TEST_F(TestBioServer, test_bio_server_delete)
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     CopyKey(req.key, "abcd", KEY_MAX_SIZE);
     auto ret = mirror->MirrorServerDelete(ctx, &req);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestBioServer, test_bio_server_report_hb)
-{
-    LOG_INFO("test_bio_server_report_hb");
-    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    ServiceContext ctx;
-    auto ret = mirror->MirrorServerReportHb(ctx);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -1056,9 +1038,6 @@ TEST_F(TestBioServer, test_bio_server_handle)
     EXPECT_EQ(ret, BIO_OK);
 
     ret = mirror->HandleLoad(ctx);
-    EXPECT_EQ(ret, BIO_OK);
-
-    ret = mirror->HandleReportHb(ctx);
     EXPECT_EQ(ret, BIO_OK);
 
     ret = mirror->HandleCreateFlow(ctx);
@@ -1559,4 +1538,70 @@ TEST_F(TestBioServer, test_large_node_list)
     auto ret = BioServer::Instance()->HandleCmNodeEvent(nodeInfos);
     LVOS_HVS_deactiveTracePoint(0, "LARGE_NODE_LIST");
     EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestBioServer, test_handle_update_ready)
+{
+    LOG_INFO("test_handle_update_ready");
+    CheckUpdateReadyRequest *req = new CheckUpdateReadyRequest();
+    req->comm.magic = NO_1;
+    auto ret = MirrorServer::Instance()->CheckUpdateReadyReq(req);
+    EXPECT_EQ(ret, false);
+}
+
+TEST_F(TestBioServer, test_handle_notify_update)
+{
+    LOG_INFO("test_handle_notify_update");
+    ServiceContext ctx;
+    NotifyUpdateRequest *req = new NotifyUpdateRequest();
+    RequestComm comm;
+    comm.magic = NO_1;
+    req->comm = comm;
+    auto ret = MirrorServer::Instance()->CheckNotifyUpdateReq(req);
+    EXPECT_EQ(ret, false);
+}
+
+TEST_F(TestBioServer, test_handle_check_magic)
+{
+    LOG_INFO("test_handle_check_magic");
+    RequestComm req;
+    req.magic = MESSAGE_MAGIC;
+    auto ret = MirrorServer::Instance()->CheckMagic(req);
+    EXPECT_EQ(ret, true);
+}
+
+TEST_F(TestBioServer, test_handle_get_slice)
+{
+    LOG_INFO("test_handle_get_slice");
+    GetSliceRequest *req = new GetSliceRequest();
+    req->length = IO_SIZE_128M;
+    auto ret = MirrorServer::Instance()->CheckGetSliceReq(req);
+    EXPECT_EQ(ret, false);
+    req->length = IO_SIZE_1M;
+    ret = MirrorServer::Instance()->CheckGetSliceReq(req);
+    EXPECT_EQ(ret, true);
+}
+
+TEST_F(TestBioServer, test_handle_free_mem)
+{
+    LOG_INFO("test_handle_free_mem");
+    FreeMemRequest *req = new FreeMemRequest();
+    RequestComm comm;
+    comm.magic = NO_1;
+    req->comm = comm;
+    auto ret = MirrorServer::Instance()->CheckFreeMemReq(req);
+    EXPECT_EQ(ret, false);
+
+    req->num = NO_10;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK", 0, 1, userParam);
+    ret = MirrorServer::Instance()->CheckFreeMemReq(req);
+    EXPECT_EQ(ret, false);
+    LVOS_HVS_deactiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK");
+
+    req->num = NO_3;
+    LVOS_HVS_activeTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK", 0, 1, userParam);
+    ret = MirrorServer::Instance()->CheckFreeMemReq(req);
+    EXPECT_EQ(ret, true);
+    LVOS_HVS_deactiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK");
 }

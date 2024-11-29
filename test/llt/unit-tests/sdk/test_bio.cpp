@@ -1494,6 +1494,27 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
     LVOS_HVS_deactiveTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE");
 }
 
+TEST_F(TestBio, test_bio_client_agent_check_get_slice)
+{
+    LOG_INFO("test_bio_client_agent_check_get_slice");
+    GetSliceResponse *rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
+    rsp->addrNum = NO_20;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, false);
+    rsp->addrNum = NO_1;
+    rsp->sliceLen = NO_1;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    SliceAddrDesc addr;
+    addr.chunkLen = IO_SIZE_64M;
+    rsp->addr[0] =addr;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, false);
+    addr.chunkLen = IO_SIZE_4M;
+    rsp->addr[0] =addr;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, true);
+}
+
 TEST_F(TestBio, test_bio_client_agent_check_update_local)
 {
     LOG_INFO("test_bio_client_agent_check_update_local");

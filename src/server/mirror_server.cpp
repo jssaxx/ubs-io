@@ -16,6 +16,15 @@
 using namespace ock::bio;
 using namespace ock::hcom;
 
+bool MirrorServer::CheckMagic(RequestComm &reqComm)
+{
+    if (UNLIKELY(reqComm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        return false;
+    }
+    return true;
+}
+
 bool MirrorServer::CheckAll(RequestComm &reqComm)
 {
     if (UNLIKELY(reqComm.magic != MESSAGE_MAGIC)) {
@@ -38,8 +47,6 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
         std::bind(&MirrorServer::HandleDestroyFlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_SLICE,
         std::bind(&MirrorServer::HandleGetSlice, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_REPORT_HB,
-        std::bind(&MirrorServer::HandleReportHb, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_SYNC_DATA,
         std::bind(&MirrorServer::HandleSyncData, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_GET_EVICT_OFFSET,
@@ -1457,36 +1464,6 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
     return MirrorServerLoad(ctx, req);
 }
 
-int32_t MirrorServer::MirrorServerReportHb(ServiceContext &ctx)
-{
-    HbResponse rsp;
-    auto ret = BioServer::Instance()->GetHbInfo(&rsp.curNodeTimes, &rsp.curPtTimes);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Get hb info fail:" << ret);
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
-        return ret;
-    }
-
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(HbResponse));
-    return BIO_OK;
-}
-
-int32_t MirrorServer::HandleReportHb(ServiceContext &ctx)
-{
-    if (UNLIKELY(!Ready())) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(HbRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive hb message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
-    return MirrorServerReportHb(ctx);
-}
-
 int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req)
 {
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
@@ -1630,6 +1607,15 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     return BIO_OK;
 }
 
+bool MirrorServer::CheckGetSliceReq(GetSliceRequest *req)
+{
+    if (req->length > IO_SIZE_64M) {
+        LOG_ERROR("get slice length too long, length:" << req->length);
+        return false;
+    }
+    return true;
+}
+
 int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
@@ -1644,6 +1630,10 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
     }
 
     auto req = static_cast<GetSliceRequest *>(ctx.MessageData());
+    if (!CheckGetSliceReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerGetSlice(ctx, req);
 }
 
@@ -1728,8 +1718,25 @@ int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *r
     return BIO_OK;
 }
 
+bool MirrorServer::CheckFreeMemReq(FreeMemRequest *req)
+{
+    LVOS_TP_START(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, 0);
+    bool ckRet = CheckAll(req->comm);
+    if (!ckRet) {
+        return ckRet;
+    }
+    LVOS_TP_END;
+
+    if (req->num > SLICE_ADDR_SIZE) {
+        LOG_ERROR("Invalid param num: " << req->num << ".");
+        return false;
+    }
+    return true;
+}
+
 int32_t MirrorServer::HandleFreeMem(ServiceContext &ctx)
 {
+#ifndef DEBUG_UT
     if (UNLIKELY(!Ready())) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
@@ -1742,6 +1749,15 @@ int32_t MirrorServer::HandleFreeMem(ServiceContext &ctx)
     }
 
     auto req = static_cast<FreeMemRequest *>(ctx.MessageData());
+#else
+    FreeMemRequest *req = new FreeMemRequest();
+    req->comm.magic = NO_1;
+#endif
+
+    if (!CheckFreeMemReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerFreeMem(ctx, req);
 }
 
@@ -1750,6 +1766,11 @@ int32_t MirrorServer::MirrorServerNotifyUpdate(ServiceContext &ctx, NotifyUpdate
     auto ret = NotifyUpdate(*req);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
     return BIO_OK;
+}
+
+bool MirrorServer::CheckNotifyUpdateReq(NotifyUpdateRequest *req)
+{
+    return CheckMagic(req->comm);
 }
 
 int32_t MirrorServer::HandleNotifyUpdate(ServiceContext &ctx)
@@ -1766,6 +1787,10 @@ int32_t MirrorServer::HandleNotifyUpdate(ServiceContext &ctx)
     }
 
     auto req = static_cast<NotifyUpdateRequest *>(ctx.MessageData());
+    if (!CheckNotifyUpdateReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerNotifyUpdate(ctx, req);
 }
 
@@ -1775,6 +1800,11 @@ int32_t MirrorServer::MirrorServerCheckUpdateReady(ServiceContext &ctx, CheckUpd
     auto ret = CheckUpdateReady(*req, rsp);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(CheckUpdateReadyResponse));
     return BIO_OK;
+}
+
+bool MirrorServer::CheckUpdateReadyReq(CheckUpdateReadyRequest *req)
+{
+    return CheckMagic(req->comm);
 }
 
 int32_t MirrorServer::HandleCheckUpdateReady(ServiceContext &ctx)
@@ -1791,6 +1821,10 @@ int32_t MirrorServer::HandleCheckUpdateReady(ServiceContext &ctx)
     }
 
     auto req = static_cast<CheckUpdateReadyRequest *>(ctx.MessageData());
+    if (!CheckUpdateReadyReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerCheckUpdateReady(ctx, req);
 }
 
