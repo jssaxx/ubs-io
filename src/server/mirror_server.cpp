@@ -904,7 +904,10 @@ int32_t MirrorServer::MirrorServerAllocQuota(ServiceContext &ctx, AllocQuotaRequ
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_CHECK_PT_FAIL;
     }
-
+    if (req->allocQuota > NO_1024 * IO_SIZE_1M) {
+        LOG_ERROR("Invalid allocQuota :" << req->allocQuota << ".");
+        return BIO_INVALID_PARAM;
+    }
     AllocQuotaResponse rsp;
     auto ret = AllocCacheQuota(*req, rsp);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &rsp, sizeof(AllocQuotaResponse));
@@ -918,7 +921,10 @@ int32_t MirrorServer::MirrorServerFreeQuota(ServiceContext &ctx, FreeQuotaReques
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_CHECK_PT_FAIL;
     }
-
+    if (req->quota > NO_1024 * IO_SIZE_1M) {
+        LOG_ERROR("Invalid free Quota :" << req->quota << ".");
+        return BIO_INVALID_PARAM;
+    }
     auto ret = FreeCacheQuota(*req);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &ret, sizeof(BResult));
     return BIO_OK;

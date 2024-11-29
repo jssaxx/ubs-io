@@ -621,6 +621,13 @@ void BioServer::ReConnect(uint32_t peerId)
 
 BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)
 {
+    uint64_t nodeSize = nodeInfos.size();
+    LVOS_TP_START(LARGE_NODE_LIST, &nodeSize, 65535);
+    LVOS_TP_END;
+    if (nodeSize > NO_256) {
+        LOG_ERROR("Invalid node size :" << nodeInfos.size() << ".");
+        return BIO_ERR;
+    }
     for (auto it = nodeInfos.begin(); it != nodeInfos.end(); ++it) {
         LOG_INFO("Node:" << it->first.ToString() << ", " << it->second.ToString());
     }
