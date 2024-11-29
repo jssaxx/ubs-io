@@ -56,8 +56,8 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
         return -1;
     }
     if (rspLen < sizeof(InterceptorPreadOut) + resp->dataLen) {
-        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " <<
-            sizeof(InterceptorPreadOut) << " and datalen: " << resp->dataLen << ".");
+        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " << sizeof(InterceptorPreadOut) <<
+            " and datalen: " << resp->dataLen << ".");
         free(resp);
         return -1;
     }
@@ -284,7 +284,8 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<
         ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
-        void *dataBuff = InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i]);
+        void *dataBuff =
+            InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i], resp.address.address[i].size);
         if (dataBuff == nullptr) {
             CLOG_ERROR("Send large write get shm addr failed.");
             return -1;

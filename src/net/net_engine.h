@@ -210,9 +210,11 @@ public:
         mOptions.hseKfsStandbyPath = options.hseKfsStandbyPath;   /* hseceasy kfs standby path */
     }
 
-    uint8_t *GetShmAddress(uint64_t offset)
+    uint8_t *GetShmAddress(uint64_t offset, uint64_t len)
     {
-        if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mShmSize)) {
+        if (UNLIKELY(offset < mShareOffset ||
+                    offset >= mShareOffset + mShmSize ||
+                    offset + len > mShareOffset + mShmSize)) {
             NET_LOG_ERROR("Shm info, offset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }

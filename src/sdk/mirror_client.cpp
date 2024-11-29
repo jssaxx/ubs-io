@@ -32,14 +32,19 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
     } else if (opType == 1) {
         req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
     }
+    static uint32_t createFlowRTimeout = NO_60;
+    uint64_t startTime = Monotonic::TimeSec();
     CreateFlowResponse rsp;
     do {
         ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(
             static_cast<BioNodeId>(nodeId), BIO_OP_SDK_CREATE_FLOW, req, rsp);
-        if (UNLIKELY(ret == BIO_NOT_READY)) {
+        uint64_t retryTime = Monotonic::TimeSec() - startTime;
+        if (UNLIKELY(ret == BIO_NOT_READY && retryTime < createFlowRTimeout)) {
             CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" << nodeId <<
                 ", ptId:" << ptId << ".");
             sleep(NO_3);
+        } else {
+            break;
         }
     } while (ret == BIO_NOT_READY);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -882,7 +887,7 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         if (mMode == CONVERGENCE) {
             spaceInfo.address[idx].address = rsp->addr[idx].chunkId + rsp->addr[idx].chunkOffset;
         } else {
-            uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx]);
+            uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx], rsp->addr[idx].chunkLen);
             if (realAddr == nullptr) {
                 CLIENT_LOG_ERROR("Alloc space get shm addr failed.");
                 return BIO_INNER_ERR;
@@ -1028,7 +1033,7 @@ BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *
         if (mMode == WorkerMode::CONVERGENCE) {
             realAddr = reinterpret_cast<uint8_t *>(addr[i].chunkId + addr[i].chunkOffset);
         } else {
-            realAddr = net::BioClientNet::Instance()->GetShmAddress(offset[i]);
+            realAddr = net::BioClientNet::Instance()->GetShmAddress(offset[i], addr[i].chunkLen);
             if (UNLIKELY(realAddr == nullptr)) {
                 CLIENT_LOG_ERROR("Get shm addr failed offset:" << offset[i] << ".");
                 return BIO_INNER_ERR;
@@ -1188,9 +1193,15 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
-        } else {
+        } else if (resp != nullptr) {
             auto rsp = static_cast<PutResponse *>(resp);
-            ioStrategy = (rsp->ioStrategy > ioStrategy) ? rsp->ioStrategy : ioStrategy.load();
+            if (rsp->ioStrategy > WRITE_UNDERFS_BACK) {
+                cbCtx->result = BIO_INVALID_PARAM;
+            } else {
+                ioStrategy = (rsp->ioStrategy > ioStrategy) ? rsp->ioStrategy : ioStrategy.load();
+            }
+        } else {
+            cbCtx->result = BIO_INVALID_PARAM;
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             sem_post(&cbCtx->sem);
@@ -1243,6 +1254,19 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
     return ret;
 }
 
+bool MirrorClient::CheckGetRsp(GetResponse rsp)
+{
+    if (rsp.num > SLICE_ADDR_SIZE) {
+        return false;
+    }
+    for (uint32_t idx = 0; idx < rsp.num; idx++) {
+        if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
+            return false;
+        }
+    }
+    return true;
+}
+
 BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
     NetMrInfo mrInfo;
@@ -1264,6 +1288,9 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
+        if (!CheckGetRsp(rsp)) {
+            return BIO_INVALID_PARAM;
+        }
         realLen = rsp.realLen;
         if (realLen > mrInfo.size) {
             CLIENT_LOG_ERROR("Read length greater than value size, realLen:" << realLen << ", size:" << mrInfo.size);
@@ -1345,7 +1372,7 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
-            BResult res = *(static_cast<BResult *>(resp));
+            BResult res = resp != nullptr ? *(static_cast<BResult *>(resp)) : BIO_INNER_ERR;
             if (res != BIO_OK) {
                 cbCtx->result = res;
             }
@@ -1393,6 +1420,11 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
     } else {
         ret = StatRemote(dstNid, req, objInfo);
     }
+
+    if (objInfo.size > BIO_IO_MAX_LEN) {
+        return BIO_INVALID_PARAM;
+    }
+
     LVOS_TP_END;
     return ret;
 }
@@ -1513,6 +1545,9 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
         if (UNLIKELY(result != BIO_OK)) {
             callback(context, result);
             return;
+        }
+        if (resp == nullptr) {
+            callback(context, BIO_ERR);
         }
         BResult hdlRet = *(static_cast<BResult *>(resp));
         callback(context, hdlRet);

@@ -236,6 +236,8 @@ private:
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
 
+    bool CheckGetRsp(GetResponse rsp);
+
     inline BResult Insert(uint16_t ptId)
     {
         mLock.LockWrite();

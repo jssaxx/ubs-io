@@ -151,9 +151,16 @@ private:
         ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
-    BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
-
+    BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp);
+    bool CheckQueryPtViewReq(QueryPtViewRequest *req);
+    bool CheckPutReq(PutRequest *req);
+    bool CheckGetReq(GetRequest *req);
+    bool CheckDeleteReq(DeleteRequest *req);
+    bool CheckStatReq(StatRequest *req);
+    bool CheckListReq(ListRequest *req);
+    bool CheckLoadReq(LoadRequest *req);
 private:
+    std::atomic<uint64_t> flowNum { 0 };
     bool mStarted = false;
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
