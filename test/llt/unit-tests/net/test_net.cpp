@@ -328,7 +328,7 @@ TEST_F(TestNet, test_net_get_shm_address)
     LOG_INFO("test_net_get_shm_address");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t mShmOffset = 0;
-    auto ret = engine->GetShmAddress(mShmOffset);
+    auto ret = engine->GetShmAddress(mShmOffset, 0);
 }
 
 TEST_F(TestNet, test_net_get_underfs_config)

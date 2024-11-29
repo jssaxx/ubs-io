@@ -172,8 +172,7 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
     return BIO_OK;
 }
 
-BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId,
-    FileLocationQueryRsp &rsp)
+BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp)
 {
     FileLocationQueryReq req = { masterPtId, slavePtId };
     auto ret = net::BioClientNet::Instance()->SendSync<FileLocationQueryReq, FileLocationQueryRsp>(INVALID_NID,
@@ -257,8 +256,8 @@ BResult BioClientAgent::FreeQuota(FreeQuotaRequest &req)
         ret = freeQuotaOp(&req);
     } else {
         BResult hdlRet = BIO_INNER_ERR;
-        ret = net::BioClientNet::Instance()->SendSync<FreeQuotaRequest, BResult>(INVALID_NID,
-            BIO_OP_SDK_FREE_QUOTA, req, hdlRet);
+        ret = net::BioClientNet::Instance()->SendSync<FreeQuotaRequest, BResult>(INVALID_NID, BIO_OP_SDK_FREE_QUOTA,
+            req, hdlRet);
         if (ret == BIO_OK && hdlRet != BIO_OK) {
             ret = hdlRet;
         }
@@ -272,7 +271,8 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
     BResult ret = BIO_OK;
     int32_t flag = 0;
     uint32_t progressBar = 0;
-
+    static uint32_t maxRetryCnt = NO_512;
+    uint32_t retryCnt = 0;
     do {
         QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryNodeViewResponse rsp;
@@ -315,9 +315,21 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
         flag = rsp.flag;
         progressBar += rsp.num;
         curNodeTimes = rsp.curNodeTimes;
+        if ((retryCnt++) > maxRetryCnt) { // 分片获取集群视图防止死循环, 在512次分片内必定可以获取完整的集群视图.
+            break;
+        }
     } while (flag == 1);
 
     return BIO_OK;
+}
+
+bool BioClientAgent::CheckGetPtViewRsp(QueryPtViewResponse rsp)
+{
+    if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
+        CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
+        return false;
+    }
+    return true;
 }
 
 BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
@@ -325,7 +337,8 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
     BResult ret = BIO_OK;
     int32_t flag = 0;
     uint32_t progressBar = 0;
-
+    static uint32_t maxRetryCnt = NO_1024;
+    uint32_t retryCnt = 0;
     do {
         QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryPtViewResponse rsp;
@@ -339,12 +352,9 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
-
         LVOS_TP_START(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID, &rsp.num, (PT_SIZE + 1));
         LVOS_TP_END;
-        if (rsp.num > PT_SIZE || (rsp.flag == 1 && rsp.copyNum > PT_COPY_MAX_SIZE)) {
-            CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
-            ptView.clear();
+        if (!CheckGetPtViewRsp(rsp)) {
             return BIO_INVALID_PARAM;
         }
         for (uint32_t i = 0; i < rsp.num; i++) {
@@ -359,13 +369,16 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         flag = rsp.flag;
         progressBar += rsp.num;
         curPtTimes = rsp.curPtTimes;
+        if ((retryCnt++) > maxRetryCnt) { // 分片获取分区视图防止死循环, 在1024次分片内必定可以获取完整的分区视图.
+            break;
+        }
     } while (flag == 1);
 
     return BIO_OK;
 }
 
-BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId, bool &isDegrade)
+BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId,
+    bool &isDegrade)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
@@ -375,13 +388,18 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
         req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
     }
     CreateFlowResponse rsp;
+    static uint32_t createFlowTimeout = NO_60;
+    uint64_t startTime = Monotonic::TimeSec();
     do {
         ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(INVALID_NID,
             BIO_OP_SDK_CREATE_FLOW, req, rsp);
-        if (UNLIKELY(ret == BIO_NOT_READY)) {
+        uint64_t retryTime = Monotonic::TimeSec() - startTime;
+        if (UNLIKELY(ret == BIO_NOT_READY && retryTime < createFlowTimeout)) {
             CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" <<
                 mLocalNid.VNodeId() << ", ptId:" << ptId << ".");
             sleep(NO_3);
+        } else {
+            break;
         }
     } while (ret == BIO_NOT_READY);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -401,8 +419,7 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
 
 BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
 {
-    DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-        flowId };
+    DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowId };
     DestroyFlowResponse rsp;
     BResult ret = net::BioClientNet::Instance()->SendSync<DestroyFlowRequest, DestroyFlowResponse>(INVALID_NID,
         BIO_OP_SDK_DESTROY_FLOW, req, rsp);
@@ -421,7 +438,9 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_
     if (mMode == CONVERGENCE) {
         if (opType == 0) {
             CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      opType, 0, false };
+                                      opType,
+                                      0,
+                                      false };
             CreateFlowResponse rsp;
             auto ret = createFlowMasterOp(&req, &rsp);
             flowId = rsp.flowId;
@@ -429,7 +448,9 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_
             return ret;
         } else {
             CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                opType, flowId, isDegrade };
+                                      opType,
+                                      flowId,
+                                      isDegrade };
             return createFlowSlaveOp(&req);
         }
     } else {
@@ -440,8 +461,7 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_
 BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
 {
     if (mMode == CONVERGENCE) {
-        DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-            flowId };
+        DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowId };
         return destroyFlowOp(&req);
     } else {
         return SendDestroyFlowRequestLocal(ptEntry, ptId, flowId);
@@ -504,6 +524,19 @@ void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
     }
 }
 
+bool BioClientAgent::CheckGetRsp(GetResponse rsp)
+{
+    if (rsp.num > SLICE_ADDR_SIZE) {
+        return false;
+    }
+    for (uint32_t idx = 0; idx < rsp.num; idx++) {
+        if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
+            return false;
+        }
+    }
+    return true;
+}
+
 BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     GetResponse rsp;
@@ -512,23 +545,23 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
     } else {
+        if (!CheckGetRsp(rsp)) {
+            return BIO_INVALID_PARAM;
+        }
         realLen = rsp.realLen;
         if (realLen > req.length) {
             return BIO_INNER_ERR;
         }
         uint64_t off = 0;
         uint64_t cpyLength = req.length;
-        if (rsp.num > SLICE_ADDR_SIZE) {
-            return BIO_INNER_ERR;
-        }
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
-            uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx]);
-            if (addr == nullptr) {
+            uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx], rsp.addrLen[idx]);
+			if (addr == nullptr) {
                 CLIENT_LOG_ERROR("Send sync request get shm addr failed.");
                 break;
             }
-            ret = memcpy_s(static_cast<void *>(value + off), cpyLength,
-                           reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
+            ret =
+                memcpy_s(static_cast<void *>(value + off), cpyLength, reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
             if (UNLIKELY(ret != 0)) {
                 CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
                     rsp.addrLen[idx] << ".");
@@ -552,9 +585,9 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
-                CLIENT_LOG_ERROR("Client get failed to verify the CRC, << key:"<< req.key << ", origin crc:" <<
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, << key:" << req.key << ", origin crc:" <<
                     rsp.dataCrc << ", current crc:" << currentCrc);
-                ret =  BIO_CRC_ERR;
+                ret = BIO_CRC_ERR;
             }
         }
     }
@@ -570,6 +603,19 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
         realLen = rsp.realLen;
+        uint64_t off = 0;
+        uint64_t cpyLength = req.length;
+        for (uint32_t idx = 0; idx < rsp.num; idx++) {
+            ret = memcpy_s(static_cast<void *>(value + off), cpyLength, reinterpret_cast<void *>(rsp.address[idx]),
+                rsp.addrLen[idx]);
+            if (UNLIKELY(ret != 0)) {
+                CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
+                    rsp.addrLen[idx] << ".");
+                break;
+            }
+            off += rsp.addrLen[idx];
+            cpyLength -= rsp.addrLen[idx];
+        }
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
@@ -641,8 +687,8 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
     }
 
     if (rsp.num != 0) {
-        uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset);
-        if (addr == nullptr) {
+        uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset, (rsp.num * sizeof(ObjStat)));
+		if (addr == nullptr) {
             CLIENT_LOG_ERROR("Send list request get shm addr failed.");
             return BIO_INNER_ERR;
         }
@@ -707,8 +753,8 @@ BResult BioClientAgent::NotifyUpdate(bool &flag)
 
 BResult BioClientAgent::SendCheckUpdateReadyRequestLocal(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp)
 {
-    return net::BioClientNet::Instance()->SendSync<CheckUpdateReadyRequest, CheckUpdateReadyResponse>(
-        INVALID_NID, BIO_OP_SDK_CHECK_UPDATE_READY, req, rsp);
+    return net::BioClientNet::Instance()->SendSync<CheckUpdateReadyRequest, CheckUpdateReadyResponse>(INVALID_NID,
+        BIO_OP_SDK_CHECK_UPDATE_READY, req, rsp);
 }
 
 BResult BioClientAgent::CheckUpdateReady()
