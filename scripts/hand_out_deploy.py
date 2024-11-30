@@ -19,7 +19,10 @@ import subprocess
 import copy
 import shutil
 
-sp = subprocess.Popen(["touch", "./boostio_hand_out_py.log", ";chmod", "600", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
+sp = subprocess.Popen(["touch", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
+sp.communicate()
+sp.wait()
+sp = subprocess.Popen(["chmod", "600", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
 sp.communicate()
 sp.wait()
 logging.basicConfig(level=logging.INFO,
@@ -38,9 +41,7 @@ Usage:
 
 Options:
     install    [pkg_path] [user] [group]
-    uninstall 
-    start_boostio    
-    stop_boostio    
+    uninstall  
 """.format(name=os.path.basename(__file__))
 
 nodes_info = []
@@ -218,23 +219,6 @@ def uninstall(node):
         failed_times.append(1)
         return -1
     return 0
-
-
-# 通过杀进程的方式，停止应用
-def stop_boostio(node):
-    if ssh_cmd(node, home_path_of(node["user"]), "systemctl stop boostio") != 0:
-        failed_times.append(1)
-        return -1
-    return 0
-
-
-# 重新启动应用
-def start_boostio(node):
-    if ssh_cmd(node, home_path_of(node["user"]), "systemctl start boostio") != 0:
-        failed_times.append(1)
-        return -1
-    return 0
-
 
 def install(node):
     ip_str = "ip"
@@ -534,7 +518,7 @@ def exec_build(args):
     if len(args) < 2:
         help_info()
         return -1
-    if args[1] not in ["install", "uninstall", "stop_boostio", "start_boostio"]:
+    if args[1] not in ["install", "uninstall"]:
         help_info()
         return -1
     global INSTALL_USER
