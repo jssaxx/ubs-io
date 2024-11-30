@@ -455,3 +455,30 @@ TEST_F(TestRCache, test_rcache_destroy_ok)
     auto ret = Cache::Instance().DestroyRCache(G_PT_ID);
     EXPECT_EQ(ret, BIO_OK);
 }
+
+TEST_F(TestRCache, test_rcache_recover_return_err)
+{
+    LOG_INFO("test_rcache_recover_return_err");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    FlowPtr flowPtr;
+    auto ret = gRCacheManager->RecoverCache(flowPtr);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
+}
+
+TEST_F(TestRCache, test_rcache_recover_return_err2)
+{
+    LOG_INFO("test_rcache_recover_return_err2");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "FLOW_DESTROY_OBJECT_ERR", 0, 1, userParam);
+    FlowPtr flowPtr = MakeRef<Flow>(FLOW_META, FLOW_MEMORY, 0, 0, 0, 0);
+    auto ret = gRCacheManager->RecoverCache(flowPtr);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_OK");
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_DESTROY_OBJECT_ERR");
+}
+

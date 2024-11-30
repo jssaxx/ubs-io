@@ -248,7 +248,7 @@ void MirrorServer::QueryCacheQuota(QueryQuotaRequest &req, QueryQuotaResponse &r
     static uint64_t defaultPreloadSize = NO_128 * NO_1024 * NO_1024; // 128M
     uint64_t totalQuota = CacheOverloadCtrl::Instance().GetAvailableQuota();
     rsp.preloadSize = std::min<uint64_t>(defaultPreloadSize, ROUND_UP((totalQuota / NO_10), NO_4096));
-    rsp.enable = BioConfig::Instance()->GetDaemonConfig().enableQos;
+    rsp.enable = mBioConfig->GetDaemonConfig().enableQos;
     LOG_INFO("Query quota info success, write cache quota:" << totalQuota << ", scene:" << req.scene <<
         ", preload size:" << (rsp.preloadSize / NO_1024 / NO_1024) << "M, enable:" << rsp.enable << ".");
 }
@@ -613,7 +613,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
     } else {
-        if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
+        if (mBioConfig->GetDaemonConfig().enableCrc) {
             rsp.dataCrc = sliceP->GetDataCrc();
         }
     }
@@ -769,6 +769,11 @@ BResult MirrorServer::Initialize()
         return BIO_OK;
     }
     RegisterOpcode();
+    mBioConfig = BioConfig::Instance();
+    if (mBioConfig == nullptr) {
+        LOG_ERROR("Mirror server init bio config failed");
+        return BIO_NOT_READY;
+    }
     mStarted = true;
     return BIO_OK;
 }
@@ -776,7 +781,7 @@ BResult MirrorServer::Initialize()
 int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx)
 {
     ShmInitResponse rsp;
-    auto config = BioConfig::Instance()->GetDaemonConfig();
+    auto config = mBioConfig->GetDaemonConfig();
     rsp.serverPid = getpid();
     rsp.scene = config.workScene;
     rsp.alignSize = config.workIoAlignSize;
@@ -1596,7 +1601,12 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     }
     rsp->sliceLen = sliceLen;
     uint64_t outSliceLen = 0;
-    sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
+    ret = sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Serialize slice failed, ret " << ret);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
@@ -1874,7 +1884,13 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
     }
 
     GetUnderFsConfigResponse rsp;
-    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+
+    std::shared_ptr<UnderFsConfig> underFsConfig = UnderFsConfig::Instance();
+    if (!underFsConfig) {
+        LOG_ERROR("Mirror server get underfs config failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    BioConfig::UnderFsConfig config = underFsConfig->GetUnderFsConfig();
 
     int32_t ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
     ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");

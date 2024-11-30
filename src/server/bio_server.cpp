@@ -461,7 +461,11 @@ BResult BioServer::BioCacheInit()
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
     };
-    mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
+        return ret;
+    }
     LVOS_TP_END;
 
     ret = Cache::Instance().Recover();
@@ -787,7 +791,11 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     }
     (*rsp)->sliceLen = sliceLen;
     uint64_t outSliceLen = 0;
-    sliceP->Serialize((*rsp)->sliceBuf, (*rsp)->sliceLen, outSliceLen);
+    ret = sliceP->Serialize((*rsp)->sliceBuf, (*rsp)->sliceLen, outSliceLen);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Serialize slice failed, ret " << ret);
+        return static_cast<int32_t>(BIO_INNER_ERR);
+    }
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
         return static_cast<int32_t>(BIO_INNER_ERR);
