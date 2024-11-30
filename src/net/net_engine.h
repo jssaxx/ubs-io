@@ -651,6 +651,12 @@ public:
         return mDataChannelMgr->GetChannel(targetNodeId, pid, ch);
     }
 
+    inline BResult IsChannelExist(const BioNodeId &targetNodeId, uint32_t pid)
+    {
+        ChannelPtr ch = nullptr;
+        return mDataChannelMgr->GetChannel(targetNodeId, pid, ch) == BIO_OK;
+    }
+
     inline BResult GetDataChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
         BIO_TRACE_START(NET_TRACE_GET_DATA_CHANNEL);
