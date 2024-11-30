@@ -467,6 +467,9 @@ BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16
 
 bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
 {
+    if (*rsp == nullptr) {
+        return false;
+    }
     if (((*rsp)->addrNum > SLICE_ADDR_MAX_SIZE) || ((*rsp)->sliceLen >= NO_512)) {
         return false;
     }
@@ -491,13 +494,13 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
     uint64_t rspLen = 0;
     auto ret = net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
         BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
+    if (!CheckGetSliceRsp(rsp)) {
+        return BIO_INNER_ERR;
+    }
     if (ret != BIO_OK) {
         return ret;
     } else if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
         return BIO_INVALID_PARAM;
-    }
-    if (!CheckGetSliceRsp(rsp)) {
-        return BIO_INNER_ERR;
     }
 
     return BIO_OK;
