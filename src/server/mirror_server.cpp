@@ -260,9 +260,24 @@ BResult MirrorServer::AllocCacheQuota(AllocQuotaRequest &req, AllocQuotaResponse
         return BIO_CHECK_PT_FAIL;
     }
 
+    auto bioServer = BioServer::Instance();
+    if (bioServer == nullptr) {
+        LOG_ERROR("Bio server instance get fail");
+        return BIO_ALLOC_FAIL;
+    }
+    auto rpcEngine = bioServer->GetNetEngine();
+    if (rpcEngine == nullptr) {
+        LOG_ERROR("Net engine get fail");
+        return BIO_ALLOC_FAIL;
+    }
+    if (req.nid != bioServer->GetLocalNid().VNodeId() && !rpcEngine->IsChannelExist(req.nid, req.cid)) {
+        LOG_ERROR("Req nodeid " << req.nid << " or ptid " << req.cid << " is incorrect.");
+        return BIO_INNER_RETRY;
+    }
+
     QuotaHolder holder = { req.nid, req.cid };
     BIO_TRACE_START(MIRROR_TRACE_QOS_ALLOC);
-    auto ret = CacheOverloadCtrl::Instance().AllocQuota(holder, req.allocQuota, rsp.exceptQuota);
+    BResult ret = CacheOverloadCtrl::Instance().AllocQuota(holder, req.allocQuota, rsp.exceptQuota);
     BIO_TRACE_END(MIRROR_TRACE_QOS_ALLOC, ret);
     if (ret != BIO_OK) {
         LOG_ERROR("Alloc quota failed, ret:" << ret << ", holder:" << req.nid << "-" << req.cid << ", size:" <<
