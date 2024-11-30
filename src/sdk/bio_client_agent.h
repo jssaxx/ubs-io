@@ -108,6 +108,9 @@ public:
 
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
+    BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
+                                     uint64_t length, GetSliceResponse **rsp);
+
     bool CheckGetSliceRsp(GetSliceResponse **rsp);
 
 private:
@@ -121,9 +124,6 @@ private:
         uint64_t &flowId, bool &isDegrade);
 
     BResult SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-
-    BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
-        uint64_t length, GetSliceResponse **rsp);
 
     void SendPutRequestLocal(PutRequest *req, Callback &callback);
 
