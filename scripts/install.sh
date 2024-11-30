@@ -130,7 +130,7 @@ set_permissions()
   chmod 550 $BIN_PATH/cli_client
   chmod 550 $BIN_PATH/cli_server
   chmod -R 550 $LIB_PATH
-  chmod -R 550 $INCLUDE_PATH
+  chmod -R 440 $INCLUDE_PATH
   chmod -R 550 $SCRIPTS_PATH
   chmod -R 700 $LOG_PATH
   chmod -R 700 $SECURITY_PATH
