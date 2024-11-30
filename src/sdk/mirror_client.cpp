@@ -139,7 +139,11 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         }
     }
 
-    Update(ptId, ptEntry.version, flowId, isDegrade);
+    ret = Update(ptId, ptEntry.version, flowId, isDegrade);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Update flow info failed, ret " << ret);
+        return ret;
+    }
 
     CLIENT_LOG_INFO("Create flow instance success, ptId:" << ptId << ", ptv:" << ptEntry.version << ", flowId:" <<
         flowId << ", isDegrade:" << isDegrade << ".");

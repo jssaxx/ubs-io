@@ -297,8 +297,11 @@ BResult BioClientNet::SetChannelBrokenHandler()
         });
         t.detach();
     };
-    mNetEngine->RegisterChannelBrokenHandler(channelBroken);
-    return BIO_OK;
+    BResult ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Client regist channel broken handler failed, ret " << ret);
+    }
+    return ret;
 }
 
 void BioClientNet::RecoverIpc()
