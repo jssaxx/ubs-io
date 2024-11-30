@@ -172,6 +172,9 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
 
     // 计算本次写的总数据大小
     uint32_t length = spaceInfo.address[0].size + spaceInfo.address[1].size;
+    if (UNLIKELY(length > IO_SIZE_4M)) {
+        return RET_CACHE_EPERM;
+    }
     CLIENT_LOG_TRACE("Put value with space key:" << key << ", location0:" << spaceInfo.loc.location[0] <<
         ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0 size:" <<
         spaceInfo.address[0].size << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
@@ -510,6 +513,9 @@ CResult BioCreateCache(CacheDescriptor desc)
     if (UNLIKELY(bioInstance == nullptr)) {
         return RET_CACHE_EPERM;
     }
+    if (gBioCacheMap.size() > NO_1024) {
+        return RET_CACHE_NO_SPACE;
+    }
     gBioCacheMap.insert({ desc.tenantId, bioInstance });
     return RET_CACHE_OK;
 }
@@ -563,7 +569,7 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
 
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space)
 {
-    if (UNLIKELY(space == nullptr)) {
+    if (UNLIKELY(space == nullptr || length > IO_SIZE_4M)) {
         return RET_CACHE_EPERM;
     }
     std::shared_ptr<Bio> bioInstance = nullptr;
@@ -701,7 +707,7 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
 
 void BioFreeListResources(ObjStat *objs, uint64_t objNum)
 {
-    if (objNum == 0) {
+    if (objNum == 0 || objs == nullptr) {
         return;
     }
     free(objs);
