@@ -168,6 +168,8 @@ private:
     bool mStarted = false;
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
+
+    BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE
 };
 }
