@@ -351,6 +351,10 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         }
         LVOS_TP_START(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID, &rsp.num, (PT_SIZE + 1));
         LVOS_TP_END;
+        if (rsp.flag == 0) {
+            break;
+        }
+
         if (!CheckGetPtViewRsp(rsp)) {
             return BIO_INVALID_PARAM;
         }
