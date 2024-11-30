@@ -80,6 +80,7 @@ install(){
 #拷贝软件包
 install_package()
 {
+  set +e
   DEPRESS_PATH=$(cd $(dirname "$0")/..; pwd)
   rm -rf $INSTALL_PATH/*
   cd $INSTALL_PATH
