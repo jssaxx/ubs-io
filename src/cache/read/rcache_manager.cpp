@@ -196,8 +196,16 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 {
     LOG_INFO("Recover rcache, flowId:" << dataFlow->GetFlowId());
     LVOS_TP_START(NO_PROCESS_CACHE_RECOVER, 0);
-    dataFlow->Seal();
-    FlowManager::Instance()->DestroyObject(dataFlow->GetFlowType(), dataFlow->GetFlowId());
+    BResult ret = dataFlow->Seal();
+    if (ret != BIO_OK) {
+        LOG_ERROR("Recover rcache seal data flow failed, ret " << ret);
+        return ret;
+    }
+    ret = FlowManager::Instance()->DestroyObject(dataFlow->GetFlowType(), dataFlow->GetFlowId());
+    if (ret != BIO_OK) {
+        LOG_ERROR("Recover rcache destroy object failed, ret " << ret);
+        return ret;
+    }
     LVOS_TP_END;
     return BIO_OK;
 }
