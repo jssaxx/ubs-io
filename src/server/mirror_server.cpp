@@ -1596,7 +1596,12 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     }
     rsp->sliceLen = sliceLen;
     uint64_t outSliceLen = 0;
-    sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
+    ret = sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Serialize slice failed, ret " << ret);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);

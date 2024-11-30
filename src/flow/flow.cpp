@@ -96,8 +96,10 @@ BResult Flow::TruncateOffset(uint64_t offset)
 
 BResult Flow::Seal()
 {
+    BResult ret = BIO_OK;
+    LVOS_TP_START(FLOW_SEAL_ERR, &ret, BIO_ERR);
     if (mSealed) {
-        return BIO_OK;
+        return ret;
     }
     mSealed = true;
 
@@ -106,9 +108,15 @@ BResult Flow::Seal()
     BIO_TRACE_START(FLOW_TRACE_SEAL);
     uint64_t writenOffset = mPreLoadOffset;
     mWritenOffset = writenOffset;
-    TruncateOffset(mWritenOffset);
+    ret = TruncateOffset(mWritenOffset);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Truncate offset failed, ret " << ret);
+    }
     BIO_TRACE_END(FLOW_TRACE_SEAL, 0);
-    return BIO_OK;
+    LVOS_TP_END;
+    LVOS_TP_START(FLOW_SEAL_OK, &ret, BIO_OK);
+    LVOS_TP_END;
+    return ret;
 }
 
 void Flow::PreLoadHandle()

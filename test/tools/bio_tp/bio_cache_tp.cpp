@@ -141,6 +141,10 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(NO_PROCESS_GET_LOCAL_QUOTA, "no process get local quota ", CommonTp::NoProcessCallback);
     LVOS_TP_REG(GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE, "get local quota SET preLoadSize",  tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(LARGE_NODE_LIST, "large node list",  tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(FLOW_SEAL_ERR, "flow seal err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(FLOW_SEAL_OK, "flow seal ok", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(FLOW_DESTROY_OBJECT_ERR, "flow destroy object err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(FLOW_DATA_FLOW_ERR, "wcache tier data flow err", tp::CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -276,6 +280,10 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(NO_PROCESS_GET_LOCAL_QUOTA);
     LVOS_TP_UNREG(GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE);
     LVOS_TP_UNREG(LARGE_NODE_LIST);
+    LVOS_TP_UNREG(FLOW_SEAL_ERR);
+    LVOS_TP_UNREG(FLOW_SEAL_OK);
+    LVOS_TP_UNREG(FLOW_DESTROY_OBJECT_ERR);
+    LVOS_TP_UNREG(FLOW_DATA_FLOW_ERR);
 }
 #else
 void tp::CacheTp::Register() noexcept {}

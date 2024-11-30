@@ -983,3 +983,29 @@ TEST_F(TestWCache, test_bio_olc_recycle)
     iter = holdMap->find(holder);
     EXPECT_EQ(iter, holdMap->end());
 }
+
+TEST_F(TestWCache, test_wcache_tier_metaflow_error)
+{
+    LOG_INFO("test_wcache_tier_error");
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    WCacheTier wCacheTier;
+    auto ret = wCacheTier.Seal();
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
+}
+
+TEST_F(TestWCache, test_wcache_tier_dataflow_error)
+{
+    LOG_INFO("test_wcache_tier_error");
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "FLOW_DATA_FLOW_ERR", 0, 1, userParam);
+    WCacheTier wCacheTier;
+    auto ret = wCacheTier.Seal();
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
+    LVOS_HVS_deactiveTracePoint(0, "FLOW_DATA_FLOW_ERR");
+}
