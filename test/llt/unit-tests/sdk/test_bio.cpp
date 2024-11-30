@@ -1500,9 +1500,12 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
 TEST_F(TestBio, test_bio_client_agent_check_get_slice)
 {
     LOG_INFO("test_bio_client_agent_check_get_slice");
-    GetSliceResponse *rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
-    rsp->addrNum = NO_20;
+    GetSliceResponse *rsp = nullptr;
     auto ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, false);
+    rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
+    rsp->addrNum = NO_20;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     EXPECT_EQ(ret, false);
     rsp->addrNum = NO_1;
     rsp->sliceLen = NO_1;
@@ -1532,4 +1535,14 @@ TEST_F(TestBio, test_bio_client_get_shm_address)
     LOG_INFO("test_bio_client_get_shm_address");
     auto ret = ock::bio::net::BioClientNet::Instance()->GetShmAddress(0, NO_60) == nullptr ? BIO_OK : BIO_ERR;
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBio, test_bio_client_agent_prepare)
+{
+    LOG_INFO("test_bio_client_agent_prepare");
+    CmPtInfo ptEntry;
+    GetSliceResponse *tmpPtr = nullptr;
+    GetSliceResponse **rsp = &tmpPtr;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->SendPrepareResourceLocal(ptEntry, 1, 1, 1, 1, rsp);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
 }
