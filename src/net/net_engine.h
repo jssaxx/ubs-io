@@ -667,7 +667,7 @@ public:
 
     inline bool IsValidAddress(uint64_t begin, uint64_t end)
     {
-        return (begin >= mLocalMr->GetAddress()) && ((begin + end) <= (mLocalMr->GetAddress() + mOptions.memorySize));
+        return (begin >= mLocalMr->GetAddress()) && (end <= (mLocalMr->GetAddress() + mOptions.memorySize));
     }
 
     void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix,
