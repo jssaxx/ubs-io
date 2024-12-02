@@ -1225,10 +1225,16 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
             return BIO_OK;
         }
-        if (!IsValidSliceAddress(sliceP)) {
-            LOG_ERROR("Invalid slice address.");
-            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-            return BIO_OK;
+
+        LVOS_TP_START(MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID, &(req->comm.srcNid),
+            (BioServer::Instance()->GetLocalNid().VNodeId()));
+        LVOS_TP_END;
+        if (static_cast<uint16_t>(req->comm.srcNid) == BioServer::Instance()->GetLocalNid().VNodeId()) {
+            if (!IsValidSliceAddress(sliceP)) {
+                LOG_ERROR("Invalid slice address.");
+                BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+                return BIO_OK;
+            }
         }
 
         sliceP->SetDataCrc(req->dataCrc);

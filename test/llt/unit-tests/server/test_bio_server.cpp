@@ -1635,10 +1635,12 @@ TEST_F(TestBioServer, test_bio_server_put_invalid_slice)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_TRACEP_PARAM_S userParam1;
     LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "DESERIALIZE_SET_VSIZE", 0, 1, userParam1);
     auto ret = mirror->MirrorServerPut(ctx, req);
     EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "DESERIALIZE_SET_VSIZE");
+    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID");
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK");
     free(req);
 }
