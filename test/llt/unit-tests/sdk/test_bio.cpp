@@ -1318,9 +1318,9 @@ TEST_F(TestBio, test_bio_update_return_fail)
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
-TEST_F(TestBio, test_bio_convert_location_return_fail)
+TEST_F(TestBio, test_bio_convert_location)
 {
-    LOG_INFO("test_bio_convert_location_return_fail");
+    LOG_INFO("test_bio_convert_location");
     ObjLocation location{0, 0};
     ObjLocationDetail detailLoc;
     ock::bio::BioClient::Instance()->SetStartWorker(false);

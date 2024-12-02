@@ -870,7 +870,10 @@ CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
     }
 
     memcpy_s(detailLoc->hostMaster, NODE_DESC_SIZE, rsp.hostMaster, NODE_DESC_SIZE);
+    detailLoc->hostMaster[NODE_DESC_SIZE - 1] = '\0';
     memcpy_s(detailLoc->hostSlave, NODE_DESC_SIZE, rsp.hostSlave, NODE_DESC_SIZE);
+    detailLoc->hostSlave[NODE_DESC_SIZE - 1] = '\0';
+
     detailLoc->portMaster = rsp.portMaster;
     detailLoc->portSlave = rsp.portSlave;
     return RET_CACHE_OK;

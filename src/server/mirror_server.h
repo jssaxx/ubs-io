@@ -163,6 +163,7 @@ private:
     bool CheckStatReq(StatRequest *req);
     bool CheckListReq(ListRequest *req);
     bool CheckLoadReq(LoadRequest *req);
+    bool IsValidSliceAddress(WCacheSlicePtr &sliceP);
 private:
     std::atomic<uint64_t> flowNum { 0 };
     bool mStarted = false;

@@ -4,6 +4,7 @@
 
 #include "bio_log.h"
 #include "bio_crc_util.h"
+#include "bio_tracepoint_helper.h"
 #include "bdm_core.h"
 #include "securec.h"
 #include "slice.h"
@@ -142,11 +143,13 @@ BResult Slice::Deserialize(char *data, uint64_t length)
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "length memory copy failed.");
     pos += sizeof(mLength);
     size_t vsize = 0;
+    LVOS_TP_START(DESERIALIZE_SET_VSIZE, &vsize, NO_3);
     ChkTrue(length >= pos + sizeof(vsize), BIO_INVALID_PARAM,
         "Failed to deserialize data, length:" << length << "  pos + sizeof(vsize):" << pos + sizeof(vsize));
     ret = memcpy_s(&vsize, sizeof(vsize), data + pos, sizeof(vsize));
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "vsize memory copy failed.");
     pos += sizeof(vsize);
+    LVOS_TP_END;
     for (size_t i = 0; i < vsize; i++) {
         FlowAddr flowAddr;
         ChkTrue(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM,
