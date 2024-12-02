@@ -1605,3 +1605,40 @@ TEST_F(TestBioServer, test_handle_free_mem)
     EXPECT_EQ(ret, true);
     LVOS_HVS_deactiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK");
 }
+
+TEST_F(TestBioServer, test_handle_interceptor_write)
+{
+    LOG_INFO("test_handle_interceptor_write");
+    ServiceContext ctx;
+    auto ret = InterceptorServer::GetInstance().HandleInterceptorWrite(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_put_invalid_slice)
+{
+    LOG_INFO("test_bio_server_put_invalid_slice");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    PutRequest *req = (PutRequest *)new char[sizeof(PutRequest) + 128];
+    req->comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
+    req->tenantId = 1;
+    req->affinity = 1;
+    req->strategy = 1;
+    CopyKey(req->key, "abcdslice111", KEY_MAX_SIZE);
+    req->length = NO_128;
+    req->mrKey = 1;
+    req->sliceLen = 128;
+    req->ioStrategy = 0;
+    req->memFromServer = true;
+    req->mrAddress = 0UL;
+    req->mrSize = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_TRACEP_PARAM_S userParam1;
+    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "DESERIALIZE_SET_VSIZE", 0, 1, userParam1);
+    auto ret = mirror->MirrorServerPut(ctx, req);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "DESERIALIZE_SET_VSIZE");
+    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK");
+    free(req);
+}

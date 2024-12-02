@@ -665,6 +665,11 @@ public:
         return result;
     }
 
+    inline bool IsValidAddress(uint64_t begin, uint64_t end)
+    {
+        return (begin >= mLocalMr->GetAddress()) && ((begin + end) <= (mLocalMr->GetAddress() + mOptions.memorySize));
+    }
+
     void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix,
         ock::hcom::NetServiceConnectOptions &op);
     BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);

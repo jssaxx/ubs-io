@@ -1170,6 +1170,19 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
     return true;
 }
 
+bool MirrorServer::IsValidSliceAddress(WCacheSlicePtr &sliceP)
+{
+    auto addrs = sliceP->GetAddrs();
+    for (auto addr : addrs) {
+        auto beginAddr = addr.chunkId + addr.chunkOffset;
+        auto endAddr = beginAddr + addr.chunkLen;
+        if (!BioServer::Instance()->GetNetEngine()->IsValidAddress(beginAddr, endAddr)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 {
     if (!CheckPutReq(req)) {
@@ -1190,12 +1203,14 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
         }
         sliceP->SetDataCrc(req->dataCrc);
     } else {
+        LVOS_TP_START(MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK, 0);
         if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest) + req->sliceLen)) {
             LOG_ERROR("Invalid param message data length: " << ctx.MessageDataLen() <<
                 ", param data length:" << sizeof(PutRequest) + req->sliceLen);
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
             return BIO_OK;
         }
+        LVOS_TP_END;
         LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_END;
@@ -1210,6 +1225,12 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
             return BIO_OK;
         }
+        if (!IsValidSliceAddress(sliceP)) {
+            LOG_ERROR("Invalid slice address.");
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+            return BIO_OK;
+        }
+
         sliceP->SetDataCrc(req->dataCrc);
     }
 
