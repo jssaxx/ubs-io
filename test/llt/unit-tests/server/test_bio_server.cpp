@@ -972,11 +972,12 @@ TEST_F(TestBioServer, test_bio_server_writer)
     EXPECT_EQ(ret, BIO_OK);
 
     GetResponse rsp;
-    ret = mirror->WriterLocalDiffProcess(isAlloc, lMrVec, rsp);
+    GetRequest req;
+    req.comm.srcNid = NO_1;
+    req.comm.pid  = NO_1;
+    ret = mirror->WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
 
     ServiceContext netCtx;
-    GetRequest req;
-    req.comm.srcNid = 1;
     std::vector<NetMrInfo> rMrVec1;
     rMrVec1.emplace_back(NetMrInfo(123U, 128U, 1));
     isAlloc = false;
