@@ -115,6 +115,7 @@ void NetEngine::InsertGetHolder(uint32_t nodeId, uint64_t clientId, std::vector<
 
 void NetEngine::RemoveGetHolder(uint32_t nodeId, uint64_t clientId, bool flag)
 {
+    nodeId = (nodeId == NO_1024) ? mLocalNodeId : nodeId;
     GetHolder holder = {nodeId, clientId};
     WriteLocker<ReadWriteLock> lock(&mLock);
     auto iter = mHolders.find(holder);
