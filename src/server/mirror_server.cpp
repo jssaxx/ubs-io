@@ -539,7 +539,8 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
     return BIO_OK;
 }
 
-BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp)
+BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp,
+    GetRequest &req)
 {
     ChkTrue(lMrVec.size() <= SLICE_ADDR_SIZE, BIO_INNER_ERR, "Local mr size exceed 4, size:" << lMrVec.size() << ".");
     rsp.isAlloc = isAlloc;
@@ -549,6 +550,9 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
         rsp.addrOffset[idx] =
             BioServer::Instance()->GetNetEngine()->GetAddressOffset(static_cast<uint64_t>(lMrVec[idx].address));
         rsp.addrLen[idx] = lMrVec[idx].size;
+    }
+    if (isAlloc == true) {
+        BioServer::Instance()->GetNetEngine()->InsertGetHolder(req.comm.srcNid, req.comm.pid, lMrVec);
     }
     return BIO_OK;
 }
@@ -616,7 +620,7 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         }
 
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
-            return WriterLocalDiffProcess(isAlloc, lMrVec, rsp);
+            return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
         }
 
         return WriterRemote(isAlloc, lMrVec, rMrVec, netCtx, req);
@@ -1762,10 +1766,13 @@ int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *r
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
+
     for (uint32_t idx = 0; idx < req->num; idx++) {
         auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx], 0);
         BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
     }
+    BioServer::Instance()->GetNetEngine()->RemoveGetHolder(req->comm.srcNid, req->comm.pid, false);
+
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, nullptr, 0);
     return BIO_OK;
 }
