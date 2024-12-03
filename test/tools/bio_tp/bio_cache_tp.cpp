@@ -145,6 +145,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(FLOW_SEAL_OK, "flow seal ok", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(FLOW_DESTROY_OBJECT_ERR, "flow destroy object err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(FLOW_DATA_FLOW_ERR, "wcache tier data flow err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(GET_VALUE_IN_DISK, "get value in disk", tp::CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -284,6 +285,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(FLOW_SEAL_OK);
     LVOS_TP_UNREG(FLOW_DESTROY_OBJECT_ERR);
     LVOS_TP_UNREG(FLOW_DATA_FLOW_ERR);
+    LVOS_TP_UNREG(GET_VALUE_IN_DISK);
 }
 #else
 void tp::CacheTp::Register() noexcept {}

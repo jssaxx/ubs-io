@@ -489,7 +489,7 @@ void MirrorServer::InitGetResponse(GetResponse &rsp)
     rsp.realLen = 0;
 }
 
-BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp)
+BResult MirrorServer::WriterLocalSameProcessMem(const SlicePtr &from, GetResponse &rsp)
 {
     std::vector<NetMrInfo> lMrVec;
     for (auto addr : from->GetAddrs()) {
@@ -502,6 +502,20 @@ BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &
     rsp.isAlloc = false;
     rsp.num = lMrVec.size();
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        rsp.address[idx] = lMrVec[idx].address;
+        rsp.addrOffset[idx] = 0;
+        rsp.addrLen[idx] = lMrVec[idx].size;
+    }
+    return BIO_OK;
+}
+
+BResult MirrorServer::WriterLocalSameProcessDisk(std::vector<NetMrInfo> &lMrVec, GetResponse &rsp)
+{
+    ChkTrue(lMrVec.size() <= SLICE_ADDR_SIZE, BIO_INNER_ERR, "Local mr size exceed 4, size:" << lMrVec.size() << ".");
+    rsp.isAlloc = false;
+    rsp.num = lMrVec.size();
+    for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        LOG_ERROR("write local same process addr:" << lMrVec[idx].address);
         rsp.address[idx] = lMrVec[idx].address;
         rsp.addrOffset[idx] = 0;
         rsp.addrLen[idx] = lMrVec[idx].size;
@@ -607,10 +621,13 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
-            return WriterLocalSameProcess(from, rsp);
+        FlowType type = from->GetFlowType();
+        LVOS_TP_START(GET_VALUE_IN_DISK, &type, FLOW_DISK);
+        LVOS_TP_END;
+        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid()) &&
+            type == FLOW_MEMORY) {
+            return WriterLocalSameProcessMem(from, rsp);
         }
-
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
         std::vector<NetMrInfo> lMrVec;
@@ -618,7 +635,10 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         if (ret != BIO_OK) {
             return ret;
         }
-
+        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid()) &&
+            type == FLOW_DISK) {
+            return WriterLocalSameProcessDisk(lMrVec, rsp);
+        }
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
             return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
         }
@@ -1522,7 +1542,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
     }
-    if (flowNum.load() > NO_32 * NO_1000) {
+    if (flowNum.load() > NO_32 * NO_1000 * NO_8) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
