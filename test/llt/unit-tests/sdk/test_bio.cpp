@@ -269,7 +269,10 @@ TEST_F(TestBio, test_bio_get)
     LOG_INFO("test_bio_get");
     char *value = new char[G_LENGTH];
     uint64_t realLen = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "GET_VALUE_IN_DISK", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    LVOS_HVS_deactiveTracePoint(0, "GET_VALUE_IN_DISK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     EXPECT_EQ(G_LENGTH, realLen);
 
@@ -279,7 +282,6 @@ TEST_F(TestBio, test_bio_get)
     ret = BioGet(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
-    LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
