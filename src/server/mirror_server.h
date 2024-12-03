@@ -155,8 +155,7 @@ private:
         ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
-    BResult WriterLocalSameProcessMem(const SlicePtr &from, GetResponse &rsp);
-    BResult WriterLocalSameProcessDisk(std::vector<NetMrInfo> &lMrVec, GetResponse &rsp);
+    BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp, FlowType type);
     bool CheckQueryPtViewReq(QueryPtViewRequest *req);
     bool CheckPutReq(PutRequest *req);
     bool CheckGetReq(GetRequest *req);

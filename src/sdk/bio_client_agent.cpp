@@ -638,6 +638,9 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
             off += rsp.addrLen[idx];
             cpyLength -= rsp.addrLen[idx];
         }
+        if (rsp.isAlloc == true) {
+            free(reinterpret_cast<void *>(rsp.address[0]));
+        }
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
