@@ -173,6 +173,12 @@ BResult BioClientNet::ShmInit()
         return ret;
     }
 
+    if (!CheckShmInitResp(rsp)) {
+        CLIENT_LOG_ERROR("Invalid rsp, mKey:" << rsp.mKey << ", alignSize:" << rsp.alignSize << ", ioTimeOut:"
+            << rsp.ioTimeOut << ", netTimeOut: " << rsp.ioTimeOut << ", netTimeOut:" << rsp.netTimeOut << ", logLevel:"
+            << rsp.logLevel << ", scene:" << rsp.scene << ".");
+        return BIO_ERR;
+    }
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
@@ -291,8 +297,11 @@ BResult BioClientNet::SetChannelBrokenHandler()
         });
         t.detach();
     };
-    mNetEngine->RegisterChannelBrokenHandler(channelBroken);
-    return BIO_OK;
+    BResult ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Client regist channel broken handler failed, ret " << ret);
+    }
+    return ret;
 }
 
 void BioClientNet::RecoverIpc()
@@ -391,15 +400,33 @@ void BioClientNet::RecoverRpc(uint32_t peerId)
     return;
 }
 
+
+bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
+{
+    return ((strlen(rsp.underFsType) != 0) && (strlen(rsp.hdfsConfig.nameNode) != 0) &&
+        (strlen(rsp.hdfsConfig.workingPath) != 0) && (strlen(rsp.cephConfig.user) != 0) &&
+        (strlen(rsp.cephConfig.cluster) != 0) && (strlen(rsp.cephConfig.cfgPath) != 0) &&
+        (strlen(rsp.cephConfig.pool) != 0) &&
+        ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
+}
+
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
 {
     GetUnderFsConfigRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     GetUnderFsConfigResponse rsp;
+
+    LVOS_TP_START(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, 0);
     BResult ret = mNetEngine->SyncCall<GetUnderFsConfigRequest, GetUnderFsConfigResponse>(INVALID_NID,
         BIO_OP_SDK_GET_UFS_CONFIG, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send get underfs configs request failed, ret:" << ret << ".");
         return ret;
+    }
+    LVOS_TP_END;
+
+    if (!CheckGetUnderFsConfigResp(rsp)) {
+        CLIENT_LOG_ERROR("Check underfs configs failed.");
+        return BIO_INNER_ERR;
     }
 
     config.underFsType = rsp.underFsType;
@@ -410,4 +437,14 @@ BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
     config.cephConfig.cfgPath = rsp.cephConfig.cfgPath;
     config.cephConfig.pools.insert({ 0, rsp.cephConfig.pool });
     return BIO_OK;
+}
+
+bool BioClientNet::CheckShmInitResp(ShmInitResponse rsp)
+{
+    bool validAlignSize = rsp.alignSize <= NO_4194304 && rsp.alignSize >= NO_1;
+    bool validIoTimeOut = rsp.ioTimeOut >= NO_60 && rsp.ioTimeOut <= NO_300;
+    bool validNetTimeOut = rsp.netTimeOut >= NO_16 && rsp.netTimeOut <= NO_128;
+    bool validLogLevel = rsp.logLevel <= NO_4;
+    bool validScene = rsp.scene <= NO_1;
+    return validAlignSize && validIoTimeOut && validNetTimeOut && validLogLevel && validScene;
 }

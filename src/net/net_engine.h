@@ -24,6 +24,24 @@
 
 namespace ock {
 namespace bio {
+struct GetHolder {
+    uint32_t nodeId;
+    uint64_t clientId;
+};
+
+struct  GetHolderHash {
+    size_t operator()(const GetHolder& holder) const
+    {
+        return std::hash<uint64_t>()(static_cast<uint64_t>(holder.nodeId)) ^ std::hash<uint64_t>()(holder.clientId);
+    }
+};
+
+struct GetHolderEqual {
+    bool operator()(const GetHolder& holder1, const GetHolder& holder2) const
+    {
+        return (holder1.nodeId == holder2.nodeId) && (holder1.clientId == holder2.clientId);
+    }
+};
 class NetEngine {
 public:
     NetEngine() = default;
@@ -31,6 +49,8 @@ public:
 
     BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func);
     BResult Start(const NetOptions &opt);
+    void InsertGetHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo>);
+    void RemoveGetHolder(uint32_t nodeId, uint64_t clientId, bool flag);
     void Stop();
 
     inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
@@ -210,9 +230,11 @@ public:
         mOptions.hseKfsStandbyPath = options.hseKfsStandbyPath;   /* hseceasy kfs standby path */
     }
 
-    uint8_t *GetShmAddress(uint64_t offset)
+    uint8_t *GetShmAddress(uint64_t offset, uint64_t len)
     {
-        if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mShmSize)) {
+        if (UNLIKELY(offset < mShareOffset ||
+                    offset >= mShareOffset + mShmSize ||
+                    offset + len > mShareOffset + mShmSize)) {
             NET_LOG_ERROR("Shm info, offset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }
@@ -649,12 +671,23 @@ public:
         return mDataChannelMgr->GetChannel(targetNodeId, pid, ch);
     }
 
+    inline BResult IsChannelExist(const BioNodeId &targetNodeId, uint32_t pid)
+    {
+        ChannelPtr ch = nullptr;
+        return mDataChannelMgr->GetChannel(targetNodeId, pid, ch) == BIO_OK;
+    }
+
     inline BResult GetDataChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
         BIO_TRACE_START(NET_TRACE_GET_DATA_CHANNEL);
         BResult result = mDataChannelMgr->GetChannel(targetNodeId, ch);
         BIO_TRACE_END(NET_TRACE_GET_DATA_CHANNEL, result);
         return result;
+    }
+
+    inline bool IsValidAddress(uint64_t begin, uint64_t end)
+    {
+        return (begin >= mLocalMr->GetAddress()) && (end <= (mLocalMr->GetAddress() + mOptions.memorySize));
     }
 
     void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix,
@@ -914,6 +947,8 @@ private:
     uint64_t mShmSize = 0;
     uint8_t *mShareAddress = nullptr;
     friend class NetConnectTask;
+    ReadWriteLock mLock;
+    std::unordered_map<GetHolder, std::vector<NetMrInfo>, GetHolderHash, GetHolderEqual> mHolders;
 };
 
 using NetEnginePtr = Ref<NetEngine>;

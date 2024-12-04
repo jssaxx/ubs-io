@@ -207,7 +207,6 @@ void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t lim
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
-    mMetaFlow->GetFlowId();
     BResult ret = BIO_ERR;
     LVOS_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
     ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), slice);
@@ -271,15 +270,33 @@ uint64_t WCacheTier::GetDataEvictOffset()
 
 BResult WCacheTier::Seal()
 {
+    BResult ret = BIO_OK;
+#ifdef DEBUG_UT
+    LVOS_TP_START(FLOW_DATA_FLOW_ERR, &ret, BIO_ERR);
+    LVOS_TP_END;
+    if (ret == BIO_OK) {
+        mMetaFlow = MakeRef<Flow>(FLOW_META, FLOW_MEMORY, 0, 0, 0, 0);
+    } else {
+        mDataFlow = MakeRef<Flow>(FLOW_DATA, FLOW_MEMORY, 0, 0, 0, 0);
+    }
+#endif
     if (mMetaFlow != nullptr) {
-        mMetaFlow->Seal();
+        ret = mMetaFlow->Seal();
+        if (ret != BIO_OK) {
+            LOG_ERROR("Wcache tier seal metaflow failed, ret " << ret);
+            return ret;
+        }
     }
 
     if (mDataFlow != nullptr) {
-        mDataFlow->Seal();
+        ret = mDataFlow->Seal();
+        if (ret != BIO_OK) {
+            LOG_ERROR("Wcache tier seal dataflow failed, ret " << ret);
+            return ret;
+        }
     }
 
-    return BIO_OK;
+    return ret;
 }
 
 void WCacheTier::Destroy()

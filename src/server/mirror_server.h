@@ -71,6 +71,7 @@ public:
 
     BResult SendSyncData(uint16_t ptId, uint16_t masterNodeId, uint64_t version);
 
+    bool CheckMagic(RequestComm &reqComm);
     bool CheckAll(RequestComm &reqComm);
 
     void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs);
@@ -79,11 +80,11 @@ public:
     BResult ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx);
     BResult WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
         std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
-    BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp);
+    BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp, GetRequest &req);
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx, GetRequest &req);
 
-    int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
+    int32_t MirrorServerShmInit(ServiceContext &ctx);
     int32_t MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req);
     int32_t MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLocationQueryReq *req);
     int32_t MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequest *req);
@@ -100,7 +101,6 @@ public:
     int32_t MirrorServerCheckRemoteUpdateReady(ServiceContext &ctx, CheckRemoteUpdateReadyRequest *req);
     int32_t MirrorServerList(ServiceContext &ctx, ListRequest *req);
     int32_t MirrorServerLoad(ServiceContext &ctx, LoadRequest *req);
-    int32_t MirrorServerReportHb(ServiceContext &ctx);
     int32_t MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req);
     int32_t MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRequest *req);
     int32_t MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest *req);
@@ -127,7 +127,6 @@ public:
     int32_t HandleCheckRemoteUpdateReady(ServiceContext &ctx);
     int32_t HandleList(ServiceContext &ctx);
     int32_t HandleLoad(ServiceContext &ctx);
-    int32_t HandleReportHb(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
     int32_t HandleDestroyFlow(ServiceContext &ctx);
     int32_t HandleGetSlice(ServiceContext &ctx);
@@ -136,6 +135,11 @@ public:
     int32_t HandleFreeMem(ServiceContext &ctx);
     int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
     int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
+
+    bool CheckUpdateReadyReq(CheckUpdateReadyRequest *req);
+    bool CheckNotifyUpdateReq(NotifyUpdateRequest *req);
+    bool CheckFreeMemReq(FreeMemRequest *req);
+    bool CheckGetSliceReq(GetSliceRequest *req);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
@@ -151,12 +155,22 @@ private:
         ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
-    BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
-
+    BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp, FlowType type);
+    bool CheckQueryPtViewReq(QueryPtViewRequest *req);
+    bool CheckPutReq(PutRequest *req);
+    bool CheckGetReq(GetRequest *req);
+    bool CheckDeleteReq(DeleteRequest *req);
+    bool CheckStatReq(StatRequest *req);
+    bool CheckListReq(ListRequest *req);
+    bool CheckLoadReq(LoadRequest *req);
+    bool IsValidSliceAddress(WCacheSlicePtr &sliceP);
 private:
+    std::atomic<uint64_t> flowNum { 0 };
     bool mStarted = false;
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
+
+    BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE
 };
 }

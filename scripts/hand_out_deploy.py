@@ -19,7 +19,10 @@ import subprocess
 import copy
 import shutil
 
-sp = subprocess.Popen("touch ./boostio_hand_out_py.log;chmod 600 ./boostio_hand_out_py.log", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+sp = subprocess.Popen(["touch", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
+sp.communicate()
+sp.wait()
+sp = subprocess.Popen(["chmod", "600", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
 sp.communicate()
 sp.wait()
 logging.basicConfig(level=logging.INFO,
@@ -38,9 +41,7 @@ Usage:
 
 Options:
     install    [pkg_path] [user] [group]
-    uninstall 
-    start_boostio    
-    stop_boostio    
+    uninstall  
 """.format(name=os.path.basename(__file__))
 
 nodes_info = []
@@ -118,10 +119,11 @@ def send_files_to_node(node):
         cmd = "bash {0} {1} {2} {3} {4} {5}" \
             .format(SCP_FILE_SHELL_PATH, node[ip_str], node["user"], node[port_str], sent_file,
                     "/home/{0}".format(node[ip_str]))
-        sp = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+        newcmd = ["{0}".format(SCP_FILE_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]), "{0}".format(node[port_str]),
+                  "{0}".format(sent_file), "{0}".format("/home/{0}".format(node[ip_str]))]
+        sp = subprocess.Popen(newcmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
         stdout, stderr = sp.communicate(node["password"])
         sp.wait()
-
         result = stdout
         logging.info("pid:{0} node({1}:{2}); send file({3})\nresult: {4}".format(PID, node[ip_str], node[port_str], sent_file, result))
         if "Execute SCP successful" in result:
@@ -132,7 +134,7 @@ def send_files_to_node(node):
             cmd = "bash {0} {1} {2} {3} {4} {5} " \
                 .format(SCP_FILE_SHELL_PATH, node[ip_str], node["user"], node[port_str], sent_file,
                         "/home/{0}".format(node[ip_str]))
-            logging.error("pid:{0} Failed to execute SCP. (cmd:{1}), reason:{2}".format(PID, cmd, stderr))
+            logging.error("pid:{0} Failed to execute SCP. (cmd:{1})".format(PID, cmd))
             if os.path.exists(folder_path):
                 shutil.rmtree(folder_path)
             return -1
@@ -169,7 +171,9 @@ def ssh_cmd(node, path, command):
     port_str = "port"
     cmd = "bash {0} {1} {2} {3} {4} \"{5}\"" \
         .format(SSH_CMD_SHELL_PATH, node[ip_str], node["user"], node[port_str], path, command)
-    sp = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+    newcmd = ["{0}".format(SSH_CMD_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]), "{0}".format(node[port_str]),
+              "{0}".format(path), "{0}".format(command)]
+    sp = subprocess.Popen(newcmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
     stdout, stderr = sp.communicate(node["password"])
     sp.wait()
     result = stdout
@@ -215,23 +219,6 @@ def uninstall(node):
         failed_times.append(1)
         return -1
     return 0
-
-
-# 通过杀进程的方式，停止应用
-def stop_boostio(node):
-    if ssh_cmd(node, home_path_of(node["user"]), "systemctl stop boostio") != 0:
-        failed_times.append(1)
-        return -1
-    return 0
-
-
-# 重新启动应用
-def start_boostio(node):
-    if ssh_cmd(node, home_path_of(node["user"]), "systemctl start boostio") != 0:
-        failed_times.append(1)
-        return -1
-    return 0
-
 
 def install(node):
     ip_str = "ip"
@@ -531,7 +518,7 @@ def exec_build(args):
     if len(args) < 2:
         help_info()
         return -1
-    if args[1] not in ["install", "uninstall", "stop_boostio", "start_boostio"]:
+    if args[1] not in ["install", "uninstall"]:
         help_info()
         return -1
     global INSTALL_USER

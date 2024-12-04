@@ -106,6 +106,34 @@ BResult NetEngine::Start(const NetOptions &opt)
     return result;
 }
 
+void NetEngine::InsertGetHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo> lMrVec)
+{
+    GetHolder holder = { nodeId, clientId };
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    mHolders.emplace(holder, lMrVec);
+}
+
+void NetEngine::RemoveGetHolder(uint32_t nodeId, uint64_t clientId, bool flag)
+{
+    nodeId = (nodeId == NO_1024) ? mLocalNodeId : nodeId;
+    GetHolder holder = {nodeId, clientId};
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    auto iter = mHolders.find(holder);
+    if (iter == mHolders.end()) {
+        LOG_INFO("Not found holder record, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+        return;
+    }
+
+    if (flag) {
+        std::vector<NetMrInfo> lMrVec = iter->second;
+        for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+            FreeLocalMrSingle(reinterpret_cast<uintptr_t>(lMrVec[idx].address));
+        }
+    }
+
+    mHolders.erase(iter);
+}
+
 void NetEngine::Stop()
 {
     std::lock_guard<std::mutex> guard(mMutex);
@@ -599,6 +627,7 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
     if (mHandlerBroken != nullptr) {
         mHandlerBroken(dstNid.nid, dstNid.pid);
     }
+    RemoveGetHolder(dstNid.nid, dstNid.pid, true);
 }
 
 int32_t NetEngine::RequestReceived(ServiceContext &ctx)

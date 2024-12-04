@@ -22,50 +22,65 @@ cmd=$5
 set +e
 read -s pw
 set -e
+common_params=("\\" "\"" "!" "'" "~" "\`" "@" "#" "$" "%" "^" "&" "(" ")" "-" "_" "=" "+" "\|" "[" "{" "}" "]" ";" ":" "," "<" "." ">" "/" " ")
+
+transfor_special_characters()
+{
+    local input_params=$1
+    out_params=$input_params
+    for((i=0;i<${#common_params[@]};i++))
+    do
+        out_params=${out_params//${common_params[i]}/\\${common_params[i]}}
+    done
+    out_params=${out_params//\?/\\?}
+    echo -e "${out_params}"
+    return $?
+}
+
+UPDATE_PASSWORD=$(transfor_special_characters "$pw")
 
 sshcmd()
 {
     ip_addr=$1
     username=$2
-    read -s password
     ip_port=$4
     command_path=$5
     command=$6
-expect <<-EOF
+expect 2>  /dev/null << EOF
     set timeout 90
     spawn ssh ${username}@${ip_addr} -p${ip_port}
     sleep 1
         expect {
-       "*yes/no" { send "yes\r"; exp_continue }
-       "*password:" { send "${password}\r"; exp_continue }
+       "*yes/no" { send -- "yes\r"; exp_continue }
+       "*password:" { send -- "${UPDATE_PASSWORD}\r"; exp_continue }
        "Permission denied, please try again.*" { exit 1;}
-       "]*" { send "export HISTFILE=/dev/null\r" }
-       "* *#" { send "export HISTFILE=/dev/null\r"}
+       "]*" { send -- "export HISTFILE=/dev/null\r" }
+       "* *#" { send -- "export HISTFILE=/dev/null\r"}
     }
     expect {
-            "]*"; { send "cd ${command_path}\r"}
-            "* *#";{ send "cd ${command_path}\r"}
+            "]*"; { send -- "cd ${command_path}\r"}
+            "* *#";{ send -- "cd ${command_path}\r"}
     }
     expect {
-            "]*"; { send "${command}\r" }
-            "* *#";{ send "${command}\r" }
+            "]*"; { send -- "${command}\r" }
+            "* *#";{ send -- "${command}\r" }
     }
     expect {
-       "*password*" { send "${password}\r" }
-       "]*" { send "\r" }
-       "* *#" { send "\r"}
+       "*password*" { send -- "${password}\r" }
+       "]*" { send -- "\r" }
+       "* *#" { send -- "\r"}
     }
     expect {
-       "]*"; { send "echo \"recode: \$\?\"\r" }
-       "* *#";{ send "echo \"recode: \$\?\"\r" }
+       "]*"; { send -- "echo \"recode: \$\?\"\r" }
+       "* *#";{ send -- "echo \"recode: \$\?\"\r" }
     }
     expect {
-       "]*"; { send "echo \"recode: \$\?\"\r" }
-       "* *#";{ send "echo \"recode: \$\?\"\r" }
+       "]*"; { send -- "echo \"recode: \$\?\"\r" }
+       "* *#";{ send -- "echo \"recode: \$\?\"\r" }
     }
     expect {
-       "]*"; { send "exit\r" }
-       "* *#";{ send "exit\r" }
+       "]*"; { send -- "exit\r" }
+       "* *#";{ send -- "exit\r" }
     }
     expect eof
 EOF
@@ -76,7 +91,7 @@ sleep 1
 
 CUR_DIR=$(dirname $(readlink -f $0))
 
-sshcmd ${ip} ${user} stdin ${port} ${cmd_path} "${cmd}" <<<${pw} > ${CUR_DIR}/ssh_cmd_${ip}_${port}.log
+sshcmd ${ip} ${user} stdin ${port} ${cmd_path} "${cmd}" <<<${UPDATE_PASSWORD} > ${CUR_DIR}/ssh_cmd_${ip}_${port}.log
 if ! cat ${CUR_DIR}/ssh_cmd_${ip}_${port}.log|grep "recode: 0";then
     echo "----node ${ip} Failed to execute the SSH command:"
     cat ${CUR_DIR}/ssh_cmd_${ip}_${port}.log

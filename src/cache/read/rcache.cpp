@@ -588,10 +588,11 @@ BResult RCache::Delete(const Key &key)
         return BIO_NOT_EXISTS;
     }
     RCacheChunkPtr chunk = iter->second;
-    chunk->SetState(1);
     indexLock[bucket].UnLock();
     BIO_TRACE_END(RCACHE_TRACE_DEL_QUERY_INDEX, 0);
-
+    chunk->lock.lock();
+    chunk->SetState(1);
+    chunk->lock.unlock();
     IncGCData(chunk->GetTierType(), chunk->GetValue().length);
     return BIO_OK;
 }

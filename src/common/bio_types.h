@@ -64,6 +64,7 @@ constexpr uint32_t NO_1 = 1;
 
 constexpr uint64_t NO_U64_0 = 0;
 constexpr uint64_t NO_U64_1 = 1;
+constexpr uint64_t NO_U64_10 = 10;
 constexpr uint8_t NO_U8_255 = 255;
 
 constexpr uint32_t IP_SIZE = 32;
@@ -77,6 +78,8 @@ constexpr size_t IO_SIZE_256K = 256 * 1024;
 constexpr size_t IO_SIZE_1M = 1024 * 1024;
 constexpr size_t IO_SIZE_2M = 2 * 1024 * 1024;
 constexpr size_t IO_SIZE_4M = 4 * 1024 * 1024;
+constexpr size_t IO_SIZE_64M = 64 * 1024 * 1024;
+constexpr size_t IO_SIZE_128M = 128 * 1024 * 1024;
 }
 }
 
