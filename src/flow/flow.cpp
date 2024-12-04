@@ -13,7 +13,6 @@ namespace bio {
 BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr)
 {
     LOG_TRACE("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
-
     bool isInvalidRange = false;
     LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL, &isInvalidRange, true);
     isInvalidRange = (offset < mTruncateOffset);
@@ -24,13 +23,16 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
     }
 
     if (offset + len > mPreLoadOffset) {
+        BIO_TRACE_START(FLOW_TRACE_PRELOAD_MEMORY);
         BResult ret = BIO_INNER_ERR;
         LVOS_TP_START(WCACHE_HOLD_WAIT_FAIL, &ret, BIO_ERR);
         ret = HoldWait(offset + len);
         LVOS_TP_END;
         if (ret != BIO_OK) {
+            BIO_TRACE_END(FLOW_TRACE_PRELOAD_MEMORY, ret);
             return ret;
         }
+        BIO_TRACE_END(FLOW_TRACE_PRELOAD_MEMORY, 0);
     }
 
     {
@@ -39,7 +41,6 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
             mWritenOffset = offset + len;
         }
     }
-
     BIO_TRACE_START(FLOW_TRACE_GETADDR);
     mLock.LockRead();
     uint64_t remainLen = len;
@@ -63,7 +64,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 {
     std::vector<uint64_t> cleanList;
 
-    LOG_TRACE("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
+    LOG_DEBUG("Flow truncate offset, Flow:" << mFlowId << ", type:" << mType << ", truncate:" << offset);
 
     if (offset > mPreLoadOffset || offset > mWritenOffset) {
         LOG_ERROR("Invalid offset:" << offset << ", preLoad:" << mPreLoadOffset << ", writen:" << mWritenOffset);
@@ -125,14 +126,16 @@ void Flow::PreLoadHandle()
     uint64_t offset;
     bool isReady;
     do {
+        BIO_TRACE_START(FLOW_TRACE_PRELOAD_ALLOC);
         auto ret = FlowManager::MediaAlloc(mType, mMediaId, mFlowId, mPreLoadOffset, mChunkSize, &chunkId);
         if (ret != BIO_OK) {
             LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" << mMediaId <<
                 ", chunkSize:" << mChunkSize);
             HoldClean(NO_MAX_VALUE64, BIO_INNER_RETRY, false);
+            BIO_TRACE_END(FLOW_TRACE_PRELOAD_ALLOC, ret);
             break;
         }
-
+        BIO_TRACE_END(FLOW_TRACE_PRELOAD_ALLOC, ret);
         mLock.LockWrite();
         mChunkList.push_back(chunkId);
         mPreLoadOffset += mChunkSize;
@@ -160,10 +163,9 @@ void Flow::PreLoadSchedule()
     mLock.UnLock();
 
     if (preloadFlag) {
-        LOG_TRACE("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
+        LOG_DEBUG("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
         return;
     }
-
     std::function<void()> func = std::bind(&Flow::PreLoadHandle, this);
     auto ret = FlowManager::Instance()->PreLoadObject(mType, func);
     if (ret != BIO_OK) {
@@ -176,7 +178,6 @@ void Flow::PreLoadSchedule()
 void Flow::HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag)
 {
     IoHoldCtx *waitCtx = nullptr;
-
     mLock.LockWrite();
     mPreLoadFlag = preLoadFlag;
     while (!mHoldList.empty()) {
@@ -211,7 +212,6 @@ BResult Flow::HoldWait(uint64_t needOffset)
     }
     mHoldList.push_back(&ioHoldCtx);
     mLock.UnLock();
-
     PreLoadSchedule();
 
     sem_wait(&ioHoldCtx.sem);

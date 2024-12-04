@@ -175,6 +175,149 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
     return ret;
 }
 
+BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_t length, const uint64_t offset)
+{
+    BResult ret = BIO_INNER_ERR;
+    std::vector<FlowAddr> addrVec = slice->GetAddrs();
+    if (LIKELY(addrVec.size() == NO_1)) {
+        ret = UnderFs::Instance()->Get(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset),
+            length, offset);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
+        }
+    } else {
+        void *value = aligned_alloc(NO_4096, length);
+        ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory aligned failed.");
+        ret = UnderFs::Instance()->Get(key, reinterpret_cast<char *>(value), length, offset);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
+            free(value);
+            return ret;
+        }
+        ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), slice.Get());
+        free(value);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Slice copy failed, ret:" << ret << ", key:" << key << ", length:" << length << ".");
+        }
+    }
+    return ret;
+}
+
+BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint64_t offset, uint64_t &totalLen,
+    uint64_t &realLen)
+{
+    UnderFs::ObjStat stat;
+    auto ret = UnderFs::Instance()->Stat(key, stat);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Stat key from under fs failed, ret:" << ret << ", key:" << key << ".");
+        return ret;
+    }
+
+    totalLen = static_cast<uint64_t>(stat.size);
+    if (UNLIKELY(offset >= totalLen)) {
+        LOG_ERROR("Read exceed, input offset:" << offset << ", input length:" << readLen << ", totalLen:" << totalLen);
+        return BIO_READ_EXCEED;
+    }
+    realLen = totalLen - offset;
+    if (realLen > readLen) {
+        realLen = readLen;
+    }
+    return BIO_OK;
+}
+
+BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+    uint64_t &realLen)
+{
+    // 1. 获取key的信息, 计算value的总长度和此次读取长度.
+
+    uint64_t totalLen = 0;
+    BResult ret = BIO_OK;
+    LVOS_TP_START(GET_UNDERFS_NO_STAT, &ret, BIO_OK);
+    ret = GetValueLengthFromUnderFS(key, slice->GetLength(), offset, totalLen, realLen);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Get key info from under fs failed, ret:" << ret << ", key:" << key << ".");
+        return ret;
+    }
+    LVOS_TP_END;
+    LVOS_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60*NO_100);
+    LVOS_TP_END;
+
+    // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
+    bool isFromRCache = true;
+    WCacheSlicePtr wcSlicePtr = nullptr;
+    bool enoughResource = false;
+    ret = mRCacheManager->CheckEnoughResource(slice->GetPtId(), enoughResource);
+    LVOS_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
+    LVOS_TP_END;
+    if (enoughResource) {
+        LVOS_TP_START(GET_EXTERNAL_RCACHE_MALLOC_FAIL, &wcSlicePtr, nullptr);
+        mRCacheManager->AllocResources(slice->GetPtId(), totalLen, wcSlicePtr);
+        LVOS_TP_END
+        if (LIKELY(wcSlicePtr == nullptr)) {
+            void *memAddr = aligned_alloc(NO_4096, realLen);
+            ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
+            isFromRCache = false;
+            MrInfo mrInfo = { reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen) };
+            std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+            wcSlicePtr = MakeRef<WCacheSlice>(0, 0, 0, realLen, addrVec, FLOW_MEMORY);
+        }
+    } else {
+        void *memAddr = aligned_alloc(NO_4096, realLen);
+        ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
+        isFromRCache = false;
+        MrInfo mrInfo = { reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen) };
+        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+        wcSlicePtr = MakeRef<WCacheSlice>(0, 0, 0, realLen, addrVec, FLOW_MEMORY);
+    }
+    ChkTrue(wcSlicePtr != nullptr, BIO_ALLOC_FAIL, "new WCacheSlicePtr failed.");
+
+    ret = BIO_INNER_ERR;
+    do {
+        // 3. 从underFS读取数据.
+        if (isFromRCache) {
+            ret = GetFromUnderFS(key, wcSlicePtr, totalLen, 0);
+        } else {
+            ret = GetFromUnderFS(key, wcSlicePtr, realLen, offset);
+        }
+        LVOS_TP_START(GET_EXTERNAL_GETUNDERFS_OK, &ret, BIO_OK);
+        LVOS_TP_END;
+
+        if (ret != BIO_OK) {
+            break;
+        }
+
+        // 4. 将数据写到目的Slice中.
+        if (isFromRCache) {
+            SlicePtr partailSlice = nullptr;
+            ret = mSliceOperator.GetSliceFromSliceIO(partailSlice, wcSlicePtr.Get(), offset, realLen);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Get partial slice from whole slice fail.");
+                break;
+            }
+            ret = sliceWriter(partailSlice, slice.Get());
+        } else {
+            ret = sliceWriter(wcSlicePtr.Get(), slice.Get());
+        }
+        if (ret != BIO_OK) {
+            LOG_ERROR("Call slice writer failed, ret:" << ret << ", key:" << key << ", is from read cache:" <<
+                isFromRCache);
+            break;
+        }
+
+        // 5. 根据资源来历决定是否写入到RCache.
+        if (isFromRCache) {
+            ret = mRCacheManager->Put(slice->GetPtId(), key, wcSlicePtr);
+            LOG_DEBUG("Get key info from under insert  read cache, ret:" << ret << ", key:" << key << ".");
+        }
+    } while (false);
+
+    if (!isFromRCache) {
+        free(reinterpret_cast<char *>(wcSlicePtr->GetAddrs()[0].chunkId));
+    }
+    return ret;
+}
+
+
 BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
     uint64_t &realLen)
 {
@@ -197,7 +340,9 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     }
 
     BIO_TRACE_START(RCACHE_TRACE_GET);
+    LVOS_TP_START(RCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
     ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
+    LVOS_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
@@ -208,17 +353,11 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
         return BIO_OK;
     }
 
-    ret = mRCacheManager->Load(slice->GetPtId(), key, 0, BIO_IO_MAX_LEN, realLen);
+    BIO_TRACE_START(EXTERNAL_TRACE_GET);
+    ret = GetExternal(key, offset, slice, sliceWriter, realLen);
+    BIO_TRACE_END(EXTERNAL_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Read cache load failed, ret:" << ret << ", key " << key << ".");
-        if (UNLIKELY(ret == BIO_LOAD_ALLOC_FAIL)) {
-            return ret;
-        }
-    } else {
-        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
-        if (LIKELY(ret == BIO_OK)) {
-            LOG_DEBUG("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
-        }
+        LOG_ERROR("underFs get failed, ret:" << ret << ", key:" << key << ".");
     }
     return ret;
 }
@@ -418,6 +557,5 @@ void Cache::ShowEvictNegotiateQueue()
 {
     mWCacheManager->GetEvictNegotiateInfo();
 }
-
 }
 }

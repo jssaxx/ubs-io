@@ -9,6 +9,7 @@
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
 #include "bio_monotonic.h"
+#include "bio_config_instance.h"
 #include "rcache_manager.h"
 
 using namespace ock::bio;
@@ -70,6 +71,27 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
     RCachePtr cachePtr = iter->second;
     cacheLock.UnLock();
     return cachePtr;
+}
+
+BResult RCacheManager::CheckEnoughResource(uint16_t ptId, bool &havaResource)
+{
+    havaResource = false;
+    RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
+    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+    if (config.diskCaps.size() < cachePtr->GetDiskId()) {
+        havaResource = false;
+        return BIO_INVALID_PARAM;
+    }
+    auto diskCap = static_cast<uint64_t>(config.diskCaps[cachePtr->GetDiskId()]);
+    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
+    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
+    uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
+    uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, cachePtr->GetDiskId());
+    if (rcacheMemUsed < rcacheMemCap && rcacheDiskUsed < rcacheDiskCap) {
+        havaResource = true;
+    }
+    return BIO_OK;
 }
 
 BResult RCacheManager::AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice)

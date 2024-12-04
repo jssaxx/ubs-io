@@ -37,6 +37,8 @@ public:
     // alloc resources for write cache evict data
     BResult AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice);
 
+    BResult CheckEnoughResource(uint16_t ptId, bool &havaResource);
+
     BResult Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &slice);
 
     BResult Get(uint16_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
@@ -59,6 +61,7 @@ public:
     uint64_t GetGCData();
 
     const RCachePtr GetRCacheInstanceByPtId(uint16_t ptId);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

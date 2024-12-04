@@ -15,6 +15,8 @@ public:
     BResult Copy(const char *from, const SlicePtr &to) override;
     BResult Copy(const SlicePtr &from, char *to) override;
     BResult Copy(const char *from, uint64_t start, uint32_t len, const SlicePtr &to) override;
+    BResult GetSliceFromSliceIO(SlicePtr &partialSlice, const SlicePtr &wholeSlice, uint64_t offset,
+        uint64_t length) override;
 
 private:
     static bool Validate(const SlicePtr &from, const SlicePtr &to);

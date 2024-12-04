@@ -13,6 +13,7 @@
 #include "htracer.h"
 #include "bio_client.h"
 #include "bio_lock.h"
+#include "bio_client.h"
 #include "sdk_diagnose.h"
 
 #ifdef __cplusplus
@@ -480,6 +481,21 @@ static void HandleShow(std::vector<std::string> cmds)
         CLI_PrintBuf("Local Node:");
         CmNodeId localNode = BioClient::Instance()->GetMirror()->GetLocalNodeInfo();
         CLI_PrintBuf("%s\n", localNode.ToString().c_str());
+    } else if (viewType == "flow") {
+        if (cmds.size() != 3) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        uint16_t ptId = std::stoull(cmds[2]);
+        auto flowInst = BioClient::Instance()->GetMirror()->Query(ptId);
+        if (UNLIKELY(flowInst == nullptr)) {
+            CLI_PrintBuf("flow is null pt:%u", ptId);
+            return;
+        }
+        CLI_PrintBuf("flow id: %lu.\n", flowInst->FlowId());
+        CLI_PrintBuf("flow status: %d.\n", flowInst->IsNormal() ? 1 : 0);
+        CLI_PrintBuf("flow offset: %lu.\n", flowInst->GetOffset());
+        CLI_PrintBuf("flow index: %lu.\n", flowInst->GetIndex());
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -691,6 +707,7 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tcreate cache: sdk create [tenantId] [affinity] [strategy]\n");
     CLI_PrintBuf("\topen cache: sdk open [tenantId]\n");
     CLI_PrintBuf("\tdestroy cache: sdk destroy [tenantId]\n");
+    CLI_PrintBuf("\tshow flow: sdk show flow [ptId]\n");
     CLI_PrintBuf("\tput value: sdk put [key] [filePath] [length] [sliceId]\n");
     CLI_PrintBuf("\tget value: sdk get [key] [offset] [length] [location] [filePath]\n");
     CLI_PrintBuf("\tstate object: sdk stat [key] [location]\n");

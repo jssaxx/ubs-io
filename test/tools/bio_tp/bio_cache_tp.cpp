@@ -63,6 +63,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(WCACHE_INDEX_TABLE_FAIL, "wcache index table err", CommonTp::PointerValueCallback);
     LVOS_TP_REG(WCACHE_GET_OK, "wcache get ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_NOT_EXIST, "wcache alloc err", CommonTp::IntValueCallback);
+    LVOS_TP_REG(RCACHE_NOT_EXIST, "rcache get err", CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_INIT_FAIL, "under fs init err", CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_GET_META_SLICE_FAIL, "wcache get meta slice err", CommonTp::IntValueCallback);
     LVOS_TP_REG(UNDERFS_DELETE_ERR, "underfs delete err", CommonTp::IntValueCallback);
@@ -146,6 +147,11 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(FLOW_DESTROY_OBJECT_ERR, "flow destroy object err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(FLOW_DATA_FLOW_ERR, "wcache tier data flow err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(GET_VALUE_IN_DISK, "get value in disk", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(GET_UNDERFS_NO_STAT, "underfs stat ok", CommonTp::IntValueCallback);
+    LVOS_TP_REG(GET_UNDERFS_MODIFY_REALLENGTH, "external get modify real length", CommonTp::IntValueCallback);
+    LVOS_TP_REG(GET_UNDERFS_NOT_ENOUGHRESOURCE, "external get not enough resource", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(GET_EXTERNAL_GETUNDERFS_OK, "external get underfs ok", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(GET_EXTERNAL_RCACHE_MALLOC_FAIL, "external get rcache malloc fail", CommonTp::PointerValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -201,6 +207,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(WCACHE_INDEX_TABLE_FAIL);
     LVOS_TP_UNREG(WCACHE_GET_OK);
     LVOS_TP_UNREG(WCACHE_NOT_EXIST);
+    LVOS_TP_UNREG(RCACHE_NOT_EXIST);
     LVOS_TP_UNREG(UNDERFS_INIT_FAIL);
     LVOS_TP_UNREG(WCACHE_DELETE_FLOWID_ERR);
     LVOS_TP_UNREG(WCACHE_PUT_FAIL);
@@ -286,6 +293,11 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(FLOW_DESTROY_OBJECT_ERR);
     LVOS_TP_UNREG(FLOW_DATA_FLOW_ERR);
     LVOS_TP_UNREG(GET_VALUE_IN_DISK);
+    LVOS_TP_UNREG(GET_UNDERFS_NO_STAT);
+    LVOS_TP_UNREG(GET_UNDERFS_MODIFY_REALLENGTH);
+    LVOS_TP_UNREG(GET_UNDERFS_NOT_ENOUGHRESOURCE);
+    LVOS_TP_UNREG(GET_EXTERNAL_GETUNDERFS_OK);
+    LVOS_TP_UNREG(GET_EXTERNAL_RCACHE_MALLOC_FAIL);
 }
 #else
 void tp::CacheTp::Register() noexcept {}
