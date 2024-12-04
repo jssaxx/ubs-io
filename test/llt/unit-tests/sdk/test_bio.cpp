@@ -310,6 +310,107 @@ TEST_F(TestBio, test_bio_get)
     delete[] value;
 }
 
+TEST_F(TestBio, test_bio_get_external_stat)
+{
+    LOG_INFO("test_bio_get_external_stat");
+    uint64_t realLen0 = 6000UL;
+    char *value0 = new char[realLen0];
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+    delete[] value0;
+}
+
+TEST_F(TestBio, test_bio_get_external_rcache)
+{
+    LOG_INFO("test_bio_get_external_rcache");
+    uint64_t realLen0 = 6000UL;
+    char *value0 = new char[realLen0];
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+    delete[] value0;
+}
+
+TEST_F(TestBio, test_bio_get_external_rcache_fail)
+{
+    LOG_INFO("test_bio_get_external_rcache_fail");
+    uint64_t realLen0 = 6000UL;
+    char *value0 = new char[realLen0];
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
+    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL");
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value0;
+}
+
+TEST_F(TestBio, test_bio_get_external_rcache_underfs)
+{
+    LOG_INFO("test_bio_get_external_rcache_underfs");
+    uint64_t realLen0 = 6000UL;
+    char *value0 = new char[realLen0];
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value0;
+}
+
+TEST_F(TestBio, test_bio_get_external_malloc)
+{
+    LOG_INFO("test_bio_get_external_malloc");
+    uint64_t realLen0 = 6000UL;
+    char *value0 = new char[realLen0];
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NOT_ENOUGHRESOURCE", 0, 1, userParam);
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NOT_ENOUGHRESOURCE");
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    delete[] value0;
+}
+
 TEST_F(TestBio, test_bio_get_diff_size)
 {
     LOG_INFO("test_bio_get_diff_size");
