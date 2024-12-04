@@ -24,24 +24,6 @@
 
 namespace ock {
 namespace bio {
-struct GetHolder {
-    uint32_t nodeId;
-    uint64_t clientId;
-};
-
-struct  GetHolderHash {
-    size_t operator()(const GetHolder& holder) const
-    {
-        return std::hash<uint64_t>()(static_cast<uint64_t>(holder.nodeId)) ^ std::hash<uint64_t>()(holder.clientId);
-    }
-};
-
-struct GetHolderEqual {
-    bool operator()(const GetHolder& holder1, const GetHolder& holder2) const
-    {
-        return (holder1.nodeId == holder2.nodeId) && (holder1.clientId == holder2.clientId);
-    }
-};
 class NetEngine {
 public:
     NetEngine() = default;
@@ -49,8 +31,6 @@ public:
 
     BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func);
     BResult Start(const NetOptions &opt);
-    void InsertGetHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo>);
-    void RemoveGetHolder(uint32_t nodeId, uint64_t clientId, bool flag);
     void Stop();
 
     inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
@@ -947,8 +927,6 @@ private:
     uint64_t mShmSize = 0;
     uint8_t *mShareAddress = nullptr;
     friend class NetConnectTask;
-    ReadWriteLock mLock;
-    std::unordered_map<GetHolder, std::vector<NetMrInfo>, GetHolderHash, GetHolderEqual> mHolders;
 };
 
 using NetEnginePtr = Ref<NetEngine>;
