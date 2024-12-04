@@ -17,6 +17,25 @@
 
 namespace ock {
 namespace bio {
+struct MemFreeHolder {
+    uint32_t nodeId;
+    uint64_t clientId;
+};
+
+struct  MemFreeHolderHash {
+    size_t operator()(const MemFreeHolder& holder) const
+    {
+        return std::hash<uint64_t>()(static_cast<uint64_t>(holder.nodeId)) ^ std::hash<uint64_t>()(holder.clientId);
+    }
+};
+
+struct MemFreeHolderEqual {
+    bool operator()(const MemFreeHolder& holder1, const MemFreeHolder& holder2) const
+    {
+        return (holder1.nodeId == holder2.nodeId) && (holder1.clientId == holder2.clientId);
+    }
+};
+
 struct PutSlowRecode {
     WCacheSlicePtr sliceP;
     std::atomic<uint32_t> receiveCnt;
@@ -74,7 +93,7 @@ public:
     bool CheckMagic(RequestComm &reqComm);
     bool CheckAll(RequestComm &reqComm);
 
-    void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs);
+    void ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs, ListRequest &req);
     void ReplyListResultRemote(ServiceContext &ctx, ListRequest *req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx);
@@ -141,6 +160,9 @@ public:
     bool CheckFreeMemReq(FreeMemRequest *req);
     bool CheckGetSliceReq(GetSliceRequest *req);
 
+    void InsertMemFreeHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo>, uint8_t type);
+    void RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool flag, uint8_t type);
+
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
@@ -169,6 +191,10 @@ private:
     bool mStarted = false;
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
+    ReadWriteLock mLock;
+    std::unordered_map<MemFreeHolder, std::vector<NetMrInfo>, MemFreeHolderHash, MemFreeHolderEqual> mHolders;
+    ReadWriteLock mLockList;
+    std::unordered_map<MemFreeHolder, std::vector<NetMrInfo>, MemFreeHolderHash, MemFreeHolderEqual> mHoldersList;
 
     BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE
