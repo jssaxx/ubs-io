@@ -43,7 +43,6 @@ public:
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
-    using ReportHbPtr = int32_t (*)(uint64_t *, uint64_t *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -107,9 +106,12 @@ public:
 
     BResult LoadLocal(LoadRequest &req);
 
-    BResult ReportHb(uint64_t &curNodeTimes, uint64_t &curPtTimes);
-
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
+
+    BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
+                                     uint64_t length, GetSliceResponse **rsp);
+
+    bool CheckGetSliceRsp(GetSliceResponse **rsp);
 
 private:
     BResult InitUpgradeOperation();
@@ -122,9 +124,6 @@ private:
         uint64_t &flowId, bool &isDegrade);
 
     BResult SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-
-    BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
-        uint64_t length, GetSliceResponse **rsp);
 
     void SendPutRequestLocal(PutRequest *req, Callback &callback);
 
@@ -140,6 +139,12 @@ private:
     BResult SendLoadRequestLocal(LoadRequest &req);
 
     BResult SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTimes);
+
+    bool CheckGetPtViewRsp(QueryPtViewResponse rsp);
+
+    bool CheckGetRsp(GetResponse rsp);
+
+    bool CheckListRsp(ListResponse rsp);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -172,7 +177,6 @@ private:
     StatFuncPtr statOp = nullptr;
     ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;
-    ReportHbPtr hbOp = nullptr;
 };
 }
 }

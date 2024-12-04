@@ -116,6 +116,8 @@ FlowPtr FlowManager::GetObject(FlowType type, uint64_t flowId)
 
 BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
 {
+    BResult ret = BIO_OK;
+    LVOS_TP_START(FLOW_DESTROY_OBJECT_ERR, &ret, BIO_ERR);
     std::lock_guard<std::mutex> lock(mMutex);
     ChkTrueNot(mInited == true, BIO_NOT_READY);
     if (type == FLOW_MEMORY) {
@@ -124,19 +126,21 @@ BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
             BIO_TRACE_START(FLOW_TRACE_DESTROY_OBJ);
             mMemObjManager.erase(flowId);
             BIO_TRACE_END(FLOW_TRACE_DESTROY_OBJ, 0);
-            return BIO_OK;
+            return ret;
         }
-        return BIO_NOT_EXISTS;
+        ret = BIO_NOT_EXISTS;
     } else {
         auto it = mDiskObjManager.find(flowId);
         if (it != mDiskObjManager.end()) {
             BIO_TRACE_START(FLOW_TRACE_DESTROY_OBJ);
             mDiskObjManager.erase(flowId);
             BIO_TRACE_END(FLOW_TRACE_DESTROY_OBJ, 0);
-            return BIO_OK;
+            return ret;
         }
-        return BIO_NOT_EXISTS;
+        ret = BIO_NOT_EXISTS;
     }
+    LVOS_TP_END;
+    return ret;
 }
 
 BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager)

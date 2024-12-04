@@ -42,6 +42,14 @@ BResult InterceptorServer::RegisterOpcode()
     return ret;
 }
 
+bool InterceptorServer::CheckInterceptorReadReq(InterceptorPreadIn **req)
+{
+    if ((*req)->offset > IO_SIZE_4M || (*req)->nbytes > IO_SIZE_8K || (*req)->nbytes == 0) {
+        return false;
+    }
+    return true;
+}
+
 BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorPreadIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -51,6 +59,12 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     }
 
     auto *req = static_cast<InterceptorPreadIn *>(ctx.MessageData());
+    if (!CheckInterceptorReadReq(&req)) {
+        CLIENT_LOG_ERROR("Invalid request message.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_READ_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_READ_START, 0, req->startTime);
 
@@ -91,9 +105,17 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     return BIO_OK;
 }
 
+bool InterceptorServer::CheckInterceptorWriteReq(InterceptorPwriteIn **req)
+{
+    if ((*req)->nbytes < IO_SIZE_8K || (*req)->offset > IO_SIZE_4M) {
+        return false;
+    }
+    return true;
+}
+
 BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 {
-    if (UNLIKELY(ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(InterceptorPwriteIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         CLIENT_LOG_ERROR("Receive interceptor write message len:" << ctx.MessageDataLen() << " or message is invalid.");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -101,6 +123,13 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE);
     auto *req = static_cast<InterceptorPwriteIn *>(ctx.MessageData());
+    if ((ctx.MessageDataLen() < (sizeof(InterceptorPwriteIn) + req->nbytes * sizeof(char))) ||
+        !CheckInterceptorWriteReq(&req)) {
+        CLIENT_LOG_ERROR("Invalid request message.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_WRITE_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
 
@@ -124,6 +153,11 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     return BIO_OK;
 }
 
+bool InterceptorServer::CheckInterceptorAllocPageReq(InterceptorAllocPageReq **req)
+{
+    return ((*req)->length == IO_SIZE_4M);
+}
+
 BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 {
 #ifndef DEBUG_UT
@@ -133,6 +167,12 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         return BIO_OK;
     }
     auto *req = static_cast<InterceptorAllocPageReq *>(ctx.MessageData());
+    if (!CheckInterceptorAllocPageReq(&req)) {
+        CLIENT_LOG_DEBUG("Invalid request message.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     CLIENT_LOG_DEBUG("Receive interceptor alloc message pid:" << req->pid << " length:" << req->length);
 
     uint64_t tenantId = 1;
@@ -171,6 +211,15 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
     return BIO_OK;
 }
 
+bool InterceptorServer::CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn **req)
+{
+    if ((*req)->offset > IO_SIZE_4M || (*req)->nbytes != IO_SIZE_4M) {
+        return false;
+    }
+
+    return true;
+}
+
 BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorLargePwriteIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -182,6 +231,12 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE);
     auto *req = static_cast<InterceptorLargePwriteIn *>(ctx.MessageData());
+    if (!CheckInterceptorLargeWriteReq(&req)) {
+        CLIENT_LOG_ERROR("Invalid request message.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_WRITE_START);
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
 

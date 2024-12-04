@@ -461,7 +461,11 @@ BResult BioServer::BioCacheInit()
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
     };
-    mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
+        return ret;
+    }
     LVOS_TP_END;
 
     ret = Cache::Instance().Recover();
@@ -621,6 +625,13 @@ void BioServer::ReConnect(uint32_t peerId)
 
 BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)
 {
+    uint64_t nodeSize = nodeInfos.size();
+    LVOS_TP_START(LARGE_NODE_LIST, &nodeSize, 65535);
+    LVOS_TP_END;
+    if (nodeSize > NO_256) {
+        LOG_ERROR("Invalid node size :" << nodeInfos.size() << ".");
+        return BIO_ERR;
+    }
     for (auto it = nodeInfos.begin(); it != nodeInfos.end(); ++it) {
         LOG_INFO("Node:" << it->first.ToString() << ", " << it->second.ToString());
     }
@@ -780,7 +791,11 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     }
     (*rsp)->sliceLen = sliceLen;
     uint64_t outSliceLen = 0;
-    sliceP->Serialize((*rsp)->sliceBuf, (*rsp)->sliceLen, outSliceLen);
+    ret = sliceP->Serialize((*rsp)->sliceBuf, (*rsp)->sliceLen, outSliceLen);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Serialize slice failed, ret " << ret);
+        return static_cast<int32_t>(BIO_INNER_ERR);
+    }
     if (UNLIKELY(outSliceLen != sliceLen)) {
         LOG_ERROR("Serialize slice failed, outSliceLen:" << outSliceLen << ", sliceLen:" << sliceLen << ".");
         return static_cast<int32_t>(BIO_INNER_ERR);
@@ -962,9 +977,4 @@ int32_t NotifyUpdate(NotifyUpdateRequest *req)
 int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse *rsp)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CheckUpdateReady(*req, *rsp));
-}
-
-int32_t ReportHb(uint64_t *curNodeTimes, uint64_t *curPtTimes)
-{
-    return static_cast<int32_t>(BioServer::Instance()->GetHbInfo(curNodeTimes, curPtTimes));
 }

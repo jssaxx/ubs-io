@@ -16,6 +16,10 @@ namespace ock {
 namespace bio {
 inline void CopyKey(char *dstKey, const char *srcKey, uint32_t maxLen)
 {
+    if (UNLIKELY(srcKey == nullptr)) {
+        LOG_ERROR("Invalid param, srcKey is null");
+        return;
+    }
     auto keyLen = strlen(srcKey);
     auto ret = memcpy_s(dstKey, maxLen, srcKey, keyLen);
     dstKey[keyLen] = '\0';
@@ -45,7 +49,7 @@ inline bool ValidateRatios(std::string name, const std::string &value, std::stri
         return false;
     }
 
-    if (ratio0 < NO_U64_0 || ratio0 > NO_10 || ratio1 < NO_U64_0 || ratio1 > NO_10) {
+    if (ratio0 < NO_U64_0 || ratio0 > NO_U64_10 || ratio1 < NO_U64_0 || ratio1 > NO_U64_10) {
         errMsg = "Invalid value for <" + name + ">, ratio should be in range 0 to 10";
         return false;
     }

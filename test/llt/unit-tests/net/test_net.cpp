@@ -328,7 +328,7 @@ TEST_F(TestNet, test_net_get_shm_address)
     LOG_INFO("test_net_get_shm_address");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t mShmOffset = 0;
-    auto ret = engine->GetShmAddress(mShmOffset);
+    auto ret = engine->GetShmAddress(mShmOffset, 0);
 }
 
 TEST_F(TestNet, test_net_get_underfs_config)
@@ -338,4 +338,21 @@ TEST_F(TestNet, test_net_get_underfs_config)
     BioConfig::UnderFsConfig config;
     auto ret = clientNet->GetUnderFsConfig(config);
     EXPECT_EQ(ret, BIO_NET_RETRY);
+}
+
+TEST_F(TestNet, test_net_insert_getHolder)
+{
+    LOG_INFO("test_net_insert_getHolder");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    uint32_t nodeId = NO_1;
+    uint64_t clientId = NO_1;
+    std::vector<NetMrInfo> lMrVec;
+    engine->InsertGetHolder(nodeId, clientId, lMrVec);
+    engine->RemoveGetHolder(nodeId, clientId, false);
+    NetMrInfo mr;
+    uintptr_t address = 0;
+    mr.address = address;
+    engine->RemoveGetHolder(nodeId, clientId, true);
+    engine->InsertGetHolder(nodeId, clientId, lMrVec);
+    engine->RemoveGetHolder(nodeId, clientId, true);
 }

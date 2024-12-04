@@ -167,6 +167,9 @@ TEST_F(TestBio, test_bio_put)
     auto ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
+    ret = BioPut(G_TENANT_ID, "...abc", value.c_str(), G_LENGTH, g_Location);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
     ret = BioPut(G_INVALID_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
@@ -266,7 +269,10 @@ TEST_F(TestBio, test_bio_get)
     LOG_INFO("test_bio_get");
     char *value = new char[G_LENGTH];
     uint64_t realLen = 0;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "GET_VALUE_IN_DISK", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
+    LVOS_HVS_deactiveTracePoint(0, "GET_VALUE_IN_DISK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     EXPECT_EQ(G_LENGTH, realLen);
 
@@ -276,7 +282,6 @@ TEST_F(TestBio, test_bio_get)
     ret = BioGet(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
-    LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -550,11 +555,11 @@ TEST_F(TestBio, test_bio_put_copy_free)
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree4", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
 
     ret = BioDestroyCache(tenantId);
@@ -1315,9 +1320,9 @@ TEST_F(TestBio, test_bio_update_return_fail)
     EXPECT_EQ(ret, RET_CACHE_OK);
 }
 
-TEST_F(TestBio, test_bio_convert_location_return_fail)
+TEST_F(TestBio, test_bio_convert_location)
 {
-    LOG_INFO("test_bio_convert_location_return_fail");
+    LOG_INFO("test_bio_convert_location");
     ObjLocation location{0, 0};
     ObjLocationDetail detailLoc;
     ock::bio::BioClient::Instance()->SetStartWorker(false);
@@ -1429,4 +1434,117 @@ TEST_F(TestBio, test_bio_client_agent_get_pt_view)
     auto ret = ock::bio::agent::BioClientAgent::Instance()->GetPtView(curNodeTimes, ptView);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID");
+}
+
+TEST_F(TestBio, test_check_get_underfs_config_resp)
+{
+    LOG_INFO("test_check_get_underfs_config_resp");
+    GetUnderFsConfigResponse rsp;
+    char *type = "hdfs";
+    char *nameNode = "192.168.100.171:9000";
+    char *path = "/hdfs";
+    char *user = "ceph";
+    char *cluster = "ceph";
+    char *cfgPath = "/etc/conf";
+    char *pool = "pool0";
+    std::strcpy(rsp.underFsType, type);
+
+    CephConfigResponse cephConfig;
+    std::strcpy(cephConfig.cfgPath, cfgPath);
+    std::strcpy(cephConfig.cluster, cluster);
+    std::strcpy(cephConfig.user, user);
+    std::strcpy(cephConfig.pool, pool);
+
+    HdfsConfigResponse hdfsConfig;
+    std::strcpy(hdfsConfig.workingPath, path);
+    std::strcpy(hdfsConfig.nameNode, nameNode);
+
+    rsp.cephConfig = cephConfig;
+    rsp.hdfsConfig = hdfsConfig;
+
+    auto ret = ock::bio::net::BioClientNet::Instance()->CheckGetUnderFsConfigResp(rsp);
+    EXPECT_EQ(ret, true);
+}
+
+TEST_F(TestBio, test_get_underfs_config)
+{
+    LOG_INFO("test_get_underfs_config");
+    BioConfig::UnderFsConfig config;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL", 0, 1, userParam);
+    auto ret = ock::bio::net::BioClientNet::Instance()->GetUnderFsConfig(config);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL");
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+}
+
+TEST_F(TestBio, test_bio_client_net_shm_init)
+{
+    LOG_INFO("test_bio_client_net_shm_init");
+    ShmInitResponse rsp{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    auto ret = ock::bio::net::BioClientNet::Instance()->CheckShmInitResp(rsp);
+    EXPECT_EQ(ret, false);
+}
+
+TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
+{
+    LOG_INFO("test_bio_client_agent_get_local_quota_info");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE", 0, 1, userParam);
+    bool enable = true;
+    uint64_t load = 1;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(1, enable, load);
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
+    LVOS_HVS_deactiveTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE");
+}
+
+TEST_F(TestBio, test_bio_client_agent_check_get_slice)
+{
+    LOG_INFO("test_bio_client_agent_check_get_slice");
+    GetSliceResponse *rsp = nullptr;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, false);
+    rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
+    rsp->addrNum = NO_20;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, false);
+    rsp->addrNum = NO_1;
+    rsp->sliceLen = NO_1;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    SliceAddrDesc addr;
+    addr.chunkLen = IO_SIZE_64M;
+    rsp->addr[0] =addr;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, false);
+    addr.chunkLen = IO_SIZE_4M;
+    rsp->addr[0] =addr;
+    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    EXPECT_EQ(ret, true);
+}
+
+TEST_F(TestBio, test_bio_client_agent_check_update_local)
+{
+    LOG_INFO("test_bio_client_agent_check_update_local");
+    CheckUpdateReadyRequest req;
+    CheckUpdateReadyResponse rsp;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->SendCheckUpdateReadyRequestLocal(req, rsp);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
+}
+
+TEST_F(TestBio, test_bio_client_get_shm_address)
+{
+    LOG_INFO("test_bio_client_get_shm_address");
+    auto ret = ock::bio::net::BioClientNet::Instance()->GetShmAddress(0, NO_60) == nullptr ? BIO_OK : BIO_ERR;
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBio, test_bio_client_agent_prepare)
+{
+    LOG_INFO("test_bio_client_agent_prepare");
+    CmPtInfo ptEntry;
+    GetSliceResponse *tmpPtr = nullptr;
+    GetSliceResponse **rsp = &tmpPtr;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->SendPrepareResourceLocal(ptEntry, 1, 1, 1, 1, rsp);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
 }

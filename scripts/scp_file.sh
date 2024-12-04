@@ -23,21 +23,36 @@ set +e
 read -s pw
 set -e
 
+common_params=("\\" "\"" "!" "'" "~" "\`" "@" "#" "$" "%" "^" "&" "(" ")" "-" "_" "=" "+" "\|" "[" "{" "}" "]" ";" ":" "," "<" "." ">" "/" " ")
+
+transfor_special_characters()
+{
+    local input_params=$1
+    out_params=$input_params
+    for((i=0;i<${#common_params[@]};i++))
+    do
+        out_params=${out_params//${common_params[i]}/\\${common_params[i]}}
+    done
+    out_params=${out_params//\?/\\?}
+    echo -e "${out_params}"
+    return $?
+}
+
+UPDATE_PASSWORD=$(transfor_special_characters "$pw")
 sshcmd()
 {
     ip_addr=$1
     username=$2
-    read -s password
     ip_port=$4
     file_path=$5
     target_path=$6
-expect <<-EOF
+expect 2>  /dev/null << EOF
     set timeout 90
     spawn scp -P${ip_port} ${file_path} ${username}@${ip_addr}:${target_path}
     sleep 1
 	expect {
-       "*yes/no" { send "yes\r"; exp_continue }
-       "*password:" { send "${password}\r" }
+       "*yes/no" { send -- "yes\r"; exp_continue }
+       "*password:" { send -- "${UPDATE_PASSWORD}\r" }
        "*100%*"
     }
     expect eof
@@ -47,7 +62,7 @@ sleep 1
 
 CUR_DIR=$(dirname $(readlink -f $0))
 
-sshcmd ${ip} ${user} stdin ${port} ${file} "${target}" <<<${pw} > ${CUR_DIR}/scp_file_${ip}_${port}.log
+sshcmd ${ip} ${user} stdin ${port} ${file} "${target}" <<<${UPDATE_PASSWORD} > ${CUR_DIR}/scp_file_${ip}_${port}.log
 if ! cat ${CUR_DIR}/scp_file_${ip}_${port}.log|grep "100%";then
     echo "node ${ip} Failed to execute SCP, log:${CUR_DIR}/scp_file_${ip}_${port}.log"
     exit 1

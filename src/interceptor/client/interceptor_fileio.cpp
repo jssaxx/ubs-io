@@ -9,7 +9,6 @@
 #include "securec.h"
 #include "bio_def.h"
 #include "message_op.h"
-#include "message.h"
 #include "interceptor_log.h"
 #include "interceptor_net.h"
 #include "proxy_operations.h"
@@ -20,6 +19,11 @@
 using namespace ock::bio;
 
 #define CONTEXT BioInterceptorContext::GetInstance()
+
+bool ProxyOperations::CheckPreadInnerResp(InterceptorPreadOut **rsp)
+{
+    return ((*rsp) != nullptr) && ((*rsp)->dataLen > 0);
+}
 
 ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offset)
 {
@@ -46,14 +50,14 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     uint64_t rspLen = 0;
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
-    if (UNLIKELY(ret != 0)) {
+    if (UNLIKELY(ret != 0) || !CheckPreadInnerResp(&resp)) {
         CLOG_ERROR("Send read failed inode:" << request.inode << ", offset:" << request.offset << ", length:" <<
             request.nbytes << ".");
         return -1;
     }
     if (rspLen < sizeof(InterceptorPreadOut) + resp->dataLen) {
-        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " <<
-            sizeof(InterceptorPreadOut) << " and datalen: " << resp->dataLen << ".");
+        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " << sizeof(InterceptorPreadOut) <<
+            " and datalen: " << resp->dataLen << ".");
         free(resp);
         return -1;
     }
@@ -195,6 +199,11 @@ ssize_t ProxyOperations::PwriteInner(int fd, const void *buf, size_t count, off_
     }
 }
 
+bool ProxyOperations::CheckPwriteSmallInnerResp(InterceptorPwriteOut &resp)
+{
+    return resp.dataLen >= 0;
+}
+
 ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset)
 {
     auto &file = CONTEXT.files.At(fd);
@@ -227,7 +236,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     InterceptorPwriteOut resp;
     ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
-    if (UNLIKELY(ret != 0)) {
+    if (UNLIKELY(ret != 0) || !CheckPwriteSmallInnerResp(resp)) {
         CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", req->offset" << request->offset << ", count" <<
             count << ", rsp len:" << resp.dataLen << ".");
         delete[] tmpPtr;
@@ -239,6 +248,11 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     request = nullptr;
     CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << resp.dataLen << ".");
     return count;
+}
+
+bool ProxyOperations::CheckPwriteLargeInnerResp(InterceptorPwriteOut &writeResp)
+{
+    return writeResp.dataLen >= 0;
 }
 
 ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
@@ -270,7 +284,11 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<
         ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
-        void *dataBuff = InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i]);
+        void *dataBuff =
+            InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i], resp.address.address[i].size);
+        if (dataBuff == nullptr) {
+            return -1;
+        }
         ret = memcpy_s(dataBuff, resp.address.address[i].size, (const char *)copyBuff, resp.address.address[i].size);
         if (UNLIKELY(ret != 0)) {
             return -1;
@@ -287,7 +305,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     InterceptorPwriteOut writeResp;
     ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
-    if (UNLIKELY(ret != 0)) {
+    if (UNLIKELY(ret != 0) || !CheckPwriteLargeInnerResp(writeResp)) {
         return -1;
     }
 
