@@ -611,7 +611,8 @@ TEST_F(TestBioServer, test_bio_server_list_inner)
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     std::unordered_map<std::string, ObjStat> objs;
-    mirror->ReplyListResultLocal(ctx, objs);
+    ListRequest *reqs;
+    mirror->ReplyListResultLocal(ctx, objs, *reqs);
 
     ListRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, 1, getpid() };
@@ -627,7 +628,8 @@ TEST_F(TestBioServer, test_bio_server_list_inner_objs_notempty)
     ObjStat stat;
     std::unordered_map<std::string, ObjStat> objs;
     objs.emplace("obj1", stat);
-    mirror->ReplyListResultLocal(ctx, objs);
+    ListRequest *reqs;
+    mirror->ReplyListResultLocal(ctx, objs, *reqs);
 
     ListRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, 1, getpid() };
@@ -1644,4 +1646,30 @@ TEST_F(TestBioServer, test_bio_server_put_invalid_slice)
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID");
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK");
     free(req);
+}
+
+TEST_F(TestBioServer, test_bio_server_insert_getHolder)
+{
+    LOG_INFO("test_bio_server_insert_getHolder");
+    MirrorServerPtr mirrorServer = BioServer::Instance()->GetMirrorServer();
+    uint32_t nodeId = NO_1;
+    uint64_t clientId = NO_1;
+    std::vector<NetMrInfo> lMrVec;
+    uint8_t type = 0;
+    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
+    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, false, type);
+    type = 1;
+    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
+    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, false, type);
+    NetMrInfo mr;
+    uintptr_t address = 0;
+    mr.address = address;
+    type = 0;
+    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
+    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
+    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
+    type = 1;
+    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
+    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
+    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
 }

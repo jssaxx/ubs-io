@@ -594,7 +594,7 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         }
 
         if (rsp.isAlloc) {
-            FreeMemRequest freeReq = { req.comm, rsp.num, { 0 } };
+            FreeMemRequest freeReq = { req.comm, rsp.num, 0, { 0 } };
             for (uint32_t idx = 0; idx < rsp.num; idx++) {
                 freeReq.addr[idx] = rsp.addrOffset[idx];
             }
@@ -732,8 +732,8 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
             objs.insert({ stat.key, stat });
         }
 
-        FreeMemRequest freeReq = { req.comm, 1, { 0 } };
-        freeReq.addr[0] = rsp.addr;
+        FreeMemRequest freeReq = { req.comm, 1, 1, { 0 } };
+        freeReq.addr[0] = rsp.addrOffset;
         ret = net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID, BIO_OP_SDK_FREE_MEM, freeReq);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Send async free request failed, ret:" << ret << ".");
