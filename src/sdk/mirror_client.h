@@ -159,6 +159,20 @@ public:
 
     BResult PutAlignSize(const char *value, MirrorPut &param, bool &isAllocMem);
 
+    inline FlowInstancePtr Query(uint16_t ptId)
+    {
+        LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_FAIL, 0);
+        mLock.LockRead();
+        auto it = mFlowMap.find(ptId);
+        if (LIKELY(it != mFlowMap.end())) {
+            mLock.UnLock();
+            return it->second;
+        }
+        mLock.UnLock();
+        LVOS_TP_END;
+        return nullptr;
+    }
+
 private:
     bool FailHandler(BResult result, uint64_t startTime, uint64_t timeOut);
 
@@ -295,20 +309,6 @@ private:
         mLock.UnLock();
 
         DestroyFlow(ptId, flowId);
-    }
-
-    inline FlowInstancePtr Query(uint16_t ptId)
-    {
-        LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_FAIL, 0);
-        mLock.LockRead();
-        auto it = mFlowMap.find(ptId);
-        if (LIKELY(it != mFlowMap.end())) {
-            mLock.UnLock();
-            return it->second;
-        }
-        mLock.UnLock();
-        LVOS_TP_END;
-        return nullptr;
     }
 
 private:

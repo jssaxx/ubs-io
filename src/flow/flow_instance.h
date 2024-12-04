@@ -68,6 +68,16 @@ public:
         return;
     }
 
+    inline uint64_t GetOffset()
+    {
+        return mOffset;
+    }
+
+    inline uint64_t GetIndex()
+    {
+        return mIndex;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
