@@ -2062,11 +2062,9 @@ void MirrorServer::InsertMemFreeHolder(uint32_t nodeId, uint64_t clientId, std::
     if (type == 0) {
         WriteLocker<ReadWriteLock> lock(&mLock);
         mHolders.emplace(holder, lMrVec);
-        LOG_DEBUG("Insert memFreeMap of get success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
     } else if (type == 1) {
         WriteLocker<ReadWriteLock> lock(&mLockList);
         mHoldersList.emplace(holder, lMrVec);
-        LOG_DEBUG("Insert memFreeMap of list success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
     }
 }
 
@@ -2078,7 +2076,6 @@ void MirrorServer::RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool 
         WriteLocker<ReadWriteLock> lock(&mLock);
         auto iter = mHolders.find(holder);
         if (iter == mHolders.end()) {
-            LOG_INFO("Not found holder record, holder: " << holder.nodeId << "-" << holder.clientId << ".");
             return;
         }
 
@@ -2091,12 +2088,10 @@ void MirrorServer::RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool 
             LOG_DEBUG("Free getFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
         }
         mHolders.erase(iter);
-        LOG_DEBUG("Remove holder from getFreeMap, holder: " << holder.nodeId << "-" << holder.clientId << ".");
     } else if (type == 1) {
         WriteLocker<ReadWriteLock> lock(&mLockList);
         auto iter = mHoldersList.find(holder);
         if (iter == mHoldersList.end()) {
-            LOG_INFO("Not found holder record, holder: " << holder.nodeId << "-" << holder.clientId << ".");
             return;
         }
 
@@ -2109,6 +2104,5 @@ void MirrorServer::RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool 
             LOG_DEBUG("Free listFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
         }
         mHoldersList.erase(iter);
-        LOG_DEBUG("Remove holder from listFreeMap success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
     }
 }
