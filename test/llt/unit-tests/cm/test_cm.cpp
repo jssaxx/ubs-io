@@ -685,3 +685,17 @@ TEST_F(TestCm, test_cm_view_create_store)
     auto ret = CmClientZkGetNodeState(0, 0, &cmState);
     EXPECT_EQ(ret, CM_ERR);
 }
+
+TEST_F(TestCm, test_cm_max_pool_num)
+{
+    LOG_INFO("test_get_node_info");
+    NodeInfo nodeInfo;
+    auto ret = CmClientLocalGetNodeInfo(MAX_POOL_NUM, &nodeInfo);
+    EXPECT_EQ(ret, CM_ERR);
+
+    ret = CmClientLocalGetNode(MAX_POOL_NUM, &nodeInfo);
+    EXPECT_EQ(ret, CM_ERR);
+
+    ret = CmClientLocalGetNodeId(MAX_POOL_NUM);
+    EXPECT_EQ(ret, NODE_ID_INVALID);
+}

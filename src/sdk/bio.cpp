@@ -432,6 +432,10 @@ std::shared_ptr<Bio> BioService::CreateCache(const CacheDescriptor &desc)
 
     BIO_TRACE_START(SDK_TRACE_CREATE_CACHE);
     auto cache = std::make_shared<Bio>(desc.tenantId, desc.affinity, desc.strategy);
+    if (cache == nullptr) {
+        CLIENT_LOG_ERROR("Malloc bio cache failed.");
+        return nullptr;
+    }
     BResult ret = gClient->Insert(cache);
     BIO_TRACE_END(SDK_TRACE_CREATE_CACHE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
