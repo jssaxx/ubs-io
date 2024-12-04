@@ -535,14 +535,24 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
 
 int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload)
 {
+#ifndef DEBUG_UT
     if (newChannel == nullptr) {
         NET_LOG_ERROR("Invalid input parameter, newChannel is nullptr.");
         return BIO_ERR;
     }
+#endif
 
     NewChannelResp resp;
+#ifdef DEBUG_UT
+    if (ipPort == "uttest") {
+        mHandleNewChannel = [](const ChannelPtr& ch, const std::string& port, NewChannelResp& response) { return -1; };
+    }
+#endif
     if (mHandleNewChannel != nullptr) {
-        mHandleNewChannel(newChannel, ipPort, resp);
+        if (mHandleNewChannel(newChannel, ipPort, resp) != BIO_OK) {
+            NET_LOG_ERROR("Handle new channel failed.");
+            return BIO_ERR;
+        }
     }
     LVOS_TP_START(SERVER_NET_PEER_CONNECTION_REFUSED, &resp.result, BIO_INNER_ERR);
     LVOS_TP_END;
@@ -743,7 +753,7 @@ BResult NetEngine::PrepareHseCryptor(std::string kfsMaster, std::string kfsStand
     if (mbioCryptorHelper != nullptr) {
         return BIO_OK;
     }
-    
+
     mbioCryptorHelper = new (std::nothrow) BioCryptorHelper(kfsMaster, kfsStandby);
     if (mbioCryptorHelper == nullptr) {
         NET_LOG_ERROR("create hseceasy cyptor helper failed.");

@@ -339,3 +339,11 @@ TEST_F(TestNet, test_net_get_underfs_config)
     auto ret = clientNet->GetUnderFsConfig(config);
     EXPECT_EQ(ret, BIO_NET_RETRY);
 }
+
+TEST_F(TestNet, test_new_channel_error)
+{
+    LOG_INFO("test_new_channel_error");
+    auto netEngine = MakeRef<NetEngine>();
+    auto ret = netEngine->NewChannel("uttest", nullptr, "dsd");
+    EXPECT_EQ(ret, BIO_ERR);
+}
