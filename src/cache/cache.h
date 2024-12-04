@@ -87,7 +87,16 @@ public:
 
     void ShowEvictNegotiateQueue();
 
-    BResult WCacheConsultEvict(uint64_t &flowId,  std::vector<uint64_t> slices, std::vector<bool> result);
+    BResult WCacheConsultEvict(uint64_t &flowId, std::vector<uint64_t> slices, std::vector<bool> result);
+
+private:
+    BResult GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_t length, const uint64_t offset);
+
+    BResult GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
+        uint64_t &realLen);
+
+    BResult GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint64_t offset, uint64_t &totalLen,
+        uint64_t &realLen);
 
 private:
     WCacheManagerPtr mWCacheManager{ nullptr };
@@ -95,6 +104,7 @@ private:
     GetLocDiskId mGetLocDiskId{ nullptr };
     CheckServiceState mCheckService{ nullptr };
     CheckDegrade mCheckDegrade{ nullptr };
+    CacheSliceOperator mSliceOperator;
 };
 }
 }
