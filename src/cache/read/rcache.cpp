@@ -486,6 +486,14 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
 
 BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
+    auto config = BioConfig::Instance()->GetDaemonConfig();
+    auto diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
+    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
+    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
+    if (rcacheMemUsed >= rcacheMemCap) {
+        return BIO_ERR;
+    }
+
     UnderFs::ObjStat stat;
     auto ret = UnderFs::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -671,11 +679,18 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         LVOS_TP_START(RCACHE_GET_EVICT_IO_FAIL, &truncateOffset, NO_MAX_VALUE64);
         truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
         LVOS_TP_END;
-        if ((chunk->GetValue().flowOffset != truncateOffset) ||
-            (chunk->GetValue().length + haveEvictData > needEvictData)) {
+        if (chunk->GetValue().flowOffset != truncateOffset) {
+            truncateLock[READ_CACHE_TIER_MEM].UnLock();
+            LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk " <<
+                chunk->ToString());
+            break;
+        }
+
+        if (chunk->GetValue().length + haveEvictData > needEvictData) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
             break;
         }
+
         truncateLock[READ_CACHE_TIER_MEM].UnLock();
         BIO_TRACE_START(RCACHE_TRACE_EVICT2DISK);
         chunk->lock.lock();
@@ -691,7 +706,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
-
         RCacheValue chunkValue(indexInFlow, flowOffset, chunk->GetValue().length);
         ret = AllocChunk(chunk->GetKey(), chunkValue, newChunk);
         if (UNLIKELY(ret != BIO_OK) || (chunk == nullptr)) {
@@ -700,7 +714,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
-
         ret = GetSliceFromChunk(READ_CACHE_TIER_MEM, chunk, fromSlicePtr);
         if (UNLIKELY(ret != BIO_OK) || (fromSlicePtr == nullptr)) {
             LOG_ERROR("RCache alloc mem tier slice failed, " << chunk->ToString());
@@ -708,7 +721,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
-
         ret = GetSliceFromChunk(READ_CACHE_TIER_DISK, newChunk, toSlicePtr);
         if (UNLIKELY(ret != BIO_OK) || (toSlicePtr == nullptr)) {
             LOG_ERROR("RCache alloc disk tier slice failed,  " << newChunk->ToString());
@@ -716,7 +728,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
-
         ret = mSliceOperator.Copy(fromSlicePtr.Get(), toSlicePtr.Get());
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("RCache copy mem tier slice to disk tier slice failed, " << chunk->ToString());
@@ -724,7 +735,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
             BIO_TRACE_END(RCACHE_TRACE_EVICT2DISK, ret);
             return BIO_ALLOC_FAIL;
         }
-
         newChunk->SetDataCrc(chunk->GetDataCrc());
         DelFromTruncateList(READ_CACHE_TIER_MEM, chunk);
         DelFromEvictList(READ_CACHE_TIER_MEM, chunk.Get()->GetMqType(), chunk);
@@ -772,11 +782,18 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         }
         chunk = truncateQ[READ_CACHE_TIER_DISK].End();
         uint64_t truncateOffset = flow[READ_CACHE_TIER_DISK]->GetDataTruncOffset();
-        if ((chunk->GetValue().flowOffset != truncateOffset) ||
-            (chunk->GetValue().length + haveEvictData > needEvictData)) {
+        if (chunk->GetValue().flowOffset != truncateOffset) {
+            truncateLock[READ_CACHE_TIER_DISK].UnLock();
+            LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk " <<
+                chunk->ToString());
+            break;
+        }
+
+        if (chunk->GetValue().length + haveEvictData > needEvictData) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
             break;
         }
+
         truncateLock[READ_CACHE_TIER_DISK].UnLock();
         BIO_TRACE_START(RCACHE_TRACE_EVICT2NULL);
         chunk->lock.lock();

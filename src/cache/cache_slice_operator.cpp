@@ -142,6 +142,41 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
     }
 }
 
+BResult CacheSliceOperator::GetSliceFromSliceIO(SlicePtr &partialSlice, const SlicePtr &wholeSlice, uint64_t offset,
+    uint64_t length)
+{
+    std::vector<FlowAddr> flowAddr;
+    std::vector<FlowAddr> addrVec = wholeSlice->GetAddrs();
+    for (auto addr : addrVec) {
+        if (offset >= addr.chunkLen) {
+            offset -= addr.chunkLen;
+            continue;
+        }
+
+        uint64_t size = addr.chunkLen;
+        uint32_t chunkOffset = addr.chunkOffset;
+        uint32_t chunkLen = addr.chunkLen;
+        if (offset != 0) {
+            chunkOffset += offset;
+            chunkLen = length > chunkLen - offset ? chunkLen - offset : length;
+            offset = 0;
+        } else {
+            chunkLen = length > chunkLen ? chunkLen : length;
+        }
+        flowAddr.emplace_back(addr.chunkId, chunkOffset, chunkLen);
+        length -= chunkLen;
+        if (length == 0) {
+            break;
+        }
+    }
+    partialSlice = MakeRef<Slice>(length, flowAddr, wholeSlice->GetFlowType());
+    if (UNLIKELY(partialSlice == nullptr)) {
+        LOG_ERROR("Alloc slice memory for read cache failed.");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
 bool CacheSliceOperator::Validate(const SlicePtr &from, const SlicePtr &to)
 {
     ChkTrueNot(from != nullptr, false);

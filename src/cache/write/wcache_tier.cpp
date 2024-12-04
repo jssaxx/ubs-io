@@ -180,7 +180,7 @@ WCacheSliceRefPtr WCacheTier::GetEvictSlice()
 
 void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t limit)
 {
-    LOG_DEBUG("Begin get slice ,cur index :" << mCurNegotiateIndex << "flow:" << mMetaFlow->GetFlowId());
+    LOG_TRACE("Begin get slice ,cur index :" << mCurNegotiateIndex << "flow:" << mMetaFlow->GetFlowId());
     uint64_t startIndexInMap = mCurNegotiateIndex / ARRAY_SIZE_IN_NEGOTIATE_MAP;
     uint64_t startIndexInArray = mCurNegotiateIndex % ARRAY_SIZE_IN_NEGOTIATE_MAP;
     for (uint64_t indexInMap = startIndexInMap;; ++indexInMap) {
@@ -191,7 +191,7 @@ void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t lim
         auto array = it->second;
         for (uint64_t indexInArray = startIndexInArray; indexInArray < ARRAY_SIZE_IN_NEGOTIATE_MAP; ++indexInArray) {
             if (array[indexInArray] != INVALID_REF_NUM && array[indexInArray] > NO_U64_0) {
-                LOG_DEBUG("Select this slice ,flow:" << mMetaFlow->GetFlowId() << ",indexInMap :"
+                LOG_TRACE("Select this slice ,flow:" << mMetaFlow->GetFlowId() << ",indexInMap :"
                 << indexInMap << ",indexInArray:" << indexInArray);
                 indexVec.emplace_back(indexInMap * ARRAY_SIZE_IN_NEGOTIATE_MAP + indexInArray);
             } else {
@@ -320,9 +320,6 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
     if (truncateSlice == nullptr) {
         return BIO_OK;
     }
-    LOG_INFO("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
-        ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() <<
-        ", len:" << truncateSlice->GetLength());
 
     auto ret = mMetaFlow->TruncateOffset((truncateSlice->GetIndexInFlow() + 1) * sizeof(WFlowSliceMeta));
     ChkTrue(ret == BIO_OK, ret,
@@ -335,6 +332,9 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         "Failed to truncateOffset in dataFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
         truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<
         slice->GetIndexInFlow() << ", len:" << truncateSlice->GetLength());
+    LOG_INFO("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
+        ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" <<
+        truncateSlice->GetLength());
 
     return BIO_OK;
 }
@@ -371,7 +371,7 @@ WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice
 {
     std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
 
-    LOG_TRACE("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
+    LOG_DEBUG("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
         slice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" << slice->GetLength());
 
     // insert to set and sort by indexInFlow.
@@ -413,7 +413,7 @@ BResult WCacheTier::UpdateNegotiateState(uint64_t indexInFlow)
     }
     uint8_t curRefNum = --it->second[indexInArray];
     if (curRefNum == 0) {
-        LOG_DEBUG("Negotiate success,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:"
+        LOG_TRACE("Negotiate success,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:"
             << indexInFlow << ",curIndex:" << mCurNegotiateIndex);
         EvictNegotiateMapToQueue(indexInFlow);
         mCurNegotiateIndex = std::min(mCurNegotiateIndex, indexInFlow) + NO_1;
