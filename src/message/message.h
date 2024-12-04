@@ -333,6 +333,7 @@ typedef struct {
 typedef struct {
     RequestComm comm;
     uint32_t num;
+    uint8_t memFreeType;
     uintptr_t addr[SLICE_ADDR_SIZE];
 } FreeMemRequest;
 
