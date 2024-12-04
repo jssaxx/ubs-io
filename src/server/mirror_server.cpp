@@ -100,7 +100,8 @@ void MirrorServer::RegisterOpcode()
     RegisterOpcodeStep2(netEngine);
 }
 
-void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs)
+void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<std::string, ObjStat> &objs,
+    ListRequest &req)
 {
     uintptr_t address = 0;
     if (objs.size() != 0) {
@@ -110,6 +111,12 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
             return;
         }
+        std::vector<NetMrInfo> lMrVec;
+        NetMrInfo bioMr;
+        bioMr.address = address;
+        bioMr.key = key;
+        lMrVec.emplace_back(bioMr);
+        InsertMemFreeHolder(req.comm.srcNid, req.comm.pid, lMrVec, 1);
 
         auto addrP = reinterpret_cast<ObjStat *>(address);
         uint32_t index = 0;
@@ -155,6 +162,7 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(ctx.Channel(), writeReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ".");
+            BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(lAddress);
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
             return;
         }
@@ -568,7 +576,7 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
         rsp.addrLen[idx] = lMrVec[idx].size;
     }
     if (isAlloc == true) {
-        BioServer::Instance()->GetNetEngine()->InsertGetHolder(req.comm.srcNid, req.comm.pid, lMrVec);
+        InsertMemFreeHolder(req.comm.srcNid, req.comm.pid, lMrVec, 0);
     }
     return BIO_OK;
 }
@@ -1462,7 +1470,7 @@ int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
     }
 
     if (static_cast<uint16_t>(req->comm.srcNid) == BioServer::Instance()->GetLocalNid().VNodeId()) {
-        ReplyListResultLocal(ctx, objs);
+        ReplyListResultLocal(ctx, objs, *req);
     } else {
         ReplyListResultRemote(ctx, req, objs);
     }
@@ -1788,7 +1796,7 @@ int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *r
         auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx], 0);
         BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
     }
-    BioServer::Instance()->GetNetEngine()->RemoveGetHolder(req->comm.srcNid, req->comm.pid, false);
+    RemoveMemFreeHolder(req->comm.srcNid, req->comm.pid, false, req->memFreeType);
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, nullptr, 0);
     return BIO_OK;
@@ -2046,4 +2054,61 @@ int32_t MirrorServer::MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegot
     }
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &rsp, sizeof(EvictNegotiateResponse));
     return BIO_OK;
+}
+
+void MirrorServer::InsertMemFreeHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo> lMrVec, uint8_t type)
+{
+    MemFreeHolder holder = { nodeId, clientId };
+    if (type == 0) {
+        WriteLocker<ReadWriteLock> lock(&mLock);
+        mHolders.emplace(holder, lMrVec);
+        LOG_DEBUG("Insert memFreeMap of get success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+    } else if (type == 1) {
+        WriteLocker<ReadWriteLock> lock(&mLockList);
+        mHoldersList.emplace(holder, lMrVec);
+        LOG_DEBUG("Insert memFreeMap of list success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+    }
+}
+
+void MirrorServer::RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool flag, uint8_t type)
+{
+    nodeId = (nodeId == NO_1024) ? BioServer::Instance()->GetLocalNid().VNodeId() : nodeId;
+    MemFreeHolder holder = {nodeId, clientId};
+    if (type == 0) {
+        WriteLocker<ReadWriteLock> lock(&mLock);
+        auto iter = mHolders.find(holder);
+        if (iter == mHolders.end()) {
+            LOG_INFO("Not found holder record, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+            return;
+        }
+
+        if (flag) {
+            std::vector<NetMrInfo> lMrVec = iter->second;
+            for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+                BioServer::Instance()->GetNetEngine()->
+                    FreeLocalMrSingle(reinterpret_cast<uintptr_t>(lMrVec[idx].address));
+            }
+            LOG_DEBUG("Free getFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+        }
+        mHolders.erase(iter);
+        LOG_DEBUG("Remove holder from getFreeMap, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+    } else if (type == 1) {
+        WriteLocker<ReadWriteLock> lock(&mLockList);
+        auto iter = mHoldersList.find(holder);
+        if (iter == mHoldersList.end()) {
+            LOG_INFO("Not found holder record, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+            return;
+        }
+
+        if (flag) {
+            std::vector<NetMrInfo> lMrVec = iter->second;
+            for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+                BioServer::Instance()->GetNetEngine()->
+                    FreeLocalMrSingle(reinterpret_cast<uintptr_t>(lMrVec[idx].address));
+            }
+            LOG_DEBUG("Free listFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+        }
+        mHoldersList.erase(iter);
+        LOG_DEBUG("Remove holder from listFreeMap success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+    }
 }
