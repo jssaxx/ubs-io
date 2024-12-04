@@ -160,6 +160,10 @@ int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint
 
 int32_t CmClientLocalGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 {
+    if (poolId >= MAX_POOL_NUM || nodeInfo == NULL) {
+        CM_LOGERROR("Invalid poolId(%u).", poolId);
+        return CM_ERR;
+    }
     if (g_localOp[poolId].queryLocalNodeInfo == NULL) {
         CM_LOGERROR("NodeInfo, not exist, poolId(%u).", poolId);
         return CM_ERR;
@@ -171,6 +175,10 @@ int32_t CmClientLocalGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 
 uint16_t CmClientLocalGetNodeId(uint16_t poolId)
 {
+    if (poolId >= MAX_POOL_NUM) {
+        CM_LOGERROR("Invalid poolId(%u).", poolId);
+        return NODE_ID_INVALID;
+    }
     if (g_localOp[poolId].queryLocalNodeInfo == NULL) {
         CM_LOGERROR("NodeInfo, not exist, poolId(%u).", poolId);
         return NODE_ID_INVALID;
@@ -181,6 +189,10 @@ uint16_t CmClientLocalGetNodeId(uint16_t poolId)
 
 void CmClientLocalUpdateNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 {
+    if (poolId >= MAX_POOL_NUM || nodeInfo == NULL) {
+        CM_LOGERROR("Invalid poolId(%u).", poolId);
+        return;
+    }
     if (g_localOp[poolId].queryLocalNodeInfo == NULL) {
         CM_LOGERROR("NodeInfo, not exist, poolId(%u).", poolId);
         return;
@@ -192,6 +204,10 @@ void CmClientLocalUpdateNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
 
 int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo)
 {
+    if (poolId >= MAX_POOL_NUM || nodeInfo == NULL) {
+        CM_LOGERROR("Invalid poolId(%u).", poolId);
+        return CM_ERR;
+    }
     int32_t ret;
 
     if (g_localOp[poolId].queryLocalNodeInfo != NULL) {
