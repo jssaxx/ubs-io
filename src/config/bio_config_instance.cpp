@@ -190,7 +190,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     mDaemonConfig.workIoTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_IO_TIMEOUT.first));
     mDaemonConfig.workNetTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_NET_TIMEOUT.first));
 
-    mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
+    mDaemonConfig.segment = static_cast<uint32_t>(NO_4 * MB_SIZE);
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
