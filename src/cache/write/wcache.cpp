@@ -246,7 +246,7 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
     auto *value = new (std::nothrow) char[srcSlice->GetLength()];
     ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
-    ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value);
+    ret = mSliceOperator.Copy(destSliceRef->GetSlice().Get(), value, srcSlice->GetLength());
     if (UNLIKELY(ret != BIO_OK)) {
         delete[] value;
         LOG_ERROR("Failed to copy slice to value, key:" << key << " flowId:" << mFlowId);
@@ -285,7 +285,7 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
     LOG_DEBUG("Delete key:" << key << ", flowId:" << slice->GetFlowId() << ", flowIndex:" << slice->GetIndexInFlow() <<
         ", flowOffset:" << slice->GetOffsetInFlow());
     WFlowSliceMeta sliceMeta;
-    auto ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
+    auto ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta, sizeof(WFlowSliceMeta));
     ChkTrue(ret == BIO_OK, ret, "Slice copy failed.");
 
     sliceMeta.hasEvict = 1;
@@ -423,7 +423,7 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
         auto ret = diskCache->GetMetaSlice(flowIndex, metaSlice);
         ChkTrue(ret == BIO_OK, ret, "Failed to get meta slice:" << ret);
 
-        ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta);
+        ret = mSliceOperator.Copy(metaSlice.Get(), (char *)&sliceMeta, sizeof(WFlowSliceMeta));
         ChkTrueNot(ret == BIO_OK, ret);
 
         if (sliceMeta.magic != mFlowId) {
@@ -632,7 +632,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
 
     auto sliceMeta = std::make_shared<WFlowSliceMeta>();
     ChkTrueNot(sliceMeta != nullptr, BIO_ALLOC_FAIL);
-    ret = mSliceOperator.Copy(metaSlice.Get(), (char *)sliceMeta.get());
+    ret = mSliceOperator.Copy(metaSlice.Get(), (char *)sliceMeta.get(), sizeof(WFlowSliceMeta));
     ChkTrueNot(ret == BIO_OK, ret);
 
     if (sliceRef->GetState() == SLICE_VALID && isMaster) {
@@ -641,7 +641,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
         void *value = aligned_alloc(NO_4096, NO_4194304);
         ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
 
-        ret = mSliceOperator.Copy(slice.Get(), reinterpret_cast<char *>(value));
+        ret = mSliceOperator.Copy(slice.Get(), reinterpret_cast<char *>(value), NO_4194304);
         if (UNLIKELY(ret != BIO_OK)) {
             free(value);
             LOG_ERROR("failed to copy slice to value. ret:" << ret << ", slice:" << slice->ToString());
