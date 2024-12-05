@@ -38,7 +38,12 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
 
     mUsedBlock = 0;
 
-    NetLog::Instance()->SetLogFuncFunc(func);
+    auto netLog = NetLog::Instance();
+    if (netLog == nullptr) {
+        NET_LOG_ERROR("Make net log failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    netLog->SetLogFuncFunc(func);
     mTimeout = timeoutSec;
 
     mCtrlChannelMgr = MakeRef<NetChannelMgr>();
@@ -81,6 +86,10 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         }
     }
     auto serviceLog = NetOutLogger::Instance();
+    if (serviceLog == nullptr) {
+        NET_LOG_ERROR("Make net service log fail.");
+        return BIO_ALLOC_FAIL;
+    }
     serviceLog->SetExternalLogFunction(func);
     mStarted = true;
     return BIO_OK;
@@ -191,7 +200,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
 BResult NetEngine::InitCommMemAllocator()
 {
     auto result = RegisterMemoryRegion(mOptions.memorySize, mLocalMr);
-    if (result != BIO_OK) {
+    if (result != BIO_OK || mLocalMr == nullptr) {
         NET_LOG_ERROR("Failed to register mr by size " << mOptions.memorySize);
         return result;
     }
@@ -243,7 +252,7 @@ BResult NetEngine::InitShmMemAllocator()
     mShmSize = mOptions.memorySize;
 
     result = RegisterMemoryRegion(mShareAddress, mOptions.memorySize, mLocalMr);
-    if (result != BIO_OK) {
+    if (result != BIO_OK || mLocalMr == nullptr) {
         close(mShmFd);
         mShmFd = -1;
         return result;

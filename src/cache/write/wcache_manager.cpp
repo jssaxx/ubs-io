@@ -937,6 +937,10 @@ inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 BResult WCacheManager::Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
+    if (srcSlice == nullptr) {
+        LOG_ERROR("src slice is null.");
+        return BIO_INNER_ERR;
+    }
     if (UNLIKELY(offset >= srcSlice->GetLength())) {
         LOG_ERROR("Failed to split slice. offset:" << offset << ", length:" << srcSlice->GetLength());
         return BIO_READ_EXCEED;
