@@ -138,14 +138,6 @@ private:
 
     BResult SendLoadRequestLocal(LoadRequest &req);
 
-    BResult SendHbRequest(uint64_t &curNodeTimes, uint64_t &curPtTimes);
-
-    bool CheckGetPtViewRsp(QueryPtViewResponse rsp);
-
-    bool CheckGetRsp(GetResponse rsp);
-
-    bool CheckListRsp(ListResponse rsp);
-
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
