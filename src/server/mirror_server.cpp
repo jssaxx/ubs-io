@@ -1191,7 +1191,7 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
         return false;
     }
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     if (req->length == 0 || req->length > BIO_IO_MAX_LEN) {
@@ -1318,7 +1318,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 bool MirrorServer::CheckGetReq(GetRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     if (req->offset > BIO_IO_MAX_LEN || req->length == 0 || req->length > BIO_IO_MAX_LEN) {
@@ -1377,7 +1377,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1419,7 +1419,7 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
 bool MirrorServer::CheckStatReq(StatRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1466,6 +1466,10 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
 bool MirrorServer::CheckListReq(ListRequest *req)
 {
     if (req->size != (sizeof(ObjStat) * 1000U) && req->size != 0) {
+        return false;
+    }
+    std::string prefix(req->prefix);
+    if ((prefix.size() == 0) || (prefix[0] == '/') || prefix.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1516,7 +1520,7 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
 bool MirrorServer::CheckLoadReq(LoadRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     if (req->offset != 0) {
