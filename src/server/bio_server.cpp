@@ -460,8 +460,8 @@ BResult BioServer::BioCacheInit()
         nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
-        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), true, 0);
-        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), true, 1);
+        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), 0, 0);
+        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), 1, 0);
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != BIO_OK) {
