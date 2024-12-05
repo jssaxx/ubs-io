@@ -26,10 +26,7 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(SERVER_NET_RDMA_READ_FAIL, "rdma read fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVICE_START_FAIL, "server start fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(DESERIALIZE_SET_VSIZE, "set vsize", CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_NO_PROCESS_SHM_INIT_SKIP, "server handle shm init skip", CommonTp::NoProcessCallback);
     LVOS_TP_REG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, "pass check", CommonTp::NoProcessCallback);
-    LVOS_TP_REG(MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK, "pass check", CommonTp::NoProcessCallback);
-    LVOS_TP_REG(MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID, "is local nid", CommonTp::IntValueCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -48,11 +45,8 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_NET_RDMA_WRITE_FAIL);
     LVOS_TP_UNREG(SERVER_NET_RDMA_READ_FAIL);
     LVOS_TP_UNREG(SERVICE_START_FAIL);
-    LVOS_TP_UNREG(SERVER_NO_PROCESS_SHM_INIT_SKIP);
     LVOS_TP_UNREG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK);
-    LVOS_TP_UNREG(MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK);
     LVOS_TP_UNREG(DESERIALIZE_SET_VSIZE);
-    LVOS_TP_UNREG(MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID);
 }
 #else
 void tp::ServerTp::Register() noexcept {}

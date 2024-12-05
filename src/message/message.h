@@ -57,7 +57,6 @@ typedef struct {
 /* Query cache resource quota */
 typedef struct {
     RequestComm comm;
-    uint32_t scene;
 } QueryQuotaRequest;
 
 typedef struct {
