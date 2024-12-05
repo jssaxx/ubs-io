@@ -74,12 +74,14 @@ inline bool KVReader::FromFile(const std::string &filePath)
     }
     std::fill(path, path + PATH_MAX + 1, 0x00);
     if (strlen(filePath.c_str()) > PATH_MAX || realpath(filePath.c_str(), path) == nullptr) {
+        delete[] path;
         return false;
     }
 
     /* open file to read */
     std::ifstream inConfFile(path);
     if (!inConfFile) {
+        delete[] path;
         return false;
     }
 
@@ -118,7 +120,7 @@ inline bool KVReader::FromFile(const std::string &filePath)
 
     inConfFile.close();
     inConfFile.clear();
-
+    delete[] path;
     return result;
 }
 
