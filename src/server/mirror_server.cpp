@@ -543,7 +543,7 @@ BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &
     } else if (type == FLOW_DISK) {
         char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, from->GetLength()));
         ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory failed, length:" << from->GetLength() << ".");
-        auto ret = mSliceOp.Copy(from, value);
+        auto ret = mSliceOp.Copy(from, value, from->GetLength());
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Slice copy failed, ret:" << ret << ".");
             free(value);
@@ -586,7 +586,7 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
         LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
         return ret;
     }
-    ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address));
+    ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address), totalLen);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
         BioServer::Instance()->MemFree(bioMr.address);

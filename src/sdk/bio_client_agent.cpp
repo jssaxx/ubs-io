@@ -601,6 +601,9 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         }
 
         realLen = rsp.realLen;
+        if (realLen > req.length) {
+            return BIO_INNER_ERR;
+        }
         uint64_t off = 0;
         uint64_t cpyLength = req.length;
         for (uint32_t idx = 0; idx < rsp.num; idx++) {

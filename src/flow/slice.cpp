@@ -177,10 +177,12 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
 {
     char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, mLength));
     ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
+
+    uint64_t cpyLength = mLength;
     uint64_t offset = 0;
     if (mFlowType == FLOW_MEMORY) {
         for (auto fromAddr : mAddrs) {
-            auto ret = memcpy_s(reinterpret_cast<void *>(value + offset), fromAddr.chunkLen,
+            auto ret = memcpy_s(reinterpret_cast<void *>(value + offset), cpyLength,
                 reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data, length:" << fromAddr.chunkLen);
@@ -189,6 +191,7 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
                 return ret;
             }
             offset += fromAddr.chunkLen;
+            cpyLength -= fromAddr.chunkLen;
         }
     } else {
         for (auto fromAddr : mAddrs) {
