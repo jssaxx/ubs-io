@@ -99,9 +99,9 @@ def send_files_to_node(node):
     disk_str = "disk"
     node_id = "node id"
     if ssh_cmd(node, home_path_of(node["user"]),
-               "rm -rf /home/{0}/*;".format(node[ip_str], node[ip_str])) != 0:
+               "rm -rf /home/{0}/*;".format(node[ip_str])) != 0:
         logging.info("pid:{0} clear /home/{1} fails. ".format(PID, node[ip_str]))
-    config = copy.deepcopy(g_config);
+    config = copy.deepcopy(g_config)
     config["bio"]["bio.net.data.ip_mask"] = str(node[net_str]) + "/24"
     config["bio"]["bio.disk.path"] = str(node[disk_str])
     folder_path = os.path.join(os.path.join(os.path.dirname(os.path.realpath(__file__)), "{0}".format(node[node_id])))

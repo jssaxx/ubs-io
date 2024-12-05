@@ -87,7 +87,11 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t thread_num, uint16_t queue_size, u
     pool->flags = flags;
     pool->thread_num = thread_num;
     pool->queue_size = queue_size;
-    strncpy_s(pool->name, sizeof(pool->name), pool_name, sizeof(pool->name) - 1);
+    int ret = strncpy_s(pool->name, sizeof(pool->name), pool_name, sizeof(pool->name) - 1);
+    if (ret != 0) {
+        FreeRes(pool);
+        return NULL;
+    }
 
     pool->exit = THREAD_POOL_RUNNING;
     pool->queue_full = 0;
