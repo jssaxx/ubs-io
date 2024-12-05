@@ -347,7 +347,12 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
         }
         rsp.desc[index].groupId = nodeEntry.second.id.GroupId();
         rsp.desc[index].nodeId = nodeEntry.second.id.VNodeId();
-        strncpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        int32_t ret =
+                strncpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        if (ret != BIO_OK) {
+            LOG_ERROR("strncpy_s faild, ret:"<< ret << ".");
+            return;
+        }
         rsp.desc[index].port = nodeEntry.second.port;
         rsp.desc[index].status = static_cast<uint16_t>(nodeEntry.second.status);
         rsp.desc[index].num = nodeEntry.second.disks.size();

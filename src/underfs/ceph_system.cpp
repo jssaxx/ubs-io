@@ -62,7 +62,7 @@ BResult CephSystem::Init()
         return BIO_UFS_IOERR;
     }
 
-    LOG_INFO("UnderFS initialize succeed, path:" << mCfgPath << ", cluster:" << mCluster << ", user:" << mUser <<
+    LOG_INFO("UnderFS initialize succeed, cluster:" << mCluster << ", user:" << mUser <<
         ", pool:" << mPool << ".");
     mInited = true;
     return BIO_OK;
