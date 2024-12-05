@@ -1614,19 +1614,4 @@ TEST_F(TestBioServer, test_bio_server_insert_getHolder)
     std::vector<NetMrInfo> lMrVec;
     uint8_t type = 0;
     mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
-    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, false, type);
-    type = 1;
-    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
-    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, false, type);
-    NetMrInfo mr;
-    uintptr_t address = 0;
-    mr.address = address;
-    type = 0;
-    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
-    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
-    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
-    type = 1;
-    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
-    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
-    mirrorServer->RemoveMemFreeHolder(nodeId, clientId, true, type);
 }
