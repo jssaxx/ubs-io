@@ -86,6 +86,9 @@ public:
 
     inline void IncCacheData(RCacheTierType tierType, uint64_t len)
     {
+        if (UINT64_MAX - cacheData[tierType] < len) {
+            return;
+        }
         cacheData[tierType] += len;
     }
 
@@ -105,6 +108,9 @@ public:
 
     inline void IncGCData(RCacheTierType tierType, uint64_t len)
     {
+        if (UINT64_MAX - gcData[tierType] < len) {
+            return;
+        }
         gcData[tierType] += len;
     }
 

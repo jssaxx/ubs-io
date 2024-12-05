@@ -119,6 +119,10 @@ public:
             mHolders.emplace(holder, allocSize);
             iter = mHolders.find(holder);
         } else {
+            if (UINT64_MAX - iter->second < allocSize) {
+                LOG_WARN("Alloc is over uint max , holder:" << holder.nodeId << "-" << holder.clientId << ".");
+                return BIO_QUOTA_NOT_ENOUGH;
+            }
             iter->second += allocSize;
         }
         // 计算下次申请的期望预期配额资源大小.
@@ -145,6 +149,10 @@ public:
     void FreeQuota(uint64_t size, uint32_t proc)
     {
         WriteLocker<ReadWriteLock> lock(&mLock);
+        if (UINT64_MAX - mWriteQuota < size) {
+            LOG_WARN("free size incorrect , add mWriteQuota over uint64 max.");
+            return;
+        }
         mWriteQuota += size;
         mWriteQuota = std::min(mWriteQuota, mLimitWriteQuota);
         LOG_DEBUG("Free quota success, size:" << size << ", remain quota:" << mWriteQuota << ", proc:" << proc << ".");

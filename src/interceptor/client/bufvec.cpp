@@ -44,6 +44,9 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
             size_t oldTotalOffset = totalOffset;
             copyBytes += bytes;
             innerOffset += bytes;
+            if (SIZE_MAX - totalOffset < bytes) {
+                return -1;
+            }
             totalOffset += bytes;
             cpyLength -= bytes;
         } else {
@@ -72,6 +75,9 @@ ssize_t BufVec::Write(const uint8_t *buf, size_t length) noexcept
             size_t oldTotalOffset = totalOffset;
             copyBytes += bytes;
             innerOffset += bytes;
+            if (SIZE_MAX - totalOffset < bytes) {
+                return -1;
+            }
             totalOffset += bytes;
         } else {
             index++;
@@ -93,6 +99,11 @@ size_t BufVec::ComputeSize(const iovec *vec, int cnt) noexcept
     size_t computeSize = 0;
     for (auto i = 0; i < cnt; i++) {
         size_t oldComputeSize = computeSize;
+        if (SIZE_MAX - computeSize < vec[i].iov_len) {
+            CLOG_ERROR("Sum over SIZE_MAX.");
+            errno = E2BIG;
+            return 0;
+        }
         computeSize += vec[i].iov_len;
     }
 

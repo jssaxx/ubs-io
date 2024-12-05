@@ -88,7 +88,12 @@ BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
         if (mPtInfos.find(ptFinish[index].ptId) == mPtInfos.end()) {
             continue;
         }
-        ptList[num].birthVersion = ptFinish[index].version - mPtInfos[ptFinish[index].ptId].referNum;
+        uint64_t referNum = mPtInfos[ptFinish[index].ptId].referNum;
+        if (ptFinish[index].version < referNum) {
+            LOG_ERROR("Pt version incorrect, version " << ptFinish[index].version << " referNum " << referNum);
+            return BIO_ERR;
+        }
+        ptList[num].birthVersion = ptFinish[index].version - referNum;
         ptList[num].ptId = ptFinish[index].ptId;
         num++;
     }

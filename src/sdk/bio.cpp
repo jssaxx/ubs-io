@@ -166,7 +166,8 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || spaceInfo.addressNum == 0 || spaceInfo.descriptorSize == 0)) {
+    if (UNLIKELY(!KeyValid(key) || spaceInfo.addressNum == 0 || spaceInfo.descriptorSize == 0) ||
+        UINT32_MAX - spaceInfo.address[0].size < spaceInfo.address[1].size) {
         return RET_CACHE_EPERM;
     }
 
