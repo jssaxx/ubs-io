@@ -22,6 +22,10 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
         return BIO_ERR;
     }
 
+    if (UINT64_MAX - offset < len) {
+        LOG_ERROR("Invalid offset:" << offset << ", flowId:" << mFlowId << ", len:" << len);
+        return BIO_ERR;
+    }
     if (offset + len > mPreLoadOffset) {
         BIO_TRACE_START(FLOW_TRACE_PRELOAD_MEMORY);
         BResult ret = BIO_INNER_ERR;

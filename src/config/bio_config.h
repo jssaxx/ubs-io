@@ -192,7 +192,7 @@ inline bool Configuration::SetWithTypeAutoConvert(const std::string &key, const 
                 std::cout << "<" << key << ">, it was empty or in wrong type, it should be a int number." << std::endl;
                 return false;
             }
-            if (tmp > static_cast<long>(INTMAX_MAX)) {
+            if (tmp > static_cast<long>(INT32_MAX)) {
                 std::cout << "<" << key << ">, it was too long." << std::endl;
                 return false;
             }

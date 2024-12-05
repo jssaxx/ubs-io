@@ -63,7 +63,7 @@ void HTracerService::OverrideWrite(std::stringstream &ss)
         auto bufferLen = writePos + 1;
         std::vector<char> readBuffer(bufferLen);
         infile.read(readBuffer.data(), bufferLen);
-        outInfo.write(readBuffer.data(), static_cast<int64_t>(readBuffer.size()));
+        outInfo.write(readBuffer.data(), static_cast<uint64_t>(readBuffer.size()));
     }
 
     int32_t lineCount = 0;
