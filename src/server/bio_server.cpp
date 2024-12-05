@@ -120,7 +120,9 @@ void BioServer::Exit()
     if (!mStarted) {
         return;
     }
-    mService->Exit();
+    if (mService != nullptr) {
+        mService->Exit();
+    }
     LOG_INFO("Boostio server exit success.");
     BioLoggerExit();
     mStarted = false;

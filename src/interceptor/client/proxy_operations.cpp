@@ -295,7 +295,13 @@ int32_t ProxyOperations::OpenInner(const char *path, int fd)
         if (UNLIKELY(ret != 0)) {
             return BIO_ERR;
         }
-        CONTEXT.files.Add(fd, std::make_shared<OpenFile>(fd, statBuf.st_ino));
+        std::shared_ptr<OpenFile> op = nullptr;
+        try {
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
+        } catch (const std::bad_alloc& e) {
+            return BIO_ERR;
+        }
+        CONTEXT.files.Add(fd, std::move(op));
     }
 
     return BIO_OK;
@@ -317,7 +323,13 @@ int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
         if (UNLIKELY(ret != 0)) {
             return BIO_ERR;
         }
-        CONTEXT.files.Add(fd, std::make_shared<OpenFile>(fd, statBuf.st_ino));
+        std::shared_ptr<OpenFile> op = nullptr;
+        try {
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
+        } catch (const std::bad_alloc& e) {
+            return BIO_ERR;
+        }
+        CONTEXT.files.Add(fd, std::move(op));
     }
 
     return BIO_OK;
@@ -339,7 +351,13 @@ int32_t ProxyOperations::CreateInner(const char *path, int fd)
         if (UNLIKELY(ret != 0)) {
             return BIO_ERR;
         }
-        CONTEXT.files.Add(fd, std::make_shared<OpenFile>(fd, statBuf.st_ino));
+        std::shared_ptr<OpenFile> op = nullptr;
+        try {
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
+        } catch (const std::bad_alloc& e) {
+            return BIO_ERR;
+        }
+        CONTEXT.files.Add(fd, std::move(op));
     }
 
     return BIO_OK;

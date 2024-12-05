@@ -204,7 +204,11 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
 
 void CephSystem::LoadCephConfig()
 {
-    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+    auto instance = UnderFsConfig::Instance();
+    if (instance == nullptr) {
+        return;
+    }
+    BioConfig::UnderFsConfig config = instance->GetUnderFsConfig();
     mCfgPath = config.cephConfig.cfgPath;
     mCluster = config.cephConfig.cluster;
     mUser = config.cephConfig.user;

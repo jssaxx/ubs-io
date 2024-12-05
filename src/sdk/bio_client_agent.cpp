@@ -689,7 +689,7 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
         CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
         return ret;
     }
-    if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0 || rsp.addr == 0)) {
+    if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0)) {
         return BIO_INNER_RETRY;
     }
 
