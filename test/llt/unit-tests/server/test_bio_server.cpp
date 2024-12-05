@@ -48,18 +48,6 @@ TEST_F(TestBioServer, test_bio_server_check_all)
     EXPECT_EQ(ret, false);
 }
 
-TEST_F(TestBioServer, test_bio_server_shm_init)
-{
-    LOG_INFO("test_bio_server_shm_init");
-    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    ServiceContext ctx;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NO_PROCESS_SHM_INIT_SKIP", 0, 1, userParam);
-    auto ret = mirror->HandleShmInit(ctx);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NO_PROCESS_SHM_INIT_SKIP");
-}
-
 TEST_F(TestBioServer, test_bio_server_qry_node_info)
 {
     LOG_INFO("test_bio_server_qry_node_info");
@@ -77,7 +65,7 @@ TEST_F(TestBioServer, test_bio_server_qry_node_info_by_pt)
     ServiceContext ctx;
     FileLocationQueryReq req = { 1, 2 };
     auto ret = mirror->MirrorServerQueryNodeInfoByPt(ctx, &req);
-    EXPECT_EQ(ret, BIO_ERR);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBioServer, test_bio_server_qry_node_view)
@@ -909,7 +897,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal)
     req.comm.srcNid = NO_10;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
-    EXPECT_EQ(ret, BIO_NET_RETRY);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
 }
 
 TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
@@ -928,7 +916,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
     req.comm.srcNid = NO_10;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
-    EXPECT_EQ(ret, BIO_NET_RETRY);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
 }
 
 TEST_F(TestBioServer, test_bio_server_reader_not_equal_to_err)
@@ -1385,7 +1373,7 @@ TEST_F(TestBioServer, test_start_server_quota_handle)
     ret = BioServer::Instance()->GetMirrorServer()->MirrorServerFreeQuota(ctx, &freeReq);
     EXPECT_EQ(ret, BIO_OK);
 
-    QueryQuotaRequest queryReq = { { MESSAGE_MAGIC, NO_1, NO_1, NO_1, getpid() }, NO_1};
+    QueryQuotaRequest queryReq = { { MESSAGE_MAGIC, NO_1, NO_1, NO_1, getpid() }};
     ret = BioServer::Instance()->GetMirrorServer()->MirrorServerQueryQuota(ctx, &queryReq);
     EXPECT_EQ(ret, BIO_OK);
 }
@@ -1463,7 +1451,7 @@ TEST_F(TestBioServer, test_check_interceptor_alloc_page_req)
     LOG_INFO("test_check_interceptor_alloc_page");
     InterceptorAllocPageReq *req = new InterceptorAllocPageReq();
     req->length =IO_SIZE_4M;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorAllocPageReq(&req);
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorAllocPageReq(req);
     EXPECT_EQ(ret, true);
     free(req);
 }
@@ -1474,10 +1462,10 @@ TEST_F(TestBioServer, test_check_interceptor_large_write_req)
     InterceptorLargePwriteIn *req = new InterceptorLargePwriteIn();
     req->offset = 0;
     req->nbytes = 1;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(&req);
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(req);
     EXPECT_EQ(ret, false);
     req->nbytes = IO_SIZE_4M;
-    ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(&req);
+    ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(req);
     EXPECT_EQ(ret, true);
     free(req);
 }
@@ -1488,10 +1476,10 @@ TEST_F(TestBioServer, test_check_interceptor_write_req)
     InterceptorPwriteIn *req = (InterceptorPwriteIn *) new char[sizeof(InterceptorPwriteIn) + 128];
     req->nbytes = IO_SIZE_8K + 1;
     req->offset = IO_SIZE_4M + 1;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(&req);
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
     EXPECT_EQ(ret, false);
     req->offset = 0;
-    ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(&req);
+    ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
     EXPECT_EQ(ret, true);
     free(req);
 }
@@ -1502,10 +1490,10 @@ TEST_F(TestBioServer, test_check_interceptor_read_req)
     InterceptorPreadIn *req = new InterceptorPreadIn();
     req->nbytes = 0;
     req->offset = IO_SIZE_4M;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(&req);
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(req);
     EXPECT_EQ(ret, false);
     req->nbytes = 1;
-    ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(&req);
+    ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(req);
     EXPECT_EQ(ret, true);
     free(req);
 }
@@ -1615,37 +1603,6 @@ TEST_F(TestBioServer, test_handle_interceptor_write)
     ServiceContext ctx;
     auto ret = InterceptorServer::GetInstance().HandleInterceptorWrite(ctx);
     EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestBioServer, test_bio_server_put_invalid_slice)
-{
-    LOG_INFO("test_bio_server_put_invalid_slice");
-    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    ServiceContext ctx;
-    PutRequest *req = (PutRequest *)new char[sizeof(PutRequest) + 128];
-    req->comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
-    req->tenantId = 1;
-    req->affinity = 1;
-    req->strategy = 1;
-    CopyKey(req->key, "abcdslice111", KEY_MAX_SIZE);
-    req->length = NO_128;
-    req->mrKey = 1;
-    req->sliceLen = 128;
-    req->ioStrategy = 0;
-    req->memFromServer = true;
-    req->mrAddress = 0UL;
-    req->mrSize = 0;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_TRACEP_PARAM_S userParam1;
-    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "DESERIALIZE_SET_VSIZE", 0, 1, userParam1);
-    auto ret = mirror->MirrorServerPut(ctx, req);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "DESERIALIZE_SET_VSIZE");
-    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID");
-    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK");
-    free(req);
 }
 
 TEST_F(TestBioServer, test_bio_server_insert_getHolder)

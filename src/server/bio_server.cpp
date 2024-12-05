@@ -943,6 +943,7 @@ int32_t List(ListRequest *req, ListResponse **rsp)
         return BIO_ALLOC_FAIL;
     }
     *rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
+    (*rsp)->addr = 0;
     (*rsp)->addrOffset = 0;
     (*rsp)->num = objs.size();
     (*rsp)->buffLen = sizeof(ObjStat) * objs.size();

@@ -71,10 +71,8 @@ BResult MirrorClient::SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &pt
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync destroy flow request failed, ret:" << ret << ", nodeId:" << nodeId <<
             ", ptId:" << ptId << ", flowId:" << flowId << ".");
-        return ret;
     }
-
-    return BIO_OK;
+    return ret;
 }
 
 BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
@@ -866,8 +864,10 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         return ret;
     }
     if (rsp == nullptr) {
+        Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_ERR;
     }
+
     // 3. 拷贝空间地址信息
     spaceInfo.descriptorSize = rsp->sliceLen;
     ret = memcpy_s(spaceInfo.descriptorInfo, CACHE_SPACE_DEC_SIZE, rsp->sliceBuf, rsp->sliceLen);
@@ -877,11 +877,9 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_INNER_ERR;
     }
-
     LVOS_TP_START(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, &rsp->addrNum, (SLICE_ADDR_MAX_SIZE + 1));
     LVOS_TP_END;
     if (rsp->addrNum > CACHE_SPACE_ADDRESS_SIZE) {
-        CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_INNER_ERR;
@@ -893,7 +891,9 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         } else {
             uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx], rsp->addr[idx].chunkLen);
             if (realAddr == nullptr) {
-                CLIENT_LOG_ERROR("Alloc space get shm addr failed.");
+                CLIENT_LOG_ERROR("Invalid response addr offset or chunk len.");
+                delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+                Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
                 return BIO_INNER_ERR;
             }
             spaceInfo.address[idx].address = reinterpret_cast<uintptr_t>(realAddr);
@@ -1029,8 +1029,18 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     }
 }
 
-BResult MirrorClient::DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum)
+BResult MirrorClient::DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc *addr, uint64_t *offset,
+    uint32_t addrNum)
 {
+    // 检查slice内存大小是否大于等于fromLen.
+    uint32_t totalLen = 0;
+    for (uint32_t i = 0; i < addrNum; i++) {
+        totalLen += addr[i].chunkLen;
+    }
+    if (totalLen < fromLen) {
+        return BIO_INNER_ERR;
+    }
+
     uint64_t off = 0;
     for (uint32_t i = 0; i < addrNum; i++) {
         uint8_t *realAddr = nullptr;
@@ -1091,7 +1101,7 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
     }
 
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
-    ret = DataCopy(param.value, rsp->addr, rsp->addrOffset, rsp->addrNum);
+    ret = DataCopy(param.value, param.length, rsp->addr, rsp->addrOffset, rsp->addrNum);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
@@ -1258,19 +1268,6 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
     return ret;
 }
 
-bool MirrorClient::CheckGetRsp(GetResponse rsp)
-{
-    if (rsp.num > SLICE_ADDR_SIZE) {
-        return false;
-    }
-    for (uint32_t idx = 0; idx < rsp.num; idx++) {
-        if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
-            return false;
-        }
-    }
-    return true;
-}
-
 BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen)
 {
     NetMrInfo mrInfo;
@@ -1292,21 +1289,20 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
-        if (!CheckGetRsp(rsp)) {
+        if (rsp.num > SLICE_ADDR_SIZE) {
             return BIO_INVALID_PARAM;
         }
         realLen = rsp.realLen;
         if (realLen > mrInfo.size) {
-            CLIENT_LOG_ERROR("Read length greater than value size, realLen:" << realLen << ", size:" << mrInfo.size);
             return BIO_INNER_ERR;
         }
+
         BIO_TRACE_START(SDK_TRACE_GET_COPY2U);
         ret = memcpy_s(value, req.length, reinterpret_cast<void *>(mrInfo.address), realLen);
         BIO_TRACE_END(SDK_TRACE_GET_COPY2U, ret);
         if (UNLIKELY(ret != 0)) {
             CLIENT_LOG_ERROR("Copy data to user failed, ret:" << ret << ".");
-        }
-        if (req.enableCrc) {
+        } else if (req.enableCrc) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, realLen);
             if (currentCrc != rsp.dataCrc) {
                 CLIENT_LOG_ERROR("Client Get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
@@ -1472,6 +1468,9 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
     if (ret != BIO_OK) {
         net::BioClientNet::Instance()->Free(mr.address);
         return ret;
+    }
+    if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0 || rsp.addr != 0)) {
+        return BIO_INNER_RETRY;
     }
 
     if (rsp.num != 0) {
