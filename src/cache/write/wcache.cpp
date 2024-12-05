@@ -642,8 +642,12 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     LOG_DEBUG("Evict flowId:" << slice->GetFlowId() << ", index:" << slice->GetIndexInFlow() << ", offset:" <<
         slice->GetOffsetInFlow() << ", Glob:" << mFlowId << ", isFront:" << isFront);
 
-    auto sliceMeta = std::make_shared<WFlowSliceMeta>();
-    ChkTrueNot(sliceMeta != nullptr, BIO_ALLOC_FAIL);
+    std::shared_ptr<WFlowSliceMeta> sliceMeta = nullptr;
+    try {
+        sliceMeta = std::make_shared<WFlowSliceMeta>();
+    } catch (const std::bad_alloc& e) {
+        return BIO_ALLOC_FAIL;
+    }
     ret = mSliceOperator.Copy(metaSlice.Get(), (char *)sliceMeta.get(), sizeof(WFlowSliceMeta));
     ChkTrueNot(ret == BIO_OK, ret);
 
