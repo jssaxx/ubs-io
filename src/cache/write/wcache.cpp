@@ -267,6 +267,10 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
 BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
     auto slice = sliceRef->GetSlice();
+    if (slice == nullptr) {
+        LOG_ERROR("slice is null.");
+        return BIO_OK;
+    }
     WCacheSlicePtr metaSlice = nullptr;
     LVOS_TP_START(WCACHE_FLOW_DISK_FAIL, slice->GetFlowType(), FLOW_DISK);
     LVOS_TP_END;
@@ -516,13 +520,13 @@ void WCache::ProcAndCacheBrokenExpiredClear()
     while (mIsStartEvictNegotiate.load() == true || mIsMasterStartEvictNegotiate.load() == true) {
         usleep(NO_10000);
     }
-    if (IsEmptyNegotiate()) {
+    if (!IsEmptyNegotiate()) {
         mCacheTiers[WCACHE_MEMORY]->FlushNegotiateMap();
     }
 
-    if (IsEmptyEvict(WCACHE_MEMORY)) {
+    if (!IsEmptyEvict(WCACHE_MEMORY)) {
         StartEvictTask(WCACHE_MEMORY);
-    } else if (IsEmptyEvict(WCACHE_DISK)) {
+    } else if (!IsEmptyEvict(WCACHE_DISK)) {
         StartEvictTask(WCACHE_MEMORY);
     }
     LVOS_TP_END;
@@ -568,6 +572,10 @@ bool WCache::IsEmptyEvict(WCacheTierType type)
 BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
 {
     auto slice = sliceRef->GetSlice();
+    if (slice == nullptr) {
+        LOG_ERROR("slice is null.");
+        return BIO_INNER_ERR;
+    }
     auto indexInFlow = slice->GetIndexInFlow();
     auto offset = slice->GetOffsetInFlow();
     auto length = slice->GetLength();
@@ -619,6 +627,10 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
 {
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     auto slice = sliceRef->GetSlice();
+    if (slice == nullptr) {
+        LOG_ERROR("slice is null.");
+        return BIO_INNER_ERR;
+    }
     WCacheSlicePtr metaSlice = nullptr;
     auto ret = diskCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
     ChkTrue(ret == BIO_OK, ret,
@@ -727,6 +739,10 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
     uint16_t ptId = CacheFlowIdManager::GetPtId(slice->GetFlowId());
     WCacheSlicePtr writeSlice = nullptr;
     mRCacheManager->AllocResources(ptId, slice->GetLength(), writeSlice);
+    if (writeSlice == nullptr) {
+        LOG_ERROR("wcache put to rcache alloc fail.");
+        return BIO_INNER_RETRY;
+    }
     auto ret = mSliceOperator.Copy(reinterpret_cast<char *>(value), writeSlice.Get());
     ChkTrueNot(ret == BIO_OK, ret);
 
@@ -895,6 +911,9 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
             break;
         }
         auto slice = sliceRef->GetSlice();
+        if (slice == nullptr) {
+            break;
+        }
         uint64_t sliceEvictOffset = slice->GetOffsetInFlow() + slice->GetLength();
         if (globEvictOffset < sliceEvictOffset) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
@@ -960,6 +979,10 @@ BResult WCache::ExpiredClearMemImpl(WCacheSliceRefPtr sliceRef)
 {
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef](const WCacheSlicePtr &oldSlice) {
+        if (oldSlice == nullptr) {
+            LOG_ERROR("old slice is null.");
+            return;
+        }
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
         auto ret = memCache->Evict(oldSlice);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -1002,6 +1025,10 @@ BResult WCache::ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef)
 {
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef](const WCacheSlicePtr &oldSlice) {
+        if (oldSlice == nullptr) {
+            LOG_ERROR("old slice is null.");
+            return;
+        }
         auto &diskCache = mCacheTiers[WCACHE_DISK];
         auto ret = diskCache->Evict(oldSlice);
         if (UNLIKELY(ret != BIO_OK)) {

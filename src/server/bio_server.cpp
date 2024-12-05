@@ -99,7 +99,12 @@ BResult BioServer::Start()
     }
 
     if (mConfig->GetNetConfig().enableTls) {
-        ret = ExpireChecker::Instance()->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
+        auto expireChecker = ExpireChecker::Instance();
+        if (expireChecker == nullptr) {
+            LOG_INFO("expire checker alloc fail.");
+            return BIO_ALLOC_FAIL;
+        }
+        ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
             mConfig->GetNetConfig().tlsServerCertPath);
         if (ret != BIO_OK) {
             return ret;
@@ -191,7 +196,12 @@ void BioServer::BioTraceExit()
 
 BResult BioServer::BioUnderFsInit()
 {
-    return UnderFs::Instance()->Init();
+    UnderFsPtr underFsPtr = UnderFs::Instance();
+    if (underFsPtr == nullptr) {
+        LOG_ERROR("Create underfs instance fail.");
+        return BIO_ERR;
+    }
+    return underFsPtr->Init();
 }
 
 void BioServer::BioUnderFsExit()

@@ -320,6 +320,10 @@ void WCacheTier::Destroy()
 
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
 {
+    if (slice == nullptr) {
+        LOG_ERROR("slice is null.");
+        return BIO_INNER_ERR;
+    }
     auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice);
     if (truncateSlice == nullptr) {
         return BIO_OK;
