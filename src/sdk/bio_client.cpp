@@ -284,6 +284,17 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     NetOptions netConf;
     netConf.FillNetTlsConfigs(optConf.enable, optConf.certificationPath, optConf.caCerPath, optConf.caCrlPath,
         optConf.privateKeyPath, optConf.privateKeyPassword, optConf.hseKfsMasterPath, optConf.hseKfsStandbyPath);
+    if (optConf.enable) {
+        bool checkCaPath = FileUtil::CanonicalPath(netConf.caCerPath)
+                           && FileUtil::CanonicalPath((netConf.caCrlPath))
+                           && FileUtil::CanonicalPath(netConf.certificationPath)
+                           && FileUtil::CanonicalPath(netConf.hseKfsMasterPath)
+                           && FileUtil::CanonicalPath(netConf.hseKfsStandbyPath);
+        if (!checkCaPath) {
+            CLIENT_LOG_ERROR("Check ca path failed .");
+            return BIO_ERR;
+        }
+    }
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;
     }
