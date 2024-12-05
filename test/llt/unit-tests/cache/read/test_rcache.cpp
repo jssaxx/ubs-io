@@ -425,12 +425,12 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     EXPECT_EQ(ret, BIO_DISK_IOERR);
 
     auto *value = new char[NO_1024];
-    ret = cacheSliceOperator.Copy(nullptr, value);
+    ret = cacheSliceOperator.Copy(nullptr, value, NO_1024);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     ret = cacheSliceOperator.Copy(slice, nullptr);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY", 0, 1, userParam);
-    ret = cacheSliceOperator.Copy(slice1, value);
+    ret = cacheSliceOperator.Copy(slice1, value, NO_1024);
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY");
 
