@@ -22,7 +22,11 @@ std::string TimeStamp::ToString() const
     char buf[32] = {0};
     int64_t seconds = microSecondsSinceEpoch / microSecondPerSecond;
     int64_t microSeconds = microSecondsSinceEpoch % microSecondPerSecond;
-    snprintf_s(buf, sizeof(buf), sizeof(buf) - 1, "%" PRId64 ".%06" PRId64 "", seconds, microSeconds);
+    int32_t ret = snprintf_s(buf, sizeof(buf), sizeof(buf) - 1, "%" PRId64 ".%06" PRId64 "", seconds, microSeconds);
+    if (ret < 0) {
+        printf("snprintf_s failed.");
+        return "";
+    }
     return buf;
 }
 
@@ -34,9 +38,13 @@ std::string TimeStamp::ToFormattedString() const
     struct tm tmTime = {0};
     gmtime_r(&seconds, &tmTime);
 
-    snprintf_s(buf, sizeof(buf), sizeof(buf) - 1, "%4d%02d%02d %02d:%02d:%2d.%6d",
+    int32_t ret = snprintf_s(buf, sizeof(buf), sizeof(buf) - 1, "%4d%02d%02d %02d:%02d:%2d.%6d",
         static_cast<int>(tmTime.tm_year + 1900u), tmTime.tm_mon + 1, tmTime.tm_mday, tmTime.tm_hour, tmTime.tm_min,
         tmTime.tm_sec, microSeconds);
+    if (ret < 0) {
+        printf("snprintf_s failed.");
+        return "";
+    }
     return buf;
 }
 
