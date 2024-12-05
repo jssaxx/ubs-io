@@ -1989,7 +1989,7 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
 
     GetUnderFsConfigResponse rsp;
     std::shared_ptr<UnderFsConfig> underFsConfig = UnderFsConfig::Instance();
-    if (!underFsConfig) {
+    if (underFsConfig == nullptr) {
         LOG_ERROR("Mirror server get underfs config failed.");
         return BIO_ALLOC_FAIL;
     }

@@ -610,7 +610,11 @@ bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string 
 
 BResult HdfsSystem::LoadHdfsConfig()
 {
-    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+    auto instance = UnderFsConfig::Instance();
+    if (instance == nullptr) {
+        return BIO_UFS_IOERR;
+    }
+    BioConfig::UnderFsConfig config = instance->GetUnderFsConfig();
     BioConfig::HdfsConfig hdfsConfig = { config.hdfsConfig.nameNode, config.hdfsConfig.workingPath };
     std::pair<std::string, std::string> ipPort = ParseIpPort(hdfsConfig.nameNode);
     if (!IsValidHdfsConfig(ipPort, hdfsConfig.workingPath)) {

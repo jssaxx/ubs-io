@@ -1472,7 +1472,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
         net::BioClientNet::Instance()->Free(mr.address);
         return ret;
     }
-    if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0 || rsp.addr != 0)) {
+    if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0)) {
         return BIO_INNER_RETRY;
     }
 
