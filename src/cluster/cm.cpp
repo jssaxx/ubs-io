@@ -91,6 +91,7 @@ BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
         uint64_t referNum = mPtInfos[ptFinish[index].ptId].referNum;
         if (ptFinish[index].version < referNum) {
             LOG_ERROR("Pt version incorrect, version " << ptFinish[index].version << " referNum " << referNum);
+            delete[] ptList;
             return BIO_ERR;
         }
         ptList[num].birthVersion = ptFinish[index].version - referNum;
