@@ -114,11 +114,11 @@ inline static void StatisticGetIoSize(uint64_t length)
 
 inline static bool KeyValid(const char *key)
 {
-    if (UNLIKELY(key == nullptr || strlen(key) >= KEY_MAX_SIZE)) {
+    if (UNLIKELY(key == nullptr || strlen(key) == 0 || strlen(key) >= KEY_MAX_SIZE)) {
         return false;
     }
     std::string keyStr(key);
-    if (keyStr.find("..") != std::string::npos) {
+    if ((keyStr[0] == '/') || keyStr.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -304,9 +304,8 @@ CResult Bio::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(prefix == nullptr || strlen(prefix) >= KEY_MAX_SIZE)) {
-        CLIENT_LOG_ERROR("Invalid list parameter, prefix is null or length prefix: " <<
-            (prefix ? strlen(prefix) : 0) << " is invalid");
+    if (UNLIKELY(!KeyValid(prefix))) {
+        CLIENT_LOG_ERROR("Invalid list parameter, prefix:" << prefix << ".");
         return RET_CACHE_EPERM;
     }
 
