@@ -35,7 +35,11 @@ private:
 #ifdef DEBUG_UT
         return LOCAL_SYSTEM;
 #else
-        return UnderFsConfig::Instance()->GetUnderFsConfig().underFsType;
+        auto instance = UnderFsConfig::Instance();
+        if (instance == nullptr) {
+            return "";
+        }
+        return instance->GetUnderFsConfig().underFsType;
 #endif
     }
 };
