@@ -25,7 +25,8 @@ uint64_t CacheOverloadCtrl::LowWaterLevelQuota(uint64_t frontWriteBw, uint64_t e
         proc = NO_1;
         uint64_t adjust = mAdjustWQuota.load() + ROUND_DOWN(GetAvailableQuota() / NO_100 * NO_2, NO_4096);
         mAdjustWQuota.store(std::min<uint64_t>(adjust, MAX_PRELOAD_QUOTA_SIZE));
-    } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
+    } else if (evict2DiskBw != 0 &&
+        frontWriteBw <= (UINT64_MAX / evict2DiskBw < NO_4 ? UINT64_MAX : evict2DiskBw * NO_4)) {
         proc = NO_2;
         uint64_t adjust = mAdjustWQuota.load() + ROUND_DOWN(GetAvailableQuota() / NO_100, NO_4096);
         mAdjustWQuota.store(std::min<uint64_t>(adjust, MAX_PRELOAD_QUOTA_SIZE));
@@ -43,7 +44,8 @@ uint64_t CacheOverloadCtrl::MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t e
         proc = NO_1;
         uint64_t adjust = mAdjustWQuota.load() + ROUND_DOWN(GetAvailableQuota() / NO_100, NO_4096);
         mAdjustWQuota.store(std::min<uint64_t>(adjust, MAX_PRELOAD_QUOTA_SIZE));
-    } else if (frontWriteBw <= NO_4 * evict2DiskBw) {
+    } else if (evict2DiskBw != 0 &&
+        frontWriteBw <= (UINT64_MAX / evict2DiskBw < NO_4 ? UINT64_MAX : evict2DiskBw * NO_4)) {
         proc = NO_2;
         uint64_t adjust = mAdjustWQuota.load() - ROUND_DOWN(mAdjustWQuota.load() / NO_100 * NO_2, NO_4096);
         mAdjustWQuota.store(std::max<uint64_t>(adjust, MIN_PRELOAD_QUOTA_SIZE));
@@ -111,6 +113,11 @@ uint64_t CacheOverloadCtrl::GetAdjustWriteQuota(uint64_t allocSize)
 
 void CacheOverloadCtrl::AddBandwidth(BwStatType type, uint64_t count)
 {
+    uint64_t curValue = mOverloadCtrlGlbInfo.bwStatObj[type].curValue;
+    if (UINT64_MAX - count < curValue) {
+        LOG_WARN("Cache overload bandwidth over UINT64_MAX, current val " << curValue << " ready add count " << count);
+        return;
+    }
     mOverloadCtrlGlbInfo.bwStatObj[type].curValue += count;
 }
 
@@ -128,9 +135,11 @@ uint64_t CacheOverloadCtrl::GetWmStatDirectValue()
     CacheResDescription desc = { 0 };
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
     auto mVm = std::min<uint64_t>(PERCENT_100, desc.memCapacity == 0 ? 0 :
-        desc.memUsedSize * CACHE_OLC_PERCENT_BASE / desc.memCapacity);
+        ((UINT64_MAX / CACHE_OLC_PERCENT_BASE < desc.memUsedSize) ? UINT64_MAX :
+        desc.memUsedSize * CACHE_OLC_PERCENT_BASE) / desc.memCapacity);
     auto dVm = std::min<uint64_t>(PERCENT_100, desc.diskCapacity == 0 ? 0 :
-        desc.diskUsedSize * CACHE_OLC_PERCENT_BASE / desc.diskCapacity);
+        ((UINT64_MAX / CACHE_OLC_PERCENT_BASE < desc.diskUsedSize) ? UINT64_MAX :
+        desc.diskUsedSize * CACHE_OLC_PERCENT_BASE) / desc.diskCapacity);
     uint64_t retWm = std::max<uint64_t>(mVm, dVm);
     return retWm;
 }
@@ -140,7 +149,12 @@ uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
     uint16_t curIdx = (obj.curIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
     uint64_t totalValue = 0;
     for (uint16_t idx = 0; idx < obj.cycleNum; idx++) {
-        totalValue += obj.hisValue[curIdx];
+        uint64_t curIdValue = obj.hisValue[curIdx];
+        if (UINT64_MAX - totalValue < curIdValue) {
+            LOG_WARN("Bw stat average value over uint max, cur total val " << totalValue << " his val " << curIdValue);
+            break;
+        }
+        totalValue += curIdValue;
         curIdx = (curIdx + MAX_OVERLOAD_STAT_CYCLE_NUM - 1) % MAX_OVERLOAD_STAT_CYCLE_NUM;
     }
     return totalValue;

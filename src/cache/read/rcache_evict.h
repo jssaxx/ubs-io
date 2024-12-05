@@ -33,6 +33,9 @@ public:
 
     inline void IncCacheData(uint64_t len)
     {
+        if (UINT64_MAX - cacheData < len) {
+            return;
+        }
         cacheData += len;
     }
 
