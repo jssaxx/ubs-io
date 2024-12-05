@@ -109,7 +109,6 @@ void BioClientNet::Exit()
 
 BResult BioClientNet::CorrectFd()
 {
-    // 分离部署mShmFd=-1，直接返回
     if (mShmFd == -1) {
         return BIO_OK;
     }
@@ -140,7 +139,7 @@ BResult BioClientNet::CheckShmFd()
 
 BResult BioClientNet::ShmInitInner()
 {
-    // mShmFd = -1，分离部署server端未初始化shm，直接返回
+    // mShmFd = -1，分离部署server端不需要初始化shm，直接返回
     if (mShmFd == -1) {
         CLIENT_LOG_INFO("mShmFd is -1,not need ShmInitInner.");
         return BIO_OK;
@@ -149,6 +148,7 @@ BResult BioClientNet::ShmInitInner()
         mShmFd = -1;
         return BIO_ERR;
     }
+
     auto offset = static_cast<off_t>(mShmOffset);
     auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
     if (address == MAP_FAILED) {
@@ -164,7 +164,7 @@ BResult BioClientNet::ShmInitInner()
 
 BResult BioClientNet::ShmInit()
 {
-    uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
+    uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 默认最大可配置共享内存大小为300G
     ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() } };
     ShmInitResponse rsp;
     BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
@@ -172,13 +172,13 @@ BResult BioClientNet::ShmInit()
         CLIENT_LOG_ERROR("Send shm init request failed, ret:" << ret << ".");
         return ret;
     }
-
     if (!CheckShmInitResp(rsp)) {
-        CLIENT_LOG_ERROR("Invalid rsp, mKey:" << rsp.mKey << ", alignSize:" << rsp.alignSize << ", ioTimeOut:"
+        CLIENT_LOG_ERROR("Invalid responses param, alignSize:" << rsp.alignSize << ", ioTimeOut:"
             << rsp.ioTimeOut << ", netTimeOut: " << rsp.ioTimeOut << ", netTimeOut:" << rsp.netTimeOut << ", logLevel:"
             << rsp.logLevel << ", scene:" << rsp.scene << ".");
-        return BIO_ERR;
+        return BIO_INNER_ERR;
     }
+
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
@@ -190,19 +190,18 @@ BResult BioClientNet::ShmInit()
     mWorkNetTimeOut = rsp.netTimeOut;
     mLogLevel = rsp.logLevel;
     mEnableCrc = rsp.enableCrc;
-
-    CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignsize:" << mWorkIoAlignSize << ", io timeout:" <<
+    CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
         mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
 
-    mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut));
-    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID);
+    mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut)); // 更新消息请求发送超时参数.
+    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Update channel timeout failed, ret:" << ret << ".");
         return ret;
     }
-    // return ok 且 mShmFd=-1,属于分离部署server端未初始化shm
+    // return ok 且 mShmFd=-1, 属于分离部署server端不需要初始化shm
     if (mShmFd != -1 && (mShmOffset != 0 || mShmLength > defaultMaxShmSize)) {
-        CLIENT_LOG_ERROR("Get share memory para failed, offset:" << mShmOffset << ", length:" << mShmLength << ".");
+        CLIENT_LOG_ERROR("Get share memory param failed, offset:" << mShmOffset << ", length:" << mShmLength << ".");
         return BIO_ERR;
     }
 
@@ -235,7 +234,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
         return ret;
     }
 
-    // 2. start ipc service
+    // 2. start ipc service, 固定配置4个worker，4条EP链接.
     NetOptions netOptions;
     netOptions.FillNetBaseConfigs(NO_4, NO_4, NET_CLIENT, ServiceProtocol::SHM);
     netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
@@ -289,9 +288,9 @@ BResult BioClientNet::SetChannelBrokenHandler()
 {
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         std::thread t([this, nodeId]() {
-            if (nodeId == INVALID_NID) { // 本地server进程退出, 则恢复IPC.
+            if (nodeId == INVALID_NID) { // 本地server进程退出, 则一直尝试重连IPC.
                 RecoverIpc();
-            } else { // 远端server进程退出, 则恢复RPC.
+            } else { // 远端server进程退出, 则一直尝试重连RPC.
                 RecoverRpc(nodeId);
             }
         });
@@ -320,7 +319,7 @@ void BioClientNet::RecoverIpc()
 
 BResult BioClientNet::RecoverIpcService()
 {
-    // 1. connection to local bio server.
+    // 1. sync connection to local bio server.
     ConnectInfo info(INVALID_NID, static_cast<uint32_t>(getpid()), INVALID_NID);
     auto ret = mNetEngine->SyncConnect(info);
     if (ret != BIO_OK) {

@@ -221,7 +221,7 @@ private:
         uint64_t flowIndex, GetSliceResponse *rsp);
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
         uint64_t flowIndex, NetMrInfo &mr);
-    BResult DataCopy(const char *from, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
+    BResult DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
     bool IsExistLocalCopy(CmPtInfo &ptEntry);
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
@@ -249,8 +249,6 @@ private:
 
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
-
-    bool CheckGetRsp(GetResponse rsp);
 
     inline BResult Insert(uint16_t ptId)
     {

@@ -164,6 +164,10 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
     if (ret != BIO_OK) {
         return ret;
     }
+    // 当前RPC协议仅支持RDMA(0)和TCP(1), 集群组仅有一个(groupId为0).
+    if (rsp.protocol > 1 || rsp.groupId != 0) {
+        return BIO_INNER_ERR;
+    }
     protocol = rsp.protocol;
     localNid = { rsp.groupId, rsp.nodeId };
     return BIO_OK;
@@ -172,13 +176,8 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
 BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp)
 {
     FileLocationQueryReq req = { masterPtId, slavePtId };
-    auto ret = net::BioClientNet::Instance()->SendSync<FileLocationQueryReq, FileLocationQueryRsp>(INVALID_NID,
+    return net::BioClientNet::Instance()->SendSync<FileLocationQueryReq, FileLocationQueryRsp>(INVALID_NID,
         BIO_OP_SDK_GET_NODE_INFO_BY_PT, req, rsp);
-    if (ret != BIO_OK) {
-        return ret;
-    }
-
-    return BIO_OK;
 }
 
 bool BioClientAgent::GetConfigCrcFlag()
@@ -205,7 +204,7 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
 BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t &preloadSize)
 {
     BResult ret = BIO_OK;
-    QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, scene };
+    QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryQuotaResponse rsp;
     LVOS_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
     if (mMode == CONVERGENCE) {
@@ -216,14 +215,11 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
     }
     LVOS_TP_END;
     if (ret == BIO_OK) {
-        enable = rsp.enable;
-        uint64_t preSize = rsp.preloadSize;
-        LVOS_TP_START(GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE, &preSize, 135, 266, 304);
-        LVOS_TP_END;
-        if (preSize > NO_128 * IO_SIZE_1M) {
-            CLIENT_LOG_ERROR("Too large size " << rsp.preloadSize << ".");
-            return BIO_ERR;
+        if (rsp.preloadSize > NO_128 * IO_SIZE_1M) { // quota初始预取大小最大不超过128MB.
+            CLIENT_LOG_ERROR("Quota preload size too large, preloadSize " << rsp.preloadSize << ".");
+            return BIO_INNER_ERR;
         }
+        enable = rsp.enable;
         preloadSize = rsp.preloadSize;
     }
     return ret;
@@ -270,6 +266,7 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
     uint32_t progressBar = 0;
     static uint32_t maxRetryCnt = NO_512;
     uint32_t retryCnt = 0;
+
     do {
         QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryNodeViewResponse rsp;
@@ -283,24 +280,20 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
             nodeView.clear();
             return ret;
         }
-
-        LVOS_TP_START(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID, &rsp.num, (CLUSTER_NODE_SIZE + 1));
-        LVOS_TP_END;
-        if (rsp.num > CLUSTER_NODE_SIZE) {
-            CLIENT_LOG_ERROR("rsp num: " << rsp.num << " is invalid.");
-            nodeView.clear();
-            return BIO_INVALID_PARAM;
+        if (rsp.flag == 0) { // 此处没有获取到视图表示已经完成, 直接退出循环
+            break;
         }
 
+        if (rsp.num > CLUSTER_NODE_SIZE) { // 校验集群的节点数
+            nodeView.clear();
+            return BIO_INNER_RETRY;
+        }
         for (uint32_t i = 0; i < rsp.num; i++) {
-            std::vector<CmDiskInfo> disks;
-            LVOS_TP_START(SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID, &rsp.desc[0].num, (DISK_MAX_SIZE + 1));
-            LVOS_TP_END;
-            if (rsp.desc[i].num > DISK_MAX_SIZE) {
-                CLIENT_LOG_ERROR("rsp nodeid(" << rsp.desc[i].nodeId << ") num: " << rsp.desc[i].num << " is invalid.");
+            if (rsp.desc[i].num > DISK_MAX_SIZE) { // 校验节点上的磁盘数
                 nodeView.clear();
-                return BIO_INVALID_PARAM;
+                return BIO_INNER_RETRY;
             }
+            std::vector<CmDiskInfo> disks;
             for (uint32_t j = 0; j < rsp.desc[i].num; j++) {
                 disks.push_back(
                     { rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus) });
@@ -312,21 +305,12 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
         flag = rsp.flag;
         progressBar += rsp.num;
         curNodeTimes = rsp.curNodeTimes;
-        if ((retryCnt++) > maxRetryCnt) { // 分片获取集群视图防止死循环, 在512次分片内必定可以获取完整的集群视图.
+        if ((retryCnt++) > maxRetryCnt) { // 限制最大512次分段获取集群视图, 因为在512次内必定可以获取完整的集群视图.
             break;
         }
     } while (flag == 1);
 
     return BIO_OK;
-}
-
-bool BioClientAgent::CheckGetPtViewRsp(QueryPtViewResponse rsp)
-{
-    if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
-        CLIENT_LOG_ERROR("rsp num: " << rsp.num << " or copyNum: " << rsp.copyNum << " is invalid.");
-        return false;
-    }
-    return true;
 }
 
 BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView)
@@ -349,14 +333,13 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
             ptView.clear();
             return ret;
         }
-        LVOS_TP_START(SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID, &rsp.num, (PT_SIZE + 1));
-        LVOS_TP_END;
-        if (rsp.flag == 0) {
+        if (rsp.flag == 0) { // 此处没有获取到视图表示已经完成, 直接退出循环
             break;
         }
 
-        if (!CheckGetPtViewRsp(rsp)) {
-            return BIO_INVALID_PARAM;
+        if (rsp.num > PT_SIZE || rsp.copyNum > PT_COPY_MAX_SIZE) {
+            ptView.clear();
+            return BIO_INNER_RETRY;
         }
         for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmPtCopy> copys;
@@ -370,7 +353,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         flag = rsp.flag;
         progressBar += rsp.num;
         curPtTimes = rsp.curPtTimes;
-        if ((retryCnt++) > maxRetryCnt) { // 分片获取分区视图防止死循环, 在1024次分片内必定可以获取完整的分区视图.
+        if ((retryCnt++) > maxRetryCnt) { // 限制最大1024次分段获取视图, 因为在1024次内必定可以获取完整的分区视图.
             break;
         }
     } while (flag == 1);
@@ -471,19 +454,14 @@ BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16
 
 bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
 {
-    if (*rsp == nullptr) {
-        return false;
-    }
     if (((*rsp)->addrNum > SLICE_ADDR_MAX_SIZE) || ((*rsp)->sliceLen >= NO_512)) {
         return false;
     }
-
     for (uint32_t i = 0; i < (*rsp)->addrNum; i++) {
         if ((*rsp)->addr[i].chunkLen > IO_SIZE_4M) {
             return false;
         }
     }
-
     return true;
 }
 
@@ -498,15 +476,19 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
     uint64_t rspLen = 0;
     auto ret = net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
         BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
+    if (ret != BIO_OK) {
+        return ret;
+    } else {
+        if (*rsp == nullptr) {
+            return BIO_INNER_ERR;
+        }
+        if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
+            return BIO_INVALID_PARAM;
+        }
+    }
     if (!CheckGetSliceRsp(rsp)) {
         return BIO_INNER_ERR;
     }
-    if (ret != BIO_OK) {
-        return ret;
-    } else if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
-        return BIO_INVALID_PARAM;
-    }
-
     return BIO_OK;
 }
 
@@ -546,19 +528,6 @@ void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
     }
 }
 
-bool BioClientAgent::CheckGetRsp(GetResponse rsp)
-{
-    if (rsp.num > SLICE_ADDR_SIZE) {
-        return false;
-    }
-    for (uint32_t idx = 0; idx < rsp.num; idx++) {
-        if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
-            return false;
-        }
-    }
-    return true;
-}
-
 BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     GetResponse rsp;
@@ -567,7 +536,7 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
     } else {
-        if (!CheckGetRsp(rsp)) {
+        if (rsp.num > SLICE_ADDR_SIZE) {
             return BIO_INVALID_PARAM;
         }
         realLen = rsp.realLen;
@@ -577,6 +546,9 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         uint64_t off = 0;
         uint64_t cpyLength = req.length;
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
+            if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
+                return BIO_INVALID_PARAM;
+            }
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx], rsp.addrLen[idx]);
 			if (addr == nullptr) {
                 CLIENT_LOG_ERROR("Send sync request get shm addr failed.");
@@ -624,6 +596,10 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         req.address = reinterpret_cast<uintptr_t>(value);
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return ret;
+        }
+
         realLen = rsp.realLen;
         uint64_t off = 0;
         uint64_t cpyLength = req.length;
@@ -638,7 +614,7 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
             off += rsp.addrLen[idx];
             cpyLength -= rsp.addrLen[idx];
         }
-        if (rsp.isAlloc == true) {
+        if (rsp.isAlloc) {
             free(reinterpret_cast<void *>(rsp.address[0]));
         }
         if (req.enableCrc && ret == BIO_OK) {
@@ -709,6 +685,9 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send sync list request failed, ret:" << ret << ", prefix:" << req.prefix << ".");
         return ret;
+    }
+    if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0 || rsp.addr == 0)) {
+        return BIO_INNER_RETRY;
     }
 
     if (rsp.num != 0) {
