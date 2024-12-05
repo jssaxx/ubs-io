@@ -276,10 +276,9 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
         totalLen += resp.address.address[i].size;
     }
-    if (totalLen != count) {
+    if (totalLen < count) { // 校验dataBuff空间是否足够
         return -1;
     }
-
     char *copyBuff = static_cast<char *>(const_cast<void *>(buf));
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
         void *dataBuff =

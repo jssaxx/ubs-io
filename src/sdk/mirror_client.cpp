@@ -471,7 +471,7 @@ BResult MirrorClient::Put(MirrorPut &param)
 BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo,
     PutRequest *&req)
 {
-    if (spaceInfo.descriptorSize > CACHE_SPACE_DEC_SIZE) {
+    if (spaceInfo.descriptorSize == 0 || spaceInfo.descriptorSize > CACHE_SPACE_DEC_SIZE) {
         CLIENT_LOG_ERROR("Too large descriptorSize:" << spaceInfo.descriptorSize << ", it should be less than " <<
             CACHE_SPACE_DEC_SIZE << ".");
         return BIO_INNER_ERR;
@@ -1003,9 +1003,8 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
         req->ioStrategy = 0;
     }
     auto ret = memcpy_s(req->sliceBuf, req->sliceLen, rsp->sliceBuf, rsp->sliceLen);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
-        return;
+    if (UNLIKELY(ret != 0)) {
+        CLIENT_LOG_ERROR("slice buffer memcpy failed.");
     }
 }
 
