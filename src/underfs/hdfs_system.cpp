@@ -601,7 +601,7 @@ bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string 
         return false;
     }
     if (!IsValidWorkingPath(workingPath)) {
-        LOG_ERROR("invalid working path :" << workingPath << ".");
+        LOG_ERROR("invalid working path.");
         return false;
     }
     return true;

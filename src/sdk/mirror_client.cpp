@@ -1002,7 +1002,11 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     } else {
         req->ioStrategy = 0;
     }
-    memcpy_s(req->sliceBuf, req->sliceLen, rsp->sliceBuf, rsp->sliceLen);
+    auto ret = memcpy_s(req->sliceBuf, req->sliceLen, rsp->sliceBuf, rsp->sliceLen);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        return;
+    }
 }
 
 void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
