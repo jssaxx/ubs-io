@@ -1377,7 +1377,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
 {
     std::string key(req->key);
-    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
+    if ((key.empty()) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1386,9 +1386,9 @@ bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
 int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)
 {
     if (!CheckDeleteReq(req)) {
-        BResult result = BIO_INVALID_PARAM;
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, static_cast<void *>(&result),
-            sizeof(BResult));
+        LOG_ERROR("Mirror server check delete request failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
     }
 
     BResult result;

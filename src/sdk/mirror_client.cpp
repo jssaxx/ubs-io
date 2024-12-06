@@ -1365,17 +1365,13 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
             LOG_ERROR("Send delete request callback ctx null");
             return;
         }
-        if (resp == nullptr) {
-            LOG_ERROR("Send delete request resp null");
-            return;
-        }
         auto cbCtx = (ClientCallbackCtx *)ctx;
         LVOS_TP_START(SDK_MIRROR_DELETE_RECV_FAIL, &result, BIO_INNER_RETRY);
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
-            BResult res = resp != nullptr ? *(static_cast<BResult *>(resp)) : BIO_INNER_ERR;
+            BResult res = (resp != nullptr) ? *(static_cast<BResult *>(resp)) : BIO_INNER_ERR;
             if (res != BIO_OK) {
                 cbCtx->result = res;
             }
