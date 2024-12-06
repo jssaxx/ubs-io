@@ -998,7 +998,7 @@ int32_t MirrorServer::MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequ
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
 
     QueryQuotaResponse rsp;
@@ -1696,7 +1696,8 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     if (addrVec.size() > SLICE_ADDR_MAX_SIZE) { // 限制最大获取64M.
         LOG_ERROR("Get slice num " << addrVec.size() << " exceed " << SLICE_ADDR_MAX_SIZE << ".");
         delete[] tmp;
-        return static_cast<int32_t>(BIO_INNER_ERR);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_INNER_ERR;
     }
     rsp->addrNum = addrVec.size();
     for (uint32_t i = 0; i < addrVec.size(); i++) {
@@ -1710,7 +1711,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     uint64_t outSliceLen = 0;
     ret = sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
     if (ret != BIO_OK) {
-        LOG_ERROR("Serialize slice failed, ret " << ret);
+        delete[] tmp;
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
@@ -1991,44 +1992,66 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
     std::shared_ptr<UnderFsConfig> underFsConfig = UnderFsConfig::Instance();
     if (underFsConfig == nullptr) {
         LOG_ERROR("Mirror server get underfs config failed.");
-        return BIO_ALLOC_FAIL;
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        return BIO_OK;
     }
+
     BioConfig::UnderFsConfig config = underFsConfig->GetUnderFsConfig();
+    int32_t ret = BIO_INNER_ERR;
+    do {
+        ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.underFsType[config.underFsType.size()] = '\0';
 
-    int32_t ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.underFsType[config.underFsType.size()] = '\0';
+        ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE, config.hdfsConfig.nameNode.c_str(),
+            config.hdfsConfig.nameNode.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.hdfsConfig.nameNode[config.hdfsConfig.nameNode.size()] = '\0';
 
-    ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE, config.hdfsConfig.nameNode.c_str(),
-        config.hdfsConfig.nameNode.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.hdfsConfig.nameNode[config.hdfsConfig.nameNode.size()] = '\0';
+        ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE, config.hdfsConfig.workingPath.c_str(),
+                       config.hdfsConfig.workingPath.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
 
-    ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE, config.hdfsConfig.workingPath.c_str(),
-        config.hdfsConfig.workingPath.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
+        ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE, config.cephConfig.user.c_str(),
+                       config.cephConfig.user.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.user[config.cephConfig.user.size()] = '\0';
 
-    ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE, config.cephConfig.user.c_str(), config.cephConfig.user.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.user[config.cephConfig.user.size()] = '\0';
+        ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE, config.cephConfig.cfgPath.c_str(),
+                       config.cephConfig.cfgPath.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.cfgPath[config.cephConfig.cfgPath.size()] = '\0';
 
-    ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE, config.cephConfig.cfgPath.c_str(),
-        config.cephConfig.cfgPath.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.cfgPath[config.cephConfig.cfgPath.size()] = '\0';
+        ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE, config.cephConfig.cluster.c_str(),
+                       config.cephConfig.cluster.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.cluster[config.cephConfig.cluster.size()] = '\0';
 
-    ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE, config.cephConfig.cluster.c_str(),
-        config.cephConfig.cluster.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.cluster[config.cephConfig.cluster.size()] = '\0';
-
-    ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE, config.cephConfig.pools.at(0).c_str(),
-        config.cephConfig.pools.at(0).size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.pool[config.cephConfig.pools.at(0).size()] = '\0';
-
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(GetUnderFsConfigResponse));
+        ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE, config.cephConfig.pools.at(0).c_str(),
+                       config.cephConfig.pools.at(0).size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.pool[config.cephConfig.pools.at(0).size()] = '\0';
+    } while (false);
+    if (ret != BIO_OK) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+    } else {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(GetUnderFsConfigResponse));
+    }
     return BIO_OK;
 }
 
