@@ -277,16 +277,19 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 
         for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
             uint16_t vIdx = idx;
-            if (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
-                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT) {
+            if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
                 vIdx = idx + ptList->maxCopyNum;
             }
-            if (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
-                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT) {
+            if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
                 LOG_ERROR("Impossible, ptId:" << ptList->ptEntryList[index].ptId);
                 return -1;
             }
 
+            if (vIdx >= PT_MAX_COPY_INDEX) {
+                return -1;
+            }
             copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
             copy.diskId = ptList->ptEntryList[index].copyList[vIdx].diskId;
             copy.state = s_copystate[ptList->ptEntryList[index].copyList[vIdx].state];
