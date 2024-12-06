@@ -182,7 +182,7 @@ private:
         ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
-    BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp, FlowType type);
+    BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp);
     bool CheckPutReq(PutRequest *req);
     bool CheckGetReq(GetRequest *req);
     bool CheckDeleteReq(DeleteRequest *req);
