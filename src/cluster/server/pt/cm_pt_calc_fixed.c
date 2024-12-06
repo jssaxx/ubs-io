@@ -160,6 +160,10 @@ void ViewCalcFillUpdateBusyList(DList *head, uint16_t nodeId, uint16_t diskId, i
     }
 
     DListDel(&find->node);
+    if (UINT64_MAX - find->referNum < diff) {
+        CM_LOGERROR("Diff error.");
+        return;
+    }
     find->referNum += diff;
 
     D_LIST_FOR_EACH_SAFE(pos, next, head)

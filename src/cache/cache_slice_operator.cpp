@@ -105,22 +105,25 @@ BResult CacheSliceOperator::Copy(const char *from, uint64_t start, uint32_t len,
     return BIO_OK;
 }
 
-BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
+BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to, uint32_t toLen)
 {
     ChkTrueNot(Validate(from), BIO_INVALID_PARAM);
     ChkTrueNot(to != nullptr, BIO_INVALID_PARAM);
+    ChkTrueNot(toLen != 0, BIO_INVALID_PARAM);
     BResult ret = BIO_INNER_ERR;
+    uint64_t cpyLength = toLen;
 
     if (from->GetFlowType() == FLOW_MEMORY) {
         auto &fromAddrs = from->GetAddrs();
         uint64_t offset = 0;
         for (auto fromAddr : fromAddrs) {
             LVOS_TP_START(SLICE_OPERATOR_2_FLOW_MEMORY, &ret, BIO_ERR);
-            ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), fromAddr.chunkLen,
+            ret = memcpy_s(reinterpret_cast<void *>(const_cast<char *>(to + offset)), cpyLength,
                 reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
             LVOS_TP_END;
-            ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << fromAddr.chunkLen);
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << fromAddr.chunkLen << ".");
             offset += fromAddr.chunkLen;
+            cpyLength -= fromAddr.chunkLen;
         }
         return BIO_OK;
     } else {
@@ -129,7 +132,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
         for (auto fromAddr : fromAddrs) {
             LOG_TRACE("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
             BIO_TRACE_START(BDM_TRACE_READ_SYNC);
-            auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
+            ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
                 fromAddr.chunkLen);
             ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
@@ -145,6 +148,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to)
 BResult CacheSliceOperator::GetSliceFromSliceIO(SlicePtr &partialSlice, const SlicePtr &wholeSlice, uint64_t offset,
     uint64_t length)
 {
+    ChkTrueNot(Validate(wholeSlice), BIO_INVALID_PARAM);
     std::vector<FlowAddr> flowAddr;
     std::vector<FlowAddr> addrVec = wholeSlice->GetAddrs();
     for (auto addr : addrVec) {
@@ -202,6 +206,8 @@ BResult CacheSliceOperator::CopyFromDiskToDisk(const SlicePtr &from, const Slice
 
 BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const SlicePtr &to)
 {
+    ChkTrueNot(from != nullptr, false);
+    ChkTrueNot(to != nullptr, false);
     BResult ret = BIO_INNER_ERR;
     auto &fromAddrs = from->GetAddrs();
     auto &toAddrs = to->GetAddrs();
@@ -239,6 +245,8 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
 
 BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const SlicePtr &to)
 {
+    ChkTrueNot(from != nullptr, false);
+    ChkTrueNot(to != nullptr, false);
     auto &fromAddrs = from->GetAddrs();
     auto &toAddrs = to->GetAddrs();
 
@@ -278,6 +286,8 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
 
 BResult CacheSliceOperator::CopyFromMemoryToMemory(const SlicePtr &from, const SlicePtr &to)
 {
+    ChkTrueNot(from != nullptr, false);
+    ChkTrueNot(to != nullptr, false);
     BResult ret = BIO_INNER_ERR;
     auto &fromAddrs = from->GetAddrs();
     auto &toAddrs = to->GetAddrs();

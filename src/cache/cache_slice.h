@@ -83,9 +83,10 @@ public:
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         ChkTrue(length >= pos + sizeof(mPtId), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mPtId):" << pos + sizeof(mPtId));
-        memcpy_s(&mPtId, sizeof(mPtId), data + pos, sizeof(mPtId));
+        auto ret = memcpy_s(&mPtId, sizeof(mPtId), data + pos, sizeof(mPtId));
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mPtId);
-        auto ret = Slice::Deserialize(data + pos, length - pos);
+        ret = Slice::Deserialize(data + pos, length - pos);
         if (ret != BIO_OK) {
             return ret;
         }
@@ -176,19 +177,22 @@ public:
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         ChkTrue(length >= pos + sizeof(mFlowId), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowId):" << pos + sizeof(mFlowId));
-        memcpy_s(&mFlowId, sizeof(mFlowId), data + pos, sizeof(mFlowId));
+        auto ret = memcpy_s(&mFlowId, sizeof(mFlowId), data + pos, sizeof(mFlowId));
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mFlowId);
         ChkTrue(length >= pos + sizeof(mOffsetInFlow), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mOffsetInFlow):" <<
             pos + sizeof(mOffsetInFlow));
-        memcpy_s(&mOffsetInFlow, sizeof(mOffsetInFlow), data + pos, sizeof(mOffsetInFlow));
+        ret = memcpy_s(&mOffsetInFlow, sizeof(mOffsetInFlow), data + pos, sizeof(mOffsetInFlow));
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mOffsetInFlow);
         ChkTrue(length >= pos + sizeof(mIndexInFlow), BIO_INVALID_PARAM,
             "Failed to deserialize data, length:" << length << "  pos + sizeof(mIndexInFlow):" <<
             pos + sizeof(mIndexInFlow));
-        memcpy_s(&mIndexInFlow, sizeof(mIndexInFlow), data + pos, sizeof(mIndexInFlow));
+        ret = memcpy_s(&mIndexInFlow, sizeof(mIndexInFlow), data + pos, sizeof(mIndexInFlow));
+        ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mIndexInFlow);
-        auto ret = Slice::Deserialize(data + pos, length - pos);
+        ret = Slice::Deserialize(data + pos, length - pos);
         if (UNLIKELY(ret != BIO_OK)) {
             return ret;
         }

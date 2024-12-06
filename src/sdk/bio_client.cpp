@@ -41,7 +41,11 @@ BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::st
     auto logMode = static_cast<int32_t>(mode);
     auto defaultLogLevel = static_cast<int32_t>(BioClientLog::Level::LOG_LEVEL_INFO);
     auto type = static_cast<uint8_t>(logType);
-    return BioClientLog::Instance()->Initialize(logMode, defaultLogLevel, type, logFilePath);
+    auto clientLog = BioClientLog::Instance();
+    if (clientLog == nullptr) {
+        return BIO_ALLOC_FAIL;
+    }
+    return clientLog->Initialize(logMode, defaultLogLevel, type, logFilePath);
 }
 
 void BioClient::BioClientLoggerExit(WorkerMode mode)
@@ -284,6 +288,17 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     NetOptions netConf;
     netConf.FillNetTlsConfigs(optConf.enable, optConf.certificationPath, optConf.caCerPath, optConf.caCrlPath,
         optConf.privateKeyPath, optConf.privateKeyPassword, optConf.hseKfsMasterPath, optConf.hseKfsStandbyPath);
+    if (optConf.enable) {
+        bool checkCaPath = FileUtil::CanonicalPath(netConf.caCerPath)
+                           && FileUtil::CanonicalPath((netConf.caCrlPath))
+                           && FileUtil::CanonicalPath(netConf.certificationPath)
+                           && FileUtil::CanonicalPath(netConf.hseKfsMasterPath)
+                           && FileUtil::CanonicalPath(netConf.hseKfsStandbyPath);
+        if (!checkCaPath) {
+            CLIENT_LOG_ERROR("Check ca path failed .");
+            return BIO_ERR;
+        }
+    }
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;
     }
@@ -314,7 +329,12 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
 
     if (mode == SEPARATES && optConf.enable) {
-        auto ret = ExpireChecker::Instance()->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath);
+        auto expireChecker = ExpireChecker::Instance();
+        if (expireChecker == nullptr) {
+            LOG_INFO("expire checker alloc fail.");
+            return BIO_ALLOC_FAIL;
+        }
+        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath);
         if (ret != BIO_OK) {
             return ret;
         }

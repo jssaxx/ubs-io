@@ -143,7 +143,6 @@ public:
 
     bool MergeConf(const ConfigurationPtr &config, bool stopIfInvalid = true);
 
-    void Dump();
     void Dump(KVReader &reader);
 
     DEFINE_REF_COUNT_FUNCTIONS
@@ -192,7 +191,7 @@ inline bool Configuration::SetWithTypeAutoConvert(const std::string &key, const 
                 std::cout << "<" << key << ">, it was empty or in wrong type, it should be a int number." << std::endl;
                 return false;
             }
-            if (tmp > static_cast<long>(INTMAX_MAX)) {
+            if (tmp > static_cast<long>(INT32_MAX)) {
                 std::cout << "<" << key << ">, it was too long." << std::endl;
                 return false;
             }
@@ -466,27 +465,6 @@ inline bool Configuration::MergeConf(const ConfigurationPtr &config, bool stopIf
     }
 
     return true;
-}
-
-inline void Configuration::Dump()
-{
-    std::lock_guard<std::mutex> guard(mMutex);
-    printf("Configuration Dump:\n");
-    for (auto &item : mIntItems) {
-        printf("i] %s = %d\n", item.first.c_str(), item.second);
-    }
-    for (auto &item : mFloatItems) {
-        printf("f] %s = %f\n", item.first.c_str(), item.second);
-    }
-    for (auto &item : mStrItems) {
-        printf("s] %s = %s\n", item.first.c_str(), item.second.c_str());
-    }
-    for (auto &item : mBoolItems) {
-        printf("b] %s = %s\n", item.first.c_str(), item.second ? "true" : "false");
-    }
-    for (auto &item : mLongItems) {
-        printf("l] %s = %ld\n", item.first.c_str(), item.second);
-    }
 }
 
 inline void Configuration::Dump(KVReader &reader)

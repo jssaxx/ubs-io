@@ -103,7 +103,7 @@ public:
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx, GetRequest &req);
 
-    int32_t MirrorServerShmInit(ServiceContext &ctx);
+    int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
     int32_t MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req);
     int32_t MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLocationQueryReq *req);
     int32_t MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequest *req);
@@ -161,7 +161,12 @@ public:
     bool CheckGetSliceReq(GetSliceRequest *req);
 
     void InsertMemFreeHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo>, uint8_t type);
-    void RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool flag, uint8_t type);
+    void RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, uint8_t type, uintptr_t addr);
+    void InsertMemFreeHolderImpl(MemFreeHolder holder, std::unordered_map<MemFreeHolder,
+        std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual> &freeMap,
+        std::vector<NetMrInfo> lMrVec);
+    void RemoveMemFreeHolderImpl(MemFreeHolder holder, std::unordered_map<MemFreeHolder,
+        std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual> &freeMap, uintptr_t addr);
 
     DEFINE_REF_COUNT_FUNCTIONS
 
@@ -178,7 +183,6 @@ private:
 
     void InitGetResponse(GetResponse &rsp);
     BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp, FlowType type);
-    bool CheckQueryPtViewReq(QueryPtViewRequest *req);
     bool CheckPutReq(PutRequest *req);
     bool CheckGetReq(GetRequest *req);
     bool CheckDeleteReq(DeleteRequest *req);
@@ -192,9 +196,11 @@ private:
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
     ReadWriteLock mLock;
-    std::unordered_map<MemFreeHolder, std::vector<NetMrInfo>, MemFreeHolderHash, MemFreeHolderEqual> mHolders;
+    std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,
+        MemFreeHolderEqual> mHolders;
     ReadWriteLock mLockList;
-    std::unordered_map<MemFreeHolder, std::vector<NetMrInfo>, MemFreeHolderHash, MemFreeHolderEqual> mHoldersList;
+    std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,
+        MemFreeHolderEqual> mHoldersList;
 
     BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE

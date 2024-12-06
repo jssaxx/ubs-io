@@ -46,10 +46,6 @@ public:
 
     static ssize_t Write(int fd, const void *buf, size_t nbytes);
 
-    static bool CheckPwriteLargeInnerResp(InterceptorPwriteOut &writeResp);
-    static bool CheckPwriteSmallInnerResp(InterceptorPwriteOut &resp);
-    static bool CheckPreadInnerResp(InterceptorPreadOut **resp);
-
 private:
     static int32_t FullPath(const char *nativePath, std::string &realPath);
     static int32_t FullPath(int dirFd, const char *nativePath, std::string &realPath);

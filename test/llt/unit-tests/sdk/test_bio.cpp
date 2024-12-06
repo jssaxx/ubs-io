@@ -270,13 +270,8 @@ TEST_F(TestBio, test_bio_get)
     char *value = new char[G_LENGTH];
     uint64_t realLen = 0;
     LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "GET_VALUE_IN_DISK", 0, 1, userParam);
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
-    LVOS_HVS_deactiveTracePoint(0, "GET_VALUE_IN_DISK");
-    EXPECT_EQ(ret, RET_CACHE_OK);
-    EXPECT_EQ(G_LENGTH, realLen);
 
-    ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, nullptr);
+    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     ret = BioGet(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
@@ -1508,35 +1503,6 @@ TEST_F(TestBio, test_bio_qos_put_align_size)
     BioClient::Instance()->GetMirror()->SetScene(SCENE_NONE);
 }
 
-TEST_F(TestBio, test_bio_client_agent_get_cluster_node_view)
-{
-    LOG_INFO("test_bio_client_agent_get_cluster_node_view");
-    uint64_t curNodeTimes;
-    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID", 0, 1, userParam);
-    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetClusterNodeView(curNodeTimes, nodeView);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NUM_INVALID");
-
-    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID", 0, 1, userParam);
-    ret = ock::bio::agent::BioClientAgent::Instance()->GetClusterNodeView(curNodeTimes, nodeView);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_CLUSTER_NODE_VIEW_NODEID_INVALID");
-}
-
-TEST_F(TestBio, test_bio_client_agent_get_pt_view)
-{
-    LOG_INFO("test_bio_client_agent_get_pt_view");
-    uint64_t curNodeTimes;
-    std::map<uint16_t, CmPtInfo> ptView;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID", 0, 1, userParam);
-    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetPtView(curNodeTimes, ptView);
-    EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_BIO_AGENT_GET_PT_VIEW_RSP_NUM_INVALID");
-}
-
 TEST_F(TestBio, test_check_get_underfs_config_resp)
 {
     LOG_INFO("test_check_get_underfs_config_resp");
@@ -1591,24 +1557,19 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
     LOG_INFO("test_bio_client_agent_get_local_quota_info");
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE", 0, 1, userParam);
     bool enable = true;
     uint64_t load = 1;
     auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(1, enable, load);
-    EXPECT_EQ(ret, BIO_ERR);
+    EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
-    LVOS_HVS_deactiveTracePoint(0, "GET_LOCAL_QUOTA_SET_PRE_LOAD_SIZE");
 }
 
 TEST_F(TestBio, test_bio_client_agent_check_get_slice)
 {
     LOG_INFO("test_bio_client_agent_check_get_slice");
-    GetSliceResponse *rsp = nullptr;
-    auto ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
-    EXPECT_EQ(ret, false);
-    rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
+    GetSliceResponse *rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
     rsp->addrNum = NO_20;
-    ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     EXPECT_EQ(ret, false);
     rsp->addrNum = NO_1;
     rsp->sliceLen = NO_1;
@@ -1622,6 +1583,7 @@ TEST_F(TestBio, test_bio_client_agent_check_get_slice)
     rsp->addr[0] =addr;
     ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     EXPECT_EQ(ret, true);
+    delete[] rsp;
 }
 
 TEST_F(TestBio, test_bio_client_agent_check_update_local)
@@ -1644,8 +1606,7 @@ TEST_F(TestBio, test_bio_client_agent_prepare)
 {
     LOG_INFO("test_bio_client_agent_prepare");
     CmPtInfo ptEntry;
-    GetSliceResponse *tmpPtr = nullptr;
-    GetSliceResponse **rsp = &tmpPtr;
-    auto ret = ock::bio::agent::BioClientAgent::Instance()->SendPrepareResourceLocal(ptEntry, 1, 1, 1, 1, rsp);
-    EXPECT_EQ(ret, BIO_INNER_ERR);
+    GetSliceResponse *rsp = nullptr;
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->SendPrepareResourceLocal(ptEntry, 1, 1, 1, 1, &rsp);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 }

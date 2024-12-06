@@ -38,6 +38,9 @@ public:
 
     inline void AddMetaTruncOffset(uint64_t len)
     {
+        if (UINT64_MAX - mMetaTruncOffset < len) {
+            return;
+        }
         mMetaTruncOffset += len;
     }
 
@@ -48,6 +51,9 @@ public:
 
     inline void UpdateDataTruncOffset(uint64_t off, uint64_t len)
     {
+        if (UINT64_MAX - off < len) {
+            return;
+        }
         mDataTruncOffset = off + len;
     }
 

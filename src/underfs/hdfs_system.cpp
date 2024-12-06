@@ -23,7 +23,8 @@ const size_t MAX_FILENAME_LENGTH = 255;
 
 inline static bool KeyValid(const char *key)
 {
-    if (UNLIKELY(key == nullptr || strlen(key) == 0 || strlen(key) >= UFS_KEY_MAX_SIZE)) {
+    if (UNLIKELY(key == nullptr || strlen(key) == 0 || strlen(key) >= UFS_KEY_MAX_SIZE) || (key[0] == '/') ||
+        std::strstr(key, "..")) {
         return false;
     }
     return true;
@@ -601,7 +602,7 @@ bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string 
         return false;
     }
     if (!IsValidWorkingPath(workingPath)) {
-        LOG_ERROR("invalid working path :" << workingPath << ".");
+        LOG_ERROR("invalid working path.");
         return false;
     }
     return true;
@@ -609,7 +610,11 @@ bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string 
 
 BResult HdfsSystem::LoadHdfsConfig()
 {
-    BioConfig::UnderFsConfig config = UnderFsConfig::Instance()->GetUnderFsConfig();
+    auto instance = UnderFsConfig::Instance();
+    if (instance == nullptr) {
+        return BIO_UFS_IOERR;
+    }
+    BioConfig::UnderFsConfig config = instance->GetUnderFsConfig();
     BioConfig::HdfsConfig hdfsConfig = { config.hdfsConfig.nameNode, config.hdfsConfig.workingPath };
     std::pair<std::string, std::string> ipPort = ParseIpPort(hdfsConfig.nameNode);
     if (!IsValidHdfsConfig(ipPort, hdfsConfig.workingPath)) {

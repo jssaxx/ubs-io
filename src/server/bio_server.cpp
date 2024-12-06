@@ -99,7 +99,12 @@ BResult BioServer::Start()
     }
 
     if (mConfig->GetNetConfig().enableTls) {
-        ret = ExpireChecker::Instance()->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
+        auto expireChecker = ExpireChecker::Instance();
+        if (expireChecker == nullptr) {
+            LOG_INFO("expire checker alloc fail.");
+            return BIO_ALLOC_FAIL;
+        }
+        ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
             mConfig->GetNetConfig().tlsServerCertPath);
         if (ret != BIO_OK) {
             return ret;
@@ -115,7 +120,9 @@ void BioServer::Exit()
     if (!mStarted) {
         return;
     }
-    mService->Exit();
+    if (mService != nullptr) {
+        mService->Exit();
+    }
     LOG_INFO("Boostio server exit success.");
     BioLoggerExit();
     mStarted = false;
@@ -191,7 +198,12 @@ void BioServer::BioTraceExit()
 
 BResult BioServer::BioUnderFsInit()
 {
-    return UnderFs::Instance()->Init();
+    UnderFsPtr underFsPtr = UnderFs::Instance();
+    if (underFsPtr == nullptr) {
+        LOG_ERROR("Create underfs instance fail.");
+        return BIO_ERR;
+    }
+    return underFsPtr->Init();
 }
 
 void BioServer::BioUnderFsExit()
@@ -460,8 +472,8 @@ BResult BioServer::BioCacheInit()
         nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
-        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), true, 0);
-        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), true, 1);
+        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), 0, 0);
+        MirrorServer::Instance()->RemoveMemFreeHolder(nodeId, static_cast<uint64_t>(pid), 1, 0);
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != BIO_OK) {
@@ -943,6 +955,7 @@ int32_t List(ListRequest *req, ListResponse **rsp)
         return BIO_ALLOC_FAIL;
     }
     *rsp = static_cast<ListResponse *>(static_cast<void *>(tmp));
+    (*rsp)->addr = 0;
     (*rsp)->addrOffset = 0;
     (*rsp)->num = objs.size();
     (*rsp)->buffLen = sizeof(ObjStat) * objs.size();

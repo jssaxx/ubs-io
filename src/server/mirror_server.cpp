@@ -104,7 +104,8 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
     ListRequest &req)
 {
     uintptr_t address = 0;
-    if (objs.size() != 0) {
+    uint32_t index = 0;
+    if (!objs.empty()) {
         uint32_t key;
         auto ret = BioServer::Instance()->GetNetEngine()->AllocLocalMrSingle(address, key);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -118,9 +119,14 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
         lMrVec.emplace_back(bioMr);
         InsertMemFreeHolder(req.comm.srcNid, req.comm.pid, lMrVec, 1);
 
+        uint32_t segmentSize = BioServer::Instance()->GetNetEngine()->GetDataPage();
         auto addrP = reinterpret_cast<ObjStat *>(address);
-        uint32_t index = 0;
+        uint32_t totalSize = 0;
         for (auto &obj : objs) {
+            totalSize += sizeof(ObjStat);
+            if (totalSize > segmentSize) { // 防止addrP缓存区溢出.
+                break;
+            }
             CopyKey(addrP[index].key, obj.second.key, KEY_MAX_SIZE);
             addrP[index].size = obj.second.size;
             addrP[index].time = obj.second.time;
@@ -132,7 +138,7 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
     rsp.addr = address;
     rsp.addrOffset =
         (address != 0) ? BioServer::Instance()->GetNetEngine()->GetAddressOffset(static_cast<uint64_t>(address)) : 0;
-    rsp.num = objs.size();
+    rsp.num = index;
     rsp.buffLen = 0;
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(ListResponse));
 }
@@ -141,7 +147,8 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
     std::unordered_map<std::string, ObjStat> &objs)
 {
     uintptr_t lAddress = 0;
-    if (objs.size() != 0) {
+    uint32_t index = 0;
+    if (!objs.empty()) {
         uint32_t lKey;
         auto ret = BioServer::Instance()->GetNetEngine()->AllocLocalMrSingle(lAddress, lKey);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -149,16 +156,27 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
             return;
         }
 
+        uint32_t segmentSize = BioServer::Instance()->GetNetEngine()->GetDataPage();
         auto addrP = reinterpret_cast<ObjStat *>(lAddress);
-        uint32_t index = 0;
+        uint32_t totalSize = 0;
         for (auto &obj : objs) {
+            totalSize += sizeof(ObjStat);
+            if (totalSize > segmentSize) { // 防止addrP缓存区溢出.
+                break;
+            }
             CopyKey(addrP[index].key, obj.second.key, KEY_MAX_SIZE);
             addrP[index].size = obj.second.size;
             addrP[index].time = obj.second.time;
             index++;
         }
+        if (UNLIKELY(req->size < (sizeof(ObjStat) * index))) {
+            LOG_ERROR("request mr size failed, size:" << req->size << ".");
+            BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(lAddress);
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+            return;
+        }
 
-        NetRequest writeReq(lAddress, req->address, lKey, req->mrKey, (sizeof(ObjStat) * objs.size()));
+        NetRequest writeReq(lAddress, req->address, lKey, req->mrKey, (sizeof(ObjStat) * index));
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(ctx.Channel(), writeReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ".");
@@ -171,7 +189,7 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
     ListResponse rsp;
     rsp.addr = 0;
     rsp.addrOffset = 0;
-    rsp.num = objs.size();
+    rsp.num = index;
     rsp.buffLen = 0;
     BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(lAddress);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(ListResponse));
@@ -234,9 +252,7 @@ BResult MirrorServer::DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, 
     auto ret = Cache::Instance().DestroyWCache(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Destroy write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
-        return ret;
     }
-
     return ret;
 }
 
@@ -253,36 +269,43 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
 
 void MirrorServer::QueryCacheQuota(QueryQuotaRequest &req, QueryQuotaResponse &rsp)
 {
-    static uint64_t defaultPreloadSize = NO_128 * NO_1024 * NO_1024; // 128M
+    static uint64_t defaultPreloadSize = NO_128 * NO_1024 * NO_1024; // 默认预取大小为128M.
     uint64_t totalQuota = CacheOverloadCtrl::Instance().GetAvailableQuota();
     rsp.preloadSize = std::min<uint64_t>(defaultPreloadSize, ROUND_UP((totalQuota / NO_10), NO_4096));
     rsp.enable = mBioConfig->GetDaemonConfig().enableQos;
-    LOG_INFO("Query quota info success, write cache quota:" << totalQuota << ", scene:" << req.scene <<
-        ", preload size:" << (rsp.preloadSize / NO_1024 / NO_1024) << "M, enable:" << rsp.enable << ".");
+    LOG_INFO("Query quota info success, write cache quota:" << totalQuota << ", preload size:" <<
+        (rsp.preloadSize / NO_1024 / NO_1024) << "M, enable:" << rsp.enable << ".");
 }
 
 BResult MirrorServer::AllocCacheQuota(AllocQuotaRequest &req, AllocQuotaResponse &rsp)
 {
     if (UNLIKELY(!CheckAll(req.comm))) {
-        rsp.exceptQuota = 0;
         return BIO_CHECK_PT_FAIL;
     }
 
+    // 1. 检查cid和nid是否有效, 当前仅能检查跨节点SDK的quota申请请求.
     auto bioServer = BioServer::Instance();
     if (bioServer == nullptr) {
         LOG_ERROR("Bio server instance get fail");
-        return BIO_ALLOC_FAIL;
+        return BIO_INNER_RETRY;
     }
     auto rpcEngine = bioServer->GetNetEngine();
     if (rpcEngine == nullptr) {
         LOG_ERROR("Net engine get fail");
-        return BIO_ALLOC_FAIL;
-    }
-    if (req.nid != bioServer->GetLocalNid().VNodeId() && !rpcEngine->IsChannelExist(req.nid, req.cid)) {
-        LOG_ERROR("Req nodeid " << req.nid << " or ptid " << req.cid << " is incorrect.");
         return BIO_INNER_RETRY;
     }
+    if (req.nid != bioServer->GetLocalNid().VNodeId() && !rpcEngine->IsChannelExist(req.nid, req.cid)) {
+        LOG_ERROR("Invalid nodeId " << req.nid << " or cid " << req.cid << ", need retry.");
+        return BIO_INVALID_PARAM;
+    }
 
+    // 2. 限制最大单次申请quota大小不超过1GB.
+    if (req.allocQuota > NO_1024 * IO_SIZE_1M) {
+        LOG_ERROR("Alloc quota size failed, size:" << req.allocQuota << ", cid:" << req.cid << ", nid:" << req.nid);
+        return BIO_INVALID_PARAM;
+    }
+
+    // 3. 申请quota资源.
     QuotaHolder holder = { req.nid, req.cid };
     BIO_TRACE_START(MIRROR_TRACE_QOS_ALLOC);
     BResult ret = CacheOverloadCtrl::Instance().AllocQuota(holder, req.allocQuota, rsp.exceptQuota);
@@ -299,6 +322,7 @@ BResult MirrorServer::FreeCacheQuota(FreeQuotaRequest &req)
     if (UNLIKELY(!CheckAll(req.comm))) {
         return BIO_CHECK_PT_FAIL;
     }
+
     QuotaHolder holder = { req.nid, req.cid };
     std::string innerKey = "RollbackCacheQuota";
     BIO_TRACE_START(MIRROR_TRACE_QOS_ROLLBACK);
@@ -315,7 +339,7 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
     uint32_t index = 0;
     for (auto &nodeEntry : nodeView) {
-        if ((bar--) != 0) { // Skip the obtained node
+        if ((bar--) != 0) {
             continue;
         }
         if (index == CLUSTER_NODE_SIZE) {
@@ -323,7 +347,12 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
         }
         rsp.desc[index].groupId = nodeEntry.second.id.GroupId();
         rsp.desc[index].nodeId = nodeEntry.second.id.VNodeId();
-        strncpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        int32_t ret =
+                strncpy_s(rsp.desc[index].ip, IP_MAX_SIZE, nodeEntry.second.ip.c_str(), nodeEntry.second.ip.size());
+        if (ret != BIO_OK) {
+            LOG_ERROR("strncpy_s faild, ret:"<< ret << ".");
+            return;
+        }
         rsp.desc[index].port = nodeEntry.second.port;
         rsp.desc[index].status = static_cast<uint16_t>(nodeEntry.second.status);
         rsp.desc[index].num = nodeEntry.second.disks.size();
@@ -343,8 +372,7 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
     uint32_t index = 0;
     for (auto &ptEntry : ptView) {
-        if (bar != 0) { // Skip the obtained pt
-            bar--;
+        if ((bar--) != 0) {
             continue;
         }
         if (index == PT_SIZE) {
@@ -372,8 +400,9 @@ BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo>
 {
     BResult ret = BIO_OK;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        ChkTrue(lMrVec[idx].size == rMrVec[idx].size, BIO_INNER_ERR, "Slice addr size not match.");
         NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
-        if (req.memFromServer) {
+        if (req.memFromServer) { // 性能考虑, 选择不同的channel进行单边读.
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
@@ -390,15 +419,19 @@ BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo>
 BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec,
     std::vector<NetMrInfo> &rMrVec, ServiceContext &netCtx)
 {
+    // 当前版本该场景的远端MrVec的size必须为1.
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Slice addr num not match, rAddrNum:" << rMrVec.size() << ".");
-    BResult ret = BIO_OK;
     uintptr_t rMrAddr = rMrVec[0].address;
     uint32_t rMrKey = rMrVec[0].key;
+    uint64_t totalSize = 0;
+
+    BResult ret = BIO_OK;
     uint64_t off = 0;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         rMrAddr += off;
+        ChkTrue((lMrVec[idx].size + off) <= rMrVec[idx].size, BIO_INNER_ERR, "lSlice size exceeds rSlice size.");
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
-        if (req.memFromServer) {
+        if (req.memFromServer) { // 性能考虑, 选择不同的channel进行单边读.
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(netCtx.Channel(), wReq);
@@ -461,7 +494,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
 
     auto reader = [&req, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) {
-            return BIO_OK; // read local
+            return BIO_OK;
         } else {
             return ReaderRemote(from, to, req, netCtx);
         }
@@ -481,7 +514,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
         CacheOverloadCtrl::Instance().ReleaseQuota(req.key, holder, req.length, 0);
         BIO_TRACE_END(MIRROR_TRACE_QOS_RELEASE, BIO_OK);
     }
-    ioStrategy = static_cast<uint32_t>(attr.ioStrategy); // 修改sdk端IO写策略
+    ioStrategy = static_cast<uint32_t>(attr.ioStrategy); // 矫正sdk端IO写策略
     return ret;
 }
 
@@ -509,8 +542,8 @@ BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &
         }
     } else if (type == FLOW_DISK) {
         char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, from->GetLength()));
-        ChkTrueNot(value != nullptr, BIO_ALLOC_FAIL);
-        auto ret = mSliceOp.Copy(from, value);
+        ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory failed, length:" << from->GetLength() << ".");
+        auto ret = mSliceOp.Copy(from, value, from->GetLength());
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Slice copy failed, ret:" << ret << ".");
             free(value);
@@ -523,6 +556,7 @@ BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &
         LOG_ERROR("Slice type is invalid, type:" << type << ".");
     }
 
+    // 将地址带回到SDK端.
     ChkTrue(lMrVec.size() <= SLICE_ADDR_SIZE, BIO_INNER_ERR, "Local mr size exceed 4, size:" << lMrVec.size() << ".");
     rsp.num = lMrVec.size();
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
@@ -552,7 +586,7 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
         LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
         return ret;
     }
-    ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address));
+    ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address), totalLen);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
         BioServer::Instance()->MemFree(bioMr.address);
@@ -575,7 +609,7 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
             BioServer::Instance()->GetNetEngine()->GetAddressOffset(static_cast<uint64_t>(lMrVec[idx].address));
         rsp.addrLen[idx] = lMrVec[idx].size;
     }
-    if (isAlloc == true) {
+    if (isAlloc) {
         InsertMemFreeHolder(req.comm.srcNid, req.comm.pid, lMrVec, 0);
     }
     return BIO_OK;
@@ -587,10 +621,13 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
     uint32_t off = 0;
     BResult ret = BIO_OK;
-
     BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
     LVOS_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        if (UNLIKELY(lMrVec[idx].size + off) > rMrVec[0].size) {
+            ret = BIO_INNER_ERR;
+            break;
+        }
         NetRequest rReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
         uint32_t dstPid = req.isConvDeploy ? 0 : static_cast<uint32_t>(req.comm.pid); // 融合部署场景目的端PID填充0
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, dstPid, rReq);
@@ -617,7 +654,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     if (UNLIKELY(!CheckAll(req.comm))) {
         return BIO_CHECK_PT_FAIL;
     }
+
     InitGetResponse(rsp);
+    // 根据req组装slice.
     MrInfo mrInfo = { req.address, static_cast<uint32_t>(req.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr sliceP = MakeRef<RCacheSlice>(req.ptId, req.length, addrVec);
@@ -631,11 +670,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        FlowType type = from->GetFlowType();
-        LVOS_TP_START(GET_VALUE_IN_DISK, &type, FLOW_DISK);
-        LVOS_TP_END;
+        // case 1: 同节点同进程的缓存客户端读请求处理
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
-            return WriterLocalSameProcess(from, rsp, type);
+            return WriterLocalSameProcess(from, rsp, from->GetFlowType());
         }
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
@@ -644,10 +681,13 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         if (ret != BIO_OK) {
             return ret;
         }
+
+        // case 2: 同节点跨进程的缓存客户端读请求处理.
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
             return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
         }
 
+        // cse 3: 跨节点的缓存客户端读请求处理.
         return WriterRemote(isAlloc, lMrVec, rMrVec, netCtx, req);
     };
 
@@ -822,8 +862,14 @@ BResult MirrorServer::Initialize()
     return BIO_OK;
 }
 
-int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx)
+int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req)
 {
+    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
     ShmInitResponse rsp;
     auto config = mBioConfig->GetDaemonConfig();
     rsp.serverPid = getpid();
@@ -850,14 +896,15 @@ int32_t MirrorServer::HandleShmInit(ServiceContext &ctx)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
-    LVOS_TP_START(SERVER_NO_PROCESS_SHM_INIT_SKIP, 0);
+
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(ShmInitRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive shm init message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-    LVOS_TP_END;
-    return MirrorServerShmInit(ctx);
+
+    auto req = static_cast<ShmInitRequest *>(ctx.MessageData());
+    return MirrorServerShmInit(ctx, req);
 }
 
 int32_t MirrorServer::MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req)
@@ -893,30 +940,36 @@ int32_t MirrorServer::HandleQueryNodeInfo(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLocationQueryReq *req)
 {
-    CmNodeInfo nodeInfo;
-    CmNodeId id;
-    id.nodeId = req->masterPtId;
-    id.groupId = 0;
-    auto ret = BioServer::Instance()->GetNodeInfo(id, nodeInfo);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
-    }
-
+    // 1. 查询PT主节点信息.
     FileLocationQueryRsp rsp;
+    CmNodeInfo nodeInfo;
+    auto ret = BioServer::Instance()->GetNodeInfo({0, req->masterPtId}, nodeInfo);
+    if (UNLIKELY(ret != BIO_OK)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
     ret = memcpy_s(rsp.hostMaster, NODE_DESC_SIZE, nodeInfo.ip.c_str(), nodeInfo.ip.length());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Memory copy failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     rsp.hostMaster[nodeInfo.ip.length()] = '\0';
     rsp.portMaster = nodeInfo.port;
 
-    id.nodeId = req->slavePtId;
-    id.groupId = 0;
-    ret = BioServer::Instance()->GetNodeInfo(id, nodeInfo);
+    // 2. 查询PT备节点信息.
+    ret = BioServer::Instance()->GetNodeInfo({0, req->slavePtId}, nodeInfo);
     if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
     }
-
     ret = memcpy_s(rsp.hostSlave, NODE_DESC_SIZE, nodeInfo.ip.c_str(), nodeInfo.ip.length());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Memory copy failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
+    rsp.hostSlave[nodeInfo.ip.length()] = '\0';
     rsp.portSlave = nodeInfo.port;
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(FileLocationQueryRsp));
@@ -945,7 +998,7 @@ int32_t MirrorServer::MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequ
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
 
     QueryQuotaResponse rsp;
@@ -956,32 +1009,24 @@ int32_t MirrorServer::MirrorServerQueryQuota(ServiceContext &ctx, QueryQuotaRequ
 
 int32_t MirrorServer::MirrorServerAllocQuota(ServiceContext &ctx, AllocQuotaRequest *req)
 {
-    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
-        LOG_ERROR("Check message magic failed.");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
-    }
-    if (req->allocQuota > NO_1024 * IO_SIZE_1M) {
-        LOG_ERROR("Invalid allocQuota :" << req->allocQuota << ".");
-        return BIO_INVALID_PARAM;
-    }
     AllocQuotaResponse rsp;
     auto ret = AllocCacheQuota(*req, rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        rsp.exceptQuota = 0;
+    }
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &rsp, sizeof(AllocQuotaResponse));
     return BIO_OK;
 }
 
 int32_t MirrorServer::MirrorServerFreeQuota(ServiceContext &ctx, FreeQuotaRequest *req)
 {
-    if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
-        LOG_ERROR("Check message magic failed.");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
-    }
+    // 限制单次最大释放quota的大小为1GB
     if (req->quota > NO_1024 * IO_SIZE_1M) {
-        LOG_ERROR("Invalid free Quota :" << req->quota << ".");
-        return BIO_INVALID_PARAM;
+        LOG_ERROR("Invalid free quota size:" << req->quota << ", cid:" << req->cid << ", nid:" << req->nid);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
+        return BIO_OK;
     }
+
     auto ret = FreeCacheQuota(*req);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &ret, sizeof(BResult));
     return BIO_OK;
@@ -992,7 +1037,7 @@ int32_t MirrorServer::MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeVi
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
 
     QueryNodeViewResponse rsp;
@@ -1069,29 +1114,14 @@ int32_t MirrorServer::HandleQueryNodeView(ServiceContext &ctx)
     return MirrorServerQueryNodeView(ctx, req);
 }
 
-bool MirrorServer::CheckQueryPtViewReq(QueryPtViewRequest *req)
-{
-    uint64_t curPtTimes = 0;
-    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&curPtTimes);
-    if (req->bar > ptView.size()) {
-        LOG_ERROR("bar:" << req->bar << ", pt view size:" << ptView.size());
-        return false;
-    }
-    return true;
-}
-
 int32_t MirrorServer::MirrorServerQueryPtView(ServiceContext &ctx, QueryPtViewRequest *req)
 {
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_CHECK_PT_FAIL;
+        return BIO_OK;
     }
-    if (!CheckQueryPtViewReq(req)) {
-        LOG_ERROR("Check req failed.");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_ERR;
-    }
+
     QueryPtViewResponse rsp;
     QueryPtView(*req, rsp);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(QueryPtViewResponse));
@@ -1118,10 +1148,7 @@ int32_t MirrorServer::HandleQueryPtView(ServiceContext &ctx)
 
 BResult MirrorServer::GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset)
 {
-    auto ret = SendFlowGetEvictOffset(ptId, flowId, flowOffset);
-    ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << ptId);
-    LOG_TRACE("Slave:get flow evict offset, ptId:" << ptId << ", flowId:" << flowId << ", flowOffset:" << flowOffset);
-    return BIO_OK;
+    return SendFlowGetEvictOffset(ptId, flowId, flowOffset);
 }
 
 BResult MirrorServer::GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset)
@@ -1131,11 +1158,8 @@ BResult MirrorServer::GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset)
     BIO_TRACE_END(MIRROR_TRACE_GET_EVICT_OFFSET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_WARN("Get evict offset failed:" << ret << ", ptId:" << req.comm.ptId << ", flowId:" << req.flowId);
-        return ret;
     }
-    LOG_DEBUG("Master get evict offset, ptId:" << req.comm.ptId << ", flowId:" << req.flowId << ", flowOffset:" <<
-        flowOffset);
-    return BIO_OK;
+    return ret;
 }
 
 BResult MirrorServer::SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset)
@@ -1154,7 +1178,6 @@ BResult MirrorServer::SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uin
         BIO_OP_SERVER_GET_EVICT_OFFSET, req, flowOffset);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Send get evict offset failed:" << ret << ", ptId:" << ptId << ", version:" << cache.version);
-        return ret;
     }
     return ret;
 }
@@ -1168,14 +1191,17 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
         return false;
     }
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     if (req->length == 0 || req->length > BIO_IO_MAX_LEN) {
         return false;
     }
+    if (req->ioStrategy > WRITE_UNDERFS_BACK) {
+        return false;
+    }
 
-    if (req->memFromServer != true) {
+    if (!req->memFromServer) { // case 1: slice资源来自于SDK端, 则校验MR有效, sliceLen为0
         if (req->sliceLen != 0) {
             return false;
         }
@@ -1185,7 +1211,7 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
         if (req->mrAddress == 0) {
             return false;
         }
-    } else {
+    } else { // case2: slice资源来自于Server端, 则校验MR无效, sliceLen不为0
         if (req->sliceLen == 0) {
             return false;
         }
@@ -1193,16 +1219,13 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
             return false;
         }
     }
-    if (req->ioStrategy > WRITE_UNDERFS_BACK) {
-        return false;
-    }
     return true;
 }
 
 bool MirrorServer::IsValidSliceAddress(WCacheSlicePtr &sliceP)
 {
-    auto addrs = sliceP->GetAddrs();
-    for (auto addr : addrs) {
+    auto addrVec = sliceP->GetAddrs();
+    for (auto addr : addrVec) {
         auto beginAddr = addr.chunkId + addr.chunkOffset;
         auto endAddr = beginAddr + addr.chunkLen;
         if (!BioServer::Instance()->GetNetEngine()->IsValidAddress(beginAddr, endAddr)) {
@@ -1214,12 +1237,13 @@ bool MirrorServer::IsValidSliceAddress(WCacheSlicePtr &sliceP)
 
 int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 {
-    if (!CheckPutReq(req)) {
+    if (!CheckPutReq(req)) { // 检查Put请求各个参数的合法性
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
+
     WCacheSlicePtr sliceP = nullptr;
-    if (req->sliceLen == 0) {
+    if (req->sliceLen == 0) { // case 1：slice资源来自于SDK端, 使用req中的MR信息
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         LVOS_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
@@ -1231,15 +1255,11 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             return BIO_OK;
         }
         sliceP->SetDataCrc(req->dataCrc);
-    } else {
-        LVOS_TP_START(MIRROR_SERVER_PUT_PASS_MESSAGE_CHECK, 0);
+    } else { // case 2：slice资源来自于Server端, 使用req中的slice buffer信息
         if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest) + req->sliceLen)) {
-            LOG_ERROR("Invalid param message data length: " << ctx.MessageDataLen() <<
-                ", param data length:" << sizeof(PutRequest) + req->sliceLen);
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
             return BIO_OK;
         }
-        LVOS_TP_END;
         LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
         LVOS_TP_END;
@@ -1254,18 +1274,13 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
             return BIO_OK;
         }
-
-        LVOS_TP_START(MIRROR_SERVER_PUT_SLICE_IS_LOCAL_NID, &(req->comm.srcNid),
-            (BioServer::Instance()->GetLocalNid().VNodeId()));
-        LVOS_TP_END;
+        // 校验slice buffer反序列化后的slice中的地址有效性
         if (static_cast<uint16_t>(req->comm.srcNid) == BioServer::Instance()->GetLocalNid().VNodeId()) {
             if (!IsValidSliceAddress(sliceP)) {
-                LOG_ERROR("Invalid slice address.");
                 BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
                 return BIO_OK;
             }
         }
-
         sliceP->SetDataCrc(req->dataCrc);
     }
 
@@ -1303,18 +1318,19 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 bool MirrorServer::CheckGetReq(GetRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     if (req->offset > BIO_IO_MAX_LEN || req->length == 0 || req->length > BIO_IO_MAX_LEN) {
         return false;
     }
-
     if (req->offset + req->length > BIO_IO_MAX_LEN) {
         return false;
     }
-
     if (req->size == 0 || req->size > BIO_IO_MAX_LEN) {
+        return false;
+    }
+    if (req->ptId > NO_8192) {
         return false;
     }
     return true;
@@ -1326,6 +1342,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
+
     GetResponse rsp;
     BResult result;
     LVOS_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
@@ -1360,7 +1377,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.empty()) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1368,12 +1385,12 @@ bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
 
 int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)
 {
-    bool checkflag = CheckDeleteReq(req);
-    if (!checkflag) {
-        BResult result = BIO_INVALID_PARAM;
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, static_cast<void *>(&result),
-            sizeof(BResult));
+    if (!CheckDeleteReq(req)) {
+        LOG_ERROR("Mirror server check delete request failed.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
     }
+
     BResult result;
     LVOS_TP_START(MIRROR_SERVER_HDL_DELETE_FAIL, &result, BIO_INNER_RETRY);
     result = Delete(*req);
@@ -1402,7 +1419,7 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
 bool MirrorServer::CheckStatReq(StatRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1414,6 +1431,7 @@ int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
+
     ObjStat objInfo;
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
@@ -1447,7 +1465,11 @@ int32_t MirrorServer::HandleStat(ServiceContext &ctx)
 
 bool MirrorServer::CheckListReq(ListRequest *req)
 {
-    if (req->size !=sizeof(ObjStat) * 1000U && req->size != 0) {
+    if (req->size != (sizeof(ObjStat) * 1000U) && req->size != 0) {
+        return false;
+    }
+    std::string prefix(req->prefix);
+    if ((prefix.size() == 0) || (prefix[0] == '/') || prefix.find("..") != std::string::npos) {
         return false;
     }
     return true;
@@ -1459,6 +1481,7 @@ int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
         return BIO_OK;
     }
+
     std::unordered_map<std::string, ObjStat> objs;
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_LIST_FAIL, &ret, BIO_INNER_RETRY);
@@ -1497,7 +1520,7 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
 bool MirrorServer::CheckLoadReq(LoadRequest *req)
 {
     std::string key(req->key);
-    if (key.find("..") != std::string::npos) {
+    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
     }
     if (req->offset != 0) {
@@ -1515,6 +1538,7 @@ int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
+
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
     ret = Load(*req);
@@ -1542,15 +1566,18 @@ int32_t MirrorServer::HandleLoad(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req)
 {
+    static uint64_t defaultMaxFlowNum = NO_256 * NO_8192; // 默认Flow的规格为256*8K个.
     if (UNLIKELY(req->comm.magic != MESSAGE_MAGIC)) {
         LOG_ERROR("Check message magic failed.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
     }
-    if (flowNum.load() > NO_32 * NO_1000 * NO_8) {
+    if (flowNum.load() > defaultMaxFlowNum) {
+        LOG_ERROR("Exceeding the specification limit of the flow, limit:" << defaultMaxFlowNum << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
+
     BResult result;
     uint64_t flowId = UINT64_MAX;
     BIO_TRACE_START(MIRROR_TRACE_CREATE_FLOW);
@@ -1573,6 +1600,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
     }
     BIO_TRACE_END(MIRROR_TRACE_CREATE_FLOW, BIO_OK);
     flowNum++;
+
     CreateFlowResponse rsp{ flowId, req->isDegrade };
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
     return BIO_OK;
@@ -1607,6 +1635,8 @@ int32_t MirrorServer::MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRe
     BIO_TRACE_END(MIRROR_TRACE_DESTROY_FLOW, result);
     if (UNLIKELY(result != BIO_OK)) {
         LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
+    } else {
+        flowNum--;
     }
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&req->flowId), sizeof(uint64_t));
@@ -1637,6 +1667,11 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
         return BIO_OK;
     }
 
+    if (!CheckGetSliceReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
+
     WCacheSlicePtr sliceP = nullptr;
     BResult ret = GetSlice(req->flowId, req->flowOffset, req->flowIndex, req->length, sliceP);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -1644,6 +1679,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
     }
+
     uint64_t sliceLen = sliceP->GetSerializeLen();
     uint8_t *tmp = nullptr;
     LVOS_TP_START(GET_SLICE_ALLOC_FAIL, &tmp, nullptr);
@@ -1657,10 +1693,11 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     auto rsp = static_cast<GetSliceResponse *>(static_cast<void *>(tmp));
 
     std::vector<FlowAddr> addrVec = sliceP->GetAddrs();
-    if (addrVec.size() > SLICE_ADDR_MAX_SIZE) {
-        LOG_ERROR("Slice addr num " << addrVec.size() << " exceed " << SLICE_ADDR_MAX_SIZE << ".");
+    if (addrVec.size() > SLICE_ADDR_MAX_SIZE) { // 限制最大获取64M.
+        LOG_ERROR("Get slice num " << addrVec.size() << " exceed " << SLICE_ADDR_MAX_SIZE << ".");
         delete[] tmp;
-        return static_cast<int32_t>(BIO_INNER_ERR);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_INNER_ERR;
     }
     rsp->addrNum = addrVec.size();
     for (uint32_t i = 0; i < addrVec.size(); i++) {
@@ -1674,7 +1711,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
     uint64_t outSliceLen = 0;
     ret = sliceP->Serialize(rsp->sliceBuf, rsp->sliceLen, outSliceLen);
     if (ret != BIO_OK) {
-        LOG_ERROR("Serialize slice failed, ret " << ret);
+        delete[] tmp;
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
@@ -1691,7 +1728,7 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
 bool MirrorServer::CheckGetSliceReq(GetSliceRequest *req)
 {
     if (req->length > IO_SIZE_64M) {
-        LOG_ERROR("get slice length too long, length:" << req->length);
+        LOG_ERROR("get slice length too long, length:" << req->length << ".");
         return false;
     }
     return true;
@@ -1711,10 +1748,6 @@ int32_t MirrorServer::HandleGetSlice(ServiceContext &ctx)
     }
 
     auto req = static_cast<GetSliceRequest *>(ctx.MessageData());
-    if (!CheckGetSliceReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
     return MirrorServerGetSlice(ctx, req);
 }
 
@@ -1786,8 +1819,7 @@ int32_t MirrorServer::HandleGetEvictOffset(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req)
 {
-    if (req->num > SLICE_ADDR_SIZE) {
-        LOG_ERROR("Invalid param num: " << req->num << ".");
+    if (!CheckFreeMemReq(req)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
@@ -1796,7 +1828,8 @@ int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *r
         auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[idx], 0);
         BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(addr));
     }
-    RemoveMemFreeHolder(req->comm.srcNid, req->comm.pid, false, req->memFreeType);
+    auto addr = BioServer::Instance()->GetNetEngine()->GetShmAddress(req->addr[0], 0);
+    RemoveMemFreeHolder(req->comm.srcNid, req->comm.pid, req->memFreeType, reinterpret_cast<uintptr_t>(addr));
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, nullptr, 0);
     return BIO_OK;
@@ -1838,15 +1871,16 @@ int32_t MirrorServer::HandleFreeMem(ServiceContext &ctx)
     req->comm.magic = NO_1;
 #endif
 
-    if (!CheckFreeMemReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
     return MirrorServerFreeMem(ctx, req);
 }
 
 int32_t MirrorServer::MirrorServerNotifyUpdate(ServiceContext &ctx, NotifyUpdateRequest *req)
 {
+    if (!CheckNotifyUpdateReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
+
     auto ret = NotifyUpdate(*req);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
     return BIO_OK;
@@ -1871,15 +1905,16 @@ int32_t MirrorServer::HandleNotifyUpdate(ServiceContext &ctx)
     }
 
     auto req = static_cast<NotifyUpdateRequest *>(ctx.MessageData());
-    if (!CheckNotifyUpdateReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
     return MirrorServerNotifyUpdate(ctx, req);
 }
 
 int32_t MirrorServer::MirrorServerCheckUpdateReady(ServiceContext &ctx, CheckUpdateReadyRequest *req)
 {
+    if (!CheckUpdateReadyReq(req)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     CheckUpdateReadyResponse rsp;
     auto ret = CheckUpdateReady(*req, rsp);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(CheckUpdateReadyResponse));
@@ -1905,10 +1940,6 @@ int32_t MirrorServer::HandleCheckUpdateReady(ServiceContext &ctx)
     }
 
     auto req = static_cast<CheckUpdateReadyRequest *>(ctx.MessageData());
-    if (!CheckUpdateReadyReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
     return MirrorServerCheckUpdateReady(ctx, req);
 }
 
@@ -1958,48 +1989,69 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
     }
 
     GetUnderFsConfigResponse rsp;
-
     std::shared_ptr<UnderFsConfig> underFsConfig = UnderFsConfig::Instance();
-    if (!underFsConfig) {
+    if (underFsConfig == nullptr) {
         LOG_ERROR("Mirror server get underfs config failed.");
-        return BIO_ALLOC_FAIL;
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        return BIO_OK;
     }
+
     BioConfig::UnderFsConfig config = underFsConfig->GetUnderFsConfig();
+    int32_t ret = BIO_INNER_ERR;
+    do {
+        ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.underFsType[config.underFsType.size()] = '\0';
 
-    int32_t ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.underFsType[config.underFsType.size()] = '\0';
+        ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE, config.hdfsConfig.nameNode.c_str(),
+            config.hdfsConfig.nameNode.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.hdfsConfig.nameNode[config.hdfsConfig.nameNode.size()] = '\0';
 
-    ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE, config.hdfsConfig.nameNode.c_str(),
-        config.hdfsConfig.nameNode.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.hdfsConfig.nameNode[config.hdfsConfig.nameNode.size()] = '\0';
+        ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE, config.hdfsConfig.workingPath.c_str(),
+                       config.hdfsConfig.workingPath.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
 
-    ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE, config.hdfsConfig.workingPath.c_str(),
-        config.hdfsConfig.workingPath.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
+        ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE, config.cephConfig.user.c_str(),
+                       config.cephConfig.user.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.user[config.cephConfig.user.size()] = '\0';
 
-    ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE, config.cephConfig.user.c_str(), config.cephConfig.user.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.user[config.cephConfig.user.size()] = '\0';
+        ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE, config.cephConfig.cfgPath.c_str(),
+                       config.cephConfig.cfgPath.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.cfgPath[config.cephConfig.cfgPath.size()] = '\0';
 
-    ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE, config.cephConfig.cfgPath.c_str(),
-        config.cephConfig.cfgPath.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.cfgPath[config.cephConfig.cfgPath.size()] = '\0';
+        ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE, config.cephConfig.cluster.c_str(),
+                       config.cephConfig.cluster.size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.cluster[config.cephConfig.cluster.size()] = '\0';
 
-    ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE, config.cephConfig.cluster.c_str(),
-        config.cephConfig.cluster.size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.cluster[config.cephConfig.cluster.size()] = '\0';
-
-    ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE, config.cephConfig.pools.at(0).c_str(),
-        config.cephConfig.pools.at(0).size());
-    ChkTrue(ret == BIO_OK, ret, "Memory copy failed.");
-    rsp.cephConfig.pool[config.cephConfig.pools.at(0).size()] = '\0';
-
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(GetUnderFsConfigResponse));
+        ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE, config.cephConfig.pools.at(0).c_str(),
+                       config.cephConfig.pools.at(0).size());
+        if (UNLIKELY(ret != BIO_OK)) {
+            break;
+        }
+        rsp.cephConfig.pool[config.cephConfig.pools.at(0).size()] = '\0';
+    } while (false);
+    if (ret != BIO_OK) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+    } else {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(GetUnderFsConfigResponse));
+    }
     return BIO_OK;
 }
 
@@ -2044,7 +2096,8 @@ int32_t MirrorServer::MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegot
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-    EvictNegotiateResponse rsp;
+
+    EvictNegotiateResponse rsp = { false };
     std::vector<bool> result(req->count);
     auto ret = Cache::Instance().EvictNegotiate(req->flowId, req->data, result, req->count);
     if (ret == BIO_OK) {
@@ -2058,51 +2111,73 @@ int32_t MirrorServer::MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegot
 
 void MirrorServer::InsertMemFreeHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo> lMrVec, uint8_t type)
 {
-    MemFreeHolder holder = { nodeId, clientId };
+    MemFreeHolder holder = {nodeId, clientId};
+    std::vector<std::vector<NetMrInfo>> lMrVecs;
     if (type == 0) {
         WriteLocker<ReadWriteLock> lock(&mLock);
-        mHolders.emplace(holder, lMrVec);
+        InsertMemFreeHolderImpl(holder, mHolders, lMrVec);
     } else if (type == 1) {
         WriteLocker<ReadWriteLock> lock(&mLockList);
-        mHoldersList.emplace(holder, lMrVec);
+        InsertMemFreeHolderImpl(holder, mHoldersList, lMrVec);
     }
 }
 
-void MirrorServer::RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, bool flag, uint8_t type)
+void MirrorServer::InsertMemFreeHolderImpl(MemFreeHolder holder, std::unordered_map<MemFreeHolder,
+    std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual> &freeMap,
+    std::vector<NetMrInfo> lMrVec)
+{
+    std::vector<std::vector<NetMrInfo>> lMrVecs;
+    auto iter = freeMap.find(holder);
+    if (iter != freeMap.end()) {
+        lMrVecs = iter->second;
+    }
+    lMrVecs.push_back(lMrVec);
+    freeMap.emplace(holder, lMrVecs);
+}
+
+void MirrorServer::RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, uint8_t type, uintptr_t addr)
 {
     nodeId = (nodeId == NO_1024) ? BioServer::Instance()->GetLocalNid().VNodeId() : nodeId;
     MemFreeHolder holder = {nodeId, clientId};
     if (type == 0) {
         WriteLocker<ReadWriteLock> lock(&mLock);
-        auto iter = mHolders.find(holder);
-        if (iter == mHolders.end()) {
-            return;
-        }
-
-        if (flag) {
-            std::vector<NetMrInfo> lMrVec = iter->second;
-            for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
-                BioServer::Instance()->GetNetEngine()->
-                    FreeLocalMrSingle(reinterpret_cast<uintptr_t>(lMrVec[idx].address));
-            }
-            LOG_DEBUG("Free getFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
-        }
-        mHolders.erase(iter);
+        RemoveMemFreeHolderImpl(holder, mHolders, addr);
     } else if (type == 1) {
         WriteLocker<ReadWriteLock> lock(&mLockList);
-        auto iter = mHoldersList.find(holder);
-        if (iter == mHoldersList.end()) {
-            return;
-        }
-
-        if (flag) {
-            std::vector<NetMrInfo> lMrVec = iter->second;
-            for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
-                BioServer::Instance()->GetNetEngine()->
-                    FreeLocalMrSingle(reinterpret_cast<uintptr_t>(lMrVec[idx].address));
-            }
-            LOG_DEBUG("Free listFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
-        }
-        mHoldersList.erase(iter);
+        RemoveMemFreeHolderImpl(holder, mHoldersList, addr);
     }
 }
+
+void MirrorServer::RemoveMemFreeHolderImpl(MemFreeHolder holder, std::unordered_map<MemFreeHolder,
+    std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual> &freeMap, uintptr_t addr)
+{
+    auto iter = freeMap.find(holder);
+    if (iter == freeMap.end()) {
+        LOG_INFO("Not found holder from memFreeMap, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+        return;
+    }
+
+    std::vector<std::vector<NetMrInfo>> lMrVecs = iter->second;
+    std::vector<NetMrInfo> lMrVec;
+    if (addr == 0) {
+        for (uint32_t idx = 0; idx < lMrVecs.size(); idx++) {
+            lMrVec = lMrVecs[idx];
+            for (uint32_t idy = 0; idy < lMrVec.size(); idy++) {
+                BioServer::Instance()->GetNetEngine()->FreeLocalMrSingle(lMrVec[idy].address);
+            }
+        }
+        LOG_DEBUG("Free getFreeMap address success, holder: " << holder.nodeId << "-" << holder.clientId << ".");
+        freeMap.erase(iter);
+    } else {
+        for (uint32_t idx = 0; idx < lMrVecs.size(); idx++) {
+            lMrVec = lMrVecs[idx];
+            if (lMrVec.size() == 0 || lMrVec[0].address != addr) {
+                continue;
+            }
+            lMrVecs.erase(lMrVecs.begin() + idx);
+            freeMap.emplace(holder, lMrVecs);
+            break;
+        }
+    }
+}
+

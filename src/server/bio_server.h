@@ -289,6 +289,9 @@ public:
 
     inline BResult MemAlloc(uint64_t size, NetMrInfo &mr)
     {
+        if (size > mNetEngine->GetDataPage()) {
+            return BIO_ALLOC_FAIL;
+        }
         auto ret = mNetEngine->AllocLocalMrSingle(mr.address, mr.key);
         mr.size = size;
         return ret;
