@@ -530,32 +530,19 @@ void MirrorServer::InitGetResponse(GetResponse &rsp)
     rsp.realLen = 0;
 }
 
-BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp, FlowType type)
+BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp)
 {
-    rsp.isAlloc = false;
     std::vector<NetMrInfo> lMrVec;
-    if (type == FLOW_MEMORY) {
-        for (auto addr : from->GetAddrs()) {
-            MrInfo mr{};
-            addr.ToMrInfo(mr);
-            lMrVec.emplace_back(NetMrInfo(mr.address, mr.size, 0));
-        }
-    } else if (type == FLOW_DISK) {
-        char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, from->GetLength()));
-        ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory failed, length:" << from->GetLength() << ".");
-        auto ret = mSliceOp.Copy(from, value, from->GetLength());
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Slice copy failed, ret:" << ret << ".");
-            free(value);
-            return ret;
-        }
-        lMrVec.emplace_back(NetMrInfo(reinterpret_cast<uint64_t>(value), from->GetLength(), 0));
-        rsp.isAlloc = true;
-    } else {
-        return BIO_INVALID_PARAM;
-        LOG_ERROR("Slice type is invalid, type:" << type << ".");
+    char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, from->GetLength()));
+    ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory failed, length:" << from->GetLength() << ".");
+    auto ret = mSliceOp.Copy(from, value, from->GetLength());
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+        free(value);
+        return ret;
     }
-
+    lMrVec.emplace_back(NetMrInfo(reinterpret_cast<uint64_t>(value), from->GetLength(), 0));
+    rsp.isAlloc = true;
     // 将地址带回到SDK端.
     ChkTrue(lMrVec.size() <= SLICE_ADDR_SIZE, BIO_INNER_ERR, "Local mr size exceed 4, size:" << lMrVec.size() << ".");
     rsp.num = lMrVec.size();
@@ -671,8 +658,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         // case 1: 同节点同进程的缓存客户端读请求处理
+        rsp.isAlloc = false;
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
-            return WriterLocalSameProcess(from, rsp, from->GetFlowType());
+            return WriterLocalSameProcess(from, rsp);
         }
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
