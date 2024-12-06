@@ -88,7 +88,13 @@ BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
         if (mPtInfos.find(ptFinish[index].ptId) == mPtInfos.end()) {
             continue;
         }
-        ptList[num].birthVersion = ptFinish[index].version - mPtInfos[ptFinish[index].ptId].referNum;
+        uint64_t referNum = mPtInfos[ptFinish[index].ptId].referNum;
+        if (ptFinish[index].version < referNum) {
+            LOG_ERROR("Pt version incorrect, version " << ptFinish[index].version << " referNum " << referNum);
+            delete[] ptList;
+            return BIO_ERR;
+        }
+        ptList[num].birthVersion = ptFinish[index].version - referNum;
         ptList[num].ptId = ptFinish[index].ptId;
         num++;
     }
@@ -271,16 +277,19 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 
         for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
             uint16_t vIdx = idx;
-            if (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
-                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT) {
+            if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
                 vIdx = idx + ptList->maxCopyNum;
             }
-            if (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
-                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT) {
+            if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
                 LOG_ERROR("Impossible, ptId:" << ptList->ptEntryList[index].ptId);
                 return -1;
             }
 
+            if (vIdx >= PT_MAX_COPY_INDEX) {
+                return -1;
+            }
             copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
             copy.diskId = ptList->ptEntryList[index].copyList[vIdx].diskId;
             copy.state = s_copystate[ptList->ptEntryList[index].copyList[vIdx].state];

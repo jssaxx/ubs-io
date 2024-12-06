@@ -13,7 +13,7 @@ namespace bio {
 class SliceOperator {
     virtual BResult Copy(const SlicePtr &from, const SlicePtr &to) = 0;
     virtual BResult Copy(const char *from, const SlicePtr &to) = 0;
-    virtual BResult Copy(const SlicePtr &from, char *to) = 0;
+    virtual BResult Copy(const SlicePtr &from, char *to, uint32_t toLen) = 0;
     virtual BResult Copy(const char *from, uint64_t start, uint32_t len, const SlicePtr &to) = 0;
     virtual BResult GetSliceFromSliceIO(SlicePtr &partialSlice, const SlicePtr &WholeSlice, uint64_t offset,
         uint64_t length) = 0;

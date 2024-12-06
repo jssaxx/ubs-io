@@ -110,15 +110,19 @@ public:
         auto iter = mHolders.find(holder);
         if (UNLIKELY(iter == mHolders.end())) {
             uint64_t size = mHolders.size();
-            LVOS_TP_START(QUOTA_HOLDER_SIZE_MAX, &size, 65535);
+            LVOS_TP_START(QUOTA_HOLDER_SIZE_MAX, &size, (NO_8192 * NO_256 + 1));
             LVOS_TP_END;
-            if (size > MAX_HOLDER_SIZE) {
+            if (size > MAX_HOLDER_SIZE) { // 限制quota的最大holder数量为8192*256个.
                 LOG_WARN("Quota holder is oversize , holder:" << holder.nodeId << "-" << holder.clientId << ".");
                 return BIO_QUOTA_NOT_ENOUGH;
             }
             mHolders.emplace(holder, allocSize);
             iter = mHolders.find(holder);
         } else {
+            if (UINT64_MAX - iter->second < allocSize) {
+                LOG_WARN("Alloc is over uint max , holder:" << holder.nodeId << "-" << holder.clientId << ".");
+                return BIO_QUOTA_NOT_ENOUGH;
+            }
             iter->second += allocSize;
         }
         // 计算下次申请的期望预期配额资源大小.
@@ -145,6 +149,10 @@ public:
     void FreeQuota(uint64_t size, uint32_t proc)
     {
         WriteLocker<ReadWriteLock> lock(&mLock);
+        if (UINT64_MAX - mWriteQuota < size) {
+            LOG_WARN("free size incorrect , add mWriteQuota over uint64 max.");
+            return;
+        }
         mWriteQuota += size;
         mWriteQuota = std::min(mWriteQuota, mLimitWriteQuota);
         LOG_DEBUG("Free quota success, size:" << size << ", remain quota:" << mWriteQuota << ", proc:" << proc << ".");
@@ -196,7 +204,7 @@ private:
     uint64_t mWriteQuota = 0;
     ReadWriteLock mLock;
     std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> mHolders;
-    uint64_t MAX_HOLDER_SIZE = NO_4096;
+    uint64_t MAX_HOLDER_SIZE = NO_8192 * NO_256;
 
     // overload ctrl
     std::atomic<uint64_t> mAdjustWQuota;

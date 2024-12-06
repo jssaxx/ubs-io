@@ -50,7 +50,7 @@ void BioConfig::LoadDefaultConf()
 
     /* load cluster manager config */
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_2, NO_256));
-    AddIntConf(CM_COPY_NUM, VIntRange::Create(CM_COPY_NUM.first, NO_2, NO_3));
+    AddIntConf(CM_COPY_NUM, VStrEnum::Create(CM_COPY_NUM.first, "2"));
     AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
     AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_600));
@@ -124,6 +124,18 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     mNetConfig.tlsServerKeyPassPath = conf->GetStr(NET_TLS_SERVER_KEY_PASS_PATH.first);
     mNetConfig.hseKfsMasterPath = conf->GetStr(NET_HESC_SERVER_KFS_MASTER_PATH.first);
     mNetConfig.hseKfsStandbyPath = conf->GetStr(NET_HESC_SERVER_KFS_STANDBY_PATH.first);
+    if (mNetConfig.enableTls) {
+        bool checkCaPath = FileUtil::CanonicalPath(mNetConfig.tlsCaCertPath)
+                           && FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath)
+                           && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath)
+                           && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPassPath)
+                           && FileUtil::CanonicalPath(mNetConfig.hseKfsMasterPath)
+                           && FileUtil::CanonicalPath(mNetConfig.hseKfsStandbyPath);
+        if (!checkCaPath) {
+            LOG_ERROR("Invalid ca path .");
+            return BIO_ERR;
+        }
+    }
 
     std::string protocol = conf->GetStr(NET_DATA_PROTOCOL.first);
     if (protocol == "rdma") {

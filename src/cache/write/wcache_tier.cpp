@@ -51,6 +51,10 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
 {
     // fill meta flow.
     BResult res;
+    if (slice->GetIndexInFlow() != 0 && UINT64_MAX / slice->GetIndexInFlow() < sizeof(WFlowSliceMeta)) {
+        LOG_ERROR("Index in flow error " << slice->GetIndexInFlow() << ", flow meta size:" << sizeof(WFlowSliceMeta));
+        return BIO_INNER_RETRY;
+    }
     auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
     WCacheSlicePtr metaSlice;
     LVOS_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &res, BIO_INNER_RETRY);
@@ -316,6 +320,10 @@ void WCacheTier::Destroy()
 
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
 {
+    if (slice == nullptr) {
+        LOG_ERROR("slice is null.");
+        return BIO_INNER_ERR;
+    }
     auto truncateSlice = mFlowTruncateCursor->GetTruncateSlice(slice);
     if (truncateSlice == nullptr) {
         return BIO_OK;
