@@ -1560,10 +1560,14 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
     }
-    if (flowNum.load() > defaultMaxFlowNum) {
-        LOG_ERROR("Exceeding the specification limit of the flow, limit:" << defaultMaxFlowNum << ".");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
+    {
+        ReadLocker<ReadWriteLock> lock(&flowNumLock);
+        if (mflowNum > defaultMaxFlowNum) {
+            LOG_ERROR("Invalid flowNum:" << mflowNum << ",exceed the specification limit of the flow, limit:"
+                                         << defaultMaxFlowNum << ".");
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+            return BIO_OK;
+        }
     }
 
     BResult result;
@@ -1587,7 +1591,11 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
         LOG_ERROR("Invalid op type, opType:" << req->opType << ", ptId:" << req->comm.ptId << ".");
     }
     BIO_TRACE_END(MIRROR_TRACE_CREATE_FLOW, BIO_OK);
-    flowNum++;
+
+    {
+        WriteLocker<ReadWriteLock> lock(&flowNumLock);
+        mflowNum++;
+    }
 
     CreateFlowResponse rsp{ flowId, req->isDegrade };
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
@@ -1624,7 +1632,10 @@ int32_t MirrorServer::MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRe
     if (UNLIKELY(result != BIO_OK)) {
         LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
     } else {
-        flowNum--;
+        WriteLocker<ReadWriteLock> lock(&flowNumLock);
+        if (mflowNum > 0) {
+            mflowNum--;
+        };
     }
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&req->flowId), sizeof(uint64_t));
