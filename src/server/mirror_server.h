@@ -191,7 +191,8 @@ private:
     bool CheckLoadReq(LoadRequest *req);
     bool IsValidSliceAddress(WCacheSlicePtr &sliceP);
 private:
-    std::atomic<uint64_t> flowNum { 0 };
+    uint64_t mflowNum { 0 };
+    ReadWriteLock flowNumLock;
     bool mStarted = false;
     std::mutex mStartLock;
     CacheSliceOperator mSliceOp;
