@@ -423,13 +423,14 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Slice addr num not match, rAddrNum:" << rMrVec.size() << ".");
     uintptr_t rMrAddr = rMrVec[0].address;
     uint32_t rMrKey = rMrVec[0].key;
+    uint64_t remoteSize = rMrVec[0].size;
     uint64_t totalSize = 0;
 
     BResult ret = BIO_OK;
     uint64_t off = 0;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         rMrAddr += off;
-        ChkTrue((lMrVec[idx].size + off) <= rMrVec[idx].size, BIO_INNER_ERR, "lSlice size exceeds rSlice size.");
+        ChkTrue((lMrVec[idx].size + off) <= remoteSize, BIO_INNER_ERR, "lSlice size exceeds rSlice size.");
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
         if (req.memFromServer) { // 性能考虑, 选择不同的channel进行单边读.
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
