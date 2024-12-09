@@ -1420,7 +1420,7 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
         ret = StatRemote(dstNid, req, objInfo);
     }
 
-    if (objInfo.size > BIO_IO_MAX_LEN) {
+    if (ret == BIO_OK && objInfo.size > BIO_IO_MAX_LEN) {
         return BIO_INVALID_PARAM;
     }
 
