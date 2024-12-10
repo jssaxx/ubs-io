@@ -423,13 +423,14 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Slice addr num not match, rAddrNum:" << rMrVec.size() << ".");
     uintptr_t rMrAddr = rMrVec[0].address;
     uint32_t rMrKey = rMrVec[0].key;
+    uint64_t remoteSize = rMrVec[0].size;
     uint64_t totalSize = 0;
 
     BResult ret = BIO_OK;
     uint64_t off = 0;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         rMrAddr += off;
-        ChkTrue((lMrVec[idx].size + off) <= rMrVec[idx].size, BIO_INNER_ERR, "lSlice size exceeds rSlice size.");
+        ChkTrue((lMrVec[idx].size + off) <= remoteSize, BIO_INNER_ERR, "lSlice size exceeds rSlice size.");
         NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
         if (req.memFromServer) { // 性能考虑, 选择不同的channel进行单边读.
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
@@ -1560,10 +1561,14 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
         return BIO_OK;
     }
-    if (flowNum.load() > defaultMaxFlowNum) {
-        LOG_ERROR("Exceeding the specification limit of the flow, limit:" << defaultMaxFlowNum << ".");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
+    {
+        ReadLocker<ReadWriteLock> lock(&flowNumLock);
+        if (mflowNum > defaultMaxFlowNum) {
+            LOG_ERROR("Invalid flowNum:" << mflowNum << ",exceed the specification limit of the flow, limit:"
+                                         << defaultMaxFlowNum << ".");
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+            return BIO_OK;
+        }
     }
 
     BResult result;
@@ -1587,7 +1592,11 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
         LOG_ERROR("Invalid op type, opType:" << req->opType << ", ptId:" << req->comm.ptId << ".");
     }
     BIO_TRACE_END(MIRROR_TRACE_CREATE_FLOW, BIO_OK);
-    flowNum++;
+
+    {
+        WriteLocker<ReadWriteLock> lock(&flowNumLock);
+        mflowNum++;
+    }
 
     CreateFlowResponse rsp{ flowId, req->isDegrade };
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&rsp), sizeof(CreateFlowResponse));
@@ -1624,7 +1633,10 @@ int32_t MirrorServer::MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRe
     if (UNLIKELY(result != BIO_OK)) {
         LOG_ERROR("Destroy flow failed, ret:" << result << ", ptId:" << req->comm.ptId << ".");
     } else {
-        flowNum--;
+        WriteLocker<ReadWriteLock> lock(&flowNumLock);
+        if (mflowNum > 0) {
+            mflowNum--;
+        };
     }
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, result, static_cast<void *>(&req->flowId), sizeof(uint64_t));
