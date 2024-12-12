@@ -304,6 +304,23 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
             break;
         }
 
+        bool crcFlag = BioConfig::Instance()->GetDaemonConfig().enableCrc;
+        LVOS_TP_START(GET_EXTERBAL_OPEN_CRC, &crcFlag, true);
+        LVOS_TP_END;
+        if (crcFlag) {
+            uint32_t dataCrc = 0;
+            LVOS_TP_START(GET_EXTERBAL_CRC_OK, &ret, BIO_OK);
+            ret = wcSlicePtr->CalculateDataCrc(dataCrc, 0, wcSlicePtr->GetLength());
+            LVOS_TP_END;
+            if (ret != BIO_OK) {
+                LOG_ERROR("get object from underfs, calculate crc fail, ret" << ret << ".");
+                break;
+            } else {
+                wcSlicePtr->SetDataCrc(dataCrc);
+                slice->SetDataCrc(dataCrc);
+            }
+        }
+
         // 5. 根据资源来历决定是否写入到RCache.
         if (isFromRCache) {
             ret = mRCacheManager->Put(slice->GetPtId(), key, wcSlicePtr);
