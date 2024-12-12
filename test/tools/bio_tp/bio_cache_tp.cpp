@@ -150,6 +150,8 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(GET_UNDERFS_NOT_ENOUGHRESOURCE, "external get not enough resource", CommonTp::BoolValueCallback);
     LVOS_TP_REG(GET_EXTERNAL_GETUNDERFS_OK, "external get underfs ok", CommonTp::BoolValueCallback);
     LVOS_TP_REG(GET_EXTERNAL_RCACHE_MALLOC_FAIL, "external get rcache malloc fail", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(GET_EXTERBAL_OPEN_CRC, "external get open crc", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(GET_EXTERBAL_CRC_OK, "external get crc OK", CommonTp::IntValueCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -294,6 +296,8 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(GET_UNDERFS_NOT_ENOUGHRESOURCE);
     LVOS_TP_UNREG(GET_EXTERNAL_GETUNDERFS_OK);
     LVOS_TP_UNREG(GET_EXTERNAL_RCACHE_MALLOC_FAIL);
+    LVOS_TP_UNREG(GET_EXTERBAL_OPEN_CRC);
+    LVOS_TP_UNREG(GET_EXTERBAL_CRC_OK);
 }
 #else
 void tp::CacheTp::Register() noexcept {}
