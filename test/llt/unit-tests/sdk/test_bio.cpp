@@ -373,7 +373,11 @@ TEST_F(TestBio, test_bio_get_external_rcache_underfs)
     LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_EXTERBAL_OPEN_CRC", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "GET_EXTERBAL_CRC_OK", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERBAL_CRC_OK");
+    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERBAL_OPEN_CRC");
     LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
