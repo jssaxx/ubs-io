@@ -310,7 +310,7 @@ BResult HdfsSystem::Stat(const char *key, ObjStat &objStat)
         return BIO_NOT_EXISTS;
     }
 
-    if (fileInfo->mSize < 0) {
+    if (fileInfo->mSize < 0 || fileInfo->mSize > IO_MAX_LEN) {
         LOG_ERROR("invalid file size: " << fileInfo->mSize << ".");
         return BIO_NOT_EXISTS;
     }
