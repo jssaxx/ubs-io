@@ -44,7 +44,7 @@ BResult InterceptorServer::RegisterOpcode()
 
 bool InterceptorServer::CheckInterceptorReadReq(InterceptorPreadIn *req)
 {
-    if (req->offset > IO_SIZE_4M || req->nbytes > IO_SIZE_8K || req->nbytes == 0) {
+    if (req->nbytes > IO_SIZE_8K || req->nbytes == 0) {
         return false;
     }
     return true;
@@ -106,7 +106,7 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
 
 bool InterceptorServer::CheckInterceptorWriteReq(InterceptorPwriteIn *req)
 {
-    if (req->nbytes < IO_SIZE_8K || req->offset > IO_SIZE_4M) {
+    if (req->nbytes > IO_SIZE_4K || req->nbytes == 0) {
         return false;
     }
     return true;
@@ -135,13 +135,13 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
         req->nbytes << " fd:" << req->fd);
 
     InterceptorPwriteOut resp;
-    resp.dataLen = static_cast<int64_t>(BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL));
-    if (UNLIKELY(resp.dataLen < 0)) {
+    auto ret = BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL);
+    if (UNLIKELY(ret != 0)) {
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
-
+    resp.dataLen = req->nbytes;
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY);
@@ -210,7 +210,7 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 
 bool InterceptorServer::CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req)
 {
-    if (req->offset > IO_SIZE_4M || req->nbytes != IO_SIZE_4M) {
+    if (req->nbytes != IO_SIZE_4M) {
         return false;
     }
     return true;
