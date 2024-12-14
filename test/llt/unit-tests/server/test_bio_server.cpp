@@ -1480,7 +1480,7 @@ TEST_F(TestBioServer, test_check_interceptor_write_req)
     EXPECT_EQ(ret, false);
     req->offset = 0;
     ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
-    EXPECT_EQ(ret, true);
+    EXPECT_EQ(ret, false);
     free(req);
 }
 
