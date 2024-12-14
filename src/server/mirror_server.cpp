@@ -531,28 +531,23 @@ void MirrorServer::InitGetResponse(GetResponse &rsp)
     rsp.realLen = 0;
 }
 
-BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp)
+BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey)
 {
-    std::vector<NetMrInfo> lMrVec;
-    char *value = reinterpret_cast<char *>(aligned_alloc(NO_4096, from->GetLength()));
-    ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory failed, length:" << from->GetLength() << ".");
-    auto ret = mSliceOp.Copy(from, value, from->GetLength());
+    std::vector<NetMrInfo> rMrVec;
+    for (auto addr : to->GetAddrs()) {
+        MrInfo mr{};
+        addr.ToMrInfo(mr);
+        rMrVec.emplace_back(NetMrInfo(mr.address, mr.size, rKey));
+    }
+    ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
+
+    BIO_TRACE_START(MIRROR_TRACE_GET_COPY_DATA);
+    BResult ret = mSliceOp.Copy(from, reinterpret_cast<char *>(rMrVec[0].address), from->GetLength());
+    BIO_TRACE_END(MIRROR_TRACE_GET_COPY_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
-        free(value);
-        return ret;
     }
-    lMrVec.emplace_back(NetMrInfo(reinterpret_cast<uint64_t>(value), from->GetLength(), 0));
-    rsp.isAlloc = true;
-    // 将地址带回到SDK端.
-    ChkTrue(lMrVec.size() <= SLICE_ADDR_SIZE, BIO_INNER_ERR, "Local mr size exceed 4, size:" << lMrVec.size() << ".");
-    rsp.num = lMrVec.size();
-    for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
-        rsp.address[idx] = lMrVec[idx].address;
-        rsp.addrOffset[idx] = 0;
-        rsp.addrLen[idx] = lMrVec[idx].size;
-    }
-    return BIO_OK;
+    return ret;
 }
 
 BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
@@ -637,6 +632,44 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     return ret;
 }
 
+BResult MirrorServer::GetConvergence(GetRequest &req, GetResponse &rsp)
+{
+    if (UNLIKELY(!CheckAll(req.comm))) {
+        return BIO_CHECK_PT_FAIL;
+    }
+
+    InitGetResponse(rsp);
+    // 根据req组装slice.
+    MrInfo mrInfo = { req.address, static_cast<uint32_t>(req.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+    RCacheSlicePtr sliceP = MakeRef<RCacheSlice>(req.ptId, req.length, addrVec);
+    if (UNLIKELY(sliceP == nullptr)) {
+        LOG_ERROR("Make rcache slice failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    LOG_DEBUG("Mirror server get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
+        ", length:" << req.length << ", mr size:" << req.size << ", mr key:" << req.mrKey << ", slice: " <<
+        sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
+
+    auto writer = [&req, &rsp, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        // case 1: 同节点同进程的缓存客户端读请求处理
+        return WriterLocalSameProcess(from, to, req.mrKey);
+    };
+
+    BIO_TRACE_START(MIRROR_TRACE_GET);
+    BResult ret = Cache::Instance().Get(req.key, req.offset, sliceP, writer, rsp.realLen);
+    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
+    } else {
+        if (mBioConfig->GetDaemonConfig().enableCrc) {
+            rsp.dataCrc = sliceP->GetDataCrc();
+        }
+    }
+    return ret;
+}
+
 BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx)
 {
     if (UNLIKELY(!CheckAll(req.comm))) {
@@ -658,11 +691,6 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        // case 1: 同节点同进程的缓存客户端读请求处理
-        rsp.isAlloc = false;
-        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
-            return WriterLocalSameProcess(from, rsp);
-        }
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
         std::vector<NetMrInfo> lMrVec;
@@ -671,12 +699,12 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
             return ret;
         }
 
-        // case 2: 同节点跨进程的缓存客户端读请求处理.
+        // case 1: 同节点跨进程的缓存客户端读请求处理.
         if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
             return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
         }
 
-        // cse 3: 跨节点的缓存客户端读请求处理.
+        // cse 2: 跨节点的缓存客户端读请求处理.
         return WriterRemote(isAlloc, lMrVec, rMrVec, netCtx, req);
     };
 

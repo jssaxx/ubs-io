@@ -15,6 +15,7 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(SERVER_UNDERFS_GET, "server underfs get error", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_UNDERFS_DELETE, "server underfs delete error", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_UNDERFS_STAT, "server underfs stat error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_UNDERFS_STAT_SIZE, "server underfs stat invalid size", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_UNDERFS_LIST, "server underfs list error", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, "failed to create memory file", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, "truncate file with size failed", CommonTp::IntValueCallback);
@@ -35,6 +36,7 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_UNDERFS_GET);
     LVOS_TP_UNREG(SERVER_UNDERFS_DELETE);
     LVOS_TP_UNREG(SERVER_UNDERFS_STAT);
+    LVOS_TP_UNREG(SERVER_UNDERFS_STAT_SIZE);
     LVOS_TP_UNREG(SERVER_UNDERFS_LIST);
     LVOS_TP_UNREG(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE);
     LVOS_TP_UNREG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE);

@@ -77,6 +77,7 @@ public:
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy);
+    BResult GetConvergence(GetRequest &req, GetResponse &rsp);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
@@ -182,7 +183,7 @@ private:
         ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
-    BResult WriterLocalSameProcess(const SlicePtr &from, GetResponse &rsp);
+    BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
     bool CheckPutReq(PutRequest *req);
     bool CheckGetReq(GetRequest *req);
     bool CheckDeleteReq(DeleteRequest *req);
