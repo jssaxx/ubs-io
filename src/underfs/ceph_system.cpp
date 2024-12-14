@@ -165,6 +165,12 @@ BResult CephSystem::Stat(const char *key, ObjStat &stat)
         LOG_ERROR("Failed to stat object " << key << ", ret:" << ret);
         return BIO_UFS_IOERR;
     }
+    LVOS_TP_START(SERVER_UNDERFS_STAT_SIZE, &stat.size, IO_MAX_LEN + 1);
+    LVOS_TP_END;
+    if (stat.size > IO_MAX_LEN) {
+        LOG_ERROR("invalid file size: " << stat.size << ".");
+        return BIO_NOT_EXISTS;
+    }
     return BIO_OK;
 }
 

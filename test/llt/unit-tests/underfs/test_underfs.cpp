@@ -221,6 +221,11 @@ TEST_F(TestUnderFs, test_underfs_ceph_stat_return_fail)
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
     LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_STAT_NOT_EXIST");
 
+    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_STAT_SIZE", 0, 1, userParam);
+    ret = g_cephInstancePtr->Stat(G_KEY, stat);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_STAT_SIZE");
+
     LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_STAT", 0, 1, userParam);
     ret = g_cephInstancePtr->Stat(G_KEY, stat);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
