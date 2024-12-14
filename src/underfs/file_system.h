@@ -13,6 +13,7 @@
 
 namespace ock {
 namespace bio {
+constexpr uint64_t IO_MAX_LEN = 4194304;
 class FileSystem {
 public:
     struct ObjStat {
