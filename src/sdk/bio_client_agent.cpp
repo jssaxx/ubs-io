@@ -604,25 +604,7 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         if (realLen > req.length) {
             return BIO_INNER_ERR;
         }
-        if (rsp.num > SLICE_ADDR_SIZE) {
-            return BIO_INNER_ERR;
-        }
-        uint64_t off = 0;
-        uint64_t cpyLength = req.length;
-        for (uint32_t idx = 0; idx < rsp.num; idx++) {
-            ret = memcpy_s(static_cast<void *>(value + off), cpyLength, reinterpret_cast<void *>(rsp.address[idx]),
-                rsp.addrLen[idx]);
-            if (UNLIKELY(ret != 0)) {
-                CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
-                    rsp.addrLen[idx] << ".");
-                break;
-            }
-            off += rsp.addrLen[idx];
-            cpyLength -= rsp.addrLen[idx];
-        }
-        if (rsp.isAlloc) {
-            free(reinterpret_cast<void *>(rsp.address[0]));
-        }
+        realLen = rsp.realLen;
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
