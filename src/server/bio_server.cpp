@@ -927,7 +927,7 @@ int32_t Get(GetRequest *req, GetResponse *rsp)
 {
     StatisticGetIoSize(req->length);
     ServiceContext netCtx;
-    return BioServer::Instance()->GetMirrorServer()->Get(*req, *rsp, netCtx);
+    return BioServer::Instance()->GetMirrorServer()->GetConvergence(*req, *rsp);
 }
 
 int32_t Delete(DeleteRequest *req)
