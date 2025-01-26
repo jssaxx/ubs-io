@@ -25,7 +25,7 @@ make_cov_info()
 }
 
 #分目录并行收集gcda，提升效率
-for i in "src/cache" "src/cluster" "src/common" "src/config" "src/flow" "src/htracer" "src/interceptor" "src/net" "src/sdk" "src/server" "src/underfs" "test/llt" "test/tools"
+for i in "src/cache" "src/cluster" "src/common" "src/config" "src/disk" "src/flow" "src/htracer" "src/interceptor" "src/net" "src/sdk" "src/server" "src/underfs" "test/llt" "test/tools"
 do
     { make_cov_info $i
     }&
@@ -34,7 +34,7 @@ wait
 
 #汇总所有的info
 lcov -a ${GENERATE_DIR}/src/cache/coverage.info -a ${GENERATE_DIR}/src/cluster/coverage.info -a ${GENERATE_DIR}/src/common/coverage.info \
--a ${GENERATE_DIR}/src/config/coverage.info -a ${GENERATE_DIR}/src/flow/coverage.info \
+-a ${GENERATE_DIR}/src/config/coverage.info -a ${GENERATE_DIR}/src/disk/coverage.info -a ${GENERATE_DIR}/src/flow/coverage.info \
 -a ${GENERATE_DIR}/src/htracer/coverage.info -a ${GENERATE_DIR}/src/interceptor/coverage.info \
 -a ${GENERATE_DIR}/src/net/coverage.info -a ${GENERATE_DIR}/src/sdk/coverage.info \
 -a ${GENERATE_DIR}/src/server/coverage.info -a ${GENERATE_DIR}/src/underfs/coverage.info \

@@ -11,6 +11,11 @@
 extern "C" {
 #endif
 
+typedef enum {
+    CM_DISK_NORMAL = 0,
+    CM_DISK_FAULT = 1,
+} CmDiskStatus;
+
 int32_t CmReportDiskStatus(uint16_t diskId, CmDiskStatus status);
 #ifdef __cplusplus
 }
