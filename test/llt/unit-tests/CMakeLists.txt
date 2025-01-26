@@ -35,6 +35,7 @@ target_include_directories(bio_test PRIVATE
         ${TEST_DIR}/htracer
         ${TEST_DIR}/server
         ${TEST_DIR}/cm
+        ${TEST_DIR}/disk
         ${TEST_DIR}/sdk
         ${TEST_DIR}/common
         ${TEST_DIR}/cache/read
@@ -60,7 +61,6 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/underfs)
 
 target_link_libraries(bio_test bio_sdk bio_server
-        ${PROJECT_3RDPARTY_BIN_DIR}/bdm/lib/libbdm.so
         -Wl,--start-group
         pthread dl rt aio
         -Wl,--end-group)

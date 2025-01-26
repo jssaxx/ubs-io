@@ -127,11 +127,9 @@ fi
 \cp 3rdparty/hcom/lib/libhcom.so bio/lib/.
 \cp 3rdparty/hseceasy/hse/cryption_tool/bin/* bio/bin/.
 \cp 3rdparty/hseceasy/hse/cryption/lib/* bio/lib/.
-\cp 3rdparty/bdm/lib/libbdm.so bio/lib/.
 \cp 3rdparty/hcom/include/hcom/*.h bio/include/.
 \cp 3rdparty/hcom/include/hcom/go/*.go bio/include/.
 \cp 3rdparty/hcom/include/hcom/capi/*.h bio/include/.
-\cp 3rdparty/bdm/include/bdm_core.h bio/include/.
 chmod 550 -R ../scripts/*
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list

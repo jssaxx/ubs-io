@@ -8,6 +8,7 @@
 #include "bio_server.h"
 #include "tracepoint.h"
 #include "bio_server_c.h"
+#include "bdm_obj.h"
 #include "test_bio_server.h"
 #include "expire_checker.h"
 #include "interceptor_server.h"
