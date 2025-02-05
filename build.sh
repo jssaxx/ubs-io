@@ -103,6 +103,13 @@ else
 	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
+if [ -z "${CI_BUILD}" ];then
+    echo "update submodules ... "
+    cd $PROJ_DIR && git submodule update --init
+    cd $PROJ_DIR/3rdparty/hcom/hcom && git submodule update --init
+    cd $PROJ_DIR/3rdparty/hseceasy/hseceasy && git submodule update --init
+fi
+
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j ${CPU_PROCESSOR_NUM}"
@@ -133,6 +140,7 @@ fi
 chmod 550 -R ../scripts/*
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list
+rm -rf boostio
 mv bio boostio
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
 
