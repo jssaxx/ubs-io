@@ -154,6 +154,16 @@ public:
         return mMirror->AllocSpace(param, spaceInfo);
     }
 
+    inline BResult CalculateCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+    {
+        return mMirror->CalculateCacheHitRatioImpl(nodeDesc);
+    }
+
+    inline BResult QueryCacheResource(std::vector<CacheResourcesDesc> &nodeDesc)
+    {
+        return mMirror->QueryCacheResourceImpl(nodeDesc);
+    }
+
     inline CacheDescriptor Query(const uint64_t tenantId)
     {
         mLock.LockRead();
