@@ -1615,3 +1615,33 @@ TEST_F(TestBioServer, test_bio_server_insert_getHolder)
     uint8_t type = 0;
     mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
 }
+
+TEST_F(TestBioServer, test_start_server_cacl_cache_hit_local)
+{
+    LOG_INFO("test_start_server_cacl_cache_hit_local");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    auto ret = mirror->HandleCalcCacheHit(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "CALC_CACHE_HIT", 0, 1, userParam);
+    ret = mirror->HandleCalcCacheHit(ctx);
+    LVOS_HVS_deactiveTracePoint(0, "CALC_CACHE_HIT");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_start_server_cacl_cache_resource_local)
+{
+    LOG_INFO("test_start_server_cacl_cache_resource_local");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    auto ret = mirror->HandleQueryCacheResource(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "CALC_CACHE_RESOURCE", 0, 1, userParam);
+    ret = mirror->HandleQueryCacheResource(ctx);
+    LVOS_HVS_deactiveTracePoint(0, "CALC_CACHE_RESOURCE");
+    EXPECT_EQ(ret, BIO_OK);
+}

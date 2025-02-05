@@ -103,6 +103,26 @@ typedef struct {
 } CacheSpaceDesc;
 
 typedef struct {
+    uint16_t nodeId;
+    uint64_t rCacheMemCapacity;
+    uint64_t rCacheDiskCapacity;
+    uint64_t wCacheMemCapacity;
+    uint64_t wCacheDiskCapacity;
+    uint64_t rCacheMemUsedSize;
+    uint64_t rCacheDiskUsedSize;
+    uint64_t wCacheMemUsedSize;
+    uint64_t wCacheDiskUsedSize;
+} CacheResourcesDesc;
+
+typedef struct {
+    uint16_t nodeId;
+    uint64_t rCacheHitCount;
+    uint64_t rCacheTotalCount;
+    uint64_t wCacheHitCount;
+    uint64_t wCacheTotalCount;
+} CacheHitFinalDesc;
+
+typedef struct {
     LogType logType;                   // STDOUT_TYPE/FILE_TYPE/STDERR_TYPE
     char logFilePath[PATH_MAX];        // log file path, if log type use FILE_TYPE, need to set this param
     uint8_t enable;                    // switch
@@ -130,6 +150,43 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
  * @return: void
  */
 void BioExit();
+
+/**
+ * @brief: Show cache resource information
+ *
+ * @param[out]: nodeDesc: Cache Resource Description array
+ * @param[out]: nodeNum: node num
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioShowCacheResource(CacheResourcesDesc **nodeDesc, uint64_t *nodeNum);
+
+/**
+ * @brief: Free cache hit resources
+ *
+ * @param[in]: nodeDesc: cache resource pointer
+ * @param[in]: nodeNum: node number
+ * @return: void
+ */
+void BioFreeCacheResourcePtr(CacheResourcesDesc **nodeDesc, uint64_t nodeNum);
+
+/**
+ * @brief: Show cache hit ratio information
+ *
+ * @param[out]: desc: Cache hit all node information
+ * @param[out]: nodeDesc: Cache hit array
+ * @param[out]: nodeNum: node num
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioShowCacheHitRatio(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDesc, uint64_t *nodeNum);
+
+/**
+ * @brief: Free cache hit resources
+ *
+ * @param[in]: nodeDesc: cache hit pointer
+ * @param[in]: nodeNum: node number
+ * @return: void
+ */
+void BioFreeCacheHitPtr(CacheHitFinalDesc **nodeDesc, uint64_t nodeNum);
 
 /**
  * @brief: Create cache instance
