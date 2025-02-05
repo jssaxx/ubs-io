@@ -10,6 +10,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include "bio_cache_statistics.h"
 #include "bio_c.h"
 
 namespace ock {
@@ -163,6 +164,22 @@ public:
      * @return: void
      */
     static void Exit();
+
+    /**
+     * @brief: Show cache resource information
+     *
+     * @param[out]: CacheDescription: Cache Resource description array
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    static CResult BioShowCacheResource(std::vector<CacheResourcesDesc> &nodeDesc);
+
+    /**
+     * @brief: Show cache hit ratio information
+     *
+     * @param[out]: nodeDesc: Cache hit count information array
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    static CResult BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
 
     /**
      * @brief: Create cache instance

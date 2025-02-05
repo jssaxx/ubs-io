@@ -86,6 +86,8 @@ public:
     BResult NotifyUpdate(NotifyUpdateRequest &req);
     BResult CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp);
     BResult SyncData(SyncDataRequest &req);
+    BResult CalcCacheHitLocal(CacheHitResponse *rsp);
+    BResult CalcCacheResourceLocal(CacheResourceResponse *rsp);
 
     BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
 
@@ -129,6 +131,8 @@ public:
     int32_t MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req);
     int32_t MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnderFsConfigRequest *req);
     int32_t MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req);
+    int32_t MirrorServerCalcCacheHit(ServiceContext &ctx);
+    int32_t MirrorServerQueryCacheResource(ServiceContext &ctx);
 
     int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
@@ -155,6 +159,8 @@ public:
     int32_t HandleFreeMem(ServiceContext &ctx);
     int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
     int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
+    int32_t HandleCalcCacheHit(ServiceContext &ctx);
+    int32_t HandleQueryCacheResource(ServiceContext &ctx);
 
     bool CheckUpdateReadyReq(CheckUpdateReadyRequest *req);
     bool CheckNotifyUpdateReq(NotifyUpdateRequest *req);

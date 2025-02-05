@@ -10,6 +10,8 @@
 #include "cache_def.h"
 #include "wcache_manager.h"
 #include "rcache_manager.h"
+#include "wcache_statistic.h"
+#include "rcache_statistic.h"
 
 namespace ock {
 namespace bio {

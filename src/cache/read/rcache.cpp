@@ -7,7 +7,6 @@
 #include "bio_config_instance.h"
 #include "cache_flow.h"
 #include "cache_slice.h"
-#include "rcache_statistic.h"
 #include "underfs.h"
 #include "bio_trace.h"
 #include "bio_crc_util.h"
@@ -256,7 +255,7 @@ BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPt
         LOG_ERROR("Alloc chunk for read cache key failed.");
         return BIO_ALLOC_FAIL;
     }
-    
+
     return BIO_OK;
 }
 
@@ -416,7 +415,6 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     auto iter = index[bucket].find(key);
     if (iter == index[bucket].end()) {
         indexLock[bucket].UnLock();
-        RCacheStatistic::Instance().IncMisCount();
         BIO_TRACE_END(RCACHE_TRACE_GET_QUERY_INDEX, BIO_NOT_EXISTS);
         return BIO_NOT_EXISTS;
     }
@@ -431,7 +429,6 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
         return BIO_NOT_EXISTS;
     }
 
-    RCacheStatistic::Instance().IncHisCount();
     auto tier = chunk->GetTierType();
     auto ret = GetSliceFromChunkIO(tier, chunk, newSlicePtr, offset, slice->GetLength(), realLen);
     if (UNLIKELY(ret != BIO_OK || newSlicePtr == nullptr)) {
