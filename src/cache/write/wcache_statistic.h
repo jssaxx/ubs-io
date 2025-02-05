@@ -1,20 +1,22 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2024-2024. All rights reserved.
+ * Description:
+ * Create: 2024-08-17
  */
 
-#ifndef BOOSTIO_RCACHE_STATISTIC_H
-#define BOOSTIO_RCACHE_STATISTIC_H
+#ifndef BOOSTIO_WCACHE_STATISTIC_H
+#define BOOSTIO_WCACHE_STATISTIC_H
 
 #include <cstdint>
 #include <atomic>
 
 namespace ock {
 namespace bio {
-class RCacheStatistic {
+class WCacheStatistic {
 public:
-    static RCacheStatistic &Instance()
+    static WCacheStatistic &Instance()
     {
-        static RCacheStatistic instance;
+        static WCacheStatistic instance;
         return instance;
     }
 
@@ -39,11 +41,12 @@ public:
     }
 
 private:
-    RCacheStatistic() : totalCount(0), hitCount(0) {}
+    WCacheStatistic() : totalCount(0), hitCount(0) {}
 private:
     std::atomic<uint64_t> totalCount;
     std::atomic<uint64_t> hitCount;
 };
 }
 }
-#endif // BOOSTIO_RCACHE_STATISTIC_H
+
+#endif // BOOSTIO_WCACHE_STATISTIC_H

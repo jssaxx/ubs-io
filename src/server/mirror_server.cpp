@@ -63,6 +63,10 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
         std::bind(&MirrorServer::HandleGetUnderFsConfig, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_NEGOTIATE_EVICT,
         std::bind(&MirrorServer::HandleEvictNegotiateRequest, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CALC_CACHE_HIT,
+        std::bind(&MirrorServer::HandleCalcCacheHit, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_CACHE_RESOURCE,
+        std::bind(&MirrorServer::HandleQueryCacheResource, this, std::placeholders::_1));
 }
 
 void MirrorServer::RegisterOpcode()
@@ -2207,5 +2211,99 @@ void MirrorServer::RemoveMemFreeHolderImpl(MemFreeHolder holder, std::unordered_
             break;
         }
     }
+}
+
+BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
+{
+    rsp->nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
+    CacheResDescription desc{};
+    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+    rsp->wCacheMemCapacity = desc.memCapacity;
+    rsp->wCacheDiskCapacity = desc.diskCapacity;
+    rsp->wCacheMemUsedSize = desc.memUsedSize;
+    rsp->wCacheDiskUsedSize = desc.diskUsedSize;
+    Cache::Instance().GetCacheResources(desc, READ_CACHE);
+    rsp->rCacheMemCapacity = desc.memCapacity;
+    rsp->rCacheDiskCapacity = desc.diskCapacity;
+    rsp->rCacheMemUsedSize = desc.memUsedSize;
+    rsp->rCacheDiskUsedSize = desc.diskUsedSize;
+    return BIO_OK;
+}
+
+BResult MirrorServer::CalcCacheHitLocal(CacheHitResponse *rsp)
+{
+    rsp->nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
+    rsp->rCacheHitCount = RCacheStatistic::Instance().GetHitCount();
+    rsp->rCacheTotalCount = RCacheStatistic::Instance().GetTotalCount();
+    rsp->wCacheHitCount = WCacheStatistic::Instance().GetHitCount();
+    rsp->wCacheTotalCount = WCacheStatistic::Instance().GetTotalCount();
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleQueryCacheResource(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    LVOS_TP_START(CALC_CACHE_RESOURCE, 0);
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CacheResourceRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+    LVOS_TP_END;
+
+    return MirrorServerQueryCacheResource(ctx);
+}
+
+int32_t MirrorServer::HandleCalcCacheHit(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    LVOS_TP_START(CALC_CACHE_HIT, 0);
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(CacheHitRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+    LVOS_TP_END;
+
+    return MirrorServerCalcCacheHit(ctx);
+}
+
+int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
+{
+    CacheResourceResponse rsp;
+    rsp.nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
+    CacheResDescription desc{};
+    Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+    rsp.wCacheMemCapacity = desc.memCapacity;
+    rsp.wCacheDiskCapacity = desc.diskCapacity;
+    rsp.wCacheMemUsedSize = desc.memUsedSize;
+    rsp.wCacheDiskUsedSize = desc.diskUsedSize;
+    Cache::Instance().GetCacheResources(desc, READ_CACHE);
+    rsp.rCacheMemCapacity = desc.memCapacity;
+    rsp.rCacheDiskCapacity = desc.diskCapacity;
+    rsp.rCacheMemUsedSize = desc.memUsedSize;
+    rsp.rCacheDiskUsedSize = desc.diskUsedSize;
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheResourceResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::MirrorServerCalcCacheHit(ServiceContext &ctx)
+{
+    CacheHitResponse rsp;
+    rsp.nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
+    rsp.rCacheHitCount = RCacheStatistic::Instance().GetHitCount();
+    rsp.rCacheTotalCount = RCacheStatistic::Instance().GetTotalCount();
+    rsp.wCacheHitCount = WCacheStatistic::Instance().GetHitCount();
+    rsp.wCacheTotalCount = WCacheStatistic::Instance().GetTotalCount();
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheHitResponse));
+    return BIO_OK;
 }
 

@@ -43,6 +43,8 @@ public:
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
+    using CalcCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
+    using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceResponse *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -106,6 +108,10 @@ public:
 
     BResult LoadLocal(LoadRequest &req);
 
+    BResult CalcCacheHitLocal(CacheHitRequest &req, std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+
+    BResult CalcCacheResourceLocal(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc);
+
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
     BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
@@ -138,6 +144,10 @@ private:
 
     BResult SendLoadRequestLocal(LoadRequest &req);
 
+    BResult SendCacheHitRequestLocal(CacheHitRequest &req, CacheHitResponse &rsp);
+
+    BResult SendCacheResourceRequestLocal(CacheResourceRequest &req, CacheResourceResponse &rsp);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -169,6 +179,8 @@ private:
     StatFuncPtr statOp = nullptr;
     ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;
+    CalcCacheHitLocalFuncPtr cacheHitOp = nullptr;
+    CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
 };
 }
 }

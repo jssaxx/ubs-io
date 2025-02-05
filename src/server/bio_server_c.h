@@ -56,6 +56,10 @@ int32_t NotifyUpdate(NotifyUpdateRequest *req);
 
 int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse *rsp);
 
+int32_t CalcCacheHitLocal(CacheHitResponse *rsp);
+
+int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp);
+
 #ifdef __cplusplus
 }
 #endif
