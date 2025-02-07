@@ -99,7 +99,7 @@ public:
 
     BResult CheckUpdateReady();
 
-    BResult CalculateCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+    BResult GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
 
     BResult QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &nodeDesc);
 
@@ -205,11 +205,11 @@ private:
 
     BResult SendCacheResourceRequest(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc);
 
-    void CalcCacheHitLocal(CacheHitRequest &req, uint16_t localId,
-                           std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+    void GetCacheHitLocal(CacheHitRequest &req, uint16_t localId,
+                          std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
 
-    void CalcCacheHitRemote(CacheHitRequest &req, std::vector<uint16_t> &remoteId,
-                            std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+    void GetCacheHitRemote(CacheHitRequest &req, std::vector<uint16_t> &remoteId,
+                           std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
 
     void CalcCacheResourceLocal(CacheResourceRequest &req, uint16_t localId,
                                 std::vector<CacheResourcesDesc> &nodeDesc);

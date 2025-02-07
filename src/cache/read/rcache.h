@@ -20,6 +20,7 @@
 #include "cache_slice_operator.h"
 #include "cache_slice.h"
 #include "cache_def.h"
+#include "rcache_statistic.h"
 
 namespace ock {
 namespace bio {
