@@ -116,10 +116,15 @@ typedef struct {
 
 typedef struct {
     uint16_t nodeId;
+    uint64_t rCacheHitMemCount;
+    uint64_t rCacheHitDiskCount;
     uint64_t rCacheHitCount;
     uint64_t rCacheTotalCount;
+    uint64_t wCacheHitMemCount;
+    uint64_t wCacheHitDiskCount;
     uint64_t wCacheHitCount;
     uint64_t wCacheTotalCount;
+    uint64_t backendHitCount;
 } CacheHitFinalDesc;
 
 typedef struct {

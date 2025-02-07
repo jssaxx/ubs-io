@@ -994,9 +994,9 @@ int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse 
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CheckUpdateReady(*req, *rsp));
 }
 
-int32_t CalcCacheHitLocal(CacheHitResponse *rsp)
+int32_t GetCacheHitLocal(CacheHitResponse *rsp)
 {
-    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CalcCacheHitLocal(rsp));
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->GetCacheHitLocal(rsp));
 }
 
 int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp)

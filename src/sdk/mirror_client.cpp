@@ -1638,7 +1638,7 @@ BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::v
     return BIO_OK;
 }
 
-BResult MirrorClient::CalculateCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+BResult MirrorClient::GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
 {
     CacheHitRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
@@ -1648,7 +1648,7 @@ BResult MirrorClient::CalculateCacheHitRatioImpl(std::unordered_map<uint16_t, Ca
     ret = SendCacheHitRequest(req, nodeDesc);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send calc cache hit request failed, ret:" << ret);
+        CLIENT_LOG_ERROR("Send get cache hit request failed, ret:" << ret);
     }
 
     return ret;
@@ -1669,38 +1669,43 @@ BResult MirrorClient::SendCacheHitRequest(CacheHitRequest &req, std::unordered_m
         remoteId.emplace_back(node.first.nodeId);
     }
 
-    CalcCacheHitLocal(req, localId, nodeDesc);
-    CalcCacheHitRemote(req, remoteId, nodeDesc);
+    GetCacheHitLocal(req, localId, nodeDesc);
+    GetCacheHitRemote(req, remoteId, nodeDesc);
     return BIO_OK;
 }
 
-void MirrorClient::CalcCacheHitLocal(CacheHitRequest &req, uint16_t localId,
-                                     std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+void MirrorClient::GetCacheHitLocal(CacheHitRequest &req, uint16_t localId,
+                                    std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
 {
     if (UNLIKELY(localId == UINT16_MAX)) {
         return;
     }
-    BResult ret = agent::BioClientAgent::Instance()->CalcCacheHitLocal(req, nodeDesc);
+    BResult ret = agent::BioClientAgent::Instance()->GetCacheHitLocal(req, nodeDesc);
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Send calc cache hit request failed, ret: " << ret << ". nodeId: " << localId);
+        CLIENT_LOG_ERROR("Send get cache hit request failed, ret: " << ret << ". nodeId: " << localId);
     }
 }
 
-void MirrorClient::CalcCacheHitRemote(CacheHitRequest &req, std::vector<uint16_t> &remoteId,
-                                      std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+void MirrorClient::GetCacheHitRemote(CacheHitRequest &req, std::vector<uint16_t> &remoteId,
+                                     std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
 {
     for (auto id : remoteId) {
         CacheHitResponse rsp;
         BResult ret = net::BioClientNet::Instance()->SendSync<CacheHitRequest, CacheHitResponse>(
-            static_cast<BioNodeId>(id), BIO_OP_SDK_CALC_CACHE_HIT, req, rsp);
+            static_cast<BioNodeId>(id), BIO_OP_SDK_GET_CACHE_HIT, req, rsp);
         if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Send calc cache hit request failed, ret: " << ret << ". nodeId: " << id);
+            CLIENT_LOG_ERROR("Send get cache hit request failed, ret: " << ret << ". nodeId: " << id);
             continue;
         }
+        nodeDesc[rsp.nodeId].rCacheHitMemCount.store(rsp.rCacheHitMemCount);
+        nodeDesc[rsp.nodeId].rCacheHitDiskCount.store(rsp.rCacheHitDiskCount);
         nodeDesc[rsp.nodeId].rCacheHitCount.store(rsp.rCacheHitCount);
         nodeDesc[rsp.nodeId].rCacheTotalCount.store(rsp.rCacheTotalCount);
+        nodeDesc[rsp.nodeId].wCacheHitMemCount.store(rsp.wCacheHitMemCount);
+        nodeDesc[rsp.nodeId].wCacheHitDiskCount.store(rsp.wCacheHitDiskCount);
         nodeDesc[rsp.nodeId].wCacheHitCount.store(rsp.wCacheHitCount);
         nodeDesc[rsp.nodeId].wCacheTotalCount.store(rsp.wCacheTotalCount);
+        nodeDesc[rsp.nodeId].backendHitCount.store(rsp.backendHitCount);
     }
 }
 

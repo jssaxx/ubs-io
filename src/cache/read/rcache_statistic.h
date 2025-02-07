@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <atomic>
+#include "rcache_chunk.h"
 
 namespace ock {
 namespace bio {
@@ -23,6 +24,16 @@ public:
         hitCount.fetch_add(1ULL);
     }
 
+    inline void IncHitMemCount()
+    {
+        hitMemCount.fetch_add(1ULL);
+    }
+
+    inline void IncHitDiskCount()
+    {
+        hitDiskCount.fetch_add(1ULL);
+    }
+
     inline void IncTotalCount()
     {
         totalCount.fetch_add(1ULL);
@@ -33,16 +44,42 @@ public:
         return totalCount.load();
     }
 
+    uint64_t GetHitMemCount()
+    {
+        return hitMemCount.load();
+    }
+
+    uint64_t GetHitDiskCount()
+    {
+        return hitDiskCount.load();
+    }
+
     uint64_t GetHitCount()
     {
         return hitCount.load();
     }
 
+    inline void StatisticalByType(RCacheTierType type)
+    {
+        switch (type) {
+            case READ_CACHE_TIER_MEM:
+                IncHitMemCount();
+                break;
+            case READ_CACHE_TIER_DISK:
+                IncHitDiskCount();
+                break;
+            default:
+                return;
+        }
+    }
+
 private:
-    RCacheStatistic() : totalCount(0), hitCount(0) {}
+    RCacheStatistic() : totalCount(0), hitCount(0), hitMemCount(0), hitDiskCount(0) {}
 private:
     std::atomic<uint64_t> totalCount;
     std::atomic<uint64_t> hitCount;
+    std::atomic<uint64_t> hitMemCount;
+    std::atomic<uint64_t> hitDiskCount;
 };
 }
 }
