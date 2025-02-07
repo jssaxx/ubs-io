@@ -154,9 +154,9 @@ public:
         return mMirror->AllocSpace(param, spaceInfo);
     }
 
-    inline BResult CalculateCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+    inline BResult GetCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
     {
-        return mMirror->CalculateCacheHitRatioImpl(nodeDesc);
+        return mMirror->GetCacheHitRatioImpl(nodeDesc);
     }
 
     inline BResult QueryCacheResource(std::vector<CacheResourcesDesc> &nodeDesc)

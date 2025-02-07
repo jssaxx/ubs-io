@@ -25,6 +25,16 @@ public:
         hitCount.fetch_add(1ULL);
     }
 
+    inline void IncHitMemCount()
+    {
+        hitMemCount.fetch_add(1ULL);
+    }
+
+    inline void IncHitDiskCount()
+    {
+        hitDiskCount.fetch_add(1ULL);
+    }
+
     inline void IncTotalCount()
     {
         totalCount.fetch_add(1ULL);
@@ -40,11 +50,37 @@ public:
         return hitCount.load();
     }
 
+    uint64_t GetHitMemCount()
+    {
+        return hitMemCount.load();
+    }
+
+    uint64_t GetHitDiskCount()
+    {
+        return hitDiskCount.load();
+    }
+
+    inline void StatisticalByType(FlowType type)
+    {
+        switch (type) {
+            case FLOW_MEMORY:
+                IncHitMemCount();
+                break;
+            case FLOW_DISK:
+                IncHitDiskCount();
+                break;
+            default:
+                return;
+        }
+    }
+
 private:
-    WCacheStatistic() : totalCount(0), hitCount(0) {}
+    WCacheStatistic() : totalCount(0), hitCount(0), hitMemCount(0), hitDiskCount(0) {}
 private:
     std::atomic<uint64_t> totalCount;
     std::atomic<uint64_t> hitCount;
+    std::atomic<uint64_t> hitMemCount;
+    std::atomic<uint64_t> hitDiskCount;
 };
 }
 }

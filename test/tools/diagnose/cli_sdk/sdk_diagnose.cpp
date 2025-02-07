@@ -514,26 +514,57 @@ static void HandleShowCacheHit(std::vector<std::string> cmds)
         CLI_PrintBuf("Show Cache Hit failed, result:%d.\n", ret);
         return;
     }
+
+    double rCacheHitMemRatio = desc.wCacheTotalCount != 0 ?
+                               (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitDiskRatio = desc.wCacheTotalCount != 0 ?
+                               (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
     double rCacheHitRatio = desc.wCacheTotalCount != 0 ?
                             (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitMemRatio = desc.wCacheHitMemCount != 0 ?
+                               (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitDiskRatio = desc.wCacheHitDiskCount != 0 ?
+                               (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
     double wCacheHitRatio = desc.wCacheTotalCount != 0 ?
                             (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount : 0;
-    double totalHitRatio = rCacheHitRatio + wCacheHitRatio;
+    double backendHitRatio = desc.wCacheTotalCount != 0 ?
+                          (double)desc.backendHitCount / (double)desc.wCacheTotalCount : 0;
+    double totalCacheHitRatio = rCacheHitRatio + wCacheHitRatio;
     CLI_PrintBuf("--------------------------------\n");
-    CLI_PrintBuf("all node totalHitRatio  :%.2f%%.\n", totalHitRatio * 100);
+    CLI_PrintBuf("all node totalCacheHitRatio  :%.2f%%.\n", totalCacheHitRatio * 100);
+    CLI_PrintBuf("all node rCacheHitMemRatio :%.2f%%.\n", rCacheHitMemRatio * 100);
+    CLI_PrintBuf("all node rCacheHitDiskRatio :%.2f%%.\n", rCacheHitDiskRatio * 100);
     CLI_PrintBuf("all node rCacheHitRatio :%.2f%%.\n", rCacheHitRatio * 100);
+    CLI_PrintBuf("all node wCacheHitMemRatio :%.2f%%.\n", wCacheHitMemRatio * 100);
+    CLI_PrintBuf("all node wCacheHitDiskRatio :%.2f%%.\n", wCacheHitDiskRatio * 100);
     CLI_PrintBuf("all node wCacheHitRatio :%.2f%%.\n", wCacheHitRatio * 100);
+    CLI_PrintBuf("all node backendHitRatio :%.2f%%.\n", backendHitRatio * 100);
     CLI_PrintBuf("----------------------------------\n");
     for (int i = 0; i < nodeNum; i++) {
         uint16_t nodeId = nodeDesc[i].nodeId;
+        double nodeRCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                   (double)nodeDesc[i].rCacheHitMemCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeRCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                       (double)nodeDesc[i].rCacheHitDiskCount / (double)nodeDesc[i].wCacheTotalCount : 0;
         double nodeRCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
                                     (double)nodeDesc[i].rCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                       (double)nodeDesc[i].wCacheHitMemCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                        (double)nodeDesc[i].wCacheHitDiskCount / (double)nodeDesc[i].wCacheTotalCount : 0;
         double nodeWCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
                                     (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
-        double nodeTotalHitRatio = nodeRCacheHitRatio + nodeWCacheHitRatio;
-        CLI_PrintBuf("node: %d totalHitRatio :%.2f%%.\n", nodeId, nodeTotalHitRatio * 100);
+        double nodeBackendHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                    (double)nodeDesc[i].backendHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeTotalCacheHitRatio = nodeRCacheHitRatio + nodeWCacheHitRatio;
+        CLI_PrintBuf("node: %d totalHitCacheRatio :%.2f%%.\n", nodeId, nodeTotalCacheHitRatio * 100);
+        CLI_PrintBuf("node: %d rCacheHitMemRatio :%.2f%%.\n", nodeId, nodeRCacheHitMemRatio * 100);
+        CLI_PrintBuf("node: %d rCacheHitDiskRatio :%.2f%%.\n", nodeId, nodeRCacheHitDiskRatio * 100);
         CLI_PrintBuf("node: %d rCacheHitRatio :%.2f%%.\n", nodeId, nodeRCacheHitRatio * 100);
+        CLI_PrintBuf("node: %d wCacheHitMemRatio :%.2f%%.\n", nodeId, nodeWCacheHitMemRatio * 100);
+        CLI_PrintBuf("node: %d wCacheHitDiskRatio :%.2f%%.\n", nodeId, nodeWCacheHitDiskRatio * 100);
         CLI_PrintBuf("node: %d wCacheHitRatio :%.2f%%.\n", nodeId, nodeWCacheHitRatio * 100);
+        CLI_PrintBuf("node: %d backendHitRatio :%.2f%%.\n", nodeId, nodeBackendHitRatio * 100);
         CLI_PrintBuf("--------------------------------\n");
     }
     BioFreeCacheHitPtr(&nodeDesc, nodeNum);
