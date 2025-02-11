@@ -713,6 +713,22 @@ bool GetCrcFlag()
     return BioServer::Instance()->GetCrcFlag();
 }
 
+const char *GetPrometheusListenAddress()
+{
+    static std::string listenAddress = BioServer::Instance()->GetPrometheusListenAddress();
+    const char *listenAddressCStr = listenAddress.c_str();
+    return listenAddressCStr;
+}
+
+uint32_t GetNegoWorkIoTimeOut()
+{
+    return BioServer::Instance()->GetNegoWorkIoTimeOut();
+}
+
+uint32_t GetPrometheusScrapeIntervalSec()
+{
+    return BioServer::Instance()->GetPrometheusScrapeIntervalSec();
+}
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp)
 {
@@ -1002,4 +1018,9 @@ int32_t GetCacheHitLocal(CacheHitResponse *rsp)
 int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CalcCacheResourceLocal(rsp));
+}
+
+int32_t GetTracePointsLocal(GetTracePointsResponse *rsp)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->GetTracePointsLocal(rsp));
 }
