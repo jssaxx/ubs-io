@@ -67,6 +67,16 @@ public:
         return mLogLevel;
     }
 
+    inline std::string GetPrometheusListenAddress() const
+    {
+        return mPrometheusListenAddress;
+    }
+
+    inline uint32_t GetPrometheusScrapeIntervalSec() const
+    {
+        return mPrometheusScrapeIntervalSec;
+    }
+
     inline bool GetCrcFlag() const
     {
         return mEnableCrc;
@@ -184,6 +194,8 @@ private:
     uint8_t *mShmAddr = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
     uint16_t mLocalNid;
+    std::string mPrometheusListenAddress = "0.0.0.0:8123";
+    uint32_t mPrometheusScrapeIntervalSec = 15;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

@@ -478,9 +478,8 @@ CResult BioService::BioShowCacheResource(std::vector<CacheResourcesDesc> &nodeDe
     BResult ret = gClient->QueryCacheResource(nodeDesc);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("query cache resource failed ret: " << ret);
-    } else {
-        CLIENT_LOG_INFO("query cache resource success");
     }
+
     return ToCResult(ret);
 }
 
@@ -492,9 +491,8 @@ CResult BioService::BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDe
     BResult ret = gClient->GetCacheHitRatio(nodeDesc);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get Cache HitRatio failed ret: " << ret);
-    } else {
-        CLIENT_LOG_INFO("Get Cache HitRatio success");
     }
+
     return ToCResult(ret);
 }
 

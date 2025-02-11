@@ -86,6 +86,14 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include
 )
 
+if(${CMAKE_BUILD_TYPE} STREQUAL "debug")
+    include_directories(
+            ${SRC_DIR}/../test/tools/prometheus
+            ${PROJECT_3RDPARTY_BIN_DIR}/prometheus/include
+    )
+    add_compile_definitions(USE_PROMETHEUS)
+endif()
+
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     add_compile_options(-march=armv8-a+crc)
 endif()

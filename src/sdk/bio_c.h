@@ -62,6 +62,8 @@ typedef enum {
 #define NODE_DESC_SIZE (16)
 #define CACHE_SPACE_ADDRESS_SIZE (2)
 #define CACHE_SPACE_DEC_SIZE (64)
+#define MAX_TRACE_NAME_LEN (64)
+#define TRACE_MAX_NUM (100)
 
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 
@@ -139,6 +141,25 @@ typedef struct {
     char hseKfsMasterPath[PATH_MAX];   // hseceasy kfs master path
     char hseKfsStandbyPath[PATH_MAX];  // hseceasy kfs standby path
 } ClientOptionsConfig;
+
+typedef struct {
+    int16_t beginData;
+    int16_t goodEnd;
+    int16_t badEnd;
+    double max;
+    double min;
+    uint16_t total;
+} TraceMetrics;
+
+typedef struct {
+    char traceName[MAX_TRACE_NAME_LEN];
+    TraceMetrics metrics;
+} TraceData;
+
+typedef struct {
+    TraceData traces[TRACE_MAX_NUM];
+    int count;
+} TraceDatabase;
 
 /**
  * @brief: Initialize boostio service

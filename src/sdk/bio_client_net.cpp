@@ -190,6 +190,8 @@ BResult BioClientNet::ShmInit()
     mWorkNetTimeOut = rsp.netTimeOut;
     mLogLevel = rsp.logLevel;
     mEnableCrc = rsp.enableCrc;
+    mPrometheusListenAddress = rsp.listenAddress;
+    mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
     CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
         mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
 
