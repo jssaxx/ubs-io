@@ -166,6 +166,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
+
     return ret;
 }
 
@@ -187,6 +188,48 @@ BResult BioClient::BioClientStartWork()
         return ret;
     }
     return ret;
+}
+
+BResult BioClient::BioClientStartPrometheus()
+{
+    std::string listenAddress;
+    if (mMode == CONVERGENCE) {
+        listenAddress = agent::BioClientAgent::Instance()->GetPrometheusListenAddress();
+    } else {
+        listenAddress = mNetEngine->GetPrometheusListenAddress();
+    }
+    uint32_t timeOut = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
+                       mNetEngine->GetNegoWorkIoTimeOut();
+    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->
+            GetPrometheusScrapeIntervalSec() : mNetEngine->GetPrometheusScrapeIntervalSec();
+    auto prometheusManager = PrometheusManager::Instance(listenAddress, timeOut, scrapeIntervalSec);
+    auto ret = prometheusManager->Start();
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to start prometheus, ret:" << ret << ".");
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
+void BioClient::BioClientExitPrometheus()
+{
+#ifndef DEBUG_UT
+#ifdef USE_PROMETHEUS
+    std::string listenAddress;
+    if (mMode == CONVERGENCE) {
+        listenAddress = agent::BioClientAgent::Instance()->GetPrometheusListenAddress();
+    } else {
+        listenAddress = mNetEngine->GetPrometheusListenAddress();
+    }
+    uint32_t timeOut = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
+        mNetEngine->GetNegoWorkIoTimeOut();
+    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->
+        GetPrometheusScrapeIntervalSec() : mNetEngine->GetPrometheusScrapeIntervalSec();
+    auto prometheusManager = PrometheusManager::Instance(listenAddress, timeOut, scrapeIntervalSec);
+    prometheusManager->Stop();
+#endif
+#endif
 }
 
 #ifdef USE_CLI_TOOLS
@@ -339,6 +382,15 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
             return ret;
         }
     }
+
+#ifndef DEBUG_UT
+#ifdef USE_PROMETHEUS
+    if (BioClientStartPrometheus() != BIO_OK) {
+        return BIO_ERR;
+    }
+#endif
+#endif
+
     mStarted = true;
     CLIENT_LOG_INFO("Boostio client start success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
     return BIO_OK;
@@ -354,6 +406,7 @@ void BioClient::Exit()
     BioClientAgentExit();
     BioClientNetExit();
     BioClientMirrorExit();
+    BioClientExitPrometheus();
     BioClientLoggerExit(mMode);
     mStarted = false;
     CLIENT_LOG_INFO("Boostio client exit success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");

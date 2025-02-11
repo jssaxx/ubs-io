@@ -20,6 +20,12 @@ uintptr_t GetBioServerNet();
 
 bool GetCrcFlag();
 
+const char *GetPrometheusListenAddress();
+
+uint32_t GetNegoWorkIoTimeOut();
+
+uint32_t GetPrometheusScrapeIntervalSec();
+
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
 int32_t GetQuotaInfo(QueryQuotaRequest *req, QueryQuotaResponse *rsp);
@@ -59,6 +65,8 @@ int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse 
 int32_t GetCacheHitLocal(CacheHitResponse *rsp);
 
 int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp);
+
+int32_t GetTracePointsLocal(GetTracePointsResponse *rsp);
 
 #ifdef __cplusplus
 }

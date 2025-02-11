@@ -206,6 +206,21 @@ public:
         return mConfig->GetDaemonConfig().enableCrc;
     }
 
+    inline std::string GetPrometheusListenAddress()
+    {
+        return mConfig->GetDaemonConfig().listenAddress;
+    }
+
+    inline uint32_t GetNegoWorkIoTimeOut()
+    {
+        return mConfig->GetDaemonConfig().workIoTimeOut;
+    }
+
+    inline uint32_t GetPrometheusScrapeIntervalSec()
+    {
+        return mConfig->GetDaemonConfig().scrapeIntervalSec;
+    }
+
     inline BioConfigPtr GetConfig()
     {
         return mConfig;

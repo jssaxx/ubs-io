@@ -24,6 +24,9 @@ public:
     using BioServerStartFuncPtr = int32_t (*)();
     using BioServerExitFuncPtr = void (*)();
     using GetBioServerCrcFlagFuncPtr = bool (*)();
+    using GetBioServerListenAddressFuncPtr = const char *(*)();
+    using GetBioServertimeOutFuncPtr = uint32_t (*)();
+    using GetBioServerScrapeIntervalSecFuncPtr = uint32_t (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
     using GetQuotaInfoFuncPtr = int32_t (*)(QueryQuotaRequest *, QueryQuotaResponse *);
@@ -45,6 +48,7 @@ public:
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
     using GetCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
     using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceResponse *);
+    using GetTracePointsLocalFuncPtr = int32_t (*)(GetTracePointsResponse *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -67,6 +71,12 @@ public:
     }
 
     bool GetConfigCrcFlag();
+
+    const char *GetPrometheusListenAddress();
+
+    uint32_t GetNegoWorkIoTimeOut();
+
+    uint32_t GetPrometheusScrapeIntervalSec();
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
 
@@ -112,6 +122,11 @@ public:
 
     BResult CalcCacheResourceLocal(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc);
 
+    BResult GetTracePointsLocal(GetTracePointsRequest &req, GetTracePointsResponse &rsp);
+
+    BResult GetTracePointsLocal(GetTracePointsRequest &req,
+                                std::map<uint16_t, TraceDatabase> &nodesTracePoints);
+
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
     BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
@@ -148,6 +163,8 @@ private:
 
     BResult SendCacheResourceRequestLocal(CacheResourceRequest &req, CacheResourceResponse &rsp);
 
+    BResult SendGetLocalTracePointsRequest(GetTracePointsRequest &req, GetTracePointsResponse &rsp);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -160,6 +177,9 @@ private:
     BioServerStartFuncPtr startOp = nullptr;
     BioServerExitFuncPtr exitOp = nullptr;
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
+    GetBioServerListenAddressFuncPtr getListenAddress = nullptr;
+    GetBioServertimeOutFuncPtr getTimeOut = nullptr;
+    GetBioServerScrapeIntervalSecFuncPtr getScrapeIntervalSec = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
     GetQuotaInfoFuncPtr getQuotaInfoOp = nullptr;
@@ -181,6 +201,7 @@ private:
     LoadFuncPtr loadOp = nullptr;
     GetCacheHitLocalFuncPtr cacheHitOp = nullptr;
     CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
+    GetTracePointsLocalFuncPtr getTracePointsOp = nullptr;
 };
 }
 }

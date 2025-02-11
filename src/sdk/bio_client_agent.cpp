@@ -87,6 +87,18 @@ BResult BioClientAgent::InitOperation()
     if ((getCrcFlag = reinterpret_cast<GetBioServerCrcFlagFuncPtr>(LoadFunction("GetCrcFlag"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((getListenAddress = reinterpret_cast<GetBioServerListenAddressFuncPtr>
+        (LoadFunction("GetPrometheusListenAddress"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getTimeOut = reinterpret_cast<GetBioServertimeOutFuncPtr>
+    (LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getScrapeIntervalSec = reinterpret_cast<GetBioServerScrapeIntervalSecFuncPtr>
+    (LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -145,6 +157,10 @@ BResult BioClientAgent::InitOperation()
         (LoadFunction("CalcCacheResourceLocal"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((getTracePointsOp = reinterpret_cast<GetTracePointsLocalFuncPtr>
+        (LoadFunction("GetTracePointsLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
 
     return InitUpgradeOperation();
 }
@@ -190,6 +206,21 @@ BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t sla
 bool BioClientAgent::GetConfigCrcFlag()
 {
     return getCrcFlag();
+}
+
+const char *BioClientAgent::GetPrometheusListenAddress()
+{
+    return getListenAddress();
+}
+
+uint32_t BioClientAgent::GetNegoWorkIoTimeOut()
+{
+    return getTimeOut();
+}
+
+uint32_t BioClientAgent::GetPrometheusScrapeIntervalSec()
+{
+    return getScrapeIntervalSec();
 }
 
 BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
@@ -867,4 +898,35 @@ BResult BioClientAgent::SendCacheResourceRequestLocal(CacheResourceRequest &req,
     BResult ret = net::BioClientNet::Instance()->SendSync<CacheResourceRequest, CacheResourceResponse>(INVALID_NID,
         BIO_OP_SDK_QUERY_CACHE_RESOURCE, req, rsp);
     return ret;
+}
+
+BResult BioClientAgent::SendGetLocalTracePointsRequest(GetTracePointsRequest &req, GetTracePointsResponse &rsp)
+{
+    BResult ret = net::BioClientNet::Instance()->SendSync<GetTracePointsRequest, GetTracePointsResponse>(
+        INVALID_NID, BIO_OP_SDK_GET_TRACE_POINTS, req, rsp);
+    return ret;
+}
+
+BResult BioClientAgent::GetTracePointsLocal(GetTracePointsRequest &req,
+                                            std::map<uint16_t, TraceDatabase> &nodesTracePoints)
+{
+    GetTracePointsResponse rsp;
+    BResult ret = BIO_OK;
+    if (mMode == CONVERGENCE) {
+        ret = getTracePointsOp(&rsp);
+    } else {
+        ret = SendGetLocalTracePointsRequest(req, rsp);
+    }
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send get local trace points request failed, ret: " << ret << ".");
+        return ret;
+    }
+
+    if (rsp.traceDatabase.count == 0) {
+        CLIENT_LOG_ERROR("Trace number is 0.");
+        return BIO_ERR;
+    }
+
+    nodesTracePoints[req.nodeId] = rsp.traceDatabase;
+    return BIO_OK;
 }

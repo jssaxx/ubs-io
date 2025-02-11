@@ -64,9 +64,11 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_NEGOTIATE_EVICT,
         std::bind(&MirrorServer::HandleEvictNegotiateRequest, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_CACHE_HIT,
-                                         std::bind(&MirrorServer::HandleGetCacheHit, this, std::placeholders::_1));
+        std::bind(&MirrorServer::HandleGetCacheHit, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_CACHE_RESOURCE,
         std::bind(&MirrorServer::HandleQueryCacheResource, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_TRACE_POINTS,
+        std::bind(&MirrorServer::HandleGetTracePoints, this, std::placeholders::_1));
 }
 
 void MirrorServer::RegisterOpcode()
@@ -900,8 +902,14 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.netTimeOut = config.workNetTimeOut;
     rsp.logLevel = config.logLevel;
     rsp.enableCrc = config.enableCrc;
+    rsp.scrapeIntervalSec = config.scrapeIntervalSec;
+    auto ret = strcpy_s(rsp.listenAddress, sizeof(rsp.listenAddress), config.listenAddress.c_str());
+    if (ret != 0) {
+        return BIO_ERR;
+    }
+
     BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
-    auto ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
+    ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
     if (ret != BIO_OK) {
         LOG_ERROR("Send fds failed, ret:" << ret << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
@@ -2261,6 +2269,84 @@ int32_t MirrorServer::HandleQueryCacheResource(ServiceContext &ctx)
     LVOS_TP_END;
 
     return MirrorServerQueryCacheResource(ctx);
+}
+
+BResult MirrorServer::GetTracePointsLocal(GetTracePointsResponse *rsp)
+{
+    rsp->traceDatabase = GetTraceData();
+    if (rsp->traceDatabase.count == 0) {
+        LOG_ERROR("Get trace data failed!");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleGetTracePoints(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetTracePointsRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    return MirrorServerGetTracePoints(ctx);
+}
+
+TraceDatabase MirrorServer::GetTraceData()
+{
+    TraceDatabase traceDatabase = {};
+    auto tracePoints = ock::htracer::HtracerManager::GetTracePoints();
+    uint16_t traceCount = 0;
+    for (int i = 0; i < ock::htracer::MAX_SERVICE_NUM; ++i) {
+        for (int j = 0; j < ock::htracer::MAX_INNER_ID_NUM; ++j) {
+            auto &traceInfo = tracePoints[i][j];
+            if (!traceInfo.NameValid()) {
+                continue;
+            }
+
+            TraceData traceData;
+            auto str = traceInfo.GetName();
+            auto ret = strcpy_s(traceData.traceName, sizeof(traceData.traceName), str.c_str());
+            if (ret != 0) {
+                LOG_ERROR("strcpy_s failed with error code: " << ret << ".");
+                return TraceDatabase();
+            }
+
+            traceData.metrics.beginData = traceInfo.GetBegin();
+            traceData.metrics.goodEnd = traceInfo.GetGoodEnd();
+            traceData.metrics.badEnd = traceInfo.GetBadEnd();
+            traceData.metrics.min = (traceInfo.GetMin() == UINT64_MAX ?
+                                     0 : ((double)traceInfo.GetMin() / ock::htracer::unitStep));
+            traceData.metrics.max = static_cast<double>(traceInfo.GetMax()) / ock::htracer::unitStep;
+            traceData.metrics.total = traceInfo.GetTotal();
+
+            traceDatabase.traces[traceCount] = traceData;
+            traceCount++;
+        }
+    }
+    traceDatabase.count = traceCount;
+
+    return traceDatabase;
+}
+
+int32_t MirrorServer::MirrorServerGetTracePoints(ServiceContext &ctx)
+{
+    GetTracePointsResponse rsp;
+    rsp.traceDatabase = GetTraceData();
+    if (rsp.traceDatabase.count == 0) {
+        LOG_ERROR("Get trace data failed!");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
+                                                 sizeof(GetTracePointsResponse));
+    return BIO_OK;
 }
 
 int32_t MirrorServer::HandleGetCacheHit(ServiceContext &ctx)

@@ -26,3 +26,7 @@
 	path = 3rdparty/openssl/openssl-1.1.1n
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/openssl/openssl.git
 	tag = 3.0.9-htrunk6-h7
+[submodule "3rdparty/prometheus/prometheus"]
+	path = 3rdparty/prometheus/prometheus
+	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/jupp0r/prometheus-cpp.git
+	tag = v1.2.4-htrunk2
