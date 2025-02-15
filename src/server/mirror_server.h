@@ -88,6 +88,7 @@ public:
     BResult SyncData(SyncDataRequest &req);
     BResult GetCacheHitLocal(CacheHitResponse *rsp);
     BResult CalcCacheResourceLocal(CacheResourceResponse *rsp);
+    BResult GetTracePointsLocal(GetTracePointsResponse *rsp);
 
     BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
 
@@ -105,6 +106,7 @@ public:
     BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp, GetRequest &req);
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx, GetRequest &req);
+    TraceDatabase GetTraceData();
 
     int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
     int32_t MirrorServerQueryNodeInfo(ServiceContext &ctx, GetLocalNidRequest *req);
@@ -133,6 +135,7 @@ public:
     int32_t MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req);
     int32_t MirrorServerGetCacheHit(ServiceContext &ctx);
     int32_t MirrorServerQueryCacheResource(ServiceContext &ctx);
+    int32_t MirrorServerGetTracePoints(ServiceContext &ctx);
 
     int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
@@ -161,6 +164,7 @@ public:
     int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
     int32_t HandleGetCacheHit(ServiceContext &ctx);
     int32_t HandleQueryCacheResource(ServiceContext &ctx);
+    int32_t HandleGetTracePoints(ServiceContext &ctx);
 
     bool CheckUpdateReadyReq(CheckUpdateReadyRequest *req);
     bool CheckNotifyUpdateReq(NotifyUpdateRequest *req);

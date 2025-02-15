@@ -1,7 +1,7 @@
 if (NOT OPEN_RELEASE STREQUAL "ON")
     add_subdirectory(benchmarks)
 endif()
-if (OPEN_CLI STREQUAL "ON" OR OPEN_TP STREQUAL "ON")
+if (OPEN_CLI STREQUAL "ON" OR OPEN_TP STREQUAL "ON" OR ${CMAKE_BUILD_TYPE} STREQUAL "debug")
     add_subdirectory(tools)
 endif()
 

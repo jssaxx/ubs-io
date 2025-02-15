@@ -18,6 +18,9 @@
 #include "mirror_client.h"
 #include "bio_client_net.h"
 #include "underfs.h"
+#ifdef USE_PROMETHEUS
+#include "prometheus_manager.h"
+#endif
 
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
@@ -242,6 +245,8 @@ public:
     BResult BioClientUnderfsInit(WorkerMode mode);
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
+    BResult BioClientStartPrometheus();
+    void BioClientExitPrometheus();
     void BioClientUpdateHandle();
     void BioClientUpdateView();
 
