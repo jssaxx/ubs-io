@@ -3,14 +3,11 @@
  */
 
 #include "test_common.h"
-#include <mockcpp/mockcpp.hpp>
-#include "securec.h"
 #include "bio_str_util.h"
 #include "bio_functions.h"
 #include "message.h"
 #include "bio_file_util.h"
 #include "bio_log.h"
-#include "bio_mock.h"
 #include "bio_cryptor_helper.h"
 
 using namespace ock::bio;
@@ -29,11 +26,6 @@ void TestCommon::SetUp()
 void TestCommon::TearDown()
 {
     return;
-}
-
-void TestCommon::Stub()
-{
-    MOCKER_CPP(&FileUtil::GetDiskCapacity, int64_t(*)(std::string & diskPath)).stubs().will(returnValue(1073741824));
 }
 
 TEST_F(TestCommon, test_strtofloat_return_ok)
