@@ -477,6 +477,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     evictMq[tier][mqType].PushBack(chunk);
     evictMqLock[tier][mqType].UnLock();
     BIO_TRACE_END(RCACHE_TRACE_GET_UPDATE_EVICT, BIO_OK);
+    RCacheStatistic::Instance().StatisticalByType(tier);
     chunk->lock.unlock();
     return BIO_OK;
 }

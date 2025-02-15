@@ -489,11 +489,11 @@ CResult BioService::BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDe
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
-    BResult ret = gClient->CalculateCacheHitRatio(nodeDesc);
+    BResult ret = gClient->GetCacheHitRatio(nodeDesc);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Calculate Cache HitRatio failed ret: " << ret);
+        CLIENT_LOG_ERROR("Get Cache HitRatio failed ret: " << ret);
     } else {
-        CLIENT_LOG_INFO("Calculate Cache HitRatio success");
+        CLIENT_LOG_INFO("Get Cache HitRatio success");
     }
     return ToCResult(ret);
 }
@@ -585,21 +585,37 @@ static void BioCacheHitRadioCalc(CacheHitFinalDesc *desc, CacheHitFinalDesc **no
                                  std::unordered_map<uint16_t, CacheHitDesc> nodeDescription)
 {
     desc->nodeId = INVALID_NID;
+    desc->rCacheHitMemCount = 0;
+    desc->rCacheHitDiskCount = 0;
     desc->rCacheHitCount = 0;
+    desc->wCacheHitMemCount = 0;
+    desc->wCacheHitDiskCount = 0;
     desc->wCacheHitCount = 0;
     desc->rCacheTotalCount = 0;
     desc->wCacheTotalCount = 0;
+    desc->backendHitCount = 0;
     uint32_t i = 0;
     for (auto& nodeInfo : nodeDescription) {
         (*nodeDesc)[i].nodeId = nodeInfo.first;
+        (*nodeDesc)[i].rCacheHitMemCount = nodeInfo.second.rCacheHitMemCount.load();
+        (*nodeDesc)[i].rCacheHitDiskCount = nodeInfo.second.rCacheHitDiskCount.load();
         (*nodeDesc)[i].rCacheHitCount = nodeInfo.second.rCacheHitCount.load();
         (*nodeDesc)[i].rCacheTotalCount = nodeInfo.second.rCacheTotalCount.load();
+        (*nodeDesc)[i].wCacheHitMemCount = nodeInfo.second.wCacheHitMemCount.load();
+        (*nodeDesc)[i].wCacheHitDiskCount = nodeInfo.second.wCacheHitDiskCount.load();
         (*nodeDesc)[i].wCacheHitCount = nodeInfo.second.wCacheHitCount.load();
         (*nodeDesc)[i].wCacheTotalCount = nodeInfo.second.wCacheTotalCount.load();
+        (*nodeDesc)[i].backendHitCount = nodeInfo.second.backendHitCount.load();
+
+        desc->rCacheHitMemCount += (*nodeDesc)[i].rCacheHitMemCount;
+        desc->rCacheHitDiskCount += (*nodeDesc)[i].rCacheHitDiskCount;
         desc->rCacheHitCount += (*nodeDesc)[i].rCacheHitCount;
         desc->rCacheTotalCount += (*nodeDesc)[i].rCacheTotalCount;
+        desc->wCacheHitMemCount += (*nodeDesc)[i].wCacheHitMemCount;
+        desc->wCacheHitDiskCount += (*nodeDesc)[i].wCacheHitDiskCount;
         desc->wCacheHitCount += (*nodeDesc)[i].wCacheHitCount;
         desc->wCacheTotalCount += (*nodeDesc)[i].wCacheTotalCount;
+        desc->backendHitCount += (*nodeDesc)[i].backendHitCount;
         i++;
     }
 }

@@ -467,6 +467,7 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
         ret = originSlice->VerifyDataCrc(originSlice->GetDataCrc(), 0, originSlice->GetLength(), nullptr);
         if (ret != BIO_OK) {
             LOG_ERROR("Server wcache get verify the CRC fail, key:"<< key << ", ret:" << ret);
+            sliceRef->Release();
             return ret;
         }
     }
@@ -477,6 +478,8 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("WCache Read data failed, key :" << key << ", offset:" << offset << ", length:" <<
             sliceRef->GetSlice()->GetLength() << ".");
+        sliceRef->Release();
+        return ret;
     } else {
         if (mEnableCrc) {
             uint32_t readCrc;
@@ -489,6 +492,7 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
             slice->SetDataCrc(readCrc);
         }
     }
+    WCacheStatistic::Instance().StatisticalByType(sliceRef->GetSlice()->GetFlowType());
     sliceRef->Release();
     return ret;
 }

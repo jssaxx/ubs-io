@@ -138,7 +138,7 @@ BResult BioClientAgent::InitOperation()
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((cacheHitOp = reinterpret_cast<CalcCacheHitLocalFuncPtr>(LoadFunction("CalcCacheHitLocal"))) == nullptr) {
+    if ((cacheHitOp = reinterpret_cast<GetCacheHitLocalFuncPtr>(LoadFunction("GetCacheHitLocal"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((cacheResourceOp = reinterpret_cast<CalcCacheResourceLocalFuncPtr>
@@ -831,12 +831,12 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
 BResult BioClientAgent::SendCacheHitRequestLocal(CacheHitRequest &req, CacheHitResponse &rsp)
 {
     BResult ret = net::BioClientNet::Instance()->SendSync<CacheHitRequest, CacheHitResponse>(INVALID_NID,
-                                                                                             BIO_OP_SDK_CALC_CACHE_HIT,
+                                                                                             BIO_OP_SDK_GET_CACHE_HIT,
                                                                                              req, rsp);
     return ret;
 }
 
-BResult BioClientAgent::CalcCacheHitLocal(CacheHitRequest &req, std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+BResult BioClientAgent::GetCacheHitLocal(CacheHitRequest &req, std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
 {
     CacheHitResponse rsp;
     BResult ret = BIO_OK;
@@ -846,13 +846,19 @@ BResult BioClientAgent::CalcCacheHitLocal(CacheHitRequest &req, std::unordered_m
         ret = SendCacheHitRequestLocal(req, rsp);
     }
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Send calc cache hit request failed, ret:" << ret << ".");
+        CLIENT_LOG_ERROR("Send get cache hit request failed, ret:" << ret << ".");
         return ret;
     }
+
+    nodeDesc[rsp.nodeId].rCacheHitMemCount.store(rsp.rCacheHitMemCount);
+    nodeDesc[rsp.nodeId].rCacheHitDiskCount.store(rsp.rCacheHitDiskCount);
     nodeDesc[rsp.nodeId].rCacheHitCount.store(rsp.rCacheHitCount);
     nodeDesc[rsp.nodeId].rCacheTotalCount.store(rsp.rCacheTotalCount);
+    nodeDesc[rsp.nodeId].wCacheHitMemCount.store(rsp.wCacheHitMemCount);
+    nodeDesc[rsp.nodeId].wCacheHitDiskCount.store(rsp.wCacheHitDiskCount);
     nodeDesc[rsp.nodeId].wCacheHitCount.store(rsp.wCacheHitCount);
     nodeDesc[rsp.nodeId].wCacheTotalCount.store(rsp.wCacheTotalCount);
+    nodeDesc[rsp.nodeId].backendHitCount.store(rsp.backendHitCount);
     return ret;
 }
 

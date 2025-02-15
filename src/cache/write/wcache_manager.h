@@ -14,6 +14,7 @@
 #include "wcache.h"
 #include "wcache_index.h"
 #include "rcache_manager.h"
+#include "wcache_statistic.h"
 
 namespace ock {
 namespace bio {

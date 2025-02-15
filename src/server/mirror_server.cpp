@@ -63,8 +63,8 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
         std::bind(&MirrorServer::HandleGetUnderFsConfig, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_NEGOTIATE_EVICT,
         std::bind(&MirrorServer::HandleEvictNegotiateRequest, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CALC_CACHE_HIT,
-        std::bind(&MirrorServer::HandleCalcCacheHit, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_CACHE_HIT,
+                                         std::bind(&MirrorServer::HandleGetCacheHit, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_QUERY_CACHE_RESOURCE,
         std::bind(&MirrorServer::HandleQueryCacheResource, this, std::placeholders::_1));
 }
@@ -2230,13 +2230,18 @@ BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
     return BIO_OK;
 }
 
-BResult MirrorServer::CalcCacheHitLocal(CacheHitResponse *rsp)
+BResult MirrorServer::GetCacheHitLocal(CacheHitResponse *rsp)
 {
     rsp->nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
+    rsp->rCacheHitMemCount = RCacheStatistic::Instance().GetHitMemCount();
+    rsp->rCacheHitDiskCount = RCacheStatistic::Instance().GetHitDiskCount();
     rsp->rCacheHitCount = RCacheStatistic::Instance().GetHitCount();
     rsp->rCacheTotalCount = RCacheStatistic::Instance().GetTotalCount();
+    rsp->wCacheHitMemCount = WCacheStatistic::Instance().GetHitMemCount();
+    rsp->wCacheHitDiskCount = WCacheStatistic::Instance().GetHitDiskCount();
     rsp->wCacheHitCount = WCacheStatistic::Instance().GetHitCount();
     rsp->wCacheTotalCount = WCacheStatistic::Instance().GetTotalCount();
+    rsp->backendHitCount = DiskStatistic::Instance().GetHitCount();
     return BIO_OK;
 }
 
@@ -2258,14 +2263,14 @@ int32_t MirrorServer::HandleQueryCacheResource(ServiceContext &ctx)
     return MirrorServerQueryCacheResource(ctx);
 }
 
-int32_t MirrorServer::HandleCalcCacheHit(ServiceContext &ctx)
+int32_t MirrorServer::HandleGetCacheHit(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
 
-    LVOS_TP_START(CALC_CACHE_HIT, 0);
+    LVOS_TP_START(GET_CACHE_HIT, 0);
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(CacheHitRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
@@ -2273,7 +2278,7 @@ int32_t MirrorServer::HandleCalcCacheHit(ServiceContext &ctx)
     }
     LVOS_TP_END;
 
-    return MirrorServerCalcCacheHit(ctx);
+    return MirrorServerGetCacheHit(ctx);
 }
 
 int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
@@ -2295,14 +2300,19 @@ int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
     return BIO_OK;
 }
 
-int32_t MirrorServer::MirrorServerCalcCacheHit(ServiceContext &ctx)
+int32_t MirrorServer::MirrorServerGetCacheHit(ServiceContext &ctx)
 {
     CacheHitResponse rsp;
     rsp.nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
+    rsp.rCacheHitMemCount = RCacheStatistic::Instance().GetHitMemCount();
+    rsp.rCacheHitDiskCount = RCacheStatistic::Instance().GetHitDiskCount();
     rsp.rCacheHitCount = RCacheStatistic::Instance().GetHitCount();
     rsp.rCacheTotalCount = RCacheStatistic::Instance().GetTotalCount();
+    rsp.wCacheHitMemCount = WCacheStatistic::Instance().GetHitMemCount();
+    rsp.wCacheHitDiskCount = WCacheStatistic::Instance().GetHitDiskCount();
     rsp.wCacheHitCount = WCacheStatistic::Instance().GetHitCount();
     rsp.wCacheTotalCount = WCacheStatistic::Instance().GetTotalCount();
+    rsp.backendHitCount = DiskStatistic::Instance().GetHitCount();
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheHitResponse));
     return BIO_OK;
 }
