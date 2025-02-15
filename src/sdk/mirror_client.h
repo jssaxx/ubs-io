@@ -99,6 +99,10 @@ public:
 
     BResult CheckUpdateReady();
 
+    BResult CalculateCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+
+    BResult QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &nodeDesc);
+
     DEFINE_REF_COUNT_FUNCTIONS
 
     std::vector<uint16_t> ListLocalAffinityPt();
@@ -196,6 +200,22 @@ private:
     BResult SendNotifyUpdateRequest(bool &flag);
 
     BResult SendCheckUpdateReadyRequest();
+
+    BResult SendCacheHitRequest(CacheHitRequest &req, std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+
+    BResult SendCacheResourceRequest(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc);
+
+    void CalcCacheHitLocal(CacheHitRequest &req, uint16_t localId,
+                           std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+
+    void CalcCacheHitRemote(CacheHitRequest &req, std::vector<uint16_t> &remoteId,
+                            std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+
+    void CalcCacheResourceLocal(CacheResourceRequest &req, uint16_t localId,
+                                std::vector<CacheResourcesDesc> &nodeDesc);
+
+    void CalcCacheResourceRemote(CacheResourceRequest &req, std::vector<uint16_t> &remoteId,
+                                 std::vector<CacheResourcesDesc> &nodeDesc);
 
     BResult AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut &param, CacheSpaceDesc &spaceInfo);
     BResult InitializeBioQos();

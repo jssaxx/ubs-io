@@ -46,6 +46,10 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, "sdk mirror client alloc space fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_RSP_NUM_ERROR, "set mirror rsp num error", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, "get underfs config pass sync call", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL, "mirror client query cache resource fail",
+                CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL, "mirror client query cache hit fail",
+                CommonTp::IntValueCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
@@ -85,6 +89,8 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY);
     LVOS_TP_UNREG(SDK_MIRROR_RSP_NUM_ERROR);
     LVOS_TP_UNREG(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL);
+    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL);
 }
 #else
 void tp::SdkTp::Register() noexcept {}

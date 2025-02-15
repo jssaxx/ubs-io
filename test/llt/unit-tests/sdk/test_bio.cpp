@@ -48,6 +48,139 @@ void TestBio::TearDown()
     return;
 }
 
+TEST_F(TestBio, test_bio_show_cache_resource_not_num_fail)
+{
+    LOG_INFO("test_bio_show_cache_resource_not_num_fail");
+    CacheResourcesDesc *nodeDesc;
+    uint64_t nodeNum;
+    CResult ret = BioShowCacheResource(&nodeDesc, &nodeNum);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    std::vector<CacheResourcesDesc> nodeDescription;
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    ret = BioService::BioShowCacheResource(nodeDescription);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+}
+
+TEST_F(TestBio, test_bio_show_cache_resource_not_cache_fail)
+{
+    LOG_INFO("test_bio_show_cache_resource_not_cache_fail");
+    CacheResourcesDesc *nodeDesc;
+    uint64_t nodeNum;
+    auto ret = BioShowCacheResource(&nodeDesc, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+    std::vector<CacheResourcesDesc> nodeDescription;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL", 0, 1, userParam);
+    ret = BioService::BioShowCacheResource(nodeDescription);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL");
+}
+
+TEST_F(TestBio, test_bio_show_cache_resource_cache_success)
+{
+    LOG_INFO("test_bio_show_cache_resource_send_cache_fail");
+    CacheResourcesDesc *nodeDesc;
+    uint64_t nodeNum;
+    std::vector<CacheResourcesDesc> nodeDescription;
+    auto ret = BioShowCacheResource(&nodeDesc, &nodeNum);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
+    EXPECT_EQ(nodeDesc, nullptr);
+
+    ret = BioDestroyCache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
+TEST_F(TestBio, test_bio_show_cache_hit_ratio_fail)
+{
+    LOG_INFO("test_bio_show_cache_hit_ratio_fail");
+    CacheHitFinalDesc desc;
+    CacheHitFinalDesc *nodeDesc = NULL;
+    uint64_t nodeNum;
+    auto ret = BioShowCacheHitRatio(&desc, &nodeDesc, &nodeNum);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    std::unordered_map<uint16_t, CacheHitDesc> nodeDescription;
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    ret = BioService::BioShowCacheHitRatio(nodeDescription);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+}
+
+TEST_F(TestBio, test_bio_show_cache_hit_ratio_not_cache_fail)
+{
+    LOG_INFO("test_bio_show_cache_hit_ratio_not_cache_fail");
+    CacheHitFinalDesc desc;
+    CacheHitFinalDesc *nodeDesc;
+    uint64_t nodeNum;
+    auto ret = BioShowCacheHitRatio(&desc, &nodeDesc, nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+    std::unordered_map<uint16_t, CacheHitDesc> nodeDescription;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL", 0, 1, userParam);
+    ret = BioService::BioShowCacheHitRatio(nodeDescription);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL");
+}
+
+TEST_F(TestBio, test_bio_show_cache_hit_ratio_success)
+{
+    LOG_INFO("test_bio_show_cache_hit_ratio_success");
+    std::unordered_map<uint16_t, CacheHitDesc> nodeDescription;
+    CacheHitFinalDesc desc;
+    CacheHitFinalDesc *nodeDesc;
+    uint64_t nodeNum;
+    auto ret = BioShowCacheHitRatio(&desc, &nodeDesc, &nodeNum);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    BioFreeCacheHitPtr(&nodeDesc, nodeNum);
+    EXPECT_EQ(nodeDesc, nullptr);
+
+    ret = BioDestroyCache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
+TEST_F(TestBio, test_bio_free_cache_resource_ptr)
+{
+    LOG_INFO("test_bio_free_cache_resource_ptr");
+    CacheResourcesDesc *nodeDesc = nullptr;
+    uint64_t nodeNum = 0;
+    BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
+    EXPECT_EQ(nodeDesc, nullptr);
+
+    nodeNum = NO_2;
+    BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
+    EXPECT_EQ(nodeDesc, nullptr);
+}
+
+TEST_F(TestBio, test_bio_free_cache_hit_ptr)
+{
+    LOG_INFO("test_bio_free_cache_hit_ptr");
+    CacheHitFinalDesc *nodeDesc = nullptr;
+    uint64_t nodeNum = 0;
+    BioFreeCacheHitPtr(&nodeDesc, nodeNum);
+    EXPECT_EQ(nodeDesc, nullptr);
+
+    nodeNum = NO_2;
+    BioFreeCacheHitPtr(&nodeDesc, nodeNum);
+    EXPECT_EQ(nodeDesc, nullptr);
+}
+
 TEST_F(TestBio, test_bio_create_cache)
 {
     LOG_INFO("test_bio_create_cache");

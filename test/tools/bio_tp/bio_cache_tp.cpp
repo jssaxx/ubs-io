@@ -152,6 +152,8 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(GET_EXTERNAL_RCACHE_MALLOC_FAIL, "external get rcache malloc fail", CommonTp::PointerValueCallback);
     LVOS_TP_REG(GET_EXTERBAL_OPEN_CRC, "external get open crc", CommonTp::BoolValueCallback);
     LVOS_TP_REG(GET_EXTERBAL_CRC_OK, "external get crc OK", CommonTp::IntValueCallback);
+    LVOS_TP_REG(CALC_CACHE_HIT, "calc cache hit fail", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(CALC_CACHE_RESOURCE, "calc cache resource fail", tp::CommonTp::NoProcessCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
