@@ -24,7 +24,6 @@ if [ ! -d "${BUILD_DIR}" ]; then
     mkdir -p ${BUILD_DIR}
 fi
 
-
 while true; do
     case "$1" in
         -t | --type )
@@ -108,6 +107,7 @@ if [ -z "${CI_BUILD}" ];then
     cd $PROJ_DIR && git submodule update --init
     cd $PROJ_DIR/3rdparty/hcom/hcom && git submodule update --init
     cd $PROJ_DIR/3rdparty/hseceasy/hseceasy && git submodule update --init
+    cd $PROJ_DIR/3rdparty/prometheus/prometheus && git submodule update --init
 fi
 
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
@@ -130,6 +130,7 @@ if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp 3rdparty/spdlog/lib64/libspdlog.a bio/lib/.
 	  \cp 3rdparty/hcom/lib/securec/* bio/lib/.
 	  \cp 3rdparty/huawei_secure_c/lib/* bio/lib/.
+	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 \cp 3rdparty/hcom/lib/libhcom.so bio/lib/.
 \cp 3rdparty/hseceasy/hse/cryption_tool/bin/* bio/bin/.

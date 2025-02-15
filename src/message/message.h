@@ -26,6 +26,7 @@ const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
 const uint32_t MAX_EVICT_CONSULT_SIZE = 50;
+const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
 
 typedef struct {
     uint16_t magic;
@@ -52,6 +53,8 @@ typedef struct {
     uint32_t netTimeOut;
     int32_t logLevel;
     bool enableCrc;
+    char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
+    uint32_t scrapeIntervalSec;
 } ShmInitResponse;
 
 /* Query cache resource quota */
@@ -503,6 +506,16 @@ typedef struct {
     uint64_t backendHitCount;
     uint16_t nodeId;
 } CacheHitResponse;
+
+/* Get Trace Points */
+typedef struct {
+    uint16_t nodeId;
+    RequestComm comm;
+} GetTracePointsRequest;
+
+typedef struct {
+    TraceDatabase traceDatabase;
+} GetTracePointsResponse;
 
 #ifdef __cplusplus
 }

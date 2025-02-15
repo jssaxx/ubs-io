@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
+
 #include "bio_config_instance.h"
 #include "bio_log.h"
 #include "bio_ip_util.h"
@@ -74,6 +75,10 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(NET_TLS_SERVER_KEY_PASS_PATH);
     AddStrConf(NET_HESC_SERVER_KFS_MASTER_PATH);
     AddStrConf(NET_HESC_SERVER_KFS_STANDBY_PATH);
+
+    /* load prometheus config */
+    AddStrConf(PROMETHEUS_LISTEN_ADDRESS, VStrNotNull::Create(PROMETHEUS_LISTEN_ADDRESS.first));
+    AddIntConf(PROMETHEUS_SCRAPE_INTERVAL_SEC, VIntRange::Create(PROMETHEUS_SCRAPE_INTERVAL_SEC.first, NO_2, NO_8192));
 }
 
 BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
@@ -187,6 +192,8 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     mDaemonConfig.enableCrc = conf->GetStr(DATA_CRC_ENABLE.first) == "true";
     mDaemonConfig.enableTrace = conf->GetStr(BIO_TRACE_ENABLE.first) == "true";
     mDaemonConfig.enableQos = conf->GetStr(BIO_CACHE_QOS_ENABLE.first) == "true";
+    mDaemonConfig.listenAddress = conf->GetStr(PROMETHEUS_LISTEN_ADDRESS.first);
+    mDaemonConfig.scrapeIntervalSec = conf->GetInt(PROMETHEUS_SCRAPE_INTERVAL_SEC.first);
 
     std::string scene = conf->GetStr(WORK_SCENE.first);
     if (scene == "none") {

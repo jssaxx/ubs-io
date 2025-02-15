@@ -13,7 +13,6 @@
 #include "htracer.h"
 #include "bio_client.h"
 #include "bio_lock.h"
-#include "bio_client.h"
 #include "sdk_diagnose.h"
 
 #ifdef __cplusplus
@@ -531,7 +530,7 @@ static void HandleShowCacheHit(std::vector<std::string> cmds)
                           (double)desc.backendHitCount / (double)desc.wCacheTotalCount : 0;
     double totalCacheHitRatio = rCacheHitRatio + wCacheHitRatio;
     CLI_PrintBuf("--------------------------------\n");
-    CLI_PrintBuf("all node totalCacheHitRatio  :%.2f%%.\n", totalCacheHitRatio * 100);
+    CLI_PrintBuf("all node totalCacheHitRatio :%.2f%%.\n", totalCacheHitRatio * 100);
     CLI_PrintBuf("all node rCacheHitMemRatio :%.2f%%.\n", rCacheHitMemRatio * 100);
     CLI_PrintBuf("all node rCacheHitDiskRatio :%.2f%%.\n", rCacheHitDiskRatio * 100);
     CLI_PrintBuf("all node rCacheHitRatio :%.2f%%.\n", rCacheHitRatio * 100);
