@@ -346,6 +346,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     LVOS_TP_END;
     LVOS_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
+    WCacheStatistic::Instance().IncTotalCount();
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
@@ -353,6 +354,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     } else if (ret == BIO_OK) {
         LOG_DEBUG("Write cache hit, key:" << key << ", offset:" << offset << ", len:" <<
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
+        WCacheStatistic::Instance().IncHitCount();
         return BIO_OK;
     }
 
@@ -361,12 +363,14 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
     LVOS_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
+    RCacheStatistic::Instance().IncTotalCount();
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
         return ret;
     } else if (ret == BIO_OK) {
         LOG_DEBUG("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
+        RCacheStatistic::Instance().IncHitCount();
         return BIO_OK;
     }
 

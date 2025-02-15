@@ -469,6 +469,36 @@ typedef struct {
     bool negoResult[MAX_EVICT_CONSULT_SIZE];
 } EvictNegotiateResponse;
 
+/* Cache Resource */
+typedef struct {
+    RequestComm comm;
+} CacheResourceRequest;
+
+typedef struct {
+    uint64_t rCacheMemCapacity;
+    uint64_t rCacheDiskCapacity;
+    uint64_t wCacheMemCapacity;
+    uint64_t wCacheDiskCapacity;
+    uint64_t rCacheMemUsedSize;
+    uint64_t rCacheDiskUsedSize;
+    uint64_t wCacheMemUsedSize;
+    uint64_t wCacheDiskUsedSize;
+    uint16_t nodeId;
+} CacheResourceResponse;
+
+/* Cache Hit */
+typedef struct {
+    RequestComm comm;
+} CacheHitRequest;
+
+typedef struct {
+    uint64_t rCacheHitCount;
+    uint64_t rCacheTotalCount;
+    uint64_t wCacheHitCount;
+    uint64_t wCacheTotalCount;
+    uint16_t nodeId;
+} CacheHitResponse;
+
 #ifdef __cplusplus
 }
 #endif

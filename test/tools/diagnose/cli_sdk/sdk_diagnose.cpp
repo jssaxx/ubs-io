@@ -60,6 +60,8 @@ static void HandleStat(std::vector<std::string> cmds);
 static void HandleLoad(std::vector<std::string> cmds);
 static void HandleDelete(std::vector<std::string> cmds);
 static void HandleShow(std::vector<std::string> cmds);
+static void HandleShowCacheHit(std::vector<std::string> cmds);
+static void HandleShowCacheResource(std::vector<std::string> cmds);
 static void HandleNotifyUpdatePrepare(std::vector<std::string> cmds);
 static void HandleNotifyUpdateFinish(std::vector<std::string> cmds);
 static void HandleCheckUpdateReady(std::vector<std::string> cmds);
@@ -501,6 +503,86 @@ static void HandleShow(std::vector<std::string> cmds)
     }
 }
 
+static void HandleShowCacheHit(std::vector<std::string> cmds)
+{
+    CacheHitFinalDesc desc;
+    CacheHitFinalDesc *nodeDesc = NULL;
+    uint64_t nodeNum = 0;
+    auto ret = BioShowCacheHitRatio(&desc, &nodeDesc, &nodeNum);
+    if (ret != RET_CACHE_OK) {
+        BioFreeCacheHitPtr(&nodeDesc, nodeNum);
+        CLI_PrintBuf("Show Cache Hit failed, result:%d.\n", ret);
+        return;
+    }
+    double rCacheHitRatio = desc.wCacheTotalCount != 0 ?
+                            (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitRatio = desc.wCacheTotalCount != 0 ?
+                            (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double totalHitRatio = rCacheHitRatio + wCacheHitRatio;
+    CLI_PrintBuf("--------------------------------\n");
+    CLI_PrintBuf("all node totalHitRatio  :%.2f%%.\n", totalHitRatio * 100);
+    CLI_PrintBuf("all node rCacheHitRatio :%.2f%%.\n", rCacheHitRatio * 100);
+    CLI_PrintBuf("all node wCacheHitRatio :%.2f%%.\n", wCacheHitRatio * 100);
+    CLI_PrintBuf("----------------------------------\n");
+    for (int i = 0; i < nodeNum; i++) {
+        uint16_t nodeId = nodeDesc[i].nodeId;
+        double nodeRCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                    (double)nodeDesc[i].rCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                    (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeTotalHitRatio = nodeRCacheHitRatio + nodeWCacheHitRatio;
+        CLI_PrintBuf("node: %d totalHitRatio :%.2f%%.\n", nodeId, nodeTotalHitRatio * 100);
+        CLI_PrintBuf("node: %d rCacheHitRatio :%.2f%%.\n", nodeId, nodeRCacheHitRatio * 100);
+        CLI_PrintBuf("node: %d wCacheHitRatio :%.2f%%.\n", nodeId, nodeWCacheHitRatio * 100);
+        CLI_PrintBuf("--------------------------------\n");
+    }
+    BioFreeCacheHitPtr(&nodeDesc, nodeNum);
+}
+
+static void HandleShowCacheResource(std::vector<std::string> cmds)
+{
+    CacheResourcesDesc *nodeDesc = NULL;
+    uint64_t nodeNum = 0;
+    auto ret = BioShowCacheResource(&nodeDesc, &nodeNum);
+    if (ret != RET_CACHE_OK) {
+        BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
+        CLI_PrintBuf("Show Cache Resource failed, result:%d \n", ret);
+        return;
+    }
+    CLI_PrintBuf("--------------------------------\n");
+    for (int i = 0; i < nodeNum; i++) {
+        uint16_t nodeId = nodeDesc[i].nodeId;
+        if (nodeDesc[i].rCacheMemCapacity == 0 || nodeDesc[i].rCacheDiskCapacity == 0
+            || nodeDesc[i].wCacheMemCapacity == 0 || nodeDesc[i].wCacheDiskCapacity == 0) {
+            CLI_PrintBuf("node Capacity is zero, nodeId:%d  rCacheMemCapacity(MB):%llu  rCacheDiskCapacity(MB):%llu \n",
+                         nodeId, nodeDesc[i].rCacheMemCapacity / NO_1048576,
+                         nodeDesc[i].rCacheDiskCapacity / NO_1048576);
+            CLI_PrintBuf("wCacheMemCapacity(MB):%llu  wCacheDiskCapacity(MB):%llu \n",
+                         nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
+            continue;
+        }
+        CLI_PrintBuf("node: %d cache resources information(MB): \n", nodeId);
+        double wCacheMemWaterLever = (double)nodeDesc[i].wCacheMemUsedSize / (double)nodeDesc[i].wCacheMemCapacity;
+        double rCacheMemWaterLever = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
+        double wCacheDiskWaterLever = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
+        double rCacheDiskWaterLever = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
+        CLI_PrintBuf("wCacheMemCapacity %llu   wCacheDiskCapacity %llu \n",
+                     nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
+        CLI_PrintBuf("rCacheMemCapacity %llu   rCacheDiskCapacity %llu \n",
+                     nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheDiskCapacity / NO_1048576);
+        CLI_PrintBuf("wCacheMemUsedSize %llu   wCacheDiskUsedSize %llu \n",
+                     nodeDesc[i].wCacheMemUsedSize / NO_1048576, nodeDesc[i].wCacheDiskUsedSize / NO_1048576);
+        CLI_PrintBuf("wCacheMemWaterLever %.4f%%   wCacheDiskWaterLever %.4f%% \n",
+                     wCacheMemWaterLever * 100, wCacheDiskWaterLever * 100);
+        CLI_PrintBuf("rCacheMemUsedSize %llu   rCacheDiskUsedSize %llu \n",
+                     nodeDesc[i].rCacheMemUsedSize / NO_1048576, nodeDesc[i].rCacheDiskUsedSize / NO_1048576);
+        CLI_PrintBuf("rCacheMemWaterLever %.4f%%   rCacheDiskWaterLever %.4f%% \n",
+                     rCacheMemWaterLever * 100, rCacheDiskWaterLever * 100);
+        CLI_PrintBuf("--------------------------------\n");
+    }
+    BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
+}
+
 static void HandleSdkTrace(std::vector<std::string> cmds)
 {
     auto cType = cmds[1].c_str();
@@ -716,6 +798,8 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tdelete object: sdk delete [key] [location]\n");
     CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity]\n");
     CLI_PrintBuf("\ttrace: sdk trace [show/clear]\n");
+    CLI_PrintBuf("\tCache hit: sdk cachehit\n");
+    CLI_PrintBuf("\tCache resource: sdk cacheresource\n");
     CLI_PrintBuf("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     CLI_PrintBuf("\tupdate prepare: sdk notifyupdate [tenantId]\n");
     CLI_PrintBuf("\tupdate check: sdk checkupdate [tenantId]\n");
@@ -853,6 +937,26 @@ static void BioSdkDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleCheckUpdateReady(cmds);
+    } else if (cmdType == "cachehit") {
+        if (gTenantId == UINT64_MAX) {
+            CLI_PrintBuf("Create and open a cache first!\n");
+            return;
+        }
+        if (cmds.size() != 1) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleShowCacheHit(cmds);
+    } else if (cmdType == "cacheresource") {
+        if (gTenantId == UINT64_MAX) {
+            CLI_PrintBuf("Create and open a cache first!\n");
+            return;
+        }
+        if (cmds.size() != 1) {
+            CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleShowCacheResource(cmds);
     } else if (cmdType == "exit") {
         return;
     } else {

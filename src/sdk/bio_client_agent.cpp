@@ -138,6 +138,13 @@ BResult BioClientAgent::InitOperation()
     if ((loadOp = reinterpret_cast<LoadFuncPtr>(LoadFunction("Load"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((cacheHitOp = reinterpret_cast<CalcCacheHitLocalFuncPtr>(LoadFunction("CalcCacheHitLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((cacheResourceOp = reinterpret_cast<CalcCacheResourceLocalFuncPtr>
+        (LoadFunction("CalcCacheResourceLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
 
     return InitUpgradeOperation();
 }
@@ -792,4 +799,66 @@ BResult BioClientAgent::LoadLocal(LoadRequest &req)
     } else {
         return SendLoadRequestLocal(req);
     }
+}
+
+BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc)
+{
+    CacheResourceResponse rsp;
+    BResult ret = BIO_OK;
+    if (mMode == CONVERGENCE) {
+        ret = cacheResourceOp(&rsp);
+    } else {
+        ret = SendCacheResourceRequestLocal(req, rsp);
+    }
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send calc resource request failed, ret:" << ret << ".");
+        return ret;
+    }
+    CacheResourcesDesc tempDesc;
+    tempDesc.nodeId = rsp.nodeId;
+    tempDesc.rCacheMemCapacity = rsp.rCacheMemCapacity;
+    tempDesc.rCacheDiskCapacity = rsp.rCacheDiskCapacity;
+    tempDesc.wCacheMemCapacity = rsp.wCacheMemCapacity;
+    tempDesc.wCacheDiskCapacity = rsp.wCacheDiskCapacity;
+    tempDesc.rCacheDiskUsedSize = rsp.rCacheDiskUsedSize;
+    tempDesc.rCacheMemUsedSize = rsp.rCacheMemUsedSize;
+    tempDesc.wCacheMemUsedSize = rsp.wCacheMemUsedSize;
+    tempDesc.wCacheDiskUsedSize = rsp.wCacheDiskUsedSize;
+    nodeDesc.push_back(tempDesc);
+    return ret;
+}
+
+BResult BioClientAgent::SendCacheHitRequestLocal(CacheHitRequest &req, CacheHitResponse &rsp)
+{
+    BResult ret = net::BioClientNet::Instance()->SendSync<CacheHitRequest, CacheHitResponse>(INVALID_NID,
+                                                                                             BIO_OP_SDK_CALC_CACHE_HIT,
+                                                                                             req, rsp);
+    return ret;
+}
+
+BResult BioClientAgent::CalcCacheHitLocal(CacheHitRequest &req, std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+{
+    CacheHitResponse rsp;
+    BResult ret = BIO_OK;
+    if (mMode == CONVERGENCE) {
+        ret = cacheHitOp(&rsp);
+    } else {
+        ret = SendCacheHitRequestLocal(req, rsp);
+    }
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send calc cache hit request failed, ret:" << ret << ".");
+        return ret;
+    }
+    nodeDesc[rsp.nodeId].rCacheHitCount.store(rsp.rCacheHitCount);
+    nodeDesc[rsp.nodeId].rCacheTotalCount.store(rsp.rCacheTotalCount);
+    nodeDesc[rsp.nodeId].wCacheHitCount.store(rsp.wCacheHitCount);
+    nodeDesc[rsp.nodeId].wCacheTotalCount.store(rsp.wCacheTotalCount);
+    return ret;
+}
+
+BResult BioClientAgent::SendCacheResourceRequestLocal(CacheResourceRequest &req, CacheResourceResponse &rsp)
+{
+    BResult ret = net::BioClientNet::Instance()->SendSync<CacheResourceRequest, CacheResourceResponse>(INVALID_NID,
+        BIO_OP_SDK_QUERY_CACHE_RESOURCE, req, rsp);
+    return ret;
 }

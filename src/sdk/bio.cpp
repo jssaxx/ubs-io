@@ -470,6 +470,34 @@ void BioService::DestroyCache(uint64_t tenantId)
     CLIENT_LOG_INFO("Destroy cache instance success, tenantId:" << tenantId << ".");
 }
 
+CResult BioService::BioShowCacheResource(std::vector<CacheResourcesDesc> &nodeDesc)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    BResult ret = gClient->QueryCacheResource(nodeDesc);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("query cache resource failed ret: " << ret);
+    } else {
+        CLIENT_LOG_INFO("query cache resource success");
+    }
+    return ToCResult(ret);
+}
+
+CResult BioService::BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    BResult ret = gClient->CalculateCacheHitRatio(nodeDesc);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Calculate Cache HitRatio failed ret: " << ret);
+    } else {
+        CLIENT_LOG_INFO("Calculate Cache HitRatio success");
+    }
+    return ToCResult(ret);
+}
+
 CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf)
 {
     auto bioClient = BioClient::Instance();
@@ -506,6 +534,120 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
 void BioExit()
 {
     BioService::Exit();
+}
+
+static void BioCacheResourceCalc(CacheResourcesDesc **nodeDesc, const std::vector<CacheResourcesDesc> &nodeDescription)
+{
+    uint32_t i = 0;
+    for (auto& nodeInfo : nodeDescription) {
+        (*nodeDesc)[i].nodeId = nodeInfo.nodeId;
+        (*nodeDesc)[i].rCacheMemCapacity = nodeInfo.rCacheMemCapacity;
+        (*nodeDesc)[i].rCacheDiskCapacity = nodeInfo.rCacheDiskCapacity;
+        (*nodeDesc)[i].wCacheMemCapacity = nodeInfo.wCacheMemCapacity;
+        (*nodeDesc)[i].wCacheDiskCapacity = nodeInfo.wCacheDiskCapacity;
+        (*nodeDesc)[i].wCacheMemUsedSize = nodeInfo.wCacheMemUsedSize;
+        (*nodeDesc)[i].wCacheDiskUsedSize = nodeInfo.wCacheDiskUsedSize;
+        (*nodeDesc)[i].rCacheMemUsedSize = nodeInfo.rCacheMemUsedSize;
+        (*nodeDesc)[i].rCacheDiskUsedSize = nodeInfo.rCacheDiskUsedSize;
+        i++;
+    }
+}
+
+CResult BioShowCacheResource(CacheResourcesDesc **nodeDesc, uint64_t *nodeNum)
+{
+    if (UNLIKELY(nodeNum == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        if (UNLIKELY(gBioCacheMap.empty())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+    }
+
+    std::vector<CacheResourcesDesc> nodeDescription;
+    auto ret = BioService::BioShowCacheResource(nodeDescription);
+    if (UNLIKELY(ret != RET_CACHE_OK)) {
+        return ret;
+    }
+
+    *nodeNum = nodeDescription.size();
+    *nodeDesc = (CacheResourcesDesc *)malloc(sizeof(CacheResourcesDesc) * (*nodeNum));
+    if (*nodeDesc == nullptr) {
+        return RET_CACHE_NO_SPACE;
+    }
+
+    BioCacheResourceCalc(nodeDesc, nodeDescription);
+    return ret;
+}
+
+static void BioCacheHitRadioCalc(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDesc,
+                                 std::unordered_map<uint16_t, CacheHitDesc> nodeDescription)
+{
+    desc->nodeId = INVALID_NID;
+    desc->rCacheHitCount = 0;
+    desc->wCacheHitCount = 0;
+    desc->rCacheTotalCount = 0;
+    desc->wCacheTotalCount = 0;
+    uint32_t i = 0;
+    for (auto& nodeInfo : nodeDescription) {
+        (*nodeDesc)[i].nodeId = nodeInfo.first;
+        (*nodeDesc)[i].rCacheHitCount = nodeInfo.second.rCacheHitCount.load();
+        (*nodeDesc)[i].rCacheTotalCount = nodeInfo.second.rCacheTotalCount.load();
+        (*nodeDesc)[i].wCacheHitCount = nodeInfo.second.wCacheHitCount.load();
+        (*nodeDesc)[i].wCacheTotalCount = nodeInfo.second.wCacheTotalCount.load();
+        desc->rCacheHitCount += (*nodeDesc)[i].rCacheHitCount;
+        desc->rCacheTotalCount += (*nodeDesc)[i].rCacheTotalCount;
+        desc->wCacheHitCount += (*nodeDesc)[i].wCacheHitCount;
+        desc->wCacheTotalCount += (*nodeDesc)[i].wCacheTotalCount;
+        i++;
+    }
+}
+
+CResult BioShowCacheHitRatio(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDesc, uint64_t *nodeNum)
+{
+    if (UNLIKELY(nodeNum == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        if (UNLIKELY(gBioCacheMap.empty())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+    }
+
+    std::unordered_map<uint16_t, CacheHitDesc> nodeDescription;
+    auto ret = BioService::BioShowCacheHitRatio(nodeDescription);
+    if (UNLIKELY(ret != RET_CACHE_OK)) {
+        return ret;
+    }
+
+    *nodeNum = nodeDescription.size();
+    *nodeDesc = (CacheHitFinalDesc *)malloc(sizeof(CacheHitFinalDesc) * (*nodeNum));
+    if (*nodeDesc == nullptr) {
+        return RET_CACHE_NO_SPACE;
+    }
+
+    BioCacheHitRadioCalc(desc, nodeDesc, std::move(nodeDescription));
+    return ret;
+}
+
+void BioFreeCacheResourcePtr(CacheResourcesDesc **nodeDesc, uint64_t nodeNum)
+{
+    if (nodeNum == 0) {
+        return;
+    }
+    free(*nodeDesc);
+    *nodeDesc = nullptr;
+}
+
+void BioFreeCacheHitPtr(CacheHitFinalDesc **nodeDesc, uint64_t nodeNum)
+{
+    if (nodeNum == 0) {
+        return;
+    }
+    free(*nodeDesc);
+    *nodeDesc = nullptr;
 }
 
 CResult BioCreateCache(CacheDescriptor desc)
