@@ -63,7 +63,7 @@ typedef enum {
 #define CACHE_SPACE_ADDRESS_SIZE (2)
 #define CACHE_SPACE_DEC_SIZE (64)
 #define MAX_TRACE_NAME_LEN (64)
-#define TRACE_MAX_NUM (100)
+#define TRACE_MAX_NUM (256)
 
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 
