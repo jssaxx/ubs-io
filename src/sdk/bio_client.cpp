@@ -192,6 +192,8 @@ BResult BioClient::BioClientStartWork()
 
 BResult BioClient::BioClientStartPrometheus()
 {
+#ifndef DEBUG_UT
+#ifdef USE_PROMETHEUS
     std::string listenAddress;
     if (mMode == CONVERGENCE) {
         listenAddress = agent::BioClientAgent::Instance()->GetPrometheusListenAddress();
@@ -209,6 +211,9 @@ BResult BioClient::BioClientStartPrometheus()
         return ret;
     }
 
+    return BIO_OK;
+#endif
+#endif
     return BIO_OK;
 }
 
@@ -383,13 +388,9 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         }
     }
 
-#ifndef DEBUG_UT
-#ifdef USE_PROMETHEUS
     if (BioClientStartPrometheus() != BIO_OK) {
         return BIO_ERR;
     }
-#endif
-#endif
 
     mStarted = true;
     CLIENT_LOG_INFO("Boostio client start success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
