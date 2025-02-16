@@ -1622,6 +1622,7 @@ BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::v
 {
     uint16_t localId = UINT16_MAX;
     std::vector<uint16_t> remoteId;
+    mLock.LockRead();
     for (const auto& node: mNodeView) {
         if (node.second.status == CM_NODE_FAULT) {
             continue;
@@ -1632,6 +1633,7 @@ BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::v
         }
         remoteId.emplace_back(node.first.nodeId);
     }
+    mLock.UnLock();
 
     CalcCacheResourceLocal(req, localId, nodeDesc);
     CalcCacheResourceRemote(req, remoteId, nodeDesc);
@@ -1658,6 +1660,7 @@ BResult MirrorClient::SendCacheHitRequest(CacheHitRequest &req, std::unordered_m
 {
     uint16_t localId = UINT16_MAX;
     std::vector<uint16_t> remoteId;
+    mLock.LockRead();
     for (const auto& node: mNodeView) {
         if (node.second.status == CM_NODE_FAULT) {
             continue;
@@ -1668,6 +1671,7 @@ BResult MirrorClient::SendCacheHitRequest(CacheHitRequest &req, std::unordered_m
         }
         remoteId.emplace_back(node.first.nodeId);
     }
+    mLock.UnLock();
 
     GetCacheHitLocal(req, localId, nodeDesc);
     GetCacheHitRemote(req, remoteId, nodeDesc);
