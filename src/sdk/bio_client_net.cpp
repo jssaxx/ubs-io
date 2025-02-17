@@ -50,7 +50,7 @@ BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
     return ret;
 }
 
-BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView,
+BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView,
     uint16_t protocol, const NetOptions netConf)
 {
     if (mMode == CONVERGENCE) {
@@ -342,7 +342,7 @@ void BioClientNet::StopInner()
     mNetEngine->Stop();
 }
 
-BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
+BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView)
 {
     if (mMode == CONVERGENCE) {
         return BIO_OK;
