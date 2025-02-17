@@ -208,6 +208,7 @@ void PrometheusManager::GetAllNodeTracePoints(std::map<uint16_t, TraceDatabase> 
 {
     uint16_t localId = UINT16_MAX;
     std::vector<uint16_t> remoteIds;
+    mLock.LockRead();
     for (const auto& node : gBioClient->GetMirror()->GetNodeView()) {
         if (node.second.status == CM_NODE_FAULT) {
             continue;
@@ -219,6 +220,7 @@ void PrometheusManager::GetAllNodeTracePoints(std::map<uint16_t, TraceDatabase> 
         }
         remoteIds.push_back(node.first.nodeId);
     }
+    mLock.UnLock();
 
     GetTracePointsLocal(localId, nodesTracePoints);
     GetRemoteTracePoints(remoteIds, nodesTracePoints);
