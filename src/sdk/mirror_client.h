@@ -140,8 +140,9 @@ public:
         return false;
     }
 
-    inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &GetNodeView()
+    inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView()
     {
+        ReadLocker<ReadWriteLock> locker(&mLock);
         return mNodeView;
     }
 
