@@ -243,7 +243,6 @@ private:
     //  定时线程
     std::thread mUpdaterThread;
     std::mutex mMutex;
-    ReadWriteLock mLock;
     uint32_t mTimeOut = NO_60;
     uint32_t mScrapeIntervalSec = 15;
 
