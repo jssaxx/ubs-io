@@ -13,19 +13,19 @@ extern "C" {
 
 #define MODULE_NAME_MAX_LEN (50)
 
-typedef struct tagMODULE_DEFINE_S {
+typedef struct TagModuleDefineS {
     char name[MODULE_NAME_MAX_LEN];
     int32_t (*initModule)(void);
     void (*exitModule)(void);
 } MODULE_DEFINE_S;
 
-typedef struct tagMODULE_DEFINE_WITH_PARAM_S {
+typedef struct TagModuleDefineWithParamS {
     char name[MODULE_NAME_MAX_LEN];
     int32_t (*initModule)(void *);
     void (*exitModule)(void);
 } MODULE_DEFINE_WITH_PARAM_S;
 
-static inline void rollbackModules(MODULE_DEFINE_S *modules, int32_t curSteps)
+static inline void RollbackModules(MODULE_DEFINE_S *modules, int32_t curSteps)
 {
     MODULE_DEFINE_S *m = NULL;
     int32_t i;
@@ -41,7 +41,7 @@ static inline void rollbackModules(MODULE_DEFINE_S *modules, int32_t curSteps)
     }
 }
 
-static inline void rollbackModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, int32_t curSteps)
+static inline void RollbackModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, int32_t curSteps)
 {
     MODULE_DEFINE_WITH_PARAM_S *m = NULL;
     int32_t i;
@@ -57,7 +57,7 @@ static inline void rollbackModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules,
     }
 }
 
-static inline int32_t initModules(MODULE_DEFINE_S *modules, int32_t steps)
+static inline int32_t InitModules(MODULE_DEFINE_S *modules, int32_t steps)
 {
     MODULE_DEFINE_S *m = modules;
     int32_t i;
@@ -69,7 +69,7 @@ static inline int32_t initModules(MODULE_DEFINE_S *modules, int32_t steps)
 
         if (0 != m->initModule()) {
             CM_LOGERROR("init %s failed.", m->name);
-            rollbackModules(modules, i);
+            RollbackModules(modules, i);
             return -1;
         }
 
@@ -79,7 +79,7 @@ static inline int32_t initModules(MODULE_DEFINE_S *modules, int32_t steps)
     return 0;
 }
 
-static inline int32_t initModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, int32_t steps, void *initParam)
+static inline int32_t InitModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, int32_t steps, void *initParam)
 {
     MODULE_DEFINE_WITH_PARAM_S *m = modules;
     int32_t i;
@@ -91,7 +91,7 @@ static inline int32_t initModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, 
 
         if (0 != m->initModule(initParam)) {
             CM_LOGERROR("init %s failed.", m->name);
-            rollbackModulesWithParam(modules, i);
+            RollbackModulesWithParam(modules, i);
             return -1;
         }
 
@@ -101,13 +101,13 @@ static inline int32_t initModulesWithParam(MODULE_DEFINE_WITH_PARAM_S *modules, 
     return 0;
 }
 
-#define INIT_MODULES(modules) initModules(modules, ARRAY_LEN(modules))
+#define INIT_MODULES(modules) InitModules(modules, ARRAY_LEN(modules))
 
-#define INIT_MODULES_WITH_PARAM(modules, initParam) initModulesWithParam(modules, ARRAY_LEN(modules), initParam)
+#define INIT_MODULES_WITH_PARAM(modules, initParam) InitModulesWithParam(modules, ARRAY_LEN(modules), initParam)
 
-#define EXIT_MODULES(modules) rollbackModules(modules, ARRAY_LEN(modules))
+#define EXIT_MODULES(modules) RollbackModules(modules, ARRAY_LEN(modules))
 
-#define EXIT_MODULES_WITH_PARAM(modules) rollbackModulesWithParam(modules, ARRAY_LEN(modules))
+#define EXIT_MODULES_WITH_PARAM(modules) RollbackModulesWithParam(modules, ARRAY_LEN(modules))
 
 #ifdef __cplusplus
 }

@@ -20,7 +20,7 @@
 #define CM_SERVER_PT_TRY_INTERAL (5000)
 
 typedef struct {
-    cm_rwlock_t lock;
+    CM_RWLOCK_T lock;
     int32_t used;
     int32_t nodeChange;
     int32_t stateChange;
@@ -38,7 +38,7 @@ typedef struct {
 } CmServerPool;
 
 typedef struct {
-    cm_rwlock_t lock;
+    CM_RWLOCK_T lock;
     CmServerRole role;
     CmServerPool list[MAX_POOL_NUM];
 } CmServerPoolMgr;
@@ -480,7 +480,7 @@ int32_t CmServerViewNodeListChange(CmNodeIdList *watchList)
     uint16_t nodeId, nodeIndex;
     int32_t ret;
 
-    cm_rwlock_wrlock(&spool->lock);
+    CM_RWLOCK_WRLOCK(&spool->lock);
     for (nodeId = 0; nodeId < nodeList->nodeNum; nodeId++) {
         nodeIndex = CmServerViewFindNodeIndex(watchList->nodeList, watchList->nodeNum, nodeId);
         if (nodeIndex == watchList->nodeNum) {
@@ -489,12 +489,12 @@ int32_t CmServerViewNodeListChange(CmNodeIdList *watchList)
             ret = CmServerViewNodeOnline(watchList->poolId, nodeId);
         }
         if (ret != CM_OK) {
-            cm_rwlock_unlock(&spool->lock);
+            CM_RWLOCK_UNLOCK(&spool->lock);
             CM_LOGERROR("Node deal failed, poolId(%u) nodeId(%u) ret(%d).", watchList->poolId, nodeId, ret);
             return ret;
         }
     }
-    cm_rwlock_unlock(&spool->lock);
+    CM_RWLOCK_UNLOCK(&spool->lock);
 
     if (spool->nodeChange == TRUE) {
         ret = CmServerZkRecordNodeList(spool->nodeList);
@@ -684,14 +684,14 @@ static void *CmServerViewInitialDetectThread(void *ctx)
             break;
         }
 
-        cm_rwlock_rdlock(&spool->lock);
+        CM_RWLOCK_RDLOCK(&spool->lock);
         for (nodeId = 0; nodeId < spool->stateList->nodeNum; nodeId++) {
             NodeStateInfo *stateInfo = &spool->stateList->nodeList[nodeId];
             if (stateInfo->state == NODE_STATE_UP && stateInfo->clusterState == NODE_CLUSTER_STATE_IN) {
                 okNum++;
             }
         }
-        cm_rwlock_unlock(&spool->lock);
+        CM_RWLOCK_UNLOCK(&spool->lock);
 
         uint64_t curTimes = CmGetSecondsTime();
 
@@ -874,12 +874,12 @@ void CmServerViewReset(void)
 {
     uint16_t poolId;
 
-    cm_rwlock_init(&g_sPoolMgr.lock, NULL);
+    CM_RWLOCK_INIT(&g_sPoolMgr.lock, NULL);
 
     g_sPoolMgr.role = CM_SERVER_SLAVE;
 
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
-        cm_rwlock_init(&g_sPoolMgr.list[poolId].lock, NULL);
+        CM_RWLOCK_INIT(&g_sPoolMgr.list[poolId].lock, NULL);
         g_sPoolMgr.list[poolId].used = FALSE;
         g_sPoolMgr.list[poolId].nodeChange = FALSE;
         g_sPoolMgr.list[poolId].stateChange = FALSE;
@@ -950,7 +950,7 @@ void CmServerViewExit(void)
 {
     uint16_t poolId;
 
-    cm_rwlock_wrlock(&g_sPoolMgr.lock);
+    CM_RWLOCK_WRLOCK(&g_sPoolMgr.lock);
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
         if (g_sPoolMgr.list[poolId].used == FALSE) {
             continue;
@@ -978,10 +978,10 @@ void CmServerViewExit(void)
             g_sPoolMgr.list[poolId].storeOps->destoryStorer(g_sPoolMgr.list[poolId].storer);
             g_sPoolMgr.list[poolId].storer = NULL;
         }
-        cm_rwlock_destroy(&g_sPoolMgr.list[poolId].lock);
+        CM_RWLOCK_DESTROY(&g_sPoolMgr.list[poolId].lock);
     }
-    cm_rwlock_unlock(&g_sPoolMgr.lock);
-    cm_rwlock_destroy(&g_sPoolMgr.lock);
+    CM_RWLOCK_UNLOCK(&g_sPoolMgr.lock);
+    CM_RWLOCK_DESTROY(&g_sPoolMgr.lock);
     CM_LOGINFO("Cm server view exit succeed.");
     return;
 }

@@ -62,13 +62,13 @@ int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId)
         return BDM_CODE_ERR;
     }
 
-    chunkId = DENCODE_CHUNK_ID(chunkId);
-    int32_t ret = bdm->ops.free((uintptr_t)bdm, len, chunkId);
+    uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
+    int32_t ret = bdm->ops.free((uintptr_t)bdm, len, decodeChunkId);
     if (ret != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Free failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
-    BDM_LOGDEBUG(0, "Free: chunk(%lu).", chunkId);
+    BDM_LOGDEBUG(0, "Free: chunk(%lu).", decodeChunkId);
     return BDM_CODE_OK;
 }
 
@@ -96,8 +96,8 @@ int32_t BdmRead(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
         return BDM_CODE_ERR;
     }
 
-    chunkId = DENCODE_CHUNK_ID(chunkId);
-    int32_t ret = bdm->ops.read((uintptr_t)bdm, chunkId, offset, buf, len);
+    uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
+    int32_t ret = bdm->ops.read((uintptr_t)bdm, decodeChunkId, offset, buf, len);
     if (ret != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Read failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
@@ -129,8 +129,8 @@ int32_t BdmWrite(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
         return BDM_CODE_ERR;
     }
 
-    chunkId = DENCODE_CHUNK_ID(chunkId);
-    int32_t ret = bdm->ops.write((uintptr_t)bdm, chunkId, offset, buf, len);
+    uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
+    int32_t ret = bdm->ops.write((uintptr_t)bdm, decodeChunkId, offset, buf, len);
     if (ret != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Write failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
