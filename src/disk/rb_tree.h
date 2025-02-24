@@ -193,7 +193,7 @@ extern struct RbNode *RbNext(struct RbNode *node);
 * @param[in]  node - 当前节点
 * @retval node，当前节点的前一个节点
 */
-extern struct RbNode *RbPrev(struct RbNode *);
+extern struct RbNode *RbPrev(struct RbNode *node);
 /**
 * @brief 功能描述:  获取红黑树第一个节点
 * @verbatim

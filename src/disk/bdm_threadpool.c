@@ -7,7 +7,11 @@
 #include "securec.h"
 #include "bdm_core.h"
 
-#define THREAD_SLEEP_INTERVAL 200
+#define THREAD_SLEEP_INTERVAL (200)
+#define LANE_INDEX_0 (0)
+#define LANE_INDEX_1 (1)
+#define LANE_INDEX_2 (2)
+#define LANE_INDEX_3 (3)
 
 void BdmThreadBindCPUs(const char *name, int32_t cpuid)
 {
@@ -56,27 +60,28 @@ static void *BdmThreadThread(void *arg)
     while (1) {
         pthread_mutex_lock(&(thread->queueMutex));
 
-        while ((!vgetq_lane_u32(thread->state_desc, 0)) && (vgetq_lane_u32(thread->queue_desc, 2) ==
-            vgetq_lane_u32(thread->queue_desc, 3))) {
+        while ((!vgetq_lane_u32(thread->state_desc, LANE_INDEX_0)) &&
+               (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3))) {
             pthread_cond_wait(&(thread->notify), &(thread->queueMutex));
         }
 
-        if ((vgetq_lane_u32(thread->state_desc, 0) == BDM_THREAD_EXIT_IMMEDIATELY) ||
-            ((vgetq_lane_u32(thread->state_desc, 0) == BDM_THREAD_EXIT_DELAY) &&
-            (vgetq_lane_u32(thread->queue_desc, 2) == vgetq_lane_u32(thread->queue_desc, 3)))) {
+        if ((vgetq_lane_u32(thread->state_desc, LANE_INDEX_0) == BDM_THREAD_EXIT_IMMEDIATELY) ||
+            ((vgetq_lane_u32(thread->state_desc, LANE_INDEX_0) == BDM_THREAD_EXIT_DELAY) &&
+            (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)))) {
             break;
         }
 
-        BDM_THREAD_HANDLE handle = thread->queue[vgetq_lane_u32(thread->queue_desc, 2)].handle;
-        void *ctx = thread->queue[vgetq_lane_u32(thread->queue_desc, 2)].ctx;
-        uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, 1);
+        BDM_THREAD_HANDLE handle = thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2)].handle;
+        void *ctx = thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2)].ctx;
+        uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, LANE_INDEX_1);
         if (tmpLane == 0) {
             continue;
         }
-        uint32_t val = (vgetq_lane_u32(thread->queue_desc, 2) + 1) % tmpLane;
-        thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, 2);
+        uint32_t val = (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) + 1) % tmpLane;
+        thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, LANE_INDEX_2);
 
-        thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, 2) + 1, thread->state_desc, 2);
+        thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_2) + 1, thread->state_desc,
+                                            LANE_INDEX_2);
 
         pthread_mutex_unlock(&(thread->queueMutex));
 
@@ -101,30 +106,31 @@ static void *BdmThreadBatchThread(void *arg)
     while (1) {
         pthread_mutex_lock(&(thread->queueMutex));
 
-        while ((!vgetq_lane_u32(thread->state_desc, 0)) &&
-            (vgetq_lane_u32(thread->queue_desc, 2) == vgetq_lane_u32(thread->queue_desc, 3))) {
+        while ((!vgetq_lane_u32(thread->state_desc, LANE_INDEX_0)) &&
+            (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3))) {
             pthread_cond_wait(&(thread->notify), &(thread->queueMutex));
         }
 
-        if ((vgetq_lane_u32(thread->state_desc, 0) == BDM_THREAD_EXIT_IMMEDIATELY) ||
-            ((vgetq_lane_u32(thread->state_desc, 0) == BDM_THREAD_EXIT_DELAY) &&
-            (vgetq_lane_u32(thread->queue_desc, 2) == vgetq_lane_u32(thread->queue_desc, 3)))) {
+        if ((vgetq_lane_u32(thread->state_desc, LANE_INDEX_0) == BDM_THREAD_EXIT_IMMEDIATELY) ||
+            ((vgetq_lane_u32(thread->state_desc, LANE_INDEX_0) == BDM_THREAD_EXIT_DELAY) &&
+            (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)))) {
             break;
         }
 
         argNum = 0;
         while (argNum < BDM_BATCH_HANDLE_NUM &&
-            vgetq_lane_u32(thread->queue_desc, 2) != vgetq_lane_u32(thread->queue_desc, 3)) {
-            argList[argNum] = thread->queue[vgetq_lane_u32(thread->queue_desc, 2)].ctx;
+            vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) != vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)) {
+            argList[argNum] = thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2)].ctx;
             argNum++;
-            uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, 1);
+            uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, LANE_INDEX_1);
             if (tmpLane == 0) {
                 continue;
             }
-            uint32_t val = (vgetq_lane_u32(thread->queue_desc, 2) + 1) % tmpLane;
-            thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, 2);
+            uint32_t val = (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) + 1) % tmpLane;
+            thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, LANE_INDEX_2);
 
-            thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, 2) + 1, thread->state_desc, 2);
+            thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_2) + 1,
+                                                thread->state_desc, LANE_INDEX_2);
         }
 
         pthread_mutex_unlock(&(thread->queueMutex));
@@ -170,26 +176,27 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
 {
     pthread_mutex_lock(&thread->queueMutex);
 
-    uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, 1);
+    uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, LANE_INDEX_1);
     if (tmpLane == 0) {
         return BDM_CODE_ERR;
     }
 
-    if (((vgetq_lane_u32(thread->queue_desc, 3) + 1) % tmpLane) ==
-        vgetq_lane_u32(thread->queue_desc, 2)) {
+    if (((vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3) + 1) % tmpLane) ==
+        vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2)) {
         pthread_mutex_unlock(&thread->queueMutex);
         return BDM_CODE_ERR;
     }
 
-    thread->queue[vgetq_lane_u32(thread->queue_desc, 3)].handle = handle;
-    thread->queue[vgetq_lane_u32(thread->queue_desc, 3)].ctx = ctx;
+    thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)].handle = handle;
+    thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)].ctx = ctx;
 
-    uint32_t val = (vgetq_lane_u32(thread->queue_desc, 3) + 1) % tmpLane;
-    thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, 3);
+    uint32_t val = (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3) + 1) % tmpLane;
+    thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, LANE_INDEX_3);
 
     pthread_cond_signal(&thread->notify);
 
-    thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, 1) + 1, thread->state_desc, 1);
+    thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_1) + 1, thread->state_desc,
+                                        LANE_INDEX_1);
 
     pthread_mutex_unlock(&thread->queueMutex);
 
@@ -308,7 +315,8 @@ int32_t BdmThreadPoolAdd(BDM_THREAD_POOL_S *threadPool, BDM_THREAD_HANDLE handle
             break;
         }
 
-        thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, 3) + 1, thread->state_desc, 3);
+        thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_3) + 1, thread->state_desc,
+                                            LANE_INDEX_3);
         usleep(THREAD_SLEEP_INTERVAL);
     }
 
@@ -350,7 +358,7 @@ int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadPool, int32_t flags)
 
     uint32_t index;
     for (index = 0; index < threadPool->threadNum; index++) {
-        if (vgetq_lane_u32(threadPool->threadList[index].queue_desc, 0) == FALSE) {
+        if (vgetq_lane_u32(threadPool->threadList[index].queue_desc, LANE_INDEX_0) == FALSE) {
             continue;
         }
         BdmThreadDestroy(&threadPool->threadList[index], flags);

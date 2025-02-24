@@ -55,7 +55,7 @@ typedef struct {
     uint16_t queue_full_cnt;
 } CM_THREAD_POOL_S;
 
-CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t thread_num, uint16_t queue_size, uint16_t flags, const char *pool_name);
+CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t threadNum, uint16_t queueSize, uint16_t flags, const char *poolName);
 int32_t CmThreadPoolAdd(CM_THREAD_POOL_S *pool, THREAD_CALL_BACK callback, void *args);
 int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags);
 

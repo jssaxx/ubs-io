@@ -19,7 +19,7 @@ static const int UNCHECK_VERSION = -1;
 
 #if DESC("zk client")
 typedef struct {
-    cm_rwlock_t lock;
+    CM_RWLOCK_T lock;
     uint16_t used;
     PoolInfo *pool;
     NodeStateInfo local;
@@ -154,7 +154,7 @@ static int32_t CmClientZkAtoi(const char *str)
 
 uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre)
 {
-    int32_t step = strlen(pre);
+    size_t step = strlen(pre);
     const char *str = &path[step];
 
     return (uint16_t)CmClientZkAtoi(str);
@@ -184,13 +184,13 @@ int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
         // 第一次启动：通过ZK生成全局唯一nodeid
         char zkPathT[CM_ZNODE_PATH_LEN] = {0};
         char zkPathB[CM_ZNODE_PATH_LEN] = {0};
-        int32_t BLen = CM_ZNODE_PATH_LEN;
+        int32_t bLen = CM_ZNODE_PATH_LEN;
         ret = sprintf_s(zkPathT, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_NODEID_GENERATE_CHILD_PATH);
         if (ret < 0) {
             CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
             return CM_ERR;
         }
-        ret = CmZkCreate(g_zh, zkPathT, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL | ZOO_SEQUENCE, zkPathB, BLen);
+        ret = CmZkCreate(g_zh, zkPathT, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL | ZOO_SEQUENCE, zkPathB, bLen);
         if (ret != ZOK) {
             CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPathT, ret);
             return CM_ERR;
@@ -530,7 +530,7 @@ static void CmClientZkUpdateNodeList(NodeInfoList *changeList)
     notifyList->poolId = changeList->poolId;
     notifyList->nodeNum = 0;
 
-    cm_rwlock_wrlock(&restore->lock);
+    CM_RWLOCK_WRLOCK(&restore->lock);
     nodeList->poolId = changeList->poolId;
     nodeList->nodeNum = changeList->nodeNum;
     for (nodeId = 0; nodeId < nodeList->nodeNum; nodeId++) {
@@ -540,7 +540,7 @@ static void CmClientZkUpdateNodeList(NodeInfoList *changeList)
             notifyList->nodeNum++;
         }
     }
-    cm_rwlock_unlock(&restore->lock);
+    CM_RWLOCK_UNLOCK(&restore->lock);
     if (restore->nodeChange != NULL) {
         restore->nodeChange(notifyList);
     }
@@ -622,7 +622,7 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
     notifyList->masterNodeId = changeList->masterNodeId;
 
     uint16_t masterNodeId = NODE_ID_INVALID;
-    cm_rwlock_wrlock(&restore->lock);
+    CM_RWLOCK_WRLOCK(&restore->lock);
     stateList->poolId = changeList->poolId;
     stateList->nodeNum = changeList->nodeNum;
     if (stateList->masterNodeId != changeList->masterNodeId) {
@@ -634,7 +634,7 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
             (changeList->nodeList[nodeId].state == NODE_STATE_UP)) {
             ret = CmClientZkGetNodeSession(changeList->poolId, nodeId, &changeList->nodeList[nodeId].sessionId);
             if (ret != CM_OK) {
-                cm_rwlock_unlock(&restore->lock);
+                CM_RWLOCK_UNLOCK(&restore->lock);
                 free(notifyList);
                 return;
             }
@@ -647,7 +647,7 @@ static void CmClientZkUpdateStateList(NodeStateList *changeList)
             notifyList->nodeNum++;
         }
     }
-    cm_rwlock_unlock(&restore->lock);
+    CM_RWLOCK_UNLOCK(&restore->lock);
     if (restore->masterChange != NULL && masterNodeId != NODE_ID_INVALID) {
         restore->masterChange(changeList->poolId, masterNodeId);
     }
@@ -780,7 +780,7 @@ static void CmClientZkUpdatePtList(PtEntryList *changeList)
 
     CM_LOGINFO("Get: poolId(%u) gv(%lu) cv(%lu).", changeList->poolId, changeList->globalVersion,
         changeList->changeVersion);
-    cm_rwlock_wrlock(&restore->lock);
+    CM_RWLOCK_WRLOCK(&restore->lock);
     ptList->poolId = changeList->poolId;
     ptList->ptNum = changeList->ptNum;
     ptList->maxCopyNum = changeList->maxCopyNum;
@@ -794,7 +794,7 @@ static void CmClientZkUpdatePtList(PtEntryList *changeList)
             notifyList->ptNum++;
         }
     }
-    cm_rwlock_unlock(&restore->lock);
+    CM_RWLOCK_UNLOCK(&restore->lock);
     if (notifyList->ptNum != 0) {
         restore->ptChange(notifyList);
     }
@@ -990,7 +990,7 @@ static void CmClientZkInitMgr(void)
     uint16_t poolId;
 
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
-        cm_rwlock_init(&g_cZkMgr.restore[poolId].lock, NULL);
+        CM_RWLOCK_INIT(&g_cZkMgr.restore[poolId].lock, NULL);
         g_cZkMgr.restore[poolId].used = FALSE;
         g_cZkMgr.restore[poolId].pool = CmConfigGetPoolInfo(poolId);
         g_cZkMgr.restore[poolId].local.sessionId = 0;
@@ -1187,7 +1187,7 @@ static int32_t CmServerZkAtoi(const char *str)
 
 static uint16_t CmServerZkGetNodeIdByPath(const char *path, const char *pre)
 {
-    int32_t step = strlen(pre);
+    size_t step = strlen(pre);
     const char *str = &path[step];
 
     return (uint16_t)CmServerZkAtoi(str);
@@ -1216,13 +1216,13 @@ static int32_t CmServerZkGenMetaNodeId(const char *ipv4AddrStr)
         // 第一次启动：通过ZK生成全局唯一nodeid
         char zkPathT[CM_ZNODE_PATH_LEN] = {0};
         char zkPathB[CM_ZNODE_PATH_LEN] = {0};
-        int32_t BLen = CM_ZNODE_PATH_LEN;
+        int32_t bLen = CM_ZNODE_PATH_LEN;
         ret = sprintf_s(zkPathT, CM_ZNODE_PATH_LEN, "%s/%s", CM_META, CM_NODEID_GENERATE_CHILD_PATH);
         if (ret < 0) {
             CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
             return CM_ERR;
         }
-        ret = CmZkCreate(g_zh, zkPathT, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL | ZOO_SEQUENCE, zkPathB, BLen);
+        ret = CmZkCreate(g_zh, zkPathT, NULL, -1, &ZOO_OPEN_ACL_UNSAFE, ZOO_EPHEMERAL | ZOO_SEQUENCE, zkPathB, bLen);
         if (ret != ZOK) {
             CM_LOGERROR("Create znode(%s) failed, ret(%d).", zkPathT, ret);
             return CM_ERR;

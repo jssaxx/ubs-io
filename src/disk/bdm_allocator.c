@@ -82,7 +82,7 @@ int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t tot
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset,
+static int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset,
     BdmChunkIndex *chunk, uint32_t isFree)
 {
     BdmChunkMeta *metaAddr = (BdmChunkMeta *)realize->metaAddr;
@@ -108,7 +108,7 @@ int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t bucketId, 
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root, BdmChunkIndex *chunk,
+static int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root, BdmChunkIndex *chunk,
     BdmChunkIndex *pos, struct RbNode **newNode)
 {
     struct RbNode *neighbNode = NULL;
@@ -167,7 +167,7 @@ int32_t BdmAllocatorInsertPre(BdmAllocatorRealize *realize, struct RbRoot *root,
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorInsertNext(BdmAllocatorRealize *realize, struct RbRoot *root, BdmChunkIndex *chunk,
+static int32_t BdmAllocatorInsertNext(BdmAllocatorRealize *realize, struct RbRoot *root, BdmChunkIndex *chunk,
     BdmChunkIndex *pos, struct RbNode **newNode)
 {
     struct RbNode *neighbNode = NULL;
@@ -225,7 +225,7 @@ int32_t BdmAllocatorInsertNext(BdmAllocatorRealize *realize, struct RbRoot *root
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
+static int32_t BdmAllocatorInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
 {
     struct RbRoot *root = &realize->root;
     if (root == NULL) {
@@ -279,7 +279,7 @@ int32_t BdmAllocatorInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorRestoreInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
+static int32_t BdmAllocatorRestoreInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
 {
     struct RbRoot *root = &realize->root;
     if (root == NULL) {
@@ -374,8 +374,8 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset, uint64_t *index,
-    uint64_t chunkSize)
+static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset,
+                                  uint64_t *index, uint64_t chunkSize)
 {
     BdmChunkIndex *chunk = NULL;
     uint64_t freeIndex;
@@ -531,7 +531,7 @@ int32_t BdmAllocatorGetCap(BdmAllocator allocator, uint64_t *totalSize, uint64_t
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorCreateImpl(BdmAllocatorRealize *realize)
+static int32_t BdmAllocatorCreateImpl(BdmAllocatorRealize *realize)
 {
     BdmChunkIndex *chunk = &realize->chunkList[0];
     chunk->index = 0UL;
@@ -548,7 +548,7 @@ int32_t BdmAllocatorCreateImpl(BdmAllocatorRealize *realize)
     return BDM_CODE_OK;
 }
 
-int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
+static int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
 {
     if (realize->metaOps.readMeta == NULL) {
         BDM_LOGWARN(0, "Bdm meta ops not register.");

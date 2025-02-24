@@ -73,9 +73,9 @@ void FreeRes(CM_THREAD_POOL_S *pool)
     return;
 }
 
-CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t thread_num, uint16_t queue_size, uint16_t flags, const char *pool_name)
+CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t threadNum, uint16_t queueSize, uint16_t flags, const char *poolName)
 {
-    if (ParamCheck(&thread_num, &queue_size)) {
+    if (ParamCheck(&threadNum, &queueSize)) {
         return NULL;
     }
     CM_THREAD_POOL_S *pool = (CM_THREAD_POOL_S *)malloc(sizeof(CM_THREAD_POOL_S));
@@ -85,9 +85,9 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t thread_num, uint16_t queue_size, u
 
     memset_s(pool, sizeof(CM_THREAD_POOL_S), 0, sizeof(CM_THREAD_POOL_S));
     pool->flags = flags;
-    pool->thread_num = thread_num;
-    pool->queue_size = queue_size;
-    int ret = strncpy_s(pool->name, sizeof(pool->name), pool_name, sizeof(pool->name) - 1);
+    pool->thread_num = threadNum;
+    pool->queue_size = queueSize;
+    int ret = strncpy_s(pool->name, sizeof(pool->name), poolName, sizeof(pool->name) - 1);
     if (ret != 0) {
         FreeRes(pool);
         return NULL;
@@ -103,23 +103,23 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t thread_num, uint16_t queue_size, u
     pthread_cond_init(&(pool->notify), 0);
     sem_init(&pool->sem_queue_full, 0, 0);
 
-    pool->tid = (pthread_t *)malloc(sizeof(pthread_t) * thread_num);
-    pool->queue = (CM_THREAD_QUEUE_S *)malloc(sizeof(CM_THREAD_QUEUE_S) * queue_size);
+    pool->tid = (pthread_t *)malloc(sizeof(pthread_t) * threadNum);
+    pool->queue = (CM_THREAD_QUEUE_S *)malloc(sizeof(CM_THREAD_QUEUE_S) * queueSize);
     if ((pool->tid == NULL) || (pool->queue == NULL)) {
         FreeRes(pool);
         return NULL;
     }
-    size_t len = sizeof(pthread_t) * thread_num;
+    size_t len = sizeof(pthread_t) * threadNum;
     memset_s(pool->tid, len, 0, len);
-    len = sizeof(CM_THREAD_QUEUE_S) * queue_size;
+    len = sizeof(CM_THREAD_QUEUE_S) * queueSize;
     memset_s(pool->queue, len, 0, len);
 
-    for (uint16_t i = 0; i < thread_num; i++) {
+    for (uint16_t i = 0; i < threadNum; i++) {
         if (pthread_create(&(pool->tid[i]), NULL, ThreadPoolThread, (void *)pool) != 0) {
             CmThreadPoolDestroy(pool, 0);
             return NULL;
         }
-        pthread_setname_np(pool->tid[i], pool_name);
+        pthread_setname_np(pool->tid[i], poolName);
     }
 
     return pool;

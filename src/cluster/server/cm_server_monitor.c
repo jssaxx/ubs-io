@@ -43,7 +43,7 @@ typedef struct {
 } NodeRecordList;
 
 typedef struct {
-    cm_rwlock_t lock;
+    CM_RWLOCK_T lock;
     uint16_t used;
     PoolInfo *pool;
     uint16_t activeNum;
@@ -52,7 +52,7 @@ typedef struct {
 } PoolRecord;
 
 typedef struct {
-    cm_rwlock_t lock;
+    CM_RWLOCK_T lock;
     PoolRecord list[MAX_POOL_NUM];
     CM_SEM_S sem;
     CmServerMonitorExpiredHandle handle;
@@ -70,7 +70,7 @@ void CmServerListenNodeFault(uint16_t poolId, uint16_t nodeId)
     PoolRecord *record = &g_faultMonitor.list[poolId];
     NodeRecordList *nodeList = record->nodeList;
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
     if (nodeList->list[nodeId].used == FALSE) {
         CM_LOGINFO("Listen, poolId(%u) nodeId(%u).", poolId, nodeId);
         nodeList->list[nodeId].used = TRUE;
@@ -80,7 +80,7 @@ void CmServerListenNodeFault(uint16_t poolId, uint16_t nodeId)
         record->activeNum++;
     } else {
         if (nodeList->list[nodeId].node.state == RECORD_STATE_FAULT) {
-            cm_rwlock_unlock(&record->lock);
+            CM_RWLOCK_UNLOCK(&record->lock);
             return;
         }
         CM_LOGINFO("Listen, poolId(%u) nodeId(%u).", poolId, nodeId);
@@ -90,7 +90,7 @@ void CmServerListenNodeFault(uint16_t poolId, uint16_t nodeId)
 
         nodeList->list[nodeId].diskNum = 0;
     }
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
 
     CM_SEM_UP(&g_faultMonitor.sem);
     return;
@@ -101,7 +101,7 @@ void CmServerListenDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId)
     PoolRecord *record = &g_faultMonitor.list[poolId];
     NodeRecordList *nodeList = record->nodeList;
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
     if (nodeList->list[nodeId].used == FALSE) {
         CM_LOGINFO("Listen, poolId(%u) nodeId(%u) diskId(%u).", poolId, nodeId, diskId);
         nodeList->list[nodeId].used = TRUE;
@@ -112,13 +112,13 @@ void CmServerListenDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId)
         record->activeNum++;
     } else {
         if (nodeList->list[nodeId].node.state == RECORD_STATE_FAULT) {
-            cm_rwlock_unlock(&record->lock);
+            CM_RWLOCK_UNLOCK(&record->lock);
             return;
         }
         uint16_t index;
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].id == diskId) {
-                cm_rwlock_unlock(&record->lock);
+                CM_RWLOCK_UNLOCK(&record->lock);
                 return;
             }
         }
@@ -128,7 +128,7 @@ void CmServerListenDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId)
         nodeList->list[nodeId].diskList[nodeList->list[nodeId].diskNum].times = CmGetSecondsTime();
         nodeList->list[nodeId].diskNum++;
     }
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
 
     CM_SEM_UP(&g_faultMonitor.sem);
     return;
@@ -139,9 +139,9 @@ void CmServerCancelNodeFault(uint16_t poolId, uint16_t nodeId)
     PoolRecord *record = &g_faultMonitor.list[poolId];
     NodeRecordList *nodeList = record->nodeList;
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
     if (nodeList->list[nodeId].used == FALSE) {
-        cm_rwlock_unlock(&record->lock);
+        CM_RWLOCK_UNLOCK(&record->lock);
         return;
     } else {
         CM_LOGINFO("Cancel, poolId(%u) nodeId(%u).", poolId, nodeId);
@@ -153,7 +153,7 @@ void CmServerCancelNodeFault(uint16_t poolId, uint16_t nodeId)
         nodeList->list[nodeId].diskNum = 0;
         record->activeNum--;
     }
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
 
     return;
 }
@@ -163,13 +163,13 @@ void CmServerCancelDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId)
     PoolRecord *record = &g_faultMonitor.list[poolId];
     NodeRecordList *nodeList = record->nodeList;
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
     if (nodeList->list[nodeId].used == FALSE) {
-        cm_rwlock_unlock(&record->lock);
+        CM_RWLOCK_UNLOCK(&record->lock);
         return;
     } else {
         if (nodeList->list[nodeId].node.state == RECORD_STATE_FAULT) {
-            cm_rwlock_unlock(&record->lock);
+            CM_RWLOCK_UNLOCK(&record->lock);
             return;
         }
         uint16_t index, diskIndex;
@@ -192,7 +192,7 @@ void CmServerCancelDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId)
             record->activeNum--;
         }
     }
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
 
     return;
 }
@@ -218,7 +218,7 @@ void CmServerMonitorPoolExpiredUpdate(PoolRecord *record, uint64_t curTimes)
     NodeRecordList *nodeList = record->nodeList;
     uint16_t nodeId, index;
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
 
     for (nodeId = 0; nodeId < nodeList->num; nodeId++) {
         if (nodeList->list[nodeId].used == FALSE) {
@@ -254,7 +254,7 @@ void CmServerMonitorPoolExpiredUpdate(PoolRecord *record, uint64_t curTimes)
         nodeList->list[nodeId].diskNum = num;
     }
 
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
 
     return;
 }
@@ -267,7 +267,7 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
 
     uint64_t curTimes = CmGetSecondsTime();
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
 
     for (nodeId = 0; nodeId < nodeList->num; nodeId++) {
         if (nodeList->list[nodeId].used == FALSE) {
@@ -289,7 +289,7 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
         }
     }
 
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
 
     int32_t ret = g_faultMonitor.handle.ExpiredCommit(record->pool->poolId);
     if (ret != CM_OK) {
@@ -350,16 +350,16 @@ void *CmServerMonitorDetectThread(void *ctx)
                 continue;
             }
             isContinue = TRUE;
-            cm_rwlock_rdlock(&record->lock);
+            CM_RWLOCK_RDLOCK(&record->lock);
             if (record->idle == FALSE) {
-                cm_rwlock_unlock(&record->lock); // current has generated task;
+                CM_RWLOCK_UNLOCK(&record->lock); // current has generated task;
                 continue;
             }
             isExpired = CmServerMonitorPoolIsExpired(poolId);
             if (isExpired == TRUE) {
                 record->idle = FALSE;
             }
-            cm_rwlock_unlock(&record->lock);
+            CM_RWLOCK_UNLOCK(&record->lock);
             if (isExpired == TRUE) {
                 CmServerSchedueAdd(poolId, CmServerMonitorPoolExpiredHandle, (void *)record);
             }
@@ -383,7 +383,7 @@ static void CmServerMonitorResetPool(uint16_t poolId)
 
     NodeRecordList *nodeList = record->nodeList;
 
-    cm_rwlock_wrlock(&record->lock);
+    CM_RWLOCK_WRLOCK(&record->lock);
 
     record->activeNum = 0;
     record->idle = TRUE;
@@ -402,7 +402,7 @@ static void CmServerMonitorResetPool(uint16_t poolId)
         nodeList->list[nodeId].diskNum = 0;
     }
 
-    cm_rwlock_unlock(&record->lock);
+    CM_RWLOCK_UNLOCK(&record->lock);
     return;
 }
 
@@ -429,10 +429,10 @@ void CmServerMonitorInitMgr(void)
 {
     uint16_t poolId;
 
-    cm_rwlock_init(&g_faultMonitor.lock, NULL);
+    CM_RWLOCK_INIT(&g_faultMonitor.lock, NULL);
 
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
-        cm_rwlock_init(&g_faultMonitor.list[poolId].lock, NULL);
+        CM_RWLOCK_INIT(&g_faultMonitor.list[poolId].lock, NULL);
         g_faultMonitor.list[poolId].used = FALSE;
         g_faultMonitor.list[poolId].pool = CmConfigGetPoolInfo(poolId);
         g_faultMonitor.list[poolId].activeNum = 0;
@@ -490,7 +490,7 @@ void CmServerMonitorExit(void)
 {
     uint16_t poolId;
 
-    cm_rwlock_wrlock(&g_faultMonitor.lock);
+    CM_RWLOCK_WRLOCK(&g_faultMonitor.lock);
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
         if (g_faultMonitor.list[poolId].used == FALSE) {
             continue;
@@ -500,10 +500,10 @@ void CmServerMonitorExit(void)
             free(g_faultMonitor.list[poolId].nodeList);
             g_faultMonitor.list[poolId].nodeList = NULL;
         }
-        cm_rwlock_destroy(&g_faultMonitor.list[poolId].lock);
+        CM_RWLOCK_DESTROY(&g_faultMonitor.list[poolId].lock);
     }
-    cm_rwlock_unlock(&g_faultMonitor.lock);
-    cm_rwlock_destroy(&g_faultMonitor.lock);
+    CM_RWLOCK_UNLOCK(&g_faultMonitor.lock);
+    CM_RWLOCK_DESTROY(&g_faultMonitor.lock);
     CM_LOGINFO("Cm server monitor exit succeed.");
     return;
 }

@@ -113,12 +113,12 @@ extern "C" {
 #define DATA_INIT __attribute__((constructor)) static void
 #endif
 
-#define cm_rwlock_t pthread_rwlock_t
-#define cm_rwlock_init pthread_rwlock_init
-#define cm_rwlock_rdlock pthread_rwlock_rdlock
-#define cm_rwlock_wrlock pthread_rwlock_wrlock
-#define cm_rwlock_unlock pthread_rwlock_unlock
-#define cm_rwlock_destroy pthread_rwlock_destroy
+#define CM_RWLOCK_T pthread_rwlock_t
+#define CM_RWLOCK_INIT pthread_rwlock_init
+#define CM_RWLOCK_RDLOCK pthread_rwlock_rdlock
+#define CM_RWLOCK_WRLOCK pthread_rwlock_wrlock
+#define CM_RWLOCK_UNLOCK pthread_rwlock_unlock
+#define CM_RWLOCK_DESTROY pthread_rwlock_destroy
 
 #define CM_LOG_BUF_LEN 512UL
 
