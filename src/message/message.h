@@ -507,6 +507,25 @@ typedef struct {
     uint16_t nodeId;
 } CacheHitResponse;
 
+typedef struct {
+    uint64_t beginData;
+    uint64_t goodEnd;
+    uint64_t badEnd;
+    uint64_t max;
+    uint64_t min;
+    uint64_t total;
+} TraceMetrics;
+
+typedef struct {
+    char traceName[MAX_TRACE_NAME_LEN];
+    TraceMetrics metrics;
+} TraceData;
+
+typedef struct {
+    TraceData traces[TRACE_MAX_NUM];
+    int count;
+} TraceDatabase;
+
 /* Get Trace Points */
 typedef struct {
     uint16_t nodeId;

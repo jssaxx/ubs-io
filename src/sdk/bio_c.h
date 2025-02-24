@@ -142,25 +142,6 @@ typedef struct {
     char hseKfsStandbyPath[PATH_MAX];  // hseceasy kfs standby path
 } ClientOptionsConfig;
 
-typedef struct {
-    int16_t beginData;
-    int16_t goodEnd;
-    int16_t badEnd;
-    double max;
-    double min;
-    uint16_t total;
-} TraceMetrics;
-
-typedef struct {
-    char traceName[MAX_TRACE_NAME_LEN];
-    TraceMetrics metrics;
-} TraceData;
-
-typedef struct {
-    TraceData traces[TRACE_MAX_NUM];
-    int count;
-} TraceDatabase;
-
 /**
  * @brief: Initialize boostio service
  *

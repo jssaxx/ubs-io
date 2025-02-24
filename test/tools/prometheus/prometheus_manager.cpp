@@ -44,6 +44,17 @@ void PrometheusManager::Stop()
     return;
 }
 
+void PrometheusManager::GetFaultNodeId(std::vector<uint16_t> &faultNodesId)
+{
+    auto nodeView = gBioClient->GetMirror()->GetNodeView();
+
+    for (const auto &node : nodeView) {
+        if (node.second.status == CM_NODE_FAULT) {
+            faultNodesId.push_back(node.first.nodeId);
+        }
+    }
+}
+
 void PrometheusManager::UpdatePrometheusData()
 {
     while (mPrometheusRunning.load()) {
@@ -72,32 +83,71 @@ void PrometheusManager::UpdateCacheHit()
         return;
     }
 
-    for (int i = 0; i < nodeNum; i++) {
-        uint16_t nodeId = nodeDesc[i].nodeId;
-        double rCacheHitMemRatio = desc.wCacheTotalCount != 0 ?
-                                   (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
-        double rCacheHitDiskRatio = desc.wCacheTotalCount != 0 ?
-                                    (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
-        double rCacheHitRatio = desc.wCacheTotalCount != 0 ?
-                                (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount : 0;
-        double wCacheHitMemRatio = desc.wCacheHitMemCount != 0 ?
-                                   (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
-        double wCacheHitDiskRatio = desc.wCacheHitDiskCount != 0 ?
-                                    (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
-        double wCacheHitRatio = desc.wCacheTotalCount != 0 ?
-                                (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount : 0;
-        double backendHitRatio = desc.wCacheTotalCount != 0 ?
-                                 (double)desc.backendHitCount / (double)desc.wCacheTotalCount : 0;
-        double totalCacheHitRatio = rCacheHitRatio + wCacheHitRatio;
+    std::vector<uint16_t> faultNodesId;
+    GetFaultNodeId(faultNodesId);
+    for (const auto &nodeId : faultNodesId) {
+        UpdateFaultNodeCacheHitRatio(mTotalCacheHitRatios, mTotalCacheHitRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mRCacheHitRatios, mRCacheHitRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mRCacheHitMemRatios, mRCacheHitMemRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mRCacheHitDiskRatios, mRCacheHitDiskRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mWCacheHitRatios, mWCacheHitRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mWCacheHitMemRatios, mWCacheHitMemRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mWCacheHitDiskRatios, mWCacheHitDiskRatioFamily, nodeId);
+        UpdateFaultNodeCacheHitRatio(mBackendHitRatios, mBackendHitRatioFamily, nodeId);
+    }
 
-        UpdateCacheHitRatio(mTotalCacheHitRatios, mTotalCacheHitRatioFamily, nodeId, totalCacheHitRatio);
-        UpdateCacheHitRatio(mRCacheHitRatios, mRCacheHitRatioFamily, nodeId, rCacheHitRatio);
-        UpdateCacheHitRatio(mRCacheHitMemRatios, mRCacheHitMemRatioFamily, nodeId, rCacheHitMemRatio);
-        UpdateCacheHitRatio(mRCacheHitDiskRatios, mRCacheHitDiskRatioFamily, nodeId, rCacheHitDiskRatio);
-        UpdateCacheHitRatio(mWCacheHitRatios, mWCacheHitRatioFamily, nodeId, wCacheHitRatio);
-        UpdateCacheHitRatio(mWCacheHitMemRatios, mWCacheHitMemRatioFamily, nodeId, wCacheHitMemRatio);
-        UpdateCacheHitRatio(mWCacheHitDiskRatios, mWCacheHitDiskRatioFamily, nodeId, wCacheHitDiskRatio);
-        UpdateCacheHitRatio(mBackendHitRatios, mBackendHitRatioFamily, nodeId, backendHitRatio);
+    uint16_t nodeId = UINT16_MAX;
+    double rCacheHitMemRatio = desc.wCacheTotalCount != 0 ?
+                               (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitDiskRatio = desc.wCacheTotalCount != 0 ?
+                                (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitRatio = desc.wCacheTotalCount != 0 ?
+                            (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitMemRatio = desc.wCacheHitMemCount != 0 ?
+                               (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitDiskRatio = desc.wCacheHitDiskCount != 0 ?
+                                (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitRatio = desc.wCacheTotalCount != 0 ?
+                            (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double backendHitRatio = desc.wCacheTotalCount != 0 ?
+                             (double)desc.backendHitCount / (double)desc.wCacheTotalCount : 0;
+    double totalCacheHitRatio = rCacheHitRatio + wCacheHitRatio;
+
+    UpdateCacheHitRatio(mTotalCacheHitRatios, mTotalCacheHitRatioFamily, nodeId, totalCacheHitRatio);
+    UpdateCacheHitRatio(mRCacheHitRatios, mRCacheHitRatioFamily, nodeId, rCacheHitRatio);
+    UpdateCacheHitRatio(mRCacheHitMemRatios, mRCacheHitMemRatioFamily, nodeId, rCacheHitMemRatio);
+    UpdateCacheHitRatio(mRCacheHitDiskRatios, mRCacheHitDiskRatioFamily, nodeId, rCacheHitDiskRatio);
+    UpdateCacheHitRatio(mWCacheHitRatios, mWCacheHitRatioFamily, nodeId, wCacheHitRatio);
+    UpdateCacheHitRatio(mWCacheHitMemRatios, mWCacheHitMemRatioFamily, nodeId, wCacheHitMemRatio);
+    UpdateCacheHitRatio(mWCacheHitDiskRatios, mWCacheHitDiskRatioFamily, nodeId, wCacheHitDiskRatio);
+    UpdateCacheHitRatio(mBackendHitRatios, mBackendHitRatioFamily, nodeId, backendHitRatio);
+
+    for (int i = 0; i < nodeNum; i++) {
+        nodeId = nodeDesc[i].nodeId;
+        double nodeRCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                       (double)nodeDesc[i].rCacheHitMemCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeRCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitDiskCount
+                                        / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeRCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitCount
+                                    / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitMemCount
+                                       / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitDiskCount
+                                        / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                    (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeBackendHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                     (double)nodeDesc[i].backendHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeTotalCacheHitRatio = nodeRCacheHitRatio + nodeWCacheHitRatio;
+
+        UpdateCacheHitRatio(mTotalCacheHitRatios, mTotalCacheHitRatioFamily, nodeId, nodeTotalCacheHitRatio);
+        UpdateCacheHitRatio(mRCacheHitRatios, mRCacheHitRatioFamily, nodeId, nodeRCacheHitRatio);
+        UpdateCacheHitRatio(mRCacheHitMemRatios, mRCacheHitMemRatioFamily, nodeId, nodeRCacheHitMemRatio);
+        UpdateCacheHitRatio(mRCacheHitDiskRatios, mRCacheHitDiskRatioFamily, nodeId, nodeRCacheHitDiskRatio);
+        UpdateCacheHitRatio(mWCacheHitRatios, mWCacheHitRatioFamily, nodeId, nodeWCacheHitRatio);
+        UpdateCacheHitRatio(mWCacheHitMemRatios, mWCacheHitMemRatioFamily, nodeId, nodeWCacheHitMemRatio);
+        UpdateCacheHitRatio(mWCacheHitDiskRatios, mWCacheHitDiskRatioFamily, nodeId, nodeWCacheHitDiskRatio);
+        UpdateCacheHitRatio(mBackendHitRatios, mBackendHitRatioFamily, nodeId, nodeBackendHitRatio);
     }
 
     BioFreeCacheHitPtr(&nodeDesc, nodeNum);
@@ -112,6 +162,22 @@ void PrometheusManager::UpdateCacheResource()
     if (ret != RET_CACHE_OK) {
         BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
         return;
+    }
+    std::vector<uint16_t> faultNodesId;
+    GetFaultNodeId(faultNodesId);
+    for (const auto &faultNodeId : faultNodesId) {
+        UpdateFaultNodeCacheMetric(mWCacheMemWaterLevels, mWCacheMemWaterLevelFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mWCacheMemCapacities, mWCacheMemCapacityFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mWCacheMemUsedSizes, mWCacheMemUsedSizeFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mWCacheDiskWaterLevels, mWCacheDiskWaterLevelFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mWCacheDiskCapacities, mWCacheDiskCapacityFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mWCacheDiskUsedSizes, mWCacheDiskUsedSizeFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mRCacheMemWaterLevels, mRCacheMemWaterLevelFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mRCacheMemCapacities, mRCacheMemCapacityFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mRCacheMemUsedSizes, mRCacheMemUsedSizeFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mRCacheDiskWaterLevels, mRCacheDiskWaterLevelFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mRCacheDiskCapacities, mRCacheDiskCapacityFamily, faultNodeId);
+        UpdateFaultNodeCacheMetric(mRCacheDiskUsedSizes, mRCacheDiskUsedSizeFamily, faultNodeId);
     }
 
     //  更新每个node的指标
@@ -129,7 +195,7 @@ void PrometheusManager::UpdateCacheResource()
         UpdateCacheMetric(mWCacheMemUsedSizes, mWCacheMemUsedSizeFamily, nodeId, nodeDesc[i].wCacheMemUsedSize, true);
 
         // 更新写缓存磁盘水位
-        double wCacheDiskWaterLever = nodeDesc[i].wCacheDiskUsedSize / nodeDesc[i].wCacheDiskCapacity;
+        double wCacheDiskWaterLever = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
         UpdateCacheMetric(mWCacheDiskWaterLevels, mWCacheDiskWaterLevelFamily, nodeId, wCacheDiskWaterLever);
 
         // 更新写缓存磁盘容量（单位转换为MB）
@@ -141,7 +207,7 @@ void PrometheusManager::UpdateCacheResource()
                           nodeId, nodeDesc[i].wCacheDiskUsedSize, true);
 
         // 更新读缓存水位
-        double rCacheMemWaterLever = nodeDesc[i].rCacheMemUsedSize / nodeDesc[i].rCacheMemCapacity;
+        double rCacheMemWaterLever = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
         UpdateCacheMetric(mRCacheMemWaterLevels, mRCacheMemWaterLevelFamily, nodeId, rCacheMemWaterLever);
 
         // 更新读缓存容量（单位转换为MB）
@@ -151,7 +217,7 @@ void PrometheusManager::UpdateCacheResource()
         UpdateCacheMetric(mRCacheMemUsedSizes, mRCacheMemUsedSizeFamily, nodeId, nodeDesc[i].rCacheMemUsedSize, true);
 
         // 更新读缓存磁盘水位
-        double rCacheDiskWaterLever = nodeDesc[i].rCacheDiskUsedSize / nodeDesc[i].rCacheDiskCapacity;
+        double rCacheDiskWaterLever = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
         UpdateCacheMetric(mRCacheDiskWaterLevels, mRCacheDiskWaterLevelFamily, nodeId, rCacheDiskWaterLever);
 
         // 更新读缓存磁盘容量（单位转换为MB）
@@ -170,6 +236,20 @@ void PrometheusManager::UpdateTraceData()
 {
     std::map<uint16_t, TraceDatabase> nodesTracePoints;
     GetAllNodeTracePoints(nodesTracePoints);
+
+    std::vector<uint16_t> faultNodesId;
+    GetFaultNodeId(faultNodesId);
+    for (const auto &faultNodeId : faultNodesId) {
+        UpdateFaultNodeTraceMetrics(mBegins, mBeginFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mGoodEnds, mGoodEndFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mBadEnds, mBadEndFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mOnFlys, mOnFlyFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mIOPSs, mIOPSFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mMins, mMinFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mMaxs, mMaxFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mAvgs, mAvgFamily, faultNodeId);
+        UpdateFaultNodeTraceMetrics(mTotals, mTotalFamily, faultNodeId);
+    }
 
     for (const auto &tracePoints : nodesTracePoints) {
         if (tracePoints.second.count == 0) {

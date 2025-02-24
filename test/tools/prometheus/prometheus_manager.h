@@ -80,6 +80,8 @@ private:
     void GetRemoteTracePoints(std::vector<uint16_t> nodeIds,
                               std::map<uint16_t, TraceDatabase> &nodesTracePoints);
 
+    void GetFaultNodeId(std::vector<uint16_t> &faultNodesId);
+
     bool FailHandler(BResult result, uint64_t startTime, uint64_t timeOut);
 
     inline uint32_t GetScrapeIntervalSec()
@@ -92,13 +94,26 @@ private:
                                     uint16_t key, double value)
     {
         std::lock_guard<std::mutex> lock(mMutex);
+        std::string nodeStr = (key == UINT16_MAX) ? "all_node" : std::to_string(key);
         auto nodeCacheHitRatio = dataMap.find(key);
         if (nodeCacheHitRatio == dataMap.end()) {
-            dataMap[key] = &dataFamily->Add({{"node", std::to_string(key)}});
+            dataMap[key] = &dataFamily->Add({{"node", nodeStr}});
             dataMap[key]->Set(value);
         } else {
             nodeCacheHitRatio->second->Set(value);
         }
+    }
+
+    inline void UpdateFaultNodeCacheHitRatio(std::map<uint16_t, prometheus::Gauge*> &dataMap,
+                                             prometheus::Family<prometheus::Gauge> *dataFamily,
+                                             uint16_t faultNodeId)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        auto faultNodeCacheHitRatio = dataMap.find(faultNodeId);
+        if (faultNodeCacheHitRatio == dataMap.end()) {
+            return;
+        }
+        faultNodeCacheHitRatio->second->Set(std::numeric_limits<double>::quiet_NaN());
     }
 
     inline void UpdateCacheMetric(std::map<uint16_t, prometheus::Gauge*> &cacheMetrics,
@@ -117,8 +132,19 @@ private:
         }
     }
 
+    inline void UpdateFaultNodeCacheMetric(std::map<uint16_t, prometheus::Gauge*> &cacheMetrics,
+                                           prometheus::Family<prometheus::Gauge> *cacheMetricFamily,
+                                           uint16_t faultNodeId)
+    {
+        auto faultNodeCacheMetric = cacheMetrics.find(faultNodeId);
+        if (faultNodeCacheMetric == cacheMetrics.end()) {
+            return;
+        }
+        faultNodeCacheMetric->second->Set(std::numeric_limits<double>::quiet_NaN());
+    }
+
     inline void UpdateTraceMetrics(std::unordered_map<uint16_t,
-            std::unordered_map<std::string, prometheus::Gauge*>> &traceMaps,
+                                   std::unordered_map<std::string, prometheus::Gauge*>> &traceMaps,
                                    prometheus::Family<prometheus::Gauge> *traceFamily,
                                    uint16_t nodeId, std::string traceName, double value)
     {
@@ -135,6 +161,21 @@ private:
             traceMaps[nodeId][traceName]->Set(value);
         } else {
             traceMaps[nodeId][traceName]->Set(value);
+        }
+    }
+
+    inline void UpdateFaultNodeTraceMetrics(std::unordered_map<uint16_t,
+                                            std::unordered_map<std::string, prometheus::Gauge*>> &traceMaps,
+                                            prometheus::Family<prometheus::Gauge> *traceFamily,
+                                            uint16_t nodeId)
+    {
+        auto it = traceMaps.find(nodeId);
+        if (it == traceMaps.end()) {
+            return;
+        }
+
+        for (auto &trace : it->second) {
+            trace.second->Set(std::numeric_limits<double>::quiet_NaN());
         }
     }
 
