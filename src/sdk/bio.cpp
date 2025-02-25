@@ -553,7 +553,7 @@ static void BioCacheResourceCalc(CacheResourcesDesc **nodeDesc, const std::vecto
 
 CResult BioShowCacheResource(CacheResourcesDesc **nodeDesc, uint64_t *nodeNum)
 {
-    if (UNLIKELY(nodeNum == nullptr)) {
+    if (UNLIKELY(nodeNum == nullptr || nodeDesc == nullptr)) {
         return RET_CACHE_EPERM;
     }
     {
@@ -620,7 +620,7 @@ static void BioCacheHitRadioCalc(CacheHitFinalDesc *desc, CacheHitFinalDesc **no
 
 CResult BioShowCacheHitRatio(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDesc, uint64_t *nodeNum)
 {
-    if (UNLIKELY(nodeNum == nullptr)) {
+    if (UNLIKELY(nodeNum == nullptr || desc == nullptr || nodeDesc == nullptr)) {
         return RET_CACHE_EPERM;
     }
     {
