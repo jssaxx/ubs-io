@@ -697,7 +697,7 @@ int32_t BioServerInit()
     return bioServer->Start();
 }
 
-void BioServerExit()
+void BioServerExit(void)
 {
     BioServer::Instance()->Exit();
 }
@@ -713,7 +713,7 @@ bool GetCrcFlag()
     return BioServer::Instance()->GetCrcFlag();
 }
 
-const char *GetPrometheusListenAddress()
+const char *GetPrometheusListenAddress(void)
 {
     static std::string listenAddress = BioServer::Instance()->GetPrometheusListenAddress();
     const char *listenAddressCStr = listenAddress.c_str();

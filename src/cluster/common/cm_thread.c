@@ -7,9 +7,9 @@
 
 #define CM_MILLI_TO_SECOND 1000
 
-void CmSleep(unsigned int var)
+void CmSleep(unsigned int seconds)
 {
-    sleep((var) / CM_MILLI_TO_SECOND);
+    sleep((seconds) / CM_MILLI_TO_SECOND);
 }
 
 int32_t CmSwitchThreadAsync(const char *name, void *data, THREAD_CALL_BACK handle)

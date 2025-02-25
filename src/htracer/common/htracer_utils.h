@@ -29,7 +29,10 @@ public:
     static std::string CurrentTime()
     {
         time_t rawTime;
-        time(&rawTime);
+        if (time(&rawTime) == (time_t)-1) {
+            return "";
+        }
+
         auto tmInfo = localtime(&rawTime);
         if (tmInfo == nullptr) {
             return "";

@@ -156,7 +156,7 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
  *
  * @return: void
  */
-void BioExit();
+void BioExit(void);
 
 /**
  * @brief: Show cache resource information

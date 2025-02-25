@@ -11,9 +11,9 @@
 extern "C" {
 #endif
 
-#define CM_NODE_STATE(state) ((state == NODE_STATUS_OK) ? "ok" : "unok")
-#define CM_NET_STATE(state) ((state == NET_STATE_NORMAL) ? "norm" : "fault")
-#define CM_DISK_STATE(state) ((state == DISK_STATE_NORMAL) ? "norm" : "fault")
+#define CM_NODE_STATE(state) (((state) == NODE_STATUS_OK) ? "ok" : "unok")
+#define CM_NET_STATE(state) (((state) == NET_STATE_NORMAL) ? "norm" : "fault")
+#define CM_DISK_STATE(state) (((state) == DISK_STATE_NORMAL) ? "norm" : "fault")
 
 typedef enum {
     CM_SERVER_MASTER,

@@ -41,7 +41,7 @@ void BdmRegOpsWithDestory(BdmDestoryFunc destory)
     return;
 }
 
-uint32_t BdmObjAllocBdmId(uint32_t bdmId)
+static uint32_t BdmObjAllocBdmId(uint32_t bdmId)
 {
     uint32_t i;
 
@@ -80,7 +80,7 @@ uint32_t BdmObjAllocBdmId(uint32_t bdmId)
     return index;
 }
 
-void BdmObjFreeBdmId(uint32_t bdmId)
+static void BdmObjFreeBdmId(uint32_t bdmId)
 {
     if (bdmId >= BDM_MAX_NUM) {
         BDM_LOGERROR(0, "Invalid bdm id(%u).", bdmId);
@@ -100,7 +100,7 @@ void BdmObjFreeBdmId(uint32_t bdmId)
     return;
 }
 
-void BdmObjInsert(BdmObj *obj)
+static void BdmObjInsert(BdmObj *obj)
 {
     BDM_SPIN_LOCK(&g_bdmObj.lock);
     g_bdmObj.list[obj->bdmId].obj = obj;

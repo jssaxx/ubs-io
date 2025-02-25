@@ -529,7 +529,7 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
     return BioService::Initialize(mode, *optConf);
 }
 
-void BioExit()
+void BioExit(void)
 {
     BioService::Exit();
 }
