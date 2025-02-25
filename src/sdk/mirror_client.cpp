@@ -1036,7 +1036,7 @@ BResult MirrorClient::DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc
     uint32_t addrNum)
 {
     // 检查slice内存大小是否大于等于fromLen.
-    uint32_t totalLen = 0;
+    uint64_t totalLen = 0;
     for (uint32_t i = 0; i < addrNum; i++) {
         totalLen += addr[i].chunkLen;
     }
