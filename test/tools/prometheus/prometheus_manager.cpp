@@ -262,13 +262,12 @@ void PrometheusManager::UpdateTraceData()
             auto beginData = traceData.metrics.beginData;
             auto goodEndData = traceData.metrics.goodEnd;
             auto badEndData = traceData.metrics.badEnd;
-            auto onFlyData = goodEndData - badEndData;
+            auto onFlyData = ((beginData > goodEndData + badEndData) ? (beginData - goodEndData - badEndData) : 0);
             auto iopsData = (static_cast<double>(beginData) / ock::htracer::iopsDiff);
-            auto minData = (traceData.metrics.min == UINT64_MAX ?
-                            0 : (traceData.metrics.min / ock::htracer::unitStep));
-            auto maxData = traceData.metrics.max/ ock::htracer::unitStep;
+            auto minData = traceData.metrics.min;
+            auto maxData = traceData.metrics.max;
             auto avgData = (goodEndData == 0 ? 0 : static_cast<double>(traceData.metrics.total)
-                                                   / static_cast<double>(goodEndData) / ock::htracer::unitStep);
+                                                   / static_cast<double>(goodEndData));
             auto total = traceData.metrics.total;
 
             UpdateTraceMetrics(mBegins, mBeginFamily, nodeId, traceName, beginData);

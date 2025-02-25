@@ -1646,3 +1646,12 @@ TEST_F(TestBioServer, test_start_server_get_cache_resource_local)
     LVOS_HVS_deactiveTracePoint(0, "CALC_CACHE_RESOURCE");
     EXPECT_EQ(ret, BIO_OK);
 }
+
+TEST_F(TestBioServer, test_get_trace_data_success)
+{
+    LOG_INFO("test_get_trace_data_success");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    TraceDatabase traceDatabase = mirror->GetTraceData();
+    auto ret = traceDatabase.count != 0;
+    EXPECT_EQ(ret, true);
+}
