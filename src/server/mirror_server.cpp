@@ -2323,7 +2323,7 @@ TraceDatabase MirrorServer::GetTraceData()
             traceData.metrics.min = (traceInfo.GetMin() == UINT64_MAX ?
                                      0 : ((double)traceInfo.GetMin() / ock::htracer::unitStep));
             traceData.metrics.max = static_cast<double>(traceInfo.GetMax()) / ock::htracer::unitStep;
-            traceData.metrics.total = traceInfo.GetTotal();
+            traceData.metrics.total = static_cast<double>(traceInfo.GetTotal()) / ock::htracer::unitStep;
 
             traceDatabase.traces[traceCount] = traceData;
             traceCount++;
