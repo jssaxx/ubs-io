@@ -12,9 +12,9 @@ extern "C" {
 #endif
 
 typedef struct {
-    void (*ExpiredNodeSet)(uint16_t poolId, uint16_t nodeId);
-    void (*ExpiredDiskSet)(uint16_t poolId, uint16_t nodeId, uint16_t diskId);
-    int32_t (*ExpiredCommit)(uint16_t poolId);
+    void (*expiredNodeSet)(uint16_t poolId, uint16_t nodeId);
+    void (*expiredDiskSet)(uint16_t poolId, uint16_t nodeId, uint16_t diskId);
+    int32_t (*expiredCommit)(uint16_t poolId);
 } CmServerMonitorExpiredHandle;
 
 void CmServerMonitorRegisterHandle(CmServerMonitorExpiredHandle handle);

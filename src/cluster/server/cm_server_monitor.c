@@ -275,14 +275,14 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
         }
         if (nodeList->list[nodeId].node.state == RECORD_STATE_FAULT) {
             if (nodeList->list[nodeId].node.times + MONITOR_PERM_FAULT_TIME <= curTimes) {
-                g_faultMonitor.handle.ExpiredNodeSet(record->pool->poolId, nodeId);
+                g_faultMonitor.handle.expiredNodeSet(record->pool->poolId, nodeId);
                 continue;
             }
             continue;
         }
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
-                g_faultMonitor.handle.ExpiredDiskSet(record->pool->poolId, nodeId,
+                g_faultMonitor.handle.expiredDiskSet(record->pool->poolId, nodeId,
                     nodeList->list[nodeId].diskList[index].id);
                 continue;
             }
@@ -291,7 +291,7 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
 
     CM_RWLOCK_UNLOCK(&record->lock);
 
-    int32_t ret = g_faultMonitor.handle.ExpiredCommit(record->pool->poolId);
+    int32_t ret = g_faultMonitor.handle.expiredCommit(record->pool->poolId);
     if (ret != CM_OK) {
         CM_LOGWARN("Expired pool handle failed, continue, poolId(%u).", record->pool->poolId);
         record->idle = TRUE;

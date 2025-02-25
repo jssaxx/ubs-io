@@ -5,13 +5,13 @@
 #ifndef BOOSTIO_FILESYSTEMFACTORY_H
 #define BOOSTIO_FILESYSTEMFACTORY_H
 
-#include "file_system.h"
 #include <functional>
+#include <memory>
+#include "file_system.h"
 #include "ceph_system.h"
 #include "hdfs_system.h"
 #include "local_system.h"
 #include "bio_ref.h"
-#include <memory>
 
 namespace ock {
 namespace bio {

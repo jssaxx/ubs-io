@@ -222,7 +222,7 @@ int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo)
     }
 
     if (nodeInfo->diskList.num > DISK_LIST_NUM || nodeInfo->netList.num > NET_LIST_NUM) {
-        CM_LOGERROR("Invalid nodeInfo, poolId(%u) disk num(%d) net num(%d).", poolId, nodeInfo->diskList.num,
+        CM_LOGERROR("Invalid nodeInfo, poolId(%u) disk num(%hu) net num(%hu).", poolId, nodeInfo->diskList.num,
             nodeInfo->netList.num);
         return CM_ERR;
     }

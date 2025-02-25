@@ -354,8 +354,8 @@ static void ViewCalcBuildPrintf(uint16_t copyIndex, DList *head, const char *nam
     D_LIST_FOR_EACH(start, head)
     {
         elem = D_LIST_ENTRY(start, CalcElem, node);
-        CM_LOGINFO("[%s]: copyIndex(%u) nodeId(%u) diskId(%u) referNum(%u).", name, copyIndex, elem->nodeId,
-            elem->diskId, elem->referNum);
+        CM_LOGINFO("[%s]: copyIndex(%u) nodeId(%u) diskId(%u) referNum(%ld).", name, copyIndex, elem->nodeId,
+                   elem->diskId, elem->referNum);
     }
 }
 

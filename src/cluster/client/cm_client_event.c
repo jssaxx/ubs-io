@@ -168,7 +168,7 @@ int32_t CM_SetPtFinishStatus(uint16_t poolId, uint16_t ptNum, PtFinish *eventLis
         return ret;
     }
 
-    uint16_t len = sizeof(CmNodeEvent) + sizeof(PtFinish) * ptNum;
+    size_t len = sizeof(CmNodeEvent) + sizeof(PtFinish) * ptNum;
     if (len > NODE_META_BUFF_LEN) {
         CM_LOGERROR("PtNum(%u) too much, poolId(%u).", ptNum, poolId);
         return CM_ERR;

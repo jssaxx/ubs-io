@@ -191,9 +191,9 @@ static void CmServerViewRegisterExpiredHandle(void)
 {
     CmServerMonitorExpiredHandle handle;
 
-    handle.ExpiredNodeSet = CmServerViewExpiredNodeSet;
-    handle.ExpiredDiskSet = CmServerViewExpiredDiskSet;
-    handle.ExpiredCommit = CmServerViewExpiredCommit;
+    handle.expiredNodeSet = CmServerViewExpiredNodeSet;
+    handle.expiredDiskSet = CmServerViewExpiredDiskSet;
+    handle.expiredCommit = CmServerViewExpiredCommit;
 
     CmServerMonitorRegisterHandle(handle);
     return;

@@ -11,7 +11,7 @@
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
-int KunpengCpuCheck()
+int KunpengCpuCheck(void)
 {
 #ifdef DISABLE_CPU_CHECKER
     printf("KunpengCpuCheck()\n");
@@ -91,7 +91,7 @@ int DoQingsongCpuCheck(std::string file)
     return -1;
 }
 
-int QingsongCpuCheck()
+int QingsongCpuCheck(void)
 {
     std::string dev0 = I2C_DEV_0;
     std::string dev1 = I2C_DEV_1;

@@ -5,6 +5,7 @@
 #include "cm_pt_calc_fixed_state.h"
 #include "cm_log.h"
 
+#define LOSS_NUM_TWO (2)
 void ViewPtUpdateCopyKeepAlive(PtEntry *ptEntry, uint16_t minCopyNum)
 {
     uint16_t index;
@@ -88,7 +89,7 @@ void ViewPtEntryUpdatePtState(PtEntry *ptEntry, PtEntryList *ptList)
         ptEntry->state = PT_STATE_NORMAL;
     } else if (runningNum + 1 == ptList->maxCopyNum) {
         ptEntry->state = PT_STATE_DEGRADE_LOSS1;
-    } else if (runningNum + 2 == ptList->maxCopyNum) {
+    } else if (runningNum + LOSS_NUM_TWO == ptList->maxCopyNum) {
         ptEntry->state = PT_STATE_DEGRADE_LOSS2;
     } else {
         CM_LOGERROR("Impossible.");
@@ -181,7 +182,6 @@ void ViewPtEntryListUpdateNodeUp(uint16_t nodeId, NodeInfo *info, PtEntryList *p
     uint16_t ptId, index;
 
     int32_t netfault = ViewPtEntryCheckNetFault(info);
-
     if (netfault == TRUE) {
         ViewPtEntryListUpdateNodeDown(nodeId, ptList, pgChange);
         return;

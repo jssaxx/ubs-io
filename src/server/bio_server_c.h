@@ -14,13 +14,13 @@ extern "C" {
 
 int32_t BioServerInit();
 
-void BioServerExit();
+void BioServerExit(void);
 
 uintptr_t GetBioServerNet();
 
 bool GetCrcFlag();
 
-const char *GetPrometheusListenAddress();
+const char *GetPrometheusListenAddress(void);
 
 uint32_t GetNegoWorkIoTimeOut();
 

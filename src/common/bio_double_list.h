@@ -5,8 +5,8 @@
 #ifndef BOOSTIO_BIO_DOUBLE_LIST_H
 #define BOOSTIO_BIO_DOUBLE_LIST_H
 
-#include "bio_def.h"
 #include <cstdlib>
+#include "bio_def.h"
 
 namespace ock {
 namespace bio {

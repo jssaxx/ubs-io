@@ -36,8 +36,8 @@ extern "C" {
 #define FORTIFY_SRC_IDX 1
 
 #define I2C_MSG_NUM 2
-int KunpengCpuCheck();
-int QingsongCpuCheck();
+int KunpengCpuCheck(void);
+int QingsongCpuCheck(void);
 
 #ifdef __cplusplus
 }
