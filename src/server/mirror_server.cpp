@@ -560,7 +560,7 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
     std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc)
 {
     // 1. parse remote mr info
-    uint32_t totalLen = 0;
+    uint64_t totalLen = 0;
     for (auto addr : to->GetAddrs()) {
         MrInfo mr;
         addr.ToMrInfo(mr);
