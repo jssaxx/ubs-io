@@ -194,7 +194,7 @@ private:
     uint8_t *mShmAddr = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
     uint16_t mLocalNid;
-    std::string mPrometheusListenAddress = "0.0.0.0:8123";
+    std::string mPrometheusListenAddress = "127.0.0.1:7204";
     uint32_t mPrometheusScrapeIntervalSec = 15;
     DEFINE_REF_COUNT_VARIABLE;
 };
