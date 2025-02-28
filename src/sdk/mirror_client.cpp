@@ -1622,6 +1622,7 @@ BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::v
 {
     uint16_t localId = UINT16_MAX;
     std::vector<uint16_t> remoteId;
+    mUpdateView(); // 更新视图
     auto nodeView = GetNodeView();
     for (const auto& node: nodeView) {
         if (node.second.status == CM_NODE_FAULT) {
@@ -1660,6 +1661,7 @@ BResult MirrorClient::SendCacheHitRequest(CacheHitRequest &req, std::unordered_m
     uint16_t localId = UINT16_MAX;
     std::vector<uint16_t> remoteId;
 
+    mUpdateView(); // 更新视图
     auto nodeView = GetNodeView();
     for (const auto& node: nodeView) {
         if (node.second.status == CM_NODE_FAULT) {
