@@ -2321,9 +2321,10 @@ TraceDatabase MirrorServer::GetTraceData()
             traceData.metrics.goodEnd = traceInfo.GetGoodEnd();
             traceData.metrics.badEnd = traceInfo.GetBadEnd();
             traceData.metrics.min = (traceInfo.GetMin() == UINT64_MAX ?
-                0 : static_cast<int>(static_cast<double>(traceInfo.GetMin()) / ock::htracer::unitStep));
-            traceData.metrics.max = static_cast<int>(static_cast<double>(traceInfo.GetMax()) / ock::htracer::unitStep);
-            traceData.metrics.total = static_cast<int>(static_cast<double>(traceInfo.GetTotal()) /
+                0 : static_cast<uint64_t>(static_cast<double>(traceInfo.GetMin()) / ock::htracer::unitStep));
+            traceData.metrics.max = static_cast<uint64_t>(static_cast<double>(traceInfo.GetMax()) /
+                ock::htracer::unitStep);
+            traceData.metrics.total = static_cast<uint64_t>(static_cast<double>(traceInfo.GetTotal()) /
                 ock::htracer::unitStep);
 
             traceDatabase.traces[traceCount] = traceData;
