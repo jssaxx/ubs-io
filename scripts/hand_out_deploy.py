@@ -19,10 +19,12 @@ import subprocess
 import copy
 import shutil
 
-sp = subprocess.Popen(["touch", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
+sp = subprocess.Popen(["/usr/bin/touch", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                      stderr=subprocess.PIPE, shell=False, universal_newlines=True)
 sp.communicate()
 sp.wait()
-sp = subprocess.Popen(["chmod", "600", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
+sp = subprocess.Popen(["/usr/bin/chmod", "600", "./boostio_hand_out_py.log"], stdin=subprocess.PIPE,
+                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
 sp.communicate()
 sp.wait()
 logging.basicConfig(level=logging.INFO,
@@ -70,12 +72,12 @@ DEFAULT_INSTALL_PATH = "/opt"
 INSTALL_SCRIPT_PATH = "/opt/boostio/scripts"
 g_config = configparser.ConfigParser()
 
-
 BOOSTIO_CONF = "bio.conf"
 HOST_IP_LIST = "host_ip_list"
-NODE_COUNT=0
+NODE_COUNT = 0
 DEFAULT_HCOM_PORT = 9898
 CONFIG_OBJ = {}
+
 
 def echo_to_terminal(message):
     lines = message.splitlines()
@@ -116,19 +118,20 @@ def send_files_to_node(node):
     will_sent_files = [PACKAGE_PATH, new_config_path]
     for sent_file in will_sent_files:
         echo_to_terminal("node{0}, file:{1}".format(node[node_id], sent_file))
-        cmd = "bash {0} {1} {2} {3} {4} {5}" \
-            .format(SCP_FILE_SHELL_PATH, node[ip_str], node["user"], node[port_str], sent_file,
-                    "/home/{0}".format(node[ip_str]))
-        newcmd = ["{0}".format(SCP_FILE_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]), "{0}".format(node[port_str]),
+        new_cmd = ["{0}".format(SCP_FILE_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]),
+                  "{0}".format(node[port_str]),
                   "{0}".format(sent_file), "{0}".format("/home/{0}".format(node[ip_str]))]
-        sp = subprocess.Popen(newcmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
-        stdout, stderr = sp.communicate(node["password"])
-        sp.wait()
+        sp_local = subprocess.Popen(new_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    shell=False, universal_newlines=True)
+        stdout, stderr = sp_local.communicate(node["password"])
+        sp_local.wait()
         result = stdout
-        logging.info("pid:{0} node({1}:{2}); send file({3})\nresult: {4}".format(PID, node[ip_str], node[port_str], sent_file, result))
+        logging.info("pid:{0} node({1}:{2}); send file({3})\nresult: {4}".format(PID, node[ip_str], node[port_str],
+                                                                                 sent_file, result))
         if "Execute SCP successful" in result:
             logging.info(
-                "pid:{0} Execution succeeded--node({1}:{2}); send file({3}) success.".format(PID, node[ip_str], node[port_str], sent_file))
+                "pid:{0} Execution succeeded--node({1}:{2}); send file({3}) success.".format(PID, node[ip_str],
+                                                                                             node[port_str], sent_file))
         else:
             failed_times.append(1)
             cmd = "bash {0} {1} {2} {3} {4} {5} " \
@@ -141,6 +144,7 @@ def send_files_to_node(node):
     if os.path.exists(folder_path):
         shutil.rmtree(folder_path)
     return 0
+
 
 def check_threads_alive(thread_list):
     # 如果线程结束便移除线程列表
@@ -171,11 +175,12 @@ def ssh_cmd(node, path, command):
     port_str = "port"
     cmd = "bash {0} {1} {2} {3} {4} \"{5}\"" \
         .format(SSH_CMD_SHELL_PATH, node[ip_str], node["user"], node[port_str], path, command)
-    newcmd = ["{0}".format(SSH_CMD_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]), "{0}".format(node[port_str]),
+    new_cmd = ["{0}".format(SSH_CMD_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]), "{0}".format(node[port_str]),
               "{0}".format(path), "{0}".format(command)]
-    sp = subprocess.Popen(newcmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, universal_newlines=True)
-    stdout, stderr = sp.communicate(node["password"])
-    sp.wait()
+    sp_local = subprocess.Popen(new_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                shell=False, universal_newlines=True)
+    stdout, stderr = sp_local.communicate(node["password"])
+    sp_local.wait()
     result = stdout
     # 日志记录返回结果
     logging.info("pid:{0} node({1}:{2}); cmd({3}):\n {4}".format(PID, node[ip_str], node[port_str], cmd, result))
@@ -206,8 +211,8 @@ def ssh_cmd(node, path, command):
 def decompress_pkg(node):
     ip_str = "ip"
     if ssh_cmd(node, home_path_of(node["user"]) + "/{0}".format(node[ip_str]),
-               "tar -xvf /home/{0}/{1} -C /home/{2};chown -R {3}:{4} /home/{2}/*;chmod -R 700 /home/{2}/*".format(node[ip_str],
-               PACKAGE_NAME, node[ip_str], INSTALL_USER, INSTALL_USER)) != 0:
+               "tar -xvf /home/{0}/{1} -C /home/{2};chown -R {3}:{4} /home/{2}/*;chmod -R 700 /home/{2}/*"
+               .format(node[ip_str], PACKAGE_NAME, node[ip_str], INSTALL_USER, INSTALL_USER)) != 0:
         logging.error("pid:{0} decompress package fails.".format(PID))
         return -1
     return 0
@@ -220,6 +225,7 @@ def uninstall(node):
         return -1
     return 0
 
+
 def install(node):
     ip_str = "ip"
     if ssh_cmd(node, "/home/{0}/{1}/scripts".format(node[ip_str], "boostio"),
@@ -230,7 +236,7 @@ def install(node):
     if ssh_cmd(node, home_path_of(node["user"]),
                "rm -rf /home/{0}/*".format(node[ip_str], node[ip_str])) != 0:
         logging.info("pid:{0} remove install dir /home/{1} fails. The dir not exist".format(PID, node[ip_str]))
-
+        return -1
 
 
 def wait_for_threads_end(thread_list, mission):
@@ -262,6 +268,7 @@ def delete_temp_file(node):
 def error_log(string):
     echo_to_terminal(string)
     logging.error(string)
+
 
 def is_valid_ip_address(ip_address):
     pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
@@ -398,6 +405,7 @@ def check_config(conf_path):
         return -1
     return 0
 
+
 def get_nodes_info_no_conf():
     user_str = "user"
     password_str = "password"
@@ -412,7 +420,7 @@ def get_nodes_info_no_conf():
             echo_to_terminal("node{0} net: {1} disk_path: {2}.".format(count, net_ip, disk_path))
             if not is_valid_ip_address(host_ip):
                 error_log("invalid host_ip form {0}.".format(host_ip))
-                return False
+                return -1
             template = {
                 "node id": count,
                 "ip": host_ip,
@@ -425,6 +433,7 @@ def get_nodes_info_no_conf():
             count += 1
             nodes_info.append(template)
     return 0
+
 
 def get_nodes_info():
     user_str = "user"
@@ -440,7 +449,7 @@ def get_nodes_info():
             echo_to_terminal("node{0} net: {1} disk_path: {2}.".format(count, net_ip, disk_path))
             if not is_valid_ip_address(host_ip):
                 error_log("invalid host_ip form {0}.".format(host_ip))
-                return False
+                return -1
             template = {
                 "node id": count,
                 "ip": host_ip,
@@ -514,6 +523,7 @@ def uninstall_all_nodes():
     echo_to_terminal("(3/3)----------success.")
     return 0
 
+
 def exec_build(args):
     if len(args) < 2:
         help_info()
@@ -526,7 +536,7 @@ def exec_build(args):
     user_pattern = r'^[a-zA-Z][a-zA-Z0-9_-]{0,31}$'
     if re.match(user_pattern, INSTALL_USER) is None:
         error_log("invalid login username or password.")
-        return False
+        return -1
 
     # 检查password
     global INSTALL_PASSWORD
