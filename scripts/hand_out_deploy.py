@@ -175,8 +175,8 @@ def ssh_cmd(node, path, command):
     port_str = "port"
     cmd = "bash {0} {1} {2} {3} {4} \"{5}\"" \
         .format(SSH_CMD_SHELL_PATH, node[ip_str], node["user"], node[port_str], path, command)
-    new_cmd = ["{0}".format(SSH_CMD_SHELL_PATH), "{0}".format(node[ip_str]), "{0}".format(node["user"]), "{0}".format(node[port_str]),
-              "{0}".format(path), "{0}".format(command)]
+    new_cmd = ["{0}".format(SSH_CMD_SHELL_PATH), "{0}".format(node[ip_str]),
+               "{0}".format(node["user"]), "{0}".format(node[port_str]), "{0}".format(path), "{0}".format(command)]
     sp_local = subprocess.Popen(new_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 shell=False, universal_newlines=True)
     stdout, stderr = sp_local.communicate(node["password"])
@@ -189,7 +189,8 @@ def ssh_cmd(node, path, command):
             "pid:{0} Execution completed--node({1}:{2});cmd({3})".format(PID, node[ip_str], node[port_str], command))
     else:
         logging.error(
-            "pid:{0} SSH command run failed.--node({1}:{2});cmd({3})".format(PID, node[ip_str], node[port_str], command))
+            "pid:{0} SSH command run failed.--node({1}:{2});cmd({3})".format(PID, node[ip_str],
+                                                                             node[port_str], command))
         if "bash install.sh install" in command:
             if "recode: 2" in result:
                 echo_to_terminal("{0} The user group:{1} and its user:{2} do not exist.".
@@ -233,10 +234,13 @@ def install(node):
                                                             DEFAULT_INSTALL_PATH)) != 0:
         failed_times.append(1)
         return -1
+
     if ssh_cmd(node, home_path_of(node["user"]),
                "rm -rf /home/{0}/*".format(node[ip_str], node[ip_str])) != 0:
         logging.info("pid:{0} remove install dir /home/{1} fails. The dir not exist".format(PID, node[ip_str]))
         return -1
+
+    return 0
 
 
 def wait_for_threads_end(thread_list, mission):
