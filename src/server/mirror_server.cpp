@@ -2301,12 +2301,19 @@ TraceDatabase MirrorServer::GetTraceData()
 {
     TraceDatabase traceDatabase = {};
     auto tracePoints = ock::htracer::HtracerManager::GetTracePoints();
-    uint16_t traceCount = 0;
+    int traceCount = 0;
     for (int i = 0; i < ock::htracer::MAX_SERVICE_NUM; ++i) {
         for (int j = 0; j < ock::htracer::MAX_INNER_ID_NUM; ++j) {
             auto &traceInfo = tracePoints[i][j];
             if (!traceInfo.NameValid()) {
                 continue;
+            }
+            LVOS_TP_START(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, &traceCount, TRACE_MAX_NUM);
+            LVOS_TP_END;
+            if (traceCount >= TRACE_MAX_NUM) {
+                LOG_ERROR("Trace num exceeds the array size," << "max trace num: " << TRACE_MAX_NUM);
+                traceDatabase.count = traceCount - 1;
+                return traceDatabase;
             }
 
             TraceData traceData;

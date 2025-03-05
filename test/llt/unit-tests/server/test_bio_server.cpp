@@ -1655,3 +1655,14 @@ TEST_F(TestBioServer, test_get_trace_data_success)
     auto ret = traceDatabase.count != 0;
     EXPECT_EQ(ret, true);
 }
+
+TEST_F(TestBioServer, test_get_trace_data_fail)
+{
+    LOG_INFO("test_get_trace_data_fail");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE", 0, 1, userParam);
+    TraceDatabase traceDatabase = mirror->GetTraceData();
+    LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE");
+    EXPECT_EQ(traceDatabase.count, TRACE_MAX_NUM - 1);
+}

@@ -28,6 +28,7 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(SERVICE_START_FAIL, "server start fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(DESERIALIZE_SET_VSIZE, "set vsize", CommonTp::IntValueCallback);
     LVOS_TP_REG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, "pass check", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, "get trace fail", CommonTp::IntValueCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -49,6 +50,7 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVICE_START_FAIL);
     LVOS_TP_UNREG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK);
     LVOS_TP_UNREG(DESERIALIZE_SET_VSIZE);
+    LVOS_TP_UNREG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE);
 }
 #else
 void tp::ServerTp::Register() noexcept {}
