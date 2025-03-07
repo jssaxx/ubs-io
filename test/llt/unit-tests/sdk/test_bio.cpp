@@ -614,7 +614,7 @@ TEST_F(TestBio, test_bio_list_all)
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_OK);
     EXPECT_EQ(objNum, 1);
-    BioFreeListResources(objs, objNum);
+    BioFreeListResources(&objs, objNum);
 
     ret = BioListAll(G_TENANT_ID, prefix, &objs, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -862,7 +862,7 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_OK);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
-    BioFreeListResources(objs, objNum);
+    BioFreeListResources(&objs, objNum);
 }
 
 TEST_F(TestBio, test_list_remote_remote_over_limit)
@@ -879,7 +879,7 @@ TEST_F(TestBio, test_list_remote_remote_over_limit)
     EXPECT_EQ(ret, RET_CACHE_OK);
     LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_OVER_1000");
     LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT");
-    BioFreeListResources(objs, objNum);
+    BioFreeListResources(&objs, objNum);
 }
 
 TEST_F(TestBio, test_bio_put_remote_case_return_fail)
@@ -1455,7 +1455,7 @@ TEST_F(TestBio, test_bio_list_all_not_ready_case_return_fail)
     uint64_t objNum = 0;
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
-    BioFreeListResources(objs, objNum);
+    BioFreeListResources(&objs, objNum);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 }
 

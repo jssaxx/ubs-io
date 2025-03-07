@@ -648,7 +648,7 @@ CResult BioShowCacheHitRatio(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDe
 
 void BioFreeCacheResourcePtr(CacheResourcesDesc **nodeDesc, uint64_t nodeNum)
 {
-    if (nodeNum == 0) {
+    if (nodeNum == 0 || *nodeDesc == nullptr) {
         return;
     }
     free(*nodeDesc);
@@ -657,7 +657,7 @@ void BioFreeCacheResourcePtr(CacheResourcesDesc **nodeDesc, uint64_t nodeNum)
 
 void BioFreeCacheHitPtr(CacheHitFinalDesc **nodeDesc, uint64_t nodeNum)
 {
-    if (nodeNum == 0) {
+    if (nodeNum == 0 || *nodeDesc == nullptr) {
         return;
     }
     free(*nodeDesc);
@@ -867,13 +867,13 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
     return RET_CACHE_OK;
 }
 
-void BioFreeListResources(ObjStat *objs, uint64_t objNum)
+void BioFreeListResources(ObjStat **objs, uint64_t objNum)
 {
-    if (objNum == 0 || objs == nullptr) {
+    if (objNum == 0 || *objs == nullptr) {
         return;
     }
-    free(objs);
-    objs = nullptr;
+    free(*objs);
+    *objs = nullptr;
 }
 
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)

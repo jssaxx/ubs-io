@@ -289,7 +289,7 @@ static void HandleList(std::vector<std::string> cmds)
             CLI_PrintBuf("Object#%u: key:%s, size:%u, time:%s",
                          idx, objs[idx].key, objs[idx].size, ctime(&objs[idx].time));
         }
-        BioFreeListResources(objs, objNum);
+        BioFreeListResources(&objs, objNum);
     }
 }
 

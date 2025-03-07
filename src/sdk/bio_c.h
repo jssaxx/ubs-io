@@ -300,7 +300,7 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
  * @param[out]: objNum: object number
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-void BioFreeListResources(ObjStat *objs, uint64_t objNum);
+void BioFreeListResources(ObjStat **objs, uint64_t objNum);
 
 /**
  * @brief: Stat object
