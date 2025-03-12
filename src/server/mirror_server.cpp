@@ -902,6 +902,7 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.netTimeOut = config.workNetTimeOut;
     rsp.logLevel = config.logLevel;
     rsp.enableCrc = config.enableCrc;
+    rsp.enablePrometheus = config.enablePrometheus;
     rsp.scrapeIntervalSec = config.scrapeIntervalSec;
     auto ret = strcpy_s(rsp.listenAddress, sizeof(rsp.listenAddress), config.listenAddress.c_str());
     if (ret != 0) {
