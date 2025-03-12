@@ -206,6 +206,11 @@ public:
         return mConfig->GetDaemonConfig().enableCrc;
     }
 
+    inline bool GetPrometheusToggle()
+    {
+        return mConfig->GetDaemonConfig().enablePrometheus;
+    }
+
     inline std::string GetPrometheusListenAddress()
     {
         return mConfig->GetDaemonConfig().listenAddress;

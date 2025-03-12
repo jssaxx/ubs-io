@@ -77,6 +77,11 @@ public:
         return mPrometheusScrapeIntervalSec;
     }
 
+    inline bool GetPrometheusToggle() const
+    {
+        return mEnablePrometheus;
+    }
+
     inline bool GetCrcFlag() const
     {
         return mEnableCrc;
@@ -194,6 +199,7 @@ private:
     uint8_t *mShmAddr = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
     uint16_t mLocalNid;
+    bool mEnablePrometheus = { false };
     std::string mPrometheusListenAddress = "127.0.0.1:7204";
     uint32_t mPrometheusScrapeIntervalSec = 15;
     DEFINE_REF_COUNT_VARIABLE;

@@ -76,6 +76,7 @@ const auto UNDERFS_CEPH_POOL = std::make_pair("bio.underfs.ceph.pool", "0:jfspoo
 const auto UNDERFS_HDFS_NAMENODE = std::make_pair("bio.underfs.hdfs.name_node", "default:0");
 const auto UNDERFS_HDFS_WORKING_PATH = std::make_pair("bio.underfs.hdfs.working_path", "/hdfs");
 
+const auto PROMETHEUS_ENABLE = std::make_pair("bio.prometheus.enable", "false");
 const auto PROMETHEUS_LISTEN_ADDRESS = std::make_pair("bio.prometheus.exposer", "127.0.0.1:7204");
 const auto PROMETHEUS_SCRAPE_INTERVAL_SEC = std::make_pair("bio.prometheus.scrape_interval_sec", 15);
 
@@ -140,6 +141,7 @@ public:
         bool enableCrc = false;
         bool enableTrace = true;
         bool enableQos = true;
+        bool enablePrometheus = false;
         std::string listenAddress = "127.0.0.1:7204";
         uint32_t scrapeIntervalSec = 15;
     };

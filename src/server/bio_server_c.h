@@ -20,6 +20,8 @@ uintptr_t GetBioServerNet();
 
 bool GetCrcFlag();
 
+bool GetPrometheusToggle();
+
 const char *GetPrometheusListenAddress(void);
 
 uint32_t GetNegoWorkIoTimeOut();

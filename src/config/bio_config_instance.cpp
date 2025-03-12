@@ -77,6 +77,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(NET_HESC_SERVER_KFS_STANDBY_PATH);
 
     /* load prometheus config */
+    AddStrConf(PROMETHEUS_ENABLE, VStrBoolRange::Create(PROMETHEUS_ENABLE.first));
     AddStrConf(PROMETHEUS_LISTEN_ADDRESS, VStrNotNull::Create(PROMETHEUS_LISTEN_ADDRESS.first));
     AddIntConf(PROMETHEUS_SCRAPE_INTERVAL_SEC, VIntRange::Create(PROMETHEUS_SCRAPE_INTERVAL_SEC.first, NO_2, NO_8192));
 }
@@ -192,6 +193,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     mDaemonConfig.enableCrc = conf->GetStr(DATA_CRC_ENABLE.first) == "true";
     mDaemonConfig.enableTrace = conf->GetStr(BIO_TRACE_ENABLE.first) == "true";
     mDaemonConfig.enableQos = conf->GetStr(BIO_CACHE_QOS_ENABLE.first) == "true";
+    mDaemonConfig.enablePrometheus = conf->GetStr(PROMETHEUS_ENABLE.first) == "true";
     mDaemonConfig.listenAddress = conf->GetStr(PROMETHEUS_LISTEN_ADDRESS.first);
     mDaemonConfig.scrapeIntervalSec = conf->GetInt(PROMETHEUS_SCRAPE_INTERVAL_SEC.first);
 

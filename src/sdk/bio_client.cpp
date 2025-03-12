@@ -192,6 +192,11 @@ BResult BioClient::BioClientStartWork()
 
 BResult BioClient::BioClientStartPrometheus()
 {
+    bool enablePrometheus = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigPrometheusToggle() :
+        mNetEngine->GetPrometheusToggle();
+    if (!enablePrometheus) {
+        return BIO_OK;
+    }
 #ifndef DEBUG_UT
 #ifdef USE_PROMETHEUS
     std::string listenAddress;

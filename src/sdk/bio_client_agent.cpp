@@ -87,6 +87,10 @@ BResult BioClientAgent::InitOperation()
     if ((getCrcFlag = reinterpret_cast<GetBioServerCrcFlagFuncPtr>(LoadFunction("GetCrcFlag"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((getPrometheusToggle = reinterpret_cast<GetBioServerPromethuesToggleFuncPtr>
+        (LoadFunction("GetPrometheusToggle"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((getListenAddress = reinterpret_cast<GetBioServerListenAddressFuncPtr>
         (LoadFunction("GetPrometheusListenAddress"))) == nullptr) {
         return BIO_INNER_ERR;
@@ -206,6 +210,11 @@ BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t sla
 bool BioClientAgent::GetConfigCrcFlag()
 {
     return getCrcFlag();
+}
+
+bool BioClientAgent::GetConfigPrometheusToggle()
+{
+    return getPrometheusToggle();
 }
 
 const char *BioClientAgent::GetPrometheusListenAddress()

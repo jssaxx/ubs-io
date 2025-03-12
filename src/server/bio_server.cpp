@@ -713,6 +713,11 @@ bool GetCrcFlag()
     return BioServer::Instance()->GetCrcFlag();
 }
 
+bool GetPrometheusToggle()
+{
+    return BioServer::Instance()->GetPrometheusToggle();
+}
+
 const char *GetPrometheusListenAddress(void)
 {
     static std::string listenAddress = BioServer::Instance()->GetPrometheusListenAddress();

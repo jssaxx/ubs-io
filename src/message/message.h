@@ -53,6 +53,7 @@ typedef struct {
     uint32_t netTimeOut;
     int32_t logLevel;
     bool enableCrc;
+    bool enablePrometheus;
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
 } ShmInitResponse;
