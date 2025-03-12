@@ -19,23 +19,13 @@ port=$3
 cmd_path=$4
 cmd=$5
 
+CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
+PROJ_DIR="$(realpath "${CURRENT_PATH}")"
+source ${PROJ_DIR}/common.sh
+
 set +e
 read -s pw
 set -e
-common_params=("\\" "\"" "!" "'" "~" "\`" "@" "#" "$" "%" "^" "&" "(" ")" "-" "_" "=" "+" "\|" "[" "{" "}" "]" ";" ":" "," "<" "." ">" "/" " ")
-
-transfor_special_characters()
-{
-    local input_params=$1
-    out_params=$input_params
-    for((i=0;i<${#common_params[@]};i++))
-    do
-        out_params=${out_params//${common_params[i]}/\\${common_params[i]}}
-    done
-    out_params=${out_params//\?/\\?}
-    echo -e "${out_params}"
-    return $?
-}
 
 UPDATE_PASSWORD=$(transfor_special_characters "$pw")
 
