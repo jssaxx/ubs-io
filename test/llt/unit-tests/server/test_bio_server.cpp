@@ -1606,16 +1606,6 @@ TEST_F(TestBioServer, test_handle_interceptor_write)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestBioServer, test_bio_server_insert_getHolder)
-{
-    LOG_INFO("test_bio_server_insert_getHolder");
-    MirrorServerPtr mirrorServer = BioServer::Instance()->GetMirrorServer();
-    uint32_t nodeId = NO_1;
-    uint64_t clientId = NO_1;
-    std::vector<NetMrInfo> lMrVec;
-    uint8_t type = 0;
-    mirrorServer->InsertMemFreeHolder(nodeId, clientId, lMrVec, type);
-}
 
 TEST_F(TestBioServer, test_start_server_cacl_cache_hit_local)
 {
