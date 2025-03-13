@@ -171,14 +171,6 @@ public:
     bool CheckFreeMemReq(FreeMemRequest *req);
     bool CheckGetSliceReq(GetSliceRequest *req);
 
-    void InsertMemFreeHolder(uint32_t nodeId, uint64_t clientId, std::vector<NetMrInfo>, uint8_t type);
-    void RemoveMemFreeHolder(uint32_t nodeId, uint64_t clientId, uint8_t type, uintptr_t addr);
-    void InsertMemFreeHolderImpl(MemFreeHolder holder, std::unordered_map<MemFreeHolder,
-        std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual> &freeMap,
-        std::vector<NetMrInfo> lMrVec);
-    void RemoveMemFreeHolderImpl(MemFreeHolder holder, std::unordered_map<MemFreeHolder,
-        std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual> &freeMap, uintptr_t addr);
-
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
