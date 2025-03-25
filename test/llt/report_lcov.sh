@@ -1,3 +1,5 @@
+#!/bin/bash
+# Copyright: (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
 CURRENT_DIR="$( cd "$( dirname "$0"  )" && pwd  )"
 PROJECT_HOME="$( cd "$( dirname "$0" )"/../..  && pwd  )"
 GENERATE_DIR=${CURRENT_DIR}/cov/gen
@@ -15,7 +17,6 @@ make_cov_info()
     find ${PROJECT_HOME}/build/${SUB_DIR} -name "*.gcno" | xargs  -i cp {} ${SUB_GENERATE_DIR}
 
     # generate all coverage
-    #tmp_file="coverage_${SUB_DIR}.info"
     tmp_file="coverage.info"
     lcov --d ${SUB_GENERATE_DIR} --c --output-file ${SUB_GENERATE_DIR}/${tmp_file} --rc lcov_branch_coverage=1
     if [ 0 != $? ];then

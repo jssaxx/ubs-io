@@ -69,7 +69,7 @@ if [ "$BUILD_TYPE" == "clean" ]; then
     echo $BUILD_CMD
     $BUILD_CMD || {
         echo "Failed to clean boostio."
-        exit -1
+        exit 1
     }
     echo
     echo "clean boostio successful."
@@ -117,12 +117,12 @@ cd $BUILD_DIR
 echo $CMAKE_CMD
 $CMAKE_CMD || {
     echo "Failed to configure boostio build."
-	  exit -1
+	  exit 1
 }
 echo $BUILD_CMD
 $BUILD_CMD || {
 	  echo "Failed to build boostio."
-	  exit -1
+	  exit 1
 }
 cd ${PROJ_DIR}/output
 if [[ "$BUILD_TYPE" == "debug" ]];then
