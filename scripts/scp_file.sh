@@ -28,6 +28,8 @@ read -s pw
 set -e
 
 UPDATE_PASSWORD=$(transfor_special_characters "$pw")
+unset pw
+
 sshcmd()
 {
     ip_addr=$1
