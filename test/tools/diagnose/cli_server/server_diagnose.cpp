@@ -19,7 +19,7 @@
 #include "cache_overload_ctrl.h"
 
 using namespace ock::bio;
-
+std::regex serverPattern("[0-9]+");
 static void BioServerDebugProcess(int argc, char *argv[]) noexcept;
 static void BioServerDebugHelp(char *command, int detail) noexcept;
 static void HandleModifyEvictWaterLevel(uint8_t tier, uint64_t level);
@@ -198,6 +198,9 @@ static void BioServerDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
     CLI_PrintBuf("\tshow: bioserver show [disk/net/olc/evict]\n");
     CLI_PrintBuf("\ttrace: bioserver trace [show/clear]\n");
+    CLI_PrintBuf("\tRCache put: bioserver RCachePut [key] [filePath] [ptId] [length]\n");
+    CLI_PrintBuf("\tRCache get: bioserver RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
+    CLI_PrintBuf("\tDelete rCache: bioserver RCacheDelete [ptId] [key]\n");
     CLI_PrintBuf("\texit: exit console\n");
 }
 
@@ -214,6 +217,151 @@ static bool CanConvertToUint64(const std::string &str, uint64_t &val)
         return false;
     } catch (const std::out_of_range &oor) {
         return false;
+    }
+}
+
+static void  HandleRCachePut(std::vector<std::string> cmds)
+{
+    if (!std::regex_match(cmds[3], serverPattern)) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+
+    auto key = const_cast<Key>(cmds[1].c_str());
+    auto filePath = cmds[2].c_str();
+    uint64_t ptId = 0;
+    uint64_t length = 0;
+    try {
+        ptId = std::stoull(cmds[3]);
+        length = std::stoull(cmds[4]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+
+    uint64_t curPtTimes;
+    std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&curPtTimes);
+    if (ptId >= ptView.size()) {
+        CLI_PrintBuf("Failed to put value to rCache, PtId exceed%d.\n");
+        return;
+    }
+
+    FILE *fp = nullptr;
+    if ((fp = fopen(filePath, "r")) == nullptr) {
+        CLI_PrintBuf("fopen file failed, file: %s.\n", filePath);
+        return;
+    }
+
+    char *value = new char[length];
+    if (fread(value, sizeof(char), length, fp) != length) {
+        CLI_PrintBuf("Read value from file failed, errno:%d.\n", errno);
+        delete[] value;
+        fclose(fp);
+        return;
+    }
+
+    WCacheSlicePtr writeSlice = nullptr;
+    RCacheManagerPtr rCacheManager = RCacheManager::Instance();
+    rCacheManager->AllocResources(ptId, length, writeSlice);
+    CacheSliceOperator sliceOperator;
+    sliceOperator.Copy(value, writeSlice.Get());
+    uint32_t dataCrc = 0;
+    writeSlice->CalculateDataCrc(dataCrc, 0, writeSlice->GetLength());
+    writeSlice->SetDataCrc(dataCrc);
+    auto ret = rCacheManager->Put(ptId, key, writeSlice);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to put value to rCache, result:%d.\n", ret);
+    } else {
+        CLI_PrintBuf("Put value to rCache successfully, key:%s, ptId:%llu, length:%llu.\n", key, ptId, length);
+    }
+
+    delete[] value;
+    fclose(fp);
+}
+
+static void HandleRCacheGet(std::vector<std::string> cmds)
+{
+    for (int i = 2; i <= 4; i++) {
+        if (!std::regex_match(cmds[i], serverPattern)) {
+            CLI_PrintBuf("Invalid input.\n");
+            return;
+        }
+    }
+
+    uint64_t ptId = 0;
+    uint64_t offset = 0;
+    uint64_t length = 0;
+    auto const_key = cmds[1].c_str();
+    char* key = const_cast<char*>(const_key);
+    try {
+        ptId = std::stoull(cmds[2]);
+        offset = std::stoull(cmds[3]);
+        length = std::stoull(cmds[4]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+
+    auto filePath = cmds[5].c_str();
+    FILE *fp = nullptr;
+    if ((fp = fopen(filePath, "w")) == nullptr) {
+        CLI_PrintBuf("fopen file failed, file:%s.\n", filePath);
+        return;
+    }
+
+    MrInfo mrInfo;
+    char *ptr = (char *)malloc(length);
+    mrInfo.address = reinterpret_cast<uint64_t>(ptr);
+    mrInfo.size = length;
+    FlowAddr flowAddr(mrInfo);
+    std::vector<FlowAddr> flowAddrs{flowAddr};
+    RCacheSlicePtr rCacheSlice = MakeRef<RCacheSlice>(ptId, length, flowAddrs);
+    static auto writer = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        CacheSliceOperator sliceOperator;
+        auto ret = sliceOperator.Copy(from, to);
+        return ret;
+    };
+
+    uint64_t realLength;
+    RCacheManagerPtr rCacheManager = RCacheManager::Instance();
+    auto ret = rCacheManager->Get(ptId, key, offset, rCacheSlice, writer, realLength);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Get key from cache failed, ret:%d, key:%s\n", ret, key);
+    } else {
+        CLI_PrintBuf("Get value success, key:%s, ptId:%llu, offset:%llu, length:%llu, realLen:%llu.\n",
+                     key, ptId, offset, length, realLength);
+        if (fwrite(ptr, sizeof(char), realLength, fp) != realLength) {
+            CLI_PrintBuf("fwrite value to file failed, errno:%d.\n", errno);
+        }
+    }
+
+    delete[] ptr;
+    fclose(fp);
+}
+
+static void HandleRCacheDelete(std::vector<std::string> cmds)
+{
+    if (!std::regex_match(cmds[1], serverPattern)) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+
+    uint64_t ptId = 0;
+    auto const_key = cmds[2].c_str();
+    char* key = const_cast<char*>(const_key);
+    try {
+        ptId = std::stoull(cmds[1]);
+    } catch (std::exception e) {
+        CLI_PrintBuf("Invalid input.\n");
+        return;
+    }
+
+    RCacheManagerPtr rCacheManager = RCacheManager::Instance();
+    auto ret = rCacheManager->Delete(ptId, key);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to delete key: %s, result:%d.\n", key, ret);
+    } else {
+        CLI_PrintBuf("Delete key success, key: %s.\n", key);
     }
 }
 
@@ -287,6 +435,24 @@ static void BioServerDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleServerTrace(cmds);
+    } else if (cmdType == "RCachePut"){
+        if (cmds.size() != 5) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        HandleRCachePut(cmds);
+    } else if (cmdType == "RCacheGet"){
+        if (cmds.size() != 6) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        HandleRCacheGet(cmds);
+    } else if (cmdType == "RCacheDelete") {
+        if (cmds.size() != 3) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        HandleRCacheDelete(cmds);
     } else if (cmdType == "exit") {
         return;
     } else {
