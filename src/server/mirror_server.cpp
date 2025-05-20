@@ -2030,48 +2030,49 @@ int32_t MirrorServer::MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnder
     BioConfig::UnderFsConfig config = underFsConfig->GetUnderFsConfig();
     int32_t ret = BIO_INNER_ERR;
     do {
-        ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE, config.underFsType.c_str(), config.underFsType.size());
+        // 把 destsz 设为 KEY_MAX_SIZE-1，让超长时直接报错，保证在数组的最后一个元素之后的位置写入空字符，不会导致数组越界
+        ret = memcpy_s(rsp.underFsType, KEY_MAX_SIZE - 1, config.underFsType.c_str(), config.underFsType.size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
         rsp.underFsType[config.underFsType.size()] = '\0';
 
-        ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE, config.hdfsConfig.nameNode.c_str(),
+        ret = memcpy_s(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE - 1, config.hdfsConfig.nameNode.c_str(),
             config.hdfsConfig.nameNode.size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
         rsp.hdfsConfig.nameNode[config.hdfsConfig.nameNode.size()] = '\0';
 
-        ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE, config.hdfsConfig.workingPath.c_str(),
+        ret = memcpy_s(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE - 1, config.hdfsConfig.workingPath.c_str(),
                        config.hdfsConfig.workingPath.size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
         rsp.hdfsConfig.workingPath[config.hdfsConfig.workingPath.size()] = '\0';
 
-        ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE, config.cephConfig.user.c_str(),
+        ret = memcpy_s(rsp.cephConfig.user, KEY_MAX_SIZE - 1, config.cephConfig.user.c_str(),
                        config.cephConfig.user.size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
         rsp.cephConfig.user[config.cephConfig.user.size()] = '\0';
 
-        ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE, config.cephConfig.cfgPath.c_str(),
+        ret = memcpy_s(rsp.cephConfig.cfgPath, KEY_MAX_SIZE - 1, config.cephConfig.cfgPath.c_str(),
                        config.cephConfig.cfgPath.size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
         rsp.cephConfig.cfgPath[config.cephConfig.cfgPath.size()] = '\0';
 
-        ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE, config.cephConfig.cluster.c_str(),
+        ret = memcpy_s(rsp.cephConfig.cluster, KEY_MAX_SIZE - 1, config.cephConfig.cluster.c_str(),
                        config.cephConfig.cluster.size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
         }
         rsp.cephConfig.cluster[config.cephConfig.cluster.size()] = '\0';
 
-        ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE, config.cephConfig.pools.at(0).c_str(),
+        ret = memcpy_s(rsp.cephConfig.pool, KEY_MAX_SIZE - 1, config.cephConfig.pools.at(0).c_str(),
                        config.cephConfig.pools.at(0).size());
         if (UNLIKELY(ret != BIO_OK)) {
             break;
