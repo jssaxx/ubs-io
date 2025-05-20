@@ -1976,11 +1976,6 @@ int32_t MirrorServer::HandleCheckUpdateReady(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerCheckRemoteUpdateReady(ServiceContext &ctx, CheckRemoteUpdateReadyRequest *req)
 {
-    if (UNLIKELY(!CheckAll(req->comm))) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_CHECK_PT_FAIL, nullptr, 0);
-        return BIO_OK;
-    }
-
     CheckRemoteUpdateReadyResponse rsp;
     auto chkRet = Cache::Instance().ServiceUngradeFlush();
     if (chkRet != BIO_OK) {
