@@ -124,7 +124,7 @@ BResult RCacheManager::Get(uint16_t ptId, const Key &key, uint64_t offset, const
     const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
+    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
     return cachePtr->Get(key, offset, slice, sliceWriter, realLen);
 }
 
