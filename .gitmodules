@@ -5,7 +5,7 @@
 [submodule "3rdparty/zookeeper/zookeeper"]
 	path = 3rdparty/zookeeper/zookeeper
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/apache/zookeeper.git
-	tag = 3.8.1-h3
+	tag = 3.9.3-htrunk3
 [submodule "3rdparty/spdlog/spdlog"]
 	path = 3rdparty/spdlog/spdlog
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/gabime/spdlog.git
@@ -25,7 +25,7 @@
 [submodule "3rdparty/openssl/openssl-1.1.1n"]
 	path = 3rdparty/openssl/openssl-1.1.1n
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/openssl/openssl.git
-	tag = 3.0.9-htrunk6-h7
+	tag = 3.0.9-htrunk15
 [submodule "3rdparty/prometheus/prometheus"]
 	path = 3rdparty/prometheus/prometheus
 	url = https://szv-open.codehub.huawei.com/OpenSourceCenter/jupp0r/prometheus-cpp.git
