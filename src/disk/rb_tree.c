@@ -327,9 +327,6 @@ color:
     }
 }
 
-/*
- * This function returns the first node (in sort order) of the tree.
- */
 /**
   \brief 功能描述:  获取红黑树第一个节点
   \verbatim
@@ -376,8 +373,6 @@ struct RbNode *RbNext(struct RbNode *node)
         return NULL;
     }
 
-    /* If we have a right-hand child, go down and then left as far
-       as we can. */
     if (node->rbRight) {
         node = node->rbRight;
         while (node->rbLeft) {
@@ -386,12 +381,6 @@ struct RbNode *RbNext(struct RbNode *node)
         return (struct RbNode *)node;
     }
 
-    /* No right-hand children.  Everything down and left is
-       smaller than us, so any 'next' node must be in the general
-       direction of our parent. Go up the tree; any time the
-       ancestor is a right-hand child of its parent, keep going
-       up. First time it's a left-hand child of its parent, said
-       parent is our 'next' node. */
     while ((parent = RB_PARENT(node)) && node == parent->rbRight) {
         node = parent;
     }
@@ -419,8 +408,6 @@ struct RbNode *RbPrev(struct RbNode *node)
         return NULL;
     }
 
-    /* If we have a left-hand child, go down and then right as far
-       as we can. */
     if (node->rbLeft) {
         node = node->rbLeft;
         while (node->rbRight) {
@@ -429,8 +416,6 @@ struct RbNode *RbPrev(struct RbNode *node)
         return (struct RbNode *)node;
     }
 
-    /* No left-hand children. Go up till we find an ancestor which
-       is a right-hand child of its parent */
     while ((parent = RB_PARENT(node)) && node == parent->rbLeft) {
         node = parent;
     }
@@ -456,7 +441,6 @@ void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode, struct RbRoot 
 {
     struct RbNode *parent = RB_PARENT(victim);
 
-    /* Set the surrounding nodes to point to the replacement */
     if (parent) {
         if (victim == parent->rbLeft) {
             parent->rbLeft = newNode;
@@ -473,7 +457,6 @@ void RbReplaceNode(struct RbNode *victim, struct RbNode *newNode, struct RbRoot 
         RbSetParent(victim->rbRight, newNode);
     }
 
-    /* Copy the pointers/colour from the victim to the replacement */
     *newNode = *victim;
 }
 
