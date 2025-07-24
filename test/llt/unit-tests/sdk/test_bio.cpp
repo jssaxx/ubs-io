@@ -1747,3 +1747,11 @@ TEST_F(TestBio, test_bio_client_agent_prepare)
     auto ret = ock::bio::agent::BioClientAgent::Instance()->SendPrepareResourceLocal(ptEntry, 1, 1, 1, 1, &rsp);
     EXPECT_EQ(ret, BIO_NET_RETRY);
 }
+
+TEST_F(TestBio, test_bio_client_get_cli_flag)
+{
+    LOG_INFO("test_bio_client_get_cli_flag");
+    auto instance = agent::BioClientAgent::Instance();
+    bool flag = instance->GetConfigCliFlag();
+    EXPECT_EQ(flag, false);
+}

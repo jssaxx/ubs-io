@@ -18,13 +18,11 @@
 #include "mirror_client.h"
 #include "bio_client_net.h"
 #include "underfs.h"
-#ifdef USE_PROMETHEUS
-#include "prometheus_manager.h"
-#endif
-
-#ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include "sdk_diagnose.h"
+
+#ifdef USE_PROMETHEUS
+#include "prometheus_manager.h"
 #endif
 
 namespace ock {
@@ -233,6 +231,13 @@ public:
         return mNetEngine;
     }
 
+    inline void* LoadFunction(const char *name, void *handler)
+    {
+        void *ptr = nullptr;
+        ptr = dlsym(handler, name);
+        return ptr;
+    }
+
     BResult BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath);
     void BioClientLoggerExit(WorkerMode mode);
     BResult BioClientAgentInit(WorkerMode mode);
@@ -251,13 +256,10 @@ public:
     void BioClientUpdateView();
 
     DEFINE_REF_COUNT_FUNCTIONS;
-
-#ifdef USE_CLI_TOOLS
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
     BResult BioClientTracePointInit(WorkerMode mode);
-#endif
 
 private:
     WorkerMode mMode;

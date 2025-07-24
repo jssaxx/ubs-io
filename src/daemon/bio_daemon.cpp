@@ -32,15 +32,6 @@ static void HandleSigterm(int signum)
 
 int main(int argc, char *argv[])
 {
-    auto uid = getuid();
-    auto gid = getgid();
-#if defined(_DEBUG) || defined(DEBUG)
-#else
-    if (uid == 0 && gid == 0) {
-        std::cout << "The current user is not supported." << std::endl;
-        return -1;
-    }
-#endif
     auto bioServer = BioServer::Instance();
     auto ret = bioServer->Start();
     if (ret != BIO_OK) {

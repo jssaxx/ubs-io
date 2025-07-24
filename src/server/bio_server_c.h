@@ -20,6 +20,8 @@ uintptr_t GetBioServerNet();
 
 bool GetCrcFlag();
 
+bool GetCliFlag();
+
 bool GetPrometheusToggle();
 
 const char *GetPrometheusListenAddress(void);

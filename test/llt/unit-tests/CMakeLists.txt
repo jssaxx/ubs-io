@@ -43,6 +43,9 @@ target_include_directories(bio_test PRIVATE
         ${TEST_DIR}/net
         ${TEST_DIR}/underfs
 		${TEST_DIR}/../../tools/tracepoint/include
+		${TEST_DIR}/../../tools/cli/include
+		${TEST_DIR}/../../tools/diagnose/cli_sdk
+		${TEST_DIR}/../../tools/bio_tp
         ${SRC_DIR}/common
         ${SRC_DIR}/cache
         ${SRC_DIR}/cache/read

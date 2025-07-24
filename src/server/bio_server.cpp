@@ -4,6 +4,8 @@
 
 #include <unistd.h>
 #include <utility>
+#include <dlfcn.h>
+#include "cli.h"
 #include "htracer.h"
 #include "bio_log.h"
 #include "bdm_core.h"
@@ -18,11 +20,6 @@
 #include "cache_overload_ctrl.h"
 #include "expire_checker.h"
 #include "bio_server.h"
-
-#ifdef USE_CLI_TOOLS
-#include "cli.h"
-#include <dlfcn.h>
-#endif
 
 namespace ock {
 namespace bio {
@@ -39,10 +36,10 @@ static void Log(int level, const char *msg)
 BioServer::BioServer() noexcept
 {
     std::vector<ModuleDesc> modules = {
-#ifdef USE_CLI_TOOLS
-        { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
+#ifdef USE_DEBUG_TP_TOOLS
         { "Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr },
 #endif
+        { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
         { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
             std::bind(&BioServer::BioTraceExit, this) },
         { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
@@ -512,23 +509,60 @@ void BioServer::BioFlowExit()
     FlowManager::Instance()->Exit();
 }
 
-#ifdef USE_CLI_TOOLS
+using CLIAgentInitFunc = int (*)(uint32_t, char *);
 BResult BioServer::BioServerDiagnoseInit()
 {
+#ifdef OPEN_RELEASE
+    if (!mConfig->GetDaemonConfig().enableCli) {
+        LOG_DEBUG("not open cli, skip");
+        return BIO_OK;
+    }
+#endif
+#ifdef DEBUG_UT
+    const char *soFileName = "libcli_agent.so";
+    void *handler = dlopen(soFileName, RTLD_NOW);
+#else
+    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
+    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+    if (canonicalPath == nullptr) {
+        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+        return BIO_NOT_EXISTS;
+    }
+
+    void *handler = dlopen(canonicalPath, RTLD_NOW);
+    free(canonicalPath);
+    canonicalPath = nullptr;
+#endif
+    if (handler == nullptr) {
+        LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
+        return BIO_INNER_ERR;
+    }
+
+    auto ptr = LoadFunction("CLI_AgentInit", handler);
+    if (ptr == nullptr) {
+        LOG_ERROR("Failed to load function CLI_AgentInit.");
+        dlclose(handler);
+        return BIO_ERR;
+    }
+
+    auto cliAgentInitFunc = reinterpret_cast<CLIAgentInitFunc>(ptr);
     uint32_t procPid = 456U;
     std::string diagName = "bio_server";
-    int32_t ret = BIO_INNER_ERR;
+
+    BResult ret = BIO_OK;
     LVOS_TP_START(CLI_AGENT_INIT_ERR, &ret, BIO_ERR);
-    ret = CLI_AgentInit(procPid, const_cast<char *>(diagName.c_str()));
+    ret = cliAgentInitFunc(procPid, const_cast<char *>(diagName.c_str()));
     LVOS_TP_END;
     if (ret != BIO_OK) {
-        LOG_ERROR("init bio server diagnose fail.");
-        return BIO_ERR;
+        LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
+        dlclose(handler);
+        return BIO_INNER_ERR;
     }
 
     ret = this->BioServerDiagnoseInitInner();
     if (ret != BIO_OK) {
         LOG_ERROR("inner init bio server diagnose fail.");
+        dlclose(handler);
     }
     return ret;
 }
@@ -567,10 +601,12 @@ BResult BioServer::BioServerDiagnoseInitInner()
     LVOS_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
+        dlclose(handler);
     }
     return ret;
 }
 
+#ifdef USE_DEBUG_TP_TOOLS
 BResult BioServer::BioServerTracePointInit()
 {
 #ifdef USE_DEBUG_TP_TOOLS
@@ -709,6 +745,11 @@ uintptr_t GetBioServerNet()
 bool GetCrcFlag()
 {
     return BioServer::Instance()->GetCrcFlag();
+}
+
+bool GetCliFlag()
+{
+    return BioServer::Instance()->GetCliFlag();
 }
 
 bool GetPrometheusToggle()

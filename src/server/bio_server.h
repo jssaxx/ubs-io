@@ -206,6 +206,11 @@ public:
         return mConfig->GetDaemonConfig().enableCrc;
     }
 
+    inline bool GetCliFlag()
+    {
+        return mConfig->GetDaemonConfig().enableCli;
+    }
+
     inline bool GetPrometheusToggle()
     {
         return mConfig->GetDaemonConfig().enablePrometheus;
@@ -341,6 +346,14 @@ public:
         }
         return mCm->GetNodeInfo(nid, nodeInfo);
     }
+
+    inline void* LoadFunction(const char *name, void *handler)
+    {
+        void *ptr = nullptr;
+        ptr = dlsym(handler, name);
+        return ptr;
+    }
+
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
 
     DEFINE_REF_COUNT_FUNCTIONS;
@@ -365,9 +378,9 @@ protected:
     void BioCacheExit();
     BResult BioFlowInit();
     void BioFlowExit();
-#ifdef USE_CLI_TOOLS
     BResult BioServerDiagnoseInit();
     BResult BioServerDiagnoseInitInner();
+#ifdef USE_DEBUG_TP_TOOLS
     BResult BioServerTracePointInit();
 #endif
     void Connection();

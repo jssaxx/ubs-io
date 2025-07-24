@@ -87,6 +87,11 @@ public:
         return mEnableCrc;
     }
 
+    inline bool GetCliFlag() const
+    {
+        return mEnableCli;
+    }
+
     inline NetEnginePtr GetNetEngine() const
     {
         return mNetEngine;
@@ -190,6 +195,7 @@ private:
     uint32_t mWorkNetTimeOut = 16;
     int32_t mLogLevel = 1;
     bool mEnableCrc = { false };
+    bool mEnableCli = { false };
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;

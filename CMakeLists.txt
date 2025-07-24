@@ -94,6 +94,10 @@ if(${CMAKE_BUILD_TYPE} STREQUAL "debug")
     add_compile_definitions(USE_PROMETHEUS)
 endif()
 
+if(${CMAKE_BUILD_TYPE} STREQUAL "release")
+    add_compile_definitions(OPEN_RELEASE)
+endif()
+
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     add_compile_options(-march=armv8-a+crc)
 endif()
@@ -107,10 +111,6 @@ endif()
 
 if (OPEN_TP STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TP_TOOLS)
-endif()
-
-if (OPEN_CLI STREQUAL "ON")
-    add_compile_definitions(USE_CLI_TOOLS)
 endif()
 
 add_subdirectory(3rdparty)
