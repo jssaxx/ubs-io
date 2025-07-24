@@ -2,6 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
  */
 
+#include <dlfcn.h>
 #include "bio_client_log.h"
 #include "bio_client_net.h"
 #include "bio_client_agent.h"
@@ -9,9 +10,6 @@
 #include "bio_tracepoint_helper.h"
 #include "expire_checker.h"
 #include "bio_client.h"
-#ifdef USE_CLI_TOOLS
-#include <dlfcn.h>
-#endif
 
 using namespace ock::bio;
 
@@ -242,8 +240,8 @@ void BioClient::BioClientExitPrometheus()
 #endif
 }
 
-#ifdef USE_CLI_TOOLS
 using SdkDiagnose = int (*)();
+using CLIAgentInitFunc = int (*)(uint32_t, char *);
 BResult BioClient::BioDiagnoseSdkInit()
 {
 #ifdef DEBUG_UT
@@ -265,22 +263,67 @@ BResult BioClient::BioDiagnoseSdkInit()
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_INNER_ERR;
     }
-    SdkDiagnose sdkInitFunc = reinterpret_cast<SdkDiagnose>(dlsym(handler, "SdkDiagnoseInit"));
+
+    auto ptr = LoadFunction("SdkDiagnoseInit", handler);
+    if (ptr == nullptr) {
+        LOG_ERROR("Failed to load function SdkDiagnoseInit.");
+        dlclose(handler);
+        return BIO_ERR;
+    }
+
+    SdkDiagnose sdkInitFunc = reinterpret_cast<SdkDiagnose>(ptr);
     BResult ret = sdkInitFunc();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
+        dlclose(handler);
     }
     return ret;
 }
 
 BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 {
+#ifdef OPEN_RELEASE
+    bool enableCli = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCliFlag() :
+        mNetEngine->GetCliFlag();
+    if (!enableCli) {
+        return BIO_OK;
+    }
+#endif
     BResult ret = BIO_OK;
     if (mode == SEPARATES) {
+#ifdef DEBUG_UT
+        const char *soFileName = "libcli_agent.so";
+        void *handler = dlopen(soFileName, RTLD_NOW);
+#else
+        std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
+        char *canonicalPath = realpath(soFileName.c_str(), nullptr);
+        if (canonicalPath == nullptr) {
+            CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
+            return BIO_NOT_EXISTS;
+        }
+
+        void *handler = dlopen(canonicalPath, RTLD_NOW);
+        free(canonicalPath);
+        canonicalPath = nullptr;
+#endif
+        if (handler == nullptr) {
+            CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
+            return BIO_INNER_ERR;
+        }
+
+        auto ptr = LoadFunction("CLI_AgentInit", handler);
+        if (ptr == nullptr) {
+            LOG_ERROR("Failed to load function CLI_AgentInit.");
+            dlclose(handler);
+            return BIO_ERR;
+        }
+
+        auto cliAgentInitFunc = reinterpret_cast<CLIAgentInitFunc>(ptr);
         std::string diagName = "bio_sdk";
-        ret = CLI_AgentInit(getpid(), const_cast<char *>(diagName.c_str()));
+        ret = cliAgentInitFunc(getpid(), const_cast<char *>(diagName.c_str()));
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
+            dlclose(handler);
             return BIO_INNER_ERR;
         }
     }
@@ -306,7 +349,6 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
 #endif
     return BIO_OK;
 }
-#endif
 
 BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
 {
@@ -327,11 +369,8 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
-    // 3. 初始化client端的CLI和TP功能, 仅debug生效.
-#ifdef USE_CLI_TOOLS
-    if (this->BioClientDiagnoseInit(mode) != BIO_OK) {
-        return BIO_ERR;
-    }
+    // 3. 初始化client端的TP功能, 仅debug生效.
+#ifdef USE_DEBUG_TP_TOOLS
     if (this->BioClientTracePointInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
@@ -378,6 +417,10 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
 
     // 9. bio client开工, mirror client开工去创建亲和的Flow实例.
     if (BioClientStartWork() != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    if (BioClientDiagnoseInit(mode) != BIO_OK) {
         return BIO_ERR;
     }
 

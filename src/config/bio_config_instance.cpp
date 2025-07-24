@@ -43,6 +43,7 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
+    AddStrConf(BIO_CLI_TOOLS_ENABLE, VStrBoolRange::Create(BIO_CLI_TOOLS_ENABLE.first));
 
     AddStrConf(WORK_SCENE, VStrEnum::Create(WORK_SCENE.first, "none||bigdata"));
     AddIntConf(WORK_IO_ALIGNSIZE, VIntRange::Create(WORK_IO_ALIGNSIZE.first, NO_1, NO_4194304));
@@ -174,6 +175,20 @@ BResult BioConfig::AutoConfigCm(const ConfigurationPtr &conf)
 
 BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 {
+    auto ret = AutoConfigDaemonLogAndOther(conf);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    ret = AutoConfigDaemonCache(conf);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    ret = AutoConfigDaemonDisk(conf);
+    ChkTrueNot(ret == BIO_OK, ret);
+
+    return ret;
+}
+
+BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
+{
     auto logLevel = conf->GetStr(LOG_LEVEL.first);
     if (logLevel == "trace") {
         mDaemonConfig.logLevel = SPDLOG_LEVEL_TRACE;
@@ -193,6 +208,7 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     mDaemonConfig.enableCrc = conf->GetStr(DATA_CRC_ENABLE.first) == "true";
     mDaemonConfig.enableTrace = conf->GetStr(BIO_TRACE_ENABLE.first) == "true";
     mDaemonConfig.enableQos = conf->GetStr(BIO_CACHE_QOS_ENABLE.first) == "true";
+    mDaemonConfig.enableCli = conf->GetStr(BIO_CLI_TOOLS_ENABLE.first) == "true";
     mDaemonConfig.enablePrometheus = conf->GetStr(PROMETHEUS_ENABLE.first) == "true";
     mDaemonConfig.listenAddress = conf->GetStr(PROMETHEUS_LISTEN_ADDRESS.first);
     mDaemonConfig.scrapeIntervalSec = conf->GetInt(PROMETHEUS_SCRAPE_INTERVAL_SEC.first);
@@ -204,8 +220,14 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
         mDaemonConfig.workScene = NO_1;
     } else {
         LOG_ERROR("Invalid configuration with scene items: " << scene);
+        return BIO_INVALID_PARAM;
     }
 
+    return BIO_OK;
+}
+
+BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
+{
     // The value range of related parameters is verified during configuration parsing.
     mDaemonConfig.workIoAlignSize = static_cast<uint32_t>(conf->GetInt(WORK_IO_ALIGNSIZE.first));
     mDaemonConfig.workIoTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_IO_TIMEOUT.first));
@@ -235,10 +257,14 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.diskWriteRatio);
 
     if (mDaemonConfig.memCap == 0) {
-        LOG_INFO("this server config  memory is 0, disk config is invalid , server can not join pt.");
-        return BIO_OK;
+        LOG_INFO("This server config  memory is 0, disk config is invalid , server can not join pt.");
     }
 
+    return BIO_OK;
+}
+
+BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
+{
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > NO_4) {
@@ -256,14 +282,15 @@ BResult BioConfig::AutoConfigDaemon(const ConfigurationPtr &conf)
 
     if (mDaemonConfig.diskCaps.size() == 0) {
         mDaemonConfig.memCap = 0;
-        LOG_INFO("this server config  disk is null, ,memory reset to 0 , server can not join pt.");
+        LOG_INFO("This server config disk is null, memory reset to 0, server can not join pt.");
         return BIO_OK;
     }
 
     if (mDaemonConfig.diskCaps.size() > DEVICE_SIZE) { // 参考 DISK_LIST_NUM
         LOG_ERROR("Disk num limit:" << DEVICE_SIZE << ", input:" << mDaemonConfig.diskCaps.size());
-            return BIO_ERR;
+        return BIO_ERR;
     }
+
     return BIO_OK;
 }
 

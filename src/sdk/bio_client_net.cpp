@@ -190,6 +190,7 @@ BResult BioClientNet::ShmInit()
     mWorkNetTimeOut = rsp.netTimeOut;
     mLogLevel = rsp.logLevel;
     mEnableCrc = rsp.enableCrc;
+    mEnableCli = rsp.enableCli;
     mEnablePrometheus = rsp.enablePrometheus;
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;

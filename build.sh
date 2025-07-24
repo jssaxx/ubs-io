@@ -62,7 +62,7 @@ while true; do
     esac
 done
 
-if [ "$BUILD_TYPE" == "clean" ]; then
+if [[ "$BUILD_TYPE" == "clean" ]]; then
     cd $BUILD_DIR
     BUILD_CMD="make clean"
     echo
@@ -77,14 +77,14 @@ if [ "$BUILD_TYPE" == "clean" ]; then
     exit 0
 fi
 
-if [ "$BUILD_TYPE" == "release" ]; then
+if [[ "$BUILD_TYPE" == "release" ]]; then
     TP_FLAG=OFF
     CMAKE_FLAGS+='-DOPEN_RELEASE=ON '
 else
     CMAKE_FLAGS+='-DOPEN_RELEASE=OFF '
 fi
 
-if [ "$CLI_FLAG" == "ON" ]; then
+if [[ "$CLI_FLAG" == "ON" ]]; then
 	  CMAKE_FLAGS+='-DOPEN_CLI=ON '
 else
     CMAKE_FLAGS+='-DOPEN_CLI=OFF '
@@ -102,7 +102,7 @@ else
 	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
-if [ -z "${CI_BUILD}" ];then
+if [[ -z "${CI_BUILD}" ]];then
     echo "update submodules ... "
     cd $PROJ_DIR && git submodule update --init
     cd $PROJ_DIR/3rdparty/hcom/hcom && git submodule update --init
@@ -132,6 +132,7 @@ if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp 3rdparty/huawei_secure_c/lib/* bio/lib/.
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
+
 \cp 3rdparty/openssl/lib/*.so bio/lib/.
 \cp 3rdparty/hcom/lib/libhcom.so bio/lib/.
 \cp 3rdparty/hseceasy/hse/cryption_tool/bin/* bio/bin/.
@@ -139,6 +140,24 @@ fi
 \cp 3rdparty/hcom/include/hcom/*.h bio/include/.
 \cp 3rdparty/hcom/include/hcom/go/*.go bio/include/.
 \cp 3rdparty/hcom/include/hcom/capi/*.h bio/include/.
+
+if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
+    mkdir -p test_tools
+    mkdir -p test_tools/bin
+    mkdir -p test_tools/lib
+    mkdir -p test_tools/conf
+    mv bio/bin/cli_server test_tools/bin/.
+    mv bio/bin/cli_client test_tools/bin/.
+    mv bio/bin/bio_console test_tools/bin/.
+    mv bio/lib/libcli_agent.so test_tools/lib/.
+    mv bio/lib/libsdk_diagnose.so test_tools/lib/.
+    mv bio/lib/libserver_diagnose.so test_tools/lib/.
+    \cp ../configs/bio_sdk_test.conf test_tools/conf/.
+    \cp -d 3rdparty/zookeeper/lib/* test_tools/lib/.
+    rm -rf bio/lib/libcli_agent.a
+    tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
+fi
+
 chmod 550 -R ../scripts/*
 \cp -r ../scripts bio/.
 touch bio/scripts/host_ip_list

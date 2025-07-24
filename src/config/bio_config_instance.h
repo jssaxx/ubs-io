@@ -62,6 +62,8 @@ const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio
 
 const auto DISK_READ_WRITE_RATIO = std::make_pair("bio.cache.disk_read_write_ratio", "5:5");
 
+const auto BIO_CLI_TOOLS_ENABLE = std::make_pair("bio_cli_tools_enable", "false");
+
 const auto WORK_SCENE = std::make_pair("bio.work.scene", "none");
 const auto WORK_IO_ALIGNSIZE = std::make_pair("bio.work.io.alignsize", 1);
 const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
@@ -142,6 +144,7 @@ public:
         bool enableTrace = true;
         bool enableQos = true;
         bool enablePrometheus = false;
+        bool enableCli = false;
         std::string listenAddress = "127.0.0.1:7204";
         uint32_t scrapeIntervalSec = 15;
     };
@@ -220,6 +223,12 @@ private:
     BResult AutoConfigCm(const ConfigurationPtr &conf);
 
     BResult AutoConfigDaemon(const ConfigurationPtr &conf);
+
+    BResult AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf);
+
+    BResult AutoConfigDaemonCache(const ConfigurationPtr &conf);
+
+    BResult AutoConfigDaemonDisk(const ConfigurationPtr &conf);
 
     BResult AutoConfigClient(const ConfigurationPtr &conf);
 

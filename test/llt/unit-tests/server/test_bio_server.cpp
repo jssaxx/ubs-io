@@ -1656,3 +1656,11 @@ TEST_F(TestBioServer, test_get_trace_data_fail)
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE");
     EXPECT_EQ(traceDatabase.count, TRACE_MAX_NUM - 1);
 }
+
+TEST_F(TestBioServer, test_bio_server_get_cli_flag)
+{
+    LOG_INFO("test_bio_server_get_cli_flag");
+    auto instance = BioServer::Instance();
+    bool flag = instance->GetCliFlag();
+    EXPECT_EQ(flag, false);
+}

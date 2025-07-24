@@ -24,6 +24,7 @@ public:
     using BioServerStartFuncPtr = int32_t (*)();
     using BioServerExitFuncPtr = void (*)();
     using GetBioServerCrcFlagFuncPtr = bool (*)();
+    using GetBioServerCliFlagFuncPtr = bool (*)();
     using GetBioServerPromethuesToggleFuncPtr = bool (*)();
     using GetBioServerListenAddressFuncPtr = const char *(*)();
     using GetBioServertimeOutFuncPtr = uint32_t (*)();
@@ -72,6 +73,8 @@ public:
     }
 
     bool GetConfigCrcFlag();
+
+    bool GetConfigCliFlag();
 
     bool GetConfigPrometheusToggle();
 
@@ -180,6 +183,7 @@ private:
     BioServerStartFuncPtr startOp = nullptr;
     BioServerExitFuncPtr exitOp = nullptr;
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
+    GetBioServerCliFlagFuncPtr getCliFlag = nullptr;
     GetBioServerPromethuesToggleFuncPtr getPrometheusToggle = nullptr;
     GetBioServerListenAddressFuncPtr getListenAddress = nullptr;
     GetBioServertimeOutFuncPtr getTimeOut = nullptr;
