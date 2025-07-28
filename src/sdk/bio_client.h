@@ -140,6 +140,11 @@ public:
         return mMirror->StatObject(key, location, stat);
     }
 
+    inline BResult AddDisk(const char *diskPath)
+    {
+        return mMirror->AddDisk(diskPath);
+    }
+
     inline BResult NotifyUpdate(bool &flag)
     {
         return mMirror->NotifyUpdate(flag);

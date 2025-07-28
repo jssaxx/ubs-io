@@ -58,6 +58,7 @@ static void HandleList(std::vector<std::string> cmds);
 static void HandleStat(std::vector<std::string> cmds);
 static void HandleLoad(std::vector<std::string> cmds);
 static void HandleDelete(std::vector<std::string> cmds);
+static void HandleAddDisk(std::vector<std::string> cmds);
 static void HandleShow(std::vector<std::string> cmds);
 static void HandleShowCacheHit(std::vector<std::string> cmds);
 static void HandleShowCacheResource(std::vector<std::string> cmds);
@@ -445,6 +446,17 @@ static void HandleDelete(std::vector<std::string> cmds)
     }
 }
 
+static void HandleAddDisk(std::vector<std::string> cmds)
+{
+    auto diskPath = cmds[1].c_str();
+    auto ret = BioAddDisk(diskPath);
+    if (ret != RET_CACHE_OK) {
+        CLI_PrintBuf("Failed to add a disk, result:%d.\n", ret);
+    } else {
+        CLI_PrintBuf("Add disk success, diskPath:%s, tenantId:%u\n", diskPath);
+    }
+}
+
 static void HandleShow(std::vector<std::string> cmds)
 {
     auto cType = cmds[1].c_str();
@@ -829,6 +841,7 @@ static void BioSdkDebugHelp(char *command, int detail) noexcept
     CLI_PrintBuf("\tshow view: sdk show [pt/node] [all/affinity]\n");
     CLI_PrintBuf("\ttrace: sdk trace [show/clear]\n");
     CLI_PrintBuf("\tCache hit: sdk cachehit\n");
+    CLI_PrintBuf("\tAdd disk: sdk adddisk [diskPath]\n");
     CLI_PrintBuf("\tCache resource: sdk cacheresource\n");
     CLI_PrintBuf("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     CLI_PrintBuf("\tupdate prepare: sdk notifyupdate [tenantId]\n");
@@ -931,6 +944,12 @@ static void BioSdkDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleDelete(cmds);
+    } else if (cmdType == "adddisk") {
+        if (cmds.size() != 2) {
+            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        HandleAddDisk(cmds);
     } else if (cmdType == "show") {
         if (cmds.size() < 2) {
             CLI_PrintBuf("Input parameters failed!, num:%u\n", cmds.size());

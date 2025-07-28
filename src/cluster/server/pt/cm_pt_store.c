@@ -33,7 +33,7 @@ static int32_t CmServerZkRecordSubPtEntryList(uint16_t poolId, uint16_t nodeId, 
     return CM_OK;
 }
 
-static void ViewDestoryStorer(Storer storer)
+static void ViewDestroyStorer(Storer storer)
 {
     StoreCore *store = (StoreCore *)storer;
 
@@ -76,14 +76,14 @@ static Storer ViewCreateStorer(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t 
     store->ptList = (PtEntryList *)malloc(sizeof(PtEntry) * maxPtNum + sizeof(PtEntryList));
     if (maxPtNum > UINT32_MAX / (CM_PT_STORE_EXPAND_NUM * maxCopyNum)) {
         CM_LOGERROR("Invalid parameter, maxPtNum or maxCopyNum exceed.");
-        ViewDestoryStorer((Storer)store);
+        ViewDestroyStorer((Storer)store);
         return NULL;
     }
     uint32_t elemNum = maxPtNum * maxCopyNum * CM_PT_STORE_EXPAND_NUM;
     store->cache = (NodeElem *)malloc(sizeof(NodeElem) * elemNum);
     if (store->nodeList == NULL || store->nodeListBak == NULL || store->ptList == NULL || store->cache == NULL) {
         CM_LOGERROR("Malloc cacheList buff failed.");
-        ViewDestoryStorer((Storer)store);
+        ViewDestroyStorer((Storer)store);
         return NULL;
     }
 
@@ -478,7 +478,7 @@ static int32_t ViewStoreUpdate(Storer storer, PtEntryList *ptList)
 
 static StoreOps g_storeOps = {
     .createStorer = ViewCreateStorer,
-    .destoryStorer = ViewDestoryStorer,
+    .destroyStorer = ViewDestroyStorer,
     .initial = ViewStoreInitial,
     .loadcheck = ViewStoreLoadCheck,
     .update = ViewStoreUpdate,

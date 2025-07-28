@@ -830,6 +830,60 @@ BResult MirrorClient::NotifyUpdate(bool &flag)
     return ret;
 }
 
+BResult MirrorClient::AddDisk(const char *diskPath)
+{
+    bool isRetry = false;
+    uint64_t retryTime;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t retryCnt = 0;
+    BResult ret;
+
+    do {
+        isRetry = false;
+        ret = AddDiskImpl(diskPath);
+        if (LIKELY(ret == BIO_OK)) {
+            return BIO_OK;
+        }
+        if (ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
+            CLIENT_LOG_INFO("Add disk delay retry, times:" << ++retryCnt << ", ret:" << ret << ".");
+            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut + 1));
+            LVOS_TP_END;
+            retryTime = Monotonic::TimeSec() - startTime;
+            if (retryTime < BIO_INIT_TIMEOUT_TIME) {
+                isRetry = true;
+                sleep(BIO_IO_INTERAL_TIME);
+            }
+        }
+    } while (isRetry);
+
+    return ret;
+}
+
+BResult MirrorClient::AddDiskImpl(const char *diskPath)
+{
+    AddDiskRequest req{};
+    req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
+    auto pathLen = strlen(diskPath);
+    BResult ret = memcpy_s(req.diskPath, FILE_PATH_MAX_LEN, diskPath, pathLen);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Req copy disk path failed, ret:" << ret << ", path:" << diskPath << ".");
+        return ret;
+    }
+    req.diskPath[pathLen] = '\0';
+
+    ret = SendAddDiskRequest(req);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send add disk request failed, ret:" << ret << ", diskPath:" << req.diskPath << ".");
+    }
+    return ret;
+}
+
+BResult MirrorClient::SendAddDiskRequest(AddDiskRequest &req)
+{
+    AddDiskResponse rsp;
+    return agent::BioClientAgent::Instance()->AddDisk(req, rsp);
+}
+
 BResult MirrorClient::CheckUpdateReady()
 {
     auto ret = SendCheckUpdateReadyRequest();

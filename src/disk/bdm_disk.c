@@ -165,7 +165,7 @@ int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, ui
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
-
+    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
     return BDM_CODE_ERR_IO;
 }
 
@@ -191,6 +191,7 @@ int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t l
         BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
 
+    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
     return BDM_CODE_ERR_IO;
 }
 
@@ -322,7 +323,7 @@ int32_t BdmDiskWrite(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskReset(uintptr_t objPtr)
+int32_t BdmDiskAllocatorReset(uintptr_t objPtr)
 {
     BdmObj *obj = (BdmObj *)objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -801,17 +802,12 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
+int32_t BdmDiskNewAllocator(BdmDiskItem *item)
 {
-    int32_t ret = BdmDiskRestoreAllocator(item);
-    if (ret == BDM_CODE_OK) {
-        return ret;
-    }
-
     BdmAllocatorPara allocatorPara = { 0 };
 
     uint64_t metaSize, dataSize;
-    ret = BdmAllocatorGetSplitSize(item->headSize, item->minChunkSize, item->totalSize, &metaSize, &dataSize);
+    int32_t ret = BdmAllocatorGetSplitSize(item->headSize, item->minChunkSize, item->totalSize, &metaSize, &dataSize);
     if (ret != BDM_CODE_OK) {
         return ret;
     }
@@ -843,13 +839,23 @@ int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
     return BDM_CODE_OK;
 }
 
-void BdmDiskDestoryAllocator(BdmDiskItem *item)
+int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
+{
+    int32_t ret = BdmDiskRestoreAllocator(item);
+    if (ret == BDM_CODE_OK) {
+        return ret;
+    }
+
+    return BdmDiskNewAllocator(item);
+}
+
+void BdmDiskDestroyAllocator(BdmDiskItem *item)
 {
     int32_t ret;
 
-    ret = BdmAllocatorDestory(item->allocator);
+    ret = BdmAllocatorDestroy(item->allocator);
     if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Destory allocator failed.");
+        BDM_LOGERROR(0, "destroy allocator failed.");
     }
 
     return;
@@ -868,7 +874,7 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->ops.write = BdmDiskWrite;
     obj->ops.readAsync = BdmDiskReadAsync;
     obj->ops.writeAsync = BdmDiskWriteAsync;
-    obj->ops.reset = BdmDiskReset;
+    obj->ops.allocatorReset = BdmDiskAllocatorReset;
     obj->ops.nextchunk = BdmDiskGetNextChunk;
     obj->ops.getcap = BdmDiskGetCap;
 
@@ -922,7 +928,7 @@ BdmObj *BdmDiskCreate(uint32_t bdmId, uintptr_t createPara)
     BdmObj *obj = (BdmObj *)malloc(sizeof(BdmObj));
     if (obj == NULL) {
         BDM_LOGERROR(0, "Malloc obj failed.");
-        BdmDiskDestoryAllocator(item);
+        BdmDiskDestroyAllocator(item);
         BdmDiskCloseDisk(item);
         free(item);
         item = NULL;
@@ -940,16 +946,16 @@ BdmObj *BdmDiskCreate(uint32_t bdmId, uintptr_t createPara)
     return obj;
 }
 
-int32_t BdmDiskDestory(BdmObj *obj)
+int32_t BdmDiskDestroy(BdmObj *obj)
 {
     if (obj == NULL) {
-        BDM_LOGINFO(0, "Bdm obj is null, no need to destory.");
+        BDM_LOGINFO(0, "Bdm obj is null, no need to destroy.");
         return BDM_CODE_OK;
     }
-    BDM_LOGINFO(0, "Bdm disk destory, bdm id(%u).", obj->bdmId);
+    BDM_LOGINFO(0, "Bdm disk destroy, bdm id(%u).", obj->bdmId);
 
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
-    BdmDiskDestoryAllocator(item);
+    BdmDiskDestroyAllocator(item);
     BdmDiskCloseDisk(item);
 
     BDM_SPIN_LOCK(&g_bdmDisk.lock);
@@ -961,6 +967,55 @@ int32_t BdmDiskDestory(BdmObj *obj)
     item = NULL;
     free(obj);
     obj = NULL;
+    return BDM_CODE_OK;
+}
+
+int32_t BdmReopenDisk(BdmDiskItem *item)
+{
+    uint32_t index;
+    item->fd = open(item->name, O_RDWR | O_CREAT | O_SYNC, BDM_OPEN_FILE_PERMISSION);
+    if (item->fd < 0) {
+        BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
+        return BDM_CODE_ERR;
+    }
+
+    for (index = 0; index < BDM_AYSNC_IO_FD_NUM; index++) {
+        item->asyncfd[index] = open(item->name, O_RDWR | __O_DIRECT);
+        if (item->asyncfd[index] < 0) {
+            BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
+            BdmDiskCloseDisk(item);
+            return BDM_CODE_ERR;
+        }
+    }
+    return BDM_CODE_OK;
+}
+
+int32_t BdmDiskReset(BdmObj *obj)
+{
+    BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
+    if (item == NULL) {
+        BDM_LOGERROR(0, "Get bdm disk item failed.");
+        return BDM_CODE_ERR;
+    }
+
+    // destroy old disk allocator
+    BdmDiskDestroyAllocator(item);
+    BdmDiskCloseDisk(item);
+
+    // reopen disk fd
+    int32_t ret = BdmReopenDisk(item);
+    if (ret != 0) {
+        BDM_LOGERROR(0, "Reopen disk failed, ret(%d), bdmId(%d).", ret, item->bdmId);
+        return BDM_CODE_ERR;
+    }
+
+    // create new allocator to item
+    ret = BdmDiskNewAllocator(item);
+    if (ret != 0) {
+        BDM_LOGERROR(0, "Create new allocator failed, ret(%d), bdmId(%d).", ret, item->bdmId);
+        return BDM_CODE_ERR;
+    }
+
     return BDM_CODE_OK;
 }
 
@@ -1045,7 +1100,8 @@ int32_t BdmDiskInit(void)
     D_INIT_LIST_HEAD(&(g_bdmDisk.head));
     g_bdmDisk.num = 0UL;
     BdmRegOpsWithCreate(BdmDiskCreate);
-    BdmRegOpsWithDestory(BdmDiskDestory);
+    BdmRegOpsWithDestroy(BdmDiskDestroy);
+    BdmRegOpsWithReset(BdmDiskReset);
     int32_t ret = BdmDiskThreadPoolInit();
     if (ret != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Bdm disk init thread pool failed, ret(%d).", ret);

@@ -24,6 +24,7 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_MIRROR_PUT_RECV_FAIL, "sdk mirror recv put request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_GET_RECV_FAIL, "sdk mirror recv get request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_DELETE_RECV_FAIL, "sdk mirror recv delete request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_MIRROR_ADD_DISK_RECV_FAIL, "sdk mirror recv add disk request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_LOAD_RECV_FAIL, "sdk mirror recv load request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_STAT_RECV_FAIL, "sdk mirror recv stat request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_LIST_RECV_FAIL, "sdk mirror recv list request failed, rturn BIO_INNER_RETRY", CommonTp::IntValueCallback);
@@ -50,6 +51,7 @@ void tp::SdkTp::Register() noexcept
                 CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL, "mirror client query cache hit fail",
                 CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_ADD_DISK_BY_SEPARATES, "sdk add disk by separates", CommonTp::NoProcessCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
@@ -67,6 +69,7 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_MIRROR_PUT_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_GET_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_DELETE_RECV_FAIL);
+    LVOS_TP_UNREG(SDK_MIRROR_ADD_DISK_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_LOAD_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_STAT_RECV_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_LIST_RECV_FAIL);
@@ -91,6 +94,7 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL);
+    LVOS_TP_UNREG(SDK_ADD_DISK_BY_SEPARATES);
 }
 #else
 void tp::SdkTp::Register() noexcept {}

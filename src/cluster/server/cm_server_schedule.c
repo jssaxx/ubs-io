@@ -50,7 +50,7 @@ void CmServerScheduleExit(void)
         if (g_scheduleThread[i] != NULL) {
             int32_t ret = CmThreadPoolDestroy(g_scheduleThread[i], THREAD_POOL_EXIT_DELAY);
             if (ret != RETURN_OK) {
-                CM_LOGERROR("Threadpool destory failed, ret(%d).", ret);
+                CM_LOGERROR("Threadpool destroy failed, ret(%d).", ret);
                 continue;
             }
             g_scheduleThread[i] = NULL;

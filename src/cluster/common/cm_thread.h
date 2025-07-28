@@ -49,7 +49,7 @@ void CmSleep(unsigned int seconds);
     do {                                                                                                        \
         int destRet = sem_destroy(sem);                                                                         \
         if (destRet != 0) {                                                                                     \
-            CM_LOGERROR(0, "FuncName(%s)Line(%d) destory lwtSem failed(%d).", __FUNCTION__, __LINE__, destRet); \
+            CM_LOGERROR(0, "FuncName(%s)Line(%d) destroy lwtSem failed(%d).", __FUNCTION__, __LINE__, destRet); \
         }                                                                                                       \
     } while (0)
 

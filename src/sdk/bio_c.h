@@ -430,6 +430,13 @@ void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh);
  */
 CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc);
 
+/**
+ * @brief: Add Disk to Bio
+ * @param[in]: diskPath: disk path
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioAddDisk(const char *diskPath);
+
 #ifdef __cplusplus
 }
 #endif

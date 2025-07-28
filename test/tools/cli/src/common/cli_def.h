@@ -153,7 +153,7 @@ static inline void DIAG_SEM_DESTROY(diag_sem_t *sem)
 {
     int destRet = sem_destroy(sem);
     if (destRet != RETURN_OK) {
-        // LOGERROR(0, "Mf destory lwtSem failed(%d).", destRet);
+        // LOGERROR(0, "Mf destroy lwtSem failed(%d).", destRet);
     }
 }
 

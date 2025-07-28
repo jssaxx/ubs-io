@@ -76,7 +76,7 @@ typedef struct {
 
 int32_t BdmCreate(BdmCreatePara *createPara, uint32_t *bdmId);
 
-int32_t BdmDestory(uint32_t bdmId);
+int32_t BdmDestroy(uint32_t bdmId);
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId);
 
@@ -101,7 +101,13 @@ int32_t BdmInit(void);
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 
+int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
+
+int32_t BdmResetDisk(uint16_t diskId);
+
 BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
+
+void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status);
 
 #ifdef __cplusplus
 }

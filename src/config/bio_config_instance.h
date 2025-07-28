@@ -213,6 +213,16 @@ public:
 
     std::string ModifyConfigDiskReadWriteRatio(const std::string &ratios);
 
+    BResult CreateDiskConfBak(const std::string &diskPath);
+
+    BResult AddDiskPath(const std::string &diskPath, const std::string &configPath);
+
+    BResult ReplaceFile(const std::string &oldFile, const std::string &newFile);
+
+    bool CheckDiskIsExist(std::string &newDiskPath, uint32_t &diskId);
+
+    void ResizeDaemonConfigDisks(std::string &newDiskPath);
+
 private:
     void DumpToLog();
 

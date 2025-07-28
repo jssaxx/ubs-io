@@ -21,7 +21,7 @@ typedef void *Calculator;
 
 typedef struct {
     Calculator (*createCalculator)(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t copyNum, uint16_t minCopyNum);
-    void (*destoryCalculator)(Calculator calculator);
+    void (*destroyCalculator)(Calculator calculator);
     int32_t (*viewInitial)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
         PtEntryList *ptList);
     int32_t (*viewRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,

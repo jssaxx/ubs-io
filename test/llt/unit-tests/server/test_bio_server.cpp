@@ -1664,3 +1664,12 @@ TEST_F(TestBioServer, test_bio_server_get_cli_flag)
     bool flag = instance->GetCliFlag();
     EXPECT_EQ(flag, false);
 }
+
+TEST_F(TestBioServer, test_start_server_add_disk)
+{
+    LOG_INFO("test_start_server_add_disk");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    auto ret = mirror->HandleAddDisk(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}

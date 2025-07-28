@@ -658,12 +658,12 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
     return (BdmAllocator)realize;
 }
 
-int32_t BdmAllocatorDestory(BdmAllocator allocator)
+int32_t BdmAllocatorDestroy(BdmAllocator allocator)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
-    BDM_LOGINFO(0, "Allocator destory, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
+    BDM_LOGINFO(0, "Allocator destroy, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
         realize->maxChunkSize, realize->totalSize);
-    BDM_RWLOCK_DESTORY(&realize->lock);
+    BDM_RWLOCK_DESTROY(&realize->lock);
     free((void *)realize->metaAddr);
     realize->metaAddr = 0;
     free(realize);

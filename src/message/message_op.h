@@ -19,6 +19,7 @@ enum BioOpCode : uint16_t {
     BIO_OP_SDK_PUT,
     BIO_OP_SDK_GET,
     BIO_OP_SDK_DELETE,
+    BIO_OP_SDK_ADD_DISK,
     BIO_OP_SDK_STAT,
     BIO_OP_SDK_LIST,
     BIO_OP_SDK_LOAD,

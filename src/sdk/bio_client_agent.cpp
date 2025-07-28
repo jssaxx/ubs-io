@@ -148,6 +148,9 @@ BResult BioClientAgent::InitOperation()
     if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("Delete"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((addDiskOp = reinterpret_cast<AddDiskFuncPtr>(LoadFunction("AddDisk"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((listOp = reinterpret_cast<ListFuncPtr>(LoadFunction("List"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -687,6 +690,21 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, Callback &callback)
     } else {
         return SendDeleteRequestLocal(req, callback);
     }
+}
+
+BResult BioClientAgent::AddDisk(AddDiskRequest &req, AddDiskResponse &rsp)
+{
+    LVOS_TP_START(SDK_ADD_DISK_BY_SEPARATES, 0)
+    if (mMode == CONVERGENCE) {
+        return addDiskOp(&req, &rsp);
+    }
+    LVOS_TP_END;
+    return SendAddDiskRequest(req, rsp);
+}
+
+BResult BioClientAgent::SendAddDiskRequest(AddDiskRequest &req, AddDiskResponse &rsp)
+{
+    return net::BioClientNet::Instance()->SendSync<AddDiskRequest, AddDiskResponse>(INVALID_NID, BIO_OP_SDK_ADD_DISK, req, rsp);
 }
 
 BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)

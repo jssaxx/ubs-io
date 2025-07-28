@@ -17,6 +17,7 @@
 
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;
+uint32_t g_bdmCount = 0UL;
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
 {
@@ -251,12 +252,12 @@ int32_t BdmResetScanPool(uint32_t bdmId)
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.reset == NULL) {
+    if (bdm->ops.allocatorReset == NULL) {
         BDM_LOGERROR(0, "Invalid ops, not register.");
         return BDM_CODE_ERR;
     }
 
-    int32_t ret = bdm->ops.reset((uintptr_t)bdm);
+    int32_t ret = bdm->ops.allocatorReset((uintptr_t)bdm);
     if (ret != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Reset failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
@@ -426,6 +427,20 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
         return ret;
     }
     g_bdmStart = 1UL;
+    g_bdmCount = diskList->num;
     BDM_LOGINFO(0, "Bdm start succeed.");
+    return BDM_CODE_OK;
+}
+
+int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
+{
+    uint32_t diskId = g_bdmCount;
+    int32_t ret = BdmDevicesCreate(diskId, diskPath, diskCap, chunkSize);
+    if (ret != BDM_CODE_OK) {
+        BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
+        return ret;
+    }
+
+    __sync_fetch_and_add(&g_bdmCount, 1);
     return BDM_CODE_OK;
 }

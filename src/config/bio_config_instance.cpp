@@ -5,6 +5,7 @@
 #include "bio_config_instance.h"
 #include "bio_log.h"
 #include "bio_ip_util.h"
+#include "bio_file_util.h"
 
 namespace ock {
 namespace bio {
@@ -369,6 +370,97 @@ BResult BioConfig::Initialize(const std::string &homePath)
     std::vector<std::string> moreErrors;
     mInited = true;
     return BIO_OK;
+}
+
+BResult BioConfig::CreateDiskConfBak(const std::string &diskPath)
+{
+    LOG_DEBUG("Start to backup disk config.");
+    auto ret = FileUtil::BackUpFile(CONFIG_PATH, CONFIG_PATH_BAK_INIT);
+    if (UNLIKELY(!ret)) {
+        LOG_ERROR("Backup config file failed.");
+        return BIO_INNER_ERR;
+    }
+
+    BResult res = AddDiskPath(diskPath, CONFIG_PATH_BAK_INIT);
+    if (UNLIKELY(res != BIO_OK)) {
+        LOG_ERROR("Add disk path to config file failed.");
+        FileUtil::RemoveFile(CONFIG_PATH_BAK_INIT);
+        return BIO_INNER_ERR;
+    }
+
+    ret = FileUtil::RenameFile(CONFIG_PATH_BAK_INIT, CONFIG_PATH_BAK);
+    if (UNLIKELY(!ret)) {
+        LOG_ERROR("Rename backup config file failed.");
+        FileUtil::RemoveFile(CONFIG_PATH_BAK_INIT);
+        return BIO_INNER_ERR;
+    }
+
+    LOG_DEBUG("Finish to backup disk config.");
+    return BIO_OK;
+}
+
+BResult BioConfig::AddDiskPath(const std::string &diskPath, const std::string &configPath)
+{
+    LOG_DEBUG("Start to add disk path to config file.");
+    std::vector<std::string> lines;
+    auto ret = FileUtil::ReadFile(configPath, lines);
+    if (UNLIKELY(!ret || lines.empty())) {
+        LOG_ERROR("Read config file failed, filePath: " << configPath << " .");
+        return BIO_INNER_ERR;
+    }
+
+    std::string configKey = "bio.disk.path";
+    std::string newDiskConfig = ":" + diskPath;
+    ret = FileUtil::AppendConfigToLine(lines, configKey, newDiskConfig);
+    if (UNLIKELY(!ret)) {
+        LOG_ERROR("Append config to line failed, filePath: " << newDiskConfig << ", diskPath: " << diskPath << ".");
+        return BIO_INNER_ERR;
+    }
+
+    ret = FileUtil::WriteFile(configPath, lines);
+    if (UNLIKELY(!ret)) {
+        LOG_ERROR("Write config to file failed, filePath: " << newDiskConfig << ", diskPath: " << diskPath << ".");
+        return BIO_INNER_ERR;
+    }
+
+    LOG_DEBUG("Finish to add disk path to config file.");
+    return BIO_OK;
+}
+
+BResult BioConfig::ReplaceFile(const std::string &oldFile, const std::string &newFile)
+{
+    LOG_DEBUG("Start to replace file.");
+    if (std::remove(oldFile.c_str()) != 0) {
+        LOG_ERROR("Old file is not exist, oldFile: " << oldFile << ".");
+        return BIO_INNER_ERR;
+    }
+
+    if (std::rename(newFile.c_str(), oldFile.c_str()) != 0) {
+        LOG_ERROR("Rename file failed, oldFile: " << oldFile << " , newFile: " << newFile << ".");
+        return BIO_INNER_ERR;
+    }
+
+    LOG_DEBUG("Finish to replace file.");
+    return BIO_OK;
+}
+
+bool BioConfig::CheckDiskIsExist(std::string &newDiskPath, uint32_t &diskId)
+{
+    bool IsExist = false;
+    for (size_t i = 0; i < mDaemonConfig.diskList.size(); ++i) {
+        if (mDaemonConfig.diskList[i] == newDiskPath) {
+            IsExist = true;
+            diskId = i;
+            return IsExist;
+        }
+    }
+    return IsExist;
+}
+
+void BioConfig::ResizeDaemonConfigDisks(std::string &newDiskPath)
+{
+    mDaemonConfig.diskList.emplace_back(newDiskPath);
+    mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(newDiskPath));
 }
 
 void BioConfig::DumpToLog()

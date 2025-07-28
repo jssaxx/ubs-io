@@ -97,6 +97,8 @@ public:
 
     BResult NotifyUpdate(bool &flag);
 
+    BResult AddDisk(const char *diskPath);
+
     BResult CheckUpdateReady();
 
     BResult GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
@@ -270,6 +272,8 @@ private:
 
     BResult LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio::LoadCallback &callback, void *context);
     BResult SendLoadRequest(CmPtInfo &ptEntry, LoadRequest &req, const Bio::LoadCallback &callback, void *context);
+    BResult AddDiskImpl(const char *diskPath);
+    BResult SendAddDiskRequest(AddDiskRequest &req);
 
     inline BResult Insert(uint16_t ptId)
     {

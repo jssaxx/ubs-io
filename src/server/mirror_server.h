@@ -80,6 +80,10 @@ public:
     BResult GetConvergence(GetRequest &req, GetResponse &rsp);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult Delete(DeleteRequest &req);
+    BResult AddDisk(AddDiskRequest &req);
+    BResult AddDiskImpl(AddDiskRequest &req);
+    BResult AddOldDiskImpl(const std::string &diskPath, uint16_t diskId);
+    BResult AddNewDiskImpl(std::string &diskPath);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult Stat(StatRequest &req, ObjStat &objInfo);
     BResult Load(LoadRequest &req);
@@ -119,6 +123,7 @@ public:
     int32_t MirrorServerPut(ServiceContext &ctx, PutRequest *req);
     int32_t MirrorServerGet(ServiceContext &ctx, GetRequest *req);
     int32_t MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req);
+    int32_t MirrorServerAddDisk(ServiceContext &ctx, AddDiskRequest *req);
     int32_t MirrorServerStat(ServiceContext &ctx, StatRequest *req);
     int32_t MirrorServerNotifyUpdate(ServiceContext &ctx, NotifyUpdateRequest *req);
     int32_t MirrorServerCheckUpdateReady(ServiceContext &ctx, CheckUpdateReadyRequest *req);
@@ -148,6 +153,7 @@ public:
     int32_t HandlePut(ServiceContext &ctx);
     int32_t HandleGet(ServiceContext &ctx);
     int32_t HandleDelete(ServiceContext &ctx);
+    int32_t HandleAddDisk(ServiceContext &ctx);
     int32_t HandleStat(ServiceContext &ctx);
     int32_t HandleNotifyUpdate(ServiceContext &ctx);
     int32_t HandleCheckUpdateReady(ServiceContext &ctx);
@@ -198,6 +204,7 @@ private:
     ReadWriteLock flowNumLock;
     bool mStarted = false;
     std::mutex mStartLock;
+    std::mutex mDiskViewMutex;
     CacheSliceOperator mSliceOp;
     ReadWriteLock mLock;
     std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,

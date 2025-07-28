@@ -22,7 +22,8 @@ static BdmObjMgr g_bdmObj = { 0 };
 
 typedef struct {
     BdmCreateFunc create;
-    BdmDestoryFunc destory;
+    BdmDestroyFunc destroy;
+    BdmResetFunc reset;
 } BdmOpsEx;
 
 static BdmOpsEx g_bdmOpsEx = { 0 };
@@ -34,10 +35,17 @@ void BdmRegOpsWithCreate(BdmCreateFunc create)
     return;
 }
 
-void BdmRegOpsWithDestory(BdmDestoryFunc destory)
+void BdmRegOpsWithDestroy(BdmDestroyFunc destroy)
 {
-    BDM_LOGINFO(0, "Reg destory ops succeed.");
-    g_bdmOpsEx.destory = destory;
+    BDM_LOGINFO(0, "Reg destroy ops succeed.");
+    g_bdmOpsEx.destroy = destroy;
+    return;
+}
+
+void BdmRegOpsWithReset(BdmResetFunc reset)
+{
+    BDM_LOGINFO(0, "Reg reset ops succeed.");
+    g_bdmOpsEx.reset = reset;
     return;
 }
 
@@ -137,7 +145,7 @@ int32_t BdmCreate(BdmCreatePara *createPara, uint32_t *bdmId)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDestory(uint32_t bdmId)
+int32_t BdmDestroy(uint32_t bdmId)
 {
     if (bdmId >= BDM_MAX_NUM || g_bdmObj.list[bdmId].used == FALSE) {
         BDM_LOGWARN(0, "Invalid bdm id(%u).", bdmId);
@@ -145,18 +153,18 @@ int32_t BdmDestory(uint32_t bdmId)
     }
 
     BdmObj *obj = g_bdmObj.list[bdmId].obj;
-    if (g_bdmOpsEx.destory == NULL) {
+    if (g_bdmOpsEx.destroy == NULL) {
         BDM_LOGERROR(0, "Invalid operate.");
         return BDM_CODE_ERR;
     }
 
-    int32_t ret = g_bdmOpsEx.destory(obj);
+    int32_t ret = g_bdmOpsEx.destroy(obj);
     if (ret != RETURN_OK) {
-        BDM_LOGERROR(0, "Bdm destory failed, bdm id(%u) ret(%d).", bdmId, ret);
+        BDM_LOGERROR(0, "Bdm destroy failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
     BdmObjFreeBdmId(bdmId);
-    BDM_LOGINFO(0, "Bdm destory succeed, bdm id(%u).", bdmId);
+    BDM_LOGINFO(0, "Bdm destroy succeed, bdm id(%u).", bdmId);
     return BDM_CODE_OK;
 }
 
@@ -180,6 +188,15 @@ BdmDiskState BdmGetBdmStatus(uint32_t bdmId)
     return BDM_DISK_STATE_NORMAL;
 }
 
+void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status)
+{
+    if (g_bdmObj.list[bdmId].obj == NULL) {
+        BDM_LOGERROR(0, "Bdm set disk status failed, bdm id(%u).", bdmId);
+        return;
+    }
+    g_bdmObj.list[bdmId].used = status;
+}
+
 int32_t BdmObjInit(void)
 {
     BDM_SPIN_INIT(&g_bdmObj.lock, 0);
@@ -191,5 +208,27 @@ int32_t BdmObjInit(void)
         g_bdmObj.list[index].obj = NULL;
     }
     BDM_SPIN_UNLOCK(&g_bdmObj.lock);
+    return BDM_CODE_OK;
+}
+
+int32_t BdmResetDisk(uint16_t diskId)
+{
+    BdmObj *obj = BdmGetBdmObj(diskId);
+    if (obj == NULL) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", diskId);
+        return BDM_CODE_NOT_EXIST;
+    }
+
+    if (g_bdmOpsEx.reset == NULL) {
+        BDM_LOGERROR(0, "Invalid operate.");
+        return BDM_CODE_ERR;
+    }
+
+    int32_t ret = g_bdmOpsEx.reset(obj);
+    if (ret != RETURN_OK) {
+        BDM_LOGERROR(0, "Bdm reset failed, bdm id(%u) ret(%d).", diskId, ret);
+        return ret;
+    }
+    BDM_LOGINFO(0, "Bdm reset succeed, bdm id(%u).", diskId);
     return BDM_CODE_OK;
 }

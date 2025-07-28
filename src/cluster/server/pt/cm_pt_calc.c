@@ -17,7 +17,7 @@ DATA_INIT CmPtCalcOpsInit(void)
         g_calcOps[index].updateState = NULL;
         g_calcOps[index].updateFinish = NULL;
         g_calcOps[index].createCalculator = NULL;
-        g_calcOps[index].destoryCalculator = NULL;
+        g_calcOps[index].destroyCalculator = NULL;
         g_calcOps[index].viewInitial = NULL;
         g_calcOps[index].viewRebalance = NULL;
     }
@@ -25,7 +25,7 @@ DATA_INIT CmPtCalcOpsInit(void)
     g_calcOps[PT_NUM_LIMIT_FIXED].updateState = ViewPtEntryListUpdateNodeState;
     g_calcOps[PT_NUM_LIMIT_FIXED].updateFinish = ViewPtEntryListUpdateNodeFinish;
     g_calcOps[PT_NUM_LIMIT_FIXED].createCalculator = CreateViewCalculator;
-    g_calcOps[PT_NUM_LIMIT_FIXED].destoryCalculator = DestoryViewCalculator;
+    g_calcOps[PT_NUM_LIMIT_FIXED].destroyCalculator = DestroyViewCalculator;
     g_calcOps[PT_NUM_LIMIT_FIXED].viewInitial = ViewCalculatorInitial;
     g_calcOps[PT_NUM_LIMIT_FIXED].viewRebalance = ViewCalculatorRebalance;
     g_calcOps[PT_NUM_LIMIT_FIXED].needRebalance = ViewCalculatorNeedRebalance;

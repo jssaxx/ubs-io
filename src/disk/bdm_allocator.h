@@ -45,7 +45,7 @@ int32_t BdmAllocatorGetCap(BdmAllocator allocator, uint64_t *totalSize, uint64_t
 
 BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore);
 
-int32_t BdmAllocatorDestory(BdmAllocator allocator);
+int32_t BdmAllocatorDestroy(BdmAllocator allocator);
 
 #ifdef __cplusplus
 }
