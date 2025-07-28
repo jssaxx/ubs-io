@@ -1097,7 +1097,7 @@ TEST_F(TestBio, test_create_view_caculator)
     Calculator calc = nullptr;
     calc = CreateViewCalculator(1, 1, 1, 1);
     EXPECT_EQ(0, BIO_OK);
-    DestoryViewCalculator(calc);
+    DestroyViewCalculator(calc);
 }
 
 TEST_F(TestBio, test_view_caculator_initial)
@@ -1147,7 +1147,7 @@ TEST_F(TestBio, test_view_caculator_initial)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorInitial(calculator, notifyList, stateList, ptEntryList);
-    DestoryViewCalculator(calculator);
+    DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -1207,7 +1207,7 @@ TEST_F(TestBio, test_caculator_need_rebalance)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorNeedRebalance(calculator, notifyList, stateList, ptEntryList);
-    DestoryViewCalculator(calculator);
+    DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -1266,7 +1266,7 @@ TEST_F(TestBio, test_caculator_rebalance)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
-    DestoryViewCalculator(calculator);
+    DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -1325,7 +1325,7 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
     ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
-    DestoryViewCalculator(calculator);
+    DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
     free(ptEntryList);
@@ -1754,4 +1754,80 @@ TEST_F(TestBio, test_bio_client_get_cli_flag)
     auto instance = agent::BioClientAgent::Instance();
     bool flag = instance->GetConfigCliFlag();
     EXPECT_EQ(flag, false);
+}
+
+TEST_F(TestBio, test_bio_add_disk_invalid_parameter)
+{
+    LOG_INFO("test_bio_add_disk_invalid_parameter");
+    const char *diskPath = nullptr;
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    std::string path(NO_256, 'A');
+    ret = BioAddDisk(path.c_str());
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+}
+
+TEST_F(TestBio, test_bio_add_disk_invalid_parameterV1)
+{
+    LOG_INFO("test_bio_add_disk_invalid_parameterV1");
+    const char *diskPath = "/dev/xxx";
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+}
+
+TEST_F(TestBio, test_bio_add_disk)
+{
+    LOG_INFO("test_bio_add_disk");
+    const char *diskPath = "/dev/xxx";
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+}
+
+TEST_F(TestBio, test_bio_add_disk_update_bdm_success)
+{
+    LOG_INFO("test_bio_add_disk_update_bdm_success");
+    const char *diskPath = "/dev/xxx";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, BIO_OK);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
+}
+
+TEST_F(TestBio, test_bio_add_new_disk_fail)
+{
+    LOG_INFO("test_bio_add_new_disk_fail");
+    const char *diskPath = "/dev/xxx";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL", 0, 1, userParam);
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL");
+}
+
+TEST_F(TestBio, test_bio_add_by_separates)
+{
+    LOG_INFO("test_bio_add_by_separates");
+    const char *diskPath = "/dev/xxx";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES", 0, 1, userParam);
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES");
+}
+
+TEST_F(TestBio, test_bio_add_old_disk)
+{
+    LOG_INFO("test_bio_add_old_disk");
+    const char *diskPath = "test1";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_OLD_DISK_EXIST", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SERVER_SET_OLD_DISK_ID", 0, 1, userParam);
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_SET_OLD_DISK_ID");
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_OLD_DISK_EXIST");
 }

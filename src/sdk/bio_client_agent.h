@@ -45,6 +45,7 @@ public:
     using PutFuncPtr = int32_t (*)(PutRequest *, PutResponse *);
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
     using DeleteFuncPtr = int32_t (*)(DeleteRequest *);
+    using AddDiskFuncPtr = int32_t (*)(AddDiskRequest *, AddDiskResponse *);
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
@@ -110,6 +111,8 @@ public:
 
     void DeleteLocal(DeleteRequest &req, Callback &callback);
 
+    BResult AddDisk(AddDiskRequest &req, AddDiskResponse &rsp);
+
     BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
@@ -158,6 +161,8 @@ private:
 
     void SendDeleteRequestLocal(DeleteRequest &req, Callback &callback);
 
+    BResult SendAddDiskRequest(AddDiskRequest &req, AddDiskResponse &rsp);
+
     BResult CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult SendListRequestLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
@@ -204,6 +209,7 @@ private:
     PutFuncPtr putOp = nullptr;
     GetFuncPtr getOp = nullptr;
     DeleteFuncPtr deleteOp = nullptr;
+    AddDiskFuncPtr addDiskOp = nullptr;
     StatFuncPtr statOp = nullptr;
     ListFuncPtr listOp = nullptr;
     LoadFuncPtr loadOp = nullptr;

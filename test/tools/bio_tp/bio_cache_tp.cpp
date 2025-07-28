@@ -132,6 +132,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(MIRROR_SERVER_HDL_PUT_FAIL, "mirror server handle put err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(MIRROR_SERVER_HDL_GET_FAIL, "mirror server handle get err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(MIRROR_SERVER_HDL_DELETE_FAIL, "mirror server handle delete err", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(MIRROR_SERVER_ADD_DISK_FAIL, "mirror server handle add disk err", tp::CommonTp::IntValueCallback);
     LVOS_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, "no process wcache judge master", CommonTp::NoProcessCallback);
     LVOS_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_SEND, "no process wcache send negotiate", CommonTp::NoProcessCallback);
     LVOS_TP_REG(WCACHE_NEGOTIATE_FLAG_CLEAR, "wcache negotiate flag clear", CommonTp::BoolValueCallback);
@@ -280,6 +281,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(MIRROR_SERVER_HDL_PUT_FAIL);
     LVOS_TP_UNREG(MIRROR_SERVER_HDL_GET_FAIL);
     LVOS_TP_UNREG(MIRROR_SERVER_HDL_DELETE_FAIL);
+    LVOS_TP_UNREG(MIRROR_SERVER_ADD_DISK_FAIL);
     LVOS_TP_UNREG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER);
     LVOS_TP_UNREG(NO_PROCESS_SLAVE_NEGOTIATE_NO_SEND);
     LVOS_TP_UNREG(WCACHE_NEGOTIATE_FLAG_CLEAR);

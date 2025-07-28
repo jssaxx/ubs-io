@@ -102,6 +102,8 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleList, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_LOAD,
         std::bind(&MirrorServer::HandleLoad, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_ADD_DISK,
+        std::bind(&MirrorServer::HandleAddDisk, this, std::placeholders::_1));
 
     RegisterOpcodeStep2(netEngine);
 }
@@ -733,6 +735,107 @@ BResult MirrorServer::Delete(DeleteRequest &req)
         LOG_DEBUG("Mirror server delete success, key:" << req.key << ", ptId:" << req.comm.ptId << ".");
     }
     return ret;
+}
+
+BResult MirrorServer::AddDisk(AddDiskRequest &req)
+{
+    if (UNLIKELY(req.comm.magic != MESSAGE_MAGIC)) {
+        LOG_ERROR("Check message magic failed.");
+        return false;
+    }
+
+    BResult ret = AddDiskImpl(req);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Add disk failed, diskPath: " << req.diskPath << ".");
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
+BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
+{
+    std::lock_guard<std::mutex> lock(mDiskViewMutex);
+    uint32_t diskId;
+    BResult ret = BIO_OK;
+    std::string diskPath = req.diskPath;
+    bool isExist;
+    LVOS_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
+    LVOS_TP_START(SERVER_SET_OLD_DISK_ID, &diskId, 0);
+    isExist = mBioConfig->CheckDiskIsExist(diskPath, diskId);
+    LVOS_TP_END;
+    LVOS_TP_END;
+    if (isExist) {
+        ret = AddOldDiskImpl(diskPath, diskId);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Add old disk failed, diskPath: " << diskPath << ".");
+            return BIO_INNER_ERR;
+        }
+        return BIO_OK;
+    }
+
+    LVOS_TP_START(SERVER_ADD_NEW_DISK_FAIL, &ret, BIO_INNER_ERR);
+    ret = AddNewDiskImpl(diskPath);
+    LVOS_TP_END;
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Add new disk failed, diskPath: " << diskPath << ".");
+        return ret;
+    }
+
+    return BIO_OK;
+}
+
+BResult MirrorServer::AddOldDiskImpl(const std::string &diskPath, uint16_t diskId)
+{
+    LOG_DEBUG("Start to add old disk, diskPath: " << diskPath << ".");
+    // reset disk
+    BResult res = BioServer::Instance()->BioDiskReset(diskId);
+    if (UNLIKELY(res != BIO_OK)) {
+        LOG_ERROR("Reset disk failed, diskId: " << diskId << " , res: " << res);
+        return res;
+    }
+
+    // update diskInfo to cm
+    int32_t ret = CmReportDiskStatus(diskId, CM_DISK_NORMAL);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Report disk normal failed, diskId: " << diskId << " , diskPath: " << diskPath);
+        return ret;
+    }
+
+    LOG_DEBUG("Finish to add old disk, diskPath: " << diskPath << ".");
+    return BIO_OK;
+}
+
+BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
+{
+    LOG_DEBUG("Start to add new disk, diskPath: " << diskPath << ".");
+    // write diskPath to config
+    BResult ret = mBioConfig->CreateDiskConfBak(diskPath);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Update disk config failed, diskPath: " << diskPath << ".");
+        return ret;
+    }
+
+    // add disk to bdm
+    LVOS_TP_START(SERVER_BDM_UPDATE_SUCCESS, &ret, BIO_OK);
+    ret = BioServer::Instance()->BioBdmUpdate(diskPath);
+    LVOS_TP_END;
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ".");
+        return ret;
+    }
+
+    // update info to cm zzt
+    // replace config file
+    ret = mBioConfig->ReplaceFile(CONFIG_PATH, CONFIG_PATH_BAK);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ".");
+        return ret;
+    }
+
+    mBioConfig->ResizeDaemonConfigDisks(diskPath);
+    LOG_DEBUG("Finish to add new disk, diskPath: " << diskPath << ".");
+    return BIO_OK;
 }
 
 BResult MirrorServer::List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
@@ -1437,6 +1540,39 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
 
     auto req = static_cast<DeleteRequest *>(ctx.MessageData());
     return MirrorServerDelete(ctx, req);
+}
+
+int32_t MirrorServer::MirrorServerAddDisk(ServiceContext &ctx, AddDiskRequest *req)
+{
+    BResult ret;
+    LVOS_TP_START(MIRROR_SERVER_ADD_DISK_FAIL, &ret, BIO_INNER_RETRY);
+    ret = AddDisk(*req);
+    LVOS_TP_END;
+    if (UNLIKELY(ret != BIO_OK)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
+
+    AddDiskResponse rsp;
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, static_cast<void *>(&rsp), sizeof(rsp));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleAddDisk(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(AddDiskRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive add disk message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<AddDiskRequest *>(ctx.MessageData());
+    return MirrorServerAddDisk(ctx, req);
 }
 
 bool MirrorServer::CheckStatReq(StatRequest *req)

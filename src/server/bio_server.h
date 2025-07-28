@@ -356,6 +356,10 @@ public:
 
     BResult HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos);
 
+    BResult BioBdmUpdate(std::string diskPath);
+
+    BResult BioDiskReset(uint16_t diskId);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:

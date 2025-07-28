@@ -111,14 +111,14 @@ extern "C" {
 #define BDM_SPIN_INIT pthread_spin_init
 #define BDM_SPIN_LOCK pthread_spin_lock
 #define BDM_SPIN_UNLOCK pthread_spin_unlock
-#define BDM_SPIN_DESTORY pthread_spin_destroy
+#define BDM_SPIN_DESTROY  pthread_spin_destroy
 
 #define BDM_RWLOCK_T pthread_rwlock_t
 #define BDM_RWLOCK_INIT pthread_rwlock_init
 #define BDM_RWLOCK_RDLOCK pthread_rwlock_rdlock
 #define BDM_RWLOCK_WRLOCK pthread_rwlock_wrlock
 #define BDM_RWLOCK_UNLOCK pthread_rwlock_unlock
-#define BDM_RWLOCK_DESTORY pthread_rwlock_destroy
+#define BDM_RWLOCK_DESTROY pthread_rwlock_destroy
 
 #define BDM_LOG_BUF_LEN 512UL
 

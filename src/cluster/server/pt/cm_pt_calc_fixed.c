@@ -62,7 +62,7 @@ Calculator CreateViewCalculator(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t
     return (Calculator)calc;
 }
 
-void DestoryViewCalculator(Calculator calculator)
+void DestroyViewCalculator(Calculator calculator)
 {
     CalcCore *calc = (CalcCore *)calculator;
 

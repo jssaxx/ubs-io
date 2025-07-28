@@ -21,6 +21,10 @@ class Configuration;
 
 using ConfigurationPtr = Ref<Configuration>;
 
+#define CONFIG_PATH "/opt/boostio/bin/conf/bio.conf"
+#define CONFIG_PATH_BAK "/opt/boostio/bin/conf/bio.conf.bak"
+#define CONFIG_PATH_BAK_INIT "/opt/boostio/bin/conf/bio.conf.bak.init"
+
 enum ConfValueType {
     VINT = 0,
     VFLOAT = 1,

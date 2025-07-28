@@ -1040,3 +1040,23 @@ CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
     detailLoc->portSlave = rsp.portSlave;
     return RET_CACHE_OK;
 }
+
+CResult BioAddDisk(const char *diskPath)
+{
+    if (UNLIKELY(diskPath == nullptr || strlen(diskPath) >= FILE_PATH_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Invalid input parameter, diskPath: " << diskPath << ".");
+        return RET_CACHE_EPERM;
+    }
+
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    auto ret = gClient->GetMirror()->AddDisk(diskPath);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to add disk, ret:" << ret << ", diskPath:"<< diskPath << ".");
+        return ToCResult(ret);
+    }
+
+    return RET_CACHE_OK;
+}

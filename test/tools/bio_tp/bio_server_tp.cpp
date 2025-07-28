@@ -29,6 +29,10 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(DESERIALIZE_SET_VSIZE, "set vsize", CommonTp::IntValueCallback);
     LVOS_TP_REG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, "pass check", CommonTp::NoProcessCallback);
     LVOS_TP_REG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, "get trace fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_BDM_UPDATE_SUCCESS, "server bdm update success", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_ADD_NEW_DISK_FAIL, "server add new disk fail", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_OLD_DISK_EXIST, "server old disk exist", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(SERVER_SET_OLD_DISK_ID, "server set old disk id", CommonTp::IntValueCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -51,6 +55,11 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK);
     LVOS_TP_UNREG(DESERIALIZE_SET_VSIZE);
     LVOS_TP_UNREG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE);
+
+    LVOS_TP_UNREG(SERVER_BDM_UPDATE_SUCCESS);
+    LVOS_TP_UNREG(SERVER_ADD_NEW_DISK_FAIL);
+    LVOS_TP_UNREG(SERVER_OLD_DISK_EXIST);
+    LVOS_TP_UNREG(SERVER_SET_OLD_DISK_ID);
 }
 #else
 void tp::ServerTp::Register() noexcept {}

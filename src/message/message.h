@@ -27,6 +27,7 @@ const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
 const uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
+const uint32_t FILE_PATH_MAX_LEN = 256;
 
 typedef struct {
     uint16_t magic;
@@ -295,6 +296,15 @@ typedef struct {
     uint64_t size;
     uint32_t mrKey;
 } ListRequest;
+
+/* Add disk */
+typedef struct {
+    RequestComm comm;
+    char diskPath[FILE_PATH_MAX_LEN];
+} AddDiskRequest;
+
+typedef struct {
+} AddDiskResponse;
 
 typedef struct {
     uintptr_t addr;

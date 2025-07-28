@@ -246,6 +246,31 @@ BResult BioServer::BioBdmInit()
     return BIO_OK;
 }
 
+BResult BioServer::BioBdmUpdate(std::string diskPath)
+{
+    auto &daemonConfig = mConfig->GetDaemonConfig();
+    auto diskCap = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPath));
+
+    auto ret = BdmUpdate(const_cast<char *>(diskPath.c_str()), daemonConfig.segment, diskCap);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        LOG_ERROR("Bdm Update fail, diskPath: " << diskPath << ".");
+        return BIO_ERR;
+    }
+    return BIO_OK;
+}
+
+BResult BioServer::BioDiskReset(uint16_t diskId)
+{
+    // 防重入
+    if (BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL) {
+        LOG_ERROR("Bdm is already in used, diskId: " << diskId << ".");
+        return BIO_ERR;
+    }
+
+    BdmSetDiskUsedStatus(diskId, true);
+    return BdmResetDisk(diskId);
+}
+
 void BioServer::BioBdmExit()
 {
     return;
@@ -948,6 +973,13 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     ret = BioServer::Instance()->GetMirrorServer()->Put(*req, sliceP, netCtx, ioStrategy);
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_LOCAL, ret);
     rsp->ioStrategy = ioStrategy;
+    return ret;
+}
+
+int32_t AddDisk(AddDiskRequest *req, AddDiskResponse *rsp)
+{
+    BResult ret;
+    ret = BioServer::Instance()->GetMirrorServer()->AddDisk(*req);
     return ret;
 }
 

@@ -15,7 +15,7 @@ typedef void *Storer;
 
 typedef struct {
     Storer (*createStorer)(uint16_t maxNodeNum, uint16_t maxPtNum, uint16_t copyNum);
-    void (*destoryStorer)(Storer storer);
+    void (*destroyStorer)(Storer storer);
     int32_t (*initial)(Storer storer, PtEntryList *ptList);
     int32_t (*loadcheck)(Storer storer, PtEntryList *ptList);
     int32_t (*update)(Storer storer, PtEntryList *ptList);

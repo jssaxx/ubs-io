@@ -971,11 +971,11 @@ void CmServerViewExit(void)
             g_sPoolMgr.list[poolId].ptEntryList = NULL;
         }
         if (g_sPoolMgr.list[poolId].calculator != NULL) {
-            g_sPoolMgr.list[poolId].calcOps->destoryCalculator(g_sPoolMgr.list[poolId].calculator);
+            g_sPoolMgr.list[poolId].calcOps->destroyCalculator(g_sPoolMgr.list[poolId].calculator);
             g_sPoolMgr.list[poolId].calculator = NULL;
         }
         if (g_sPoolMgr.list[poolId].storer != NULL) {
-            g_sPoolMgr.list[poolId].storeOps->destoryStorer(g_sPoolMgr.list[poolId].storer);
+            g_sPoolMgr.list[poolId].storeOps->destroyStorer(g_sPoolMgr.list[poolId].storer);
             g_sPoolMgr.list[poolId].storer = NULL;
         }
         CM_RWLOCK_DESTROY(&g_sPoolMgr.list[poolId].lock);

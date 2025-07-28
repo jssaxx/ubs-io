@@ -243,6 +243,52 @@ TEST_F(TestDisk, test_disk_bdm_creat)
     EXPECT_EQ(ret, BDM_CODE_OK);
 }
 
+TEST_F(TestDisk, test_disk_bdm_reset)
+{
+    LOG_INFO("test_disk_bdm_reset");
+    BdmCreatePara para = {0};
+    const char *name = "disk_name";
+    const char *sn = "disk_sn";
+    auto ret = strncpy_s(para.name, BDM_NAME_LEN, name, (BDM_NAME_LEN - 1));
+    EXPECT_EQ(ret, BDM_CODE_OK);
+    ret = strncpy_s(para.sn, BDM_SN_LEN, sn, (BDM_SN_LEN - 1));
+    EXPECT_EQ(ret, BDM_CODE_OK);
+    para.offset = 0UL;
+    para.length = 1073741824UL;
+    para.bdmId = 13U;
+    para.pad = 0U;
+    para.minChunkSize = NO_4194304;
+    para.maxChunkSize = NO_4194304;
+    ret = BdmCreate(&para, &g_bdmId);
+    EXPECT_EQ(ret, BDM_CODE_OK);
+
+    ret = BdmResetDisk(para.bdmId);
+}
+
+TEST_F(TestDisk, test_set_disk_used_status)
+{
+    LOG_INFO("test_set_disk_used_status");
+    BdmSetDiskUsedStatus(NO_1, true);
+
+    BdmCreatePara para = {0};
+    const char *name = "disk_name";
+    const char *sn = "disk_sn";
+    auto ret = strncpy_s(para.name, BDM_NAME_LEN, name, (BDM_NAME_LEN - 1));
+    EXPECT_EQ(ret, BDM_CODE_OK);
+    ret = strncpy_s(para.sn, BDM_SN_LEN, sn, (BDM_SN_LEN - 1));
+    EXPECT_EQ(ret, BDM_CODE_OK);
+    para.offset = 0UL;
+    para.length = 1073741824UL;
+    para.bdmId = 17U;
+    para.pad = 0U;
+    para.minChunkSize = NO_4194304;
+    para.maxChunkSize = NO_4194304;
+    ret = BdmCreate(&para, &g_bdmId);
+    EXPECT_EQ(ret, BDM_CODE_OK);
+
+    BdmSetDiskUsedStatus(NO_1, true);;
+}
+
 TEST_F(TestDisk, test_disk_alloc_case_return_fail)
 {
     LOG_INFO("test_disk_alloc_case_return_fail");
@@ -271,16 +317,16 @@ TEST_F(TestDisk, test_disk_alloc_case_return_fail)
     LVOS_HVS_deactiveTracePoint(0, "BDM_ALLOC_BLOCK_FAIL");
 }
 
-TEST_F(TestDisk, test_disk_bdm_destory)
+TEST_F(TestDisk, test_disk_bdm_destroy)
 {
-    LOG_INFO("test_disk_bdm_destory");
-    auto ret = BdmDestory(BDM_MAX_NUM);
+    LOG_INFO("test_disk_bdm_destroy");
+    auto ret = BdmDestroy(BDM_MAX_NUM);
     EXPECT_EQ(ret, BDM_CODE_NOT_EXIST);
 
-    ret = BdmDestory(g_bdmId);
+    ret = BdmDestroy(g_bdmId);
     EXPECT_EQ(ret, BDM_CODE_OK);
 
-    ret = BdmDestory(g_bdmId);
+    ret = BdmDestroy(g_bdmId);
     EXPECT_EQ(ret, BDM_CODE_NOT_EXIST);
 }
 

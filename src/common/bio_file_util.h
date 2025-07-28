@@ -5,12 +5,16 @@
 #ifndef HDAGGER_DAGGER_FILE_H
 #define HDAGGER_DAGGER_FILE_H
 
+#include <iostream>
+#include <fstream>
+#include <string>
 #include <cstring>
 #include <dirent.h>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <vector>
 
 namespace ock {
 namespace bio {
@@ -62,6 +66,20 @@ public:
     static bool CanonicalPath(std::string &path);
 
     static int64_t GetDiskCapacity(std::string &diskPath);
+
+    static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key, const std::string& newConfig);
+
+    static int64_t FindTargetLine(const std::vector<std::string>& lines, const std::string& key);
+
+    static bool WriteFile(const std::string& filename, const std::vector<std::string>& lines);
+
+    static bool ReadFile(const std::string& filename, std::vector<std::string>& lines);
+
+    static bool BackUpFile(const std::string& srcPath, const std::string& destPath);
+
+    static bool RenameFile(const std::string& oldPath, const std::string& newPath);
+
+    static bool RemoveFile(const std::string& filePath);
 };
 
 inline bool FileUtil::Exist(const std::string &path)
@@ -211,6 +229,95 @@ inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
     }
     close(fd);
     return off;
+}
+
+inline bool FileUtil::WriteFile(const std::string& filename, const std::vector<std::string>& lines)
+{
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    for (const auto& line : lines) {
+        file << line << std::endl;
+    }
+    file.close();
+    return true;
+}
+
+inline int64_t FileUtil::FindTargetLine(const std::vector<std::string>& lines, const std::string& key)
+{
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].find(key) != std::string::npos) {
+            return i;
+        }
+    }
+    return -1; // Not found
+}
+
+inline bool FileUtil::AppendConfigToLine(std::vector<std::string>& lines, const std::string& key, const std::string& newConfig)
+{
+    int index = FindTargetLine(lines, key);
+    if (index != -1) {
+        lines[index] += newConfig;
+        return true;
+    }
+    return false;
+}
+
+inline bool FileUtil::ReadFile(const std::string& filename, std::vector<std::string>& lines)
+{
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        lines.push_back(line);
+    }
+    file.close();
+    return true;
+}
+
+inline bool FileUtil::BackUpFile(const std::string& srcPath, const std::string& destPath)
+{
+    // 打开源文件
+    std::ifstream src(srcPath, std::ios::binary);
+    if (!src) {
+        return false;
+    }
+
+    // 打开目标文件
+    std::ofstream dest(destPath, std::ios::binary);
+    if (!dest) {
+        return false;
+    }
+
+    // 文件赋值
+    dest << src.rdbuf();
+    if (!dest) {
+        return false;
+    }
+
+    return true;
+}
+
+inline bool FileUtil::RenameFile(const std::string& oldPath, const std::string& newPath)
+{
+    if (oldPath == newPath) {
+        return true;
+    }
+
+    if (std::rename(oldPath.c_str(), newPath.c_str()) != 0) {
+        return false;
+    }
+    return true;
+}
+
+inline bool FileUtil::RemoveFile(const std::string& filePath)
+{
+    return std::remove(filePath.c_str()) == 0;
 }
 }
 }

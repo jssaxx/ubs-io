@@ -72,6 +72,7 @@ int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp);
 
 int32_t GetTracePointsLocal(GetTracePointsResponse *rsp);
 
+int32_t AddDisk(AddDiskRequest *req, AddDiskResponse *rsp);
 #ifdef __cplusplus
 }
 #endif

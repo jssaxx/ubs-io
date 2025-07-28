@@ -290,7 +290,7 @@ BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, B
         if (ret != 0) {
             ret = BdmThreadPoolDestroy(threadPool, 0);
             if (ret != 0) {
-                BDM_LOGERROR(0, "ThreadPool destory fail, ret(%d).", ret);
+                BDM_LOGERROR(0, "ThreadPool destroy fail, ret(%d).", ret);
             }
             return NULL;
         }
