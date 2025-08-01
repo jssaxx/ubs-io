@@ -103,6 +103,8 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
 
+uint32_t BdmGetDiskCount(void);
+
 int32_t BdmResetDisk(uint16_t diskId);
 
 BdmDiskState BdmGetDiskStatus(uint32_t bdmId);

@@ -624,6 +624,20 @@ void ViewCalcUpdatePtEntryList(PtEntryList *ptEntryList, CalcCore *calc)
     }
 }
 
+static void UpdatePtState(PtEntryList *ptList, PtState fromState, PtState toState)
+{
+    if (ptList == NULL) {
+        return;
+    }
+
+    for (uint16_t i = 0; i < ptList->ptNum; ++i) {
+        PtEntry *ptEntry = &ptList->ptEntryList[i];
+        if (ptEntry->state == fromState) {
+            ptEntry->state = toState;
+        }
+    }
+}
+
 void ViewCalcUpdatePtEntryList111(PtEntry *ptEntry, uint16_t diffNum)
 {
     uint16_t diffNumBak = diffNum;
@@ -687,7 +701,7 @@ void ViewCalcUpdatePtEntryList11(PtEntryList *ptEntryList, CalcCore *calc)
     }
 }
 
-void ViewCalcUpdatePtEntryList1(PtEntryList *ptEntryList, CalcCore *calc)
+void ViewCalcUpdatePtEntryList1(PtEntryList *ptEntryList, CalcCore *calc, CmNodeEvent *cmNodeEvent)
 {
     PtEntry *ptEntry;
     uint16_t ptId, copyIndex, runningNum, firstIndex, masterIndex;
@@ -728,6 +742,10 @@ void ViewCalcUpdatePtEntryList1(PtEntryList *ptEntryList, CalcCore *calc)
             ptEntry->state = PT_STATE_FAULT;
         }
     }
+
+    if (cmNodeEvent != NULL && cmNodeEvent->eventType == CM_EVENT_ADD_DISK) {
+        UpdatePtState(ptEntryList, PT_STATE_DEGRADE_LOSS1, PT_STATE_LOSS1_BYPASS);
+    }
 }
 
 int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
@@ -760,7 +778,7 @@ int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, Nod
 }
 
 int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList)
+    PtEntryList *ptEntryList, CmNodeEvent *cmNodeEvent)
 {
     CalcCore *calc = (CalcCore *)calculator;
 
@@ -782,7 +800,7 @@ int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, N
     }
     ViewCalcDestroyBusyList(calc);
 
-    ViewCalcUpdatePtEntryList1(ptEntryList, calc);
+    ViewCalcUpdatePtEntryList1(ptEntryList, calc, cmNodeEvent);
     return CM_OK;
 }
 

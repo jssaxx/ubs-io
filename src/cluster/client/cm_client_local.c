@@ -423,6 +423,7 @@ static int32_t CmClientPtListChangeFp(PtEntryList *changeList)
         "loss1",
         "loss2",
         "fault",
+        "loss1_bypass",
         "butt",
     };
 

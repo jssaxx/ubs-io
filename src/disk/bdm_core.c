@@ -398,9 +398,7 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
         return BDM_CODE_ERR;
     }
     // 最多支持4块磁盘设备, chunkSize满足[1M, 16M].
-    if (diskList->num > DISK_DEV_NUM ||
-        chunkSize < 1UL * 1024UL * 1024UL ||
-        chunkSize > 16UL * 1024UL * 1024UL) {
+    if (chunkSize < 1UL * 1024UL * 1024UL || chunkSize > 16UL * 1024UL * 1024UL) {
         BDM_LOGERROR(0, "Disk device param input failed.");
         return BDM_CODE_ERR;
     }
@@ -443,4 +441,13 @@ int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
 
     __sync_fetch_and_add(&g_bdmCount, 1);
     return BDM_CODE_OK;
+}
+
+uint32_t BdmGetDiskCount()
+{
+    if (g_bdmCount != 0) {
+        return g_bdmCount -1;
+    }
+
+    return 0;
 }

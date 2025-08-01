@@ -699,3 +699,14 @@ TEST_F(TestCm, test_cm_max_pool_num)
     ret = CmClientLocalGetNodeId(MAX_POOL_NUM);
     EXPECT_EQ(ret, NODE_ID_INVALID);
 }
+
+TEST_F(TestCm, test_cm_update_node_info)
+{
+    LOG_INFO("test_cm_update_node_info");
+    uint16_t poolId = 0;
+    DiskState state = DISK_STATE_NORMAL;
+    uint16_t diskId = 1;
+    int32_t isNewDisk = 0;
+    auto ret = CM_UpdateNodeInfo(poolId, state, diskId, isNewDisk);
+    EXPECT_EQ(ret, CM_OK);
+}

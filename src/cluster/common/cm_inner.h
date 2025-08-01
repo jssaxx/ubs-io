@@ -6,6 +6,7 @@
 #define CM_INNER_H
 
 #include <stdint.h>
+#include "stdbool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,7 +54,8 @@ typedef enum {
     PT_STATE_NORMAL = 1,        // OK
     PT_STATE_DEGRADE_LOSS1 = 2, // degrade 1
     PT_STATE_DEGRADE_LOSS2 = 3, // degrade 2
-    PT_STATE_FAULT = 4,         // fault;
+    PT_STATE_FAULT = 4,         // fault
+    PT_STATE_LOSS1_BYPASS = 5,  // async
     PT_STATE_BUTT
 } PtState;
 
@@ -268,7 +270,7 @@ int32_t CM_Init(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo 
 /*
  * 功能描述：获取指定节点的基本信息
  * 参数说明：poolId: {in}，pool ID
- *         nodeInfo: {in/out}, NodeInfo结构体指针
+ *       nodeInfo: {in/out}, NodeInfo结构体指针
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_GetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
@@ -276,7 +278,7 @@ int32_t CM_GetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 /*
  * 功能描述：获取指定节点的mr信息
  * 参数说明：poolId: {in}，pool ID
- *         mr: {in/out}, MetaBuffInfo结构体指针
+ *             mr: {in/out}, MetaBuffInfo结构体指针
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_GetNodeMr(uint16_t poolId, NodeMetaBuff *mr);
@@ -291,7 +293,7 @@ uint16_t CM_GetLocalNodeId(uint16_t poolId);
 /*
  * 功能描述：向CM注册本地节点信息获取钩子函数
  * 参数说明：poolId: {in}，pool ID
-             handle: {in}, CM加载本地信息时，调用业务侧注册的查询接口
+           handle: {in}, CM加载本地信息时，调用业务侧注册的查询接口
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_RegLocalNodeQueryOpHandle(uint16_t poolId, LocalNodeQueryOpHandle *handle);
@@ -299,7 +301,7 @@ int32_t CM_RegLocalNodeQueryOpHandle(uint16_t poolId, LocalNodeQueryOpHandle *ha
 /*
  * 功能描述：向CM注册CN集群节点视图更新时通知回调函数
  * 参数说明：poolId: {in}，pool ID
-             handle: {in}, 回调函数
+           handle: {in}, 回调函数
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_RegNodeListChangeNotifyHandle(uint16_t poolId, NodeListChangeOpHandle *handle);
@@ -307,17 +309,27 @@ int32_t CM_RegNodeListChangeNotifyHandle(uint16_t poolId, NodeListChangeOpHandle
 /*
  * 功能描述：设置磁盘状态
  * 参数说明：poolId: {in}，pool ID
-             diskId: {in}, 磁盘在当前节点上的编号（来源于BDM）
-              state: {in}, 磁盘状态
+           diskId: {in}, 磁盘在当前节点上的编号（来源于BDM）
+            state: {in}, 磁盘状态
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_SetDiskStatus(uint16_t poolId, uint16_t diskId, DiskState state);
 
 /*
+ * 功能描述：添加新磁盘
+ * 参数说明：poolId: {in}，pool ID
+            state: {in}, 磁盘状态
+           diskId: {in}, 磁盘在当前节点上的编号（来源于BDM）
+        isNewDisk: {in}, 是否新加盘标志
+ * 返回值：0表示成功，非0表示失败
+ */
+int32_t CM_UpdateNodeInfo(uint16_t poolId, DiskState state, uint16_t diskId, bool isNewDisk);
+
+/*
  * 功能描述：设置PT副本数据恢复完成
  * 参数说明：poolId: {in}，pool ID
-              ptNum: {in}, pt数量
-          eventList: {in}, pt列表
+            ptNum: {in}, pt数量
+        eventList: {in}, pt列表
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_SetPtFinishStatus(uint16_t poolId, uint16_t ptNum, PtFinish *ptList);
@@ -325,7 +337,7 @@ int32_t CM_SetPtFinishStatus(uint16_t poolId, uint16_t ptNum, PtFinish *ptList);
 /*
  * 功能描述：注册PTview更新通知与回调函数
  * 参数说明：poolId: {in}，pool ID
-             handle: {in}, PTView更新回调函数，在PTView更之后，则会调用该回调函数
+           handle: {in}, PTView更新回调函数，在PTView更之后，则会调用该回调函数
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_RegPtViewChangeOpHandle(uint16_t poolId, PtViewChangeOpHandle *handle);
@@ -333,9 +345,9 @@ int32_t CM_RegPtViewChangeOpHandle(uint16_t poolId, PtViewChangeOpHandle *handle
 /*
  * 功能描述：往指定POOL写入DataInfo数据
  * 参数说明：poolId: {in}，pool ID
-             key: {in}, 数据索引键值
-             value: {in}, 写入的数据
-             valLen: {in}, 写入数据长度
+              key: {in}, 数据索引键值
+            value: {in}, 写入的数据
+           valLen: {in}, 写入数据长度
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen);
@@ -343,7 +355,7 @@ int32_t CM_WriteDataInfo(uint16_t poolId, const char *key, void *value, uint32_t
 /*
  * 功能描述：注册DataInfo更新通知与回调函数
  * 参数说明：poolId: {in}，pool ID
-             handle: {in}, DataInfo更新回调函数，在DataInfo更之后，则会调用该回调函数
+           handle: {in}, DataInfo更新回调函数，在DataInfo更之后，则会调用该回调函数
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_RegDataInfoHandle(uint16_t poolId, const char *key, void *value, uint32_t valLen,

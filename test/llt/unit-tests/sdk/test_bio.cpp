@@ -1265,7 +1265,8 @@ TEST_F(TestBio, test_caculator_rebalance)
     stateList->poolId = 0;
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
-    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
+    CmNodeEvent *cmNodeEvent;
+    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList, cmNodeEvent);
     DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
@@ -1324,7 +1325,8 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     stateList->poolId = 0;
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
-    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList);
+    CmNodeEvent *cmNodeEvent;
+    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList, cmNodeEvent);
     DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);

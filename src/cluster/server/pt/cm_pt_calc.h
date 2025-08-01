@@ -25,7 +25,7 @@ typedef struct {
     int32_t (*viewInitial)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
         PtEntryList *ptList);
     int32_t (*viewRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-        PtEntryList *ptList);
+        PtEntryList *ptList, CmNodeEvent *cmNodeEvent);
     int32_t (*needRebalance)(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
         PtEntryList *ptList);
     void (*updateState)(uint16_t nodeId, NodeState state, NodeInfo *info, PtEntryList *ptList, int32_t *ptChange);

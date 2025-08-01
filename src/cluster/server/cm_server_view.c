@@ -88,7 +88,7 @@ static const char *g_cstate[NODE_CLUSTER_STATE_BUTT + 1] = {
     "butt",
 };
 
-static int32_t CmServerViewUpdatePtEntryList(uint16_t poolId)
+static int32_t CmServerViewUpdatePtEntryList(uint16_t poolId, CmNodeEvent *nodeEvent)
 {
     CmServerPool *spool = &g_sPoolMgr.list[poolId];
     PoolInfo *pool = spool->pool;
@@ -96,10 +96,10 @@ static int32_t CmServerViewUpdatePtEntryList(uint16_t poolId)
 
     if (pool->redundance != PT_NONE) {
         int32_t isNeed =
-            spool->calcOps->needRebalance(spool->calculator, spool->nodeList, spool->stateList, spool->ptEntryList);
+                spool->calcOps->needRebalance(spool->calculator, spool->nodeList, spool->stateList, spool->ptEntryList);
         if (isNeed == TRUE) {
-            ret =
-                spool->calcOps->viewRebalance(spool->calculator, spool->nodeList, spool->stateList, spool->ptEntryList);
+            ret = spool->calcOps->viewRebalance(spool->calculator, spool->nodeList, spool->stateList,
+                                                spool->ptEntryList, nodeEvent);
             if (ret != CM_OK) {
                 CM_LOGERROR("Rebalance failed, poolId(%u) ret(%d).", pool->poolId, ret);
                 return ret;
@@ -178,7 +178,7 @@ static int32_t CmServerViewExpiredCommit(uint16_t poolId)
 
     spool->stateChange = FALSE;
 
-    ret = CmServerViewUpdatePtEntryList(poolId);
+    ret = CmServerViewUpdatePtEntryList(poolId, NULL);
     if (ret != CM_OK) {
         CM_LOGERROR("Update ptEntryList failed, poolId(%u) ret(%d).", pool->poolId, ret);
         return ret;
@@ -248,47 +248,80 @@ static void CmServerViewUpdateMasterNodeId(uint16_t poolId)
     return;
 }
 
-static int32_t CmServerViewBuildNode(uint16_t poolId, uint16_t nodeId)
+static void SyncDiskListToState(CmServerPool *spool, uint16_t nodeId, const NodeInfo *cache)
 {
-    CmServerPool *spool = &g_sPoolMgr.list[poolId];
-    PoolInfo *pool = spool->pool;
-    NodeInfo *nodeInfo = &spool->nodeList->nodeList[nodeId];
-    NodeStateInfo *nodeState = &spool->stateList->nodeList[nodeId];
-    int32_t ret;
+    NodeStateInfo *dst = &spool->stateList->nodeList[nodeId];
+    const DiskList *srcDiskList = &cache->diskList;
+    dst->diskNum = srcDiskList->num;
 
-    if (nodeState->state == NODE_STATE_INVALID) {
-        return CM_OK;
+    for (uint16_t j = 0; j < srcDiskList->num; ++j) {
+        dst->diskList[j].diskId = srcDiskList->list[j].diskId;
+        dst->diskList[j].clusterState = DISK_CLUSTER_STATE_IN;
     }
 
+    spool->stateChange = TRUE;
+    spool->ptChange = TRUE;
+}
+
+static int32_t CompareAndUpdateNodeInfo(uint16_t poolId, uint16_t nodeId, CmServerPool *spool,
+                                        bool isInit)
+{
+    NodeInfo *nodeInfo = &spool->nodeList->nodeList[nodeId];
+    NodeStateInfo *nodeState = &spool->stateList->nodeList[nodeId];
     NodeInfo cache;
     cache.nodeId = nodeId;
-    ret = CmServerZkGetNodeInfo(poolId, &cache);
+
+    int32_t ret = CmServerZkGetNodeInfo(poolId, &cache);
     if (ret != CM_OK) {
         CM_LOGERROR("Get nodeInfo failed, poolId(%u) nodeId(%u) ret(%d).", poolId, nodeId, ret);
         return ret;
     }
 
     if (memcmp(nodeInfo, &cache, sizeof(NodeInfo)) != 0) {
+        if (!isInit) {
+            SyncDiskListToState(spool, nodeId, &cache);
+        }
         memcpy_s(nodeInfo, sizeof(NodeInfo), &cache, sizeof(NodeInfo));
         spool->nodeChange = TRUE;
+    }
+
+    return CM_OK;
+}
+
+static int32_t CmServerViewBuildNode(uint16_t poolId, uint16_t nodeId, bool isInit)
+{
+    CmServerPool *spool = &g_sPoolMgr.list[poolId];
+    PoolInfo *pool = spool->pool;
+    NodeInfo *nodeInfo = &spool->nodeList->nodeList[nodeId];
+    NodeStateInfo *nodeState = &spool->stateList->nodeList[nodeId];
+    if (spool->nodeList == NULL || spool->stateList == NULL) {
+        CM_LOGERROR("nodeList or stateList is NULL for poolId(%u)", poolId);
+        return CM_ERR;
+    }
+
+    if (nodeState->state == NODE_STATE_INVALID) {
+        return CM_OK;
+    }
+
+    int32_t ret = CompareAndUpdateNodeInfo(poolId, nodeId, spool, isInit);
+    if (ret != CM_OK) {
+        return ret;
     }
 
     CmServerViewUpdateMasterNodeId(poolId);
 
     if (nodeState->state == NODE_STATE_DOWN && nodeState->clusterState == NODE_CLUSTER_STATE_IN) {
-        CmServerListenNodeFault(poolId, nodeInfo->nodeId); // 恢复节点故障监控
+        CmServerListenNodeFault(poolId, nodeId);
         if (pool->redundance != PT_NONE) {
-            spool->calcOps->updateState(nodeId, NODE_STATE_DOWN, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+            spool->calcOps->updateState(nodeId, NODE_STATE_DOWN, nodeInfo, spool->ptEntryList, &spool->ptChange);
         }
         return CM_OK;
     }
 
     if (nodeState->state == NODE_STATE_UP && nodeState->clusterState == NODE_CLUSTER_STATE_IN) {
-        CmServerViewCheckDiskFault(poolId, nodeInfo, nodeState); // 扫描节点磁盘故障监控
+        CmServerViewCheckDiskFault(poolId, nodeInfo, nodeState);
         if (pool->redundance != PT_NONE) {
-            spool->calcOps->updateState(nodeId, NODE_STATE_UP, nodeInfo, spool->ptEntryList,
-                &spool->ptChange); // 更新PT副本状态
+            spool->calcOps->updateState(nodeId, NODE_STATE_UP, nodeInfo, spool->ptEntryList, &spool->ptChange);
         }
         return CM_OK;
     }
@@ -318,7 +351,7 @@ int32_t CmServerViewBuildNodeList(uint16_t poolId)
 
     uint16_t nodeId;
     for (nodeId = 0; nodeId < spool->stateList->nodeNum; nodeId++) {
-        ret = CmServerViewBuildNode(pool->poolId, nodeId);
+        ret = CmServerViewBuildNode(pool->poolId, nodeId, TRUE);
         if (ret != CM_OK) {
             CM_LOGERROR("Build node failed, poolId(%u) nodeId(%u) ret(%d).", pool->poolId, nodeId, ret);
             return ret;
@@ -343,7 +376,7 @@ int32_t CmServerViewBuildNodeList(uint16_t poolId)
         spool->stateChange = FALSE;
     }
 
-    ret = CmServerViewUpdatePtEntryList(poolId);
+    ret = CmServerViewUpdatePtEntryList(poolId, NULL);
     if (ret != CM_OK) {
         CM_LOGERROR("Update ptEntryList failed, poolId(%u) ret(%d).", pool->poolId, ret);
         return ret;
@@ -514,7 +547,7 @@ int32_t CmServerViewNodeListChange(CmNodeIdList *watchList)
         spool->stateChange = FALSE;
     }
 
-    ret = CmServerViewUpdatePtEntryList(watchList->poolId);
+    ret = CmServerViewUpdatePtEntryList(watchList->poolId, NULL);
     if (ret != CM_OK) {
         CM_LOGERROR("Update ptEntryList failed, poolId(%u) ret(%d).", pool->poolId, ret);
         return ret;
@@ -554,7 +587,7 @@ int32_t CmServerViewNodeEvent(CmNodeEvent *nodeEvent)
         return CM_OK;
     }
 
-    int32_t ret = CmServerViewBuildNode(nodeEvent->poolId, nodeEvent->nodeId);
+    int32_t ret = CmServerViewBuildNode(nodeEvent->poolId, nodeEvent->nodeId, FALSE);
     if (ret != CM_OK) {
         CM_LOGERROR("Build node failed, poolId(%u) nodeId(%u) ret(%d).", nodeEvent->poolId, nodeEvent->nodeId, ret);
         return ret;
@@ -579,7 +612,7 @@ int32_t CmServerViewNodeEvent(CmNodeEvent *nodeEvent)
         spool->stateChange = FALSE;
     }
 
-    ret = CmServerViewUpdatePtEntryList(nodeEvent->poolId);
+    ret = CmServerViewUpdatePtEntryList(nodeEvent->poolId, nodeEvent);
     if (ret != CM_OK) {
         CM_LOGERROR("Update ptEntryList failed, poolId(%u) ret(%d).", nodeEvent->poolId, ret);
         return ret;

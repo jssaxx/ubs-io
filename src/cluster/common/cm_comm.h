@@ -30,6 +30,7 @@ typedef enum {
     CM_EVENT_NET = 0,
     CM_EVENT_DISK = 1,
     CM_EVENT_PT_FINISH = 2,
+    CM_EVENT_ADD_DISK = 3,
     CM_EVENT_BUTT
 } CmEventType;
 

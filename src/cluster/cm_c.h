@@ -6,6 +6,7 @@
 #define CM_C_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "bdm_core.h"
 #ifdef __cplusplus
 extern "C" {
@@ -17,6 +18,9 @@ typedef enum {
 } CmDiskStatus;
 
 int32_t CmReportDiskStatus(uint16_t diskId, CmDiskStatus status);
+
+int32_t CmAddNewDisk(uint16_t diskId, CmDiskStatus status, bool isNewDisk);
+
 #ifdef __cplusplus
 }
 #endif

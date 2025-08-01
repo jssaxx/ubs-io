@@ -72,6 +72,20 @@ BResult Cm::ReportDiskStatus(uint16_t diskId, CmDiskStatus status)
     return BIO_OK;
 }
 
+BResult Cm::AddNewDisk(uint16_t diskId, CmDiskStatus status, bool isNewDisk)
+{
+    WriteLocker<ReadWriteLock> lock(&mLock);
+    uint16_t poolId = GetCmLocalNodeId().groupId;
+    DiskState state = (status == CM_DISK_NORMAL) ? DISK_STATE_NORMAL : DISK_STATE_FAULT;
+
+    auto ret = CM_UpdateNodeInfo(poolId, state, diskId, isNewDisk);
+    if (ret != 0) {
+        return BIO_ERR;
+    }
+
+    return BIO_OK;
+}
+
 BResult Cm::ReportPtFinish(std::vector<CmPtFinish> &ptFinish)
 {
     WriteLocker<ReadWriteLock> lock(&mLock);
@@ -238,13 +252,48 @@ int32_t Cm::NotifyNodeListChange(NodeStateList *nodeList, void *ctx)
     return 0;
 }
 
+void Cm::FillPtInfo(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmPtState ptState[])
+{
+    pt.version = ptList->ptEntryList[index].birthVersion + ptList->ptEntryList[index].referNum;
+    pt.referNum = ptList->ptEntryList[index].referNum;
+    pt.ptId = ptList->ptEntryList[index].ptId;
+    pt.state = ptState[ptList->ptEntryList[index].state];
+    pt.masterNodeId = ptList->ptEntryList[index].masterNodeId;
+    pt.masterDiskId = ptList->ptEntryList[index].masterDiskId;
+}
+
+void Cm::FillPtCopyList(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmCopyState ptState[])
+{
+    for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
+        uint16_t vIdx = idx;
+        if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                                         ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
+            vIdx = idx + ptList->maxCopyNum;
+        }
+        if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
+                                         ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
+            LOG_ERROR("Impossible, ptId:" << ptList->ptEntryList[index].ptId);
+            throw std::runtime_error("Invalid state");
+        }
+
+        if (vIdx >= PT_MAX_COPY_INDEX) {
+            throw std::runtime_error("Index out of bounds");
+        }
+        CmPtCopy copy;
+        copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
+        copy.diskId = ptList->ptEntryList[index].copyList[vIdx].diskId;
+        copy.state = ptState[ptList->ptEntryList[index].copyList[vIdx].state];
+        pt.copys.push_back(copy);
+    }
+}
+
 int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 {
     Cm *cm = static_cast<Cm *>(ctx);
     WriteLocker<ReadWriteLock> lock(&cm->mLock);
     cm->mStatus = CM_NORMAL;
 
-    static CmPtState s_ptstate[PT_STATE_BUTT] = {
+    static CmPtState ptState[PT_STATE_BUTT] = {
         CM_PT_INIT,
         CM_PT_NORMAL,
         CM_PT_DEGRADE_LOSS1,
@@ -252,7 +301,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
         CM_PT_FAULT,
     };
 
-    static CmCopyState s_copystate[PT_COPY_STATE_BUTT] = {
+    static CmCopyState copyState[PT_COPY_STATE_BUTT] = {
         CM_COPY_INIT,
         CM_COPY_RUNNING,
         CM_COPY_DOWN,
@@ -266,35 +315,8 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
         }
 
         CmPtInfo pt;
-        CmPtCopy copy;
-
-        pt.version = ptList->ptEntryList[index].birthVersion + ptList->ptEntryList[index].referNum;
-        pt.referNum = ptList->ptEntryList[index].referNum;
-        pt.ptId = ptList->ptEntryList[index].ptId;
-        pt.state = s_ptstate[ptList->ptEntryList[index].state];
-        pt.masterNodeId = ptList->ptEntryList[index].masterNodeId;
-        pt.masterDiskId = ptList->ptEntryList[index].masterDiskId;
-
-        for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
-            uint16_t vIdx = idx;
-            if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
-                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
-                vIdx = idx + ptList->maxCopyNum;
-            }
-            if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
-                ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
-                LOG_ERROR("Impossible, ptId:" << ptList->ptEntryList[index].ptId);
-                return -1;
-            }
-
-            if (vIdx >= PT_MAX_COPY_INDEX) {
-                return -1;
-            }
-            copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
-            copy.diskId = ptList->ptEntryList[index].copyList[vIdx].diskId;
-            copy.state = s_copystate[ptList->ptEntryList[index].copyList[vIdx].state];
-            pt.copys.push_back(copy);
-        }
+        FillPtInfo(ptList, index, pt, ptState);
+        FillPtCopyList(ptList, index, pt, copyState);
 
         cm->mPtInfos[pt.ptId] = CmPtInfo();
         cm->mPtInfos[pt.ptId].Clone(pt);
@@ -336,4 +358,9 @@ using namespace ock::bio;
 int32_t CmReportDiskStatus(uint16_t diskId, CmDiskStatus status)
 {
     return Cm::Instance()->ReportDiskStatus(diskId, status);
+}
+
+int32_t CmAddNewDisk(uint16_t diskId, CmDiskStatus status, bool isNewDisk)
+{
+    return Cm::Instance()->AddNewDisk(diskId, status, isNewDisk);
 }
