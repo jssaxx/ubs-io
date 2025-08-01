@@ -304,6 +304,7 @@ typedef struct {
 } AddDiskRequest;
 
 typedef struct {
+    uint32_t result;
 } AddDiskResponse;
 
 typedef struct {

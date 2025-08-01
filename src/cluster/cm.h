@@ -359,6 +359,8 @@ public:
 
     BResult ReportDiskStatus(uint16_t diskId, CmDiskStatus status);
 
+    BResult AddNewDisk(uint16_t diskId, CmDiskStatus status, bool isNewDisk);
+
     BResult ReportPtFinish(std::vector<CmPtFinish> &ptFinish);
 
     BResult RegisterNode(CmNodeInfo &node);
@@ -378,6 +380,8 @@ public:
 
     static int32_t QueryLocalNodeInfo(NodeInfo *nodeInfo, void *ctx);
     static int32_t NotifyNodeListChange(NodeStateList *nodeList, void *ctx);
+    static void FillPtInfo(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmPtState ptState[]);
+    static void FillPtCopyList(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmCopyState ptState[]);
     static int32_t NotifyPtListChange(PtEntryList *ptList, void *ctx);
     static int32_t NotifyDataInfoChange(const char *key, void *value, uint32_t valLen, void *ctx);
 

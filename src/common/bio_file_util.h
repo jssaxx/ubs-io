@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <vector>
+#include <bio_log.h>
 
 namespace ock {
 namespace bio {
@@ -285,18 +286,21 @@ inline bool FileUtil::BackUpFile(const std::string& srcPath, const std::string& 
     // 打开源文件
     std::ifstream src(srcPath, std::ios::binary);
     if (!src) {
+        LOG_ERROR("BackUpFile: failed to open source file: '" << srcPath << "'");
         return false;
     }
 
     // 打开目标文件
     std::ofstream dest(destPath, std::ios::binary);
     if (!dest) {
+        LOG_ERROR("BackUpFile: failed to open destination file: '" << destPath << "'");
         return false;
     }
 
     // 文件赋值
     dest << src.rdbuf();
     if (!dest) {
+        LOG_ERROR("BackUpFile: error writing data from '" << srcPath << "' to '" << destPath << "'");
         return false;
     }
 
@@ -306,12 +310,17 @@ inline bool FileUtil::BackUpFile(const std::string& srcPath, const std::string& 
 inline bool FileUtil::RenameFile(const std::string& oldPath, const std::string& newPath)
 {
     if (oldPath == newPath) {
+        LOG_DEBUG("RenameFile: oldPath and newPath are identical, nothing to do.");
         return true;
     }
 
     if (std::rename(oldPath.c_str(), newPath.c_str()) != 0) {
+        int err = errno;
+        LOG_ERROR("RenameFile: failed to rename from '" << oldPath << "' to '"
+                  << newPath << "', errno=" << err << " (" << std::strerror(err) << ")");
         return false;
     }
+
     return true;
 }
 

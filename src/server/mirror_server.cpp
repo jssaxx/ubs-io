@@ -11,6 +11,8 @@
 #include "message_op.h"
 #include "bio_crc_util.h"
 #include "cache_overload_ctrl.h"
+#include "bdm_core.h"
+#include "bdm_disk.h"
 #include "mirror_server.h"
 
 using namespace ock::bio;
@@ -757,6 +759,10 @@ BResult MirrorServer::AddDisk(AddDiskRequest &req)
 BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
 {
     std::lock_guard<std::mutex> lock(mDiskViewMutex);
+    if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
+        LOG_ERROR("The number of available disks must not exceed 4.");
+        return BIO_ERR;
+    }
     uint32_t diskId;
     BResult ret = BIO_OK;
     std::string diskPath = req.diskPath;
@@ -797,7 +803,7 @@ BResult MirrorServer::AddOldDiskImpl(const std::string &diskPath, uint16_t diskI
     }
 
     // update diskInfo to cm
-    int32_t ret = CmReportDiskStatus(diskId, CM_DISK_NORMAL);
+    int32_t ret = CmAddNewDisk(diskId, CM_DISK_NORMAL, false);
     if (ret != BIO_OK) {
         LOG_ERROR("Report disk normal failed, diskId: " << diskId << " , diskPath: " << diskPath);
         return ret;
@@ -813,7 +819,7 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     // write diskPath to config
     BResult ret = mBioConfig->CreateDiskConfBak(diskPath);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Update disk config failed, diskPath: " << diskPath << ".");
+        LOG_ERROR("Update disk config failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
 
@@ -822,15 +828,22 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     ret = BioServer::Instance()->BioBdmUpdate(diskPath);
     LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ".");
+        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
 
-    // update info to cm zzt
+    // update info to cm
+    uint32_t diskId = BdmGetDiskCount();
+    ret = CmAddNewDisk(diskId, CM_DISK_NORMAL, true);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Update new disk status failed, ret: " << ret);
+        return ret;
+    }
+
     // replace config file
     ret = mBioConfig->ReplaceFile(CONFIG_PATH, CONFIG_PATH_BAK);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ".");
+        LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
     }
 

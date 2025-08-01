@@ -5,6 +5,7 @@
 #ifndef CM_SERVER_VIEW_H
 #define CM_SERVER_VIEW_H
 
+#include <stdbool.h>
 #include "cm_comm.h"
 
 #ifdef __cplusplus

@@ -125,6 +125,23 @@ static uint64_t g_bdmIndex = 0;
 
 static BdmThreadPool g_bdmThreadPool;
 
+uint32_t BdmGetNormalDiskNum(void)
+{
+    uint32_t num;
+    BDM_SPIN_LOCK(&g_bdmDisk.lock);
+    num = g_bdmDisk.num;
+    BDM_SPIN_UNLOCK(&g_bdmDisk.lock);
+    return num;
+}
+
+void BdmSetNormalDiskNum(uint32_t value)
+{
+    BDM_SPIN_LOCK(&g_bdmDisk.lock);
+    g_bdmDisk.num = value;
+    BDM_SPIN_UNLOCK(&g_bdmDisk.lock);
+    return;
+}
+
 uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
 {
     uint64_t remain = len;

@@ -16,7 +16,7 @@ void DestroyViewCalculator(Calculator calculator);
 int32_t ViewCalculatorInitial(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
     PtEntryList *ptEntryList);
 int32_t ViewCalculatorRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
-    PtEntryList *ptEntryList);
+    PtEntryList *ptEntryList, CmNodeEvent *cmNodeEvent);
 int32_t ViewCalculatorNeedRebalance(Calculator calculator, NodeInfoList *nodeList, NodeStateList *stateList,
     PtEntryList *ptEntryList);
 
