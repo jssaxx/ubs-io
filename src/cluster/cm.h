@@ -154,6 +154,7 @@ enum CmPtState : uint16_t {
     CM_PT_DEGRADE_LOSS1 = 2,
     CM_PT_DEGRADE_LOSS2 = 3,
     CM_PT_FAULT = 4,
+    CM_PT_BYPASS = 5, // by pass to new flow
     CM_PT_BUTT
 };
 

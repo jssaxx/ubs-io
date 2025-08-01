@@ -13,6 +13,8 @@
 
 namespace ock {
 namespace bio {
+using AfterPtEventProcess = std::function<void()>;
+
 struct CmPtTask;
 using CmPtTaskPtr = Ref<CmPtTask>;
 struct CmPtTask {
@@ -24,7 +26,7 @@ struct CmPtTask {
 
     std::atomic<uint32_t> jobNum;
     sem_t jobSem;
-
+    AfterPtEventProcess pFunc;
     DEFINE_REF_COUNT_FUNCTIONS;
 
 public:
@@ -59,7 +61,7 @@ public:
     void Exit();
 
 public:
-    BResult NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
+    BResult NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos, AfterPtEventProcess pFunc);
 
     void JobAddFinishList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
     void JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo);
