@@ -324,8 +324,38 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     return BIO_OK;
 }
 
+void BioConfig::BakFileProcess(const std::string &homePath)
+{
+    std::string initConfPath = homePath + CONF_INIT_BAK_SUFFIX;
+    std::string bakConfPath = homePath + CONF_BAK_SUFFIX;
+    std::string configPath = homePath + CONF_SUFFIX;
+    // 1、查看是否存在.bak.init文件，存在则将其重命名为.bak文件,不存在不做处理
+    if (FileUtil::Exist(initConfPath)) {
+        if (std::rename(initConfPath.c_str(), bakConfPath.c_str()) != 0) {
+            LOG_WARN("Replace bak init path to bak path failed!");
+        }
+    }
+
+    // 2、判断是否存在.bak文件，不存在不做处理，
+    if (!FileUtil::Exist(bakConfPath)) {
+        return;
+    }
+
+    // 3、存在则删除老conf文件（存在，不存在则忽略），并将.bak重命名问bio.conf
+    if (FileUtil::Exist(configPath)) {
+        if (std::remove(configPath.c_str()) != 0) {
+            LOG_ERROR("Remove configPath error.");
+            return;
+        }
+    }
+    if (std::rename(bakConfPath.c_str(), configPath.c_str()) != 0) {
+        LOG_ERROR("Replace bak path to conf path failed!");
+    }
+}
+
 BResult BioConfig::Initialize(const std::string &homePath)
 {
+    BakFileProcess(homePath);
     std::string configurePath = homePath + "/conf/bio.conf";
     LOG_INFO("Start to read config file.");
 
