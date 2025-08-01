@@ -299,6 +299,7 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
         CM_PT_DEGRADE_LOSS1,
         CM_PT_DEGRADE_LOSS2,
         CM_PT_FAULT,
+        CM_PT_BYPASS,
     };
 
     static CmCopyState copyState[PT_COPY_STATE_BUTT] = {
