@@ -414,7 +414,7 @@ BResult MirrorClient::Start()
 
 BResult MirrorClient::PutCheckPtState(CmPtInfo ptEntry)
 {
-    if (ptEntry.state == CM_PT_NORMAL) {
+    if (ptEntry.state == CM_PT_NORMAL || ptEntry.state == CM_PT_BYPASS) {
         return BIO_OK;
     }
     mUpdateView();

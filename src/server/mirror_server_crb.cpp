@@ -3,6 +3,8 @@
  */
 
 #include "mirror_server_crb.h"
+
+#include <utility>
 #include "mirror_server.h"
 #include "bio_monotonic.h"
 #include "bio_trace.h"
@@ -58,11 +60,11 @@ void MirrorServerCrb::Exit()
     mJobService->Stop();
 }
 
-BResult MirrorServerCrb::NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
+BResult MirrorServerCrb::NotifyPtChangeEvent(const std::map<uint16_t, CmPtInfo> &ptInfos, AfterPtEventProcess pFunc)
 {
     CmPtTaskPtr ptTask = MakeRef<CmPtTask>();
     ChkTrueNot(ptTask != nullptr, BIO_ALLOC_FAIL);
-
+    ptTask->pFunc = std::move(pFunc);
     for (auto it = ptInfos.begin(); it != ptInfos.end(); ++it) {
         CmPtInfo ptInfo;
         ptInfo.Clone(it->second);
@@ -93,7 +95,6 @@ void MirrorServerCrb::RunTaskThread(CmPtTaskPtr ptTask)
             }
         }
     } while (isRetry);
-
     return;
 }
 
@@ -120,6 +121,9 @@ void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
 
     ptTask->ptList.clear();
     ptTask->ptList.swap(ptTask->retryList);
+    if (ptTask->pFunc) {
+        ptTask->pFunc();
+    }
 
     RunTaskThreadFinish(ptTask);
     return;

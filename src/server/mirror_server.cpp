@@ -493,7 +493,7 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
     LOG_DEBUG("Mirror server put, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", flowId:" <<
         sliceP->GetFlowId() << ", offsetInFlow:" << sliceP->GetOffsetInFlow() << ", indexInFlow:" <<
         sliceP->GetIndexInFlow() << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() <<
-        ".");
+        "." << " ptVersion:" << BioServer::Instance()->GetPtEntry(req.comm.ptId).version << ", ptId:" << req.comm.ptId);
 
     auto reader = [&req, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) {
@@ -688,7 +688,8 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 
     LOG_DEBUG("Mirror server get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
         ", length:" << req.length << ", mr size:" << req.size << ", mr key:" <<
-        req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
+        req.mrKey << ", slice: " << sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << "."
+        << " ptVersion:" << BioServer::Instance()->GetPtEntry(req.comm.ptId).version << ", ptId:" << req.comm.ptId);
 
     auto writer = [&req, &rsp, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         bool isAlloc = false;
@@ -1825,8 +1826,14 @@ int32_t MirrorServer::HandleDestroyFlow(ServiceContext &ctx)
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-
     auto req = static_cast<DestroyFlowRequest *>(ctx.MessageData());
+
+    if (BioServer::Instance()->GetCrbProcessing()) {
+        LOG_WARN("Crb processing, do not destroy flow! flowId:" << req->flowId << ", ptId:" << req->comm.ptId);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, nullptr, 0);
+        return BIO_OK;
+    }
+
     return MirrorServerDestroyFlow(ctx, req);
 }
 

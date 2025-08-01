@@ -196,6 +196,11 @@ public:
         return mMirrorCrb;
     }
 
+    inline bool GetCrbProcessing()
+    {
+        return mCrbProcessing.load();
+    }
+
     inline CmPtr GetCm()
     {
         return mCm;
@@ -389,6 +394,7 @@ protected:
 #endif
     void Connection();
     BResult HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
+    bool CheckNeedCrb(const std::map<uint16_t, CmPtInfo> &ptInfos);
 
 private:
     BResult StartRpcService(const NetOptions &opt);
@@ -407,6 +413,7 @@ private:
     CmNodeId mLocalNid;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeView;
     std::map<uint16_t, CmPtInfo> mPtView;
+    std::atomic<bool> mCrbProcessing{false};
     std::mutex mNodeViewMutex;
     std::mutex mPtViewMutex;
     uint64_t mCurNodeTimes = 0;

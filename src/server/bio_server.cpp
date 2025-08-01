@@ -724,15 +724,35 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
     return BIO_OK;
 }
 
+bool BioServer::CheckNeedCrb(const std::map<uint16_t, CmPtInfo> &ptInfos)
+{
+    for (const auto &ptInfo: ptInfos) {
+        for (const auto &copy: ptInfo.second.copys) {
+            if (copy.state == CM_COPY_RECOVERY) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
 {
     std::lock_guard<std::mutex> lock(mPtViewMutex);
+
+    if (CheckNeedCrb(ptInfos)) {
+        mCrbProcessing.store(true);
+    }
+
     mPtView = ptInfos;
     for (auto it = mPtView.begin(); it != mPtView.end(); ++it) {
         LOG_INFO("Recv ptId:" << it->second.ptId << ", " << it->second.ToString());
     }
 
-    auto ret = mMirrorCrb->NotifyPtChangeEvent(ptInfos);
+    auto pFunc = [this]() {
+        this->mCrbProcessing.store(false);
+    };
+    auto ret = mMirrorCrb->NotifyPtChangeEvent(ptInfos, pFunc);
     if (ret != BIO_OK) {
         LOG_ERROR("Handle ptevent fail, ret:" << ret);
         return ret;
