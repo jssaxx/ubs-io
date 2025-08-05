@@ -12,8 +12,8 @@
 	tag = v1.15.3-htrunk1
 [submodule "3rdparty/hcom/hcom"]
 	path = 3rdparty/hcom/hcom
-	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hcom.git
-	tag = tag_BeiMing_24.4.RC4.B019_01
+	url = https://szv-y.codehub.huawei.com/BeiMing/service_domain/matrix_core/matrix_comm/hcom.git
+	tag = tag_BeiMing_25.2.0.B005
 [submodule "3rdparty/hseceasy/hseceasy"]
 	path = 3rdparty/hseceasy/hseceasy
 	url = https://szv-y.codehub.huawei.com/ComputingFoundationSoftware/ock-platform/hseceasy.git
