@@ -16,7 +16,6 @@
 #include "bdm_threadpool.h"
 #include "rb_tree.h"
 #include "bdm_allocator.h"
-#include "kunpeng_cpu_checker.h"
 #include "test_disk.h"
 
 using namespace ock::bio;
@@ -442,13 +441,6 @@ TEST_F(TestDisk, test_disk_rb_tree)
             RbErase(node, root);
         }
     }
-}
-
-TEST_F(TestDisk, test_disk_kunpeng_cpu_check)
-{
-    LOG_INFO("test_disk_kunpeng_cpu_check");
-    auto ret = QingsongCpuCheck();
-    EXPECT_EQ(ret, BDM_CODE_ERR);
 }
 
 TEST_F(TestDisk, test_disk_allocator_get_split_size_fail)

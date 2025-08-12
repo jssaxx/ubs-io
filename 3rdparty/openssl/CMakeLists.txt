@@ -5,7 +5,11 @@ set(LIBOPENSSL_INSTALL_DIR ${PROJECT_3RDPARTY_BIN_DIR}/openssl)
 message("-- openssl : check if need to build ")
 
 # build the lib if not built yet
-find_file(LIBS_BUILT_LIBOPENSSL libssl.so ${LIBOPENSSL_INSTALL_DIR}/lib/)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)$") # arm
+    find_file(LIBS_BUILT_LIBOPENSSL libssl.so ${LIBOPENSSL_INSTALL_DIR}/lib/)
+else()
+    find_file(LIBS_BUILT_LIBOPENSSL libssl.so ${LIBOPENSSL_INSTALL_DIR}/lib64/)
+endif()
 if(NOT LIBS_BUILT_LIBOPENSSL)
 
     # create build dir

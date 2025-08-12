@@ -9,7 +9,12 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <unistd.h>
+
+#if defined(__aarch64__) || defined(__arm__)
 #include <arm_neon.h>
+#endif
+
+#define THREAD_SLEEP_INTERVAL (200)
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,8 +64,21 @@ typedef struct {
     pthread_mutex_t queueMutex;
     pthread_cond_t notify;
 
+#if defined(__aarch64__) || defined(__arm__)
     uint32x4_t queue_desc; // init, queue size, head, tail
     uint32x4_t state_desc; // exit, enqueue cnt, invoke cnt, queue full cnt
+#else
+    uint32_t init;
+    uint32_t exit;
+
+    uint32_t queueSize;
+    uint32_t queueHead;
+    uint32_t queueTail;
+
+    uint32_t enqueueCnt;
+    uint32_t totalInvokeCnt;
+    uint32_t queueFullCnt;
+#endif
 } BDM_THREAD_S;
 
 typedef struct {
@@ -72,6 +90,9 @@ typedef struct {
 void BdmThreadBindCPUs(const char *name, int32_t cpuid);
 BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, BDM_BIND_CPU_S *binds,
     const char *poolName, BDM_BATCH_CTX_S *batchCtx);
+void BdmThreadFreeRes(BDM_THREAD_S *thread);
+int32_t BdmThreadCreate(BDM_THREAD_S* thread, uint32_t queueSize, int32_t cpuid, const char* poolName,
+                        BDM_BATCH_CTX_S* batchCtx);
 int32_t BdmThreadPoolAdd(BDM_THREAD_POOL_S *threadPool, BDM_THREAD_HANDLE handle, void *ctx);
 int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadPool, int32_t flags);
 
