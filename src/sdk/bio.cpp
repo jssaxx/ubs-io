@@ -263,24 +263,24 @@ CResult Bio::Delete(const char *key, const ObjLocation &location)
     return ToCResult(ret);
 }
 
-CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation location,
-    const BioLoadCallback callback, void *context)
+CResult Bio::Load(LoadPara &para, const ObjLocation location, const BioLoadCallback callback, void *context)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || context == nullptr || offset != 0 || length == 0 || length > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Invalid load parameter, key:" << key << ".");
+    if (UNLIKELY(!KeyValid(para.key) || context == nullptr || para.offset != 0 || para.length == 0 ||
+        para.length > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Invalid load parameter, key:" << para.key << ".");
         return RET_CACHE_EPERM;
     }
 
-    LoadCallback cb = [location, key, callback](void *context, BResult result) {
+    LoadCallback cb = [location, &para, callback](void *context, BResult result) {
         if (result != BIO_OK) {
-            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << key << ", location0:" <<
+            CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << para.key << ", location0:" <<
                 location.location[0] << ", location1:" << location.location[1] << ".");
         } else {
-            CLIENT_LOG_DEBUG("Load success, key:" << key << ", location0:" << location.location[0] << ", location1:" <<
+            CLIENT_LOG_DEBUG("Load success, key:" << para.key << ", location0:" << location.location[0] << ", location1:" <<
                 location.location[1] << ".");
         }
         if (callback != nullptr && context != nullptr) {
@@ -289,11 +289,11 @@ CResult Bio::Load(const char *key, uint64_t offset, uint64_t length, const ObjLo
     };
 
     BIO_TRACE_START(SDK_TRACE_LOAD);
-    BResult ret = gClient->Load(key, offset, length, location, cb, context);
+    BResult ret = gClient->Load(para, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
-            length << ", location:" << location.location[0] << ".");
+        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << para.key << ", offset:" << para.offset << ", length:"
+        << para.length << ", location:" << location.location[0] << ".");
     }
     return ToCResult(ret);
 }
@@ -824,7 +824,9 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
         }
         bioInstance = iter->second;
     }
-    return bioInstance->Load(key, offset, length, location, callback, context);
+
+    LoadPara para = {key, offset, length};
+    return bioInstance->Load(para, location, callback, context);
 }
 
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum)

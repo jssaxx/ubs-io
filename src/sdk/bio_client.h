@@ -124,10 +124,9 @@ public:
         return mMirror->DeleteKey(key, location);
     }
 
-    inline BResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-        Bio::LoadCallback callback, void *context)
+    inline BResult Load(LoadPara &para, const ObjLocation &location, Bio::LoadCallback callback, void *context)
     {
-        return mMirror->Load(key, offset, length, location, std::move(callback), context);
+        return mMirror->Load(para, location, std::move(callback), context);
     }
 
     inline BResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)

@@ -212,7 +212,7 @@ BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
     mDaemonConfig.enableCli = conf->GetStr(BIO_CLI_TOOLS_ENABLE.first) == "true";
     mDaemonConfig.enablePrometheus = conf->GetStr(PROMETHEUS_ENABLE.first) == "true";
     mDaemonConfig.listenAddress = conf->GetStr(PROMETHEUS_LISTEN_ADDRESS.first);
-    mDaemonConfig.scrapeIntervalSec = conf->GetInt(PROMETHEUS_SCRAPE_INTERVAL_SEC.first);
+    mDaemonConfig.scrapeIntervalSec = static_cast<uint32_t>(conf->GetInt(PROMETHEUS_SCRAPE_INTERVAL_SEC.first));
 
     std::string scene = conf->GetStr(WORK_SCENE.first);
     if (scene == "none") {
