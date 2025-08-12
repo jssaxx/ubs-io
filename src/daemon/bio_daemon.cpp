@@ -35,6 +35,7 @@ int main(int argc, char *argv[])
     auto bioServer = BioServer::Instance();
     auto ret = bioServer->Start();
     if (ret != BIO_OK) {
+        std::cout << "BoostIO Daemon Start Fail." << std::endl;
         return -1;
     }
 
