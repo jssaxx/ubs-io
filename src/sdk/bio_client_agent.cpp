@@ -474,29 +474,28 @@ BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t 
     return BIO_OK;
 }
 
-BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId, bool &isDegrade)
+BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, FlowInfo &flowInfo)
 {
     if (mMode == CONVERGENCE) {
-        if (opType == 0) {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      opType,
+        if (flowInfo.opType == 0) {
+            CreateFlowRequest req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
+                                      flowInfo.opType,
                                       0,
                                       false };
             CreateFlowResponse rsp;
             auto ret = createFlowMasterOp(&req, &rsp);
-            flowId = rsp.flowId;
-            isDegrade = rsp.isDegrade;
+            flowInfo.flowId = rsp.flowId;
+            flowInfo.isDegrade = rsp.isDegrade;
             return ret;
         } else {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      opType,
-                                      flowId,
-                                      isDegrade };
+            CreateFlowRequest req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
+                                      flowInfo.opType,
+                                      flowInfo.flowId,
+                                      flowInfo.isDegrade };
             return createFlowSlaveOp(&req);
         }
     } else {
-        return SendCreateFlowRequestLocal(ptEntry, ptId, opType, flowId, isDegrade);
+        return SendCreateFlowRequestLocal(ptEntry, flowInfo.ptId, flowInfo.opType, flowInfo.flowId, flowInfo.isDegrade);
     }
 }
 

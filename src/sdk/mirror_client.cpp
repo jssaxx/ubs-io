@@ -22,15 +22,15 @@ using namespace ock::bio;
 
 static const uint32_t IO_EXTRATEGE_TIME = 3; // IO策略3s过期
 
-BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId, bool &isDegrade)
+BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
-    if (opType == 0) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0, false };
-    } else if (opType == 1) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
+    if (flowInfo.opType == 0) {
+        req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowInfo.opType, 0, false };
+    } else if (flowInfo.opType == 1) {
+        req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowInfo.opType,
+            flowInfo.flowId, flowInfo.isDegrade };
     }
     static uint32_t createFlowRTimeout = NO_60;
     uint64_t startTime = Monotonic::TimeSec();
@@ -41,7 +41,7 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
         uint64_t retryTime = Monotonic::TimeSec() - startTime;
         if (UNLIKELY(ret == BIO_NOT_READY && retryTime < createFlowRTimeout)) {
             CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" << nodeId <<
-                ", ptId:" << ptId << ".");
+                ", ptId:" << flowInfo.ptId << ".");
             sleep(NO_3);
         } else {
             break;
@@ -49,13 +49,13 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
     } while (ret == BIO_NOT_READY);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << nodeId << ", ptId:" <<
-            ptId << ".");
+            flowInfo.ptId << ".");
         return ret;
     }
 
-    if (opType == 0) {
-        flowId = rsp.flowId;
-        isDegrade = rsp.isDegrade;
+    if (flowInfo.opType == 0) {
+        flowInfo.flowId = rsp.flowId;
+        flowInfo.isDegrade = rsp.isDegrade;
     }
     return ret;
 }
@@ -75,14 +75,12 @@ BResult MirrorClient::SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &pt
     return ret;
 }
 
-BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    uint64_t &flowId, bool &isDegrade)
+BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo)
 {
     if (LIKELY(nodeId == mLocalNid.VNodeId())) {
-        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, ptId, opType,
-            flowId, isDegrade);
+        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, flowInfo);
     } else {
-        return SendCreateFlowRequestRemote(nodeId, ptEntry, ptId, opType, flowId, isDegrade);
+        return SendCreateFlowRequestRemote(nodeId, ptEntry, flowInfo);
     }
 }
 
@@ -111,10 +109,9 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         return ret;
     }
 
-    uint64_t flowId = UINT64_MAX;
-    bool isDegrade = false;
-    ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, ptId, 0, flowId, isDegrade);
-    if (UNLIKELY(ret != BIO_OK || flowId == UINT64_MAX)) {
+    FlowInfo flowInfo = {ptId, 0, UINT64_MAX, false};
+    ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, flowInfo);
+    if (UNLIKELY(ret != BIO_OK || flowInfo.flowId == UINT64_MAX)) {
         CLIENT_LOG_ERROR("Create master flow failed, ret:" << ret << ", ptId:" << ptId << ", masterNid:" <<
             ptEntry.masterNodeId << ".");
         Delete(ptId, 0);
@@ -128,7 +125,8 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
             continue;
         }
-        ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, ptId, 1, flowId, isDegrade);
+        flowInfo.opType = 1;
+        ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, flowInfo);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
                 ptEntry.copys[idx].nodeId << ".");
@@ -137,14 +135,14 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         }
     }
 
-    ret = Update(ptId, ptEntry.version, flowId, isDegrade);
+    ret = Update(ptId, ptEntry.version, flowInfo.flowId, flowInfo.isDegrade);
     if (ret != BIO_OK) {
         LOG_ERROR("Update flow info failed, ret " << ret);
         return ret;
     }
 
     CLIENT_LOG_INFO("Create flow instance success, ptId:" << ptId << ", ptv:" << ptEntry.version << ", flowId:" <<
-        flowId << ", isDegrade:" << isDegrade << ".");
+        flowInfo.flowId << ", isDegrade:" << flowInfo.isDegrade << ".");
     return BIO_OK;
 }
 
@@ -721,15 +719,15 @@ BResult MirrorClient::DeleteKeyImpl(const char *key, const ObjLocation &location
     return ret;
 }
 
-BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-    const Bio::LoadCallback &callback, void *context)
+BResult MirrorClient::Load(LoadPara &para, const ObjLocation &location, const Bio::LoadCallback &callback,
+                           void *context)
 {
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
-        ret = LoadImpl(key, offset, length, location, callback, context);
+        ret = LoadImpl(para, location, callback, context);
         if (LIKELY(ret == BIO_OK)) {
             break;
         }
@@ -738,25 +736,25 @@ BResult MirrorClient::Load(const char *key, uint64_t offset, uint64_t length, co
     return ret;
 }
 
-BResult MirrorClient::LoadImpl(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-    const Bio::LoadCallback &callback, void *context)
+BResult MirrorClient::LoadImpl(LoadPara &para, const ObjLocation &location, const Bio::LoadCallback &callback,
+                               void *context)
 {
     uint16_t ptId = ParseLocation(location);
     CmPtInfo ptEntry;
     BResult ret = GetPtEntry(ptId, ptEntry);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Get pt entry failed, ret: " << ret << ", ptId:" << ptId << ", key:" << para.key << ".");
         return ret;
     }
 
     LoadRequest req;
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
-    CopyKey(req.key, key, KEY_MAX_SIZE);
-    req.offset = offset;
-    req.length = length;
+    CopyKey(req.key, para.key, KEY_MAX_SIZE);
+    req.offset = para.offset;
+    req.length = para.length;
     ret = SendLoadRequest(ptEntry, req, callback, context);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
+        CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << para.key << ".");
     }
     return ret;
 }

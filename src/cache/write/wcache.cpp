@@ -134,7 +134,7 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
 BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr)
 {
     // 1. 计算IO写入策略.
-    RealIoStrategy ioStrategy = WRITE_DEFALUT;
+    RealIoStrategy ioStrategy = WRITE_DEFAULT;
     PutSetIoStrategy(ioStrategy, attr);
 
     // 2. Add evict negotiate queue.
@@ -186,7 +186,7 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
 void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
 {
     ioStrategy = attr.ioStrategy;
-    if (ioStrategy == WRITE_DEFALUT) {
+    if (ioStrategy == WRITE_DEFAULT) {
         if (attr.strategy == WRITE_BACK) {
             ioStrategy = WRITE_MEM_BACK;
         } else {

@@ -20,6 +20,7 @@
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
 #include "bio_qos.h"
+#include "bio_client_agent.h"
 
 namespace ock {
 namespace bio {
@@ -28,6 +29,7 @@ constexpr uint16_t BIO_IO_TIMEOUT_TIME = 60;
 constexpr uint16_t BIO_IO_INTERAL_TIME = 2;
 constexpr uint16_t BIO_IO_DELAY_TIME = 1;
 using UpdateView = std::function<void(void)>;
+using FlowInfo = ock::bio::agent::BioClientAgent::FlowInfo;
 
 enum WorkerScene : uint32_t {
     SCENE_NONE = 0,
@@ -84,8 +86,7 @@ public:
 
     BResult DeleteKey(const char *key, const ObjLocation &location);
 
-    BResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-        const Bio::LoadCallback &callback, void *context);
+    BResult Load(LoadPara &para, const ObjLocation &location, const Bio::LoadCallback &callback, void *context);
 
     BResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
@@ -193,8 +194,7 @@ private:
 
     BResult DeleteKeyImpl(const char *key, const ObjLocation &location);
 
-    BResult LoadImpl(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
-        const Bio::LoadCallback &callback, void *context);
+    BResult LoadImpl(LoadPara &para, const ObjLocation &location, const Bio::LoadCallback &callback, void *context);
 
     BResult ListAllImpl(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
@@ -231,11 +231,9 @@ private:
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
         uint64_t &index);
-    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-        uint64_t &flowId, bool &isDegrade);
+    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
     BResult SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-        uint64_t &flowId, bool &isDegrade);
+    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
     BResult DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlow(uint16_t ptId);
     BResult DestroyFlow(uint16_t ptId, uint64_t flowId);

@@ -17,6 +17,12 @@ namespace ock {
 namespace bio {
 constexpr uint32_t BIO_IO_MAX_LEN = 4194304;
 
+struct LoadPara {
+    const char *key;
+    uint64_t offset;
+    uint64_t length;
+};
+
 class Bio {
 public:
     using LoadCallback = std::function<void(void *context, int32_t result)>;
@@ -67,16 +73,15 @@ public:
     /**
      * @brief: Load value
      *
-     * @param[in]: key: object key
-     * @param[in]: offset: offset
-     * @param[in]: length: length
+     * @param[in]: para.key: object key
+     * @param[in]: para.offset: offset
+     * @param[in]: para.length: length
      * @param[in]: location: object location info
      * @param[in]: callback: callback function
      * @param[in]: context: callback context
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
-    CResult Load(const char *key, uint64_t offset, uint64_t length, const ObjLocation location,
-        const BioLoadCallback callback, void *context);
+    CResult Load(LoadPara &para, const ObjLocation location, const BioLoadCallback callback, void *context);
 
     /**
      * @brief: List all key that meets the prefix condition

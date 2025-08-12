@@ -29,12 +29,12 @@ enum CacheType : uint16_t {
     CACHE_BUTT
 };
 
-typedef enum : uint32_t {
-    WRITE_DEFALUT = 0,
+enum RealIoStrategy : uint32_t {
+    WRITE_DEFAULT = 0,
     WRITE_MEM_BACK = 1,
     WRITE_DISK_BACK = 2,
     WRITE_UNDERFS_BACK = 3,
-} RealIoStrategy;
+};
 
 struct CacheResDescription {
     uint64_t memCapacity;
@@ -50,7 +50,7 @@ struct CacheAttr {
     WriteStrategy strategy;
 
     CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : ioStrategy(WRITE_DEFALUT), mTenantId(id), affinity(aff), strategy(str)
+        : ioStrategy(WRITE_DEFAULT), mTenantId(id), affinity(aff), strategy(str)
     {}
     CacheAttr(RealIoStrategy iostr, uint64_t id, AffinityStrategy aff, WriteStrategy str)
         : ioStrategy(iostr), mTenantId(id), affinity(aff), strategy(str)

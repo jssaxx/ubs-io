@@ -21,6 +21,14 @@ class BioClientAgent;
 using BioClientAgentPtr = Ref<BioClientAgent>;
 class BioClientAgent {
 public:
+    struct FlowInfo {
+        uint16_t ptId;
+        uint16_t opType;
+        uint64_t flowId;
+        bool isDegrade;
+    };
+
+public:
     using BioServerStartFuncPtr = int32_t (*)();
     using BioServerExitFuncPtr = void (*)();
     using GetBioServerCrcFlagFuncPtr = bool (*)();
@@ -97,8 +105,7 @@ public:
 
     BResult GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView);
 
-    BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-        uint64_t &flowId, bool &isDegrade);
+    BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
 
     BResult DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 
