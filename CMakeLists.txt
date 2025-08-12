@@ -63,7 +63,7 @@ include_directories(
         ${SRC_DIR}/cluster
 		${SRC_DIR}/cluster/common
         ${SRC_DIR}/config
-        ${SRC_DIR}/disk
+        ${SRC_DIR}/disk/common
 		${SRC_DIR}/flow
 		${SRC_DIR}/htracer
         ${SRC_DIR}/message

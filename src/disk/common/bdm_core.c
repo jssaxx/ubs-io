@@ -9,8 +9,14 @@
 #include "bdm_obj.h"
 #include "bdm_disk.h"
 #include "securec.h"
-#include "kunpeng_cpu_checker.h"
 #include "bdm_core.h"
+
+#if defined(__aarch64__) || defined(__arm__)
+#include "kunpeng_cpu_checker.h"
+#else
+#include "cpu_vendor_checker.h"
+#endif
+
 #define CHUNK_ID_TO_BDMID(chunkId) (((chunkId) >> 48UL) & 0xFFFF)
 #define ENCODE_CHUNK_ID(chunkId, bdmId) ((((uint64_t)(bdmId) & 0xFFFF) << 48UL) | ((chunkId) & 0xFFFFFFFFFFFF))
 #define DENCODE_CHUNK_ID(chunkId) ((chunkId) & 0xFFFFFFFFFFFF)
@@ -303,9 +309,14 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
 
 int32_t BdmInit(void)
 {
-    int32_t ret = KunpengCpuCheck();
+    int32_t ret = BDM_CODE_ERR;
+#if defined(__aarch64__) || defined(__arm__)
+    ret = KunpengCpuCheck();
+#else
+    ret = CheckCpuVendor();
+#endif
     if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Bdm cpu check failed, not KunpengCpu, ret(%d).", ret);
+        BDM_LOGERROR(0, "Bdm cpu check failed, ret(%d).", ret);
         return ret;
     }
     if (g_bdmInit == 1UL) {
