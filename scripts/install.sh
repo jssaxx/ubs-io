@@ -123,7 +123,7 @@ set_permissions()
 {
   set +e
   chmod -R 700 $INSTALL_PATH/tools
-  chmod 550 $CONF_PATH
+  chmod 750 $CONF_PATH
   chmod 550 $BIN_PATH
   chmod 550 $BIN_PATH/bio_daemon
   chmod 550 $BIN_PATH/bio_console
