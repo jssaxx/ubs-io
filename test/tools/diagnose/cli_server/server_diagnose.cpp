@@ -220,7 +220,7 @@ static bool CanConvertToUint64(const std::string &str, uint64_t &val)
     }
 }
 
-static void  HandleRCachePut(std::vector<std::string> cmds)
+static void HandleRCachePut(std::vector<std::string> cmds)
 {
     if (!std::regex_match(cmds[3], serverPattern)) {
         CLI_PrintBuf("Invalid input.\n");
@@ -263,6 +263,13 @@ static void  HandleRCachePut(std::vector<std::string> cmds)
     WCacheSlicePtr writeSlice = nullptr;
     RCacheManagerPtr rCacheManager = RCacheManager::Instance();
     rCacheManager->AllocResources(ptId, length, writeSlice);
+    if (writeSlice == nullptr) {
+        CLI_PrintBuf("Write cache put to read cache alloc fail.");
+        delete[] value;
+        fclose(fp);
+        return;
+    }
+
     CacheSliceOperator sliceOperator;
     sliceOperator.Copy(value, writeSlice.Get());
     uint32_t dataCrc = 0;
