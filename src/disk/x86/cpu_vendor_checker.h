@@ -48,7 +48,7 @@ int32_t CheckCpuVendor()
     }
 
     if (strcmp(vendorId, UNSUPPORTED_VENDOR_ID) == 0) {
-        BDM_LOGERROR("Unsupported cpu vendor:%s", vendorId);
+        BDM_LOGERROR(0, "Unsupported cpu vendor:%s", vendorId);
         return BDM_CODE_ERR;
     }
 
