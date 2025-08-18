@@ -610,11 +610,12 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
     NET_LOG_WARN("Receive broken channel " << ch->Id() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid <<
         ", panel:" << ctx.IsCtrlPanel() << ".");
-    if (ctx.IsCtrlPanel()) {
-        mCtrlChannelMgr->RemoveChannel(dstNid, ch);
-    } else {
-        mDataChannelMgr->RemoveChannel(dstNid, ch);
+
+    NetChannelMgrPtr mgr = ctx.IsCtrlPanel() ? mCtrlChannelMgr : mDataChannelMgr;
+    if (mgr != nullptr) {
+        mgr->RemoveChannel(dstNid, ch);
     }
+
     if (mHandlerBroken != nullptr) {
         mHandlerBroken(dstNid.nid, dstNid.pid);
     }

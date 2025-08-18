@@ -264,7 +264,7 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
     WCacheSlicePtr &slice)
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
-    BResult ret;
+    BResult ret = BIO_OK;
     LVOS_TP_START(MIRROR_SERVER_GET_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = Cache::Instance().GetWCacheSlice(sliceKey, slice);
     LVOS_TP_END;
@@ -763,7 +763,7 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
         LOG_ERROR("The number of available disks must not exceed 4.");
         return BIO_ERR;
     }
-    uint32_t diskId;
+    uint32_t diskId = DISK_ID_INVALID;
     BResult ret = BIO_OK;
     std::string diskPath = req.diskPath;
     bool isExist;
@@ -1425,7 +1425,7 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     }
 
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
-    BResult result;
+    BResult result = BIO_OK;
     uint32_t ioStrategy = 0;
     LVOS_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
     result = Put(*req, sliceP, ctx, ioStrategy);
