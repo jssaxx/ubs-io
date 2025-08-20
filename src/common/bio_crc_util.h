@@ -258,8 +258,12 @@ inline uint32_t BioCrcUtil::HardCrc32(const void *data, uint32_t dataLen)
 
 inline uint32_t BioCrcUtil::Crc32(const void *data, uint32_t dataLen)
 {
+#ifdef __aarch64__
     auto crc = HardCrc32(data, dataLen);
     return crc != 0 ? crc : SoftCrc32(data, dataLen);
+#else
+    return SoftCrc32(data, dataLen);
+#endif
 }
 }
 }
