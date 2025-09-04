@@ -306,7 +306,7 @@ BResult WCacheManager::ServiceUngradeFlush()
 
     LVOS_TP_START(NO_PROCESS_UPGRADE_FLUSH, 0);
     for (const auto &flow : flushList) {
-        flow->Flush();
+        flow->Flush(flow);
     }
 
     if (!flushList.empty()) {
@@ -635,7 +635,7 @@ BResult WCacheManager::FlushImpl(uint16_t ptId, uint64_t ptv)
     std::list<WCachePtr> flushList;
     ScanOldCache(ptId, ptv, flushList);
     for (const auto &flow : flushList) {
-        flow->Flush();
+        flow->Flush(flow);
     }
     return (!flushList.empty()) ? BIO_INNER_RETRY : BIO_OK;
 }
@@ -681,7 +681,7 @@ BResult WCacheManager::ExpiredClearImpl(uint16_t ptId, uint64_t ptv)
     ScanOldCache(ptId, ptv, expiredList);
 
     for (const auto &flow : expiredList) {
-        flow->ExpiredClear();
+        flow->ExpiredClear(flow);
     }
 
     return (expiredList.size() != 0) ? BIO_INNER_RETRY : BIO_OK;
@@ -799,7 +799,7 @@ BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
     LVOS_TP_START(WCACHE_HANDLE_BROCK_EXPIRED_CLEAR, &isMaster, false);
     LVOS_TP_END;
     if (isMaster) {
-        wcache->Flush();
+        wcache->Flush(wcache);
     } else {
         wcache->ProcAndCacheBrokenExpiredClear();
     }
@@ -854,7 +854,7 @@ BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId)
         LVOS_TP_START(WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR, &isMaster, false);
         LVOS_TP_END;
         if (isMaster) {
-            flow->Flush();
+            flow->Flush(flow);
         } else {
             flow->ProcAndCacheBrokenExpiredClear();
         }
@@ -978,6 +978,7 @@ void WCacheManager::RetryEvictThread()
         }
 
         for (const auto &flowId : retryFlows) {
+            ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
             auto wflowIt = mWCacheManager.find(flowId);
             if (UNLIKELY(wflowIt == mWCacheManager.end())) {
                 LOG_WARN("Failed to get flow by id:" << flowId);
@@ -992,6 +993,7 @@ void WCacheManager::RetryEvictThread()
         }
 
         for (const auto &flowId: retryFlows) {
+            ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
             auto wflowIt = mWCacheManager.find(flowId);
             if (UNLIKELY(wflowIt == mWCacheManager.end())) {
                 LOG_WARN("Failed to get flow by id:" << flowId);
@@ -1010,6 +1012,7 @@ BResult WCacheManager::EvictNegotiateThread()
     LVOS_TP_START(WCACHE_NEGOTIATE_FLAG_TRUE, &mNegotiateFlag, true);
     LVOS_TP_END;
     while (mNegotiateFlag) {
+        mWCacheManagerLock.LockRead();
         uint32_t wcacheSize = mWCacheManager.size();
         uint32_t waitSize = 0;
         for (const auto &item: mWCacheManager) {
@@ -1018,6 +1021,8 @@ BResult WCacheManager::EvictNegotiateThread()
                 ++waitSize;
             }
         }
+        mWCacheManagerLock.UnLock();
+
         if (wcacheSize == waitSize) {
             delayInUs = std::min(MAX_NEGOTIATE_DELAY, delayInUs * NO_2);
         } else {
@@ -1077,6 +1082,7 @@ BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], 
 BResult WCacheManager::GetEvictNegotiateInfo()
 {
     LOG_INFO("Current evict negotiate info.");
+    ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
     for (const auto &item: mWCacheManager) {
         uint32_t flowId = item.first;
         auto mapPtr = item.second->GetEvictNegotiateIndexMap();

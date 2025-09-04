@@ -124,8 +124,8 @@ public:
     using RecoverCallback = std::function<BResult(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 
-    void Flush();
-    void ExpiredClear();
+    void Flush(const WCachePtr &self);
+    void ExpiredClear(const WCachePtr &self);
     void ProcAndCacheBrokenExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
     bool IsEmptyNegotiate();
