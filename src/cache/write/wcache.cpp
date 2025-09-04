@@ -332,10 +332,17 @@ void WCache::StartEvictTask(WCacheTierType type)
     }
 
     bool isSucceed;
+    IncreaseRef();
     if (type == WCACHE_MEMORY) {
-        isSucceed = mEvictService[type]->Execute([this]() { EvictAllMemSliceToDisk(); });
+        isSucceed = mEvictService[type]->Execute([this]() {
+            EvictAllMemSliceToDisk();
+            DecreaseRef();
+        });
     } else {
-        isSucceed = mEvictService[type]->Execute([this]() { EvictAllDiskSliceToUnderFs(); });
+        isSucceed = mEvictService[type]->Execute([this]() {
+            EvictAllDiskSliceToUnderFs();
+            DecreaseRef();
+        });
     }
 
     if (!isSucceed) {
@@ -358,7 +365,12 @@ BResult WCache::StartEvictNegotiateTask()
     if (!mIsStartEvictNegotiate.compare_exchange_weak(expectFlag, true)) {
         return BIO_OK;
     }
-    if (!mEvictNegotiateService->Execute([this]() { EvictNegotiate(); })) {
+
+    IncreaseRef();
+    if (!mEvictNegotiateService->Execute([this]() {
+            EvictNegotiate();
+            DecreaseRef();
+        })) {
         mIsStartEvictNegotiate.store(false);
     }
     return BIO_OK;
@@ -380,10 +392,17 @@ void WCache::RetryEvictTask(WCacheTierType type)
     }
 
     bool isSucceed;
+    IncreaseRef();
     if (type == WCACHE_MEMORY) {
-        isSucceed = mEvictService[type]->Execute([this]() { EvictAllMemSliceToDisk(); });
+        isSucceed = mEvictService[type]->Execute([this]() {
+            EvictAllMemSliceToDisk();
+            DecreaseRef();
+        });
     } else {
-        isSucceed = mEvictService[type]->Execute([this]() { EvictAllDiskSliceToUnderFs(); });
+        isSucceed = mEvictService[type]->Execute([this]() {
+            EvictAllDiskSliceToUnderFs();
+            DecreaseRef();
+        });
     }
 
     if (!isSucceed) {
@@ -460,14 +479,14 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
     return BIO_OK;
 }
 
-void WCache::Flush()
+void WCache::Flush(const WCachePtr &self)
 {
     LVOS_TP_START(NO_PROCESS_WCACHE_FLUSH, 0);
     mIsForced = true;
     {
         bool expectval = false;
         if (mEvictRef[WCACHE_MEMORY].compare_exchange_weak(expectval, true)) {
-            bool isSucceed = mEvictService[WCACHE_MEMORY]->Execute([this]() { FlushMem(); });
+            bool isSucceed = mEvictService[WCACHE_MEMORY]->Execute([self]() { self->FlushMem(); });
             if (!isSucceed) {
                 mEvictRef[WCACHE_MEMORY] = false;
             }
@@ -477,7 +496,7 @@ void WCache::Flush()
     {
         bool expectval = false;
         if (mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
-            bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this]() { FlushDisk(); });
+            bool isSucceed = mEvictService[WCACHE_DISK]->Execute([self]() { self->FlushDisk(); });
             if (!isSucceed) {
                 mEvictRef[WCACHE_DISK] = false;
             }
@@ -487,14 +506,14 @@ void WCache::Flush()
     return;
 }
 
-void WCache::ExpiredClear()
+void WCache::ExpiredClear(const WCachePtr &self)
 {
     LVOS_TP_START(NO_PROCESS_WCACHE_EXPIRED_CLEAR, 0);
     mIsForced = true;
     {
         bool expectval = false;
         if (mEvictRef[WCACHE_MEMORY].compare_exchange_weak(expectval, true)) {
-            bool isSucceed = mEvictService[WCACHE_MEMORY]->Execute([this]() { ExpiredClearMem(); });
+            bool isSucceed = mEvictService[WCACHE_MEMORY]->Execute([self]() { self->ExpiredClearMem(); });
             if (!isSucceed) {
                 mEvictRef[WCACHE_MEMORY] = false;
             }
@@ -504,7 +523,7 @@ void WCache::ExpiredClear()
     {
         bool expectval = false;
         if (mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
-            bool isSucceed = mEvictService[WCACHE_DISK]->Execute([this]() { ExpiredClearDisk(); });
+            bool isSucceed = mEvictService[WCACHE_DISK]->Execute([self]() { self->ExpiredClearDisk(); });
             if (!isSucceed) {
                 mEvictRef[WCACHE_DISK] = false;
             }
