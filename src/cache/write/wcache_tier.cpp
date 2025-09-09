@@ -107,16 +107,15 @@ void WCacheTier::AddEvictNegotiateIndexMap(uint64_t indexInFlow, uint8_t refNum)
 {
     uint64_t indexInMap = indexInFlow / ARRAY_SIZE_IN_NEGOTIATE_MAP;
     uint64_t indexInArray = indexInFlow % ARRAY_SIZE_IN_NEGOTIATE_MAP;
+    WriteLocker<ReadWriteLock> lock(&mNegotiateIndexMapLock);
     auto array = mNegotiateIndexMap.find(indexInMap);
     if (array == mNegotiateIndexMap.end()) {
-        mNegotiateIndexMapLock.Lock();
         array = mNegotiateIndexMap.find(indexInMap);
         if (array == mNegotiateIndexMap.end()) {
             std::array<uint8_t, ARRAY_SIZE_IN_NEGOTIATE_MAP> newArray{};
             newArray.fill(INVALID_REF_NUM);
             mNegotiateIndexMap.emplace(indexInMap, newArray);
         }
-        mNegotiateIndexMapLock.UnLock();
     }
     mNegotiateIndexMap[indexInMap][indexInArray] = refNum;
 }
@@ -188,11 +187,15 @@ void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t lim
     uint64_t startIndexInMap = mCurNegotiateIndex / ARRAY_SIZE_IN_NEGOTIATE_MAP;
     uint64_t startIndexInArray = mCurNegotiateIndex % ARRAY_SIZE_IN_NEGOTIATE_MAP;
     for (uint64_t indexInMap = startIndexInMap;; ++indexInMap) {
+        mNegotiateIndexMapLock.LockRead();
         auto it = mNegotiateIndexMap.find(startIndexInMap);
         if (it == mNegotiateIndexMap.end()) {
+            mNegotiateIndexMapLock.UnLock();
             return;
         }
         auto array = it->second;
+        mNegotiateIndexMapLock.UnLock();
+
         for (uint64_t indexInArray = startIndexInArray; indexInArray < ARRAY_SIZE_IN_NEGOTIATE_MAP; ++indexInArray) {
             if (array[indexInArray] != INVALID_REF_NUM && array[indexInArray] > NO_U64_0) {
                 LOG_TRACE("Select this slice ,flow:" << mMetaFlow->GetFlowId() << ",indexInMap :"
@@ -410,16 +413,21 @@ BResult WCacheTier::UpdateNegotiateState(uint64_t indexInFlow)
     BIO_TRACE_START(WCACHE_TRACE_NEGOTIATE_UPDATE)
     uint64_t indexInMap = indexInFlow / ARRAY_SIZE_IN_NEGOTIATE_MAP;
     uint64_t indexInArray = indexInFlow % ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    auto it = mNegotiateIndexMap.find(indexInMap);
-    if (it == mNegotiateIndexMap.end()) {
-        LOG_DEBUG("Not find slice,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);
-        return BIO_NOT_EXISTS;
+    uint8_t curRefNum = 0;
+    {
+        WriteLocker<ReadWriteLock> lock(&mNegotiateIndexMapLock);
+        auto it = mNegotiateIndexMap.find(indexInMap);
+        if (it == mNegotiateIndexMap.end()) {
+            LOG_DEBUG("Not find slice,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);
+            return BIO_NOT_EXISTS;
+        }
+        if (it->second[indexInArray] == INVALID_REF_NUM) {
+            LOG_DEBUG("Invalid index,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);
+            return BIO_NOT_EXISTS;
+        }
+        curRefNum = --it->second[indexInArray];
     }
-    if (it->second[indexInArray] == INVALID_REF_NUM) {
-        LOG_DEBUG("Invalid index,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);
-        return BIO_NOT_EXISTS;
-    }
-    uint8_t curRefNum = --it->second[indexInArray];
+    
     if (curRefNum == 0) {
         LOG_TRACE("Negotiate success,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:"
             << indexInFlow << ",curIndex:" << mCurNegotiateIndex);
@@ -466,10 +474,10 @@ void WCacheTier::EvictNegotiateMapToQueue(uint64_t indexInFlow)
 void WCacheTier::DelEvictIndexArray(uint64_t indexInMap)
 {
     BIO_TRACE_START(WCACHE_DEL_NEGOTIATE_ARRAY)
-    mNegotiateIndexMapLock.Lock();
+    mNegotiateIndexMapLock.LockWrite();
     mNegotiateIndexMap.erase(indexInMap);
-    LOG_DEBUG("Del array in map, index: " << indexInMap << ",flow:"<<mDataFlow->GetFlowId());
     mNegotiateIndexMapLock.UnLock();
+    LOG_DEBUG("Del array in map, index: " << indexInMap << ",flow:"<<mDataFlow->GetFlowId());
     BIO_TRACE_END(WCACHE_DEL_NEGOTIATE_ARRAY, BIO_OK)
 }
 }

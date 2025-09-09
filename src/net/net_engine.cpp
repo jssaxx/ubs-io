@@ -579,9 +579,10 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
 
     NetChannelUpCtx ctx(netPayload.srcNodeId, isCtrl, true);
     newChannel->UpCtx(ctx.whole);
+#ifndef DEBUG_UT
     newChannel->SetOneSideTimeout(mTimeout);
     newChannel->SetTwoSideTimeout(mTimeout);
-
+#endif
     if (netPayload.srcNodeId.pid == 0) {
         NET_LOG_INFO("Receive new channel, not needed add,  channel " << newChannel->Id() << ", peer connected nid " <<
             netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " << ipPort << ", payload " <<
@@ -724,8 +725,10 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 
     NetChannelUpCtx ctx(info.peerId, isCtrlPanel, false);
     ch->UpCtx(ctx.whole);
+#ifndef DEBUG_UT
     ch->SetOneSideTimeout(mTimeout);
     ch->SetTwoSideTimeout(mTimeout);
+#endif
     return BIO_OK;
 }
 

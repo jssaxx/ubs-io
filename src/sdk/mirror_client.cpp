@@ -353,8 +353,8 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     isPtNormal = (iter->second.state != CM_PT_FAULT);
     LVOS_TP_END;
     if (UNLIKELY(!isPtNormal)) {
-        mLock.UnLock();
         CLIENT_LOG_ERROR("Pt stat is fault, pt id:" << ptId << ", state:" << iter->second.state << ".");
+        mLock.UnLock();
         return BIO_CHECK_PT_FAIL;
     }
 

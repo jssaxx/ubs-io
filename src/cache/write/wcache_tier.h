@@ -75,6 +75,16 @@ public:
         return &mNegotiateIndexMap;
     }
 
+    inline void NegotiateIndexMapLockRead()
+    {
+        mNegotiateIndexMapLock.LockRead();
+    }
+
+    inline void NegotiateIndexMapUnLock()
+    {
+        mNegotiateIndexMapLock.UnLock();
+    }
+
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);
 
     BResult GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
@@ -134,7 +144,7 @@ private:
     SpinLock mEvictNegotiateMapLock;
     std::unordered_map<uint64_t, WCacheSliceRefPtr> mEvictNegotiateMap;
 
-    SpinLock mNegotiateIndexMapLock;
+    ReadWriteLock mNegotiateIndexMapLock;
     std::map<uint64_t, std::array<uint8_t, ARRAY_SIZE_IN_NEGOTIATE_MAP>> mNegotiateIndexMap;
     uint64_t mCurNegotiateIndex = { 0 };
 
