@@ -19,8 +19,13 @@ extern "C" {
 #define VENDOR_REGS_COUNT 3
 #define UNSUPPORTED_VENDOR_ID "HygonGenuine"
 
-int32_t GetCpuVendorId(char* vendorId)
+int32_t GetCpuVendorId(char* vendorId, size_t vendorLen)
 {
+    if (vendorId == NULL || vendorLen == 0) {
+        BDM_LOGERROR(0, "Invalid parameter: vendorId or vendorIdLen");
+        return BDM_CODE_ERR;
+    }
+
     uint32_t eax;
     uint32_t ebx;
     uint32_t ecx;
@@ -39,10 +44,10 @@ int32_t GetCpuVendorId(char* vendorId)
     return BDM_CODE_OK;
 }
 
-int32_t CheckCpuVendor()
+int32_t CheckCpuVendor(void)
 {
     char vendorId[VENDOR_NAME_MAX_LEN];
-    int32_t ret = GetCpuVendorId(vendorId);
+    int32_t ret = GetCpuVendorId(vendorId, sizeof(vendorId));
     if (ret != BDM_CODE_OK) {
         return ret;
     }

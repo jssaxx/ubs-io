@@ -134,10 +134,10 @@ uint32_t BdmGetNormalDiskNum(void)
     return num;
 }
 
-void BdmSetNormalDiskNum(uint32_t value)
+void BdmSetNormalDiskNum(uint32_t diskNum)
 {
     BDM_SPIN_LOCK(&g_bdmDisk.lock);
-    g_bdmDisk.num = value;
+    g_bdmDisk.num = diskNum;
     BDM_SPIN_UNLOCK(&g_bdmDisk.lock);
     return;
 }

@@ -68,7 +68,8 @@ public:
 
     static int64_t GetDiskCapacity(std::string &diskPath);
 
-    static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key, const std::string& newConfig);
+    static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
+                                   const std::string& newConfig);
 
     static int64_t FindTargetLine(const std::vector<std::string>& lines, const std::string& key);
 
@@ -256,7 +257,8 @@ inline int64_t FileUtil::FindTargetLine(const std::vector<std::string>& lines, c
     return -1; // Not found
 }
 
-inline bool FileUtil::AppendConfigToLine(std::vector<std::string>& lines, const std::string& key, const std::string& newConfig)
+inline bool FileUtil::AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
+                                         const std::string& newConfig)
 {
     int index = FindTargetLine(lines, key);
     if (index != -1) {

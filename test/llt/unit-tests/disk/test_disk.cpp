@@ -285,7 +285,7 @@ TEST_F(TestDisk, test_set_disk_used_status)
     ret = BdmCreate(&para, &g_bdmId);
     EXPECT_EQ(ret, BDM_CODE_OK);
 
-    BdmSetDiskUsedStatus(NO_1, true);;
+    BdmSetDiskUsedStatus(NO_1, true);
 }
 
 TEST_F(TestDisk, test_disk_alloc_case_return_fail)

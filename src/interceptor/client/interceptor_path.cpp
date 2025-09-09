@@ -13,8 +13,6 @@
 namespace ock {
 namespace bio {
 static const char DELIMITER = '/';
-static const std::string PARENT = "..";
-static const std::string SELF = ".";
 
 std::string AddPrefix(const std::string &prefix, const char *rawPath)
 {

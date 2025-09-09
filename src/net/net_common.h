@@ -41,7 +41,7 @@ struct Callback {
     Callback(CbFunc func, void *ctx) : cb(std::move(func)), cbCtx(ctx) {}
 };
 
-enum ConnectMode {
+enum class ConnectMode {
     CONNECT_IPC = 0,
     CONNECT_RPC = 1,
 };
@@ -85,7 +85,7 @@ struct ConnectInfo {
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
 
-enum Role {
+enum class Role {
     NET_CLIENT = 0,
     NET_SERVER = 1,
     NET_BUTT = 2,
@@ -100,7 +100,7 @@ struct NetOptions {
     bool isBusyLoop = false;                             /* busy for rdma only */
     uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
     bool regShmMem = false;                              /* register the memory to shared */
-    Role role = NET_BUTT;                                /* net service role */
+    Role role = Role::NET_BUTT;                                /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
     bool enableTls = false;                              /* tls switch */

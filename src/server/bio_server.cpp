@@ -312,7 +312,7 @@ BResult BioServer::BioNetInit()
     netOptions.ipMask = netConfig.dataIpMask;
     netOptions.port = netConfig.dataPort;
     netOptions.isBusyLoop = netConfig.isRpcBusyLoop;
-    netOptions.role = NET_SERVER;
+    netOptions.role = Role::NET_SERVER;
     netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
     netOptions.memorySize = mConfig->GetDaemonConfig().memCap;
     netOptions.regShmMem = true;
@@ -330,7 +330,7 @@ BResult BioServer::BioNetInit()
     ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
     netOptions.isBusyLoop = netConfig.isIpcBusyLoop;
-    netOptions.role = NET_SERVER;
+    netOptions.role = Role::NET_SERVER;
     netOptions.protocol = ServiceProtocol::SHM;
     netOptions.handlerCount = netConfig.ipcDataWorkersCnt;
     netOptions.connCount = netConfig.ipcDataWorkersCnt;
@@ -998,7 +998,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
 
 int32_t AddDisk(AddDiskRequest *req, AddDiskResponse *rsp)
 {
-    BResult ret;
+    BResult ret = BIO_ERR;
     ret = BioServer::Instance()->GetMirrorServer()->AddDisk(*req);
     return ret;
 }

@@ -132,7 +132,7 @@ BResult NetConnector::AsyncConnect(ConnectInfo &info, AsyncConnHandler &handler,
         return BIO_ALLOC_FAIL;
     }
 
-    task->mode = (info.srcId.nid == INVALID_NID) ? CONNECT_IPC : CONNECT_RPC;
+    task->mode = (info.srcId.nid == INVALID_NID) ? ConnectMode::CONNECT_IPC : ConnectMode::CONNECT_RPC;
     task->mEngine = mEngine;
     task->mConnectInfo = info;
     task->mSyncConnect = false;
@@ -155,7 +155,7 @@ BResult NetConnector::SyncConnect(ConnectInfo &info)
         return BIO_ALLOC_FAIL;
     }
 
-    task->mode = (info.srcId.nid == INVALID_NID) ? CONNECT_IPC : CONNECT_RPC;
+    task->mode = (info.srcId.nid == INVALID_NID) ? ConnectMode::CONNECT_IPC : ConnectMode::CONNECT_RPC;
     task->mEngine = mEngine;
     task->mConnectInfo = info;
     task->mSyncConnect = true;

@@ -703,7 +703,8 @@ BResult BioClientAgent::AddDisk(AddDiskRequest &req, AddDiskResponse &rsp)
 
 BResult BioClientAgent::SendAddDiskRequest(AddDiskRequest &req, AddDiskResponse &rsp)
 {
-    return net::BioClientNet::Instance()->SendSync<AddDiskRequest, AddDiskResponse>(INVALID_NID, BIO_OP_SDK_ADD_DISK, req, rsp);
+    return net::BioClientNet::Instance()->SendSync<AddDiskRequest, AddDiskResponse>(INVALID_NID,
+                                                                                    BIO_OP_SDK_ADD_DISK, req, rsp);
 }
 
 BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)

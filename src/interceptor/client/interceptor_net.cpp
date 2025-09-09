@@ -50,7 +50,7 @@ int32_t InterceptorClientNetService::StartNetService()
 
     NetOptions netOptions;
     netOptions.isBusyLoop = false;
-    netOptions.role = NET_CLIENT;
+    netOptions.role = Role::NET_CLIENT;
     netOptions.protocol = ServiceProtocol::SHM;
     netOptions.connCount = NO_4;
     netOptions.handlerCount = 1;
