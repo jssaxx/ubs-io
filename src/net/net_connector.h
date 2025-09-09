@@ -58,16 +58,16 @@ private:
     }
 
 private:
-    ConnectMode mode = CONNECT_RPC;           /* connect mode */
-    NetEngine *mEngine = nullptr;             /* engine, use raw pointer to avoid include files dead-locks */
-    ConnectInfo mConnectInfo{};               /* connect info */
-    BResult mResult = BIO_OK;                 /* connect result */
-    bool mSyncConnect = true;                 /* connect type */
-    bool mFinish = false;                     /* for sync connect */
-    std::mutex mMutex;                        /* for sync connect */
-    std::condition_variable mCV;              /* for sync connect */
-    AsyncConnHandler mAsyncHandler = nullptr; /* for async connect */
-    uintptr_t mUserCtx = 0;                   /* for async connect */
+    ConnectMode mode = ConnectMode::CONNECT_RPC;    /* connect mode */
+    NetEngine *mEngine = nullptr;                   /* engine, use raw pointer to avoid include files dead-locks */
+    ConnectInfo mConnectInfo{};                     /* connect info */
+    BResult mResult = BIO_OK;                       /* connect result */
+    bool mSyncConnect = true;                       /* connect type */
+    bool mFinish = false;                           /* for sync connect */
+    std::mutex mMutex;                              /* for sync connect */
+    std::condition_variable mCV;                    /* for sync connect */
+    AsyncConnHandler mAsyncHandler = nullptr;       /* for async connect */
+    uintptr_t mUserCtx = 0;                         /* for async connect */
 
     friend class NetConnector;
 };

@@ -21,11 +21,11 @@ class Configuration;
 
 using ConfigurationPtr = Ref<Configuration>;
 
-#define CONFIG_PATH "/opt/boostio/bin/conf/bio.conf"
-#define CONFIG_PATH_BAK "/opt/boostio/bin/conf/bio.conf.bak"
-#define CONFIG_PATH_BAK_INIT "/opt/boostio/bin/conf/bio.conf.bak.init"
+constexpr const char* CONFIG_PATH = "/opt/boostio/bin/conf/bio.conf";
+constexpr const char* CONFIG_PATH_BAK = "/opt/boostio/bin/conf/bio.conf.bak";
+constexpr const char* CONFIG_PATH_BAK_INIT = "/opt/boostio/bin/conf/bio.conf.bak.init";
 
-enum ConfValueType {
+enum class ConfValueType {
     VINT = 0,
     VFLOAT = 1,
     VSTRING = 2,

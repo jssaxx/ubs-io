@@ -27,7 +27,8 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
     BResult ret = BIO_OK;
     CreateFlowRequest req;
     if (flowInfo.opType == 0) {
-        req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowInfo.opType, 0, false };
+        req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
+                flowInfo.opType, 0, false };
     } else if (flowInfo.opType == 1) {
         req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowInfo.opType,
             flowInfo.flowId, flowInfo.isDegrade };

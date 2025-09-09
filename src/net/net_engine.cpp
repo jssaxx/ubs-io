@@ -415,7 +415,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         NET_LOG_INFO("Net ipc service has already created.");
         return BIO_OK;
     }
-    bool isOobSvr = opt.role != NET_CLIENT;
+    bool isOobSvr = opt.role != Role::NET_CLIENT;
     if (!isOobSvr) {
         mOptions = opt;
     }
@@ -505,7 +505,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
         return BIO_OK;
     }
     mOptions = opt;
-    bool isOobSvr = opt.role != NET_CLIENT;
+    bool isOobSvr = opt.role != Role::NET_CLIENT;
     mRpcService = NetService::Instance(opt.protocol, "BIO_RPC", isOobSvr);
     if (mRpcService == nullptr) {
         NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
@@ -686,7 +686,7 @@ void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &p
 
 BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
-    NetService *netService = (mode == CONNECT_IPC) ? mIpcService : mRpcService;
+    NetService *netService = (mode == ConnectMode::CONNECT_IPC) ? mIpcService : mRpcService;
     if (netService == nullptr) {
         NET_LOG_ERROR("Net service not ready.");
         return BIO_ERR;
@@ -698,7 +698,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         NetConnPayload payload(info.srcId);
-        if (mode == CONNECT_IPC) {
+        if (mode == ConnectMode::CONNECT_IPC) {
 #ifndef DEBUG_UT
             result = netService->Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
 #else

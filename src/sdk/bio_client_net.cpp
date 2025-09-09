@@ -240,7 +240,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
 
     // 2. start ipc service, 固定配置4个worker，4条EP链接.
     NetOptions netOptions;
-    netOptions.FillNetBaseConfigs(NO_4, NO_4, NET_CLIENT, ServiceProtocol::SHM);
+    netOptions.FillNetBaseConfigs(NO_4, NO_4, Role::NET_CLIENT, ServiceProtocol::SHM);
     netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
         netConf.privateKeyPath, netConf.privateKeyPassword, netConf.hseKfsMasterPath, netConf.hseKfsStandbyPath);
     ret = mNetEngine->Start(netOptions);
@@ -271,7 +271,7 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     NetOptions netOptions;
     netOptions.ipMask = std::move(ipMask);
     netOptions.port = port;
-    netOptions.role = NET_CLIENT;
+    netOptions.role = Role::NET_CLIENT;
     netOptions.isBusyLoop = false;
     netOptions.memorySize = defaultMemorySize;
     netOptions.protocol = protocol;

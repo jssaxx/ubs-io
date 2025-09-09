@@ -280,8 +280,8 @@ CResult Bio::Load(LoadPara &para, const ObjLocation location, const BioLoadCallb
             CLIENT_LOG_ERROR("Load failed, ret:" << result << ", key:" << para.key << ", location0:" <<
                 location.location[0] << ", location1:" << location.location[1] << ".");
         } else {
-            CLIENT_LOG_DEBUG("Load success, key:" << para.key << ", location0:" << location.location[0] << ", location1:" <<
-                location.location[1] << ".");
+            CLIENT_LOG_DEBUG("Load success, key:" << para.key << ", location0:" << location.location[0]
+                             << ", location1:" << location.location[1] << ".");
         }
         if (callback != nullptr && context != nullptr) {
             callback(context, ToCResult(result));
@@ -292,8 +292,8 @@ CResult Bio::Load(LoadPara &para, const ObjLocation location, const BioLoadCallb
     BResult ret = gClient->Load(para, location, cb, context);
     BIO_TRACE_END(SDK_TRACE_LOAD, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << para.key << ", offset:" << para.offset << ", length:"
-        << para.length << ", location:" << location.location[0] << ".");
+        CLIENT_LOG_ERROR("Load failed, ret:" << ret << ", key:" << para.key << ", offset:" << para.offset
+                         << ", length:" << para.length << ", location:" << location.location[0] << ".");
     }
     return ToCResult(ret);
 }
