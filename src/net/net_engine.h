@@ -843,9 +843,20 @@ private:
 #ifndef DEBUG_UT
         auto *netCallback = NewCallback(
             [this, ts, callback](NetServiceContext &context) {
-                AsyncCallDone(context.Result(), ts);
-                callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(),
-                    NetResult(context.Result()));
+                if (context.Result() != SER_OK) {
+                    AsyncCallDone(context.Result(), ts);
+                    callback.cb(callback.cbCtx,
+                                nullptr,
+                                0,
+                                NetResult(context.Result()));
+                } else {
+                    NetServiceOpInfo rspOpInfo = context.OpInfo();
+                    AsyncCallDone(rspOpInfo.errorCode, ts);
+                    callback.cb(callback.cbCtx,
+                                context.MessageData(),
+                                context.MessageDataLen(),
+                                rspOpInfo.errorCode);
+                }
             }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
 #else
@@ -878,13 +889,18 @@ private:
             [this, ts, callback](NetServiceContext &context) {
                 if (context.Result() != SER_OK) {
                     AsyncCallBuffDone(context.Result(), ts);
-                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(),
+                    callback.cb(callback.cbCtx,
+                                nullptr,
+                                0,
                                 NetResult(context.Result()));
                 } else {
                     NetServiceOpInfo rspOpInfo = context.OpInfo();
                     AsyncCallBuffDone(rspOpInfo.errorCode, ts);
-                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), rspOpInfo.errorCode);
-                    }
+                    callback.cb(callback.cbCtx,
+                                context.MessageData(),
+                                context.MessageDataLen(),
+                                rspOpInfo.errorCode);
+                }
         }, std::placeholders::_1);
         result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);
 #else
