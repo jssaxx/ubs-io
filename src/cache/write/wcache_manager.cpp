@@ -1089,6 +1089,7 @@ BResult WCacheManager::GetEvictNegotiateInfo()
         LOG_INFO("FlowId " << flowId << " :");
         uint64_t idx = 0;
         uint64_t indexInMap = 0;
+        item.second->NegotiateIndexMapLockRead();
         for (auto pair: (*mapPtr)) {
             uint8_t indexInArray = 0;
             for (const auto array: pair.second) {
@@ -1097,6 +1098,7 @@ BResult WCacheManager::GetEvictNegotiateInfo()
             indexInMap++;
             idx++;
         }
+        item.second->NegotiateIndexMapUnLock();
     }
     return BIO_OK;
 }

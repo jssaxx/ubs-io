@@ -83,6 +83,11 @@ inline bool IpUtil::FilterIpByMask(const std::string &ipMask, std::vector<std::s
 
     struct ifaddrs *iter = addresses;
     while (iter != nullptr) {
+        if ((iter->ifa_addr == nullptr) || (iter->ifa_addr->sa_family != AF_INET)) {
+            iter = iter->ifa_next;
+            continue;
+        }
+
         auto address = (reinterpret_cast<struct sockaddr_in *>(iter->ifa_addr))->sin_addr;
         if (iter->ifa_addr->sa_family != AF_INET || (address.s_addr & mask) != inputIpByMask) {
             iter = iter->ifa_next;

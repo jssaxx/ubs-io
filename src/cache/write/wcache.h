@@ -121,6 +121,16 @@ public:
         return mCacheTiers[WCACHE_MEMORY]->GetEvictMapPtr();
     }
 
+    inline void NegotiateIndexMapLockRead()
+    {
+        mCacheTiers[WCACHE_MEMORY]->NegotiateIndexMapLockRead();
+    }
+
+    inline void NegotiateIndexMapUnLock()
+    {
+        mCacheTiers[WCACHE_MEMORY]->NegotiateIndexMapUnLock();
+    }
+
     using RecoverCallback = std::function<BResult(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 
