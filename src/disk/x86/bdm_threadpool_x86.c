@@ -110,15 +110,15 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
 int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t cpuid, const char *poolName,
                                BDM_BATCH_CTX_S *batchCtx)
 {
-    if(thread == NULL) {
+    if (thread == NULL) {
         BDM_LOGERROR(0, "Invalid parameters, thread is nullptr.");
         return BDM_CODE_ERR;
     }
-    if(poolName == NULL) {
+    if (poolName == NULL) {
         BDM_LOGERROR(0, "Invalid parameters, poolName is nullptr.");
         return BDM_CODE_ERR;
     }
-    if(batchCtx == NULL) {
+    if (batchCtx == NULL) {
         BDM_LOGERROR(0, "Invalid parameters, batchCtx is nullptr.");
         return BDM_CODE_ERR;
     }
