@@ -347,6 +347,7 @@ void WCache::StartEvictTask(WCacheTierType type)
 
     if (!isSucceed) {
         mEvictRef[type].store(false);
+        DecreaseRef();
     }
     return;
 }
@@ -372,6 +373,7 @@ BResult WCache::StartEvictNegotiateTask()
             DecreaseRef();
         })) {
         mIsStartEvictNegotiate.store(false);
+        DecreaseRef();
     }
     return BIO_OK;
 }
@@ -407,6 +409,7 @@ void WCache::RetryEvictTask(WCacheTierType type)
 
     if (!isSucceed) {
         mEvictRef[type].store(false);
+        DecreaseRef();
     }
     return;
 }

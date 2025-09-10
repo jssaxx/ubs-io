@@ -50,8 +50,6 @@ public:
 
     FlowPtr CreateObject(FlowRole role, FlowType type, uint64_t flowId, uint32_t mediaId);
 
-    FlowPtr GetObject(FlowType type, uint64_t flowId);
-
     BResult DestroyObject(FlowType type, uint64_t flowId);
 
     BResult GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager);
