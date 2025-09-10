@@ -95,25 +95,6 @@ FlowPtr FlowManager::CreateObject(FlowRole role, FlowType type, uint64_t flowId,
     }
 }
 
-FlowPtr FlowManager::GetObject(FlowType type, uint64_t flowId)
-{
-    std::lock_guard<std::mutex> lock(mMutex);
-    ChkTrueNot(mInited, nullptr);
-    if (type == FLOW_MEMORY) {
-        auto it = mMemObjManager.find(flowId);
-        if (it != mMemObjManager.end()) {
-            return it->second;
-        }
-        return nullptr;
-    } else {
-        auto it = mDiskObjManager.find(flowId);
-        if (it != mDiskObjManager.end()) {
-            return it->second;
-        }
-        return nullptr;
-    }
-}
-
 BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
 {
     BResult ret = BIO_OK;
