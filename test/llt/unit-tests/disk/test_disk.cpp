@@ -14,7 +14,7 @@
 #include "bio_err.h"
 #include "bio_log.h"
 #include "bdm_threadpool.h"
-#include "rb_tree.h"
+#include "ngx_rbtree.h"
 #include "bdm_allocator.h"
 #include "test_disk.h"
 
@@ -385,62 +385,6 @@ TEST_F(TestDisk, test_disk_thread_destroy)
     pool = BdmThreadPoolCreate(1, NO_1024, &cpus, "pool", &batchCtx);
     ret = BdmThreadPoolDestroy(pool, 0);
     EXPECT_EQ(ret, BDM_CODE_OK);
-}
-
-struct RbNode *CreateNode()
-{
-    struct RbNode *node = (struct RbNode *)malloc(sizeof(struct RbNode));
-    if (node) {
-        node->rbParentColor = RB_RED;
-        node->rbLeft = node->rbRight = NULL;
-    }
-    return node;
-}
-
-TEST_F(TestDisk, test_disk_rb_tree)
-{
-    LOG_INFO("test_disk_rb_tree");
-    struct RbRoot *root = new RbRoot();
-    for (int i = 0; i < 10; i++) {
-        struct RbNode *node = CreateNode();
-        struct RbNode **newNode = &(root->rbNode);
-        struct RbNode *parent = nullptr;
-        while (*newNode) {
-            parent = *newNode;
-            if (node < *newNode) {
-                newNode = &((*newNode)->rbLeft);
-            }
-            else {
-                newNode = &((*newNode)->rbRight);
-            }
-        }
-        node->rbParentColor = (unsigned long)parent;
-        *newNode = node;
-        RbInsertColor(node, root);
-    }
-
-    if (root->rbNode->rbRight != nullptr) {
-        RbNext(root->rbNode->rbRight);
-        RbPrev(root->rbNode->rbRight);
-        RbErase(root->rbNode->rbRight, root);
-    }
-    if (root->rbNode->rbLeft != nullptr) {
-        RbNext(root->rbNode->rbLeft);
-        RbPrev(root->rbNode->rbRight);
-        RbErase(root->rbNode->rbLeft, root);
-    }
-    RbErase(root->rbNode, root);
-
-    for (int i = 0; i < 4; i++) {
-        auto ret = RbFirst(root);
-        EXPECT_FALSE(ret == nullptr);
-        RbNode *node = RbNext(root->rbNode);
-        if (node != nullptr) {
-            RbNext(node);
-            RbPrev(node);
-            RbErase(node, root);
-        }
-    }
 }
 
 TEST_F(TestDisk, test_disk_allocator_get_split_size_fail)
