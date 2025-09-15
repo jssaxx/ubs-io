@@ -24,11 +24,11 @@ void CmLogFunc(int logLevel, const char *funcName, int line, const char *fileNam
 
     va_start(argPtr, format);
     ret = vsnprintf_s(dataBuf, CM_LOG_BUF_LEN, sizeof(dataBuf) - 1, format, argPtr);
+    va_end(argPtr);
     if (ret < 0) {
         BIO_LOG_INTERNAL(logLevel, fileName, line, funcName, "vsnprintf_s failed.");
         return;
     }
-    va_end(argPtr);
 
     BIO_LOG_INTERNAL(logLevel, fileName, line, funcName, dataBuf);
     return;

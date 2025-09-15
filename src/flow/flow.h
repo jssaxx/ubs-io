@@ -40,6 +40,10 @@ public:
 
     BResult GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr);
 
+    BResult ValidateAndPreloadRange(uint64_t offset, uint32_t len);
+
+    BResult BuildFlowAddrs(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr);
+
     BResult TruncateOffset(uint64_t offset);
 
     BResult Seal();

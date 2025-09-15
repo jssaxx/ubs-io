@@ -13,6 +13,24 @@ namespace bio {
 BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr)
 {
     LOG_TRACE("Flow:" << mFlowId << ", type:" << mType << ", offset:" << offset << ", len:" << len);
+    BResult ret = ValidateAndPreloadRange(offset, len);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Validate and preload range failed, ret: " << ret << ".");
+        return ret;
+    }
+
+    ret = BuildFlowAddrs(offset, len, flowAddr);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Build flow address failed, ret: " <<ret << ".");
+        return ret;
+    }
+
+    PreLoadSchedule();
+    return BIO_OK;
+}
+
+BResult Flow::ValidateAndPreloadRange(uint64_t offset, uint32_t len)
+{
     bool isInvalidRange = false;
     LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL, &isInvalidRange, true);
     isInvalidRange = (offset < mTruncateOffset);
@@ -26,6 +44,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
         LOG_ERROR("Invalid offset:" << offset << ", flowId:" << mFlowId << ", len:" << len);
         return BIO_ERR;
     }
+
     if (offset + len > mPreLoadOffset) {
         BIO_TRACE_START(FLOW_TRACE_PRELOAD_MEMORY);
         BResult ret = BIO_INNER_ERR;
@@ -45,22 +64,39 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
             mWritenOffset = offset + len;
         }
     }
+    return BIO_OK;
+}
+
+BResult Flow::BuildFlowAddrs(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr)
+{
     BIO_TRACE_START(FLOW_TRACE_GETADDR);
+
     mLock.LockRead();
     uint64_t remainLen = len;
     uint64_t curOffset = offset - (mTruncateOffset / mChunkSize * mChunkSize);
     uint64_t curLen;
+    uint64_t idx;
+
     while (remainLen > 0) {
+        idx = curOffset / mChunkSize;
+        if (UNLIKELY(idx >= mChunkList.size())) {
+            mLock.UnLock();
+            LOG_ERROR("Address out of range! idx: " << idx << "mChunkList size: " << mChunkList.size() << ".");
+            BIO_TRACE_END(FLOW_TRACE_GETADDR, BIO_INNER_ERR);
+            return BIO_INNER_ERR;
+        }
+
         curLen = mChunkSize - curOffset % mChunkSize;
         curLen = (remainLen > curLen) ? curLen : remainLen;
+
         flowAddr.emplace_back(mChunkList[curOffset / mChunkSize], curOffset % mChunkSize, curLen);
+
         curOffset += curLen;
         remainLen -= curLen;
     }
+
     mLock.UnLock();
     BIO_TRACE_END(FLOW_TRACE_GETADDR, 0);
-
-    PreLoadSchedule();
     return BIO_OK;
 }
 
