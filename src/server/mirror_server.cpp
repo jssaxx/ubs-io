@@ -604,7 +604,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     ServiceContext &netCtx, GetRequest &req)
 {
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
-    uint32_t off = 0;
+    uint64_t off = 0;
     BResult ret = BIO_OK;
     BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
     LVOS_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
