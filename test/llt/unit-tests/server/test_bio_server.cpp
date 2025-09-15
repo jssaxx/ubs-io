@@ -1323,6 +1323,20 @@ TEST_F(TestBioServer, test_start_server_diagnose_handler_err_return_fail)
     LVOS_HVS_deactiveTracePoint(0, "CLI_SERVER_DIAGNOSE_HANDLER_ERR");
 }
 
+TEST_F(TestBioServer, test_start_server_diagnose_initfunc_null_return_fail)
+{
+    LOG_INFO("test_start_server_diagnose_handler_err_return_fail");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "CLI_SERVER_DIAGNOSE_INITFUNC_NULL", 0, 1, userParam);
+    auto ret = BioServer::Instance()->Start();
+    EXPECT_EQ(ret, BIO_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SERVER_START");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
+    LVOS_HVS_deactiveTracePoint(0, "CLI_SERVER_DIAGNOSE_INITFUNC_NULL");
+}
+
 TEST_F(TestBioServer, test_start_server_diagnose_init_err_return_fail)
 {
     LOG_INFO("test_start_server_diagnose_init_err_return_fail");

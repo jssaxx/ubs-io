@@ -47,6 +47,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(RCACHE_EVICT_THREAD_FAIL, "rcache evict thread err", CommonTp::PointerValueCallback);
     LVOS_TP_REG(CLI_AGENT_INIT_ERR, "cli agent init err", CommonTp::IntValueCallback);
     LVOS_TP_REG(CLI_SERVER_DIAGNOSE_HANDLER_ERR, "cli server handler err", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(CLI_SERVER_DIAGNOSE_INITFUNC_NULL, "cli server init func null err", CommonTp::PointerValueCallback);
     LVOS_TP_REG(CLI_SERVER_DIAGNOSE_INIT_ERR, "cli server init err", CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_FLOW_DISK_FAIL, "wcache flow disk err", CommonTp::IntValueCallback);
     LVOS_TP_REG(SYNCCALL_FAIL, "synccall err", CommonTp::IntValueCallback);
@@ -149,8 +150,10 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(GET_UNDERFS_NO_STAT, "underfs stat ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(GET_UNDERFS_MODIFY_REALLENGTH, "external get modify real length", CommonTp::IntValueCallback);
     LVOS_TP_REG(GET_UNDERFS_NOT_ENOUGHRESOURCE, "external get not enough resource", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(GET_UNDERFS_ENABLE_CRC, "external get enable crc", CommonTp::BoolValueCallback);
     LVOS_TP_REG(GET_EXTERNAL_GETUNDERFS_OK, "external get underfs ok", CommonTp::BoolValueCallback);
     LVOS_TP_REG(GET_EXTERNAL_RCACHE_MALLOC_FAIL, "external get rcache malloc fail", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(GET_EXTERNAL_WCSLICE_ALLOC_FAIL, "external get wcslice malloc fail", CommonTp::PointerValueCallback);
     LVOS_TP_REG(GET_EXTERBAL_OPEN_CRC, "external get open crc", CommonTp::BoolValueCallback);
     LVOS_TP_REG(GET_EXTERBAL_CRC_OK, "external get crc OK", CommonTp::IntValueCallback);
     LVOS_TP_REG(GET_CACHE_HIT, "get cache hit fail", tp::CommonTp::NoProcessCallback);
@@ -194,6 +197,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(RCACHE_EVICT_THREAD_FAIL);
     LVOS_TP_UNREG(CLI_AGENT_INIT_ERR);
     LVOS_TP_UNREG(CLI_SERVER_DIAGNOSE_HANDLER_ERR);
+    LVOS_TP_UNREG(CLI_SERVER_DIAGNOSE_INITFUNC_NULL);
     LVOS_TP_UNREG(CLI_SERVER_DIAGNOSE_INIT_ERR);
     LVOS_TP_UNREG(WCACHE_FLOW_DISK_FAIL);
     LVOS_TP_UNREG(SYNCCALL_FAIL);
@@ -298,8 +302,10 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(GET_UNDERFS_NO_STAT);
     LVOS_TP_UNREG(GET_UNDERFS_MODIFY_REALLENGTH);
     LVOS_TP_UNREG(GET_UNDERFS_NOT_ENOUGHRESOURCE);
+    LVOS_TP_UNREG(GET_UNDERFS_ENABLE_CRC);
     LVOS_TP_UNREG(GET_EXTERNAL_GETUNDERFS_OK);
     LVOS_TP_UNREG(GET_EXTERNAL_RCACHE_MALLOC_FAIL);
+    LVOS_TP_UNREG(GET_EXTERNAL_WCSLICE_ALLOC_FAIL);
     LVOS_TP_UNREG(GET_EXTERBAL_OPEN_CRC);
     LVOS_TP_UNREG(GET_EXTERBAL_CRC_OK);
 }
