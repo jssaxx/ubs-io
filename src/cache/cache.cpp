@@ -225,6 +225,35 @@ BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint6
     return BIO_OK;
 }
 
+BResult Cache::CalculateDataCrc(const SlicePtr &value, SlicePtr slice)
+{
+    uint32_t dataCrc = 0;
+    auto ret = value->CalculateDataCrc(dataCrc, 0, value->GetLength());
+    if (ret != BIO_OK) {
+        LOG_ERROR("Calculate crc fail, ret" << ret << ".");
+    } else {
+        slice->SetDataCrc(dataCrc);
+    }
+    return ret;
+}
+
+inline BResult Cache::WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr fromSlice, SlicePtr destSlice,
+    bool crcFlag, const Key &key)
+{
+    auto ret = sliceWriter(fromSlice, destSlice);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Call slice writer failed, ret:" << ret << ", key:" << key << ".");
+        return ret;
+    }
+    if (crcFlag) {
+        ret = CalculateDataCrc(fromSlice, destSlice);
+    }
+    if (ret != BIO_OK) {
+        LOG_ERROR("Call slice writer calculate crc failed, ret:" << ret << ", key:" << key << ".");
+    }
+    return ret;
+}
+
 BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
     uint64_t &realLen)
 {
@@ -249,12 +278,13 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     ret = mRCacheManager->CheckEnoughResource(slice->GetPtId(), enoughResource);
     LVOS_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
     LVOS_TP_END;
+    void *memAddr = nullptr;
     if (enoughResource) {
         LVOS_TP_START(GET_EXTERNAL_RCACHE_MALLOC_FAIL, &wcSlicePtr, nullptr);
         mRCacheManager->AllocResources(slice->GetPtId(), totalLen, wcSlicePtr);
         LVOS_TP_END
         if (LIKELY(wcSlicePtr == nullptr)) {
-            void *memAddr = aligned_alloc(NO_4096, realLen);
+            memAddr = aligned_alloc(NO_4096, realLen);
             ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
             isFromRCache = false;
             MrInfo mrInfo = { reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen) };
@@ -262,15 +292,24 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
             wcSlicePtr = MakeRef<WCacheSlice>(0, 0, 0, realLen, addrVec, FLOW_MEMORY);
         }
     } else {
-        void *memAddr = aligned_alloc(NO_4096, realLen);
+        memAddr = aligned_alloc(NO_4096, realLen);
         ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
         isFromRCache = false;
         MrInfo mrInfo = { reinterpret_cast<uint64_t>(memAddr), static_cast<uint32_t>(realLen) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         wcSlicePtr = MakeRef<WCacheSlice>(0, 0, 0, realLen, addrVec, FLOW_MEMORY);
     }
-    ChkTrue(wcSlicePtr != nullptr, BIO_ALLOC_FAIL, "new WCacheSlicePtr failed.");
-
+    if (wcSlicePtr == nullptr) {
+        LOG_ERROR("Alloc wCacheSlicePtr failed.");
+        if (memAddr != nullptr) {
+            free(memAddr);
+        }
+        return BIO_ALLOC_FAIL;
+    }
+    bool crcFlag = false;
+    crcFlag = BioConfig::Instance()->GetDaemonConfig().enableCrc;
+    LVOS_TP_START(GET_UNDERFS_ENABLE_CRC, &crcFlag, true);
+    LVOS_TP_END;
     ret = BIO_INNER_ERR;
     do {
         // 3. 从underFS读取数据.
@@ -294,35 +333,23 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
                 LOG_ERROR("Get partial slice from whole slice fail.");
                 break;
             }
-            ret = sliceWriter(partailSlice, slice.Get());
+            ret = WriteToDesSlice(sliceWriter, partailSlice, slice.Get(), crcFlag, key);
         } else {
-            ret = sliceWriter(wcSlicePtr.Get(), slice.Get());
+            ret = WriteToDesSlice(sliceWriter, wcSlicePtr.Get(), slice.Get(), crcFlag, key);
         }
         if (ret != BIO_OK) {
-            LOG_ERROR("Call slice writer failed, ret:" << ret << ", key:" << key << ", is from read cache:" <<
-                isFromRCache);
+            LOG_ERROR("Call slice writer to dest slice failed, key:" << key << ", ret" << ret << ".");
             break;
-        }
-
-        bool crcFlag = BioConfig::Instance()->GetDaemonConfig().enableCrc;
-        LVOS_TP_START(GET_EXTERBAL_OPEN_CRC, &crcFlag, true);
-        LVOS_TP_END;
-        if (crcFlag) {
-            uint32_t dataCrc = 0;
-            LVOS_TP_START(GET_EXTERBAL_CRC_OK, &ret, BIO_OK);
-            ret = wcSlicePtr->CalculateDataCrc(dataCrc, 0, wcSlicePtr->GetLength());
-            LVOS_TP_END;
-            if (ret != BIO_OK) {
-                LOG_ERROR("get object from underfs, calculate crc fail, ret" << ret << ".");
-                break;
-            } else {
-                wcSlicePtr->SetDataCrc(dataCrc);
-                slice->SetDataCrc(dataCrc);
-            }
         }
 
         // 5. 根据资源来历决定是否写入到RCache.
         if (isFromRCache) {
+            if (crcFlag) {
+                ret = CalculateDataCrc(wcSlicePtr.Get(), wcSlicePtr.Get());
+            }
+            if (ret != BIO_OK) {
+                break;
+            }
             ret = mRCacheManager->Put(slice->GetPtId(), key, wcSlicePtr);
             LOG_DEBUG("Get key info from under insert  read cache, ret:" << ret << ", key:" << key << ".");
         }

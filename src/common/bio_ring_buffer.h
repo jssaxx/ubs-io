@@ -249,7 +249,7 @@ public:
     inline bool PushFrontN(T *items, uint32_t n)
     {
         mLock.Lock();
-        if (mCapacity < (mCount + n)) {
+        if (n > mCapacity || mCount > (mCapacity - n)) {
             mLock.UnLock();
             return false;
         }
@@ -282,7 +282,7 @@ public:
     inline bool PushBackN(T *items, uint32_t n)
     {
         mLock.Lock();
-        if (mCapacity < (mCount + n)) {
+        if (n > mCapacity || mCount > (mCapacity - n)) {
             mLock.UnLock();
             return false;
         }

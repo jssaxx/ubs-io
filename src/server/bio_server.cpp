@@ -620,6 +620,13 @@ BResult BioServer::BioServerDiagnoseInitInner()
     }
 
     ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
+    LVOS_TP_START(CLI_SERVER_DIAGNOSE_INITFUNC_NULL, &serverInitFunc, nullptr);
+    LVOS_TP_END;
+    if (serverInitFunc == nullptr) {
+        dlclose(handler);
+        return BIO_INNER_ERR;
+    }
+
     BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(CLI_SERVER_DIAGNOSE_INIT_ERR, &ret, BIO_ERR);
     ret = serverInitFunc();

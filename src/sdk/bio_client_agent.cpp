@@ -42,6 +42,7 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
 
         if (InitOperation() != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to init operation.");
+            dlclose(handler);
             return BIO_INNER_ERR;
         }
 
@@ -52,6 +53,7 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
         LVOS_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to start bio server, ret:" << ret << ".");
+            dlclose(handler);
             return BIO_INNER_ERR;
         }
     }
@@ -540,10 +542,12 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
             return BIO_INNER_ERR;
         }
         if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
+            delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
             return BIO_INVALID_PARAM;
         }
     }
     if (!CheckGetSliceRsp(rsp)) {
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         return BIO_INNER_ERR;
     }
     return BIO_OK;

@@ -140,6 +140,7 @@ bool ProxyOperationsLoader::LoadProxyOperations()
     if (operations == nullptr) {
         INTERCEPTORLOG_WARN("Getting null operations from  %s",
             operationsFuncsName.c_str(), workProxy.c_str());
+        dlclose(handle);
         return false;
     }
     return true;
@@ -158,6 +159,7 @@ bool ProxyOperationsLoader::LoadProxyInitFunc()
     if (ret != 0) {
         INTERCEPTORLOG_WARN("Failed to Init %s, error(%d)", workProxy.c_str(),
             proxyInitFuncName.c_str(), ret);
+        dlclose(handle);
         return false;
     }
     return true;
@@ -177,5 +179,6 @@ void ProxyOperationsLoader::LoadProxyExitFunc()
         return;
     }
     proxyExitFunc();
+    dlclose(handle);
     operations = nullptr;
 }

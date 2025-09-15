@@ -95,6 +95,11 @@ public:
 private:
     BResult GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_t length, const uint64_t offset);
 
+    BResult CalculateDataCrc(const SlicePtr &value, SlicePtr slice);
+
+    inline BResult WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr fromSlice, SlicePtr destSlice,
+        bool crcFlag, const Key &key);
+
     BResult GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
         uint64_t &realLen);
 

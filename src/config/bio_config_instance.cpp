@@ -251,12 +251,12 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     StrUtil::Split(mDaemonConfig.memReadWriteRatio, ":", ratios);
     StrUtil::StrToLong(ratios[0], mDaemonConfig.memReadRatio);
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.memWriteRatio);
+
     ratios.clear();
     mDaemonConfig.diskReadWriteRatio = conf->GetStr(DISK_READ_WRITE_RATIO.first);
     StrUtil::Split(mDaemonConfig.diskReadWriteRatio, ":", ratios);
     StrUtil::StrToLong(ratios[0], mDaemonConfig.diskReadRatio);
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.diskWriteRatio);
-
     if (mDaemonConfig.memCap == 0) {
         LOG_INFO("This server config  memory is 0, disk config is invalid , server can not join pt.");
     }
