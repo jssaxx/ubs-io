@@ -55,6 +55,8 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane)
     auto chInfo = new (std::nothrow) ChannelInfo(dstNid, ch);
     if (UNLIKELY(chInfo == nullptr)) {
         NET_LOG_ERROR("Alloc memory failed.");
+        mChannelNodeMap.erase(ch->Id());
+        free(chNode);
         return BIO_ALLOC_FAIL;
     }
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));

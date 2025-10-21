@@ -587,7 +587,20 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
 BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp,
     GetRequest &req)
 {
-    ChkTrue(lMrVec.size() <= SLICE_ADDR_SIZE, BIO_INNER_ERR, "Local mr size exceed 4, size:" << lMrVec.size() << ".");
+    auto lMrSize = lMrVec.size();
+    LVOS_TP_START(WCACHE_READ_LOCAL_RMRSIZE_ERR, &lMrSize, NO_5);
+    LVOS_TP_END;
+    if (UNLIKELY(lMrSize > SLICE_ADDR_SIZE)) {
+        if (isAlloc) {
+            for (auto mr : lMrVec) {
+                LVOS_TP_START(NO_PROCESS_MEM_FREE, 0);
+                BioServer::Instance()->MemFree(mr.address);
+                LVOS_TP_END;
+            }
+        }
+        LOG_ERROR("Local mr size exceed 4, size:" << lMrVec.size() << ".");
+        return BIO_INNER_ERR;
+    }
     rsp.isAlloc = isAlloc;
     rsp.num = lMrVec.size();
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
@@ -603,7 +616,20 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
 BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
     ServiceContext &netCtx, GetRequest &req)
 {
-    ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
+    auto rMrSize = rMrVec.size();
+    LVOS_TP_START(WCACHE_READ_REMOTE_RMRSIZE_ERR, &rMrSize, NO_4);
+    LVOS_TP_END;
+    if (UNLIKELY(rMrSize != NO_1)) {
+        if (isAlloc) {
+            for (auto mr : lMrVec) {
+                LVOS_TP_START(NO_PROCESS_MEM_FREE, 0);
+                BioServer::Instance()->MemFree(mr.address);
+                LVOS_TP_END;
+            }
+        }
+        LOG_ERROR("Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
+        return BIO_INNER_ERR;
+    }
     uint64_t off = 0;
     BResult ret = BIO_OK;
     BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);

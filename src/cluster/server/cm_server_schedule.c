@@ -35,6 +35,7 @@ int32_t CmServerScheduleInit(void)
             CmThreadPoolCreate(CM_SERVER_THREAD_NUM, CM_SERVER_QUEUE_SIZE, 0, CM_SERVER_THREADPOOL_NAME);
         if (g_scheduleThread[i] == NULL) {
             CM_LOGERROR("Threadpool create failed.");
+            CmServerScheduleExit();
             return RETURN_ERROR;
         }
     }
