@@ -303,6 +303,7 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
         LOG_ERROR("Alloc wCacheSlicePtr failed.");
         if (memAddr != nullptr) {
             free(memAddr);
+            memAddr = nullptr;
         }
         return BIO_ALLOC_FAIL;
     }

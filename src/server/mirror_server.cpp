@@ -1434,7 +1434,8 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
         }
         sliceP->SetDataCrc(req->dataCrc);
     } else { // case 2：slice资源来自于Server端, 使用req中的slice buffer信息
-        if (UNLIKELY(ctx.MessageDataLen() < sizeof(PutRequest) + req->sliceLen)) {
+        if (UNLIKELY((sizeof(PutRequest) > UINT64_MAX - req->sliceLen) ||
+                     (ctx.MessageDataLen() < sizeof(PutRequest) + req->sliceLen))) {
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
             return BIO_OK;
         }

@@ -77,6 +77,10 @@ size_t HookFread(void* ptr, size_t size, size_t count, FILE* stream)
         !InitNativeHook() || CHECKNATIVEFUNC(fread)) {
         return 0;
     }
+    // 检查size * count是否会溢出size_t
+    if (size > 0 && count > SIZE_MAX / size) {
+        return 0;
+    }
     if (CHECKPROXYLOADED || CHECKPROXYFUNC(fread)) {
         return NATIVE(fread)(ptr, size, count, stream);
     }
