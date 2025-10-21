@@ -257,7 +257,8 @@ void PrometheusManager::UpdateTraceData()
         }
 
         uint16_t nodeId = tracePoints.first;
-        for (auto traceData : tracePoints.second.traces) {
+        for (int i = 0; i < tracePoints.second.count; ++i) {
+            const auto &traceData = tracePoints.second.traces[i];
             auto traceName = traceData.traceName;
             auto beginData = traceData.metrics.beginData;
             auto goodEndData = traceData.metrics.goodEnd;

@@ -359,6 +359,7 @@ void BioServer::BioNetExit()
 BResult BioServer::BioCmInit()
 {
     CmOptions cmOptions;
+    BResult result = BIO_OK;
     cmOptions.role = ROLE_TOGETHER;
     cmOptions.zkIpMask = mConfig->GetCmConfig().zkHost;
     cmOptions.groups.groupId = static_cast<uint16_t>(mConfig->GetCmConfig().groupId);
@@ -371,7 +372,7 @@ BResult BioServer::BioCmInit()
     mCm = Cm::Instance();
     ChkTrue(mCm != nullptr, BIO_ERR, "cm instance is nullptr.");
 
-    auto result = mCm->Initialize(cmOptions);
+    result = mCm->Initialize(cmOptions);
     ChkTrue(result == BIO_OK, BIO_ERR, "Cm Initialize failed, result:" << result << ".");
 
     auto &daemonConfig = mConfig->GetDaemonConfig();

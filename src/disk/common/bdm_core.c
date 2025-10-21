@@ -456,9 +456,5 @@ int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
 
 uint32_t BdmGetDiskCount()
 {
-    if (g_bdmCount != 0) {
-        return g_bdmCount - 1;
-    }
-
-    return 0;
+    return g_bdmCount;
 }
