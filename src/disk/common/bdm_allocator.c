@@ -268,6 +268,9 @@ static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *temp, ngx_rbtree_node_t
 static int32_t BdmAllocatorInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
 {
     ngx_rbtree_t *root = &realize->root;
+    if (root == NULL) {
+        return BDM_CODE_INVALID_PARAM;
+    }
 
     InsertCbContext context = {.realize = realize, .eraseNode = NULL, .chunk = chunk, .result = BDM_CODE_OK};
     ngx_rbtree_insert(root, &chunk->node, &context);
@@ -311,6 +314,9 @@ static int32_t BdmAllocatorRemoveSameLen(BdmChunkIndex *chunk, BdmAllocatorReali
                                          uint64_t bucketOffset, uint64_t freeIndex, uint64_t *index)
 {
     ngx_rbtree_t *root = &realize->root;
+    if (root == NULL) {
+        return BDM_CODE_INVALID_PARAM;
+    }
     *index = chunk->index;
     DListDel(&chunk->head);
     realize->free[freeIndex].count--;
@@ -326,6 +332,9 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
                                          uint64_t bucketOffset, uint64_t length, uint64_t *index)
 {
     ngx_rbtree_t *root = &realize->root;
+    if (root == NULL) {
+        return BDM_CODE_INVALID_PARAM;
+    }
     BdmChunkIndex *neighChunk = (BdmChunkIndex *)(chunk + length);
     neighChunk->index = chunk->index + length;
     neighChunk->length = chunk->length - length;
@@ -347,7 +356,7 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
     if (ret != BDM_CODE_OK) {
         return ret;
     }
-    ngx_rbtree_replace(&realize->root, &neighChunk->node, &chunk->node);
+    ngx_rbtree_replace(root, &neighChunk->node, &chunk->node);
     return BDM_CODE_OK;
 }
 

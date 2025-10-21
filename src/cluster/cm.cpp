@@ -262,7 +262,7 @@ void Cm::FillPtInfo(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmP
     pt.masterDiskId = ptList->ptEntryList[index].masterDiskId;
 }
 
-void Cm::FillPtCopyList(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmCopyState ptState[])
+int32_t Cm::FillPtCopyList(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const CmCopyState ptState[])
 {
     for (uint16_t idx = 0; idx < ptList->maxCopyNum; idx++) {
         uint16_t vIdx = idx;
@@ -273,11 +273,12 @@ void Cm::FillPtCopyList(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const
         if (vIdx < PT_MAX_COPY_INDEX && (ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_INIT ||
                                          ptList->ptEntryList[index].copyList[vIdx].state == PT_COPY_STATE_OUT)) {
             LOG_ERROR("Impossible, ptId:" << ptList->ptEntryList[index].ptId);
-            throw std::runtime_error("Invalid state");
+            return -1;
         }
 
         if (vIdx >= PT_MAX_COPY_INDEX) {
-            throw std::runtime_error("Index out of bounds");
+            LOG_ERROR("Impossible copy num : " << vIdx);
+            return -1;
         }
         CmPtCopy copy;
         copy.nodeId = ptList->ptEntryList[index].copyList[vIdx].nodeId;
@@ -285,6 +286,7 @@ void Cm::FillPtCopyList(PtEntryList *ptList, uint16_t index, CmPtInfo &pt, const
         copy.state = ptState[ptList->ptEntryList[index].copyList[vIdx].state];
         pt.copys.push_back(copy);
     }
+    return 0;
 }
 
 int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
@@ -317,7 +319,11 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
 
         CmPtInfo pt;
         FillPtInfo(ptList, index, pt, ptState);
-        FillPtCopyList(ptList, index, pt, copyState);
+        int32_t ret = FillPtCopyList(ptList, index, pt, copyState);
+        if (ret != 0) {
+            LOG_ERROR("Fill pt copy list failed, ret :" << ret);
+            return ret;
+        }
 
         cm->mPtInfos[pt.ptId] = CmPtInfo();
         cm->mPtInfos[pt.ptId].Clone(pt);

@@ -294,10 +294,6 @@ static int32_t CmServerViewBuildNode(uint16_t poolId, uint16_t nodeId, bool isIn
     PoolInfo *pool = spool->pool;
     NodeInfo *nodeInfo = &spool->nodeList->nodeList[nodeId];
     NodeStateInfo *nodeState = &spool->stateList->nodeList[nodeId];
-    if (spool->nodeList == NULL || spool->stateList == NULL) {
-        CM_LOGERROR("nodeList or stateList is NULL for poolId(%u)", poolId);
-        return CM_ERR;
-    }
 
     if (nodeState->state == NODE_STATE_INVALID) {
         return CM_OK;

@@ -262,5 +262,6 @@ int32_t BdmThreadPoolDestroy(BDM_THREAD_POOL_S *threadPool, int32_t flags)
     }
 
     free(threadPool);
+    threadPool = NULL;
     return BDM_CODE_OK;
 }
