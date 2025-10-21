@@ -33,6 +33,10 @@ static void HandleSigterm(int signum)
 int main(int argc, char *argv[])
 {
     auto bioServer = BioServer::Instance();
+    if (bioServer == nullptr) {
+        std::cout << "BioServer init failed!" << std::endl;
+        return -1;
+    }
     auto ret = bioServer->Start();
     if (ret != BIO_OK) {
         std::cout << "BoostIO Daemon Start Fail." << std::endl;
