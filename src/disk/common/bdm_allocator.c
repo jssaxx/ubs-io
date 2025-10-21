@@ -358,6 +358,11 @@ static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketI
     uint64_t freeIndex;
     int32_t ret;
 
+    if (realize == NULL) {
+        BDM_LOGERROR(0, "Invalid allocator.");
+        return BDM_CODE_INVALID_PARAM;
+    }
+
     if (realize->minChunkSize == 0) {
         return BDM_CODE_ERR;
     }
@@ -394,6 +399,11 @@ int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64
                                uint64_t *chunkId)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
+
+    if (realize == NULL) {
+        BDM_LOGERROR(0, "Invalid allocator.");
+        return BDM_CODE_INVALID_PARAM;
+    }
 
     BDM_RWLOCK_WRLOCK(&realize->lock);
     int32_t ret = BdmAllocatorRemove(realize, bucketId, bucketOffset, chunkId, chunkSize);
@@ -442,6 +452,11 @@ int32_t BdmAllocatorFreeChunk(BdmAllocator allocator, uint64_t chunkSize, uint64
 int32_t BdmAllocatorCheckChunk(BdmAllocator allocator, uint64_t chunkId, uint64_t offset, uint64_t length)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
+    if (realize == NULL) {
+        BDM_LOGERROR(0, "Invalid allocator.");
+        return BDM_CODE_INVALID_PARAM;
+    }
+
     if (chunkId >= realize->chunkNum) {
         BDM_LOGERROR(0, "Invalid chunk id(%llu), chunk num(%llu).", chunkId, realize->chunkNum);
         return BDM_CODE_INVALID_CHUNK_ID;
@@ -473,6 +488,10 @@ int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint
                                  uint64_t *bucketOffset)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
+    if (realize == NULL) {
+        BDM_LOGERROR(0, "Invalid allocator.");
+        return BDM_CODE_INVALID_PARAM;
+    }
     BdmChunkMeta *chunkMeta = (BdmChunkMeta *)realize->metaAddr + realize->scanIndex;
     uint64_t chunkIndex = realize->scanIndex;
     while (chunkIndex < realize->chunkNum) {
@@ -638,6 +657,11 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
 int32_t BdmAllocatorDestroy(BdmAllocator allocator)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
+    if (realize == NULL) {
+        BDM_LOGERROR(0, "Invalid allocator.");
+        return BDM_CODE_INVALID_PARAM;
+    }
+
     BDM_LOGINFO(0, "Allocator destroy, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
                 realize->maxChunkSize, realize->totalSize);
     BDM_RWLOCK_DESTROY(&realize->lock);

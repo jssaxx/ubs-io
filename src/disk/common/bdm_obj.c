@@ -190,6 +190,10 @@ BdmDiskState BdmGetBdmStatus(uint32_t bdmId)
 
 void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status)
 {
+    if (bdmId >= BDM_MAX_NUM) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u) .", bdmId);
+        return;
+    }
     if (g_bdmObj.list[bdmId].obj == NULL) {
         BDM_LOGERROR(0, "Bdm set disk status failed, bdm id(%u).", bdmId);
         return;

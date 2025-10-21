@@ -162,6 +162,10 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
 
         uint32_t segmentSize = BioServer::Instance()->GetNetEngine()->GetDataPage();
         auto addrP = reinterpret_cast<ObjStat *>(lAddress);
+        if (addrP == nullptr) {
+            LOG_ERROR("Invalid address!");
+            return;
+        }
         uint32_t totalSize = 0;
         for (auto &obj : objs) {
             totalSize += sizeof(ObjStat);
