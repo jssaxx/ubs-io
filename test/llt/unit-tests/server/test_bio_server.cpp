@@ -419,6 +419,43 @@ TEST_F(TestBioServer, test_bio_server_get_check_key)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestBioServer, test_bio_server_get_read_local_lmrSize_err)
+{
+    LOG_INFO("test_bio_server_get_read_local_lmrSize_err");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    bool isAlloc = true;
+    NetMrInfo mrinfo { 0, 0, 0 };
+    std::vector<NetMrInfo> lMrVec { mrinfo };
+    GetResponse rsp;
+    GetRequest req;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_READ_LOCAL_RMRSIZE_ERR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MEM_FREE", 0, 1, userParam);
+    auto ret = mirror->WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_READ_LOCAL_RMRSIZE_ERR");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_MEM_FREE");
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+}
+
+TEST_F(TestBioServer, test_bio_server_get_read_remote_lmrSize_err)
+{
+    LOG_INFO("test_bio_server_get_read_remote_lmrSize_err");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    bool isAlloc = true;
+    NetMrInfo mrinfo { 0, 0, 0 };
+    std::vector<NetMrInfo> lMrVec { mrinfo };
+    std::vector<NetMrInfo> rMrVec { mrinfo };
+    ServiceContext ctx;
+    GetRequest req;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "WCACHE_READ_REMOTE_RMRSIZE_ERR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MEM_FREE", 0, 1, userParam);
+    auto ret = mirror->WriterRemote(isAlloc, lMrVec, rMrVec, ctx, req);
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_READ_REMOTE_RMRSIZE_ERR");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_MEM_FREE");
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+}
+
 TEST_F(TestBioServer, test_bio_server_get_read_err_reply_return_ok)
 {
     LOG_INFO("test_bio_server_get_read_err_reply_return_ok");

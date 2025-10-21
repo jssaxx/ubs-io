@@ -21,6 +21,9 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(SLICE_OPERATOR_2_FLOW_MEMORY, "slice operator to flow memory err", CommonTp::IntValueCallback);
     LVOS_TP_REG(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, "recover alloc object err", CommonTp::IntValueCallback);
     LVOS_TP_REG(WCACHE_READ_CALLBACK_FAIL, "wcache read callback err", CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_READ_REMOTE_RMRSIZE_ERR, "wcache read remote rmr size error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_READ_LOCAL_RMRSIZE_ERR, "wcache read local rmr size error", CommonTp::IntValueCallback);
+    LVOS_TP_REG(NO_PROCESS_MEM_FREE, "wcache read local no mem free", CommonTp::NoProcessCallback);
     LVOS_TP_REG(LOG_INIT_FAIL, "log init err", CommonTp::IntValueCallback);
     LVOS_TP_REG(TRACE_FILE_OPPEN_FAIL, "trace file open err", CommonTp::IntValueCallback);
     LVOS_TP_REG(EVICT_NEGOTIATE_VECTOR_EMPTY, "evict negotiate vectort is empty", CommonTp::BoolValueCallback);
@@ -172,6 +175,9 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(SLICE_OPERATOR_2_FLOW_MEMORY);
     LVOS_TP_UNREG(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL);
     LVOS_TP_UNREG(WCACHE_READ_CALLBACK_FAIL);
+    LVOS_TP_UNREG(WCACHE_READ_REMOTE_RMRSIZE_ERR);
+    LVOS_TP_UNREG(WCACHE_READ_LOCAL_RMRSIZE_ERR);
+    LVOS_TP_UNREG(NO_PROCESS_MEM_FREE);
     LVOS_TP_UNREG(LOG_INIT_FAIL);
     LVOS_TP_UNREG(TRACE_FILE_OPPEN_FAIL);
     LVOS_TP_UNREG(EVICT_NEGOTIATE_VECTOR_EMPTY);

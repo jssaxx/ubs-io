@@ -134,6 +134,7 @@ bool ProxyOperationsLoader::LoadProxyOperations()
     if (getOperationsFuncs == nullptr) {
         INTERCEPTORLOG_DEBUG("%s does not has symbol %s, error(%s)",
             workProxy.c_str(), operationsFuncsName.c_str(), dlerror());
+        dlclose(handle);
         return false;
     }
     operations = getOperationsFuncs(&(NativeOperationsLoader::GetInstance().GetProxy()));
@@ -176,6 +177,7 @@ void ProxyOperationsLoader::LoadProxyExitFunc()
         INTERCEPTORLOG_DEBUG("Symbol(%s) of %s is ambiguous, error(%s)", proxyExitFuncName.c_str(),
             workProxy.c_str(), dlerror());
         operations = nullptr;
+        dlclose(handle);
         return;
     }
     proxyExitFunc();
