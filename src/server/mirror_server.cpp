@@ -842,8 +842,16 @@ BResult MirrorServer::AddOldDiskImpl(const std::string &diskPath, uint16_t diskI
 BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
 {
     LOG_DEBUG("Start to add new disk, diskPath: " << diskPath << ".");
+    // Determine whether the number of disks exceeds 8
+    BResult ret = BIO_OK;
+    uint32_t diskCount = BdmGetDiskCount();
+    if (UNLIKELY(diskCount >= DISK_MAX_SIZE)) {
+        LOG_ERROR("The number of total disks must not exceed 8.");
+        return BIO_ERR;
+    }
+
     // write diskPath to config
-    BResult ret = mBioConfig->CreateDiskConfBak(diskPath);
+    ret = mBioConfig->CreateDiskConfBak(diskPath);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Update disk config failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
@@ -859,7 +867,7 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     }
 
     // update info to cm
-    uint32_t diskId = BdmGetDiskCount();
+    uint32_t diskId = diskCount;
     ret = CmAddNewDisk(diskId, CM_DISK_NORMAL, true);
     if (ret != BIO_OK) {
         LOG_ERROR("Update new disk status failed, ret: " << ret);
@@ -2410,7 +2418,7 @@ TraceDatabase MirrorServer::GetTraceData()
             LVOS_TP_END;
             if (traceCount >= TRACE_MAX_NUM) {
                 LOG_ERROR("Trace num exceeds the array size," << "max trace num: " << TRACE_MAX_NUM);
-                traceDatabase.count = traceCount - 1;
+                traceDatabase.count = traceCount;
                 return traceDatabase;
             }
 

@@ -27,6 +27,7 @@ void BdmLogFunc(int logLevel, const char *funcName, int line, const char *fileNa
     ret = vsnprintf_s(dataBuf, BDM_LOG_BUF_LEN, sizeof(dataBuf) - 1, format, argPtr);
     if (ret < 0) {
         BIO_LOG_INTERNAL(logLevel, fileName, line, funcName, "vsnprintf_s failed.");
+        va_end(argPtr);
         return;
     }
     va_end(argPtr);

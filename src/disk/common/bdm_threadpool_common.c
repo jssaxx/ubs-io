@@ -21,8 +21,8 @@ void BdmThreadBindCPUs(const char *name, int32_t cpuid)
     CPU_SET(cpuid, &mask);
 
     ret = pthread_setaffinity_np(pSelf, sizeof(mask), &mask);
-    if (ret < 0) {
-        BDM_LOGERROR(0, "Thread:%s, binding to CPU:%d, failed, errno(%s).", name, cpuid, strerror(errno));
+    if (ret != 0) {
+        BDM_LOGERROR(0, "Thread:%s, binding to CPU:%d, failed, ret: %d", name, cpuid, ret);
         return;
     }
 
@@ -31,8 +31,8 @@ void BdmThreadBindCPUs(const char *name, int32_t cpuid)
     CPU_ZERO(&get);
 
     ret = pthread_getaffinity_np(pSelf, sizeof(get), &get);
-    if (ret < 0) {
-        BDM_LOGERROR(0, "Thread:%s, failed to get bind CPU:%d, failed, errno(%s).", name, cpuid, strerror(errno));
+    if (ret != 0) {
+        BDM_LOGERROR(0, "Thread:%s, failed to get bind CPU:%d, failed, ret(%d).", name, cpuid, ret);
         return;
     }
 
@@ -85,7 +85,11 @@ BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, B
     if (threadPool == NULL) {
         return NULL;
     }
-    memset_s(threadPool, sizeof(BDM_THREAD_POOL_S), 0, sizeof(BDM_THREAD_POOL_S));
+    ret = memset_s(threadPool, sizeof(BDM_THREAD_POOL_S), 0, sizeof(BDM_THREAD_POOL_S));
+    if (ret != 0) {
+        BDM_LOGERROR(0, "Memset_s fail, ret(%d).", ret);
+        return NULL;
+    }
 
     threadPool->index = 0;
     threadPool->threadNum = threadNum;
