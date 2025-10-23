@@ -88,6 +88,8 @@ BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, B
     ret = memset_s(threadPool, sizeof(BDM_THREAD_POOL_S), 0, sizeof(BDM_THREAD_POOL_S));
     if (ret != 0) {
         BDM_LOGERROR(0, "Memset_s fail, ret(%d).", ret);
+        free(threadPool);
+        threadPool = NULL;
         return NULL;
     }
 
