@@ -1708,6 +1708,17 @@ TEST_F(TestBioServer, test_get_trace_data_fail)
     EXPECT_EQ(traceDatabase.count, TRACE_MAX_NUM);
 }
 
+TEST_F(TestBioServer, test_get_trace_data_null)
+{
+    LOG_INFO("test_get_trace_data_null");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_GET_TRACEDATA_ERR", 0, 1, userParam);
+    TraceDatabase traceDatabase = mirror->GetTraceData();
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_GET_TRACEDATA_ERR");
+    EXPECT_EQ(traceDatabase.count, 0);
+}
+
 TEST_F(TestBioServer, test_bio_server_get_cli_flag)
 {
     LOG_INFO("test_bio_server_get_cli_flag");

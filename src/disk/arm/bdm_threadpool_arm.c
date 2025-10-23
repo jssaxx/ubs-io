@@ -36,6 +36,7 @@ static void *BdmThreadThread(void *arg)
         void *ctx = thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2)].ctx;
         uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, LANE_INDEX_1);
         if (tmpLane == 0) {
+            pthread_mutex_unlock(&(thread->queueMutex));
             continue;
         }
         uint32_t val = (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) + 1) % tmpLane;
@@ -112,6 +113,7 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
 
     uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, LANE_INDEX_1);
     if (tmpLane == 0) {
+        pthread_mutex_unlock(&thread->queueMutex);
         return BDM_CODE_ERR;
     }
 

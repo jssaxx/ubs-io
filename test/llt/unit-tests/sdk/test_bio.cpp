@@ -1788,15 +1788,28 @@ TEST_F(TestBio, test_bio_add_disk)
     EXPECT_EQ(ret, BIO_INNER_ERR);
 }
 
+TEST_F(TestBio, test_bio_add_disk_update_bdm_fail)
+{
+    LOG_INFO("test_bio_add_disk_update_bdm_fail");
+    const char *diskPath = "/dev/xxx";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
+    auto ret = BioAddDisk(diskPath);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
+}
+
 TEST_F(TestBio, test_bio_add_disk_update_bdm_success)
 {
     LOG_INFO("test_bio_add_disk_update_bdm_success");
     const char *diskPath = "/dev/xxx";
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SERVER_NO_DISK_CHECK", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_OK);
     LVOS_HVS_deactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_NO_DISK_CHECK");
 }
 
 TEST_F(TestBio, test_bio_add_new_disk_fail)

@@ -796,6 +796,9 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
     uint32_t diskId = DISK_ID_INVALID;
     BResult ret = BIO_OK;
     std::string diskPath = req.diskPath;
+    LVOS_TP_START(SERVER_NO_DISK_CHECK, 0);
+    ChkTrue(FileUtil::CanonicalPath(diskPath), BIO_ERR,  "The device does not exist.");
+    LVOS_TP_END
     bool isExist;
     LVOS_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
     LVOS_TP_START(SERVER_SET_OLD_DISK_ID, &diskId, 0);
@@ -2412,6 +2415,12 @@ TraceDatabase MirrorServer::GetTraceData()
 {
     TraceDatabase traceDatabase = {};
     auto tracePoints = ock::htracer::HtracerManager::GetTracePoints();
+    LVOS_TP_START(SERVER_GET_TRACEDATA_ERR, &tracePoints, nullptr);
+    LVOS_TP_END;
+    if (tracePoints == nullptr) {
+        traceDatabase.count = 0;
+        return traceDatabase;
+    }
     int traceCount = 0;
     for (int i = 0; i < ock::htracer::MAX_SERVICE_NUM; ++i) {
         for (int j = 0; j < ock::htracer::MAX_INNER_ID_NUM; ++j) {
