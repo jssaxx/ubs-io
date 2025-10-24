@@ -1559,7 +1559,7 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
     auto tempPtView = mPtView;
     for (auto &ptEntry : tempPtView) {
         uint16_t dstNid = ptEntry.second.masterNodeId;
-        req.isListUnderFs = (index == 0);
+        req.isListUnderFs = (index == tempPtView.size() - 1);
         req.comm.ptId = ptEntry.second.ptId;
         req.comm.ptv = ptEntry.second.version;
         LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &ret, BIO_INNER_RETRY);
