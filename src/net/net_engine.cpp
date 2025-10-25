@@ -172,7 +172,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     int fd = -1;
     LVOS_TP_START(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, &fd, -1);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
-    fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, 600UL);
+    fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
 #else
     fd = syscall(SYS_memfd_create, name.c_str(), 0);
 #endif
@@ -188,7 +188,9 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     LVOS_TP_END;
     if (ret < 0) {
         NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
-        shm_unlink(name.c_str());
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
+    shm_unlink(name.c_str());
+#endif
         close(fd);
         return BIO_INNER_ERR;
     }
