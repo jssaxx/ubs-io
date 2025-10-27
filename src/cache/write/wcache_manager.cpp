@@ -74,7 +74,8 @@ BResult WCacheManager::EvictNegotiateExecutorInit()
         return BIO_ALLOC_FAIL;
     }
     mEvictNegotiateService->SetThreadName("wcache-negotiate-evict");
-    auto result = mEvictNegotiateService->Start();
+    BResult result = BIO_OK;
+    result = mEvictNegotiateService->Start();
     ChkTrue(result, BIO_INNER_ERR, "Start evict negotiate service failed.");
     result = mEvictNegotiateService->Execute([this]() { EvictNegotiateThread(); });
     ChkTrue(result, BIO_INNER_ERR, "Execute evict negotiate service failed.");

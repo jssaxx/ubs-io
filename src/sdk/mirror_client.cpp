@@ -1308,7 +1308,8 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 {
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
-    BResult ret = Prepare(ptEntry, param, req);
+    BResult ret = BIO_OK;
+    ret = Prepare(ptEntry, param, req);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Prepare put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
@@ -1553,7 +1554,7 @@ BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string
 
 BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult ret = BIO_OK;
+    BResult ret = BIO_ERR;
     uint32_t index = 0;
 
     auto tempPtView = mPtView;
@@ -1661,7 +1662,7 @@ BResult MirrorClient::QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &no
     CacheResourceRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
 
-    BResult ret = BIO_OK;
+    BResult ret = BIO_ERR;
     LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL, &ret, BIO_INNER_ERR);
     ret = SendCacheResourceRequest(req, nodeDesc);
     LVOS_TP_END;
@@ -1698,7 +1699,7 @@ BResult MirrorClient::GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHit
     CacheHitRequest req;
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
 
-    BResult ret = BIO_OK;
+    BResult ret = BIO_ERR;
     LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL, &ret, BIO_INNER_ERR);
     ret = SendCacheHitRequest(req, nodeDesc);
     LVOS_TP_END;
@@ -1738,7 +1739,8 @@ void MirrorClient::GetCacheHitLocal(CacheHitRequest &req, uint16_t localId,
     if (UNLIKELY(localId == UINT16_MAX)) {
         return;
     }
-    BResult ret = agent::BioClientAgent::Instance()->GetCacheHitLocal(req, nodeDesc);
+    BResult ret = BIO_OK;
+    ret = agent::BioClientAgent::Instance()->GetCacheHitLocal(req, nodeDesc);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send get cache hit request failed, ret: " << ret << ". nodeId: " << localId);
     }
