@@ -29,8 +29,8 @@ using NewRequestHandler = std::function<int32_t(ServiceContext &)>;
 using NewChannelHandler = std::function<int32_t(const ChannelPtr &, const std::string &ipPort, NewChannelResp &)>;
 using ChannelBrokenHandler = std::function<void(uint32_t nodeId, uint32_t procId)>;
 using ServiceProtocol = ock::hcom::NetServiceProtocol;
-using MemoryRegionPtr = ock::hcom::NetMemoryRegionPtr;
-using MemoryAllocatorPtr = ock::hcom::NetMemoryAllocatorPtr;
+using MemoryRegionPtr = ock::hcom::UBSHcomNetMemoryRegionPtr;
+using MemoryAllocatorPtr = ock::hcom::UBSHcomNetMemoryAllocatorPtr;
 using NetRequest = hcom::NetServiceRequest;
 
 using CbFunc = std::function<void(void *ctx, void *resp, uint32_t len, int32_t result)>;

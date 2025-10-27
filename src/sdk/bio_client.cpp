@@ -17,7 +17,8 @@ BResult BioClient::BioClientUnderfsInit(WorkerMode mode)
 {
     if (mode == SEPARATES) {
         BioConfig::UnderFsConfig config;
-        BResult ret = mNetEngine->GetUnderFsConfig(config);
+        BResult ret = BIO_OK;
+        ret = mNetEngine->GetUnderFsConfig(config);
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to get underfs configs from server, ret:" << ret << ".");
             return ret;

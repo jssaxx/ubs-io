@@ -729,7 +729,7 @@ private:
         auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
-            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
         }
 
@@ -755,7 +755,7 @@ private:
         auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen }, rspOpInfo, respMsg);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
-            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
         }
 
@@ -786,7 +786,7 @@ private:
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " <<
-                NetErrStr(result));
+                UBSHcomNetErrStr(result));
             return NetResult(result);
         }
 
@@ -819,7 +819,7 @@ private:
         result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, cb);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
-            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
         }
         return BIO_OK;
@@ -864,7 +864,7 @@ private:
 #endif
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
-            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL, result, ts);
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
@@ -907,7 +907,7 @@ private:
         result = NetStub::AsyncCall(reqOpInfo, { req, reqLen }, callback);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
-            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << NetErrStr(result));
+            NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL_BUFF, result, ts);
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }

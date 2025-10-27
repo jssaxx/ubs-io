@@ -85,7 +85,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
             return ret;
         }
     }
-    auto serviceLog = NetOutLogger::Instance();
+    auto serviceLog = UBSHcomNetOutLogger::Instance();
     if (serviceLog == nullptr) {
         NET_LOG_ERROR("Make net service log fail.");
         return BIO_ALLOC_FAIL;
@@ -323,20 +323,21 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
     });
 
     driver->RegisterTLSCaCallback([&options](const std::string &name, std::string &capath, std::string &crlPath,
-        PeerCertVerifyType &verifyPeerCert, TLSCertVerifyCallback &cb) {
+        UBSHcomPeerCertVerifyType &verifyPeerCert, UBSHcomTLSCertVerifyCallback &cb) {
         capath = options.caCerPath;
         if (!options.caCrlPath.empty()) {
             crlPath = options.caCrlPath;
             NET_LOG_INFO("Get cacrl cert path success.");
         }
         NET_LOG_INFO("Get CA cert success.");
-        verifyPeerCert = PeerCertVerifyType::VERIFY_BY_DEFAULT;
+        verifyPeerCert = UBSHcomPeerCertVerifyType::VERIFY_BY_DEFAULT;
         cb = [](void *, const char *) { return 0; };
         return true;
     });
 
     driver->RegisterTLSPrivateKeyCallback(
-        [this, &options](const std::string &name, std::string &path, void *&pwd, int &len, TLSEraseKeypass &erase) {
+        [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
+            UBSHcomTLSEraseKeypass &erase) {
             std::pair<char *, int> passwordData;
             auto ret = mbioCryptorHelper->Decrypt(1, options.privateKeyPassword, passwordData);
             if (ret != 0) {
@@ -364,7 +365,8 @@ std::string NetEngine::GenerateWorkersSetting(const NetOptions& opt)
 
 void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options)
 {
-    options.mode = opt.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
+    options.mode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
+        UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     options.SetWorkerGroups(GenerateWorkersSetting(opt));
     options.mrSendReceiveSegSize = (NO_64 * NO_1024); // shm场景的是ep级
     options.mrSendReceiveSegCount = NO_1024; // shm场景未使用
@@ -438,7 +440,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     AssignIpcServiceOptions(opt, isOobSvr, options);
     result = mIpcService->Start(options);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start ipc service, result:" << NetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to start ipc service, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
     }
     NET_LOG_INFO("Bio server Start ipc service success, protocol:" << opt.protocol << ".");
@@ -456,7 +458,8 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr,
     }
 
     options.mode =
-        mOptions.isBusyLoop ? NetDriverWorkingMode::NET_BUSY_POLLING : NetDriverWorkingMode::NET_EVENT_POLLING;
+        mOptions.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
+            UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     options.mrSendReceiveSegSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.mrSendReceiveSegCount = NO_1024;
     options.qpSendQueueSize = NO_4096;
@@ -525,18 +528,18 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     NetServiceOptions options{};
     result = AssignRpcServiceOptions(opt, isOobSvr, options);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to assign rpc service options, result:" << NetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to assign rpc service options, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
     }
     result = mRpcService->Start(options);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start rpc service, result:" << NetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to start rpc service, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
     }
 
     result = InitMemoryAllocator();
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to init mr allocator, result:" << NetErrStr(result) << ".");
+        NET_LOG_ERROR("Failed to init mr allocator, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
     }
 
@@ -720,7 +723,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
         }
     }
     if (result != 0) {
-        NET_LOG_ERROR("Connect to peer failed, ret:" << NetErrStr(result) << ", ip " << info.ip << ", port " <<
+        NET_LOG_ERROR("Connect to peer failed, ret:" << UBSHcomNetErrStr(result) << ", ip " << info.ip << ", port " <<
             info.port << ", nid " << info.peerId.nid << ", pid " << info.peerId.pid << ".");
         return result;
     }
