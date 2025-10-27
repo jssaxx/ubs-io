@@ -310,9 +310,9 @@ public:
         return mPtView[ptId];
     }
 
-    inline uint32_t GetLocalMrKey()
+    inline uint64_t GetLocalMrKey()
     {
-        uint32_t key = 0;
+        uint64_t key = 0;
         mNetEngine->GetLocalMrKey(key);
         return key;
     }
@@ -330,7 +330,7 @@ public:
     inline BResult MemAlloc(uint64_t size, uint64_t *addr)
     {
         uintptr_t address;
-        uint32_t outKey;
+        uint64_t outKey;
         auto ret = mNetEngine->AllocLocalMrSingle(address, outKey);
         if (UNLIKELY(ret != BIO_OK)) {
             return ret;

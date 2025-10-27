@@ -130,7 +130,7 @@ TEST_F(TestNet, test_net_show)
     int32_t fd = 0;
     uint64_t offset = 0;
     uint64_t length = 0;
-    uint32_t mKey = 0;
+    uint64_t mKey = 0;
     engine->QueryShmInfo(fd, offset, length, mKey);
 }
 

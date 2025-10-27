@@ -108,7 +108,7 @@ public:
             return BIO_ALLOC_FAIL;
         }
         uintptr_t address = 0;
-        uint32_t key = UINT32_MAX;
+        uint64_t key = UINT64_MAX;
         BResult ret = mNetEngine->AllocLocalMrSingle(address, key);
         mr = NetMrInfo(address, size, key);
         return ret;
@@ -157,9 +157,9 @@ public:
         mNetEngine->AsyncCallBuff(target, opcode, req, reqLen, cb);
     }
 
-    inline uint32_t GetLocalMrKey()
+    inline uint64_t GetLocalMrKey()
     {
-        uint32_t key = 0;
+        uint64_t key = 0;
         if (mMode == CONVERGENCE) {
             mNetEngine->GetLocalMrKey(key);
         } else {
@@ -201,7 +201,7 @@ private:
     int32_t mServerPid = 0;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
-    uint32_t mShmKey = 0;
+    uint64_t mShmKey = 0;
     uint8_t *mShmAddr = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
     uint16_t mLocalNid;

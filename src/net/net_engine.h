@@ -81,7 +81,7 @@ public:
         return mDataPageBytes;
     }
 
-    inline BResult AllocLocalMrBatch(uint32_t count, std::vector<uintptr_t> &address, uint32_t &outKey)
+    inline BResult AllocLocalMrBatch(uint32_t count, std::vector<uintptr_t> &address, uint64_t &outKey)
     {
         if (UNLIKELY(mMrBlockPool == nullptr)) {
             NET_LOG_ERROR("Net block pool not ready.");
@@ -98,7 +98,7 @@ public:
 
     void setDriverTlsCallback(ock::hcom::NetService *driver, const NetOptions &options);
 
-    inline BResult AllocLocalMrSingle(uintptr_t &address, uint32_t &outKey)
+    inline BResult AllocLocalMrSingle(uintptr_t &address, uint64_t &outKey)
     {
         if (UNLIKELY(mMrBlockPool == nullptr)) {
             NET_LOG_ERROR("Net block pool not ready.");
@@ -112,7 +112,7 @@ public:
         return ret;
     }
 
-    inline BResult GetLocalMrKey(uint32_t &outKey)
+    inline BResult GetLocalMrKey(uint64_t &outKey)
     {
         if (UNLIKELY(mMrBlockPool == nullptr)) {
             NET_LOG_ERROR("Net block pool not ready.");
@@ -140,7 +140,7 @@ public:
         mUsedBlock -= NO_1;
     }
 
-    void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint32_t &mKey)
+    void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
     {
         fd = mShmFd;
         offset = mShareOffset;
