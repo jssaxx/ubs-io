@@ -116,7 +116,7 @@ void MirrorServer::ReplyListResultLocal(ServiceContext &ctx, std::unordered_map<
     uintptr_t address = 0;
     uint32_t index = 0;
     if (!objs.empty()) {
-        uint32_t key;
+        uint64_t key;
         auto ret = BioServer::Instance()->GetNetEngine()->AllocLocalMrSingle(address, key);
         if (UNLIKELY(ret != BIO_OK)) {
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -153,7 +153,7 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
     uintptr_t lAddress = 0;
     uint32_t index = 0;
     if (!objs.empty()) {
-        uint32_t lKey;
+        uint64_t lKey;
         auto ret = BioServer::Instance()->GetNetEngine()->AllocLocalMrSingle(lAddress, lKey);
         if (UNLIKELY(ret != BIO_OK)) {
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);

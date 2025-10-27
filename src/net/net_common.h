@@ -207,10 +207,10 @@ union NetChannelUpCtx {
 struct NetMrInfo {
     uintptr_t address = 0; /* buffer address */
     uint64_t size = 0;     /* size of buffer */
-    uint32_t key = 0;      /* RDMA key */
+    uint64_t key = 0;      /* RDMA key */
 
     NetMrInfo() = default;
-    NetMrInfo(uintptr_t addr, uint64_t s, uint32_t k) : address(addr), size(s), key(k) {}
+    NetMrInfo(uintptr_t addr, uint64_t s, uint64_t k) : address(addr), size(s), key(k) {}
 };
 
 class NetEngine;

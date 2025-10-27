@@ -47,7 +47,7 @@ typedef struct {
     int32_t serverPid;
     uint64_t offset;
     uint64_t length;
-    uint32_t mKey;
+    uint64_t mKey;
     uint32_t scene;
     uint32_t alignSize;
     uint32_t ioTimeOut;
@@ -229,7 +229,7 @@ typedef struct {
     uint64_t flowIndex;
     uintptr_t mrAddress;
     uint64_t mrSize;
-    uint32_t mrKey;
+    uint64_t mrKey;
     bool memFromServer;
     bool isDegrade;
     uint32_t ioStrategy;
@@ -254,7 +254,7 @@ typedef struct {
     uint8_t isMr;
     uintptr_t address;
     uint64_t size;
-    uint32_t mrKey;
+    uint64_t mrKey;
     bool enableCrc;
     bool isConvDeploy;
 } GetRequest;
@@ -294,7 +294,7 @@ typedef struct {
     bool isListUnderFs;
     uintptr_t address;
     uint64_t size;
-    uint32_t mrKey;
+    uint64_t mrKey;
 } ListRequest;
 
 /* Add disk */
