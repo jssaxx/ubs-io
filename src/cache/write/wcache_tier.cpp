@@ -93,6 +93,7 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
 
     destSliceRef = MakeRef<WCacheSliceRef>(dataSlice);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_RETRY);
+    LOG_DEBUG("Wcache write memory success, key: " << key << ".");
     return BIO_OK;
 }
 
@@ -101,38 +102,6 @@ void WCacheTier::AddEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.Lock();
     mEvictSliceQueue.emplace_back(sliceRef);
     mEvictSliceQueueLock.UnLock();
-}
-
-void WCacheTier::AddEvictNegotiateIndexMap(uint64_t indexInFlow, uint8_t refNum)
-{
-    uint64_t indexInMap = indexInFlow / ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    uint64_t indexInArray = indexInFlow % ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    WriteLocker<ReadWriteLock> lock(&mNegotiateIndexMapLock);
-    auto array = mNegotiateIndexMap.find(indexInMap);
-    if (array == mNegotiateIndexMap.end()) {
-        array = mNegotiateIndexMap.find(indexInMap);
-        if (array == mNegotiateIndexMap.end()) {
-            std::array<uint8_t, ARRAY_SIZE_IN_NEGOTIATE_MAP> newArray{};
-            newArray.fill(INVALID_REF_NUM);
-            mNegotiateIndexMap.emplace(indexInMap, newArray);
-        }
-    }
-    mNegotiateIndexMap[indexInMap][indexInArray] = refNum;
-}
-
-
-void WCacheTier::AddEvictNegotiateMap(WCacheSliceRefPtr &sliceRef)
-{
-    mEvictNegotiateMapLock.Lock();
-    mEvictNegotiateMap.emplace(sliceRef->GetSlice()->GetIndexInFlow(), sliceRef);
-    mEvictNegotiateMapLock.UnLock();
-}
-
-void WCacheTier::DelEvictNegotiateMap(WCacheReplicaSlicePtr repSlicePtr)
-{
-    mEvictNegotiateMapLock.Lock();
-    mEvictNegotiateMap.erase(repSlicePtr->GeNegotiateOffset());
-    mEvictNegotiateMapLock.UnLock();
 }
 
 void WCacheTier::RetryEvictQueue(WCacheSliceRefPtr sliceRef)
@@ -147,15 +116,6 @@ void WCacheTier::DelEvictQueue(WCacheSliceRefPtr sliceRef)
     mEvictSliceQueueLock.Lock();
     mEvictSliceQueue.remove(sliceRef);
     mEvictSliceQueueLock.UnLock();
-}
-
-bool WCacheTier::IsEmptyNegotiateMap()
-{
-    bool isEmpty;
-    mEvictNegotiateMapLock.Lock();
-    isEmpty = mEvictNegotiateMap.empty();
-    mEvictNegotiateMapLock.UnLock();
-    return isEmpty;
 }
 
 bool WCacheTier::IsEmptyEvictSliceQueue()
@@ -181,35 +141,9 @@ WCacheSliceRefPtr WCacheTier::GetEvictSlice()
     return sliceRef;
 }
 
-void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t limit)
+uint64_t WCacheTier::GetTruncateIndex()
 {
-    LOG_TRACE("Begin get slice ,cur index :" << mCurNegotiateIndex << "flow:" << mMetaFlow->GetFlowId());
-    uint64_t startIndexInMap = mCurNegotiateIndex / ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    uint64_t startIndexInArray = mCurNegotiateIndex % ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    for (uint64_t indexInMap = startIndexInMap;; ++indexInMap) {
-        mNegotiateIndexMapLock.LockRead();
-        auto it = mNegotiateIndexMap.find(startIndexInMap);
-        if (it == mNegotiateIndexMap.end()) {
-            mNegotiateIndexMapLock.UnLock();
-            return;
-        }
-        auto array = it->second;
-        mNegotiateIndexMapLock.UnLock();
-
-        for (uint64_t indexInArray = startIndexInArray; indexInArray < ARRAY_SIZE_IN_NEGOTIATE_MAP; ++indexInArray) {
-            if (array[indexInArray] != INVALID_REF_NUM && array[indexInArray] > NO_U64_0) {
-                LOG_TRACE("Select this slice ,flow:" << mMetaFlow->GetFlowId() << ",indexInMap :"
-                << indexInMap << ",indexInArray:" << indexInArray);
-                indexVec.emplace_back(indexInMap * ARRAY_SIZE_IN_NEGOTIATE_MAP + indexInArray);
-            } else {
-                return;
-            }
-            if (indexVec.size() == limit) {
-                return;
-            }
-        }
-        startIndexInArray = 0;
-    }
+    return mFlowTruncateCursor->GetPreTruncateSliceIndex();
 }
 
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
@@ -343,7 +277,7 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
         "Failed to truncateOffset in dataFlow, FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" <<
         truncateSlice->GetFlowType() << ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" <<
         slice->GetIndexInFlow() << ", len:" << truncateSlice->GetLength());
-    LOG_INFO("FlowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
+    LOG_DEBUG("Evict success, flowId:" << truncateSlice->GetFlowId() << ", fLowType:" << truncateSlice->GetFlowType() <<
         ", flowOffset:" << truncateSlice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" <<
         truncateSlice->GetLength());
 
@@ -378,28 +312,55 @@ inline BResult WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64
     return BIO_OK;
 }
 
+bool WCacheTier::IsEmptyCursorEvictSlices()
+{
+    return mFlowTruncateCursor->IsEmptyEvictSlices();
+}
+
+void  WCacheTier::SetGlobMinTruncateIndex(uint64_t globMinTruncateIndex)
+{
+    mFlowTruncateCursor->SetGlobMinTruncateIndex(globMinTruncateIndex);
+}
+
+void WCacheTier::SetIsNormal(bool isNormal)
+{
+    mFlowTruncateCursor->SetIsNormal(isNormal);
+}
+
 WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice)
 {
     std::lock_guard<std::mutex> lock(mEvictedSliceListLock);
-
-    LOG_DEBUG("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
-        slice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" << slice->GetLength());
+    uint64_t globTruncateIndex = mGlobTruncateIndex;
+    globTruncateIndex = globTruncateIndex == 0 ? 0 : globTruncateIndex - 1;
+    LOG_TRACE("FlowId:" << slice->GetFlowId() << ", fLowType:" << slice->GetFlowType() << ", flowOffset:" <<
+        slice->GetOffsetInFlow() << ", flowIndex:" << slice->GetIndexInFlow() << ", len:" << slice->GetLength() <<
+        ", globTruncateIndex" << globTruncateIndex << ", mIsNormal：" << mIsNormal << ", queueSize:" <<
+        mEvictedSlices.size() << ", mPreTruncateSliceIndex:" << mPreTruncateSliceIndex << ".");
 
     // insert to set and sort by indexInFlow.
     mEvictedSlices.emplace(slice);
 
     // obtain the last truncate slice from the indexInFlow that is truncated last time.
     WCacheSlicePtr truncateSlice = nullptr;
-    uint64_t truncateSliceIndex = mPreTruncateSliceIndex;
     auto evictSliceIt = mEvictedSlices.begin();
     while (evictSliceIt != mEvictedSlices.end()) {
         auto evictSlice = evictSliceIt->Get();
-        if (evictSlice->GetIndexInFlow() == truncateSliceIndex) {
+        uint64_t evictIndex = evictSlice->GetIndexInFlow();
+        bool isSatisfied;
+
+        if (!mIsNormal) {
+            isSatisfied = evictIndex == mPreTruncateSliceIndex;
+        } else if (globTruncateIndex == 0) {
+            isSatisfied = false;
+        } else {
+            isSatisfied = (evictIndex <= std::min(mPreTruncateSliceIndex, globTruncateIndex));
+        }
+
+        if (isSatisfied) {
             truncateSlice = evictSlice;
             mEvictedSlices.erase(evictSliceIt);
             evictSliceIt = mEvictedSlices.begin();
-            truncateSliceIndex++;
-            mPreTruncateSliceIndex = truncateSliceIndex;
+            mPreTruncateSliceIndex = ++evictIndex;
         } else {
             break;
         }
@@ -408,77 +369,24 @@ WCacheSlicePtr WFlowTruncateCursor::GetTruncateSlice(const WCacheSlicePtr &slice
     return truncateSlice;
 }
 
-BResult WCacheTier::UpdateNegotiateState(uint64_t indexInFlow)
+inline uint64_t WFlowTruncateCursor::GetPreTruncateSliceIndex()
 {
-    BIO_TRACE_START(WCACHE_TRACE_NEGOTIATE_UPDATE)
-    uint64_t indexInMap = indexInFlow / ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    uint64_t indexInArray = indexInFlow % ARRAY_SIZE_IN_NEGOTIATE_MAP;
-    uint8_t curRefNum = 0;
-    {
-        WriteLocker<ReadWriteLock> lock(&mNegotiateIndexMapLock);
-        auto it = mNegotiateIndexMap.find(indexInMap);
-        if (it == mNegotiateIndexMap.end()) {
-            LOG_DEBUG("Not find slice,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);
-            return BIO_NOT_EXISTS;
-        }
-        if (it->second[indexInArray] == INVALID_REF_NUM) {
-            LOG_DEBUG("Invalid index,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:" << indexInFlow);
-            return BIO_NOT_EXISTS;
-        }
-        curRefNum = --it->second[indexInArray];
-    }
-    
-    if (curRefNum == 0) {
-        LOG_TRACE("Negotiate success,flow:" << mDataFlow->GetFlowId() << ",indexInFlow:"
-            << indexInFlow << ",curIndex:" << mCurNegotiateIndex);
-        EvictNegotiateMapToQueue(indexInFlow);
-        mCurNegotiateIndex = std::min(mCurNegotiateIndex, indexInFlow) + NO_1;
-    }
-    if (indexInArray == ARRAY_SIZE_IN_NEGOTIATE_MAP - NO_1) {
-        DelEvictIndexArray(indexInMap);
-    }
-    BIO_TRACE_END(WCACHE_TRACE_NEGOTIATE_UPDATE, BIO_OK)
-    return BIO_OK;
+    return mPreTruncateSliceIndex;
 }
 
-void WCacheTier::FlushNegotiateMap()
+void WFlowTruncateCursor::SetGlobMinTruncateIndex(uint64_t globMinTruncateIndex)
 {
-    mEvictNegotiateMapLock.Lock();
-    auto size = mEvictNegotiateMap.size();
-    while (!mEvictNegotiateMap.empty()) {
-        auto it = mEvictNegotiateMap.begin();
-        LOG_DEBUG("Flush mEvictNegotiateQueue, put evictQueue ,flowId:" <<it->second->GetSlice()->GetFlowId()
-        << ", IndexInFlow:" <<it->second->GetSlice()->GetIndexInFlow());
-        AddEvictQueue(it->second);
-        mEvictNegotiateMap.erase(it);
-    }
-    mEvictNegotiateMapLock.UnLock();
-    LOG_DEBUG("Flush mEvictNegotiateQueue ,size :" << size << ".");
+    mGlobTruncateIndex = globMinTruncateIndex;
 }
 
-void WCacheTier::EvictNegotiateMapToQueue(uint64_t indexInFlow)
+inline bool WFlowTruncateCursor::IsEmptyEvictSlices()
 {
-    mEvictNegotiateMapLock.Lock();
-    auto it = mEvictNegotiateMap.find(indexInFlow);
-    if (it == mEvictNegotiateMap.end()) {
-        mEvictNegotiateMapLock.UnLock();
-        return;
-    }
-    BIO_TRACE_START(WCACHE_ADD_EVICT_QUEUE)
-    AddEvictQueue(it->second);
-    BIO_TRACE_END(WCACHE_ADD_EVICT_QUEUE, BIO_OK)
-    mEvictNegotiateMap.erase(it);
-    mEvictNegotiateMapLock.UnLock();
+    return mEvictedSlices.empty();
 }
 
-void WCacheTier::DelEvictIndexArray(uint64_t indexInMap)
+void WFlowTruncateCursor::SetIsNormal(bool isNormal)
 {
-    BIO_TRACE_START(WCACHE_DEL_NEGOTIATE_ARRAY)
-    mNegotiateIndexMapLock.LockWrite();
-    mNegotiateIndexMap.erase(indexInMap);
-    mNegotiateIndexMapLock.UnLock();
-    LOG_DEBUG("Del array in map, index: " << indexInMap << ",flow:"<<mDataFlow->GetFlowId());
-    BIO_TRACE_END(WCACHE_DEL_NEGOTIATE_ARRAY, BIO_OK)
+    mIsNormal = isNormal;
 }
 }
 }

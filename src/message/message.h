@@ -25,7 +25,6 @@ const uint32_t PT_COPY_MAX_SIZE = 3;
 const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
-const uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
 const uint32_t FILE_PATH_MAX_LEN = 256;
 
@@ -181,6 +180,9 @@ typedef struct {
 typedef struct {
     uint64_t flowId;
     bool isDegrade;
+    uint64_t index;
+    uint64_t offset;
+    bool isNewFlow;
 } CreateFlowResponse;
 
 /* Destroy flow */
@@ -192,6 +194,18 @@ typedef struct {
 typedef struct {
     uint64_t flowId;
 } DestroyFlowResponse;
+
+/* Create data message memory pool */
+typedef struct {
+    RequestComm comm;
+    uint64_t size;
+} CreateDataMsgMemPoolRequest;
+
+typedef struct {
+    int32_t memFd;
+    uint64_t offset;
+    uint64_t length;
+} CreateDataMsgMemPoolResponse;
 
 /* Get slice */
 typedef struct {
@@ -228,6 +242,7 @@ typedef struct {
     uint64_t flowOffset;
     uint64_t flowIndex;
     uintptr_t mrAddress;
+    uint64_t mrOffset;
     uint64_t mrSize;
     uint64_t mrKey;
     bool memFromServer;
@@ -343,6 +358,26 @@ typedef struct {
     RequestComm comm;
     uint64_t flowId;
 } GetEvictRequest;
+
+typedef struct {
+    RequestComm comm;
+    uint64_t flowId;
+    bool needDestroy;
+    uint64_t index;
+    uint64_t offset;
+} ProcFlowSyncRequest;
+
+typedef struct {
+    uint32_t nodeId;
+    bool needDestroy;
+} ProcFlowSyncResponse;
+
+typedef struct {
+    int32_t result;
+    uint32_t quota;
+    sem_t sem;
+    bool needDestroy;
+} ProcBrokenCallbackCtx;
 
 /* Free server memory */
 typedef struct {
@@ -476,13 +511,12 @@ typedef struct {
 } GetUnderFsConfigResponse;
 
 typedef struct {
+    RequestComm comm;
     uint64_t flowId;
-    uint32_t count;
-    uint64_t data[MAX_EVICT_CONSULT_SIZE];
 } EvictNegotiateRequest;
 
 typedef struct {
-    bool negoResult[MAX_EVICT_CONSULT_SIZE];
+    uint64_t truncateIndex;
 } EvictNegotiateResponse;
 
 /* Cache Resource */

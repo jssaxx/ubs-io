@@ -63,6 +63,15 @@ public:
         ObjLocation location;
     };
 
+    struct UpdateParams {
+        uint16_t ptId;
+        uint64_t ptv;
+        uint64_t flowId;
+        bool isDegrade;
+        uint64_t index;
+        uint64_t offset;
+    };
+
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
     BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc);
@@ -226,14 +235,19 @@ private:
     BResult LoadOriginViewImpl();
     BResult LoadAffinityFlow();
 
+    BResult CreateDataMessageMemLocal();
+    BResult CreateDataMessageMemRemote();
+    BResult CreateDataMessageMem();
+
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     uint32_t CalcPtQuota(CmPtInfo &ptEntry);
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
         uint64_t &index);
-    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
+    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        FlowInfo &flowInfo);
     BResult SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
+    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, FlowInfo &flowInfo);
     BResult DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlow(uint16_t ptId);
     BResult DestroyFlow(uint16_t ptId, uint64_t flowId);
@@ -252,8 +266,8 @@ private:
     BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
 
-    BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
-    BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
+    BResult GetServerRemote(GetRequest &req, uint16_t dstNid, char *value, uint64_t &realLen);
+    BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
 
     void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, Callback &callback);
@@ -295,17 +309,17 @@ private:
         return BIO_OK;
     }
 
-    inline BResult Update(uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
+    inline BResult Update(UpdateParams &para)
     {
         mLock.LockWrite();
         if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
             mLock.UnLock();
             return BIO_ERR;
         }
-        auto it = mFlowMap.find(ptId);
+        auto it = mFlowMap.find(para.ptId);
         if (it != mFlowMap.end()) {
             FlowInstancePtr instance = it->second;
-            instance->Update(flowId, ptv, isDegrade);
+            instance->Update(para.flowId, para.ptv, para.isDegrade, para.index, para.offset);
             mLock.UnLock();
             return BIO_OK;
         }
@@ -349,6 +363,9 @@ private:
     uint32_t mTimeOut = NO_60;
     bool mEnableCrc { false };
     BioQosPtr mBioQos = nullptr;
+    uint8_t *mDataMsgMemAddr = nullptr;
+    MemoryRegionPtr mDataMsgMemMr;
+    NetBlockPoolPtr mDataMsgMemPool = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
 using MirrorClientPtr = Ref<MirrorClient>;

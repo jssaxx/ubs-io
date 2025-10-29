@@ -144,9 +144,9 @@ public:
     {
         fd = mShmFd;
         offset = mShareOffset;
-        length = mOptions.memorySize;
+        length = mOptions.memoryPoolSize;
         mKey = 0;
-        if (mOptions.memorySize > 0) {
+        if (mOptions.memoryPoolSize > 0) {
             // 配置内存小于等于0，未初始化内存
             mKey = mLocalMr->GetLKey();
         }
@@ -170,13 +170,6 @@ public:
         ChannelPtr ch{ nullptr };
 
         auto ret = GetCtrlChanel(targetNodeId, ch);
-        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
-            return BIO_ERR;
-        }
-        ch->SetOneSideTimeout(mTimeout);
-        ch->SetTwoSideTimeout(mTimeout);
-        ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_ERR;
@@ -440,6 +433,10 @@ public:
         ret = NetStub::SyncRead(req);
 #endif
         LVOS_TP_END;
+        if (ret != SER_OK) {
+            NET_LOG_ERROR("Sync read failed, hcom result:" << ret << ", channelId:" << ch->Id() << ", return ret:" <<
+                                                           NetResult(ret) << ".");
+        }
         return NetResult(ret);
     }
 
@@ -667,10 +664,10 @@ public:
 
     inline bool IsValidAddress(uint64_t begin, uint64_t end)
     {
-        return (begin >= mLocalMr->GetAddress()) && (end <= (mLocalMr->GetAddress() + mOptions.memorySize));
+        return (begin >= mLocalMr->GetAddress()) && (end <= (mLocalMr->GetAddress() + mOptions.memoryPoolSize));
     }
 
-    void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix,
+    void FillConnectOption(ConnectMode mode, ConnectInfo &info, bool isCtrl, std::string &prefix,
         ock::hcom::NetServiceConnectOptions &op);
     BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
 
@@ -685,6 +682,10 @@ public:
     int RequestPosted(const ServiceContext &ctx);
     int OneSideDone(const ServiceContext &ctx);
 
+    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
+
+    void DestroyShmFdWithPid(int32_t &shmFd, uint8_t *addr, uint32_t pid, uint64_t size);
+
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
@@ -698,8 +699,6 @@ private:
     std::string GenerateWorkersSetting(const NetOptions& opt);
 
     void StopInner();
-
-    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
 
     static inline BResult NetResult(hcom::SerResult ret)
     {

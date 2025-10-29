@@ -12,6 +12,7 @@ include_directories(${SRC_DIR}/common
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
+		${SRC_DIR}/ufs
 		${SRC_DIR}/interceptor
         ${PROJECT_3RDPARTY_BIN_DIR}/hcom/include/hcom
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog

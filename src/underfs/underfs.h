@@ -7,17 +7,13 @@
 
 #include <memory>
 #include "file_system_factory.h"
-#include "file_system.h"
-#include "bio_ref.h"
-#include "underfs_config.h"
+#include "underfs_c.h"
 
 namespace ock {
 namespace bio {
 using UnderFsPtr = std::shared_ptr<FileSystem>;
 class UnderFs {
 public:
-    using ObjStat = FileSystem::ObjStat;
-
     static void InitUnderFsConfig(BioConfig::UnderFsConfig config)
     {
         UnderFsConfig::Initialize(config);

@@ -128,17 +128,15 @@ BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &ob
 {
     std::lock_guard<std::mutex> lock(mMutex);
     ChkTrueNot(mInited == true, BIO_NOT_READY);
-    BIO_TRACE_START(FLOW_TRACE_GETALL_OBJ);
     if (type == FLOW_MEMORY) {
-        for (auto it = mMemObjManager.begin(); it != mMemObjManager.end(); ++it) {
-            objManager[it->first] = it->second;
+        for (auto &it : mMemObjManager) {
+            objManager[it.first] = it.second;
         }
     } else {
-        for (auto it = mDiskObjManager.begin(); it != mDiskObjManager.end(); ++it) {
-            objManager[it->first] = it->second;
+        for (auto &it : mDiskObjManager) {
+            objManager[it.first] = it.second;
         }
     }
-    BIO_TRACE_END(FLOW_TRACE_GETALL_OBJ, 0);
     return BIO_OK;
 }
 

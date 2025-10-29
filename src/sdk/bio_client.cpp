@@ -13,28 +13,6 @@
 
 using namespace ock::bio;
 
-BResult BioClient::BioClientUnderfsInit(WorkerMode mode)
-{
-    if (mode == SEPARATES) {
-        BioConfig::UnderFsConfig config;
-        BResult ret = BIO_OK;
-        ret = mNetEngine->GetUnderFsConfig(config);
-        if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Failed to get underfs configs from server, ret:" << ret << ".");
-            return ret;
-        }
-
-        UnderFs::InitUnderFsConfig(config);
-        ret = UnderFs::Instance()->Init();
-        if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Failed to init underfs, ret:" << ret << ".");
-            return ret;
-        }
-    }
-    CLIENT_LOG_INFO("Initialize client underfs success.");
-    return BIO_OK;
-}
-
 BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath)
 {
     auto logMode = static_cast<int32_t>(mode);
@@ -91,6 +69,25 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf
 
     // 根据配置文件中的日志等级重新设置Client端的日志打印等级.
     BioClientLog::Instance()->ResetLogLevel(mNetEngine->GetNegoLogLevel());
+
+    if (mode != CONVERGENCE) {
+        BioConfig::UnderFsConfig config;
+        ret = mNetEngine->GetUnderFsConfig(config);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to get service underfs config, ret:" << ret << ".");
+            return ret;
+        }
+        UfsHelperPtr underFsPtr = UfsHelper::Instance();
+        if (underFsPtr == nullptr) {
+            LOG_ERROR("Create underfs instance fail.");
+            return BIO_ERR;
+        }
+        ret = underFsPtr->Initialize(config);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Client init underfs fail, ret:" << ret);
+            return ret;
+        }
+    }
     return BIO_OK;
 }
 
@@ -181,12 +178,7 @@ BResult BioClient::BioInterceptorServerInit(WorkerMode mode)
 
 BResult BioClient::BioClientStartWork()
 {
-    auto ret = mMirror->Start();
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
-        return ret;
-    }
-    return ret;
+    return mMirror->Start();
 }
 
 BResult BioClient::BioClientStartPrometheus()
@@ -411,12 +403,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
-    // 8. 初始化sdk端underfs
-    if (BioClientUnderfsInit(mode) != BIO_OK) {
-        return BIO_ERR;
-    }
-
-    // 9. bio client开工, mirror client开工去创建亲和的Flow实例.
+    // 8. bio client开工, 1)创建SDK端数据消息内存池; 2)mirror client开工去创建亲和的Flow实例.
     if (BioClientStartWork() != BIO_OK) {
         return BIO_ERR;
     }

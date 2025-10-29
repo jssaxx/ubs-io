@@ -1,6 +1,7 @@
-//
-// Created by j30026471 on 2024/2/28.
-//
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ */
+
 #include <chrono>
 #include <iostream>
 #include <memory>

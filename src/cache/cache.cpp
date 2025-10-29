@@ -4,7 +4,7 @@
 
 #include "cache.h"
 #include "cache_flow.h"
-#include "underfs.h"
+#include "ufs_helper.h"
 #include "flow_manager.h"
 #include "bio.h"
 #include "bio_trace.h"
@@ -33,7 +33,7 @@ BResult Cache::Init()
 
     ret = CacheOverloadCtrl::Instance().Initialize();
     ChkTrue(ret == BIO_OK, ret, "Initialize overload ctrl failed, ret:" << ret << ".");
-
+    mUfsEnable = BioConfig::Instance()->GetUnderFsConfig().underFsType != "none";
     return BIO_OK;
 }
 
@@ -180,7 +180,7 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
     BResult ret = BIO_INNER_ERR;
     std::vector<FlowAddr> addrVec = slice->GetAddrs();
     if (LIKELY(addrVec.size() == NO_1)) {
-        ret = UnderFs::Instance()->Get(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset),
+        ret = UfsHelper::Instance()->Get(key, reinterpret_cast<char *>(addrVec[0].chunkId + addrVec[0].chunkOffset),
             length, offset);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
@@ -188,7 +188,7 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
     } else {
         void *value = aligned_alloc(NO_4096, length);
         ChkTrue(value != nullptr, BIO_ALLOC_FAIL, "Alloc memory aligned failed.");
-        ret = UnderFs::Instance()->Get(key, reinterpret_cast<char *>(value), length, offset);
+        ret = UfsHelper::Instance()->Get(key, reinterpret_cast<char *>(value), length, offset);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to get from underFs failed, ret:" << ret << ", key:" << key << ", len:" << length << ".");
             free(value);
@@ -206,8 +206,8 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
 BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint64_t offset, uint64_t &totalLen,
     uint64_t &realLen)
 {
-    UnderFs::ObjStat stat;
-    auto ret = UnderFs::Instance()->Stat(key, stat);
+    UfsHelper::ObjStat stat;
+    auto ret = UfsHelper::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Stat key from under fs failed, ret:" << ret << ", key:" << key << ".");
         return ret;
@@ -274,8 +274,7 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
     bool isFromRCache = true;
     WCacheSlicePtr wcSlicePtr = nullptr;
-    bool enoughResource = false;
-    ret = mRCacheManager->CheckEnoughResource(slice->GetPtId(), enoughResource);
+    bool enoughResource = mRCacheManager->IsResourceEnough(slice->GetPtId());
     LVOS_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
     LVOS_TP_END;
     void *memAddr = nullptr;
@@ -367,13 +366,14 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     uint64_t &realLen)
 {
     BResult ret = BIO_INNER_ERR;
-    BIO_TRACE_START(WCACHE_TRACE_GET);
+    // 1. 首先从WCache中读取数据, 对象不存在则执行步骤2.
     LVOS_TP_START(WCACHE_GET_OK, &ret, BIO_OK);
     LVOS_TP_START(WCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
+    BIO_TRACE_START(WCACHE_TRACE_GET);
     ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
-    LVOS_TP_END;
-    LVOS_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
+    LVOS_TP_END;
+    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             (slice == nullptr ? 0 : slice->GetLength()) << ".");
@@ -388,6 +388,7 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
         return BIO_OK;
     }
 
+    // 2. 然后从RCache中读取数据, 对象不存在则执行步骤3.
     BIO_TRACE_START(RCACHE_TRACE_GET);
     LVOS_TP_START(RCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
     ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
@@ -405,12 +406,17 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
         RCacheStatistic::Instance().IncHitCount();
         return BIO_OK;
     }
+    if (!mUfsEnable) {
+        return ret;
+    }
 
+    // 3. 最后从外部存储中读取数据.
     BIO_TRACE_START(EXTERNAL_TRACE_GET);
     ret = GetExternal(key, offset, slice, sliceWriter, realLen);
     BIO_TRACE_END(EXTERNAL_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("underFs get failed, ret:" << ret << ", key:" << key << ".");
+        LOG_ERROR("External storage get failed, ret:" << ret << ", key:" << key << ", offset:" << offset <<
+            ", length:" << slice->GetLength() << ".");
         return ret;
     }
     DiskStatistic::Instance().IncHitCount();
@@ -430,9 +436,12 @@ BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
     if ((ret == BIO_OK) || (ret != BIO_NOT_EXISTS)) {
         return ret;
     }
+    if (!mUfsEnable) {
+        return ret;
+    }
 
-    UnderFs::ObjStat stat;
-    ret = UnderFs::Instance()->Stat(key, stat);
+    UfsHelper::ObjStat stat;
+    ret = UfsHelper::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key " << key << " stat from under fs failed, error code: " << ret);
     } else {
@@ -454,10 +463,10 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
         return BIO_OK;
     }
 
-    if (force) {
-        std::unordered_map<std::string, UnderFs::ObjStat> underStatInfo;
+    if (mUfsEnable && force) {
+        std::unordered_map<std::string, UfsHelper::ObjStat> underStatInfo;
         LVOS_TP_START(UNDERFS_INIT_FAIL, &ret, BIO_ERR);
-        ret = UnderFs::Instance()->List(prefix, underStatInfo);
+        ret = UfsHelper::Instance()->List(prefix, underStatInfo);
         LVOS_TP_END;
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("UnderFS list failed, ret:" << ret << ", prefix:" << prefix << ".");
@@ -496,10 +505,12 @@ BResult Cache::Delete(uint16_t ptId, const Key &key)
         return ret;
     }
 
-    ret = UnderFs::Instance()->Delete(key);
-    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
-        return ret;
+    if (mUfsEnable) {
+        ret = UfsHelper::Instance()->Delete(key);
+        if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+            LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
+            return ret;
+        }
     }
 
     if (ret == BIO_NOT_EXISTS) {
@@ -603,14 +614,15 @@ void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
     }
 }
 
-BResult Cache::EvictNegotiate(uint64_t &flowId, uint64_t slices[], std::vector<bool> &result, uint32_t count)
+BResult Cache::EvictNegotiate(uint64_t &flowId, uint64_t &truncateIndex)
 {
-    return mWCacheManager->MasterEvictNegotiate(flowId, slices, result, count);
+    return mWCacheManager->GetTruncateIndex(flowId, truncateIndex);
 }
 
-void Cache::ShowEvictNegotiateQueue()
+BResult Cache::ProcBrokenSyncFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy)
 {
-    mWCacheManager->GetEvictNegotiateInfo();
+    return mWCacheManager->ProcBrokenSyncOldFlow(flowId, index, offset, needDestroy);
 }
+
 }
 }

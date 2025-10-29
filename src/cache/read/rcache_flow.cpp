@@ -70,7 +70,7 @@ BResult RCacheFlow::Initialize(uint16_t ptId, uint16_t diskId, FlowType flowType
         return BIO_ERR;
     }
 
-    LOG_INFO("Meta flowId:" << mMetaFlow->GetFlowId() << ", flowType:" << flowType);
+    LOG_DEBUG("RCache meta flowId:" << mMetaFlow->GetFlowId() << ", flowType:" << flowType << ", ptId:" << ptId << ".");
 
     mMetaFlowInstance = MakeRef<FlowInstance>(flowIds[0]);
     if (UNLIKELY(mMetaFlowInstance == nullptr)) {
@@ -86,7 +86,7 @@ BResult RCacheFlow::Initialize(uint16_t ptId, uint16_t diskId, FlowType flowType
         return BIO_ERR;
     }
 
-    LOG_INFO("Data flowId:" << mDataFlow->GetFlowId() << ", flowType:" << flowType);
+    LOG_DEBUG("RCache data flowId:" << mDataFlow->GetFlowId() << ", flowType:" << flowType << ", ptId:" << ptId << ".");
 
     mDataFlowInstance = MakeRef<FlowInstance>(flowIds[1]);
     if (UNLIKELY(mDataFlowInstance == nullptr)) {

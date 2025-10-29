@@ -17,7 +17,7 @@
 #include "bio_lock.h"
 #include "mirror_client.h"
 #include "bio_client_net.h"
-#include "underfs.h"
+#include "ufs_helper.h"
 #include "cli.h"
 #include "sdk_diagnose.h"
 
@@ -74,8 +74,12 @@ public:
         BResult ret = mMirror->Put(param);
         if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_QUOTA_NOT_ENOUGH ||
             ret == BIO_QUOTA_TIMEOUT)) {
+            if (UfsHelper::Instance()->GetConfig().underFsType == "none") {
+                CLIENT_LOG_WARN("Put underFs failed, underFs type is none, key:" << param.key << ",ret:" << ret << ".");
+                return ret;
+            }
             BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
-            ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
+            ret = UfsHelper::Instance()->Put(param.key, param.value, param.length);
             BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
         }
         return ret;
@@ -93,8 +97,12 @@ public:
         LVOS_TP_END;
         if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
             BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
-            UnderFs::ObjStat stat;
-            auto underFsRet = UnderFs::Instance()->Stat(param.key, stat);
+            if (UfsHelper::Instance()->GetConfig().underFsType == "none") {
+                CLIENT_LOG_WARN("Get underFs failed, underFs type is none, key:" << param.key << ",ret:" << ret << ".");
+                return ret;
+            }
+            UfsHelper::ObjStat stat;
+            auto underFsRet = UfsHelper::Instance()->Stat(param.key, stat);
             LVOS_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &underFsRet, BIO_OK);
             LVOS_TP_END;
             if (UNLIKELY(underFsRet != BIO_OK)) {
@@ -112,7 +120,7 @@ public:
             } else {
                 length = param.length;
             }
-            underFsRet = UnderFs::Instance()->Get(param.key, param.value, length, param.offset);
+            underFsRet = UfsHelper::Instance()->Get(param.key, param.value, length, param.offset);
             BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
             return underFsRet == BIO_OK ? BIO_OK : ret;
         }
@@ -251,7 +259,6 @@ public:
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
     void BioClientMirrorExit();
-    BResult BioClientUnderfsInit(WorkerMode mode);
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
     BResult BioClientStartPrometheus();

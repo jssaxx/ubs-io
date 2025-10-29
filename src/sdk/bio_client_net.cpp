@@ -273,7 +273,8 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.port = port;
     netOptions.role = Role::NET_CLIENT;
     netOptions.isBusyLoop = false;
-    netOptions.memorySize = defaultMemorySize;
+    netOptions.isCreateMemPool = false;
+    netOptions.memoryPoolSize = defaultMemorySize;
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;
@@ -410,7 +411,8 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
         (strlen(rsp.hdfsConfig.workingPath) != 0) && (strlen(rsp.cephConfig.user) != 0) &&
         (strlen(rsp.cephConfig.cluster) != 0) && (strlen(rsp.cephConfig.cfgPath) != 0) &&
         (strlen(rsp.cephConfig.pool) != 0) &&
-        ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
+        ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0) ||
+        (strcmp(rsp.underFsType, "none") == 0)));
 }
 
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)

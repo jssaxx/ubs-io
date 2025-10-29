@@ -347,3 +347,88 @@ TEST_F(TestNet, test_new_channel_error)
     auto ret = netEngine->NewChannel("uttest", nullptr, "dsd");
     EXPECT_EQ(ret, BIO_ERR);
 }
+
+TEST_F(TestNet, test_net_engine_start_enable_tls_error)
+{
+    LOG_INFO("test_net_engine_start_error");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    NetOptions netOptions;
+    netOptions.enableTls = true;
+    netOptions.protocol = ServiceProtocol::SHM;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NULL", 0, 1, userParam);
+    auto ret = engine->Start(netOptions);
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NULL");
+    EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestNet, test_net_engine_enable_tls_path_empty_error)
+{
+    LOG_INFO("test_net_engine_start_error");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    NetOptions netOptions;
+    netOptions.enableTls = true;
+    netOptions.role = Role::NET_CLIENT;
+    netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.caCerPath = "";
+    netOptions.certificationPath = "";
+    netOptions.privateKeyPath = "";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NULL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_SET_TLS_ENABLE", 0, 1, userParam);
+    auto ret = engine->Start(netOptions);
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NULL");
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR");
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_SET_TLS_ENABLE");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestNet, test_net_engine_enable_tls_cert_path_not_exist_error)
+{
+    LOG_INFO("test_net_engine_start_error");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    NetOptions netOptions;
+    netOptions.enableTls = true;
+    netOptions.role = Role::NET_CLIENT;
+    netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.caCerPath = "ca";
+    (void) system("touch ca");
+
+    netOptions.certificationPath = "test invalid";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NULL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_SET_TLS_ENABLE", 0, 1, userParam);
+    auto ret = engine->Start(netOptions);
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NULL");
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR");
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_SET_TLS_ENABLE");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestNet, test_net_engine_enable_tls_key_path_not_exist_error)
+
+{
+    LOG_INFO("test_net_engine_start_error");
+    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
+    NetOptions netOptions;
+    netOptions.enableTls = true;
+    netOptions.role = Role::NET_CLIENT;
+    netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.caCerPath = "ca";
+    (void) system("touch ca");
+
+    netOptions.certificationPath = "cert";
+    (void) system("touch cert");
+    netOptions.privateKeyPath = "test invalid";
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NULL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "START_IPC_SERVICE_SET_TLS_ENABLE", 0, 1, userParam);
+    auto ret = engine->Start(netOptions);
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NULL");
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR");
+    LVOS_HVS_deactiveTracePoint(0, "START_IPC_SERVICE_SET_TLS_ENABLE");
+    EXPECT_EQ(ret, BIO_OK);
+}

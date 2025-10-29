@@ -83,6 +83,14 @@ namespace bio {
         }                                                        \
     } while (0)
 
+#define ChkTrueEx(ARGS, MSG)                                     \
+    do {                                                         \
+        if (__builtin_expect(!(ARGS), 0) != 0) {                 \
+            LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
+            return;                                              \
+        }                                                        \
+    } while (0)
+
 struct LoggerOptions {
     uint8_t logType = 0;
     int32_t minLogLevel = 0;

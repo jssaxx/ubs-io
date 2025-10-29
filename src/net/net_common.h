@@ -98,8 +98,8 @@ struct NetOptions {
     uint16_t handlerCount = 1;                           /* handler count */
     uint16_t connCount = 1;                              /* connect count */
     bool isBusyLoop = false;                             /* busy for rdma only */
-    uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
-    bool regShmMem = false;                              /* register the memory to shared */
+    bool isCreateMemPool = false;                        /* create net memory pool flag */
+    uint64_t memoryPoolSize = 128ULL * 1024ULL;          /* net memory pool size */
     Role role = Role::NET_BUTT;                                /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
