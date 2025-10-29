@@ -3,6 +3,7 @@
  */
 
 #include "wcache_manager.h"
+#include <unordered_set>
 #include "bio_log.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
@@ -10,6 +11,9 @@
 #include "flow_id_allocator.h"
 #include "bio_crc_util.h"
 #include "bio_config_instance.h"
+#include "message.h"
+#include "securec.h"
+#include "bio_server.h"
 #include "cache_flow.h"
 
 namespace ock {
@@ -245,6 +249,9 @@ BResult WCacheManager::DeleteWCache(uint64_t flowId)
     }
 
     WCachePtr wcache = iter->second;
+    while (wcache->GetStartEvictNegotiateFlag()) {
+        usleep(NO_10000);
+    }
     wcache->Destroy();
     mWCacheManager.erase(iter);
     mWCacheManagerLock.UnLock();
@@ -327,7 +334,7 @@ void WCacheManager::ScanUpgradeCache(std::list<WCachePtr> &list)
             continue;
         }
         flowIt.second->SetState(false);
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate() &&
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
@@ -699,8 +706,7 @@ void WCacheManager::ScanOldCache(uint16_t ptId, uint64_t ptv, std::list<WCachePt
         if (flowIt.second->GetPtv() >= ptv) {
             continue;
         }
-        flowIt.second->SetState(false);
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate() &&
+        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) &&
             flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
             continue;
         }
@@ -744,6 +750,7 @@ BResult WCacheManager::ClearOldCache(uint16_t ptId, uint64_t ptv)
 
 BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 {
+    LOG_INFO("Destroy wcache begin, procId:" << procId << ", flowId:" << flowId << ".");
     auto wcache = GetWCache(flowId);
     if (UNLIKELY(wcache == nullptr)) {
         LOG_WARN("Failed to get wcache flow by id:" << flowId << ".");
@@ -778,7 +785,7 @@ BResult WCacheManager::HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId)
 BResult WCacheManager::HandleCacheBrokenImpl(WCachePtr wcache)
 {
     LVOS_TP_START(NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT, 0);
-    if (wcache->IsEmptyEvict(WCACHE_MEMORY) && wcache->IsEmptyNegotiate() &&
+    if (wcache->IsEmptyEvict(WCACHE_MEMORY) &&
         wcache->IsEmptyEvict(WCACHE_DISK)) {
         return BIO_OK;
     }
@@ -820,70 +827,227 @@ BResult WCacheManager::HandleProcBroken(uint64_t procId)
 
 BResult WCacheManager::HandleProcBrokenHdl(uint64_t procId)
 {
+    startedProcLock.DoLock();
+    auto task = startedProc.find(procId);
+    if (task != startedProc.end()) {
+        startedProcLock.UnLock();
+        return BIO_OK;
+    }
+    startedProc.insert(procId);
+    startedProcLock.UnLock();
+
     BResult ret = BIO_INNER_ERR;
+    std::list<WCache*> oldList;
+    ScanProcCache(procId, oldList);
     do {
         LVOS_TP_START(HANDLE_PROC_BROKE_OK, &ret, BIO_OK);
-        ret = HandleProcBrokenImpl(procId);
+        ret = HandleProcBrokenImpl(procId, oldList);
         LVOS_TP_END;
         if (ret != BIO_OK) {
             usleep(BROKEN_INTERAL_TIME);
         }
     } while (ret != BIO_OK);
 
-    ret = ClearProcCache(procId);
-    ChkTrueNot(ret == BIO_OK, ret);
+    startedProcLock.DoLock();
+    startedProc.erase(procId);
+    startedProcLock.UnLock();
     return ret;
 }
 
-BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId)
+void WCacheManager::InitCallbackCtx(ProcBrokenCallbackCtx &cbCtx, uint32_t quota)
 {
-    BResult ret = BIO_INNER_ERR;
-    std::list<WCachePtr> brokenList;
-    bool isMaster = false;
+    cbCtx.result = BIO_OK;
+    sem_init(&cbCtx.sem, 0, 0);
+    cbCtx.quota = quota;
+    cbCtx.needDestroy = false;
+}
 
-    ScanProcCache(procId, brokenList);
-    for (const auto &flow : brokenList) {
-        LVOS_TP_START(WCACHE_HANDLE_PROC_BROCK_ROLE_ERR, &ret, BIO_ERR);
-        ret = mLocRole(static_cast<uint16_t>(flow->GetPtId()), isMaster);
-        LVOS_TP_END;
-        if (ret != BIO_OK) {
-            LOG_ERROR("Get local role failed, ret:" << ret << ", ptId:" << flow->GetPtId() << ".");
+BResult WCacheManager::SendProcBrokenSyncRequest(WCachePtr flow, CmPtInfo ptEntry, uint32_t localNid,
+    bool *slaveResult, bool &needDestroy)
+{
+    std::vector<uint32_t> slaveNode;
+    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
+        if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
             continue;
         }
+        if (ptEntry.copys[idx].nodeId == localNid) {
+            continue;
+        }
+        slaveNode.emplace_back(ptEntry.copys[idx].nodeId);
+    }
+    ProcBrokenCallbackCtx cbCtx;
+    InitCallbackCtx(cbCtx, slaveNode.size());
+    auto cbFunc = [&slaveResult](void *ctx, void *resp, uint32_t len, int32_t result) {
+        auto cbCtx = static_cast<ProcBrokenCallbackCtx *>(ctx);
+        if (UNLIKELY(result != BIO_OK)) {
+            cbCtx->result = result;
+        }
+        if (UNLIKELY(resp == nullptr)) {
+            if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
+                sem_post(&cbCtx->sem);
+            }
+            return;
+        }
+        auto procBrokenResp = static_cast<ProcFlowSyncResponse *>(resp);
+        slaveResult[procBrokenResp->nodeId] = procBrokenResp->needDestroy;
+        if (procBrokenResp->needDestroy) {
+            cbCtx->needDestroy = true;
+        }
+        if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
+            sem_post(&cbCtx->sem);
+        }
+    };
+    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+
+    ProcFlowSyncRequest req;
+    req.comm = {MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, localNid, getpid()};
+    req.needDestroy = false;
+    req.index = flow->GetIndex();
+    req.offset = flow->GetOffset();
+    req.flowId = flow->GetFlowId();
+    NetEnginePtr rpcEngine = BioServer::Instance()->GetNetEngine();
+    for (auto nodeId : slaveNode) {
+        rpcEngine->AsyncCall(nodeId, BIO_OP_SERVER_PROCBROCKEN_SYNC_FLOW, req, callback);
+    }
+    sem_wait(&cbCtx.sem);
+    sem_destroy(&cbCtx.sem);
+
+    needDestroy = cbCtx.needDestroy;
+    return cbCtx.result;
+}
+
+void WCacheManager::HandleProcBrokenDestroyFlow(WCachePtr flow, uint32_t localNid, bool *slaveResult)
+{
+    bool destroyLocal = false;
+    uint16_t ptId = flow->GetPtId();
+    uint64_t ptV = flow->GetPtv();
+    uint64_t flowId = flow->GetFlowId();
+    uint64_t procId = flow->GetProcId();
+    flow->SetState(true);
+    NetEnginePtr rpcEngine = BioServer::Instance()->GetNetEngine();
+    DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptV, localNid, getpid() }, flowId };
+    DestroyFlowResponse rsp;
+    BResult ret = BIO_OK;
+
+    do {
+        LVOS_TP_START(WCACHE_DESTROY_LOCAL_FALSE, &destroyLocal, true);
+        LVOS_TP_END;
+        if (!destroyLocal) {
+            ret = DestroyWCache(procId, flowId, ptId, ptV);
+            if (ret == BIO_OK) {
+                destroyLocal = true;
+            } else {
+                continue;
+            }
+        }
+        for (uint32_t i = 0; i < CLUSTER_SIZEMAX; i++) {
+            if (!slaveResult[i]) {
+                ret = rpcEngine->SyncCall<DestroyFlowRequest, DestroyFlowResponse>(static_cast<BioNodeId>(i),
+                    BIO_OP_SDK_DESTROY_FLOW, req, rsp);
+            }
+            if (ret == BIO_OK) {
+                slaveResult[i] = true;
+            } else {
+                break;
+            }
+        }
+        LVOS_TP_START(BROCK_DESTROY_FLOW_OK, &ret, BIO_OK);
+        LVOS_TP_END;
+    } while (ret != BIO_OK);
+}
+
+BResult WCacheManager::MasterProcBrokenSyncFlow(WCachePtr flow, CmPtInfo ptEntry, uint32_t localNid)
+{
+    bool slaveResult[CLUSTER_SIZEMAX];
+    std::fill(std::begin(slaveResult), std::end(slaveResult), true);
+    bool needDestroy = false;
+    auto ret = SendProcBrokenSyncRequest(flow, ptEntry, localNid, slaveResult, needDestroy);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Send proc broken sync request fail, flow:"<< flow->GetFlowId() <<
+                                                             ", ptId:" << flow->GetPtId() << ", ret:" << ret);
+        return ret;
+    }
+    if (!needDestroy) {
+        WriteLocker<ReadWriteLock> lock(&mReuseFlowsLock);
+        auto oldFlow = mReuseFlows.find(flow->GetPtId());
+        if (oldFlow == mReuseFlows.end()) {
+            std::unordered_set<uint64_t> flows;
+            flows.insert(flow->GetFlowId());
+            mReuseFlows.insert(std::pair<uint16_t, std::unordered_set<uint64_t>>(flow->GetPtId(), flows));
+        } else {
+            oldFlow->second.insert(flow->GetFlowId());
+        }
+        LOG_DEBUG("Inser reuse flow collection, flow:" << flow->GetFlowId() << ", pt:" << flow->GetPtId() << ".");
+        flow->SetState(true);
+    } else {
+        bool isSucceed = mGcEvictService->Execute(
+            [this, &slaveResult, flow, localNid]() { HandleProcBrokenDestroyFlow(flow, localNid, slaveResult); });
+        ret = (isSucceed) ? BIO_OK : BIO_ERR;
+    }
+
+    return ret;
+}
+
+BResult WCacheManager::HandleProcBrokenImpl(uint64_t procId, std::list<WCache*> &oldList)
+{
+    BResult ret = BIO_INNER_ERR;
+    bool isMaster = false;
+    auto it = oldList.begin();
+    while (it != oldList.end()) {
+        auto flow = *it;
+        while (!flow->IsIoFinish()) {
+            usleep(NO_20 * NO_10000);
+        }
+        CmPtInfo ptEntry;
+        ret = Cm::Instance()->GetPtInfo(flow->GetPtId(), ptEntry);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Get pt info fail,flow:" << flow->GetFlowId() << ", ptId:" << flow->GetPtId() << ".");
+            it++;
+            continue;
+        }
+        uint16_t localNid = Cm::Instance()->GetCmLocalNodeId().VNodeId();
         LVOS_TP_START(WCACHE_HANDLE_PROC_BROCK_FLUSH, &isMaster, true);
         LVOS_TP_END;
         LVOS_TP_START(WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR, &isMaster, false);
         LVOS_TP_END;
-        if (isMaster) {
-            flow->Flush(flow);
-        } else {
-            flow->ProcAndCacheBrokenExpiredClear();
+
+        ret = MasterProcBrokenSyncFlow(flow, ptEntry, localNid);
+        if (ret != BIO_OK && flow->GetState()) {
+            flow->SetState(false);
+            LOG_ERROR("proc broken sync flow fail,flow:" << flow->GetFlowId() << ", ptId:" <<
+                                                         flow->GetPtId() << ", ret:" << ret <<".");
+            it++;
+            continue;
         }
+        *it = nullptr;
+        it = oldList.erase(it);
     }
 
-    return (brokenList.empty()) ? BIO_OK : BIO_INNER_RETRY;
+    return (oldList.empty()) ? BIO_OK : BIO_INNER_RETRY;
 }
 
-void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCachePtr> &list)
+void WCacheManager::ScanProcCache(uint64_t procId, std::list<WCache*> &list)
 {
-    WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    bool isMaster = false;
     for (const auto &flowIt : mWCacheManager) {
         uint16_t flowPtId = CacheFlowIdManager::GetPtId(flowIt.first);
-        if (procId != flowIt.second->GetProcId()) {
+        if (procId != flowIt.second->GetProcId() || !flowIt.second->GetState()) {
+            continue;
+        }
+        isMaster = false;
+        auto ret = mLocRole(flowPtId, isMaster);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Get pt info fail, ptId:" << flowPtId << ".");
+        }
+        if (!isMaster) {
             continue;
         }
         flowIt.second->SetState(false);
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate()) {
-            flowIt.second->Seal(WCACHE_MEMORY);
-        }
-        if (flowIt.second->IsEmptyEvict(WCACHE_MEMORY) && flowIt.second->IsEmptyNegotiate() &&
-            flowIt.second->IsEmptyEvict(WCACHE_DISK)) {
-            continue;
-        }
-        LOG_TRACE("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
+        LOG_DEBUG("Flow ptId:" << flowPtId << ", ptv:" << flowIt.second->GetPtv() << ", flowId:" << flowIt.first <<
             ", procId:" << procId << ", Mem:" << flowIt.second->GetCapacity(WCACHE_MEMORY) << ", Disk:" <<
             flowIt.second->GetCapacity(WCACHE_DISK));
-        list.emplace_back(flowIt.second);
+        list.emplace_back(flowIt.second.Get());
     }
 
     return;
@@ -1064,8 +1228,7 @@ void WCacheManager::DestroyEvictThread()
     }
 }
 
-BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], std::vector<bool> &result,
-    uint32_t count)
+BResult WCacheManager::GetTruncateIndex(uint64_t flowId, uint64_t &truncateIndex)
 {
     LOG_DEBUG("Get negotiate message,flow:" << flowId);
     WCachePtr wCache = GetWCache(flowId);
@@ -1076,32 +1239,54 @@ BResult WCacheManager::MasterEvictNegotiate(uint64_t flowId, uint64_t slices[], 
     if (UNLIKELY(wCache->GetState() == false)) {
         return BIO_OK;
     }
-    wCache->MasterEvictNegotiate(slices, result, count);
+    truncateIndex = wCache->GetTruncateIndex();
     return BIO_OK;
 }
 
-BResult WCacheManager::GetEvictNegotiateInfo()
+BResult WCacheManager::GetReuseFlowId(uint16_t ptId, uint64_t &flowId)
 {
-    LOG_INFO("Current evict negotiate info.");
-    ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
-    for (const auto &item: mWCacheManager) {
-        uint32_t flowId = item.first;
-        auto mapPtr = item.second->GetEvictNegotiateIndexMap();
-        LOG_INFO("FlowId " << flowId << " :");
-        uint64_t idx = 0;
-        uint64_t indexInMap = 0;
-        item.second->NegotiateIndexMapLockRead();
-        for (auto pair: (*mapPtr)) {
-            uint8_t indexInArray = 0;
-            for (const auto array: pair.second) {
-                LOG_INFO("  " << idx << ", negotiate indexInMap:" << indexInMap << ",indexInArray :" << indexInArray++);
-            }
-            indexInMap++;
-            idx++;
+    mReuseFlowsLock.LockWrite();
+    if (mReuseFlows.find(ptId) != mReuseFlows.end()) {
+        if (mReuseFlows[ptId].empty()) {
+            mReuseFlows.erase(ptId);
+            mReuseFlowsLock.UnLock();
+            return BIO_NOT_EXISTS;
         }
-        item.second->NegotiateIndexMapUnLock();
+        flowId = *(mReuseFlows[ptId].begin());
+        mReuseFlows[ptId].erase(flowId);
+        mReuseFlowsLock.UnLock();
+        return BIO_OK;
     }
-    return BIO_OK;
+    mReuseFlowsLock.UnLock();
+    return BIO_NOT_EXISTS;
 }
+
+BResult WCacheManager::ProcBrokenSyncOldFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy)
+{
+    auto wcache = GetWCache(flowId);
+    if (UNLIKELY(wcache == nullptr)) {
+        LOG_ERROR("WCache failed to get flow, flowId:" << flowId << ".");
+        needDestroy = true;
+        return BIO_OK;
+    }
+
+    while (!wcache->IsIoFinish()) {
+        usleep(NO_20 * NO_10000);
+    }
+
+    if (wcache->GetIndex() == index && wcache->GetOffset() == offset) {
+        needDestroy = false;
+        LOG_DEBUG("Current node not need to destroy flow:" << wcache->GetFlowId() << ", pt:" <<
+                                                           wcache->GetPtId() << ", ptV:" << wcache->GetPtv() << ".");
+        return BIO_OK;
+    }
+    needDestroy = true;
+    LOG_DEBUG("Current node flow:" << wcache->GetFlowId() << ", pt:" << wcache->GetPtId() << ", index:" <<
+        wcache->GetIndex() << ", offset:" << wcache->GetOffset() << ", is not same to master node flow index:" <<
+        index << ", offset:" << offset << ".");
+    auto ret = DestroyWCache(wcache->GetProcId(), flowId, wcache->GetPtId(), wcache->GetPtv());
+    return ret;
+}
+
 }
 }

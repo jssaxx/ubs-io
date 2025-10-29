@@ -53,6 +53,8 @@ void ClearTraceInfo();
 
 void HTracerSetEnable(bool isEnable);
 
+void HTracerDumpSetEnable(bool isEnable);
+
 constexpr int32_t GetTraceId(uint32_t serviceId, uint32_t innerId)
 {
     return ((serviceId << SERVICE_SHIFT) | (innerId & 0xFFFF));

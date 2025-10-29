@@ -666,6 +666,141 @@ TEST_F(TestCm, test_cm_get_pt_info)
     EXPECT_EQ(ret, 123U);
 }
 
+TEST_F(TestCm, test_cm_node_id_to_string)
+{
+    LOG_INFO("test_cm_node_id_to_string");
+    CmNodeId nodeId { 1, 1 };
+
+    std::string strNid = nodeId.ToString();
+    EXPECT_NE(strNid, "");
+}
+
+TEST_F(TestCm, test_cm_node_info_to_string)
+{
+    LOG_INFO("test_cm_node_info_to_string");
+    CmNodeInfo nodeInfo;
+    nodeInfo.port = 0;
+    CmNodeId nodeId { 1, 1 };
+    nodeInfo.id = nodeId;
+    nodeInfo.ip = "0.0.0.0";
+    nodeInfo.status = CM_NODE_FAULT;
+
+    std::vector<CmDiskInfo> disks;
+    disks.push_back({ 1, CM_DISK_NORMAL });
+    disks.push_back({ 2, CM_DISK_NORMAL });
+    disks.push_back({ 3, CM_DISK_NORMAL });
+    disks.push_back({ 4, CM_DISK_NORMAL });
+    disks.push_back({ 5, CM_DISK_NORMAL });
+
+    nodeInfo.disks = disks;
+    std::string strNodeInfo = nodeInfo.ToString();
+    EXPECT_NE(strNodeInfo, "");
+}
+
+TEST_F(TestCm, test_cm_pt_info_to_string)
+{
+    LOG_INFO("test_cm_pt_info_to_string");
+    CmPtInfo ptInfo;
+    ptInfo.version = 1;
+    ptInfo.referNum = 1;
+    ptInfo.ptId = 1;
+    ptInfo.state = CM_PT_NORMAL;
+    ptInfo.masterNodeId = 1;
+    ptInfo.masterDiskId = 1;
+
+    std::vector<CmPtCopy> copy;
+    copy.push_back({ 1, 1, CM_COPY_RUNNING});
+    copy.push_back({ 2, 2, CM_COPY_RUNNING});
+    copy.push_back({ 3, 1, CM_COPY_RUNNING});
+    copy.push_back({ 4, 2, CM_COPY_RUNNING});
+    ptInfo.copys = copy;
+
+    std::string strPtInfo = ptInfo.ToString();
+    EXPECT_NE(strPtInfo, "");
+}
+
+TEST_F(TestCm, test_cm_pt_info_err)
+{
+    LOG_INFO("test_cm_pt_info_err");
+    CmPtr cmInstance = Cm::Instance();
+    CmPtInfo ptInfo;
+    ptInfo.version = 1;
+    ptInfo.referNum = 1;
+    ptInfo.ptId = 1;
+    ptInfo.state = CM_PT_NORMAL;
+    ptInfo.masterNodeId = 1;
+    ptInfo.masterDiskId = 1;
+
+    std::vector<CmPtCopy> copy;
+    copy.push_back({ 1, 1, CM_COPY_RUNNING});
+    copy.push_back({ 2, 2, CM_COPY_RUNNING});
+    copy.push_back({ 3, 1, CM_COPY_RUNNING});
+    copy.push_back({ 4, 2, CM_COPY_RUNNING});
+    ptInfo.copys = copy;
+
+    uint16_t ptId = 100;
+    BResult ret = cmInstance->GetPtInfo(ptId, ptInfo);
+    EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestCm, test_cm_get_local_disk_id_err)
+{
+    LOG_INFO("test_cm_get_local_disk_id_err");
+    CmPtr cmInstance = Cm::Instance();
+    uint16_t ptId = 100;
+    uint16_t diskId = 200;
+    BResult ret = cmInstance->GetLocalDiskId(ptId, diskId);
+    EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestCm, test_cm_get_local_disk_status_err)
+{
+    LOG_INFO("test_cm_get_local_disk_status_err");
+    CmPtr cmInstance = Cm::Instance();
+    uint16_t ptId = 100;
+    uint16_t diskId = 200;
+    bool isNormal;
+    cmInstance->GetLocalDiskStatus(ptId, diskId, isNormal);
+    EXPECT_EQ(isNormal, false);
+}
+
+TEST_F(TestCm, test_cm_check_pt_degrade)
+{
+    LOG_INFO("test_cm_check_pt_degrade");
+    CmPtr cmInstance = Cm::Instance();
+    uint16_t ptId = 100;
+    bool isDegrade;
+    BResult ret = cmInstance->CheckPtDegrade(ptId, isDegrade);
+    EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestCm, test_cm_check_local_role)
+{
+    LOG_INFO("test_cm_check_local_role");
+    CmPtr cmInstance = Cm::Instance();
+    uint16_t ptId = 100;
+    bool isMaster;
+    BResult ret = cmInstance->CheckLocalRole(ptId, isMaster);
+    EXPECT_EQ(ret, BIO_ERR);
+
+    ptId = 0;
+    ret = cmInstance->CheckLocalRole(ptId, isMaster);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestCm, test_cm_report_pt_finish)
+{
+    LOG_INFO("test_cm_report_pt_finish");
+    CmPtr cmInstance = Cm::Instance();
+    std::vector<ock::bio::CmPtFinish> ptFinish;
+    ptFinish.push_back({ 1, 1 });
+    ptFinish.push_back({ 1, 0 });
+    ptFinish.push_back({ 1, 2 });
+    ptFinish.push_back({ 1, 3 });
+    BResult ret = cmInstance->ReportPtFinish(ptFinish);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestCm, test_cm_get_zk_node_state)
 {
     LOG_INFO("test_cm_get_zk_node_state");

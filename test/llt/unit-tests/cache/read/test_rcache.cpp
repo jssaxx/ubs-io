@@ -4,7 +4,7 @@
 
 #include <mockcpp/mockcpp.hpp>
 #include <cstdint>
-#include "underfs.h"
+#include "ufs_helper.h"
 #include "bio_server.h"
 #include "bio_mock.h"
 #include "bio_config_instance.h"
@@ -78,6 +78,13 @@ TEST_F(TestRCache, test_rcache_put_ok)
     EXPECT_EQ(needEvictData, haveEvictData);
 
     // evict disk data to underfs
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "RCACHE_EVICT_NULL_CHUNK", 0, 1, userParam);
+    ret = gRCacheManager->GetRCacheInstanceByPtId(G_PT_ID)->EvictDiskData(needEvictData, haveEvictData);
+    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_NE(needEvictData, haveEvictData);
+    LVOS_HVS_deactiveTracePoint(0, "RCACHE_EVICT_NULL_CHUNK");
+
     gRCacheManager->GetRCacheInstanceByPtId(G_PT_ID)->EvictDiskData(needEvictData, haveEvictData);
     EXPECT_EQ(ret, BIO_OK);
     EXPECT_EQ(needEvictData, haveEvictData);
@@ -104,6 +111,14 @@ TEST_F(TestRCache, test_bio_server_expire_clear)
     ptInfo.version = 0;
     ret = BioServer::Instance()->GetMirrorCrb()->JobExpiredClear(ptInfo);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestRCache, test_rcache_resource_enough_false)
+{
+    LOG_INFO("test_rcache_resource_enough_false");
+    // test invalid pt id
+    auto ret = gRCacheManager->IsResourceEnough(NO_1024);
+    EXPECT_EQ(ret, false);
 }
 
 TEST_F(TestRCache, test_rcache_put_ptid_not_exist)
@@ -168,7 +183,7 @@ TEST_F(TestRCache, test_rcache_load_ok)
     LOG_INFO("test_rcache_load_ok");
     Key key = "123123key2";
     uint64_t len = strlen(G_VALUE) + 1;
-    auto ret = UnderFs::Instance()->Put(key, G_VALUE, len);
+    auto ret = UfsHelper::Instance()->Put(key, G_VALUE, len);
     EXPECT_EQ(ret, BIO_OK);
 
     uint64_t realLen;

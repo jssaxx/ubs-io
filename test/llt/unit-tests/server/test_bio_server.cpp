@@ -18,6 +18,8 @@ using namespace ock::bio;
 
 bool TestBioServer::gSetup = false;
 
+constexpr uint64_t NUM_ZERO = 0;
+
 void TestBioServer::SetUp()
 {
     if (gSetup) {
@@ -47,6 +49,49 @@ TEST_F(TestBioServer, test_bio_server_check_all)
     reqComm = { MESSAGE_MAGIC, 1, NO_2, 1, getpid() };
     ret = mirror->CheckAll(reqComm);
     EXPECT_EQ(ret, false);
+}
+
+TEST_F(TestBioServer, test_bio_server_shm_init)
+{
+    LOG_INFO("test_bio_server_shm_init");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() } };
+    auto ret = mirror->MirrorServerShmInit(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_create_flow_mem_pool_ok)
+{
+    LOG_INFO("test_create_flow_mem_pool_ok");
+    ServiceContext ctx;
+    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() }, NO_1024 };
+    auto ret = BioServer::Instance()->GetMirrorServer()->MirrorServerCreateDataMsgMemPool(ctx, &req);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_destroy_flow_mem_pool_ok)
+{
+    LOG_INFO("test_destroy_flow_mem_pool_ok");
+    BioServer::Instance()->GetMirrorServer()->RecycleDataMsgMem(getpid());
+}
+
+TEST_F(TestBioServer, test_create_flow_mem_pool_mmap_fail)
+{
+    LOG_INFO("test_create_flow_mem_pool_mmap_fail");
+    ServiceContext ctx;
+    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() }, 0 };
+
+    auto ret = BioServer::Instance()->GetMirrorServer()->MirrorServerCreateDataMsgMemPool(ctx, &req);
+    EXPECT_EQ(ret, BIO_ERR);
+}
+
+TEST_F(TestBioServer, test_create_flow_trans_mem_addr_ok)
+{
+    LOG_INFO("test_create_flow_trans_mem_addr_ok");
+    ServiceContext ctx;
+    auto ret = BioServer::Instance()->GetMirrorServer()->TransDataMsgMemAddr(0, 0);
+    EXPECT_EQ(ret, 0);
 }
 
 TEST_F(TestBioServer, test_bio_server_qry_node_info)
@@ -644,6 +689,7 @@ TEST_F(TestBioServer, test_bio_server_list_inner)
     req.comm = { MESSAGE_MAGIC, 0, 0, 1, getpid() };
     CopyKey(req.prefix, "a", KEY_MAX_SIZE);
     mirror->ReplyListResultRemote(ctx, &req, objs);
+    EXPECT_EQ(objs.size(), 0);
 }
 
 TEST_F(TestBioServer, test_bio_server_list_inner_objs_notempty)
@@ -661,6 +707,7 @@ TEST_F(TestBioServer, test_bio_server_list_inner_objs_notempty)
     req.comm = { MESSAGE_MAGIC, 0, 0, 1, getpid() };
     CopyKey(req.prefix, "a", KEY_MAX_SIZE);
     mirror->ReplyListResultRemote(ctx, &req, objs);
+    EXPECT_NE(objs.size(), 0);
 }
 
 TEST_F(TestBioServer, test_mirror_master_create_flow_wcache_err)
@@ -671,8 +718,9 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_wcache_err)
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 1, 1, getpid() }, 0, 1 };
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "MIRROR_FLOW_CREATE_WCACHE_FAIL", 0, 1, userParam);
-    mirror->MirrorServerCreateFlow(ctx, &req);
+    auto ret = mirror->MirrorServerCreateFlow(ctx, &req);
     LVOS_HVS_deactiveTracePoint(0, "MIRROR_FLOW_CREATE_WCACHE_FAIL");
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBioServer, test_slave_create_flow_ok)
@@ -700,9 +748,10 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_alloc_obj_err)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_FIND", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "RCACHE_ALLOC_OBJ_FAIL", 0, 1, userParam);
-    mirror->MirrorServerCreateFlow(ctx, &req);
+    auto ret = mirror->MirrorServerCreateFlow(ctx, &req);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_FIND");
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_ALLOC_OBJ_FAIL");
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBioServer, test_mirror_server_destroy_flow_rcache_alloc_obj_err)
@@ -772,9 +821,10 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_init_obj_err)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RCACHE_FIND", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "RCACHE_INIT_OBJ_FAIL", 0, 1, userParam);
-    mirror->MirrorServerCreateFlow(ctx, &req);
+    auto ret = mirror->MirrorServerCreateFlow(ctx, &req);
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RCACHE_FIND");
     LVOS_HVS_deactiveTracePoint(0, "RCACHE_INIT_OBJ_FAIL");
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBioServer, test_bio_server_load_check_success)
@@ -935,7 +985,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal)
     req.comm.srcNid = NO_10;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
-    EXPECT_EQ(ret, BIO_INNER_ERR);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 }
 
 TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
@@ -1095,6 +1145,7 @@ TEST_F(TestBioServer, test_bio_server_add_finish_list)
     CmPtTaskPtr ptTask = MakeRef<CmPtTask>();
     CmPtInfo ptInfo;
     crb->JobAddFinishList(ptTask, ptInfo);
+    EXPECT_NE(ptTask->ptFinish.size(), 0);
 }
 
 TEST_F(TestBioServer, test_bio_server_add_retry_list)
@@ -1104,6 +1155,7 @@ TEST_F(TestBioServer, test_bio_server_add_retry_list)
     CmPtTaskPtr ptTask = MakeRef<CmPtTask>();
     CmPtInfo ptInfo;
     crb->JobAddRetryList(ptTask, ptInfo);
+    EXPECT_NE(ptTask->retryList.size(), 0);
 }
 
 TEST_F(TestBioServer, test_bio_server_expire_clear)
@@ -1113,7 +1165,8 @@ TEST_F(TestBioServer, test_bio_server_expire_clear)
     CmPtInfo ptInfo;
     ptInfo.ptId = 1;
     ptInfo.version = 1;
-    crb->JobExpiredClear(ptInfo);
+    auto ret = crb->JobExpiredClear(ptInfo);
+    EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestBioServer, test_bio_server_add_sync_data)
@@ -1123,7 +1176,8 @@ TEST_F(TestBioServer, test_bio_server_add_sync_data)
     CmPtInfo ptInfo;
     ptInfo.ptId = 1;
     ptInfo.version = 1;
-    crb->JobSyncData(ptInfo);
+    auto ret = crb->JobSyncData(ptInfo);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 }
 
 TEST_F(TestBioServer, test_start_server_log_init_err_return_fail)
@@ -1444,12 +1498,7 @@ TEST_F(TestBioServer, test_wcache_negotiate)
     LOG_INFO("test_wcache_negotiate");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
-    std::vector<uint64_t> offsetVec;
-    offsetVec.emplace_back(0);
-    EvictNegotiateRequest req = { 0, static_cast<uint32_t>(offsetVec.size()) };
-    for (uint32_t idx = 0; idx < req.count; idx++) {
-        req.data[idx] = offsetVec[idx];
-    }
+    EvictNegotiateRequest req = { 0 };
     auto ret = mirror->MirrorServerEvictNegotiate(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
 }
@@ -1483,7 +1532,7 @@ TEST_F(TestBioServer, test_server_exception)
     auto ret = MirrorServer::Instance()->MirrorServerFreeMem(ctx, &freeMemReq);
     EXPECT_EQ(ret, BIO_OK);
     EvictNegotiateRequest negoReq;
-    negoReq.count = NO_1024;
+    negoReq.flowId= 0;
     ret = MirrorServer::Instance()->MirrorServerEvictNegotiate(ctx, &negoReq);
     EXPECT_EQ(ret, BIO_OK);
     ret = ExpireChecker::Instance()->ExpireCheckerInit("./test.pem", "./test1.pem");
@@ -1495,6 +1544,14 @@ TEST_F(TestBioServer, test_handle_interceptor_alloc_page)
     LOG_INFO("test_handle_interceptor_alloc_page");
     ServiceContext ctx;
     auto ret = InterceptorServer::GetInstance().HandleInterceptorAllocPage(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_handle_interceptor_large_write)
+{
+    LOG_INFO("test_handle_interceptor_large_write");
+    ServiceContext ctx;
+    auto ret = InterceptorServer::GetInstance().HandleInterceptorLargeWrite(ctx);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -1719,6 +1776,56 @@ TEST_F(TestBioServer, test_get_trace_data_null)
     EXPECT_EQ(traceDatabase.count, 0);
 }
 
+TEST_F(TestBioServer, test_mirror_server_alloc_cache_quota)
+{
+    LOG_INFO("test_mirror_server_alloc_cache_quota");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    AllocQuotaRequest req = { { NUM_ZERO, NO_1, NUM_ZERO, NO_1, getpid() }, NO_1, NO_1024, NO_4194304 };
+    AllocQuotaResponse rsp;
+    auto ret = mirror->AllocCacheQuota(req, rsp);
+    EXPECT_EQ(ret, BIO_CHECK_PT_FAIL);
+}
+
+TEST_F(TestBioServer, test_bio_server_handle_not_ready)
+{
+    LOG_INFO("test_bio_server_handle_not_ready");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    mirror->SetStartWorker(false);
+    auto ret = mirror->HandleShmInit(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleQueryNodeInfo(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleQueryNodeInfoByPt(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleQueryQuota(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleAllocQuota(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleFreeQuota(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleQueryNodeView(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleQueryPtView(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandlePut(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleGet(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = mirror->HandleDelete(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
 TEST_F(TestBioServer, test_bio_server_get_cli_flag)
 {
     LOG_INFO("test_bio_server_get_cli_flag");
@@ -1733,5 +1840,26 @@ TEST_F(TestBioServer, test_start_server_add_disk)
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     auto ret = mirror->HandleAddDisk(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_server_handle_create_data_msg_mem_pool)
+{
+    LOG_INFO("test_bio_server_handle_create_data_msg_mem_pool");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    ServiceContext ctx;
+    auto ret = mirror->HandleCreateDataMsgMemPool(ctx);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestBioServer, test_bio_mirror_server_proc_broken_sync_flow)
+{
+    LOG_INFO("test_bio_mirror_server_proc_broken_sync_flow");
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+
+    ProcFlowSyncRequest req;
+    ServiceContext ctx;
+    req.flowId = 0;
+    auto ret = mirror->MirrorServerProcBrokenSyncFlow(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
 }

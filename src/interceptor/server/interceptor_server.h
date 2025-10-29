@@ -28,6 +28,11 @@ public:
     BResult HandleInterceptorAllocPage(ServiceContext &ctx);
     BResult HandleInterceptorLargeWrite(ServiceContext &ctx);
 
+    BResult InterceptorServerRead(ServiceContext &ctx, InterceptorPreadIn *req);
+    BResult InterceptorServerWrite(ServiceContext &ctx, InterceptorPwriteIn *req);
+    BResult InterceptorServerAllocPage(ServiceContext &ctx, InterceptorAllocPageReq *req);
+    BResult InterceptorServerLargeWrite(ServiceContext &ctx, InterceptorLargePwriteIn *req);
+
     bool CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req);
     bool CheckInterceptorAllocPageReq(InterceptorAllocPageReq *req);
     bool CheckInterceptorWriteReq(InterceptorPwriteIn *req);

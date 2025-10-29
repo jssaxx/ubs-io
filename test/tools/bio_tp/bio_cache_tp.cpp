@@ -55,6 +55,7 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(WCACHE_FLOW_DISK_FAIL, "wcache flow disk err", CommonTp::IntValueCallback);
     LVOS_TP_REG(SYNCCALL_FAIL, "synccall err", CommonTp::IntValueCallback);
     LVOS_TP_REG(SYNCCALL_CHANNEL_FAIL, "synccall channel err", CommonTp::IntValueCallback);
+    LVOS_TP_REG(BROCK_DESTROY_FLOW_OK, "synccall channel ok", CommonTp::IntValueCallback);
     LVOS_TP_REG(SYNCCALL_OPCODE_FAIL, "synccall opcode err", CommonTp::BoolValueCallback);
     LVOS_TP_REG(PUT_SLICE_ZERO_ALLOC_FAIL, "put slice zero alloc err", CommonTp::PointerValueCallback);
     LVOS_TP_REG(PUT_SLICE_NORMAL_ALLOC_FAIL, "put slice normal alloc err", CommonTp::PointerValueCallback);
@@ -161,6 +162,13 @@ void tp::CacheTp::Register() noexcept
     LVOS_TP_REG(GET_EXTERBAL_CRC_OK, "external get crc OK", CommonTp::IntValueCallback);
     LVOS_TP_REG(GET_CACHE_HIT, "get cache hit fail", tp::CommonTp::NoProcessCallback);
     LVOS_TP_REG(CALC_CACHE_RESOURCE, "calc cache resource fail", tp::CommonTp::NoProcessCallback);
+    LVOS_TP_REG(RCACHE_EVICT_NULL_CHUNK, "rcache evict null chunk", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(GET_EXTERNAL_ALLOCFLOW_FAIL, "external alloc rcache mem fail", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(MASTER_PROC_BROKEN_SYNC_FLOW_SUCCESS, "master proc broken sync flow success", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(PROC_BROKEN_SYNC_SEM_UP, "proc broken sync sem up", tp::CommonTp::IntValueCallback);
+    LVOS_TP_REG(WCACHE_DESTROY_LOCAL_FALSE, "wcache not destroy local", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(ALLOC_DEST_SLICE_NULL, "alloc dest slice fail", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(NO_PROCESS_RESOURCE_ENOUGH, "no process rcache resource enough", CommonTp::NoProcessCallback);
 }
 
 void tp::CacheTp::Deregister() noexcept
@@ -208,6 +216,7 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(WCACHE_FLOW_DISK_FAIL);
     LVOS_TP_UNREG(SYNCCALL_FAIL);
     LVOS_TP_UNREG(SYNCCALL_CHANNEL_FAIL);
+    LVOS_TP_UNREG(BROCK_DESTROY_FLOW_OK);
     LVOS_TP_UNREG(SYNCCALL_OPCODE_FAIL);
     LVOS_TP_UNREG(PUT_SLICE_ZERO_ALLOC_FAIL);
     LVOS_TP_UNREG(PUT_SLICE_NORMAL_ALLOC_FAIL);
@@ -314,6 +323,14 @@ void tp::CacheTp::Deregister() noexcept
     LVOS_TP_UNREG(GET_EXTERNAL_WCSLICE_ALLOC_FAIL);
     LVOS_TP_UNREG(GET_EXTERBAL_OPEN_CRC);
     LVOS_TP_UNREG(GET_EXTERBAL_CRC_OK);
+    LVOS_TP_UNREG(RCACHE_EVICT_NULL_CHUNK);
+    LVOS_TP_UNREG(GET_EXTERNAL_ALLOCFLOW_FAIL);
+    LVOS_TP_UNREG(MASTER_PROC_BROKEN_SYNC_FLOW_SUCCESS);
+    LVOS_TP_UNREG(PROC_BROKEN_SYNC_SEM_UP);
+    LVOS_TP_UNREG(PROC_BROKEN_SYSNC_DESTROY);
+    LVOS_TP_UNREG(WCACHE_DESTROY_LOCAL_FALSE);
+    LVOS_TP_UNREG(ALLOC_DEST_SLICE_NULL);
+    LVOS_TP_UNREG(NO_PROCESS_RESOURCE_ENOUGH);
 }
 #else
 void tp::CacheTp::Register() noexcept {}

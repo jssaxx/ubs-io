@@ -33,6 +33,7 @@ public:
     static void NoProcessCallback(LVOS_TRACEP_PARAM_S *user) noexcept;
     static void PointerValueCallback(LVOS_TRACEP_PARAM_S *user, void** value, void* set) noexcept;
     static void PointerValueResetCallback(LVOS_TRACEP_PARAM_S *user, void** value) noexcept;
+    static void LongIntValueCallback(LVOS_TRACEP_PARAM_S *user, int64_t *value, int64_t set) noexcept;
 };
 }
 }

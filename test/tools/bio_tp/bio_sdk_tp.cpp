@@ -41,9 +41,6 @@ void tp::SdkTp::Register() noexcept
     LVOS_TP_REG(SDK_MIRROR_CLIENT_PREPARE_FAIL, "prepare fail", CommonTp::NoProcessCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, "not exsit local copy", CommonTp::NoProcessCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_FAIL, "mirror client query fail, retuen nullptr", CommonTp::NoProcessCallback);
-    LVOS_TP_REG(SDK_MIRROR_CLIENT_GET_RETRY, "sdk mirror client get return retry", CommonTp::IntValueCallback);
-    LVOS_TP_REG(SDK_CLIENT_GET_CEPH_STAT_OK, "sdk mirror client get ceph stat ok", CommonTp::IntValueCallback);
-    LVOS_TP_REG(SDK_CLIENT_GET_CEPH_STAT_SIZE, "sdk mirror client get ceph stat size unequit zero", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, "sdk mirror client alloc space fail", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_RSP_NUM_ERROR, "set mirror rsp num error", CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, "get underfs config pass sync call", CommonTp::NoProcessCallback);
@@ -51,7 +48,20 @@ void tp::SdkTp::Register() noexcept
                 CommonTp::IntValueCallback);
     LVOS_TP_REG(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL, "mirror client query cache hit fail",
                 CommonTp::IntValueCallback);
+    LVOS_TP_REG(START_IPC_SERVICE_NULL, "start ipc service null", CommonTp::PointerValueCallback);
+    LVOS_TP_REG(START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR, "start ipc service not prepare hse cryptor",
+                CommonTp::NoProcessCallback);
+    LVOS_TP_REG(START_IPC_SERVICE_SET_TLS_ENABLE, "start ipc service set tls enable", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(BIO_CRYPTOR_HELPER_UNDO, "bio cryptor helper undo",
+                CommonTp::NoProcessCallback);
     LVOS_TP_REG(SDK_ADD_DISK_BY_SEPARATES, "sdk add disk by separates", CommonTp::NoProcessCallback);
+    LVOS_TP_REG(SDK_PUT_NOT_RETRY, "sdk put do not retry", CommonTp::BoolValueCallback);
+    LVOS_TP_REG(SDK_CREATE_DATA_MESSAGE_MEM_POOL_SEND_SUCCESS, "create data message mem pool send sync success", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_PREPARE_RESOURCE_LOCAL_SUCCESS, "Send prepare resource local success", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_GET_LOCAL_NODE_INFO_REQUEST, "Send get local node info request success",
+                CommonTp::IntValueCallback);
+    LVOS_TP_REG(SDK_CREATE_FLOW_REQUEST_SEND_SUCCESS, "create flow request send sync success",
+                CommonTp::IntValueCallback);
 }
 
 void tp::SdkTp::Deregister() noexcept
@@ -84,9 +94,6 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_SELECT_PT_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_SET_RETRY_TIME);
-    LVOS_TP_UNREG(SDK_MIRROR_CLIENT_GET_RETRY);
-    LVOS_TP_UNREG(SDK_CLIENT_GET_CEPH_STAT_OK);
-    LVOS_TP_UNREG(SDK_CLIENT_GET_CEPH_STAT_SIZE);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_ADDRNUM_INVALID);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_PREPARE_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY);
@@ -94,7 +101,16 @@ void tp::SdkTp::Deregister() noexcept
     LVOS_TP_UNREG(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL);
     LVOS_TP_UNREG(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL);
+    LVOS_TP_UNREG(START_IPC_SERVICE_NULL);
+    LVOS_TP_UNREG(START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR);
+    LVOS_TP_UNREG(START_IPC_SERVICE_SET_TLS_ENABLE);
+    LVOS_TP_UNREG(BIO_CRYPTOR_HELPER_UNDO);
     LVOS_TP_UNREG(SDK_ADD_DISK_BY_SEPARATES);
+    LVOS_TP_UNREG(SDK_PUT_NOT_RETRY);
+    LVOS_TP_UNREG(SDK_CREATE_DATA_MESSAGE_MEM_POOL_SEND_SUCCESS);
+    LVOS_TP_UNREG(SDK_CREATE_FLOW_REQUEST_SEND_SUCCESS);
+    LVOS_TP_UNREG(SDK_GET_LOCAL_NODE_INFO_REQUEST);
+    LVOS_TP_UNREG(SDK_PREPARE_RESOURCE_LOCAL_SUCCESS);
 }
 #else
 void tp::SdkTp::Register() noexcept {}

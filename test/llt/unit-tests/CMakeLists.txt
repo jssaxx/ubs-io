@@ -27,6 +27,7 @@ aux_source_directory(disk BIO_TEST)
 aux_source_directory(sdk BIO_TEST)
 aux_source_directory(common BIO_TEST)
 aux_source_directory(underfs BIO_TEST)
+aux_source_directory(interceptor BIO_TEST)
 add_executable(bio_test ${BIO_TEST} main.cpp ut_common.cpp ut_common.h)
 
 set(TEST_DIR ${PROJECT_SOURCE_DIR})
@@ -61,11 +62,12 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
-        ${SRC_DIR}/underfs)
+        ${SRC_DIR}/underfs
+        ${SRC_DIR}/ufs)
 
-target_link_libraries(bio_test bio_sdk bio_server
+target_link_libraries(bio_test bio_sdk bio_server bio_underfs
         -Wl,--start-group
-        pthread dl rt aio
+        pthread dl rt aio rados
         -Wl,--end-group)
 
 set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")

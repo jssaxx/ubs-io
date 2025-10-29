@@ -77,7 +77,6 @@ BResult BioServer::Start()
         return BIO_INNER_ERR;
     }
 
-    UnderFs::InitUnderFsConfig(mConfig->GetUnderFsConfig());
     auto &daemonConfig = mConfig->GetDaemonConfig();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
 
@@ -102,7 +101,7 @@ BResult BioServer::Start()
             return BIO_ALLOC_FAIL;
         }
         ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
-            mConfig->GetNetConfig().tlsServerCertPath);
+                                               mConfig->GetNetConfig().tlsServerCertPath);
         if (ret != BIO_OK) {
             return ret;
         }
@@ -195,17 +194,17 @@ void BioServer::BioTraceExit()
 
 BResult BioServer::BioUnderFsInit()
 {
-    UnderFsPtr underFsPtr = UnderFs::Instance();
+    UfsHelperPtr underFsPtr = UfsHelper::Instance();
     if (underFsPtr == nullptr) {
         LOG_ERROR("Create underfs instance fail.");
         return BIO_ERR;
     }
-    return underFsPtr->Init();
+    return underFsPtr->Initialize(mConfig->GetUnderFsConfig());
 }
 
 void BioServer::BioUnderFsExit()
 {
-    UnderFs::Instance()->Stop();
+    UfsHelper::Instance()->Stop();
 }
 
 BResult BioServer::BioBdmInit()
@@ -314,8 +313,8 @@ BResult BioServer::BioNetInit()
     netOptions.isBusyLoop = netConfig.isRpcBusyLoop;
     netOptions.role = Role::NET_SERVER;
     netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
-    netOptions.memorySize = mConfig->GetDaemonConfig().memCap;
-    netOptions.regShmMem = true;
+    netOptions.isCreateMemPool = true;
+    netOptions.memoryPoolSize = mConfig->GetDaemonConfig().memCap;
     netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
     netOptions.connCount = netConfig.rpcDataWorkersCnt;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
@@ -492,9 +491,12 @@ BResult BioServer::BioCacheInit()
         } else {
             ReConnect(nodeId);
         }
+        // Quota资源回收.
         nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
+        // Data message memory资源回收
+        mMirror->RecycleDataMsgMem(pid);
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != BIO_OK) {
@@ -867,7 +869,7 @@ int32_t GetPtView(QueryPtViewRequest *req, QueryPtViewResponse *rsp)
 int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp)
 {
     BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(req->comm.pid, req->comm.ptId,
-        req->comm.ptv, rsp->flowId, rsp->isDegrade);
+        req->comm.ptv, *rsp);
     return static_cast<int32_t>(ret);
 }
 

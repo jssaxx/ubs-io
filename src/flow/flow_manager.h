@@ -140,11 +140,10 @@ public:
         }
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS;
-
-private:
     BResult Recover();
     BResult RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t flowId, uint64_t flowOffset);
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     std::map<uint64_t, FlowPtr> mMemObjManager;

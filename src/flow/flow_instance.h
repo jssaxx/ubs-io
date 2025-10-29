@@ -41,12 +41,14 @@ public:
         return mIsNormal.load();
     }
 
-    inline void Update(uint64_t flowId, uint64_t version, bool isDegrade)
+    inline void Update(uint64_t flowId, uint64_t version, bool isDegrade, uint64_t index, uint64_t offset)
     {
         mFlowId = flowId;
         mVersion = version;
         mIsDegrade = isDegrade;
         mIsNormal = true;
+        mIndex = index;
+        mOffset = offset;
     }
 
     inline uint64_t AllocOffset(uint64_t len, uint64_t &offset)

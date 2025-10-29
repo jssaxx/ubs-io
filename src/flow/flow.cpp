@@ -206,11 +206,16 @@ void Flow::PreLoadSchedule()
         LOG_DEBUG("PreLoadSchedule: not ready:" << mType << ", Flow:" << mFlowId);
         return;
     }
-    std::function<void()> func = std::bind(&Flow::PreLoadHandle, this);
+    IncreaseRef();
+    std::function<void()> func = [this]() {
+        PreLoadHandle();
+        DecreaseRef();
+    };
     auto ret = FlowManager::Instance()->PreLoadObject(mType, func);
     if (ret != BIO_OK) {
         LOG_ERROR("Preload failed:" << ret << ", flowId:" << mFlowId);
         mPreLoadFlag = false;
+        DecreaseRef();
         return;
     }
 }

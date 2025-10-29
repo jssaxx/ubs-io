@@ -11,6 +11,8 @@
 #include <mutex>
 
 #include "hse_cryptor.h"
+#include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 
 namespace ock {
 namespace bio {
