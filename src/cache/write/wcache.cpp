@@ -24,11 +24,12 @@ constexpr uint32_t EVICT_DISK_HLEVEL = 98;
 BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
     const RCacheManagerPtr rCacheManager, bool isRecover)
 {
+    BResult ret = BIO_INNER_ERR;
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
         ChkTrue(cacheTier != nullptr, BIO_ALLOC_FAIL, "Make wcache tier failed.");
 
-        auto ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, mDiskId);
+        ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, mDiskId);
         ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << mFlowId);
         mCacheTiers[i] = cacheTier;
     }
@@ -49,7 +50,7 @@ BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorSe
         return BIO_OK;
     }
 
-    auto ret = mLocRole(static_cast<uint16_t>(mPtId), mIsMaster); // 创建时获取当时的副本主备，用于降级场景的PUT流程
+    ret = mLocRole(static_cast<uint16_t>(mPtId), mIsMaster); // 创建时获取当时的副本主备，用于降级场景的PUT流程
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get role fail:" << ret << ", ptId:" << mPtId << " flowId:" << mFlowId);
         return ret;
@@ -831,11 +832,10 @@ BResult WCache::AllocRCacheResource(const WCacheSlicePtr &srcSlice, WCacheSliceP
         ret = dstSlice->VerifyDataCrc(srcSlice->GetDataCrc(), 0, dstSlice->GetLength(), dstSlice.Get());
         if (ret != BIO_OK) {
             LOG_ERROR("Evict to rcache verify the crc failed, ret: "<< ret << ".");
+            if (memAddr != nullptr) {
+                free(memAddr);
+            }
         }
-    }
-
-    if (memAddr != nullptr) {
-        free(memAddr);
     }
     return ret;
 }
@@ -942,6 +942,7 @@ bool WCache::EvictDiskSatisfiedCond()
 
 BResult WCache::EvictAllMemSliceToDisk()
 {
+    BResult ret = BIO_INNER_ERR;
     bool isSatisfied = EvictMemSatisfiedCond();
     while (isSatisfied || mIsForced) {
         WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
@@ -949,7 +950,7 @@ BResult WCache::EvictAllMemSliceToDisk()
             break;
         }
         CacheOverloadCtrl::Instance().AddBandwidth(BW_STAT_EVICT_TO_DISK, sliceRef->GetSlice()->GetLength());
-        auto ret = EvictFromMemToDisk(sliceRef);
+        ret = EvictFromMemToDisk(sliceRef);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_WARN("Evict all mem slice memory, need delayed internal retry, flowId:" <<
