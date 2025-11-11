@@ -19,7 +19,7 @@ BResult Cache::Init()
     mRCacheManager = RCacheManager::Instance();
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
 
-    BResult ret = BIO_OK;
+    BResult ret = BIO_INNER_ERR;
     LVOS_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
     ret = mRCacheManager->Init();
     LVOS_TP_END;
@@ -39,7 +39,7 @@ BResult Cache::Init()
 
 BResult Cache::Recover()
 {
-    BResult ret = BIO_OK;
+    BResult ret = BIO_INNER_ERR;
     std::map<uint64_t, FlowPtr> flowMaps;
     LVOS_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_NOT_READY);
     ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
@@ -111,7 +111,7 @@ BResult Cache::CreateWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64
 
 BResult Cache::DestroyWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
 {
-    BResult ret = BIO_OK;
+    BResult ret = BIO_INNER_ERR;
     BIO_TRACE_START(WCACHE_TRACE_DESTROY_OBJ);
     ret = mWCacheManager->DestroyWCache(procId, flowId, ptId, ptv);
     BIO_TRACE_END(WCACHE_TRACE_DESTROY_OBJ, ret);

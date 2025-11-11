@@ -35,7 +35,7 @@ BResult LocalSystem::Init()
     if (dir == nullptr) {
         int status = BIO_UFS_IOERR;
         LVOS_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_UFS_IOERR);
-        status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP);
         LVOS_TP_END;
         if (status == BIO_OK) {
             LOG_INFO("Succeed to create directory, " << mEmulationCephPath.c_str());
@@ -70,7 +70,8 @@ BResult LocalSystem::Put(const char *key, const char *value, const size_t len)
         for (uint32_t i = NO_2; i < list.size() - NO_1; i++) {
             prefix += list[i];
             prefix += "/";
-            mkdir(prefix.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+            auto ret = mkdir(prefix.c_str(), S_IRWXU | S_IRGRP | S_IXGRP);
+            if (ret != BIO_OK) { return BIO_ERR; }
         }
     }
 
