@@ -594,7 +594,7 @@ static int32_t CmClientZkSubNodeList(uint16_t poolId)
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubNodeListWatch, restore, (char *)nodeList, &len, NULL);
-    if (ret != ZOK) {
+    if (ret != ZOK && (CheckNodeDataFromZk(nodeList) != CM_OK)) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
         free(nodeList);
         return CM_ERR;
@@ -682,6 +682,25 @@ static void CmClientZkSubStateListWatch(zhandle_t *zh, int evtype, int state, co
     return;
 }
 
+int32_t CheckStateDataFromZk(NodeStateList *nodeStateList)
+{
+    if (nodeStateList->nodeNum > MAX_NODE_NUM || nodeStateList->poolId > MAX_POOL_NUM) {
+        CM_LOGERROR("Node number or pool id check fail, node number:(%u), pool id:(%u)", nodeStateList->nodeNum,
+                    nodeStateList->poolId);
+        return CM_ERR;
+    }
+
+    for (uint16_t i = 0; i < nodeStateList->nodeNum; ++i) {
+        if (nodeStateList->nodeList[i].nodeId > MAX_NODE_NUM || nodeStateList->nodeList[i].diskNum > DISK_LIST_NUM) {
+            CM_LOGERROR("Node id or disk number check fail, node id:(%u), disk number:(%u)",
+                        nodeStateList->nodeList[i].nodeId, nodeStateList->nodeList[i].diskNum);
+            return CM_ERR;
+        }
+    }
+
+    return CM_OK;
+}
+
 static int32_t CmClientZkSubStateList(uint16_t poolId)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
@@ -704,7 +723,7 @@ static int32_t CmClientZkSubStateList(uint16_t poolId)
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubStateListWatch, restore, (char *)stateList, &len, NULL);
-    if (ret != ZOK) {
+    if (ret != ZOK && (CheckStateDataFromZk(stateList) != CM_OK)) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
         free(stateList);
         return CM_ERR;
@@ -824,6 +843,44 @@ static void CmClientZkPtWatchFunc(zhandle_t *zh, int evtype, int state, const ch
     return;
 }
 
+int32_t CheckPtDataFromZk(PtEntryList *ptEntryList)
+{
+    if (ptEntryList->maxCopyNum > PT_MAX_COPY_NUM || ptEntryList->minCopyNum < PT_COPY_NUM_1 ||
+        ptEntryList->ptNum < MIN_PT_ENTRY || ptEntryList->ptNum > MAX_PT_ENTRY || ptEntryList->poolId > MAX_POOL_NUM) {
+        CM_LOGERROR("Param verify failed, max copy number:(%u), min copy number:(%u), pt number:(%u), pool id:(%u)",
+                    ptEntryList->maxCopyNum, ptEntryList->minCopyNum, ptEntryList->ptNum, ptEntryList->poolId);
+        return CM_ERR;
+    }
+
+    for (uint16_t i = 0; i < ptEntryList->ptNum; ++i) {
+        if (ptEntryList->ptEntryList[i].copyNum > PT_MAX_COPY_NUM) {
+            CM_LOGERROR("Copy number check failed, copy number: (%llu)", ptEntryList->ptEntryList[i].copyNum);
+            return CM_ERR;
+        }
+    }
+
+    return CM_OK;
+}
+
+int32_t CheckNodeDataFromZk(NodeInfoList *nodeInfoList)
+{
+    if (nodeInfoList->nodeNum > MAX_NODE_NUM || nodeInfoList->poolId > MAX_POOL_NUM) {
+        CM_LOGERROR("Node number or pool id check fail, node number:(%u), pool id:(%u)", nodeInfoList->nodeNum,
+                    nodeInfoList->poolId);
+        return CM_ERR;
+    }
+
+    for (uint16_t i = 0; i < nodeInfoList->nodeNum; ++i) {
+        if (nodeInfoList->nodeList[i].nodeId > MAX_NODE_NUM || nodeInfoList->nodeList[i].diskList.num > DISK_LIST_NUM) {
+            CM_LOGERROR("Node id or disk number check fail, node id:(%u), disk number:(%u)",
+                        nodeInfoList->nodeList[i].nodeId, nodeInfoList->nodeList[i].diskList.num);
+            return CM_ERR;
+        }
+    }
+
+    return CM_OK;
+}
+
 int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
@@ -849,11 +906,12 @@ int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
     }
 
     ret = CmZkWget(g_zh, zkPath, CmClientZkPtWatchFunc, restore, (char *)ptList, &len, NULL);
-    if (ret != ZOK) {
+    if (ret != ZOK && (CheckPtDataFromZk(ptList) != CM_OK)) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
         free(ptList);
         return CM_ERR;
     }
+
     CmClientZkUpdatePtList(ptList);
     free(ptList);
     return CM_OK;

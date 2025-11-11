@@ -77,6 +77,8 @@ public:
     BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc);
     BResult Start();
 
+    void FreeIoStrategy();
+
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
     ~MirrorClient() {}
 

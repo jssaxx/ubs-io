@@ -372,6 +372,17 @@ BResult MirrorClient::LoadOriginViewImpl()
     return BIO_OK;
 }
 
+void MirrorClient::FreeIoStrategy()
+{
+    for (auto ioStrategy : mIoStrategy) {
+        if (ioStrategy.second != nullptr) {
+            free(ioStrategy.second);
+        }
+    }
+
+    return;
+}
+
 std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
 {
     std::vector<uint16_t> ans;

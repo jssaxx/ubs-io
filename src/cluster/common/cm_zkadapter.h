@@ -90,6 +90,13 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
 int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp);
 
 int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkCommitPtEventFp commitFp);
+
+int32_t CheckStateDataFromZk(NodeStateList *nodeStateList);
+
+int32_t CheckPtDataFromZk(PtEntryList *ptEntryList);
+
+int32_t CheckNodeDataFromZk(NodeInfoList *nodeInfoList);
+
 #endif
 #if DESC("zk base handle")
 #define CM_ROOT "/cm"
