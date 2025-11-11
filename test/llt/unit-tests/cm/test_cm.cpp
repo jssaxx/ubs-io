@@ -845,3 +845,140 @@ TEST_F(TestCm, test_cm_update_node_info)
     auto ret = CM_UpdateNodeInfo(poolId, state, diskId, isNewDisk);
     EXPECT_EQ(ret, CM_OK);
 }
+
+TEST_F(TestCm, test_cm_check_state_data_return_ok)
+{
+    LOG_INFO("test_cm_check_state_data_return_ok");
+    int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
+    auto stateList = reinterpret_cast<NodeStateList*>(malloc(len));
+    memset_s(stateList, len, 0, len);
+    stateList->nodeNum = NO_3;
+    stateList->poolId = 1;
+    stateList->masterNodeId = 1;
+    stateList->resv = 1;
+    for (uint32_t i = 0; i < NO_3; ++i) {
+        stateList->nodeList[i].nodeId = i;
+        stateList->nodeList[i].state = NODE_STATE_UP;
+        stateList->nodeList[i].diskNum = NO_3;
+        stateList->nodeList[i].sessionId = 1;
+        stateList->nodeList[i].clusterState = NODE_CLUSTER_STATE_IN;
+        for (uint32_t j = 0; j < stateList->nodeList[i].diskNum; ++j) {
+            stateList->nodeList[i].diskList[j].diskId = j;
+            stateList->nodeList[i].diskList[j].clusterState = DISK_CLUSTER_STATE_IN;
+        }
+    }
+
+    auto ret = CheckStateDataFromZk(stateList);
+    EXPECT_EQ(ret, CM_OK);
+    free(stateList);
+}
+
+TEST_F(TestCm, test_cm_check_state_data_return_err)
+{
+    LOG_INFO("test_cm_check_state_data_return_err");
+    int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
+    auto stateList = reinterpret_cast<NodeStateList*>(malloc(len));
+    memset_s(stateList, len, 0, len);
+    stateList->nodeNum = NO_3;
+    stateList->poolId = 1;
+    stateList->masterNodeId = 1;
+    stateList->resv = 1;
+    for (uint32_t i = 0; i < NO_3; ++i) {
+        stateList->nodeList[i].nodeId = i;
+        stateList->nodeList[i].state = NODE_STATE_UP;
+        stateList->nodeList[i].diskNum = NO_50;
+        stateList->nodeList[i].sessionId = 1;
+        stateList->nodeList[i].clusterState = NODE_CLUSTER_STATE_IN;
+        for (uint32_t j = 0; j < NO_3; ++j) {
+            stateList->nodeList[i].diskList[j].diskId = j;
+            stateList->nodeList[i].diskList[j].clusterState = DISK_CLUSTER_STATE_IN;
+        }
+    }
+
+    auto ret = CheckStateDataFromZk(stateList);
+    EXPECT_EQ(ret, CM_ERR);
+    free(stateList);
+}
+
+TEST_F(TestCm, test_cm_check_pt_data_return_ok)
+{
+    LOG_INFO("test_cm_check_pt_data_return_ok");
+    int32_t len = (int32_t)(sizeof(PtEntry) * NO_16 + sizeof(PtEntryList));
+    PtEntryList *ptList = (PtEntryList *)malloc(len);
+    memset_s(ptList, len, 0, len);
+    ptList->poolId = NO_1;
+    ptList->ptNum = NO_16;
+    ptList->maxCopyNum = NO_3;
+    ptList->minCopyNum = NO_2;
+    ptList->globalVersion = NO_1;
+    ptList->changeVersion = NO_1;
+    for (uint16_t i = 0; i < ptList->ptNum; ++i) {
+        ptList->ptEntryList[i].birthVersion = NO_1;
+        ptList->ptEntryList[i].ptId = i;
+        ptList->ptEntryList[i].state = PT_STATE_NORMAL;
+        ptList->ptEntryList[i].masterNodeId = NO_1;
+        ptList->ptEntryList[i].masterDiskId = NO_1;
+        ptList->ptEntryList[i].copyNum = NO_2;
+        for (uint16_t j = 0; j < ptList->ptEntryList[i].copyNum; ++j) {
+            ptList->ptEntryList[i].copyList[j].nodeId = NO_1;
+            ptList->ptEntryList[i].copyList[j].diskId = NO_1;
+            ptList->ptEntryList[i].copyList[j].keepAlive = NO_1;
+            ptList->ptEntryList[i].copyList[j].state = PT_COPY_STATE_RUNNING;
+        }
+    }
+
+    auto ret = CheckPtDataFromZk(ptList);
+    EXPECT_EQ(ret, CM_OK);
+    free(ptList);
+}
+
+TEST_F(TestCm, test_cm_check_pt_data_return_err)
+{
+    LOG_INFO("test_cm_check_pt_data_return_err");
+    int32_t len = (int32_t)(sizeof(PtEntry) * NO_16 + sizeof(PtEntryList));
+    PtEntryList *ptList = (PtEntryList *)malloc(len);
+    memset_s(ptList, len, 0, len);
+    ptList->poolId = NO_1;
+    ptList->ptNum = NO_16;
+    ptList->maxCopyNum = NO_3;
+    ptList->minCopyNum = NO_2;
+    ptList->globalVersion = NO_1;
+    ptList->changeVersion = NO_1;
+    for (uint16_t i = 0; i < ptList->ptNum; ++i) {
+        ptList->ptEntryList[i].birthVersion = NO_1;
+        ptList->ptEntryList[i].ptId = i;
+        ptList->ptEntryList[i].state = PT_STATE_NORMAL;
+        ptList->ptEntryList[i].masterNodeId = NO_1;
+        ptList->ptEntryList[i].masterDiskId = NO_1;
+        ptList->ptEntryList[i].copyNum = NO_16;
+        for (uint16_t j = 0; j < NO_3; ++j) {
+            ptList->ptEntryList[i].copyList[j].nodeId = NO_1;
+            ptList->ptEntryList[i].copyList[j].diskId = NO_1;
+            ptList->ptEntryList[i].copyList[j].keepAlive = NO_1;
+            ptList->ptEntryList[i].copyList[j].state = PT_COPY_STATE_RUNNING;
+        }
+    }
+
+    auto ret = CheckPtDataFromZk(ptList);
+    EXPECT_EQ(ret, CM_ERR);
+    free(ptList);
+}
+
+TEST_F(TestCm, test_cm_check_node_data_return_err)
+{
+    LOG_INFO("test_cm_check_node_data_return_err");
+    int32_t len = (int32_t)(sizeof(NodeInfoList) + sizeof(NodeInfo) * NO_3);
+    NodeInfoList *nodeInfoList = (NodeInfoList *)malloc(len);
+    memset_s(nodeInfoList, len, 0, len);
+    nodeInfoList->poolId = NO_1;
+    nodeInfoList->nodeNum = NO_3;
+    for (uint16_t i = 0; i < nodeInfoList->nodeNum; ++i) {
+        nodeInfoList->nodeList[i].nodeId = i;
+        nodeInfoList->nodeList[i].status = NODE_STATE_UP;
+        nodeInfoList->nodeList[i].diskList.num = NO_3;
+    }
+
+    auto ret = CheckNodeDataFromZk(nodeInfoList);
+    EXPECT_EQ(ret, CM_OK);
+    free(nodeInfoList);
+}

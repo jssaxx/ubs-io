@@ -168,6 +168,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 
 void BioClient::BioClientMirrorExit()
 {
+    mMirror->FreeIoStrategy();
     return;
 }
 

@@ -26,10 +26,10 @@ typedef enum {
 #define PT_COPY_NUM_3 (3)                         /* 3副本 */
 #define PT_COPY_NUM_2 (2)                         /* 2副本 */
 #define PT_COPY_NUM_1 (1)                         /* 1副本 */
-#define MAX_PT_ENTRY (1024)                       /* PT最大数量 */
+#define MAX_PT_ENTRY (8192)                       /* PT最大数量 */
 #define MIN_PT_ENTRY (3)                          /* PT最小数量 */
 
-#define MAX_NODE_NUM (1024) /* POOL管理节点的最大数量 */
+#define MAX_NODE_NUM (256) /* POOL管理节点的最大数量 */
 #define MIN_NODE_NUM (3)    /* POOL管理节点的最小数量 */
 #define MAX_POOL_NUM (512)  /* POOL的数量上限 */
 #define DISK_LIST_NUM (16)  /* 每个节点上最大的磁盘数量 */
