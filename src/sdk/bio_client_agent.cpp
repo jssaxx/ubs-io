@@ -196,8 +196,6 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
     GetLocalNidResponse rsp;
     auto ret = net::BioClientNet::Instance()->SendSync<GetLocalNidRequest, GetLocalNidResponse>(INVALID_NID,
         BIO_OP_SDK_GET_NODE_INFO, req, rsp);
-    LVOS_TP_START(SDK_GET_LOCAL_NODE_INFO_REQUEST, &ret, BIO_OK);
-    LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }
@@ -423,18 +421,15 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
     return BIO_OK;
 }
 
-BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    FlowInfo &flowInfo)
+BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId,
+    bool &isDegrade)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
     if (opType == 0) {
         req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0, false };
     } else if (opType == 1) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-            opType,
-            flowInfo.flowId,
-            flowInfo.isDegrade };
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
     }
     CreateFlowResponse rsp;
     static uint32_t createFlowTimeout = NO_60;
@@ -451,8 +446,6 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
             break;
         }
     } while (ret == BIO_NOT_READY);
-    LVOS_TP_START(SDK_CREATE_FLOW_REQUEST_SEND_SUCCESS, &ret, BIO_OK);
-    LVOS_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << mLocalNid.VNodeId() <<
             ", ptId:" << ptId << ".");
@@ -460,7 +453,8 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
     }
 
     if (opType == 0) {
-        flowInfo = { rsp.flowId, rsp.isDegrade, rsp.index, rsp.offset, rsp.isNewFlow };
+        flowId = rsp.flowId;
+        isDegrade = rsp.isDegrade;
     } else if (opType == 1 && rsp.flowId != 0) {
         ret = BIO_ERR;
     }
@@ -482,29 +476,28 @@ BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t 
     return BIO_OK;
 }
 
-BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-    FlowInfo &flowInfo)
+BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, FlowInfo &flowInfo)
 {
     if (mMode == CONVERGENCE) {
-        if (opType == 0) {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      opType,
+        if (flowInfo.opType == 0) {
+            CreateFlowRequest req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
+                                      flowInfo.opType,
                                       0,
                                       false };
             CreateFlowResponse rsp;
-            rsp.index = 0;
-            rsp.offset = 0;
-            rsp.isNewFlow = true;
             auto ret = createFlowMasterOp(&req, &rsp);
-            flowInfo = { rsp.flowId, rsp.isDegrade, rsp.index, rsp.offset, rsp.isNewFlow };
+            flowInfo.flowId = rsp.flowId;
+            flowInfo.isDegrade = rsp.isDegrade;
             return ret;
         } else {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                opType, flowInfo.flowId, flowInfo.isDegrade };
+            CreateFlowRequest req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
+                                      flowInfo.opType,
+                                      flowInfo.flowId,
+                                      flowInfo.isDegrade };
             return createFlowSlaveOp(&req);
         }
     } else {
-        return SendCreateFlowRequestLocal(ptEntry, ptId, opType, flowInfo);
+        return SendCreateFlowRequestLocal(ptEntry, flowInfo.ptId, flowInfo.opType, flowInfo.flowId, flowInfo.isDegrade);
     }
 }
 
@@ -531,22 +524,6 @@ bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
     return true;
 }
 
-BResult BioClientAgent::CreateDataMessageMemPool(pid_t procId, uint64_t memPoolSize, int32_t &memFd, uint64_t &offset)
-{
-    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() }, memPoolSize };
-    CreateDataMsgMemPoolResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<CreateDataMsgMemPoolRequest, CreateDataMsgMemPoolResponse>(
-        INVALID_NID, BIO_OP_SDK_CREATE_DATA_MSG_MEM_POOL, req, rsp);
-    LVOS_TP_START(SDK_CREATE_DATA_MESSAGE_MEM_POOL_SEND_SUCCESS, &ret, BIO_OK);
-    LVOS_TP_END;
-    if (ret != BIO_OK) {
-        return ret;
-    }
-    memFd = rsp.memFd;
-    offset = rsp.offset;
-    return BIO_OK;
-}
-
 BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
     uint64_t length, GetSliceResponse **rsp)
 {
@@ -558,8 +535,6 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
     uint64_t rspLen = 0;
     auto ret = net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
         BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
-    LVOS_TP_START(SDK_PREPARE_RESOURCE_LOCAL_SUCCESS, &ret, BIO_OK);
-    LVOS_TP_END;
     if (ret != BIO_OK) {
         return ret;
     } else {

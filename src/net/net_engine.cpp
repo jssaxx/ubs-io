@@ -188,10 +188,10 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     LVOS_TP_END;
     if (ret < 0) {
         NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
-        close(fd);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
-        shm_unlink(name.c_str());
+    shm_unlink(name.c_str());
 #endif
+        close(fd);
         return BIO_INNER_ERR;
     }
 
@@ -199,24 +199,11 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     return BIO_OK;
 }
 
-void NetEngine::DestroyShmFdWithPid(int32_t &shmFd, uint8_t *addr, uint32_t pid, uint64_t size)
-{
-    if (munmap(addr, size) == -1) {
-        NET_LOG_ERROR("munmap address failed.");
-        return;
-    }
-    close(shmFd);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(NO_3, NO_17, 0)
-    std::string shmName = "bio_data_msg_mem_pool" + std::to_string(pid);
-    shm_unlink(shmName.c_str());
-#endif
-}
-
 BResult NetEngine::InitCommMemAllocator()
 {
-    auto result = RegisterMemoryRegion(mOptions.memoryPoolSize, mLocalMr);
-    if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to register mr by size " << mOptions.memoryPoolSize);
+    auto result = RegisterMemoryRegion(mOptions.memorySize, mLocalMr);
+    if (result != BIO_OK || mLocalMr == nullptr) {
+        NET_LOG_ERROR("Failed to register mr by size " << mOptions.memorySize);
         return result;
     }
 
@@ -227,47 +214,47 @@ BResult NetEngine::InitCommMemAllocator()
     }
 
     SetDataPageKb(NO_4 * NO_1024);
-    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memoryPoolSize / mDataPageBytes);
+    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start block pool " << mOptions.memoryPoolSize << ".");
+        NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
-        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memoryPoolSize << ", key:" <<
+        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:" <<
             mLocalMr->GetLKey() << ".");
     }
-    LOG_INFO("Register common memory success, size:" << mOptions.memoryPoolSize << ", Key:" << mLocalMr->GetLKey());
+    LOG_INFO("Register common memory success, size:" << mOptions.memorySize << ", Key:" << mLocalMr->GetLKey());
     return result;
 }
 
 BResult NetEngine::InitShmMemAllocator()
 {
-    if (mOptions.memoryPoolSize == 0) {
-        NET_LOG_INFO("mOption memorySize :" << mOptions.memoryPoolSize << ", not need init shm.");
+    if (mOptions.memorySize == 0) {
+        NET_LOG_INFO("mOption memorySize :" << mOptions.memorySize << ", not need init shm.");
         return BIO_OK;
     }
     std::string shmName = "bio_shm";
-    auto result = CreateShmFdWithName(mShmFd, mOptions.memoryPoolSize, shmName);
+    auto result = CreateShmFdWithName(mShmFd, mOptions.memorySize, shmName);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to create shm fd, size:" << mOptions.memoryPoolSize << ".");
+        NET_LOG_ERROR("Failed to create shm fd, size:" << mOptions.memorySize << ".");
         return result;
     }
 
     auto offset = static_cast<off_t>(mShareOffset);
     auto address = MAP_FAILED;
     LVOS_TP_START(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, &address, MAP_FAILED);
-    address = mmap(nullptr, mOptions.memoryPoolSize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    address = mmap(nullptr, mOptions.memorySize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
     LVOS_TP_END;
     if (address == MAP_FAILED) {
-        NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memoryPoolSize << " offset " << offset << " failed, error:" <<
+        NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memorySize << " offset " << offset << " failed, error:" <<
             strerror(errno));
         close(mShmFd);
         mShmFd = -1;
         return BIO_ERR;
     }
     mShareAddress = static_cast<uint8_t *>(address);
-    mShmSize = mOptions.memoryPoolSize;
+    mShmSize = mOptions.memorySize;
 
-    result = RegisterMemoryRegion(mShareAddress, mOptions.memoryPoolSize, mLocalMr);
-    if (result != BIO_OK) {
+    result = RegisterMemoryRegion(mShareAddress, mOptions.memorySize, mLocalMr);
+    if (result != BIO_OK || mLocalMr == nullptr) {
         close(mShmFd);
         mShmFd = -1;
         return result;
@@ -280,13 +267,13 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
         return BIO_ALLOC_FAIL;
     }
-    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memoryPoolSize / mDataPageBytes);
+    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
-        NET_LOG_ERROR("Failed to start block pool " << mOptions.memoryPoolSize << ".");
+        NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
         close(mShmFd);
         mShmFd = -1;
     } else {
-        NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memoryPoolSize << ", shmOffset:" <<
+        NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize << ", shmOffset:" <<
             mShareOffset << ", key:" << mLocalMr->GetLKey() << ".");
     }
     return result;
@@ -294,11 +281,10 @@ BResult NetEngine::InitShmMemAllocator()
 
 BResult NetEngine::InitMemoryAllocator()
 {
-    if (mOptions.isCreateMemPool == true) {
-        return InitShmMemAllocator(); // 创建server端的内存分配器
-    } else {
-        return InitCommMemAllocator();
+    if (mOptions.regShmMem == true) {
+        return InitShmMemAllocator();
     }
+    return InitCommMemAllocator();
 }
 
 BResult ValidateTlsCert(const NetOptions &opt)
@@ -381,7 +367,7 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
 {
     options.mode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
         UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
-    options.SetWorkerGroups(std::to_string(opt.handlerCount));
+    options.SetWorkerGroups(GenerateWorkersSetting(opt));
     options.mrSendReceiveSegSize = (NO_64 * NO_1024); // shm场景的是ep级
     options.mrSendReceiveSegCount = NO_1024; // shm场景未使用
     options.heartBeatIdleTime = NO_5;
@@ -404,8 +390,6 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
         mIpcService->RegisterNewChannelHandler(std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
             std::placeholders::_2, std::placeholders::_3));
     }
-    LVOS_TP_START(START_IPC_SERVICE_SET_TLS_ENABLE, &opt.enableTls, true);
-    LVOS_TP_END;
     if (opt.enableTls) {
         if (ValidateTlsCert(mOptions) != BIO_OK) {
             NET_LOG_ERROR("Failed to enable Ipc TLS service , enableTls:" << opt.enableTls << ".");
@@ -429,10 +413,8 @@ void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, oc
 
 BResult NetEngine::StartIpcService(const NetOptions &opt)
 {
-    int result = BIO_OK;
+    int result = BIO_ERR;
 
-    LVOS_TP_START(START_IPC_SERVICE_NULL, &mIpcService, nullptr);
-    LVOS_TP_END;
     if (mIpcService != nullptr) {
         NET_LOG_INFO("Net ipc service has already created.");
         return BIO_OK;
@@ -447,9 +429,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         return BIO_ERR;
     }
     if (opt.enableTls) {
-        LVOS_TP_START(START_IPC_SERVICE_NOT_PREPARE_HSE_CRYPTOR, 0);
         result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
-        LVOS_TP_END;
         if (result != BIO_OK) {
             NET_LOG_ERROR("Failed to prepare hseceasy cryptor, result:" << result << ".");
             return result;
@@ -494,7 +474,6 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr,
     options.heartBeatProbeInterval = NO_1;
     options.tcpUserTimeout = NO_3;
     options.enableTls = false;
-    options.maxConnectionNum = NO_4096 * NO_1024;
     options.SetNetDeviceIpMask(ipMask);
     options.SetWorkerGroups(GenerateWorkersSetting(opt));
     if (isOobSvr) {
@@ -693,8 +672,7 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
-void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, bool isCtrl, std::string &prefix,
-    NetServiceConnectOptions &op)
+void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, NetServiceConnectOptions &op)
 {
     op.epSize = mOptions.connCount;
     if (isCtrl) {
@@ -702,11 +680,9 @@ void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, bool isCt
         op.serverGrpNo = WKR_GRP_INDEX_CTRL;
         prefix = CONN_PAYLOAD_PREFIX_CTRL;
     } else {
-        if (mode == ConnectMode::CONNECT_RPC) {
-            op.clientGrpNo = WKR_GRP_INDEX_DATA;
-            op.serverGrpNo = WKR_GRP_INDEX_DATA;
-            prefix = CONN_PAYLOAD_PREFIX_DATA;
-        }
+        op.clientGrpNo = WKR_GRP_INDEX_DATA;
+        op.serverGrpNo = WKR_GRP_INDEX_DATA;
+        prefix = CONN_PAYLOAD_PREFIX_DATA;
     }
     if (info.isSelfPoll) {
         op.flags = NET_EP_SELF_POLLING;
@@ -723,7 +699,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 
     NetServiceConnectOptions options;
     std::string prefix;
-    FillConnectOption(mode, info, isCtrlPanel, prefix, options);
+    FillConnectOption(info, isCtrlPanel, prefix, options);
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         NetConnPayload payload(info.srcId);

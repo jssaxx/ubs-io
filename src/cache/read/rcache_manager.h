@@ -37,7 +37,7 @@ public:
     // alloc resources for write cache evict data
     BResult AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice);
 
-    bool IsResourceEnough(uint16_t ptId);
+    BResult CheckEnoughResource(uint16_t ptId, bool &havaResource);
 
     BResult Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &slice);
 

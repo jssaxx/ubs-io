@@ -39,11 +39,6 @@ void tp::CommonTp::LongValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, long *value
     errno = err;
 }
 
-void tp::CommonTp::LongIntValueCallback(LVOS_TRACEP_PARAM_S *user, int64_t *value, int64_t set) noexcept
-{
-    *value = set;
-}
-
 void tp::CommonTp::BoolValueCallback(LVOS_TRACEP_PARAM_S *user, bool *value, bool set) noexcept
 {
     *value = set;

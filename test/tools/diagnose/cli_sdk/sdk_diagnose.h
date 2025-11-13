@@ -1,6 +1,6 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
- */
+//
+// Created by j30026471 on 2024/2/28.
+//
 
 #ifndef BOOSTIO_SDK_DIAGNOSE_H
 #define BOOSTIO_SDK_DIAGNOSE_H

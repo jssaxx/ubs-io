@@ -102,16 +102,6 @@ public:
         return mNetEngine->GetDataPage();
     }
 
-    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
-    {
-        return mNetEngine->RegisterMemoryRegion(addr, size, mr);
-    }
-
-    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
-    {
-        return mNetEngine->RegisterMemoryRegion(size, mr);
-    }
-
     inline BResult Alloc(uint64_t size, NetMrInfo &mr)
     {
         if (UNLIKELY(mNetEngine->GetDataPage() < size)) {
@@ -132,11 +122,6 @@ public:
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
         return mNetEngine->GetShmAddress(offset, len);
-    }
-
-    BResult ReceiveFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
-    {
-        return mNetEngine->ReceiveFds(targetNodeId, fds, count);
     }
 
     template <typename TReq, typename TResp>
@@ -187,6 +172,9 @@ public:
 
     bool CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp);
 
+    DEFINE_REF_COUNT_FUNCTIONS;
+
+private:
     BResult CheckShmFd();
     BResult CorrectFd();
     BResult ShmInitInner();
@@ -198,7 +186,6 @@ public:
     void RecoverIpc();
     void RecoverRpc(uint32_t peerId);
     void StopInner();
-    DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     WorkerMode mMode;

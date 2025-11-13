@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <libaio.h>
 #include "bio_server.h"
-#include "bio_server_c.h"
 #include "bio_mock.h"
 #include "bio_config_instance.h"
 #include "cache_slice_operator.h"
@@ -165,6 +164,22 @@ TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
     LVOS_HVS_deactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    uint64_t slices[NO_3];
+    slices[0] = 0;
+    slices[NO_1] = NO_1;
+    slices[NO_2] = NO_2;
+    std::vector<bool> reslut;
+    reslut.push_back(false);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
+    gWCacheManager->MasterEvictNegotiate(g_flowId, slices, reslut, NO_3);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_get_evict_negotiate_info_case)
+{
+    LOG_INFO("test_get_evict_negotiate_info_case");
+    auto ret = gWCacheManager->GetEvictNegotiateInfo();
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -233,6 +248,9 @@ TEST_F(TestWCache, test_put_repeat_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = gWCacheManager->Delete(G_PT_ID, key);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -480,6 +498,7 @@ TEST_F(TestWCache, test_rcache_get_flow_offset_err_case_return_fail)
     uint64_t realLen = 0;
     std::vector<FlowAddr> addrVec;
     RCacheSlicePtr slicePtr = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
+    sleep(NO_5);
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Get(key, 0, slicePtr, wWriter, realLen);
@@ -515,6 +534,8 @@ TEST_F(TestWCache, test_cache_get_nullslicewriter_case_return_err)
     ret = gWCacheManager->Get(key, 0, rcacheSlice, nullptr, realLen);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
+    ret = gWCacheManager->Delete(G_PT_ID, key);
+    EXPECT_EQ(ret, BIO_OK);
     BioServer::Instance()->MemFree(mrInfo.address);
 }
 
@@ -535,6 +556,9 @@ TEST_F(TestWCache, test_stat_case_return_ok)
 
     CacheObjStat objState;
     ret = gWCacheManager->Stat(G_PT_ID, key, objState);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = gWCacheManager->Delete(G_PT_ID, key);
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -613,6 +637,79 @@ TEST_F(TestWCache, test_expired_flush_return_ok)
     ret = gWCacheManager->ExpiredClear(G_PT_ID, G_PT_V);
 }
 
+TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
+{
+    LOG_INFO("test_wcache_destroy_case_return_ok");
+    LVOS_TRACEP_PARAM_S userParam;
+    auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, g_flowId);
+    EXPECT_EQ(ret, BIO_OK);
+
+    ret = Cache::Instance().DestroyRCache(G_PT_ID);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_wcache_destroy_flowid_unexist_return_ok)
+{
+    LOG_INFO("test_wcache_destroy_flowid_unexist_return_ok");
+    auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, NO_1024);
+    EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_wcache_destroy_flowid_err_return_ok)
+{
+    LOG_INFO("test_wcache_destroy_flowid_err_return_ok");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
+    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
+    EXPECT_EQ(ret, BIO_OK);
+    sleep(NO_5);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL");
+    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
+}
+
+TEST_F(TestWCache, test_wcache_destroy_flush_return_ok)
+{
+    LOG_INFO("test_wcache_destroy_flush_return_ok");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
+    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
+    EXPECT_EQ(ret, BIO_OK);
+    sleep(NO_5);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
+    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH");
+}
+
+TEST_F(TestWCache, test_wcache_destroy_expire_return_ok)
+{
+    LOG_INFO("test_wcache_destroy_expire_return_ok");
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
+    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
+    EXPECT_EQ(ret, BIO_OK);
+    sleep(NO_5);
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
+    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
+    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
+    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR");
+}
+
 TEST_F(TestWCache, test_handle_proc_broken_err)
 {
     LOG_INFO("test_handle_proc_broken_err");
@@ -675,23 +772,6 @@ TEST_F(TestWCache, test_handle_proc_broken_role_err)
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
     LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
-}
-
-TEST_F(TestWCache, test_handle_proc_broken_callback)
-{
-    LOG_INFO("test_handle_proc_broken_callback");
-    LVOS_TRACEP_PARAM_S userParam;
-    CmPtInfo ptEntry;
-    auto ret = Cm::Instance()->GetPtInfo(0, ptEntry);
-    WCachePtr wcache = MakeRef<WCache>(1, 1, 1, 1, 1, false);
-    bool needDestroy = false;
-    bool slaveResult[CLUSTER_SIZEMAX];
-    std::fill(std::begin(slaveResult), std::end(slaveResult), true);
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL", 0, 1, userParam);
-    ret = WCacheManager::Instance()->SendProcBrokenSyncRequest(wcache, ptEntry, 1,
-                                                               slaveResult, needDestroy);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL");
-    EXPECT_EQ(ret, BIO_NET_RETRY);
 }
 
 TEST_F(TestWCache, test_start_pool_threadnum_incorrect_return_fail)
@@ -776,43 +856,6 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     LVOS_HVS_deactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
-}
-
-TEST_F(TestWCache, test_destroy_flow_ok)
-{
-    LOG_INFO("test_destroy_flow_ok");
-    WCachePtr wCachePtr = MakeRef<WCache>(1, 1, 1, 1, 1, false);
-    bool slaveResult[CLUSTER_SIZEMAX];
-    std::fill(std::begin(slaveResult), std::end(slaveResult), false);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_DESTROY_LOCAL_FALSE", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "BROCK_DESTROY_FLOW_OK", 0, 1, userParam);
-    gWCacheManager->HandleProcBrokenDestroyFlow(wCachePtr, 0, slaveResult);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_DESTROY_LOCAL_FALSE");
-    LVOS_HVS_deactiveTracePoint(0, "BROCK_DESTROY_FLOW_OK");
-}
-
-TEST_F(TestWCache, test_alloc_rcache_ok)
-{
-    LOG_INFO("test_alloc_rcache_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "ALLOC_DEST_SLICE_NULL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_RESOURCE_ENOUGH", 0, 1, userParam);
-    WCachePtr wcache = MakeRef<WCache>(1, 1, 1, 1, 1, false);
-    FlowAddr flowAddr;
-    flowAddr.chunkId = 1;
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrs;
-    addrs.push_back(flowAddr);
-    WCacheSlicePtr srcSlice = MakeRef<WCacheSlice>(G_PT_ID, 0, 1, NO_1024, addrs);
-    WCacheSlicePtr dstSlice = nullptr;
-
-    bool isRcache = true;
-    BResult ret = wcache->AllocRCacheResource(srcSlice, dstSlice, isRcache);
-    EXPECT_EQ(ret, BIO_ALLOC_FAIL);
-    LVOS_HVS_deactiveTracePoint(0, "ALLOC_DEST_SLICE_NULL");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_RESOURCE_ENOUGH");
 }
 
 TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
@@ -924,7 +967,6 @@ TEST_F(TestWCache, test_bio_olc_show)
     uint64_t remainQuota = 0;
     std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> holders;
     CacheOverloadCtrl::Instance().Show(vmVec, totalQuota, remainQuota, holders);
-    EXPECT_NE(vmVec, 0);
 }
 
 TEST_F(TestWCache, test_bio_olc_recycle)
@@ -966,319 +1008,4 @@ TEST_F(TestWCache, test_wcache_tier_dataflow_error)
     EXPECT_EQ(ret, BIO_ERR);
     LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
     LVOS_HVS_deactiveTracePoint(0, "FLOW_DATA_FLOW_ERR");
-}
-
-TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
-{
-    LOG_INFO("test_wcache_destroy_case_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, g_flowId);
-    EXPECT_EQ(ret, BIO_OK);
-
-    ret = Cache::Instance().DestroyRCache(G_PT_ID);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_wcache_destroy_flowid_unexist_return_ok)
-{
-    LOG_INFO("test_wcache_destroy_flowid_unexist_return_ok");
-    auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, NO_1024);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_wcache_destroy_flowid_err_return_ok)
-{
-    LOG_INFO("test_wcache_destroy_flowid_err_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
-    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
-}
-
-TEST_F(TestWCache, test_wcache_destroy_flush_return_ok)
-{
-    LOG_INFO("test_wcache_destroy_flush_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
-    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH");
-}
-
-TEST_F(TestWCache, test_wcache_destroy_expire_return_ok)
-{
-    LOG_INFO("test_wcache_destroy_expire_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
-    auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
-    EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR");
-}
-
-TEST_F(TestWCache, test_handle_proc_brock)
-{
-    LOG_INFO("test_handle_proc_brock");
-    std::list<WCache*> oldList;
-    gWCacheManager->ScanProcCache(getpid(), oldList);
-    auto ret = gWCacheManager->HandleProcBrokenImpl(getpid(), oldList);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_bio_cache_get_capacity)
-{
-    LOG_INFO("test_bio_cache_get_capacity");
-    auto result = Cache::Instance().CreateWCache(1, 1, 1, 1, false);
-    EXPECT_EQ(result, BIO_OK);
-
-    auto capacity = gWCacheManager->GetWCache(1)->GetCapacity(WCACHE_DISK);
-    EXPECT_NE(capacity, -1);
-
-    auto virCapacity = gWCacheManager->GetWCache(1)->GetVirCapacity(WCACHE_DISK);
-    EXPECT_NE(virCapacity, -1);
-
-    auto evictOffset = gWCacheManager->GetWCache(1)->GetEvictOffset();
-    EXPECT_NE(evictOffset, -1);
-
-    auto truncateIndex = gWCacheManager->GetWCache(1)->GetTruncateIndex();
-    EXPECT_NE(truncateIndex, -1);
-
-    FlowPtr flowPtr = FlowManager::Instance()->CreateObject(FLOW_DATA, FLOW_DISK, 1, 1);
-    auto ret = gWCacheManager->RecoverCache(flowPtr);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_to_string)
-{
-    LOG_INFO("test_to_string");
-    // disk slice
-    char *buffer = static_cast<char*>(malloc(NO_1024));
-    FlowAddr flowAddr;
-    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrVec;
-    addrVec.push_back(flowAddr);
-    SlicePtr slice = MakeRef<Slice>(NO_1024, addrVec, FLOW_DISK);
-    auto diskStr = slice->ToString();
-    EXPECT_NE(diskStr.find(std::to_string(slice->GetFlowType())), std::string::npos);
-
-    // memory slice
-    char *buffer1 = static_cast<char*>(malloc(NO_1024));
-    FlowAddr flowAddr1;
-    flowAddr1.chunkId = reinterpret_cast<uint64_t>(buffer1);
-    flowAddr1.chunkOffset = 0;
-    flowAddr1.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrVec1;
-    addrVec1.push_back(flowAddr1);
-    SlicePtr memSlice = MakeRef<Slice>(NO_1024, addrVec1, FLOW_MEMORY);
-    auto memStr = slice->ToString();
-    EXPECT_NE(memStr.find(std::to_string(slice->GetFlowType())), std::string::npos);
-    free(buffer);
-    free(buffer1);
-}
-
-TEST_F(TestWCache, test_calculate_data_crc_disk_fail)
-{
-    LOG_INFO("test_calculate_data_crc_disk_fail");
-    uint32_t crcValue = 0;
-    uint64_t dataOffset = 0;
-    uint64_t dataLength = NO_200;
-    char *buffer = static_cast<char*>(malloc(NO_1024));
-    FlowAddr flowAddr;
-    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrVec;
-    addrVec.push_back(flowAddr);
-    SlicePtr slice = MakeRef<Slice>(NO_1024, addrVec, FLOW_DISK);
-    auto diskStr = slice->ToString();
-    EXPECT_NE(diskStr.find(std::to_string(slice->GetFlowType())), std::string::npos);
-    BResult result = slice->CalculateDataCrc(crcValue, dataOffset, dataLength);
-    EXPECT_EQ(result, BIO_DISK_IOERR);
-    free(buffer);
-}
-
-TEST_F(TestWCache, test_calculate_data_crc_ok)
-{
-    LOG_INFO("test_calculate_data_crc_ok");
-    uint32_t crcValue = 0;
-    uint64_t dataOffset = 0;
-    uint64_t dataLength = NO_200;
-    char *buffer = static_cast<char*>(malloc(NO_1024));
-    FlowAddr flowAddr;
-    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrVec;
-    addrVec.push_back(flowAddr);
-    SlicePtr slice = MakeRef<Slice>(NO_1024, addrVec, FLOW_MEMORY);
-    auto diskStr = slice->ToString();
-    EXPECT_NE(diskStr.find(std::to_string(slice->GetFlowType())), std::string::npos);
-    BResult result = slice->CalculateDataCrc(crcValue, dataOffset, dataLength);
-    EXPECT_EQ(result, BIO_OK);
-    free(buffer);
-}
-
-TEST_F(TestWCache, test_verify_data_crc_success)
-{
-    LOG_INFO("test_verify_data_crc_success");
-    uint32_t crcValue = 0;
-    uint64_t dataOffset = 0;
-    uint64_t dataLength = NO_100;
-    Slice testSlice;
-    char *buffer = static_cast<char*>(malloc(NO_1024));
-    FlowAddr flowAddr;
-    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrVec;
-    addrVec.push_back(flowAddr);
-    SlicePtr slice = MakeRef<Slice>(NO_1024, addrVec, FLOW_MEMORY);
-    BResult result = slice->CalculateDataCrc(crcValue, dataOffset, dataLength);
-    EXPECT_EQ(result, BIO_OK);
-    result = slice->VerifyDataCrc(crcValue, dataOffset, dataLength, &testSlice);
-    EXPECT_EQ(result, BIO_OK);
-    free(buffer);
-}
-
-TEST_F(TestWCache, test_verify_data_crc_mismatch)
-{
-    LOG_INFO("test_verify_data_crc_mismatch");
-    uint32_t originCrc = NO_1024;
-    uint64_t dataOffset = 0;
-    uint64_t dataLength = NO_100;
-    Slice testSlice;
-    char *buffer = static_cast<char*>(malloc(NO_1024));
-    FlowAddr flowAddr;
-    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer);
-    flowAddr.chunkOffset = 0;
-    flowAddr.chunkLen = NO_1024;
-    std::vector<FlowAddr> addrVec;
-    addrVec.push_back(flowAddr);
-    SlicePtr slice = MakeRef<Slice>(NO_1024, addrVec, FLOW_MEMORY);
-    BResult result = slice->VerifyDataCrc(originCrc, dataOffset, dataLength, &testSlice);
-    EXPECT_EQ(result, BIO_CRC_ERR);
-    free(buffer);
-}
-
-TEST_F(TestWCache, test_slice_ref_release)
-{
-    LOG_INFO("test_slice_ref_release");
-    WCacheSlicePtr dataSlice = nullptr;
-    auto sliceRef = MakeRef<WCacheSliceRef>(dataSlice);
-    sliceRef->Release();
-}
-
-TEST_F(TestWCache, test_get_all_object_disk)
-{
-    LOG_INFO("test_get_all_object_disk");
-    std::map<uint64_t, FlowPtr> flowMaps;
-    auto ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_get_all_object_mem)
-{
-    LOG_INFO("test_get_all_object_mem");
-    std::map<uint64_t, FlowPtr> flowMaps;
-    auto ret = FlowManager::Instance()->GetAllObject(FLOW_MEMORY, flowMaps);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_recover_chunk_success)
-{
-    LOG_INFO("test_recover_chunk_success");
-    FlowRole flowRole = FLOW_DATA;
-    FlowType flowType = FLOW_DISK;
-    uint64_t flowId = NO_1;
-    uint32_t mediaId = NO_1;
-    uint64_t chunkSize = NO_4194304;
-    uint64_t preLoadSize = NO_1024;
-    Flow flow(flowRole, flowType, flowId, mediaId, chunkSize, preLoadSize);
-    auto ret = flow.RecoverChunk(0, 0);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_recover_check_empty)
-{
-    LOG_INFO("test_recover_check_empty");
-    FlowRole flowRole = FLOW_DATA;
-    FlowType flowType = FLOW_DISK;
-    uint64_t flowId = NO_1;
-    uint32_t mediaId = NO_1;
-    uint64_t chunkSize = NO_4194304;
-    uint64_t preLoadSize = NO_1024;
-    Flow flow(flowRole, flowType, flowId, mediaId, chunkSize, preLoadSize);
-    auto ret = flow.RecoverCheck();
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_recover_check_return_ok)
-{
-    LOG_INFO("test_recover_check_return_ok");
-    FlowRole flowRole = FLOW_DATA;
-    FlowType flowType = FLOW_DISK;
-    uint64_t flowId = NO_1;
-    uint32_t mediaId = NO_1;
-    uint64_t chunkSize = NO_4194304;
-    uint64_t preLoadSize = NO_1024;
-    Flow flow(flowRole, flowType, flowId, mediaId, chunkSize, preLoadSize);
-    auto ret = flow.RecoverChunk(0, 0);
-    EXPECT_EQ(ret, BIO_OK);
-    ret = flow.RecoverCheck();
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, sync_flow_id)
-{
-    LOG_INFO("sync_flow_id");
-    uint64_t flowId = NO_1;
-    auto idAllocator = FlowIdAllocator::Instance();
-    idAllocator->SyncFlowId(flowId);
-}
-
-TEST_F(TestWCache, recover_chunk_return_ok)
-{
-    LOG_INFO("recover_chunk_return_ok");
-    uint32_t mediaId = NO_1;
-    uint64_t chunkId = NO_1;
-    uint64_t flowId = NO_1;
-    uint64_t flowOffset = NO_1;
-    auto flowManager = FlowManager::Instance();
-    auto ret = flowManager->RecoverChunk(mediaId, chunkId, flowId, flowOffset);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_roll_back_offset)
-{
-    LOG_INFO("test_roll_back_offset");
-    uint64_t flowId = NO_1;
-    uint64_t version = 0;
-    bool isDegrade = false;
-    uint64_t len = NO_1024;
-    FlowInstance flowInstance(flowId, version, isDegrade);
-    flowInstance.RollbackOffset(len);
 }

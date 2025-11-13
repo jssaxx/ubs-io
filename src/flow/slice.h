@@ -49,7 +49,7 @@ public:
         return mFlowType;
     }
 
-    inline uint32_t GetLength() const
+    inline uint64_t GetLength() const
     {
         return mLength;
     }
@@ -93,7 +93,7 @@ protected:
 private:
     uint32_t mdataCrc{ 0 };
     FlowType mFlowType{ FLOW_MEMORY };
-    uint32_t mLength{ 0 };
+    uint64_t mLength{ 0 };
     std::vector<FlowAddr> mAddrs;
 };
 

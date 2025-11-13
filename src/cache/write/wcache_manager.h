@@ -7,14 +7,12 @@
 
 #include <atomic>
 #include <unordered_map>
-#include <unordered_set>
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "cache_def.h"
 #include "slice.h"
 #include "wcache.h"
 #include "wcache_index.h"
-#include "message.h"
 #include "rcache_manager.h"
 #include "wcache_statistic.h"
 
@@ -93,34 +91,23 @@ public:
 
     BResult HandleProcBrokenHdl(uint64_t procId);
 
-    BResult GetTruncateIndex(uint64_t flowId, uint64_t &truncateIndex);
+    BResult MasterEvictNegotiate(uint64_t flowId, uint64_t offsets[], std::vector<bool> &result, uint32_t count);
+
+    BResult GetEvictNegotiateInfo();
 
     BResult EvictNegotiateThread();
-
-    BResult GetReuseFlowId(uint16_t ptId, uint64_t &flowId);
-
-    BResult ProcBrokenSyncOldFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy);
-
-    WCachePtr GetWCache(uint64_t flowId);
-
-    void HandleProcBrokenDestroyFlow(WCachePtr flow, uint32_t localNid, bool *slaveResult);
-
-    BResult SendProcBrokenSyncRequest(WCachePtr flow, CmPtInfo cmPtInfo, uint32_t localNid,
-                                      bool *slaveResult, bool &needDestroy);
-    void ScanProcCache(uint64_t  procId, std::list<WCache*> &list);
-    BResult HandleProcBrokenImpl(uint64_t procId, std::list<WCache*> &oldList);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
+    WCachePtr GetWCache(uint64_t flowId);
     BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
         const SliceWriter &sliceWriter, uint64_t &realLen);
     BResult FlushImpl(uint16_t ptId, uint64_t ptv);
     BResult ExpiredClearImpl(uint16_t ptId, uint64_t ptv);
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
     BResult HandleCacheBrokenImpl(WCachePtr wcache);
-    BResult MasterProcBrokenSyncFlow(WCachePtr flow, CmPtInfo ptEntry, uint32_t localNid);
-    void InitCallbackCtx(ProcBrokenCallbackCtx &cbCtx, uint32_t quota);
+    BResult HandleProcBrokenImpl(uint64_t procId);
 
     void ScanUpgradeCache(std::list<WCachePtr> &list);
     BResult ClearUpgradeCache();
@@ -128,6 +115,7 @@ private:
     void ScanOldCache(uint16_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
     BResult ClearOldCache(uint16_t ptId, uint64_t ptv);
 
+    void ScanProcCache(uint64_t  procId, std::list<WCachePtr> &list);
     BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
@@ -159,11 +147,6 @@ private:
 
     WCacheIndexPtr mCacheIndex;
 
-    std::unordered_map<uint16_t, std::unordered_set<uint64_t>> mReuseFlows{};
-    ReadWriteLock mReuseFlowsLock;
-
-    std::unordered_set<uint32_t> startedProc;
-    Lock startedProcLock;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

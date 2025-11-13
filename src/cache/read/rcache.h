@@ -141,6 +141,10 @@ private:
 
     BResult DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk);
 
+    void AddToEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk);
+
+    void DelFromEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk);
+
     void AddToTruncateList(RCacheTierType tierType, RCacheChunkPtr &chunk);
 
     void DelFromTruncateList(RCacheTierType tierType, RCacheChunkPtr &chunk);
@@ -176,6 +180,9 @@ private:
     std::unordered_map<std::string, RCacheChunkPtr> index[READ_CACHE_META_HASH_BUCKET_NUM]; // read cache index
 
     RCacheFlowPtr flow[READ_CACHE_TIER_BUTT]; // read cache data
+
+    SpinLock evictMqLock[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT];
+    BioDoubleList<RCacheChunkPtr> evictMq[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT]; // read cache evict list
 
     SpinLock truncateLock[READ_CACHE_TIER_BUTT];
     BioDoubleList<RCacheChunkPtr> truncateQ[READ_CACHE_TIER_BUTT]; // truncate cache list

@@ -59,23 +59,19 @@ int BioCryptorHelper::Decrypt(int domainId, const std::string &filePath, std::pa
         return -1;
     }
 
-    LVOS_TP_START(BIO_CRYPTOR_HELPER_UNDO, 0);
     CryptorHelperInitializer initializer{ kfsMasterPath, kfsStandbyPath };
     if (!initializer.Initialized()) {
         LOG_ERROR("CryptorHelperInitializer failed for file");
         delete[] buffer;
         return -1;
     }
-    LVOS_TP_END;
 
-    LVOS_TP_START(BIO_CRYPTOR_HELPER_UNDO, 0);
     ret = HseCryptor::RefreshMkMask();
     if (ret != 0) {
         LOG_ERROR("Refresh hse mk mask failed: " << ret << " for file.");
         delete[] buffer;
         return -1;
     }
-    LVOS_TP_END;
 
     auto encryptLength = encryptedText.length();
     if (encryptLength > INTMAX_MAX) {
@@ -84,14 +80,12 @@ int BioCryptorHelper::Decrypt(int domainId, const std::string &filePath, std::pa
         return -1;
     }
     auto dataLength = static_cast<int>(encryptLength);
-    LVOS_TP_START(BIO_CRYPTOR_HELPER_UNDO, 0);
     ret = HseCryptor::Decrypt(domainId, encryptedText, buffer, dataLength);
     if (ret != 0) {
         LOG_ERROR("Decrypt tls key password failed: " << ret << " for file.");
         delete[] buffer;
         return -1;
     }
-    LVOS_TP_END;
 
     LOG_INFO("decrypt success.");
     result = std::make_pair(buffer, dataLength);
