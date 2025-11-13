@@ -40,10 +40,5 @@ void HTracerSetEnable(bool isEnable)
 {
     HtracerManager::mEnable = isEnable;
 }
-
-void HTracerDumpSetEnable(bool isEnable)
-{
-    HTracerService::mDumpEnable = isEnable;
-}
 }
 }

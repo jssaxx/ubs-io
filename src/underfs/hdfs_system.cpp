@@ -86,15 +86,19 @@ void HdfsSystem::Stop()
     mInited = false;
 }
 
-BResult ParsePath(const char *path, char *parentDir)
+BResult ParsePath(const char *path, char *parentDir, size_t parentDirSize)
 {
     const char *lastSlash = strrchr(path, '/');
     if (lastSlash != nullptr) {
         size_t parentLen = lastSlash - path;
-        std::copy(path, path + parentLen, parentDir);
+        BResult ret = strncpy_s(parentDir, parentDirSize, path, parentLen);
+        if (ret != BIO_OK) {
+            LOG_ERROR("strncpy_s faild, ret:"<< ret << ".");
+            return BIO_UFS_IOERR;
+        }
         parentDir[parentLen] = '\0';
     } else {
-        std::fill(parentDir, parentDir + UFS_KEY_MAX_SIZE, '\0');
+        strcpy_s(parentDir, parentDirSize, "");
     }
     return BIO_OK;
 }
@@ -138,7 +142,7 @@ BResult HdfsSystem::Put(const char *key, const char *value, const size_t len)
     }
 
     char parentDir[UFS_KEY_MAX_SIZE];
-    if (ParsePath(key, parentDir) != BIO_OK) {
+    if (ParsePath(key, parentDir, sizeof(parentDir)) != BIO_OK) {
         LOG_ERROR("parse path failed, path:" << key << ".");
         return BIO_UFS_IOERR;
     }
@@ -170,6 +174,11 @@ BResult HdfsSystem::Put(const char *key, const char *value, const size_t len)
         LOG_ERROR("Failed to write file, file:" << key << ".");
         closeFileOp(mHdfsFs, file);
         return BIO_UFS_IOERR;
+    }
+
+    if (flushOp(mHdfsFs, file) != BIO_OK) {
+        LOG_WARN("Failed to flush data to hdfs"
+            << ".");
     }
 
     LOG_INFO("Put data success, key:" << key << ", len:" << len << ".");

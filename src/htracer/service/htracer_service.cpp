@@ -22,7 +22,6 @@ namespace ock {
 namespace htracer {
 constexpr int DUMP_PERIOD = 90;
 constexpr size_t MAX_DUMP_SIZE = 10 * 1024 * 1024;
-bool HTracerService::mDumpEnable = true;
 
 int32_t HTracerService::StartUp(const std::string &dumpDir)
 {
@@ -176,9 +175,7 @@ void HTracerService::DumpTraceInfoPeriod()
     std::unique_lock<std::mutex> lock(mDumpLock);
     while (mIsRunning) {
         mDumpCond.wait_for(lock, std::chrono::seconds(DUMP_PERIOD));
-        if (mDumpEnable) {
-            DumpTraceInfos();
-        }
+        DumpTraceInfos();
     }
 }
 

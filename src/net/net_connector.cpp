@@ -43,10 +43,6 @@ BResult ConnectTask::DoConnect()
             mConnectInfo.peerId.pid << ".");
     }
 
-    if (mode == ConnectMode::CONNECT_IPC) {
-        return BIO_OK;
-    }
-
     ChannelPtr dataChanel = nullptr;
     if ((ret = mEngine->GetDataChannelMgr()->GetChannel(mConnectInfo.peerId, dataChanel)) == BIO_NOT_EXISTS) {
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, false, dataChanel);

@@ -43,6 +43,6 @@ lcov -a ${GENERATE_DIR}/src/cache/coverage.info -a ${GENERATE_DIR}/src/cluster/c
 -o hdt.info --rc lcov_branch_coverage=1
 
 #删除不统计的目录、文件
-lcov -r hdt.info "*/llt/*" "/usr/*"  "*/build/*" "*/test/*" "*7.3.0*" "*/3rdparty/*" -o hdt.info --rc lcov_branch_coverage=1
+lcov -r hdt.info "*/llt/*" "/usr/*"  "*/build/*" "*/test/*" "*7.3.0*" "*/3rdparty/*" "*/write/wcache.cpp" "*/write/wcache_manager.cpp" "*/disk/common/ngx_rbtree.c" "*/disk/common/bdm_allocator.c" -o hdt.info --rc lcov_branch_coverage=1
 
 genhtml -o hdt_report hdt.info --rc genhtml_branch_coverage=1

@@ -83,11 +83,12 @@ public:
     {
         return mMediaId;
     }
-    BResult RecoverChunk(uint64_t offset, uint64_t chunkId);
-    BResult RecoverCheck();
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
+    BResult RecoverChunk(uint64_t offset, uint64_t chunkId);
+    BResult RecoverCheck();
     void PreLoadHandle();
     void PreLoadSchedule();
     void HoldClean(uint64_t realOffset, int32_t ret, bool preLoadFlag);

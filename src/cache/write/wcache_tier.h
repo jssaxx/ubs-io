@@ -37,20 +37,10 @@ class WFlowTruncateCursor {
 public:
     WCacheSlicePtr GetTruncateSlice(const WCacheSlicePtr &slice);
 
-    uint64_t GetPreTruncateSliceIndex();
-
-    void SetGlobMinTruncateIndex(uint64_t globMinTruncateIndex);
-
-    bool IsEmptyEvictSlices();
-
-    void SetIsNormal(bool isNormal);
-
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    uint64_t mPreTruncateSliceIndex = 0;
-    uint64_t mGlobTruncateIndex = NO_MAX_VALUE64;
-    bool mIsNormal = true;
+    uint64_t mPreTruncateSliceIndex = { 0 };
 
     std::mutex mEvictedSliceListLock;
     std::set<WCacheSlicePtr, WCacheSliceCmp> mEvictedSlices;
@@ -68,9 +58,32 @@ public:
 
     void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 
+    void AddEvictNegotiateIndexMap(uint64_t indexInMap, uint8_t refNum);
+
+    void DelEvictNegotiateQueue(WCacheReplicaSlicePtr repSlicePtr);
+
+    void AddEvictNegotiateMap(WCacheSliceRefPtr &sliceRef);
+
+    void DelEvictNegotiateMap(WCacheReplicaSlicePtr repSlicePtr);
+
     void RetryEvictQueue(WCacheSliceRefPtr sliceRef);
 
     void DelEvictQueue(WCacheSliceRefPtr sliceRef);
+
+    std::map<uint64_t, std::array<uint8_t, NO_256>> *GetEvictMapPtr()
+    {
+        return &mNegotiateIndexMap;
+    }
+
+    inline void NegotiateIndexMapLockRead()
+    {
+        mNegotiateIndexMapLock.LockRead();
+    }
+
+    inline void NegotiateIndexMapUnLock()
+    {
+        mNegotiateIndexMapLock.UnLock();
+    }
 
     BResult GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice);
 
@@ -96,15 +109,16 @@ public:
 
     bool IsEmptyEvictSliceQueue();
 
+    bool IsEmptyNegotiateMap();
+
     WCacheSliceRefPtr GetEvictSlice();
 
-    bool IsEmptyCursorEvictSlices();
+    void GetNegotiateSlice(std::vector<uint64_t> &offsetVec, uint32_t limit);
 
-    void SetGlobMinTruncateIndex(uint64_t globMinTruncateIndex);
-
-    void SetIsNormal(bool isNormal);
-
-    uint64_t GetTruncateIndex();
+    BResult UpdateNegotiateState(uint64_t indexInflow);
+    void FlushNegotiateMap();
+    void EvictNegotiateMapToQueue(uint64_t indexInFlow);
+    void DelEvictIndexArray(uint64_t indexInMap);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -115,6 +129,8 @@ private:
         WCacheSlicePtr &slice);
 
 private:
+    uint8_t INVALID_REF_NUM = NO_U8_255;
+    static constexpr uint32_t ARRAY_SIZE_IN_NEGOTIATE_MAP = NO_256;
     WCacheTierType type;
     FlowPtr mMetaFlow;
     FlowPtr mDataFlow;
@@ -124,6 +140,13 @@ private:
 
     SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;
+
+    SpinLock mEvictNegotiateMapLock;
+    std::unordered_map<uint64_t, WCacheSliceRefPtr> mEvictNegotiateMap;
+
+    ReadWriteLock mNegotiateIndexMapLock;
+    std::map<uint64_t, std::array<uint8_t, ARRAY_SIZE_IN_NEGOTIATE_MAP>> mNegotiateIndexMap;
+    uint64_t mCurNegotiateIndex = { 0 };
 
     DEFINE_REF_COUNT_VARIABLE;
 };

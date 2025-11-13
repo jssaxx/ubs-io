@@ -86,9 +86,11 @@ public:
 
     void GetCacheResources(CacheResDescription &desc, CacheType type);
 
-    BResult EvictNegotiate(uint64_t &flowId, uint64_t &truncateIndex);
+    BResult EvictNegotiate(uint64_t &flowId, uint64_t slices[], std::vector<bool> &result, uint32_t count);
 
-    BResult ProcBrokenSyncFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy);
+    void ShowEvictNegotiateQueue();
+
+    BResult WCacheConsultEvict(uint64_t &flowId, std::vector<uint64_t> slices, std::vector<bool> result);
 
 private:
     BResult GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_t length, const uint64_t offset);
@@ -105,7 +107,6 @@ private:
         uint64_t &realLen);
 
 private:
-    bool mUfsEnable = false;
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
     GetLocDiskId mGetLocDiskId{ nullptr };

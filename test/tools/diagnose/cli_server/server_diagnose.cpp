@@ -111,7 +111,7 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         CLI_PrintBuf("  ip: %s:%u, protocol:%s, mode:%s, workers_count:%u, request_executor:%u, memory_size:%luGB\n",
             option.ipMask.c_str(), option.port, protoStr[option.protocol].c_str(),
             (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, executorNum,
-            (option.memoryPoolSize / NO_1024 / NO_1024 / NO_1024));
+            (option.memorySize / NO_1024 / NO_1024 / NO_1024));
     } else if (cmdType == "resources") {
         if (cmds.size() != 2) {
             CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
@@ -164,6 +164,9 @@ static void BioServerHandleShow(std::vector<std::string> cmds)
         for (auto iter = holders.begin(); iter != holders.end(); iter++) {
             CLI_PrintBuf("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
+    } else if (cmdType == "evict") {
+        Cache::Instance().ShowEvictNegotiateQueue();
+        CLI_PrintBuf("Show evict negotiate queue success, please see log file.\n");
     } else {
         CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
     }

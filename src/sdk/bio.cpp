@@ -208,8 +208,19 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
     }
-    if (UNLIKELY(offset > BIO_IO_MAX_LEN || length > BIO_IO_MAX_LEN || (offset + length) > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read exceed limit, offset" << offset << ", length:" << length << ".");
+    if (UNLIKELY(offset > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Read offset exceed limit, offset" << offset << ", limits:" <<
+            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        return RET_CACHE_READ_EXCEED;
+    }
+    if (UNLIKELY(length > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Read length exceed limit, length" << length << ", limits:" <<
+            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        return RET_CACHE_READ_EXCEED;
+    }
+    if (UNLIKELY((offset + length) > BIO_IO_MAX_LEN)) {
+        CLIENT_LOG_ERROR("Read length exceed limit, offset" << offset << "length:" << length << ", limits:" <<
+            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
         return RET_CACHE_READ_EXCEED;
     }
 
@@ -222,7 +233,6 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
-        // DSJ：性能调优, 采集读IO模型
         CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
             ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
             location.location[1] << ".");

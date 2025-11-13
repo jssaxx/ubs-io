@@ -29,15 +29,6 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(DESERIALIZE_SET_VSIZE, "set vsize", CommonTp::IntValueCallback);
     LVOS_TP_REG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, "pass check", CommonTp::NoProcessCallback);
     LVOS_TP_REG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, "get trace fail", CommonTp::IntValueCallback);
-    LVOS_TP_REG(SERVER_SET_RETRY_TIME, "mirror server set retry time zero", CommonTp::IntValueCallback);
-    LVOS_TP_REG(INTERCEPTOR_SERVER_MALLOC_FAIL, "interceptor server malloc fail", CommonTp::PointerValueCallback);
-    LVOS_TP_REG(INTERCEPTOR_SERVER_BIO_READ_HOOK_FAIL, "interceptor server bio read hook fail",
-                CommonTp::IntValueCallback);
-    LVOS_TP_REG(INTERCEPTOR_SERVER_CHANGE_LEN, "interceptor server change len", CommonTp::LongIntValueCallback);
-    LVOS_TP_REG(INTERCEPTOR_SERVER_DATA_CHANGE_LEN, "interceptor server data change len",
-                CommonTp::LongIntValueCallback);
-    LVOS_TP_REG(INTERCEPTOR_SERVER_ALLOC_CACHE_SPACE_FAIL, "interceptor server alloc cache space fail",
-                CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_GET_TRACEDATA_ERR, "server get tace data err", CommonTp::PointerValueCallback);
     LVOS_TP_REG(SERVER_BDM_UPDATE_SUCCESS, "server bdm update success", CommonTp::IntValueCallback);
     LVOS_TP_REG(SERVER_ADD_NEW_DISK_FAIL, "server add new disk fail", CommonTp::IntValueCallback);
@@ -66,12 +57,6 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK);
     LVOS_TP_UNREG(DESERIALIZE_SET_VSIZE);
     LVOS_TP_UNREG(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE);
-    LVOS_TP_UNREG(SERVER_SET_RETRY_TIME);
-    LVOS_TP_UNREG(INTERCEPTOR_SERVER_MALLOC_FAIL);
-    LVOS_TP_UNREG(INTERCEPTOR_SERVER_BIO_READ_HOOK_FAIL);
-    LVOS_TP_UNREG(INTERCEPTOR_SERVER_CHANGE_LEN);
-    LVOS_TP_UNREG(INTERCEPTOR_SERVER_DATA_CHANGE_LEN);
-    LVOS_TP_UNREG(INTERCEPTOR_SERVER_ALLOC_CACHE_SPACE_FAIL);
     LVOS_TP_UNREG(SERVER_GET_TRACEDATA_ERR);
     LVOS_TP_UNREG(SERVER_BDM_UPDATE_SUCCESS);
     LVOS_TP_UNREG(SERVER_ADD_NEW_DISK_FAIL);

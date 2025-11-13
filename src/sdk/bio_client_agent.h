@@ -22,11 +22,10 @@ using BioClientAgentPtr = Ref<BioClientAgent>;
 class BioClientAgent {
 public:
     struct FlowInfo {
+        uint16_t ptId;
+        uint16_t opType;
         uint64_t flowId;
         bool isDegrade;
-        uint64_t index;
-        uint64_t offset;
-        bool isNewFlow;
     };
 
 public:
@@ -106,12 +105,9 @@ public:
 
     BResult GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtInfo> &ptView);
 
-    BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-                            FlowInfo &flowInfo);
+    BResult CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
 
     BResult DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-
-    BResult CreateDataMessageMemPool(pid_t procId, uint64_t memPoolSize, int32_t &memFd, uint64_t &offset);
 
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
@@ -154,13 +150,15 @@ public:
 
     bool CheckGetSliceRsp(GetSliceResponse **rsp);
 
+private:
     BResult InitUpgradeOperation();
     BResult InitOperation();
     void *LoadFunction(const char *name);
 
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
 
-    BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, FlowInfo &flowInfo);
+    BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        uint64_t &flowId, bool &isDegrade);
 
     BResult SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 

@@ -13,7 +13,7 @@
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
 #include "flow.h"
-#include "ufs_helper.h"
+#include "underfs.h"
 #include "wcache_tier.h"
 #include "rcache_manager.h"
 #include "cm.h"
@@ -66,17 +66,12 @@ public:
 
     inline void SetState(bool isNormal)
     {
-        mIsNormal.store(isNormal);
+        mIsNormal = isNormal;
     }
 
     inline bool GetState() const
     {
-        return mIsNormal.load();
-    }
-
-    inline bool IsIoFinish() const
-    {
-        return mOnFlyRef == 0;
+        return mIsNormal;
     }
 
     void StartEvictTask(WCacheTierType type);
@@ -121,29 +116,19 @@ public:
         mOnFlyRef -= 1;
     }
 
-    inline uint64_t GetFlyIo()
+    std::map<uint64_t, std::array<uint8_t, NO_256>> *GetEvictNegotiateIndexMap()
     {
-        return mOnFlyRef.load();
+        return mCacheTiers[WCACHE_MEMORY]->GetEvictMapPtr();
     }
 
-    inline uint64_t GetIndex()
+    inline void NegotiateIndexMapLockRead()
     {
-        return mIndex;
+        mCacheTiers[WCACHE_MEMORY]->NegotiateIndexMapLockRead();
     }
 
-    inline uint64_t GetOffset()
+    inline void NegotiateIndexMapUnLock()
     {
-        return mOffset;
-    }
-
-    inline void SetProcId(uint64_t procId)
-    {
-        mProcId = procId;
-    }
-
-    inline bool GetStartEvictNegotiateFlag()
-    {
-        return mIsStartEvictNegotiate.load();
+        mCacheTiers[WCACHE_MEMORY]->NegotiateIndexMapUnLock();
     }
 
     using RecoverCallback = std::function<BResult(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
@@ -153,9 +138,9 @@ public:
     void ExpiredClear(const WCachePtr &self);
     void ProcAndCacheBrokenExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
+    bool IsEmptyNegotiate();
 
-    uint64_t GetTruncateIndex();
-    BResult AllocRCacheResource(const WCacheSlicePtr &srcSlice, WCacheSlicePtr &dstSlice, bool &isRCache);
+    void MasterEvictNegotiate(uint64_t indexs[], std::vector<bool> &result, uint32_t count);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -170,11 +155,11 @@ private:
     BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront);
 
     BResult EvictSlice(WCacheSliceRefPtr &sliceRef);
-    void FreeRCacheResource(bool &isRCache, WCacheSlicePtr &slice);
-    void EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCacheSlicePtr &slice, bool &isRCache);
-    BResult EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const size_t length);
+    BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
 
     void EvictNegotiate();
+
+    void AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum);
 
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
@@ -193,23 +178,23 @@ private:
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
+    BResult GetPtMasterNode(uint32_t &masterNid);
+
     BResult StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
 private:
     uint64_t mProcId;
     uint64_t mFlowId;
-    Lock indexOffsetLock;
-    uint64_t mOffset;
-    uint64_t mIndex;
     uint16_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
+    uint16_t mCopyNum{ 0 };
     bool mIsDegrade;
     bool mIsMaster{ true };
-    std::atomic<bool> mIsNormal { true };
+    bool mIsNormal{ true };
     bool mIsForced { false };
-    bool mUfsEnable{ false };
     std::atomic<bool> mIsStartEvictNegotiate{ false };
+    std::atomic<bool> mIsMasterStartEvictNegotiate{ false };
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
@@ -226,7 +211,7 @@ private:
     GetGlobEvictOffset mGlobEvictOffset{ nullptr };
 
     RCacheManagerPtr mRCacheManager;
-    UfsHelperPtr mUnderFs;
+    UnderFsPtr mUnderFs;
 
     std::atomic<uint64_t> mOnFlyRef;
 
