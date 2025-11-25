@@ -343,7 +343,7 @@ void PrometheusManager::GetRemoteTracePoints(std::vector<uint16_t> nodeIds,
                 break;
             }
 
-            if (rsp.traceDatabase.count == 0) {
+            if (rsp.traceDatabase.count == 0 || rsp.traceDatabase.count > TRACE_MAX_NUM) {
                 continue;
             }
             nodesTracePoints[nodeId] = rsp.traceDatabase;
