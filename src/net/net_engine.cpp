@@ -138,9 +138,7 @@ void NetEngine::StopInner()
     }
 
     mCtrlChannelMgr->UnInitialize();
-    mCtrlChannelMgr = nullptr;
     mDataChannelMgr->UnInitialize();
-    mDataChannelMgr = nullptr;
 
     if (mMrBlockPool != nullptr) {
         mMrBlockPool->Stop();
@@ -161,6 +159,8 @@ void NetEngine::StopInner()
         mIpcService = nullptr;
     }
 
+    mDataChannelMgr = nullptr;
+    mCtrlChannelMgr = nullptr;
     if (mbioCryptorHelper != nullptr) {
         delete mbioCryptorHelper;
         mbioCryptorHelper = nullptr;

@@ -140,7 +140,7 @@ public:
         mUsedBlock -= NO_1;
     }
 
-    void QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
+    int QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
     {
         fd = mShmFd;
         offset = mShareOffset;
@@ -148,8 +148,12 @@ public:
         mKey = 0;
         if (mOptions.memorySize > 0) {
             // 配置内存小于等于0，未初始化内存
+            if (mLocalMr == nullptr) {
+                return BIO_ERR;
+            }
             mKey = mLocalMr->GetLKey();
         }
+        return BIO_OK;
     }
 
     void SetShmInfo(int32_t fd, uint8_t *addr, uint64_t off, uint64_t size)
