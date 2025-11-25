@@ -35,6 +35,7 @@ void tp::ServerTp::Register() noexcept
     LVOS_TP_REG(SERVER_OLD_DISK_EXIST, "server old disk exist", CommonTp::BoolValueCallback);
     LVOS_TP_REG(SERVER_NO_DISK_CHECK, "server no disk check", CommonTp::NoProcessCallback);
     LVOS_TP_REG(SERVER_SET_OLD_DISK_ID, "server set old disk id", CommonTp::IntValueCallback);
+    LVOS_TP_REG(SERVER_NET_ADD_CHANNEL_FAIL, "server net add channel fail", CommonTp::PointerValueCallback);
 }
 
 void tp::ServerTp::Deregister() noexcept
@@ -63,6 +64,7 @@ void tp::ServerTp::Deregister() noexcept
     LVOS_TP_UNREG(SERVER_OLD_DISK_EXIST);
     LVOS_TP_UNREG(SERVER_NO_DISK_CHECK);
     LVOS_TP_UNREG(SERVER_SET_OLD_DISK_ID);
+    LVOS_TP_UNREG(SERVER_NET_ADD_CHANNEL_FAIL);
 }
 #else
 void tp::ServerTp::Register() noexcept {}
