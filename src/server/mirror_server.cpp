@@ -205,7 +205,7 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
 
 BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
-    BResult ret = BIO_INNER_ERR;
+    BResult ret = BIO_OK;
     LVOS_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL, &ret, BIO_ERR);
     ret = Cache::Instance().CreateWCache(procId, ptId, ptv, flowId, isDegrade);
     LVOS_TP_END;
@@ -1060,7 +1060,11 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
         return BIO_ERR;
     }
 
-    BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
+    ret = BioServer::Instance()->GetNetEngine()->QueryShmInfo(rsp.memFd, rsp.offset, rsp.length, rsp.mKey);
+    if (ret != BIO_OK) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     ret = BioServer::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &rsp.memFd, NO_1);
     if (ret != BIO_OK) {
         LOG_ERROR("Send fds failed, ret:" << ret << ".");
