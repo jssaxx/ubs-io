@@ -376,13 +376,9 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
 
 void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp)
 {
-    uint32_t bar = req.bar;
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
     uint32_t index = 0;
     for (auto &ptEntry : ptView) {
-        if ((bar--) != 0) {
-            continue;
-        }
         if (index == PT_SIZE) {
             break;
         }

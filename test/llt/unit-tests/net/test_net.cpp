@@ -347,3 +347,18 @@ TEST_F(TestNet, test_new_channel_error)
     auto ret = netEngine->NewChannel("uttest", nullptr, "dsd");
     EXPECT_EQ(ret, BIO_ERR);
 }
+
+TEST_F(TestNet, test_add_channel)
+{
+    LOG_INFO("test_add_channel");
+    auto dataChannelMgr = MakeRef<NetChannelMgr>();
+    NetNode netNode{};
+    netNode.whole = 1;
+    ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
+    uint8_t plane = 1;
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SERVER_NET_ADD_CHANNEL_FAIL", 0, 1, userParam);
+    auto ret = dataChannelMgr->AddChannel(netNode, channel, plane);
+    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_ADD_CHANNEL_FAIL");
+    EXPECT_EQ(ret, BIO_ALLOC_FAIL);
+}
