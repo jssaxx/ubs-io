@@ -139,6 +139,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     ret = Update(ptId, ptEntry.version, flowInfo.flowId, flowInfo.isDegrade);
     if (ret != BIO_OK) {
         LOG_ERROR("Update flow info failed, ret " << ret);
+        Delete(ptId, 0);
         return ret;
     }
 
@@ -271,12 +272,10 @@ BResult MirrorClient::LoadOriginViewImpl()
 
 void MirrorClient::FreeIoStrategy()
 {
-    for (auto ioStrategy : mIoStrategy) {
-        if (ioStrategy.second != nullptr) {
-            free(ioStrategy.second);
-        }
+    for (auto &ioStrategy : mIoStrategy) {
+        delete ioStrategy.second;
     }
-
+    mIoStrategy.clear();
     return;
 }
 
@@ -1319,8 +1318,7 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 {
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
-    BResult ret = BIO_OK;
-    ret = Prepare(ptEntry, param, req);
+    BResult ret = Prepare(ptEntry, param, req);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Prepare put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
@@ -1358,10 +1356,12 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
         if (rsp.num > SLICE_ADDR_SIZE) {
+            net::BioClientNet::Instance()->Free(mrInfo.address);
             return BIO_INVALID_PARAM;
         }
         realLen = rsp.realLen;
         if (realLen > mrInfo.size) {
+            net::BioClientNet::Instance()->Free(mrInfo.address);
             return BIO_INNER_ERR;
         }
 
@@ -1375,6 +1375,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             if (currentCrc != rsp.dataCrc) {
                 CLIENT_LOG_ERROR("Client Get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
                     rsp.dataCrc << ", current crc:" << currentCrc);
+                net::BioClientNet::Instance()->Free(mrInfo.address);
                 return BIO_CRC_ERR;
             }
         }
@@ -1565,7 +1566,7 @@ BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string
 
 BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult ret = BIO_ERR;
+    BResult ret = BIO_OK;
     uint32_t index = 0;
 
     auto tempPtView = mPtView;

@@ -192,6 +192,7 @@ BResult BioClientNet::ShmInit()
     mEnableCrc = rsp.enableCrc;
     mEnableCli = rsp.enableCli;
     mEnablePrometheus = rsp.enablePrometheus;
+    rsp.listenAddress[MAX_LISTEN_ADDRESS_LENGTH - 1] = '\0';
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
     CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
@@ -406,11 +407,19 @@ void BioClientNet::RecoverRpc(uint32_t peerId)
 
 bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
 {
-    return ((strlen(rsp.underFsType) != 0) && (strlen(rsp.hdfsConfig.nameNode) != 0) &&
-        (strlen(rsp.hdfsConfig.workingPath) != 0) && (strlen(rsp.cephConfig.user) != 0) &&
-        (strlen(rsp.cephConfig.cluster) != 0) && (strlen(rsp.cephConfig.cfgPath) != 0) &&
-        (strlen(rsp.cephConfig.pool) != 0) &&
-        ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
+    size_t underFsTypeLen = strnlen(rsp.underFsType, KEY_MAX_SIZE);
+    size_t nameNodeLen = strnlen(rsp.hdfsConfig.nameNode, KEY_MAX_SIZE);
+    size_t workingPathLen = strnlen(rsp.hdfsConfig.workingPath, KEY_MAX_SIZE);
+    size_t userLen = strnlen(rsp.cephConfig.user, KEY_MAX_SIZE);
+    size_t clusterLen = strnlen(rsp.cephConfig.cluster, KEY_MAX_SIZE);
+    size_t cfgPathLen = strnlen(rsp.cephConfig.cfgPath, KEY_MAX_SIZE);
+    size_t poolLen = strnlen(rsp.cephConfig.pool, KEY_MAX_SIZE);
+
+    return ((underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE) && (nameNodeLen != 0 && nameNodeLen < KEY_MAX_SIZE)
+            && (workingPathLen != 0 && workingPathLen < KEY_MAX_SIZE) && (userLen != 0 && userLen < KEY_MAX_SIZE) &&
+            (clusterLen != 0 && clusterLen < KEY_MAX_SIZE) && (cfgPathLen != 0 && cfgPathLen < KEY_MAX_SIZE) &&
+            (poolLen != 0 && poolLen < KEY_MAX_SIZE) &&
+            ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
 }
 
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)

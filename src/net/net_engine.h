@@ -218,7 +218,8 @@ public:
     {
         if (UNLIKELY(offset < mShareOffset ||
                     offset >= mShareOffset + mShmSize ||
-                    offset + len > mShareOffset + mShmSize)) {
+                    len >= mShareOffset + mShmSize ||
+                    offset > mShareOffset + mShmSize - len)) {
             NET_LOG_ERROR("Shm info, offset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }

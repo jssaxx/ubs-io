@@ -168,7 +168,9 @@ public:
         }
         uint64_t recycleQuota = iter->second;
         mHolders.erase(iter);
-        mWriteQuota += recycleQuota;
+        if (UINT64_MAX - mWriteQuota >= recycleQuota) {
+            mWriteQuota += recycleQuota;
+        }
         LOG_INFO("Recycle quota success, holder: " << holder.nodeId << "-" << holder.clientId << ", recycle quota:" <<
             recycleQuota << ".");
     }

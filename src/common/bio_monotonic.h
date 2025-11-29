@@ -57,7 +57,7 @@ public:
         const static int32_t TICK_PER_US = InitTickUs<1>();
         uint64_t timeValue = 0;
         __asm__ volatile("mrs %0, cntvct_el0" : "=r"(timeValue));
-        return timeValue * 1000L / TICK_PER_US;
+        return timeValue / TICK_PER_US * 1000L;
     }
 
     /*
@@ -138,7 +138,7 @@ public:
     static inline uint64_t TimeNs()
     {
         const static int32_t TICK_PER_US = InitTickUs<1>();
-        return __rdtsc() * 1000L / TICK_PER_US;
+        return __rdtsc() / TICK_PER_US * 1000L;
     }
 
     /*

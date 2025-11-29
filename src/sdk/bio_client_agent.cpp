@@ -295,7 +295,7 @@ BResult BioClientAgent::AllocQuota(AllocQuotaRequest &req, uint64_t &expectPrelo
         ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
     }
-    expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);\
+    expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);
     if (expectPreloadSize > NO_1024 * IO_SIZE_1M) {
         return BIO_ERR;
     }
@@ -358,6 +358,7 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
                 disks.push_back(
                     { rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus) });
             }
+            rsp.desc[i].ip[IP_MAX_SIZE - 1] = '\0';
             nodeView.insert(std::make_pair(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId),
                 CmNodeInfo(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId), rsp.desc[i].ip, rsp.desc[i].port,
                 static_cast<CmNodeStatus>(rsp.desc[i].status), disks)));
@@ -541,13 +542,13 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
         if (*rsp == nullptr) {
             return BIO_INNER_ERR;
         }
-        if (rspLen < (*rsp)->sliceLen + sizeof(GetSliceResponse)) {
-            delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        if (rspLen < sizeof(GetSliceResponse) || rspLen - sizeof(GetSliceResponse) < (*rsp)->sliceLen) {
+            delete[] static_cast<uint8_t *>(static_cast<void *>(*rsp));
             return BIO_INVALID_PARAM;
         }
     }
     if (!CheckGetSliceRsp(rsp)) {
-        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        delete[] static_cast<uint8_t *>(static_cast<void *>(*rsp));
         return BIO_INNER_ERR;
     }
     return BIO_OK;

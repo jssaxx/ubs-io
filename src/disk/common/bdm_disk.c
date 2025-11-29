@@ -1046,16 +1046,20 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
     int32_t ret = memset_s(&(bdmPool->ioctx[index]), sizeof(io_context_t), 0, sizeof(io_context_t));
     if (ret != 0) {
         BDM_LOGERROR(0, "Memset ioctx failed, ret(%d).", ret);
+        close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     ret = io_setup(BDM_IOCTX_EVENTS_NUM, &(bdmPool->ioctx[index]));
     if (ret != 0) {
         BDM_LOGERROR(0, "Io setup failed, errno(%s).", strerror(errno));
+        close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     bdmPool->epfd[index] = epoll_create(1);
     if (bdmPool->epfd[index] < 0) {
         BDM_LOGERROR(0, "Epoll create failed, errno(%s).", strerror(errno));
+        io_destroy(bdmPool->ioctx[index]);
+        close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     bdmPool->epevent[index].events = EPOLLIN | EPOLLET;
@@ -1063,6 +1067,9 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
     ret = epoll_ctl(bdmPool->epfd[index], EPOLL_CTL_ADD, bdmPool->efd[index], &(bdmPool->epevent[index]));
     if (ret != 0) {
         BDM_LOGERROR(0, "Epoll ctl failed, errno(%s).", strerror(errno));
+        io_destroy(bdmPool->ioctx[index]);
+        close(bdmPool->epfd[index]);
+        close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     bdmPool->cpus[index] = BDM_BIND_CPU_DEFAULT;

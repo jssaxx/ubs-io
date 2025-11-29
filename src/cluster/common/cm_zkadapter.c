@@ -64,6 +64,12 @@ int32_t CmClientZkGetNodeId(uint16_t poolId, const char *ipv4AddrStr, uint16_t p
     if (ret == ZNONODE) {
         return CM_NOT_EXIST;
     }
+
+    if (*nodeId > MAX_NODE_NUM) {
+        CM_LOGERROR("Node id exceeds max node number, node id(%u).", *nodeId);
+        return CM_ERR;
+    }
+
     return CM_OK;
 }
 
@@ -144,20 +150,56 @@ static int32_t CmClientZkRecordNodeId(uint16_t poolId, NodeInfo *nodeInfo)
 
 static int32_t CmClientZkAtoi(const char *str)
 {
+    if (str == NULL || *str == '\0') {
+        return -1;
+    }
+
     int32_t num = 0;
-    while (str != NULL && str[0] >= '0' && str[0] <= '9') {
-        num = num * CM_ZK_RADIX_10 + (str[0] - '0');
+    const int32_t LIMIT_DIV_10 = INT32_MAX / CM_ZK_RADIX_10;
+    const int32_t LIMIT_MOD_10 = INT32_MAX % CM_ZK_RADIX_10;
+
+    while (*str && *str >= '0' && *str <= '9') {
+        int32_t digit = *str - '0';
+
+        // 溢出检查
+        if (num > LIMIT_DIV_10 || (num == LIMIT_DIV_10 && digit > LIMIT_MOD_10)) {
+            return -1;
+        }
+
+        num = num * CM_ZK_RADIX_10 + digit;
         str++;
     }
+
     return num;
 }
 
 uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre)
 {
-    size_t step = strlen(pre);
-    const char *str = &path[step];
+    if (path == NULL || pre == NULL) {
+        CM_LOGERROR("Invalid zkPathB or zkPathT.");
+        return UINT16_MAX;
+    }
 
-    return (uint16_t)CmClientZkAtoi(str);
+    size_t preLen = strnlen(pre, CM_ZNODE_PATH_LEN);
+    size_t pathLen = strnlen(path, CM_ZNODE_PATH_LEN);
+    if (pathLen <= preLen) {
+        CM_LOGERROR("ZkPathT greater than zkPathB.");
+        return UINT16_MAX;
+    }
+    // 确保 path 确实是以 pre 开头的
+    if (strncmp(path, pre, preLen) != 0) {
+        CM_LOGERROR("ZkPathB do not contain zkPathT.");
+        return UINT16_MAX;
+    }
+    // 此时可以安全计算偏移量
+    const char *str = &path[preLen];
+    int32_t nodeId = CmClientZkAtoi(str);
+    if (nodeId < 0 || nodeId > MAX_NODE_NUM) {
+        CM_LOGERROR("Cm client zk a to i fail.");
+        return UINT16_MAX;
+    }
+
+    return (uint16_t)nodeId;
 }
 
 int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
@@ -196,6 +238,10 @@ int32_t CmClientZkGenNodeId(uint16_t poolId, NodeInfo *nodeInfo)
             return CM_ERR;
         }
         nodeInfo->nodeId = CmClientZkGetNodeIdByPath(zkPathB, zkPathT);
+        if (nodeInfo->nodeId == UINT16_MAX) {
+            CM_LOGERROR("Invalid nodeId(%u).", nodeInfo->nodeId);
+            return CM_ERR;
+        }
         ret = CmZkDelete(g_zh, zkPathB, UNCHECK_VERSION);
         if (ret != CM_OK) {
             CM_LOGERROR("Delete znode(%s) failed, ret(%d).", zkPathB, ret);
@@ -425,6 +471,12 @@ int32_t CmClientZkGetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo)
     if (ret == ZNONODE) {
         return CM_NOT_EXIST;
     }
+    size_t ipLen = strnlen(nodeInfo->ipv4AddrStr, IP_ADDR_LEN);
+    if (nodeInfo->diskList.num > DISK_LIST_NUM || ipLen == 0 || ipLen >= IP_ADDR_LEN) {
+        CM_LOGERROR("Disk list get from zk exceeds max disk number or wrong ip addr ret(%d)", ret);
+        return CM_ERR;
+    }
+
     return CM_OK;
 }
 
@@ -1235,20 +1287,56 @@ static int32_t CmServerZkRecordMetaNodeId(const char *ipv4AddrStr)
 
 static int32_t CmServerZkAtoi(const char *str)
 {
+    if (str == NULL || *str == '\0') {
+        return -1;
+    }
+
     int32_t num = 0;
-    while (str != NULL && str[0] >= '0' && str[0] <= '9') {
-        num = num * CM_ZK_RADIX_10 + (str[0] - '0');
+    const int32_t LIMIT_DIV_10 = INT32_MAX / CM_ZK_RADIX_10;
+    const int32_t LIMIT_MOD_10 = INT32_MAX % CM_ZK_RADIX_10;
+
+    while (*str && *str >= '0' && *str <= '9') {
+        int32_t digit = *str - '0';
+
+        // 溢出检查
+        if (num > LIMIT_DIV_10 || (num == LIMIT_DIV_10 && digit > LIMIT_MOD_10)) {
+            return -1;
+        }
+
+        num = num * CM_ZK_RADIX_10 + digit;
         str++;
     }
+
     return num;
 }
 
 static uint16_t CmServerZkGetNodeIdByPath(const char *path, const char *pre)
 {
-    size_t step = strlen(pre);
-    const char *str = &path[step];
+    if (path == NULL || pre == NULL) {
+        CM_LOGERROR("Invalid zkPathB or zkPathT.");
+        return UINT16_MAX;
+    }
 
-    return (uint16_t)CmServerZkAtoi(str);
+    size_t preLen = strnlen(pre, CM_ZNODE_PATH_LEN);
+    size_t pathLen = strnlen(path, CM_ZNODE_PATH_LEN);
+    if (pathLen <= preLen) {
+        CM_LOGERROR("ZkPathT greater or equal than zkPathB.");
+        return UINT16_MAX;
+    }
+    // 确保 path 确实是以 pre 开头的
+    if (strncmp(path, pre, preLen) != 0) {
+        CM_LOGERROR("ZkPathB do not contain zkPathT.");
+        return UINT16_MAX;
+    }
+    // 此时可以安全计算偏移量
+    const char *str = &path[preLen];
+    int32_t nodeId = CmServerZkAtoi(str);
+    if (nodeId < 0 || nodeId > MAX_NODE_NUM) {
+        CM_LOGERROR("Cm client zk a to i fail.");
+        return UINT16_MAX;
+    }
+
+    return (uint16_t)nodeId;
 }
 
 static int32_t CmServerZkGenMetaNodeId(const char *ipv4AddrStr)
@@ -1286,6 +1374,10 @@ static int32_t CmServerZkGenMetaNodeId(const char *ipv4AddrStr)
             return CM_ERR;
         }
         g_sZkMgr.localId = CmServerZkGetNodeIdByPath(zkPathB, zkPathT);
+        if (g_sZkMgr.localId == UINT16_MAX) {
+            CM_LOGERROR("Invalid nodeId(%u).", g_sZkMgr.localId);
+            return CM_ERR;
+        }
         ret = CmZkDelete(g_zh, zkPathB, UNCHECK_VERSION);
         if (ret != CM_OK) {
             CM_LOGERROR("Delete znode(%s) failed, ret(%d).", zkPathB, ret);
@@ -1637,6 +1729,7 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
     CmNodeIdList *nodeList =
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
+        deallocate_String_vector(&retStrings);
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
         return CM_ERR;
     }
@@ -1645,6 +1738,11 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
     uint16_t index;
     for (index = 0; index < nodeList->nodeNum; index++) {
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
+        if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
+            deallocate_String_vector(&retStrings);
+            CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
+            return CM_ERR;
+        }
     }
     CmServerSchedueAdd(poolId, CmServerZkSubNodeListHandle, (void *)nodeList);
     deallocate_String_vector(&retStrings);
@@ -1673,6 +1771,11 @@ static int32_t CmServerZkGetNodeEvent(CmNodeEvent *event)
         CM_LOGINFO("Get znode(%s), not exist.", zkPath);
         return CM_NOT_EXIST;
     }
+    if (event->poolId > MAX_POOL_NUM) {
+        CM_LOGINFO("Get event from zk exceeds the max pool number.");
+        return CM_ERR;
+    }
+
     return CM_OK;
 }
 
@@ -1800,6 +1903,7 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
     CmNodeIdList *nodeList =
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
+        deallocate_String_vector(&retStrings);
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
         return CM_ERR;
     }
@@ -1808,6 +1912,11 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
     uint16_t index;
     for (index = 0; index < nodeList->nodeNum; index++) {
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
+        if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
+            deallocate_String_vector(&retStrings);
+            CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
+            return CM_ERR;
+        }
     }
     CmServerSchedueAdd(poolId, CmServerZkSubNodeEventHandle, (void *)nodeList);
     deallocate_String_vector(&retStrings);
@@ -1835,6 +1944,11 @@ static int32_t CmServerZkGetPtEvent(CmPtEvent *event)
         CM_LOGINFO("Get znode(%s), not exist.", zkPath);
         return CM_NOT_EXIST;
     }
+    if (event->poolId > MAX_POOL_NUM) {
+        CM_LOGINFO("Get event from zk exceeds the max pool number.");
+        return CM_ERR;
+    }
+
     return CM_OK;
 }
 
@@ -1944,7 +2058,6 @@ static void CmServerZkSubPtEventWatch(zhandle_t *zh, int evtype, int state, cons
 int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkCommitPtEventFp commitFp)
 {
     char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
-    int32_t ret;
 
     if (g_sZkMgr.role != CM_SERVER_MASTER) {
         return CM_OK;
@@ -1960,7 +2073,7 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
         g_sZkMgr.restore[poolId].ptCommit = commitFp;
     }
 
-    ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_PT_EVENT_PATH);
+    int32_t ret = sprintf_s(zkPath, CM_ZNODE_PATH_LEN, "%s/%u/%s", CM_POOL, poolId, CM_PT_EVENT_PATH);
     if (ret < 0) {
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
@@ -1976,21 +2089,25 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
     if (retStrings.count == 0) {
         deallocate_String_vector(&retStrings);
         return CM_OK;
-    } else {
-        g_sZkMgr.restore[poolId].ptIdle = FALSE;
     }
+    g_sZkMgr.restore[poolId].ptIdle = FALSE;
 
     CmNodeIdList *nodeList =
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
+        deallocate_String_vector(&retStrings);
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
     nodeList->nodeNum = (uint16_t)retStrings.count;
-    uint16_t index;
-    for (index = 0; index < nodeList->nodeNum; index++) {
+    for (uint16_t index = 0; index < nodeList->nodeNum; index++) {
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
+        if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
+            deallocate_String_vector(&retStrings);
+            CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
+            return CM_ERR;
+        }
     }
     CmServerSchedueAdd(poolId, CmServerZkSubPtEventHandle, (void *)nodeList);
     deallocate_String_vector(&retStrings);
@@ -2271,6 +2388,7 @@ static int32_t CmZkConnect(void)
     while (zoo_state(g_zh) != ZOO_CONNECTED_STATE) {
         CM_LOGWARN("Waiting for zookeeper connected, retry(%u ms).", cnt);
         if (cnt >= CM_ZK_TRY_CONNECT_TIME) {
+            zookeeper_close(g_zh);
             CM_LOGERROR("Connect zookeeper failed, zkserver(%s).", zkServerIp);
             return CM_ERR;
         }

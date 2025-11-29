@@ -1846,3 +1846,53 @@ TEST_F(TestBio, test_bio_add_old_disk)
     LVOS_HVS_deactiveTracePoint(0, "SERVER_SET_OLD_DISK_ID");
     LVOS_HVS_deactiveTracePoint(0, "SERVER_OLD_DISK_EXIST");
 }
+
+TEST_F(TestBio, test_bio_initialize_invalid_path)
+{
+    LOG_INFO("test_bio_initialize_invalid_path");
+    ClientOptionsConfig config;
+    config.logType = static_cast<LogType>(3);
+    config.enable = false;
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    config.logType = FILE_TYPE;
+    memset_s(config.logFilePath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.logFilePath, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.certificationPath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.certificationPath, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.caCerPath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.caCerPath, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.caCrlPath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.caCrlPath, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.privateKeyPath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.privateKeyPath, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.privateKeyPassword, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.privateKeyPassword, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.hseKfsMasterPath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+
+    memset_s(config.hseKfsMasterPath, PATH_MAX, 0, PATH_MAX);
+    memset_s(config.hseKfsStandbyPath, PATH_MAX, 'a', PATH_MAX);
+    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
+}

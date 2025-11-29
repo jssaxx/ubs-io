@@ -31,7 +31,7 @@ public:
         }
         uint32_t serviceId = GetServiceId(tpId);
         uint32_t innerId = GetInnerId(tpId);
-        if (serviceId > MAX_SERVICE_NUM || innerId > MAX_INNER_ID_NUM) {
+        if (serviceId >= MAX_SERVICE_NUM || innerId >= MAX_INNER_ID_NUM) {
             return nullptr;
         }
         return &tracePoints[serviceId][innerId];

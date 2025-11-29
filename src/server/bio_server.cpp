@@ -588,8 +588,8 @@ BResult BioServer::BioServerDiagnoseInit()
     ret = this->BioServerDiagnoseInitInner();
     if (ret != BIO_OK) {
         LOG_ERROR("inner init bio server diagnose fail.");
-        dlclose(handler);
     }
+    dlclose(handler);
     return ret;
 }
 
