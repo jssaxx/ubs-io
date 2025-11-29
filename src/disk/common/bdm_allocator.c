@@ -635,6 +635,7 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
     realize->metaAddr = (uint64_t)malloc(sizeof(BdmChunkMeta) * chunkNum);
     if (realize->metaAddr == 0UL) {
         BDM_LOGERROR(0, "Malloc failed, chunk num(%llu).", chunkNum);
+        BDM_RWLOCK_DESTROY(&realize->lock);
         free(realize);
         return 0L;
     }
@@ -653,6 +654,7 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
     }
 
     if (ret != BDM_CODE_OK) {
+        BDM_RWLOCK_DESTROY(&realize->lock);
         free((void *)realize->metaAddr);
         realize->metaAddr = 0;
         free(realize);

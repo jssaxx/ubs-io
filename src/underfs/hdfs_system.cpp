@@ -46,6 +46,7 @@ BResult HdfsSystem::Init()
     }
     LVOS_TP_START(UNDERFS_HDFS_CONNECT_FAIL, &mHdfsFs, nullptr);
     hdfsBuilder *builder = newBuilderOp();
+    ChkTrue(builder != NULL, BIO_UFS_IOERR, "Create hdfs new builder failed.");
     builderSetNameNodeOp(builder, mNameNodeIp.c_str());
     builderSetNameNodePortOp(builder, mNameNodePort);
     mHdfsFs = builderConnectOp(builder);

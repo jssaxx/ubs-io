@@ -278,7 +278,7 @@ int32_t CM_GetNodeInfo(uint16_t poolId, NodeInfo *nodeInfo);
 /*
  * 功能描述：获取指定节点的mr信息
  * 参数说明：poolId: {in}，pool ID
- *             mr: {in/out}, MetaBuffInfo结构体指针
+ *             mr: {in/out}, MetaBuffInfo结构体指针，mr内存长度需要大于4096
  * 返回值：0表示成功，非0表示失败
  */
 int32_t CM_GetNodeMr(uint16_t poolId, NodeMetaBuff *mr);

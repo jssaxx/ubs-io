@@ -165,6 +165,7 @@ static int ZooRecvTimeout()
 static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
     int mode, char *pathBuffer, int pathBufferLen)
 {
+    strncpy_s(pathBuffer, pathBufferLen - 1, "/cm/meta/nodeid_generator/0", pathBufferLen - 1);
     return ZOK;
 }
 
@@ -846,4 +847,26 @@ TEST_F(TestCm, test_cm_check_node_data_return_err)
     auto ret = CheckNodeDataFromZk(nodeInfoList);
     EXPECT_EQ(ret, CM_OK);
     free(nodeInfoList);
+}
+
+TEST_F(TestCm, test_cm_get_node_id_by_path_null)
+{
+    LOG_INFO("test_cm_get_node_id_by_path_null");
+    int32_t ret = CmClientZkGetNodeIdByPath(NULL, NULL);
+    EXPECT_EQ(ret, UINT16_MAX);
+
+    std::string path = "/pre";
+    std::string pre = "/pre/123";
+    ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
+    EXPECT_EQ(ret, UINT16_MAX);
+
+    path = "/path";
+    pre = "/pre";
+    ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
+    EXPECT_EQ(ret, UINT16_MAX);
+
+    path = "/pre/123";
+    pre = "/pre";
+    ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
+    EXPECT_EQ(ret, 0);
 }

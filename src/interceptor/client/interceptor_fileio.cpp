@@ -50,7 +50,8 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
         return -1;
     }
 
-    if (resp->dataLen == 0 || rspLen < sizeof(InterceptorPreadOut) + resp->dataLen) {
+    const uint64_t headerSize = sizeof(InterceptorPreadOut);
+    if (resp->dataLen == 0 || rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
         CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " << sizeof(InterceptorPreadOut) <<
             " and dataLen: " << resp->dataLen << ".");
         free(resp);

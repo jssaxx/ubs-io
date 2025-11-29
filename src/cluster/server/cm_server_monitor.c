@@ -60,6 +60,8 @@ typedef struct {
 
 static FaultMonitor g_faultMonitor;
 
+int g_monitorWatchFlag = 1;
+
 void CmServerMonitorRegisterHandle(CmServerMonitorExpiredHandle handle)
 {
     g_faultMonitor.handle = handle;
@@ -344,6 +346,10 @@ void *CmServerMonitorDetectThread(void *ctx)
 
         uint16_t poolId;
 
+        if (g_monitorWatchFlag != 1) {
+            break;
+        }
+
         for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
             PoolRecord *record = &g_faultMonitor.list[poolId];
             if (record->used == FALSE || record->activeNum == 0) {
@@ -489,7 +495,7 @@ int32_t CmServerMonitorInit(void)
 void CmServerMonitorExit(void)
 {
     uint16_t poolId;
-
+    g_monitorWatchFlag = 0;
     CM_RWLOCK_WRLOCK(&g_faultMonitor.lock);
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
         if (g_faultMonitor.list[poolId].used == FALSE) {

@@ -343,13 +343,9 @@ BResult MirrorServer::FreeCacheQuota(FreeQuotaRequest &req)
 
 void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp)
 {
-    uint32_t bar = req.bar;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
     uint32_t index = 0;
     for (auto &nodeEntry : nodeView) {
-        if ((bar--) != 0) {
-            continue;
-        }
         if (index == CLUSTER_NODE_SIZE) {
             break;
         }
@@ -791,9 +787,10 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
     }
     uint32_t diskId = DISK_ID_INVALID;
     BResult ret = BIO_OK;
+    req.diskPath[FILE_PATH_MAX_LEN - 1] = '\0';
     std::string diskPath = req.diskPath;
     LVOS_TP_START(SERVER_NO_DISK_CHECK, 0);
-    ChkTrue(FileUtil::CanonicalPath(diskPath), BIO_ERR,  "The device does not exist.");
+    ChkTrue(FileUtil::CanonicalPath(diskPath), BIO_ERR, "The device does not exist.");
     LVOS_TP_END
     bool isExist;
     LVOS_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
@@ -1135,6 +1132,10 @@ int32_t MirrorServer::MirrorServerQueryNodeInfoByPt(ServiceContext &ctx, FileLoc
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
+    if (nodeInfo.ip.length() > NODE_DESC_SIZE) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     rsp.hostMaster[nodeInfo.ip.length()] = '\0';
     rsp.portMaster = nodeInfo.port;
 
@@ -1371,6 +1372,7 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
     if (req->strategy > STRATEGY_BUTT || req->strategy < WRITE_BACK) {
         return false;
     }
+    req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
@@ -1499,6 +1501,7 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
 
 bool MirrorServer::CheckGetReq(GetRequest *req)
 {
+    req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
@@ -1558,6 +1561,7 @@ int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 
 bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
 {
+    req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.empty()) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
@@ -1610,6 +1614,7 @@ int32_t MirrorServer::MirrorServerAddDisk(ServiceContext &ctx, AddDiskRequest *r
     }
 
     AddDiskResponse rsp;
+    rsp.result = BIO_OK;
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, static_cast<void *>(&rsp), sizeof(rsp));
     return BIO_OK;
 }
@@ -1633,6 +1638,7 @@ int32_t MirrorServer::HandleAddDisk(ServiceContext &ctx)
 
 bool MirrorServer::CheckStatReq(StatRequest *req)
 {
+    req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;
@@ -1683,6 +1689,7 @@ bool MirrorServer::CheckListReq(ListRequest *req)
     if (req->size != (sizeof(ObjStat) * 1000U) && req->size != 0) {
         return false;
     }
+    req->prefix[KEY_MAX_SIZE - 1] = '\0';
     std::string prefix(req->prefix);
     if ((prefix.size() == 0) || (prefix[0] == '/') || prefix.find("..") != std::string::npos) {
         return false;
@@ -1734,6 +1741,7 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
 
 bool MirrorServer::CheckLoadReq(LoadRequest *req)
 {
+    req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
         return false;

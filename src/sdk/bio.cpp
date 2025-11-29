@@ -114,10 +114,21 @@ inline static void StatisticGetIoSize(uint64_t length)
 
 inline static bool KeyValid(const char *key)
 {
-    if (UNLIKELY(key == nullptr || strlen(key) == 0 || strlen(key) >= KEY_MAX_SIZE)) {
+    if (UNLIKELY(key == nullptr)) {
         return false;
     }
-    std::string keyStr(key);
+
+    const char* end = (const char*)memchr(key, '\0', KEY_MAX_SIZE);
+    if (UNLIKELY(end == nullptr)) {
+        return false;
+    }
+
+    size_t len = end - key;
+    if (UNLIKELY(len == 0 || len >= KEY_MAX_SIZE)) {
+        return false;
+    }
+
+    std::string keyStr(key, len);
     if ((keyStr[0] == '/') || keyStr.find("..") != std::string::npos) {
         return false;
     }
@@ -519,12 +530,48 @@ using namespace ock::bio;
 static std::unordered_map<uint64_t, std::shared_ptr<Bio>> gBioCacheMap;
 static std::mutex g_lock;
 
+static bool CheckClientConfig(const ClientOptionsConfig &optConf)
+{
+    if (optConf.logType < STDOUT_TYPE || optConf.logType > STDERR_TYPE) {
+        return false;
+    }
+    if (!memchr(optConf.logFilePath, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.certificationPath, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.caCerPath, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.caCrlPath, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.privateKeyPath, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.privateKeyPassword, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.hseKfsMasterPath, '\0', PATH_MAX)) {
+        return false;
+    }
+    if (!memchr(optConf.hseKfsStandbyPath, '\0', PATH_MAX)) {
+        return false;
+    }
+    return true;
+}
+
 CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
 {
     if (optConf == nullptr) {
-        ClientOptionsConfig config;
+        ClientOptionsConfig config{};
         config.enable = false;
         return BioService::Initialize(mode, config);
+    }
+
+    if (!CheckClientConfig(*optConf)) {
+        return RET_CACHE_EPERM;
     }
     return BioService::Initialize(mode, *optConf);
 }

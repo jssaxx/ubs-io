@@ -247,6 +247,7 @@ BResult Flow::HoldWait(uint64_t needOffset)
     }
     if (mPreLoadOffset >= needOffset) {
         mLock.UnLock();
+        sem_destroy(&ioHoldCtx.sem);
         BIO_TRACE_END(FLOW_TRACE_HOLDWAIT, 0);
         return BIO_OK;
     }

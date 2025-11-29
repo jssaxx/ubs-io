@@ -338,9 +338,12 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
     driver->RegisterTLSPrivateKeyCallback(
         [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
             UBSHcomTLSEraseKeypass &erase) {
-            std::pair<char *, int> passwordData;
+            std::pair<char *, int> passwordData{nullptr, 0};
             auto ret = mbioCryptorHelper->Decrypt(1, options.privateKeyPassword, passwordData);
             if (ret != 0) {
+                if (passwordData.first) {
+                    BioCryptorHelper::EraseDecryptData(passwordData);
+                }
                 return false;
             }
             path = options.privateKeyPath;

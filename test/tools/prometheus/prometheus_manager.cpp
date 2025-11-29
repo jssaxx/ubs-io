@@ -251,14 +251,15 @@ void PrometheusManager::UpdateTraceData()
         UpdateFaultNodeTraceMetrics(mTotals, mTotalFamily, faultNodeId);
     }
 
-    for (const auto &tracePoints : nodesTracePoints) {
+    for (auto &tracePoints : nodesTracePoints) {
         if (tracePoints.second.count == 0) {
             continue;
         }
 
         uint16_t nodeId = tracePoints.first;
         for (int i = 0; i < tracePoints.second.count; ++i) {
-            const auto &traceData = tracePoints.second.traces[i];
+            auto &traceData = tracePoints.second.traces[i];
+            traceData.traceName[MAX_TRACE_NAME_LEN - 1] = '\0';
             auto traceName = traceData.traceName;
             auto beginData = traceData.metrics.beginData;
             auto goodEndData = traceData.metrics.goodEnd;

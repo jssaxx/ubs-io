@@ -63,7 +63,10 @@ void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allo
         ", held quota form " << oriQuota << " to " << iter->second << ".");
 
     // 2. 重置状态
-    mTaskRunFlag.find(nodeSet)->second = false;
+    auto iter1 = mTaskRunFlag.find(nodeSet);
+    if (UNLIKELY(iter1 != mTaskRunFlag.end())) {
+        iter1->second = false;
+    }
 
     // 3. 唤醒等待队列中的IO
     auto iter2 = mIoQueueMap.find(nodeSet);
@@ -148,7 +151,7 @@ void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
 {
     BResult ret = BIO_INNER_ERR;
     uint16_t localNid = BioClient::Instance()->GetMirror()->GetLocalNodeInfo().VNodeId();
-    uint64_t expectPreloadSize = UINT64_MAX;
+    uint64_t expectPreloadSize = NO_1024 * IO_SIZE_1M;
     std::vector<uint16_t> successNodeVec;
     std::vector<uint64_t> successQuotaVec;
 
