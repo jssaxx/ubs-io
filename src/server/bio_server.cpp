@@ -965,7 +965,7 @@ inline static void StatisticPutIoSize(uint64_t length)
 
 int32_t Put(PutRequest *req, PutResponse *rsp)
 {
-    BResult ret;
+    BResult ret = BIO_OK;
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };

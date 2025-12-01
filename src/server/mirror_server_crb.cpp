@@ -145,7 +145,7 @@ void MirrorServerCrb::RunTaskThreadFinish(CmPtTaskPtr ptTask)
 
 void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
 {
-    BResult ret;
+    BResult ret = BIO_OK;
 
     LOG_INFO("Job begin: ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
@@ -319,7 +319,7 @@ BResult MirrorServerCrb::SendSyncDataReq(CmPtInfo &ptInfo)
     bool isRetry = false;
     uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
-    BResult ret;
+    BResult ret = BIO_OK;
 
     do {
         isRetry = false;

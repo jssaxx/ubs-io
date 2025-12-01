@@ -605,7 +605,7 @@ BResult WCacheManager::Flush(uint16_t ptId, uint64_t ptv)
     bool isRetry = false;
     uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeUs();
-    BResult ret;
+    BResult ret = BIO_OK;
 
     LVOS_TP_START(NO_PROCESS_FLUSH, 0);
     LVOS_TP_START(WCACHE_FLUSH_FAIL, &ret, BIO_INNER_RETRY);

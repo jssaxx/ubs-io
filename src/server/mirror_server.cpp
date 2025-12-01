@@ -1805,7 +1805,7 @@ int32_t MirrorServer::MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequ
         }
     }
 
-    BResult result;
+    BResult result = BIO_OK;
     uint64_t flowId = UINT64_MAX;
     BIO_TRACE_START(MIRROR_TRACE_CREATE_FLOW);
     if (req->opType == 0) {

@@ -233,7 +233,7 @@ BResult WCacheTier::GetDataSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice
 BResult WCacheTier::GetMetaDataSlice(uint64_t indexInFlow, uint64_t offset, uint64_t length,
     WFlowMetaDataSlice &metaDataSlice)
 {
-    BResult ret;
+    BResult ret = BIO_OK;
     WCacheSlicePtr metaSlice;
     ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta),
         metaSlice);

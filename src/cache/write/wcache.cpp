@@ -152,7 +152,7 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
     }
 
     // 4. write thought
-    BResult ret;
+    BResult ret = BIO_OK;
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     if (sliceRef != nullptr) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_DISK_BACK);
@@ -300,7 +300,7 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
 
 BResult WCache::Seal(WCacheTierType type)
 {
-    BResult ret;
+    BResult ret = BIO_OK;
 
     ret = mCacheTiers[type]->Seal();
     if (ret != BIO_OK) {
