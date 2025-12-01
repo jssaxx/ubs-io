@@ -1740,6 +1740,7 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
             deallocate_String_vector(&retStrings);
+            free(nodeList);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
             return CM_ERR;
         }
@@ -1914,6 +1915,7 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
             deallocate_String_vector(&retStrings);
+            free(nodeList);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
             return CM_ERR;
         }
@@ -2105,6 +2107,7 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
             deallocate_String_vector(&retStrings);
+            free(nodeList);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
             return CM_ERR;
         }

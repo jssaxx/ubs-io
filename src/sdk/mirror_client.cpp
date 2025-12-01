@@ -202,7 +202,7 @@ BResult MirrorClient::LoadOriginView()
     uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
     uint64_t retryCnt = 0;
-    BResult ret;
+    BResult ret = BIO_OK;
 
     do {
         isRetry = false;
@@ -845,7 +845,7 @@ BResult MirrorClient::AddDisk(const char *diskPath)
     uint64_t retryTime;
     uint64_t startTime = Monotonic::TimeSec();
     uint64_t retryCnt = 0;
-    BResult ret;
+    BResult ret = BIO_OK;
 
     do {
         isRetry = false;
