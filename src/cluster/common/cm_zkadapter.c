@@ -1729,8 +1729,8 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
     CmNodeIdList *nodeList =
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
-        deallocate_String_vector(&retStrings);
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
+        deallocate_String_vector(&retStrings);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
@@ -1740,8 +1740,8 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
             deallocate_String_vector(&retStrings);
-            free(nodeList);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
+            free(nodeList);
             return CM_ERR;
         }
     }
@@ -1904,8 +1904,8 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
     CmNodeIdList *nodeList =
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
-        deallocate_String_vector(&retStrings);
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
+        deallocate_String_vector(&retStrings);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
@@ -1915,8 +1915,8 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
             deallocate_String_vector(&retStrings);
-            free(nodeList);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
+            free(nodeList);
             return CM_ERR;
         }
     }
@@ -2097,8 +2097,8 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
     CmNodeIdList *nodeList =
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
-        deallocate_String_vector(&retStrings);
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
+        deallocate_String_vector(&retStrings);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
@@ -2107,8 +2107,8 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
             deallocate_String_vector(&retStrings);
-            free(nodeList);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
+            free(nodeList);
             return CM_ERR;
         }
     }
