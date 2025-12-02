@@ -654,9 +654,16 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
 
 int32_t NetEngine::RequestIPCReceived(ServiceContext &ctx)
 {
-    auto &handler = mHandlers[ctx.OpCode()];
+    uint16_t opCode = ctx.OpCode();
+    LVOS_TP_START(SDK_REQUEST_IPC_OPCODE_EXCEED, &opCode, MAX_NEW_REQ_HANDLER);
+    LVOS_TP_END;
+    if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << opCode);
+        return BIO_ERR;
+    }
+    auto &handler = mHandlers[opCode];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() << ".");
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << opCode << ".");
         return BIO_ERR;
     }
     BIO_TRACE_START(NET_TRACE_IPC_HDL);

@@ -1318,7 +1318,8 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 {
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
-    BResult ret = Prepare(ptEntry, param, req);
+    BResult ret = BIO_OK;
+    ret = Prepare(ptEntry, param, req);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Prepare put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
@@ -1566,7 +1567,7 @@ BResult MirrorClient::ListLocal(ListRequest &req, std::unordered_map<std::string
 
 BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    BResult ret = BIO_OK;
+    BResult ret = BIO_ERR;
     uint32_t index = 0;
 
     auto tempPtView = mPtView;

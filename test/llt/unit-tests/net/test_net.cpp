@@ -117,6 +117,12 @@ TEST_F(TestNet, test_receive_handle)
 
     ret = netEngine->RequestIPCReceived(ctx);
     EXPECT_EQ(ret, BIO_OK);
+
+    LVOS_TRACEP_PARAM_S userParam;
+    LVOS_HVS_activeTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED", 0, 1, userParam);
+    ret = netEngine->RequestIPCReceived(ctx);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED");
+    EXPECT_EQ(ret, BIO_ERR);
 }
 
 TEST_F(TestNet, test_net_show)
