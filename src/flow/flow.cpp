@@ -206,7 +206,7 @@ void Flow::PreLoadSchedule()
         return;
     }
     IncreaseRef();
-    std::function<void()> func = [this]() {
+    std::function<void()> func = [&]() {
         PreLoadHandle();
         DecreaseRef();
     };
