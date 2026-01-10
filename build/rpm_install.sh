@@ -30,7 +30,7 @@ parse_os_version()
 DEPRESS_PATH=$(cd -P -- "$(dirname -- "$0")"/.. && pwd -P)
 CUSTOM_OS=$(parse_os_version)
 SRC_TAR="BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE,,}.tar.gz"
-SRC_TAR_PATH="${DEPRESS_PATH}/output/${SRC_TAR}"
+SRC_TAR_PATH="${DEPRESS_PATH}/dist/${SRC_TAR}"
 INSTALL_DIR_NAME="home"
 
 if [ "$CUSTOM_OS" == "unknown_os" ]; then

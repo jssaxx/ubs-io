@@ -14,11 +14,11 @@ if [[ -n "$2" ]]; then
 fi
 
 hdt build -s ${asan} -c on \
-&& cp -r ../../build/* build/ \
+&& cp -r ../../Build/* build/ \
 && cp build/3rdparty/secure/huawei_secure_c/lib/* build/ \
 && cp -r ../../configs/ . \
-&& \cp ../../output/boostio/lib/* build/ \
+&& \cp ../../dist/boostio/lib/* build/ \
 && hdt run -s ${asan} -c on "--args=\"--gtest_output=xml:report.xml\"" \
 && hdt report \
 && pwd \
-&& cp ./build/report.xml ../../build/hdt_report
+&& cp ./build/report.xml ../../Build/hdt_report

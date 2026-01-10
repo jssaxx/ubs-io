@@ -14,7 +14,7 @@ usage() {
 
 CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
-BUILD_DIR=${PROJ_DIR}/build
+BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
@@ -73,7 +73,7 @@ if [[ "$BUILD_TYPE" == "clean" ]]; then
     }
     echo
     echo "clean boostio successful."
-    rm -rf ${PROJ_DIR}/output
+    rm -rf ${PROJ_DIR}/dist
     exit 0
 fi
 
@@ -124,7 +124,7 @@ $BUILD_CMD || {
 	  echo "Failed to build boostio."
 	  exit 1
 }
-cd ${PROJ_DIR}/output
+cd ${PROJ_DIR}/dist
 if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp -d 3rdparty/zookeeper/lib/* bio/lib/.
 	  \cp 3rdparty/spdlog/lib64/libspdlog.a bio/lib/.
