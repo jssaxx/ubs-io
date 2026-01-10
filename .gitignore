@@ -3,4 +3,4 @@
 /build/
 /Build/
 /cmake-build-*/
-/output/
+/dist/
