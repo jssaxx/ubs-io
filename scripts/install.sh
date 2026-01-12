@@ -1,5 +1,10 @@
 #!/bin/bash
-# Copyright: (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
+# ***********************************************************************
+# Copyright: (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# script for Huawei hyperio to build pkg
+# version: 1.0.0
+# ***********************************************************************
+
 set -e
 ROOT_PATH=/opt
 RUN_USER=hwMindX
