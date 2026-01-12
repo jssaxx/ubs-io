@@ -1,6 +1,7 @@
 #!/bin/bash
 # ***********************************************************************
 # Copyright: (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# script for Huawei ubs-io to build pkg
 # version: 1.0.0
 # ***********************************************************************
 set -e
