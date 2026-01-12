@@ -1,6 +1,6 @@
 #!/bin/bash
 # ***********************************************************************
-# Copyright: (c) Huawei Technologies Co., Ltd. 2020. All rights reserved.
+# Copyright: (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
 # version: 1.0.0
 # ***********************************************************************
 set -e

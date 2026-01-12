@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2022-2023. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #include "cm_zkadapter.h"
@@ -1040,14 +1048,14 @@ static int32_t CmClientZkSubDataHandle(uint16_t poolId)
         CM_LOGERROR("Sprintf_s path failed, ret(%d).", ret);
         return CM_ERR;
     }
-    
+
     int len = USER_DATA_MAX_LEN;
     ret = CmZkWget(g_zh, zkPath, CmClientZkSubDataChangeWatch, restore, (char *)restore->userValue, &len, NULL);
     if (ret != ZOK) {
         CM_LOGERROR("Get znode(%s) failed, ret(%d).", zkPath, ret);
         return CM_ERR;
     }
-    
+
     restore->userHandle.notifyDataInfoChange(restore->userKey, restore->userValue, len, restore->userHandle.ctx);
     return CM_OK;
 }
@@ -2324,7 +2332,7 @@ static void CmZkServerRestore(void)
     if (ret != CM_OK) {
         CM_LOGWARN("Record meta session failed, ret(%d) nid(%u).", ret, g_sZkMgr.localId);
     }
-    
+
     ret = CmServerZkSubRoleChange(g_sZkMgr.roleChange); // 恢复订阅
     if (ret != CM_OK) {
         return;

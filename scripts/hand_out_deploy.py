@@ -2,7 +2,7 @@
 # coding=utf-8
 
 # ***********************************************************************
-# Copyright: (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
+# Copyright: (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
 # script for Huawei boostio to install pkg
 # version: 1.0.0
 # change log:

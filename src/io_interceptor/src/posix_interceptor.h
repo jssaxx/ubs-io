@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2021-2023. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #ifndef POXSIX_INTERCEPTOR_H
@@ -24,7 +32,7 @@ namespace interceptor {
     int HookCreat(const char* path, mode_t mode);
 
     int HookCreat64(const char* path, mode_t mode);
-    
+
     int HookClose(int fd);
 
     off_t HookLseek(int fd, off_t offset, int whence);
@@ -54,7 +62,7 @@ namespace interceptor {
     ssize_t HookPwritev(int fd, const struct iovec* vector, int count, off_t offset);
 
     ssize_t HookPwritev64(int fd, const struct iovec* vector, int count, off64_t offset);
-    
+
     int HookTruncate(const char* path, off_t length);
 
     int HookTruncate64(const char* path, off_t length);
