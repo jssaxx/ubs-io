@@ -220,8 +220,8 @@ static void BdmAllocatorInsertNext(BdmChunkIndex *chunk, BdmChunkIndex *prev, In
 }
 
 
-static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel,
-                                      void *context)
+static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *current, ngx_rbtree_node_t *node,
+                                      ngx_rbtree_node_t *treeSentinel, void *context)
 {
     ngx_rbtree_node_t **p;
     InsertCbContext *cbContext = (InsertCbContext *)context;
@@ -231,9 +231,9 @@ static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *temp, ngx_rbtree_node_t
         return BDM_CODE_ERR;
     }
     BdmChunkIndex *nodePos = ngx_rb_entry(node, BdmChunkIndex, node);
-    if (temp != NULL) {
+    if (current != NULL) {
         while (1) {
-            BdmChunkIndex *tempPos = ngx_rb_entry(temp, BdmChunkIndex, node);
+            BdmChunkIndex *tempPos = ngx_rb_entry(current, BdmChunkIndex, node);
             if (nodePos->index == tempPos->index + tempPos->length) {
                 BdmAllocatorInsertNext(nodePos, tempPos, cbContext);
                 return 1;
@@ -244,25 +244,25 @@ static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *temp, ngx_rbtree_node_t
             }
 
             if (nodePos->index + nodePos->length < tempPos->index) {
-                p = &temp->left;
+                p = &current->left;
             } else if (nodePos->index > tempPos->index + tempPos->length) {
-                p = &temp->right;
+                p = &current->right;
             } else {
                 BDM_LOGERROR(0, "Areas overlapped failed, start(%llu) length(%llu).", nodePos->index, nodePos->length);
                 cbContext->result = BDM_CODE_ERR;
                 return BDM_CODE_ERR;
             }
 
-            if (*p == sentinel) {
+            if (*p == treeSentinel) {
                 break;
             }
 
-            temp = *p;
+            current = *p;
         }
         *p = node;
-        node->parent = temp;
-        node->left = sentinel;
-        node->right = sentinel;
+        node->parent = current;
+        node->left = treeSentinel;
+        node->right = treeSentinel;
         ngx_rbt_red(node);
     }
 

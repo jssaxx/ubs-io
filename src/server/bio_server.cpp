@@ -163,7 +163,7 @@ BResult BioServer::BioLoggerInit(std::string pathName)
 {
     LoggerOptions loggerOptions;
     loggerOptions.logType = FILE_TYPE;
-    loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
+    loggerOptions.minLogLevel = BIOLOG_LEVEL_INFO;
     loggerOptions.path = std::move(pathName);
     Logger *logger = Logger::Instance(loggerOptions);
     if (logger == nullptr) {

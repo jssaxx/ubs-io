@@ -200,15 +200,15 @@ BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
 {
     auto logLevel = conf->GetStr(LOG_LEVEL.first);
     if (logLevel == "trace") {
-        mDaemonConfig.logLevel = SPDLOG_LEVEL_TRACE;
+        mDaemonConfig.logLevel = BIOLOG_LEVEL_TRACE;
     } else if (logLevel == "debug") {
-        mDaemonConfig.logLevel = SPDLOG_LEVEL_DEBUG;
+        mDaemonConfig.logLevel = BIOLOG_LEVEL_DEBUG;
     } else if (logLevel == "info") {
-        mDaemonConfig.logLevel = SPDLOG_LEVEL_INFO;
+        mDaemonConfig.logLevel = BIOLOG_LEVEL_INFO;
     } else if (logLevel == "warn") {
-        mDaemonConfig.logLevel = SPDLOG_LEVEL_WARN;
+        mDaemonConfig.logLevel = BIOLOG_LEVEL_WARN;
     } else if (logLevel == "error") {
-        mDaemonConfig.logLevel = SPDLOG_LEVEL_ERROR;
+        mDaemonConfig.logLevel = BIOLOG_LEVEL_ERROR;
     } else {
         LOG_ERROR("Failed to load daemon log level config, invalid level " << logLevel);
         return BIO_ERR;
