@@ -1,6 +1,9 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ * This file contains  Red-black tree algorithm implementation from NGINX
+ * which is licensed under 2-clause BSD-like license
+ * please see https://github.com/nginx/nginx/blob/master/LICENSE for details.
  *
  * ubs-io is licensed under the Mulan PSL v2.
  * You can use this software according to the terms and conditions of the Mulan PSL v2.
