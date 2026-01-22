@@ -3012,3 +3012,6 @@ CResult BioAddDisk\(const char \*diskPath\)
 </tbody>
 </table>
 
+# 版权说明<a name="ZH-CN_TOPIC_0000002517352029"></a>
+
+Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
