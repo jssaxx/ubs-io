@@ -76,7 +76,6 @@ if [[ "$BUILD_TYPE" == "clean" ]]; then
         echo "Failed to clean boostio."
         exit 1
     }
-
     echo
     echo "clean boostio successful."
     rm -rf ${PROJ_DIR}/dist
