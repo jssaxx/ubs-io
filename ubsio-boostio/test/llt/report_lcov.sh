@@ -18,7 +18,8 @@ make_cov_info()
 
     # generate all coverage
     tmp_file="coverage.info"
-    lcov --d ${SUB_GENERATE_DIR} --c --output-file ${SUB_GENERATE_DIR}/${tmp_file} --rc lcov_branch_coverage=1
+    lcov --d ${SUB_GENERATE_DIR} --c --output-file ${SUB_GENERATE_DIR}/${tmp_file} --rc lcov_branch_coverage=1 \
+             --rc lcov_excl_br_line="LCOV_EXCL_BR_LINE|NET_LOG*|CLIENT_LOG*|LOG*|LVOS_TP_START*|ChkTrue*"
     if [ 0 != $? ];then
     echo "Failed to generate all coverage info"
     exit 1

@@ -13,7 +13,7 @@ include_directories(${SRC_DIR}/common
         ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
 		${SRC_DIR}/interceptor
-        ${PROJECT_3RDPARTY_BIN_DIR}/hcom/include/hcom
+        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include/zookeeper
         ${TEST_DIR}/mock
@@ -29,7 +29,7 @@ include_directories(${SRC_DIR}/common
         ${TEST_DIR}/net)
 
 link_directories(
-        ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/
+        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/lib64/
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/
 )

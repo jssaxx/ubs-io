@@ -31,15 +31,15 @@ struct NewChannelResp {
     int32_t result = 0; /* if 0, means a good client, otherwise reject */
 };
 
-using ChannelPtr = ock::hcom::NetChannelPtr;
-using ServiceContext = ock::hcom::NetServiceContext;
+using ChannelPtr = ock::hcom::UBSHcomChannelPtr;
+using ServiceContext = ock::hcom::UBSHcomServiceContext;
 using NewRequestHandler = std::function<int32_t(ServiceContext &)>;
 using NewChannelHandler = std::function<int32_t(const ChannelPtr &, const std::string &ipPort, NewChannelResp &)>;
 using ChannelBrokenHandler = std::function<void(uint32_t nodeId, uint32_t procId)>;
-using ServiceProtocol = ock::hcom::NetServiceProtocol;
-using MemoryRegionPtr = ock::hcom::UBSHcomNetMemoryRegionPtr;
-using MemoryAllocatorPtr = ock::hcom::UBSHcomNetMemoryAllocatorPtr;
-using NetRequest = hcom::NetServiceRequest;
+using ServiceProtocol = ock::hcom::UBSHcomServiceProtocol;
+using MemoryRegion = ock::hcom::UBSHcomRegMemoryRegion;
+using NetRequest = ock::hcom::UBSHcomOneSideRequest;
+using NetCallback = ock::hcom::Callback;
 
 using CbFunc = std::function<void(void *ctx, void *resp, uint32_t len, int32_t result)>;
 struct Callback {
@@ -131,8 +131,9 @@ struct NetOptions {
         protocol = netProtocol;
     }
 
-    void FillNetTlsConfigs(bool enable, std::string certPath, std::string tlsCaCerPath, std::string tlsCaCrlPath,
-        std::string priKeyPath, std::string priKeyPw, std::string hseMstPath, std::string hseStandbyPath)
+    void FillNetTlsConfigs(bool enable, const std::string &certPath, const std::string &tlsCaCerPath,
+        const std::string &tlsCaCrlPath, const std::string &priKeyPath, const std::string &priKeyPw,
+        const std::string &hseMstPath, const std::string &hseStandbyPath)
     {
         enableTls = enable;
         certificationPath = certPath;
@@ -149,15 +150,15 @@ const std::string CONN_PAYLOAD_PREFIX_CTRL = "bio-ctrl-";
 const std::string CONN_PAYLOAD_PREFIX_DATA = "bio-data-";
 const uint32_t CONN_PAYLOAD_PREFIX_SIZE = CONN_PAYLOAD_PREFIX_DATA.size();
 const std::string UDS_NAME = "BIO_SHM_UDS";
-constexpr uint32_t MAX_MESSAGE_SIZE = (4 * 1024);
-constexpr uint32_t MAX_MESSAGE_HEAD_SIZE = 1024;
+const std::string RPC_SERVICE_NAME = "BIO_RPC"
+const std::string IPC_SERVICE_NAME = "BIO_IPC"
 
 union NetConnPayload {
     NetNode srcNodeId;
     uint64_t whole = 0;
 
     NetConnPayload() : srcNodeId(0, 0) {}
-    explicit NetConnPayload(NetNode sId) : srcNodeId(sId.nid, sId.pid) {}
+    explicit NetConnPayload(const NetNode &sId) : srcNodeId(sId.nid, sId.pid) {}
     explicit NetConnPayload(uint64_t p) : whole(p) {}
 
     std::string ToPayloadStr(const std::string &prefix) const

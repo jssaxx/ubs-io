@@ -47,7 +47,7 @@ void NetChannelMgr::UnInitialize()
     mInited = false;
 }
 
-BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane)
+BResult NetChannelMgr::AddChannel(const NetNode &dstNid, ChannelPtr &ch, uint8_t plane)
 {
     if (UNLIKELY(ch == nullptr)) {
         NET_LOG_ERROR("The channel is nullptr.");
@@ -59,26 +59,24 @@ BResult NetChannelMgr::AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane)
         NET_LOG_ERROR("Alloc memory failed.");
         return BIO_ALLOC_FAIL;
     }
-    mChannelNodeMap.emplace(std::make_pair(ch->Id(), chNode));
+    mChannelNodeMap.emplace(std::make_pair(ch->GetId(), chNode));
     auto chInfo = new (std::nothrow) ChannelInfo(dstNid, ch);
-    LVOS_TP_START(SERVER_NET_ADD_CHANNEL_FAIL, &chInfo, nullptr);
-    LVOS_TP_END;
     if (UNLIKELY(chInfo == nullptr)) {
         NET_LOG_ERROR("Alloc memory failed.");
-        mChannelNodeMap.erase(ch->Id());
+        mChannelNodeMap.erase(ch->GetId());
         delete chNode;
         return BIO_ALLOC_FAIL;
     }
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
-    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() <<
-        ", plane:" << static_cast<uint32_t>(plane) << ".");
+    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:"
+        << ch->GetId() << ", plane:" << static_cast<uint32_t>(plane) << ".");
     return BIO_OK;
 }
 
 BResult NetChannelMgr::RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch)
 {
     std::unique_lock<std::mutex> locker(lock);
-    auto pos = mChannelNodeMap.find(ch->Id());
+    auto pos = mChannelNodeMap.find(ch->GetId());
     if (pos == mChannelNodeMap.end()) {
         return BIO_NOT_EXISTS;
     }
@@ -94,7 +92,8 @@ BResult NetChannelMgr::RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch
     mChannelMgr.erase(iter);
     delete chInfo;
     chInfo = nullptr;
-    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->Id() << ".");
+    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:"
+        << ch->GetId() << ".");
     return BIO_OK;
 }
 }
