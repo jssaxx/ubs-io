@@ -15,8 +15,8 @@ target_link_libraries(bio_sdk -Wl,--start-group rados -Wl,--end-group)
 target_link_libraries(bio_sdk
         -Wl,--start-group
         pthread dl expire_checker
-        ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
+        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
-        ${PROJECT_3RDPARTY_BIN_DIR}/huawei_secure_c/lib/libsecurec.a
+        ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libsecurec.a
         htracer bio_common bio_net bio_interceptor_server bio_underfs
         -Wl,--end-group)
