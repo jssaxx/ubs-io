@@ -1,6 +1,6 @@
-set(SOURCE_DIR ${PROJECT_3RDPARTY_SRC_DIR}/hcom/hcom/)
-set(BUILD_DIR ${PROJECT_BUILD_PATH}/build/hcom/)
-set(INSTALL_DIR ${PROJECT_3RDPARTY_BIN_DIR}/hcom)
+set(SOURCE_DIR ${PROJECT_3RDPARTY_SRC_DIR}/ubs-comm/ubs-comm/)
+set(BUILD_DIR ${PROJECT_BUILD_PATH}/build/ubs-comm/)
+set(INSTALL_DIR ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm)
 
 set(CHECK_FILE_HCOM ${INSTALL_DIR}/include/hcom/hcom.h)
 
@@ -22,7 +22,12 @@ else()
     exec_program(mkdir ${BUILD_DIR} ARGS -p ${INSTALL_DIR})
 
     # configure
-    exec_program(cmake ${BUILD_DIR} ARGS  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_DEPENDS_USE_COMPILER=false -DBUILD_TESTS=off -DBUILD_WITH_RDMA_CX5=on -DENABLE_ARM_KP=${ENABLE_KP_OPT} -DBUILD_EXAMPLE=off -DBUILD_PERF=off -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR})
+    exec_program(cmake ${BUILD_DIR} ARGS
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+            -DCMAKE_DEPENDS_USE_COMPILER=false
+            -DBUILD_TESTS=off
+            -DENABLE_ARM_KP=${ENABLE_KP_OPT}
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR})
 
     # execute make && make install
     exec_program(make ${BUILD_DIR} ARGS clean)
@@ -30,6 +35,4 @@ else()
     exec_program(make ${BUILD_DIR} ARGS install)
 
     exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/lib/libhcom.so ${TARGET_INSTALL_LIB_DIR})
-    exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/lib/libhcom_static.a ${TARGET_INSTALL_LIB_DIR})
-    exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/lib/securec/libsecurec.a ${TARGET_INSTALL_LIB_DIR})
 endif()

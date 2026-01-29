@@ -1,6 +1,0 @@
-/3rdparty
-/benchmark
-/conf
-/include
-/src
-/tests

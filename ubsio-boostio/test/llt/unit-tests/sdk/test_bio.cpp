@@ -868,7 +868,7 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     BioFreeListResources(&objs, objNum);
 }
@@ -883,8 +883,10 @@ TEST_F(TestBio, test_list_remote_remote_over_limit)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "LISTALL_REMOTE_OVER_1000", 0, 1, userParam);
     LVOS_HVS_activeTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT", 0, 1, userParam);
+    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_OVER_1000");
     LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT");
     BioFreeListResources(&objs, objNum);
@@ -902,7 +904,7 @@ TEST_F(TestBio, test_bio_put_remote_case_return_fail)
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioPut(G_TENANT_ID, "putremote", value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
 }
 
@@ -918,7 +920,7 @@ TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioPut(G_TENANT_ID, "putremoteptverror", value.c_str(), G_LENGTH, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     fclose(fp);
 }
@@ -932,7 +934,7 @@ TEST_F(TestBio, test_bio_get_remote_case_return_fail)
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, "getremote", 0, G_LENGTH, g_Location, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
     LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     delete[] value;
 }

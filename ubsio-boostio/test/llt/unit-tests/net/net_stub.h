@@ -36,7 +36,7 @@ namespace bio {
 class NetStub {
 public:
     static int32_t Connect(const std::string &oobIpOrName, uint16_t oobPort, const std::string &payload, ChannelPtr &ch,
-        ock::hcom::NetServiceConnectOptions options);
+                ock::hcom::NetServiceConnectOptions options);
 
     static int32_t SyncCall(const ock::hcom::NetServiceOpInfo &reqOpInfo, const ock::hcom::NetServiceMessage &req,
         ock::hcom::NetServiceOpInfo &rspOpInfo, ock::hcom::NetServiceMessage &rsp);
