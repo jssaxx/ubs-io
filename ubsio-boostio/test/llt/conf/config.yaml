@@ -1,0 +1,31 @@
+---
+version: 1.0.0
+
+project:
+  name: "bio_test"
+  desc: "bio_test project"
+  prod: null
+  team: null
+
+pipeline:
+  build:
+    - task: "cmake_test"
+      exec: "bash ../../../build.sh -t debug --ut"
+  run:
+    - task: "run_test"
+  report:
+    - task: "lcov_report"
+      exec: "pwd;cd ../../../build/;sh ../test/llt/report_lcov.sh"
+      args: false
+  clean:
+    - task: "clean"
+
+components:
+  - type: "hdt_cmc_c_cpp"
+    repo: null
+    dest: null
+    manifest:
+      gtest: null
+      mockcpp: null
+      gcov: null
+      asan: null
