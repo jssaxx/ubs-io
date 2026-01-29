@@ -169,10 +169,6 @@ void NetEngine::StopInner()
 
     mDataChannelMgr = nullptr;
     mCtrlChannelMgr = nullptr;
-    if (mbioCryptorHelper != nullptr) {
-        delete mbioCryptorHelper;
-        mbioCryptorHelper = nullptr;
-    }
 }
 
 BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name)
@@ -346,25 +342,58 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
     });
     tlsOpt.caCb = tlsCaCallback;
 
-    auto tlsPrivateKeyCallback = (
+    driver->RegisterTLSPrivateKeyCallback(
             [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
                              UBSHcomTLSEraseKeypass &erase) {
-                std::pair<char *, int> passwordData{nullptr, 0};
-                auto ret = mbioCryptorHelper->Decrypt(1, options.privateKeyPassword, passwordData);
-                if (ret != 0) {
-                    if (passwordData.first) {
-                        BioCryptorHelper::EraseDecryptData(passwordData);
-                    }
+                std::vector<char> encryptedKeyPass(KEYPASS_MAX_LEN, 0);
+                std::ifstream fileStream(options.privateKeyPassword);
+                if (!fileStream.is_open()) {
+                    LOG_ERROR("Failed to open keyPassFile: " << options.privateKeyPassword);
                     return false;
                 }
+
+                if (!fileStream.getline(encryptedKeyPass.data(), KEYPASS_MAX_LEN)) {
+                    LOG_ERROR("Failed to read keyPassFile");
+                    return false;
+                }
+
+                size_t actualLen = strlen(encryptedKeyPass.data());
+                std::vector<char> plainTextBuffer(KEYPASS_MAX_LEN, 0);
+                size_t plainTextLen = KEYPASS_MAX_LEN;
+                auto ret = mDecryptHandler(encryptedKeyPass.data(), actualLen, plainTextBuffer.data(), &plainTextLen);
+                if (ret != 0) {
+                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+                    LOG_ERROR("Decrypt failed with error: " << ret);
+                    return false;
+                }
+
                 path = options.privateKeyPath;
-                pwd = passwordData.first;
-                len = passwordData.second;
-                NET_LOG_INFO("Get privateKey path success.");
+                pwd = malloc(plainTextLen);
+                len = static_cast<int>(plainTextLen);
+                if (!pwd) {
+                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+                    LOG_ERROR("Memory allocation failed.");
+                    return false;
+                }
+
+                ret = memcpy_s(pwd, plainTextLen, plainTextBuffer.data(), plainTextLen);
+                if (ret != 0) {
+                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+                    free(pwd);
+                    pwd = nullptr;
+                    LOG_ERROR("Memory copy failed.");
+                    return false;
+                }
+
                 erase = [](void *pass, int len) {
-                    auto data = std::make_pair(static_cast<char *>(pass), len);
-                    BioCryptorHelper::EraseDecryptData(data);
+                    if (pass && len > 0) {
+                        (void)memset_s(pass, len, 0, len);
+                        free(pass);
+                        pass = nullptr;
+                    }
                 };
+
+                std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
                 return true;
             });
     tlsOpt.pkCb = tlsPrivateKeyCallback;
@@ -447,9 +476,9 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     }
 
     if (opt.enableTls) {
-        result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
+        result = PrepareTlsDecrypter(opt);
         if (result != BIO_OK) {
-            NET_LOG_ERROR("Failed to prepare hseceasy cryptor, result:" << result << ".");
+            NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
             return result;
         }
     }
@@ -550,9 +579,9 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
 
     if (opt.enableTls) {
-        result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
+        result = PrepareTlsDecrypter(opt);
         if (result != BIO_OK) {
-            NET_LOG_ERROR("Failed to prepare hseceasy cryptor, result:" << result << ".");
+            NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
             return result;
         }
     }
@@ -756,55 +785,17 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
     return BIO_OK;
 }
 
-void HseSeceasyLog(int level, const char *msg)
+BResult NetEngine::PrepareTlsDecrypter(const NetOptions &config)
 {
-    if (msg == nullptr) {
-        return;
-    }
-    switch (level) {
-        case 0: // 0 TRACE
-            NET_LOG_DEBUG(msg);
-            break;
-        case 1: // 1 DEBUG
-            NET_LOG_DEBUG(msg);
-            break;
-        case 2: // 2 INFO
-            NET_LOG_INFO(msg);
-            break;
-        case 3: // 3 WARN
-            NET_LOG_WARN(msg);
-            break;
-        case 4: // 4 ERROR
-            NET_LOG_ERROR(msg);
-            break;
-        default:
-            NET_LOG_WARN("invalid level " << level << ", " << msg);
-            break;
-    }
-}
-
-BResult NetEngine::PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby)
-{
-    int ret = BIO_ERR;
-
-    if (mbioCryptorHelper != nullptr) {
-        return BIO_OK;
+    const auto decrypter = TlsUtil::LoadDecryptFunction(config.decrypterLibPath.c_str());
+    if (decrypter == nullptr) {
+        LOG_ERROR("Failed to load customized decrypt function.");
+        return BIO_INVALID_PARAM;
     }
 
-    mbioCryptorHelper = new (std::nothrow) BioCryptorHelper(kfsMaster, kfsStandby);
-    if (mbioCryptorHelper == nullptr) {
-        NET_LOG_ERROR("create hseceasy cyptor helper failed.");
-        return BIO_ERR;
-    }
-    ret = ock::hse::HseCryptor::SetExternalLogger(HseSeceasyLog);
-    if (ret != 0) {
-        NET_LOG_ERROR("set hseceasy log func failed, ret:" << ret << ".");
-        delete mbioCryptorHelper;
-        mbioCryptorHelper = nullptr;
-        return BIO_ERR;
-    }
-    NET_LOG_INFO("create hseceasy cyptor helper success.");
+    RegisterDecryptHandler(decrypter);
     return BIO_OK;
 }
+
 }
 }

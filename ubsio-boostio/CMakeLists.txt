@@ -75,14 +75,11 @@ include_directories(
         ${SRC_DIR}/io_interceptor
         ${SRC_DIR}/interceptor
         ${SRC_DIR}/interceptor/server
-        ${SRC_DIR}/security/certificate
         ${SRC_DIR}/security/expiration_check
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
-        ${PROJECT_3RDPARTY_BIN_DIR}/hseceasy/hse/cryption/include/cryption
-        ${PROJECT_3RDPARTY_BIN_DIR}/hseceasy/hse/utils
         ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include
 )
 

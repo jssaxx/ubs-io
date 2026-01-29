@@ -83,8 +83,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(NET_TLS_SERVER_CERT_PATH);
     AddStrConf(NET_TLS_SERVER_KEY_PATH);
     AddStrConf(NET_TLS_SERVER_KEY_PASS_PATH);
-    AddStrConf(NET_HESC_SERVER_KFS_MASTER_PATH);
-    AddStrConf(NET_HESC_SERVER_KFS_STANDBY_PATH);
+    AddStrConf(NET_TLS_SERVER_DECRYPTER_PATH);
 
     /* load prometheus config */
     AddStrConf(PROMETHEUS_ENABLE, VStrBoolRange::Create(PROMETHEUS_ENABLE.first));
@@ -138,18 +137,22 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     mNetConfig.tlsServerCertPath = conf->GetStr(NET_TLS_SERVER_CERT_PATH.first);
     mNetConfig.tlsServerKeyPath = conf->GetStr(NET_TLS_SERVER_KEY_PATH.first);
     mNetConfig.tlsServerKeyPassPath = conf->GetStr(NET_TLS_SERVER_KEY_PASS_PATH.first);
-    mNetConfig.hseKfsMasterPath = conf->GetStr(NET_HESC_SERVER_KFS_MASTER_PATH.first);
-    mNetConfig.hseKfsStandbyPath = conf->GetStr(NET_HESC_SERVER_KFS_STANDBY_PATH.first);
+    mNetConfig.decrypterLibPath = conf->GetStr(NET_TLS_SERVER_DECRYPTER_PATH.first);
     if (mNetConfig.enableTls) {
         bool checkCaPath = FileUtil::CanonicalPath(mNetConfig.tlsCaCertPath)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPassPath)
-                           && FileUtil::CanonicalPath(mNetConfig.hseKfsMasterPath)
-                           && FileUtil::CanonicalPath(mNetConfig.hseKfsStandbyPath);
+                           && FileUtil::CanonicalPath(mNetConfig.decrypterLibPath);
         if (!checkCaPath) {
-            LOG_ERROR("Invalid ca path .");
+            LOG_ERROR("Invalid ca path.");
             return BIO_ERR;
+        }
+        if (!mNetConfig.tlsCaCrlPath.empty()) {
+            if (!FileUtil::CanonicalPath(mNetConfig.tlsCaCrlPath)) {
+                LOG_ERROR("Invalid crl path.");
+                return BIO_ERR;
+            }
         }
     }
 

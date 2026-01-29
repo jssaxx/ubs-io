@@ -146,8 +146,7 @@ typedef struct {
     char caCrlPath[PATH_MAX];          // caCer path
     char privateKeyPath[PATH_MAX];     // private key path
     char privateKeyPassword[PATH_MAX]; // private key password
-    char hseKfsMasterPath[PATH_MAX];   // hseceasy kfs master path
-    char hseKfsStandbyPath[PATH_MAX];  // hseceasy kfs standby path
+    char decrypterPath[PATH_MAX];      // decrypter lib path
 } ClientOptionsConfig;
 
 /**

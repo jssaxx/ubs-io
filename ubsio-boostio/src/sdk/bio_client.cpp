@@ -389,18 +389,26 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     // 4. 初始化Net第一步, 分离部署场景: 1)创建IPC服务; 2)与本地sever建立连接; 3)创建shm pool; 4)获取配置项.
     NetOptions netConf;
     netConf.FillNetTlsConfigs(optConf.enable, optConf.certificationPath, optConf.caCerPath, optConf.caCrlPath,
-        optConf.privateKeyPath, optConf.privateKeyPassword, optConf.hseKfsMasterPath, optConf.hseKfsStandbyPath);
+        optConf.privateKeyPath, optConf.privateKeyPassword, optConf.decrypterLibPath);
     if (optConf.enable) {
-        bool checkCaPath = FileUtil::CanonicalPath(netConf.caCerPath)
-                           && FileUtil::CanonicalPath((netConf.caCrlPath))
-                           && FileUtil::CanonicalPath(netConf.certificationPath)
-                           && FileUtil::CanonicalPath(netConf.hseKfsMasterPath)
-                           && FileUtil::CanonicalPath(netConf.hseKfsStandbyPath);
+        bool checkCaPath = FileUtil::CanonicalPath(netConf.certificationPath)
+                           && FileUtil::CanonicalPath(netConf.caCerPath)
+                           && FileUtil::CanonicalPath(netConf.privateKeyPath)
+                           && FileUtil::CanonicalPath(netConf.privateKeyPassword)
+                           && FileUtil::CanonicalPath(netConf.decrypterLibPath);
         if (!checkCaPath) {
-            CLIENT_LOG_ERROR("Check ca path failed .");
+            CLIENT_LOG_ERROR("Check ca path failed.");
             return BIO_ERR;
         }
+
+        if (!netConf.caCrlPath.empty()) {
+            if (!FileUtil::CanonicalPath(netConf.caCrlPath)) {
+                LOG_ERROR("Invalid crl path.");
+                return BIO_ERR;
+            }
+        }
     }
+
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;
     }

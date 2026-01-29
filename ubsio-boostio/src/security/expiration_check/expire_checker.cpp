@@ -23,7 +23,6 @@
 
 namespace ock {
 namespace bio {
-// 加载证书
 X509* LoadCertificate(const char* filename)
 {
     char *canonicalPath = realpath(filename, nullptr);
@@ -49,7 +48,6 @@ X509* LoadCertificate(const char* filename)
     return x509;
 }
 
-// 获取当前时间
 time_t GetCurrentTime()
 {
     time_t currentTime;
@@ -57,17 +55,16 @@ time_t GetCurrentTime()
     return currentTime;
 }
 
-// 校验证书的有效时间
 ExpireChecker::CertStatus ValidateCertificateTime(X509* x509)
 {
     if (!x509) {
         LOG_ERROR("CERT Invalid certificate");
         return ExpireChecker::CertStatus::CERT_FAIL;
     }
-    // 获取证书的有效时间
+
     ASN1_TIME* notBefore = X509_get_notBefore(x509);
     ASN1_TIME* notAfter = X509_get_notAfter(x509);
-    // 将 ASN1_TIME 转换为 time_t
+
     time_t now = GetCurrentTime();
     struct tm tm;
     time_t notBeforeTime = ASN1_TIME_to_tm(notBefore, &tm) ? mktime(&tm) : -1;
@@ -76,7 +73,7 @@ ExpireChecker::CertStatus ValidateCertificateTime(X509* x509)
         LOG_ERROR("CERT Failed to convert certificate times");
         return ExpireChecker::CertStatus::CERT_FAIL;
     }
-    // 比较当前时间与证书的有效时间
+
     if (now < notBeforeTime) {
         LOG_ERROR("CERT Certificate is not yet valid");
         return ExpireChecker::CertStatus::CERT_YET_VALID;
@@ -99,9 +96,8 @@ ExpireChecker::CertStatus ValidateCertificateTime(X509* x509)
     return ExpireChecker::CertStatus::CERT_SUCCESS;
 }
 
-static inline void HandleCheckCert(std::string caCertFile, std::string workCertFile)
+static inline void HandleCheckCert(const std::string &caCertFile, const std::string &workCertFile)
 {
-    // 加载证书
     X509* caX509 = LoadCertificate(caCertFile.c_str());
     if (!caX509) {
         LOG_ERROR("CERT Ca Certificate load fail.");
@@ -114,7 +110,7 @@ static inline void HandleCheckCert(std::string caCertFile, std::string workCertF
         X509_free(caX509);
         return;
     }
-    // 校验证书的有效时间
+
     auto isValid = ValidateCertificateTime(caX509);
     switch (isValid) {
         case ExpireChecker::CertStatus::CERT_FAIL:LOG_ERROR("CERT Ca Certificate fail.");break;
@@ -133,12 +129,11 @@ static inline void HandleCheckCert(std::string caCertFile, std::string workCertF
         default:LOG_INFO("CERT work Certificate success.");
     }
 
-    // 释放证书
     X509_free(caX509);
     X509_free(workX509);
 }
 
-void IsExpiredCheck(int period, std::string tlsCaCertFile, std::string tlsWorkCertFile)
+void IsExpiredCheck(int period, const std::string &tlsCaCertFile, const std::string &tlsWorkCertFile)
 {
     while (true) {
         try {
@@ -152,7 +147,7 @@ void IsExpiredCheck(int period, std::string tlsCaCertFile, std::string tlsWorkCe
     LOG_INFO("CERT Cert check is stopped.");
 }
 
-void ExpireChecker::TimingManagement(const std::string caCertFile, const std::string serverCertFile, int period) const
+void ExpireChecker::TimingManagement(const std::string &caCertFile, const std::string &serverCertFile, int period) const
 {
     LOG_INFO("CERT TimingManagement started to create thread cert time.");
     if (caCertFile.empty()) {
@@ -170,7 +165,7 @@ void ExpireChecker::TimingManagement(const std::string caCertFile, const std::st
     checkManager.detach();
 }
 
-BResult ExpireChecker::ExpireCheckerInit(std::string caCertPath, std::string workCertPath)
+BResult ExpireChecker::ExpireCheckerInit(const std::string &caCertPath, const std::string &workCertPath)
 {
     if (!FileUtil::Exist(caCertPath)) {
         LOG_ERROR("CERT ca cert path is not exit");

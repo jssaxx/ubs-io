@@ -70,10 +70,6 @@ int main(int argc, char *argv[])
         "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' /opt/boostio/bin/conf/bio.conf");
     (void)system("sed -i 's#bio.net.tls.enable.switch = true"
                  "#bio.net.tls.enable.switch = false#g' /opt/boostio/bin/conf/bio.conf");
-    (void)system("sed -i 's#bio.net.hesc.server.tls.kfs.master.path = /path/server/master/kfsa"
-                 "##g' /opt/boostio/bin/conf/bio.conf");
-    (void)system("sed -i 's#bio.net.hesc.server.tls.kfs.pass.standby.path = /path/server/standby/kfsb"
-                 "##g' /opt/boostio/bin/conf/bio.conf");
     (void)system("touch ceph.conf");
 
     std::cout << "Start boostio tester begin..." << std::endl;

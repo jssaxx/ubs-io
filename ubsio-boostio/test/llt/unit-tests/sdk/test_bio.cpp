@@ -1895,14 +1895,4 @@ TEST_F(TestBio, test_bio_initialize_invalid_path)
     memset_s(config.privateKeyPassword, PATH_MAX, 'a', PATH_MAX);
     ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-
-    memset_s(config.privateKeyPassword, PATH_MAX, 0, PATH_MAX);
-    memset_s(config.hseKfsMasterPath, PATH_MAX, 'a', PATH_MAX);
-    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
-
-    memset_s(config.hseKfsMasterPath, PATH_MAX, 0, PATH_MAX);
-    memset_s(config.hseKfsStandbyPath, PATH_MAX, 'a', PATH_MAX);
-    ret = BioInitialize(WorkerMode::CONVERGENCE, &config);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
 }
