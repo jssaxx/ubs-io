@@ -108,11 +108,27 @@ else
 	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
+cd ${PROJ_DIR}
+if [[ ! -d ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm ]]; then
+    echo "Trying to git clone ubs-comm ..."
+    cd ${PROJ_DIR}/3rdparty/ubs-comm
+    git clone https://atomgit.com/openeuler/ubs-comm.git
+    cd ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm
+    git checkout br_noncom_container_20260228 && git submodule update --init
+fi
+
+if [[ ! -d ${PROJ_DIR}/3rdparty/libboundscheck/libboundscheck ]]; then
+    echo "Trying to git clone libboundscheck ..."
+    cd ${PROJ_DIR}/3rdparty/libboundscheck
+    git clone https://gitee.com/openeuler/libboundscheck.git
+    cd ${PROJ_DIR}/3rdparty/libboundscheck/libboundscheck
+    git checkout v1.1.16
+fi
+
+
 if [[ -z "${CI_BUILD}" ]];then
     echo "update submodules ... "
     cd $PROJ_DIR && git submodule update --init
-    cd $PROJ_DIR/3rdparty/hcom/hcom && git submodule update --init
-    cd $PROJ_DIR/3rdparty/hseceasy/hseceasy && git submodule update --init
     cd $PROJ_DIR/3rdparty/prometheus/prometheus && git submodule update --init
 fi
 
@@ -133,9 +149,7 @@ $BUILD_CMD || {
 cd ${PROJ_DIR}/dist
 if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp -d 3rdparty/zookeeper/lib/* bio/lib/.
-	  \cp 3rdparty/spdlog/lib64/libspdlog.a bio/lib/.
-	  \cp 3rdparty/hcom/lib/securec/* bio/lib/.
-	  \cp 3rdparty/huawei_secure_c/lib/* bio/lib/.
+	  \cp 3rdparty/libboundscheck/lib/* bio/lib/.
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 
@@ -145,12 +159,11 @@ if [[ "$arch" == "aarch64" ]] || [[ "$arch" == arm* ]]; then
 else
   \cp 3rdparty/openssl/lib64/*.so bio/lib/.
 fi
-\cp 3rdparty/hcom/lib/libhcom.so bio/lib/.
-\cp 3rdparty/hseceasy/hse/cryption_tool/bin/* bio/bin/.
-\cp 3rdparty/hseceasy/hse/cryption/lib/* bio/lib/.
-\cp 3rdparty/hcom/include/hcom/*.h bio/include/.
-\cp 3rdparty/hcom/include/hcom/go/*.go bio/include/.
-\cp 3rdparty/hcom/include/hcom/capi/*.h bio/include/.
+
+\cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
+\cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
+\cp 3rdparty/ubs-comm/include/hcom/*.h bio/include/.
+\cp 3rdparty/ubs-comm/include/hcom/capi/*.h bio/include/.
 
 if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mkdir -p test_tools

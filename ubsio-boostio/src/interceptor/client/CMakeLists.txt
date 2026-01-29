@@ -7,7 +7,7 @@ install(TARGETS ock_iofwd_proxy DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIO
 target_link_libraries(ock_iofwd_proxy
         -Wl,--start-group
         pthread dl aio
-        ${PROJECT_3RDPARTY_BIN_DIR}/hcom/lib/libhcom.so
+        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
         bio_common bio_net htracer
         -Wl,--end-group)
 if (OPEN_TP STREQUAL "ON")

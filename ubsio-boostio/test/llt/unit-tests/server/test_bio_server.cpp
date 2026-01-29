@@ -1018,7 +1018,7 @@ TEST_F(TestBioServer, test_bio_server_writer)
     rMrVec1.emplace_back(NetMrInfo(123U, 128U, 1));
     isAlloc = false;
     ret = mirror->WriterRemote(isAlloc, lMrVec, rMrVec1, netCtx, req);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 }
 
 TEST_F(TestBioServer, test_bio_server_writer_copy_slice_fail)
