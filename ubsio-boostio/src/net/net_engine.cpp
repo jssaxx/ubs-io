@@ -155,16 +155,15 @@ void NetEngine::StopInner()
     }
 
     if (mRpcService != nullptr) {
-        if (mLocalMr != nullptr) {
+        if (!mLocalMr.GetHcomMrs().empty()) {
             mRpcService->DestroyMemoryRegion(mLocalMr);
-            mLocalMr = nullptr;
         }
-        mRpcService->Stop();
+        mRpcService->Destroy(RPC_SERVICE_NAME);
         mRpcService = nullptr;
     }
 
     if (mIpcService != nullptr) {
-        mIpcService->Stop();
+        mIpcService->Destroy(IPC_SERVICE_NAME);
         mIpcService = nullptr;
     }
 
@@ -211,7 +210,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
 BResult NetEngine::InitCommMemAllocator()
 {
     auto result = RegisterMemoryRegion(mOptions.memorySize, mLocalMr);
-    if (result != BIO_OK || mLocalMr == nullptr) {
+    if (result != BIO_OK || mLocalMr.GetHcomMrs().empty()) {
         NET_LOG_ERROR("Failed to register mr by size " << mOptions.memorySize);
         return result;
     }
@@ -223,14 +222,15 @@ BResult NetEngine::InitCommMemAllocator()
     }
 
     SetDataPageKb(NO_4 * NO_1024);
-    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
+    result = mMrBlockPool->Start(mLocalMr.GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
         NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:" <<
-            mLocalMr->GetLKey() << ".");
+            mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
     }
-    LOG_INFO("Register common memory success, size:" << mOptions.memorySize << ", Key:" << mLocalMr->GetLKey());
+    LOG_INFO("Register common memory success, size:" << mOptions.memorySize << ", Key:"
+        << mLocalMr.GetHcomMrs()[0]->GetLKey());
     return result;
 }
 
@@ -263,7 +263,7 @@ BResult NetEngine::InitShmMemAllocator()
     mShmSize = mOptions.memorySize;
 
     result = RegisterMemoryRegion(mShareAddress, mOptions.memorySize, mLocalMr);
-    if (result != BIO_OK || mLocalMr == nullptr) {
+    if (result != BIO_OK || mLocalMr.GetHcomMrs().empty()) {
         close(mShmFd);
         mShmFd = -1;
         return result;
@@ -276,21 +276,21 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
         return BIO_ALLOC_FAIL;
     }
-    result = mMrBlockPool->Start(mLocalMr->GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
+    result = mMrBlockPool->Start(mLocalMr.GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
         close(mShmFd);
         mShmFd = -1;
     } else {
         NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize << ", shmOffset:" <<
-            mShareOffset << ", key:" << mLocalMr->GetLKey() << ".");
+            mShareOffset << ", key:" << mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
     }
     return result;
 }
 
 BResult NetEngine::InitMemoryAllocator()
 {
-    if (mOptions.regShmMem == true) {
+    if (mOptions.regShmMem) {
         return InitShmMemAllocator();
     }
     return InitCommMemAllocator();
@@ -323,15 +323,16 @@ BResult ValidateTlsCert(const NetOptions &opt)
     return BIO_OK;
 }
 
-void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOptions &options)
+void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt)
 {
-    driver->RegisterTLSCertificationCallback([&options](const std::string &name, std::string &path) {
+    auto tlsCertificationCallback = ([&options](const std::string &name, std::string &path) {
         path = options.certificationPath;
         NET_LOG_INFO("Get client cert success.");
         return true;
     });
+    tlsOpt.cfCb = tlsCertificationCallback;
 
-    driver->RegisterTLSCaCallback([&options](const std::string &name, std::string &capath, std::string &crlPath,
+    auto tlsCaCallback= ([&options](const std::string &name, std::string &capath, std::string &crlPath,
         UBSHcomPeerCertVerifyType &verifyPeerCert, UBSHcomTLSCertVerifyCallback &cb) {
         capath = options.caCerPath;
         if (!options.caCrlPath.empty()) {
@@ -343,84 +344,80 @@ void NetEngine::setDriverTlsCallback(ock::hcom::NetService *driver, const NetOpt
         cb = [](void *, const char *) { return 0; };
         return true;
     });
+    tlsOpt.caCb = tlsCaCallback;
 
-    driver->RegisterTLSPrivateKeyCallback(
-        [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
-            UBSHcomTLSEraseKeypass &erase) {
-            std::pair<char *, int> passwordData{nullptr, 0};
-            auto ret = mbioCryptorHelper->Decrypt(1, options.privateKeyPassword, passwordData);
-            if (ret != 0) {
-                if (passwordData.first) {
-                    BioCryptorHelper::EraseDecryptData(passwordData);
+    auto tlsPrivateKeyCallback = (
+            [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
+                             UBSHcomTLSEraseKeypass &erase) {
+                std::pair<char *, int> passwordData{nullptr, 0};
+                auto ret = mbioCryptorHelper->Decrypt(1, options.privateKeyPassword, passwordData);
+                if (ret != 0) {
+                    if (passwordData.first) {
+                        BioCryptorHelper::EraseDecryptData(passwordData);
+                    }
+                    return false;
                 }
-                return false;
-            }
-            path = options.privateKeyPath;
-            pwd = passwordData.first;
-            len = passwordData.second;
-            NET_LOG_INFO("Get privateKey path success.");
-            erase = [](void *pass, int len) {
-                auto data = std::make_pair(static_cast<char *>(pass), len);
-                BioCryptorHelper::EraseDecryptData(data);
-            };
-            return true;
-        });
+                path = options.privateKeyPath;
+                pwd = passwordData.first;
+                len = passwordData.second;
+                NET_LOG_INFO("Get privateKey path success.");
+                erase = [](void *pass, int len) {
+                    auto data = std::make_pair(static_cast<char *>(pass), len);
+                    BioCryptorHelper::EraseDecryptData(data);
+                };
+                return true;
+            });
+    tlsOpt.pkCb = tlsPrivateKeyCallback;
 }
 
-std::string NetEngine::GenerateWorkersSetting(const NetOptions& opt)
+BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
-    std::ostringstream oss;
-    /* total two groups: ctrl panel and data panel */
-    oss << std::to_string(opt.handlerCount) << "," << std::to_string(opt.handlerCount);
-    return oss.str();
-}
+    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
+    mIpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
 
-void NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options)
-{
-    options.mode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-        UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
-    options.SetWorkerGroups(GenerateWorkersSetting(opt));
-    options.mrSendReceiveSegSize = (NO_64 * NO_1024); // shm场景的是ep级
-    options.mrSendReceiveSegCount = NO_1024; // shm场景未使用
-    options.heartBeatIdleTime = NO_5;
-    options.heartBeatProbeInterval = NO_1;
-    options.qpSendQueueSize = NO_128; // shm场景的是ep级
-    options.pollingBatchSize = NO_16;
-    options.prePostReceiveSizePerQP = NO_64;
-    options.oobType = NET_OOB_UDS;
-    options.completionQueueDepth = NO_8192;
-    options.eventPollingTimeout = NO_1000;
-    options.maxConnectionNum = NO_4096 * NO_1024;
-    options.enableTls = false;
-    const static int DEFAULT_THREAD_PRIORITY = 0;
-    options.workerThreadPriority = DEFAULT_THREAD_PRIORITY;
+    UBSHcomHeartBeatOptions hbOpt;
+    hbOpt.heartBeatIdleSec = NO_5;
+    hbOpt.heartBeatProbeIntervalSec = 1;
+    mIpcService->SetHeartBeatOptions(hbOpt);
+    mIpcService->SetMaxSendRecvDataCount(NO_1024);
+    mIpcService->SetSendQueueSize(NO_128);
+    mIpcService->SetCompletionQueueDepth(NO_8192);
+    mIpcService->SetPollingBatchSize(NO_16);
+    mIpcService->SetQueuePrePostSize(NO_64);
+    mIpcService->SetEventPollingTimeOutUs(NO_1000);
+    mIpcService->SetMaxConnectionCount(NO_4096 * NO_1024);
     if (isOobSvr) {
-        NetServiceOobUDSListenerOptions listenOpt;
-        listenOpt.Name(UDS_NAME);
-        listenOpt.perm = 0;
-        mIpcService->AddOobUdsOptions(listenOpt);
-        mIpcService->RegisterNewChannelHandler(std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
-            std::placeholders::_2, std::placeholders::_3));
+        const std::string listenerUrl = "uds://" + UDS_NAME;
+        auto ret = mIpcService->Bind(listenerUrl, std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
+                                                          std::placeholders::_2, std::placeholders::_3));
+        if (UNLIKELY(ret != BIO_OK)) {
+            NET_LOG_ERROR("Net tls callback has created.");
+            return ret;
+        }
     }
+
+    UBSHcomTlsOptions tlsOpt;
+    tlsOpt.enableTls = opt.enableTls;
     if (opt.enableTls) {
         if (ValidateTlsCert(mOptions) != BIO_OK) {
             NET_LOG_ERROR("Failed to enable Ipc TLS service , enableTls:" << opt.enableTls << ".");
+            return BIO_ERR;
         }
-        options.enableTls = true;
-        setDriverTlsCallback(mIpcService, mOptions);
+        SetDriverTlsCallback(mOptions, tlsOpt);
         NET_LOG_INFO("Net tls callback has created.");
     }
+    mIpcService->SetTlsOptions(tlsOpt);
+
     mIpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
-        BROKEN_ALL);
+                                              UBSHcomChannelBrokenPolicy::BROKEN_ALL);
     if (reqExecutorNum > NO_32) {
-        mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestReceived, this,
-            std::placeholders::_1));
+        mIpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
     } else {
-        mIpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestIPCReceived, this,
-            std::placeholders::_1));
+        mIpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestIPCReceived, this, std::placeholders::_1));
     }
-    mIpcService->RegisterOpSentHandler(0, std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
-    mIpcService->RegisterOpOneSideHandler(0, std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
+    mIpcService->RegisterSendHandler(std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
+    mIpcService->RegisterOneSideHandler(std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
+    return BIO_OK;
 }
 
 BResult NetEngine::StartIpcService(const NetOptions &opt)
@@ -435,11 +432,20 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     if (!isOobSvr) {
         mOptions = opt;
     }
-    mIpcService = NetService::Instance(opt.protocol, "BIO_IPC", isOobSvr);
+
+    UBSHcomServiceOptions options;
+    options.maxSendRecvDataSize = (NO_64 * NO_1024);
+    options.workerGroupId = 0;
+    options.workerGroupThreadCount = opt.handlerCount;
+    options.workerThreadPriority = 0;
+    options.workerGroupMode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
+                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
+    mIpcService = UBSHcomService::Create(opt.protocol, IPC_SERVICE_NAME, options);
     if (mIpcService == nullptr) {
         NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
         return BIO_ERR;
     }
+
     if (opt.enableTls) {
         result = PrepareHseCryptor(opt.hseKfsMasterPath, opt.hseKfsStandbyPath);
         if (result != BIO_OK) {
@@ -448,18 +454,23 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         }
     }
 
-    NetServiceOptions options{};
-    AssignIpcServiceOptions(opt, isOobSvr, options);
-    result = mIpcService->Start(options);
+    result = AssignIpcServiceOptions(opt, isOobSvr);
+    if (result != BIO_OK) {
+        NET_LOG_ERROR("Failed to assign ipc service options, result:" << UBSHcomNetErrStr(result) << ".");
+        return result;
+    }
+
+    result = mIpcService->Start();
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start ipc service, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
     }
+
     NET_LOG_INFO("Bio server Start ipc service success, protocol:" << opt.protocol << ".");
     return BIO_OK;
 }
 
-BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr, NetServiceOptions &options)
+BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
     std::string ipMask = mOptions.ipMask;
     auto port = mOptions.port;
@@ -469,47 +480,49 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr,
         return BIO_ERR;
     }
 
-    options.mode =
-        mOptions.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-            UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
-    options.mrSendReceiveSegSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
-    options.mrSendReceiveSegCount = NO_1024;
-    options.qpSendQueueSize = NO_4096;
-    options.qpReceiveQueueSize = NO_2048;
-    options.prePostReceiveSizePerQP = NO_1024;
-    options.pollingBatchSize = NO_1024;
-    options.maxPostSendCountPerQP = NO_1024;
-    options.dontStartWorkers = false;
-    options.completionQueueDepth = NO_2048;
-    options.heartBeatIdleTime = NO_1;  // 保证空闲时，网卡down能在1秒断开
-    options.heartBeatProbeTimes = NO_1;
-    options.heartBeatProbeInterval = NO_1;
-    options.tcpUserTimeout = NO_3;
-    options.enableTls = false;
-    options.SetNetDeviceIpMask(ipMask);
-    options.SetWorkerGroups(GenerateWorkersSetting(opt));
+    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
+    mRpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
+
+    UBSHcomHeartBeatOptions hbOpt;
+    hbOpt.heartBeatIdleSec = NO_1;
+    hbOpt.heartBeatProbeTimes = NO_1;
+    hbOpt.heartBeatProbeIntervalSec = NO_1;
+    mRpcService->SetHeartBeatOptions(hbOpt);
+    mRpcService->SetMaxSendRecvDataCount(NO_1024);
+    mRpcService->SetSendQueueSize(NO_4096);
+    mRpcService->SetRecvQueueSize(NO_2048);
+    mRpcService->SetCompletionQueueDepth(NO_2048);
+    mRpcService->SetPollingBatchSize(NO_1024);
+    mRpcService->SetQueuePrePostSize(NO_1024);
+    mRpcService->SetTcpUserTimeOutSec(NO_3);
+    mRpcService->SetDeviceIpMask({ipMask});
+
     if (isOobSvr) {
-        options.oobType = NET_OOB_TCP;
-        NetServiceOobListenerOptions listenOpt;
-        listenOpt.Set(goodIps.at(0), port);
-        mRpcService->AddListener(listenOpt);
-        mRpcService->RegisterNewChannelHandler(std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
-            std::placeholders::_2, std::placeholders::_3));
+        const std::string listenerUrl = "tcp://" + goodIps.at(0) + ":" + std::to_string(port);
+        auto ret = mRpcService->Bind(listenerUrl, std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
+                                                            std::placeholders::_2, std::placeholders::_3));
+        if (UNLIKELY(ret != BIO_OK)) {
+            NET_LOG_ERROR("Net tls callback has created.");
+            return ret;
+        }
     }
+
+    UBSHcomTlsOptions tlsOpt;
+    tlsOpt.enableTls = opt.enableTls;
     if (opt.enableTls) {
         if (ValidateTlsCert(mOptions) != BIO_OK) {
             NET_LOG_ERROR("Failed to enable Ipc TLS service.");
             return BIO_ERR;
         }
-        options.enableTls = true;
-        setDriverTlsCallback(mRpcService, mOptions);
+        SetDriverTlsCallback(mOptions, tlsOpt);
         NET_LOG_INFO("Net tls callback has created.");
     }
+    mRpcService->SetTlsOptions(tlsOpt);
     mRpcService->RegisterChannelBrokenHandler(std::bind(&NetEngine::ChannelBroken, this, std::placeholders::_1),
-        BROKEN_ALL);
-    mRpcService->RegisterOpReceiveHandler(0, std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
-    mRpcService->RegisterOpSentHandler(0, std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
-    mRpcService->RegisterOpOneSideHandler(0, std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
+                                              UBSHcomChannelBrokenPolicy::BROKEN_ALL);
+    mRpcService->RegisterRecvHandler(std::bind(&NetEngine::RequestReceived, this, std::placeholders::_1));
+    mRpcService->RegisterSendHandler(std::bind(&NetEngine::RequestPosted, this, std::placeholders::_1));
+    mRpcService->RegisterOneSideHandler(std::bind(&NetEngine::OneSideDone, this, std::placeholders::_1));
     return BIO_OK;
 }
 
@@ -523,7 +536,14 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
     mOptions = opt;
     bool isOobSvr = opt.role != Role::NET_CLIENT;
-    mRpcService = NetService::Instance(opt.protocol, "BIO_RPC", isOobSvr);
+    UBSHcomServiceOptions options;
+    options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
+    options.workerGroupId = 0;
+    options.workerGroupThreadCount = opt.handlerCount;
+    options.workerThreadPriority = 0;
+    options.workerGroupMode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
+                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
+    mRpcService = UBSHcomService::Create(opt.protocol, RPC_SERVICE_NAME, options);
     if (mRpcService == nullptr) {
         NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
         return BIO_ERR;
@@ -537,13 +557,13 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
         }
     }
 
-    NetServiceOptions options{};
-    result = AssignRpcServiceOptions(opt, isOobSvr, options);
+    result = AssignRpcServiceOptions(opt, isOobSvr);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to assign rpc service options, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
     }
-    result = mRpcService->Start(options);
+
+    result = mRpcService->Start();
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start rpc service, result:" << UBSHcomNetErrStr(result) << ".");
         return BIO_ERR;
@@ -561,29 +581,8 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
 
 int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload)
 {
-#ifndef DEBUG_UT
     if (newChannel == nullptr) {
         NET_LOG_ERROR("Invalid input parameter, newChannel is nullptr.");
-        return BIO_ERR;
-    }
-#endif
-
-    NewChannelResp resp;
-#ifdef DEBUG_UT
-    if (ipPort == "uttest") {
-        mHandleNewChannel = [](const ChannelPtr& ch, const std::string& port, NewChannelResp& response) { return -1; };
-    }
-#endif
-    if (mHandleNewChannel != nullptr) {
-        if (mHandleNewChannel(newChannel, ipPort, resp) != BIO_OK) {
-            NET_LOG_ERROR("Handle new channel failed.");
-            return BIO_ERR;
-        }
-    }
-    LVOS_TP_START(SERVER_NET_PEER_CONNECTION_REFUSED, &resp.result, BIO_INNER_ERR);
-    LVOS_TP_END;
-    if (resp.result != 0) {
-        NET_LOG_WARN("Peer connection from " << ipPort << " has been refused");
         return BIO_ERR;
     }
 
@@ -595,14 +594,13 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     }
 
     NetChannelUpCtx ctx(netPayload.srcNodeId, isCtrl, true);
-    newChannel->UpCtx(ctx.whole);
+    newChannel->SetUpCtx(ctx.whole);
 #ifndef DEBUG_UT
-    newChannel->SetOneSideTimeout(mTimeout);
-    newChannel->SetTwoSideTimeout(mTimeout);
+    newChannel->SetChannelTimeOut(mTimeout, mTimeout);
 #endif
     if (netPayload.srcNodeId.pid == 0) {
-        NET_LOG_INFO("Receive new channel, not needed add,  channel " << newChannel->Id() << ", peer connected nid " <<
-            netPayload.srcNodeId.nid << " pid " << netPayload.srcNodeId.pid << ", ip " << ipPort << ", payload " <<
+        NET_LOG_INFO("Receive new channel, not needed add, channel: " << newChannel->GetId() << ", peer connected nid: "
+            << netPayload.srcNodeId.nid << " pid: " << netPayload.srcNodeId.pid << ", ip: " << ipPort << ", payload " <<
             payload << ".");
         return BIO_OK;
     }
@@ -612,7 +610,7 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     } else {
         mDataChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), 1);
     }
-    NET_LOG_INFO("Receive new channel " << newChannel->Id() << ", nodeId:" << netPayload.srcNodeId.nid << ", pid:" <<
+    NET_LOG_INFO("Receive new channel " << newChannel->GetId() << ", nodeId:" << netPayload.srcNodeId.nid << ", pid:" <<
         netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload " << payload << ".");
     return BIO_OK;
 }
@@ -624,10 +622,10 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
         return;
     }
 
-    NetChannelUpCtx ctx(ch->UpCtx());
+    NetChannelUpCtx ctx(ch->GetUpCtx());
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
-    NET_LOG_WARN("Receive broken channel " << ch->Id() << ", nodeId:" << dstNid.nid << ", pid:" << dstNid.pid <<
-        ", panel:" << ctx.IsCtrlPanel() << ".");
+    NET_LOG_WARN("Receive broken channel: " << ch->GetId() << ", nodeId: " << dstNid.nid << ", pid: " << dstNid.pid <<
+        ", panel: " << ctx.IsCtrlPanel() << ".");
 
     NetChannelMgrPtr mgr = ctx.IsCtrlPanel() ? mCtrlChannelMgr : mDataChannelMgr;
     if (mgr != nullptr) {
@@ -691,53 +689,56 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
-void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, NetServiceConnectOptions &op)
+void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, UBSHcomConnectOptions &op)
 {
-    op.epSize = mOptions.connCount;
+    op.linkCount = mOptions.connCount;
     if (isCtrl) {
-        op.clientGrpNo = WKR_GRP_INDEX_CTRL;
-        op.serverGrpNo = WKR_GRP_INDEX_CTRL;
+        op.clientGroupId = WKR_GRP_INDEX_CTRL;
+        op.serverGroupId = WKR_GRP_INDEX_CTRL;
         prefix = CONN_PAYLOAD_PREFIX_CTRL;
     } else {
-        op.clientGrpNo = WKR_GRP_INDEX_DATA;
-        op.serverGrpNo = WKR_GRP_INDEX_DATA;
+        op.clientGroupId = WKR_GRP_INDEX_DATA;
+        op.serverGroupId = WKR_GRP_INDEX_DATA;
         prefix = CONN_PAYLOAD_PREFIX_DATA;
     }
     if (info.isSelfPoll) {
-        op.flags = NET_EP_SELF_POLLING;
+        op.mode = UBSHcomClientPollingMode::SELF_POLL_BUSY;
     }
+    NetConnPayload payload(info.srcId);
+    op.payload = payload.ToPayloadStr(prefix);
 }
 
 BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch)
 {
-    NetService *netService = (mode == ConnectMode::CONNECT_IPC) ? mIpcService : mRpcService;
+    UBSHcomService *netService = (mode == ConnectMode::CONNECT_IPC) ? mIpcService : mRpcService;
     if (netService == nullptr) {
         NET_LOG_ERROR("Net service not ready.");
         return BIO_ERR;
     }
 
-    NetServiceConnectOptions options;
+    UBSHcomConnectOptions options;
     std::string prefix;
     FillConnectOption(info, isCtrlPanel, prefix, options);
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
-        NetConnPayload payload(info.srcId);
         if (mode == ConnectMode::CONNECT_IPC) {
+            const std::string serverUrl = "uds://" + UDS_NAME;
 #ifndef DEBUG_UT
-            result = netService->Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
+            result = netService->Connect(serverUrl, ch, options);
 #else
-            result = NetStub::Connect(UDS_NAME, 0, payload.ToPayloadStr(prefix), ch, options);
+            result = NetStub::Connect(serverUrl, ch, options);
 #endif
         } else {
+            const std::string serverUrl = "tcp://" + info.ip + ":" + std::to_string(info.port);
 #ifndef DEBUG_UT
-            result = netService->Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
+            result = netService->Connect(serverUrl, ch, options);
 #else
-            result = NetStub::Connect(info.ip, info.port, payload.ToPayloadStr(prefix), ch, options);
+            result = NetStub::Connect(serverUrl, ch, options);
 #endif
         }
         if (result == 0) {
             NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid " <<
-                info.peerId.nid << ", payload " << payload.ToPayloadStr(prefix) << ".");
+                info.peerId.nid << ", payload " << options.payload << ".");
             break;
         }
     }
@@ -748,10 +749,9 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
     }
 
     NetChannelUpCtx ctx(info.peerId, isCtrlPanel, false);
-    ch->UpCtx(ctx.whole);
+    ch->SetUpCtx(ctx.whole);
 #ifndef DEBUG_UT
-    ch->SetOneSideTimeout(mTimeout);
-    ch->SetTwoSideTimeout(mTimeout);
+    ch->SetChannelTimeOut(mTimeout, mTimeout);
 #endif
     return BIO_OK;
 }

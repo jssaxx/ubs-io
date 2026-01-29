@@ -1,6 +1,6 @@
-add_subdirectory(secure)
+add_subdirectory(libboundscheck)
 add_subdirectory(openssl)
-add_subdirectory(hcom)
+add_subdirectory(ubs-comm)
 add_subdirectory(spdlog)
 add_subdirectory(zookeeper)
 add_subdirectory(hseceasy)

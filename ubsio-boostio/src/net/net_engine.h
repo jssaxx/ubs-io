@@ -42,7 +42,7 @@ public:
     BResult Start(const NetOptions &opt);
     void Stop();
 
-    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
+    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegion &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
@@ -57,7 +57,7 @@ public:
         option = mOptions;
     }
 
-    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
+    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegion &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
@@ -66,7 +66,7 @@ public:
         return mRpcService->RegisterMemoryRegion(size, mr);
     }
 
-    inline void DestroyMemoryRegion(MemoryRegionPtr &mr)
+    inline void DestroyMemoryRegion(MemoryRegion &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
@@ -75,9 +75,9 @@ public:
         mRpcService->DestroyMemoryRegion(mr);
     }
 
-    static inline NetMrInfo MemoryRegionInfo(MemoryRegionPtr &mr)
+    static inline NetMrInfo MemoryRegionInfo(MemoryRegion &mr)
     {
-        return NetMrInfo(mr->GetAddress(), mr->Size(), mr->GetLKey());
+        return NetMrInfo(mr.GetAddress(), mr.Size(), mr.GetHcomMrs()[0]->GetLKey());
     }
 
     inline void SetDataPageKb(uint32_t dataPageKb)
@@ -96,7 +96,7 @@ public:
             NET_LOG_ERROR("Net block pool not ready.");
             return BIO_NOT_READY;
         }
-        outKey = mLocalMr->GetLKey();
+        outKey = mLocalMr.GetHcomMrs()[0]->GetLKey();
         return mMrBlockPool->AllocMany(count, address);
     }
 
@@ -105,15 +105,13 @@ public:
         return mUsedBlock * mDataPageBytes;
     }
 
-    void setDriverTlsCallback(ock::hcom::NetService *driver, const NetOptions &options);
-
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint64_t &outKey)
     {
         if (UNLIKELY(mMrBlockPool == nullptr)) {
             NET_LOG_ERROR("Net block pool not ready.");
             return BIO_NOT_READY;
         }
-        outKey = mLocalMr->GetLKey();
+        outKey = mLocalMr.GetHcomMrs()[0]->GetLKey();
         auto ret = mMrBlockPool->AllocOne(address);
         if (ret == BIO_OK) {
             mUsedBlock += NO_1;
@@ -127,7 +125,7 @@ public:
             NET_LOG_ERROR("Net block pool not ready.");
             return BIO_NOT_READY;
         }
-        outKey = mLocalMr->GetLKey();
+        outKey = mLocalMr.GetHcomMrs()[0]->GetLKey();
         return BIO_OK;
     }
 
@@ -157,10 +155,10 @@ public:
         mKey = 0;
         if (mOptions.memorySize > 0) {
             // 配置内存小于等于0，未初始化内存
-            if (mLocalMr == nullptr) {
+            if (mLocalMr.GetHcomMrs().empty()) {
                 return BIO_ERR;
             }
-            mKey = mLocalMr->GetLKey();
+            mKey = mLocalMr.GetHcomMrs()[0]->GetLKey();
         }
         return BIO_OK;
     }
@@ -187,40 +185,15 @@ public:
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_ERR;
         }
-        ch->SetOneSideTimeout(mTimeout);
-        ch->SetTwoSideTimeout(mTimeout);
+        ch->SetChannelTimeout(mTimeout, mTimeout);
+
         ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_ERR;
         }
-        ch->SetOneSideTimeout(mTimeout);
-        ch->SetTwoSideTimeout(mTimeout);
+        ch->SetChannelTimeout(mTimeout, mTimeout);
         return BIO_OK;
-    }
-
-    void GetTlsOptions(NetOptions options)
-    {
-        options.enableTls = mOptions.enableTls;
-        options.certificationPath = mOptions.certificationPath;   /* certification path */
-        options.caCerPath = mOptions.caCerPath;                   /* caCert path */
-        options.caCrlPath = mOptions.caCrlPath;                   /* caCrl path */
-        options.privateKeyPath = mOptions.privateKeyPath;         /* private key path */
-        options.privateKeyPassword = mOptions.privateKeyPassword; /* private key password */
-        options.hseKfsMasterPath = mOptions.hseKfsMasterPath;     /* hseceasy kfs master path */
-        options.hseKfsStandbyPath = mOptions.hseKfsStandbyPath;   /* hseceasy kfs standby path */
-    }
-
-    void SetTlsOptions(NetOptions options)
-    {
-        mOptions.enableTls = options.enableTls;
-        mOptions.certificationPath = options.certificationPath;   /* certification path */
-        mOptions.caCerPath = options.caCerPath;                   /* caCert path */
-        mOptions.caCrlPath = options.caCrlPath;                   /* caCrl path */
-        mOptions.privateKeyPath = options.privateKeyPath;         /* private key path */
-        mOptions.privateKeyPassword = options.privateKeyPassword; /* private key password */
-        mOptions.hseKfsMasterPath = options.hseKfsMasterPath;     /* hseceasy kfs master path */
-        mOptions.hseKfsStandbyPath = options.hseKfsStandbyPath;   /* hseceasy kfs standby path */
     }
 
     uint8_t *GetShmAddress(uint64_t offset, uint64_t len)
@@ -449,9 +422,9 @@ public:
         }
         LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        ret = ch->Read(req, nullptr);
+        ret = ch->Get(req, nullptr);
 #else
-        ret = NetStub::SyncRead(req);
+        ret = NetStub::Get(req);
 #endif
         LVOS_TP_END;
         return NetResult(ret);
@@ -469,9 +442,9 @@ public:
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V1);
         LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        ret = ch->Read(req, nullptr);
+        ret = ch->Get(req, nullptr);
 #else
-        ret = NetStub::SyncRead(req);
+        ret = NetStub::Get(req);
 #endif
         LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V1, ret);
@@ -485,9 +458,9 @@ public:
         int ret;
         LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        ret = ch->Read(req, nullptr);
+        ret = ch->Get(req, nullptr);
 #else
-        ret = NetStub::SyncRead(req);
+        ret = NetStub::Get(req);
 #endif
         LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V2, ret);
@@ -506,9 +479,9 @@ public:
         }
         LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        ret = ch->Write(req, nullptr);
+        ret = ch->Put(req, nullptr);
 #else
-        ret = NetStub::SyncWrite(req);
+        ret = NetStub::Put(req);
 #endif
         LVOS_TP_END;
         return NetResult(ret);
@@ -527,9 +500,9 @@ public:
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
         LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        ret = ch->Write(req, nullptr);
+        ret = ch->Put(req, nullptr);
 #else
-        ret = NetStub::SyncWrite(req);
+        ret = NetStub::Put(req);
 #endif
         LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V1, ret);
@@ -543,9 +516,9 @@ public:
         int ret;
         LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        ret = ch->Write(req, nullptr);
+        ret = ch->Put(req, nullptr);
 #else
-        ret = NetStub::SyncWrite(req);
+        ret = NetStub::Put(req);
 #endif
         LVOS_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V2, ret);
@@ -565,17 +538,23 @@ public:
 #ifndef DEBUG_UT
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_REPLY_ASYNC);
         uint64_t ts = Monotonic::TimeNs();
-        NetCallback *callback = NewCallback([this, ts](NetServiceContext &context) {
+        NetCallback *callback = UBSHcomNewCallback([this, ts](UBSHcomServiceContext &context) {
             ReplyDone(context.Result(), ts);
             }, std::placeholders::_1);
 
         BIO_TRACE_START(NET_TRACE_REPLY_SYNC);
-        NetServiceOpInfo opInfo{};
-        opInfo.errorCode = static_cast<int16_t>(retCode);
+        UBSHcomReplyContext replyCtx;
+        replyCtx.errorCode = static_cast<int16_t>(retCode);
+        replyCtx.rspCtx = ctx.RspCtx();
+        UBSHcomRequest reqMsg;
         if (resp != nullptr) {
-            result = ctx.ReplySend(opInfo, { resp, respSize }, callback);
+            reqMsg.address = resp;
+            reqMsg.size = respSize;
+            result = ctx.Channel()->Reply(replyCtx, reqMsg, callback);
         } else {
-            result = ctx.ReplySend(opInfo, { &retCode, sizeof(retCode) }, callback);
+            reqMsg.address = &retCode;
+            reqMsg.size = sizeof(retCode);
+            result = ctx.Channel()->Reply(replyCtx, reqMsg, callback);
         }
         BIO_TRACE_END(NET_TRACE_REPLY_SYNC, result);
 #else
@@ -600,18 +579,6 @@ public:
         }
 
         mHandlers[opCode] = h;
-        return BIO_OK;
-    }
-
-    BResult RegisterNewChannelHandler(const NewChannelHandler &h)
-    {
-        std::lock_guard<std::mutex> guard(mMutex);
-        if (UNLIKELY(mHandleNewChannel != nullptr)) {
-            NET_LOG_ERROR("Failed to register new channel handler");
-            return BIO_ERR;
-        }
-
-        mHandleNewChannel = h;
         return BIO_OK;
     }
 
@@ -681,11 +648,25 @@ public:
 
     inline bool IsValidAddress(uint64_t begin, uint64_t end)
     {
-        return (begin >= mLocalMr->GetAddress()) && (end <= (mLocalMr->GetAddress() + mOptions.memorySize));
+        return (begin >= mLocalMr.GetAddress()) && (end <= (mLocalMr.GetAddress() + mOptions.memorySize));
     }
 
-    void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix,
-        ock::hcom::NetServiceConnectOptions &op);
+    inline NetRequest InitNetRequest(uintptr_t la, uintptr_t ra, uint64_t lk, uint64_t rk, uint32_t size)
+    {
+        NetRequest req;
+        ock::hcom::UBSHcomMemoryKey lKey;
+        lKey.keys[0] = lk;
+        ock::hcom::UBSHcomMemoryKey rKey;
+        rKey.keys[0] = rk;
+        req.lKey = lKey;
+        req.rKey = rKey;
+        req.lAddress = la;
+        req.rAddress = ra;
+        req.size = size;
+        return req;
+    }
+
+    void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, ock::hcom::UBSHcomConnectOptions &op);
     BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
 
     BResult InitCommMemAllocator();
@@ -702,14 +683,13 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
-    void AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options);
+    BResult AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr);
     BResult StartIpcService(const NetOptions &opt);
-    BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr, ock::hcom::NetServiceOptions &options);
+    BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr);
     BResult StartRpcService(const NetOptions &opt);
+    void SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt);
 
     BResult PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby);
-
-    std::string GenerateWorkersSetting(const NetOptions& opt);
 
     void StopInner();
 
@@ -726,30 +706,28 @@ private:
             case SER_TIMEOUT:
                 return BIO_NET_RETRY;
             default:
-                return BIO_NET_RETRY; // hcom错误码太多，SDK端IO遇到网络IO异常时需要进行重试处理
+                return BIO_NET_RETRY; // hcom错误码太多, SDK端IO遇到网络异常时需要进行重试处理
         }
     }
 
     template <typename TReq, typename TResp> BResult SyncCall(uint16_t opCode, TReq &req, TResp &resp, ChannelPtr &ch)
     {
         using namespace ock::hcom;
-        NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = mTimeout;
-        NetServiceOpInfo rspOpInfo{};
-        NetServiceMessage respMsg(&resp, sizeof(TResp));
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+        UBSHcomResponse respMsg(static_cast<void *>(&resp), sizeof(TResp));
 #ifndef DEBUG_UT
-        auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+        auto result = ch->Call(reqMsg, respMsg);
 #else
-        auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+        auto result = NetStub::Call(reqMsg, respMsg);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(rspOpInfo.errorCode != BIO_OK)) {
-            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << rspOpInfo.errorCode);
-            return rspOpInfo.errorCode;
+        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
+            return respMsg.errorCode;
         }
 
         return BIO_OK;
@@ -759,23 +737,21 @@ private:
     BResult SyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, TResp &resp, ChannelPtr &ch)
     {
         using namespace ock::hcom;
-        NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = mTimeout;
-        NetServiceOpInfo rspOpInfo{};
-        NetServiceMessage respMsg(&resp, sizeof(TResp));
+        UBSHcomRequest reqMsg(req, reqLen, opCode);
+        UBSHcomResponse respMsg(static_cast<void *>(&resp), sizeof(TResp));
 #ifndef DEBUG_UT
-        auto result = ch->SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen }, rspOpInfo, respMsg);
+        auto result = ch->Call(reqMsg, respMsg);
 #else
-        auto result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(req), reqLen }, rspOpInfo, respMsg);
+        auto result = NetStub::Call(reqMsg, respMsg);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(rspOpInfo.errorCode != BIO_OK)) {
-            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << rspOpInfo.errorCode);
-            return rspOpInfo.errorCode;
+        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
+            return respMsg.errorCode;
         }
 
         return BIO_OK;
@@ -786,16 +762,14 @@ private:
     {
         using namespace ock::hcom;
         BResult result = BIO_INNER_ERR;
-        NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = mTimeout;
-        NetServiceOpInfo rspOpInfo{};
-        NetServiceMessage respMsg{};
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+        UBSHcomResponse respMsg{};
 
         LVOS_TP_START(SYNCCALL_FAIL, &result, BIO_ERR);
 #ifndef DEBUG_UT
-        result = ch->SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+        result = ch->Call(reqMsg, respMsg);
 #else
-        result = NetStub::SyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, rspOpInfo, respMsg);
+        result = NetStub::Call(reqMsg, respMsg);
 #endif
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
@@ -804,13 +778,13 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(rspOpInfo.errorCode != BIO_OK)) {
+        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code " <<
-                rspOpInfo.errorCode);
-            return rspOpInfo.errorCode;
+                respMsg.errorCode);
+            return respMsg.errorCode;
         }
 
-        *resp = reinterpret_cast<TResp *>(respMsg.data);
+        *resp = reinterpret_cast<TResp *>(respMsg.address);
         respLen = respMsg.size;
         return BIO_OK;
     }
@@ -819,18 +793,18 @@ private:
     {
         using namespace ock::hcom;
         int32_t result = BIO_ERR;
-        NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = mTimeout;
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+        UBSHcomResponse respMsg{};
 
 #ifndef DEBUG_UT
-        auto *netCallback = NewCallback([](NetServiceContext &context) { return; }, std::placeholders::_1);
-        result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
+        auto *netCallback = UBSHcomNewCallback([](UBSHcomServiceContext &context) { return; }, std::placeholders::_1);
+        result = ch->Call(reqMsg, respMsg, netCallback);
 #else
         CbFunc cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
             free(resp);
         };
         Callback cb = Callback(cbFunc, nullptr);
-        result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, cb);
+        result = NetStub::AsyncCall(reqMsg, respMsg, cb);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
@@ -848,15 +822,15 @@ private:
     {
         using namespace ock::hcom;
         int32_t result = BIO_ERR;
-        NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = mTimeout;
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+        UBSHcomResponse respMsg{};
         uint64_t ts = Monotonic::TimeNs();
 
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
         LVOS_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
 #ifndef DEBUG_UT
-        auto *netCallback = NewCallback(
-            [this, ts, callback](NetServiceContext &context) {
+        auto *netCallback = UBSHcomNewCallback(
+            [this, ts, callback](UBSHcomServiceContext &context) {
                 if (context.Result() != SER_OK) {
                     AsyncCallDone(context.Result(), ts);
                     callback.cb(callback.cbCtx,
@@ -864,17 +838,16 @@ private:
                                 0,
                                 NetResult(context.Result()));
                 } else {
-                    NetServiceOpInfo rspOpInfo = context.OpInfo();
-                    AsyncCallDone(rspOpInfo.errorCode, ts);
+                    AsyncCallDone(context.ErrorCode(), ts);
                     callback.cb(callback.cbCtx,
                                 context.MessageData(),
                                 context.MessageDataLen(),
-                                rspOpInfo.errorCode);
+                                context.ErrorCode());
                 }
             }, std::placeholders::_1);
-        result = ch->AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
 #else
-        result = NetStub::AsyncCall(reqOpInfo, { static_cast<void *>(&req), sizeof(TReq) }, callback);
+        result = NetStub::AsyncCall(reqMsg, respMsg, callback);
 #endif
         LVOS_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
@@ -893,14 +866,14 @@ private:
     {
         using namespace ock::hcom;
         int32_t result = BIO_ERR;
-        NetServiceOpInfo reqOpInfo(opCode);
-        reqOpInfo.timeout = mTimeout;
+        UBSHcomRequest reqMsg(req, reqLen, opCode);
+        UBSHcomResponse respMsg{};
         uint64_t ts = Monotonic::TimeNs();
 
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL_BUFF);
 #ifndef DEBUG_UT
-        auto *netCallback = NewCallback(
-            [this, ts, callback](NetServiceContext &context) {
+        auto *netCallback = UBSHcomNewCallback(
+            [this, ts, callback](UBSHcomServiceContext &context) {
                 if (context.Result() != SER_OK) {
                     AsyncCallBuffDone(context.Result(), ts);
                     callback.cb(callback.cbCtx,
@@ -908,17 +881,16 @@ private:
                                 0,
                                 NetResult(context.Result()));
                 } else {
-                    NetServiceOpInfo rspOpInfo = context.OpInfo();
-                    AsyncCallBuffDone(rspOpInfo.errorCode, ts);
+                    AsyncCallBuffDone(context.ErrorCode(), ts);
                     callback.cb(callback.cbCtx,
                                 context.MessageData(),
                                 context.MessageDataLen(),
-                                rspOpInfo.errorCode);
+                                context.ErrorCode());
                 }
         }, std::placeholders::_1);
-        result = ch->AsyncCall(reqOpInfo, { req, reqLen }, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
 #else
-        result = NetStub::AsyncCall(reqOpInfo, { req, reqLen }, callback);
+        result = NetStub::AsyncCall(reqMsg, respMsg, callback);
 #endif
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
@@ -936,17 +908,16 @@ private:
     uint32_t mDataPageBytes = NO_128 * NO_1024;
     NetChannelMgrPtr mCtrlChannelMgr = nullptr;
     NetChannelMgrPtr mDataChannelMgr = nullptr;
-    MemoryRegionPtr mLocalMr = nullptr;
+    MemoryRegion mLocalMr;
     NetBlockPoolPtr mMrBlockPool = nullptr;
     std::atomic<uint64_t> mUsedBlock;
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};
     NetConnectorPtr mConnector = nullptr;
     DEFINE_REF_COUNT_VARIABLE
     uint16_t mLocalNodeId = UINT16_MAX;
-    NewChannelHandler mHandleNewChannel = nullptr;
     ChannelBrokenHandler mHandlerBroken = nullptr;
-    ock::hcom::NetService *mRpcService = nullptr;
-    ock::hcom::NetService *mIpcService = nullptr;
+    ock::hcom::UBSHcomService *mRpcService = nullptr;
+    ock::hcom::UBSHcomService *mIpcService = nullptr;
     BioCryptorHelper *mbioCryptorHelper = nullptr;
     std::mutex mMutex;
     NetOptions mOptions;
@@ -956,10 +927,10 @@ private:
     uint64_t mShareOffset = 0;
     uint64_t mShmSize = 0;
     uint8_t *mShareAddress = nullptr;
-    friend class NetConnectTask;
 };
 
 using NetEnginePtr = Ref<NetEngine>;
 }
 }
 #endif // NET_ENGINE_H
+

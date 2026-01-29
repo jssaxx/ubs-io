@@ -192,7 +192,8 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
             return;
         }
 
-        NetRequest writeReq(lAddress, req->address, lKey, req->mrKey, (sizeof(ObjStat) * index));
+        NetRequest writeReq = BioServer::Instance()->GetNetEngine()->InitNetRequest(lAddress,
+            req->address, lKey, req->mrKey, sizeof(ObjStat) * index);
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(ctx.Channel(), writeReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ".");
@@ -409,7 +410,8 @@ BResult MirrorServer::ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo>
     BResult ret = BIO_OK;
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         ChkTrue(lMrVec[idx].size == rMrVec[idx].size, BIO_INNER_ERR, "Slice addr size not match.");
-        NetRequest wReq(lMrVec[idx].address, rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
+        NetRequest wReq = BioServer::Instance()->GetNetEngine()->InitNetRequest(lMrVec[idx].address,
+            rMrVec[idx].address, lMrVec[idx].key, rMrVec[idx].key, lMrVec[idx].size);
         if (req.memFromServer) { // 性能考虑, 选择不同的channel进行单边读.
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
@@ -439,7 +441,8 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         rMrAddr += off;
         ChkTrue((lMrVec[idx].size + off) <= remoteSize, BIO_INNER_ERR, "lSlice size exceeds rSlice size.");
-        NetRequest wReq(lMrVec[idx].address, rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
+        NetRequest wReq = BioServer::Instance()->GetNetEngine()->InitNetRequest(lMrVec[idx].address,
+            rMrAddr, lMrVec[idx].key, rMrKey, lMrVec[idx].size);
         if (req.memFromServer) { // 性能考虑, 选择不同的channel进行单边读.
             ret = BioServer::Instance()->GetNetEngine()->SyncRead(req.comm.srcNid, wReq);
         } else {
@@ -643,7 +646,8 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
             ret = BIO_INNER_ERR;
             break;
         }
-        NetRequest rReq(lMrVec[idx].address, rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
+        NetRequest rReq = BioServer::Instance()->GetNetEngine()->InitNetRequest(lMrVec[idx].address,
+            rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
         uint32_t dstPid = req.isConvDeploy ? 0 : static_cast<uint32_t>(req.comm.pid); // 融合部署场景目的端PID填充0
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, dstPid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {

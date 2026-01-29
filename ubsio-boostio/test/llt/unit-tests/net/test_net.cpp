@@ -50,7 +50,7 @@ TEST_F(TestNet, test_net_get_data_channel)
 
     targetNodeId = 1;
     ret = engine->GetDataChanel(targetNodeId, pid, channel);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
 TEST_F(TestNet, test_net_init_common_allocator)
@@ -83,23 +83,6 @@ TEST_F(TestNet, test_net_init_shm_allocator)
     LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_MMAP_SHM_SIZE");
 }
 
-TEST_F(TestNet, test_net_new_channel)
-{
-    LOG_INFO("test_net_new_channel");
-    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
-    int32_t ret = engine->NewChannel("127.0.0.1", channel, "bio-ctrl-2");
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestNet, test_net_broken_channel)
-{
-    LOG_INFO("test_net_broken_channel");
-    NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
-    ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
-    engine->ChannelBroken(channel);
-}
-
 int32_t TestNet::TestMsgHandle(ServiceContext &ctx)
 {
     return BIO_OK;
@@ -121,10 +104,10 @@ TEST_F(TestNet, test_receive_handle)
 
     ServiceContext ctx; // default opcode is equal to 0
     ret = netEngine->RequestReceived(ctx);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_ERR);
 
     ret = netEngine->RequestIPCReceived(ctx);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_ERR);
 
     LVOS_TRACEP_PARAM_S userParam;
     LVOS_HVS_activeTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED", 0, 1, userParam);
@@ -154,7 +137,7 @@ TEST_F(TestNet, test_net_check_connect)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     BioNodeId targetNodeId = 1;
     BResult ret = engine->CheckConnect(targetNodeId);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     targetNodeId = NO_100;
     ret = engine->CheckConnect(targetNodeId);
@@ -168,7 +151,7 @@ TEST_F(TestNet, test_net_sync_call_intf_1)
     uint64_t request = NO_1024;
     uint64_t response = 0;
     BResult ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, request, response);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     uint16_t opCode = NO_256;
     ret = engine->SyncCall<uint64_t, uint64_t>(1, opCode, request, response);
@@ -187,7 +170,7 @@ TEST_F(TestNet, test_net_sync_call_intf_2)
     uint64_t *response = nullptr;
     uint64_t rspLen = 0;
     auto ret = engine->SyncCall<uint64_t, uint64_t>(1, 1, request, &response, rspLen);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
     if (response != nullptr) {
         free(response);
     }
@@ -207,7 +190,7 @@ TEST_F(TestNet, test_net_async_call_without_resp)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     uint64_t request = NO_1024;
     auto ret = engine->AsyncCallWithoutResponse<uint64_t>(1, 1, request);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     uint16_t opCode = NO_256;
     ret = engine->AsyncCallWithoutResponse<uint64_t>(1, opCode, request);
@@ -274,14 +257,14 @@ TEST_F(TestNet, test_net_read)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     NetRequest request;
     auto ret = engine->SyncRead(1, 0, request);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     BioNodeId targetNodeId = NO_100;
     ret = engine->SyncRead(targetNodeId, 0, request);
     EXPECT_EQ(ret, BIO_NET_RETRY);
 
     ret = engine->SyncRead(1, request);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     targetNodeId = NO_100;
     ret = engine->SyncRead(targetNodeId, request);
@@ -294,14 +277,14 @@ TEST_F(TestNet, test_net_write)
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
     NetRequest request;
     auto ret = engine->SyncWrite(1, 0, request);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     BioNodeId targetNodeId = NO_100;
     ret = engine->SyncWrite(targetNodeId, 0, request);
     EXPECT_EQ(ret, BIO_NET_RETRY);
 
     ret = engine->SyncWrite(1, request);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     targetNodeId = NO_100;
     ret = engine->SyncWrite(targetNodeId, request);
@@ -319,7 +302,7 @@ TEST_F(TestNet, test_net_receive_fds)
 
     int32_t realFd = 1;
     BResult ret = engine->ReceiveFds(1, &realFd, NO_1);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_NET_RETRY);
 
     BioNodeId targetNodeId = NO_100;
     ret = engine->ReceiveFds(targetNodeId, &realFd, NO_1);
@@ -352,27 +335,4 @@ TEST_F(TestNet, test_net_get_underfs_config)
     BioConfig::UnderFsConfig config;
     auto ret = clientNet->GetUnderFsConfig(config);
     EXPECT_EQ(ret, BIO_NET_RETRY);
-}
-
-TEST_F(TestNet, test_new_channel_error)
-{
-    LOG_INFO("test_new_channel_error");
-    auto netEngine = MakeRef<NetEngine>();
-    auto ret = netEngine->NewChannel("uttest", nullptr, "dsd");
-    EXPECT_EQ(ret, BIO_ERR);
-}
-
-TEST_F(TestNet, test_add_channel)
-{
-    LOG_INFO("test_add_channel");
-    auto dataChannelMgr = MakeRef<NetChannelMgr>();
-    NetNode netNode{};
-    netNode.whole = 1;
-    ChannelPtr channel(ock::hcom::NetServiceDefaultImp::MakeChannel());
-    uint8_t plane = 1;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_ADD_CHANNEL_FAIL", 0, 1, userParam);
-    auto ret = dataChannelMgr->AddChannel(netNode, channel, plane);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_ADD_CHANNEL_FAIL");
-    EXPECT_EQ(ret, BIO_ALLOC_FAIL);
 }

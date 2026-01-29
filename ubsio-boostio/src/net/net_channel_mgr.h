@@ -45,7 +45,7 @@ public:
     BResult Initialize();
     void UnInitialize();
 
-    BResult AddChannel(NetNode dstNid, ChannelPtr &ch, uint8_t plane);
+    BResult AddChannel(const NetNode &dstNid, ChannelPtr &ch, uint8_t plane);
     BResult RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch);
 
     inline BResult GetChannel(uint32_t dstNid, uint32_t pid, ChannelPtr &ch)
