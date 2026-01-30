@@ -22,6 +22,6 @@ if (${OPEN_TP} STREQUAL "ON")
     endif()
 endif ()
 
-if(${OPEN_PROMETHEUS} STREQUAL "ON")
+if (${OPEN_PROMETHEUS} STREQUAL "ON")
     add_subdirectory(prometheus)
 endif()

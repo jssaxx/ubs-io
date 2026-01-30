@@ -83,7 +83,7 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include
 )
 
-if(${OPEN_PROMETHEUS} STREQUAL "ON")
+if (${OPEN_PROMETHEUS} STREQUAL "ON")
     include_directories(
             ${SRC_DIR}/../test/tools/prometheus
             ${PROJECT_3RDPARTY_BIN_DIR}/prometheus/include

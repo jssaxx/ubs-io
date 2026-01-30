@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint] [--pms=prometheus]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release [--cli] // 禁止添加tp功能，对外发布包禁止添加cli功能"
@@ -59,7 +59,7 @@ while true; do
             CLI_FLAG=ON
             TP_FLAG=ON
             shift ;;
-        --prometheus )
+        --pms )
             PROMETHEUS_FLAG=ON
             shift ;;
 		    -h | -help )

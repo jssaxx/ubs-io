@@ -7,7 +7,7 @@ include_directories(
         ../diagnose/cli_sdk
 )
 
-if(${OPEN_PROMETHEUS} STREQUAL "ON")
+if (${OPEN_PROMETHEUS} STREQUAL "ON")
     target_link_libraries(bio_sdk
             -Wl,--start-group
             ${PROJECT_3RDPARTY_BIN_DIR}/prometheus/lib64/libprometheus-cpp-core.so
