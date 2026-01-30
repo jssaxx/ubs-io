@@ -111,14 +111,13 @@ struct NetOptions {
     Role role = Role::NET_BUTT;                                /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
-    bool enableTls = false;                              /* tls switch */
-    std::string certificationPath{};                     /* certification path */
-    std::string caCerPath{};                             /* caCer path */
-    std::string caCrlPath{};                             /* caCer path */
-    std::string privateKeyPath{};                        /* private key path */
-    std::string privateKeyPassword{};                    /* private key password */
-    std::string hseKfsMasterPath{};                      /* hseceasy kfs master path */
-    std::string hseKfsStandbyPath{};                     /* hseceasy kfs standby path  */
+    bool enableTls = false;                            /* tls switch */
+    std::string certificationPath;                     /* certification path */
+    std::string caCerPath;                             /* caCer path */
+    std::string caCrlPath;                             /* caCer path */
+    std::string privateKeyPath;                        /* private key path */
+    std::string privateKeyPassword;                    /* private key password */
+    std::string decrypterLibPath;                      /* decrypter lib path */
 
     NetOptions() = default;
     ~NetOptions() = default;
@@ -133,7 +132,7 @@ struct NetOptions {
 
     void FillNetTlsConfigs(bool enable, const std::string &certPath, const std::string &tlsCaCerPath,
         const std::string &tlsCaCrlPath, const std::string &priKeyPath, const std::string &priKeyPw,
-        const std::string &hseMstPath, const std::string &hseStandbyPath)
+        const std::string &decLibPath)
     {
         enableTls = enable;
         certificationPath = certPath;
@@ -141,8 +140,7 @@ struct NetOptions {
         caCrlPath = tlsCaCrlPath;
         privateKeyPath = priKeyPath;
         privateKeyPassword = priKeyPw;
-        hseKfsMasterPath = hseMstPath;
-        hseKfsStandbyPath = hseStandbyPath;
+        decrypterLibPath = decLibPath;
     }
 };
 

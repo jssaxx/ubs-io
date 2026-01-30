@@ -251,7 +251,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
     NetOptions netOptions;
     netOptions.FillNetBaseConfigs(NO_4, NO_4, Role::NET_CLIENT, ServiceProtocol::SHM);
     netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
-        netConf.privateKeyPath, netConf.privateKeyPassword, netConf.hseKfsMasterPath, netConf.hseKfsStandbyPath);
+        netConf.privateKeyPath, netConf.privateKeyPassword, netConf.decrypterLibPath);
     ret = mNetEngine->Start(netOptions);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Start ipc service failed, result:" << ret << ".");
@@ -292,8 +292,7 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.caCrlPath = netConf.caCrlPath;                    /* caCrl path */
     netOptions.privateKeyPath = netConf.privateKeyPath;          /* private key path */
     netOptions.privateKeyPassword = netConf.privateKeyPassword;  /* private key password */
-    netOptions.hseKfsMasterPath = netConf.hseKfsMasterPath;      /* hseceasy kfs master path */
-    netOptions.hseKfsStandbyPath = netConf.hseKfsStandbyPath;    /* hseceasy kfs standby path */
+    netOptions.decrypterLibPath = netConf.decrypterLibPath;      /* decrypter lib path */
     return mNetEngine->Start(netOptions);
 }
 

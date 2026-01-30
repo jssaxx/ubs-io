@@ -41,9 +41,10 @@ public:
         static auto instance = MakeRef<ExpireChecker>();
         return instance;
     }
+
     void TimingManagement(const std::string caCertFile, const std::string serverCertFile, int period) const;
 
-    BResult ExpireCheckerInit(std::string caCertPath, std::string workCertPath);
+    BResult ExpireCheckerInit(const std::string &caCertPath, const std::string &workCertPath);
     DEFINE_REF_COUNT_FUNCTIONS
 private:
     DEFINE_REF_COUNT_VARIABLE

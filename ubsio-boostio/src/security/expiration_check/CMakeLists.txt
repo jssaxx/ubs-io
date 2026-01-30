@@ -3,7 +3,7 @@ file(GLOB_RECURSE EXPIRE_CHECKER_SRCS *.h *.cpp)
 add_library(expire_checker SHARED ${EXPIRE_CHECKER_SRCS})
 
 if (${DEBUG_UT} MATCHES "ON")
-set_source_files_properties(expire_checker.cpp PROPERTIES COMPILE_FLAGS -fexceptions)
+    set_source_files_properties(expire_checker.cpp PROPERTIES COMPILE_FLAGS -fexceptions)
 endif()
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)$") # arm

@@ -229,14 +229,9 @@ CResult BioInitialize\(WorkerMode mode, ClientOptionsConfig \*optConf\)
 <td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p2017817572526"><a name="p2017817572526"></a><a name="p2017817572526"></a>Client证书私钥口令密文的文件路径，安全使能时要求路径有效。</p>
 </td>
 </tr>
-<tr id="row864321625316"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p13643716205316"><a name="p13643716205316"></a><a name="p13643716205316"></a>hseKfsMasterPath</p>
+<tr id="row864321625316"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p13643716205316"><a name="p13643716205316"></a><a name="p13643716205316"></a>decrypterPath</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p1964311615314"><a name="p1964311615314"></a><a name="p1964311615314"></a>Client证书私钥口令根密钥路径，安全使能时要求路径有效。</p>
-</td>
-</tr>
-<tr id="row10952318185311"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p4952131810531"><a name="p4952131810531"></a><a name="p4952131810531"></a>hseKfsStandbyPath</p>
-</td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p195214189538"><a name="p195214189538"></a><a name="p195214189538"></a>Client证书私钥口令备份根密钥路径，安全使能时要求路径有效。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p1964311615314"><a name="p1964311615314"></a><a name="p1964311615314"></a>Client解密函数so路径，安全使能时要求路径有效。</p>
 </td>
 </tr>
 </tbody>
