@@ -97,9 +97,9 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
             node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port);
-        LVOS_TP_START(SDK_BIO_NET_START_CONNECT_FAIL, &ret, BIO_INNER_ERR);
+        BIO_TP_START(SDK_BIO_NET_START_CONNECT_FAIL, &ret, BIO_INNER_ERR);
         ret = mNetEngine->SyncConnect(info);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Connect to bio server failed, result:" << ret << ".");
             return ret;
@@ -434,14 +434,14 @@ BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
     GetUnderFsConfigRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     GetUnderFsConfigResponse rsp;
 
-    LVOS_TP_START(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, 0);
+    BIO_TP_START(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, 0);
     BResult ret = mNetEngine->SyncCall<GetUnderFsConfigRequest, GetUnderFsConfigResponse>(INVALID_NID,
         BIO_OP_SDK_GET_UFS_CONFIG, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send get underfs configs request failed, ret:" << ret << ".");
         return ret;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     if (!CheckGetUnderFsConfigResp(rsp)) {
         CLIENT_LOG_ERROR("Check underfs configs failed.");

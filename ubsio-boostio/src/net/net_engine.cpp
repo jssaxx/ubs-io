@@ -114,9 +114,9 @@ BResult NetEngine::Start(const NetOptions &opt)
         }
     }
     if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA) {
-        LVOS_TP_START(SDK_BIO_NET_START_RPC_FAIL, &result, BIO_INNER_ERR);
+        BIO_TP_START(SDK_BIO_NET_START_RPC_FAIL, &result, BIO_INNER_ERR);
         result = StartRpcService(opt);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (result != BIO_OK) {
             return result;
         }
@@ -174,22 +174,22 @@ void NetEngine::StopInner()
 BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name)
 {
     int fd = -1;
-    LVOS_TP_START(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, &fd, -1);
+    BIO_TP_START(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, &fd, -1);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
     fd = shm_open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
 #else
     fd = syscall(SYS_memfd_create, name.c_str(), 0);
 #endif
-    LVOS_TP_END;
+    BIO_TP_END;
     if (fd < 0) {
         NET_LOG_ERROR("create memory file " << name << ", failed, error:" << strerror(errno));
         return BIO_INNER_ERR;
     }
 
     int ret = -1;
-    LVOS_TP_START(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, &ret, -1);
+    BIO_TP_START(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, &ret, -1);
     ret = ftruncate(fd, static_cast<off_t>(size));
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret < 0) {
         NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
@@ -245,9 +245,9 @@ BResult NetEngine::InitShmMemAllocator()
 
     auto offset = static_cast<off_t>(mShareOffset);
     auto address = MAP_FAILED;
-    LVOS_TP_START(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, &address, MAP_FAILED);
+    BIO_TP_START(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, &address, MAP_FAILED);
     address = mmap(nullptr, mOptions.memorySize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (address == MAP_FAILED) {
         NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memorySize << " offset " << offset << " failed, error:" <<
             strerror(errno));
@@ -691,8 +691,8 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
 int32_t NetEngine::RequestIPCReceived(ServiceContext &ctx)
 {
     uint16_t opCode = ctx.OpCode();
-    LVOS_TP_START(SDK_REQUEST_IPC_OPCODE_EXCEED, &opCode, MAX_NEW_REQ_HANDLER);
-    LVOS_TP_END;
+    BIO_TP_START(SDK_REQUEST_IPC_OPCODE_EXCEED, &opCode, MAX_NEW_REQ_HANDLER);
+    BIO_TP_END;
     if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
         NET_LOG_ERROR("Net engine received a message with invalid opCode " << opCode);
         return BIO_ERR;

@@ -18,10 +18,10 @@
 #ifdef __aarch64__
 #include "tracepoint.h"
 #else
-#define BIO_LVOS_TRACEP_PARAM_SIZE 32UL
+#define BIO_BIO_TRACEP_PARAM_SIZE 32UL
 typedef struct {
-    char achParamData[BIO_LVOS_TRACEP_PARAM_SIZE];
-} LVOS_TRACEP_PARAM_S;
+    char tpParamData[BIO_BIO_TRACEP_PARAM_SIZE];
+} BioTracepointParam;
 #endif
 
 namespace ock {
@@ -33,15 +33,15 @@ public:
     static void Deregister() noexcept;
 
 public:
-    static void IntValueCallback(LVOS_TRACEP_PARAM_S *user, int *value, int set) noexcept;
-    static void IntValueResetCallback(LVOS_TRACEP_PARAM_S *user, int *value) noexcept;
-    static void IntValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, int *value, int set, int err) noexcept;
-    static void LongValueCallback(LVOS_TRACEP_PARAM_S *user, long *value, long set) noexcept;
-    static void LongValueErrnoCallback(LVOS_TRACEP_PARAM_S *user, long *value, long set, int err) noexcept;
-    static void BoolValueCallback(LVOS_TRACEP_PARAM_S *user, bool *value, bool set) noexcept;
-    static void NoProcessCallback(LVOS_TRACEP_PARAM_S *user) noexcept;
-    static void PointerValueCallback(LVOS_TRACEP_PARAM_S *user, void** value, void* set) noexcept;
-    static void PointerValueResetCallback(LVOS_TRACEP_PARAM_S *user, void** value) noexcept;
+    static void IntValueCallback(BioTracepointParam *user, int *value, int set) noexcept;
+    static void IntValueResetCallback(BioTracepointParam *user, int *value) noexcept;
+    static void IntValueErrnoCallback(BioTracepointParam *user, int *value, int set, int err) noexcept;
+    static void LongValueCallback(BioTracepointParam *user, long *value, long set) noexcept;
+    static void LongValueErrnoCallback(BioTracepointParam *user, long *value, long set, int err) noexcept;
+    static void BoolValueCallback(BioTracepointParam *user, bool *value, bool set) noexcept;
+    static void NoProcessCallback(BioTracepointParam *user) noexcept;
+    static void PointerValueCallback(BioTracepointParam *user, void** value, void* set) noexcept;
+    static void PointerValueResetCallback(BioTracepointParam *user, void** value) noexcept;
 };
 }
 }

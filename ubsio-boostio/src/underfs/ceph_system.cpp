@@ -28,16 +28,16 @@ BResult CephSystem::Init()
 
     LoadCephConfig();
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(UNDERFS_CEPH_CREAT_FAIL, &ret, -1);
+    BIO_TP_START(UNDERFS_CEPH_CREAT_FAIL, &ret, -1);
     ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret < 0 || mConn == nullptr) {
         LOG_ERROR("Failed to create, ret:" << ret);
         return BIO_UFS_IOERR;
     }
     ret = rados_conf_read_file(mConn, mCfgPath.c_str());
-    LVOS_TP_START(UNDERFS_CEPH_READ_FILE_FAIL, &ret, -1);
-    LVOS_TP_END;
+    BIO_TP_START(UNDERFS_CEPH_READ_FILE_FAIL, &ret, -1);
+    BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to read config, ret:" << ret);
         rados_shutdown(mConn);
@@ -45,8 +45,8 @@ BResult CephSystem::Init()
     }
 
     ret = rados_connect(mConn);
-    LVOS_TP_START(UNDERFS_CEPH_CONNECT_FAIL, &ret, -1);
-    LVOS_TP_END;
+    BIO_TP_START(UNDERFS_CEPH_CONNECT_FAIL, &ret, -1);
+    BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to connect, ret:" << ret);
         rados_shutdown(mConn);
@@ -62,8 +62,8 @@ BResult CephSystem::Init()
     }
 
     ret = rados_ioctx_create(mConn, mPool.c_str(), &mIoCtx);
-    LVOS_TP_START(UNDERFS_CEPH_IOCTX_CREAT_FAIL, &ret, -1);
-    LVOS_TP_END;
+    BIO_TP_START(UNDERFS_CEPH_IOCTX_CREAT_FAIL, &ret, -1);
+    BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to create ioctx, ret:" << ret);
         rados_shutdown(mConn);
@@ -92,9 +92,9 @@ BResult CephSystem::Put(const char *key, const char *value, const size_t len)
     LOG_DEBUG("UnderFs put key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_PUT);
-    LVOS_TP_START(SERVER_UNDERFS_PUT, &ret, -1);
+    BIO_TP_START(SERVER_UNDERFS_PUT, &ret, -1);
     ret = rados_write(mIoCtx, key, value, len, 0);
-    LVOS_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
         LOG_ERROR("Failed to write object, ret:" << ret << ".");
@@ -110,11 +110,11 @@ BResult CephSystem::Get(const char *key, char *value, const size_t len, const ui
     LOG_DEBUG("UnderFs get key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_GET);
-    LVOS_TP_START(SERVER_UNDERFS_GET, &ret, -1);
+    BIO_TP_START(SERVER_UNDERFS_GET, &ret, -1);
     ret = rados_read(mIoCtx, key, value, len, off);
-    LVOS_TP_END;
-    LVOS_TP_START(UNDERFS_CEPH_GET_FAIL, &ret, (-ENOENT));
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_START(UNDERFS_CEPH_GET_FAIL, &ret, (-ENOENT));
+    BIO_TP_END;
     int res = (ret < 0) ? BIO_UFS_IOERR : BIO_OK;
     BIO_TRACE_END(UFS_TRACE_GET, res);
     if (ret == -ENOENT) {
@@ -135,11 +135,11 @@ BResult CephSystem::Delete(const char *key)
     LOG_DEBUG("UnderFs delete key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_DEL);
-    LVOS_TP_START(SERVER_UNDERFS_DELETE, &ret, -1);
+    BIO_TP_START(SERVER_UNDERFS_DELETE, &ret, -1);
     ret = rados_remove(mIoCtx, key);
-    LVOS_TP_END;
-    LVOS_TP_START(UNDERFS_CEPH_DELETE_NOT_EXIST, &ret, (-ENOENT));
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_START(UNDERFS_CEPH_DELETE_NOT_EXIST, &ret, (-ENOENT));
+    BIO_TP_END;
     BIO_TRACE_END(UFS_TRACE_DEL, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to check file, not exist, " << key);
@@ -159,11 +159,11 @@ BResult CephSystem::Stat(const char *key, ObjStat &stat)
     LOG_DEBUG("UnderFs stat key:" << key);
 
     BIO_TRACE_START(UFS_TRACE_STAT);
-    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, -1);
+    BIO_TP_START(SERVER_UNDERFS_STAT, &ret, -1);
     ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
-    LVOS_TP_END;
-    LVOS_TP_START(UNDERFS_CEPH_STAT_NOT_EXIST, &ret, (-ENOENT));
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_START(UNDERFS_CEPH_STAT_NOT_EXIST, &ret, (-ENOENT));
+    BIO_TP_END;
     BIO_TRACE_END(UFS_TRACE_STAT, ret);
     if (ret == -ENOENT) {
         LOG_WARN("Fail to stat object " << key << ", not exist.");
@@ -173,8 +173,8 @@ BResult CephSystem::Stat(const char *key, ObjStat &stat)
         LOG_ERROR("Failed to stat object " << key << ", ret:" << ret);
         return BIO_UFS_IOERR;
     }
-    LVOS_TP_START(SERVER_UNDERFS_STAT_SIZE, &stat.size, IO_MAX_LEN + 1);
-    LVOS_TP_END;
+    BIO_TP_START(SERVER_UNDERFS_STAT_SIZE, &stat.size, IO_MAX_LEN + 1);
+    BIO_TP_END;
     if (stat.size > IO_MAX_LEN) {
         LOG_ERROR("invalid file size: " << stat.size << ".");
         return BIO_NOT_EXISTS;
@@ -189,9 +189,9 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
     LOG_DEBUG("UnderFs list prefix:" << prefix);
 
     rados_list_ctx_t listCtx;
-    LVOS_TP_START(SERVER_UNDERFS_LIST, &ret, -1);
+    BIO_TP_START(SERVER_UNDERFS_LIST, &ret, -1);
     ret = rados_nobjects_list_open(mIoCtx, &listCtx);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to list open, ret:" << ret);
         return BIO_UFS_IOERR;

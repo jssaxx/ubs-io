@@ -239,21 +239,21 @@ TEST_F(TestRCache, test_cache_create_rcache_err)
 TEST_F(TestRCache, test_cache_recover_return_err)
 {
     LOG_INFO("test_cache_recover_return_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL", 0, 1, userParam);
     auto ret = Cache::Instance().Recover();
     EXPECT_EQ(ret, BIO_NOT_READY);
-    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL");
+    BioHvsDeactiveTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL");
 }
 
 TEST_F(TestRCache, test_cache_init_rcache_init_err)
 {
     LOG_INFO("test_cache_init_rcache_init_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "RCACHE_MANAGER_INIT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL", 0, 1, userParam);
     auto ret = Cache::Instance().Init();
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL");
+    BioHvsDeactiveTracePoint(0, "RCACHE_MANAGER_INIT_FAIL");
 }
 
 TEST_F(TestRCache, test_rcache_slice)
@@ -319,25 +319,25 @@ TEST_F(TestRCache, test_wcache_slice)
 TEST_F(TestRCache, test_cache_recover_err)
 {
     LOG_INFO("test_cache_recover_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_TYPE_FAIL", 0, NO_24, userParam);
-    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_TYPE_INNER_FAIL", 0, NO_24, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CACHE_RECOVER", 0, NO_24, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "CACHE_RECOVER_TYPE_FAIL", 0, NO_24, userParam);
+    BioHvsActiveTracePoint(0, "CACHE_RECOVER_TYPE_INNER_FAIL", 0, NO_24, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_CACHE_RECOVER", 0, NO_24, userParam);
     auto ret = Cache::Instance().Recover();
     EXPECT_EQ(ret, BIO_OK);
 
-    LVOS_HVS_activeTracePoint(0, "CACHE_RECOVER_CACHE_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "CACHE_RECOVER_CACHE_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Recover();
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_TYPE_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_TYPE_INNER_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CACHE_RECOVER");
-    LVOS_HVS_deactiveTracePoint(0, "CACHE_RECOVER_CACHE_FAIL");
+    BioHvsDeactiveTracePoint(0, "CACHE_RECOVER_TYPE_FAIL");
+    BioHvsDeactiveTracePoint(0, "CACHE_RECOVER_TYPE_INNER_FAIL");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_CACHE_RECOVER");
+    BioHvsDeactiveTracePoint(0, "CACHE_RECOVER_CACHE_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Recover();
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL");
+    BioHvsDeactiveTracePoint(0, "RECOVER_CACHE_FLOWID_FAIL");
 }
 
 TEST_F(TestRCache, test_cache_slice_operator_ok)
@@ -391,11 +391,11 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     ret = cacheSliceOperator.Copy(sliceStr1.c_str(), 0, NO_1024, slice1);
     EXPECT_EQ(ret, BIO_OK);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_4_FLOW_MEMORY", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SLICE_OPERATOR_4_FLOW_MEMORY", 0, 1, userParam);
     ret = cacheSliceOperator.Copy(sliceStr.c_str(), 0, NO_1024, slice1);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_4_FLOW_MEMORY");
+    BioHvsDeactiveTracePoint(0, "SLICE_OPERATOR_4_FLOW_MEMORY");
 
     ret = cacheSliceOperator.Copy(slicePtr.Get(), slicePtr.Get());
     EXPECT_EQ(ret, BIO_OK);
@@ -410,10 +410,10 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
 
     ret = cacheSliceOperator.Copy(slice, slice);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_activeTracePoint(0, "SLICE_COPY_DISK2MEMORY_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SLICE_COPY_DISK2MEMORY_OK", 0, 1, userParam);
     ret = cacheSliceOperator.Copy(slice, slice);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_COPY_DISK2MEMORY_OK");
+    BioHvsDeactiveTracePoint(0, "SLICE_COPY_DISK2MEMORY_OK");
 
     ret = cacheSliceOperator.Copy(slice1, slice);
     EXPECT_EQ(ret, BIO_DISK_IOERR);
@@ -425,10 +425,10 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     ret = cacheSliceOperator.Copy(sliceStr.c_str(), slice1);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_FLOW_MEMORY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SLICE_OPERATOR_FLOW_MEMORY", 0, 1, userParam);
     ret = cacheSliceOperator.Copy(sliceStr.c_str(), slice1);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_FLOW_MEMORY");
+    BioHvsDeactiveTracePoint(0, "SLICE_OPERATOR_FLOW_MEMORY");
     ret = cacheSliceOperator.Copy(sliceStr.c_str(), slice);
     EXPECT_EQ(ret, BIO_DISK_IOERR);
 
@@ -437,10 +437,10 @@ TEST_F(TestRCache, test_cache_slice_operator_ok)
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
     ret = cacheSliceOperator.Copy(slice, nullptr);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
-    LVOS_HVS_activeTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY", 0, 1, userParam);
     ret = cacheSliceOperator.Copy(slice1, value, NO_1024);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY");
+    BioHvsDeactiveTracePoint(0, "SLICE_OPERATOR_2_FLOW_MEMORY");
 
     delete[] value;
     free(buffer);
@@ -467,26 +467,26 @@ TEST_F(TestRCache, test_rcache_destroy_ok)
 TEST_F(TestRCache, test_rcache_recover_return_err)
 {
     LOG_INFO("test_rcache_recover_return_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
     FlowPtr flowPtr;
     auto ret = gRCacheManager->RecoverCache(flowPtr);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
+    BioHvsDeactiveTracePoint(0, "FLOW_SEAL_ERR");
 }
 
 TEST_F(TestRCache, test_rcache_recover_return_err2)
 {
     LOG_INFO("test_rcache_recover_return_err2");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "FLOW_DESTROY_OBJECT_ERR", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "FLOW_SEAL_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "FLOW_DESTROY_OBJECT_ERR", 0, 1, userParam);
     FlowPtr flowPtr = MakeRef<Flow>(FLOW_META, FLOW_MEMORY, 0, 0, 0, 0);
     auto ret = gRCacheManager->RecoverCache(flowPtr);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_OK");
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_DESTROY_OBJECT_ERR");
+    BioHvsDeactiveTracePoint(0, "FLOW_SEAL_ERR");
+    BioHvsDeactiveTracePoint(0, "FLOW_SEAL_OK");
+    BioHvsDeactiveTracePoint(0, "FLOW_DESTROY_OBJECT_ERR");
 }
 

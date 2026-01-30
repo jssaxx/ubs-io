@@ -286,9 +286,9 @@ public:
     {
         BIO_TRACE_START(NET_TRACE_SYNC_CALL_V1);
         bool isValidOp = true;
-        LVOS_TP_START(SYNCCALL_OPCODE_FAIL, &isValidOp, false);
+        BIO_TP_START(SYNCCALL_OPCODE_FAIL, &isValidOp, false);
         isValidOp = (opCode < MAX_NEW_REQ_HANDLER);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(!isValidOp)) {
             NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_INVALID_PARAM);
@@ -297,9 +297,9 @@ public:
 
         ChannelPtr ch{ nullptr };
         BResult ret = BIO_INNER_ERR;
-        LVOS_TP_START(SYNCCALL_CHANNEL_FAIL, &ret, BIO_ERR);
+        BIO_TP_START(SYNCCALL_CHANNEL_FAIL, &ret, BIO_ERR);
         ret = GetCtrlChanel(targetNodeId, ch);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             BIO_TRACE_END(NET_TRACE_SYNC_CALL_V1, BIO_NET_RETRY);
@@ -422,13 +422,13 @@ public:
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
             return BIO_NET_RETRY;
         }
-        LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         ret = ch->Get(req, nullptr);
 #else
         ret = NetStub::Get(req);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         return NetResult(ret);
     }
 
@@ -442,13 +442,13 @@ public:
             return BIO_NET_RETRY;
         }
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V1);
-        LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         ret = ch->Get(req, nullptr);
 #else
         ret = NetStub::Get(req);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V1, ret);
         return NetResult(ret);
     }
@@ -458,13 +458,13 @@ public:
         using namespace ock::hcom;
         BIO_TRACE_START(NET_TRACE_SYNC_READ_V2);
         int ret;
-        LVOS_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_RDMA_READ_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         ret = ch->Get(req, nullptr);
 #else
         ret = NetStub::Get(req);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_READ_V2, ret);
         return NetResult(ret);
     }
@@ -479,13 +479,13 @@ public:
                 pid << ", result " << ret);
             return BIO_NET_RETRY;
         }
-        LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         ret = ch->Put(req, nullptr);
 #else
         ret = NetStub::Put(req);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         return NetResult(ret);
     }
 
@@ -500,13 +500,13 @@ public:
             return BIO_NET_RETRY;
         }
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
-        LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         ret = ch->Put(req, nullptr);
 #else
         ret = NetStub::Put(req);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V1, ret);
         return NetResult(ret);
     }
@@ -516,13 +516,13 @@ public:
         using namespace ock::hcom;
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V2);
         int ret;
-        LVOS_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         ret = ch->Put(req, nullptr);
 #else
         ret = NetStub::Put(req);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         BIO_TRACE_END(NET_TRACE_SYNC_WRITE_V2, ret);
         return NetResult(ret);
     }
@@ -772,13 +772,13 @@ private:
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
         UBSHcomResponse respMsg{};
 
-        LVOS_TP_START(SYNCCALL_FAIL, &result, BIO_ERR);
+        BIO_TP_START(SYNCCALL_FAIL, &result, BIO_ERR);
 #ifndef DEBUG_UT
         result = ch->Call(reqMsg, respMsg);
 #else
         result = NetStub::Call(reqMsg, respMsg);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " <<
                 UBSHcomNetErrStr(result));
@@ -834,7 +834,7 @@ private:
         uint64_t ts = Monotonic::TimeNs();
 
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_ASYNC_CALL);
-        LVOS_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
+        BIO_TP_START(SERVER_NET_ASYNC_CALL_FAIL, &result, BIO_NET_RETRY);
 #ifndef DEBUG_UT
         auto *netCallback = UBSHcomNewCallback(
             [this, ts, callback](UBSHcomServiceContext &context) {
@@ -856,7 +856,7 @@ private:
 #else
         result = NetStub::AsyncCall(reqMsg, respMsg, callback);
 #endif
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL, result, ts);

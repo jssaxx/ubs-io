@@ -132,55 +132,55 @@ TEST_F(TestWCache, test_put_case_return_ok)
 TEST_F(TestWCache, test_slave_send_negotiate_case_return_ok)
 {
     LOG_INFO("test_master_negotiate_case_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
     auto ret = gWCacheManager->EvictNegotiateThread();
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
     EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestWCache, test_slave_send_negotiate_get_masternode_file)
 {
     LOG_INFO("test_slave_send_negotiate_get_masternode_file");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
     auto ret = gWCacheManager->EvictNegotiateThread();
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    LVOS_HVS_deactiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
+    BioHvsDeactiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
     EXPECT_EQ(ret, BIO_OK);
 }
 
 TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
 {
     LOG_INFO("test_slave_send_negotiate_get_vectory_empty");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
     auto ret = gWCacheManager->EvictNegotiateThread();
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    LVOS_HVS_deactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
+    BioHvsDeactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
     uint64_t slices[NO_3];
     slices[0] = 0;
     slices[NO_1] = NO_1;
     slices[NO_2] = NO_2;
     std::vector<bool> reslut;
     reslut.push_back(false);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
     gWCacheManager->MasterEvictNegotiate(g_flowId, slices, reslut, NO_3);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -204,11 +204,11 @@ TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
 
     Key key = "test_put_state_not_normal_case_return_fail";
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NOT_NORMAL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_STATE_NOT_NORMAL", 0, 1, userParam);
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_INNER_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NOT_NORMAL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_STATE_NOT_NORMAL");
 
     ret = gWCacheManager->Delete(G_PT_ID, key);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
@@ -228,11 +228,11 @@ TEST_F(TestWCache, test_put_wcache_put_err_case_return_fail)
 
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     Key key = "test_put_wcache_put_err_case_return_fail";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_PUT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_PUT_FAIL", 0, 1, userParam);
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_PUT_FAIL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_PUT_FAIL");
 
     ret = gWCacheManager->Delete(G_PT_ID, key);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
@@ -507,11 +507,11 @@ TEST_F(TestWCache, test_rcache_get_flow_offset_err_case_return_fail)
     std::vector<FlowAddr> addrVec;
     RCacheSlicePtr slicePtr = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     sleep(NO_5);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Get(key, 0, slicePtr, wWriter, realLen);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
 
     ret = gWCacheManager->Delete(G_PT_ID, key);
     EXPECT_EQ(ret, BIO_OK);
@@ -590,11 +590,11 @@ TEST_F(TestWCache, test_list_prefix_null_underfs_fail_case_return_ok)
     for (int i = 0; i < NO_10; i++) {
         objs.emplace("test" + std::to_string(i), stat);
     }
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_INIT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_INIT_FAIL", 0, 1, userParam);
     auto ret = Cache::Instance().List(nullptr, 0, true, objs);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_INIT_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_INIT_FAIL");
 }
 
 TEST_F(TestWCache, test_delete_wcache_flowid_notexist_return_ok)
@@ -608,12 +608,12 @@ TEST_F(TestWCache, test_delete_wcache_flowid_notexist_return_ok)
 TEST_F(TestWCache, test_wcache_alloc_case_return_fail)
 {
     LOG_INFO("test_wcache_alloc_case_return_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_ALLOC_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_ALLOC_FAIL", 0, 1, userParam);
     uint16_t ptId = 1;
     auto ret = Cache::Instance().CreateWCache(0, ptId, 0, 0, false);
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_ALLOC_FAIL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_ALLOC_FAIL");
 }
 
 TEST_F(TestWCache, test_cache_delete_keynull_case_return_err)
@@ -627,14 +627,14 @@ TEST_F(TestWCache, test_cache_delete_keynull_case_return_err)
 TEST_F(TestWCache, test_flush_return_err)
 {
     LOG_INFO("test_flush_return_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_OLD_CACHE", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_FLUSH", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_CLEAR_OLD_CACHE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_FLUSH", 0, 1, userParam);
     SyncDataRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() } };
     auto ret = MirrorServer::Instance()->SyncData(req);
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CLEAR_OLD_CACHE");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_CLEAR_OLD_CACHE");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_FLUSH");
 }
 
 TEST_F(TestWCache, test_expired_flush_return_ok)
@@ -648,7 +648,7 @@ TEST_F(TestWCache, test_expired_flush_return_ok)
 TEST_F(TestWCache, test_wcache_destroy_case_return_ok)
 {
     LOG_INFO("test_wcache_destroy_case_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     auto ret = Cache::Instance().DestroyWCache(0, G_PT_ID, G_PT_V, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -666,120 +666,120 @@ TEST_F(TestWCache, test_wcache_destroy_flowid_unexist_return_ok)
 TEST_F(TestWCache, test_wcache_destroy_flowid_err_return_ok)
 {
     LOG_INFO("test_wcache_destroy_flowid_err_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
     sleep(NO_5);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL");
+    BioHvsDeactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
 }
 
 TEST_F(TestWCache, test_wcache_destroy_flush_return_ok)
 {
     LOG_INFO("test_wcache_destroy_flush_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
     sleep(NO_5);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
+    BioHvsDeactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH");
 }
 
 TEST_F(TestWCache, test_wcache_destroy_expire_return_ok)
 {
     LOG_INFO("test_wcache_destroy_expire_return_ok");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "HANDLE_CACHE_BROKE_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
     sleep(NO_5);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
+    BioHvsDeactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR");
 }
 
 TEST_F(TestWCache, test_handle_proc_broken_err)
 {
     LOG_INFO("test_handle_proc_broken_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKEN_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "HANDLE_PROC_BROKEN_FAIL", 0, 1, userParam);
     auto ret = Cache::Instance().HandleProcBroken(NO_1024);
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKEN_FAIL");
+    BioHvsDeactiveTracePoint(0, "HANDLE_PROC_BROKEN_FAIL");
 }
 
 TEST_F(TestWCache, test_handle_proc_broken_expired_err)
 {
     LOG_INFO("test_handle_proc_broken_expired_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, NO_10, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, NO_10, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR", 0, NO_10, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, NO_10, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, NO_10, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, NO_10, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, NO_10, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR", 0, NO_10, userParam);
+    BioHvsActiveTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, NO_10, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, NO_10, userParam);
     auto ret = WCacheManager::Instance()->HandleProcBrokenHdl(0);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
 }
 
 TEST_F(TestWCache, test_handle_proc_broken_flush_err)
 {
     LOG_INFO("test_handle_proc_broken_flush_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, 1, userParam);
     auto ret = WCacheManager::Instance()->HandleProcBrokenHdl(0);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
 }
 
 TEST_F(TestWCache, test_handle_proc_broken_role_err)
 {
     LOG_INFO("test_handle_proc_broken_role_err");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_ROLE_ERR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_ROLE_ERR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "HANDLE_PROC_BROKE_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE", 0, 1, userParam);
     auto ret = WCacheManager::Instance()->HandleProcBrokenHdl(0);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_ROLE_ERR");
-    LVOS_HVS_deactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_PROC_BROCK_ROLE_ERR");
+    BioHvsDeactiveTracePoint(0, "HANDLE_PROC_BROKE_OK");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_CLEAR_PROC_CACHE");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_EXPIRED_CLEAR");
 }
 
 TEST_F(TestWCache, test_start_pool_threadnum_incorrect_return_fail)
@@ -803,10 +803,10 @@ TEST_F(TestWCache, test_start_pool_return_ok)
 TEST_F(TestWCache, test_service_update_return_retry)
 {
     LOG_INFO("test_service_update_return_retry");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
     auto ret = gWCacheManager->ServiceUngradeFlush();
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
     EXPECT_EQ(ret, BIO_OK);
 }
 
@@ -844,12 +844,12 @@ TEST_F(TestWCache, test_get_evict_offset_return_ok)
 TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
 {
     LOG_INFO("test_get_slice_wcache_flow_offset_err_return_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
     auto ret = GetSlice(g_flowId, 0, NO_1024);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_STATE_NORMAL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
 }
 
@@ -857,12 +857,12 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
 {
     LOG_INFO("test_get_slice_wcache_hold_wait_err_return_fail");
     GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1, 0, 1, NO_128 };
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
     auto ret = GetSlice(g_flowId, 0, NO_MAX_VALUE64-1);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_STATE_NORMAL");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_STATE_NORMAL");
+    BioHvsDeactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
 }
 
@@ -885,11 +885,11 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "WRITE_SLICE_NULL_FAIL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "WRITE_SLICE_NULL_FAIL", 0, 1, userParam);
     auto ret = mirror->MirrorServerPut(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "WRITE_SLICE_NULL_FAIL");
+    BioHvsDeactiveTracePoint(0, "WRITE_SLICE_NULL_FAIL");
 }
 
 TEST_F(TestWCache, test_bio_olc_low_water_level)
@@ -996,24 +996,24 @@ TEST_F(TestWCache, test_wcache_tier_metaflow_error)
 {
     LOG_INFO("test_wcache_tier_error");
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
     WCacheTier wCacheTier;
     auto ret = wCacheTier.Seal();
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
+    BioHvsDeactiveTracePoint(0, "FLOW_SEAL_ERR");
 }
 
 TEST_F(TestWCache, test_wcache_tier_dataflow_error)
 {
     LOG_INFO("test_wcache_tier_error");
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "FLOW_DATA_FLOW_ERR", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "FLOW_DATA_FLOW_ERR", 0, 1, userParam);
     WCacheTier wCacheTier;
     auto ret = wCacheTier.Seal();
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_SEAL_ERR");
-    LVOS_HVS_deactiveTracePoint(0, "FLOW_DATA_FLOW_ERR");
+    BioHvsDeactiveTracePoint(0, "FLOW_SEAL_ERR");
+    BioHvsDeactiveTracePoint(0, "FLOW_DATA_FLOW_ERR");
 }

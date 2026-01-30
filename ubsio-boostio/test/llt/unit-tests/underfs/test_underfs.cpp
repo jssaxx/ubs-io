@@ -100,41 +100,41 @@ void TestUnderFs::Stub()
 TEST_F(TestUnderFs, test_underfs_ceph_init_creat_fail)
 {
     LOG_INFO("test_underfs_ceph_init_creat_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_CREAT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_CREAT_FAIL", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Init();
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_CREAT_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_CREAT_FAIL");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_read_fail)
 {
     LOG_INFO("test_underfs_ceph_init_read_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_READ_FILE_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_READ_FILE_FAIL", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Init();
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_READ_FILE_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_READ_FILE_FAIL");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_connect_fail)
 {
     LOG_INFO("test_underfs_ceph_init_connect_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_CONNECT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_CONNECT_FAIL", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Init();
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_CONNECT_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_CONNECT_FAIL");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_ioctx_creat_fail)
 {
     LOG_INFO("test_underfs_ceph_init_ioctx_creat_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_IOCTX_CREAT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_IOCTX_CREAT_FAIL", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Init();
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_IOCTX_CREAT_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_IOCTX_CREAT_FAIL");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_return_ok)
@@ -150,11 +150,11 @@ TEST_F(TestUnderFs, test_underfs_ceph_put_return_fail)
     const char *value = "value1";
     const size_t len = strlen(value);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_PUT", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SERVER_UNDERFS_PUT", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Put(G_KEY, value, len);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_PUT");
+    BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_PUT");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_put_return_ok)
@@ -174,16 +174,16 @@ TEST_F(TestUnderFs, test_underfs_ceph_get_return_fail)
     const size_t len = NO_256;
     const uint64_t off = 0;
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_GET_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_GET_FAIL", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Get(G_KEY, value, len, off);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_GET_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_GET_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_GET", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_UNDERFS_GET", 0, 1, userParam);
     ret = g_cephInstancePtr->Get(G_KEY, value, len, off);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_GET");
+    BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_GET");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_get_return_ok)
@@ -200,16 +200,16 @@ TEST_F(TestUnderFs, test_underfs_ceph_get_return_ok)
 TEST_F(TestUnderFs, test_underfs_ceph_delete_return_fail)
 {
     LOG_INFO("test_underfs_ceph_delete_return_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_DELETE_NOT_EXIST", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_DELETE_NOT_EXIST", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Delete(G_KEY);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_DELETE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_DELETE_NOT_EXIST");
 
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_DELETE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_UNDERFS_DELETE", 0, 1, userParam);
     ret = g_cephInstancePtr->Delete(G_KEY);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_DELETE");
+    BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_DELETE");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_delete_return_ok)
@@ -223,21 +223,21 @@ TEST_F(TestUnderFs, test_underfs_ceph_stat_return_fail)
 {
     LOG_INFO("test_underfs_ceph_stat_return_fail");
     FileSystem::ObjStat stat;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_CEPH_STAT_NOT_EXIST", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_CEPH_STAT_NOT_EXIST", 0, 1, userParam);
     auto ret = g_cephInstancePtr->Stat(G_KEY, stat);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_CEPH_STAT_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_CEPH_STAT_NOT_EXIST");
 
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_STAT_SIZE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_UNDERFS_STAT_SIZE", 0, 1, userParam);
     ret = g_cephInstancePtr->Stat(G_KEY, stat);
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_STAT_SIZE");
+    BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_STAT_SIZE");
 
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_STAT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_UNDERFS_STAT", 0, 1, userParam);
     ret = g_cephInstancePtr->Stat(G_KEY, stat);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_STAT");
+    BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_STAT");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_stat_return_ok)
@@ -254,11 +254,11 @@ TEST_F(TestUnderFs, test_underfs_ceph_list_return_fail)
     LOG_INFO("test_underfs_ceph_list_return_fail");
     const char *prefix = "key";
     std::unordered_map<std::string, CephSystem::ObjStat> objStat;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_UNDERFS_LIST", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SERVER_UNDERFS_LIST", 0, 1, userParam);
     auto ret = g_cephInstancePtr->List(prefix, objStat);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_UNDERFS_LIST");
+    BioHvsDeactiveTracePoint(0, "SERVER_UNDERFS_LIST");
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_list_return_OK)
@@ -274,11 +274,11 @@ TEST_F(TestUnderFs, test_underfs_ceph_list_return_OK)
 TEST_F(TestUnderFs, test_underfs_hdfs_init_return_fail)
 {
     LOG_INFO("test_underfs_hdfs_init_return_fail");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_HDFS_CONNECT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_HDFS_CONNECT_FAIL", 0, 1, userParam);
     auto ret = g_hdfsInstancePtr->Init();
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_HDFS_CONNECT_FAIL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_HDFS_CONNECT_FAIL");
 }
 
 TEST_F(TestUnderFs, test_underfs_hdfs_put_return_fail)
@@ -295,11 +295,11 @@ TEST_F(TestUnderFs, test_underfs_hdfs_put_return_fail)
 
     len = strlen(value2);
     const char *key = "/key111";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_SET_BUILDER_NULL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_SET_BUILDER_NULL", 0, 1, userParam);
     ret = g_hdfsInstancePtr->Put(key, value2, len);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_SET_BUILDER_NULL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_SET_BUILDER_NULL");
 }
 
 TEST_F(TestUnderFs, test_underfs_hdfs_get_return_fail)
@@ -316,11 +316,11 @@ TEST_F(TestUnderFs, test_underfs_hdfs_get_return_fail)
     EXPECT_EQ(ret, BIO_UFS_IOERR);
 
     len = NO_256;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "UNDERFS_SET_BUILDER_NULL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "UNDERFS_SET_BUILDER_NULL", 0, 1, userParam);
     ret = g_hdfsInstancePtr->Get(G_KEY, value2, len, off);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-    LVOS_HVS_deactiveTracePoint(0, "UNDERFS_SET_BUILDER_NULL");
+    BioHvsDeactiveTracePoint(0, "UNDERFS_SET_BUILDER_NULL");
 }
 
 TEST_F(TestUnderFs, test_underfs_hdfs_delete_return_fail)

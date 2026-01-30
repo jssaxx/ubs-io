@@ -31,22 +31,22 @@ static constexpr uint32_t FLUSH_INTERAL_TIME = 100000;
 
 BResult RCacheManager::Init()
 {
-    LVOS_TP_START(NO_PROCESS_RCACHE_EVICT, 0);
+    BIO_TP_START(NO_PROCESS_RCACHE_EVICT, 0);
     rCacheEvict = MakeRef<RCacheEvict>();
     if (UNLIKELY(rCacheEvict == nullptr)) {
         LOG_ERROR("Failed to make rcache evict.");
         return BIO_ALLOC_FAIL;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     BResult ret = BIO_OK;
-    LVOS_TP_START(NO_PROCESS_RCACHE_GC, &ret, BIO_ALLOC_FAIL);
+    BIO_TP_START(NO_PROCESS_RCACHE_GC, &ret, BIO_ALLOC_FAIL);
     ret = rCacheEvict->Initialize();
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Failed to init rcache evict, ret:" << ret << ".");
         return ret;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
@@ -149,9 +149,9 @@ BResult RCacheManager::Load(uint16_t ptId, const Key &key, uint64_t offset, uint
 BResult RCacheManager::Delete(uint16_t ptId, const Key &key)
 {
     RCachePtr cachePtr = nullptr;
-    LVOS_TP_START(RCACHE_MANAGER_DELETE_ERR, &cachePtr, nullptr);
+    BIO_TP_START(RCACHE_MANAGER_DELETE_ERR, &cachePtr, nullptr);
     cachePtr = GetRCacheInstanceByPtId(ptId);
-    LVOS_TP_END;
+    BIO_TP_END;
     ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");
     return cachePtr->Delete(key);
 }
@@ -159,20 +159,20 @@ BResult RCacheManager::Delete(uint16_t ptId, const Key &key)
 BResult RCacheManager::CreateRCache(uint16_t ptId, uint64_t ptv, uint16_t diskId)
 {
     cacheLock.LockWrite();
-    LVOS_TP_START(NO_PROCESS_RCACHE_FIND, 0);
+    BIO_TP_START(NO_PROCESS_RCACHE_FIND, 0);
     auto iter = cache.find(ptId);
     if (iter != cache.end()) {
         LOG_INFO("Exist, ptId:" << ptId << " have associated read cache object.");
         cacheLock.UnLock();
         return BIO_OK;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     uint32_t workIndex = mWorkIndex++;
     RCachePtr cacheObj = nullptr;
-    LVOS_TP_START(RCACHE_ALLOC_OBJ_FAIL, &cacheObj, nullptr);
+    BIO_TP_START(RCACHE_ALLOC_OBJ_FAIL, &cacheObj, nullptr);
     cacheObj = MakeRef<RCache>(ptId, ptv, diskId, workIndex);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(cacheObj == nullptr)) {
         LOG_ERROR("Create read cache object memory failed.");
         cacheLock.UnLock();
@@ -180,9 +180,9 @@ BResult RCacheManager::CreateRCache(uint16_t ptId, uint64_t ptv, uint16_t diskId
     }
 
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(RCACHE_INIT_OBJ_FAIL, &ret, BIO_ERR);
+    BIO_TP_START(RCACHE_INIT_OBJ_FAIL, &ret, BIO_ERR);
     ret = cacheObj->Initialize();
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Initialize read cache object ptId:" << ptId << " failed, error code " << ret);
         cacheLock.UnLock();
@@ -225,7 +225,7 @@ BResult RCacheManager::DeleteRCache(uint16_t ptId)
 BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 {
     LOG_INFO("Recover rcache, flowId:" << dataFlow->GetFlowId());
-    LVOS_TP_START(NO_PROCESS_CACHE_RECOVER, 0);
+    BIO_TP_START(NO_PROCESS_CACHE_RECOVER, 0);
     BResult ret = dataFlow->Seal();
     if (ret != BIO_OK) {
         LOG_ERROR("Recover rcache seal data flow failed, ret " << ret);
@@ -236,7 +236,7 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
         LOG_ERROR("Recover rcache destroy object failed, ret " << ret);
         return ret;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return BIO_OK;
 }
 

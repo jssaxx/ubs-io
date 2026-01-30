@@ -107,7 +107,7 @@ FlowPtr FlowManager::CreateObject(FlowRole role, FlowType type, uint64_t flowId,
 BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
 {
     BResult ret = BIO_OK;
-    LVOS_TP_START(FLOW_DESTROY_OBJECT_ERR, &ret, BIO_ERR);
+    BIO_TP_START(FLOW_DESTROY_OBJECT_ERR, &ret, BIO_ERR);
     std::lock_guard<std::mutex> lock(mMutex);
     ChkTrueNot(mInited == true, BIO_NOT_READY);
     if (type == FLOW_MEMORY) {
@@ -129,7 +129,7 @@ BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
         }
         ret = BIO_NOT_EXISTS;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 

@@ -97,20 +97,20 @@ public:
     inline BResult Get(MirrorClient::MirrorGet &param, uint64_t &length)
     {
         BResult ret = mMirror->Get(param, length);
-        LVOS_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
-        LVOS_TP_END;
+        BIO_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
+        BIO_TP_END;
         if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
             BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
             UnderFs::ObjStat stat;
             auto underFsRet = UnderFs::Instance()->Stat(param.key, stat);
-            LVOS_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &underFsRet, BIO_OK);
-            LVOS_TP_END;
+            BIO_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &underFsRet, BIO_OK);
+            BIO_TP_END;
             if (UNLIKELY(underFsRet != BIO_OK)) {
                 BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
                 return ret;
             }
-            LVOS_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &stat.size, NO_1024);
-            LVOS_TP_END;
+            BIO_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &stat.size, NO_1024);
+            BIO_TP_END;
             if (UNLIKELY(stat.size <= param.offset)) {
                 BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, BIO_INVALID_PARAM);
                 return BIO_INVALID_PARAM;
