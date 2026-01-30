@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=Diagnose] [--ut=UT] [--tp=tracepoint] [--pms=prometheus]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release [--cli] // 禁止添加tp功能，对外发布包禁止添加cli功能"
@@ -23,6 +23,7 @@ BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
+PROMETHEUS_FLAG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -58,6 +59,9 @@ while true; do
             CLI_FLAG=ON
             TP_FLAG=ON
             shift ;;
+        --pms )
+            PROMETHEUS_FLAG=ON
+            shift ;;
 		    -h | -help )
             usage
             exit 0
@@ -91,7 +95,7 @@ else
 fi
 
 if [[ "$CLI_FLAG" == "ON" ]]; then
-	  CMAKE_FLAGS+='-DOPEN_CLI=ON '
+    CMAKE_FLAGS+='-DOPEN_CLI=ON '
 else
     CMAKE_FLAGS+='-DOPEN_CLI=OFF '
 fi
@@ -105,7 +109,13 @@ fi
 if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
 else
-	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
+    CMAKE_FLAGS+="-DDEBUG_UT=OFF "
+fi
+
+if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
+    CMAKE_FLAGS+="-DOPEN_PROMETHEUS=ON "
+else
+    CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
 cd ${PROJ_DIR}
