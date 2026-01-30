@@ -224,7 +224,6 @@ BResult BioClient::BioClientStartPrometheus()
         return ret;
     }
 
-    return BIO_OK;
 #endif
 #endif
     return BIO_OK;
@@ -454,9 +453,11 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         }
     }
 
+#ifdef USE_PROMETHEUS
     if (BioClientStartPrometheus() != BIO_OK) {
         return BIO_ERR;
     }
+#endif
 
     mStarted = true;
     CLIENT_LOG_INFO("Boostio client start success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
@@ -473,7 +474,9 @@ void BioClient::Exit()
     BioClientAgentExit();
     BioClientNetExit();
     BioClientMirrorExit();
+#ifdef USE_PROMETHEUS
     BioClientExitPrometheus();
+#endif
     BioClientLoggerExit(mMode);
     mStarted = false;
     CLIENT_LOG_INFO("Boostio client exit success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
