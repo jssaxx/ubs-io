@@ -23,6 +23,7 @@ BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
+PROMETHEUS_FLAG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -57,6 +58,9 @@ while true; do
         --tp )
             CLI_FLAG=ON
             TP_FLAG=ON
+            shift ;;
+        --prometheus )
+            PROMETHEUS_FLAG=ON
             shift ;;
 		    -h | -help )
             usage
@@ -106,6 +110,12 @@ if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
 else
 	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
+fi
+
+if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
+    CMAKE_FLAGS+="-DOPEN_PROMETHEUS=ON "
+else
+	  CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
 cd ${PROJ_DIR}

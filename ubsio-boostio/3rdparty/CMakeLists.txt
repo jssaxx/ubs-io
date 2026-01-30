@@ -3,6 +3,7 @@ add_subdirectory(openssl)
 add_subdirectory(ubs-comm)
 add_subdirectory(spdlog)
 add_subdirectory(zookeeper)
-if(${CMAKE_BUILD_TYPE} STREQUAL "debug")
+
+if(${OPEN_PROMETHEUS} STREQUAL "ON")
     add_subdirectory(prometheus)
 endif()
