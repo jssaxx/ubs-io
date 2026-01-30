@@ -95,7 +95,7 @@ else
 fi
 
 if [[ "$CLI_FLAG" == "ON" ]]; then
-	  CMAKE_FLAGS+='-DOPEN_CLI=ON '
+    CMAKE_FLAGS+='-DOPEN_CLI=ON '
 else
     CMAKE_FLAGS+='-DOPEN_CLI=OFF '
 fi
@@ -109,13 +109,13 @@ fi
 if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
 else
-	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
+    CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
 if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=ON "
 else
-	  CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
+    CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
 cd ${PROJ_DIR}
