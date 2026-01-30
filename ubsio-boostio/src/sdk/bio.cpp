@@ -561,10 +561,7 @@ static bool CheckClientConfig(const ClientOptionsConfig &optConf)
     if (!memchr(optConf.privateKeyPassword, '\0', PATH_MAX)) {
         return false;
     }
-    if (!memchr(optConf.hseKfsMasterPath, '\0', PATH_MAX)) {
-        return false;
-    }
-    if (!memchr(optConf.hseKfsStandbyPath, '\0', PATH_MAX)) {
+    if (!memchr(optConf.decrypterLibPath, '\0', PATH_MAX)) {
         return false;
     }
     return true;

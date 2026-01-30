@@ -20,7 +20,7 @@
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
 #include "bio_monotonic.h"
-#include "bio_cryptor_helper.h"
+#include "bio_tls_util.h"
 #include "net_common.h"
 #include "net_channel_mgr.h"
 #include "net_connector.h"
@@ -33,6 +33,8 @@
 
 namespace ock {
 namespace bio {
+constexpr size_t KEYPASS_MAX_LEN = 10000;
+
 class NetEngine {
 public:
     NetEngine() = default;
@@ -617,7 +619,7 @@ public:
     uint16_t GeConnectCount()
     {
         return mOptions.connCount;
-    };
+    }
 
     inline BResult GetCtrlChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
@@ -689,11 +691,16 @@ private:
     BResult StartRpcService(const NetOptions &opt);
     void SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt);
 
-    BResult PrepareHseCryptor(std::string kfsMaster, std::string kfsStandby);
+    BResult PrepareTlsDecrypter(const NetOptions &config);
 
     void StopInner();
 
     BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
+
+	inline void RegisterDecryptHandler(const DecryptFunc &h)
+	{
+     	mDecryptHandler = h;
+	}
 
     static inline BResult NetResult(hcom::SerResult ret)
     {
@@ -918,7 +925,6 @@ private:
     ChannelBrokenHandler mHandlerBroken = nullptr;
     ock::hcom::UBSHcomService *mRpcService = nullptr;
     ock::hcom::UBSHcomService *mIpcService = nullptr;
-    BioCryptorHelper *mbioCryptorHelper = nullptr;
     std::mutex mMutex;
     NetOptions mOptions;
     NetExecutorPoolPtr mRequestExecutor = nullptr;
@@ -927,6 +933,7 @@ private:
     uint64_t mShareOffset = 0;
     uint64_t mShmSize = 0;
     uint8_t *mShareAddress = nullptr;
+	DecryptFunc mDecryptHandler;
 };
 
 using NetEnginePtr = Ref<NetEngine>;

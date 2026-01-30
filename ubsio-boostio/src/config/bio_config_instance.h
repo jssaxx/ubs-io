@@ -36,10 +36,8 @@ const auto NET_TLS_SERVER_CERT_PATH = std::make_pair("bio.net.tls.server.cert.pa
 const auto NET_TLS_SERVER_KEY_PATH = std::make_pair("bio.net.tls.server.key.path", "/path/server/serverkey.pem");
 const auto NET_TLS_SERVER_KEY_PASS_PATH = std::make_pair("bio.net.tls.server.key.pass.path",
     "/path/server/server.keypass");
-const auto NET_HESC_SERVER_KFS_MASTER_PATH = std::make_pair("bio.net.hesc.server.tls.kfs.master.path",
-    "/path/server/master/kfsa");
-const auto NET_HESC_SERVER_KFS_STANDBY_PATH = std::make_pair("bio.net.hesc.server.tls.kfs.pass.standby.path",
-    "/path/server/standby/kfsb");
+const auto NET_TLS_SERVER_DECRYPTER_PATH = std::make_pair("bio.net.tls.server.decrypter.lib.path",
+    "/path/libdecrypt.so");
 
 const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
 const auto CM_COPY_NUM = std::make_pair("bio.cm.copy_num", 2);
@@ -111,13 +109,12 @@ public:
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
         bool enableTls = true;
-        std::string tlsCaCertPath = "/path/CA/cacert.pem"; /* CA根证书 */
-        std::string tlsCaCrlPath = "";                     /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
-        std::string tlsServerCertPath = "/path/server/servercert.pem"; /* server工作证书 */
-        std::string tlsServerKeyPath = "/path/server/serverkey.pem"; /* server公钥 */
-        std::string tlsServerKeyPassPath = "/path/server/server.keypass"; /* server端私钥密文文件 */
-        std::string hseKfsMasterPath = "/path/client/master/kfsa"; /* hseceasy kfs master path */
-        std::string hseKfsStandbyPath = "/path/client/standby/kfsb"; /* hseceasy kfs standby path  */
+        std::string tlsCaCertPath = "/path/CA/cacert.pem";                  /* CA根证书 */
+        std::string tlsCaCrlPath = "";                                      /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
+        std::string tlsServerCertPath = "/path/server/servercert.pem";      /* server工作证书 */
+        std::string tlsServerKeyPath = "/path/server/serverkey.pem";        /* server公钥 */
+        std::string tlsServerKeyPassPath = "/path/server/server.keypass";   /* server端私钥密文文件 */
+        std::string decrypterLibPath = "/path/libdecrypt.so";               /* server端私钥密文文件 */
     };
 
     struct CmConfig {
