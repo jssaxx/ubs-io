@@ -83,7 +83,7 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include
 )
 
-if(${CMAKE_BUILD_TYPE} STREQUAL "debug")
+if (${OPEN_PROMETHEUS} STREQUAL "ON")
     include_directories(
             ${SRC_DIR}/../test/tools/prometheus
             ${PROJECT_3RDPARTY_BIN_DIR}/prometheus/include
@@ -95,7 +95,7 @@ if(${CMAKE_BUILD_TYPE} STREQUAL "release")
     add_compile_definitions(OPEN_RELEASE)
 endif()
 
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     add_compile_options(-march=armv8-a+crc)
 endif()
 
@@ -106,7 +106,7 @@ if (${DEBUG_UT} MATCHES "ON")
     add_compile_options(-fno-inline)
 endif()
 
-if (OPEN_TP STREQUAL "ON")
+if (${OPEN_TP} STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TP_TOOLS)
 endif()
 
