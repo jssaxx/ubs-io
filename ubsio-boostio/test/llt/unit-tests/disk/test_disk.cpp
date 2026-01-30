@@ -317,11 +317,11 @@ TEST_F(TestDisk, test_disk_alloc_case_return_fail)
     EXPECT_EQ(ret, BDM_CODE_INVALID_PARAM);
 
     len = NO_4194304;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "BDM_ALLOC_BLOCK_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "BDM_ALLOC_BLOCK_FAIL", 0, 1, userParam);
     ret = BdmAlloc(g_bdmId, bucketId, bucketOffset, len, &chunkId);
     EXPECT_EQ(ret, BDM_CODE_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "BDM_ALLOC_BLOCK_FAIL");
+    BioHvsDeactiveTracePoint(0, "BDM_ALLOC_BLOCK_FAIL");
 }
 
 TEST_F(TestDisk, test_disk_bdm_destroy)

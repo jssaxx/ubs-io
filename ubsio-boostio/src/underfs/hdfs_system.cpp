@@ -52,13 +52,13 @@ BResult HdfsSystem::Init()
         LOG_ERROR("Failed to load hdfs config.");
         return BIO_UFS_IOERR;
     }
-    LVOS_TP_START(UNDERFS_HDFS_CONNECT_FAIL, &mHdfsFs, nullptr);
+    BIO_TP_START(UNDERFS_HDFS_CONNECT_FAIL, &mHdfsFs, nullptr);
     hdfsBuilder *builder = newBuilderOp();
     ChkTrue(builder != NULL, BIO_UFS_IOERR, "Create hdfs new builder failed.");
     builderSetNameNodeOp(builder, mNameNodeIp.c_str());
     builderSetNameNodePortOp(builder, mNameNodePort);
     mHdfsFs = builderConnectOp(builder);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (!mHdfsFs) {
         LOG_ERROR("Failed to connect to hdfs, ip:" << mNameNodeIp << ", port:" << mNameNodePort << ".");
         return BIO_UFS_IOERR;
@@ -164,9 +164,9 @@ BResult HdfsSystem::Put(const char *key, const char *value, const size_t len)
     }
 
     hdfsStreamBuilder *builder;
-    LVOS_TP_START(UNDERFS_SET_BUILDER_NULL, &builder, nullptr);
+    BIO_TP_START(UNDERFS_SET_BUILDER_NULL, &builder, nullptr);
     builder = streamBuilderAllocOp(mHdfsFs, key, O_WRONLY | O_CREAT);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (!builder) {
         LOG_ERROR("Failed to allocate hdfs file builder, file:" << key << ".");
         return BIO_UFS_IOERR;
@@ -208,9 +208,9 @@ BResult HdfsSystem::Get(const char *key, char *value, const size_t len, const ui
     }
 
     hdfsStreamBuilder *builder;
-    LVOS_TP_START(UNDERFS_SET_BUILDER_NULL, &builder, nullptr);
+    BIO_TP_START(UNDERFS_SET_BUILDER_NULL, &builder, nullptr);
     builder = streamBuilderAllocOp(mHdfsFs, key, O_RDONLY);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (!builder) {
         LOG_ERROR("Failed to allocate hdfs file builder, file:" << key << ".");
         return BIO_UFS_IOERR;

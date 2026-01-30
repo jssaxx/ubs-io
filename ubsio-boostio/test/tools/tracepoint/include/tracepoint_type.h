@@ -10,20 +10,30 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef BIO_TRACEPOINT_HELPER_H
-#define BIO_TRACEPOINT_HELPER_H
+#ifndef UBS_IO_TRACEPOINT_TYPE_H
+#define UBS_IO_TRACEPOINT_TYPE_H
 
-#ifdef USE_DEBUG_TP_TOOLS
-#include "bio_tracepoint.h"
-#ifndef __aarch64__
-#define BIO_TP_START(name, ...)
-#define BIO_TP_NOPARAM_START(...)
-#define BIO_TP_END
-#endif
-#else
-#define BIO_TP_START(name, ...)
-#define BIO_TP_NOPARAM_START(...)
-#define BIO_TP_END
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#endif // BIO_TRACEPOINT_HELPER_H
+#ifndef TP_TYPES
+#define TP_TYPES
+typedef char TpChar;
+typedef int32_t TpInt32;
+typedef uint32_t TpUint32;
+typedef uint64_t TpUint64;
+#endif
+
+#define PID_OSP_NULL        0
+#define BSP_SOFT_REBOOT     0
+
+void DpaxReboot(unsigned long resetReason, unsigned int pid, char *message);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // UBS_IO_TRACEPOINT_TYPE_H

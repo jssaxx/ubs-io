@@ -154,7 +154,7 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
 {
     uint64_t remain = len;
     int64_t rc = 0;
-    LVOS_TP_START(BDM_RW_IO_FAIL, 0);
+    BIO_TP_START(BDM_RW_IO_FAIL, 0);
     while (remain > 0) {
         if (isRead) {
             rc = pread(fd, buff + (len - remain), remain, offset + (len - remain));
@@ -168,7 +168,7 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
         }
         remain -= (uint64_t)rc;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return (len - remain);
 }
 
@@ -261,9 +261,9 @@ int32_t BdmDiskAlloc(uintptr_t objPtr, uint64_t bucketId, uint64_t bucketOffset,
     }
 
     int32_t ret = BDM_CODE_OK;
-    LVOS_TP_START(BDM_ALLOC_BLOCK_FAIL, &ret, BDM_CODE_ERR);
+    BIO_TP_START(BDM_ALLOC_BLOCK_FAIL, &ret, BDM_CODE_ERR);
     ret = BdmAllocatorAllocChunk(item->allocator, bucketId, bucketOffset, len, chunkId);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != BDM_CODE_OK) {
         BDM_LOGWARN(0, "Alloc chunk failed, bdm id(%u) length(%lu).", obj->bdmId, len);
         return ret;

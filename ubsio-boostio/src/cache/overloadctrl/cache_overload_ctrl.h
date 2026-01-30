@@ -118,8 +118,8 @@ public:
         auto iter = mHolders.find(holder);
         if (UNLIKELY(iter == mHolders.end())) {
             uint64_t size = mHolders.size();
-            LVOS_TP_START(QUOTA_HOLDER_SIZE_MAX, &size, (NO_8192 * NO_256 + 1));
-            LVOS_TP_END;
+            BIO_TP_START(QUOTA_HOLDER_SIZE_MAX, &size, (NO_8192 * NO_256 + 1));
+            BIO_TP_END;
             if (size > MAX_HOLDER_SIZE) { // 限制quota的最大holder数量为8192*256个.
                 LOG_WARN("Quota holder is oversize , holder:" << holder.nodeId << "-" << holder.clientId << ".");
                 return BIO_QUOTA_NOT_ENOUGH;

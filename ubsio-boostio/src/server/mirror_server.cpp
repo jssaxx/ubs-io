@@ -215,9 +215,9 @@ void MirrorServer::ReplyListResultRemote(ServiceContext &ctx, ListRequest *req,
 BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
 {
     BResult ret = BIO_OK;
-    LVOS_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL, &ret, BIO_ERR);
+    BIO_TP_START(MIRROR_FLOW_CREATE_WCACHE_FAIL, &ret, BIO_ERR);
     ret = Cache::Instance().CreateWCache(procId, ptId, ptv, flowId, isDegrade);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
         return ret;
@@ -278,9 +278,9 @@ BResult MirrorServer::GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t fl
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
     BResult ret = BIO_OK;
-    LVOS_TP_START(MIRROR_SERVER_GET_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_GET_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = Cache::Instance().GetWCacheSlice(sliceKey, slice);
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
@@ -595,14 +595,14 @@ BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInf
     GetRequest &req)
 {
     auto lMrSize = lMrVec.size();
-    LVOS_TP_START(WCACHE_READ_LOCAL_RMRSIZE_ERR, &lMrSize, NO_5);
-    LVOS_TP_END;
+    BIO_TP_START(WCACHE_READ_LOCAL_RMRSIZE_ERR, &lMrSize, NO_5);
+    BIO_TP_END;
     if (UNLIKELY(lMrSize > SLICE_ADDR_SIZE)) {
         if (isAlloc) {
             for (auto mr : lMrVec) {
-                LVOS_TP_START(NO_PROCESS_MEM_FREE, 0);
+                BIO_TP_START(NO_PROCESS_MEM_FREE, 0);
                 BioServer::Instance()->MemFree(mr.address);
-                LVOS_TP_END;
+                BIO_TP_END;
             }
         }
         LOG_ERROR("Local mr size exceed 4, size:" << lMrVec.size() << ".");
@@ -624,14 +624,14 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     ServiceContext &netCtx, GetRequest &req)
 {
     auto rMrSize = rMrVec.size();
-    LVOS_TP_START(WCACHE_READ_REMOTE_RMRSIZE_ERR, &rMrSize, NO_4);
-    LVOS_TP_END;
+    BIO_TP_START(WCACHE_READ_REMOTE_RMRSIZE_ERR, &rMrSize, NO_4);
+    BIO_TP_END;
     if (UNLIKELY(rMrSize != NO_1)) {
         if (isAlloc) {
             for (auto mr : lMrVec) {
-                LVOS_TP_START(NO_PROCESS_MEM_FREE, 0);
+                BIO_TP_START(NO_PROCESS_MEM_FREE, 0);
                 BioServer::Instance()->MemFree(mr.address);
-                LVOS_TP_END;
+                BIO_TP_END;
             }
         }
         LOG_ERROR("Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
@@ -640,7 +640,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
     uint64_t off = 0;
     BResult ret = BIO_OK;
     BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
-    LVOS_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
+    BIO_TP_START(WCACHE_READ_CALLBACK_FAIL, &ret, BIO_ERR);
     for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
         if (UNLIKELY(lMrVec[idx].size + off) > rMrVec[0].size) {
             ret = BIO_INNER_ERR;
@@ -662,7 +662,7 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
             BioServer::Instance()->MemFree(mr.address);
         }
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_GET_WRITE_DATA, ret);
 
     return ret;
@@ -801,15 +801,15 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
     BResult ret = BIO_OK;
     req.diskPath[FILE_PATH_MAX_LEN - 1] = '\0';
     std::string diskPath = req.diskPath;
-    LVOS_TP_START(SERVER_NO_DISK_CHECK, 0);
+    BIO_TP_START(SERVER_NO_DISK_CHECK, 0);
     ChkTrue(FileUtil::CanonicalPath(diskPath), BIO_ERR, "The device does not exist.");
-    LVOS_TP_END
+    BIO_TP_END
     bool isExist;
-    LVOS_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
-    LVOS_TP_START(SERVER_SET_OLD_DISK_ID, &diskId, 0);
+    BIO_TP_START(SERVER_OLD_DISK_EXIST, &isExist, true);
+    BIO_TP_START(SERVER_SET_OLD_DISK_ID, &diskId, 0);
     isExist = mBioConfig->CheckDiskIsExist(diskPath, diskId);
-    LVOS_TP_END;
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_END;
     if (isExist) {
         ret = AddOldDiskImpl(diskPath, diskId);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -819,9 +819,9 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
         return BIO_OK;
     }
 
-    LVOS_TP_START(SERVER_ADD_NEW_DISK_FAIL, &ret, BIO_INNER_ERR);
+    BIO_TP_START(SERVER_ADD_NEW_DISK_FAIL, &ret, BIO_INNER_ERR);
     ret = AddNewDiskImpl(diskPath);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Add new disk failed, diskPath: " << diskPath << ".");
         return ret;
@@ -870,9 +870,9 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     }
 
     // add disk to bdm
-    LVOS_TP_START(SERVER_BDM_UPDATE_SUCCESS, &ret, BIO_OK);
+    BIO_TP_START(SERVER_BDM_UPDATE_SUCCESS, &ret, BIO_OK);
     ret = BioServer::Instance()->BioBdmUpdate(diskPath);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Update new disk to bdm failed, diskPath: " << diskPath << ", ret: " << ret);
         return ret;
@@ -1441,9 +1441,9 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     if (req->sliceLen == 0) { // case 1：slice资源来自于SDK端, 使用req中的MR信息
         MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
-        LVOS_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
+        BIO_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -1456,9 +1456,9 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
             return BIO_OK;
         }
-        LVOS_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
+        BIO_TP_START(PUT_SLICE_NORMAL_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -1483,9 +1483,9 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     BIO_TRACE_START(MIRROR_TRACE_PUT_RECEIVE_REMOTE);
     BResult result = BIO_OK;
     uint32_t ioStrategy = 0;
-    LVOS_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_HDL_PUT_FAIL, &result, BIO_INNER_RETRY);
     result = Put(*req, sliceP, ctx, ioStrategy);
-    LVOS_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_PUT_RECEIVE_REMOTE, result);
 
     PutResponse rsp;
@@ -1542,9 +1542,9 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 
     GetResponse rsp;
     BResult result;
-    LVOS_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
     result = Get(*req, rsp, ctx);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (result != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, result, nullptr, 0);
         return BIO_OK;
@@ -1590,9 +1590,9 @@ int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req
     }
 
     BResult result;
-    LVOS_TP_START(MIRROR_SERVER_HDL_DELETE_FAIL, &result, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_HDL_DELETE_FAIL, &result, BIO_INNER_RETRY);
     result = Delete(*req);
-    LVOS_TP_END;
+    BIO_TP_END;
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&result), sizeof(BResult));
     return BIO_OK;
 }
@@ -1617,9 +1617,9 @@ int32_t MirrorServer::HandleDelete(ServiceContext &ctx)
 int32_t MirrorServer::MirrorServerAddDisk(ServiceContext &ctx, AddDiskRequest *req)
 {
     BResult ret;
-    LVOS_TP_START(MIRROR_SERVER_ADD_DISK_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_ADD_DISK_FAIL, &ret, BIO_INNER_RETRY);
     ret = AddDisk(*req);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
@@ -1667,9 +1667,9 @@ int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
 
     ObjStat objInfo;
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
     ret = Stat(*req, objInfo);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
@@ -1718,9 +1718,9 @@ int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
 
     std::unordered_map<std::string, ObjStat> objs;
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(MIRROR_SERVER_HDL_LIST_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_HDL_LIST_FAIL, &ret, BIO_INNER_RETRY);
     ret = List(*req, objs);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != BIO_OK) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
@@ -1775,9 +1775,9 @@ int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
     }
 
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
     ret = Load(*req);
-    LVOS_TP_END;
+    BIO_TP_END;
     BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
     return BIO_OK;
 }
@@ -1934,9 +1934,9 @@ int32_t MirrorServer::MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest 
 
     uint64_t sliceLen = sliceP->GetSerializeLen();
     uint8_t *tmp = nullptr;
-    LVOS_TP_START(GET_SLICE_ALLOC_FAIL, &tmp, nullptr);
+    BIO_TP_START(GET_SLICE_ALLOC_FAIL, &tmp, nullptr);
     tmp = new (std::nothrow) uint8_t[sizeof(GetSliceResponse) + sliceLen];
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(tmp == nullptr)) {
         LOG_ERROR("Alloc memory failed, len:" << sizeof(GetSliceResponse) + sliceLen << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
@@ -2087,12 +2087,12 @@ int32_t MirrorServer::MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *r
 
 bool MirrorServer::CheckFreeMemReq(FreeMemRequest *req)
 {
-    LVOS_TP_START(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, 0);
+    BIO_TP_START(MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK, 0);
     bool ckRet = CheckAll(req->comm);
     if (!ckRet) {
         return ckRet;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     if (req->num > SLICE_ADDR_SIZE) {
         LOG_ERROR("Invalid param num: " << req->num << ".");
@@ -2394,13 +2394,13 @@ int32_t MirrorServer::HandleQueryCacheResource(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    LVOS_TP_START(CALC_CACHE_RESOURCE, 0);
+    BIO_TP_START(CALC_CACHE_RESOURCE, 0);
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(CacheResourceRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     return MirrorServerQueryCacheResource(ctx);
 }
@@ -2435,8 +2435,8 @@ TraceDatabase MirrorServer::GetTraceData()
 {
     TraceDatabase traceDatabase = {};
     auto tracePoints = ock::htracer::HtracerManager::GetTracePoints();
-    LVOS_TP_START(SERVER_GET_TRACEDATA_ERR, &tracePoints, nullptr);
-    LVOS_TP_END;
+    BIO_TP_START(SERVER_GET_TRACEDATA_ERR, &tracePoints, nullptr);
+    BIO_TP_END;
     if (tracePoints == nullptr) {
         traceDatabase.count = 0;
         return traceDatabase;
@@ -2448,8 +2448,8 @@ TraceDatabase MirrorServer::GetTraceData()
             if (!traceInfo.NameValid()) {
                 continue;
             }
-            LVOS_TP_START(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, &traceCount, TRACE_MAX_NUM);
-            LVOS_TP_END;
+            BIO_TP_START(MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE, &traceCount, TRACE_MAX_NUM);
+            BIO_TP_END;
             if (traceCount >= TRACE_MAX_NUM) {
                 LOG_ERROR("Trace num exceeds the array size," << "max trace num: " << TRACE_MAX_NUM);
                 traceDatabase.count = traceCount;
@@ -2505,13 +2505,13 @@ int32_t MirrorServer::HandleGetCacheHit(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    LVOS_TP_START(GET_CACHE_HIT, 0);
+    BIO_TP_START(GET_CACHE_HIT, 0);
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(CacheHitRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive sync data message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     return MirrorServerGetCacheHit(ctx);
 }

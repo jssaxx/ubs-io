@@ -88,9 +88,9 @@ public:
                 LOG_INFO("Module (" << it->name << ") initialize success.");
             } else {
                 LOG_ERROR("Module (" << it->name << ") initialize failed, result:" << ret << ".");
-                LVOS_TP_START(NO_PROCESS_ROLLBACK_SERVICE_INIT, 0);
+                BIO_TP_START(NO_PROCESS_ROLLBACK_SERVICE_INIT, 0);
                 RollbackInit(it);
-                LVOS_TP_END;
+                BIO_TP_END;
                 return BIO_ERR;
             }
         }

@@ -320,8 +320,8 @@ uint16_t MirrorClient::SelectingPt(uint64_t objectId, AffinityStrategy affinity)
             }
         }
     } while (isRetry);
-    LVOS_TP_START(SDK_MIRROR_SELECT_PT_FAIL, &ptId, UINT16_MAX);
-    LVOS_TP_END;
+    BIO_TP_START(SDK_MIRROR_SELECT_PT_FAIL, &ptId, UINT16_MAX);
+    BIO_TP_END;
     return ptId;
 }
 
@@ -345,8 +345,8 @@ uint16_t MirrorClient::SelectingPtImpl(uint64_t objectId, AffinityStrategy affin
         CLIENT_LOG_ERROR("Invalid affinity type or pt view is empty, objectId:" << objectId << ", affinity:" <<
             affinity << ".");
     }
-    LVOS_TP_START(SDK_MIRROR_SET_PT_ID_FAIL, &ptId, 0);
-    LVOS_TP_END;
+    BIO_TP_START(SDK_MIRROR_SET_PT_ID_FAIL, &ptId, 0);
+    BIO_TP_END;
     if (UNLIKELY(ptId == UINT16_MAX)) {
         CLIENT_LOG_ERROR("Selecting pt failed, objectId:" << objectId << ", affinity:" << affinity << ".");
     }
@@ -358,9 +358,9 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     mLock.LockRead();
     auto iter = mPtView.find(ptId);
     bool isFind = false;
-    LVOS_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, &isFind, false);
+    BIO_TP_START(SDK_MIRROR_PT_VIEW_FIND_FAIL, &isFind, false);
     isFind = (iter != mPtView.end());
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(!isFind)) {
         mLock.UnLock();
         CLIENT_LOG_ERROR("Invalid pt id:" << ptId << ".");
@@ -368,9 +368,9 @@ BResult MirrorClient::GetPtEntry(uint16_t ptId, CmPtInfo &ptEntry)
     }
 
     bool isPtNormal = false;
-    LVOS_TP_START(SDK_MIRROR_CHECK_PT_FAIL, &isPtNormal, false);
+    BIO_TP_START(SDK_MIRROR_CHECK_PT_FAIL, &isPtNormal, false);
     isPtNormal = (iter->second.state != CM_PT_FAULT);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(!isPtNormal)) {
         CLIENT_LOG_ERROR("Pt stat is fault, pt id:" << ptId << ", state:" << iter->second.state << ".");
         mLock.UnLock();
@@ -495,9 +495,9 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     }
 
     uint8_t *reqTmp = nullptr;
-    LVOS_TP_START(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, 0);
+    BIO_TP_START(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, 0);
     reqTmp = new(std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(reqTmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put memory failed, len:" << sizeof(PutRequest) + spaceInfo.descriptorSize << ".");
         return BIO_INNER_ERR;
@@ -587,8 +587,8 @@ BResult MirrorClient::PutAlignSize(const char *value, MirrorPut &param, bool &is
 bool MirrorClient::FailHandler(const BResult result, uint64_t startTime, uint64_t timeOut)
 {
     uint64_t costTime = Monotonic::TimeSec() - startTime;
-    LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &costTime, (mTimeOut+1));
-    LVOS_TP_END;
+    BIO_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &costTime, (mTimeOut+1));
+    BIO_TP_END;
     if (UNLIKELY(costTime >= timeOut)) { // 超过重试时间则不再进行重试.
         return false;
     }
@@ -863,8 +863,8 @@ BResult MirrorClient::AddDisk(const char *diskPath)
         }
         if (ret == BIO_INNER_RETRY || ret == BIO_NET_RETRY || ret == BIO_CHECK_PT_FAIL) {
             CLIENT_LOG_INFO("Add disk delay retry, times:" << ++retryCnt << ", ret:" << ret << ".");
-            LVOS_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut + 1));
-            LVOS_TP_END;
+            BIO_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &retryTime, (mTimeOut + 1));
+            BIO_TP_END;
             retryTime = Monotonic::TimeSec() - startTime;
             if (retryTime < BIO_INIT_TIMEOUT_TIME) {
                 isRetry = true;
@@ -948,8 +948,8 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
         return BIO_INNER_ERR;
     }
-    LVOS_TP_START(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, &rsp->addrNum, (SLICE_ADDR_MAX_SIZE + 1));
-    LVOS_TP_END;
+    BIO_TP_START(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, &rsp->addrNum, (SLICE_ADDR_MAX_SIZE + 1));
+    BIO_TP_END;
     if (rsp->addrNum > CACHE_SPACE_ADDRESS_SIZE) {
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
@@ -1029,9 +1029,9 @@ BResult MirrorClient::AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, 
 
     // 2. 检查FLOW状态.
     bool isNormal = false;
-    LVOS_TP_START(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL, &isNormal, false);
+    BIO_TP_START(SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL, &isNormal, false);
     isNormal = flowInst->IsNormal();
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(!isNormal)) {
         CLIENT_LOG_WARN("Check flow failed, ptId:" << ptId << ".");
         return BIO_INNER_RETRY;
@@ -1139,14 +1139,14 @@ BResult MirrorClient::DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc
 
 bool MirrorClient::IsExistLocalCopy(CmPtInfo &ptEntry)
 {
-    LVOS_TP_START(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, 0);
+    BIO_TP_START(SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY, 0);
     for (uint32_t i = 0; i < ptEntry.copys.size(); i++) {
         if (ptEntry.copys[i].nodeId == mLocalNid.VNodeId() &&
             (ptEntry.copys[i].state == CM_COPY_RUNNING || ptEntry.copys[i].state == CM_COPY_RECOVERY)) {
             return true;
         }
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return false;
 }
 
@@ -1166,8 +1166,8 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
         return BIO_ERR;
     }
 
-    LVOS_TP_START(SDK_MIRROR_RSP_NUM_ERROR, &(rsp->addrNum), (SLICE_ADDR_MAX_SIZE + 1));
-    LVOS_TP_END;
+    BIO_TP_START(SDK_MIRROR_RSP_NUM_ERROR, &(rsp->addrNum), (SLICE_ADDR_MAX_SIZE + 1));
+    BIO_TP_END;
     if (UNLIKELY(rsp->addrNum > SLICE_ADDR_MAX_SIZE)) {
         CLIENT_LOG_ERROR("rsp addrNum: " << rsp->addrNum << " is invalid.");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
@@ -1217,9 +1217,9 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     }
 
     uint8_t* tmp = nullptr;
-    LVOS_TP_START(SDK_MIRROR_CLIENT_PREPARE_FAIL, 0);
+    BIO_TP_START(SDK_MIRROR_CLIENT_PREPARE_FAIL, 0);
     tmp = new (std::nothrow) uint8_t[sizeof(PutRequest)];
-    LVOS_TP_END;
+    BIO_TP_END;
     if (tmp == nullptr) {
         CLIENT_LOG_ERROR("Alloc memory failed.");
         net::BioClientNet::Instance()->Free(mr.address);
@@ -1277,8 +1277,8 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
 
     auto cbFunc = [&ioStrategy](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto *cbCtx = (ClientCallbackCtx *)ctx;
-        LVOS_TP_START(SDK_MIRROR_PUT_RECV_FAIL, &(cbCtx->result), BIO_INNER_RETRY);
-        LVOS_TP_END;
+        BIO_TP_START(SDK_MIRROR_PUT_RECV_FAIL, &(cbCtx->result), BIO_INNER_RETRY);
+        BIO_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else if (resp != nullptr) {
@@ -1398,7 +1398,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
     CLIENT_LOG_DEBUG("Get master start, masterNid:" << masterNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
     if (masterNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
         ret = agent::BioClientAgent::Instance()->GetLocal(req, value, realLen);
@@ -1408,7 +1408,7 @@ BResult MirrorClient::GetMaster(GetRequest &req, uint16_t masterNid, char *value
         ret = GetMasterRemote(req, masterNid, value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_REMOTE, ret);
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
@@ -1441,8 +1441,8 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
             return;
         }
         auto cbCtx = (ClientCallbackCtx *)ctx;
-        LVOS_TP_START(SDK_MIRROR_DELETE_RECV_FAIL, &result, BIO_INNER_RETRY);
-        LVOS_TP_END;
+        BIO_TP_START(SDK_MIRROR_DELETE_RECV_FAIL, &result, BIO_INNER_RETRY);
+        BIO_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else {
@@ -1488,7 +1488,7 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
 {
     uint16_t dstNid = ptEntry.masterNodeId;
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SDK_MIRROR_STAT_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(SDK_MIRROR_STAT_RECV_FAIL, &ret, BIO_INNER_RETRY);
     if (dstNid == mLocalNid.VNodeId()) {
         ret = StatLocal(req, objInfo);
     } else {
@@ -1499,25 +1499,25 @@ BResult MirrorClient::SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjSt
         return BIO_INVALID_PARAM;
     }
 
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
 BResult MirrorClient::SendNotifyUpdateRequest(bool &flag)
 {
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL, &ret, BIO_INNER_RETRY);
     ret = agent::BioClientAgent::Instance()->NotifyUpdate(flag);
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
 BResult MirrorClient::SendCheckUpdateReadyRequest()
 {
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SDK_MIRROR_CHECK_UPDATE_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(SDK_MIRROR_CHECK_UPDATE_RECV_FAIL, &ret, BIO_INNER_RETRY);
     ret = agent::BioClientAgent::Instance()->CheckUpdateReady();
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
@@ -1535,10 +1535,10 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
     req.size = maxSize;
     req.mrKey = mr.key;
     ListResponse rsp;
-    LVOS_TP_START(LISTALL_REMOTE_RSP_OVER_LIMIT, &rsp.num, 1500U);
+    BIO_TP_START(LISTALL_REMOTE_RSP_OVER_LIMIT, &rsp.num, 1500U);
     ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
         BIO_OP_SDK_LIST, req, rsp);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != BIO_OK) {
         net::BioClientNet::Instance()->Free(mr.address);
         return ret;
@@ -1552,8 +1552,8 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
         auto statInfo = reinterpret_cast<ObjStat *>(mr.address);
         for (uint32_t i = 0; i < rsp.num; i++) {
             objSize = objs.size();
-            LVOS_TP_START(LISTALL_REMOTE_OVER_1000, &objSize, 1500U);
-            LVOS_TP_END;
+            BIO_TP_START(LISTALL_REMOTE_OVER_1000, &objSize, 1500U);
+            BIO_TP_END;
             if (objSize >= 1000U) {
                 break;
             }
@@ -1584,13 +1584,13 @@ BResult MirrorClient::SendListRequest(ListRequest &req, std::unordered_map<std::
         req.isListUnderFs = (index == tempPtView.size() - 1);
         req.comm.ptId = ptEntry.second.ptId;
         req.comm.ptv = ptEntry.second.version;
-        LVOS_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &ret, BIO_INNER_RETRY);
+        BIO_TP_START(SDK_MIRROR_LIST_RECV_FAIL, &ret, BIO_INNER_RETRY);
         if (dstNid == mLocalNid.VNodeId()) {
             ret = ListLocal(req, objs);
         } else {
             ret = ListRemote(dstNid, req, objs);
         }
-        LVOS_TP_END;
+        BIO_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Send list request failed, ret:" << ret << ", dstNid:" << dstNid << ", ptId:" <<
                 ptEntry.second.ptId << ".");
@@ -1609,16 +1609,16 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
 {
     if (masterNid == mLocalNid.VNodeId()) {
         BResult ret = BIO_INNER_ERR;
-        LVOS_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &ret, BIO_INNER_RETRY);
+        BIO_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &ret, BIO_INNER_RETRY);
         ret = agent::BioClientAgent::Instance()->LoadLocal(req);
-        LVOS_TP_END;
+        BIO_TP_END;
         callback(context, ret);
         return BIO_OK;
     }
 
     auto cbFunc = [&callback, context](void *ctx, void *resp, uint32_t len, int32_t result) {
-        LVOS_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &result, BIO_INNER_RETRY);
-        LVOS_TP_END;
+        BIO_TP_START(SDK_MIRROR_LOAD_RECV_FAIL, &result, BIO_INNER_RETRY);
+        BIO_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
             callback(context, result);
             return;
@@ -1684,9 +1684,9 @@ BResult MirrorClient::QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &no
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
 
     BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL, &ret, BIO_INNER_ERR);
+    BIO_TP_START(SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL, &ret, BIO_INNER_ERR);
     ret = SendCacheResourceRequest(req, nodeDesc);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send query cache resource request failed, ret:" << ret);
     }
@@ -1721,9 +1721,9 @@ BResult MirrorClient::GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHit
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
 
     BResult ret = BIO_ERR;
-    LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL, &ret, BIO_INNER_ERR);
+    BIO_TP_START(SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL, &ret, BIO_INNER_ERR);
     ret = SendCacheHitRequest(req, nodeDesc);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get cache hit request failed, ret:" << ret);
     }

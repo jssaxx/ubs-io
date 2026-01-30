@@ -20,15 +20,15 @@
 #endif
 
 #ifndef __aarch64__
-#define LVOS_TP_START(name, ...)
-#define LVOS_TP_NOPARAM_START(...)
-#define LVOS_TP_END
+#define BIO_TP_START(name, ...)
+#define BIO_TP_NOPARAM_START(...)
+#define BIO_TP_END
 #endif
 
 #else
-#define LVOS_TP_START(name, ...)
-#define LVOS_TP_NOPARAM_START(...)
-#define LVOS_TP_END
+#define BIO_TP_START(name, ...)
+#define BIO_TP_NOPARAM_START(...)
+#define BIO_TP_END
 #endif
 
 #endif // BIO_TRACEPOINT_HELPER_C_H

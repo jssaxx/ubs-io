@@ -345,9 +345,9 @@ BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)
     std::vector<FlowAddr> flowAdd;
 
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = flow[READ_CACHE_TIER_MEM]->AllocOffset(length, offset, indexInFlow);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Get tier:" << READ_CACHE_TIER_MEM << ", offset:" << offset << ", len:" << length <<
             ", flow address failed.");
@@ -550,9 +550,9 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
     }
 
     WCacheSlicePtr toSlicePtr = nullptr;
-    LVOS_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(RCACHE_GET_MEM_SLICE_FAIL, &ret, BIO_INNER_RETRY);
     ret = GetSliceFromChunk(READ_CACHE_TIER_MEM, chunk, toSlicePtr);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(ret != BIO_OK || toSlicePtr == nullptr)) {
         LOG_ERROR("Read cache alloc slice failed, ret:" << ret << ", key:" << key << ".");
         delete[] value;
@@ -682,9 +682,9 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         chunk = truncateQ[READ_CACHE_TIER_MEM].End();
 
         uint64_t truncateOffset = 0;
-        LVOS_TP_START(RCACHE_GET_EVICT_IO_FAIL, &truncateOffset, NO_MAX_VALUE64);
+        BIO_TP_START(RCACHE_GET_EVICT_IO_FAIL, &truncateOffset, NO_MAX_VALUE64);
         truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
-        LVOS_TP_END;
+        BIO_TP_END;
         if (chunk->GetValue().flowOffset != truncateOffset) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
             LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk " <<
@@ -703,9 +703,9 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         uint64_t flowOffset = 0;
         uint64_t indexInFlow = 0;
         BResult ret = BIO_INNER_ERR;
-        LVOS_TP_START(RCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
+        BIO_TP_START(RCACHE_GET_DISK_SLICE_FAIL, &ret, BIO_INNER_RETRY);
         ret = flow[READ_CACHE_TIER_DISK]->AllocOffset(chunk->GetValue().length, flowOffset, indexInFlow);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Alloc offset for read cache key " << chunk->GetKey() << " failed.");
             chunk->lock.unlock();

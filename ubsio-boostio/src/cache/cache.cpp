@@ -28,9 +28,9 @@ BResult Cache::Init()
     ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
 
     BResult ret = BIO_OK;
-    LVOS_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
+    BIO_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
     ret = mRCacheManager->Init();
-    LVOS_TP_END;
+    BIO_TP_END;
     ChkTrue(ret == BIO_OK, ret, "Initialize read cache manager failed, ret:" << ret << ".");
 
     mWCacheManager = WCacheManager::Instance();
@@ -49,9 +49,9 @@ BResult Cache::Recover()
 {
     BResult ret = BIO_OK;
     std::map<uint64_t, FlowPtr> flowMaps;
-    LVOS_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_NOT_READY);
+    BIO_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_NOT_READY);
     ret = FlowManager::Instance()->GetAllObject(FLOW_DISK, flowMaps);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Get flow list fail:" << ret);
         return ret;
@@ -60,21 +60,21 @@ BResult Cache::Recover()
     uint64_t type = 0;
     uint64_t innerType = 0;
     for (auto &elem : flowMaps) {
-        LVOS_TP_START(CACHE_RECOVER_TYPE_FAIL, &type, READ_CACHE);
+        BIO_TP_START(CACHE_RECOVER_TYPE_FAIL, &type, READ_CACHE);
         type = CacheFlowIdManager::GetType(elem.first);
-        LVOS_TP_END;
-        LVOS_TP_START(CACHE_RECOVER_TYPE_INNER_FAIL, &innerType, RCACHE_FLOW_DISK_DATA_PREFIX);
+        BIO_TP_END;
+        BIO_TP_START(CACHE_RECOVER_TYPE_INNER_FAIL, &innerType, RCACHE_FLOW_DISK_DATA_PREFIX);
         innerType = CacheFlowIdManager::GetInnerType(elem.first);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (static_cast<uint16_t>(type) == WRITE_CACHE &&
             static_cast<uint32_t>(innerType) == WCACHE_FLOW_DISK_META_PREFIX) {
             ret = mWCacheManager->RecoverCache(elem.second);
             ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         } else if (static_cast<uint16_t>(type) == READ_CACHE &&
             static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
-            LVOS_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
+            BIO_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
             ret = mRCacheManager->RecoverCache(elem.second);
-            LVOS_TP_END;
+            BIO_TP_END;
             ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         }
     }
@@ -269,28 +269,28 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
 
     uint64_t totalLen = 0;
     BResult ret = BIO_ERR;
-    LVOS_TP_START(GET_UNDERFS_NO_STAT, &ret, BIO_OK);
+    BIO_TP_START(GET_UNDERFS_NO_STAT, &ret, BIO_OK);
     ret = GetValueLengthFromUnderFS(key, slice->GetLength(), offset, totalLen, realLen);
     if (ret != BIO_OK) {
         LOG_ERROR("Get key info from under fs failed, ret:" << ret << ", key:" << key << ".");
         return ret;
     }
-    LVOS_TP_END;
-    LVOS_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60*NO_100);
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60*NO_100);
+    BIO_TP_END;
 
     // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
     bool isFromRCache = true;
     WCacheSlicePtr wcSlicePtr = nullptr;
     bool enoughResource = false;
     ret = mRCacheManager->CheckEnoughResource(slice->GetPtId(), enoughResource);
-    LVOS_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
-    LVOS_TP_END;
+    BIO_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
+    BIO_TP_END;
     void *memAddr = nullptr;
     if (enoughResource) {
-        LVOS_TP_START(GET_EXTERNAL_RCACHE_MALLOC_FAIL, &wcSlicePtr, nullptr);
+        BIO_TP_START(GET_EXTERNAL_RCACHE_MALLOC_FAIL, &wcSlicePtr, nullptr);
         mRCacheManager->AllocResources(slice->GetPtId(), totalLen, wcSlicePtr);
-        LVOS_TP_END
+        BIO_TP_END
         if (LIKELY(wcSlicePtr == nullptr)) {
             memAddr = aligned_alloc(NO_4096, realLen);
             ChkTrue(memAddr != nullptr, BIO_ALLOC_FAIL, "Alloc aligned memory failed, size:" << realLen << ".");
@@ -317,8 +317,8 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     }
     bool crcFlag = false;
     crcFlag = BioConfig::Instance()->GetDaemonConfig().enableCrc;
-    LVOS_TP_START(GET_UNDERFS_ENABLE_CRC, &crcFlag, true);
-    LVOS_TP_END;
+    BIO_TP_START(GET_UNDERFS_ENABLE_CRC, &crcFlag, true);
+    BIO_TP_END;
     ret = BIO_INNER_ERR;
     do {
         // 3. 从underFS读取数据.
@@ -327,8 +327,8 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
         } else {
             ret = GetFromUnderFS(key, wcSlicePtr, realLen, offset);
         }
-        LVOS_TP_START(GET_EXTERNAL_GETUNDERFS_OK, &ret, BIO_OK);
-        LVOS_TP_END;
+        BIO_TP_START(GET_EXTERNAL_GETUNDERFS_OK, &ret, BIO_OK);
+        BIO_TP_END;
 
         if (ret != BIO_OK) {
             break;
@@ -376,11 +376,11 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
 {
     BResult ret = BIO_INNER_ERR;
     BIO_TRACE_START(WCACHE_TRACE_GET);
-    LVOS_TP_START(WCACHE_GET_OK, &ret, BIO_OK);
-    LVOS_TP_START(WCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
+    BIO_TP_START(WCACHE_GET_OK, &ret, BIO_OK);
+    BIO_TP_START(WCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
     ret = mWCacheManager->Get(key, offset, slice, sliceWriter, realLen);
-    LVOS_TP_END;
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(WCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Write cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
@@ -397,9 +397,9 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     }
 
     BIO_TRACE_START(RCACHE_TRACE_GET);
-    LVOS_TP_START(RCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
+    BIO_TP_START(RCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
     ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
-    LVOS_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
@@ -464,9 +464,9 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
 
     if (force) {
         std::unordered_map<std::string, UnderFs::ObjStat> underStatInfo;
-        LVOS_TP_START(UNDERFS_INIT_FAIL, &ret, BIO_ERR);
+        BIO_TP_START(UNDERFS_INIT_FAIL, &ret, BIO_ERR);
         ret = UnderFs::Instance()->List(prefix, underStatInfo);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("UnderFS list failed, ret:" << ret << ", prefix:" << prefix << ".");
             return ret;
@@ -495,9 +495,9 @@ BResult Cache::Delete(uint16_t ptId, const Key &key)
     }
 
     BIO_TRACE_START(RCACHE_TRACE_DEL);
-    LVOS_TP_START(CACHE_DELETE_RCACHE_MANAGER_ERR, &ret, BIO_ERR);
+    BIO_TP_START(CACHE_DELETE_RCACHE_MANAGER_ERR, &ret, BIO_ERR);
     ret = mRCacheManager->Delete(ptId, key);
-    LVOS_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
     if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
         LOG_ERROR("Read cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
