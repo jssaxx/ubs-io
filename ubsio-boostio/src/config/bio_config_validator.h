@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef HDAGGER_DG_VALIDATOR_H
-#define HDAGGER_DG_VALIDATOR_H
+#ifndef BIO_VALIDATOR_H
+#define BIO_VALIDATOR_H
 
 #include <climits>
 #include <string>
@@ -792,4 +792,4 @@ public:
 };
 }
 }
-#endif // HDAGGER_DG_VALIDATOR_H
+#endif // BIO_VALIDATOR_H

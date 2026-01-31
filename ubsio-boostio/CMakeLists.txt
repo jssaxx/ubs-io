@@ -76,6 +76,7 @@ include_directories(
         ${SRC_DIR}/interceptor
         ${SRC_DIR}/interceptor/server
         ${SRC_DIR}/security/expiration_check
+        ${SRC_DIR}/security/openssl_tools
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
@@ -83,7 +84,7 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include
 )
 
-if (${OPEN_PROMETHEUS} STREQUAL "ON")
+if ("${OPEN_PROMETHEUS}" STREQUAL "ON")
     include_directories(
             ${SRC_DIR}/../test/tools/prometheus
             ${PROJECT_3RDPARTY_BIN_DIR}/prometheus/include
@@ -106,7 +107,7 @@ if (${DEBUG_UT} MATCHES "ON")
     add_compile_options(-fno-inline)
 endif()
 
-if (${OPEN_TP} STREQUAL "ON")
+if ("${OPEN_TP}" STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TP_TOOLS)
 endif()
 

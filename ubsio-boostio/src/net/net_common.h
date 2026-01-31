@@ -108,16 +108,16 @@ struct NetOptions {
     bool isBusyLoop = false;                             /* busy for rdma only */
     uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
     bool regShmMem = false;                              /* register the memory to shared */
-    Role role = Role::NET_BUTT;                                /* net service role */
+    Role role = Role::NET_BUTT;                          /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
-    bool enableTls = false;                            /* tls switch */
-    std::string certificationPath;                     /* certification path */
-    std::string caCerPath;                             /* caCer path */
-    std::string caCrlPath;                             /* caCer path */
-    std::string privateKeyPath;                        /* private key path */
-    std::string privateKeyPassword;                    /* private key password */
-    std::string decrypterLibPath;                      /* decrypter lib path */
+    bool enableTls = false;                              /* tls switch */
+    std::string certificationPath;                       /* certification path */
+    std::string caCerPath;                               /* caCer path */
+    std::string caCrlPath;                               /* caCrl path */
+    std::string privateKeyPath;                          /* private key path */
+    std::string privateKeyPassword;                      /* private key password */
+    std::string decrypterLibPath;                        /* decrypter lib path */
 
     NetOptions() = default;
     ~NetOptions() = default;

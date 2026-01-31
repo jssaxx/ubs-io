@@ -11,7 +11,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)$")
             "${CMAKE_CURRENT_SOURCE_DIR}/arm/*.c"
             "${CMAKE_CURRENT_SOURCE_DIR}/arm/*.cpp"
             )
-    set(PLAT_INCLUDE_DIR "arm")
+    set(PLAT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/arm")
 else()
     message(STATUS "Building bdm for x86...")
     file(GLOB_RECURSE ARCH_SRCS
@@ -19,7 +19,7 @@ else()
             "${CMAKE_CURRENT_SOURCE_DIR}/x86/*.c"
             "${CMAKE_CURRENT_SOURCE_DIR}/x86/*.cpp"
             )
-    set(PLAT_INCLUDE_DIR "x86")
+    set(PLAT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/x86")
 endif()
 
 add_library(bio_bdm STATIC ${COMMON_SRCS} ${ARCH_SRCS})
