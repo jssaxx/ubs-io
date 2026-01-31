@@ -84,6 +84,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(NET_TLS_SERVER_KEY_PATH);
     AddStrConf(NET_TLS_SERVER_KEY_PASS_PATH);
     AddStrConf(NET_TLS_SERVER_DECRYPTER_PATH);
+    AddStrConf(NET_TLS_SERVER_SSL_LIB_DIR);
 
     /* load prometheus config */
     AddStrConf(PROMETHEUS_ENABLE, VStrBoolRange::Create(PROMETHEUS_ENABLE.first));
@@ -138,6 +139,7 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     mNetConfig.tlsServerKeyPath = conf->GetStr(NET_TLS_SERVER_KEY_PATH.first);
     mNetConfig.tlsServerKeyPassPath = conf->GetStr(NET_TLS_SERVER_KEY_PASS_PATH.first);
     mNetConfig.decrypterLibPath = conf->GetStr(NET_TLS_SERVER_DECRYPTER_PATH.first);
+    mNetConfig.opensslLibDir = conf->GetStr(NET_TLS_SERVER_SSL_LIB_DIR.first);
     if (mNetConfig.enableTls) {
         bool checkCaPath = FileUtil::CanonicalPath(mNetConfig.tlsCaCertPath)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath)

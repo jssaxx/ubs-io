@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef HDAGGER_DG_KV_H
-#define HDAGGER_DG_KV_H
+#ifndef BIO_KV_H
+#define BIO_KV_H
 
 #include <cstring>
 #include <fstream>
@@ -198,4 +198,4 @@ inline void KVReader::Dump()
 }
 }
 }
-#endif // HDAGGER_DG_KV_H
+#endif // BIO_KV_H

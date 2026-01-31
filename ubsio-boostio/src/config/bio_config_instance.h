@@ -38,6 +38,7 @@ const auto NET_TLS_SERVER_KEY_PASS_PATH = std::make_pair("bio.net.tls.server.key
     "/path/server/server.keypass");
 const auto NET_TLS_SERVER_DECRYPTER_PATH = std::make_pair("bio.net.tls.server.decrypter.lib.path",
     "/path/libdecrypt.so");
+const auto NET_TLS_SERVER_SSL_LIB_DIR = std::make_pair("bio.net.tls.server.ssl.lib.dir", "");
 
 const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
 const auto CM_COPY_NUM = std::make_pair("bio.cm.copy_num", 2);
@@ -114,7 +115,8 @@ public:
         std::string tlsServerCertPath = "/path/server/servercert.pem";      /* server工作证书 */
         std::string tlsServerKeyPath = "/path/server/serverkey.pem";        /* server公钥 */
         std::string tlsServerKeyPassPath = "/path/server/server.keypass";   /* server端私钥密文文件 */
-        std::string decrypterLibPath = "/path/libdecrypt.so";               /* server端私钥密文文件 */
+        std::string decrypterLibPath = "/path/libdecrypt.so";               /* server端解密函数文件 */
+        std::string opensslLibDir = "";                                     /* openssl lib 目录 */
     };
 
     struct CmConfig {

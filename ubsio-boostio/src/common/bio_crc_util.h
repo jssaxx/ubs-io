@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef HDAGGER_DG_CRC_H
-#define HDAGGER_DG_CRC_H
+#ifndef BIO_CRC_H
+#define BIO_CRC_H
 
 #include <cstdint>
 
@@ -277,4 +277,4 @@ inline uint32_t BioCrcUtil::Crc32(const void *data, uint32_t dataLen)
 }
 }
 
-#endif // HDAGGER_DG_CRC_H
+#endif // BIO_CRC_H

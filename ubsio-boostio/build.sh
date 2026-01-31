@@ -135,7 +135,6 @@ if [[ ! -d ${PROJ_DIR}/3rdparty/libboundscheck/libboundscheck ]]; then
     git checkout v1.1.16
 fi
 
-
 if [[ -z "${CI_BUILD}" ]];then
     echo "update submodules ... "
     cd $PROJ_DIR && git submodule update --init
@@ -161,13 +160,6 @@ if [[ "$BUILD_TYPE" == "debug" ]];then
 	  \cp -d 3rdparty/zookeeper/lib/* bio/lib/.
 	  \cp 3rdparty/libboundscheck/lib/* bio/lib/.
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
-fi
-
-arch=$(uname -m)
-if [[ "$arch" == "aarch64" ]] || [[ "$arch" == arm* ]]; then
-  \cp 3rdparty/openssl/lib/*.so bio/lib/.
-else
-  \cp 3rdparty/openssl/lib64/*.so bio/lib/.
 fi
 
 \cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
