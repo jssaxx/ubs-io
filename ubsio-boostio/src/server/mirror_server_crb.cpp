@@ -31,11 +31,11 @@ constexpr uint32_t CRB_JOB_QUEUE_SIZE = 8192;
 
 BResult MirrorServerCrb::Init()
 {
-    LVOS_TP_START(NO_PROCESS_MIRROR_SERVER_CRB_INIT, 0);
+    BIO_TP_START(NO_PROCESS_MIRROR_SERVER_CRB_INIT, 0);
     if (mInited) {
         return BIO_OK;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     mTaskService = ExecutorService::Create(CRB_TASK_THREAD_NUM, CRB_TASK_QUEUE_SIZE);
     if (UNLIKELY(mTaskService == nullptr)) {
@@ -303,9 +303,9 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
 {
     BIO_TRACE_START(MIRROR_TRACE_SYNC_DATA);
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SERVER_CRB_SEND_FLUSH_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(SERVER_CRB_SEND_FLUSH_FAIL, &ret, BIO_INNER_RETRY);
     ret = SendSyncDataReq(ptInfo);
-    LVOS_TP_END;
+    BIO_TP_END;
     BIO_TRACE_END(MIRROR_TRACE_SYNC_DATA, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_WARN("Send sync data req fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);

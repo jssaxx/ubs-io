@@ -29,22 +29,22 @@ namespace bio {
 BResult LocalSystem::Init()
 {
     static const std::string CEPH_PATH = "./ceph/";
-    LVOS_TP_START(NO_PROCESS_UNDERFS_INIT, 0);
+    BIO_TP_START(NO_PROCESS_UNDERFS_INIT, 0);
     if (mInited) {
         return BIO_OK;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     DIR *dir = nullptr;
     mEmulationCephPath = CEPH_PATH;
-    LVOS_TP_START(UNDERFS_OPEN_DIR_FAIL, &dir, nullptr);
+    BIO_TP_START(UNDERFS_OPEN_DIR_FAIL, &dir, nullptr);
     dir = opendir(mEmulationCephPath.c_str());
-    LVOS_TP_END;
+    BIO_TP_END;
     if (dir == nullptr) {
         int status = BIO_UFS_IOERR;
-        LVOS_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_UFS_IOERR);
+        BIO_TP_START(UNDERFS_MKDIR_FAIL, &status, BIO_UFS_IOERR);
         status = mkdir(mEmulationCephPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (status == BIO_OK) {
             LOG_INFO("Succeed to create directory, " << mEmulationCephPath.c_str());
         } else {
@@ -89,8 +89,8 @@ BResult LocalSystem::Put(const char *key, const char *value, const size_t len)
     fstream file;
     file.open(keyPath.c_str(), ios::out | ios::binary);
     int isOpen = static_cast<int>(file.is_open());
-    LVOS_TP_START(SERVER_UNDERFS_PUT, &isOpen, 0)
-    LVOS_TP_END;
+    BIO_TP_START(SERVER_UNDERFS_PUT, &isOpen, 0)
+    BIO_TP_END;
     if (!isOpen) {
         LOG_ERROR("Fail to create file, " << keyPath.c_str());
         return BIO_UFS_IOERR;
@@ -123,8 +123,8 @@ BResult LocalSystem::Get(const char *key, char *value, const size_t len, const u
     free(canonicalPath);
     canonicalPath = nullptr;
     int isOpen = static_cast<int>(file.is_open());
-    LVOS_TP_START(SERVER_UNDERFS_GET, &isOpen, 0)
-    LVOS_TP_END;
+    BIO_TP_START(SERVER_UNDERFS_GET, &isOpen, 0)
+    BIO_TP_END;
     if (!isOpen) {
         LOG_ERROR("Fail to open file, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
@@ -151,8 +151,8 @@ BResult LocalSystem::Delete(const char *key)
     BIO_TRACE_START(UFS_TRACE_DEL);
     std::ifstream infile(canonicalPath);
     int isGood = static_cast<int>(infile.good());
-    LVOS_TP_START(SERVER_UNDERFS_DELETE, &isGood, 1);
-    LVOS_TP_END;
+    BIO_TP_START(SERVER_UNDERFS_DELETE, &isGood, 1);
+    BIO_TP_END;
     if (!isGood) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
@@ -163,9 +163,9 @@ BResult LocalSystem::Delete(const char *key)
     infile.close();
 
     int ret = -1;
-    LVOS_TP_START(UNDERFS_DELETE_ERR, &ret, BIO_ERR);
+    BIO_TP_START(UNDERFS_DELETE_ERR, &ret, BIO_ERR);
     ret = remove(canonicalPath);
-    LVOS_TP_END;
+    BIO_TP_END;
     free(canonicalPath);
     canonicalPath = nullptr;
     if (ret != BIO_OK) {
@@ -185,9 +185,9 @@ BResult LocalSystem::Stat(const char *key, ObjStat &objStat)
     BIO_TRACE_START(UFS_TRACE_STAT);
     struct stat fileStat;
     int ret = BIO_UFS_IOERR;
-    LVOS_TP_START(SERVER_UNDERFS_STAT, &ret, BIO_UFS_IOERR);
+    BIO_TP_START(SERVER_UNDERFS_STAT, &ret, BIO_UFS_IOERR);
     ret = stat(keyPath.c_str(), &fileStat);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret != 0) {
         LOG_ERROR("Fail to check file, " << keyPath.c_str());
         BIO_TRACE_END(UFS_TRACE_STAT, BIO_NOT_EXISTS);

@@ -66,21 +66,21 @@ TEST_F(TestNet, test_net_init_shm_allocator)
     LOG_INFO("test_net_init_shm_allocator");
     NetEnginePtr engine = BioServer::Instance()->GetNetEngine();
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE", 0, 1, userParam);
     auto ret = engine->InitShmMemAllocator();
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE");
+    BioHvsDeactiveTracePoint(0, "SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE");
 
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE", 0, 1, userParam);
     ret = engine->InitShmMemAllocator();
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE");
+    BioHvsDeactiveTracePoint(0, "SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE");
 
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_FAIL_TO_MMAP_SHM_SIZE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_NET_FAIL_TO_MMAP_SHM_SIZE", 0, 1, userParam);
     ret = engine->InitShmMemAllocator();
     EXPECT_EQ(ret, BIO_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_FAIL_TO_MMAP_SHM_SIZE");
+    BioHvsDeactiveTracePoint(0, "SERVER_NET_FAIL_TO_MMAP_SHM_SIZE");
 }
 
 int32_t TestNet::TestMsgHandle(ServiceContext &ctx)
@@ -109,10 +109,10 @@ TEST_F(TestNet, test_receive_handle)
     ret = netEngine->RequestIPCReceived(ctx);
     EXPECT_EQ(ret, BIO_ERR);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED", 0, 1, userParam);
     ret = netEngine->RequestIPCReceived(ctx);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED");
+    BioHvsDeactiveTracePoint(0, "SDK_REQUEST_IPC_OPCODE_EXCEED");
     EXPECT_EQ(ret, BIO_ERR);
 }
 
@@ -222,10 +222,10 @@ TEST_F(TestNet, test_net_async_call)
     BioNodeId targetNodeId = NO_100;
     engine->AsyncCall<uint64_t>(targetNodeId, 1, request, callback);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL", 0, 1, userParam);
     engine->AsyncCall<uint64_t>(1, 1, request, callback);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL");
+    BioHvsDeactiveTracePoint(0, "SERVER_NET_ASYNC_CALL_FAIL");
 }
 
 TEST_F(TestNet, test_net_async_call_buff)

@@ -85,11 +85,11 @@ TEST_F(TestBio, test_bio_show_cache_resource_not_cache_fail)
 
     ock::bio::BioClient::Instance()->SetStartWorker(true);
     std::vector<CacheResourcesDesc> nodeDescription;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL", 0, 1, userParam);
     ret = BioService::BioShowCacheResource(nodeDescription);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_RESOURCE_SEND_FAIL");
 }
 
 TEST_F(TestBio, test_bio_show_cache_resource_cache_success)
@@ -139,11 +139,11 @@ TEST_F(TestBio, test_bio_show_cache_hit_ratio_not_cache_fail)
 
     ock::bio::BioClient::Instance()->SetStartWorker(true);
     std::unordered_map<uint16_t, CacheHitDesc> nodeDescription;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL", 0, 1, userParam);
     ret = BioService::BioShowCacheHitRatio(nodeDescription);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_CACHE_HIT_SEND_FAIL");
 }
 
 TEST_F(TestBio, test_bio_show_cache_hit_ratio_success)
@@ -317,16 +317,16 @@ TEST_F(TestBio, test_bio_put)
     ret = BioPut(G_TENANT_ID, nullptr, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioPut(G_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     uint64_t tenantId = 187UL;
     static ObjLocation location{};
@@ -334,21 +334,21 @@ TEST_F(TestBio, test_bio_put)
     ret = BioCreateCache(desc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_PREPARE_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_PREPARE_FAIL", 0, 1, userParam);
     ret = BioPut(tenantId, "key187", "testvalue", 2UL, location);
     EXPECT_EQ(ret, BIO_ALLOC_FAIL);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_PREPARE_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_PREPARE_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_NOT_EXIST_LOCAL_COPY");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_RSP_NUM_ERROR", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_RSP_NUM_ERROR", 0, 1, userParam);
     ret = BioPut(tenantId, "key204", "testvalue204", 4UL, location);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_RSP_NUM_ERROR");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_RSP_NUM_ERROR");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -410,7 +410,7 @@ TEST_F(TestBio, test_bio_get)
     LOG_INFO("test_bio_get");
     char *value = new char[G_LENGTH];
     uint64_t realLen = 0;
-    LVOS_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
 
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -418,31 +418,31 @@ TEST_F(TestBio, test_bio_get)
     ret = BioGet(G_INVALID_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, G_PT_TIMES, userParam);
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
+    BioHvsDeactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_SIZE", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_SIZE", 0, 1, userParam);
     ret = BioGet(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_SIZE");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
+    BioHvsDeactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_SIZE");
+    BioHvsDeactiveTracePoint(0, "SDK_CLIENT_GET_CEPH_STAT_OK");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_GET_RETRY");
     delete[] value;
 }
 
@@ -451,12 +451,12 @@ TEST_F(TestBio, test_bio_get_external_stat)
     LOG_INFO("test_bio_get_external_stat");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
     delete[] value0;
 }
@@ -466,16 +466,16 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     LOG_INFO("test_bio_get_external_rcache");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
     delete[] value0;
 }
@@ -485,20 +485,20 @@ TEST_F(TestBio, test_bio_get_external_rcache_fail)
     LOG_INFO("test_bio_get_external_rcache_fail");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
-    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
-    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
+    BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
 }
@@ -508,22 +508,22 @@ TEST_F(TestBio, test_bio_get_external_rcache_underfs)
     LOG_INFO("test_bio_get_external_rcache_underfs");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_ENABLE_CRC", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_EXTERBAL_CRC_OK", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_ENABLE_CRC", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_EXTERBAL_CRC_OK", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
-    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERBAL_CRC_OK");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_ENABLE_CRC");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
-    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
+    BioHvsDeactiveTracePoint(0, "GET_EXTERBAL_CRC_OK");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_ENABLE_CRC");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
 }
@@ -533,20 +533,20 @@ TEST_F(TestBio, test_bio_get_external_malloc)
     LOG_INFO("test_bio_get_external_malloc");
     uint64_t realLen0 = 6000UL;
     char *value0 = new char[realLen0];
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "GET_UNDERFS_NOT_ENOUGHRESOURCE", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_NOT_ENOUGHRESOURCE", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NOT_ENOUGHRESOURCE");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
-    LVOS_HVS_deactiveTracePoint(0, "WCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    LVOS_HVS_deactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
-    LVOS_HVS_deactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_NOT_ENOUGHRESOURCE");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
+    BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
 }
@@ -658,16 +658,16 @@ TEST_F(TestBio, test_bio_stat)
     ret = BioStat(G_INVALID_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, 1, userParam);
     ret = BioStat(G_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_STAT_RECV_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_STAT_RECV_FAIL", 0, 1, userParam);
     ret = BioStat(G_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_STAT_RECV_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_STAT_RECV_FAIL");
 }
 
 namespace {
@@ -699,16 +699,16 @@ TEST_F(TestBio, test_bio_load)
     ret = BioLoad(G_TENANT_ID, nullptr, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL", 0, 1, userParam);
     ret = BioLoad(G_TENANT_ID, G_KEY, 0, G_LENGTH, g_Location, TestCallback, &loadCtx);
     EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CHECK_PT_FAIL");
 
     sem_wait(&(loadCtx.sem));
     sem_destroy(&(loadCtx.sem));
@@ -730,28 +730,28 @@ TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_QUERY_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_ALLOC_PUT_OFFSET_FAIL");
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_ADDRNUM_INVALID", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_ADDRNUM_INVALID", 0, 1, userParam);
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_ADDRNUM_INVALID");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_ADDRNUM_INVALID");
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -789,19 +789,19 @@ TEST_F(TestBio, test_bio_put_copy_free)
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree2", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree4", &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -810,11 +810,11 @@ TEST_F(TestBio, test_bio_put_copy_free)
 TEST_F(TestBio, test_bio_delete)
 {
     LOG_INFO("test_bio_delete");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     auto ret = BioDelete(G_TENANT_ID, G_KEY, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioDelete(G_TENANT_ID, nullptr, g_Location);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -835,11 +835,11 @@ TEST_F(TestBio, test_bio_update_return_ok)
     ret = BioNotifyUpgradePrepare(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
     ret = BioCheckUpgradeReady(tenantId);
     EXPECT_EQ(ret, RET_CACHE_ERROR);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
 
     ret = BioNotifyUpgradeFinish(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -865,11 +865,11 @@ TEST_F(TestBio, test_list_remote_case_return_ok)
     auto prefix = "456";
     ObjStat *objs = nullptr;
     uint64_t objNum = 0;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     BioFreeListResources(&objs, objNum);
 }
 
@@ -880,15 +880,15 @@ TEST_F(TestBio, test_list_remote_remote_over_limit)
     auto prefix = "456";
     ObjStat *objs = nullptr;
     uint64_t objNum = 0;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "LISTALL_REMOTE_OVER_1000", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BioTracepointParam userParam;
+    BioHvsActiveTracePoint(0, "LISTALL_REMOTE_OVER_1000", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioListAll(G_TENANT_ID, prefix, &objs, &objNum);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
-    LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_OVER_1000");
-    LVOS_HVS_deactiveTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "LISTALL_REMOTE_OVER_1000");
+    BioHvsDeactiveTracePoint(0, "LISTALL_REMOTE_RSP_OVER_LIMIT");
     BioFreeListResources(&objs, objNum);
 }
 
@@ -900,12 +900,12 @@ TEST_F(TestBio, test_bio_put_remote_case_return_fail)
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
     EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioPut(G_TENANT_ID, "putremote", value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
 }
 
 TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
@@ -917,11 +917,11 @@ TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
     EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioPut(G_TENANT_ID, "putremoteptverror", value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     fclose(fp);
 }
 
@@ -931,11 +931,11 @@ TEST_F(TestBio, test_bio_get_remote_case_return_fail)
     TestBio::VNodeIdStub();
     char *value = new char[G_LENGTH];
     uint64_t realLen = G_LENGTH;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, "getremote", 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME");
     delete[] value;
 }
 
@@ -1493,13 +1493,13 @@ TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_SELECT_PT_FAIL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_SELECT_PT_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(G_TENANT_ID, objectId, ock::bio::NO_1024, &spaceDesc);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_SELECT_PT_FAIL");
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_SELECT_PT_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL");
 }
 
 TEST_F(TestBio, test_bio_putwithspace_not_ready_case_return_fail)
@@ -1529,11 +1529,11 @@ TEST_F(TestBio, test_bio_update_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
     ret = BioNotifyUpgradePrepare(tenantId);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL");
 
     ret = BioCheckUpgradeReady(G_INVALID_TENANT_ID);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
@@ -1543,10 +1543,10 @@ TEST_F(TestBio, test_bio_update_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_CHECK_UPDATE_RECV_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_CHECK_UPDATE_RECV_FAIL", 0, 1, userParam);
     ret = BioCheckUpgradeReady(tenantId);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_CHECK_UPDATE_RECV_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_CHECK_UPDATE_RECV_FAIL");
 
     ret = BioNotifyUpgradeFinish(G_INVALID_TENANT_ID);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
@@ -1556,10 +1556,10 @@ TEST_F(TestBio, test_bio_update_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
     ret = BioNotifyUpgradeFinish(tenantId);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL");
 
     ret = BioDestroyCache(tenantId);
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -1575,11 +1575,11 @@ TEST_F(TestBio, test_bio_convert_location)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioConvertLocation(location, &detailLoc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
+    BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioConvertLocation(location, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -1686,10 +1686,10 @@ TEST_F(TestBio, test_get_underfs_config)
 {
     LOG_INFO("test_get_underfs_config");
     BioConfig::UnderFsConfig config;
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL", 0, 1, userParam);
     auto ret = ock::bio::net::BioClientNet::Instance()->GetUnderFsConfig(config);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL");
+    BioHvsDeactiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL");
     EXPECT_EQ(ret, BIO_INNER_ERR);
 }
 
@@ -1704,13 +1704,13 @@ TEST_F(TestBio, test_bio_client_net_shm_init)
 TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
 {
     LOG_INFO("test_bio_client_agent_get_local_quota_info");
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
     bool enable = true;
     uint64_t load = 1;
     auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(1, enable, load);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
+    BioHvsDeactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
 }
 
 TEST_F(TestBio, test_bio_client_agent_check_get_slice)
@@ -1802,59 +1802,59 @@ TEST_F(TestBio, test_bio_add_disk_update_bdm_fail)
 {
     LOG_INFO("test_bio_add_disk_update_bdm_fail");
     const char *diskPath = "/dev/xxx";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
+    BioHvsDeactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
 }
 
 TEST_F(TestBio, test_bio_add_disk_update_bdm_success)
 {
     LOG_INFO("test_bio_add_disk_update_bdm_success");
     const char *diskPath = "/dev/xxx";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SERVER_NO_DISK_CHECK", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_NO_DISK_CHECK", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_OK);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_NO_DISK_CHECK");
+    BioHvsDeactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
+    BioHvsDeactiveTracePoint(0, "SERVER_NO_DISK_CHECK");
 }
 
 TEST_F(TestBio, test_bio_add_new_disk_fail)
 {
     LOG_INFO("test_bio_add_new_disk_fail");
     const char *diskPath = "/dev/xxx";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL");
+    BioHvsDeactiveTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL");
 }
 
 TEST_F(TestBio, test_bio_add_by_separates)
 {
     LOG_INFO("test_bio_add_by_separates");
     const char *diskPath = "/dev/xxx";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES");
+    BioHvsDeactiveTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES");
 }
 
 TEST_F(TestBio, test_bio_add_old_disk)
 {
     LOG_INFO("test_bio_add_old_disk");
     const char *diskPath = "test1";
-    LVOS_TRACEP_PARAM_S userParam;
-    LVOS_HVS_activeTracePoint(0, "SERVER_OLD_DISK_EXIST", 0, 1, userParam);
-    LVOS_HVS_activeTracePoint(0, "SERVER_SET_OLD_DISK_ID", 0, 1, userParam);
+    BIO_TRACEP_PARAM_S userParam;
+    BioHvsActiveTracePoint(0, "SERVER_OLD_DISK_EXIST", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "SERVER_SET_OLD_DISK_ID", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_SET_OLD_DISK_ID");
-    LVOS_HVS_deactiveTracePoint(0, "SERVER_OLD_DISK_EXIST");
+    BioHvsDeactiveTracePoint(0, "SERVER_SET_OLD_DISK_ID");
+    BioHvsDeactiveTracePoint(0, "SERVER_OLD_DISK_EXIST");
 }
 
 TEST_F(TestBio, test_bio_initialize_invalid_path)

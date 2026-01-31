@@ -56,9 +56,9 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
 
         // Start boostio server for converged deployment mode
         int32_t ret = BIO_INNER_ERR;
-        LVOS_TP_START(SDK_BIO_AGENT_START_OP_FAIL, &ret, BIO_INNER_ERR);
+        BIO_TP_START(SDK_BIO_AGENT_START_OP_FAIL, &ret, BIO_INNER_ERR);
         ret = startOp();
-        LVOS_TP_END;
+        BIO_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to start bio server, ret:" << ret << ".");
             dlclose(handler);
@@ -188,9 +188,9 @@ BResult BioClientAgent::InitOperation()
 void *BioClientAgent::LoadFunction(const char *name)
 {
     void *ptr = nullptr;
-    LVOS_TP_START(SDK_BIO_AGENT_LOAD_FUNC_FAIL, &ptr, nullptr);
+    BIO_TP_START(SDK_BIO_AGENT_LOAD_FUNC_FAIL, &ptr, nullptr);
     ptr = dlsym(handler, name);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ptr == nullptr) {
         CLIENT_LOG_ERROR("Failed to load function " << name);
         return nullptr;
@@ -274,14 +274,14 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
     BResult ret = BIO_OK;
     QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryQuotaResponse rsp;
-    LVOS_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
+    BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
     if (mMode == CONVERGENCE) {
         ret = getQuotaInfoOp(&req, &rsp);
     } else {
         ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     if (ret == BIO_OK) {
         if (rsp.preloadSize > NO_128 * IO_SIZE_1M) { // quota初始预取大小最大不超过128MB.
             CLIENT_LOG_ERROR("Quota preload size too large, preloadSize " << rsp.preloadSize << ".");
@@ -706,11 +706,11 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, Callback &callback)
 
 BResult BioClientAgent::AddDisk(AddDiskRequest &req, AddDiskResponse &rsp)
 {
-    LVOS_TP_START(SDK_ADD_DISK_BY_SEPARATES, 0)
+    BIO_TP_START(SDK_ADD_DISK_BY_SEPARATES, 0)
     if (mMode == CONVERGENCE) {
         return addDiskOp(&req, &rsp);
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return SendAddDiskRequest(req, rsp);
 }
 

@@ -40,9 +40,9 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
 BResult Flow::ValidateAndPreloadRange(uint64_t offset, uint32_t len)
 {
     bool isInvalidRange = false;
-    LVOS_TP_START(WCACHE_FLOW_OFFSET_FAIL, &isInvalidRange, true);
+    BIO_TP_START(WCACHE_FLOW_OFFSET_FAIL, &isInvalidRange, true);
     isInvalidRange = (offset < mTruncateOffset);
-    LVOS_TP_END;
+    BIO_TP_END;
     if (UNLIKELY(isInvalidRange)) {
         LOG_ERROR("Invalid offset:" << offset << ", flowId:" << mFlowId << ", truncate:" << mTruncateOffset);
         return BIO_ERR;
@@ -56,9 +56,9 @@ BResult Flow::ValidateAndPreloadRange(uint64_t offset, uint32_t len)
     if (offset + len > mPreLoadOffset) {
         BIO_TRACE_START(FLOW_TRACE_PRELOAD_MEMORY);
         BResult ret = BIO_INNER_ERR;
-        LVOS_TP_START(WCACHE_HOLD_WAIT_FAIL, &ret, BIO_ERR);
+        BIO_TP_START(WCACHE_HOLD_WAIT_FAIL, &ret, BIO_ERR);
         ret = HoldWait(offset + len);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (ret != BIO_OK) {
             BIO_TRACE_END(FLOW_TRACE_PRELOAD_MEMORY, ret);
             return ret;
@@ -146,7 +146,7 @@ BResult Flow::TruncateOffset(uint64_t offset)
 BResult Flow::Seal()
 {
     BResult ret = BIO_OK;
-    LVOS_TP_START(FLOW_SEAL_ERR, &ret, BIO_ERR);
+    BIO_TP_START(FLOW_SEAL_ERR, &ret, BIO_ERR);
     if (mSealed) {
         return ret;
     }
@@ -162,9 +162,9 @@ BResult Flow::Seal()
         LOG_ERROR("Truncate offset failed, ret " << ret);
     }
     BIO_TRACE_END(FLOW_TRACE_SEAL, 0);
-    LVOS_TP_END;
-    LVOS_TP_START(FLOW_SEAL_OK, &ret, BIO_OK);
-    LVOS_TP_END;
+    BIO_TP_END;
+    BIO_TP_START(FLOW_SEAL_OK, &ret, BIO_OK);
+    BIO_TP_END;
     return ret;
 }
 

@@ -63,9 +63,9 @@ void BioClient::BioClientLoggerExit(WorkerMode mode)
 BResult BioClient::BioClientAgentInit(WorkerMode mode)
 {
     agent::BioClientAgentPtr agentPtr = nullptr;
-    LVOS_TP_START(SDK_BIO_AGENT_CREAT_FAIL, &agentPtr, nullptr);
+    BIO_TP_START(SDK_BIO_AGENT_CREAT_FAIL, &agentPtr, nullptr);
     agentPtr = agent::BioClientAgent::Instance();
-    LVOS_TP_END;
+    BIO_TP_END;
     if (agentPtr == nullptr) {
         CLIENT_LOG_ERROR("Failed to create agent instance.");
         return BIO_ALLOC_FAIL;

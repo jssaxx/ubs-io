@@ -136,9 +136,9 @@ public:
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp)
     {
         BResult ret = BIO_INNER_ERR;
-        LVOS_TP_START(SDK_BIO_MIRROR_SEND_SYNC_FAIL, &ret, BIO_INNER_RETRY);
+        BIO_TP_START(SDK_BIO_MIRROR_SEND_SYNC_FAIL, &ret, BIO_INNER_RETRY);
         ret = mNetEngine->SyncCall(target, opcode, req, rsp);
-        LVOS_TP_END;
+        BIO_TP_END;
         return ret;
     }
 

@@ -156,9 +156,9 @@ WCacheIndexTable *WCacheIndex::GetIndexTable(uint16_t ptId)
             return table->second;
         }
         WCacheIndexTable *inTable = nullptr;
-        LVOS_TP_START(WCACHE_INDEX_TABLE_FAIL, &inTable, nullptr);
+        BIO_TP_START(WCACHE_INDEX_TABLE_FAIL, &inTable, nullptr);
         inTable = new (std::nothrow) WCacheIndexTable;
-        LVOS_TP_END;
+        BIO_TP_END;
         ChkTrue(inTable != nullptr, nullptr, "Alloc memory failed.");
         mTable.insert(std::make_pair(ptId, inTable));
         return mTable[ptId];

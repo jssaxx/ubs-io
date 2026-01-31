@@ -179,7 +179,7 @@ public:
 
     inline FlowInstancePtr Query(uint16_t ptId)
     {
-        LVOS_TP_START(SDK_MIRROR_CLIENT_QUERY_FAIL, 0);
+        BIO_TP_START(SDK_MIRROR_CLIENT_QUERY_FAIL, 0);
         mLock.LockRead();
         auto it = mFlowMap.find(ptId);
         if (LIKELY(it != mFlowMap.end())) {
@@ -187,7 +187,7 @@ public:
             return it->second;
         }
         mLock.UnLock();
-        LVOS_TP_END;
+        BIO_TP_END;
         return nullptr;
     }
 

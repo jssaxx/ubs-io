@@ -65,9 +65,9 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     }
     auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
     WCacheSlicePtr metaSlice;
-    LVOS_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &res, BIO_INNER_RETRY);
+    BIO_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &res, BIO_INNER_RETRY);
     res = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), metaSlice);
-    LVOS_TP_END;
+    BIO_TP_END;
     ChkTrue(res == BIO_OK, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
@@ -223,9 +223,9 @@ void WCacheTier::GetNegotiateSlice(std::vector<uint64_t> &indexVec, uint32_t lim
 BResult WCacheTier::GetMetaSlice(uint64_t indexInFlow, WCacheSlicePtr &slice)
 {
     BResult ret = BIO_ERR;
-    LVOS_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
+    BIO_TP_START(WCACHE_GET_META_SLICE_FAIL, ret, BIO_ERR);
     ret = GetSlice(mMetaFlow, indexInFlow * sizeof(WFlowSliceMeta), indexInFlow, sizeof(WFlowSliceMeta), slice);
-    LVOS_TP_END;
+    BIO_TP_END;
     ChkTrue(ret == BIO_OK, ret,
         "Failed to get meta slice, flowId " << mMetaFlow->GetFlowId() << " indexInFlow:" << indexInFlow);
     return BIO_OK;
@@ -287,8 +287,8 @@ BResult WCacheTier::Seal()
 {
     BResult ret = BIO_OK;
 #ifdef DEBUG_UT
-    LVOS_TP_START(FLOW_DATA_FLOW_ERR, &ret, BIO_ERR);
-    LVOS_TP_END;
+    BIO_TP_START(FLOW_DATA_FLOW_ERR, &ret, BIO_ERR);
+    BIO_TP_END;
     if (ret == BIO_OK) {
         mMetaFlow = MakeRef<Flow>(FLOW_META, FLOW_MEMORY, 0, 0, 0, 0);
     } else {

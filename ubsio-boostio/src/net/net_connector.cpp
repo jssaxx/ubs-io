@@ -37,9 +37,9 @@ BResult ConnectTask::DoConnect()
     BResult ret = BIO_OK;
     ChannelPtr ctrlChanel = nullptr;
     if ((ret = mEngine->GetCtrlChannelMgr()->GetChannel(mConnectInfo.peerId, ctrlChanel)) == BIO_NOT_EXISTS) {
-        LVOS_TP_START(SERVER_NET_CONNECT_FAIL, &ret, BIO_INNER_RETRY);
+        BIO_TP_START(SERVER_NET_CONNECT_FAIL, &ret, BIO_INNER_RETRY);
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, true, ctrlChanel);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (ret != BIO_OK) {
             NET_LOG_ERROR("Failed to connect ctrl plane to peer, dstNid:" << mConnectInfo.peerId.nid <<
                 ", pid:" << mConnectInfo.peerId.pid << ".");

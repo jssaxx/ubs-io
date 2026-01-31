@@ -205,17 +205,17 @@ private:
 
 inline bool ExecutorService::Start()
 {
-    LVOS_TP_START(NO_PROCESS_EXECUTOR, 0);
+    BIO_TP_START(NO_PROCESS_EXECUTOR, 0);
     if (mStarted) {
         return true;
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     /* init ring buffer blocking queue */
     int result = 0;
-    LVOS_TP_START(QUEUE_INIT_FAIL, &result, -1);
+    BIO_TP_START(QUEUE_INIT_FAIL, &result, -1);
     result = mRunnableQueue.Initialize();
-    LVOS_TP_END;
+    BIO_TP_END;
     if (result != 0) {
         LOG_ERROR("Failed to initialize queue, result " << result);
         return false;
@@ -224,9 +224,9 @@ inline bool ExecutorService::Start()
     for (uint16_t i = 0; i < mThreadNum; i++) {
         auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
         std::thread *thr = nullptr;
-        LVOS_TP_START(EXECUTOR_THREAD_FAIL, &thr, nullptr);
+        BIO_TP_START(EXECUTOR_THREAD_FAIL, &thr, nullptr);
         thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
-        LVOS_TP_END;
+        BIO_TP_END;
         if (thr == nullptr) {
             LOG_ERROR("Failed to create executor thread " << i);
             return false;
