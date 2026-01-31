@@ -19,7 +19,6 @@
 #include <atomic>
 #include <condition_variable>
 #include <memory>
-#include <openssl/x509.h>
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "bio_openssl_api_wrapper.h"
