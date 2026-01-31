@@ -1494,7 +1494,7 @@ TEST_F(TestBioServer, test_server_exception)
     negoReq.count = NO_1024;
     ret = MirrorServer::Instance()->MirrorServerEvictNegotiate(ctx, &negoReq);
     EXPECT_EQ(ret, BIO_OK);
-    ret = ExpireChecker::Instance()->ExpireCheckerInit("./test.pem", "./test1.pem");
+    ret = ExpireChecker::Instance()->ExpireCheckerInit("./test.pem", "./test1.pem", "./test1.pem");
     EXPECT_EQ(ret, BIO_ERR);
 }
 
