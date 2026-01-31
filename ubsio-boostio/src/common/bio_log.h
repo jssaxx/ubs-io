@@ -83,6 +83,14 @@ namespace bio {
         }                                         \
     } while (0)
 
+#define ChkTrueVoid(ARGS, MSG)                                   \
+    do {                                                         \
+        if (__builtin_expect(!(ARGS), 0) != 0) {                 \
+            LOG_ERROR("Check Failed: " << #ARGS << ", " << MSG); \
+            return;                                              \
+        }                                                        \
+    } while (0)
+
 #define ChkTrue(ARGS, RET, MSG)                                  \
     do {                                                         \
         if (__builtin_expect(!(ARGS), 0) != 0) {                 \

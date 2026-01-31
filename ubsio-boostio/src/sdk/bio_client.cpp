@@ -447,7 +447,8 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
             LOG_INFO("expire checker alloc fail.");
             return BIO_ALLOC_FAIL;
         }
-        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath);
+        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath,
+            optConf.opensslLibDir);
         if (ret != BIO_OK) {
             return ret;
         }

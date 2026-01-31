@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef HDAGGER_DG_CONFIGURATION_H
-#define HDAGGER_DG_CONFIGURATION_H
+#ifndef BIO_CONFIGURATION_H
+#define BIO_CONFIGURATION_H
 
 #include <map>
 #include <string>
@@ -501,4 +501,4 @@ inline void Configuration::Dump(KVReader &reader)
 }
 }
 
-#endif // HDAGGER_DG_CONFIGURATION_H
+#endif // BIO_CONFIGURATION_H

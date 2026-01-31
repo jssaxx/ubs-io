@@ -110,7 +110,7 @@ BResult BioServer::Start()
             return BIO_ALLOC_FAIL;
         }
         ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
-            mConfig->GetNetConfig().tlsServerCertPath);
+            mConfig->GetNetConfig().tlsServerCertPath, mConfig->GetNetConfig().opensslLibDir);
         if (ret != BIO_OK) {
             return ret;
         }

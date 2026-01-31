@@ -10,31 +10,31 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef PLATFORM_UTILITIES_PLATFORM_UTILITIES_EXPIRE_CHECKER_H
-#define PLATFORM_UTILITIES_PLATFORM_UTILITIES_EXPIRE_CHECKER_H
+#ifndef OCK_BIO_EXPIRE_CHECKER_H
+#define OCK_BIO_EXPIRE_CHECKER_H
 
-#include <thread>
 #include <string>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <condition_variable>
+#include <memory>
 #include "bio_err.h"
 #include "bio_ref.h"
+#include "bio_openssl_api_wrapper.h"
 
 namespace ock {
 namespace bio {
 class ExpireChecker;
 using ExpireCheckerPtr = Ref<ExpireChecker>;
+constexpr int ONE_DAY = 24 * 60 * 60;
+constexpr uint32_t CHECK_SEVEN_DAY = 7 * 24 * 60 * 60;
+
 class ExpireChecker {
 public:
-    enum class CertStatus {
-        CERT_SUCCESS = 0,
-        CERT_FAIL = 1,
-        CERT_YET_VALID = 2,
-        CERT_NEAR_EXPIRE = 3,
-        CERT_EXPIRED = 4,
-        CERT_STATUS_BUTT
-    };
+    ExpireChecker();
 
-    ExpireChecker() = default;
-    virtual ~ExpireChecker() = default;
+    virtual ~ExpireChecker();
 
     static ExpireCheckerPtr &Instance()
     {
@@ -42,14 +42,29 @@ public:
         return instance;
     }
 
-    void TimingManagement(const std::string caCertFile, const std::string serverCertFile, int period) const;
+    void TimingManagement();
 
-    BResult ExpireCheckerInit(const std::string &caCertPath, const std::string &workCertPath);
-    DEFINE_REF_COUNT_FUNCTIONS
+    BResult ExpireCheckerInit(const std::string &caCertPath, const std::string &workCertPath,
+                              const std::string &opensslDir);
+
+    DEFINE_REF_COUNT_FUNCTIONS;
 private:
-    DEFINE_REF_COUNT_VARIABLE
-};
-}
-}
+    void StopThread();
+    BResult HandleCertExpiredCheck();
+    BResult CertExpiredCheck(const std::string &path, const std::string &type);
+    BResult ValidateCertificateTime(X509* x509, const std::string &type);
 
-#endif // PLATFORM_UTILITIES_PLATFORM_UTILITIES_EXPIRE_CHECKER_H
+private:
+    std::string mCaPath;
+    std::string mCertPath;
+    mutable std::thread workerThread;
+    mutable std::atomic<bool> stopFlag;
+    mutable std::condition_variable cv;
+    mutable std::mutex mutex;
+    DEFINE_REF_COUNT_VARIABLE;
+};
+
+} // namespace bio
+} // namespace ock
+
+#endif // OCK_BIO_EXPIRE_CHECKER_H
