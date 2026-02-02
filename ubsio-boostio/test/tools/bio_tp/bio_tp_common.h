@@ -13,14 +13,14 @@
 #ifndef BIO_TP_COMMON_H
 #define BIO_TP_COMMON_H
 
-#include "flow_task_pool.h"
+#include <utility>
 
 #ifdef __aarch64__
 #include "tracepoint.h"
 #else
-#define BIO_BIO_TRACEP_PARAM_SIZE 32UL
+#define BIO_TRACEP_PARAM_SIZE 32UL
 typedef struct {
-    char tpParamData[BIO_BIO_TRACEP_PARAM_SIZE];
+    char tpParamData[BIO_TRACEP_PARAM_SIZE];
 } BioTracepointParam;
 #endif
 

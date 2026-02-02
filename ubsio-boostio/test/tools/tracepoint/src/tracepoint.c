@@ -23,7 +23,6 @@
 #include "dpax_list.h"
 #include "tracepoint_common.h"
 #include "tracepoint.h"
-#include "tracepoint_cmd.h"
 #include "tracepoint_pub.h"
 
 MODULE_ID(PID_DEBUG);
@@ -55,12 +54,10 @@ static pthread_spinlock_t g_TPHtLock;
 void TracePointInit()
 {
     pthread_spin_init(&g_TPHtLock, 0);
-    TracePointCmdInit();
 }
 
 void TracePointExit()
 {
-    TracePointCmdExit();
     pthread_spin_destroy(&g_TPHtLock);
 }
 

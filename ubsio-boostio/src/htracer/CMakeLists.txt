@@ -1,4 +1,11 @@
 #source files
+if ("${OPEN_TP}" STREQUAL "ON")
+    include_directories(
+            ${PROJECT_SOURCE_DIR}/test/tools/bio_tp/
+            ${PROJECT_SOURCE_DIR}/test/tools/tracepoint/include
+    )
+endif()
+
 aux_source_directory(common LIBS_SRCS)
 aux_source_directory(manager LIBS_SRCS)
 aux_source_directory(service LIBS_SRCS)

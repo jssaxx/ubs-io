@@ -19,7 +19,6 @@
 #include "bio_monotonic.h"
 #include "bio_server_c.h"
 #include "cache_overload_ctrl.h"
-#include "cli.h"
 #include "cm_c.h"
 #include "expire_checker.h"
 #include "flow_manager.h"
