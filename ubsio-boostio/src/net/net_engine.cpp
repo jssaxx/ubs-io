@@ -342,7 +342,7 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
     });
     tlsOpt.caCb = tlsCaCallback;
 
-    driver->RegisterTLSPrivateKeyCallback(
+    auto tlsPrivateKeyCallback = (
             [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
                              UBSHcomTLSEraseKeypass &erase) {
                 std::vector<char> encryptedKeyPass(KEYPASS_MAX_LEN, 0);

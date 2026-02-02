@@ -26,8 +26,6 @@
 #include "mirror_client.h"
 #include "bio_client_net.h"
 #include "underfs.h"
-#include "cli.h"
-#include "sdk_diagnose.h"
 
 #ifdef USE_PROMETHEUS
 #include "prometheus_manager.h"

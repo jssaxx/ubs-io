@@ -1,7 +1,8 @@
-if (${OPEN_TP} MATCHES "ON")
-include_directories(
-        ${SRC_DIR}/../test/tools/bio_tp/
-        ${SRC_DIR}/../test/tools/tracepoint/include)
+if ("${OPEN_TP}" STREQUAL "ON")
+    include_directories(
+            ${PROJECT_SOURCE_DIR}/test/tools/bio_tp/
+            ${PROJECT_SOURCE_DIR}/test/tools/tracepoint/include
+    )
 endif()
 
 add_subdirectory(cluster)

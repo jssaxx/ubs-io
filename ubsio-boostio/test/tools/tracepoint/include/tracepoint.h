@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#ifndef BIO_TRACEPOINT_H
-#define BIO_TRACEPOINT_H
+#ifndef TRACEPOINT_H
+#define TRACEPOINT_H
 
 #include <stdlib.h>
 
@@ -372,4 +372,4 @@ void TracePointExit(void);
 
 #endif
 
-#endif // BIO_TRACEPOINT_H
+#endif // TRACEPOINT_H
