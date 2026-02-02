@@ -900,7 +900,7 @@ TEST_F(TestBio, test_bio_put_remote_case_return_fail)
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
     EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioPut(G_TENANT_ID, "putremote", value.c_str(), G_LENGTH, g_Location);
     fclose(fp);
@@ -917,7 +917,7 @@ TEST_F(TestBio, test_bio_put_remote_ptv_error_case_return_fail)
     EXPECT_NE(fp, nullptr);
     std::string value(G_LENGTH, ' ');
     EXPECT_EQ(fread((void *)value.c_str(), sizeof(char), G_LENGTH, fp), G_LENGTH);
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioPut(G_TENANT_ID, "putremoteptverror", value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
@@ -931,7 +931,7 @@ TEST_F(TestBio, test_bio_get_remote_case_return_fail)
     TestBio::VNodeIdStub();
     char *value = new char[G_LENGTH];
     uint64_t realLen = G_LENGTH;
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_MIRROR_CLIENT_SET_RETRY_TIME", 0, 1, userParam);
     auto ret = BioGet(G_TENANT_ID, "getremote", 0, G_LENGTH, g_Location, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
@@ -1493,7 +1493,7 @@ TEST_F(TestBio, test_bio_allocspace_not_ready_case_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_MIRROR_SET_PT_ID_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "SDK_MIRROR_SELECT_PT_FAIL", 0, 1, userParam);
     ret = BioAllocCacheSpace(G_TENANT_ID, objectId, ock::bio::NO_1024, &spaceDesc);
@@ -1529,7 +1529,7 @@ TEST_F(TestBio, test_bio_update_return_fail)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_MIRROR_NOTIFY_UPDATE_RECV_FAIL", 0, 1, userParam);
     ret = BioNotifyUpgradePrepare(tenantId);
     EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
@@ -1575,7 +1575,7 @@ TEST_F(TestBio, test_bio_convert_location)
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL", 0, 1, userParam);
     ret = BioConvertLocation(location, &detailLoc);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
@@ -1686,7 +1686,7 @@ TEST_F(TestBio, test_get_underfs_config)
 {
     LOG_INFO("test_get_underfs_config");
     BioConfig::UnderFsConfig config;
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL", 0, 1, userParam);
     auto ret = ock::bio::net::BioClientNet::Instance()->GetUnderFsConfig(config);
     BioHvsDeactiveTracePoint(0, "SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL");
@@ -1704,7 +1704,7 @@ TEST_F(TestBio, test_bio_client_net_shm_init)
 TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
 {
     LOG_INFO("test_bio_client_agent_get_local_quota_info");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
     bool enable = true;
     uint64_t load = 1;
@@ -1802,7 +1802,7 @@ TEST_F(TestBio, test_bio_add_disk_update_bdm_fail)
 {
     LOG_INFO("test_bio_add_disk_update_bdm_fail");
     const char *diskPath = "/dev/xxx";
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
@@ -1813,7 +1813,7 @@ TEST_F(TestBio, test_bio_add_disk_update_bdm_success)
 {
     LOG_INFO("test_bio_add_disk_update_bdm_success");
     const char *diskPath = "/dev/xxx";
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "SERVER_NO_DISK_CHECK", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
@@ -1826,7 +1826,7 @@ TEST_F(TestBio, test_bio_add_new_disk_fail)
 {
     LOG_INFO("test_bio_add_new_disk_fail");
     const char *diskPath = "/dev/xxx";
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_ADD_NEW_DISK_FAIL", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
@@ -1837,7 +1837,7 @@ TEST_F(TestBio, test_bio_add_by_separates)
 {
     LOG_INFO("test_bio_add_by_separates");
     const char *diskPath = "/dev/xxx";
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SDK_ADD_DISK_BY_SEPARATES", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
     EXPECT_EQ(ret, BIO_INNER_ERR);
@@ -1848,7 +1848,7 @@ TEST_F(TestBio, test_bio_add_old_disk)
 {
     LOG_INFO("test_bio_add_old_disk");
     const char *diskPath = "test1";
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_OLD_DISK_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "SERVER_SET_OLD_DISK_ID", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);

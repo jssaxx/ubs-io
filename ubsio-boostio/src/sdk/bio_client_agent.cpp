@@ -281,7 +281,6 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
         ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
-    BIO_TP_END;
     if (ret == BIO_OK) {
         if (rsp.preloadSize > NO_128 * IO_SIZE_1M) { // quota初始预取大小最大不超过128MB.
             CLIENT_LOG_ERROR("Quota preload size too large, preloadSize " << rsp.preloadSize << ".");
@@ -290,6 +289,7 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
         enable = rsp.enable;
         preloadSize = rsp.preloadSize;
     }
+    BIO_TP_END;
     return ret;
 }
 

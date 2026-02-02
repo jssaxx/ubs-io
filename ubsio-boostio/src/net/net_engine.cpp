@@ -778,8 +778,8 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
     }
 
     NetChannelUpCtx ctx(info.peerId, isCtrlPanel, false);
-    ch->SetUpCtx(ctx.whole);
 #ifndef DEBUG_UT
+    ch->SetUpCtx(ctx.whole);
     ch->SetChannelTimeOut(mTimeout, mTimeout);
 #endif
     return BIO_OK;

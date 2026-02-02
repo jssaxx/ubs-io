@@ -48,12 +48,23 @@ MODULE_ID(PID_DEBUG);
 static BioTracepoints g_stTp[BIO_MAX_TRACEP_NUM];
 static BioTpInitActive g_initActiveTPs[BIO_TP_MAX_INIT_ACTIVE_NUM];
 static int32_t g_initActiveTPNum = 0;
+static int g_init = 0;
+static pthread_mutex_t g_initLock = PTHREAD_MUTEX_INITIALIZER;
 BioHtS *g_TPHt = NULL;
 static pthread_spinlock_t g_TPHtLock;
 
 void TracePointInit()
 {
     pthread_spin_init(&g_TPHtLock, 0);
+    pthread_mutex_lock(&g_initLock);
+    if (g_init != 0) {
+        pthread_mutex_unlock(&g_initLock);
+        return;
+    }
+
+    BioHvsInitTracePoint();
+    g_init = 1;
+    pthread_mutex_unlock(&g_initLock);
 }
 
 void TracePointExit()

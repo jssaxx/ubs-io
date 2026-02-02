@@ -15,7 +15,7 @@ pipeline:
     - task: "run_test"
   report:
     - task: "lcov_report"
-      exec: "pwd;cd ../../../build/;sh ../test/llt/report_lcov.sh"
+      exec: "pwd;cd ../../../Build/;sh ../test/llt/report_lcov.sh"
       args: false
   clean:
     - task: "clean"

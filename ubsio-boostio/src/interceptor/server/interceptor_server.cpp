@@ -166,7 +166,6 @@ bool InterceptorServer::CheckInterceptorAllocPageReq(InterceptorAllocPageReq *re
 
 BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 {
-#ifndef DEBUG_UT
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorAllocPageReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         CLIENT_LOG_ERROR("Receive interceptor alloc message len:" << ctx.MessageDataLen() << " or message is invalid.");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
@@ -189,11 +188,7 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
     }
-#endif
-#ifdef DEBUG_UT
-    CacheSpaceDesc addressInfo;
-    addressInfo.addressNum = CACHE_SPACE_ADDRESS_SIZE + 1;
-#endif
+
     if (UNLIKELY(addressInfo.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
         CLIENT_LOG_ERROR("addressNum: " << addressInfo.addressNum << " is invalid.");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);

@@ -14,7 +14,7 @@ if [[ -n "$2" ]]; then
 fi
 
 hdt build -s ${asan} -c on \
-&& cp -r ../../Build/* build/ \
+&& cp -r ../../Build/bio_test build/ \
 && cp -r ../../configs/ . \
 && \cp ../../dist/boostio/lib/* build/ \
 && hdt run -s ${asan} -c on "--args=\"--gtest_output=xml:report.xml\"" \

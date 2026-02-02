@@ -777,7 +777,7 @@ TEST_F(TestBioServer, test_mirror_master_create_flow_rcache_init_obj_err)
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     CreateFlowRequest req = { { MESSAGE_MAGIC, 0, 0, 1, getpid() }, 0, 1 };
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_RCACHE_FIND", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_INIT_OBJ_FAIL", 0, 1, userParam);
     mirror->MirrorServerCreateFlow(ctx, &req);
@@ -832,7 +832,7 @@ TEST_F(TestBioServer, test_bio_server_delete_disk_err)
     DeleteRequest req;
     req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     CopyKey(req.key, "abcd", KEY_MAX_SIZE);
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_FLOW_DISK_FAIL", 0, 1, userParam);
     auto ret = mirror->Delete(req);
     EXPECT_EQ(ret, BIO_OK);
@@ -1010,7 +1010,6 @@ TEST_F(TestBioServer, test_bio_server_writer)
     GetResponse rsp;
     GetRequest req;
     req.comm.srcNid = NO_1;
-    req.comm.pid  = NO_1;
     ret = mirror->WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
 
     ServiceContext netCtx;
@@ -1137,7 +1136,7 @@ TEST_F(TestBioServer, test_bio_server_add_sync_data)
 TEST_F(TestBioServer, test_start_server_log_init_err_return_fail)
 {
     LOG_INFO("test_start_server_log_init_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "LOG_INIT_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
@@ -1149,7 +1148,7 @@ TEST_F(TestBioServer, test_start_server_log_init_err_return_fail)
 TEST_F(TestBioServer, test_start_server_service_tracer_init_open_file_err_return_fail)
 {
     LOG_INFO("test_start_server_service_tracer_init_open_file_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "TRACE_FILE_OPPEN_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
@@ -1161,7 +1160,7 @@ TEST_F(TestBioServer, test_start_server_service_tracer_init_open_file_err_return
 TEST_F(TestBioServer, test_start_server_service_tracer_init_create_dir_err_return_fail)
 {
     LOG_INFO("test_start_server_service_tracer_init_create_dir_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "TRACE_CREATE_DIR_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
@@ -1173,7 +1172,7 @@ TEST_F(TestBioServer, test_start_server_service_tracer_init_create_dir_err_retur
 TEST_F(TestBioServer, test_start_server_service_tracer_init_path_real_err_return_fail)
 {
     LOG_INFO("test_start_server_service_tracer_init_path_real_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "TRACE_PATH_REAL_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
@@ -1185,7 +1184,7 @@ TEST_F(TestBioServer, test_start_server_service_tracer_init_path_real_err_return
 TEST_F(TestBioServer, test_start_server_underfs_init_dir_exist_return_ok)
 {
     LOG_INFO("test_start_server_underfs_init_dir_exist_return_ok");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_UNDERFS_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
@@ -1197,7 +1196,7 @@ TEST_F(TestBioServer, test_start_server_underfs_init_dir_exist_return_ok)
 TEST_F(TestBioServer, test_start_server_underfs_init_make_dir_err_return_fail)
 {
     LOG_INFO("test_start_server_underfs_init_make_dir_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_UNDERFS_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "UNDERFS_MKDIR_FAIL", 0, 1, userParam);
@@ -1213,7 +1212,7 @@ TEST_F(TestBioServer, test_start_server_underfs_init_make_dir_err_return_fail)
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_queue_init_err_return_fail)
 {
     LOG_INFO("test_start_server_mirrorserver_init_executor_queue_init_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_MIRROR_SERVER_CRB_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -1233,7 +1232,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_queue_init_er
 TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_thread_init_err_return_fail)
 {
     LOG_INFO("test_start_server_mirrorserver_init_executor_thread_init_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_MIRROR_SERVER_CRB_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_MIRROR_SERVER_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
@@ -1253,7 +1252,7 @@ TEST_F(TestBioServer, test_start_server_mirrorserver_init_executor_thread_init_e
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_param_err_return_fail)
 {
     LOG_INFO("test_start_server_cache_init_rcache_evict_param_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_EVICT_PARAM_FAIL", 0, 1, userParam);
@@ -1271,7 +1270,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_param_err_return
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_thread_err_return_fail)
 {
     LOG_INFO("test_start_server_cache_init_rcache_evict_thread_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_EVICT_THREAD_FAIL", 0, 1, userParam);
@@ -1289,7 +1288,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_evict_thread_err_retur
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_param_err_return_fail)
 {
     LOG_INFO("test_start_server_cache_init_rcache_gc_param_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
@@ -1307,7 +1306,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_param_err_return_fa
 TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_thread_err_return_fail)
 {
     LOG_INFO("test_start_server_cache_init_rcache_gc_thread_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_RCACHE_EVICT", 0, 1, userParam);
@@ -1325,7 +1324,7 @@ TEST_F(TestBioServer, test_start_server_cache_init_rcache_gc_thread_err_return_f
 TEST_F(TestBioServer, test_start_server_cache_init_cache_recover_err_return_fail)
 {
     LOG_INFO("test_start_server_cache_init_cache_recover_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_CACHE_PROCESS", 0, 1, userParam);
@@ -1340,66 +1339,10 @@ TEST_F(TestBioServer, test_start_server_cache_init_cache_recover_err_return_fail
     BioHvsDeactiveTracePoint(0, "CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL");
 }
 
-TEST_F(TestBioServer, test_start_server_diagnose_cliagent_err_return_fail)
-{
-    LOG_INFO("test_start_server_diagnose_cliagent_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "CLI_AGENT_INIT_ERR", 0, 1, userParam);
-    auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SERVER_START");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
-    BioHvsDeactiveTracePoint(0, "CLI_AGENT_INIT_ERR");
-}
-
-TEST_F(TestBioServer, test_start_server_diagnose_handler_err_return_fail)
-{
-    LOG_INFO("test_start_server_diagnose_handler_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "CLI_SERVER_DIAGNOSE_HANDLER_ERR", 0, 1, userParam);
-    auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SERVER_START");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
-    BioHvsDeactiveTracePoint(0, "CLI_SERVER_DIAGNOSE_HANDLER_ERR");
-}
-
-TEST_F(TestBioServer, test_start_server_diagnose_initfunc_null_return_fail)
-{
-    LOG_INFO("test_start_server_diagnose_handler_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "CLI_SERVER_DIAGNOSE_INITFUNC_NULL", 0, 1, userParam);
-    auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SERVER_START");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
-    BioHvsDeactiveTracePoint(0, "CLI_SERVER_DIAGNOSE_INITFUNC_NULL");
-}
-
-TEST_F(TestBioServer, test_start_server_diagnose_init_err_return_fail)
-{
-    LOG_INFO("test_start_server_diagnose_init_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "CLI_SERVER_DIAGNOSE_INIT_ERR", 0, 1, userParam);
-    auto ret = BioServer::Instance()->Start();
-    EXPECT_EQ(ret, BIO_ERR);
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SERVER_START");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_ROLLBACK_SERVICE_INIT");
-    BioHvsDeactiveTracePoint(0, "CLI_SERVER_DIAGNOSE_INIT_ERR");
-}
-
 TEST_F(TestBioServer, test_start_server_service_start_err_return_fail)
 {
     LOG_INFO("test_start_server_service_start_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVICE_START_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     auto ret = BioServer::Instance()->Start();
@@ -1411,7 +1354,7 @@ TEST_F(TestBioServer, test_start_server_service_start_err_return_fail)
 TEST_F(TestBioServer, test_start_server_config_init_err_return_fail)
 {
     LOG_INFO("test_start_server_config_init_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "CONFIG_INIT_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_SERVER_START", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_CONFIG", 0, 1, userParam);
@@ -1571,7 +1514,7 @@ TEST_F(TestBioServer, test_mirror_server_check_remote_update_ready)
 TEST_F(TestBioServer, test_alloc_quota_error)
 {
     LOG_INFO("test_alloc_quota_error");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "QUOTA_HOLDER_SIZE_MAX", 0, 1, userParam);
     QuotaHolder holder{NO_256, NO_1024};
     uint64_t expectAllocSize = NO_1024;
@@ -1583,7 +1526,7 @@ TEST_F(TestBioServer, test_alloc_quota_error)
 TEST_F(TestBioServer, test_large_node_list)
 {
     LOG_INFO("test_large_node_list");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "LARGE_NODE_LIST", 0, 1, userParam);
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeInfos;
     auto ret = BioServer::Instance()->HandleCmNodeEvent(nodeInfos);
@@ -1644,7 +1587,7 @@ TEST_F(TestBioServer, test_handle_free_mem)
     EXPECT_EQ(ret, false);
 
     req->num = NO_10;
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK", 0, 1, userParam);
     ret = MirrorServer::Instance()->CheckFreeMemReq(req);
     EXPECT_EQ(ret, false);
@@ -1674,7 +1617,7 @@ TEST_F(TestBioServer, test_start_server_cacl_cache_hit_local)
     auto ret = mirror->HandleGetCacheHit(ctx);
     EXPECT_EQ(ret, BIO_OK);
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_CACHE_HIT", 0, 1, userParam);
     ret = mirror->HandleGetCacheHit(ctx);
     BioHvsDeactiveTracePoint(0, "GET_CACHE_HIT");
@@ -1689,7 +1632,7 @@ TEST_F(TestBioServer, test_start_server_get_cache_resource_local)
     auto ret = mirror->HandleQueryCacheResource(ctx);
     EXPECT_EQ(ret, BIO_OK);
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "CALC_CACHE_RESOURCE", 0, 1, userParam);
     ret = mirror->HandleQueryCacheResource(ctx);
     BioHvsDeactiveTracePoint(0, "CALC_CACHE_RESOURCE");
@@ -1709,7 +1652,7 @@ TEST_F(TestBioServer, test_get_trace_data_fail)
 {
     LOG_INFO("test_get_trace_data_fail");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE", 0, 1, userParam);
     TraceDatabase traceDatabase = mirror->GetTraceData();
     BioHvsDeactiveTracePoint(0, "MIRROR_SERVER_TRACE_EXCEED_ARRAY_SIZE");
@@ -1720,7 +1663,7 @@ TEST_F(TestBioServer, test_get_trace_data_null)
 {
     LOG_INFO("test_get_trace_data_null");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_GET_TRACEDATA_ERR", 0, 1, userParam);
     TraceDatabase traceDatabase = mirror->GetTraceData();
     BioHvsDeactiveTracePoint(0, "SERVER_GET_TRACEDATA_ERR");
