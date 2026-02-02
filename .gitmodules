@@ -18,7 +18,3 @@
 	path = ubsio-boostio/3rdparty/zookeeper/zookeeper
 	url = https://gitcode.com/gh_mirrors/zo/zookeeper.git
 	tag = v3.9.3
-[submodule "ubsio-boostio/3rdparty/hadoop/hadoop"]
-	path = ubsio-boostio/3rdparty/hadoop/hadoop
-	url = https://gitcode.com/gh_mirrors/ha/hadoop.git
-	tag = rel/release-3.4.0
