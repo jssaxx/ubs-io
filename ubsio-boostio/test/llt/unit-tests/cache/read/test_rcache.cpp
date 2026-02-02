@@ -469,7 +469,7 @@ TEST_F(TestRCache, test_rcache_recover_return_err)
     LOG_INFO("test_rcache_recover_return_err");
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
-    FlowPtr flowPtr;
+    FlowPtr flowPtr = MakeRef<Flow>(FLOW_META, FLOW_MEMORY, 0, 0, 0, 0);
     auto ret = gRCacheManager->RecoverCache(flowPtr);
     EXPECT_EQ(ret, BIO_ERR);
     BioHvsDeactiveTracePoint(0, "FLOW_SEAL_ERR");

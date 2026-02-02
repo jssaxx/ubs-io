@@ -12,11 +12,9 @@ install(FILES bio_c.h DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}/)
 add_library(bio_sdk SHARED ${BIO_SDK_SRCS})
 install(TARGETS bio_sdk DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
-target_link_libraries(bio_sdk -Wl,--start-group rados -Wl,--end-group)
-
 target_link_libraries(bio_sdk
         -Wl,--start-group
-        pthread dl expire_checker
+        pthread dl expire_checker bio_security rados
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a

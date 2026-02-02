@@ -29,7 +29,7 @@ aux_source_directory(common BIO_TEST)
 aux_source_directory(underfs BIO_TEST)
 add_executable(bio_test ${BIO_TEST} main.cpp ut_common.cpp ut_common.h)
 
-set(TEST_DIR ../../../..)
+set(TEST_DIR ${PROJECT_SOURCE_DIR})
 target_include_directories(bio_test PRIVATE
         ${TEST_DIR}/mock
         ${TEST_DIR}/htracer

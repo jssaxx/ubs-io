@@ -254,9 +254,8 @@ using CLIAgentInitFunc = int (*)(uint32_t, char *);
 BResult BioClient::BioDiagnoseSdkInit()
 {
 #ifdef DEBUG_UT
-    const char *soFileName = "libsdk_diagnose.so";
-    void *handler = dlopen(soFileName, RTLD_NOW);
-#else
+    return BIO_OK;
+#endif
     std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libsdk_diagnose.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
@@ -267,7 +266,7 @@ BResult BioClient::BioDiagnoseSdkInit()
     void *handler = dlopen(canonicalPath, RTLD_NOW);
     free(canonicalPath);
     canonicalPath = nullptr;
-#endif
+
     if (handler == nullptr) {
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_INNER_ERR;
@@ -471,7 +470,6 @@ void BioClient::Exit()
     if (!mStarted) {
         return;
     }
-    uint64_t startTime = Monotonic::TimeSec();
     BioClientAgentExit();
     BioClientNetExit();
     BioClientMirrorExit();
@@ -480,5 +478,4 @@ void BioClient::Exit()
 #endif
     BioClientLoggerExit(mMode);
     mStarted = false;
-    CLIENT_LOG_INFO("Boostio client exit success, cost time:" << (Monotonic::TimeSec() - startTime) << "s.");
 }

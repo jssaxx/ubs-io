@@ -543,16 +543,16 @@ void BioServer::BioFlowExit()
 using CLIAgentInitFunc = int (*)(uint32_t, char *);
 BResult BioServer::BioServerDiagnoseInit()
 {
+#ifdef DEBUG_UT
+    return BIO_OK;
+#endif
+
 #ifdef OPEN_RELEASE
     if (!mConfig->GetDaemonConfig().enableCli) {
         LOG_DEBUG("not open cli, skip");
         return BIO_OK;
     }
 #endif
-#ifdef DEBUG_UT
-    const char *soFileName = "libcli_agent.so";
-    void *handler = dlopen(soFileName, RTLD_NOW);
-#else
     std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
@@ -563,7 +563,6 @@ BResult BioServer::BioServerDiagnoseInit()
     void *handler = dlopen(canonicalPath, RTLD_NOW);
     free(canonicalPath);
     canonicalPath = nullptr;
-#endif
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
         return BIO_INNER_ERR;
@@ -581,9 +580,7 @@ BResult BioServer::BioServerDiagnoseInit()
     std::string diagName = "bio_server";
 
     BResult ret = BIO_OK;
-    BIO_TP_START(CLI_AGENT_INIT_ERR, &ret, BIO_ERR);
     ret = cliAgentInitFunc(procPid, const_cast<char *>(diagName.c_str()));
-    BIO_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
         dlclose(handler);
@@ -601,12 +598,9 @@ BResult BioServer::BioServerDiagnoseInit()
 using ServerDiagnose = int (*)();
 BResult BioServer::BioServerDiagnoseInitInner()
 {
-    void *handler = nullptr;
 #ifdef DEBUG_UT
-    const char *soFileName = "libserver_diagnose.so";
-    BIO_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
-    handler = dlopen(soFileName, RTLD_NOW);
-#else
+    return BIO_OK;
+#endif
     std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libserver_diagnose.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
@@ -614,29 +608,22 @@ BResult BioServer::BioServerDiagnoseInitInner()
         return BIO_NOT_EXISTS;
     }
 
-    BIO_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
-    handler = dlopen(canonicalPath, RTLD_NOW);
+    auto handler = dlopen(canonicalPath, RTLD_NOW);
     free(canonicalPath);
     canonicalPath = nullptr;
-#endif
-    BIO_TP_END;
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_ERR;
     }
 
     ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
-    BIO_TP_START(CLI_SERVER_DIAGNOSE_INITFUNC_NULL, &serverInitFunc, nullptr);
-    BIO_TP_END;
     if (serverInitFunc == nullptr) {
         dlclose(handler);
         return BIO_INNER_ERR;
     }
 
     BResult ret = BIO_INNER_ERR;
-    BIO_TP_START(CLI_SERVER_DIAGNOSE_INIT_ERR, &ret, BIO_ERR);
     ret = serverInitFunc();
-    BIO_TP_END;
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
         dlclose(handler);

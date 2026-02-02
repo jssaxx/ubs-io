@@ -803,7 +803,7 @@ TEST_F(TestWCache, test_start_pool_return_ok)
 TEST_F(TestWCache, test_service_update_return_retry)
 {
     LOG_INFO("test_service_update_return_retry");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH", 0, 1, userParam);
     auto ret = gWCacheManager->ServiceUngradeFlush();
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_UPGRADE_FLUSH");
@@ -844,7 +844,7 @@ TEST_F(TestWCache, test_get_evict_offset_return_ok)
 TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
 {
     LOG_INFO("test_get_slice_wcache_flow_offset_err_return_fail");
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
     auto ret = GetSlice(g_flowId, 0, NO_1024);
@@ -857,7 +857,7 @@ TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
 {
     LOG_INFO("test_get_slice_wcache_hold_wait_err_return_fail");
     GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1, 0, 1, NO_128 };
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
     auto ret = GetSlice(g_flowId, 0, NO_MAX_VALUE64-1);
@@ -885,7 +885,7 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     req.memFromServer = true;
     req.mrAddress = 0ULL;
     req.mrSize = 0;
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WRITE_SLICE_NULL_FAIL", 0, 1, userParam);
     auto ret = mirror->MirrorServerPut(ctx, &req);
     EXPECT_EQ(ret, BIO_OK);
@@ -996,7 +996,7 @@ TEST_F(TestWCache, test_wcache_tier_metaflow_error)
 {
     LOG_INFO("test_wcache_tier_error");
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
     WCacheTier wCacheTier;
     auto ret = wCacheTier.Seal();
@@ -1008,7 +1008,7 @@ TEST_F(TestWCache, test_wcache_tier_dataflow_error)
 {
     LOG_INFO("test_wcache_tier_error");
 
-    BIO_TRACEP_PARAM_S userParam;
+    BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "FLOW_SEAL_ERR", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "FLOW_DATA_FLOW_ERR", 0, 1, userParam);
     WCacheTier wCacheTier;
