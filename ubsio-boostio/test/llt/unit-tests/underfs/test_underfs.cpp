@@ -242,7 +242,7 @@ TEST_F(TestUnderFs, test_underfs_ceph_stat_return_fail)
 
 TEST_F(TestUnderFs, test_underfs_ceph_stat_return_ok)
 {
-    LOG_INFO("test_underfs_ceph_stat_return_fail");
+    LOG_INFO("test_underfs_ceph_stat_return_ok");
     FileSystem::ObjStat stat;
     stat.size = 1;
     auto ret = g_cephInstancePtr->Stat(G_KEY, stat);

@@ -56,10 +56,6 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(EXECUTOR_THREAD_FAIL, "executor thread err", CommonTp::PointerValueCallback);
     BIO_TP_REG(RCACHE_GC_THREAD_FAIL, "rcache gc thread err", CommonTp::PointerValueCallback);
     BIO_TP_REG(RCACHE_EVICT_THREAD_FAIL, "rcache evict thread err", CommonTp::PointerValueCallback);
-    BIO_TP_REG(CLI_AGENT_INIT_ERR, "cli agent init err", CommonTp::IntValueCallback);
-    BIO_TP_REG(CLI_SERVER_DIAGNOSE_HANDLER_ERR, "cli server handler err", CommonTp::PointerValueCallback);
-    BIO_TP_REG(CLI_SERVER_DIAGNOSE_INITFUNC_NULL, "cli server init func null err", CommonTp::PointerValueCallback);
-    BIO_TP_REG(CLI_SERVER_DIAGNOSE_INIT_ERR, "cli server init err", CommonTp::IntValueCallback);
     BIO_TP_REG(WCACHE_FLOW_DISK_FAIL, "wcache flow disk err", CommonTp::IntValueCallback);
     BIO_TP_REG(SYNCCALL_FAIL, "synccall err", CommonTp::IntValueCallback);
     BIO_TP_REG(SYNCCALL_CHANNEL_FAIL, "synccall channel err", CommonTp::IntValueCallback);
@@ -209,10 +205,6 @@ void tp::CacheTp::Deregister() noexcept
     BIO_TP_UNREG(EXECUTOR_THREAD_FAIL);
     BIO_TP_UNREG(RCACHE_GC_THREAD_FAIL);
     BIO_TP_UNREG(RCACHE_EVICT_THREAD_FAIL);
-    BIO_TP_UNREG(CLI_AGENT_INIT_ERR);
-    BIO_TP_UNREG(CLI_SERVER_DIAGNOSE_HANDLER_ERR);
-    BIO_TP_UNREG(CLI_SERVER_DIAGNOSE_INITFUNC_NULL);
-    BIO_TP_UNREG(CLI_SERVER_DIAGNOSE_INIT_ERR);
     BIO_TP_UNREG(WCACHE_FLOW_DISK_FAIL);
     BIO_TP_UNREG(SYNCCALL_FAIL);
     BIO_TP_UNREG(SYNCCALL_CHANNEL_FAIL);
