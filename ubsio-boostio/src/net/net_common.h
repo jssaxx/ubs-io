@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "hcom/hcom_service.h"
+#include "hcom/hcom_service_context.h"
 #include "bio_err.h"
 #include "bio_types.h"
 #include "bio_ref.h"
@@ -148,8 +149,8 @@ const std::string CONN_PAYLOAD_PREFIX_CTRL = "bio-ctrl-";
 const std::string CONN_PAYLOAD_PREFIX_DATA = "bio-data-";
 const uint32_t CONN_PAYLOAD_PREFIX_SIZE = CONN_PAYLOAD_PREFIX_DATA.size();
 const std::string UDS_NAME = "BIO_SHM_UDS";
-const std::string RPC_SERVICE_NAME = "BIO_RPC"
-const std::string IPC_SERVICE_NAME = "BIO_IPC"
+const std::string RPC_SERVICE_NAME = "BIO_RPC";
+const std::string IPC_SERVICE_NAME = "BIO_IPC";
 
 union NetConnPayload {
     NetNode srcNodeId;

@@ -14,6 +14,7 @@
 #define BIO_SDK_TP_H
 
 #include "bio_tp_common.h"
+
 namespace ock {
 namespace bio {
 namespace tp {

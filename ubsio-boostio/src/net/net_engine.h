@@ -79,7 +79,7 @@ public:
 
     static inline NetMrInfo MemoryRegionInfo(MemoryRegion &mr)
     {
-        return NetMrInfo(mr.GetAddress(), mr.Size(), mr.GetHcomMrs()[0]->GetLKey());
+        return NetMrInfo(mr.GetAddress(), mr.GetSize(), mr.GetHcomMrs()[0]->GetLKey());
     }
 
     inline void SetDataPageKb(uint32_t dataPageKb)
@@ -187,14 +187,14 @@ public:
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_ERR;
         }
-        ch->SetChannelTimeout(mTimeout, mTimeout);
+        ch->SetChannelTimeOut(mTimeout, mTimeout);
 
         ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_ERR;
         }
-        ch->SetChannelTimeout(mTimeout, mTimeout);
+        ch->SetChannelTimeOut(mTimeout, mTimeout);
         return BIO_OK;
     }
 

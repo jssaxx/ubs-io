@@ -564,6 +564,9 @@ static bool CheckClientConfig(const ClientOptionsConfig &optConf)
     if (!memchr(optConf.decrypterLibPath, '\0', PATH_MAX)) {
         return false;
     }
+    if (!memchr(optConf.opensslLibDir, '\0', PATH_MAX)) {
+        return false;
+    }
     return true;
 }
 

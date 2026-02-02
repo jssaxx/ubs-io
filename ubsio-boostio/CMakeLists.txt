@@ -20,16 +20,16 @@ set(CMAKE_C_FLAGS_RELEASE "${C_COMMON_FLAGS} -O3 -D_FORTIFY_SOURCE=2 -g -DNDEBUG
 set(CMAKE_CXX_FLAGS_DEBUG "${CXX_COMMON_FLAGS} -O0 -ggdb3 -g -lrt")
 set(CMAKE_CXX_FLAGS_RELEASE "${CXX_COMMON_FLAGS} -O3 -D_FORTIFY_SOURCE=2 -g -DNDEBUG=1 -lrt")
 
-set(SRC_DIR src)
-set(3RDPARTY_SRC_DIR 3rdparty)
-set(OUTPUT_PATH ../dist)
+set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
+set(3RDPARTY_SRC_DIR  ${PROJECT_SOURCE_DIR}/3rdparty)
+set(OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/dist)
 set(BUILD_PATH ${PROJECT_BINARY_DIR}/)
 
-set(STUB_SRC_DIR test/stub)
+set(STUB_SRC_DIR  ${PROJECT_SOURCE_DIR}/test/stub)
 
-set(PROJECT_3RDPARTY_SRC_DIR 3rdparty)
-set(PROJECT_BUILD_PATH build)
-set(PROJECT_OUTPUT_PATH ../dist)
+set(PROJECT_3RDPARTY_SRC_DIR  ${PROJECT_SOURCE_DIR}/3rdparty)
+set(PROJECT_BUILD_PATH ${PROJECT_SOURCE_DIR}/Build)
+set(PROJECT_OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/dist)
 set(PROJECT_3RDPARTY_BIN_DIR ${PROJECT_OUTPUT_PATH}/3rdparty)
 set(ENV{3RDPARTY_BIN_DIR} ${PROJECT_3RDPARTY_BIN_DIR})
 
@@ -70,7 +70,6 @@ include_directories(
         ${SRC_DIR}/net
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
-        ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
         ${SRC_DIR}/io_interceptor
         ${SRC_DIR}/interceptor
@@ -86,7 +85,7 @@ include_directories(
 
 if ("${OPEN_PROMETHEUS}" STREQUAL "ON")
     include_directories(
-            ${SRC_DIR}/../test/tools/prometheus
+            ${PROJECT_SOURCE_DIR}/test/tools/prometheus
             ${PROJECT_3RDPARTY_BIN_DIR}/prometheus/include
     )
     add_compile_definitions(USE_PROMETHEUS)
@@ -109,6 +108,10 @@ endif()
 
 if ("${OPEN_TP}" STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TP_TOOLS)
+    include_directories(
+            ${PROJECT_SOURCE_DIR}/test/tools/bio_tp/
+            ${PROJECT_SOURCE_DIR}/test/tools/tracepoint/include
+    )
 endif()
 
 add_subdirectory(3rdparty)

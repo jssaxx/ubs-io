@@ -146,7 +146,7 @@ typedef struct {
     char caCrlPath[PATH_MAX];          // caCer path
     char privateKeyPath[PATH_MAX];     // private key path
     char privateKeyPassword[PATH_MAX]; // private key password
-    char decrypterPath[PATH_MAX];      // decrypter lib path
+    char decrypterLibPath[PATH_MAX];      // decrypter lib path
     char opensslLibDir[PATH_MAX];      // openssl lib dir path
 } ClientOptionsConfig;
 
