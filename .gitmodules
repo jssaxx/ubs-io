@@ -18,3 +18,7 @@
 	path = ubsio-boostio/3rdparty/hadoop/hadoop
 	url = https://gitcode.com/gh_mirrors/ha/hadoop.git
 	tag = rel/release-3.4.0
+[submodule "ubsio-boostio/3rdparty/prometheus/prometheus"]
+	path = ubsio-boostio/3rdparty/prometheus/prometheus
+	url = https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git
+    tag = v1.2.4
