@@ -135,17 +135,13 @@ $BUILD_CMD || {
 	  exit 1
 }
 cd ${PROJ_DIR}/dist
-if [[ "$BUILD_TYPE" == "debug" ]];then
-	  \cp -d 3rdparty/zookeeper/lib/* bio/lib/.
-	  if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
-	  	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
-	  fi
+if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
+	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 
+\cp -d 3rdparty/zookeeper/lib/* bio/lib/.
 \cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
 \cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
-\cp 3rdparty/ubs-comm/include/hcom/*.h bio/include/.
-\cp 3rdparty/ubs-comm/include/hcom/capi/*.h bio/include/.
 
 chmod 550 -R ../scripts/*
 \cp -r ../scripts bio/.
