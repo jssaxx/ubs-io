@@ -109,7 +109,16 @@ fi
 
 if [[ -z "${CI_BUILD}" ]];then
     echo "update submodules ... "
-    cd $PROJ_DIR && git submodule update --init
+    cd $PROJ_DIR
+    git submodule update --init 3rdparty/ubs-comm/ubs-comm \
+                                3rdparty/spdlog/spdlog \
+                                3rdparty/zookeeper/zookeeper \
+                                3rdparty/libboundscheck/libboundscheck \
+                                3rdparty/hadoop/hadoop
+    if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
+        cd $PROJ_DIR && git submodule update --init 3rdparty/prometheus/prometheus
+        cd $PROJ_DIR/3rdparty/prometheus/prometheus && git submodule update --init
+    fi
 fi
 
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))

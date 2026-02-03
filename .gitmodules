@@ -6,10 +6,6 @@
 	path = ubsio-boostio/3rdparty/libboundscheck/libboundscheck
 	url = https://gitcode.com/openeuler/libboundscheck.git
 	tag = v1.1.16
-[submodule "ubsio-boostio/3rdparty/prometheus/prometheus"]
-	path = ubsio-boostio/3rdparty/prometheus/prometheus
-	url = https://gitcode.com/GitHub_Trending/pr/prometheus.git
-	tag = v3.7.3
 [submodule "ubsio-boostio/3rdparty/spdlog/spdlog"]
 	path = ubsio-boostio/3rdparty/spdlog/spdlog
 	url = https://gitcode.com/GitHub_Trending/sp/spdlog.git
@@ -18,3 +14,7 @@
 	path = ubsio-boostio/3rdparty/zookeeper/zookeeper
 	url = https://gitcode.com/gh_mirrors/zo/zookeeper.git
 	tag = v3.9.3
+[submodule "ubsio-boostio/3rdparty/prometheus/prometheus"]
+	path = ubsio-boostio/3rdparty/prometheus/prometheus
+	url = https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git
+    tag = v1.2.4
