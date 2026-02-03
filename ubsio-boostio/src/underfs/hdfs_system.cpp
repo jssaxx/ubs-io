@@ -15,11 +15,8 @@
 #include "bio_err.h"
 #include "bio_log.h"
 #include "bio_tracepoint_helper.h"
-#include "ceptor_env.h"
 #include "underfs_config.h"
 #include <cstring>
-
-using namespace ock::interceptor;
 
 namespace ock {
 namespace bio {
@@ -534,13 +531,18 @@ BResult HdfsSystem::LoadHdfsLibrary()
     return BIO_OK;
 #endif
 
-    std::string hadoopHome = env::GetEnv("HADOOP_HOME", "");
-    if (hadoopHome.empty()) {
-        LOG_ERROR("Failed to check HADOOP_HOME.");
+    const char* hadoopHome = getenv("HADOOP_HOME");
+    if (hadoopHome == nullptr || hadoopHome[0] == '\0') {
+        LOG_ERROR("HADOOP_HOME is not set or empty.");
         return BIO_UFS_IOERR;
     }
 
-    std::string soFileName = hadoopHome + "/lib/native/libhdfs.so";
+    std::string homeStr(hadoopHome);
+    if (homeStr.back() != '/') {
+        homeStr = homeStr + '/';
+    }
+
+    std::string soFileName = homeStr + "lib/native/libhdfs.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
         LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");

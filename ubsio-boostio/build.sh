@@ -113,8 +113,7 @@ if [[ -z "${CI_BUILD}" ]];then
     git submodule update --init 3rdparty/ubs-comm/ubs-comm \
                                 3rdparty/spdlog/spdlog \
                                 3rdparty/zookeeper/zookeeper \
-                                3rdparty/libboundscheck/libboundscheck \
-                                3rdparty/hadoop/hadoop
+                                3rdparty/libboundscheck/libboundscheck
     if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
         cd $PROJ_DIR && git submodule update --init 3rdparty/prometheus/prometheus
         cd $PROJ_DIR/3rdparty/prometheus/prometheus && git submodule update --init
