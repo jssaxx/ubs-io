@@ -15,6 +15,10 @@ if ("${OPEN_TP}" STREQUAL "ON")
     endif()
 endif()
 
+if ("${OPEN_CLI}" STREQUAL "ON")
+    add_subdirectory(diagnose)
+endif()
+
 if ("${OPEN_PROMETHEUS}" STREQUAL "ON")
     add_subdirectory(prometheus)
 endif()
