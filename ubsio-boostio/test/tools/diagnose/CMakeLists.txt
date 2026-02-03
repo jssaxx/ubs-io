@@ -1,3 +1,4 @@
+include_directories(${PROJECT_SOURCE_DIR}/test/tools/diagnose)
 add_subdirectory(cli_sdk)
 add_subdirectory(cli_server)
 
