@@ -110,6 +110,9 @@ fi
 if [[ -z "${CI_BUILD}" ]];then
     echo "update submodules ... "
     cd $PROJ_DIR && git submodule update --init
+    if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
+        cd $PROJ_DIR/3rdparty/prometheus/prometheus && git submodule update --init
+    fi
 fi
 
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
