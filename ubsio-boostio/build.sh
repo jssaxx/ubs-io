@@ -158,8 +158,6 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mkdir -p test_tools/bin
     mkdir -p test_tools/lib
     mkdir -p test_tools/conf
-    mv bio/bin/cli_server test_tools/bin/.
-    mv bio/bin/cli_client test_tools/bin/.
     mv bio/bin/bio_console test_tools/bin/.
     mv bio/lib/libsdk_diagnose.so test_tools/lib/.
     mv bio/lib/libserver_diagnose.so test_tools/lib/.
