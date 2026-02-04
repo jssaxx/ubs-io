@@ -13,7 +13,11 @@ if ("${OPEN_TP}" STREQUAL "ON")
     if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
         add_subdirectory(tracepoint)
     endif()
-endif ()
+endif()
+
+if ("${OPEN_CLI}" STREQUAL "ON")
+    add_subdirectory(diagnose)
+endif()
 
 if ("${OPEN_PROMETHEUS}" STREQUAL "ON")
     add_subdirectory(prometheus)
