@@ -26,6 +26,12 @@
 using namespace ock::bio;
 std::regex serverPattern("[0-9]+");
 
+bool ock::bio::diagnose::BioServerCommand::mInited = false;
+void* ock::bio::diagnose::BioServerCommand::mHandler = nullptr;
+CliRegCmdFuncPtr ock::bio::diagnose::BioServerCommand::mRegOp = nullptr;
+CliUnRegCmdFuncPtr ock::bio::diagnose::BioServerCommand::mUnRegOp = nullptr;
+CliPrintBufFuncPtr ock::bio::diagnose::BioServerCommand::mPrintOp = nullptr;
+
 int32_t diagnose::BioServerCommand::LoadSymbols()
 {
     std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
@@ -46,7 +52,7 @@ int32_t diagnose::BioServerCommand::LoadSymbols()
 
     mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "CLI_RegCmd"));
     mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "CLI_UnRegCmd"));
-    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "mPrintOp"));
+    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "CLI_PrintBuf"));
     if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
         LOG_ERROR("Failed to load function.");
         dlclose(mHandler);

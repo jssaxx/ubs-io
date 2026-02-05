@@ -4,7 +4,7 @@ install(TARGETS bio_server DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OW
 
 target_link_libraries(bio_server
         -Wl,--start-group
-        pthread dl aio expire_checker bio_security rados
+        pthread dl aio expire_checker rados
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a
