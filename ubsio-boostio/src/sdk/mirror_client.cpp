@@ -1365,6 +1365,7 @@ BResult MirrorClient::GetMasterRemote(GetRequest &req, uint16_t masterNid, char 
             req.offset << ", length:" << req.length << ", dstNid:" << masterNid << ".");
     } else {
         if (rsp.num > SLICE_ADDR_SIZE) {
+            CLIENT_LOG_ERROR("rsp.num is " << rsp.num);
             net::BioClientNet::Instance()->Free(mrInfo.address);
             return BIO_INVALID_PARAM;
         }

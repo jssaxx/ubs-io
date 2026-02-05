@@ -709,6 +709,7 @@ BResult MirrorServer::GetConvergence(GetRequest &req, GetResponse &rsp)
 BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx)
 {
     if (UNLIKELY(!CheckAll(req.comm))) {
+        LOG_ERROR("UNLIKELY(!CheckAll(req.comm))");
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -1516,18 +1517,23 @@ bool MirrorServer::CheckGetReq(GetRequest *req)
     req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
+        LOG_ERROR("key.size() is " << key.size() << ", key[0] is " << key[0] << ", key " << key);
         return false;
     }
     if (req->offset > BIO_IO_MAX_LEN || req->length == 0 || req->length > BIO_IO_MAX_LEN) {
+        LOG_ERROR("req->offset " << req->offset << ", req->length " << req->length);
         return false;
     }
     if (req->offset + req->length > BIO_IO_MAX_LEN) {
+        LOG_ERROR("req->offset " << req->offset << ", req->length " << req->length);
         return false;
     }
     if (req->size == 0 || req->size > BIO_IO_MAX_LEN) {
+        LOG_ERROR("req->size " << req->size);
         return false;
     }
     if (req->ptId > NO_8192) {
+        LOG_ERROR("req->ptId " << req->ptId);
         return false;
     }
     return true;
@@ -1535,13 +1541,18 @@ bool MirrorServer::CheckGetReq(GetRequest *req)
 
 int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 {
+    LOG_DEBUG("haha get, key:" << req->key << ", srcNid:" << req->comm.srcNid << ", offset:" << req->offset <<
+                                        ", length:" << req->length << ", mr size:" << req->size << ", mr key:" << req->mrKey
+                                        << " ptVersion:" << BioServer::Instance()->GetPtEntry(req->comm.ptId).version << ", ptId:" << req->comm.ptId);
     if (!CheckGetReq(req)) {
+        LOG_ERROR("CheckGetReq");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
     GetResponse rsp;
     BResult result;
+    LOG_ERROR("result = Get(*req, rsp, ctx);");
     BIO_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
     result = Get(*req, rsp, ctx);
     BIO_TP_END;
@@ -1550,6 +1561,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
         return BIO_OK;
     }
 
+    LOG_ERROR("rsp.num is " << rsp.num);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(GetResponse));
     return BIO_OK;
 }
@@ -1557,6 +1569,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
+        LOG_ERROR("UNLIKELY(!Ready())");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
