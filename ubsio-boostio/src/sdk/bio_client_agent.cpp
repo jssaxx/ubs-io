@@ -207,8 +207,8 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
     if (ret != BIO_OK) {
         return ret;
     }
-    // 当前RPC协议仅支持RDMA(0)和TCP(1), 集群组仅有一个(groupId为0).
-    if (rsp.protocol > 1 || rsp.groupId != 0) {
+    // 集群组仅有一个(groupId为0).
+    if (rsp.groupId != 0) {
         return BIO_INNER_ERR;
     }
     protocol = rsp.protocol;

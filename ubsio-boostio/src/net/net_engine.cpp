@@ -45,8 +45,6 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         return BIO_OK;
     }
 
-    mUsedBlock = 0;
-
     auto netLog = NetLog::Instance();
     if (netLog == nullptr) {
         NET_LOG_ERROR("Make net log failed.");

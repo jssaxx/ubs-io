@@ -589,7 +589,7 @@ void *BdmDiskEventsThread(void *argsP)
     struct epoll_event *epeventP = &bdmPool->epevent[threadIdx];
     int32_t epfd = bdmPool->epfd[threadIdx];
     int32_t recvs;
-    int32_t fdNum = 128UL;
+    int32_t fdNum = 8UL;
 
     BDM_LOGINFO(0, "bdm disk events thread start.");
 
