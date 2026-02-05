@@ -732,7 +732,7 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+        if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
             return respMsg.errorCode;
         }
@@ -756,7 +756,7 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+        if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
             return respMsg.errorCode;
         }
@@ -785,7 +785,7 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+        if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code " <<
                 respMsg.errorCode);
             return respMsg.errorCode;
