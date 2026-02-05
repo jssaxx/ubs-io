@@ -1540,9 +1540,9 @@ bool MirrorServer::CheckGetReq(GetRequest *req)
 
 int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 {
-    LOG_DEBUG("haha get, key:" << req.key << ", srcNid:" << req.comm.srcNid << ", offset:" << req.offset <<
-                                        ", length:" << req.length << ", mr size:" << req.size << ", mr key:" << req.mrKey
-                                        << " ptVersion:" << BioServer::Instance()->GetPtEntry(req.comm.ptId).version << ", ptId:" << req.comm.ptId);
+    LOG_DEBUG("haha get, key:" << req->key << ", srcNid:" << req->comm.srcNid << ", offset:" << req->offset <<
+                                        ", length:" << req->length << ", mr size:" << req->size << ", mr key:" << req->mrKey
+                                        << " ptVersion:" << BioServer::Instance()->GetPtEntry(req->comm.ptId).version << ", ptId:" << req->comm.ptId);
     if (!CheckGetReq(req)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
