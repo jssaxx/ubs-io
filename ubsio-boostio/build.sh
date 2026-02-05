@@ -149,9 +149,9 @@ if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 
-\cp -d 3rdparty/zookeeper/lib/* bio/lib/.
-\cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
-\cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
+if [[ "$BUILD_TYPE" == "debug" ]]; then
+	  \cp -d 3rdparty/zookeeper/lib/* bio/lib/.
+fi
 
 if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mkdir -p test_tools
@@ -162,6 +162,7 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mv bio/lib/libsdk_diagnose.so test_tools/lib/.
     mv bio/lib/libserver_diagnose.so test_tools/lib/.
     \cp ../configs/bio_sdk_test.conf test_tools/conf/.
+    \cp -d 3rdparty/zookeeper/lib/* test_tools/lib/.
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi
 

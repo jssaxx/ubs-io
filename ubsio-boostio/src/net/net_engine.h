@@ -104,7 +104,7 @@ public:
 
     inline uint64_t GetUsedBlockSize()
     {
-        return mUsedBlock * mDataPageBytes;
+        return mUsedBlock.load() * mDataPageBytes;
     }
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint64_t &outKey)
@@ -917,7 +917,7 @@ private:
     NetChannelMgrPtr mDataChannelMgr = nullptr;
     MemoryRegion mLocalMr;
     NetBlockPoolPtr mMrBlockPool = nullptr;
-    std::atomic<uint64_t> mUsedBlock;
+    std::atomic<uint64_t> mUsedBlock {0};
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};
     NetConnectorPtr mConnector = nullptr;
     DEFINE_REF_COUNT_VARIABLE
