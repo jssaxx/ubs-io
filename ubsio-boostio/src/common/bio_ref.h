@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <utility>
+#include <new>
 
 namespace ock {
 namespace bio {

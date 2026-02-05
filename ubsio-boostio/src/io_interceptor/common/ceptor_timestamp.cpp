@@ -12,6 +12,7 @@
 
 #include <sys/time.h>
 #include <cinttypes>
+#include <ctime>
 #include "securec.h"
 #include "ceptor_timestamp.h"
 
