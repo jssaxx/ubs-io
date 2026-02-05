@@ -709,6 +709,7 @@ BResult MirrorServer::GetConvergence(GetRequest &req, GetResponse &rsp)
 BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx)
 {
     if (UNLIKELY(!CheckAll(req.comm))) {
+        LOG_ERROR("UNLIKELY(!CheckAll(req.comm))");
         return BIO_CHECK_PT_FAIL;
     }
 
@@ -1544,12 +1545,14 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
                                         ", length:" << req->length << ", mr size:" << req->size << ", mr key:" << req->mrKey
                                         << " ptVersion:" << BioServer::Instance()->GetPtEntry(req->comm.ptId).version << ", ptId:" << req->comm.ptId);
     if (!CheckGetReq(req)) {
+        LOG_ERROR("CheckGetReq");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
     GetResponse rsp;
     BResult result;
+    LOG_ERROR("result = Get(*req, rsp, ctx);");
     BIO_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
     result = Get(*req, rsp, ctx);
     BIO_TP_END;
@@ -1558,6 +1561,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
         return BIO_OK;
     }
 
+    LOG_ERROR("rsp.num is " << rsp.num);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(GetResponse));
     return BIO_OK;
 }
@@ -1565,6 +1569,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 int32_t MirrorServer::HandleGet(ServiceContext &ctx)
 {
     if (UNLIKELY(!Ready())) {
+        LOG_ERROR("UNLIKELY(!Ready())");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
         return BIO_OK;
     }
