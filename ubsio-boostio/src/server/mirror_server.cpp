@@ -1516,7 +1516,7 @@ bool MirrorServer::CheckGetReq(GetRequest *req)
     req->key[KEY_MAX_SIZE - 1] = '\0';
     std::string key(req->key);
     if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
-        LOG_ERROR("key.size() is " << key.size() << ", key[0] is " << key[0] << ", key.find()" << key.find("..") != std::string::npos);
+        LOG_ERROR("key.size() is " << key.size() << ", key[0] is " << key[0] << ", key " << key);
         return false;
     }
     if (req->offset > BIO_IO_MAX_LEN || req->length == 0 || req->length > BIO_IO_MAX_LEN) {
