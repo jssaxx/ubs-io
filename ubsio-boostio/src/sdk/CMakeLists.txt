@@ -14,7 +14,7 @@ install(TARGETS bio_sdk DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER
 
 target_link_libraries(bio_sdk
         -Wl,--start-group
-        pthread dl expire_checker bio_security rados
+        pthread dl expire_checker rados
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a

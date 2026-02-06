@@ -49,6 +49,12 @@ struct PerfTestParam {
 static std::unordered_map<std::string, ObjLocation> gLocation;
 static ReadWriteLock gLocationLock;
 
+bool ock::bio::diagnose::BioSdkCommand::mInited = false;
+void* ock::bio::diagnose::BioSdkCommand::mHandler = nullptr;
+CliRegCmdFuncPtr ock::bio::diagnose::BioSdkCommand::mRegOp = nullptr;
+CliUnRegCmdFuncPtr ock::bio::diagnose::BioSdkCommand::mUnRegOp = nullptr;
+CliPrintBufFuncPtr ock::bio::diagnose::BioSdkCommand::mPrintOp = nullptr;
+
 int32_t diagnose::BioSdkCommand::LoadSymbols()
 {
     std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
@@ -69,7 +75,7 @@ int32_t diagnose::BioSdkCommand::LoadSymbols()
 
     mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "CLI_RegCmd"));
     mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "CLI_UnRegCmd"));
-    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "mPrintOp"));
+    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "CLI_PrintBuf"));
     if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
         CLIENT_LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
