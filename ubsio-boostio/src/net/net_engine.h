@@ -547,6 +547,7 @@ public:
         BIO_TRACE_START(NET_TRACE_REPLY_SYNC);
         UBSHcomReplyContext replyCtx;
         replyCtx.errorCode = static_cast<int16_t>(retCode);
+        LOG_ERROR("retCode :" << retCode << ", replyCtx.errorCode: " << replyCtx.errorCode);
         replyCtx.rspCtx = ctx.RspCtx();
         UBSHcomRequest reqMsg;
         if (resp != nullptr) {
@@ -732,7 +733,7 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+        if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
             return respMsg.errorCode;
         }
@@ -756,7 +757,7 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+        if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
             return respMsg.errorCode;
         }
@@ -785,7 +786,7 @@ private:
             return NetResult(result);
         }
 
-        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+        if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
             NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code " <<
                 respMsg.errorCode);
             return respMsg.errorCode;

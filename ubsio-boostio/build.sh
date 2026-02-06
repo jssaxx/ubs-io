@@ -155,6 +155,9 @@ if [[ "$BUILD_TYPE" == "debug" ]]; then
 	  \cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
 fi
 
+\cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
+\cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
+
 if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mkdir -p test_tools
     mkdir -p test_tools/bin
