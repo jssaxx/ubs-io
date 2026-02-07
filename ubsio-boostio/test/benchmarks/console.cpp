@@ -88,7 +88,7 @@ int main(int argc, char **argv)
             delete optConf;
             return BIO_ERR;
         }
-        auto result = mConfig->Initialize(".");
+        auto result = mConfig->Initialize("/etc/boostio/");
         if (result != BIO_OK) {
             std::cout << "Failed to initialize sdk configuration, result: " << result << "." << std::endl;
             delete optConf;
