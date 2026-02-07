@@ -42,4 +42,5 @@ namespace bio {
     };
 }
 }
+
 #endif // BOOSTIO_DISK_STATISTIC_H

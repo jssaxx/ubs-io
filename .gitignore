@@ -4,3 +4,5 @@
 /Build/
 /cmake-build-*/
 /dist/
+
+.codemate
