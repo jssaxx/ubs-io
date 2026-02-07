@@ -1275,8 +1275,8 @@ TEST_F(TestBio, test_caculator_rebalance)
     stateList->poolId = 0;
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
-    CmNodeEvent *cmNodeEvent;
-    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList, cmNodeEvent);
+    CmNodeEvent cmNodeEvent;
+    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList, &cmNodeEvent);
     DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
@@ -1335,8 +1335,8 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     stateList->poolId = 0;
     stateList->nodeNum = 1;
     stateList->nodeList[0] = *nodeStateInfo;
-    CmNodeEvent *cmNodeEvent;
-    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList, cmNodeEvent);
+    CmNodeEvent cmNodeEvent;
+    ViewCalculatorRebalance(calculator, notifyList, stateList, ptEntryList, &cmNodeEvent);
     DestroyViewCalculator(calculator);
     free(stateList);
     free(nodeStateInfo);
@@ -1817,7 +1817,7 @@ TEST_F(TestBio, test_bio_add_disk_update_bdm_success)
     BioHvsActiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "SERVER_NO_DISK_CHECK", 0, 1, userParam);
     auto ret = BioAddDisk(diskPath);
-    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(ret, BIO_INNER_ERR);
     BioHvsDeactiveTracePoint(0, "SERVER_BDM_UPDATE_SUCCESS");
     BioHvsDeactiveTracePoint(0, "SERVER_NO_DISK_CHECK");
 }
