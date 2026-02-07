@@ -48,19 +48,14 @@ using FuncSslCtxFree = void (*)(SSL_CTX *);
 using FuncSslWrite = int (*)(SSL *, const void *, int);
 using FuncSslRead = int (*)(SSL *, void *, int);
 using FuncSslGetError = int (*)(const SSL *, int);
-using FuncSslWriteEx = int (*)(SSL *, const void *, size_t, size_t *);
-using FuncSslReadEx = int (*)(SSL *, void *, size_t, size_t *);
 
 using FuncSetCipherSuites = int (*)(SSL_CTX *, const char *);
 // SSL_CTX_set_min_proto_version
 using FuncSslCtxCtrl = long (*)(SSL_CTX *, int, long, void *);
 using FuncSslGetCurrentCipher = const SSL_CIPHER *(*)(const SSL *);
 using FuncSslGetVersion = const char *(*)(const SSL *);
-using FuncSslIsServer = int (*)(SSL *);
 
-using FuncUsePrivKey = int (*)(SSL_CTX *ctx, EVP_PKEY *pkey);
 using FuncUsePrivKeyFile = int (*)(SSL_CTX *ctx, const char *, int);
-using FuncUseCertFile = int (*)(SSL_CTX *, const char *, int);
 using FuncPemReadX509 = X509 *(*)(FILE * fp, X509 **x, pem_password_cb *cb, void *u);
 using FuncX509Free = X509 *(*)(X509 * cert);
 using FuncAsn1Time2Tm = int (*)(const ASN1_TIME *s, struct tm *tm);
@@ -71,7 +66,6 @@ using FuncLoadVerifyLocations = int (*)(SSL_CTX *, const char *, const char *);
 using FuncCheckPrivateKey = int (*)(const SSL_CTX *);
 using FuncSslGetVerifyResult = long (*)(const SSL *);
 using FuncSslGetPeerCertificate = X509 *(*)(const SSL *);
-using FuncSsLCtxGet0Certificate = X509 *(*)(const SSL_CTX *ctx);
 
 using FuncEvpAesCipher = const EVP_CIPHER *(*)();
 using FuncEvpCipherCtxNew = EVP_CIPHER_CTX *(*)();
@@ -94,10 +88,8 @@ using FuncX509VerifyCert = int (*)(X509_STORE_CTX *ctx);
 using FuncX509VerifyCertErrorString = const char *(*)(long n);
 using FuncX509StoreCtxGetError = int (*)(const X509_STORE_CTX *ctx);
 using FuncPemReadBioX509Crl = X509_CRL *(*)(BIO * bp, X509_CRL **x, PEM_PASSWORD_CB *cb, void *u);
-using FuncPemReadBioPk = EVP_PKEY *(*)(BIO * bp, EVP_PKEY **x, PEM_PASSWORD_CB *cb, void *u);
 using FuncBioSFile = const BIO_METHOD *(*)(void);
 using FuncBioNew = BIO *(*)(const BIO_METHOD *);
-using FuncBioNewMemBuf = BIO *(*)(const void *buf, int len);
 using FuncBioFree = void (*)(BIO *b);
 using FuncBioCtrl = long (*)(BIO *bp, int cmd, long larg, void *parg);
 using FuncX509StoreCtxGet0Store = X509_STORE *(*)(const X509_STORE_CTX *ctx);
@@ -111,17 +103,15 @@ using FuncX509CrlGet0NextUpdate = const ASN1_TIME *(*)(const X509_CRL *crl);
 using FuncX509GetNotAfter = ASN1_TIME *(*)(const X509 *x);
 using FuncX509GetNotBefore = ASN1_TIME *(*)(const X509 *x);
 using FuncX509GetPubkey = EVP_PKEY *(*)(X509 * x);
-using FuncEvpPkeyBits = int (*)(const EVP_PKEY *pkey);
 using FuncEvpPkeyFree = void (*)(EVP_PKEY *pkey);
 
-class OpensslApiDl {
+class DlOpensslApi {
 public:
     static FuncInit initSsl;
     static FuncInit initCrypto;
     static FuncOpensslCleanup opensslCleanup;
     static FuncGetMethod tlsServerMethod;
     static FuncGetMethod tlsClientMethod;
-    static FuncGetMethod tlsMethod;
     static FuncSslOperation sslShutdown;
     static FuncSslFd sslSetFd;
     static FuncSslNew sslNew;
@@ -131,22 +121,14 @@ public:
     static FuncSslWrite sslWrite;
     static FuncSslRead sslRead;
     static FuncSslOperation sslConnect;
-    static FuncSslOperation sslConnectState;
     static FuncSslOperation sslAccept;
-    static FuncSslOperation sslAcceptState;
-    static FuncSslOperation sslGetShutdown;
     static FuncSslGetError sslGetError;
-    static FuncSslWriteEx sslWriteEx;
-    static FuncSslReadEx sslReadEx;
 
     static FuncSslCtxCtrl sslCtxCtrl;
     static FuncSslGetCurrentCipher sslGetCurrentCipher;
     static FuncSslGetVersion sslGetVersion;
-    static FuncSslIsServer sslIsServer;
     static FuncSetCipherSuites setCipherSuites;
-    static FuncUsePrivKey usePrivKey;
     static FuncUsePrivKeyFile usePrivKeyFile;
-    static FuncUseCertFile useCertFile;
     static FuncPemReadX509 pemReadX509;
     static FuncX509Free x509Free;
     static FuncAsn1Time2Tm asn1Time2Tm;
@@ -157,7 +139,6 @@ public:
     static FuncCheckPrivateKey checkPrivateKey;
     static FuncSslGetVerifyResult sslGetVerifyResult;
     static FuncSslGetPeerCertificate sslGetPeerCertificate;
-    static FuncSsLCtxGet0Certificate ssLCtxGet0Certificate;
 
     static FuncEvpAesCipher evpAes128Gcm;
     static FuncEvpAesCipher evpAes256Gcm;
@@ -183,10 +164,8 @@ public:
     static FuncX509VerifyCertErrorString x509VerifyCertErrorString;
     static FuncX509StoreCtxGetError x509StoreCtxGetError;
     static FuncPemReadBioX509Crl pemReadBioX509Crl;
-    static FuncPemReadBioPk pemReadBioPk;
     static FuncBioSFile bioSFile;
     static FuncBioNew bioNew;
-    static FuncBioNewMemBuf bioNewMemBuf;
     static FuncBioFree bioFree;
     static FuncBioCtrl bioCtrl;
     static FuncX509StoreCtxGet0Store x509StoreCtxGet0Store;
@@ -200,7 +179,6 @@ public:
     static FuncX509GetNotAfter x509GetNotAfter;
     static FuncX509GetNotBefore x509GetNotBefore;
     static FuncX509GetPubkey x509GetPubkey;
-    static FuncEvpPkeyBits evpPkeyBits;
     static FuncEvpPkeyFree evpPkeyFree;
 
     static int LoadOpensslApiDl(const std::string &libPath);
