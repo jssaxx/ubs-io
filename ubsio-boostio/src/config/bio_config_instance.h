@@ -89,9 +89,9 @@ const auto PROMETHEUS_ENABLE = std::make_pair("bio.prometheus.enable", "false");
 const auto PROMETHEUS_LISTEN_ADDRESS = std::make_pair("bio.prometheus.exposer", "127.0.0.1:7204");
 const auto PROMETHEUS_SCRAPE_INTERVAL_SEC = std::make_pair("bio.prometheus.scrape_interval_sec", 15);
 
-const std::string CONF_INIT_BAK_SUFFIX = "/conf/bio.conf.bak.init";
-const std::string CONF_BAK_SUFFIX = "/conf/bio.conf.bak";
-const std::string CONF_SUFFIX = "/conf/bio.conf";
+const std::string CONF_INIT_BAK_SUFFIX = "bio.conf.bak.init";
+const std::string CONF_BAK_SUFFIX = "bio.conf.bak";
+const std::string CONF_SUFFIX = "bio.conf";
 
 class BioConfig;
 using BioConfigPtr = Ref<BioConfig>;

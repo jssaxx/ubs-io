@@ -26,6 +26,19 @@
         (ptr) = (type)ptr1;                        \
     } while (0)
 
+#define DLSYM_UPDATE(handle, type, ptr, sym1, sym2)        \
+    do {                                                   \
+        auto ptr1 = dlsym((handle), (sym1));               \
+        if (ptr1 == nullptr) {                             \
+            ptr1 = dlsym((handle), (sym2));                \
+            if (ptr1 == nullptr) {                         \
+                LOG_ERROR("Failed to load " << (sym1));    \
+                return -1;                                 \
+            }                                              \
+        }                                                  \
+        (ptr) = (type)ptr1;                                \
+    } while (0)
+
 namespace ock {
 namespace bio {
 FuncInit OpensslApiDl::initSsl = nullptr;
@@ -34,7 +47,6 @@ FuncOpensslCleanup OpensslApiDl::opensslCleanup = nullptr;
 
 FuncGetMethod OpensslApiDl::tlsServerMethod = nullptr;
 FuncGetMethod OpensslApiDl::tlsClientMethod = nullptr;
-FuncGetMethod OpensslApiDl::tlsMethod = nullptr;
 FuncSslOperation OpensslApiDl::sslShutdown = nullptr;
 FuncSslFd OpensslApiDl::sslSetFd = nullptr;
 FuncSslNew OpensslApiDl::sslNew = nullptr;
@@ -44,22 +56,14 @@ FuncSslCtxFree OpensslApiDl::sslCtxFree = nullptr;
 FuncSslWrite OpensslApiDl::sslWrite = nullptr;
 FuncSslRead OpensslApiDl::sslRead = nullptr;
 FuncSslOperation OpensslApiDl::sslConnect = nullptr;
-FuncSslOperation OpensslApiDl::sslConnectState = nullptr;
 FuncSslOperation OpensslApiDl::sslAccept = nullptr;
-FuncSslOperation OpensslApiDl::sslAcceptState = nullptr;
-FuncSslOperation OpensslApiDl::sslGetShutdown = nullptr;
 FuncSslGetError OpensslApiDl::sslGetError = nullptr;
-FuncSslWriteEx OpensslApiDl::sslWriteEx = nullptr;
-FuncSslReadEx OpensslApiDl::sslReadEx = nullptr;
 
 FuncSslCtxCtrl OpensslApiDl::sslCtxCtrl = nullptr;
 FuncSslGetCurrentCipher OpensslApiDl::sslGetCurrentCipher = nullptr;
 FuncSslGetVersion OpensslApiDl::sslGetVersion = nullptr;
-FuncSslIsServer OpensslApiDl::sslIsServer = nullptr;
 FuncSetCipherSuites OpensslApiDl::setCipherSuites = nullptr;
-FuncUsePrivKey OpensslApiDl::usePrivKey = nullptr;
 FuncUsePrivKeyFile OpensslApiDl::usePrivKeyFile = nullptr;
-FuncUseCertFile OpensslApiDl::useCertFile = nullptr;
 FuncSslCtxSetVerify OpensslApiDl::sslCtxSetVerify = nullptr;
 FuncSetDefaultPasswdCbUserdata OpensslApiDl::setDefaultPasswdCbUserdata = nullptr;
 FuncSetCertVerifyCallback OpensslApiDl::setCertVerifyCallback = nullptr;
@@ -67,7 +71,6 @@ FuncLoadVerifyLocations OpensslApiDl::loadVerifyLocations = nullptr;
 FuncCheckPrivateKey OpensslApiDl::checkPrivateKey = nullptr;
 FuncSslGetVerifyResult OpensslApiDl::sslGetVerifyResult = nullptr;
 FuncSslGetPeerCertificate OpensslApiDl::sslGetPeerCertificate = nullptr;
-FuncSsLCtxGet0Certificate OpensslApiDl::ssLCtxGet0Certificate = nullptr;
 
 FuncEvpAesCipher OpensslApiDl::evpAes128Gcm = nullptr;
 FuncEvpAesCipher OpensslApiDl::evpAes256Gcm = nullptr;
@@ -93,10 +96,8 @@ FuncX509VerifyCert OpensslApiDl::x509VerifyCert = nullptr;
 FuncX509VerifyCertErrorString OpensslApiDl::x509VerifyCertErrorString = nullptr;
 FuncX509StoreCtxGetError OpensslApiDl::x509StoreCtxGetError = nullptr;
 FuncPemReadBioX509Crl OpensslApiDl::pemReadBioX509Crl = nullptr;
-FuncPemReadBioPk OpensslApiDl::pemReadBioPk = nullptr;
 FuncBioSFile OpensslApiDl::bioSFile = nullptr;
 FuncBioNew OpensslApiDl::bioNew = nullptr;
-FuncBioNewMemBuf OpensslApiDl::bioNewMemBuf = nullptr;
 FuncBioFree OpensslApiDl::bioFree = nullptr;
 FuncBioCtrl OpensslApiDl::bioCtrl = nullptr;
 FuncX509StoreCtxGet0Store OpensslApiDl::x509StoreCtxGet0Store = nullptr;
@@ -110,7 +111,6 @@ FuncX509CrlGet0NextUpdate OpensslApiDl::x509CrlGet0NextUpdate = nullptr;
 FuncX509GetNotAfter OpensslApiDl::x509GetNotAfter = nullptr;
 FuncX509GetNotBefore OpensslApiDl::x509GetNotBefore = nullptr;
 FuncX509GetPubkey OpensslApiDl::x509GetPubkey = nullptr;
-FuncEvpPkeyBits OpensslApiDl::evpPkeyBits = nullptr;
 FuncEvpPkeyFree OpensslApiDl::evpPkeyFree = nullptr;
 FuncPemReadX509 OpensslApiDl::pemReadX509 = nullptr;
 FuncX509Free OpensslApiDl::x509Free = nullptr;
@@ -128,7 +128,6 @@ int OpensslApiDl::LoadSSLSymbols(void *sslHandle)
     DLSYM(sslHandle, FuncOpensslCleanup, opensslCleanup, "OPENSSL_cleanup");
     DLSYM(sslHandle, FuncGetMethod, tlsServerMethod, "TLS_server_method");
     DLSYM(sslHandle, FuncGetMethod, tlsClientMethod, "TLS_client_method");
-    DLSYM(sslHandle, FuncGetMethod, tlsMethod, "TLS_method");
     DLSYM(sslHandle, FuncSslOperation, sslShutdown, "SSL_shutdown");
     DLSYM(sslHandle, FuncSslFd, sslSetFd, "SSL_set_fd");
     DLSYM(sslHandle, FuncSslNew, sslNew, "SSL_new");
@@ -138,18 +137,13 @@ int OpensslApiDl::LoadSSLSymbols(void *sslHandle)
     DLSYM(sslHandle, FuncSslWrite, sslWrite, "SSL_write");
     DLSYM(sslHandle, FuncSslRead, sslRead, "SSL_read");
     DLSYM(sslHandle, FuncSslOperation, sslConnect, "SSL_connect");
-    DLSYM(sslHandle, FuncSslOperation, sslConnectState, "SSL_set_connect_state");
     DLSYM(sslHandle, FuncSslOperation, sslAccept, "SSL_accept");
-    DLSYM(sslHandle, FuncSslOperation, sslAcceptState, "SSL_set_accept_state");
-    DLSYM(sslHandle, FuncSslOperation, sslGetShutdown, "SSL_get_shutdown");
     DLSYM(sslHandle, FuncSslGetError, sslGetError, "SSL_get_error");
     DLSYM(sslHandle, FuncSetCipherSuites, setCipherSuites, "SSL_CTX_set_ciphersuites");
     DLSYM(sslHandle, FuncSslCtxCtrl, sslCtxCtrl, "SSL_CTX_ctrl");
     DLSYM(sslHandle, FuncSslGetCurrentCipher, sslGetCurrentCipher, "SSL_get_current_cipher");
     DLSYM(sslHandle, FuncSslGetVersion, sslGetVersion, "SSL_get_version");
-    DLSYM(sslHandle, FuncUsePrivKey, usePrivKey, "SSL_CTX_use_PrivateKey");
     DLSYM(sslHandle, FuncUsePrivKeyFile, usePrivKeyFile, "SSL_CTX_use_PrivateKey_file");
-    DLSYM(sslHandle, FuncUseCertFile, useCertFile, "SSL_CTX_use_certificate_file");
     DLSYM(sslHandle, FuncSslCtxSetVerify, sslCtxSetVerify, "SSL_CTX_set_verify");
     DLSYM(sslHandle, FuncSetDefaultPasswdCbUserdata, setDefaultPasswdCbUserdata,
           "SSL_CTX_set_default_passwd_cb_userdata");
@@ -157,11 +151,8 @@ int OpensslApiDl::LoadSSLSymbols(void *sslHandle)
     DLSYM(sslHandle, FuncLoadVerifyLocations, loadVerifyLocations, "SSL_CTX_load_verify_locations");
     DLSYM(sslHandle, FuncCheckPrivateKey, checkPrivateKey, "SSL_CTX_check_private_key");
     DLSYM(sslHandle, FuncSslGetVerifyResult, sslGetVerifyResult, "SSL_get_verify_result");
-    DLSYM(sslHandle, FuncSslGetPeerCertificate, sslGetPeerCertificate, "SSL_get1_peer_certificate");
-    DLSYM(sslHandle, FuncSsLCtxGet0Certificate, ssLCtxGet0Certificate, "SSL_CTX_get0_certificate");
-    DLSYM(sslHandle, FuncSslWriteEx, sslWriteEx, "SSL_write_ex");
-    DLSYM(sslHandle, FuncSslReadEx, sslReadEx, "SSL_read_ex");
-    DLSYM(sslHandle, FuncSslIsServer, sslIsServer, "SSL_is_server");
+    DLSYM_UPDATE(sslHandle, FuncSslGetPeerCertificate, sslGetPeerCertificate, "SSL_get_peer_certificate",
+        "SSL_get1_peer_certificate");
     return 0;
 }
 
@@ -189,10 +180,8 @@ int OpensslApiDl::LoadCryptoSymbols(void *cryptoHandle)
     DLSYM(cryptoHandle, FuncX509VerifyCertErrorString, x509VerifyCertErrorString, "X509_verify_cert_error_string");
     DLSYM(cryptoHandle, FuncX509StoreCtxGetError, x509StoreCtxGetError, "X509_STORE_CTX_get_error");
     DLSYM(cryptoHandle, FuncPemReadBioX509Crl, pemReadBioX509Crl, "PEM_read_bio_X509_CRL");
-    DLSYM(cryptoHandle, FuncPemReadBioPk, pemReadBioPk, "PEM_read_bio_PrivateKey");
     DLSYM(cryptoHandle, FuncBioSFile, bioSFile, "BIO_s_file");
     DLSYM(cryptoHandle, FuncBioNew, bioNew, "BIO_new");
-    DLSYM(cryptoHandle, FuncBioNewMemBuf, bioNewMemBuf, "BIO_new_mem_buf");
     DLSYM(cryptoHandle, FuncBioFree, bioFree, "BIO_free");
     DLSYM(cryptoHandle, FuncBioCtrl, bioCtrl, "BIO_ctrl");
     DLSYM(cryptoHandle, FuncX509StoreCtxGet0Store, x509StoreCtxGet0Store, "X509_STORE_CTX_get0_store");
@@ -206,7 +195,6 @@ int OpensslApiDl::LoadCryptoSymbols(void *cryptoHandle)
     DLSYM(cryptoHandle, FuncX509GetNotAfter, x509GetNotAfter, "X509_getm_notAfter");
     DLSYM(cryptoHandle, FuncX509GetNotBefore, x509GetNotBefore, "X509_getm_notBefore");
     DLSYM(cryptoHandle, FuncX509GetPubkey, x509GetPubkey, "X509_get_pubkey");
-    DLSYM(cryptoHandle, FuncEvpPkeyBits, evpPkeyBits, "EVP_PKEY_get_bits");
     DLSYM(cryptoHandle, FuncEvpPkeyFree, evpPkeyFree, "EVP_PKEY_free");
     DLSYM(cryptoHandle, FuncPemReadX509, pemReadX509, "PEM_read_X509");
     DLSYM(cryptoHandle, FuncX509Free, x509Free, "X509_free");

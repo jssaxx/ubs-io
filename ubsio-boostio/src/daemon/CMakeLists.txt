@@ -10,7 +10,7 @@ if (${DEBUG_UT} MATCHES "OFF")
 	    -pie
         -Wl,--start-group
         pthread dl
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so.0.0.1
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
 		bio_server
         -Wl,--end-group)

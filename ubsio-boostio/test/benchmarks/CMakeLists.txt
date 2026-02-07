@@ -9,7 +9,7 @@ if (${DEBUG_UT} MATCHES "OFF")
     target_link_libraries(bio_console
             -Wl,--start-group
             pthread dl aio
-            ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+            ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so.0.0.1
             ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
             bio_sdk bio_conf
             -Wl,--end-group)
