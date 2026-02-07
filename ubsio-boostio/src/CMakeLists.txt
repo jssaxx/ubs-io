@@ -1,10 +1,3 @@
-if ("${OPEN_TP}" STREQUAL "ON")
-    include_directories(
-            ${PROJECT_SOURCE_DIR}/test/tools/bio_tp/
-            ${PROJECT_SOURCE_DIR}/test/tools/tracepoint/include
-    )
-endif()
-
 add_subdirectory(cluster)
 add_subdirectory(common)
 add_subdirectory(config)
