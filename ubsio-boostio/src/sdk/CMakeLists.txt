@@ -20,3 +20,14 @@ target_link_libraries(bio_sdk
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a
         htracer bio_common bio_net bio_interceptor_server bio_underfs
         -Wl,--end-group)
+
+set(LIB_VERSION_MAJOR 1)
+set(LIB_VERSION_MINOR 0)
+set(LIB_VERSION_PATCH 0)
+set(LIB_VERSION "${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH}")
+set(SO_VERSION "${LIB_VERSION_MAJOR}")
+
+set_target_properties(bio_sdk PROPERTIES
+        VERSION ${LIB_VERSION}
+        SO_VERSION ${SO_VERSION}
+)

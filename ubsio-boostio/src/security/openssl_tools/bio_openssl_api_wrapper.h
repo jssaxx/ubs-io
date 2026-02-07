@@ -63,12 +63,6 @@ public:
         return OpensslApiDl::tlsClientMethod();
     }
 
-    static inline const SSL_METHOD *TlsMethod()
-    {
-        ChkTrue(OpensslApiDl::tlsMethod != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::tlsMethod();
-    }
-
     static inline const SSL_METHOD *TlsServerMethod()
     {
         ChkTrue(OpensslApiDl::tlsServerMethod != nullptr, nullptr, "openssl handler not loaded.");
@@ -129,46 +123,16 @@ public:
         return OpensslApiDl::sslConnect(s);
     }
 
-    static inline int SslConnectState(SSL *s)
-    {
-        ChkTrue(OpensslApiDl::sslConnectState != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslConnectState(s);
-    }
-
     static inline int SslAccept(SSL *s)
     {
         ChkTrue(OpensslApiDl::sslAccept != nullptr, BIO_ERR, "openssl handler not loaded.");
         return OpensslApiDl::sslAccept(s);
     }
 
-    static inline int SslAcceptState(SSL *s)
-    {
-        ChkTrue(OpensslApiDl::sslAcceptState != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslAcceptState(s);
-    }
-
-    static inline int SslGetShutdown(SSL *s)
-    {
-        ChkTrue(OpensslApiDl::sslGetShutdown != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslGetShutdown(s);
-    }
-
     static inline int SslGetError(const SSL *s, int retCode)
     {
         ChkTrue(OpensslApiDl::sslGetError != nullptr, BIO_ERR, "openssl handler not loaded.");
         return OpensslApiDl::sslGetError(s, retCode);
-    }
-
-    static inline int SslWriteEx(SSL *s, const void *buf, size_t num, size_t *written)
-    {
-        ChkTrue(OpensslApiDl::sslWriteEx != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslWriteEx(s, buf, num, written);
-    }
-
-    static inline int SslReadEx(SSL *s, void *buf, size_t num, size_t *readBytes)
-    {
-        ChkTrue(OpensslApiDl::sslReadEx != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslReadEx(s, buf, num, readBytes);
     }
 
     static inline int SslCtxSetCipherSuites(SSL_CTX *ctx, const char *str)
@@ -189,34 +153,16 @@ public:
         return OpensslApiDl::sslGetVersion(ssl);
     }
 
-    static inline int SslIsServer(SSL *ssl)
-    {
-        ChkTrue(OpensslApiDl::sslIsServer != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslIsServer(ssl);
-    }
-
     static inline void SslCtxSetVerify(SSL_CTX *ctx, int mode, int (*cb)(int, X509_STORE_CTX *))
     {
         ChkTrueVoid(OpensslApiDl::sslCtxSetVerify != nullptr, "openssl handler not loaded.");
         OpensslApiDl::sslCtxSetVerify(ctx, mode, cb);
     }
 
-    static inline int SslCtxUsePrivateKey(SSL_CTX *ctx, EVP_PKEY *pkey)
-    {
-        ChkTrue(OpensslApiDl::usePrivKey != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::usePrivKey(ctx, pkey);
-    }
-
     static inline int SslCtxUsePrivateKeyFile(SSL_CTX *ctx, const char *file, int type)
     {
         ChkTrue(OpensslApiDl::usePrivKeyFile != nullptr, BIO_ERR, "openssl handler not loaded.");
         return OpensslApiDl::usePrivKeyFile(ctx, file, type);
-    }
-
-    static inline int SslCtxUseCertificateFile(SSL_CTX *ctx, const char *file, int type)
-    {
-        ChkTrue(OpensslApiDl::useCertFile != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::useCertFile(ctx, file, type);
     }
 
     static inline X509 *PemReadX509(FILE *fp, X509 **x, PEM_PASSWORD_CB *cb, void *u)
@@ -265,12 +211,6 @@ public:
     {
         ChkTrue(OpensslApiDl::sslGetPeerCertificate != nullptr, nullptr, "openssl handler not loaded.");
         return OpensslApiDl::sslGetPeerCertificate(ssl);
-    }
-
-    static inline X509 *SslCtxGet0Certificate(const SSL_CTX *ctx)
-    {
-        ChkTrue(OpensslApiDl::ssLCtxGet0Certificate != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::ssLCtxGet0Certificate(ctx);
     }
 
     static inline long SslGetVerifyResult(const SSL *ssl)
@@ -397,22 +337,10 @@ public:
         return OpensslApiDl::bioSFile();
     }
 
-    static inline EVP_PKEY *PemReadBioPk(BIO *bp, EVP_PKEY **x, PEM_PASSWORD_CB *cb, void *u)
-    {
-        ChkTrue(OpensslApiDl::pemReadBioPk != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::pemReadBioPk(bp, x, cb, u);
-    }
-
     static inline BIO *BioNew(const BIO_METHOD *bioMethod)
     {
         ChkTrue(OpensslApiDl::bioNew != nullptr, nullptr, "openssl handler not loaded.");
         return OpensslApiDl::bioNew(bioMethod);
-    }
-
-    static inline BIO *BioNewMemBuf(const void *buf, int len)
-    {
-        ChkTrue(OpensslApiDl::bioNewMemBuf != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::bioNewMemBuf(buf, len);
     }
 
     static inline long BioCtrl(BIO *bp, int cmd, long larg, void *parg)
@@ -485,12 +413,6 @@ public:
     {
         ChkTrue(OpensslApiDl::x509GetPubkey != nullptr, nullptr, "openssl handler not loaded.");
         return OpensslApiDl::x509GetPubkey(x);
-    }
-
-    static inline int EvpPkeyBits(const EVP_PKEY *pkey)
-    {
-        ChkTrue(OpensslApiDl::evpPkeyBits != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpPkeyBits(pkey);
     }
 
     static inline void EvpPkeyFree(EVP_PKEY *pkey)

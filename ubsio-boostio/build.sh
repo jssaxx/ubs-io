@@ -130,9 +130,9 @@ if [[ -z "${CI_BUILD}" ]];then
     fi
 fi
 
-CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
+CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
-BUILD_CMD="make install -j ${CPU_PROCESSOR_NUM}"
+BUILD_CMD="make install -j 16" # CI环境核数会波动, 默认只用16
 cd $BUILD_DIR
 echo $CMAKE_CMD
 $CMAKE_CMD || {
@@ -164,13 +164,9 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mv bio/lib/libsdk_diagnose.so test_tools/lib/.
     mv bio/lib/libserver_diagnose.so test_tools/lib/.
     \cp ../configs/bio_sdk_test.conf test_tools/conf/.
-    \cp -d 3rdparty/zookeeper/lib/*.so* test_tools/lib/.
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi
 
-chmod 550 -R ../scripts/*
-\cp -r ../scripts bio/.
-touch bio/scripts/host_ip_list
 rm -rf boostio
 mv bio boostio
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio

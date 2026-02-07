@@ -19,9 +19,9 @@
 #include "bio_log.h"
 #include "bdm_core.h"
 #include "bio_server.h"
-#include "server_diagnose.h"
 #include "bio_functions.h"
 #include "cache_overload_ctrl.h"
+#include "server_diagnose.h"
 
 using namespace ock::bio;
 std::regex serverPattern("[0-9]+");
@@ -34,17 +34,8 @@ CliPrintBufFuncPtr ock::bio::diagnose::BioServerCommand::mPrintOp = nullptr;
 
 int32_t diagnose::BioServerCommand::LoadSymbols()
 {
-    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
-    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
-        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-        return BIO_NOT_EXISTS;
-    }
-
-    mHandler = dlopen(canonicalPath, RTLD_NOW);
-    free(canonicalPath);
-    canonicalPath = nullptr;
-
+    const char* soFileName = "libcli_agent.so";
+    mHandler = dlopen(soFileName, RTLD_NOW);
     if (mHandler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
         return BIO_INNER_ERR;
