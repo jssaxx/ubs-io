@@ -62,7 +62,7 @@ BResult BioSdkConfig::AutoConfigLog(const ConfigurationPtr &conf)
 
 BResult BioSdkConfig::Initialize(const std::string &homePath)
 {
-    std::string configurePath = homePath + "/conf/bio_sdk_test.conf";
+    std::string configurePath = homePath + "bio_sdk_test.conf";
     if (mInited) {
         return BIO_OK;
     }
