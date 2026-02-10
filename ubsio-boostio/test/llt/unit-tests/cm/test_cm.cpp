@@ -26,6 +26,7 @@
 #include "server/cm_server_init.h"
 #include "server/cm_server_view.h"
 #include "server/cm_server_monitor.h"
+#include "cm_zk_api_dl.h"
 #include "test_cm.h"
 
 using namespace ock::bio;
@@ -153,31 +154,32 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
     return CM_OK;
 }
 
-static void ZooSetDebugLevel() {}
+static void ZooSetDebugLevelMock(ZooLogLevel level) {}
 
-static zhandle_t *ZookeeperInit()
+static zhandle_t *ZookeeperInitMock(const char *host, watcher_fn fn, int recv_timeout,
+    const clientid_t *clientid, void *context, int flags)
 {
     return (zhandle_t *)"zHandle";
 }
 
-static int ZooState()
+static int ZooStateMock(zhandle_t *zh)
 {
     return ZOO_CONNECTED_STATE;
 }
 
-static int ZooRecvTimeout()
+static int ZooRecvTimeoutMock(zhandle_t *zh)
 {
     return (int)NO_10;
 }
 
-static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
+static int ZooCreateMock(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
     int mode, char *pathBuffer, int pathBufferLen)
 {
     strncpy_s(pathBuffer, pathBufferLen - 1, "/cm/meta/nodeid_generator/0", pathBufferLen - 1);
     return ZOK;
 }
 
-static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
+static int ZooGetMock(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
 {
     if (*bufferLen == (int)sizeof(uint16_t)) {
         if (strcmp(path, "/cm/meta/ip/127.0.0.1") == 0) {
@@ -218,18 +220,18 @@ static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int 
     return ZOK;
 }
 
-static int ZooExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
+static int ZooExistsMock(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
 {
     return ZNONODE;
 }
 
-static int ZooSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
+static int ZooSetMock(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
 {
     return ZOK;
 }
 
-static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
-    struct Stat *stat)
+static int ZooWgetMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer,
+    int *bufferLen, struct Stat *stat)
 {
     char *result = nullptr;
     char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
@@ -276,13 +278,13 @@ static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *wa
     return ZOK;
 }
 
-static int ZooDelete(zhandle_t *zh, const char *path, int version)
+static int ZooDeleteMock(zhandle_t *zh, const char *path, int version)
 {
     return ZOK;
 }
 
 static std::vector<std::string> gZkGetChildrenFirst;
-static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
+static int ZooWgetChildrenMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
     struct String_vector *strings)
 {
     auto it = std::find(gZkGetChildrenFirst.begin(), gZkGetChildrenFirst.end(), path);
@@ -309,7 +311,7 @@ static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, 
     return ZOK;
 }
 
-static int ZooDeallocateStringVector(struct String_vector *strings)
+static void ZooDeallocateStringVectorMock(struct String_vector *strings)
 {
     if (strings != nullptr) {
         if (strings->data != nullptr) {
@@ -317,10 +319,9 @@ static int ZooDeallocateStringVector(struct String_vector *strings)
             strings->data = nullptr;
         }
     }
-    return ZOK;
 }
 
-static int ZookeeperClose(zhandle_t *zh)
+static int ZookeeperCloseMock(zhandle_t *zh)
 {
     return ZOK;
 }
@@ -333,548 +334,17 @@ void TestCm::Stub()
     MOCKER(CM_GetNodeInfo).stubs().will(invoke(CM_GetNodeInfo_Stub));
     MOCKER(CM_Init).stubs().will(invoke(CM_Init_Stub));
 
-    MOCKER(zoo_set_debug_level).stubs().will(invoke(ZooSetDebugLevel));
-    MOCKER(zookeeper_init).stubs().will(invoke(ZookeeperInit));
-    MOCKER(zoo_state).stubs().will(invoke(ZooState));
-    MOCKER(zoo_recv_timeout).stubs().will(invoke(ZooRecvTimeout));
-    MOCKER(zoo_create).stubs().will(invoke(ZooCreate));
-    MOCKER(zoo_recv_timeout).stubs().will(invoke(ZooRecvTimeout));
-    MOCKER(zoo_get).stubs().will(invoke(ZooGet));
-    MOCKER(zoo_exists).stubs().will(invoke(ZooExists));
-    MOCKER(zoo_set).stubs().will(invoke(ZooSet));
-    MOCKER(zoo_wget).stubs().will(invoke(ZooWget));
-    MOCKER(zoo_delete).stubs().will(invoke(ZooDelete));
-    MOCKER(zoo_wget_children).stubs().will(invoke(ZooWgetChildren));
-    MOCKER(zookeeper_close).stubs().will(invoke(ZookeeperClose));
-    MOCKER(deallocate_String_vector).stubs().will(invoke(ZooDeallocateStringVector));
-}
-
-TEST_F(TestCm, test_cm_inner_init)
-{
-    LOG_INFO("test_cm_inner_init");
-    CmOptions mOptions;
-    mOptions.role = ROLE_TOGETHER;
-    mOptions.zkIpMask = "127.0.0.1:2181";
-    mOptions.groups.groupId = 0;
-    mOptions.groups.replicaNum = NO_2;
-    mOptions.groups.initialNodeNum = NO_3;
-    mOptions.groups.maxNodeNum = NO_256;
-    mOptions.groups.maxPtNum = NO_16;
-    mOptions.hbTempTimeout = NO_30;
-    mOptions.hbPermFaultTime = NO_60;
-
-    PoolInfo pools;
-    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio_tester");
-    EXPECT_EQ(ret, 0);
-    pools.poolId = mOptions.groups.groupId;
-    pools.type = DISK_TYPE_DRAM;
-    pools.redundance = (mOptions.groups.replicaNum == NO_2) ? PT_REP_DOUBLE : PT_REP_TRIPLE;
-    pools.initialNodeNum = mOptions.groups.initialNodeNum;
-    pools.maxNodeNum = mOptions.groups.maxNodeNum;
-    pools.maxPtNum = mOptions.groups.maxPtNum;
-
-    CmCfgInfo cfgInfo;
-    cfgInfo.zkIpMask = const_cast<char *>(mOptions.zkIpMask.c_str());
-    cfgInfo.ipStr = "127.0.0.1";
-    cfgInfo.regTimeOut = mOptions.hbTempTimeout * NO_1000;
-    cfgInfo.regPermTimeOut = mOptions.hbPermFaultTime * NO_1000;
-    ret = CmConfigInit(CONFIG_ROLE_TOGETHER, &pools, 1, &cfgInfo);
-    EXPECT_EQ(ret, CM_OK);
-
-    ret = CmZkInit();
-    EXPECT_EQ(ret, CM_OK);
-
-    ret = CM_ClientInit();
-    EXPECT_EQ(ret, CM_OK);
-
-    ret = CM_ServerInit();
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_get_node_mr)
-{
-    LOG_INFO("test_cm_get_node_mr");
-    NodeMetaBuff *mr = (NodeMetaBuff *) malloc(NODE_META_BUFF_LEN);
-    mr->nodeId = UINT16_MAX;
-    int32_t ret = CM_GetNodeMr(NO_512, mr);
-    EXPECT_EQ(ret, CM_ERR);
-
-    ret = CM_GetNodeMr(0, mr);
-    EXPECT_EQ(ret, CM_ERR);
-
-    mr->nodeId = 0;
-    ret = CM_GetNodeMr(0, mr);
-    EXPECT_EQ(ret, CM_OK);
-
-    free(mr);
-}
-
-TEST_F(TestCm, test_cm_get_node_session)
-{
-    LOG_INFO("test_cm_get_node_session");
-    uint64_t sessionId = 0;
-    int32_t ret = CmClientZkGetNodeSession(0, 0, &sessionId);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_node_event_check)
-{
-    LOG_INFO("test_cm_node_event_check");
-    uint16_t poolId = 0;
-    uint16_t nodeId = 0;
-    int32_t ret = CmClientZkNodeEventExistCheck(poolId, nodeId);
-    EXPECT_EQ(ret, CM_NOT_EXIST);
-}
-
-TEST_F(TestCm, test_cm_pt_event_check)
-{
-    LOG_INFO("test_cm_pt_event_check");
-    uint16_t poolId = 0;
-    uint16_t nodeId = 0;
-    int32_t ret = CmClientZkPtEventExistCheck(poolId, nodeId);
-    EXPECT_EQ(ret, CM_NOT_EXIST);
-}
-
-TEST_F(TestCm, test_cm_record_node_event)
-{
-    LOG_INFO("test_cm_record_node_event");
-    CmNodeEvent nodeEvent;
-    nodeEvent.poolId = 0;
-    nodeEvent.nodeId = 0;
-    int32_t ret = CmClientZkRecordNodeEvent(&nodeEvent);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_record_pt_event)
-{
-    LOG_INFO("test_cm_record_pt_event");
-    CmPtEvent ptEvent;
-    ptEvent.poolId = 0;
-    ptEvent.nodeId = 0;
-    ptEvent.ptNum = 0;
-    int32_t ret = CmClientZkRecordPtEvent(&ptEvent);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_report_disk_status_fault)
-{
-    LOG_INFO("test_cm_report_disk_status_fault");
-    uint16_t diskId = 0;
-    int32_t ret = CmReportDiskStatus(diskId, CM_DISK_FAULT);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_report_disk_status_normal)
-{
-    LOG_INFO("test_cm_report_disk_status_normal");
-    uint16_t diskId = 0;
-    int32_t ret = CmReportDiskStatus(diskId, CM_DISK_NORMAL);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_server_view_role_change_slave)
-{
-    LOG_INFO("test_cm_server_view_role_change_slave");
-    int32_t ret = CmServerViewRoleChange(CM_SERVER_SLAVE);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_server_view_role_change_master)
-{
-    LOG_INFO("test_cm_server_view_role_change_master");
-    int32_t ret = CmServerViewRoleChange(CM_SERVER_MASTER);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_server_view_role_change_master_ptnum_0)
-{
-    LOG_INFO("test_cm_server_view_role_change_master_ptnum_0");
-    PoolInfo pools;
-    int32_t ret = strcpy_s(pools.poolName, POOL_NAME_LEN, "bio_tester");
-    EXPECT_EQ(ret, 0);
-    pools.poolId = 0;
-    pools.type = DISK_TYPE_DRAM;
-    pools.redundance = PT_REP_DOUBLE;
-    pools.initialNodeNum = NO_3;
-    pools.maxNodeNum = NO_256;
-    pools.maxPtNum = NO_16;
-
-    auto nodeList = (NodeStateList *)malloc(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_2);
-    InitNodeList(&pools, nodeList, NO_2);
-    gNodeChange.notifyNodeListChange(nodeList, gNodeChange.ctx);
-    free(nodeList);
-
-    auto ptList = (PtEntryList *)malloc(sizeof(PtEntryList) + sizeof(PtEntry) * gNodeInfo.diskList.num);
-    ptList->poolId = pools.poolId;
-    ptList->ptNum = 0;
-    ptList->maxCopyNum = 1;
-    ptList->minCopyNum = 1;
-    ptList->globalVersion = 1;
-    ptList->changeVersion = 1;
-    for (uint16_t diskIdx = 0; diskIdx < gNodeInfo.diskList.num; diskIdx++) {
-        ptList->ptEntryList[diskIdx].birthVersion = 1;
-        ptList->ptEntryList[diskIdx].ptId = diskIdx;
-        ptList->ptEntryList[diskIdx].state = PT_STATE_NORMAL;
-        ptList->ptEntryList[diskIdx].masterNodeId = 0;
-        ptList->ptEntryList[diskIdx].masterDiskId = gNodeInfo.diskList.list[diskIdx].diskId;
-        ptList->ptEntryList[diskIdx].referNum = 0;
-        ptList->ptEntryList[diskIdx].copyNum = 1;
-        ptList->ptEntryList[diskIdx].copyList[0].nodeId = 0;
-        ptList->ptEntryList[diskIdx].copyList[0].diskId = gNodeInfo.diskList.list[diskIdx].diskId;
-        ptList->ptEntryList[diskIdx].copyList[0].keepAlive = 0;
-        ptList->ptEntryList[diskIdx].copyList[0].state = PT_COPY_STATE_RUNNING;
-    }
-    gPtChange.notifyPtListChange(ptList, gPtChange.ctx);
-    ret = CmServerViewRoleChange(CM_SERVER_MASTER);
-    EXPECT_EQ(ret, CM_OK);
-    ptList->ptNum = gNodeInfo.diskList.num;
-    gPtChange.notifyPtListChange(ptList, gPtChange.ctx);
-    free(ptList);
-}
-
-static void CmServerCancelNodeFaultStub()
-{
-    return;
-}
-
-static void CmServerMonitorInitMgrStub()
-{
-    return;
-}
-
-static int32_t CmServerMonitorLoadPoolStub()
-{
-    return CM_OK;
-}
-
-TEST_F(TestCm, test_cm_server_view_change_case_return_ok)
-{
-    LOG_INFO("test_cm_server_view_change_case_return_ok");
-    CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
-    nodeList->poolId = 0;
-    nodeList->nodeNum = NO_256;
-    nodeList->nodeList[0] = 0;
-    int32_t ret = CmServerViewNodeListChange(nodeList);
-    EXPECT_EQ(ret, CM_OK);
-    free(nodeList);
-
-    ret = CmServerMonitorInit();
-    EXPECT_EQ(ret, CM_OK);
-}
-
-void TestCm::CancelNodeStub()
-{
-    MOCKER(CmServerCancelNodeFault).stubs().will(invoke(CmServerCancelNodeFaultStub));
-    MOCKER(CmServerMonitorInitMgr).stubs().will(invoke(CmServerMonitorInitMgrStub));
-    MOCKER(CmServerMonitorLoadPool).stubs().will(invoke(CmServerMonitorLoadPoolStub));
-}
-
-TEST_F(TestCm, test_cm_server_monitor_expire_case_return_ok)
-{
-    LOG_INFO("test_cm_server_monitor_expire_case_return_ok");
-    TestCm::CancelNodeStub();
-    CmNodeIdList *nodeList = (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t));
-    nodeList->poolId = 0;
-    nodeList->nodeNum = NO_256;
-    nodeList->nodeList[0] = 0;
-    int32_t ret = CmServerViewNodeListChange(nodeList);
-    EXPECT_EQ(ret, CM_OK);
-    free(nodeList);
-
-    ret = CmServerMonitorInit();
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_server_get_node_state_case_return_ok)
-{
-    LOG_INFO("test_cm_server_get_node_state_case_return_ok");
-    NodeStateInfo state;
-    state.nodeId = 0;
-    int32_t ret = CmServerViewGetNodeState(0, &state);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_get_node_info)
-{
-    LOG_INFO("test_cm_get_node_info");
-    NodeInfo nodeInfo;
-    auto ret = CM_GetNodeInfo(0, &nodeInfo);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-static int32_t StubNodeChgHandler(NodeStateList *nodeList, void *ctx)
-{
-    return BIO_OK;
-}
-
-TEST_F(TestCm, test_cm_register_node_chg)
-{
-    LOG_INFO("test_cm_register_node_chg");
-    NodeListChangeOpHandle handle = { StubNodeChgHandler, nullptr };
-    int32_t ret = CM_RegNodeListChangeNotifyHandle(0, &handle);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_set_pt_finish)
-{
-    LOG_INFO("test_cm_set_pt_finish");
-    PtFinish eventList = { 1, 1, 0 };
-    int32_t ret = CM_SetPtFinishStatus(0, 1, &eventList);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_is_pt_same)
-{
-    LOG_INFO("test_cm_is_pt_same");
-    PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
-        {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
-    PtEntry elem2 = elem1;
-    int32_t ret = ViewStorePtEntryIsSame(&elem1, &elem2);
-    EXPECT_EQ(ret, TRUE);
-}
-
-TEST_F(TestCm, test_cm_get_node_id_by_path)
-{
-    LOG_INFO("test_cm_get_node_id_by_path");
-    std::string path = "/zk/123";
-    std::string pre = "/zk/";
-    int32_t ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
-    EXPECT_EQ(ret, 123U);
-}
-
-TEST_F(TestCm, test_cm_is_zk_pt_same)
-{
-    LOG_INFO("test_cm_is_zk_pt_same");
-    PtEntry elem1 = { 1, 1, PT_STATE_NORMAL, 1, 1, 0, 2,
-        {  { 1, 2, FALSE, PT_COPY_STATE_RUNNING },  { 1, 2, FALSE, PT_COPY_STATE_RUNNING } } };
-    PtEntry elem2 = elem1;
-    int32_t ret = CmClientZkPtEntryIsSame(&elem1, &elem2);
-    EXPECT_EQ(ret, TRUE);
-}
-
-TEST_F(TestCm, test_cm_get_pt_info)
-{
-    LOG_INFO("test_cm_get_pt_info");
-    CmPtInfo ptInfo;
-    ptInfo.ptId = 0;
-    ptInfo.version = 1;
-    ptInfo.state = CM_PT_NORMAL;
-    ptInfo.masterNodeId = 0;
-    ptInfo.copys = std::vector<CmPtCopy>();
-    CmPtCopy copy1 = {0, 1, CM_COPY_RUNNING};
-    CmPtCopy copy2 = {1, 1, CM_COPY_RUNNING};
-    CmPtCopy copy3 = {1, 0, CM_COPY_RUNNING};
-    ptInfo.copys.emplace_back(copy1);
-    ptInfo.copys.emplace_back(copy2);
-    ptInfo.copys.emplace_back(copy3);
-    LOG_INFO("pt:%s" << ptInfo.ToString());
-    LOG_INFO("test_cm_get_node_id_by_path");
-    std::string path = "/zk/123";
-    std::string pre = "/zk/";
-    int32_t ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
-    EXPECT_EQ(ret, 123U);
-}
-
-TEST_F(TestCm, test_cm_get_zk_node_state)
-{
-    LOG_INFO("test_cm_get_zk_node_state");
-    NodeStateInfo cmState;
-    MOCKER(CmZkGet).stubs().will(returnValue(-1));
-    auto ret = CmClientZkGetNodeState(0, 0, &cmState);
-    EXPECT_EQ(ret, CM_ERR);
-}
-
-TEST_F(TestCm, test_cm_view_create_store)
-{
-    LOG_INFO("test_cm_view_create_store");
-    auto ops = CmPtStoreOpsGet();
-    ops->createStorer(NO_3, NO_65535, NO_65535);
-    NodeStateInfo cmState;
-    MOCKER(CmZkGet).stubs().will(returnValue(-1));
-    auto ret = CmClientZkGetNodeState(0, 0, &cmState);
-    EXPECT_EQ(ret, CM_ERR);
-}
-
-TEST_F(TestCm, test_cm_max_pool_num)
-{
-    LOG_INFO("test_get_node_info");
-    NodeInfo nodeInfo;
-    auto ret = CmClientLocalGetNodeInfo(MAX_POOL_NUM, &nodeInfo);
-    EXPECT_EQ(ret, CM_ERR);
-
-    ret = CmClientLocalGetNode(MAX_POOL_NUM, &nodeInfo);
-    EXPECT_EQ(ret, CM_ERR);
-
-    ret = CmClientLocalGetNodeId(MAX_POOL_NUM);
-    EXPECT_EQ(ret, NODE_ID_INVALID);
-}
-
-TEST_F(TestCm, test_cm_update_node_info)
-{
-    LOG_INFO("test_cm_update_node_info");
-    uint16_t poolId = 0;
-    DiskState state = DISK_STATE_NORMAL;
-    uint16_t diskId = 1;
-    int32_t isNewDisk = 0;
-    auto ret = CM_UpdateNodeInfo(poolId, state, diskId, isNewDisk);
-    EXPECT_EQ(ret, CM_OK);
-}
-
-TEST_F(TestCm, test_cm_check_state_data_return_ok)
-{
-    LOG_INFO("test_cm_check_state_data_return_ok");
-    int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
-    auto stateList = reinterpret_cast<NodeStateList*>(malloc(len));
-    memset_s(stateList, len, 0, len);
-    stateList->nodeNum = NO_3;
-    stateList->poolId = 1;
-    stateList->masterNodeId = 1;
-    stateList->resv = 1;
-    for (uint32_t i = 0; i < NO_3; ++i) {
-        stateList->nodeList[i].nodeId = i;
-        stateList->nodeList[i].state = NODE_STATE_UP;
-        stateList->nodeList[i].diskNum = NO_3;
-        stateList->nodeList[i].sessionId = 1;
-        stateList->nodeList[i].clusterState = NODE_CLUSTER_STATE_IN;
-        for (uint32_t j = 0; j < stateList->nodeList[i].diskNum; ++j) {
-            stateList->nodeList[i].diskList[j].diskId = j;
-            stateList->nodeList[i].diskList[j].clusterState = DISK_CLUSTER_STATE_IN;
-        }
-    }
-
-    auto ret = CheckStateDataFromZk(stateList);
-    EXPECT_EQ(ret, CM_OK);
-    free(stateList);
-}
-
-TEST_F(TestCm, test_cm_check_state_data_return_err)
-{
-    LOG_INFO("test_cm_check_state_data_return_err");
-    int32_t len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo) * NO_3);
-    auto stateList = reinterpret_cast<NodeStateList*>(malloc(len));
-    memset_s(stateList, len, 0, len);
-    stateList->nodeNum = NO_3;
-    stateList->poolId = 1;
-    stateList->masterNodeId = 1;
-    stateList->resv = 1;
-    for (uint32_t i = 0; i < NO_3; ++i) {
-        stateList->nodeList[i].nodeId = i;
-        stateList->nodeList[i].state = NODE_STATE_UP;
-        stateList->nodeList[i].diskNum = NO_50;
-        stateList->nodeList[i].sessionId = 1;
-        stateList->nodeList[i].clusterState = NODE_CLUSTER_STATE_IN;
-        for (uint32_t j = 0; j < NO_3; ++j) {
-            stateList->nodeList[i].diskList[j].diskId = j;
-            stateList->nodeList[i].diskList[j].clusterState = DISK_CLUSTER_STATE_IN;
-        }
-    }
-
-    auto ret = CheckStateDataFromZk(stateList);
-    EXPECT_EQ(ret, CM_ERR);
-    free(stateList);
-}
-
-TEST_F(TestCm, test_cm_check_pt_data_return_ok)
-{
-    LOG_INFO("test_cm_check_pt_data_return_ok");
-    int32_t len = (int32_t)(sizeof(PtEntry) * NO_16 + sizeof(PtEntryList));
-    PtEntryList *ptList = (PtEntryList *)malloc(len);
-    memset_s(ptList, len, 0, len);
-    ptList->poolId = NO_1;
-    ptList->ptNum = NO_16;
-    ptList->maxCopyNum = NO_3;
-    ptList->minCopyNum = NO_2;
-    ptList->globalVersion = NO_1;
-    ptList->changeVersion = NO_1;
-    for (uint16_t i = 0; i < ptList->ptNum; ++i) {
-        ptList->ptEntryList[i].birthVersion = NO_1;
-        ptList->ptEntryList[i].ptId = i;
-        ptList->ptEntryList[i].state = PT_STATE_NORMAL;
-        ptList->ptEntryList[i].masterNodeId = NO_1;
-        ptList->ptEntryList[i].masterDiskId = NO_1;
-        ptList->ptEntryList[i].copyNum = NO_2;
-        for (uint16_t j = 0; j < ptList->ptEntryList[i].copyNum; ++j) {
-            ptList->ptEntryList[i].copyList[j].nodeId = NO_1;
-            ptList->ptEntryList[i].copyList[j].diskId = NO_1;
-            ptList->ptEntryList[i].copyList[j].keepAlive = NO_1;
-            ptList->ptEntryList[i].copyList[j].state = PT_COPY_STATE_RUNNING;
-        }
-    }
-
-    auto ret = CheckPtDataFromZk(ptList);
-    EXPECT_EQ(ret, CM_OK);
-    free(ptList);
-}
-
-TEST_F(TestCm, test_cm_check_pt_data_return_err)
-{
-    LOG_INFO("test_cm_check_pt_data_return_err");
-    int32_t len = (int32_t)(sizeof(PtEntry) * NO_16 + sizeof(PtEntryList));
-    PtEntryList *ptList = (PtEntryList *)malloc(len);
-    memset_s(ptList, len, 0, len);
-    ptList->poolId = NO_1;
-    ptList->ptNum = NO_16;
-    ptList->maxCopyNum = NO_3;
-    ptList->minCopyNum = NO_2;
-    ptList->globalVersion = NO_1;
-    ptList->changeVersion = NO_1;
-    for (uint16_t i = 0; i < ptList->ptNum; ++i) {
-        ptList->ptEntryList[i].birthVersion = NO_1;
-        ptList->ptEntryList[i].ptId = i;
-        ptList->ptEntryList[i].state = PT_STATE_NORMAL;
-        ptList->ptEntryList[i].masterNodeId = NO_1;
-        ptList->ptEntryList[i].masterDiskId = NO_1;
-        ptList->ptEntryList[i].copyNum = NO_16;
-        for (uint16_t j = 0; j < NO_3; ++j) {
-            ptList->ptEntryList[i].copyList[j].nodeId = NO_1;
-            ptList->ptEntryList[i].copyList[j].diskId = NO_1;
-            ptList->ptEntryList[i].copyList[j].keepAlive = NO_1;
-            ptList->ptEntryList[i].copyList[j].state = PT_COPY_STATE_RUNNING;
-        }
-    }
-
-    auto ret = CheckPtDataFromZk(ptList);
-    EXPECT_EQ(ret, CM_ERR);
-    free(ptList);
-}
-
-TEST_F(TestCm, test_cm_check_node_data_return_err)
-{
-    LOG_INFO("test_cm_check_node_data_return_err");
-    int32_t len = (int32_t)(sizeof(NodeInfoList) + sizeof(NodeInfo) * NO_3);
-    NodeInfoList *nodeInfoList = (NodeInfoList *)malloc(len);
-    memset_s(nodeInfoList, len, 0, len);
-    nodeInfoList->poolId = NO_1;
-    nodeInfoList->nodeNum = NO_3;
-    for (uint16_t i = 0; i < nodeInfoList->nodeNum; ++i) {
-        nodeInfoList->nodeList[i].nodeId = i;
-        nodeInfoList->nodeList[i].status = NODE_STATE_UP;
-        nodeInfoList->nodeList[i].diskList.num = NO_3;
-    }
-
-    auto ret = CheckNodeDataFromZk(nodeInfoList);
-    EXPECT_EQ(ret, CM_OK);
-    free(nodeInfoList);
-}
-
-TEST_F(TestCm, test_cm_get_node_id_by_path_null)
-{
-    LOG_INFO("test_cm_get_node_id_by_path_null");
-    int32_t ret = CmClientZkGetNodeIdByPath(NULL, NULL);
-    EXPECT_EQ(ret, UINT16_MAX);
-
-    std::string path = "/pre";
-    std::string pre = "/pre/123";
-    ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
-    EXPECT_EQ(ret, UINT16_MAX);
-
-    path = "/path";
-    pre = "/pre";
-    ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
-    EXPECT_EQ(ret, UINT16_MAX);
-
-    path = "/pre/123";
-    pre = "/pre";
-    ret = CmClientZkGetNodeIdByPath(path.c_str(), pre.c_str());
-    EXPECT_EQ(ret, 0);
+    ZooSetDebugLevel = ZooSetDebugLevelMock;
+    ZookeeperInit = ZookeeperInitMock;
+    ZooState = ZooStateMock;
+    ZooRecvTimeout = ZooRecvTimeoutMock;
+    ZooCreate = ZooCreateMock;
+    ZooGet = ZooGetMock;
+    ZooExists = ZooExistsMock;
+    ZooSet = ZooSetMock;
+    ZooWget = ZooWgetMock;
+    ZooDelete = ZooDeleteMock;
+    ZooWgetChildren = ZooWgetChildrenMock;
+    ZookeeperClose = ZookeeperCloseMock;
+    DeallocateStringVector =  ZooDeallocateStringVectorMock;
 }

@@ -25,6 +25,25 @@ static const int UNCHECK_VERSION = -1;
 
 #define USER_DATA_MAX_LEN 4096
 
+const int ZOO_CONNECTED_STATE         = 3;
+const int ZOO_CONNECTING_STATE        = 1;
+const int ZOO_ASSOCIATING_STATE       = 2;
+const int ZOO_EXPIRED_SESSION_STATE   = -112;
+const int ZOO_AUTH_FAILED_STATE       = 999;
+
+const int ZOO_CREATED_EVENT           = 1;
+const int ZOO_DELETED_EVENT           = 2;
+const int ZOO_CHANGED_EVENT           = 3;
+const int ZOO_CHILD_EVENT             = 4;
+const int ZOO_SESSION_EVENT           = 5;
+const int ZOO_NOTWATCHING_EVENT       = -1;
+
+const int ZOO_EPHEMERAL               = 1;
+const int ZOO_SEQUENCE                = 2;
+
+static struct ACL OPEN_ACL_UNSAFE_ACL[] = {{0x1f, {"world", "anyone"}}};
+struct ACL_vector ZOO_OPEN_ACL_UNSAFE = {1, OPEN_ACL_UNSAFE_ACL};
+
 #if DESC("zk client")
 typedef struct {
     CM_RWLOCK_T lock;
@@ -1738,7 +1757,7 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
-        deallocate_String_vector(&retStrings);
+        DeallocateStringVector(&retStrings);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
@@ -1747,14 +1766,14 @@ int32_t CmServerZkSubNodeListChange(uint16_t poolId, ZkNotifyNodeListFp notifyFp
     for (index = 0; index < nodeList->nodeNum; index++) {
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
-            deallocate_String_vector(&retStrings);
+            DeallocateStringVector(&retStrings);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
             free(nodeList);
             return CM_ERR;
         }
     }
     CmServerSchedueAdd(poolId, CmServerZkSubNodeListHandle, (void *)nodeList);
-    deallocate_String_vector(&retStrings);
+    DeallocateStringVector(&retStrings);
     return CM_OK;
 }
 
@@ -1903,7 +1922,7 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
     }
 
     if (retStrings.count == 0) {
-        deallocate_String_vector(&retStrings);
+        DeallocateStringVector(&retStrings);
         return CM_OK;
     } else {
         g_sZkMgr.restore[poolId].nodeIdle = FALSE;
@@ -1913,7 +1932,7 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
-        deallocate_String_vector(&retStrings);
+        DeallocateStringVector(&retStrings);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
@@ -1922,14 +1941,14 @@ int32_t CmServerZkSubNodeEvent(uint16_t poolId, ZkNotifyNodeEventFp notifyFp)
     for (index = 0; index < nodeList->nodeNum; index++) {
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
-            deallocate_String_vector(&retStrings);
+            DeallocateStringVector(&retStrings);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
             free(nodeList);
             return CM_ERR;
         }
     }
     CmServerSchedueAdd(poolId, CmServerZkSubNodeEventHandle, (void *)nodeList);
-    deallocate_String_vector(&retStrings);
+    DeallocateStringVector(&retStrings);
     return CM_OK;
 }
 
@@ -2097,7 +2116,7 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
     }
 
     if (retStrings.count == 0) {
-        deallocate_String_vector(&retStrings);
+        DeallocateStringVector(&retStrings);
         return CM_OK;
     }
     g_sZkMgr.restore[poolId].ptIdle = FALSE;
@@ -2106,7 +2125,7 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
         (CmNodeIdList *)malloc(sizeof(CmNodeIdList) + sizeof(uint16_t) * (uint16_t)retStrings.count);
     if (nodeList == NULL) {
         CM_LOGERROR("Malloc nodeList buff failed, count(%d).", retStrings.count);
-        deallocate_String_vector(&retStrings);
+        DeallocateStringVector(&retStrings);
         return CM_ERR;
     }
     nodeList->poolId = poolId;
@@ -2114,14 +2133,14 @@ int32_t CmServerZkSubPtEvent(uint16_t poolId, ZkNotifyPtEventFp notifyFp, ZkComm
     for (uint16_t index = 0; index < nodeList->nodeNum; index++) {
         nodeList->nodeList[index] = (uint16_t)CmServerZkAtoi(retStrings.data[index]);
         if (nodeList->nodeList[index] < 0 || nodeList->nodeList[index] > MAX_NODE_NUM) {
-            deallocate_String_vector(&retStrings);
+            DeallocateStringVector(&retStrings);
             CM_LOGERROR("Invalid nodeId(%u).", nodeList->nodeList[index]);
             free(nodeList);
             return CM_ERR;
         }
     }
     CmServerSchedueAdd(poolId, CmServerZkSubPtEventHandle, (void *)nodeList);
-    deallocate_String_vector(&retStrings);
+    DeallocateStringVector(&retStrings);
     return CM_OK;
 }
 
@@ -2178,7 +2197,7 @@ int CmZkCreate(zhandle_t *zh, const char *path, const char *value, int valuelen,
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_create(zh, path, value, valuelen, acl, mode, pathBuffer, pathBufferLen);
+        ret = ZooCreate(zh, path, value, valuelen, acl, mode, pathBuffer, pathBufferLen);
         if ((ret != ZOK) && (ret != ZNODEEXISTS) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Create znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2194,7 +2213,7 @@ int CmZkDelete(zhandle_t *zh, const char *path, int version)
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_delete(zh, path, version);
+        ret = ZooDelete(zh, path, version);
         if ((ret != ZOK) && (ret != ZNONODE) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Delete znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2210,7 +2229,7 @@ int CmZkGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *buffe
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_get(zh, path, watch, buffer, bufferLen, stat);
+        ret = ZooGet(zh, path, watch, buffer, bufferLen, stat);
         if ((ret != ZOK) && (ret != ZNONODE) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Get znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2226,7 +2245,7 @@ int CmZkExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_exists(zh, path, watch, stat);
+        ret = ZooExists(zh, path, watch, stat);
         if ((ret != ZOK) && (ret != ZNONODE) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Exists znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2242,7 +2261,7 @@ int CmZkSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_set(zh, path, buffer, buflen, version);
+        ret = ZooSet(zh, path, buffer, buflen, version);
         if ((ret != ZOK) && (ret != ZNONODE) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Exists znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2259,7 +2278,7 @@ int CmZkWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherC
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_wget(zh, path, watcher, watcherCtx, buffer, bufferLen, stat);
+        ret = ZooWget(zh, path, watcher, watcherCtx, buffer, bufferLen, stat);
         if ((ret != ZOK) && (ret != ZNONODE) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Wget znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2276,7 +2295,7 @@ int CmZkWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *
 
     uint16_t cnt = 0;
     do {
-        ret = zoo_wget_children(zh, path, watcher, watcherCtx, strings);
+        ret = ZooWgetChildren(zh, path, watcher, watcherCtx, strings);
         if ((ret != ZOK) && (ret != ZNONODE) && (ret != ZSESSIONEXPIRED)) {
             CM_LOGWARN("Wget children znode(%s) failed, ret(%d).", path, ret);
         }
@@ -2344,7 +2363,7 @@ static void CmZkRestore(void)
     int32_t ret;
 
     do {
-        ret = zookeeper_close(g_zh);
+        ret = ZookeeperClose(g_zh);
         if (ret != CM_OK) {
             CM_LOGWARN("Zookeeper close failed, ret(%d).", ret);
         }
@@ -2388,18 +2407,21 @@ static int32_t CmZkConnect(void)
     const char *zkServerIp = CmConfigGetZkServerList();
     int timeOut = (int)CmConfigGetTimeOut();
 
-    zoo_set_debug_level(ZOO_LOG_LEVEL_ERROR);
-    g_zh = zookeeper_init(zkServerIp, CmZkWatchFunc, timeOut, NULL, NULL, 0);
+    // Set debug level
+    ZooSetDebugLevel(ZOO_LOG_LEVEL_ERROR);
+    
+    // Initialize zookeeper connection
+    g_zh = ZookeeperInit(zkServerIp, CmZkWatchFunc, timeOut, NULL, NULL, 0);
     if (g_zh == NULL) {
         CM_LOGERROR("Connect zookeeper failed, zkserver(%s).", zkServerIp);
         return CM_ERR;
     }
 
     uint16_t cnt = 0;
-    while (zoo_state(g_zh) != ZOO_CONNECTED_STATE) {
-        CM_LOGWARN("Waiting for zookeeper connected, retry(%u ms).", cnt);
+    while (ZooState(g_zh) != ZOO_CONNECTED_STATE) {
+        CM_LOGWARN("Waiting for zookeeper connected, zoo_state is %d, retry(%u ms).", ZooState(g_zh), cnt);
         if (cnt >= CM_ZK_TRY_CONNECT_TIME) {
-            zookeeper_close(g_zh);
+            ZookeeperClose(g_zh);
             CM_LOGERROR("Connect zookeeper failed, zkserver(%s).", zkServerIp);
             return CM_ERR;
         }
@@ -2407,7 +2429,7 @@ static int32_t CmZkConnect(void)
         cnt += CM_ZK_TRY_INTERAL;
     }
 
-    int32_t timeout = zoo_recv_timeout(g_zh);
+    int32_t timeout = ZooRecvTimeout(g_zh);
     CM_LOGINFO("Connect zookeeper succeed, zkserver(%s) timeout(%d ms).", zkServerIp, timeout);
     return CM_OK;
 }
@@ -2785,18 +2807,25 @@ static int32_t CmZkCreateDataPoolDir(void)
 
 int CmZkInit(void)
 {
-    int ret;
+    int ret = ZookeeperApiLoad();
+    if (ret != 0) {
+        CM_LOGERROR("Failed to load zookeeper library");
+        return CM_ERR;
+    }
 
+    // Connect to zookeeper
     ret = CmZkConnect();
     if (ret != CM_OK) {
         return ret;
     }
 
+    // Create meta directory
     ret = CmZkCreateMetaDir();
     if (ret != CM_OK) {
         return ret;
     }
 
+    // Create data pool directory
     ret = CmZkCreateDataPoolDir();
     if (ret != CM_OK) {
         return ret;

@@ -73,11 +73,11 @@ include_directories(
         ${SRC_DIR}/interceptor/server
         ${SRC_DIR}/security/expiration_check
         ${SRC_DIR}/security/openssl_tools
+        ${3RDPARTY_SRC_DIR}/zookeeper
+        ${3RDPARTY_SRC_DIR}/hadoop
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
-		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
-        ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include
 )
 
 if ("${OPEN_PROMETHEUS}" STREQUAL "ON")
