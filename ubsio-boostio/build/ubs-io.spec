@@ -78,6 +78,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/boostio
 
 SRC_CORE=$DIST_ROOT/boostio
 cp -ad $SRC_CORE/lib/*.so* %{buildroot}%{_libdir}/
+cp -ad $SRC_CORE/lib/libbio_sdk.a %{buildroot}%{_libdir}/
 pushd %{buildroot}%{_libdir}
     ln -sf libbio_sdk.so.1.0.0 libbio_sdk.so.1
     ln -sf libbio_sdk.so.1     libbio_sdk.so
@@ -100,6 +101,7 @@ fi
 %endif
 
 find %{buildroot}%{_libdir} -type f -name "*.so*" -exec chmod 755 {} \;
+find %{buildroot}%{_libdir} -type f -name "*.a" -exec chmod 644 {} \;
 find %{buildroot}%{_bindir} -type f -exec chmod 755 {} \;
 find %{buildroot}%{_includedir} -type f -exec chmod 644 {} \;
 find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
@@ -135,6 +137,7 @@ find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
 %defattr(-,root,root,-)
 %{_includedir}/boostio/
 %{_libdir}/libbio_sdk.so
+%{_libdir}/libbio_sdk.a
 
 %clean
 rm -rf %{buildroot}
