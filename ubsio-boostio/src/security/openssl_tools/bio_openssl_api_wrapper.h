@@ -47,383 +47,383 @@ public:
 
     static int OpensslInitSsl(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
     {
-        ChkTrue(OpensslApiDl::initSsl != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::initSsl(opts, settings);
+        ChkTrue(DlOpensslApi::initSsl != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::initSsl(opts, settings);
     }
 
     static inline int OpensslInitCrypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
     {
-        ChkTrue(OpensslApiDl::initCrypto != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::initCrypto(opts, settings);
+        ChkTrue(DlOpensslApi::initCrypto != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::initCrypto(opts, settings);
     }
 
     static inline const SSL_METHOD *TlsClientMethod()
     {
-        ChkTrue(OpensslApiDl::tlsClientMethod != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::tlsClientMethod();
+        ChkTrue(DlOpensslApi::tlsClientMethod != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::tlsClientMethod();
     }
 
     static inline const SSL_METHOD *TlsServerMethod()
     {
-        ChkTrue(OpensslApiDl::tlsServerMethod != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::tlsServerMethod();
+        ChkTrue(DlOpensslApi::tlsServerMethod != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::tlsServerMethod();
     }
 
     static inline int SslShutdown(SSL *s)
     {
-        ChkTrue(OpensslApiDl::sslShutdown != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslShutdown(s);
+        ChkTrue(DlOpensslApi::sslShutdown != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslShutdown(s);
     }
 
     static inline int SslSetFd(SSL *s, int fd)
     {
-        ChkTrue(OpensslApiDl::sslSetFd != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslSetFd(s, fd);
+        ChkTrue(DlOpensslApi::sslSetFd != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslSetFd(s, fd);
     }
 
     static inline SSL *SslNew(SSL_CTX *ctx)
     {
-        ChkTrue(OpensslApiDl::sslNew != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::sslNew(ctx);
+        ChkTrue(DlOpensslApi::sslNew != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::sslNew(ctx);
     }
 
     static inline void SslFree(SSL *s)
     {
-        ChkTrueVoid(OpensslApiDl::sslFree != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::sslFree(s);
+        ChkTrueVoid(DlOpensslApi::sslFree != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::sslFree(s);
     }
 
     static SSL_CTX *SslCtxNew(const SSL_METHOD *method)
     {
-        ChkTrue(OpensslApiDl::sslCtxNew != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::sslCtxNew(method);
+        ChkTrue(DlOpensslApi::sslCtxNew != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::sslCtxNew(method);
     }
 
     static inline void SslCtxFree(SSL_CTX *ctx)
     {
-        ChkTrueVoid(OpensslApiDl::sslCtxFree != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::sslCtxFree(ctx);
+        ChkTrueVoid(DlOpensslApi::sslCtxFree != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::sslCtxFree(ctx);
     }
 
     static inline int SslWrite(SSL *s, const void *buf, int num)
     {
-        ChkTrue(OpensslApiDl::sslWrite != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslWrite(s, buf, num);
+        ChkTrue(DlOpensslApi::sslWrite != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslWrite(s, buf, num);
     }
 
     static inline int SslRead(SSL *s, void *buf, int num)
     {
-        ChkTrue(OpensslApiDl::sslRead != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslRead(s, buf, num);
+        ChkTrue(DlOpensslApi::sslRead != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslRead(s, buf, num);
     }
 
     static inline int SslConnect(SSL *s)
     {
-        ChkTrue(OpensslApiDl::sslConnect != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslConnect(s);
+        ChkTrue(DlOpensslApi::sslConnect != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslConnect(s);
     }
 
     static inline int SslAccept(SSL *s)
     {
-        ChkTrue(OpensslApiDl::sslAccept != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslAccept(s);
+        ChkTrue(DlOpensslApi::sslAccept != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslAccept(s);
     }
 
     static inline int SslGetError(const SSL *s, int retCode)
     {
-        ChkTrue(OpensslApiDl::sslGetError != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslGetError(s, retCode);
+        ChkTrue(DlOpensslApi::sslGetError != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslGetError(s, retCode);
     }
 
     static inline int SslCtxSetCipherSuites(SSL_CTX *ctx, const char *str)
     {
-        ChkTrue(OpensslApiDl::setCipherSuites != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::setCipherSuites(ctx, str);
+        ChkTrue(DlOpensslApi::setCipherSuites != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::setCipherSuites(ctx, str);
     }
 
     static inline long SslCtxCtrl(SSL_CTX *ctx, int cmd, long larg, void *parg)
     {
-        ChkTrue(OpensslApiDl::sslCtxCtrl != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslCtxCtrl(ctx, cmd, larg, parg);
+        ChkTrue(DlOpensslApi::sslCtxCtrl != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslCtxCtrl(ctx, cmd, larg, parg);
     }
 
     static inline const char *SslGetVersion(const SSL *ssl)
     {
-        ChkTrue(OpensslApiDl::sslGetVersion != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::sslGetVersion(ssl);
+        ChkTrue(DlOpensslApi::sslGetVersion != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::sslGetVersion(ssl);
     }
 
     static inline void SslCtxSetVerify(SSL_CTX *ctx, int mode, int (*cb)(int, X509_STORE_CTX *))
     {
-        ChkTrueVoid(OpensslApiDl::sslCtxSetVerify != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::sslCtxSetVerify(ctx, mode, cb);
+        ChkTrueVoid(DlOpensslApi::sslCtxSetVerify != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::sslCtxSetVerify(ctx, mode, cb);
     }
 
     static inline int SslCtxUsePrivateKeyFile(SSL_CTX *ctx, const char *file, int type)
     {
-        ChkTrue(OpensslApiDl::usePrivKeyFile != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::usePrivKeyFile(ctx, file, type);
+        ChkTrue(DlOpensslApi::usePrivKeyFile != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::usePrivKeyFile(ctx, file, type);
     }
 
     static inline X509 *PemReadX509(FILE *fp, X509 **x, PEM_PASSWORD_CB *cb, void *u)
     {
-        ChkTrue(OpensslApiDl::pemReadX509 != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::pemReadX509(fp, x, cb, u);
+        ChkTrue(DlOpensslApi::pemReadX509 != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::pemReadX509(fp, x, cb, u);
     }
 
     static inline void X509Free(X509 *cert)
     {
-        ChkTrueVoid(OpensslApiDl::x509Free != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::x509Free(cert);
+        ChkTrueVoid(DlOpensslApi::x509Free != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::x509Free(cert);
     }
 
     static inline int Asn1Time2Tm(const ASN1_TIME *s, struct tm *tm)
     {
-        ChkTrue(OpensslApiDl::asn1Time2Tm != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::asn1Time2Tm(s, tm);
+        ChkTrue(DlOpensslApi::asn1Time2Tm != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::asn1Time2Tm(s, tm);
     }
 
     static inline void SslCtxSetDefaultPasswdCbUserdata(SSL_CTX *ctx, void *u)
     {
-        ChkTrueVoid(OpensslApiDl::setDefaultPasswdCbUserdata != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::setDefaultPasswdCbUserdata(ctx, u);
+        ChkTrueVoid(DlOpensslApi::setDefaultPasswdCbUserdata != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::setDefaultPasswdCbUserdata(ctx, u);
     }
 
     static inline void SslCtxSetCertVerifyCallback(SSL_CTX *ctx, int (*cb)(X509_STORE_CTX *, void *), void *arg)
     {
-        ChkTrueVoid(OpensslApiDl::setCertVerifyCallback != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::setCertVerifyCallback(ctx, cb, arg);
+        ChkTrueVoid(DlOpensslApi::setCertVerifyCallback != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::setCertVerifyCallback(ctx, cb, arg);
     }
 
     static inline int SslCtxLoadVerifyLocations(SSL_CTX *ctx, const char *cafile, const char *capath)
     {
-        ChkTrue(OpensslApiDl::loadVerifyLocations != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::loadVerifyLocations(ctx, cafile, capath);
+        ChkTrue(DlOpensslApi::loadVerifyLocations != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::loadVerifyLocations(ctx, cafile, capath);
     }
 
     static inline int SslCtxCheckPrivateKey(const SSL_CTX *ctx)
     {
-        ChkTrue(OpensslApiDl::checkPrivateKey != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::checkPrivateKey(ctx);
+        ChkTrue(DlOpensslApi::checkPrivateKey != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::checkPrivateKey(ctx);
     }
 
     static inline X509 *SslGetPeerCertificate(const SSL *ssl)
     {
-        ChkTrue(OpensslApiDl::sslGetPeerCertificate != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::sslGetPeerCertificate(ssl);
+        ChkTrue(DlOpensslApi::sslGetPeerCertificate != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::sslGetPeerCertificate(ssl);
     }
 
     static inline long SslGetVerifyResult(const SSL *ssl)
     {
-        ChkTrue(OpensslApiDl::sslGetVerifyResult != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::sslGetVerifyResult(ssl);
+        ChkTrue(DlOpensslApi::sslGetVerifyResult != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::sslGetVerifyResult(ssl);
     }
 
     static inline const EVP_CIPHER *EvpAes128Gcm()
     {
-        ChkTrue(OpensslApiDl::evpAes128Gcm != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::evpAes128Gcm();
+        ChkTrue(DlOpensslApi::evpAes128Gcm != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::evpAes128Gcm();
     }
 
     static inline const EVP_CIPHER *EvpAes256Gcm()
     {
-        ChkTrue(OpensslApiDl::evpAes256Gcm != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::evpAes256Gcm();
+        ChkTrue(DlOpensslApi::evpAes256Gcm != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::evpAes256Gcm();
     }
 
     static inline EVP_CIPHER_CTX *EvpCipherCtxNew()
     {
-        ChkTrue(OpensslApiDl::evpCipherCtxNew != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::evpCipherCtxNew();
+        ChkTrue(DlOpensslApi::evpCipherCtxNew != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::evpCipherCtxNew();
     }
 
     static inline void EvpCipherCtxFree(EVP_CIPHER_CTX *ctx)
     {
-        ChkTrueVoid(OpensslApiDl::evpCipherCtxFree != nullptr, "openssl handler not loaded.");
-        OpensslApiDl::evpCipherCtxFree(ctx);
+        ChkTrueVoid(DlOpensslApi::evpCipherCtxFree != nullptr, "openssl handler not loaded.");
+        DlOpensslApi::evpCipherCtxFree(ctx);
     }
 
     static inline int EvpCipherCtxCtrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr)
     {
-        ChkTrue(OpensslApiDl::evpCipherCtxCtrl != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpCipherCtxCtrl(ctx, type, arg, ptr);
+        ChkTrue(DlOpensslApi::evpCipherCtxCtrl != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpCipherCtxCtrl(ctx, type, arg, ptr);
     }
 
     static inline int EvpEncryptInitEx(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
                                        const unsigned char *key, const unsigned char *iv)
     {
-        ChkTrue(OpensslApiDl::evpEncryptInitEx != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpEncryptInitEx(ctx, cipher, impl, key, iv);
+        ChkTrue(DlOpensslApi::evpEncryptInitEx != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpEncryptInitEx(ctx, cipher, impl, key, iv);
     }
 
     static inline int EvpEncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in,
                                        int inl)
     {
-        ChkTrue(OpensslApiDl::evpEncryptUpdate != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpEncryptUpdate(ctx, out, outl, in, inl);
+        ChkTrue(DlOpensslApi::evpEncryptUpdate != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpEncryptUpdate(ctx, out, outl, in, inl);
     }
 
     static inline int EvpEncryptFinalEx(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl)
     {
-        ChkTrue(OpensslApiDl::evpEncryptFinalEx != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpEncryptFinalEx(ctx, out, outl);
+        ChkTrue(DlOpensslApi::evpEncryptFinalEx != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpEncryptFinalEx(ctx, out, outl);
     }
 
     static inline int EvpDecryptInitEx(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
                                        const unsigned char *key, const unsigned char *iv)
     {
-        ChkTrue(OpensslApiDl::evpDecryptInitEx != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpDecryptInitEx(ctx, cipher, impl, key, iv);
+        ChkTrue(DlOpensslApi::evpDecryptInitEx != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpDecryptInitEx(ctx, cipher, impl, key, iv);
     }
 
     static inline int EvpDecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in,
                                        int inl)
     {
-        ChkTrue(OpensslApiDl::evpDecryptUpdate != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpDecryptUpdate(ctx, out, outl, in, inl);
+        ChkTrue(DlOpensslApi::evpDecryptUpdate != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpDecryptUpdate(ctx, out, outl, in, inl);
     }
 
     static inline int EvpDecryptFinalEx(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl)
     {
-        ChkTrue(OpensslApiDl::evpDecryptFinalEx != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::evpDecryptFinalEx(ctx, out, outl);
+        ChkTrue(DlOpensslApi::evpDecryptFinalEx != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::evpDecryptFinalEx(ctx, out, outl);
     }
 
     static inline int RandPoll()
     {
-        ChkTrue(OpensslApiDl::randPoll != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::randPoll();
+        ChkTrue(DlOpensslApi::randPoll != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::randPoll();
     }
 
     static inline int RandStatus()
     {
-        ChkTrue(OpensslApiDl::randStatus != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::randStatus();
+        ChkTrue(DlOpensslApi::randStatus != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::randStatus();
     }
 
     static inline int RandPrivBytes(unsigned char *buf, int num)
     {
-        ChkTrue(OpensslApiDl::randPrivBytes != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::randPrivBytes(buf, num);
+        ChkTrue(DlOpensslApi::randPrivBytes != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::randPrivBytes(buf, num);
     }
 
     static inline int X509VerifyCert(X509_STORE_CTX *ctx)
     {
-        ChkTrue(OpensslApiDl::x509VerifyCert != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::x509VerifyCert(ctx);
+        ChkTrue(DlOpensslApi::x509VerifyCert != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::x509VerifyCert(ctx);
     }
 
     static inline const char *X509VerifyCertErrorString(long n)
     {
-        ChkTrue(OpensslApiDl::x509VerifyCertErrorString != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509VerifyCertErrorString(n);
+        ChkTrue(DlOpensslApi::x509VerifyCertErrorString != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509VerifyCertErrorString(n);
     }
 
     static inline int X509StoreCtxGetError(X509_STORE_CTX *ctx)
     {
-        ChkTrue(OpensslApiDl::x509StoreCtxGetError != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::x509StoreCtxGetError(ctx);
+        ChkTrue(DlOpensslApi::x509StoreCtxGetError != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::x509StoreCtxGetError(ctx);
     }
 
     static inline X509_CRL *PemReadBioX509Crl(BIO *bp, X509_CRL **x, PEM_PASSWORD_CB *cb, void *u)
     {
-        ChkTrue(OpensslApiDl::pemReadBioX509Crl != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::pemReadBioX509Crl(bp, x, cb, u);
+        ChkTrue(DlOpensslApi::pemReadBioX509Crl != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::pemReadBioX509Crl(bp, x, cb, u);
     }
 
     static inline const BIO_METHOD *BioSFile()
     {
-        ChkTrue(OpensslApiDl::bioSFile != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::bioSFile();
+        ChkTrue(DlOpensslApi::bioSFile != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::bioSFile();
     }
 
     static inline BIO *BioNew(const BIO_METHOD *bioMethod)
     {
-        ChkTrue(OpensslApiDl::bioNew != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::bioNew(bioMethod);
+        ChkTrue(DlOpensslApi::bioNew != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::bioNew(bioMethod);
     }
 
     static inline long BioCtrl(BIO *bp, int cmd, long larg, void *parg)
     {
-        ChkTrue(OpensslApiDl::bioCtrl != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::bioCtrl(bp, cmd, larg, parg);
+        ChkTrue(DlOpensslApi::bioCtrl != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::bioCtrl(bp, cmd, larg, parg);
     }
 
     static inline void BioFree(BIO *b)
     {
-        ChkTrueVoid(OpensslApiDl::bioFree != nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::bioFree(b);
+        ChkTrueVoid(DlOpensslApi::bioFree != nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::bioFree(b);
     }
 
     static inline X509_STORE *X509StoreCtxGet0Store(const X509_STORE_CTX *ctx)
     {
-        ChkTrue(OpensslApiDl::x509StoreCtxGet0Store != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509StoreCtxGet0Store(ctx);
+        ChkTrue(DlOpensslApi::x509StoreCtxGet0Store != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509StoreCtxGet0Store(ctx);
     }
 
     static inline void X509StoreCtxSetFlags(X509_STORE_CTX *ctx, unsigned long flags)
     {
-        ChkTrueVoid(OpensslApiDl::x509StoreCtxSetFlags != nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509StoreCtxSetFlags(ctx, flags);
+        ChkTrueVoid(DlOpensslApi::x509StoreCtxSetFlags != nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509StoreCtxSetFlags(ctx, flags);
     }
 
     static inline int X509StoreAddCrl(X509_STORE *xs, X509_CRL *x)
     {
-        ChkTrue(OpensslApiDl::x509StoreAddCrl != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::x509StoreAddCrl(xs, x);
+        ChkTrue(DlOpensslApi::x509StoreAddCrl != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::x509StoreAddCrl(xs, x);
     }
 
     static inline void X509CrlFree(X509_CRL *x)
     {
-        ChkTrueVoid(OpensslApiDl::x509CrlFree != nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509CrlFree(x);
+        ChkTrueVoid(DlOpensslApi::x509CrlFree != nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509CrlFree(x);
     }
 
     static inline int X509CmpCurrentTime(const ASN1_TIME *s)
     {
-        ChkTrue(OpensslApiDl::x509CmpCurrentTime != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::x509CmpCurrentTime(s);
+        ChkTrue(DlOpensslApi::x509CmpCurrentTime != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::x509CmpCurrentTime(s);
     }
 
     static inline int X509CrlGet0ByCert(X509_CRL *crl, X509_REVOKED **ret, X509 *x)
     {
-        ChkTrue(OpensslApiDl::x509CrlGet0ByCert != nullptr, BIO_ERR, "openssl handler not loaded.");
-        return OpensslApiDl::x509CrlGet0ByCert(crl, ret, x);
+        ChkTrue(DlOpensslApi::x509CrlGet0ByCert != nullptr, BIO_ERR, "openssl handler not loaded.");
+        return DlOpensslApi::x509CrlGet0ByCert(crl, ret, x);
     }
 
     static inline const ASN1_TIME *X509CrlGet0NextUpdate(const X509_CRL *crl)
     {
-        ChkTrue(OpensslApiDl::x509CrlGet0NextUpdate != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509CrlGet0NextUpdate(crl);
+        ChkTrue(DlOpensslApi::x509CrlGet0NextUpdate != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509CrlGet0NextUpdate(crl);
     }
 
     static inline ASN1_TIME *X509GetNotAfter(const X509 *x)
     {
-        ChkTrue(OpensslApiDl::x509GetNotAfter != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509GetNotAfter(x);
+        ChkTrue(DlOpensslApi::x509GetNotAfter != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509GetNotAfter(x);
     }
 
     static inline ASN1_TIME *X509GetNotBefore(const X509 *x)
     {
-        ChkTrue(OpensslApiDl::x509GetNotBefore != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509GetNotBefore(x);
+        ChkTrue(DlOpensslApi::x509GetNotBefore != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509GetNotBefore(x);
     }
 
     static inline EVP_PKEY *X509GetPubkey(X509 *x)
     {
-        ChkTrue(OpensslApiDl::x509GetPubkey != nullptr, nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::x509GetPubkey(x);
+        ChkTrue(DlOpensslApi::x509GetPubkey != nullptr, nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::x509GetPubkey(x);
     }
 
     static inline void EvpPkeyFree(EVP_PKEY *pkey)
     {
-        ChkTrueVoid(OpensslApiDl::evpPkeyFree != nullptr, "openssl handler not loaded.");
-        return OpensslApiDl::evpPkeyFree(pkey);
+        ChkTrueVoid(DlOpensslApi::evpPkeyFree != nullptr, "openssl handler not loaded.");
+        return DlOpensslApi::evpPkeyFree(pkey);
     }
 
     static inline int Load(const std::string &libPath)
     {
-        return OpensslApiDl::LoadOpensslApiDl(libPath);
+        return DlOpensslApi::LoadOpensslApiDl(libPath);
     }
 
     static inline void UnLoad() {}

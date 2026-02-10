@@ -105,7 +105,7 @@ using FuncX509GetNotBefore = ASN1_TIME *(*)(const X509 *x);
 using FuncX509GetPubkey = EVP_PKEY *(*)(X509 * x);
 using FuncEvpPkeyFree = void (*)(EVP_PKEY *pkey);
 
-class OpensslApiDl {
+class DlOpensslApi {
 public:
     static FuncInit initSsl;
     static FuncInit initCrypto;

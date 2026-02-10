@@ -41,87 +41,87 @@
 
 namespace ock {
 namespace bio {
-FuncInit OpensslApiDl::initSsl = nullptr;
-FuncInit OpensslApiDl::initCrypto = nullptr;
-FuncOpensslCleanup OpensslApiDl::opensslCleanup = nullptr;
+FuncInit DlOpensslApi::initSsl = nullptr;
+FuncInit DlOpensslApi::initCrypto = nullptr;
+FuncOpensslCleanup DlOpensslApi::opensslCleanup = nullptr;
 
-FuncGetMethod OpensslApiDl::tlsServerMethod = nullptr;
-FuncGetMethod OpensslApiDl::tlsClientMethod = nullptr;
-FuncSslOperation OpensslApiDl::sslShutdown = nullptr;
-FuncSslFd OpensslApiDl::sslSetFd = nullptr;
-FuncSslNew OpensslApiDl::sslNew = nullptr;
-FuncSslFree OpensslApiDl::sslFree = nullptr;
-FuncSslCtxNew OpensslApiDl::sslCtxNew = nullptr;
-FuncSslCtxFree OpensslApiDl::sslCtxFree = nullptr;
-FuncSslWrite OpensslApiDl::sslWrite = nullptr;
-FuncSslRead OpensslApiDl::sslRead = nullptr;
-FuncSslOperation OpensslApiDl::sslConnect = nullptr;
-FuncSslOperation OpensslApiDl::sslAccept = nullptr;
-FuncSslGetError OpensslApiDl::sslGetError = nullptr;
+FuncGetMethod DlOpensslApi::tlsServerMethod = nullptr;
+FuncGetMethod DlOpensslApi::tlsClientMethod = nullptr;
+FuncSslOperation DlOpensslApi::sslShutdown = nullptr;
+FuncSslFd DlOpensslApi::sslSetFd = nullptr;
+FuncSslNew DlOpensslApi::sslNew = nullptr;
+FuncSslFree DlOpensslApi::sslFree = nullptr;
+FuncSslCtxNew DlOpensslApi::sslCtxNew = nullptr;
+FuncSslCtxFree DlOpensslApi::sslCtxFree = nullptr;
+FuncSslWrite DlOpensslApi::sslWrite = nullptr;
+FuncSslRead DlOpensslApi::sslRead = nullptr;
+FuncSslOperation DlOpensslApi::sslConnect = nullptr;
+FuncSslOperation DlOpensslApi::sslAccept = nullptr;
+FuncSslGetError DlOpensslApi::sslGetError = nullptr;
 
-FuncSslCtxCtrl OpensslApiDl::sslCtxCtrl = nullptr;
-FuncSslGetCurrentCipher OpensslApiDl::sslGetCurrentCipher = nullptr;
-FuncSslGetVersion OpensslApiDl::sslGetVersion = nullptr;
-FuncSetCipherSuites OpensslApiDl::setCipherSuites = nullptr;
-FuncUsePrivKeyFile OpensslApiDl::usePrivKeyFile = nullptr;
-FuncSslCtxSetVerify OpensslApiDl::sslCtxSetVerify = nullptr;
-FuncSetDefaultPasswdCbUserdata OpensslApiDl::setDefaultPasswdCbUserdata = nullptr;
-FuncSetCertVerifyCallback OpensslApiDl::setCertVerifyCallback = nullptr;
-FuncLoadVerifyLocations OpensslApiDl::loadVerifyLocations = nullptr;
-FuncCheckPrivateKey OpensslApiDl::checkPrivateKey = nullptr;
-FuncSslGetVerifyResult OpensslApiDl::sslGetVerifyResult = nullptr;
-FuncSslGetPeerCertificate OpensslApiDl::sslGetPeerCertificate = nullptr;
+FuncSslCtxCtrl DlOpensslApi::sslCtxCtrl = nullptr;
+FuncSslGetCurrentCipher DlOpensslApi::sslGetCurrentCipher = nullptr;
+FuncSslGetVersion DlOpensslApi::sslGetVersion = nullptr;
+FuncSetCipherSuites DlOpensslApi::setCipherSuites = nullptr;
+FuncUsePrivKeyFile DlOpensslApi::usePrivKeyFile = nullptr;
+FuncSslCtxSetVerify DlOpensslApi::sslCtxSetVerify = nullptr;
+FuncSetDefaultPasswdCbUserdata DlOpensslApi::setDefaultPasswdCbUserdata = nullptr;
+FuncSetCertVerifyCallback DlOpensslApi::setCertVerifyCallback = nullptr;
+FuncLoadVerifyLocations DlOpensslApi::loadVerifyLocations = nullptr;
+FuncCheckPrivateKey DlOpensslApi::checkPrivateKey = nullptr;
+FuncSslGetVerifyResult DlOpensslApi::sslGetVerifyResult = nullptr;
+FuncSslGetPeerCertificate DlOpensslApi::sslGetPeerCertificate = nullptr;
 
-FuncEvpAesCipher OpensslApiDl::evpAes128Gcm = nullptr;
-FuncEvpAesCipher OpensslApiDl::evpAes256Gcm = nullptr;
+FuncEvpAesCipher DlOpensslApi::evpAes128Gcm = nullptr;
+FuncEvpAesCipher DlOpensslApi::evpAes256Gcm = nullptr;
 
-FuncEvpCipherCtxNew OpensslApiDl::evpCipherCtxNew = nullptr;
-FuncEvpCipherCtxFree OpensslApiDl::evpCipherCtxFree = nullptr;
-FuncEvpCipherCtxCtrl OpensslApiDl::evpCipherCtxCtrl = nullptr;
+FuncEvpCipherCtxNew DlOpensslApi::evpCipherCtxNew = nullptr;
+FuncEvpCipherCtxFree DlOpensslApi::evpCipherCtxFree = nullptr;
+FuncEvpCipherCtxCtrl DlOpensslApi::evpCipherCtxCtrl = nullptr;
 
-FuncEvpEncryptInitEx OpensslApiDl::evpEncryptInitEx = nullptr;
-FuncEvpEncryptUpdate OpensslApiDl::evpEncryptUpdate = nullptr;
-FuncEvpEncryptFinalEx OpensslApiDl::evpEncryptFinalEx = nullptr;
-FuncEvpDecryptInitEx OpensslApiDl::evpDecryptInitEx = nullptr;
-FuncEvpDecryptUpdate OpensslApiDl::evpDecryptUpdate = nullptr;
-FuncEvpDecryptFinalEx OpensslApiDl::evpDecryptFinalEx = nullptr;
+FuncEvpEncryptInitEx DlOpensslApi::evpEncryptInitEx = nullptr;
+FuncEvpEncryptUpdate DlOpensslApi::evpEncryptUpdate = nullptr;
+FuncEvpEncryptFinalEx DlOpensslApi::evpEncryptFinalEx = nullptr;
+FuncEvpDecryptInitEx DlOpensslApi::evpDecryptInitEx = nullptr;
+FuncEvpDecryptUpdate DlOpensslApi::evpDecryptUpdate = nullptr;
+FuncEvpDecryptFinalEx DlOpensslApi::evpDecryptFinalEx = nullptr;
 
-FuncRandPoll OpensslApiDl::randPoll = nullptr;
-FuncRandStatus OpensslApiDl::randStatus = nullptr;
-FuncRandBytes OpensslApiDl::randBytes = nullptr;
-FuncRandBytes OpensslApiDl::randPrivBytes = nullptr;
-FuncRandSeed OpensslApiDl::randSeed = nullptr;
+FuncRandPoll DlOpensslApi::randPoll = nullptr;
+FuncRandStatus DlOpensslApi::randStatus = nullptr;
+FuncRandBytes DlOpensslApi::randBytes = nullptr;
+FuncRandBytes DlOpensslApi::randPrivBytes = nullptr;
+FuncRandSeed DlOpensslApi::randSeed = nullptr;
 
-FuncX509VerifyCert OpensslApiDl::x509VerifyCert = nullptr;
-FuncX509VerifyCertErrorString OpensslApiDl::x509VerifyCertErrorString = nullptr;
-FuncX509StoreCtxGetError OpensslApiDl::x509StoreCtxGetError = nullptr;
-FuncPemReadBioX509Crl OpensslApiDl::pemReadBioX509Crl = nullptr;
-FuncBioSFile OpensslApiDl::bioSFile = nullptr;
-FuncBioNew OpensslApiDl::bioNew = nullptr;
-FuncBioFree OpensslApiDl::bioFree = nullptr;
-FuncBioCtrl OpensslApiDl::bioCtrl = nullptr;
-FuncX509StoreCtxGet0Store OpensslApiDl::x509StoreCtxGet0Store = nullptr;
-FuncX509StoreCtxSetFlags OpensslApiDl::x509StoreCtxSetFlags = nullptr;
-FuncX509StoreAddCrl OpensslApiDl::x509StoreAddCrl = nullptr;
-FuncX509CrlFree OpensslApiDl::x509CrlFree = nullptr;
+FuncX509VerifyCert DlOpensslApi::x509VerifyCert = nullptr;
+FuncX509VerifyCertErrorString DlOpensslApi::x509VerifyCertErrorString = nullptr;
+FuncX509StoreCtxGetError DlOpensslApi::x509StoreCtxGetError = nullptr;
+FuncPemReadBioX509Crl DlOpensslApi::pemReadBioX509Crl = nullptr;
+FuncBioSFile DlOpensslApi::bioSFile = nullptr;
+FuncBioNew DlOpensslApi::bioNew = nullptr;
+FuncBioFree DlOpensslApi::bioFree = nullptr;
+FuncBioCtrl DlOpensslApi::bioCtrl = nullptr;
+FuncX509StoreCtxGet0Store DlOpensslApi::x509StoreCtxGet0Store = nullptr;
+FuncX509StoreCtxSetFlags DlOpensslApi::x509StoreCtxSetFlags = nullptr;
+FuncX509StoreAddCrl DlOpensslApi::x509StoreAddCrl = nullptr;
+FuncX509CrlFree DlOpensslApi::x509CrlFree = nullptr;
 
-FuncX509CmpCurrentTime OpensslApiDl::x509CmpCurrentTime = nullptr;
-FuncX509CrlGet0ByCert OpensslApiDl::x509CrlGet0ByCert = nullptr;
-FuncX509CrlGet0NextUpdate OpensslApiDl::x509CrlGet0NextUpdate = nullptr;
-FuncX509GetNotAfter OpensslApiDl::x509GetNotAfter = nullptr;
-FuncX509GetNotBefore OpensslApiDl::x509GetNotBefore = nullptr;
-FuncX509GetPubkey OpensslApiDl::x509GetPubkey = nullptr;
-FuncEvpPkeyFree OpensslApiDl::evpPkeyFree = nullptr;
-FuncPemReadX509 OpensslApiDl::pemReadX509 = nullptr;
-FuncX509Free OpensslApiDl::x509Free = nullptr;
-FuncAsn1Time2Tm OpensslApiDl::asn1Time2Tm = nullptr;
+FuncX509CmpCurrentTime DlOpensslApi::x509CmpCurrentTime = nullptr;
+FuncX509CrlGet0ByCert DlOpensslApi::x509CrlGet0ByCert = nullptr;
+FuncX509CrlGet0NextUpdate DlOpensslApi::x509CrlGet0NextUpdate = nullptr;
+FuncX509GetNotAfter DlOpensslApi::x509GetNotAfter = nullptr;
+FuncX509GetNotBefore DlOpensslApi::x509GetNotBefore = nullptr;
+FuncX509GetPubkey DlOpensslApi::x509GetPubkey = nullptr;
+FuncEvpPkeyFree DlOpensslApi::evpPkeyFree = nullptr;
+FuncPemReadX509 DlOpensslApi::pemReadX509 = nullptr;
+FuncX509Free DlOpensslApi::x509Free = nullptr;
+FuncAsn1Time2Tm DlOpensslApi::asn1Time2Tm = nullptr;
 
-bool OpensslApiDl::gLoaded = false;
-const char *OpensslApiDl::gOpensslLibSslName = "libssl.so";
-const char *OpensslApiDl::gOpensslLibCryptoName = "libcrypto.so";
-const char *OpensslApiDl::gSep = "/";
+bool DlOpensslApi::gLoaded = false;
+const char *DlOpensslApi::gOpensslLibSslName = "libssl.so";
+const char *DlOpensslApi::gOpensslLibCryptoName = "libcrypto.so";
+const char *DlOpensslApi::gSep = "/";
 
-int OpensslApiDl::LoadSSLSymbols(void *sslHandle)
+int DlOpensslApi::LoadSSLSymbols(void *sslHandle)
 {
     DLSYM(sslHandle, FuncInit, initSsl, "OPENSSL_init_ssl");
     DLSYM(sslHandle, FuncInit, initCrypto, "OPENSSL_init_crypto");
@@ -156,7 +156,7 @@ int OpensslApiDl::LoadSSLSymbols(void *sslHandle)
     return 0;
 }
 
-int OpensslApiDl::LoadCryptoSymbols(void *cryptoHandle)
+int DlOpensslApi::LoadCryptoSymbols(void *cryptoHandle)
 {
     DLSYM(cryptoHandle, FuncEvpCipherCtxNew, evpCipherCtxNew, "EVP_CIPHER_CTX_new");
     DLSYM(cryptoHandle, FuncEvpCipherCtxFree, evpCipherCtxFree, "EVP_CIPHER_CTX_free");
@@ -202,7 +202,7 @@ int OpensslApiDl::LoadCryptoSymbols(void *cryptoHandle)
     return 0;
 }
 
-int OpensslApiDl::GetLibPath(std::string libDir, std::string &libSslPath, std::string &libCryptoPath)
+int DlOpensslApi::GetLibPath(std::string libDir, std::string &libSslPath, std::string &libCryptoPath)
 {
     if (libDir.empty()) {
         libSslPath = gOpensslLibSslName;
@@ -229,7 +229,7 @@ int OpensslApiDl::GetLibPath(std::string libDir, std::string &libSslPath, std::s
     return 0;
 }
 
-int OpensslApiDl::LoadOpensslApiDl(const std::string &libPath)
+int DlOpensslApi::LoadOpensslApiDl(const std::string &libPath)
 {
     LOG_INFO("Starting to load openssl api");
     if (gLoaded) {
