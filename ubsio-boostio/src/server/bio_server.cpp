@@ -148,7 +148,12 @@ BResult BioServer::BioConfigInit()
 
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
-    result = mConfig->Initialize("/opt/boostio/bin");
+#ifdef DEBUG_UT
+    const std::string confPath = "/opt/boostio/bin/conf/";
+#else
+    const std::string confPath = "/etc/boostio/";
+#endif
+    result = mConfig->Initialize(confPath);
     BIO_TP_END;
     if (result != BIO_OK) {
         LOG_ERROR("Failed to initialize configuration, result: " << result << ".");
@@ -553,16 +558,8 @@ BResult BioServer::BioServerDiagnoseInit()
         return BIO_OK;
     }
 #endif
-    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
-    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
-        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-        return BIO_NOT_EXISTS;
-    }
-
-    void *handler = dlopen(canonicalPath, RTLD_NOW);
-    free(canonicalPath);
-    canonicalPath = nullptr;
+    const char* soFileName = "libcli_agent.so";
+    void *handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
         return BIO_INNER_ERR;
@@ -601,7 +598,7 @@ BResult BioServer::BioServerDiagnoseInitInner()
 #ifdef DEBUG_UT
     return BIO_OK;
 #endif
-    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libserver_diagnose.so";
+    std::string soFileName = "/usr/lib64/boostio/test_tools/libserver_diagnose.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
         LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");

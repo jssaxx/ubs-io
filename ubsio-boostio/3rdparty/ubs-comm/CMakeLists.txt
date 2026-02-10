@@ -33,6 +33,4 @@ else()
     exec_program(make ${BUILD_DIR} ARGS clean)
     exec_program(make ${BUILD_DIR} ARGS -j8)
     exec_program(make ${BUILD_DIR} ARGS install)
-
-    exec_program(cp ${TARGET_INSTALL_LIB_DIR} ARGS -rf ${INSTALL_DIR}/lib/libhcom.so ${TARGET_INSTALL_LIB_DIR})
 endif()
