@@ -115,18 +115,14 @@ find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
 %config(noreplace) %{_sysconfdir}/boostio/bio.conf
 
 %if %{with_cli}
-%exclude %{_libdir}/boostio
-%exclude %{_bindir}/boostio
-%endif
-
-%if %{with_cli}
 %files test-tools
 %defattr(-,root,root,-)
 %dir %{_libdir}/boostio
 %dir %{_bindir}/boostio
+%dir %{_libdir}/boostio/test_tools
+%dir %{_bindir}/boostio/test_tools
 
-%{_libdir}/boostio/test_tools/
-%{_bindir}/boostio/test_tools/
+%{_libdir}/boostio/test_tools/*
 %{_bindir}/boostio/test_tools/bio_console
 %config(noreplace) %{_sysconfdir}/boostio/bio_sdk_test.conf
 %endif
