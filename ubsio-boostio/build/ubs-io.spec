@@ -104,9 +104,6 @@ find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
 %post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
 
-%post test-tools -p /sbin/ldconfig
-%postun test-tools -p /sbin/ldconfig
-
 %files
 %defattr(-,root,root,-)
 %{_libdir}/libbio_sdk.so.1
