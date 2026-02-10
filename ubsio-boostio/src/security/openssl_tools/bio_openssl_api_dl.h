@@ -213,8 +213,8 @@ private:
     static bool gLoaded;
 
     static int GetLibPath(std::string libDir, std::string &libSslPath, std::string &libCryptoPath);
-    static int LoadSSLSymbols(void *sslHandle);
-    static int LoadCryptoSymbols(void *cryptoHandle);
+    static int LoadSSLMethod(void *sslHandle);
+    static int LoadCryptoMethod(void *cryptoHandle);
 };
 } // namespace bio
 } // namespace ock

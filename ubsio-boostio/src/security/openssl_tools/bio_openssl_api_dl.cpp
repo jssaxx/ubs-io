@@ -90,7 +90,7 @@ const char *DlOpensslApi::gOpensslLibSslName = "libssl.so";
 const char *DlOpensslApi::gOpensslLibCryptoName = "libcrypto.so";
 const char *DlOpensslApi::gSep = "/";
 
-int DlOpensslApi::LoadSSLSymbols(void *handle)
+int DlOpensslApi::LoadSSLMethod(void *handle)
 {
     DLSYM_RETURN(handle, MethodSslNew, sslNew, "SSL_new");
     DLSYM_RETURN(handle, MethodSslCtxFree, sslCtxFree, "SSL_CTX_free");
@@ -125,7 +125,7 @@ int DlOpensslApi::LoadSSLSymbols(void *handle)
     return 0;
 }
 
-int DlOpensslApi::LoadCryptoSymbols(void *handle)
+int DlOpensslApi::LoadCryptoMethod(void *handle)
 {
     DLSYM_RETURN(handle, MethodX509StoreCtxGetError, x509StoreCtxGetError, "X509_STORE_CTX_get_error");
     DLSYM_RETURN(handle, MethodEvpDecryptUpdate, evpDecryptUpdate, "EVP_DecryptUpdate");
@@ -214,7 +214,7 @@ int DlOpensslApi::LoadOpensslApiDl(const std::string &libPath)
         return -1;
     }
 
-    if (LoadCryptoSymbols(cryptoHandle) == -1) {
+    if (LoadCryptoMethod(cryptoHandle) == -1) {
         LOG_ERROR("Failed to dlopen libcrypto.so err: " << dlerror());
         dlclose(cryptoHandle);
         return -1;
@@ -227,7 +227,7 @@ int DlOpensslApi::LoadOpensslApiDl(const std::string &libPath)
         return -1;
     }
 
-    if (LoadSSLSymbols(sslHandle) == -1) {
+    if (LoadSSLMethod(sslHandle) == -1) {
         LOG_ERROR("Failed to dlopen libssl.so err: " << dlerror());
         dlclose(cryptoHandle);
         dlclose(sslHandle);
