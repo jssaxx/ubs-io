@@ -1,6 +1,4 @@
 include_directories(${PROJECT_3RDPARTY_SRC_DIR}/hadoop/)
-set(HDFS_INCLUDE_PATH ${PROJECT_3RDPARTY_SRC_DIR}/hadoop/hdfs.h)
-file(COPY ${HDFS_INCLUDE_PATH} DESTINATION ${PROJECT_3RDPARTY_BIN_DIR}/hadoop/include)
 file(GLOB_RECURSE BIO_UNDERFS_SRCS *.cpp *.h)
 add_library(bio_underfs STATIC ${BIO_UNDERFS_SRCS})
 target_link_libraries(bio_underfs PRIVATE dl)

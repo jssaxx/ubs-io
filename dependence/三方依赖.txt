@@ -1,7 +1,5 @@
 1、spdlog
-2、zookeeper
-3、ubs-comm
-4、openssl
-5、secure
+2、ubs-comm
+3、libboundscheck
 
 

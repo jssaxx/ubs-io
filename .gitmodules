@@ -10,10 +10,6 @@
 	path = ubsio-boostio/3rdparty/spdlog/spdlog
 	url = https://gitcode.com/GitHub_Trending/sp/spdlog.git
 	tag = v1.15.3
-[submodule "ubsio-boostio/3rdparty/zookeeper/zookeeper"]
-	path = ubsio-boostio/3rdparty/zookeeper/zookeeper
-	url = https://gitcode.com/gh_mirrors/zo/zookeeper.git
-	tag = v3.9.3
 [submodule "ubsio-boostio/3rdparty/prometheus/prometheus"]
 	path = ubsio-boostio/3rdparty/prometheus/prometheus
 	url = https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git
