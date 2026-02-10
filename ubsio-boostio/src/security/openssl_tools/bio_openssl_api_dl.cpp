@@ -18,7 +18,6 @@
 
 namespace ock {
 namespace bio {
-
 MethodSslWrite DlOpensslApi::sslWrite = nullptr;
 MethodX509StoreCtxGetError DlOpensslApi::x509StoreCtxGetError = nullptr;
 MethodSslOperation DlOpensslApi::sslShutdown = nullptr;
@@ -123,7 +122,6 @@ int DlOpensslApi::LoadSSLSymbols(void *sslHandle)
           "SSL_CTX_set_default_passwd_cb_userdata");
     DLSYM_RETURN(sslHandle, MethodUsePrivKeyFile, usePrivKeyFile, "SSL_CTX_use_PrivateKey_file");
     DLSYM_RETURN(sslHandle, MethodGetMethod, tlsServerMethod, "TLS_server_method");
-
     return 0;
 }
 
@@ -167,7 +165,6 @@ int DlOpensslApi::LoadCryptoSymbols(void *cryptoHandle)
     DLSYM_RETURN(cryptoHandle, MethodPemReadX509, pemReadX509, "PEM_read_X509");
     DLSYM_RETURN(cryptoHandle, MethodX509GetNotBefore, x509GetNotBefore, "X509_getm_notBefore");
     DLSYM_RETURN(cryptoHandle, MethodEvpPkeyFree, evpPkeyFree, "EVP_PKEY_free");
-
     return 0;
 }
 
