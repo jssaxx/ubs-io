@@ -92,79 +92,80 @@ const char *DlOpensslApi::gSep = "/";
 
 int DlOpensslApi::LoadCryptoMethod(void *handle)
 {
-    DLSYM_RETURN(handle, MethodX509StoreCtxGetError, x509StoreCtxGetError, "X509_STORE_CTX_get_error");
-    DLSYM_RETURN(handle, MethodEvpDecryptUpdate, evpDecryptUpdate, "EVP_DecryptUpdate");
-    DLSYM_RETURN(handle, MethodX509CmpCurrentTime, x509CmpCurrentTime, "X509_cmp_current_time");
-    DLSYM_RETURN(handle, MethodRandBytes, randBytes, "RAND_bytes");
-    DLSYM_RETURN(handle, MethodX509Free, x509Free, "X509_free");
-    DLSYM_RETURN(handle, MethodEvpAesCipher, evpAes128Gcm, "EVP_aes_128_gcm");
-    DLSYM_RETURN(handle, MethodBioFree, bioFree, "BIO_free");
-    DLSYM_RETURN(handle, MethodEvpEncryptFinalEx, evpEncryptFinalEx, "EVP_EncryptFinal_ex");
-    DLSYM_RETURN(handle, MethodX509StoreCtxSetFlags, x509StoreCtxSetFlags, "X509_STORE_CTX_set_flags");
-    DLSYM_RETURN(handle, MethodEvpCipherCtxNew, evpCipherCtxNew, "EVP_CIPHER_CTX_new");
-    DLSYM_RETURN(handle, MethodX509GetPubkey, x509GetPubkey, "X509_get_pubkey");
-    DLSYM_RETURN(handle, MethodRandPoll, randPoll, "RAND_poll");
-    DLSYM_RETURN(handle, MethodPemReadBioX509Crl, pemReadBioX509Crl, "PEM_read_bio_X509_CRL");
-    DLSYM_RETURN(handle, MethodEvpCipherCtxFree, evpCipherCtxFree, "EVP_CIPHER_CTX_free");
-    DLSYM_RETURN(handle, MethodX509StoreAddCrl, x509StoreAddCrl, "X509_STORE_add_crl");
-    DLSYM_RETURN(handle, MethodRandSeed, randSeed, "RAND_seed");
-    DLSYM_RETURN(handle, MethodEvpAesCipher, evpAes256Gcm, "EVP_aes_256_gcm");
-    DLSYM_RETURN(handle, MethodX509CrlGet0ByCert, x509CrlGet0ByCert, "X509_CRL_get0_by_cert");
-    DLSYM_RETURN(handle, MethodBioNew, bioNew, "BIO_new");
-    DLSYM_RETURN(handle, MethodEvpCipherCtxCtrl, evpCipherCtxCtrl, "EVP_CIPHER_CTX_ctrl");
-    DLSYM_RETURN(handle, MethodEvpDecryptInitEx, evpDecryptInitEx, "EVP_DecryptInit_ex");
-    DLSYM_RETURN(handle, MethodRandBytes, randPrivBytes, "RAND_priv_bytes");
-    DLSYM_RETURN(handle, MethodX509VerifyCert, x509VerifyCert, "X509_verify_cert");
-    DLSYM_RETURN(handle, MethodEvpEncryptUpdate, evpEncryptUpdate, "EVP_EncryptUpdate");
-    DLSYM_RETURN(handle, MethodAsn1Time2Tm, asn1Time2Tm, "ASN1_TIME_to_tm");
-    DLSYM_RETURN(handle, MethodX509GetNotAfter, x509GetNotAfter, "X509_getm_notAfter");
-    DLSYM_RETURN(handle, MethodX509CrlGet0NextUpdate, x509CrlGet0NextUpdate, "X509_CRL_get0_nextUpdate");
-    DLSYM_RETURN(handle, MethodEvpEncryptInitEx, evpEncryptInitEx, "EVP_EncryptInit_ex");
-    DLSYM_RETURN(handle, MethodBioSFile, bioSFile, "BIO_s_file");
-    DLSYM_RETURN(handle, MethodEvpDecryptFinalEx, evpDecryptFinalEx, "EVP_DecryptFinal_ex");
-    DLSYM_RETURN(handle, MethodX509CrlFree, x509CrlFree, "X509_CRL_free");
-    DLSYM_RETURN(handle, MethodBioCtrl, bioCtrl, "BIO_ctrl");
-    DLSYM_RETURN(handle, MethodX509StoreCtxGet0Store, x509StoreCtxGet0Store, "X509_STORE_CTX_get0_store");
-    DLSYM_RETURN(handle, MethodRandStatus, randStatus, "RAND_status");
-    DLSYM_RETURN(handle, MethodX509VerifyCertErrorString, x509VerifyCertErrorString, "X509_verify_cert_error_string");
-    DLSYM_RETURN(handle, MethodPemReadX509, pemReadX509, "PEM_read_X509");
-    DLSYM_RETURN(handle, MethodX509GetNotBefore, x509GetNotBefore, "X509_getm_notBefore");
-    DLSYM_RETURN(handle, MethodEvpPkeyFree, evpPkeyFree, "EVP_PKEY_free");
+    DLSYM_RETURN(handle, "X509_STORE_CTX_get_error", MethodX509StoreCtxGetError, x509StoreCtxGetError);
+    DLSYM_RETURN(handle, "EVP_DecryptUpdate", MethodEvpDecryptUpdate, evpDecryptUpdate);
+    DLSYM_RETURN(handle, "X509_cmp_current_time", MethodX509CmpCurrentTime, x509CmpCurrentTime);
+    DLSYM_RETURN(handle, "RAND_bytes", MethodRandBytes, randBytes);
+    DLSYM_RETURN(handle, "X509_free", MethodX509Free, x509Free);
+    DLSYM_RETURN(handle, "EVP_aes_128_gcm", MethodEvpAesCipher, evpAes128Gcm);
+    DLSYM_RETURN(handle, "BIO_free", MethodBioFree, bioFree);
+    DLSYM_RETURN(handle, "EVP_EncryptFinal_ex", MethodEvpEncryptFinalEx, evpEncryptFinalEx);
+    DLSYM_RETURN(handle, "X509_STORE_CTX_set_flags", MethodX509StoreCtxSetFlags, x509StoreCtxSetFlags);
+    DLSYM_RETURN(handle, "EVP_CIPHER_CTX_new", MethodEvpCipherCtxNew, evpCipherCtxNew);
+    DLSYM_RETURN(handle, "X509_get_pubkey", MethodX509GetPubkey, x509GetPubkey);
+    DLSYM_RETURN(handle, "RAND_poll", MethodRandPoll, randPoll);
+    DLSYM_RETURN(handle, "PEM_read_bio_X509_CRL", MethodPemReadBioX509Crl, pemReadBioX509Crl);
+    DLSYM_RETURN(handle, "EVP_CIPHER_CTX_free", MethodEvpCipherCtxFree, evpCipherCtxFree);
+    DLSYM_RETURN(handle, "X509_STORE_add_crl", MethodX509StoreAddCrl, x509StoreAddCrl);
+    DLSYM_RETURN(handle, "RAND_seed", MethodRandSeed, randSeed);
+    DLSYM_RETURN(handle, "EVP_aes_256_gcm", MethodEvpAesCipher, evpAes256Gcm);
+    DLSYM_RETURN(handle, "X509_CRL_get0_by_cert", MethodX509CrlGet0ByCert, x509CrlGet0ByCert);
+    DLSYM_RETURN(handle, "BIO_new", MethodBioNew, bioNew);
+    DLSYM_RETURN(handle, "EVP_CIPHER_CTX_ctrl", MethodEvpCipherCtxCtrl, evpCipherCtxCtrl);
+    DLSYM_RETURN(handle, "EVP_DecryptInit_ex", MethodEvpDecryptInitEx, evpDecryptInitEx);
+    DLSYM_RETURN(handle, "RAND_priv_bytes", MethodRandBytes, randPrivBytes);
+    DLSYM_RETURN(handle, "X509_verify_cert", MethodX509VerifyCert, x509VerifyCert);
+    DLSYM_RETURN(handle, "EVP_EncryptUpdate", MethodEvpEncryptUpdate, evpEncryptUpdate);
+    DLSYM_RETURN(handle, "ASN1_TIME_to_tm", MethodAsn1Time2Tm, asn1Time2Tm);
+    DLSYM_RETURN(handle, "X509_getm_notAfter", MethodX509GetNotAfter, x509GetNotAfter);
+    DLSYM_RETURN(handle, "X509_CRL_get0_nextUpdate", MethodX509CrlGet0NextUpdate, x509CrlGet0NextUpdate);
+    DLSYM_RETURN(handle, "EVP_EncryptInit_ex", MethodEvpEncryptInitEx, evpEncryptInitEx);
+    DLSYM_RETURN(handle, "BIO_s_file", MethodBioSFile, bioSFile);
+    DLSYM_RETURN(handle, "EVP_DecryptFinal_ex", MethodEvpDecryptFinalEx, evpDecryptFinalEx);
+    DLSYM_RETURN(handle, "X509_CRL_free", MethodX509CrlFree, x509CrlFree);
+    DLSYM_RETURN(handle, "BIO_ctrl", MethodBioCtrl, bioCtrl);
+    DLSYM_RETURN(handle, "X509_STORE_CTX_get0_store", MethodX509StoreCtxGet0Store, x509StoreCtxGet0Store);
+    DLSYM_RETURN(handle, "RAND_status", MethodRandStatus, randStatus);
+    DLSYM_RETURN(handle, "X509_verify_cert_error_string", MethodX509VerifyCertErrorString, x509VerifyCertErrorString);
+    DLSYM_RETURN(handle, "PEM_read_X509", MethodPemReadX509, pemReadX509);
+    DLSYM_RETURN(handle, "X509_getm_notBefore", MethodX509GetNotBefore, x509GetNotBefore);
+    DLSYM_RETURN(handle, "EVP_PKEY_free", MethodEvpPkeyFree, evpPkeyFree);
     return 0;
 }
 
 int DlOpensslApi::LoadSSLMethod(void *handle)
 {
-    DLSYM_RETURN(handle, MethodSslNew, sslNew, "SSL_new");
-    DLSYM_RETURN(handle, MethodSslCtxFree, sslCtxFree, "SSL_CTX_free");
-    DLSYM_RETURN(handle, MethodSslGetError, sslGetError, "SSL_get_error");
-    DLSYM_RETURN(handle, MethodSslWrite, sslWrite, "SSL_write");
-    DLSYM_RETURN(handle, MethodSslOperation, sslShutdown, "SSL_shutdown");
-    DLSYM_RETURN(handle, MethodSetCertVerifyCallback, setCertVerifyCallback, "SSL_CTX_set_cert_verify_callback");
-    DLSYM_RETURN(handle, MethodInit, initCrypto, "OPENSSL_init_crypto");
-    DLSYM_RETURN(handle, MethodSslRead, sslRead, "SSL_read");
-    DLSYM_RETURN(handle, MethodSslGetCurrentCipher, sslGetCurrentCipher, "SSL_get_current_cipher");
-    DLSYM_RETURN(handle, MethodSslGetVersion, sslGetVersion, "SSL_get_version");
-    DLSYM_RETURN(handle, MethodSslFree, sslFree, "SSL_free");
-    DLSYM_RETURN(handle, MethodSslOperation, sslAccept, "SSL_accept");
-    DLSYM_RETURN(handle, MethodSslCtxCtrl, sslCtxCtrl, "SSL_CTX_ctrl");
-    DLSYM_RETURN(handle, MethodSslCtxNew, sslCtxNew, "SSL_CTX_new");
-    DLSYM_RETURN(handle, MethodSslOperation, sslConnect, "SSL_connect");
-    DLSYM_UPDATE(handle, MethodSslGetPeerCertificate, sslGetPeerCertificate, "SSL_get_peer_certificate",
-        "SSL_get1_peer_certificate");
-    DLSYM_RETURN(handle, MethodGetMethod, tlsClientMethod, "TLS_client_method");
-    DLSYM_RETURN(handle, MethodInit, initSsl, "OPENSSL_init_ssl");
-    DLSYM_RETURN(handle, MethodSslFd, sslSetFd, "SSL_set_fd");
-    DLSYM_RETURN(handle, MethodSslGetVerifyResult, sslGetVerifyResult, "SSL_get_verify_result");
-    DLSYM_RETURN(handle, MethodCheckPrivateKey, checkPrivateKey, "SSL_CTX_check_private_key");
-    DLSYM_RETURN(handle, MethodLoadVerifyLocations, loadVerifyLocations, "SSL_CTX_load_verify_locations");
-    DLSYM_RETURN(handle, MethodSslCtxSetVerify, sslCtxSetVerify, "SSL_CTX_set_verify");
-    DLSYM_RETURN(handle, MethodOpensslCleanup, opensslCleanup, "OPENSSL_cleanup");
-    DLSYM_RETURN(handle, MethodSetCipherSuites, setCipherSuites, "SSL_CTX_set_ciphersuites");
-    DLSYM_RETURN(handle, MethodSetDefaultPasswdCbUserdata, setDefaultPasswdCbUserdata,
-          "SSL_CTX_set_default_passwd_cb_userdata");
-    DLSYM_RETURN(handle, MethodUsePrivKeyFile, usePrivKeyFile, "SSL_CTX_use_PrivateKey_file");
-    DLSYM_RETURN(handle, MethodGetMethod, tlsServerMethod, "TLS_server_method");
+    DLSYM_RETURN(handle, "SSL_new", MethodSslNew, sslNew);
+    DLSYM_RETURN(handle, "SSL_CTX_free", MethodSslCtxFree, sslCtxFree);
+    DLSYM_RETURN(handle, "SSL_get_error", MethodSslGetError, sslGetError);
+    DLSYM_RETURN(handle, "SSL_write", MethodSslWrite, sslWrite);
+    DLSYM_RETURN(handle, "SSL_shutdown", MethodSslOperation, sslShutdown);
+    DLSYM_RETURN(handle, "SSL_CTX_set_cert_verify_callback", MethodSetCertVerifyCallback, setCertVerifyCallback);
+    DLSYM_RETURN(handle, "OPENSSL_init_crypto", MethodInit, initCrypto);
+    DLSYM_RETURN(handle, "SSL_read", MethodSslRead, sslRead);
+    DLSYM_RETURN(handle, "SSL_get_current_cipher", MethodSslGetCurrentCipher, sslGetCurrentCipher);
+    DLSYM_RETURN(handle, "SSL_get_version", MethodSslGetVersion, sslGetVersion);
+    DLSYM_RETURN(handle, "SSL_free", MethodSslFree, sslFree);
+    DLSYM_RETURN(handle, "SSL_accept", MethodSslOperation, sslAccept);
+    DLSYM_RETURN(handle, "SSL_CTX_ctrl", MethodSslCtxCtrl, sslCtxCtrl);
+    DLSYM_RETURN(handle, "SSL_CTX_new", MethodSslCtxNew, sslCtxNew);
+    DLSYM_RETURN(handle, "SSL_connect", MethodSslOperation, sslConnect);
+    DLSYM_UPDATE(handle, "SSL_get_peer_certificate", "SSL_get1_peer_certificate", MethodSslGetPeerCertificate,
+        sslGetPeerCertificate);
+    DLSYM_RETURN(handle, "TLS_client_method", MethodGetMethod, tlsClientMethod);
+    DLSYM_RETURN(handle, "OPENSSL_init_ssl", MethodInit, initSsl);
+    DLSYM_RETURN(handle, "SSL_set_fd", MethodSslFd, sslSetFd);
+    DLSYM_RETURN(handle, "SSL_get_verify_result", MethodSslGetVerifyResult, sslGetVerifyResult);
+    DLSYM_RETURN(handle, "SSL_CTX_check_private_key", MethodCheckPrivateKey, checkPrivateKey);
+    DLSYM_RETURN(handle, "SSL_CTX_load_verify_locations", MethodLoadVerifyLocations, loadVerifyLocations);
+    DLSYM_RETURN(handle, "SSL_CTX_set_verify", MethodSslCtxSetVerify, sslCtxSetVerify);
+    DLSYM_RETURN(handle, "OPENSSL_cleanup", MethodOpensslCleanup, opensslCleanup);
+    DLSYM_RETURN(handle, "SSL_CTX_set_ciphersuites", MethodSetCipherSuites, setCipherSuites);
+    DLSYM_RETURN(handle, "SSL_CTX_set_default_passwd_cb_userdata", MethodSetDefaultPasswdCbUserdata,
+        setDefaultPasswdCbUserdata);
+    DLSYM_RETURN(handle, "SSL_CTX_use_PrivateKey_file", MethodUsePrivKeyFile, usePrivKeyFile);
+    DLSYM_RETURN(handle, "TLS_server_method", MethodGetMethod, tlsServerMethod);
+
     return 0;
 }
 
