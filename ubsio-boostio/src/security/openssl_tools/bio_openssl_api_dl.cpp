@@ -90,41 +90,6 @@ const char *DlOpensslApi::gOpensslLibSslName = "libssl.so";
 const char *DlOpensslApi::gOpensslLibCryptoName = "libcrypto.so";
 const char *DlOpensslApi::gSep = "/";
 
-int DlOpensslApi::LoadSSLMethod(void *handle)
-{
-    DLSYM_RETURN(handle, MethodSslNew, sslNew, "SSL_new");
-    DLSYM_RETURN(handle, MethodSslCtxFree, sslCtxFree, "SSL_CTX_free");
-    DLSYM_RETURN(handle, MethodSslGetError, sslGetError, "SSL_get_error");
-    DLSYM_RETURN(handle, MethodSslWrite, sslWrite, "SSL_write");
-    DLSYM_RETURN(handle, MethodSslOperation, sslShutdown, "SSL_shutdown");
-    DLSYM_RETURN(handle, MethodSetCertVerifyCallback, setCertVerifyCallback, "SSL_CTX_set_cert_verify_callback");
-    DLSYM_RETURN(handle, MethodInit, initCrypto, "OPENSSL_init_crypto");
-    DLSYM_RETURN(handle, MethodSslRead, sslRead, "SSL_read");
-    DLSYM_RETURN(handle, MethodSslGetCurrentCipher, sslGetCurrentCipher, "SSL_get_current_cipher");
-    DLSYM_RETURN(handle, MethodSslGetVersion, sslGetVersion, "SSL_get_version");
-    DLSYM_RETURN(handle, MethodSslFree, sslFree, "SSL_free");
-    DLSYM_RETURN(handle, MethodSslOperation, sslAccept, "SSL_accept");
-    DLSYM_RETURN(handle, MethodSslCtxCtrl, sslCtxCtrl, "SSL_CTX_ctrl");
-    DLSYM_RETURN(handle, MethodSslCtxNew, sslCtxNew, "SSL_CTX_new");
-    DLSYM_RETURN(handle, MethodSslOperation, sslConnect, "SSL_connect");
-    DLSYM_UPDATE(handle, MethodSslGetPeerCertificate, sslGetPeerCertificate, "SSL_get_peer_certificate",
-        "SSL_get1_peer_certificate");
-    DLSYM_RETURN(handle, MethodGetMethod, tlsClientMethod, "TLS_client_method");
-    DLSYM_RETURN(handle, MethodInit, initSsl, "OPENSSL_init_ssl");
-    DLSYM_RETURN(handle, MethodSslFd, sslSetFd, "SSL_set_fd");
-    DLSYM_RETURN(handle, MethodSslGetVerifyResult, sslGetVerifyResult, "SSL_get_verify_result");
-    DLSYM_RETURN(handle, MethodCheckPrivateKey, checkPrivateKey, "SSL_CTX_check_private_key");
-    DLSYM_RETURN(handle, MethodLoadVerifyLocations, loadVerifyLocations, "SSL_CTX_load_verify_locations");
-    DLSYM_RETURN(handle, MethodSslCtxSetVerify, sslCtxSetVerify, "SSL_CTX_set_verify");
-    DLSYM_RETURN(handle, MethodOpensslCleanup, opensslCleanup, "OPENSSL_cleanup");
-    DLSYM_RETURN(handle, MethodSetCipherSuites, setCipherSuites, "SSL_CTX_set_ciphersuites");
-    DLSYM_RETURN(handle, MethodSetDefaultPasswdCbUserdata, setDefaultPasswdCbUserdata,
-          "SSL_CTX_set_default_passwd_cb_userdata");
-    DLSYM_RETURN(handle, MethodUsePrivKeyFile, usePrivKeyFile, "SSL_CTX_use_PrivateKey_file");
-    DLSYM_RETURN(handle, MethodGetMethod, tlsServerMethod, "TLS_server_method");
-    return 0;
-}
-
 int DlOpensslApi::LoadCryptoMethod(void *handle)
 {
     DLSYM_RETURN(handle, MethodX509StoreCtxGetError, x509StoreCtxGetError, "X509_STORE_CTX_get_error");
@@ -168,6 +133,41 @@ int DlOpensslApi::LoadCryptoMethod(void *handle)
     return 0;
 }
 
+int DlOpensslApi::LoadSSLMethod(void *handle)
+{
+    DLSYM_RETURN(handle, MethodSslNew, sslNew, "SSL_new");
+    DLSYM_RETURN(handle, MethodSslCtxFree, sslCtxFree, "SSL_CTX_free");
+    DLSYM_RETURN(handle, MethodSslGetError, sslGetError, "SSL_get_error");
+    DLSYM_RETURN(handle, MethodSslWrite, sslWrite, "SSL_write");
+    DLSYM_RETURN(handle, MethodSslOperation, sslShutdown, "SSL_shutdown");
+    DLSYM_RETURN(handle, MethodSetCertVerifyCallback, setCertVerifyCallback, "SSL_CTX_set_cert_verify_callback");
+    DLSYM_RETURN(handle, MethodInit, initCrypto, "OPENSSL_init_crypto");
+    DLSYM_RETURN(handle, MethodSslRead, sslRead, "SSL_read");
+    DLSYM_RETURN(handle, MethodSslGetCurrentCipher, sslGetCurrentCipher, "SSL_get_current_cipher");
+    DLSYM_RETURN(handle, MethodSslGetVersion, sslGetVersion, "SSL_get_version");
+    DLSYM_RETURN(handle, MethodSslFree, sslFree, "SSL_free");
+    DLSYM_RETURN(handle, MethodSslOperation, sslAccept, "SSL_accept");
+    DLSYM_RETURN(handle, MethodSslCtxCtrl, sslCtxCtrl, "SSL_CTX_ctrl");
+    DLSYM_RETURN(handle, MethodSslCtxNew, sslCtxNew, "SSL_CTX_new");
+    DLSYM_RETURN(handle, MethodSslOperation, sslConnect, "SSL_connect");
+    DLSYM_UPDATE(handle, MethodSslGetPeerCertificate, sslGetPeerCertificate, "SSL_get_peer_certificate",
+        "SSL_get1_peer_certificate");
+    DLSYM_RETURN(handle, MethodGetMethod, tlsClientMethod, "TLS_client_method");
+    DLSYM_RETURN(handle, MethodInit, initSsl, "OPENSSL_init_ssl");
+    DLSYM_RETURN(handle, MethodSslFd, sslSetFd, "SSL_set_fd");
+    DLSYM_RETURN(handle, MethodSslGetVerifyResult, sslGetVerifyResult, "SSL_get_verify_result");
+    DLSYM_RETURN(handle, MethodCheckPrivateKey, checkPrivateKey, "SSL_CTX_check_private_key");
+    DLSYM_RETURN(handle, MethodLoadVerifyLocations, loadVerifyLocations, "SSL_CTX_load_verify_locations");
+    DLSYM_RETURN(handle, MethodSslCtxSetVerify, sslCtxSetVerify, "SSL_CTX_set_verify");
+    DLSYM_RETURN(handle, MethodOpensslCleanup, opensslCleanup, "OPENSSL_cleanup");
+    DLSYM_RETURN(handle, MethodSetCipherSuites, setCipherSuites, "SSL_CTX_set_ciphersuites");
+    DLSYM_RETURN(handle, MethodSetDefaultPasswdCbUserdata, setDefaultPasswdCbUserdata,
+          "SSL_CTX_set_default_passwd_cb_userdata");
+    DLSYM_RETURN(handle, MethodUsePrivKeyFile, usePrivKeyFile, "SSL_CTX_use_PrivateKey_file");
+    DLSYM_RETURN(handle, MethodGetMethod, tlsServerMethod, "TLS_server_method");
+    return 0;
+}
+
 int DlOpensslApi::GetLibPath(std::string dir, std::string &sslPath, std::string &cryptoPath)
 {
     if (dir.empty()) {
@@ -198,7 +198,7 @@ int DlOpensslApi::GetLibPath(std::string dir, std::string &sslPath, std::string 
 int DlOpensslApi::LoadOpensslApiDl(const std::string &libPath)
 {
     LOG_INFO("Starting to load openssl api");
-    if (gLoaded) {
+    if (gStarted) {
         return 0;
     }
 
@@ -234,7 +234,7 @@ int DlOpensslApi::LoadOpensslApiDl(const std::string &libPath)
         return -1;
     }
 
-    gLoaded = true;
+    gStarted = true;
     return 0;
 }
 } // namespace bio

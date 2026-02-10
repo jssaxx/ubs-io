@@ -210,7 +210,7 @@ private:
     static const char* gOpensslLibSslName;
     static const char* gOpensslLibCryptoName;
     static const char* gSep;
-    static bool gLoaded;
+    static bool gStarted;
 
     static int GetLibPath(std::string libDir, std::string &libSslPath, std::string &libCryptoPath);
     static int LoadSSLMethod(void *sslHandle);
