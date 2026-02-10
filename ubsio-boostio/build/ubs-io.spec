@@ -79,11 +79,6 @@ mkdir -p %{buildroot}%{_sysconfdir}/boostio
 SRC_CORE=$DIST_ROOT/boostio
 cp -ad $SRC_CORE/lib/*.so* %{buildroot}%{_libdir}/
 cp -ad $SRC_CORE/lib/libbio_sdk.a %{buildroot}%{_libdir}/
-pushd %{buildroot}%{_libdir}
-    ln -sf libbio_sdk.so.1.0.0 libbio_sdk.so.1
-    ln -sf libbio_sdk.so.1     libbio_sdk.so
-popd
-
 cp -ad $SRC_CORE/include/* %{buildroot}%{_includedir}/boostio/
 cp -ad $SRC_CORE/bin/* %{buildroot}%{_bindir}/
 cp -ad $SRC_CORE/conf/bio.conf %{buildroot}%{_sysconfdir}/boostio/
@@ -105,6 +100,12 @@ find %{buildroot}%{_libdir} -type f -name "*.a" -exec chmod 644 {} \;
 find %{buildroot}%{_bindir} -type f -exec chmod 755 {} \;
 find %{buildroot}%{_includedir} -type f -exec chmod 644 {} \;
 find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
+
+%post -p /sbin/ldconfig
+%postun -p /sbin/ldconfig
+
+%post test-tools -p /sbin/ldconfig
+%postun test-tools -p /sbin/ldconfig
 
 %files
 %defattr(-,root,root,-)
