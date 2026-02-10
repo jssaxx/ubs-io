@@ -15,29 +15,6 @@
 
 #include <string>
 
-#define DLSYM_RETURN(handle, type, ptr, sym)              \
-    do {                                           \
-        auto ptr1 = dlsym((handle), (sym));        \
-        if (ptr1 == nullptr) {                     \
-            LOG_ERROR("Failed to load " << (sym)); \
-            return -1;                             \
-        }                                          \
-        (ptr) = (type)ptr1;                        \
-    } while (0)
-
-#define DLSYM_UPDATE(handle, type, ptr, sym1, sym2)        \
-    do {                                                   \
-        auto ptr1 = dlsym((handle), (sym1));               \
-        if (ptr1 == nullptr) {                             \
-            ptr1 = dlsym((handle), (sym2));                \
-            if (ptr1 == nullptr) {                         \
-                LOG_ERROR("Failed to load " << (sym1));    \
-                return -1;                                 \
-            }                                              \
-        }                                                  \
-        (ptr) = (type)ptr1;                                \
-    } while (0)
-
 namespace ock {
 namespace bio {
 using OPENSSL_INIT_SETTINGS = struct ossl_init_settings_st;
