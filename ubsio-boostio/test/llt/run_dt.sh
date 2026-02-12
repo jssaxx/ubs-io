@@ -70,7 +70,7 @@ lcov --remove ${TOTAL_INFO} \
      "*/io_interceptor/*" \
      "*/security/openssl_tools/*" \
      "*/disk/common/ngx_rbtree.c" \
-     "*/cluster/*"
+     "*/cluster/*" \
      "*/security/expiration_check/expire_checker.cpp" \
      "*/dist/*" \
      "*/cmake-build-*" \
