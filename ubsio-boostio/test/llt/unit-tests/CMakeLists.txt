@@ -15,7 +15,16 @@ else()
     set(CMAKE_CXX_STANDARD 11)
 endif()
 
-include(../conf/comp.cmake)
+set(GTEST_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/googletest")
+if (NOT EXISTS ${GTEST_INSTALL_DIR})
+    message(ERROR "GTEST_INSTALL_DIR(${GTEST_INSTALL_DIR}) is invalid")
+endif()
+
+set(MOCKCPP_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/mockcpp")
+if (NOT EXISTS ${MOCKCPP_INSTALL_DIR})
+    message(ERROR "MOCKCPP_INSTALL_DIR(${MOCKCPP_INSTALL_DIR}) is invalid")
+endif()
+
 aux_source_directory(mock BIO_TEST)
 aux_source_directory(htracer BIO_TEST)
 aux_source_directory(server BIO_TEST)
