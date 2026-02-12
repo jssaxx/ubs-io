@@ -17,7 +17,7 @@ BeiMing UBS-IO基于华为鲲鹏计算平台构建了计算侧高性能分布式
 ## 源码编译
 
 ```shell
-$ git clone <hcom-repo-url>
+$ git clone <repo-url>
 $ cd boostio
 $ bash build.sh -t release
 ```
@@ -27,7 +27,19 @@ $ bash build.sh -t release
 执行build目录下，rpm_install.sh脚本
 
 ```
-bash rpm_install.sh release
+rm -rf ~/rpmbuild
+rpmdev-setuptree
+tar -cvzf ubs-io.tar.gz ubs-io
+cp ubs-io.tar.gz ~/rpmbuild/SOURCES/
+
+# 带cli工具包, 需要开发人员提供cli so进行调试
+rpmbuild -ba ubs-io.spec
+
+# 标准发布包, 无测试包
+rpmbuild -ba ubs-io.spec --define "with_cli 0"
+
+# debug包
+rpmbuild -ba ubs-io.spec --define "build_type debug"
 ```
 
 最终在 ~/rpmbuild/RPMS 下生成最终rpm安装包
