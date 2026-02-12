@@ -23,12 +23,14 @@ mkdir -p ${REPORT_DIR}
 echo "=== 2. Building Project ==="
 bash ${PROJECT_ROOT}/build.sh -t debug --ut
 
+LCOV_RC_OPTS="--rc lcov_branch_coverage=1 --rc lcov_excl_br_line=LCOV_EXCL_BR_LINE|NET_LOG*|CLIENT_LOG*|LOG*|BIO_TP_START*|ChkTrue*"
+
 echo "=== 3. Capturing Baseline (Initial State) ==="
 # 扫描所有生成的 .gcno 文件，将所有源文件标记为 0% 覆盖
 lcov --capture --initial \
      --directory ${PROJECT_ROOT}/Build \
      --output-file ${BASELINE_INFO} \
-     --rc lcov_branch_coverage=1 \
+     ${LCOV_RC_OPTS} \
      --quiet
 
 echo "=== 4. Running Tests ==="
@@ -43,7 +45,7 @@ cd ${PROJECT_ROOT}
 lcov --capture \
      --directory ${PROJECT_ROOT}/Build \
      --output-file ${TEST_INFO} \
-     --rc lcov_branch_coverage=1 \
+     ${LCOV_RC_OPTS} \
      --quiet
 
 echo "=== 6. Merging & Filtering ==="
@@ -73,7 +75,7 @@ lcov --remove ${TOTAL_INFO} \
      "*/dist/*" \
      "*/cmake-build-*" \
      --output-file ${FINAL_INFO} \
-     --rc lcov_branch_coverage=1 \
+     ${LCOV_RC_OPTS} \
      --quiet
 
 echo "=== 7. Generating HTML Report ==="
