@@ -68,11 +68,15 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
-        ${SRC_DIR}/underfs)
+        ${SRC_DIR}/underfs
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/include/
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/include/)
 
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group
         pthread dl rt aio
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64/libgtest.a
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
 
 set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")
