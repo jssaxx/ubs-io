@@ -56,7 +56,7 @@ lcov --add-tracefile ${BASELINE_INFO} \
      --rc lcov_branch_coverage=1 \
      --quiet
 
-# 过滤，去除 python 库干扰
+# 过滤
 lcov --remove ${TOTAL_INFO} \
      "*/llt/*" \
      "/usr/*" \
