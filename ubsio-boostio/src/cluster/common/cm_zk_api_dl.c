@@ -11,8 +11,8 @@
  */
 
 #include <dlfcn.h>
-#include "cm_zk_api_dl.h"
 #include "cm_log.h"
+#include "cm_zk_api_dl.h"
 
 // Function pointers
 ZooCreateFn ZooCreate = NULL;
