@@ -10,7 +10,6 @@ if (${DEBUG_UT} MATCHES "OFF")
             -Wl,--start-group
             pthread dl aio
             ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
-            ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
             bio_sdk bio_conf
             -Wl,--end-group)
 endif()

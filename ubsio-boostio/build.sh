@@ -122,7 +122,6 @@ if [[ -z "${CI_BUILD}" ]];then
     cd $PROJ_DIR
     git submodule update --init 3rdparty/ubs-comm/ubs-comm \
                                 3rdparty/spdlog/spdlog \
-                                3rdparty/zookeeper/zookeeper \
                                 3rdparty/libboundscheck/libboundscheck
     if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
         cd $PROJ_DIR && git submodule update --init 3rdparty/prometheus/prometheus
@@ -150,7 +149,6 @@ if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
 fi
 
 if [[ "$BUILD_TYPE" == "debug" ]]; then
-	  \cp -d 3rdparty/zookeeper/lib/*.so* bio/lib/.
 	  \cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
 	  \cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
 fi

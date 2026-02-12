@@ -11,7 +11,6 @@ if (${DEBUG_UT} MATCHES "OFF")
         -Wl,--start-group
         pthread dl
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
-		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
 		bio_server
         -Wl,--end-group)
 endif()

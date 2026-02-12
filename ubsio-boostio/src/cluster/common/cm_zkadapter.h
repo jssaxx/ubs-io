@@ -15,7 +15,7 @@
 
 #include "cm_comm.h"
 #include "cm_log.h"
-#include "zookeeper/zookeeper.h"
+#include "cm_zk_api_dl.h"
 
 #if defined(__cplusplus)
 extern "C" {
