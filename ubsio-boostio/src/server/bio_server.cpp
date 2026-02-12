@@ -166,7 +166,7 @@ BResult BioServer::BioConfigInit()
 BResult BioServer::BioLoggerInit(std::string pathName)
 {
     LoggerOptions loggerOptions;
-    loggerOptions.logType = FILE_TYPE;
+    loggerOptions.logType = STDOUT_TYPE;
     loggerOptions.minLogLevel = BIOLOG_LEVEL_INFO;
     loggerOptions.path = std::move(pathName);
     Logger *logger = Logger::Instance(loggerOptions);
