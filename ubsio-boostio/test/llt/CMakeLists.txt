@@ -15,6 +15,8 @@ include_directories(${SRC_DIR}/common
 		${SRC_DIR}/interceptor
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/include/
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/include/
         ${TEST_DIR}/mock
         ${TEST_DIR}/htracer
         ${TEST_DIR}/server
@@ -28,6 +30,8 @@ include_directories(${SRC_DIR}/common
         ${TEST_DIR}/net)
 
 link_directories(
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/lib64/
 )
