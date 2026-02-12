@@ -25,7 +25,7 @@ int DecryptPassword(const char* cipherText, const size_t cipherTextLen, char *pl
 - `cipherText`: 加密的文本（输入）
 - `cipherTextLen`: 加密文本的长度（输入） 注: 长度不超过10000
 - `plainText`: 解密文本缓冲区（输出）
-- `plainTextLen`: 解密缓冲区大小（输入）
+- `plainTextLen`: 解密缓冲区大小（输出）
 
 返回值：
 
