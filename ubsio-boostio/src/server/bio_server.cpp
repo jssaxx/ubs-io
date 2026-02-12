@@ -149,7 +149,7 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "/opt/boostio/bin/conf/";
+    const std::string confPath = "./";
 #else
     const std::string confPath = "/etc/boostio/";
 #endif
