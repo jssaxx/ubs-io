@@ -22,13 +22,13 @@ add_library(ock_interceptor_static STATIC $<TARGET_OBJECTS:ock_interceptor_objec
 set_target_properties(ock_interceptor_static PROPERTIES OUTPUT_NAME "ock_interceptor_static")
 target_link_libraries(ock_interceptor_static
         pthread dl
-        ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a)
+        boundscheck_lib)
 set_target_properties(ock_interceptor_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
 add_library(ock_interceptor_shared SHARED $<TARGET_OBJECTS:ock_interceptor_object>)
 target_link_libraries(ock_interceptor_shared
         pthread dl
-        ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a)
+        boundscheck_lib)
 set_target_properties(ock_interceptor_shared PROPERTIES OUTPUT_NAME "ock_interceptor")
 
 install(TARGETS ock_interceptor_shared DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
