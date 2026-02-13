@@ -9,7 +9,7 @@ if (${DEBUG_UT} MATCHES "OFF")
     target_link_libraries(bio_console
             -Wl,--start-group
             pthread dl aio
-            ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+            hcom_lib
             bio_sdk bio_conf
             -Wl,--end-group)
 endif()

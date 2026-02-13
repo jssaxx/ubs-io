@@ -124,18 +124,6 @@ else
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
-if [[ -z "${CI_BUILD}" ]];then
-    echo "update submodules ... "
-    cd $PROJ_DIR
-    git submodule update --init 3rdparty/ubs-comm/ubs-comm \
-                                3rdparty/spdlog/spdlog \
-                                3rdparty/libboundscheck/libboundscheck
-    if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
-        cd $PROJ_DIR && git submodule update --init 3rdparty/prometheus/prometheus
-        cd $PROJ_DIR/3rdparty/prometheus/prometheus && git submodule update --init
-    fi
-fi
-
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 16" # CI环境核数会波动, 默认只用16
@@ -153,10 +141,6 @@ $BUILD_CMD || {
 cd ${PROJ_DIR}/dist
 if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
-fi
-
-if [[ "$BUILD_TYPE" == "debug" ]]; then
-	  \cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
 fi
 
 if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
