@@ -193,7 +193,7 @@ void BioServer::BioLoggerExit()
 
 BResult BioServer::BioTraceInit()
 {
-    const std::string dumpDir = "/var/log/boostio/trace/";
+    std::string dumpDir = "/var/log/boostio/trace/";
 #ifdef DEBUG_UT
     dumpDir = "./";
 #endif
