@@ -195,7 +195,7 @@ BResult BioServer::BioTraceInit()
 {
 #ifdef DEBUG_UT
     const std::string dumpDir = "./";
-#else 
+#else
     const std::string dumpDir = "/var/log/boostio/trace/";
 #endif
     auto ret = ock::htracer::HTracerInit(dumpDir);
