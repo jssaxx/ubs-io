@@ -5,7 +5,7 @@ install(TARGETS bio_server DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OW
 target_link_libraries(bio_server
         -Wl,--start-group
         pthread dl aio expire_checker rados
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
-        ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/lib/libboundscheck.a
+        hcom_lib
+        boundscheck_lib
         htracer bio_common bio_bdm bio_flow bio_cache bio_net bio_conf bio_cluster bio_underfs
         -Wl,--end-group)

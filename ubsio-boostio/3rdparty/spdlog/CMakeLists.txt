@@ -9,11 +9,25 @@ message("-- spdlog: check if need to build ")
 find_file(LIBS_BUILT_SPDLOG libspdlog.a ${INSTALL_DIR}/lib64/ ${INSTALL_DIR}/lib)
 if(NOT EXISTS ${LIBS_BUILT_SPDLOG})
 
+    include(FetchContent)
+
+    FetchContent_Declare(
+            spdlog
+            GIT_REPOSITORY https://gitcode.com/GitHub_Trending/sp/spdlog.git
+            GIT_TAG v1.15.3
+    )
+
+    # 获取 spdlog 源码路径
+    FetchContent_GetProperties(spdlog)
+    if(NOT spdlog_POPULATED)
+        FetchContent_Populate(spdlog)
+    endif()
+
     # create build dir
     exec_program(mkdir ${BUILD_PATH} ARGS -p ${BUILD_DIR})
 
     # configure
-    exec_program(cmake ${BUILD_DIR} ARGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR})
+    exec_program(cmake ${BUILD_DIR} ARGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${spdlog_SOURCE_DIR})
 
     # execute make && make install
     exec_program(make ${BUILD_DIR} ARGS clean)

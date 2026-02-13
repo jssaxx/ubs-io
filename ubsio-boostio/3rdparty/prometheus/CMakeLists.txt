@@ -11,12 +11,25 @@ if(EXISTS ${CHECK_FILE_PROMETHEUS})
     message("-- prometheus: ${CHECK_FILE_PROMETHEUS}")
     message("-- prometheus: has been built, ignored")
 else()
+    include(FetchContent)
+
+    FetchContent_Declare(
+            prometheus
+            GIT_REPOSITORY https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git
+            GIT_TAG v1.2.4
+    )
+
+    # 获取 prometheus 源码路径
+    FetchContent_GetProperties(prometheus)
+    if(NOT prometheus_POPULATED)
+        FetchContent_Populate(prometheus)
+    endif()
     # create build dir
     exec_program(mkdir ${BUILD_DIR} ARGS -p ${BUILD_DIR})
     exec_program(mkdir ${BUILD_DIR} ARGS -p ${INSTALL_DIR})
 
     # configure
-    exec_program(cmake ${BUILD_DIR} ARGS -DBUILD_SHARED_LIBS=ON -DENABLE_TESTING=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR})
+    exec_program(cmake ${BUILD_DIR} ARGS -DBUILD_SHARED_LIBS=ON -DENABLE_TESTING=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${prometheus_SOURCE_DIR})
 
     # execute make && make install
     exec_program(make ${BUILD_DIR} ARGS clean)

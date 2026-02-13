@@ -1,19 +1,63 @@
+# --- 路径设置 ---
 set(SOURCE_DIR ${PROJECT_3RDPARTY_SRC_DIR}/libboundscheck/libboundscheck)
-set(OBJECT_DIR ${PROJECT_3RDPARTY_SRC_DIR}/libboundscheck/libboundscheck/obj)
-set(BUILD_DIR ${PROJECT_BUILD_PATH}/3rdparty/libboundscheck/)
-set(INSTALL_DIR ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck)
+set(LIBBOUNDCHECK_INSTALL_DIR "${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck")
 
-message("-- secure: check if need to build")
+message(STATUS "LIBBOUNDCHECK_INSTALL_DIR: ${LIBBOUNDCHECK_INSTALL_DIR}")
 
-find_file(LIBS_BUILT_SECURE_C libboundscheck.a ${INSTALL_DIR}/lib/)
+find_path(LIBBOUNDCHECK_FINAL_INCLUDE
+        NAMES securec.h
+        PATHS /usr/include ${LIBBOUNDCHECK_INSTALL_DIR}/include
+        NO_DEFAULT_PATH
+)
 
-# build the lib if not built yet
-if(NOT EXISTS ${LIBS_BUILT_SECURE_C})
-    execute_process(COMMAND make -j WORKING_DIRECTORY ${SOURCE_DIR})
-    EXEC_PROGRAM(ar ${INSTALL_DIR}/lib ARGS crv ${INSTALL_DIR}/lib/libboundscheck.a ${OBJECT_DIR}/*.o)
-    execute_process(COMMAND mkdir -p ${INSTALL_DIR} WORKING_DIRECTORY ${SOURCE_DIR})
-    execute_process(COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/libboundscheck/include ${INSTALL_DIR} WORKING_DIRECTORY ${INSTALL_DIR})
-else()
-    message("-- secure: ${LIBS_BUILT_SECURE_C}")
-    message("-- secure: has been built, ignored")
-endif(NOT EXISTS ${LIBS_BUILT_SECURE_C})
+find_library(LIBBOUNDCHECK_FINAL_LIBRARY
+        NAMES libboundscheck.so boundscheck
+        PATHS /usr/lib64 /usr/lib ${LIBBOUNDCHECK_INSTALL_DIR}/lib
+        NO_DEFAULT_PATH
+)
+
+if(NOT LIBBOUNDCHECK_FINAL_INCLUDE OR NOT LIBBOUNDCHECK_FINAL_LIBRARY)
+    message(STATUS "libboundscheck not found! Attempting to build from source...")
+
+    include(FetchContent)
+    FetchContent_Declare(
+            libboundscheck_src
+            GIT_REPOSITORY https://gitee.com/openeuler/libboundscheck.git
+            GIT_TAG        master
+            SOURCE_DIR     ${SOURCE_DIR}
+    )
+    FetchContent_MakeAvailable(libboundscheck_src)
+
+    execute_process(
+            COMMAND make CC=gcc -j8
+            WORKING_DIRECTORY ${SOURCE_DIR}
+            RESULT_VARIABLE MAKE_RESULT
+    )
+
+    if(NOT MAKE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to build libboundscheck from source!")
+    endif()
+
+    file(MAKE_DIRECTORY ${LIBBOUNDCHECK_INSTALL_DIR}/lib)
+    file(MAKE_DIRECTORY ${LIBBOUNDCHECK_INSTALL_DIR}/include)
+
+    file(COPY ${SOURCE_DIR}/lib/ DESTINATION ${LIBBOUNDCHECK_INSTALL_DIR}/lib)
+    file(COPY ${SOURCE_DIR}/include/ DESTINATION ${LIBBOUNDCHECK_INSTALL_DIR}/include)
+
+    set(LIBBOUNDCHECK_FINAL_INCLUDE "${LIBBOUNDCHECK_INSTALL_DIR}/include")
+    set(LIBBOUNDCHECK_FINAL_LIBRARY "${LIBBOUNDCHECK_INSTALL_DIR}/lib/libboundscheck.so")
+endif()
+
+if(NOT TARGET boundscheck_lib)
+    add_library(boundscheck_lib SHARED IMPORTED GLOBAL)
+
+    set_target_properties(boundscheck_lib PROPERTIES
+            IMPORTED_LOCATION "${LIBBOUNDCHECK_FINAL_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
+    )
+
+    set(LIBBOUNDCHECK_LIBRARIES boundscheck_lib CACHE INTERNAL "libboundscheck libraries")
+    set(LIBBOUNDCHECK_INCLUDE_DIRS "${LIBBOUNDCHECK_FINAL_INCLUDE}" CACHE INTERNAL "libboundscheck includes")
+endif()
+
+message(STATUS "libboundscheck Target defined: ${LIBBOUNDCHECK_FINAL_LIBRARY}")

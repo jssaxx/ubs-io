@@ -10,7 +10,7 @@ if (${DEBUG_UT} MATCHES "OFF")
 	    -pie
         -Wl,--start-group
         pthread dl
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+        hcom_lib
 		bio_server
         -Wl,--end-group)
 endif()
