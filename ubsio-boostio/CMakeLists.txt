@@ -97,6 +97,7 @@ if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
 endif()
 
 if (${DEBUG_UT} MATCHES "ON")
+    enable_testing()
     add_compile_options(-ftest-coverage -fprofile-arcs)
 	add_compile_definitions(DEBUG_UT)
     link_libraries(gcov)

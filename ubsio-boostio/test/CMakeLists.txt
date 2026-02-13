@@ -9,4 +9,5 @@ endif()
 
 if (${DEBUG_UT} MATCHES "ON")
     add_subdirectory(llt)
+    include(${PROJECT_SOURCE_DIR}/test/tools/scripts/mockcpp.cmake)
 endif()
