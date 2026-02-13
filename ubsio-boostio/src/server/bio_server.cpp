@@ -166,7 +166,7 @@ BResult BioServer::BioConfigInit()
 BResult BioServer::BioLoggerInit(std::string pathName)
 {
     LoggerOptions loggerOptions;
-    loggerOptions.logType = STDOUT_TYPE;
+    loggerOptions.logType = FILE_TYPE;
     loggerOptions.minLogLevel = BIOLOG_LEVEL_INFO;
     loggerOptions.path = std::move(pathName);
     Logger *logger = Logger::Instance(loggerOptions);
@@ -193,9 +193,10 @@ void BioServer::BioLoggerExit()
 
 BResult BioServer::BioTraceInit()
 {
-    std::string dumpDir = "/var/log/boostio/trace/";
 #ifdef DEBUG_UT
-    dumpDir = "./";
+    const std::string dumpDir = "./";
+#else 
+    const std::string dumpDir = "/var/log/boostio/trace/";
 #endif
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
