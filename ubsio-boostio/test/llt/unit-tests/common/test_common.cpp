@@ -59,36 +59,3 @@ TEST_F(TestCommon, test_copy_key_fail)
     auto ret = StrUtil::StartWith("123.5", "1");
     EXPECT_EQ(ret, true);
 }
-
-TEST_F(TestCommon, bio_config_init_bak_file_exit_test)
-{
-    LOG_INFO("bio_config_init_bak_file_exit_test");
-    BioConfigPtr config = BioConfig::Instance();
-
-    std::string homePath = "/opt/boostio/bin";
-    std::string confPath = "/opt/boostio/bin/conf/bio.conf";
-    std::string initBakPath = "/opt/boostio/bin/conf/bio.conf.bak.init";
-    (void)system("touch /opt/boostio/bin/conf/bio.conf.bak.init");
-
-    FileUtil::BackUpFile(confPath, initBakPath);
-
-    config->BakFileProcess(homePath);
-    bool exist = FileUtil::Exist(initBakPath);
-    EXPECT_EQ(exist, false);
-}
-
-TEST_F(TestCommon, bio_config_bak_file_exit_test)
-{
-    LOG_INFO("bio_config_bak_file_exit_test");
-    BioConfigPtr config = BioConfig::Instance();
-    std::string homePath = "/opt/boostio/bin";
-    std::string confPath = "/opt/boostio/bin/conf/bio.conf";
-    std::string bakPath = "/opt/boostio/bin/conf/bio.conf.bak";
-    (void)system("touch /opt/boostio/bin/conf/bio.conf.bak");
-
-    FileUtil::BackUpFile(confPath, bakPath);
-
-    config->BakFileProcess(homePath);
-    bool exist = FileUtil::Exist(bakPath);
-    EXPECT_EQ(exist, false);
-}

@@ -149,7 +149,7 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "/opt/boostio/bin/conf/";
+    const std::string confPath = "./";
 #else
     const std::string confPath = "/etc/boostio/";
 #endif
@@ -193,7 +193,11 @@ void BioServer::BioLoggerExit()
 
 BResult BioServer::BioTraceInit()
 {
+#ifdef DEBUG_UT
+    const std::string dumpDir = "./";
+#else
     const std::string dumpDir = "/var/log/boostio/trace/";
+#endif
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");

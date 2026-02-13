@@ -343,9 +343,9 @@ void BioConfig::BakFileProcess(const std::string &homePath)
     std::string bakConfPath = homePath + CONF_BAK_SUFFIX;
     std::string configPath = homePath + CONF_SUFFIX;
 #ifdef DEBUG_UT
-    initConfPath = "/opt/boostio/bin/conf/" + CONF_INIT_BAK_SUFFIX;
-    bakConfPath = "/opt/boostio/bin/conf/" + CONF_BAK_SUFFIX;
-    configPath = "/opt/boostio/bin/conf/" + CONF_SUFFIX;
+    initConfPath = "./" + CONF_INIT_BAK_SUFFIX;
+    bakConfPath = "./" + CONF_BAK_SUFFIX;
+    configPath = "./" + CONF_SUFFIX;
 #endif
     // 1、查看是否存在.bak.init文件，存在则将其重命名为.bak文件,不存在不做处理
     if (FileUtil::Exist(initConfPath)) {

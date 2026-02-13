@@ -106,7 +106,14 @@ else
 fi
 
 if [[ "$BUILD_UT" == 'ON' ]]; then
+    [[ -z "${TEST_TOOL_PATH}" ]] && TEST_TOOL_PATH="${PROJ_DIR}/dist/boostio_test_tools"
+    if [[ ! -d "${TEST_TOOL_PATH}" ]]; then
+        echo "boostio test tools are not installed, installing..."
+        bash "${PROJ_DIR}/build/install_test_tools.sh"
+    fi
+
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
+    CMAKE_FLAGS+="-DTEST_TOOL_INSTALL_PATH=${TEST_TOOL_PATH} "
 else
     CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
@@ -150,7 +157,6 @@ fi
 
 if [[ "$BUILD_TYPE" == "debug" ]]; then
 	  \cp -d 3rdparty/ubs-comm/lib/libhcom.so* bio/lib/.
-	  \cp ${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm/dist/hcom_3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
 fi
 
 if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then

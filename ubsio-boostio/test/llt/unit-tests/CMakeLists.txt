@@ -15,7 +15,16 @@ else()
     set(CMAKE_CXX_STANDARD 11)
 endif()
 
-include(../conf/comp.cmake)
+set(GTEST_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/googletest")
+if (NOT EXISTS ${GTEST_INSTALL_DIR})
+    message(ERROR "GTEST_INSTALL_DIR(${GTEST_INSTALL_DIR}) is invalid")
+endif()
+
+set(MOCKCPP_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/mockcpp")
+if (NOT EXISTS ${MOCKCPP_INSTALL_DIR})
+    message(ERROR "MOCKCPP_INSTALL_DIR(${MOCKCPP_INSTALL_DIR}) is invalid")
+endif()
+
 aux_source_directory(mock BIO_TEST)
 aux_source_directory(htracer BIO_TEST)
 aux_source_directory(server BIO_TEST)
@@ -59,11 +68,15 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
-        ${SRC_DIR}/underfs)
+        ${SRC_DIR}/underfs
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/include/
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/include/)
 
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group
         pthread dl rt aio
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64/libgtest.a
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
 
 set_target_properties(bio_test PROPERTIES OUTPUT_NAME "bio_test")
