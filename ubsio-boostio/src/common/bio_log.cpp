@@ -29,6 +29,7 @@ const int STDERR_TYPE = 2;
 constexpr int MIN_LOG_LEVEL_MAX = 5;
 constexpr int SIZE_MB_SHIFT = 20;
 constexpr auto ROTATION_FILE_SIZE_MAX_MB = 100UL;                                   // 100MB
+constexpr mode_t UMASK_MODE = 0277;
 constexpr auto ROTATION_FILE_SIZE_MAX = ROTATION_FILE_SIZE_MAX_MB << SIZE_MB_SHIFT; // 100MB
 constexpr auto ROTATION_FILE_SIZE_MIN_MB = 2;                                       // 2MB
 constexpr auto ROTATION_FILE_SIZE_MIN = ROTATION_FILE_SIZE_MIN_MB << SIZE_MB_SHIFT; // 2MB
@@ -130,8 +131,16 @@ int32_t Logger::Init()
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
         } else if (mOptions.logType == FILE_TYPE) { // file
             std::string logName = std::string("ns:0").append(";log:normal");
+            spdlog::file_event_handlers handlers;
+            handlers.after_open = [this](const spdlog::filename_t &filename, std::FILE* f) {
+                if (filename == mOptions.path) {
+                    chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
+                }
+            };
+            mode_t oldMask = umask(UMASK_MODE);
             mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path,
-                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount);
+                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount, false, handlers);
+            umask(oldMask);
             mSpdLogger->set_pattern("%v");
             mSpdLogger->info("", "");
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");

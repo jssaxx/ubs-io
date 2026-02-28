@@ -22,8 +22,8 @@ if(NOT LIBBOUNDCHECK_FINAL_INCLUDE OR NOT LIBBOUNDCHECK_FINAL_LIBRARY)
     include(FetchContent)
     FetchContent_Declare(
             libboundscheck_src
-            GIT_REPOSITORY https://gitee.com/openeuler/libboundscheck.git
-            GIT_TAG        master
+            GIT_REPOSITORY https://gitcode.com/openeuler/libboundscheck.git
+            GIT_TAG        v1.1.16
             SOURCE_DIR     ${SOURCE_DIR}
     )
     FetchContent_MakeAvailable(libboundscheck_src)
@@ -49,11 +49,13 @@ if(NOT LIBBOUNDCHECK_FINAL_INCLUDE OR NOT LIBBOUNDCHECK_FINAL_LIBRARY)
 endif()
 
 if(NOT TARGET boundscheck_lib)
-    add_library(boundscheck_lib SHARED IMPORTED GLOBAL)
+    get_filename_component(BC_LIB_DIR "${LIBBOUNDCHECK_FINAL_LIBRARY}" DIRECTORY)
+
+    add_library(boundscheck_lib INTERFACE IMPORTED GLOBAL)
 
     set_target_properties(boundscheck_lib PROPERTIES
-            IMPORTED_LOCATION "${LIBBOUNDCHECK_FINAL_LIBRARY}"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
+            INTERFACE_LINK_LIBRARIES "-L${BC_LIB_DIR} -lboundscheck"
     )
 
     set(LIBBOUNDCHECK_LIBRARIES boundscheck_lib CACHE INTERNAL "libboundscheck libraries")
