@@ -49,13 +49,12 @@ if(NOT LIBBOUNDCHECK_FINAL_INCLUDE OR NOT LIBBOUNDCHECK_FINAL_LIBRARY)
 endif()
 
 if(NOT TARGET boundscheck_lib)
-    # 1. 提取库文件所在的目录
     get_filename_component(BC_LIB_DIR "${LIBBOUNDCHECK_FINAL_LIBRARY}" DIRECTORY)
 
     add_library(boundscheck_lib SHARED IMPORTED GLOBAL)
 
     set_target_properties(boundscheck_lib PROPERTIES
-            IMPORTED_LOCATION "${LIBBOUNDCHECK_FINAL_LIBRARY}"
+            IMPORTED_LOCATION "libboundscheck.so"
             INTERFACE_LINK_LIBRARIES "-L${BC_LIB_DIR} -lboundscheck"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
     )
