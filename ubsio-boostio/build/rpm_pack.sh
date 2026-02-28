@@ -5,6 +5,7 @@
 # version: 1.0.0
 # ***********************************************************************
 
+tar -czvf ubs-io.tar.gz ubs-io
 rm -rf ~/rpmbuild
 rpmdev-setuptree
 cp ubs-io.tar.gz ~/rpmbuild/SOURCES/
