@@ -53,6 +53,7 @@ if(NOT TARGET boundscheck_lib)
 
     set_target_properties(boundscheck_lib PROPERTIES
             IMPORTED_LOCATION "${LIBBOUNDCHECK_FINAL_LIBRARY}"
+            IMPORTED_SONAME "libboundscheck.so"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
     )
 
