@@ -54,7 +54,7 @@ if(NOT TARGET boundscheck_lib)
     add_library(boundscheck_lib SHARED IMPORTED GLOBAL)
 
     set_target_properties(boundscheck_lib PROPERTIES
-            IMPORTED_LOCATION "libboundscheck.so"
+            IMPORTED_LOCATION "${LIBBOUNDCHECK_FINAL_LIBRARY}"
             INTERFACE_LINK_LIBRARIES "-L${BC_LIB_DIR} -lboundscheck"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
     )
