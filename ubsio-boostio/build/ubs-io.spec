@@ -1,34 +1,16 @@
-%define custom_os %( \
-    if [ -f "/etc/openEuler-release" ]; then \
-        OS_RELEASE_CONTENT=$(cat /etc/openEuler-release); \
-        if [[ $OS_RELEASE_CONTENT =~ ([0-9]+)\\.([0-9]+).*-?SP-?([0-9]+) ]]; then \
-            printf "oe%%s%%ssp%%s" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"; \
-        elif [[ $OS_RELEASE_CONTENT =~ ([0-9]+)\\.([0-9]+) ]]; then \
-            printf "oe%%s%%s" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"; \
-        fi; \
-    else \
-        echo "unknown_os"; \
-    fi \
-)
-
 %global with_cli %{?_with_cli}%{!?_with_cli:1}
-%{!?version_count: %define version_count 1}
-%{!?build_type:    %define build_type release}
 
-%define _os             %{custom_os}
-%define _full_release   %{version_count}.%{_os}
-%define _build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm
 %define __os_install_post %{nil}
 %define debug_package     %{nil}
 
 Name:           ubs_io-boostio
 Version:        1.0.0
-Release:        %{_full_release}
+Release:        1
 Summary:        BoostIO: High-performance cache acceleration library
 License:        Mulan PSL v2
 Vendor:         Huawei Technologies Co., Ltd
 Source0:        ubs-io.tar.gz
-BuildArch:      aarch64 x86_64
+BuildArch:      aarch64
 
 BuildRequires:  gcc gcc-c++ make cmake maven hostname fuse-devel automake
 BuildRequires:  librados-devel libaio-devel libtool numactl-devel libcurl-devel
@@ -61,9 +43,9 @@ Contains header files and development resources for BoostIO.
 %build
 cd ubsio-boostio
 %if %{with_cli}
-    bash -x build.sh -t %{build_type} --cli
+    bash -x build.sh -t release --cli
 %else
-    bash -x build.sh -t %{build_type}
+    bash -x build.sh -t release
 %endif
 
 %install
@@ -144,5 +126,8 @@ fi
 rm -rf %{buildroot}
 
 %changelog
+* Sat Feb 28 2026 ljj929 <499109299@qq.com> - 1.0.0-2
+- fix file permission
+
 * Sat Feb 07 2026 ljj929 <499109299@qq.com> - 1.0.0-1
 - Initial RPM release
