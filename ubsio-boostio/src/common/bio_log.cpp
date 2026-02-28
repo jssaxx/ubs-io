@@ -130,8 +130,16 @@ int32_t Logger::Init()
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
         } else if (mOptions.logType == FILE_TYPE) { // file
             std::string logName = std::string("ns:0").append(";log:normal");
+            spdlog::file_event_handlers handlers;
+            handlers.after_open = [this](const spdlog::filename_t &filename, std::FILE* f) {
+                if (filename == mOptions.path) {
+                    chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
+                } else {
+                    chmod(filename.c_str(), S_IRUSR);
+                }
+            };
             mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path,
-                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount);
+                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount, false, handlers);
             mSpdLogger->set_pattern("%v");
             mSpdLogger->info("", "");
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");

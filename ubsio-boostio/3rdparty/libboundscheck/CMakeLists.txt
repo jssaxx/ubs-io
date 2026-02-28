@@ -22,8 +22,8 @@ if(NOT LIBBOUNDCHECK_FINAL_INCLUDE OR NOT LIBBOUNDCHECK_FINAL_LIBRARY)
     include(FetchContent)
     FetchContent_Declare(
             libboundscheck_src
-            GIT_REPOSITORY https://gitee.com/openeuler/libboundscheck.git
-            GIT_TAG        master
+            GIT_REPOSITORY https://gitcode.com/openeuler/libboundscheck.git
+            GIT_TAG        v1.1.16
             SOURCE_DIR     ${SOURCE_DIR}
     )
     FetchContent_MakeAvailable(libboundscheck_src)
