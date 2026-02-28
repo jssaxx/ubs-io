@@ -51,7 +51,7 @@ endif()
 if(NOT TARGET boundscheck_lib)
     get_filename_component(BC_LIB_DIR "${LIBBOUNDCHECK_FINAL_LIBRARY}" DIRECTORY)
 
-    add_library(boundscheck_lib INTERFACE GLOBAL)
+    add_library(boundscheck_lib INTERFACE IMPORTED GLOBAL)
 
     set_target_properties(boundscheck_lib PROPERTIES
             INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
