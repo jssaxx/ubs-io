@@ -95,11 +95,18 @@ if [ -d "$SRC_TEST" ]; then
 fi
 %endif
 
-find %{buildroot}%{_libdir} -type f -name "*.so*" -exec chmod 755 {} \;
-find %{buildroot}%{_libdir} -type f -name "*.a" -exec chmod 644 {} \;
-find %{buildroot}%{_bindir} -type f -exec chmod 755 {} \;
-find %{buildroot}%{_includedir} -type f -exec chmod 644 {} \;
-find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
+find %{buildroot}%{_sysconfdir}/boostio -type d -exec chmod 750 {} \;
+find %{buildroot}%{_sysconfdir}/boostio -type f -exec chmod 640 {} \;
+find %{buildroot}%{_includedir}/boostio -type f -name "*.h" -exec chmod 400 {} \;
+find %{buildroot}%{_includedir}/boostio -type f -exec chmod 400 {} \;
+find %{buildroot}%{_libdir} -type f -name "*.so*" -exec chmod 550 {} \;
+find %{buildroot}%{_libdir} -type f -name "*.a" -exec chmod 400 {} \;
+find %{buildroot}%{_bindir} -type f -exec chmod 550 {} \;
+
+if [ -d "%{buildroot}%{_libdir}/boostio" ]; then
+    find %{buildroot}%{_libdir}/boostio -type d -exec chmod 750 {} \;
+    find %{buildroot}%{_bindir}/boostio -type d -exec chmod 750 {} \;
+fi
 
 %post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
@@ -111,20 +118,20 @@ find %{buildroot}%{_sysconfdir} -type f -exec chmod 644 {} \;
 %{_libdir}/*.so
 %exclude %{_libdir}/libbio_sdk.so
 %{_bindir}/bio_daemon
-%dir %{_sysconfdir}/boostio
-%config(noreplace) %{_sysconfdir}/boostio/bio.conf
+%attr(750,root,root) %dir %{_sysconfdir}/boostio
+%config(noreplace) %attr(640,root,root) %{_sysconfdir}/boostio/bio.conf
 
 %if %{with_cli}
 %files test-tools
 %defattr(-,root,root,-)
-%dir %{_libdir}/boostio
-%dir %{_bindir}/boostio
-%dir %{_libdir}/boostio/test_tools
-%dir %{_bindir}/boostio/test_tools
+%attr(750,root,root) %dir %{_libdir}/boostio
+%attr(750,root,root) %dir %{_bindir}/boostio
+%attr(750,root,root) %dir %{_libdir}/boostio/test_tools
+%attr(750,root,root) %dir %{_bindir}/boostio/test_tools
 
 %{_libdir}/boostio/test_tools/*
 %{_bindir}/boostio/test_tools/bio_console
-%config(noreplace) %{_sysconfdir}/boostio/bio_sdk_test.conf
+%config(noreplace) %attr(640,root,root) %{_sysconfdir}/boostio/bio_sdk_test.conf
 %endif
 
 %files devel
