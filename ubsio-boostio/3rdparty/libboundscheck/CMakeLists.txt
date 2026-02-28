@@ -51,12 +51,11 @@ endif()
 if(NOT TARGET boundscheck_lib)
     get_filename_component(BC_LIB_DIR "${LIBBOUNDCHECK_FINAL_LIBRARY}" DIRECTORY)
 
-    add_library(boundscheck_lib SHARED IMPORTED GLOBAL)
+    add_library(boundscheck_lib INTERFACE GLOBAL)
 
     set_target_properties(boundscheck_lib PROPERTIES
-            IMPORTED_LOCATION "${LIBBOUNDCHECK_FINAL_LIBRARY}"
-            INTERFACE_LINK_LIBRARIES "-L${BC_LIB_DIR} -lboundscheck"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBBOUNDCHECK_FINAL_INCLUDE}"
+            INTERFACE_LINK_LIBRARIES "-L${BC_LIB_DIR} -lboundscheck"
     )
 
     set(LIBBOUNDCHECK_LIBRARIES boundscheck_lib CACHE INTERNAL "libboundscheck libraries")
