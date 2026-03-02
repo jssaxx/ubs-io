@@ -17,8 +17,7 @@
 #include "securec.h"
 #include "slice.h"
 #include <atomic>
-#include <condition_variable>
-#include <mutex>
+#include <semaphore>
 
 namespace ock {
 namespace bio {
@@ -27,8 +26,7 @@ namespace bio {
 struct AsyncIoContext {
     std::atomic<int32_t> ret{0};
     std::atomic<bool> completed{false};
-    std::mutex mtx;
-    std::condition_variable cv;
+    sem_t sem;
 };
 
 // 异步IO回调函数
@@ -36,14 +34,23 @@ static void AsyncIoCallback(void *ctx, int32_t ret) {
     auto *asyncCtx = reinterpret_cast<AsyncIoContext *>(ctx);
     asyncCtx->ret.store(ret);
     asyncCtx->completed.store(true);
-    asyncCtx->cv.notify_one();
+    sem_post(&asyncCtx->sem, 1);
 }
 
 // 等待异步IO完成
 static int32_t WaitAsyncIo(AsyncIoContext *asyncCtx) {
-    std::unique_lock<std::mutex> lock(asyncCtx->mtx);
-    asyncCtx->cv.wait(lock, [asyncCtx] { return asyncCtx->completed.load(); });
+    sem_wait(&asyncCtx->sem);
     return asyncCtx->ret.load();
+}
+
+// 初始化异步IO上下文
+static void InitAsyncIoContext(AsyncIoContext *asyncCtx) {
+    sem_init(&asyncCtx->sem, 0, 0);
+}
+
+// 销毁异步IO上下文
+static void DestroyAsyncIoContext(AsyncIoContext *asyncCtx) {
+    sem_destroy(&asyncCtx->sem);
 }
 bool Slice::IsTheSameWith(const SlicePtr &other)
 {
@@ -233,6 +240,7 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
         std::vector<BdmIoCtx> ioCtxs(mAddrs.size());
         
         for (size_t i = 0; i < mAddrs.size(); i++) {
+            InitAsyncIoContext(&asyncCtxs[i]);
             auto &fromAddr = mAddrs[i];
             ioCtxs[i] = {
                 .cb = AsyncIoCallback,
@@ -243,6 +251,9 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
                     " to memory by length:" << fromAddr.chunkLen << ".");
+                for (size_t j = 0; j <= i; j++) {
+                    DestroyAsyncIoContext(&asyncCtxs[j]);
+                }
                 free(value);
                 value = nullptr;
                 return BIO_DISK_IOERR;
@@ -255,10 +266,17 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data from disk chunkId:" << (mAddrs[i].chunkId + mAddrs[i].chunkOffset) <<
                     " to memory by length:" << mAddrs[i].chunkLen << ".");
+                for (size_t j = 0; j < asyncCtxs.size(); j++) {
+                    DestroyAsyncIoContext(&asyncCtxs[j]);
+                }
                 free(value);
                 value = nullptr;
                 return BIO_DISK_IOERR;
             }
+        }
+        
+        for (size_t i = 0; i < asyncCtxs.size(); i++) {
+            DestroyAsyncIoContext(&asyncCtxs[i]);
         }
     }
 
