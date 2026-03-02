@@ -29,6 +29,7 @@ target_link_libraries(bdm_benchmark
         pthread dl aio
         bio_bdm bio_common bio_cluster
         -lboundscheck
+        -lhtracer
         -luring 
         -lstdc++
         -Wl,--end-group
