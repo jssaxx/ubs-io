@@ -15,7 +15,10 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+#include <unistd.h>
 #include "bdm_core.h"
+
+#define UNREFERENCE_PARAM(param) (void)(param)
 
 #define TEST_CHUNK_SIZE (1024 * 1024)  // 1MB
 #define TEST_CHUNK_NUM 10

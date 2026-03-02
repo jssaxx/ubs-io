@@ -5,7 +5,10 @@ set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 set(SRC_DIR ${ROOT_DIR}/src)
 
 # 链接库
-link_directories(${ROOT_DIR}/dist/bio/lib)
+link_directories(
+        ${ROOT_DIR}/dist/bio/lib
+        ${ROOT_DIR}/Build/src/disk
+        )
 
 add_executable(bdm_benchmark bdm_benchmark.c)
 
