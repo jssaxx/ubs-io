@@ -14,9 +14,35 @@
 #include "bdm_core.h"
 #include "bio_tracepoint_helper.h"
 #include "bio_trace.h"
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 
 namespace ock {
 namespace bio {
+
+// 异步IO上下文结构
+struct AsyncIoContext {
+    std::atomic<int32_t> ret{0};
+    std::atomic<bool> completed{false};
+    std::mutex mtx;
+    std::condition_variable cv;
+};
+
+// 异步IO回调函数
+static void AsyncIoCallback(void *ctx, int32_t ret) {
+    auto *asyncCtx = reinterpret_cast<AsyncIoContext *>(ctx);
+    asyncCtx->ret.store(ret);
+    asyncCtx->completed.store(true);
+    asyncCtx->cv.notify_one();
+}
+
+// 等待异步IO完成
+static int32_t WaitAsyncIo(AsyncIoContext *asyncCtx) {
+    std::unique_lock<std::mutex> lock(asyncCtx->mtx);
+    asyncCtx->cv.wait(lock, [asyncCtx] { return asyncCtx->completed.load(); });
+    return asyncCtx->ret.load();
+}
 BResult CacheSliceOperator::Copy(const SlicePtr &from, const SlicePtr &to)
 {
     ChkTrueNot(Validate(from, to), BIO_INVALID_PARAM);
@@ -66,8 +92,16 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
         uint64_t offset = 0;
         for (auto toAddr : toAddrs) {
             BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
-            ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
-                reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
+            AsyncIoContext asyncCtx;
+            BdmIoCtx ioCtx = {
+                .cb = AsyncIoCallback,
+                .ctx = &asyncCtx
+            };
+            ret = BdmWriteAsync(toAddr.chunkId, toAddr.chunkOffset,
+                reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen, &ioCtx);
+            if (ret == BIO_OK) {
+                ret = WaitAsyncIo(&asyncCtx);
+            }
             ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
             ChkTrue(ret == BIO_OK, ret, "Failed to copy length:" << toAddr.chunkLen);
@@ -140,8 +174,16 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to, uint32_t toLen)
         for (auto fromAddr : fromAddrs) {
             LOG_TRACE("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
             BIO_TRACE_START(BDM_TRACE_READ_SYNC);
-            ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
-                fromAddr.chunkLen);
+            AsyncIoContext asyncCtx;
+            BdmIoCtx ioCtx = {
+                .cb = AsyncIoCallback,
+                .ctx = &asyncCtx
+            };
+            ret = BdmReadAsync(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
+                fromAddr.chunkLen, &ioCtx);
+            if (ret == BIO_OK) {
+                ret = WaitAsyncIo(&asyncCtx);
+            }
             ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
             ChkTrue(ret == BIO_OK, ret,
@@ -230,8 +272,16 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
         BIO_TRACE_START(BDM_TRACE_READ_SYNC);
         BIO_TP_START(SLICE_COPY_DISK2MEMORY_OK, &ret, BIO_OK);
-        ret = BdmRead(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
-            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len);
+        AsyncIoContext asyncCtx;
+        BdmIoCtx ioCtx = {
+            .cb = AsyncIoCallback,
+            .ctx = &asyncCtx
+        };
+        ret = BdmReadAsync(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
+            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len, &ioCtx);
+        if (ret == BIO_OK) {
+            ret = WaitAsyncIo(&asyncCtx);
+        }
         BIO_TP_END;
         ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
@@ -269,8 +319,16 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
         BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
-        auto ret = BdmWrite(toIt->chunkId, toIt->chunkOffset + toOffset,
-            reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
+        AsyncIoContext asyncCtx;
+        BdmIoCtx ioCtx = {
+            .cb = AsyncIoCallback,
+            .ctx = &asyncCtx
+        };
+        auto ret = BdmWriteAsync(toIt->chunkId, toIt->chunkOffset + toOffset,
+            reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len, &ioCtx);
+        if (ret == BIO_OK) {
+            ret = WaitAsyncIo(&asyncCtx);
+        }
         ret = (ret == BIO_OK) ? BIO_OK : BIO_DISK_IOERR;
         BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
         LOG_TRACE("Copy data from disk chunk:" << fromIt->chunkOffset << ", from off:" << fromOffset << ", to off:" <<

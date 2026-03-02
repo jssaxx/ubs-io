@@ -16,9 +16,35 @@
 #include "bdm_core.h"
 #include "securec.h"
 #include "slice.h"
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 
 namespace ock {
 namespace bio {
+
+// 异步IO上下文结构
+struct AsyncIoContext {
+    std::atomic<int32_t> ret{0};
+    std::atomic<bool> completed{false};
+    std::mutex mtx;
+    std::condition_variable cv;
+};
+
+// 异步IO回调函数
+static void AsyncIoCallback(void *ctx, int32_t ret) {
+    auto *asyncCtx = reinterpret_cast<AsyncIoContext *>(ctx);
+    asyncCtx->ret.store(ret);
+    asyncCtx->completed.store(true);
+    asyncCtx->cv.notify_one();
+}
+
+// 等待异步IO完成
+static int32_t WaitAsyncIo(AsyncIoContext *asyncCtx) {
+    std::unique_lock<std::mutex> lock(asyncCtx->mtx);
+    asyncCtx->cv.wait(lock, [asyncCtx] { return asyncCtx->completed.load(); });
+    return asyncCtx->ret.load();
+}
 bool Slice::IsTheSameWith(const SlicePtr &other)
 {
     if (other->GetFlowType() != GetFlowType()) {
@@ -204,8 +230,21 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
         }
     } else {
         for (auto fromAddr : mAddrs) {
-            auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(value + offset),
-                fromAddr.chunkLen);
+            AsyncIoContext asyncCtx;
+            BdmIoCtx ioCtx = {
+                .cb = AsyncIoCallback,
+                .ctx = &asyncCtx
+            };
+            auto ret = BdmReadAsync(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(value + offset),
+                fromAddr.chunkLen, &ioCtx);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
+                    " to memory by length:" << fromAddr.chunkLen << ".");
+                free(value);
+                value = nullptr;
+                return BIO_DISK_IOERR;
+            }
+            ret = WaitAsyncIo(&asyncCtx);
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
                     " to memory by length:" << fromAddr.chunkLen << ".");
