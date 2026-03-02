@@ -36,7 +36,7 @@ static void async_callback(void *ctx, int32_t ret) {
     UNREFERENCE_PARAM(ret);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     int32_t ret;
     uint32_t bdmId;
     uint64_t chunkIds[TEST_CHUNK_NUM];
@@ -47,10 +47,36 @@ int main() {
     }
     memset(buf, 0xAA, TEST_IO_SIZE);
 
+    // 检查命令行参数
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <disk_path>\n", argv[0]);
+        free(buf);
+        return -1;
+    }
+    char *diskPath = argv[1];
+    printf("Using disk: %s\n", diskPath);
+
     // 初始化bdm
     ret = BdmInit();
     if (ret != BDM_CODE_OK) {
         fprintf(stderr, "BdmInit failed, ret=%d\n", ret);
+        free(buf);
+        return -1;
+    }
+
+    // 配置磁盘设备
+    DiskDevices diskDevices = {
+        .num = 1,
+        .diskCaps = {TEST_CHUNK_SIZE * TEST_CHUNK_NUM * 2},
+        .list = {{""}}
+    };
+    strncpy(diskDevices.list[0].path, diskPath, DISK_PATH_LEN - 1);
+    diskDevices.list[0].path[DISK_PATH_LEN - 1] = '\0';
+
+    // 启动bdm，指定磁盘设备
+    ret = BdmStart(&diskDevices, TEST_CHUNK_SIZE);
+    if (ret != BDM_CODE_OK) {
+        fprintf(stderr, "BdmStart failed, ret=%d\n", ret);
         free(buf);
         return -1;
     }
