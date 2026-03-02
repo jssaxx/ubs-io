@@ -229,22 +229,17 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
             cpyLength -= fromAddr.chunkLen;
         }
     } else {
-        for (auto fromAddr : mAddrs) {
-            AsyncIoContext asyncCtx;
-            BdmIoCtx ioCtx = {
+        std::vector<AsyncIoContext> asyncCtxs(mAddrs.size());
+        std::vector<BdmIoCtx> ioCtxs(mAddrs.size());
+        
+        for (size_t i = 0; i < mAddrs.size(); i++) {
+            auto &fromAddr = mAddrs[i];
+            ioCtxs[i] = {
                 .cb = AsyncIoCallback,
-                .ctx = &asyncCtx
+                .ctx = &asyncCtxs[i]
             };
             auto ret = BdmReadAsync(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(value + offset),
-                fromAddr.chunkLen, &ioCtx);
-            if (ret != BIO_OK) {
-                LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
-                    " to memory by length:" << fromAddr.chunkLen << ".");
-                free(value);
-                value = nullptr;
-                return BIO_DISK_IOERR;
-            }
-            ret = WaitAsyncIo(&asyncCtx);
+                fromAddr.chunkLen, &ioCtxs[i]);
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
                     " to memory by length:" << fromAddr.chunkLen << ".");
@@ -253,6 +248,17 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
                 return BIO_DISK_IOERR;
             }
             offset += fromAddr.chunkLen;
+        }
+        
+        for (size_t i = 0; i < asyncCtxs.size(); i++) {
+            auto ret = WaitAsyncIo(&asyncCtxs[i]);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Failed to copy data from disk chunkId:" << (mAddrs[i].chunkId + mAddrs[i].chunkOffset) <<
+                    " to memory by length:" << mAddrs[i].chunkLen << ".");
+                free(value);
+                value = nullptr;
+                return BIO_DISK_IOERR;
+            }
         }
     }
 
