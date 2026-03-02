@@ -17,7 +17,7 @@
 #include "securec.h"
 #include "slice.h"
 #include <atomic>
-#include <semaphore>
+#include <semaphore.h>
 
 namespace ock {
 namespace bio {
@@ -26,6 +26,12 @@ namespace bio {
 struct AsyncIoContext {
     std::atomic<int32_t> ret{0};
     std::atomic<bool> completed{false};
+};
+
+// 批量异步IO等待上下文
+struct BatchAsyncIoContext {
+    std::atomic<uint32_t> quota{0};
+    std::atomic<int32_t> ret{0};
     sem_t sem;
 };
 
@@ -34,23 +40,35 @@ static void AsyncIoCallback(void *ctx, int32_t ret) {
     auto *asyncCtx = reinterpret_cast<AsyncIoContext *>(ctx);
     asyncCtx->ret.store(ret);
     asyncCtx->completed.store(true);
-    sem_post(&asyncCtx->sem, 1);
 }
 
-// 等待异步IO完成
-static int32_t WaitAsyncIo(AsyncIoContext *asyncCtx) {
-    sem_wait(&asyncCtx->sem);
-    return asyncCtx->ret.load();
+// 批量异步IO回调函数
+static void BatchAsyncIoCallback(void *ctx, int32_t ret) {
+    auto *batchCtx = reinterpret_cast<BatchAsyncIoContext *>(ctx);
+    if (ret != BIO_OK && batchCtx->ret.load() == BIO_OK) {
+        batchCtx->ret.store(ret);
+    }
+    if (__sync_sub_and_fetch(&batchCtx->quota, 1) == 0) {
+        sem_post(&batchCtx->sem);
+    }
 }
 
-// 初始化异步IO上下文
-static void InitAsyncIoContext(AsyncIoContext *asyncCtx) {
-    sem_init(&asyncCtx->sem, 0, 0);
+// 等待批量异步IO完成
+static int32_t WaitBatchAsyncIo(BatchAsyncIoContext *batchCtx) {
+    sem_wait(&batchCtx->sem);
+    return batchCtx->ret.load();
 }
 
-// 销毁异步IO上下文
-static void DestroyAsyncIoContext(AsyncIoContext *asyncCtx) {
-    sem_destroy(&asyncCtx->sem);
+// 初始化批量异步IO上下文
+static void InitBatchAsyncIoContext(BatchAsyncIoContext *batchCtx, uint32_t quota) {
+    batchCtx->quota.store(quota);
+    batchCtx->ret.store(BIO_OK);
+    sem_init(&batchCtx->sem, 0, 0);
+}
+
+// 销毁批量异步IO上下文
+static void DestroyBatchAsyncIoContext(BatchAsyncIoContext *batchCtx) {
+    sem_destroy(&batchCtx->sem);
 }
 bool Slice::IsTheSameWith(const SlicePtr &other)
 {
@@ -238,22 +256,21 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
     } else {
         std::vector<AsyncIoContext> asyncCtxs(mAddrs.size());
         std::vector<BdmIoCtx> ioCtxs(mAddrs.size());
+        BatchAsyncIoContext batchCtx;
+        InitBatchAsyncIoContext(&batchCtx, mAddrs.size());
         
         for (size_t i = 0; i < mAddrs.size(); i++) {
-            InitAsyncIoContext(&asyncCtxs[i]);
             auto &fromAddr = mAddrs[i];
             ioCtxs[i] = {
-                .cb = AsyncIoCallback,
-                .ctx = &asyncCtxs[i]
+                .cb = BatchAsyncIoCallback,
+                .ctx = &batchCtx
             };
             auto ret = BdmReadAsync(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(value + offset),
                 fromAddr.chunkLen, &ioCtxs[i]);
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
                     " to memory by length:" << fromAddr.chunkLen << ".");
-                for (size_t j = 0; j <= i; j++) {
-                    DestroyAsyncIoContext(&asyncCtxs[j]);
-                }
+                DestroyBatchAsyncIoContext(&batchCtx);
                 free(value);
                 value = nullptr;
                 return BIO_DISK_IOERR;
@@ -261,22 +278,13 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
             offset += fromAddr.chunkLen;
         }
         
-        for (size_t i = 0; i < asyncCtxs.size(); i++) {
-            auto ret = WaitAsyncIo(&asyncCtxs[i]);
-            if (ret != BIO_OK) {
-                LOG_ERROR("Failed to copy data from disk chunkId:" << (mAddrs[i].chunkId + mAddrs[i].chunkOffset) <<
-                    " to memory by length:" << mAddrs[i].chunkLen << ".");
-                for (size_t j = 0; j < asyncCtxs.size(); j++) {
-                    DestroyAsyncIoContext(&asyncCtxs[j]);
-                }
-                free(value);
-                value = nullptr;
-                return BIO_DISK_IOERR;
-            }
-        }
-        
-        for (size_t i = 0; i < asyncCtxs.size(); i++) {
-            DestroyAsyncIoContext(&asyncCtxs[i]);
+        auto ret = WaitBatchAsyncIo(&batchCtx);
+        DestroyBatchAsyncIoContext(&batchCtx);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Failed to copy data from disk to memory.");
+            free(value);
+            value = nullptr;
+            return BIO_DISK_IOERR;
         }
     }
 
