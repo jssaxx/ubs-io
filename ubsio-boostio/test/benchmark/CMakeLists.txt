@@ -6,10 +6,11 @@ set(SRC_DIR ${ROOT_DIR}/src)
 
 # 链接库
 link_directories(
-        ${ROOT_DIR}/dist/bio/lib
         ${ROOT_DIR}/Build/src/disk
         ${ROOT_DIR}/Build/src/common
         ${ROOT_DIR}/Build/src/cluster
+        ${ROOT_DIR}/dist/bio/lib
+        ${ROOT_DIR}/dist/3rdparty/libboundscheck/lib
         ${ROOT_DIR}/dist/3rdparty/ubs-comm/lib
         )
 
@@ -23,12 +24,12 @@ target_include_directories(bdm_benchmark PRIVATE
         ${SRC_DIR}/cluster/common
         )
 
-target_link_libraries(bdm_benchmark 
-        bio_bdm 
-        bio_common 
-        bio_cluster 
+target_link_libraries(bdm_benchmark
+        -Wl,--start-group
+        pthread dl aio
+        bio_bdm bio_common bio_cluster
+        boundscheck_lib
         -luring 
-        -lstdc++ 
-        -lboundscheck_lib 
-        -lubscmm
+        -lstdc++
+        -Wl,--end-group
         )
