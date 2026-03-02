@@ -18,7 +18,4 @@ target_include_directories(bdm_benchmark PRIVATE
         ${SRC_DIR}/common
         )
 
-target_link_libraries(bdm_benchmark
-                        -Wl,--start-group
-                        bio_bdm uring stdc++ boundscheck_lib
-                        -Wl,--end-group)
+target_link_libraries(bdm_benchmark bio_bdm -luring -lstdc++)
