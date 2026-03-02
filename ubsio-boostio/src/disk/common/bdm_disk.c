@@ -396,13 +396,7 @@ int32_t BdmDiskGetCap(uintptr_t objPtr, uint64_t *totalSize, uint64_t *usedSize)
     return ret;
 }
 
-void BdmDiskAIOCallback(io_context_t ctx, struct iocb *iocb, long res, long res2)
-{
-    UNREFERENCE_PARAM(ctx);
-    UNREFERENCE_PARAM(iocb);
-    UNREFERENCE_PARAM(res);
-    UNREFERENCE_PARAM(res2);
-}
+
 
 int32_t BdmDiskSubmitAIO(void **argList, uint32_t argNum, void *ctx)
 {
@@ -524,24 +518,7 @@ int32_t BdmDiskCreateCheck(BdmCreatePara *para)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskRetryIo(io_context_t ctx, struct iocb **iocbPP)
-{
-    BdmIoContext *bdmIo = (BdmIoContext *)*iocbPP;
-    int32_t j = 0;
-    do {
-        j = io_submit(ctx, 1, iocbPP);
-        if (j == 1) {
-            return 0;
-        } else if (j == (-EAGAIN)) {
-            BDM_LOGWARN(0, "retry: io_submit busy, chunkId %ld", bdmIo->chunkId);
-            sched_yield();
-        } else {
-            BDM_LOGERROR(0, "doWork: io_submit failed, %s, j %d", strerror(errno), j);
-            return -1;
-        }
-    } while (j == (-EAGAIN));
-    return -1;
-}
+
 
 static void BdmCompleteIOHandler(const struct io_uring_cqe *cqe, BdmThreadPool *bdmPool, uint32_t threadIdx)
 {
