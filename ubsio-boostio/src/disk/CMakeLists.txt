@@ -28,3 +28,4 @@ target_include_directories(bio_bdm PUBLIC
         $<BUILD_INTERFACE:${PLAT_INCLUDE_DIR}>
         )
 target_compile_options(bio_bdm PUBLIC -D_GNU_SOURCE)
+target_link_libraries(bio_bdm -luring)

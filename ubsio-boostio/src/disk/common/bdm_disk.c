@@ -14,10 +14,10 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <libaio.h>
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
 #include <linux/version.h>
+#include <liburing.h>
 #include "securec.h"
 #include "dlist.h"
 #include "bio_tracepoint_helper_c.h"
@@ -108,13 +108,12 @@ typedef struct {
     pthread_t threadId[BDM_WORKER_THREAD_NUM];
     int32_t efd[BDM_WORKER_THREAD_NUM];
     int32_t epfd[BDM_WORKER_THREAD_NUM];
-    io_context_t ioctx[BDM_WORKER_THREAD_NUM];
+    struct io_uring ring[BDM_WORKER_THREAD_NUM];
     struct epoll_event epevent[BDM_WORKER_THREAD_NUM];
     BDM_THREAD_POOL_S *pool[BDM_WORKER_THREAD_NUM];
 } BdmThreadPool;
 
 typedef struct {
-    struct iocb iocb;
     void *buf;
     uint64_t len;
     uint64_t chunkId;
@@ -409,10 +408,10 @@ int32_t BdmDiskSubmitAIO(void **argList, uint32_t argNum, void *ctx)
 {
     BdmThreadCtx *threadCtx = (BdmThreadCtx *)ctx;
     BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
-    struct iocb *iocbPs[BDM_BATCH_HANDLE_NUM];
     int32_t ret;
 
     uint32_t threadIdx = threadCtx->index;
+    struct io_uring *ring = &(bdmPool->ring[threadIdx]);
 
     static uint64_t submitIndex = 0;
     uint64_t fdIdx = ATOMIC_INC(&submitIndex) % BDM_AYSNC_IO_FD_NUM;
@@ -420,23 +419,24 @@ int32_t BdmDiskSubmitAIO(void **argList, uint32_t argNum, void *ctx)
     uint32_t i;
     for (i = 0; i < argNum; i++) {
         BdmIoContext *bdmIo = (BdmIoContext *)argList[i];
-        if (g_bdmAioIsDirect == FALSE) {
+        struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
+        if (!sqe) {
+            BDM_LOGWARN(0, "Failed to get sqe");
+            return BDM_CODE_ERR;
         }
-        iocbPs[i] = &bdmIo->iocb;
         BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
         uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
         if (bdmIo->isRead) {
-            io_prep_pread(&bdmIo->iocb, item->asyncfd[fdIdx], bdmIo->buf, bdmIo->len, rwOffset);
+            io_uring_prep_read(sqe, item->asyncfd[fdIdx], bdmIo->buf, bdmIo->len, rwOffset);
         } else {
-            io_prep_pwrite(&bdmIo->iocb, item->asyncfd[fdIdx], bdmIo->buf, bdmIo->len, rwOffset);
+            io_uring_prep_write(sqe, item->asyncfd[fdIdx], bdmIo->buf, bdmIo->len, rwOffset);
         }
-        io_set_eventfd(&bdmIo->iocb, bdmPool->efd[threadIdx]);
-        io_set_callback(&bdmIo->iocb, BdmDiskAIOCallback);
+        io_uring_sqe_set_data(sqe, bdmIo);
     }
 
-    ret = io_submit(bdmPool->ioctx[threadIdx], argNum, &(iocbPs[0]));
+    ret = io_uring_submit(ring);
     if (ret != (int32_t)argNum) {
-        BDM_LOGWARN(0, "Failed to io submit, size %d, %d, %s", ret, errno, strerror(errno));
+        BDM_LOGWARN(0, "Failed to io uring submit, size %d, %d, %s", ret, errno, strerror(errno));
         return BDM_CODE_ERR;
     }
     return BDM_CODE_OK;
@@ -482,11 +482,8 @@ int32_t BdmDiskHandleAIO(BdmAsyncOpsReq *req, bool isRead)
     void *argList[1UL] = {(void *)bdmIo};
 
     uint64_t index = ATOMIC_INC(&g_bdmIndex) % BDM_WORKER_THREAD_NUM;
-    if (g_bdmAioIsDirect) {
-        ret = BdmDiskSubmitAIO(argList, 1UL, (void *)&g_bdmThreadPool.threadCtx[index]);
-    } else {
-        ret = BdmThreadPoolAdd(g_bdmThreadPool.pool[index], NULL, (void *)bdmIo);
-    }
+    // 直接使用io_uring提交请求，不再使用线程池
+    ret = BdmDiskSubmitAIO(argList, 1UL, (void *)&g_bdmThreadPool.threadCtx[index]);
     return ret;
 }
 
@@ -546,32 +543,31 @@ int32_t BdmDiskRetryIo(io_context_t ctx, struct iocb **iocbPP)
     return -1;
 }
 
-static void BdmCompleteIOHandler(const struct io_event *ioEvent, BdmThreadPool *bdmPool, uint32_t threadIdx)
+static void BdmCompleteIOHandler(const struct io_uring_cqe *cqe, BdmThreadPool *bdmPool, uint32_t threadIdx)
 {
-    struct iocb *iocbP = NULL;
-    io_callback_t bdmIOCallback = (io_callback_t)ioEvent->data;
-    BdmIoContext *bdmIo = (BdmIoContext *)ioEvent->obj;
+    BdmIoContext *bdmIo = (BdmIoContext *)io_uring_cqe_get_data(cqe);
 
-    if (bdmIOCallback == (io_callback_t)0) {
-        BDM_LOGERROR(0, "Unexpected IO request with chunkId %lu", bdmIo->chunkId);
+    if (!bdmIo) {
+        BDM_LOGERROR(0, "Unexpected IO request with null context");
         return;
     }
 
-    if ((long)(ioEvent->res) <= 0 || ioEvent->res2 != 0) {
+    if (cqe->res <= 0) {
         if (bdmIo->retryNum < BDM_IO_RETRY_NUM) {
-            BDM_LOGERROR(0, "retry: chunkId %ld, res %ld res2 %ld", bdmIo->chunkId, ioEvent->res, ioEvent->res2);
+            BDM_LOGERROR(0, "retry: chunkId %ld, res %d", bdmIo->chunkId, cqe->res);
             bdmIo->retryNum++;
-            iocbP = &bdmIo->iocb;
-            if (BdmDiskRetryIo(bdmPool->ioctx[threadIdx], &iocbP) == 0) {
+            // 重新提交请求
+            void *argList[1UL] = {(void *)bdmIo};
+            if (BdmDiskSubmitAIO(argList, 1UL, (void *)&bdmPool->threadCtx[threadIdx]) == BDM_CODE_OK) {
                 return;
             }
             BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
-            BDM_LOGERROR(0, "Try to report disk fault, bdmId %u, device %s, chunkId %ld, res %ld res2 %ld", item->bdmId,
-                item->name, bdmIo->chunkId, ioEvent->res, ioEvent->res2);
+            BDM_LOGERROR(0, "Try to report disk fault, bdmId %u, device %s, chunkId %ld, res %d", item->bdmId,
+                item->name, bdmIo->chunkId, cqe->res);
 
             CmReportDiskStatus((uint16_t)item->bdmId, CM_DISK_FAULT);
         }
-        BDM_LOGERROR(0, "failed chunkId %ld, res %ld res2 %ld", bdmIo->chunkId, ioEvent->res, ioEvent->res2);
+        BDM_LOGERROR(0, "failed chunkId %ld, res %d", bdmIo->chunkId, cqe->res);
         bdmIo->cb(bdmIo->ctx, BDM_CODE_ERR_IO);
     } else {
         bdmIo->cb(bdmIo->ctx, 0);
@@ -581,14 +577,13 @@ static void BdmCompleteIOHandler(const struct io_event *ioEvent, BdmThreadPool *
 
 void *BdmDiskEventsThread(void *argsP)
 {
-    struct io_event events[BDM_IOCTX_EVENTS_NUM];
     BdmThreadCtx *threadCtx = (BdmThreadCtx *)argsP;
     BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
 
     uint32_t threadIdx = threadCtx->index;
+    struct io_uring *ring = &(bdmPool->ring[threadIdx]);
     struct epoll_event *epeventP = &bdmPool->epevent[threadIdx];
     int32_t epfd = bdmPool->epfd[threadIdx];
-    int32_t recvs;
     int32_t fdNum = 8UL;
 
     BDM_LOGINFO(0, "bdm disk events thread start.");
@@ -599,15 +594,15 @@ void *BdmDiskEventsThread(void *argsP)
             BDM_LOGERROR(0, "disk event epoll_wait, error(%s).", strerror(errno));
         }
 
-        recvs = io_getevents(bdmPool->ioctx[threadIdx], 1UL, BDM_IOCTX_EVENTS_NUM, events, NULL);
-        if (recvs <= 0) {
+        struct io_uring_cqe *cqe;
+        int ret = io_uring_wait_cqe(ring, &cqe);
+        if (ret < 0) {
+            BDM_LOGERROR(0, "io_uring_wait_cqe failed, error(%s).", strerror(errno));
             continue;
         }
 
-        for (int k = 0; k < recvs; k++) {
-            BdmCompleteIOHandler(&events[k], bdmPool, threadIdx);
-            events[k].obj = NULL;
-        }
+        BdmCompleteIOHandler(cqe, bdmPool, threadIdx);
+        io_uring_cqe_seen(ring, cqe);
     }
 
     return NULL;
@@ -1051,22 +1046,16 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
         BDM_LOGERROR(0, "Eventfd failed, errno(%s).", strerror(errno));
         return BDM_CODE_ERR;
     }
-    int32_t ret = memset_s(&(bdmPool->ioctx[index]), sizeof(io_context_t), 0, sizeof(io_context_t));
+    int32_t ret = io_uring_queue_init(BDM_IOCTX_EVENTS_NUM, &(bdmPool->ring[index]), 0);
     if (ret != 0) {
-        BDM_LOGERROR(0, "Memset ioctx failed, ret(%d).", ret);
-        close(bdmPool->efd[index]);
-        return BDM_CODE_ERR;
-    }
-    ret = io_setup(BDM_IOCTX_EVENTS_NUM, &(bdmPool->ioctx[index]));
-    if (ret != 0) {
-        BDM_LOGERROR(0, "Io setup failed, errno(%s).", strerror(errno));
+        BDM_LOGERROR(0, "Io uring setup failed, errno(%s).", strerror(errno));
         close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     bdmPool->epfd[index] = epoll_create(1);
     if (bdmPool->epfd[index] < 0) {
         BDM_LOGERROR(0, "Epoll create failed, errno(%s).", strerror(errno));
-        io_destroy(bdmPool->ioctx[index]);
+        io_uring_queue_exit(&(bdmPool->ring[index]));
         close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
@@ -1075,7 +1064,7 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
     ret = epoll_ctl(bdmPool->epfd[index], EPOLL_CTL_ADD, bdmPool->efd[index], &(bdmPool->epevent[index]));
     if (ret != 0) {
         BDM_LOGERROR(0, "Epoll ctl failed, errno(%s).", strerror(errno));
-        io_destroy(bdmPool->ioctx[index]);
+        io_uring_queue_exit(&(bdmPool->ring[index]));
         close(bdmPool->epfd[index]);
         close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
