@@ -7,8 +7,13 @@ cd "$(dirname "$0")"
 mkdir -p build
 cd build
 
-# 运行cmake配置
-cmake .. -DCMAKE_PREFIX_PATH=../../dist/bio/lib
+# 检查是否设置了LIBURING_HOME环境变量
+if [ -n "$LIBURING_HOME" ]; then
+    echo "Using custom liburing from: $LIBURING_HOME"
+    cmake .. -DCMAKE_PREFIX_PATH=../../dist/bio/lib -DLIBURING_INCLUDE_DIR="$LIBURING_HOME/include" -DLIBURING_LIBRARY_DIR="$LIBURING_HOME/lib"
+else
+    cmake .. -DCMAKE_PREFIX_PATH=../../dist/bio/lib
+fi
 
 # 编译
 make
