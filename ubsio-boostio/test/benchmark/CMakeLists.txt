@@ -18,4 +18,4 @@ target_include_directories(bdm_benchmark PRIVATE
         ${SRC_DIR}/common
         )
 
-target_link_libraries(bdm_benchmark bio_bdm -luring)
+target_link_libraries(bdm_benchmark bio_bdm -luring -lstdc++)
