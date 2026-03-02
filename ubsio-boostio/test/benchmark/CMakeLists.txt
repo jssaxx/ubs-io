@@ -9,6 +9,7 @@ link_directories(
         ${ROOT_DIR}/Build/src/disk
         ${ROOT_DIR}/Build/src/common
         ${ROOT_DIR}/Build/src/cluster
+        ${ROOT_DIR}/Build/src/htracer
         ${ROOT_DIR}/dist/bio/lib
         ${ROOT_DIR}/dist/3rdparty/libboundscheck/lib
         ${ROOT_DIR}/dist/3rdparty/ubs-comm/lib
@@ -22,14 +23,14 @@ target_include_directories(bdm_benchmark PRIVATE
         ${SRC_DIR}/common
         ${SRC_DIR}/cluster
         ${SRC_DIR}/cluster/common
+        ${SRC_DIR}/htracer
         )
 
 target_link_libraries(bdm_benchmark
         -Wl,--start-group
         pthread dl aio
-        bio_bdm bio_common bio_cluster
+        bio_bdm bio_common bio_cluster htracer
         -lboundscheck
-        -lhtracer
         -luring 
         -lstdc++
         -Wl,--end-group
