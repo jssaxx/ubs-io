@@ -8,6 +8,9 @@ set(SRC_DIR ${ROOT_DIR}/src)
 link_directories(
         ${ROOT_DIR}/dist/bio/lib
         ${ROOT_DIR}/Build/src/disk
+        ${ROOT_DIR}/Build/src/common
+        ${ROOT_DIR}/Build/src/cluster
+        ${ROOT_DIR}/dist/3rdparty/ubs-comm/lib
         )
 
 add_executable(bdm_benchmark bdm_benchmark.c)
@@ -16,6 +19,16 @@ add_executable(bdm_benchmark bdm_benchmark.c)
 target_include_directories(bdm_benchmark PRIVATE
         ${SRC_DIR}/disk/common
         ${SRC_DIR}/common
+        ${SRC_DIR}/cluster
+        ${SRC_DIR}/cluster/common
         )
 
-target_link_libraries(bdm_benchmark bio_bdm -luring -lstdc++)
+target_link_libraries(bdm_benchmark 
+        bio_bdm 
+        bio_common 
+        bio_cluster 
+        -luring 
+        -lstdc++ 
+        -lboundscheck_lib 
+        -lubscmm
+        )
