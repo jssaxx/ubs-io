@@ -5,7 +5,7 @@
 
 Name:           ubs-io-boostio
 Version:        1.0.0
-Release:        2
+Release:        3
 Summary:        BoostIO: High-performance cache acceleration library
 License:        Mulan PSL v2
 Vendor:         Huawei Technologies Co., Ltd
@@ -126,8 +126,11 @@ fi
 rm -rf %{buildroot}
 
 %changelog
-* Sat Feb 28 2026 ljj929 <499109299@qq.com> - 1.0.0-2
+* Sat Feb 28 2026 - 1.0.0-3
+- Declare the public IP addresses used in the code
+
+* Sat Feb 28 2026 - 1.0.0-2
 - fix file permission
 
-* Sat Feb 07 2026 ljj929 <499109299@qq.com> - 1.0.0-1
+* Sat Feb 07 2026 - 1.0.0-1
 - Initial RPM release
