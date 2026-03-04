@@ -13,6 +13,8 @@
 #ifndef BIO_SERVER_H
 #define BIO_SERVER_H
 
+#include <mutex>
+#include <utility>
 #include "bio_config_instance.h"
 #include "bio_err.h"
 #include "bio_ref.h"
@@ -21,8 +23,6 @@
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
 #include "net_engine.h"
-#include <mutex>
-#include <utility>
 
 namespace ock {
 namespace bio {

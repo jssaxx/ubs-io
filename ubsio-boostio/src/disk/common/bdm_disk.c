@@ -805,9 +805,9 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
         BDM_LOGERROR(0, "Malloc restore buff failed.");
         return BDM_CODE_ERR;
     }
-    ret |= memset_s(restoreBuff, BDM_RESTORE_META_SIZE, 0, BDM_RESTORE_META_SIZE);
-    ret |= memcpy_s(restoreBuff, BDM_RESTORE_META_SIZE, &head, sizeof(BdmDiskHead));
-    if (ret != BDM_CODE_OK) {
+
+    if (memset_s(restoreBuff, BDM_RESTORE_META_SIZE, 0, BDM_RESTORE_META_SIZE) != BDM_CODE_OK ||
+        memcpy_s(restoreBuff, BDM_RESTORE_META_SIZE, &head, sizeof(BdmDiskHead)) != BDM_CODE_OK) {
         BDM_LOGERROR(0, "Memcpy restore buff failed, name(%s).", item->name);
         free(restoreBuff);
         restoreBuff = NULL;

@@ -44,7 +44,8 @@ void ViewPtUpdateCopyKeepAlive(PtEntry *ptEntry, uint16_t minCopyNum)
 
 void ViewPtUpdateCopyState(PtEntry *ptEntry, uint16_t copyIndex, uint16_t minCopyNum)
 {
-    uint16_t index, normNum;
+    uint16_t index;
+    uint16_t normNum;
 
     normNum = 0;
 
@@ -70,7 +71,10 @@ void ViewPtUpdateCopyState(PtEntry *ptEntry, uint16_t copyIndex, uint16_t minCop
 
 void ViewPtEntryUpdatePtState(PtEntry *ptEntry, PtEntryList *ptList)
 {
-    uint16_t copyIndex, runningNum, firstIndex, masterIndex;
+    uint16_t copyIndex;
+    uint16_t runningNum;
+    uint16_t firstIndex;
+    uint16_t masterIndex;
 
     runningNum = 0;
     firstIndex = masterIndex = INVALID_VALUE16;
@@ -108,7 +112,8 @@ void ViewPtEntryUpdatePtState(PtEntry *ptEntry, PtEntryList *ptList)
 void ViewPtEntryListUpdateNodeDown(uint16_t nodeId, PtEntryList *ptList, int32_t *pgChange)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, index;
+    uint16_t ptId;
+    uint16_t index;
 
     for (ptId = 0; ptId < ptList->ptNum; ptId++) {
         ptEntry = &ptList->ptEntryList[ptId];
@@ -187,7 +192,8 @@ int32_t ViewPtEntryCheckDiskFault(NodeInfo *nodeInfo, uint16_t diskId)
 void ViewPtEntryListUpdateNodeUp(uint16_t nodeId, NodeInfo *info, PtEntryList *ptList, int32_t *pgChange)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, index;
+    uint16_t ptId;
+    uint16_t index;
 
     int32_t netfault = ViewPtEntryCheckNetFault(info);
     if (netfault == TRUE) {
@@ -336,7 +342,8 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
     int32_t *ptChange, uint16_t nodeNum, uint16_t validNum)
 {
     PtEntry *ptEntry = NULL;
-    uint16_t index, copyIndex;
+    uint16_t index;
+    uint16_t copyIndex;
 
     uint16_t *masterList = GenMasterList(ptEntryList, nodeNum);
     if (masterList == NULL) {

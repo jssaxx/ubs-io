@@ -5,10 +5,11 @@
  * which is licensed under 2-clause BSD-like license
  * please see https://github.com/nginx/nginx/blob/master/LICENSE for details.
  */
-#include <stdint.h>
 
 #ifndef _NGX_RBTREE_H_INCLUDED_
 #define _NGX_RBTREE_H_INCLUDED_
+
+#include <stdint.h>
 
 typedef struct ngx_rbtree_node_s ngx_rbtree_node_t;
 

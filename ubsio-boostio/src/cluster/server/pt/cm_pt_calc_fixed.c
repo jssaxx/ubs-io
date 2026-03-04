@@ -82,7 +82,8 @@ void DestroyViewCalculator(Calculator calculator)
 uint16_t ViewCalcNormNodeNum(NodeInfoList *nodeList, NodeStateList *stateList)
 {
     uint16_t normNodeNum = 0;
-    uint16_t nodeId, diskIndex;
+    uint16_t nodeId;
+    uint16_t diskIndex;
 
     for (nodeId = 0; nodeId < stateList->nodeNum; nodeId++) {
         if (stateList->nodeList[nodeId].state != NODE_STATE_UP ||
@@ -105,7 +106,8 @@ uint16_t ViewCalcNormNodeNum(NodeInfoList *nodeList, NodeStateList *stateList)
 
 void ViewCalcBuildBusyList(CalcCore *calc, NodeInfoList *nodeList, NodeStateList *stateList)
 {
-    uint16_t nodeId, diskIndex;
+    uint16_t nodeId;
+    uint16_t diskIndex;
 
     for (nodeId = 0; nodeId < stateList->nodeNum; nodeId++) {
         if (stateList->nodeList[nodeId].state != NODE_STATE_UP ||
@@ -138,7 +140,8 @@ void ViewCalcBuildBusyList(CalcCore *calc, NodeInfoList *nodeList, NodeStateList
 void ViewCalcDestroyBusyList(CalcCore *calc)
 {
     CalcElem *elem;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
     D_LIST_FOR_EACH_SAFE(pos, next, &calc->busy)
     {
         elem = D_LIST_ENTRY(pos, CalcElem, node);
@@ -149,9 +152,11 @@ void ViewCalcDestroyBusyList(CalcCore *calc)
 
 void ViewCalcFillUpdateBusyList(DList *head, uint16_t nodeId, uint16_t diskId, int32_t diff)
 {
-    CalcElem *elem, *elem1;
+    CalcElem *elem;
+    CalcElem *elem1;
     CalcElem *find = NULL;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
 
     D_LIST_FOR_EACH_SAFE(pos, next, head)
     {
@@ -248,7 +253,9 @@ int32_t ViewCalcCheckNodeIsFault(NodeInfoList *nodeList, NodeStateList *stateLis
 void ViewCalcFillBusyList(CalcCore *calc, uint16_t copyIndex, NodeInfoList *nodeList, NodeStateList *stateList,
     PtEntryList *ptEntryList)
 {
-    uint16_t ptId, nodeId, diskId;
+    uint16_t ptId;
+    uint16_t nodeId;
+    uint16_t diskId;
 
     int32_t isNormal;
 
@@ -274,7 +281,8 @@ void ViewCalcFillBusyList(CalcCore *calc, uint16_t copyIndex, NodeInfoList *node
 void ViewCalcResetBusyList(CalcCore *calc)
 {
     CalcElem *elem;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
 
     D_LIST_FOR_EACH_SAFE(pos, next, &calc->busy)
     {
@@ -295,7 +303,8 @@ void ViewCalcResetBusyList(CalcCore *calc)
 
 void ViewCalcInitPtEntryList(CalcCore *calc, PtEntryList *ptEntryList)
 {
-    uint16_t ptId, copyIndex;
+    uint16_t ptId;
+    uint16_t copyIndex;
 
     ptEntryList->maxCopyNum = calc->copyNum;
     ptEntryList->minCopyNum = calc->minCopyNum;
@@ -325,7 +334,12 @@ void ViewCalcInitPtEntryList1(CalcCore *calc, PtEntryList *ptEntryList, NodeInfo
     NodeStateList *stateList)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, copyIndex, index, nodeId, diskId, isFault;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t index;
+    uint16_t nodeId;
+    uint16_t diskId;
+    uint16_t isFault;
 
     ptEntryList->globalVersion++;
 
@@ -743,7 +757,7 @@ void ViewCalcUpdatePtEntryList1(PtEntryList *ptEntryList, CalcCore *calc, CmNode
             ptEntry->state = PT_STATE_NORMAL;
         } else if (runningNum + 1 == calc->copyNum) {
             ptEntry->state = PT_STATE_DEGRADE_LOSS1;
-        } else if (runningNum + 2 == calc->copyNum) {
+        } else if (runningNum + 2UL == calc->copyNum) {
             ptEntry->state = PT_STATE_DEGRADE_LOSS2;
         } else {
             CM_LOGERROR("Impossible.");
