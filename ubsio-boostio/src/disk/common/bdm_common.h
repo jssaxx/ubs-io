@@ -14,7 +14,9 @@
 #define BDM_COMMON_H
 
 #include <string.h>
+#include <stdbool.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus
