@@ -15,54 +15,54 @@
 #include "securec.h"
 #include <unistd.h>
 
-void *ThreadPoolThread(void *thread_pool)
+void *ThreadPoolThread(void *threadPool)
 {
-    CM_THREAD_POOL_S *pool = (CM_THREAD_POOL_S *)thread_pool;
+    CM_THREAD_POOL_S *pool = (CM_THREAD_POOL_S *)threadPool;
 
     while (1) {
-        pthread_mutex_lock(&(pool->mutex_queue));
+        pthread_mutex_lock(&(pool->mutexQueue));
 
-        while ((!pool->exit) && (pool->queue_head == pool->queue_tail)) {
-            pthread_cond_wait(&(pool->notify), &(pool->mutex_queue));
+        while ((!pool->exit) && (pool->queueHead == pool->queueTail)) {
+            pthread_cond_wait(&(pool->notify), &(pool->mutexQueue));
         }
 
         if ((pool->exit == THREAD_POOL_EXIT_IMMEDIATELY) ||
-            ((pool->exit == THREAD_POOL_EXIT_DELAY) && (pool->queue_head == pool->queue_tail))) {
+            ((pool->exit == THREAD_POOL_EXIT_DELAY) && (pool->queueHead == pool->queueTail))) {
             break;
         }
 
-        THREAD_CALL_BACK callback = pool->queue[pool->queue_head].callback;
-        void *args = pool->queue[pool->queue_head].args;
-        pool->queue_head = (pool->queue_head + 1) % pool->queue_size;
+        THREAD_CALL_BACK callback = pool->queue[pool->queueHead].callback;
+        void *args = pool->queue[pool->queueHead].args;
+        pool->queueHead = (pool->queueHead + 1) % pool->queueSize;
 
-        pool->total_invoke_cnt++;
+        pool->totalInvokeCnt++;
 
-        pthread_mutex_unlock(&(pool->mutex_queue));
+        pthread_mutex_unlock(&(pool->mutexQueue));
 
         if (callback != NULL) {
             (*callback)(args);
         }
     }
 
-    pthread_mutex_unlock(&(pool->mutex_queue));
+    pthread_mutex_unlock(&(pool->mutexQueue));
     return NULL;
 }
 
-int ParamCheck(uint16_t *thread_num, uint16_t *queue_size)
+int ParamCheck(uint16_t *threadNum, uint16_t *queueSize)
 {
-    if (*thread_num == 0 || *queue_size == 0) {
-        CM_LOGERROR(0, "create thread pool, invalid param, thread_num = %u, queue_size = %u\r\n", *thread_num,
-            *queue_size);
+    if (*threadNum == 0 || *queueSize == 0) {
+        CM_LOGERROR(0, "create thread pool, invalid param, threadNum = %u, queueSize = %u\r\n", *threadNum,
+            *queueSize);
         return -1;
     }
-    if (*thread_num > THREAD_POOL_MAX_THREADS) {
-        *thread_num = THREAD_POOL_MAX_THREADS;
-        CM_LOGERROR(0, "create thread pool, thread_num = %u\r\n", *thread_num);
+    if (*threadNum > THREAD_POOL_MAX_THREADS) {
+        *threadNum = THREAD_POOL_MAX_THREADS;
+        CM_LOGERROR(0, "create thread pool, threadNum = %u\r\n", *threadNum);
     }
 
-    if (*queue_size > THREAD_POOL_MAX_QUEUE_SIZE) {
-        *queue_size = THREAD_POOL_MAX_QUEUE_SIZE;
-        CM_LOGERROR(0, "create thread pool, queue_size = %u\r\n", *queue_size);
+    if (*queueSize > THREAD_POOL_MAX_QUEUE_SIZE) {
+        *queueSize = THREAD_POOL_MAX_QUEUE_SIZE;
+        CM_LOGERROR(0, "create thread pool, queueSize = %u\r\n", *queueSize);
     }
     return 0;
 }
@@ -93,8 +93,8 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t threadNum, uint16_t queueSize, uin
 
     memset_s(pool, sizeof(CM_THREAD_POOL_S), 0, sizeof(CM_THREAD_POOL_S));
     pool->flags = flags;
-    pool->thread_num = threadNum;
-    pool->queue_size = queueSize;
+    pool->threadNum = threadNum;
+    pool->queueSize = queueSize;
     int ret = strncpy_s(pool->name, sizeof(pool->name), poolName, sizeof(pool->name) - 1);
     if (ret != 0) {
         FreeRes(pool);
@@ -102,14 +102,14 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t threadNum, uint16_t queueSize, uin
     }
 
     pool->exit = THREAD_POOL_RUNNING;
-    pool->queue_full = 0;
-    pool->queue_head = 0;
-    pool->queue_tail = 0;
+    pool->queueFull = 0;
+    pool->queueHead = 0;
+    pool->queueTail = 0;
 
-    pthread_mutex_init(&pool->mutex_pool, 0);
-    pthread_mutex_init(&pool->mutex_queue, 0);
+    pthread_mutex_init(&pool->mutexPool, 0);
+    pthread_mutex_init(&pool->mutexQueue, 0);
     pthread_cond_init(&(pool->notify), 0);
-    sem_init(&pool->sem_queue_full, 0, 0);
+    sem_init(&pool->semQueueFull, 0, 0);
 
     pool->tid = (pthread_t *)malloc(sizeof(pthread_t) * threadNum);
     pool->queue = (CM_THREAD_QUEUE_S *)malloc(sizeof(CM_THREAD_QUEUE_S) * queueSize);
@@ -135,23 +135,23 @@ CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t threadNum, uint16_t queueSize, uin
 
 int32_t ThreadPoolEnqueue(CM_THREAD_POOL_S *pool, THREAD_CALL_BACK callback, void *args)
 {
-    pthread_mutex_lock(&pool->mutex_queue);
+    pthread_mutex_lock(&pool->mutexQueue);
 
-    if (((pool->queue_tail + 1) % pool->queue_size) == pool->queue_head) {
-        pthread_mutex_unlock(&pool->mutex_queue);
+    if (((pool->queueTail + 1) % pool->queueSize) == pool->queueHead) {
+        pthread_mutex_unlock(&pool->mutexQueue);
         return -1;
     }
 
-    pool->queue[pool->queue_tail].callback = callback;
-    pool->queue[pool->queue_tail].args = args;
+    pool->queue[pool->queueTail].callback = callback;
+    pool->queue[pool->queueTail].args = args;
 
-    pool->queue_tail = (pool->queue_tail + 1) % pool->queue_size;
+    pool->queueTail = (pool->queueTail + 1) % pool->queueSize;
 
     pthread_cond_signal(&pool->notify);
 
-    pool->enqueue_cnt++;
+    pool->enqueueCnt++;
 
-    pthread_mutex_unlock(&pool->mutex_queue);
+    pthread_mutex_unlock(&pool->mutexQueue);
 
     return 0;
 }
@@ -169,7 +169,7 @@ int32_t CmThreadPoolAdd(CM_THREAD_POOL_S *pool, THREAD_CALL_BACK callback, void 
             break;
         }
 
-        pool->queue_full_cnt++;
+        pool->queueFullCnt++;
         usleep(200);
     }
 
@@ -182,7 +182,7 @@ int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags)
         return -1;
     }
 
-    pthread_mutex_lock(&pool->mutex_pool);
+    pthread_mutex_lock(&pool->mutexPool);
 
     if (!flags) {
         pool->exit = THREAD_POOL_EXIT_DELAY;
@@ -192,15 +192,15 @@ int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags)
 
     pthread_cond_broadcast(&pool->notify);
 
-    for (uint16_t i = 0; i < pool->thread_num; i++) {
+    for (uint16_t i = 0; i < pool->threadNum; i++) {
         if (pool->tid[i] != 0) {
             pthread_join(pool->tid[i], NULL);
         }
     }
 
-    pthread_mutex_unlock(&pool->mutex_pool);
-    pthread_mutex_destroy(&(pool->mutex_pool));
-    pthread_mutex_destroy(&(pool->mutex_queue));
+    pthread_mutex_unlock(&pool->mutexPool);
+    pthread_mutex_destroy(&(pool->mutexPool));
+    pthread_mutex_destroy(&(pool->mutexQueue));
     pthread_cond_destroy(&(pool->notify));
 
     free(pool->tid);
