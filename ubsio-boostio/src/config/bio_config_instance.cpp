@@ -494,15 +494,15 @@ BResult BioConfig::ReplaceFile(const std::string &oldFile, const std::string &ne
 
 bool BioConfig::CheckDiskIsExist(std::string &newDiskPath, uint32_t &diskId)
 {
-    bool IsExist = false;
+    bool isExist = false;
     for (size_t i = 0; i < mDaemonConfig.diskList.size(); ++i) {
         if (mDaemonConfig.diskList[i] == newDiskPath) {
-            IsExist = true;
+            isExist = true;
             diskId = i;
-            return IsExist;
+            return isExist;
         }
     }
-    return IsExist;
+    return isExist;
 }
 
 void BioConfig::ResizeDaemonConfigDisks(std::string &newDiskPath)

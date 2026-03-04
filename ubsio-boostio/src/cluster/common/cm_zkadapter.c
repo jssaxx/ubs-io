@@ -54,10 +54,10 @@ typedef struct {
     NodeStateList *stateList;
     NodeInfoList *nodeList;
     PtEntryList *ptList;
-    nodeChangeNotifyFp nodeChange;
-    stateChangeNotifyFp stateChange;
-    masterChangeNotifyFp masterChange;
-    ptChangeNotifyFp ptChange;
+    NodeChangeNotifyFp nodeChange;
+    StateChangeNotifyFp stateChange;
+    MasterChangeNotifyFp masterChange;
+    PtChangeNotifyFp ptChange;
     char userKey[USER_DATA_MAX_LEN];
     char userValue[USER_DATA_MAX_LEN];
     DataInfoChangeOpHandle userHandle;
@@ -813,7 +813,7 @@ static int32_t CmClientZkSubStateList(uint16_t poolId)
     return CM_OK;
 }
 
-int32_t CmClientZkSubStateListChange(uint16_t poolId, stateChangeNotifyFp notifyFp)
+int32_t CmClientZkSubStateListChange(uint16_t poolId, StateChangeNotifyFp notifyFp)
 {
     int32_t ret;
 
@@ -960,7 +960,7 @@ int32_t CheckNodeDataFromZk(NodeInfoList *nodeInfoList)
     return CM_OK;
 }
 
-int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp)
+int32_t CmClientZkSubPtListChange(uint16_t poolId, PtChangeNotifyFp notifyFp)
 {
     ZkRestoreC *restore = &g_cZkMgr.restore[poolId];
     char zkPath[CM_ZNODE_PATH_LEN] = { 0 };

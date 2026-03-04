@@ -41,26 +41,26 @@ typedef struct {
 typedef struct {
     char name[THREAD_POOL_NAME_LEN];
     uint16_t flags;
-    uint16_t thread_num; // 线程总数
+    uint16_t threadNum; // 线程总数
 
     pthread_t *tid;
     CM_THREAD_QUEUE_S *queue;
 
-    pthread_mutex_t mutex_pool;  // thread pool操作互斥信号量
-    pthread_mutex_t mutex_queue; // 队列操作互斥信号量
+    pthread_mutex_t mutexPool;  // thread pool操作互斥信号量
+    pthread_mutex_t mutexQueue; // 队列操作互斥信号量
     pthread_cond_t notify;
-    sem_t sem_queue_full; // 队列满
+    sem_t semQueueFull; // 队列满
 
     uint16_t exit;
-    uint16_t queue_full;
+    uint16_t queueFull;
 
-    uint16_t queue_size;
-    uint16_t queue_head;
-    uint16_t queue_tail; // 队列大小
+    uint16_t queueSize;
+    uint16_t queueHead;
+    uint16_t queueTail; // 队列大小
 
-    uint16_t enqueue_cnt;
-    uint16_t total_invoke_cnt;
-    uint16_t queue_full_cnt;
+    uint16_t enqueueCnt;
+    uint16_t totalInvokeCnt;
+    uint16_t queueFullCnt;
 } CM_THREAD_POOL_S;
 
 CM_THREAD_POOL_S *CmThreadPoolCreate(uint16_t threadNum, uint16_t queueSize, uint16_t flags, const char *poolName);

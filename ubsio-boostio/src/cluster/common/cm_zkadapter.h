@@ -22,10 +22,10 @@ extern "C" {
 #endif
 
 #if DESC("zk client")
-typedef int32_t (*nodeChangeNotifyFp)(NodeInfoList *nodeList);
-typedef int32_t (*stateChangeNotifyFp)(NodeStateList *stateList);
-typedef int32_t (*masterChangeNotifyFp)(uint16_t poolId, uint16_t nodeId);
-typedef int32_t (*ptChangeNotifyFp)(PtEntryList *ptList);
+typedef int32_t (*NodeChangeNotifyFp)(NodeInfoList *nodeList);
+typedef int32_t (*StateChangeNotifyFp)(NodeStateList *stateList);
+typedef int32_t (*MasterChangeNotifyFp)(uint16_t poolId, uint16_t nodeId);
+typedef int32_t (*PtChangeNotifyFp)(PtEntryList *ptList);
 
 int32_t CmClientZkGetNodeId(uint16_t poolId, const char *ipv4AddrStr, uint16_t port, uint16_t *nodeId);
 
@@ -53,9 +53,9 @@ int32_t CmClientZkRecordNodeEvent(CmNodeEvent *nodeEvent);
 
 int32_t CmClientZkRecordPtEvent(CmPtEvent *ptEvent);
 
-int32_t CmClientZkSubStateListChange(uint16_t poolId, stateChangeNotifyFp notifyFp);
+int32_t CmClientZkSubStateListChange(uint16_t poolId, StateChangeNotifyFp notifyFp);
 
-int32_t CmClientZkSubPtListChange(uint16_t poolId, ptChangeNotifyFp notifyFp);
+int32_t CmClientZkSubPtListChange(uint16_t poolId, PtChangeNotifyFp notifyFp);
 
 int32_t CmClientZkRecordDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen);
 
