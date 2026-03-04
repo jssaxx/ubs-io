@@ -708,7 +708,8 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
         return BDM_CODE_ERR;
     }
 
-    uint64_t metaSize, dataSize;
+    uint64_t metaSize;
+    uint64_t dataSize;
     ret = BdmAllocatorGetSplitSize(item->headSize, item->minChunkSize, item->totalSize, &metaSize, &dataSize);
     if (ret != BDM_CODE_OK) {
         return ret;
@@ -830,8 +831,8 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
 int32_t BdmDiskNewAllocator(BdmDiskItem *item)
 {
     BdmAllocatorPara allocatorPara = { 0 };
-
-    uint64_t metaSize, dataSize;
+    uint64_t metaSize;
+    uint64_t dataSize;
     int32_t ret = BdmAllocatorGetSplitSize(item->headSize, item->minChunkSize, item->totalSize, &metaSize, &dataSize);
     if (ret != BDM_CODE_OK) {
         return ret;

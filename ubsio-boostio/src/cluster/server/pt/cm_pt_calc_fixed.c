@@ -384,7 +384,8 @@ static void ViewCalcBuildPrintf(uint16_t copyIndex, DList *head, const char *nam
 int32_t ViewCalcBuildPtEntry(CalcCore *calc, uint16_t copyIndex, PtEntry *ptEntry, DList *head)
 {
     CalcElem *elem;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
 
     uint16_t index;
     uint16_t isFound = FALSE;
@@ -461,7 +462,8 @@ int32_t ViewCalcBuildPreCheck(CalcCore *calc, uint16_t *index, PtEntry *ptEntry,
         return CM_OK;
     }
 
-    uint16_t nodeId, diskId;
+    uint16_t nodeId;
+    uint16_t diskId;
     if (ptEntry->copyList[*index].state != PT_COPY_STATE_INIT && ptEntry->copyList[*index].state != PT_COPY_STATE_OUT) {
         nodeId = ptEntry->copyList[*index].nodeId;
         diskId = ptEntry->copyList[*index].diskId;
@@ -482,8 +484,10 @@ int32_t ViewCalcBuildPreCheck(CalcCore *calc, uint16_t *index, PtEntry *ptEntry,
 
 int32_t ViewCalcBuildPtEntry1(CalcCore *calc, uint16_t copyIndex, PtEntry *ptEntry, uint64_t globalVersion, DList *head)
 {
-    CalcElem *elem, *startElem;
-    DList *pos, *start;
+    CalcElem *elem;
+    CalcElem *startElem;
+    DList *pos;
+    DList *start;
 
     DList *first = head->next;
     DList *last = head->prev;
@@ -555,7 +559,8 @@ int32_t ViewCalcBuildPtEntry1(CalcCore *calc, uint16_t copyIndex, PtEntry *ptEnt
 
 int32_t ViewCalcBuildPtEntryList(CalcCore *calc, PtEntryList *ptEntryList)
 {
-    uint16_t copyIndex, ptId;
+    uint16_t copyIndex;
+    uint16_t ptId;
     int32_t ret;
 
     for (copyIndex = 0; copyIndex < calc->copyNum; copyIndex++) {
@@ -582,7 +587,8 @@ int32_t ViewCalcBuildPtEntryList(CalcCore *calc, PtEntryList *ptEntryList)
 int32_t ViewCalcBuildPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeStateList *stateList,
     PtEntryList *ptEntryList)
 {
-    uint16_t copyIndex, ptId;
+    uint16_t copyIndex;
+    uint16_t ptId;
     int32_t ret;
 
     for (copyIndex = 0; copyIndex < calc->copyNum; copyIndex++) {
@@ -623,7 +629,10 @@ int32_t ViewCalcBuildPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeSt
 void ViewCalcUpdatePtEntryList(PtEntryList *ptEntryList, CalcCore *calc)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, copyIndex, normNum, isFirstRunning;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t normNum;
+    uint16_t isFirstRunning;
 
     for (ptId = 0; ptId < ptEntryList->ptNum; ptId++) {
         ptEntry = &ptEntryList->ptEntryList[ptId];
@@ -696,7 +705,10 @@ void ViewCalcUpdatePtEntryList111(PtEntry *ptEntry, uint16_t diffNum)
 void ViewCalcUpdatePtEntryList11(PtEntryList *ptEntryList, CalcCore *calc)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, copyIndex, extendIndex, normNum;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t extendIndex;
+    uint16_t normNum;
 
     for (ptId = 0; ptId < ptEntryList->ptNum; ptId++) {
         ptEntry = &ptEntryList->ptEntryList[ptId];
@@ -726,7 +738,11 @@ void ViewCalcUpdatePtEntryList11(PtEntryList *ptEntryList, CalcCore *calc)
 void ViewCalcUpdatePtEntryList1(PtEntryList *ptEntryList, CalcCore *calc, CmNodeEvent *cmNodeEvent)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, copyIndex, runningNum, firstIndex, masterIndex;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t runningNum;
+    uint16_t firstIndex;
+    uint16_t masterIndex;
 
     ViewCalcUpdatePtEntryList11(ptEntryList, calc);
 
@@ -830,7 +846,11 @@ int32_t ViewCalcCheckPtEntryList(CalcCore *calc, PtEntryList *ptEntryList, NodeI
     NodeStateList *stateList)
 {
     PtEntry *ptEntry;
-    uint16_t ptId, copyIndex, nodeId, diskId, isFault;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t nodeId;
+    uint16_t diskId;
+    uint16_t isFault;
 
     for (ptId = 0; ptId < ptEntryList->ptNum; ptId++) {
         ptEntry = &ptEntryList->ptEntryList[ptId];
@@ -855,7 +875,10 @@ int32_t ViewCalcCheckPtEntryList(CalcCore *calc, PtEntryList *ptEntryList, NodeI
 int32_t ViewCalcCheckPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeStateList *stateList,
     PtEntryList *ptEntryList)
 {
-    uint16_t ptId, copyIndex, nodeId, diskId;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t nodeId;
+    uint16_t diskId;
 
     int32_t isNormal;
     uint16_t normPtNum = 0;
@@ -881,7 +904,8 @@ int32_t ViewCalcCheckPtEntryList1(CalcCore *calc, NodeInfoList *nodeList, NodeSt
     }
 
     CalcElem *elem;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
 
     D_LIST_FOR_EACH_SAFE(pos, next, &calc->busy)
     {

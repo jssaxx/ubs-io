@@ -933,7 +933,7 @@ private:
     uint64_t mShareOffset = 0;
     uint64_t mShmSize = 0;
     uint8_t *mShareAddress = nullptr;
-	DecryptFunc mDecryptHandler;
+    DecryptFunc mDecryptHandler;
 };
 
 using NetEnginePtr = Ref<NetEngine>;
