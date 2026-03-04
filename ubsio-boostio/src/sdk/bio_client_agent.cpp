@@ -620,7 +620,7 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
                 return BIO_INVALID_PARAM;
             }
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx], rsp.addrLen[idx]);
-		    if (addr == nullptr) {
+            if (addr == nullptr) {
                 CLIENT_LOG_ERROR("Send sync request get shm addr failed.");
                 break;
             }
@@ -766,7 +766,7 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
 
     if (rsp.num != 0) {
         uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset, (rsp.num * sizeof(ObjStat)));
-	    if (addr == nullptr) {
+        if (addr == nullptr) {
             CLIENT_LOG_ERROR("Send list request get shm addr failed.");
             return BIO_INNER_ERR;
         }
