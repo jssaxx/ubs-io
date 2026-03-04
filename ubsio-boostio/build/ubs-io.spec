@@ -12,7 +12,7 @@ Vendor:         Huawei Technologies Co., Ltd
 Source0:        ubs-io.tar.gz
 BuildArch:      aarch64
 
-BuildRequires:  gcc gcc-c++ make cmake maven hostname fuse-devel automake
+BuildRequires:  gcc gcc-c++ make cmake maven hostname fuse-devel automake dos2unix
 BuildRequires:  librados-devel libaio-devel libtool numactl-devel libcurl-devel
 BuildRequires:  openssl-devel
 BuildRequires:  libboundscheck ubs-comm-devel
@@ -43,8 +43,10 @@ Contains header files and development resources for BoostIO.
 %build
 cd ubsio-boostio
 %if %{with_cli}
+    dos2unix build.sh
     bash -x build.sh -t release --cli
 %else
+    dos2unix build.sh
     bash -x build.sh -t release
 %endif
 
