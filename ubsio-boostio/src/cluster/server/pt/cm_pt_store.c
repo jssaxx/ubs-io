@@ -123,7 +123,9 @@ static NodeElem *ViewStoreGetNodeElem(StoreCore *store)
 
 static int32_t ViewStoreFillNodeList(StoreCore *store, DList *nodeList, PtEntryList *ptList)
 {
-    uint16_t ptId, copyIndex, nodeId;
+    uint16_t ptId;
+    uint16_t copyIndex;
+    uint16_t nodeId;
 
     for (ptId = 0; ptId < ptList->ptNum; ptId++) {
         PtEntry *ptEntry = &ptList->ptEntryList[ptId];
@@ -163,7 +165,8 @@ static void ViewStoreClearNodeList(StoreCore *store)
 static int32_t ViewStoreRecordSubPtView(StoreCore *store, PtEntryList *ptList)
 {
     NodeElem *elem;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
     int32_t ret;
 
     store->ptList->poolId = ptList->poolId;
@@ -258,7 +261,8 @@ int32_t ViewStorePtEntryIsSame(PtEntry *elem1, PtEntry *elem2)
 static int32_t ViewStoreCheckSubPtView1(PtEntryList *ptList, DList *head)
 {
     NodeElem *elem;
-    DList *pos, *next;
+    DList *pos;
+    DList *next;
 
     int32_t isUpdate = FALSE;
 
@@ -356,8 +360,10 @@ static int32_t ViewStoreLoadCheck(Storer storer, PtEntryList *ptList)
 
 static int32_t ViewStoreUpdateSubPtView1(PtEntryList *ptList, DList *current, DList *last)
 {
-    NodeElem *elem1, *elem2;
-    DList *pos1, *pos2;
+    NodeElem *elem1;
+    NodeElem *elem2;
+    DList *pos1;
+    DList *pos2;
 
     pos1 = current->next;
     pos2 = last->next;
