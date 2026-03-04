@@ -697,10 +697,10 @@ private:
 
     BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
 
-	inline void RegisterDecryptHandler(const DecryptFunc &h)
-	{
-     	mDecryptHandler = h;
-	}
+    inline void RegisterDecryptHandler(const DecryptFunc &h)
+    {
+        mDecryptHandler = h;
+    }
 
     static inline BResult NetResult(hcom::SerResult ret)
     {

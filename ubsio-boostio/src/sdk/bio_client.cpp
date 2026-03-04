@@ -427,7 +427,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
-    if (mode == SEPARATES && optConf.enable) {
+    if (mode == SEPARATES && optConf.enable != 0) {
         auto expireChecker = ExpireChecker::Instance();
         if (expireChecker == nullptr) {
             LOG_INFO("expire checker alloc fail.");

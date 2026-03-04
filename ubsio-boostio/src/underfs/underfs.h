@@ -13,11 +13,11 @@
 #ifndef BOOSTIO_UNDERFS_H
 #define BOOSTIO_UNDERFS_H
 
+#include <memory>
 #include "bio_ref.h"
 #include "file_system.h"
 #include "file_system_factory.h"
 #include "underfs_config.h"
-#include <memory>
 
 namespace ock {
 namespace bio {
