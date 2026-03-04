@@ -162,7 +162,7 @@ ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
         return -1;
     }
 
-    bufVec.Write(reinterpret_cast<uint8_t*>(buf), bufVec.size);
+    bufVec.Write(buf, bufVec.size);
     offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
     delete[] buf;
     return ret;

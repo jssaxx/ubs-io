@@ -24,7 +24,6 @@ void *ThreadPoolThread(void *threadPool)
 
         while ((pool->exit == 0) && (pool->queueHead == pool->queueTail)) {
             pthread_cond_wait(&(pool->notify), &(pool->mutexQueue));
-
         }
 
         if ((pool->exit == THREAD_POOL_EXIT_IMMEDIATELY) ||
