@@ -15,7 +15,7 @@
 #include "securec.h"
 #include <unistd.h>
 
-void *ThreadPoolThread(void *thread_pool)
+void *ThreadPoolThread(void *threadPool)
 {
     CM_THREAD_POOL_S *pool = (CM_THREAD_POOL_S *)threadPool;
 
