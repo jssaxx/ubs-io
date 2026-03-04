@@ -1,4 +1,4 @@
-exec_program(dos2unix ${OUTPUT_DIR} ARGS *.conf RETURN_VALUE SUCCESS)
+exec_program(dos2unix ${PROJECT_SOURCE_DIR}/configs ARGS *.conf RETURN_VALUE SUCCESS)
 if (SUCCESS EQUAL 1)
     message(FATAL_ERROR "-- failed to dos2unix conf file")
 else()
