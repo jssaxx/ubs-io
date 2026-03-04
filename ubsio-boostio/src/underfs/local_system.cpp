@@ -91,7 +91,7 @@ BResult LocalSystem::Put(const char *key, const char *value, const size_t len)
     int isOpen = static_cast<int>(file.is_open());
     BIO_TP_START(SERVER_UNDERFS_PUT, &isOpen, 0)
     BIO_TP_END;
-    if (!isOpen) {
+    if (isOpen == 0) {
         LOG_ERROR("Fail to create file, " << keyPath.c_str());
         return BIO_UFS_IOERR;
     }
@@ -125,7 +125,7 @@ BResult LocalSystem::Get(const char *key, char *value, const size_t len, const u
     int isOpen = static_cast<int>(file.is_open());
     BIO_TP_START(SERVER_UNDERFS_GET, &isOpen, 0)
     BIO_TP_END;
-    if (!isOpen) {
+    if (isOpen == 0) {
         LOG_ERROR("Fail to open file, " << keyPath.c_str());
         return BIO_NOT_EXISTS;
     }
@@ -153,7 +153,7 @@ BResult LocalSystem::Delete(const char *key)
     int isGood = static_cast<int>(infile.good());
     BIO_TP_START(SERVER_UNDERFS_DELETE, &isGood, 1);
     BIO_TP_END;
-    if (!isGood) {
+    if (isGood == 0) {
         BIO_TRACE_END(UFS_TRACE_DEL, BIO_NOT_EXISTS);
         LOG_WARN("Fail to check file, not exist, " << keyPath.c_str());
         free(canonicalPath);

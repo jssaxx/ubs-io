@@ -326,7 +326,7 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
     });
     tlsOpt.cfCb = tlsCertificationCallback;
 
-    auto tlsCaCallback= ([&options](const std::string &name, std::string &capath, std::string &crlPath,
+    auto tlsCaCallback = ([&options](const std::string &name, std::string &capath, std::string &crlPath,
         UBSHcomPeerCertVerifyType &verifyPeerCert, UBSHcomTLSCertVerifyCallback &cb) {
         capath = options.caCerPath;
         if (!options.caCrlPath.empty()) {
@@ -416,7 +416,7 @@ BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
     if (isOobSvr) {
         const std::string listenerUrl = "uds://" + UDS_NAME;
         auto ret = mIpcService->Bind(listenerUrl, std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
-                                                          std::placeholders::_2, std::placeholders::_3));
+            std::placeholders::_2, std::placeholders::_3));
         if (UNLIKELY(ret != BIO_OK)) {
             NET_LOG_ERROR("Net tls callback has created.");
             return ret;

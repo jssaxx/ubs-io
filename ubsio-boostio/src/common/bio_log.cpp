@@ -10,11 +10,11 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bio_log.h"
+#include <iostream>
 #include "bio_tracepoint_helper.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/stdout_sinks.h"
-#include <iostream>
+#include "bio_log.h"
 
 namespace ock {
 namespace bio {

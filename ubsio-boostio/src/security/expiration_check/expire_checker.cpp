@@ -80,7 +80,6 @@ BResult ExpireChecker::ValidateCertificateTime(X509* x509, const std::string &ty
     struct tm tm{};
     time_t notBeforeTime = OpenSslApiWrapper::Asn1Time2Tm(notBefore, &tm) ? mktime(&tm) : -1;
     time_t notAfterTime = OpenSslApiWrapper::Asn1Time2Tm(notAfter, &tm) ? mktime(&tm) : -1;
-
     if (notBeforeTime == -1 || notAfterTime == -1) {
         LOG_ERROR(type << " Failed to convert certificate times");
         return BIO_ERR;
