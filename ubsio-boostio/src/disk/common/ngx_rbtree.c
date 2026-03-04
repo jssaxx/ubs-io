@@ -20,7 +20,9 @@ static inline void ngx_rbtree_right_rotate(ngx_rbtree_node_t **root, ngx_rbtree_
 
 void ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node, void *context)
 {
-    ngx_rbtree_node_t **root, *temp, *sentinel;
+    ngx_rbtree_node_t **root;
+    ngx_rbtree_node_t *temp;
+    ngx_rbtree_node_t *sentinel;
 
     /* a binary tree insert */
 
