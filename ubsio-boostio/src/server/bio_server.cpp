@@ -10,7 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bio_server.h"
+#include <dlfcn.h>
+#include <unistd.h>
+#include <utility>
 #include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
@@ -24,9 +26,7 @@
 #include "flow_manager.h"
 #include "htracer.h"
 #include "interceptor_server.h"
-#include <dlfcn.h>
-#include <unistd.h>
-#include <utility>
+#include "bio_server.h"
 
 namespace ock {
 namespace bio {

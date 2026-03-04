@@ -960,7 +960,8 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
         if (mMode == CONVERGENCE) {
             spaceInfo.address[idx].address = rsp->addr[idx].chunkId + rsp->addr[idx].chunkOffset;
         } else {
-            uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx], rsp->addr[idx].chunkLen);
+            uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx],
+                rsp->addr[idx].chunkLen);
             if (realAddr == nullptr) {
                 CLIENT_LOG_ERROR("Invalid response addr offset or chunk len.");
                 delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
