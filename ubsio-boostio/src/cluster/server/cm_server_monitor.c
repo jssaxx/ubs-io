@@ -182,7 +182,8 @@ void CmServerCancelDiskFault(uint16_t poolId, uint16_t nodeId, uint16_t diskId)
             CM_RWLOCK_UNLOCK(&record->lock);
             return;
         }
-        uint16_t index, diskIndex;
+        uint16_t index;
+        uint16_t diskIndex;
         diskIndex = nodeList->list[nodeId].diskNum;
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].id == diskId) {
@@ -226,7 +227,8 @@ static void CmServerMonitorResetNode(uint16_t poolId, uint16_t nodeId)
 void CmServerMonitorPoolExpiredUpdate(PoolRecord *record, uint64_t curTimes)
 {
     NodeRecordList *nodeList = record->nodeList;
-    uint16_t nodeId, index;
+    uint16_t nodeId;
+    uint16_t index;
 
     CM_RWLOCK_WRLOCK(&record->lock);
 
@@ -273,7 +275,8 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
 {
     PoolRecord *record = (PoolRecord *)ctx;
     NodeRecordList *nodeList = record->nodeList;
-    uint16_t nodeId, index;
+    uint16_t nodeId;
+    uint16_t index;
 
     uint64_t curTimes = CmGetSecondsTime();
 
@@ -319,7 +322,8 @@ uint16_t CmServerMonitorPoolIsExpired(uint16_t poolId)
 {
     PoolRecord *record = &g_faultMonitor.list[poolId];
     NodeRecordList *nodeList = record->nodeList;
-    uint16_t nodeId, index;
+    uint16_t nodeId;
+    uint16_t index;
 
     uint64_t curTimes = CmGetSecondsTime();
 

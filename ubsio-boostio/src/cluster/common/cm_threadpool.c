@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "cm_threadpool.h"
+#include <unistd.h>
 #include "cm_log.h"
 #include "securec.h"
-#include <unistd.h>
+#include "cm_threadpool.h"
 
 void *ThreadPoolThread(void *threadPool)
 {
@@ -22,8 +22,9 @@ void *ThreadPoolThread(void *threadPool)
     while (1) {
         pthread_mutex_lock(&(pool->mutexQueue));
 
-        while ((!pool->exit) && (pool->queueHead == pool->queueTail)) {
+        while ((pool->exit == 0) && (pool->queueHead == pool->queueTail)) {
             pthread_cond_wait(&(pool->notify), &(pool->mutexQueue));
+
         }
 
         if ((pool->exit == THREAD_POOL_EXIT_IMMEDIATELY) ||
@@ -170,7 +171,7 @@ int32_t CmThreadPoolAdd(CM_THREAD_POOL_S *pool, THREAD_CALL_BACK callback, void 
         }
 
         pool->queueFullCnt++;
-        usleep(200);
+        usleep(200UL);
     }
 
     return ret;
@@ -184,7 +185,7 @@ int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags)
 
     pthread_mutex_lock(&pool->mutexPool);
 
-    if (!flags) {
+    if (flags == 0) {
         pool->exit = THREAD_POOL_EXIT_DELAY;
     } else {
         pool->exit = THREAD_POOL_EXIT_IMMEDIATELY;

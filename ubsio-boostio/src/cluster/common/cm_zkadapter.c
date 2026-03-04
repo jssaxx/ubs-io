@@ -185,7 +185,7 @@ static int32_t CmClientZkAtoi(const char *str)
     const int32_t LIMIT_DIV_10 = INT32_MAX / CM_ZK_RADIX_10;
     const int32_t LIMIT_MOD_10 = INT32_MAX % CM_ZK_RADIX_10;
 
-    while (*str && *str >= '0' && *str <= '9') {
+    while (str != NULL && *str >= '0' && *str <= '9') {
         int32_t digit = *str - '0';
 
         // 溢出检查
@@ -1091,7 +1091,7 @@ int32_t CmClientZkSubDataInfoChange(uint16_t poolId, const char *key, void *valu
         return CM_ERR;
     }
 
-    ret = memcpy_s(restore->userKey, USER_DATA_MAX_LEN, key, strlen(key) + 1ul);
+    ret = memcpy_s(restore->userKey, USER_DATA_MAX_LEN, key, strlen(key) + 1UL);
     if (ret != CM_OK) {
         CM_LOGERROR("Memory copy failed, ret(%d).", ret);
         return CM_ERR;
@@ -1322,7 +1322,7 @@ static int32_t CmServerZkAtoi(const char *str)
     const int32_t LIMIT_DIV_10 = INT32_MAX / CM_ZK_RADIX_10;
     const int32_t LIMIT_MOD_10 = INT32_MAX % CM_ZK_RADIX_10;
 
-    while (*str && *str >= '0' && *str <= '9') {
+    while (str != NULL && *str >= '0' && *str <= '9') {
         int32_t digit = *str - '0';
 
         // 溢出检查

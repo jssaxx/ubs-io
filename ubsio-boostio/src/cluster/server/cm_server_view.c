@@ -514,7 +514,8 @@ int32_t CmServerViewNodeListChange(CmNodeIdList *watchList)
         return CM_OK;
     }
 
-    uint16_t nodeId, nodeIndex;
+    uint16_t nodeId;
+    uint16_t nodeIndex;
     int32_t ret;
 
     CM_RWLOCK_WRLOCK(&spool->lock);
