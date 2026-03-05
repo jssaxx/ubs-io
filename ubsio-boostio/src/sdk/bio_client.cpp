@@ -378,9 +378,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     if (optConf.enable) {
         bool checkCaPath = FileUtil::CanonicalPath(netConf.certificationPath)
                            && FileUtil::CanonicalPath(netConf.caCerPath)
-                           && FileUtil::CanonicalPath(netConf.privateKeyPath)
-                           && FileUtil::CanonicalPath(netConf.privateKeyPassword)
-                           && FileUtil::CanonicalPath(netConf.decrypterLibPath);
+                           && FileUtil::CanonicalPath(netConf.privateKeyPath);
         if (!checkCaPath) {
             CLIENT_LOG_ERROR("Check ca path failed.");
             return BIO_ERR;
@@ -388,6 +386,20 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
 
         if (!netConf.caCrlPath.empty()) {
             if (!FileUtil::CanonicalPath(netConf.caCrlPath)) {
+                LOG_ERROR("Invalid crl path.");
+                return BIO_ERR;
+            }
+        }
+
+        if (!netConf.privateKeyPassword.empty()) {
+            if (!FileUtil::CanonicalPath(netConf.privateKeyPassword)) {
+                LOG_ERROR("Invalid crl path.");
+                return BIO_ERR;
+            }
+        }
+
+        if (!netConf.decrypterLibPath.empty()) {
+            if (!FileUtil::CanonicalPath(netConf.decrypterLibPath)) {
                 LOG_ERROR("Invalid crl path.");
                 return BIO_ERR;
             }

@@ -29,10 +29,8 @@ const auto SDK_NET_TLS_CLIENT_CERT_PATH = std::make_pair("bio.net.tls.client.cer
                                                          "/path/client/clientcert.pem");
 const auto SDK_NET_TLS_CLIENT_KEY_PATH = std::make_pair("bio.net.tls.client.key.path",
                                                         "/path/client/clientkey.pem");
-const auto SDK_NET_TLS_CLIENT_KEY_PASS_PATH = std::make_pair("bio.net.tls.client.key.pass.path",
-                                                             "/path/client/client.keypass");
-const auto SDK_NET_TLS_CLIENT_DECRYPTER_LIB_PATH = std::make_pair("bio.net.tls.client.decrypter.lib.path",
-                                                              "/path/lib");
+const auto SDK_NET_TLS_CLIENT_KEY_PASS_PATH = std::make_pair("bio.net.tls.client.key.pass.path", "");
+const auto SDK_NET_TLS_CLIENT_DECRYPTER_LIB_PATH = std::make_pair("bio.net.tls.client.decrypter.lib.path", "");
 
 class BioSdkConfig;
 using BioSdkConfigPtr = Ref<BioSdkConfig>;
@@ -45,7 +43,7 @@ public:
         std::string tlsCaCrlPath;
         std::string tlsClientCertPath = "/path/client/servercert.pem";
         std::string tlsClientKeyPath = "/path/client/serverkey.pem";
-        std::string tlsClientKeyPassPath = "/path/client/server.keypass";
+        std::string tlsClientKeyPassPath = "";
         std::string decrypterLibPath;
     };
 

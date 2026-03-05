@@ -143,16 +143,29 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     if (mNetConfig.enableTls) {
         bool checkCaPath = FileUtil::CanonicalPath(mNetConfig.tlsCaCertPath)
                            && FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath)
-                           && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath)
-                           && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPassPath)
-                           && FileUtil::CanonicalPath(mNetConfig.decrypterLibPath);
+                           && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath);
         if (!checkCaPath) {
             LOG_ERROR("Invalid ca path.");
             return BIO_ERR;
         }
+
         if (!mNetConfig.tlsCaCrlPath.empty()) {
             if (!FileUtil::CanonicalPath(mNetConfig.tlsCaCrlPath)) {
                 LOG_ERROR("Invalid crl path.");
+                return BIO_ERR;
+            }
+        }
+
+        if (!mNetConfig.tlsServerKeyPassPath.empty()) {
+            if (!FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPassPath)) {
+                LOG_ERROR("Invalid key password path.");
+                return BIO_ERR;
+            }
+        }
+
+        if (!mNetConfig.decrypterLibPath.empty()) {
+            if (!FileUtil::CanonicalPath(mNetConfig.decrypterLibPath)) {
+                LOG_ERROR("Invalid decrypter Lib Path.");
                 return BIO_ERR;
             }
         }
