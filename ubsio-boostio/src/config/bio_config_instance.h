@@ -34,10 +34,8 @@ const auto NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path", "/p
 const auto NET_TLS_CA_CRL_PATH = std::make_pair("bio.net.tls.ca.crl.path", "");
 const auto NET_TLS_SERVER_CERT_PATH = std::make_pair("bio.net.tls.server.cert.path", "/path/server/servercert.pem");
 const auto NET_TLS_SERVER_KEY_PATH = std::make_pair("bio.net.tls.server.key.path", "/path/server/serverkey.pem");
-const auto NET_TLS_SERVER_KEY_PASS_PATH = std::make_pair("bio.net.tls.server.key.pass.path",
-    "/path/server/server.keypass");
-const auto NET_TLS_SERVER_DECRYPTER_PATH = std::make_pair("bio.net.tls.server.decrypter.lib.path",
-    "/path/libdecrypt.so");
+const auto NET_TLS_SERVER_KEY_PASS_PATH = std::make_pair("bio.net.tls.server.key.pass.path", "");
+const auto NET_TLS_SERVER_DECRYPTER_PATH = std::make_pair("bio.net.tls.server.decrypter.lib.path", "");
 const auto NET_TLS_SERVER_SSL_LIB_DIR = std::make_pair("bio.net.tls.server.ssl.lib.dir", "");
 
 const auto CM_INITIAL_NODE_NUM = std::make_pair("bio.cm.initial.nodes_count", 2);
@@ -114,8 +112,8 @@ public:
         std::string tlsCaCrlPath = "";                                      /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
         std::string tlsServerCertPath = "/path/server/servercert.pem";      /* server工作证书 */
         std::string tlsServerKeyPath = "/path/server/serverkey.pem";        /* server公钥 */
-        std::string tlsServerKeyPassPath = "/path/server/server.keypass";   /* server端私钥密文文件 */
-        std::string decrypterLibPath = "/path/libdecrypt.so";               /* server端解密函数文件 */
+        std::string tlsServerKeyPassPath = "";                              /* server端私钥密文文件 */
+        std::string decrypterLibPath = "";                                  /* server端解密函数文件 */
         std::string opensslLibDir = "";                                     /* openssl lib 目录 */
     };
 
