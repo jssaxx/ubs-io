@@ -343,6 +343,14 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
     auto tlsPrivateKeyCallback = (
             [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
                              UBSHcomTLSEraseKeypass &erase) {
+                if (options.privateKeyPassword.empty()) {
+                    pwd = nullptr;
+                    len = 0;
+                    path = options.privateKeyPath;
+                    LOG_WARN("private key password is empty, use unencrypted key path.");
+                    return true;
+                }
+
                 std::vector<char> encryptedKeyPass(KEYPASS_MAX_LEN, 0);
                 std::ifstream fileStream(options.privateKeyPassword);
                 if (!fileStream.is_open()) {
@@ -785,6 +793,12 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 
 BResult NetEngine::PrepareTlsDecrypter(const NetOptions &config)
 {
+    if (config.decrypterLibPath.empty()) {
+        RegisterDecryptHandler(static_cast<DecryptFunc>(TlsUtil::DefaultDecrypter));
+        LOG_INFO("decrypter lib path is empty. use default func.");
+        return BIO_OK;
+    }
+
     const auto decrypter = TlsUtil::LoadDecryptFunction(config.decrypterLibPath.c_str());
     if (decrypter == nullptr) {
         LOG_ERROR("Failed to load customized decrypt function.");
