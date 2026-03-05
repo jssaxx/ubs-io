@@ -187,7 +187,7 @@ CResult BioInitialize\(WorkerMode mode, ClientOptionsConfig \*optConf\)
 </tr>
 <tr id="row1674005210522"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p197408529528"><a name="p197408529528"></a><a name="p197408529528"></a>char caCrlPath[PATH_MAX]</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p19740105295217"><a name="p19740105295217"></a><a name="p19740105295217"></a>吊销证书列表文件路径，可选。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p19740105295217"><a name="p19740105295217"></a><a name="p19740105295217"></a>吊销证书列表文件路径，可选。安全使能时要求路径有效。</p>
 </td>
 </tr>
 <tr id="row17294459145218"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p12294859175213"><a name="p12294859175213"></a><a name="p12294859175213"></a>char privateKeyPath[PATH_MAX]</p>
@@ -197,12 +197,12 @@ CResult BioInitialize\(WorkerMode mode, ClientOptionsConfig \*optConf\)
 </tr>
 <tr id="row1617875711528"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p161784573520"><a name="p161784573520"></a><a name="p161784573520"></a>char privateKeyPassword[PATH_MAX]</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p2017817572526"><a name="p2017817572526"></a><a name="p2017817572526"></a>Client证书私钥口令密文的文件路径，安全使能时要求路径有效。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p2017817572526"><a name="p2017817572526"></a><a name="p2017817572526"></a>Client证书私钥口令密文的文件路径，可以为空，为空时需要提供未加密的私钥路径。不为空时安全使能时要求路径有效。</p>
 </td>
 </tr>
 <tr id="row864321625316"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p13643716205316"><a name="p13643716205316"></a><a name="p13643716205316"></a>char decrypterLibPath[PATH_MAX]</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p1964311615314"><a name="p1964311615314"></a><a name="p1964311615314"></a>Client证书解密函数so文件路径，安全使能时要求路径有效。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.4.1.2 "><p id="p1964311615314"><a name="p1964311615314"></a><a name="p1964311615314"></a>Client证书解密函数so文件路径，可以为空，为空时需要提供明文口令。不为空时安全使能时要求路径有效。</p>
 </td>
 </tr>
 <tr id="row10952318185311"><td class="cellrowborder" valign="top" headers="mcps1.2.4.1.1 "><p id="p4952131810531"><a name="p4952131810531"></a><a name="p4952131810531"></a>char opensslLibDir[PATH_MAX]</p>
