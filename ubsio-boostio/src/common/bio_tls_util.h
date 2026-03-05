@@ -25,9 +25,10 @@ using DecryptFunc = int (*)(const char *cipherText, const size_t cipherTextLen, 
 class TlsUtil {
 public:
     static inline int32_t DefaultDecrypter(const char *cipherText, const size_t cipherTextLen, char *plainText,
-                                           const size_t plainTextLen)
+                                           size_t *plainTextLen)
     {
-        std::copy_n(cipherText, plainTextLen, plainText);
+        std::copy_n(cipherText, cipherTextLen, plainText);
+        *plainTextLen = cipherTextLen;
         return 0;
     }
 
