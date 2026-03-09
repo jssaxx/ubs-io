@@ -1,0 +1,2 @@
+ubsio-nds/lib/libnds_file.so filter=lfs diff=lfs merge=lfs -text
+ubsio-nds/kernel/ndsfs.ko filter=lfs diff=lfs merge=lfs -text
