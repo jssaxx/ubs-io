@@ -323,10 +323,10 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
         BIO_TP_START(SLICE_COPY_DISK2MEMORY_OK, &ret, BIO_OK);
-        AsyncIoContext asyncCtx;
+        asyncCtxs.emplace_back();
         BdmIoCtx ioCtx = {
             .cb = AsyncIoCallback,
-            .ctx = &asyncCtx
+            .ctx = &asyncCtxs.back()
         };
         ret = BdmReadAsync(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
             reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len, &ioCtx);
@@ -335,7 +335,6 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
             return BIO_DISK_IOERR;
         }
-        asyncCtxs.push_back(asyncCtx);
         ioCtxs.push_back(ioCtx);
         lens.push_back(len);
         offsets.push_back({fromIt->chunkId, fromIt->chunkOffset + fromOffset});
@@ -383,6 +382,7 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
     uint64_t fromOffset = 0;
     uint64_t toOffset = 0;
 
+    BResult ret = BIO_INNER_ERR;
     std::vector<AsyncIoContext> asyncCtxs;
     std::vector<BdmIoCtx> ioCtxs;
     std::vector<uint64_t> lens;
@@ -392,19 +392,18 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
     uint64_t len;
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
-        AsyncIoContext asyncCtx;
+        asyncCtxs.emplace_back();
         BdmIoCtx ioCtx = {
             .cb = AsyncIoCallback,
-            .ctx = &asyncCtx
+            .ctx = &asyncCtxs.back()
         };
-        auto ret = BdmWriteAsync(toIt->chunkId, toIt->chunkOffset + toOffset,
+        ret = BdmWriteAsync(toIt->chunkId, toIt->chunkOffset + toOffset,
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len, &ioCtx);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to submit async write, length:" << len);
             BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
             return BIO_DISK_IOERR;
         }
-        asyncCtxs.push_back(asyncCtx);
         ioCtxs.push_back(ioCtx);
         lens.push_back(len);
         offsets.push_back({toIt->chunkId, toIt->chunkOffset + toOffset});
