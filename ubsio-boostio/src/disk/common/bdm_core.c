@@ -227,7 +227,7 @@ int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len
 
     int32_t ret = bdm->ops.writeAsync(&req);
     if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Read failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
+        BDM_LOGERROR(0, "Write failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
     return BDM_CODE_OK;
