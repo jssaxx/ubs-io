@@ -46,7 +46,7 @@ static void BatchAsyncIoCallback(void *ctx, int32_t ret) {
     if (ret != BIO_OK && batchCtx->ret.load() == BIO_OK) {
         batchCtx->ret.store(ret);
     }
-    if (__sync_sub_and_fetch(&batchCtx->quota, 1) == 0) {
+    if (batchCtx->quota.fetch_sub(1) == 1) {
         sem_post(&batchCtx->sem);
     }
 }
@@ -120,9 +120,9 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
         InitBatchAsyncIoContext(&batchCtx, toAddrs.size());
         uint64_t offset = 0;
         
+        BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
         for (size_t i = 0; i < toAddrs.size(); i++) {
             auto &toAddr = toAddrs[i];
-            BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
             ioCtxs[i] = {
                 .cb = BatchAsyncIoCallback,
                 .ctx = &batchCtx
@@ -132,6 +132,7 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to submit async write, length:" << toAddr.chunkLen);
                 DestroyBatchAsyncIoContext(&batchCtx);
+                BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
                 return BIO_DISK_IOERR;
             }
             offset += toAddr.chunkLen;
@@ -385,10 +386,10 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
     std::vector<uint64_t> lens;
     std::vector<std::pair<uint64_t, uint64_t>> offsets;
 
+    BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
     uint64_t len;
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
-        BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
         AsyncIoContext asyncCtx;
         BdmIoCtx ioCtx = {
             .cb = AsyncIoCallback,
@@ -398,6 +399,7 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len, &ioCtx);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to submit async write, length:" << len);
+            BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
             return BIO_DISK_IOERR;
         }
         asyncCtxs.push_back(asyncCtx);
