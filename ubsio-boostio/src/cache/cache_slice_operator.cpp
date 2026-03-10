@@ -123,11 +123,12 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
         BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
         for (size_t i = 0; i < toAddrs.size(); i++) {
             auto &toAddr = toAddrs[i];
-            auto &ioCtx = ioCtxs.emplace_back();
-            ioCtx.cb = BatchAsyncIoCallback;
-            ioCtx.ctx = &batchCtx;
+            ioCtxs.emplace_back(BdmIoCtx{
+                .cb = BatchAsyncIoCallback,
+                .ctx = &batchCtx
+            });
             ret = BdmWriteAsync(toAddr.chunkId, toAddr.chunkOffset,
-                reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen, &ioCtx);
+                reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen, &ioCtxs.back());
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to submit async write, length:" << toAddr.chunkLen);
                 DestroyBatchAsyncIoContext(&batchCtx);
@@ -215,11 +216,12 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to, uint32_t toLen)
         for (size_t i = 0; i < fromAddrs.size(); i++) {
             auto &fromAddr = fromAddrs[i];
             LOG_TRACE("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
-            auto &ioCtx = ioCtxs.emplace_back();
-            ioCtx.cb = BatchAsyncIoCallback;
-            ioCtx.ctx = &batchCtx;
+            ioCtxs.emplace_back(BdmIoCtx{
+                .cb = BatchAsyncIoCallback,
+                .ctx = &batchCtx
+            });
             ret = BdmReadAsync(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(to + offset),
-                fromAddr.chunkLen, &ioCtx);
+                fromAddr.chunkLen, &ioCtxs.back());
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to submit async read, length:" << fromAddr.chunkLen);
                 DestroyBatchAsyncIoContext(&batchCtx);
@@ -324,12 +326,13 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
         BIO_TP_START(SLICE_COPY_DISK2MEMORY_OK, &ret, BIO_OK);
-        auto &ioCtx = ioCtxs.emplace_back();
-        ioCtx.cb = BatchAsyncIoCallback;
-        ioCtx.ctx = &batchCtx;
+        ioCtxs.emplace_back(BdmIoCtx{
+            .cb = BatchAsyncIoCallback,
+            .ctx = &batchCtx
+        });
         batchCtx.quota.fetch_add(1);
         ret = BdmReadAsync(fromIt->chunkId, fromIt->chunkOffset + fromOffset,
-            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len, &ioCtx);
+            reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len, &ioCtxs.back());
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to submit async read, length:" << len);
             BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
@@ -386,12 +389,13 @@ BResult CacheSliceOperator::CopyFromMemoryToDisk(const SlicePtr &from, const Sli
     uint64_t len;
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
-        auto &ioCtx = ioCtxs.emplace_back();
-        ioCtx.cb = BatchAsyncIoCallback;
-        ioCtx.ctx = &batchCtx;
+        ioCtxs.emplace_back(BdmIoCtx{
+            .cb = BatchAsyncIoCallback,
+            .ctx = &batchCtx
+        });
         batchCtx.quota.fetch_add(1);
         ret = BdmWriteAsync(toIt->chunkId, toIt->chunkOffset + toOffset,
-            reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len, &ioCtx);
+            reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len, &ioCtxs.back());
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to submit async write, length:" << len);
             BIO_TRACE_END(BDM_TRACE_WRITE_SYNC, ret);
