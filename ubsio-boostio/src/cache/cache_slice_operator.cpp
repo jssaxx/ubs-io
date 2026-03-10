@@ -212,10 +212,10 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to, uint32_t toLen)
         InitBatchAsyncIoContext(&batchCtx, fromAddrs.size());
         uint64_t offset = 0;
         
+        BIO_TRACE_START(BDM_TRACE_READ_SYNC);
         for (size_t i = 0; i < fromAddrs.size(); i++) {
             auto &fromAddr = fromAddrs[i];
             LOG_TRACE("Copy data from disk:" << " from off:" << fromAddr.chunkOffset << ", to off:" << offset);
-            BIO_TRACE_START(BDM_TRACE_READ_SYNC);
             ioCtxs[i] = {
                 .cb = BatchAsyncIoCallback,
                 .ctx = &batchCtx
@@ -225,6 +225,7 @@ BResult CacheSliceOperator::Copy(const SlicePtr &from, char *to, uint32_t toLen)
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to submit async read, length:" << fromAddr.chunkLen);
                 DestroyBatchAsyncIoContext(&batchCtx);
+                BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
                 return BIO_DISK_IOERR;
             }
             offset += fromAddr.chunkLen;
@@ -317,10 +318,10 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
     std::vector<uint64_t> lens;
     std::vector<std::pair<uint64_t, uint64_t>> offsets;
 
+    BIO_TRACE_START(BDM_TRACE_READ_SYNC);
     uint64_t len;
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
-        BIO_TRACE_START(BDM_TRACE_READ_SYNC);
         BIO_TP_START(SLICE_COPY_DISK2MEMORY_OK, &ret, BIO_OK);
         AsyncIoContext asyncCtx;
         BdmIoCtx ioCtx = {
@@ -331,6 +332,7 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
             reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len, &ioCtx);
         if (ret != BIO_OK) {
             LOG_ERROR("Failed to submit async read, length:" << len);
+            BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
             return BIO_DISK_IOERR;
         }
         asyncCtxs.push_back(asyncCtx);

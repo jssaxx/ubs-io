@@ -48,7 +48,7 @@ static void BatchAsyncIoCallback(void *ctx, int32_t ret) {
     if (ret != BIO_OK && batchCtx->ret.load() == BIO_OK) {
         batchCtx->ret.store(ret);
     }
-    if (__sync_sub_and_fetch(&batchCtx->quota, 1) == 0) {
+    if (batchCtx->quota.fetch_sub(1) == 1) {
         sem_post(&batchCtx->sem);
     }
 }
