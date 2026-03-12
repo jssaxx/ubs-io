@@ -2985,4 +2985,4 @@ CResult BioAddDisk\(const char \*diskPath\)
 
 # 版权说明<a name="ZH-CN_TOPIC_0000002553669131"></a>
 
-Copyright \(c\) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+Copyright \(c\) Huawei Technologies Co., Ltd. 2026. All rights reserved.
