@@ -2268,7 +2268,7 @@ CResult BioConvertLocation\(ObjLocation location, ObjLocationDetail \*detailLoc\
 </td>
 <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.5.1.3 "><p id="p750173241219"><a name="p750173241219"></a><a name="p750173241219"></a>出参</p>
 </td>
-<td class="cellrowborder" valign="top" width="40%" headers="mcps1.2.5.1.4 "><p id="p564215520137"><a name="p564215520137"></a><a name="p564215520137"></a>对象位置详细描述的结构参数解释参见<a href="BioInitialize.md#table0292135934712">表2</a>。</p>
+<td class="cellrowborder" valign="top" width="40%" headers="mcps1.2.5.1.4 "><p id="p564215520137"><a name="p564215520137"></a><a name="p564215520137"></a>对象位置详细描述的结构参数解释参见<a href="#table0292135934713">表2</a>。</p>
 </td>
 </tr>
 </tbody>
@@ -2276,7 +2276,7 @@ CResult BioConvertLocation\(ObjLocation location, ObjLocationDetail \*detailLoc\
 
 **表 2**  详细参数说明
 
-<a name="table0292135934712"></a>
+<a name="table0292135934713"></a>
 <table><thead align="left"><tr id="row129210597470"><th class="cellrowborder" valign="top" width="20%" id="mcps1.2.4.1.1"><p id="p3292359174711"><a name="p3292359174711"></a><a name="p3292359174711"></a>参数</p>
 </th>
 <th class="cellrowborder" valign="top" width="20%" id="mcps1.2.4.1.2"><p id="p5292145918479"><a name="p5292145918479"></a><a name="p5292145918479"></a>结构体字段</p>
@@ -2375,7 +2375,7 @@ CResult BioShowCacheResource\(CacheResourcesDesc \*\*nodeDesc, uint64\_t \*nodeN
 </td>
 <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.5.1.3 "><p id="p167824524524"><a name="p167824524524"></a><a name="p167824524524"></a>出参</p>
 </td>
-<td class="cellrowborder" valign="top" width="40%" headers="mcps1.2.5.1.4 "><p id="p1078215285210"><a name="p1078215285210"></a><a name="p1078215285210"></a>节点缓存资源使用情况，参数解释参见<a href="#table0292135934712">表2 详细参数说明</a>。</p>
+<td class="cellrowborder" valign="top" width="40%" headers="mcps1.2.5.1.4 "><p id="p1078215285210"><a name="p1078215285210"></a><a name="p1078215285210"></a>节点缓存资源使用情况，参数解释参见<a href="#table0292135934714">表2 详细参数说明</a>。</p>
 </td>
 </tr>
 <tr id="row115011432131213"><td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.5.1.1 "><p id="p1750115320129"><a name="p1750115320129"></a><a name="p1750115320129"></a>nodeNum</p>
@@ -2392,7 +2392,7 @@ CResult BioShowCacheResource\(CacheResourcesDesc \*\*nodeDesc, uint64\_t \*nodeN
 
 **表 2**  详细参数说明
 
-<a name="table0292135934712"></a>
+<a name="table0292135934714"></a>
 <table><thead align="left"><tr id="row129210597470"><th class="cellrowborder" valign="top" width="20%" id="mcps1.2.4.1.1"><p id="p3292359174711"><a name="p3292359174711"></a><a name="p3292359174711"></a>参数</p>
 </th>
 <th class="cellrowborder" valign="top" width="20%" id="mcps1.2.4.1.2"><p id="p5292145918479"><a name="p5292145918479"></a><a name="p5292145918479"></a>结构体字段</p>
@@ -2576,7 +2576,7 @@ CResult BioShowCacheHitRatio\(CacheHitFinalDesc \*desc, CacheHitFinalDesc \*\*no
 </td>
 <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.5.1.3 "><p id="p167824524524"><a name="p167824524524"></a><a name="p167824524524"></a>出参</p>
 </td>
-<td class="cellrowborder" valign="top" width="40%" headers="mcps1.2.5.1.4 "><p id="p1078215285210"><a name="p1078215285210"></a><a name="p1078215285210"></a>所有节点缓存命中率。参数解释参见<a href="#table0292135934712">表2 详细参数说明</a>。</p>
+<td class="cellrowborder" valign="top" width="40%" headers="mcps1.2.5.1.4 "><p id="p1078215285210"><a name="p1078215285210"></a><a name="p1078215285210"></a>所有节点缓存命中率。参数解释参见<a href="#table0292135934715">表2 详细参数说明</a>。</p>
 </td>
 </tr>
 <tr id="row115011432131213"><td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.5.1.1 "><p id="p9556146406"><a name="p9556146406"></a><a name="p9556146406"></a>nodeDesc</p>
@@ -2602,7 +2602,7 @@ CResult BioShowCacheHitRatio\(CacheHitFinalDesc \*desc, CacheHitFinalDesc \*\*no
 
 **表 2**  详细参数说明
 
-<a name="table0292135934712"></a>
+<a name="table0292135934715"></a>
 <table><thead align="left"><tr id="row129210597470"><th class="cellrowborder" valign="top" width="20%" id="mcps1.2.4.1.1"><p id="p3292359174711"><a name="p3292359174711"></a><a name="p3292359174711"></a>参数</p>
 </th>
 <th class="cellrowborder" valign="top" width="20%" id="mcps1.2.4.1.2"><p id="p5292145918479"><a name="p5292145918479"></a><a name="p5292145918479"></a>结构体字段</p>
