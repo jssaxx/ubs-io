@@ -1716,6 +1716,102 @@ BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::v
     return BIO_OK;
 }
 
+BResult MirrorClient::ClearWcache()
+{
+    if (mWcacheMemEvictLevel != NO_100) {
+        CLIENT_LOG_ERROR("Clear wcache not supported, wcacheMemEvictLevel:" << mWcacheMemEvictLevel);
+        return BIO_NOT_SUPPORTED;
+    }
+
+    ClearWcacheRequest req;
+    req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
+
+    return SendClearWcacheRequest(req);
+}
+
+BResult MirrorClient::SendClearWcacheRequest(ClearWcacheRequest &req)
+{
+    uint16_t localId = UINT16_MAX;
+    std::vector<uint16_t> remoteId;
+
+    mUpdateView();
+    auto nodeView = GetNodeView();
+    for (const auto &node : nodeView) {
+        if (node.second.status == CM_NODE_FAULT) {
+            continue;
+        }
+        if (node.first.nodeId == mLocalNid.VNodeId()) {
+            localId = mLocalNid.VNodeId();
+            continue;
+        }
+        remoteId.emplace_back(node.first.nodeId);
+    }
+
+    BResult ret = BIO_OK;
+    ret = ClearWcacheLocal(req, localId);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    ret = ClearWcacheRemote(req, remoteId);
+    return ret;
+}
+
+BResult MirrorClient::ClearWcacheLocal(ClearWcacheRequest &req, uint16_t localId)
+{
+    if (UNLIKELY(localId == UINT16_MAX)) {
+        return BIO_OK;
+    }
+
+    bool isRetry = false;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t retryCnt = 0;
+    BResult ret = BIO_OK;
+
+    do {
+        isRetry = false;
+        ClearWcacheResponse rsp;
+        ret = agent::BioClientAgent::Instance()->ClearWcacheLocal(req, rsp);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Clear wcache failed on local node " << localId << ", ret:" << ret);
+            if (ret == BIO_NET_RETRY || ret == BIO_INNER_RETRY) {
+                CLIENT_LOG_INFO("Clear wcache retry on local node, times:" << ++retryCnt);
+                isRetry = FailHandler(ret, startTime, mTimeOut);
+            }
+        }
+    } while (isRetry);
+
+    return ret;
+}
+
+BResult MirrorClient::ClearWcacheRemote(ClearWcacheRequest &req, std::vector<uint16_t> &remoteId)
+{
+    BResult ret = BIO_OK;
+    for (auto id : remoteId) {
+        bool isRetry = false;
+        uint64_t startTime = Monotonic::TimeSec();
+        uint64_t retryCnt = 0;
+
+        do {
+            isRetry = false;
+            ClearWcacheResponse rsp;
+            ret = net::BioClientNet::Instance()->SendSync<ClearWcacheRequest, ClearWcacheResponse>(
+                static_cast<BioNodeId>(id), BIO_OP_SDK_CLEAR_WCACHE, req, rsp);
+            if (ret != BIO_OK) {
+                CLIENT_LOG_ERROR("Clear wcache failed on remote node " << id << ", ret:" << ret);
+                if (ret == BIO_NET_RETRY || ret == BIO_INNER_RETRY) {
+                    CLIENT_LOG_INFO("Clear wcache retry on remote node " << id << ", times:" << ++retryCnt);
+                    isRetry = FailHandler(ret, startTime, mTimeOut);
+                }
+            }
+        } while (isRetry);
+
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
+    return BIO_OK;
+}
+
 BResult MirrorClient::GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
 {
     CacheHitRequest req;

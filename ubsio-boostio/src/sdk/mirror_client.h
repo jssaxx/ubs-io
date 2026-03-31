@@ -124,6 +124,28 @@ public:
 
     BResult QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &nodeDesc);
 
+    BResult ClearWcache();
+
+    inline uint32_t GetWcacheMemEvictLevel() const
+    {
+        return mWcacheMemEvictLevel;
+    }
+
+    inline void SetWcacheMemEvictLevel(uint32_t level)
+    {
+        mWcacheMemEvictLevel = level;
+    }
+
+    inline uint32_t GetTimeOut() const
+    {
+        return mTimeOut;
+    }
+
+    inline void SetTimeOut(uint32_t timeOut)
+    {
+        mTimeOut = timeOut;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS
 
     std::vector<uint16_t> ListLocalAffinityPt();
@@ -353,6 +375,10 @@ private:
     }
 
 private:
+    BResult SendClearWcacheRequest(ClearWcacheRequest &req);
+    BResult ClearWcacheLocal(ClearWcacheRequest &req, uint16_t localId);
+    BResult ClearWcacheRemote(ClearWcacheRequest &req, std::vector<uint16_t> &remoteId);
+
     std::unordered_map<uint16_t, FlowInstancePtr> mFlowMap;
     ReadWriteLock mLock;
     WorkerMode mMode;

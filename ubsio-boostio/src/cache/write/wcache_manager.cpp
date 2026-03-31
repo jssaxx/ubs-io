@@ -924,6 +924,32 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
     return BIO_OK;
 }
 
+BResult WCacheManager::ClearClientCache(uint64_t procId, uint32_t &clearedCount)
+{
+    clearedCount = 0;
+    LOG_INFO("Clear client cache, procId:" << procId);
+
+    std::vector<uint64_t> flowIdsToClear;
+    {
+        ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &flowIt : mWCacheManager) {
+            if (procId == flowIt.second->GetProcId()) {
+                flowIdsToClear.push_back(flowIt.first);
+            }
+        }
+    }
+
+    for (uint64_t flowId : flowIdsToClear) {
+        BResult ret = DeleteWCache(flowId);
+        if (ret == BIO_OK) {
+            clearedCount++;
+        }
+    }
+
+    LOG_INFO("Clear client cache done, procId:" << procId << ", clearedCount:" << clearedCount);
+    return BIO_OK;
+}
+
 inline WCachePtr WCacheManager::GetWCache(uint64_t flowId)
 {
     ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);

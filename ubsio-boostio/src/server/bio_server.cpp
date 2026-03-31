@@ -1153,3 +1153,8 @@ int32_t GetTracePointsLocal(GetTracePointsResponse *rsp)
 {
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->GetTracePointsLocal(rsp));
 }
+
+int32_t ClearWcacheLocal(ClearWcacheRequest *req, ClearWcacheResponse *rsp)
+{
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->ClearWcacheLocal(req, rsp));
+}

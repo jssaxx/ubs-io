@@ -202,6 +202,15 @@ typedef struct {
     uint64_t flowId;
 } DestroyFlowResponse;
 
+/* Clear wcache */
+typedef struct {
+    RequestComm comm;
+} ClearWcacheRequest;
+
+typedef struct {
+    uint32_t clearedCount;
+} ClearWcacheResponse;
+
 /* Get slice */
 typedef struct {
     RequestComm comm;

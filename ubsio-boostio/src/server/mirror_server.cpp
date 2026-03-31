@@ -79,6 +79,8 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
         std::bind(&MirrorServer::HandleQueryCacheResource, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_TRACE_POINTS,
         std::bind(&MirrorServer::HandleGetTracePoints, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_CLEAR_WCACHE,
+        std::bind(&MirrorServer::HandleClearWcache, this, std::placeholders::_1));
 }
 
 void MirrorServer::RegisterOpcode()
@@ -2432,6 +2434,11 @@ int32_t MirrorServer::HandleGetTracePoints(ServiceContext &ctx)
     return MirrorServerGetTracePoints(ctx);
 }
 
+BResult MirrorServer::ClearWcacheLocal(ClearWcacheRequest *req, ClearWcacheResponse *rsp)
+{
+    return WCacheManager::Instance()->ClearClientCache(req->comm.pid, rsp->clearedCount);
+}
+
 TraceDatabase MirrorServer::GetTraceData()
 {
     TraceDatabase traceDatabase = {};
@@ -2551,5 +2558,38 @@ int32_t MirrorServer::MirrorServerGetCacheHit(ServiceContext &ctx)
     rsp.backendHitCount = DiskStatistic::Instance().GetHitCount();
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheHitResponse));
     return BIO_OK;
+}
+
+int32_t MirrorServer::MirrorServerClearWcache(ServiceContext &ctx, ClearWcacheRequest *req)
+{
+    ClearWcacheResponse rsp;
+    rsp.clearedCount = 0;
+
+    auto ret = WCacheManager::Instance()->ClearClientCache(req->comm.pid, rsp.clearedCount);
+    if (ret != BIO_OK) {
+        LOG_ERROR("Clear client wcache failed, procId:" << req->comm.pid << ", ret:" << ret);
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(ClearWcacheResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::HandleClearWcache(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(ClearWcacheRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive clear wcache message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<ClearWcacheRequest *>(ctx.MessageData());
+    return MirrorServerClearWcache(ctx, req);
 }
 

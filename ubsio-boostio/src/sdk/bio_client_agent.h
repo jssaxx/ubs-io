@@ -71,6 +71,7 @@ public:
     using GetCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
     using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceResponse *);
     using GetTracePointsLocalFuncPtr = int32_t (*)(GetTracePointsResponse *);
+    using ClearWcacheFuncPtr = int32_t (*)(ClearWcacheRequest *, ClearWcacheResponse *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -160,6 +161,8 @@ public:
     BResult GetTracePointsLocal(GetTracePointsRequest &req,
                                 std::map<uint16_t, TraceDatabase> &nodesTracePoints);
 
+    BResult ClearWcacheLocal(ClearWcacheRequest &req, ClearWcacheResponse &rsp);
+
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
     BResult SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
@@ -243,6 +246,7 @@ private:
     GetCacheHitLocalFuncPtr cacheHitOp = nullptr;
     CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
     GetTracePointsLocalFuncPtr getTracePointsOp = nullptr;
+    ClearWcacheFuncPtr clearWcacheOp = nullptr;
 };
 }
 }

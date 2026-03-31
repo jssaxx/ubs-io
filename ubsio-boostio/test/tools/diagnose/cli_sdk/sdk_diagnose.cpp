@@ -649,6 +649,20 @@ void diagnose::BioSdkCommand::HandleShowCacheResource(const std::vector<std::str
     BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
 }
 
+void diagnose::BioSdkCommand::HandleClearWcache()
+{
+    if (gTenantId == UINT64_MAX) {
+        mPrintOp("Please create cache first.\n");
+        return;
+    }
+    auto ret = BioClearWcache(gTenantId);
+    if (ret != RET_CACHE_OK) {
+        mPrintOp("Clear wcache failed, result:%d\n", ret);
+        return;
+    }
+    mPrintOp("Clear wcache success.\n");
+}
+
 void diagnose::BioSdkCommand::HandleSdkTrace(const std::vector<std::string> &cmds)
 {
     auto cType = cmds[1].c_str();
@@ -867,6 +881,7 @@ void diagnose::BioSdkCommand::BioSdkDebugHelp(char *command, int detail) noexcep
     mPrintOp("\tCache hit: sdk cachehit\n");
     mPrintOp("\tAdd disk: sdk adddisk [diskPath]\n");
     mPrintOp("\tCache resource: sdk cacheresource\n");
+    mPrintOp("\tClear wcache: sdk clearwcache\n");
     mPrintOp("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     mPrintOp("\tupdate prepare: sdk notifyupdate [tenantId]\n");
     mPrintOp("\tupdate check: sdk checkupdate [tenantId]\n");
@@ -1030,6 +1045,8 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
             return;
         }
         HandleShowCacheResource(cmds);
+    } else if (cmdType == "clearwcache") {
+        HandleClearWcache();
     } else if (cmdType == "exit") {
         return;
     } else {

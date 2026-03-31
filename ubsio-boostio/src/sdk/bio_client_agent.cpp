@@ -193,6 +193,10 @@ BResult BioClientAgent::InitOperation()
         (LoadFunction("GetTracePointsLocal"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((clearWcacheOp = reinterpret_cast<ClearWcacheFuncPtr>
+        (LoadFunction("ClearWcacheLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
 
     return InitUpgradeOperation();
 }
@@ -1003,5 +1007,23 @@ BResult BioClientAgent::GetTracePointsLocal(GetTracePointsRequest &req,
     }
 
     nodesTracePoints[req.nodeId] = rsp.traceDatabase;
+    return BIO_OK;
+}
+
+BResult BioClientAgent::ClearWcacheLocal(ClearWcacheRequest &req, ClearWcacheResponse &rsp)
+{
+    BResult ret = BIO_OK;
+    if (mMode == CONVERGENCE) {
+        ret = clearWcacheOp(&req, &rsp);
+    } else {
+        ret = net::BioClientNet::Instance()->SendSync<ClearWcacheRequest, ClearWcacheResponse>(
+            INVALID_NID, BIO_OP_SDK_CLEAR_WCACHE, req, rsp);
+    }
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Clear wcache failed, ret: " << ret << ", pid: " << req.comm.pid);
+        return ret;
+    }
+
+    CLIENT_LOG_INFO("Clear wcache success, pid: " << req.comm.pid << ", clearedCount: " << rsp.clearedCount);
     return BIO_OK;
 }
