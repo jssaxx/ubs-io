@@ -185,6 +185,11 @@ BResult Cache::Put(const Key &key, const WCacheSlicePtr &slice, const SliceReade
 
 BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_t length, const uint64_t offset)
 {
+    if (UnderFs::IsNone()) {
+        LOG_ERROR("UnderFS is none, cannot get from underfs, key:" << key);
+        return BIO_ERR;
+    }
+
     BResult ret = BIO_OK;
     std::vector<FlowAddr> addrVec = slice->GetAddrs();
     if (LIKELY(addrVec.size() == NO_1)) {
@@ -214,6 +219,11 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
 BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint64_t offset, uint64_t &totalLen,
     uint64_t &realLen)
 {
+    if (UnderFs::IsNone()) {
+        LOG_ERROR("UnderFS is none, cannot stat from underfs, key:" << key);
+        return BIO_ERR;
+    }
+
     UnderFs::ObjStat stat;
     auto ret = UnderFs::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -439,6 +449,10 @@ BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
         return ret;
     }
 
+    if (UnderFs::IsNone()) {
+        return BIO_NOT_EXISTS;
+    }
+
     UnderFs::ObjStat stat;
     ret = UnderFs::Instance()->Stat(key, stat);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -462,7 +476,7 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
         return BIO_OK;
     }
 
-    if (force) {
+    if (force && !UnderFs::IsNone()) {
         std::unordered_map<std::string, UnderFs::ObjStat> underStatInfo;
         BIO_TP_START(UNDERFS_INIT_FAIL, &ret, BIO_ERR);
         ret = UnderFs::Instance()->List(prefix, underStatInfo);
@@ -504,10 +518,12 @@ BResult Cache::Delete(uint16_t ptId, const Key &key)
         return ret;
     }
 
-    ret = UnderFs::Instance()->Delete(key);
-    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
-        return ret;
+    if (!UnderFs::IsNone()) {
+        ret = UnderFs::Instance()->Delete(key);
+        if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+            LOG_ERROR("Under fs delete failed, ret:" << ret << ", key " << key << ".");
+            return ret;
+        }
     }
 
     if (ret == BIO_NOT_EXISTS) {

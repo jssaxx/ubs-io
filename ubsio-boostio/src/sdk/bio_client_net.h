@@ -100,6 +100,11 @@ public:
         return mEnableCli;
     }
 
+    inline uint32_t GetWcacheMemEvictLevel() const
+    {
+        return mWcacheMemEvictLevel;
+    }
+
     inline NetEnginePtr GetNetEngine() const
     {
         return mNetEngine;
@@ -216,6 +221,7 @@ private:
     bool mEnablePrometheus = { false };
     std::string mPrometheusListenAddress = "127.0.0.1:7204";
     uint32_t mPrometheusScrapeIntervalSec = 15;
+    uint32_t mWcacheMemEvictLevel = 0;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

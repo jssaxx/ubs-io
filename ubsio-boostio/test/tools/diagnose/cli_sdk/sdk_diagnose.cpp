@@ -618,35 +618,58 @@ void diagnose::BioSdkCommand::HandleShowCacheResource(const std::vector<std::str
     mPrintOp("--------------------------------\n");
     for (int i = 0; i < nodeNum; i++) {
         uint16_t nodeId = nodeDesc[i].nodeId;
-        if (nodeDesc[i].rCacheMemCapacity == 0 || nodeDesc[i].rCacheDiskCapacity == 0
-            || nodeDesc[i].wCacheMemCapacity == 0 || nodeDesc[i].wCacheDiskCapacity == 0) {
-            mPrintOp("node Capacity is zero, nodeId:%d  rCacheMemCapacity(MB):%llu  rCacheDiskCapacity(MB):%llu \n",
-                         nodeId, nodeDesc[i].rCacheMemCapacity / NO_1048576,
-                         nodeDesc[i].rCacheDiskCapacity / NO_1048576);
-            mPrintOp("wCacheMemCapacity(MB):%llu  wCacheDiskCapacity(MB):%llu \n",
-                         nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
-            continue;
-        }
         mPrintOp("node: %d cache resources information(MB): \n", nodeId);
-        double wCacheMemWaterLever = (double)nodeDesc[i].wCacheMemUsedSize / (double)nodeDesc[i].wCacheMemCapacity;
-        double rCacheMemWaterLever = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
-        double wCacheDiskWaterLever = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
-        double rCacheDiskWaterLever = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
-        mPrintOp("wCacheMemCapacity %llu   wCacheDiskCapacity %llu \n",
-                     nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
-        mPrintOp("rCacheMemCapacity %llu   rCacheDiskCapacity %llu \n",
-                     nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheDiskCapacity / NO_1048576);
-        mPrintOp("wCacheMemUsedSize %llu   wCacheDiskUsedSize %llu \n",
-                     nodeDesc[i].wCacheMemUsedSize / NO_1048576, nodeDesc[i].wCacheDiskUsedSize / NO_1048576);
-        mPrintOp("wCacheMemWaterLever %.4f%%   wCacheDiskWaterLever %.4f%% \n",
-                     wCacheMemWaterLever * 100, wCacheDiskWaterLever * 100);
-        mPrintOp("rCacheMemUsedSize %llu   rCacheDiskUsedSize %llu \n",
-                     nodeDesc[i].rCacheMemUsedSize / NO_1048576, nodeDesc[i].rCacheDiskUsedSize / NO_1048576);
-        mPrintOp("rCacheMemWaterLever %.4f%%   rCacheDiskWaterLever %.4f%% \n",
-                     rCacheMemWaterLever * 100, rCacheDiskWaterLever * 100);
+
+        if (nodeDesc[i].wCacheMemCapacity == 0 && nodeDesc[i].wCacheDiskCapacity == 0) {
+            mPrintOp("wCache is not enabled\n");
+        } else {
+            if (nodeDesc[i].wCacheMemCapacity != 0) {
+                double wCacheMemWaterLevel = (double)nodeDesc[i].wCacheMemUsedSize / (double)nodeDesc[i].wCacheMemCapacity;
+                mPrintOp("wCacheMemCapacity %llu   wCacheMemUsedSize %llu   wCacheMemWaterLevel %.4f%% \n",
+                             nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheMemUsedSize / NO_1048576,
+                             wCacheMemWaterLevel * 100);
+            }
+            if (nodeDesc[i].wCacheDiskCapacity != 0) {
+                double wCacheDiskWaterLevel = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
+                mPrintOp("wCacheDiskCapacity %llu   wCacheDiskUsedSize %llu   wCacheDiskWaterLevel %.4f%% \n",
+                             nodeDesc[i].wCacheDiskCapacity / NO_1048576, nodeDesc[i].wCacheDiskUsedSize / NO_1048576,
+                             wCacheDiskWaterLevel * 100);
+            }
+        }
+
+        if (nodeDesc[i].rCacheMemCapacity == 0 && nodeDesc[i].rCacheDiskCapacity == 0) {
+            mPrintOp("rCache is not enabled\n");
+        } else {
+            if (nodeDesc[i].rCacheMemCapacity != 0) {
+                double rCacheMemWaterLevel = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
+                mPrintOp("rCacheMemCapacity %llu   rCacheMemUsedSize %llu   rCacheMemWaterLevel %.4f%% \n",
+                             nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheMemUsedSize / NO_1048576,
+                             rCacheMemWaterLevel * 100);
+            }
+            if (nodeDesc[i].rCacheDiskCapacity != 0) {
+                double rCacheDiskWaterLevel = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
+                mPrintOp("rCacheDiskCapacity %llu   rCacheDiskUsedSize %llu   rCacheDiskWaterLevel %.4f%% \n",
+                             nodeDesc[i].rCacheDiskCapacity / NO_1048576, nodeDesc[i].rCacheDiskUsedSize / NO_1048576,
+                             rCacheDiskWaterLevel * 100);
+            }
+        }
         mPrintOp("--------------------------------\n");
     }
     BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
+}
+
+void diagnose::BioSdkCommand::HandleClearWcache()
+{
+    if (gTenantId == UINT64_MAX) {
+        mPrintOp("Please create cache first.\n");
+        return;
+    }
+    auto ret = BioClearWcache(gTenantId);
+    if (ret != RET_CACHE_OK) {
+        mPrintOp("Clear wcache failed, result:%d\n", ret);
+        return;
+    }
+    mPrintOp("Clear wcache success.\n");
 }
 
 void diagnose::BioSdkCommand::HandleSdkTrace(const std::vector<std::string> &cmds)
@@ -867,6 +890,7 @@ void diagnose::BioSdkCommand::BioSdkDebugHelp(char *command, int detail) noexcep
     mPrintOp("\tCache hit: sdk cachehit\n");
     mPrintOp("\tAdd disk: sdk adddisk [diskPath]\n");
     mPrintOp("\tCache resource: sdk cacheresource\n");
+    mPrintOp("\tClear wcache: sdk clearwcache\n");
     mPrintOp("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
     mPrintOp("\tupdate prepare: sdk notifyupdate [tenantId]\n");
     mPrintOp("\tupdate check: sdk checkupdate [tenantId]\n");
@@ -1030,6 +1054,8 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
             return;
         }
         HandleShowCacheResource(cmds);
+    } else if (cmdType == "clearwcache") {
+        HandleClearWcache();
     } else if (cmdType == "exit") {
         return;
     } else {

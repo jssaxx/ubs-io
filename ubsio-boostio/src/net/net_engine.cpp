@@ -34,6 +34,11 @@ namespace ock {
 namespace bio {
 using namespace ock::hcom;
 
+static void HcomLog(int level, const char *msg)
+{
+    NET_BASE_LOG(level, msg);
+}
+
 constexpr uint16_t WKR_GRP_INDEX_CTRL = 0L;
 constexpr uint16_t WKR_GRP_INDEX_DATA = 1L;
 
@@ -97,7 +102,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         NET_LOG_ERROR("Make net service log fail.");
         return BIO_ALLOC_FAIL;
     }
-    serviceLog->SetExternalLogFunction(func);
+    serviceLog->SetExternalLogFunction(HcomLog);
     mStarted = true;
     return BIO_OK;
 }
@@ -111,7 +116,8 @@ BResult NetEngine::Start(const NetOptions &opt)
             return result;
         }
     }
-    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA) {
+
+    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA || opt.protocol == ServiceProtocol::UBC) {
         BIO_TP_START(SDK_BIO_NET_START_RPC_FAIL, &result, BIO_INNER_ERR);
         result = StartRpcService(opt);
         BIO_TP_END;

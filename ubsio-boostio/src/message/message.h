@@ -66,6 +66,7 @@ typedef struct {
     bool enablePrometheus;
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
+    uint32_t wcacheMemEvictLevel;
 } ShmInitResponse;
 
 /* Query cache resource quota */
@@ -200,6 +201,15 @@ typedef struct {
 typedef struct {
     uint64_t flowId;
 } DestroyFlowResponse;
+
+/* Clear wcache */
+typedef struct {
+    RequestComm comm;
+} ClearWcacheRequest;
+
+typedef struct {
+    uint32_t clearedCount;
+} ClearWcacheResponse;
 
 /* Get slice */
 typedef struct {

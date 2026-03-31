@@ -85,7 +85,7 @@ private:
     void RunTaskThread(CmPtTaskPtr ptTask);
     void RunTaskThreadImpl(CmPtTaskPtr ptTask);
     void RunTaskThreadFinish(CmPtTaskPtr ptTask);
-    void RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo);
+    void RunJobThread(const CmPtTaskPtr &ptTask, CmPtInfo ptInfo);
 
     void UpdatePt(CmPtInfo &ptInfo);
 

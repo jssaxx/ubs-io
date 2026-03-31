@@ -51,6 +51,8 @@ inline static CResult ToCResult(const BResult ret)
             return RET_CACHE_DISK_FAULT;
         case BIO_UFS_IOERR:
             return RET_CACHE_UFS_FAULT;
+        case BIO_NOT_SUPPORTED:
+            return RET_CACHE_NOT_SUPPORTED;
         default:
             return RET_CACHE_NEED_RETRY;
     }
@@ -212,6 +214,21 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     } else {
         CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
             spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
+    }
+    return ToCResult(ret);
+}
+
+CResult Bio::ClearWcache()
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    BResult ret = gClient->ClearWcache();
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Clear wcache failed, ret:" << ret << ", tenantId:" << mTenantId);
+    } else {
+        CLIENT_LOG_INFO("Clear wcache success, tenantId:" << mTenantId);
     }
     return ToCResult(ret);
 }
@@ -717,6 +734,20 @@ void BioFreeCacheHitPtr(CacheHitFinalDesc **nodeDesc, uint64_t nodeNum)
     }
     free(*nodeDesc);
     *nodeDesc = nullptr;
+}
+
+CResult BioClearWcache(uint64_t tenantId)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->ClearWcache();
 }
 
 CResult BioCreateCache(CacheDescriptor desc)

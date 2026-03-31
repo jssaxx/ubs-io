@@ -143,6 +143,10 @@ public:
 
     void ReleaseQuota(const char *key, QuotaHolder holder, uint64_t size, uint32_t proc)
     {
+        if (!startWorker.load()) {
+            return;
+        }
+
         WriteLocker<ReadWriteLock> lock(&mLock);
         auto iter = mHolders.find(holder);
         if (UNLIKELY(iter == mHolders.end())) {

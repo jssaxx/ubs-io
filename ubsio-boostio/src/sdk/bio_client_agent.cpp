@@ -112,8 +112,20 @@ BResult BioClientAgent::InitOperation()
     (LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((getScene = reinterpret_cast<GetBioServerSceneFuncPtr>
+    (LoadFunction("GetNegoWorkScene"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getAlignSize = reinterpret_cast<GetBioServerAlignSizeFuncPtr>
+    (LoadFunction("GetNegoWorkIoAlignSize"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((getScrapeIntervalSec = reinterpret_cast<GetBioServerScrapeIntervalSecFuncPtr>
     (LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getWcacheMemEvictLevel = reinterpret_cast<GetBioServerWcacheMemEvictLevelFuncPtr>
+    (LoadFunction("GetWcacheMemEvictLevel"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {
@@ -181,6 +193,10 @@ BResult BioClientAgent::InitOperation()
         (LoadFunction("GetTracePointsLocal"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((clearWcacheOp = reinterpret_cast<ClearWcacheFuncPtr>
+        (LoadFunction("ClearWcacheLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
 
     return InitUpgradeOperation();
 }
@@ -241,6 +257,21 @@ bool BioClientAgent::GetConfigPrometheusToggle()
 const char *BioClientAgent::GetPrometheusListenAddress()
 {
     return getListenAddress();
+}
+
+uint32_t BioClientAgent::GetWcacheMemEvictLevel()
+{
+    return getWcacheMemEvictLevel();
+}
+
+uint32_t BioClientAgent::GetNegoWorkScene()
+{
+    return getScene();
+}
+
+uint32_t BioClientAgent::GetNegoWorkIoAlignSize()
+{
+    return getAlignSize();
 }
 
 uint32_t BioClientAgent::GetNegoWorkIoTimeOut()
@@ -976,5 +1007,23 @@ BResult BioClientAgent::GetTracePointsLocal(GetTracePointsRequest &req,
     }
 
     nodesTracePoints[req.nodeId] = rsp.traceDatabase;
+    return BIO_OK;
+}
+
+BResult BioClientAgent::ClearWcacheLocal(ClearWcacheRequest &req, ClearWcacheResponse &rsp)
+{
+    BResult ret = BIO_OK;
+    if (mMode == CONVERGENCE) {
+        ret = clearWcacheOp(&req, &rsp);
+    } else {
+        ret = net::BioClientNet::Instance()->SendSync<ClearWcacheRequest, ClearWcacheResponse>(
+            INVALID_NID, BIO_OP_SDK_CLEAR_WCACHE, req, rsp);
+    }
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Clear wcache failed, ret: " << ret << ", pid: " << req.comm.pid);
+        return ret;
+    }
+
+    CLIENT_LOG_INFO("Clear wcache success, pid: " << req.comm.pid << ", clearedCount: " << rsp.clearedCount);
     return BIO_OK;
 }

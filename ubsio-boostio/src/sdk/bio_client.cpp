@@ -33,6 +33,11 @@ BResult BioClient::BioClientUnderfsInit(WorkerMode mode)
         }
 
         UnderFs::InitUnderFsConfig(config);
+        if (UnderFs::IsNone()) {
+            CLIENT_LOG_INFO("UnderFS type is none, skip underfs initialization.");
+            return BIO_OK;
+        }
+
         ret = UnderFs::Instance()->Init();
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to init underfs, ret:" << ret << ".");
@@ -166,10 +171,24 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     // 初始化Mirror client
     mIsUpdating = false;
     UpdateView updateView = [this]() { BioClientUpdateView(); };
-    bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
-        mNetEngine->GetCrcFlag();
-    auto ret = mMirror->Initialize(updateView, mNetEngine->GetNegoWorkScene(), mNetEngine->GetNegoWorkIoAlignSize(),
-        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
+
+    ClientConfig config = {};
+    if (mode == CONVERGENCE) {
+        auto agent = agent::BioClientAgent::Instance();
+        config.enableCrc = agent->GetConfigCrcFlag();
+        config.wcacheMemEvictLevel = agent->GetWcacheMemEvictLevel();
+        config.workScene = agent->GetNegoWorkScene();
+        config.workIoAlignSize = agent->GetNegoWorkIoAlignSize();
+        config.workIoTimeOut = agent->GetNegoWorkIoTimeOut();
+    } else {
+        config.enableCrc = mNetEngine->GetCrcFlag();
+        config.wcacheMemEvictLevel = mNetEngine->GetWcacheMemEvictLevel();
+        config.workScene = mNetEngine->GetNegoWorkScene();
+        config.workIoAlignSize = mNetEngine->GetNegoWorkIoAlignSize();
+        config.workIoTimeOut = mNetEngine->GetNegoWorkIoTimeOut();
+    }
+
+    auto ret = mMirror->Initialize(updateView, config);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
