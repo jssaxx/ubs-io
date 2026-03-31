@@ -239,9 +239,24 @@ public:
         return mConfig->GetDaemonConfig().workIoTimeOut;
     }
 
+    inline uint32_t GetNegoWorkScene()
+    {
+        return mConfig->GetDaemonConfig().workScene;
+    }
+
+    inline uint32_t GetNegoWorkIoAlignSize()
+    {
+        return mConfig->GetDaemonConfig().workIoAlignSize;
+    }
+
     inline uint32_t GetPrometheusScrapeIntervalSec()
     {
         return mConfig->GetDaemonConfig().scrapeIntervalSec;
+    }
+
+    inline uint32_t GetWcacheMemEvictLevel()
+    {
+        return mConfig->GetDaemonConfig().wcacheMemEvictLevel;
     }
 
     inline BioConfigPtr GetConfig()

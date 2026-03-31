@@ -394,14 +394,14 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
     return quota;
 }
 
-BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize,
-    uint32_t timeOut, bool enableCrc)
+BResult MirrorClient::Initialize(UpdateView updateView, const ClientConfig &config)
 {
-    mEnableCrc = enableCrc;
+    mEnableCrc = config.enableCrc;
+    mWcacheMemEvictLevel = config.wcacheMemEvictLevel;
     mUpdateView = updateView;
-    mScene = static_cast<WorkerScene>(scene);
-    mAlignSize = alignSize;
-    mTimeOut = timeOut;
+    mScene = static_cast<WorkerScene>(config.workScene);
+    mAlignSize = config.workIoAlignSize;
+    mTimeOut = config.workIoTimeOut;
 
     // 加载视图信息
     BIO_TRACE_START(SDK_TRACE_INIT_LOAD_VIEW);
@@ -419,8 +419,8 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t
         return ret;
     }
 
-    CLIENT_LOG_INFO("Mirror client initialize, clcEnable: " << mEnableCrc << "， scene:" << mScene << ", alignSize:" <<
-        mAlignSize << ", timeOut:" << mTimeOut << ".");
+    CLIENT_LOG_INFO("Mirror client initialize, crcEnable: " << mEnableCrc << ", scene:" << mScene << ", alignSize:" <<
+        mAlignSize << ", timeOut:" << mTimeOut << ", wcacheMemEvictLevel:" << mWcacheMemEvictLevel << ".");
     return BIO_OK;
 }
 

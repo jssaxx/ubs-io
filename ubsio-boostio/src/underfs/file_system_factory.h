@@ -27,6 +27,7 @@ using FileSystemCreator = std::function<std::shared_ptr<FileSystem>()>;
 const std::string CEPH_SYSTEM = "ceph";
 const std::string HDFS_SYSTEM = "hdfs";
 const std::string LOCAL_SYSTEM = "local";
+const std::string NONE_SYSTEM = "none";
 
 class FileSystemFactory {
 public:
@@ -36,8 +37,10 @@ public:
         auto it = fileSystemMap.find(type);
         if (it != fileSystemMap.end()) {
             return it->second();
+        } else if (type == NONE_SYSTEM) {
+            return nullptr;
         } else {
-            return std::make_shared<LocalSystem>(); // use local file system by default
+            return std::make_shared<LocalSystem>();
         }
     }
 

@@ -32,7 +32,9 @@ constexpr uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
     const RCacheManagerPtr rCacheManager, bool isRecover)
 {
-    for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
+    auto wcache = BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel;
+    int count = wcache == 100 ? 1 : MAX_WCACHE_TIER;
+    for (int i = 0; i < count; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
         ChkTrue(cacheTier != nullptr, BIO_ALLOC_FAIL, "Make wcache tier failed.");
 
@@ -178,6 +180,9 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
     if (ioStrategy <= WRITE_DISK_BACK) {
         return BIO_OK;
     }
+    if (mCacheTiers[WCACHE_DISK] == nullptr) {
+        return BIO_OK;
+    }
     sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     if (sliceRef != nullptr) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_UNDERFS_BACK);
@@ -230,6 +235,10 @@ void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
         return;
     }
 
+    if (config.wcacheMemEvictLevel == NO_100) {
+        return;
+    }
+
     if (!isMemSatisfied && isDiskSatisfied) {
         attr.ioStrategy = WRITE_DISK_BACK;
         return;
@@ -262,9 +271,15 @@ BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const 
         return ret;
     }
 
-    ret = mUnderFs->Put(key, value, srcSlice->GetLength());
+    if (!UnderFs::IsNone()) {
+        ret = mUnderFs->Put(key, value, srcSlice->GetLength());
+        if (ret != BIO_OK) {
+            delete[] value;
+            LOG_ERROR("Failed to put slice to underfs, key:" << key << " flowId:" << mFlowId);
+            return ret;
+        }
+    }
     delete[] value;
-    ChkTrue(ret == BIO_OK, ret, "Failed to put slice to underfs, key:" << key << " flowId:" << mFlowId);
 
     ret = memCache->Evict(destSliceRef->GetSlice());
     ChkTrue(ret == BIO_OK, ret, "Failed to evict, key:" << key << " flowId:" << mFlowId);
@@ -310,7 +325,9 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
 BResult WCache::Seal(WCacheTierType type)
 {
     BResult ret = BIO_OK;
-
+    if (mCacheTiers[type] == nullptr) {
+        return BIO_OK;
+    }
     ret = mCacheTiers[type]->Seal();
     if (ret != BIO_OK) {
         LOG_ERROR("Seal cacheTier fail:" << ret << ", type:" << type << ", flowId:" << mFlowId);
@@ -322,8 +339,12 @@ BResult WCache::Seal(WCacheTierType type)
 
 void WCache::Destroy()
 {
-    mCacheTiers[WCACHE_MEMORY]->Destroy();
-    mCacheTiers[WCACHE_DISK]->Destroy();
+    if (mCacheTiers[WCACHE_MEMORY] != nullptr) {
+        mCacheTiers[WCACHE_MEMORY]->Destroy();
+    }
+    if (mCacheTiers[WCACHE_DISK] != nullptr) {
+        mCacheTiers[WCACHE_DISK]->Destroy();
+    }
 }
 
 void WCache::StartEvictTask(WCacheTierType type)
@@ -389,6 +410,10 @@ BResult WCache::StartEvictNegotiateTask()
 
 void WCache::RetryEvictTask(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return;
+    }
+
     if (mCacheTiers[type]->IsEmptyEvictSliceQueue()) {
         mEvictRef[type].store(false);
         return;
@@ -588,6 +613,10 @@ bool WCache::IsEmptyEvict(WCacheTierType type)
         return false;
     }
 
+    if (mCacheTiers[type] == nullptr) {
+        return true;
+    }
+
     if (!mCacheTiers[type]->IsEmptyEvictSliceQueue() ||
         mEvictRef[type] == true) {
         LOG_TRACE("Evict slice queue status:" << !mCacheTiers[type]->IsEmptyEvictSliceQueue() <<
@@ -607,6 +636,12 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
         LOG_ERROR("slice is null.");
         return BIO_INNER_ERR;
     }
+
+    if (BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel == NO_100) {
+        mCacheTiers[WCACHE_MEMORY]->Evict(sliceRef->GetSlice());
+        return BIO_OK;
+    }
+
     auto indexInFlow = slice->GetIndexInFlow();
     auto offset = slice->GetOffsetInFlow();
     auto length = slice->GetLength();
@@ -694,11 +729,13 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
             LOG_ERROR("failed to copy slice to value. ret:" << ret << ", slice:" << slice->ToString());
             return ret;
         }
-        ret = mUnderFs->Put(key, reinterpret_cast<char *>(value), sliceMeta->length);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
-            free(value);
-            return ret;
+        if (!UnderFs::IsNone()) {
+            ret = mUnderFs->Put(key, reinterpret_cast<char *>(value), sliceMeta->length);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Failed to put slice to underfs, key:" << key << ", length:" << sliceMeta->length);
+                free(value);
+                return ret;
+            }
         }
 
         LOG_DEBUG("Evict data to rcache, key:" << key << ", length:" << sliceMeta->length << ".");
@@ -995,6 +1032,9 @@ BResult WCache::FlushMem()
 BResult WCache::FlushDisk()
 {
     LOG_TRACE("Flush disk, flowId:" << mFlowId);
+    if (mCacheTiers[WCACHE_DISK] == nullptr && BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel == NO_100) {
+        return BIO_OK;
+    }
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = EvictFromDiskToUnderFs(sliceRef, true);
@@ -1080,6 +1120,11 @@ BResult WCache::ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef)
 
 BResult WCache::ExpiredClearDisk()
 {
+    if (mCacheTiers[WCACHE_DISK] == nullptr) {
+        mEvictRef[WCACHE_DISK].store(false);
+        return BIO_OK;
+    }
+
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = ExpiredClearDiskImpl(sliceRef);

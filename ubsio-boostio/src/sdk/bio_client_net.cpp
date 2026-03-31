@@ -203,8 +203,10 @@ BResult BioClientNet::ShmInit()
     rsp.listenAddress[MAX_LISTEN_ADDRESS_LENGTH - 1] = '\0';
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
+    mWcacheMemEvictLevel = rsp.wcacheMemEvictLevel;
     CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
-        mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
+        mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ", wcacheMemEvictLevel:" <<
+        mWcacheMemEvictLevel << ".");
 
     mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut)); // 更新消息请求发送超时参数.
     ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.
@@ -426,7 +428,7 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
             && (workingPathLen != 0 && workingPathLen < KEY_MAX_SIZE) && (userLen != 0 && userLen < KEY_MAX_SIZE) &&
             (clusterLen != 0 && clusterLen < KEY_MAX_SIZE) && (cfgPathLen != 0 && cfgPathLen < KEY_MAX_SIZE) &&
             (poolLen != 0 && poolLen < KEY_MAX_SIZE) &&
-            ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
+            ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0) || (strcmp(rsp.underFsType, "none") == 0)));
 }
 
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)

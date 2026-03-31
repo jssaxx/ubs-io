@@ -36,7 +36,13 @@ const char *GetPrometheusListenAddress(void);
 
 uint32_t GetNegoWorkIoTimeOut();
 
+uint32_t GetNegoWorkScene();
+
+uint32_t GetNegoWorkIoAlignSize();
+
 uint32_t GetPrometheusScrapeIntervalSec();
+
+uint32_t GetWcacheMemEvictLevel();
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 

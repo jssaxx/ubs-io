@@ -22,7 +22,7 @@ constexpr uint64_t MB_SIZE = 1024 * 1024;
 void BioConfig::LoadDefaultConf()
 {
     /* load net config for fs */
-    AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma"));
+    AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma||ub"));
     AddStrConf(NET_RPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_DATA_BUSY_POLL_MODE.first));
     AddIntConf(NET_RPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_RPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
     AddStrConf(NET_IPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_DATA_BUSY_POLL_MODE.first));
@@ -60,16 +60,16 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(WORK_NET_TIMEOUT, VIntRange::Create(WORK_NET_TIMEOUT.first, NO_16, NO_128));
 
     /* load cluster manager config */
-    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_2, NO_256));
-    AddIntConf(CM_COPY_NUM, VStrEnum::Create(CM_COPY_NUM.first, "2"));
-    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
+    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 1, NO_256));
+    AddIntConf(CM_COPY_NUM, VStrEnum::Create(CM_COPY_NUM.first, "2||1"));
+    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, 1, NO_8192));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
     AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_600));
     AddStrConf(CM_ZK_HOST, VIpv4PortListValidator::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs"));
-    AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrRealPath::Create(UNDERFS_CEPH_CFG_PATH.first));
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||none"));
+    AddStrConf(UNDERFS_CEPH_CFG_PATH);
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
@@ -176,6 +176,8 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
         mNetConfig.protocol = 0;
     } else if (protocol == "tcp") {
         mNetConfig.protocol = 1;
+	} else if (protocol == "ub") {
+        mNetConfig.protocol = NO_7;
     } else {
         LOG_ERROR("Invalid configuration with protocol items: " << protocol);
         mNetConfig.protocol = NO_255;
@@ -308,8 +310,7 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
     }
 
     if (mDaemonConfig.diskCaps.size() == 0) {
-        mDaemonConfig.memCap = 0;
-        LOG_INFO("This server config disk is null, memory reset to 0, server can not join pt.");
+		mDaemonConfig.diskCaps.emplace_back(0);
         return BIO_OK;
     }
 
@@ -331,6 +332,12 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 {
     mUnderFsConfig.underFsType = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first);
     mUnderFsConfig.cephConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
+    if (mUnderFsConfig.underFsType == "ceph") {
+        if (!FileUtil::CanonicalPath(mUnderFsConfig.cephConfig.cfgPath)) {
+            LOG_ERROR("Ceph config path not exist, value:" << mUnderFsConfig.cephConfig.cfgPath);
+            return BIO_ERR;
+        }
+    }
     mUnderFsConfig.cephConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
     mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);

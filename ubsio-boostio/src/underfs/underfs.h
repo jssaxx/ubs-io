@@ -37,6 +37,11 @@ public:
         return instance;
     }
 
+    static bool IsNone()
+    {
+        return GetUnderFsType() == NONE_SYSTEM;
+    }
+
 private:
     static std::string GetUnderFsType()
     {

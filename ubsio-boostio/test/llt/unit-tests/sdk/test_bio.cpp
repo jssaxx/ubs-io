@@ -1696,7 +1696,7 @@ TEST_F(TestBio, test_get_underfs_config)
 TEST_F(TestBio, test_bio_client_net_shm_init)
 {
     LOG_INFO("test_bio_client_net_shm_init");
-    ShmInitResponse rsp{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    ShmInitResponse rsp{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     auto ret = ock::bio::net::BioClientNet::Instance()->CheckShmInitResp(rsp);
     EXPECT_EQ(ret, false);
 }

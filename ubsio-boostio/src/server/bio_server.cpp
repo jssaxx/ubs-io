@@ -211,6 +211,11 @@ void BioServer::BioTraceExit()
 
 BResult BioServer::BioUnderFsInit()
 {
+    if (UnderFs::IsNone()) {
+        LOG_INFO("UnderFS type is none, skip underfs initialization.");
+        return BIO_OK;
+    }
+
     UnderFsPtr underFsPtr = UnderFs::Instance();
     if (underFsPtr == nullptr) {
         LOG_ERROR("Create underfs instance fail.");
@@ -221,6 +226,11 @@ BResult BioServer::BioUnderFsInit()
 
 void BioServer::BioUnderFsExit()
 {
+    if (UnderFs::IsNone()) {
+        LOG_INFO("UnderFS type is none, skip underfs stop.");
+        return;
+    }
+
     UnderFs::Instance()->Stop();
 }
 
@@ -403,6 +413,13 @@ BResult BioServer::BioCmInit()
         }
         nodeInfo.disks.push_back(diskInfo);
     }
+
+    if (daemonConfig.diskList.empty()) {
+        diskInfo.diskId = 0;
+        diskInfo.diskStatus = CM_DISK_NORMAL;
+        nodeInfo.disks.push_back(diskInfo);
+    }
+
     result = mCm->RegisterNode(nodeInfo);
     ChkTrue(result == BIO_OK, BIO_ERR, "Failed to register node, result: " << result << ".");
 
@@ -818,6 +835,21 @@ uint32_t GetNegoWorkIoTimeOut()
 uint32_t GetPrometheusScrapeIntervalSec()
 {
     return BioServer::Instance()->GetPrometheusScrapeIntervalSec();
+}
+
+uint32_t GetWcacheMemEvictLevel()
+{
+    return BioServer::Instance()->GetWcacheMemEvictLevel();
+}
+
+uint32_t GetNegoWorkScene()
+{
+    return BioServer::Instance()->GetNegoWorkScene();
+}
+
+uint32_t GetNegoWorkIoAlignSize()
+{
+    return BioServer::Instance()->GetNegoWorkIoAlignSize();
 }
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp)

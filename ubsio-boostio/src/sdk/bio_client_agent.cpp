@@ -112,8 +112,20 @@ BResult BioClientAgent::InitOperation()
     (LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((getScene = reinterpret_cast<GetBioServerSceneFuncPtr>
+    (LoadFunction("GetNegoWorkScene"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getAlignSize = reinterpret_cast<GetBioServerAlignSizeFuncPtr>
+    (LoadFunction("GetNegoWorkIoAlignSize"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((getScrapeIntervalSec = reinterpret_cast<GetBioServerScrapeIntervalSecFuncPtr>
     (LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getWcacheMemEvictLevel = reinterpret_cast<GetBioServerWcacheMemEvictLevelFuncPtr>
+    (LoadFunction("GetWcacheMemEvictLevel"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {
@@ -241,6 +253,21 @@ bool BioClientAgent::GetConfigPrometheusToggle()
 const char *BioClientAgent::GetPrometheusListenAddress()
 {
     return getListenAddress();
+}
+
+uint32_t BioClientAgent::GetWcacheMemEvictLevel()
+{
+    return getWcacheMemEvictLevel();
+}
+
+uint32_t BioClientAgent::GetNegoWorkScene()
+{
+    return getScene();
+}
+
+uint32_t BioClientAgent::GetNegoWorkIoAlignSize()
+{
+    return getAlignSize();
 }
 
 uint32_t BioClientAgent::GetNegoWorkIoTimeOut()

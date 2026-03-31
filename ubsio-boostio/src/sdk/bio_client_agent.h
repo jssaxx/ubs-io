@@ -44,7 +44,10 @@ public:
     using GetBioServerPromethuesToggleFuncPtr = bool (*)();
     using GetBioServerListenAddressFuncPtr = const char *(*)();
     using GetBioServertimeOutFuncPtr = uint32_t (*)();
+    using GetBioServerSceneFuncPtr = uint32_t (*)();
+    using GetBioServerAlignSizeFuncPtr = uint32_t (*)();
     using GetBioServerScrapeIntervalSecFuncPtr = uint32_t (*)();
+    using GetBioServerWcacheMemEvictLevelFuncPtr = uint32_t (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
     using GetQuotaInfoFuncPtr = int32_t (*)(QueryQuotaRequest *, QueryQuotaResponse *);
@@ -96,6 +99,12 @@ public:
     bool GetConfigPrometheusToggle();
 
     const char *GetPrometheusListenAddress();
+
+    uint32_t GetWcacheMemEvictLevel();
+
+    uint32_t GetNegoWorkScene();
+
+    uint32_t GetNegoWorkIoAlignSize();
 
     uint32_t GetNegoWorkIoTimeOut();
 
@@ -207,7 +216,10 @@ private:
     GetBioServerPromethuesToggleFuncPtr getPrometheusToggle = nullptr;
     GetBioServerListenAddressFuncPtr getListenAddress = nullptr;
     GetBioServertimeOutFuncPtr getTimeOut = nullptr;
+    GetBioServerSceneFuncPtr getScene = nullptr;
+    GetBioServerAlignSizeFuncPtr getAlignSize = nullptr;
     GetBioServerScrapeIntervalSecFuncPtr getScrapeIntervalSec = nullptr;
+    GetBioServerWcacheMemEvictLevelFuncPtr getWcacheMemEvictLevel = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
     GetQuotaInfoFuncPtr getQuotaInfoOp = nullptr;

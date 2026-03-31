@@ -33,6 +33,7 @@
 
 namespace ock {
 namespace bio {
+
 class BioClient;
 using BioClientPtr = Ref<BioClient>;
 class BioClient {
@@ -80,6 +81,9 @@ public:
         BResult ret = mMirror->Put(param);
         if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_QUOTA_NOT_ENOUGH ||
             ret == BIO_QUOTA_TIMEOUT)) {
+            if (UnderFs::IsNone()) {
+                return ret;
+            }
             BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
             ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
             BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
@@ -98,6 +102,9 @@ public:
         BIO_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
         BIO_TP_END;
         if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
+            if (UnderFs::IsNone()) {
+                return ret;
+            }
             BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
             UnderFs::ObjStat stat;
             auto underFsRet = UnderFs::Instance()->Stat(param.key, stat);
