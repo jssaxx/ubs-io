@@ -6,21 +6,19 @@ add_library(nds_object OBJECT ${NDS_OBJ})
 target_include_directories(nds_object PUBLIC
     ${TARGET_INSTALL_LIB}/3rdparty/nds/include
     PRIVATE
-    ${SRC_DIR}/dfc/csrc/common/utils
-    ${SRC_DIR}/dfc/csrc/client/kv/net_engine
+    ${SRC_DIR}/ubsio-kv/src/csrc/utils
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_library(dfc_nds SHARED $<TARGET_OBJECTS:nds_object>)
+add_library(ubsio_nds SHARED $<TARGET_OBJECTS:nds_object>)
 
-target_link_directories(dfc_nds PRIVATE
+target_link_directories(ubsio_nds PRIVATE
     ${TARGET_INSTALL_LIB}/3rdparty/nds/lib
 )
 
-target_link_libraries(dfc_nds PRIVATE
+target_link_libraries(ubsio_nds PRIVATE
     -Wl,--start-group
     nds_file
-    net_engine
     -Wl,--end-group
 )
 

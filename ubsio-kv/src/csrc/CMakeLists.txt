@@ -1,4 +1,3 @@
-add_subdirectory(net_engine)
-add_subdirectory(kv_client)
-add_subdirectory(kv_server)
+add_subdirectory(kvc)
 add_subdirectory(nds)
+add_subdirectory(utils)
