@@ -61,14 +61,13 @@ typedef struct {
     BdmAllocatorRealize *realize;
     ngx_rbtree_node_t *eraseNode;
     BdmChunkIndex *chunk;
-    int result;
+    int32_t result;
 } InsertCbContext;
 
 int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t totalSize, uint64_t *metaSize,
                                  uint64_t *dataSize)
 {
     uint64_t elemSize = sizeof(BdmChunkMeta);
-
     if (head + chunkSize + elemSize > totalSize) {
         BDM_LOGERROR(0, "Too small, head(%llu) chunkSize(%llu), totalSize(%llu).", head, chunkSize, totalSize);
         return BDM_CODE_ERR;
@@ -79,7 +78,6 @@ int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t tot
     metaSize1 = ROUND_UP(metaSize1 + head, BDM_ALIGN_SIZE);
 
     uint64_t dataSize1 = chunkSize * calcNum;
-
     if (metaSize1 + dataSize1 > totalSize) {
         if (calcNum <= 1) {
             BDM_LOGERROR(0, "Too small, head(%llu) chunkSize(%llu), totalSize(%llu).", head, chunkSize, totalSize);
@@ -92,7 +90,6 @@ int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t tot
     }
 
     BDM_LOGINFO(0, "Get, head(%llu) meta(%llu) data(%llu) total(%llu).", head, metaSize1, dataSize1, totalSize);
-
     *metaSize = metaSize1 - head;
     *dataSize = dataSize1;
     return BDM_CODE_OK;
@@ -126,14 +123,12 @@ static int32_t BdmAllocatorUpdateMeta(BdmAllocatorRealize *realize, uint64_t buc
 
 static void BdmAllocatorInsertPre(BdmChunkIndex *chunk, BdmChunkIndex *next, InsertCbContext *context)
 {
-    uint64_t freeIndex;
-    int32_t ret;
-
     if (next->length == 0) {
         context->result = BDM_CODE_INVALID_PARAM;
         return;
     }
-    freeIndex = MIN(next->length, BDM_FREE_LIST_NUM) - 1;
+
+    uint64_t freeIndex = MIN(next->length, BDM_FREE_LIST_NUM) - 1;
     DListDel(&next->head);
     context->realize->free[freeIndex].count--;
 
@@ -146,7 +141,7 @@ static void BdmAllocatorInsertPre(BdmChunkIndex *chunk, BdmChunkIndex *next, Ins
     DListAddTail(&chunk->head, &context->realize->free[freeIndex].head);
     context->realize->free[freeIndex].count++;
 
-    ret = BdmAllocatorUpdateMeta(context->realize, 0, 0, chunk, 1UL);
+    int32_t ret = BdmAllocatorUpdateMeta(context->realize, 0, 0, chunk, 1UL);
     if (ret != BDM_CODE_OK) {
         context->result = ret;
         return;
@@ -157,23 +152,20 @@ static void BdmAllocatorInsertPre(BdmChunkIndex *chunk, BdmChunkIndex *next, Ins
 
 static void BdmAllocatorInsertNext(BdmChunkIndex *chunk, BdmChunkIndex *prev, InsertCbContext *context)
 {
-    ngx_rbtree_node_t *neighbNode = NULL;
-    BdmChunkIndex *neighChunk = NULL;
-    uint64_t freeIndex;
     int32_t ret;
-
     if (prev->length == 0) {
         context->result = BDM_CODE_INVALID_PARAM;
         return;
     }
-    freeIndex = MIN(prev->length, BDM_FREE_LIST_NUM) - 1;
+
+    uint64_t freeIndex = MIN(prev->length, BDM_FREE_LIST_NUM) - 1;
     DListDel(&prev->head);
     context->realize->free[freeIndex].count--;
 
     prev->length += chunk->length;
-    neighbNode = ngx_rbtree_next(&context->realize->root, &prev->node);
+    ngx_rbtree_node_t *neighbNode = ngx_rbtree_next(&context->realize->root, &prev->node);
     if (neighbNode != NULL) {
-        neighChunk = ngx_rb_entry(neighbNode, BdmChunkIndex, node);
+        BdmChunkIndex *neighChunk = ngx_rb_entry(neighbNode, BdmChunkIndex, node);
         if (chunk->index + chunk->length == neighChunk->index) {
             if (neighChunk->length == 0) {
                 context->result = BDM_CODE_INVALID_PARAM;
@@ -269,7 +261,6 @@ static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *current, ngx_rbtree_nod
     uint64_t freeIndex = MIN(cbContext->chunk->length, BDM_FREE_LIST_NUM) - 1;
     DListAddTail(&cbContext->chunk->head, &cbContext->realize->free[freeIndex].head);
     cbContext->realize->free[freeIndex].count++;
-
     return 0;
 }
 
@@ -290,12 +281,7 @@ static int32_t BdmAllocatorInsert(BdmAllocatorRealize *realize, BdmChunkIndex *c
         ngx_rbtree_delete(root, context.eraseNode);
     }
 
-    int32_t ret = BdmAllocatorUpdateMeta(realize, 0, 0, chunk, 1UL);
-    if (ret != BDM_CODE_OK) {
-        return ret;
-    }
-
-    return BDM_CODE_OK;
+    return BdmAllocatorUpdateMeta(realize, 0, 0, chunk, 1UL);
 }
 
 static int32_t BdmAllocatorRestoreInsert(BdmAllocatorRealize *realize, BdmChunkIndex *chunk)
@@ -371,10 +357,6 @@ static int32_t BdmAllocatorRemoveDiffLen(BdmChunkIndex *chunk, BdmAllocatorReali
 static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketId, uint64_t bucketOffset,
                                   uint64_t *index, uint64_t chunkSize)
 {
-    BdmChunkIndex *chunk = NULL;
-    uint64_t freeIndex;
-    int32_t ret;
-
     if (realize == NULL) {
         BDM_LOGERROR(0, "Invalid allocator.");
         return BDM_CODE_INVALID_PARAM;
@@ -387,7 +369,7 @@ static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketI
     if (length == 0) {
         return BDM_CODE_INVALID_PARAM;
     }
-    freeIndex = MIN(length, BDM_FREE_LIST_NUM) - 1;
+    uint64_t freeIndex = MIN(length, BDM_FREE_LIST_NUM) - 1;
 
     for (; freeIndex < BDM_FREE_LIST_NUM; freeIndex++) {
         if (D_LIST_EMPTY(&realize->free[freeIndex].head)) {
@@ -395,13 +377,11 @@ static int32_t BdmAllocatorRemove(BdmAllocatorRealize *realize, uint64_t bucketI
         }
         DList *areaNode = realize->free[freeIndex].head.next;
         while (areaNode != &realize->free[freeIndex].head) {
-            chunk = (BdmChunkIndex *)D_LIST_ENTRY(areaNode, BdmChunkIndex, head);
+            BdmChunkIndex *chunk = (BdmChunkIndex *)D_LIST_ENTRY(areaNode, BdmChunkIndex, head);
             if (chunk->length == length) {
-                ret = BdmAllocatorRemoveSameLen(chunk, realize, bucketId, bucketOffset, freeIndex, index);
-                return ret;
+                return BdmAllocatorRemoveSameLen(chunk, realize, bucketId, bucketOffset, freeIndex, index);
             } else if (chunk->length > length) {
-                ret = BdmAllocatorRemoveDiffLen(chunk, realize, bucketId, bucketOffset, length, index);
-                return ret;
+                return BdmAllocatorRemoveDiffLen(chunk, realize, bucketId, bucketOffset, length, index);
             } else {
                 areaNode = areaNode->next;
                 continue;
@@ -416,7 +396,6 @@ int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64
                                uint64_t *chunkId)
 {
     BdmAllocatorRealize *realize = (BdmAllocatorRealize *)allocator;
-
     if (realize == NULL) {
         BDM_LOGERROR(0, "Invalid allocator.");
         return BDM_CODE_INVALID_PARAM;
@@ -509,6 +488,7 @@ int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint
         BDM_LOGERROR(0, "Invalid allocator.");
         return BDM_CODE_INVALID_PARAM;
     }
+
     BdmChunkMeta *chunkMeta = (BdmChunkMeta *)realize->metaAddr + realize->scanIndex;
     uint64_t chunkIndex = realize->scanIndex;
     while (chunkIndex < realize->chunkNum) {
@@ -557,7 +537,6 @@ static int32_t BdmAllocatorCreateImpl(BdmAllocatorRealize *realize)
 
     BDM_LOGINFO(0, "Allocator create, min chunk(%llu) max chunk(%llu) total size(%llu).", realize->minChunkSize,
                 realize->maxChunkSize, realize->totalSize);
-
     return BDM_CODE_OK;
 }
 
@@ -578,7 +557,7 @@ static int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
     BdmChunkMeta *nextChunkMeta = (BdmChunkMeta *)realize->metaAddr;
     BdmChunkMeta *chunkMeta = NULL;
     uint64_t chunkIndex = 0;
-    uint64_t length;
+    uint64_t length = 0;
     while (chunkIndex < realize->chunkNum) {
         chunkMeta = nextChunkMeta;
         if (chunkMeta->head != 1UL) {
@@ -613,7 +592,6 @@ static int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
 
     BDM_LOGINFO(0, "Allocator restore, min chunk(%llu) max chunk(%llu) total size(%llu) used size(%llu).",
                 realize->minChunkSize, realize->maxChunkSize, realize->totalSize, realize->usedSize);
-
     return BDM_CODE_OK;
 }
 
@@ -623,6 +601,7 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
         BDM_LOGERROR(0, "Alloc failed, min chunk size error.");
         return 0L;
     }
+
     uint64_t chunkNum = para->totalSize / para->minChunkSize;
     BdmAllocatorRealize *realize =
             (BdmAllocatorRealize *)malloc(sizeof(BdmAllocatorRealize) + sizeof(BdmChunkIndex) * chunkNum);
@@ -630,11 +609,10 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
         BDM_LOGERROR(0, "Malloc failed, chunk num(%llu).", chunkNum);
         return 0L;
     }
+
     BDM_RWLOCK_INIT(&realize->lock, NULL);
     ngx_rbtree_init(&realize->root, &realize->sentinel, BdmAllocatorInsertCallback);
-
-    uint32_t index;
-    for (index = 0; index < BDM_FREE_LIST_NUM; index++) {
+    for (uint32_t index = 0; index < BDM_FREE_LIST_NUM; index++) {
         D_INIT_LIST_HEAD(&realize->free[index].head);
         realize->free[index].count = 0UL;
     }
@@ -654,13 +632,7 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
     realize->scanIndex = 0UL;
     realize->chunkNum = chunkNum;
 
-    int32_t ret;
-    if (isRestore == 0UL) {
-        ret = BdmAllocatorCreateImpl(realize);
-    } else {
-        ret = BdmAllocatorRestoreImpl(realize);
-    }
-
+    int32_t ret = (isRestore == 0UL) ? BdmAllocatorCreateImpl(realize) : BdmAllocatorRestoreImpl(realize);
     if (ret != BDM_CODE_OK) {
         BDM_RWLOCK_DESTROY(&realize->lock);
         free((void *)realize->metaAddr);
