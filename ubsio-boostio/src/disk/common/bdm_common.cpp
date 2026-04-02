@@ -22,18 +22,16 @@ extern "C" {
 
 void BdmLogFunc(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...)
 {
-    va_list argPtr;
     char dataBuf[BDM_LOG_BUF_LEN];
-    int ret;
-
-    ret = memset_s(dataBuf, sizeof(dataBuf), 0, sizeof(dataBuf));
-    if (ret != 0) {
+    int32_t ret = memset_s(dataBuf, sizeof(dataBuf), 0, sizeof(dataBuf));
+    if (UNLIKELY(ret != 0)) {
         return;
     }
 
+    va_list argPtr;
     va_start(argPtr, format);
     ret = vsnprintf_s(dataBuf, BDM_LOG_BUF_LEN, sizeof(dataBuf) - 1, format, argPtr);
-    if (ret < 0) {
+    if (UNLIKELY(ret < 0)) {
         BIO_LOG_INTERNAL(logLevel, fileName, line, funcName, "vsnprintf_s failed.");
         va_end(argPtr);
         return;

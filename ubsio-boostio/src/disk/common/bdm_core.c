@@ -31,89 +31,91 @@
 
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;
-uint32_t g_bdmCount = 0UL;
+uint32_t g_bdmDiskCount = 0UL;
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
 {
-    if (len > BDM_MAX_CHUNK_LENGTH) {
+    if (UNLIKELY(len > BDM_MAX_CHUNK_LENGTH)) {
         BDM_LOGERROR(0, "bdm alloc len(%llu) is invalid.", len);
         return BDM_CODE_INVALID_PARAM;
     }
-    if (chunkId == NULL) {
+    if (UNLIKELY(chunkId == NULL)) {
         return BDM_CODE_ERR;
     }
 
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.alloc == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.alloc == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register alloc function.");
         return BDM_CODE_ERR;
     }
 
     int32_t ret = bdm->ops.alloc((uintptr_t)bdm, bucketId, bucketOffset, len, chunkId);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Alloc failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
+
     *chunkId = ENCODE_CHUNK_ID(*chunkId, bdmId);
-    BDM_LOGDEBUG(0, "Malloc: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, bucketId, bucketOffset);
+    BDM_LOGDEBUG(0, "Alloc success, chunkId(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, bucketId, bucketOffset);
     return BDM_CODE_OK;
 }
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId)
 {
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.free == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.free == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register free function.");
         return BDM_CODE_ERR;
     }
 
     uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
     int32_t ret = bdm->ops.free((uintptr_t)bdm, len, decodeChunkId);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Free failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
-    BDM_LOGDEBUG(0, "Free: chunk(%lu).", decodeChunkId);
+
+    BDM_LOGDEBUG(0, "Free success, chunkId(%lu).", decodeChunkId);
     return BDM_CODE_OK;
 }
 
 int32_t BdmRead(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
 {
-    if (len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
-        len + offset > BDM_MAX_CHUNK_LENGTH) {
-        BDM_LOGERROR(0, "read invalid  length(%llu), offset(%llu).", len, offset);
+    if (UNLIKELY(len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
+        len + offset > BDM_MAX_CHUNK_LENGTH)) {
+        BDM_LOGERROR(0, "read invalid, length(%llu) offset(%llu).", len, offset);
         return BDM_CODE_INVALID_PARAM;
     }
 
-    if (buf == NULL) {
+    if (UNLIKELY(buf == NULL)) {
         return BDM_CODE_ERR;
     }
 
     uint32_t bdmId = CHUNK_ID_TO_BDMID(chunkId);
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.read == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.read == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register read function.");
         return BDM_CODE_ERR;
     }
 
     uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
     int32_t ret = bdm->ops.read((uintptr_t)bdm, decodeChunkId, offset, buf, len);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Read failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
@@ -122,31 +124,31 @@ int32_t BdmRead(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
 
 int32_t BdmWrite(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
 {
-    if (len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
-        len + offset > BDM_MAX_CHUNK_LENGTH) {
+    if (UNLIKELY(len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
+        len + offset > BDM_MAX_CHUNK_LENGTH)) {
         BDM_LOGERROR(0, "write invalid  length(%llu), offset(%llu).", len, offset);
         return BDM_CODE_INVALID_PARAM;
     }
 
-    if (buf == NULL) {
+    if (UNLIKELY(buf == NULL)) {
         return BDM_CODE_ERR;
     }
 
     uint32_t bdmId = CHUNK_ID_TO_BDMID(chunkId);
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.write == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.write == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register write function.");
         return BDM_CODE_ERR;
     }
 
     uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
     int32_t ret = bdm->ops.write((uintptr_t)bdm, decodeChunkId, offset, buf, len);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Write failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
@@ -155,25 +157,25 @@ int32_t BdmWrite(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
 
 int32_t BdmReadAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len, BdmIoCtx *ioCtx)
 {
-    if (len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
-        len + offset > BDM_MAX_CHUNK_LENGTH) {
+    if (UNLIKELY(len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
+        len + offset > BDM_MAX_CHUNK_LENGTH)) {
         BDM_LOGERROR(0, "async read invalid  length(%llu), offset(%llu).", len, offset);
         return BDM_CODE_INVALID_PARAM;
     }
 
-    if (buf == NULL || ioCtx == NULL) {
+    if (UNLIKELY(buf == NULL || ioCtx == NULL)) {
         return BDM_CODE_ERR;
     }
 
     uint32_t bdmId = CHUNK_ID_TO_BDMID(chunkId);
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.readAsync == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.readAsync == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register read async function.");
         return BDM_CODE_ERR;
     }
 
@@ -184,10 +186,9 @@ int32_t BdmReadAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len,
     req.buf = buf;
     req.len = len;
     req.ioCtx = ioCtx;
-
     int32_t ret = bdm->ops.readAsync(&req);
-    if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Read failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Read async failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
     return BDM_CODE_OK;
@@ -195,25 +196,25 @@ int32_t BdmReadAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len,
 
 int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len, BdmIoCtx *ioCtx)
 {
-    if (len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
-        len + offset > BDM_MAX_CHUNK_LENGTH) {
+    if (UNLIKELY(len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||
+        len + offset > BDM_MAX_CHUNK_LENGTH)) {
         BDM_LOGERROR(0, "async write invalid  length(%llu), offset(%llu).", len, offset);
         return BDM_CODE_INVALID_PARAM;
     }
 
-    if (buf == NULL || ioCtx == NULL) {
+    if (UNLIKELY(buf == NULL || ioCtx == NULL)) {
         return BDM_CODE_ERR;
     }
 
     uint32_t bdmId = CHUNK_ID_TO_BDMID(chunkId);
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.writeAsync == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.writeAsync == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register write async function.");
         return BDM_CODE_ERR;
     }
 
@@ -224,10 +225,9 @@ int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len
     req.buf = buf;
     req.len = len;
     req.ioCtx = ioCtx;
-
     int32_t ret = bdm->ops.writeAsync(&req);
-    if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Read failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Write async failed, bdm id(%u) len(%lu) ret(%d).", bdmId, len, ret);
         return ret;
     }
     return BDM_CODE_OK;
@@ -235,24 +235,24 @@ int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len
 
 int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCapacity)
 {
-    if (totalCapacity == NULL || usedCapacity == NULL) {
+    if (UNLIKELY(totalCapacity == NULL || usedCapacity == NULL)) {
         return BDM_CODE_ERR;
     }
 
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.getcap == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.getcap == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register get capacity function.");
         return BDM_CODE_ERR;
     }
 
     int32_t ret = bdm->ops.getcap((uintptr_t)bdm, totalCapacity, usedCapacity);
-    if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Getcap failed, bdm id(%u) ret(%d).", bdmId, ret);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Get cap failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
     return BDM_CODE_OK;
@@ -261,19 +261,19 @@ int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCa
 int32_t BdmResetScanPool(uint32_t bdmId)
 {
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.allocatorReset == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.allocatorReset == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register alloctor reset function.");
         return BDM_CODE_ERR;
     }
 
     int32_t ret = bdm->ops.allocatorReset((uintptr_t)bdm);
-    if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Reset failed, bdm id(%u) ret(%d).", bdmId, ret);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Reset alloctor failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
     return BDM_CODE_OK;
@@ -287,18 +287,18 @@ BdmDiskState BdmGetDiskStatus(uint32_t bdmId)
 int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
     uint64_t *bucketOffset)
 {
-    if (chunkId == NULL || chunkSize == NULL || bucketId == NULL || bucketOffset == NULL) {
+    if (UNLIKELY(chunkId == NULL || chunkSize == NULL || bucketId == NULL || bucketOffset == NULL)) {
         return BDM_CODE_ERR;
     }
 
     BdmObj *bdm = BdmGetBdmObj(bdmId);
-    if (bdm == NULL) {
-        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
         return BDM_CODE_NOT_EXIST;
     }
 
-    if (bdm->ops.nextchunk == NULL) {
-        BDM_LOGERROR(0, "Invalid ops, not register.");
+    if (UNLIKELY(bdm->ops.nextchunk == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register next chunk function.");
         return BDM_CODE_ERR;
     }
 
@@ -306,42 +306,30 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
     if (ret == BDM_CODE_SCAN_OFF) {
         return ret;
     }
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Scan failed, bdm id(%u) ret(%d).", bdmId, ret);
         return ret;
     }
     *chunkId = ENCODE_CHUNK_ID(*chunkId, bdmId);
-    BDM_LOGDEBUG(0, "Recover: chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, *bucketId, *bucketOffset);
+    BDM_LOGDEBUG(0, "Recover one, chunk(%lu) bucketId(%lu) bucketOffset(%lu).", *chunkId, *bucketId, *bucketOffset);
     return BDM_CODE_OK;
 }
 
 int32_t BdmInit(void)
 {
-    int32_t ret = BDM_CODE_ERR;
-#if defined(__aarch64__) || defined(__arm__)
-    ret = KunpengCpuCheck();
-#else
-    ret = CheckCpuVendor();
-#endif
-    if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Bdm cpu check failed, ret(%d).", ret);
-        return ret;
-    }
-    if (g_bdmInit == 1UL) {
+    if (UNLIKELY(g_bdmInit == 1UL)) {
         BDM_LOGINFO(0, "Bdm already init succeed.");
         return RETURN_OK;
     }
 
-    BDM_LOGINFO(0, "Bdm init beign.");
-
-    ret = BdmObjInit();
-    if (ret != BDM_CODE_OK) {
+    int32_t ret = BdmObjInit();
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Bdm obj init failed, ret(%d).", ret);
         return ret;
     }
 
     ret = BdmDiskInit();
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Bdm disk obj init failed, ret(%d).", ret);
         return ret;
     }
@@ -353,22 +341,21 @@ int32_t BdmInit(void)
 
 static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, uint64_t chunkSize)
 {
-    if (name == NULL) {
+    if (UNLIKELY(name == NULL)) {
         BDM_LOGERROR(0, "Disk path is null.");
         return BDM_CODE_ERR;
     }
-    BdmCreatePara para = { 0 };
-    int32_t ret;
 
-    ret = strncpy_s(para.name, BDM_NAME_LEN, name, strlen(name));
-    if (ret != BDM_CODE_OK) {
-        BDM_LOGERROR(0, "Sprintf_s failed(%d).", ret);
+    BdmCreatePara para = { 0 };
+    int32_t ret = strncpy_s(para.name, BDM_NAME_LEN, name, strlen(name));
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Sprintf device name failed, ret(%d).", ret);
         return BDM_CODE_ERR;
     }
 
     ret = sprintf_s(para.sn, BDM_SN_LEN, "%s_%u", "bio_file", diskId);
-    if (ret < 0) {
-        BDM_LOGERROR(0, "Sprintf_s failed(%d).", ret);
+    if (UNLIKELY(ret < 0)) {
+        BDM_LOGERROR(0, "Sprintf device sn failed, ret(%d).", ret);
         return BDM_CODE_ERR;
     }
 
@@ -378,17 +365,17 @@ static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, 
     para.pad = 0;
     para.minChunkSize = chunkSize;
     para.maxChunkSize = chunkSize;
-
     uint32_t bdmId;
     ret = BdmCreate(&para, &bdmId);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         return ret;
     }
-    BDM_LOGINFO(0, "DiskId(%u) BdmId(%u) chunkSize(%lu) capacity(%lu).", diskId, bdmId, chunkSize, capacity);
+
+    BDM_LOGINFO(0, "Create disk success, DiskId(%u) BdmId(%u) chunkSize(%lu) capacity(%lu).", diskId, bdmId, chunkSize, capacity);
     return ret;
 }
 
-_Bool IsDiskFile(char *path)
+static bool IsDiskFile(char *path)
 {
     struct stat pathStat;
     if (stat(path, &pathStat) != 0) {
@@ -404,35 +391,30 @@ _Bool IsDiskFile(char *path)
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
 {
-    if (chunkSize > BDM_MAX_CHUNK_LENGTH) {
-        BDM_LOGERROR(0, "bdm chunkSize(%llu) is invalid.", chunkSize);
-        return BDM_CODE_INVALID_PARAM;
-    }
-    if (g_bdmStart == 1UL) {
+    if (UNLIKELY(g_bdmStart == 1UL)) {
         BDM_LOGINFO(0, "Bdm already start succeed.");
         return RETURN_OK;
     }
-
-    if (diskList == NULL) {
+    if (UNLIKELY(diskList == NULL)) {
         return BDM_CODE_ERR;
     }
-    // 最多支持4块磁盘设备, chunkSize满足[1M, 16M].
-    if (chunkSize < 1UL * 1024UL * 1024UL || chunkSize > 16UL * 1024UL * 1024UL) {
+    if (chunkSize < BDM_MIN_CHUNK_LENGTH || chunkSize > BDM_MAX_CHUNK_LENGTH) { // chunkSize必须满足[1M, 16M].
         BDM_LOGERROR(0, "Disk device param input failed.");
-        return BDM_CODE_ERR;
+        return BDM_CODE_INVALID_PARAM;
     }
+
     int32_t ret;
     uint32_t diskId;
     uint32_t failCnt = 0;
     for (diskId = 0; diskId < diskList->num; diskId++) {
 #ifndef DEBUG_UT
         if (IsDiskFile(diskList->list[diskId].path) == false) {
-            BDM_LOGERROR(0, "check devices letter failed, diskId(%u).", diskId);
+            BDM_LOGERROR(0, "Check devices letter failed, diskId(%u).", diskId);
             return BDM_CODE_ERR;
         }
 #endif
         ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, diskList->diskCaps[diskId], chunkSize);
-        if (ret != BDM_CODE_OK) {
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
             BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
             failCnt++;
         }
@@ -444,25 +426,24 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
         return ret;
     }
     g_bdmStart = 1UL;
-    g_bdmCount = diskList->num;
-    BDM_LOGINFO(0, "Bdm start succeed.");
+    g_bdmDiskCount = diskList->num - failCnt;
+    BDM_LOGINFO(0, "Bdm start succeed, create device num is %u.", g_bdmDiskCount);
     return BDM_CODE_OK;
 }
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
 {
-    uint32_t diskId = g_bdmCount;
+    uint32_t diskId = g_bdmDiskCount;
     int32_t ret = BdmDevicesCreate(diskId, diskPath, diskCap, chunkSize);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
         return ret;
     }
-
-    __sync_fetch_and_add(&g_bdmCount, 1);
+    __sync_fetch_and_add(&g_bdmDiskCount, 1);
     return BDM_CODE_OK;
 }
 
 uint32_t BdmGetDiskCount()
 {
-    return g_bdmCount;
+    return g_bdmDiskCount;
 }

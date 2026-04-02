@@ -23,6 +23,14 @@
 extern "C" {
 #endif
 
+#ifndef LIKELY
+#define LIKELY(x) (__builtin_expect(!!(x), 1) != 0)
+#endif
+
+#ifndef UNLIKELY
+#define UNLIKELY(x) (__builtin_expect(!!(x), 0) != 0)
+#endif
+
 #ifndef RETURN_OK
 #define RETURN_OK (0)
 #endif
