@@ -51,7 +51,7 @@ typedef struct {
     uint64_t maxChunkSize;
 
     BdmOps ops;
-    BdmOpsInfo opsInfo;
+    BdmOpsInfo opsInfo;   // bdm disk item
 } BdmObj;
 
 BdmObj *BdmGetBdmObj(uint32_t bdmId);
