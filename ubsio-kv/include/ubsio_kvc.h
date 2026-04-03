@@ -29,7 +29,6 @@ extern "C" {
  */
 int32_t UbsioKvCacheInit(int32_t devId);
 
-
 /**
  * @brief Put data of object with key into UBS-IO KV Cache
  * This data operation default supports async
@@ -112,5 +111,4 @@ int32_t UbsioKvCacheBatchFree(void **bufs, uint32_t keysCount);
 #ifdef __cplusplus
 }
 #endif
-
 #endif // UBSIO_KVC_H

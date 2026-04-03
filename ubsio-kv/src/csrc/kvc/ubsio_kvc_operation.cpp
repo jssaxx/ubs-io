@@ -27,28 +27,29 @@ static KvOperation *g_kvOperation = KvOperation::Instance();
 
 int32_t KvcOperationInit(int32_t devId)
 {
+    // 1. init acl stream
     if (devId >= 0) {
         if (ACLApi::LoadLibrary() != DFC_OK) {
             return DFC_ERR;
         }
-        if (DfcStreamManager::InitAclStream(devId) != DFC_OK) {
+        if (KvcStreamManager::InitAclStream(devId) != DFC_OK) {
             return DFC_ERR;
         }
     }
     
-    // dlopen and init biosdk
+    // 2. dlopen and init boostio
     int ret = DlBioSdkApi::LoadLibrary();
-    if (ret != DFC_OK) {
-        LOG_ERROR("dlopen bio sdk failed");
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return DFC_ERR;
     }
     ret = DlBioSdkApi::DfcKvBioInit();
-    if (ret != DFC_OK) {
-        LOG_ERROR("Kv bio init failed");
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("init boostio failed, ret:" << ret);
         return DFC_ERR;
     }
 
-    // init kv operation executor
+    // 3. init kv operation executor
     ret = g_kvOperation->InitKvExecutor();
     if (ret != DFC_OK) {
         LOG_ERROR("kv init executor failed");
@@ -61,19 +62,11 @@ int32_t KvcOperationInit(int32_t devId)
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags)
 {
-    if (UNLIKELY(g_kvOperation == nullptr)) {
-        LOG_ERROR("kv operation is nullptr");
-        return DFC_ERR;
-    }
     return g_kvOperation->KvPutData(key, value, len);
 }
 
 int32_t KvcBatchExistKey(const std::vector<std::string> &key, bool *results, uint32_t flags)
 {
-    if (UNLIKELY(g_kvOperation == nullptr)) {
-        LOG_ERROR("kv operation is nullptr");
-        return DFC_ERR;
-    }
     return g_kvOperation->BatchKvExistKey(key, results);
 }
 
@@ -83,19 +76,11 @@ int32_t KvcBatchGetData(const std::vector<std::string> &key,
                         std::vector<int> &results,
                         uint32_t flags)
 {
-    if (UNLIKELY(g_kvOperation == nullptr)) {
-        LOG_ERROR("kv operation is nullptr");
-        return DFC_ERR;
-    }
     return g_kvOperation->BatchKvGetData(key, bufs, lengths, results);
 }
 
 int32_t KvcBatchFreeGetAddress(void **bufs, uint32_t keys_count)
 {
-    if (UNLIKELY(g_kvOperation == nullptr)) {
-        LOG_ERROR("kv operation is nullptr");
-        return DFC_ERR;
-    }
     return DlBioSdkApi::BatchGetFree(tenantId, reinterpret_cast<uintptr_t*>(bufs), keys_count);
 }
 

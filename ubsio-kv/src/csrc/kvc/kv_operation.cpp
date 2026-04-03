@@ -49,66 +49,59 @@ void KvOperation::UnInitialize(void)
 
 int32_t KvOperation::KvPutData(const std::string &key, void *value, size_t len)
 {
-    std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-    CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-    if (status != CResult::RET_CACHE_OK) {
-        LOG_ERROR("CalcLocation failed with returned status " << status);
+    ObjLocation location;
+    CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
+    if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+        LOG_ERROR("Calc location failed, status:" << status);
         return DFC_ERR;
     }
-    return DlBioSdkApi::Put(tenantId, key.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, *location);
+    return DlBioSdkApi::Put(tenantId, key.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, location);
 }
 
 int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **bufs,
     std::vector<size_t> &lengths, std::vector<int> &results)
 {
-    uint32_t keys_count = key.size();
-    std::vector<ObjLocation> locationVec;
-    std::vector<uint64_t> realLength;
-    std::vector<uint64_t> offsets(keys_count, 0);
-    std::vector<const char*> keys;
-    locationVec.reserve(keys_count);
-    realLength.reserve(keys_count);
-    keys.reserve(keys_count);
-    
-    for (size_t i = 0; i < keys_count; i++) {
-        std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), location.get());
-        if (status != CResult::RET_CACHE_OK) {
-            LOG_ERROR("CalcLocation failed with returned status " << status);
-            return -1;
+    uint32_t keysCount = key.size();
+    std::vector<ObjLocation> locationVec(keysCount);
+    std::vector<uint64_t> realLength(keysCount);
+    std::vector<uint64_t> offsets(keysCount, 0);
+    std::vector<const char*> keys(keysCount);
+    for (size_t i = 0; i < keysCount; i++) {
+        ObjLocation> location;
+        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), &location);
+        if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+            LOG_ERROR("Calc location failed, status:" << status);
+            return DFC_ERR;
         }
-        locationVec.emplace_back(*location);
+        locationVec.emplace_back(location);
         keys.emplace_back(key[i].c_str());
     }
 
-    return DlBioSdkApi::BatchGet(tenantId, keys.data(), keys_count, offsets.data(), lengths.data(), locationVec.data(),
+    return DlBioSdkApi::BatchGet(tenantId, keys.data(), keysCount, offsets.data(), lengths.data(), locationVec.data(),
         reinterpret_cast<uintptr_t *>(bufs), realLength.data(), results.data());
 }
 
 int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *results)
 {
-    uint32_t keys_count = key.size();
-    std::vector<ObjLocation> locationVec;
-    std::vector<const char *> keys;
-    locationVec.reserve(keys_count);
-    keys.reserve(keys_count);
-
-    for (size_t i = 0; i < keys_count; i++) {
-        std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), location.get());
-        if (status != CResult::RET_CACHE_OK) {
-            LOG_ERROR("CalcLocation failed with returned status " << status);
-            return -1;
+    uint32_t keysCount = key.size();
+    std::vector<ObjLocation> locationVec(keysCount);
+    std::vector<const char *> keys(keysCount);
+    for (size_t i = 0; i < keysCount; i++) {
+        ObjLocation location;
+        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), &location);
+        if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+            LOG_ERROR("Calc location failed, status:" << status);
+            return DFC_ERR;
         }
-        locationVec.emplace_back(*location);
+        locationVec.emplace_back(location);
         keys.emplace_back(key[i].c_str());
     }
-    int ret = DlBioSdkApi::BatchExist(tenantId, keys.data(), locationVec.data(), keys_count, results);
+
+    int ret = DlBioSdkApi::BatchExist(tenantId, keys.data(), locationVec.data(), keysCount, results);
     if (ret != DFC_OK) {
         LOG_ERROR("BioBatchExist failed with returned status " << ret);
-        return -1;
+        return DFC_ERR;
     }
-
     return DFC_OK;
 }
 

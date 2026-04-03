@@ -47,7 +47,7 @@ public:
     int32_t Initialize(const std::string &path);
     void UnInitialize();
 
-    // kv操作集
+    // kv operation
     int32_t KvPutData(const std::string &key, void *value, size_t len);
     int32_t BatchKvGetData(const std::vector<std::string> &key,
                            void **bufs,

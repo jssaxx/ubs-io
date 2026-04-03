@@ -49,133 +49,60 @@ public:
 
     static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
     {
-        int ret = 0;
-        if (pBioInitialize != nullptr) {
-            ret = pBioInitialize(mode, optConf);
-        } else {
-            LOG_ERROR("dfcInit failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioInitialize(mode, optConf));
     }
 
     static CResult CreateCache(CacheDescriptor desc)
     {
-        int ret = 0;
-        if (pBioCreateCache != nullptr) {
-            ret = pBioCreateCache(desc);
-        } else {
-            LOG_ERROR("create cache failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioCreateCache(desc));
     }
 
     static CResult CalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *location)
     {
-        int ret = 0;
-        if (pBioCalcLocation != nullptr) {
-            ret = pBioCalcLocation(tenantId, objectId, location);
-        } else {
-            LOG_ERROR("cal location failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioCalcLocation(tenantId, objectId, location));
     }
 
     static CResult Get(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
                 uint64_t *realLength)
     {
-        int ret = 0;
-        if (pBioGet != nullptr) {
-            ret = pBioGet(tenantId, key, offset, length, location, value, realLength);
-        } else {
-            LOG_ERROR("dfcGet failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioGet(tenantId, key, offset, length, location, value, realLength);
     }
 
     static CResult Put(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location)
     {
-        int ret = 0;
-        if (pBioPut != nullptr) {
-            ret = pBioPut(tenantId, key, value, length, location);
-        } else {
-            LOG_ERROR("dfcPut failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioPut(tenantId, key, value, length, location));
     }
 
     static CResult Stat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
     {
-        int ret = 0;
-        if (pBioStat != nullptr) {
-            ret = pBioStat(tenantId, key, location, stat);
-        } else {
-            LOG_ERROR("dfcStat failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioStat(tenantId, key, location, stat));
     }
 
     static CResult BatchExist(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[])
     {
-        int ret = 0;
-        if (pBioBatchExist != nullptr) {
-            ret = pBioBatchExist(tenantId, key, location, count, result);
-        } else {
-            LOG_ERROR("BioBatchExist failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioBatchExist(tenantId, key, location, count, result));
     }
 
     static CResult BatchGet(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
                      ObjLocation *locations, uintptr_t *valueAddrs, uint64_t *realLengths, int32_t *results)
     {
-        int ret = 0;
-        if (pBioBatchGet != nullptr) {
-            ret = pBioBatchGet(tenantId, keys, count, offsets, lengths, locations, valueAddrs, realLengths, results);
-        } else {
-            LOG_ERROR("BioBatchGet failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioBatchGet(tenantId, keys, count, offsets, lengths,
+            locations, valueAddrs, realLengths, results));
     }
 
     static CResult BatchGetFree(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count)
     {
-        int ret = 0;
-        if (pBioBatchGetFree != nullptr) {
-            ret = pBioBatchGetFree(tenantId, valueAddrs, count);
-        } else {
-            LOG_ERROR("BioBatchGetFree failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioBatchGetFree(tenantId, valueAddrs, count));
     }
 
     static CResult Delete(uint64_t tenantId, const char *key, ObjLocation location)
     {
-        int ret = 0;
-        if (pBioDelete != nullptr) {
-            ret = pBioDelete(tenantId, key, location);
-        } else {
-            LOG_ERROR("BioDelete failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioDelete(tenantId, key, location));
     }
 
     static void Exit(void)
     {
-        if (pBioExit != nullptr) {
-            pBioExit();
-        } else {
-            LOG_ERROR("dfcExit failed");
-        }
+        pBioExit();
     }
 
     static int32_t DfcKvBioInit(void);
@@ -183,14 +110,7 @@ public:
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
     {
-        int ret = 0;
-        if (pBioBatchGetKeyDiskAddr != nullptr) {
-            ret = pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos);
-        } else {
-            LOG_ERROR("BioBatchGetKeyDiskAddr failed");
-            ret = RET_CACHE_ERROR;
-        }
-        return static_cast<CResult>(ret);
+        return static_cast<CResult>(pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos));
     }
 
 private:

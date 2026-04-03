@@ -36,7 +36,7 @@ int32_t KvcStreamManager::InitAclStream(int32_t deviceId)
     uint32_t aclStreamFastSync = 2U;
     ret = ACLApi::AclrtCreateStreamWithConfig(&stream_, 0, aclStreamFastLaunch | aclStreamFastSync);
     if (ret != 0) {
-        LOG_ERROR("Create stream failed");
+        LOG_ERROR("Create stream failed, ret:" << ret);
         return DFC_ERR;
     }
     LOG_INFO("Init acl stream success, device id:" << deviceId);
