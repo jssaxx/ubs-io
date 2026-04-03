@@ -15,16 +15,16 @@ class BinaryDistribution(Distribution):
 
 
 setuptools.setup(
-    name="pydfc",
+    name="pykvc",
     version="1.0.0",
     author="",
     author_email="",
-    description="python api for dfc",
+    description="python api for ubsio_kvc",
     packages=find_namespace_packages(),
     url="",
     license="",
     python_requires=">=3.7",
-    package_data={"pydfc": ["c2python_sdk.cpython*.so"]},
+    package_data={"pykvc": ["c2python_sdk.cpython*.so"]},
     distclass=BinaryDistribution
 
 )
