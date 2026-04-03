@@ -18,7 +18,7 @@
 namespace ock {
 namespace ubsio {
 
-enum DFCError : int32_t {
+enum KvcError : int32_t {
     DFC_OK = 0,
     DFC_ERR = 1,
     DFC_INNER_ERR = 2,

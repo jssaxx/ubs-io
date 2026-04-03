@@ -40,7 +40,7 @@ DfcNdsManager::~DfcNdsManager() noexcept
     this->UnInitialize();
 }
 
-DFCError DfcNdsManager::Initialize(int device) noexcept
+KvcError DfcNdsManager::Initialize(int device) noexcept
 {
     if (ndsInit) {
         LOG_INFO("Nds has been initialized, which device id is " << deviceId);
@@ -111,7 +111,7 @@ DFCError DfcNdsManager::Initialize(int device) noexcept
     return DFC_OK;
 }
 
-DFCError DfcNdsManager::UnInitialize() noexcept
+KvcError DfcNdsManager::UnInitialize() noexcept
 {
     if (nds_uninit() != 0) {
         LOG_ERROR("Nds unInitialize failed.");
@@ -127,7 +127,7 @@ DFCError DfcNdsManager::UnInitialize() noexcept
     return DFC_OK;
 }
 
-DFCError DfcNdsManager::RegisterMemory(const void *addr, size_t length) noexcept
+KvcError DfcNdsManager::RegisterMemory(const void *addr, size_t length) noexcept
 {
     for (const auto &[diskPath, fid]: diskFdMap) {
         int ret = nds_regmem(fid, addr, length);
@@ -140,7 +140,7 @@ DFCError DfcNdsManager::RegisterMemory(const void *addr, size_t length) noexcept
     return DFC_OK;
 }
 
-DFCError DfcNdsManager::UnRegisterMemory(const void *addr, size_t length) noexcept
+KvcError DfcNdsManager::UnRegisterMemory(const void *addr, size_t length) noexcept
 {
     for (const auto &[diskPath, fid]: diskFdMap) {
         if (nds_unregmem(fid, addr, length) < 0) {
@@ -272,7 +272,7 @@ ssize_t DfcNdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
     return static_cast<ssize_t>(totalReadBytes);
 }
 
-DFCError DfcNdsManager::DirectRead(const std::string &key,
+KvcError DfcNdsManager::DirectRead(const std::string &key,
                                    const std::vector<uintptr_t> &buffers,
                                    const std::vector<size_t> &sizes) noexcept
 {
@@ -324,7 +324,7 @@ DFCError DfcNdsManager::DirectRead(const std::string &key,
     return DFC_OK;
 }
 
-DFCError DfcNdsManager::BatchDirectRead(const std::vector<std::string> &keys,
+KvcError DfcNdsManager::BatchDirectRead(const std::vector<std::string> &keys,
                                         const std::vector<std::vector<uintptr_t>> &buffers,
                                         const std::vector<std::vector<size_t>> &sizes) noexcept
 {

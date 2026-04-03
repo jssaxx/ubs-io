@@ -39,11 +39,11 @@ UBSIO_API int32_t UbsioKvCacheInit(int32_t devId)
 
 UBSIO_API int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flags)
 {
-    if (key == nullptr || buf == nullptr || length == 0) {
-        LOG_ERROR("Invalid parma");
+    if (UNLIKELY(key == nullptr || buf == nullptr || length == 0)) {
+        LOG_ERROR("Invalid parma, length:" << length);
         return DFC_INVALID_PARAM;
     }
-    if (strlen(key) > MAX_KEY_LENGTH || strlen(key) < 1) {
+    if (UNLIKELY(strlen(key) > MAX_KEY_LENGTH || strlen(key) < 1)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
@@ -57,40 +57,38 @@ UBSIO_API int32_t UbsioKvCacheBatchGet(const char **keys,
                                        int *results,
                                        uint32_t flags)
 {
-    if (keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr) {
+    if (UNLIKELY(keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    if (keysCount > MAX_BATCH_OP_COUNT || keysCount < 1) {
+    if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    std::vector<std::string> key_vector;
-    std::vector<int> batchResult(keysCount, DFC_ERR);
-    std::vector<size_t> lengths_vector;
-    key_vector.reserve(keysCount);
-    lengths_vector.reserve(keysCount);
 
+    std::vector<std::string> keyVector(keysCount);
+    std::vector<int> batchResult(keysCount, DFC_ERR);
+    std::vector<size_t> lengthsVector(keysCount);
     for (size_t i = 0; i < keysCount; i++) {
-        if (keys[i] == nullptr) {
+        if (UNLIKELY(keys[i] == nullptr)) {
             LOG_ERROR("Get invalid key nullptr on idx [" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        if (strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1) {
+        if (UNLIKELY(strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1)) {
             LOG_ERROR("Get invalid key length [" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        if (lengths[i] == 0) {
+        if (UNLIKELY(lengths[i] == 0)) {
             LOG_ERROR("Get invalid lengths [" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        key_vector.emplace_back(keys[i]);
-        lengths_vector.emplace_back(lengths[i]);
+        keyVector.emplace_back(keys[i]);
+        lengthsVector.emplace_back(lengths[i]);
     }
 
-    auto ret = KvcBatchGetData(key_vector, bufs, lengths_vector, batchResult, flags);
-    if (ret != DFC_OK) {
-        LOG_ERROR("Dfc batch get failed");
+    auto ret = KvcBatchGetData(keyVector, bufs, lengthsVector, batchResult, flags);
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("Kvc batch get failed, ret:" << ret);
         return DFC_ERR;
     }
     for (uint32_t i = 0; i < keysCount; ++i) {
@@ -108,40 +106,36 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
                                    int *results,
                                    uint32_t flags)
 {
-    if (keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr) {
+    if (UNLIKELY(keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    if (keysCount > MAX_BATCH_OP_COUNT || keysCount < 1 || lengthsRows != keysCount || lengthsCols > MAX_KV_LAYER_NUM) {
+    if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1 || lengthsRows != keysCount || lengthsCols > MAX_KV_LAYER_NUM)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    std::vector<std::string> keyVector;
+
+    std::vector<std::string> keyVector(keysCount);
     std::vector<int> batchResult(keysCount, DFC_ERR);
-    std::vector<std::vector<size_t>> lengthsVector;
-    std::vector<std::vector<uintptr_t>> npuAddrsVector;
-    keyVector.reserve(keysCount);
-    lengthsVector.reserve(keysCount);
-    npuAddrsVector.reserve(keysCount);
+    std::vector<std::vector<size_t>> lengthsVector(keysCount);
+    std::vector<std::vector<uintptr_t>> npuAddrsVector(keysCount);
     for (uint32_t i = 0; i < keysCount; ++i) {
-        if (keys[i] == nullptr) {
+        if (UNLIKELY(keys[i] == nullptr)) {
             LOG_ERROR("Get invalid key nullptr on idx [" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        if (strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1) {
+        if (UNLIKELY(strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1)) {
             LOG_ERROR("Get invalid key length[" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        std::vector<size_t> layerLengths;
-        std::vector<uintptr_t> layerAddrs;
-        layerLengths.reserve(lengthsCols);
-        layerAddrs.reserve(lengthsCols);
+        std::vector<size_t> layerLengths(lengthsCols);
+        std::vector<uintptr_t> layerAddrs(lengthsCols);
         for (uint32_t j = 0; j < lengthsCols; ++j) {
-            if (lengths[i][j] == 0 || lengths[i][j] > MAX_KV_LAYER_LENGTH) {
+            if (UNLIKELY(lengths[i][j] == 0 || lengths[i][j] > MAX_KV_LAYER_LENGTH)) {
                 LOG_ERROR("Get invalid lengths[" << i << "][" << j << "], length " << lengths[i][j]);
                 return DFC_INVALID_PARAM;
             }
-            if (bufs[i][j] == nullptr) {
+            if (UNLIKELY(bufs[i][j] == nullptr)) {
                 LOG_ERROR("Get invalid npuAddrs[" << i << "][" << j << "]");
                 return DFC_INVALID_PARAM;
             }
@@ -152,55 +146,56 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
         lengthsVector.emplace_back(layerLengths);
         npuAddrsVector.emplace_back(layerAddrs);
     }
-    return DfcIOInstance::Instance().Read(keyVector, npuAddrsVector, lengthsVector, results);
+
+    return KvcInstance::Instance().Read(keyVector, npuAddrsVector, lengthsVector, results);
 }
 
 UBSIO_API int32_t UbsioKvCacheBatchExist(const char **keys, uint32_t keysCount, bool *results, uint32_t flags)
 {
-    if (keys == nullptr || results == nullptr) {
+    if (UNLIKELY(keys == nullptr || results == nullptr)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    if (keysCount > MAX_BATCH_OP_COUNT || keysCount < 1) {
+    if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    std::vector<std::string> key_vector;
-    key_vector.reserve(keysCount);
 
+    std::vector<std::string> keyVector(keysCount);
     for (size_t i = 0; i < keysCount; i++) {
-        if (keys[i] == nullptr) {
+        if (UNLIKELY(keys[i] == nullptr)) {
             LOG_ERROR("Get invalid key nullptr on idx [" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        if (strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1) {
+        if (UNLIKELY(strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1)) {
             LOG_ERROR("Get invalid key length[" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        key_vector.emplace_back(keys[i]);
+        keyVector.emplace_back(keys[i]);
     }
 
-    auto ret = KvcBatchExistKey(key_vector, results, flags);
-    if (ret != DFC_OK) {
-        LOG_ERROR("Dfc batch exist failed");
+    auto ret = KvcBatchExistKey(keyVector, results, flags);
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("Kvc batch exist failed, ret:" << ret);
         return DFC_ERR;
     }
     return DFC_OK;
 }
 
-UBSIO_API int32_t UbsioKvCacheBatchFree(void **bufs, uint32_t keys_count)
+UBSIO_API int32_t UbsioKvCacheBatchFree(void **bufs, uint32_t keysCount)
 {
-    if (bufs == nullptr) {
+    if (UNLIKELY(bufs == nullptr)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    if (keys_count > MAX_BATCH_OP_COUNT || keys_count < 1) {
+    if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1)) {
         LOG_ERROR("Invalid parma");
         return DFC_INVALID_PARAM;
     }
-    int ret = KvcBatchFreeGetAddress(bufs, keys_count);
-    if (ret != DFC_OK) {
-        LOG_ERROR("Dfc batch free address failed");
+
+    int ret = KvcBatchFreeGetAddress(bufs, keysCount);
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("Dfc batch free address failed, ret:" << ret);
         return DFC_ERR;
     }
     return DFC_OK;

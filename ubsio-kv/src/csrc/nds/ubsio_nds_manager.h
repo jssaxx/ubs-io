@@ -51,19 +51,19 @@ class DfcNdsManager {
 public:
     static DfcNdsManager &Instance() noexcept;
 
-    DFCError Initialize(int device) noexcept;
+    KvcError Initialize(int device) noexcept;
 
-    DFCError UnInitialize() noexcept;
+    KvcError UnInitialize() noexcept;
 
-    DFCError RegisterMemory(const void *addr, size_t length) noexcept;
+    KvcError RegisterMemory(const void *addr, size_t length) noexcept;
 
-    DFCError UnRegisterMemory(const void *addr, size_t length) noexcept;
+    KvcError UnRegisterMemory(const void *addr, size_t length) noexcept;
 
-    DFCError DirectRead(const std::string &key,
+    KvcError DirectRead(const std::string &key,
                         const std::vector<uintptr_t> &buffers,
                         const std::vector<size_t> &sizes) noexcept;
 
-    DFCError BatchDirectRead(const std::vector<std::string> &keys,
+    KvcError BatchDirectRead(const std::vector<std::string> &keys,
                              const std::vector<std::vector<uintptr_t>> &buffers,
                              const std::vector<std::vector<size_t>> &sizes) noexcept;
 
