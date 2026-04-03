@@ -1,0 +1,55 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ */
+
+#ifndef UBSIO_KVC_OPERATION_H
+#define UBSIO_KVC_OPERATION_H
+
+#include <cstdint>
+#include <string>
+#include <vector>
+#include "ubsio_kvc_def.h"
+
+namespace ock {
+namespace ubsio {
+
+int32_t KvcOperationInit(int32_t devId);
+
+void KvcExit();
+
+int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags);
+
+int32_t KvcGetData(const std::string &key, void *value, size_t len, uint32_t flags);
+
+int32_t KvcDeleteKey(const std::string &key, uint32_t flags);
+
+bool KvcExistKey(const std::string &key, uint32_t flags);
+
+int32_t KvcGetKeyLength(const std::string &key, uint32_t &length, uint32_t flags);
+
+int32_t KvcBatchPutData(const std::vector<std::string> &key,
+                        std::vector<void *> &value,
+                        std::vector<size_t> &lengths,
+                        std::vector<int> &results,
+                        uint32_t flags);
+
+int32_t KvcBatchGetData(const std::vector<std::string> &key,
+                        void **bufs,
+                        std::vector<size_t> &lengths,
+                        std::vector<int> &results,
+                        uint32_t flags);
+
+int32_t KvcBatchExistKey(const std::vector<std::string> &key, bool *results, uint32_t flags);
+
+int32_t KvcBatchDeleteKey(const std::vector<std::string> &key, std::vector<int> &results, uint32_t flags);
+
+int32_t KvcBatchGetLengthKey(const std::vector<std::string> &key,
+                             std::vector<uint32_t> &lengths,
+                             std::vector<int> &results,
+                             uint32_t flags);
+
+int32_t KvcBatchFreeGetAddress(void **bufs, uint32_t keys_count);
+
+} // namespace ubsio
+} // namespace ock
+#endif // UBSIO_KVC_OPERATION_H

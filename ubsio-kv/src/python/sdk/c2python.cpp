@@ -25,8 +25,8 @@
 #include "dfc_def.h"
 #include "dfc_err.h"
 
-using namespace ock::dfc;
-using namespace ock::dfc::nds;
+using namespace ock::ubsio;
+using namespace ock::ubsio::nds;
 
 namespace py = pybind11;
 

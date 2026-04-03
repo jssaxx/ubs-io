@@ -47,11 +47,11 @@ enum LogLevel : int {
 constexpr int MICROSECOND_WIDTH = 6;
 using ExternalLog = void (*)(int, const char *);
 using ExternalAuditLog = void (*)(const char *);
-class DfcLog {
+class UbsioLog {
 public:
-    static DfcLog &Instance()
+    static UbsioLog &Instance()
     {
-        static DfcLog gLogger;
+        static UbsioLog gLogger;
         return gLogger;
     }
 
@@ -120,19 +120,19 @@ public:
         return INFO_LEVEL;
     }
 
-    DfcLog(const DfcLog &) = delete;
-    DfcLog(DfcLog &&) = delete;
-    DfcLog &operator=(const DfcLog &other) = delete;
-    DfcLog &operator=(DfcLog &&) = delete;
+    UbsioLog(const UbsioLog &) = delete;
+    UbsioLog(UbsioLog &&) = delete;
+    UbsioLog &operator=(const UbsioLog &other) = delete;
+    UbsioLog &operator=(UbsioLog &&) = delete;
 
-    ~DfcLog()
+    ~UbsioLog()
     {
         logFunc_ = nullptr;
         auditLogFunc_ = nullptr;
     }
 
 private:
-    DfcLog() = default;
+    UbsioLog() = default;
 
     const char *LogLevelDesc(const int level) const
     {
@@ -155,14 +155,14 @@ private:
     do {                                                        \
         std::ostringstream oss;                                 \
         oss << DFC_LOG_FORMAT << msg;                           \
-        ock::dfc::DfcLog::Instance().Log(level, oss);     \
+        ock::ubsio::UbsioLog::Instance().Log(level, oss);     \
     } while (0)
 
 #define DFC_LOG_ERROR_WITH_ERRCODE(ARGS, ERRCODE)                           \
     do {                                                                    \
         std::ostringstream oss;                                             \
         oss << DFC_LOG_FORMAT << ARGS << ", error code " << ERRCODE;        \
-        ock::dfc::DfcLog::Instance().Log(ERROR_LEVEL, oss);           \
+        ock::ubsio::UbsioLog::Instance().Log(ERROR_LEVEL, oss);           \
     } while (0)
 
 #define LOG_ERROR(msg) DFC_LOG_INTERNAL(ERROR_LEVEL, msg)

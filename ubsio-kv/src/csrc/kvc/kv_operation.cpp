@@ -266,5 +266,5 @@ int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std:
     return DFC_OK;
 }
 
-}; // namespace dfc
+}; // namespace ubsio
 } // namespace ock
