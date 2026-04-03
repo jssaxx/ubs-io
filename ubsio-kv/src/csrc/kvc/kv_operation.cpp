@@ -58,65 +58,6 @@ int32_t KvOperation::KvPutData(const std::string &key, void *value, size_t len)
     return DlBioSdkApi::Put(tenantId, key.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, *location);
 }
 
-int32_t KvOperation::KvGetData(const std::string &key, void *value, size_t len)
-{
-    std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-    CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-    if (status != CResult::RET_CACHE_OK) {
-        LOG_ERROR("CalcLocation failed with returned status " << status);
-        return DFC_ERR;
-    }
-    uint64_t outLength = 0;
-    return DlBioSdkApi::Get(tenantId, key.c_str(), 0, (uint64_t)len, *location, reinterpret_cast<char*>(value), &outLength);
-}
-
-int32_t KvOperation::KvDeleteKey(const std::string &key)
-{
-    std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-    CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-    if (status != CResult::RET_CACHE_OK) {
-        LOG_ERROR("CalcLocation failed with returned status " << status);
-        return DFC_ERR;
-    }
-    return DlBioSdkApi::Delete(tenantId, key.c_str(), *location);
-}
-
-bool KvOperation::KvExistKey(const std::string &key)
-{
-    std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-    CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-    if (status != CResult::RET_CACHE_OK) {
-        LOG_ERROR("CalcLocation failed with returned status " << status);
-        return false;
-    }
-    ObjStat stat;
-    stat.size = 0;
-    auto ret = DlBioSdkApi::Stat(tenantId, key.c_str(), *location, &stat);
-    if ((ret != CResult::RET_CACHE_OK) || (stat.size == 0)) {
-        return false;
-    }
-    return true;
-}
-
-int32_t KvOperation::KvGetLengthKey(const std::string &key, uint32_t &length)
-{
-    std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-    CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
-    if (status != CResult::RET_CACHE_OK) {
-        LOG_ERROR("CalcLocation failed with returned status " << status);
-        return -1;
-    }
-    ObjStat stat;
-    stat.size = 0;
-    auto ret = DlBioSdkApi::Stat(tenantId, key.c_str(), *location, &stat);
-    if ((ret != CResult::RET_CACHE_OK) || (stat.size == 0)) {
-        LOG_ERROR("Exist data from meta failed, ret: " << ret);
-        return DFC_ERR;
-    }
-    length = stat.size;
-    return DFC_OK;
-}
-
 int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **bufs,
     std::vector<size_t> &lengths, std::vector<int> &results)
 {
@@ -144,38 +85,6 @@ int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **
         reinterpret_cast<uintptr_t *>(bufs), realLength.data(), results.data());
 }
 
-int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::vector<void*> &value,
-    std::vector<size_t> &lengths, std::vector<int> &results)
-{
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
-    for (auto i = 0; i < key.size(); i++) {
-        auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = KvPutData(key[index], value[index], lengths[index]);
-            if (ret != DFC_OK) {
-                LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
-            }
-            results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
-                sem_post(&sem);
-            }
-        };
-
-        auto result = mKvExecutor->Execute(func);
-        if (!result) {
-            LOG_ERROR("Execute batch put data, batch num: " << key.size() << " i:" << i);
-            sem_destroy(&sem);
-            return DFC_ERR;
-        }
-    }
-    sem_wait(&sem);
-    sem_destroy(&sem);
-    return DFC_OK;
-}
-
 int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *results)
 {
     uint32_t keys_count = key.size();
@@ -200,69 +109,6 @@ int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *
         return -1;
     }
 
-    return DFC_OK;
-}
-
-int32_t KvOperation::BatchKvDeleteKey(const std::vector<std::string> &key, std::vector<int> &results)
-{
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
-    for (auto i = 0; i < key.size(); i++) {
-        auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = ConKvDeleteKey(key[index]);
-            if (ret != DFC_OK) {
-                LOG_ERROR("Batch delete key failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
-            }
-            results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
-                sem_post(&sem);
-            }
-        };
-
-        auto result = mKvExecutor->Execute(func);
-        if (!result) {
-            LOG_ERROR("Execute batch delete key, batch num: " << key.size() << " i:" << i);
-            sem_destroy(&sem);
-            return DFC_ERR;
-        }
-    }
-    sem_wait(&sem);
-    sem_destroy(&sem);
-    return DFC_OK;
-}
-
-int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths,
-                                       std::vector<int> &results)
-{
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
-    for (auto i = 0; i < key.size(); i++) {
-        auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = ConKvGetLengthKey(key[index], lengths[index]);
-            if (ret != DFC_OK) {
-                LOG_ERROR("Batch get length failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
-            }
-            results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
-                sem_post(&sem);
-            }
-        };
-
-        auto result = mKvExecutor->Execute(func);
-        if (!result) {
-            LOG_ERROR("Execute batch get length, batch num: " << key.size() << " i:" << i);
-            sem_destroy(&sem);
-            return DFC_ERR;
-        }
-    }
-    sem_wait(&sem);
-    sem_destroy(&sem);
     return DFC_OK;
 }
 
