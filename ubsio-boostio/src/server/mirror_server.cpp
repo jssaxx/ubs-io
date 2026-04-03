@@ -225,6 +225,10 @@ BResult MirrorServer::CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, u
         return ret;
     }
 
+    if (mBioConfig->GetDaemonConfig().wcacheMemEvictLevel == NO_100) {
+        return BIO_OK;
+    }
+
     ret = Cache::Instance().CreateRCache(ptId, ptv);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Create read cache failed, ret:" << ret << ", ptId:" << ptId << ".");

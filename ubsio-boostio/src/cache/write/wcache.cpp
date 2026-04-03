@@ -33,7 +33,7 @@ BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorSe
     const RCacheManagerPtr rCacheManager, bool isRecover)
 {
     auto wcache = BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel;
-    int count = wcache == 100 ? 1 : MAX_WCACHE_TIER;
+    int count = wcache == NO_100 ? 1 : MAX_WCACHE_TIER;
     for (int i = 0; i < count; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
         ChkTrue(cacheTier != nullptr, BIO_ALLOC_FAIL, "Make wcache tier failed.");
@@ -45,7 +45,9 @@ BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorSe
 
     mEvictService[WCACHE_MEMORY] = evictService[WCACHE_MEMORY];
     mEvictService[WCACHE_DISK] = evictService[WCACHE_DISK];
-    mEvictNegotiateService = evictNegoService;
+    if (BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel != NO_100) {
+        mEvictNegotiateService = evictNegoService;
+    }
     mEvictRef[WCACHE_MEMORY] = false;
     mEvictRef[WCACHE_DISK] = false;
     mOnFlyRef = 0;

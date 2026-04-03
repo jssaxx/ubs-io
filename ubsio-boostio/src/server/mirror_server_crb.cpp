@@ -113,7 +113,7 @@ void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
     for (auto &elem : ptTask->ptList) {
         LOG_INFO("Job pre: ptId:" << elem.ptId << ", version:" << elem.version);
         auto ret = mJobService->Execute([this, ptTask, elem]() { RunJobThread(ptTask, elem); });
-        if (ret == false) {
+        if (!ret) {
             LOG_INFO("Delay retry ptId:" << elem.ptId);
             JobAddRetryList(ptTask, elem);
             ptTask->jobNum++;
@@ -151,7 +151,7 @@ void MirrorServerCrb::RunTaskThreadFinish(CmPtTaskPtr ptTask)
     return;
 }
 
-void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
+void MirrorServerCrb::RunJobThread(const CmPtTaskPtr &ptTask, CmPtInfo ptInfo)
 {
     BResult ret = BIO_OK;
 
@@ -249,7 +249,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
     bool isFirst = false;
 
     uint16_t localNodeId = Cm::Instance()->GetCmLocalNodeId().nodeId;
-    uint16_t index;
+    size_t index;
 
     bool oldExist = false;
     bool oldMaster = false;
@@ -262,7 +262,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
                 break;
             }
         }
-        oldMaster = (mPtInfos[ptInfo.ptId].masterNodeId == localNodeId) ? true : false;
+        oldMaster = (mPtInfos[ptInfo.ptId].masterNodeId == localNodeId);
     } else {
         isFirst = true;
     }
@@ -275,7 +275,7 @@ BResult MirrorServerCrb::JobPreHandle(CmPtInfo &ptInfo, uint16_t &curIndex, bool
             break;
         }
     }
-    bool curMaster = (ptInfo.masterNodeId == localNodeId) ? true : false;
+    bool curMaster = (ptInfo.masterNodeId == localNodeId);
 
     if (!oldMaster && curMaster) {
         auto ret = Cache::Instance().ExtraCreateRCache(ptInfo.ptId, ptInfo.version);

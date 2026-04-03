@@ -76,6 +76,10 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 
 BResult WCacheManager::EvictNegotiateExecutorInit()
 {
+    if (BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel == NO_100) {
+        LOG_INFO("wcacheMemEvictLevel is 100, skip evict negotiate service init");
+        return BIO_OK;
+    }
     mEvictNegotiateService = ExecutorService::Create(NEGOTIATE_EVICT_THREAD_NUM, NEGOTIATE_QUEUE_SIZE);
     if (UNLIKELY(mEvictNegotiateService == nullptr)) {
         LOG_ERROR("Failed to start execution service for consult evict, probably out of memory");
