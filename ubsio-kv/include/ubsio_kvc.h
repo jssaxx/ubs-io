@@ -21,19 +21,13 @@
 extern "C" {
 #endif
 
-typedef enum {
-    KV_CONVERGENCE,
-    KV_SEPARATES
-} KvWorkerMode;
-
 /**
  * @brief Initialize UBS-IO KV Cache
  *
- * @param mode             [in] deployment policy
  * @param devId            [in] device id
  * @return 0 if successful
  */
-int32_t UbsioKvCacheInit(KvWorkerMode mode, int32_t devId);
+int32_t UbsioKvCacheInit(int32_t devId);
 
 /**
  * @brief Exit UBS-IO KV Cache
