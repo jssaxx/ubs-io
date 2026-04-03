@@ -179,7 +179,7 @@ int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, ui
         if (LIKELY(rwLen == len)) {
             return BDM_CODE_OK;
         }
-        usleep(10000) // 延迟10毫秒重试.
+        usleep(10000); // 延迟10毫秒重试.
         retry++;
     }
 
@@ -205,7 +205,7 @@ int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t l
         if (LIKELY(rwLen == len)) {
             return BDM_CODE_OK;
         }
-        usleep(10000) // 延迟10毫秒重试.
+        usleep(10000); // 延迟10毫秒重试.
         retry++;
     }
 

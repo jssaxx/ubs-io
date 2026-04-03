@@ -29,39 +29,42 @@ KvcInstance &KvcInstance::Instance() noexcept
     return instance;
 }
 
-DFCError KvcInstance::Initialize(int32_t device) noexcept
+KvcError KvcInstance::Initialize(int32_t device) noexcept
 {
-    readPool_ = ExecutorService::Create(DFC_IO_INSTANCE_THREAD_NUM);
-    if (readPool_ == nullptr) {
+    // 创建batch read的executor线程池.
+    m_readExecutor = ExecutorService::Create(KVC_INSTANCE_THREAD_NUM);
+    if (m_readExecutor == nullptr) {
         LOG_ERROR("Nds thread pool init failed.");
         return DFC_ERR;
     }
-    auto success = readPool_->Start();
+    auto success = m_readExecutor->Start();
     if (!success) {
-        readPool_ = nullptr;
+        m_readExecutor = nullptr;
         LOG_ERROR("kv instance thread pool start failed.");
         return DFC_ERR;
     }
-    deviceId_ = device;
+
+    m_deviceId = device;
     return DFC_OK;
 }
 
-DFCError KvcInstance::Read(const std::vector<std::string> &keyVector,
+KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
                            std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                            const std::vector<std::vector<size_t>> &lengthsVector, int *results) noexcept
 {
-    // 先走nds
-    auto ndsRet = DfcNdsManager::Instance().BatchDirectRead(keyVector, npuAddrsVector, lengthsVector);
+    // 1. 优先选择NDS.
+    auto ret = DfcNdsManager::Instance().BatchDirectRead(keyVector, npuAddrsVector, lengthsVector);
     uint32_t keysCount = keyVector.size();
-    if (ndsRet == DFC_OK) {
+    if (LIKELY(ret == DFC_OK)) {
         std::fill(results, results + keysCount, DFC_OK);
         return DFC_OK;
     }
-    if (ndsRet != DFC_NO_NDS) {
-        LOG_WARN("nds read failed, ret: " << ndsRet << ", try to read from disk");
+    if (ret != DFC_NO_NDS) {
+        LOG_WARN("nds read failed, ret: " << ret << ", try to read from disk");
     }
-    // 失败则从盘上加载
-    // 1.读到dram
+
+    // 2. NDS失败则从走原生读.
+    // 2.1 读到dram.
     std::vector<int> batchResult(keysCount, DFC_ERR);
     std::vector<void *> dramAddrsVector;
     std::vector<size_t> dramAddrsLenVector;
@@ -70,16 +73,16 @@ DFCError KvcInstance::Read(const std::vector<std::string> &keyVector,
     for (uint32_t i = 0; i < keysCount; ++i) {
         dramAddrsLenVector.emplace_back(std::accumulate(lengthsVector[i].begin(), lengthsVector[i].end(), 0LL));
     }
-    auto ret = DfcBatchGetData(keyVector, dramAddrsVector.data(), dramAddrsLenVector, batchResult, 0);
-    if (ret != DFC_OK) {
-        LOG_ERROR("Dfc batch get failed");
+    ret = KvcBatchGetData(keyVector, dramAddrsVector.data(), dramAddrsLenVector, batchResult, 0);
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("Kv cache batch get data failed, ret:" << ret);
         return DFC_ERR;
     }
 
-    // 2.dram->hbm
-    void* stream = DfcStreamManager::GetAclStream();
-    if (stream == nullptr) {
-        LOG_ERROR("stream is null, can not do memcpy");
+    // 2.2 将数据从dram拷贝到hbm中.
+    void* stream = KvcStreamManager::GetAclStream();
+    if (UNLIKELY(stream == nullptr)) {
+        LOG_ERROR("Kv cache stream is nullptr, can not do memcpy");
         return DFC_ERR;
     }
     for (uint32_t i = 0; i < keysCount; ++i) {
@@ -95,8 +98,8 @@ DFCError KvcInstance::Read(const std::vector<std::string> &keyVector,
             void* src = reinterpret_cast<void*>(reinterpret_cast<char*>(dramAddr) + offset);
             ret = ACLApi::AclrtMemcpyAsync(dst, lengthsVector[i][j], src, lengthsVector[i][j],
                 ACL_MEMCPY_HOST_TO_DEVICE, stream);
-            if (ret != 0) {
-                LOG_ERROR("AclrtMemcpyAsync failed, ret: " << ret);
+            if (UNLIKELY(ret != DFC_OK) {
+                LOG_ERROR("Aclrt memcpy async failed, ret: " << ret);
                 results[i] = DFC_ERR;
                 break;
             }
@@ -104,17 +107,18 @@ DFCError KvcInstance::Read(const std::vector<std::string> &keyVector,
         }
     }
     ret = ACLApi::AclrtSynchronizeStream(stream);
-    if (ret != 0) {
-        LOG_ERROR("AclrtSynchronizeStream failed, ret: " << ret);
+    if (UNLIKELY(ret != DFC_OK)) {
+        LOG_ERROR("Aclrt synchronize stream failed, ret: " << ret);
     }
-    // 3.释放dram地址
-    readPool_->Execute([dramAddrsVector, keysCount]()->void {
-        auto dfcRet = DfcBatchFreeGetAddress(const_cast<void **>(dramAddrsVector.data()), keysCount);
-        if (dfcRet != DFC_OK) {
-            LOG_ERROR("Dfc batch free dram address failed");
+
+    // 3.3 释放dram地址
+    m_readExecutor->Execute([dramAddrsVector, keysCount]()->void {
+        auto ret = KvcBatchFreeGetAddress(const_cast<void **>(dramAddrsVector.data()), keysCount);
+        if (UNLIKELY(ret != DFC_OK)) {
+            LOG_ERROR("Kvc batch free dram failed, ret:" << ret);
         }
     });
-    return ret == 0 ? DFC_OK : DFC_ERR;
+    return (ret == DFC_OK) ? DFC_OK : DFC_ERR;
 }
 
 } // ubsio

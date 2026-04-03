@@ -22,8 +22,8 @@ namespace ubsio {
 class KvcInstance {
 public:
     static KvcInstance &Instance() noexcept;
-    DFCError Initialize(int32_t device) noexcept;
-    DFCError Read(const std::vector<std::string> &keyVector,
+    KvcError Initialize(int32_t device) noexcept;
+    KvcError Read(const std::vector<std::string> &keyVector,
                   std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                   const std::vector<std::vector<size_t>> &lengthsVector,
                   int *results) noexcept;
@@ -39,14 +39,14 @@ private:
 
     ~KvcInstance()
     {
-        if (readPool_.Get() != nullptr) {
-            readPool_ = nullptr;
+        if (m_readExecutor != nullptr) {
+            m_readExecutor = nullptr;
         }
     }
 
 private:
-    ExecutorServicePtr readPool_{ nullptr };
-    int32_t deviceId_{ -1 };
+    ExecutorServicePtr m_readExecutor{ nullptr };
+    int32_t m_deviceId{ -1 };
 };
 
 } // namespace ubsio
