@@ -620,32 +620,38 @@ void diagnose::BioSdkCommand::HandleShowCacheResource(const std::vector<std::str
         uint16_t nodeId = nodeDesc[i].nodeId;
         mPrintOp("node: %d cache resources information(MB): \n", nodeId);
 
-        if (nodeDesc[i].wCacheMemCapacity == 0 || nodeDesc[i].wCacheDiskCapacity == 0) {
-            mPrintOp("wCache is not enabled, wCacheMemCapacity(MB):%llu  wCacheDiskCapacity(MB):%llu \n",
-                         nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
+        if (nodeDesc[i].wCacheMemCapacity == 0 && nodeDesc[i].wCacheDiskCapacity == 0) {
+            mPrintOp("wCache is not enabled\n");
         } else {
-            double wCacheMemWaterLevel = (double)nodeDesc[i].wCacheMemUsedSize / (double)nodeDesc[i].wCacheMemCapacity;
-            double wCacheDiskWaterLevel = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
-            mPrintOp("wCacheMemCapacity %llu   wCacheDiskCapacity %llu \n",
-                         nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
-            mPrintOp("wCacheMemUsedSize %llu   wCacheDiskUsedSize %llu \n",
-                         nodeDesc[i].wCacheMemUsedSize / NO_1048576, nodeDesc[i].wCacheDiskUsedSize / NO_1048576);
-            mPrintOp("wCacheMemWaterLevel %.4f%%   wCacheDiskWaterLevel %.4f%% \n",
-                         wCacheMemWaterLevel * 100, wCacheDiskWaterLevel * 100);
+            if (nodeDesc[i].wCacheMemCapacity != 0) {
+                double wCacheMemWaterLevel = (double)nodeDesc[i].wCacheMemUsedSize / (double)nodeDesc[i].wCacheMemCapacity;
+                mPrintOp("wCacheMemCapacity %llu   wCacheMemUsedSize %llu   wCacheMemWaterLevel %.4f%% \n",
+                             nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheMemUsedSize / NO_1048576,
+                             wCacheMemWaterLevel * 100);
+            }
+            if (nodeDesc[i].wCacheDiskCapacity != 0) {
+                double wCacheDiskWaterLevel = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
+                mPrintOp("wCacheDiskCapacity %llu   wCacheDiskUsedSize %llu   wCacheDiskWaterLevel %.4f%% \n",
+                             nodeDesc[i].wCacheDiskCapacity / NO_1048576, nodeDesc[i].wCacheDiskUsedSize / NO_1048576,
+                             wCacheDiskWaterLevel * 100);
+            }
         }
 
-        if (nodeDesc[i].rCacheMemCapacity == 0 || nodeDesc[i].rCacheDiskCapacity == 0) {
-            mPrintOp("rCache is not enabled, rCacheMemCapacity(MB):%llu  rCacheDiskCapacity(MB):%llu \n",
-                         nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheDiskCapacity / NO_1048576);
+        if (nodeDesc[i].rCacheMemCapacity == 0 && nodeDesc[i].rCacheDiskCapacity == 0) {
+            mPrintOp("rCache is not enabled\n");
         } else {
-            double rCacheMemWaterLevel = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
-            double rCacheDiskWaterLevel = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
-            mPrintOp("rCacheMemCapacity %llu   rCacheDiskCapacity %llu \n",
-                         nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheDiskCapacity / NO_1048576);
-            mPrintOp("rCacheMemUsedSize %llu   rCacheDiskUsedSize %llu \n",
-                         nodeDesc[i].rCacheMemUsedSize / NO_1048576, nodeDesc[i].rCacheDiskUsedSize / NO_1048576);
-            mPrintOp("rCacheMemWaterLevel %.4f%%   rCacheDiskWaterLevel %.4f%% \n",
-                         rCacheMemWaterLevel * 100, rCacheDiskWaterLevel * 100);
+            if (nodeDesc[i].rCacheMemCapacity != 0) {
+                double rCacheMemWaterLevel = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
+                mPrintOp("rCacheMemCapacity %llu   rCacheMemUsedSize %llu   rCacheMemWaterLevel %.4f%% \n",
+                             nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheMemUsedSize / NO_1048576,
+                             rCacheMemWaterLevel * 100);
+            }
+            if (nodeDesc[i].rCacheDiskCapacity != 0) {
+                double rCacheDiskWaterLevel = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
+                mPrintOp("rCacheDiskCapacity %llu   rCacheDiskUsedSize %llu   rCacheDiskWaterLevel %.4f%% \n",
+                             nodeDesc[i].rCacheDiskCapacity / NO_1048576, nodeDesc[i].rCacheDiskUsedSize / NO_1048576,
+                             rCacheDiskWaterLevel * 100);
+            }
         }
         mPrintOp("--------------------------------\n");
     }
