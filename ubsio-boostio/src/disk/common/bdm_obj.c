@@ -26,7 +26,7 @@ typedef struct {
     BdmElem list[BDM_MAX_NUM];
 } BdmObjMgr;
 
-static BdmObjMgr g_bdmObj = { 0 };  // ¹ÜÀíbdm object.
+static BdmObjMgr g_bdmObj = { 0 };  // ï¿½ï¿½ï¿½ï¿½bdm object.
 
 typedef struct {
     BdmCreateFunc create;
@@ -189,7 +189,7 @@ void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status)
         BDM_LOGERROR(0, "Invalid bdm id(%u) .", bdmId);
         return;
     }
-    if (UNLIKELY(g_bdmObj.list[bdmId].obj == NULL) {
+    if (UNLIKELY(g_bdmObj.list[bdmId].obj == NULL)) {
         BDM_LOGERROR(0, "Bdm set disk status failed, bdm id(%u).", bdmId);
         return;
     }
