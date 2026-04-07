@@ -647,7 +647,8 @@ int32_t BdmDiskOpenDisk(BdmCreatePara *para, BdmDiskItem *item)
         BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
         return BDM_CODE_ERR;
     }
-    for (index = 0; index < BDM_AYSNC_IO_FD_NUM; index++) {
+
+    for (uint32_t index = 0; index < BDM_AYSNC_IO_FD_NUM; index++) {
         item->asyncfd[index] = open(item->name, O_RDWR | __O_DIRECT);
         if (UNLIKELY(item->asyncfd[index] < 0)) {
             BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
