@@ -62,6 +62,19 @@ public:
         uint64_t flowIndex;
     };
 
+    struct MirrorAsyncPut {
+        CacheAttr attr;
+        char *key;
+        char *value;
+        uint64_t length;
+        ObjLocation location;
+        uint64_t flowId;
+        uint64_t flowOffset;
+        uint64_t flowIndex;
+        BioAsyncPutCallback callback;
+        void* context;
+    };
+
     struct MirrorGet {
         CacheAttr attr;
         const char *key;
@@ -69,6 +82,43 @@ public:
         uint64_t offset;
         uint64_t length;
         ObjLocation location;
+    };
+
+    struct MirrorBatchGet {
+        CacheAttr attr;
+        const char **keys;
+        uint32_t count;
+        uint64_t *offsets;
+        uint64_t *lengths;
+        ObjLocation *locations;
+        uintptr_t *valuesAddr;
+        uint64_t *realLengths;
+        int32_t *results;
+    };
+
+    struct BatchExistSendKeyInfo {
+        CmPtInfo ptEntry;
+        bool result = true;
+        explicit BatchExistSendKeyInfo(CmPtInfo &entry)
+        {
+            ptEntry = entry;
+        }
+    };
+
+    struct MirrorBatchGetKeyAddr {
+        uint32_t count;
+        const char **keys;
+        ObjLocation *locations;
+        KeyAddrInfo* infos;
+    };
+
+    struct UpdateParams {
+        uint16_t ptId;
+        uint64_t ptv;
+        uint64_t flowId;
+        bool isDegrade;
+        uint64_t index;
+        uint64_t offset;
     };
 
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
@@ -90,9 +140,19 @@ public:
 
     BResult Put(MirrorPut &param);
 
+    BResult AsyncPut(MirrorPut &param, BioAsyncPutCallback callback, void *context);
+
     BResult Put(MirrorPut &param, CacheSpaceDesc &spaceInfo);
 
     BResult Get(MirrorGet &param, uint64_t &realLen);
+
+    BResult BatchGet(MirrorBatchGet &param);
+
+    void BatchFree(uintptr_t *valueAddrs, const uint32_t count);
+
+    BResult BatchGetKeyDiskAddr(MirrorBatchGetKeyAddr &param);
+
+    BResult AsyncGet(MirrorGet &param, AsyncOpParam &opParam);
 
     BResult DeleteKey(const char *key, const ObjLocation &location);
 
@@ -101,6 +161,8 @@ public:
     BResult ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
+
+    BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
 
     BResult GetFileLocation(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &fileLocationQueryRsp);
 
@@ -197,10 +259,18 @@ private:
     uint16_t SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity);
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo, PutRequest *&req);
     BResult PutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry);
+    BResult AsyncPutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry, BioAsyncPutCallback callback,
+        void* context);
     BResult PutImpl(MirrorPut &param, CacheSpaceDesc &spaceInfo);
     BResult PutCheckPtState(CmPtInfo ptEntry);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
+
+    BResult BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param);
+
+    BResult BatchGetImpl(MirrorBatchGet &param);
+
+    BResult GetImpl(MirrorGet &param, AsyncOpParam &opParam);
 
     BResult DeleteKeyImpl(const char *key, const ObjLocation &location);
 
@@ -209,6 +279,8 @@ private:
     BResult ListAllImpl(const char *prefix, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatObjectImpl(const char *key, const ObjLocation &location, ObjStat &stat);
+
+    BResult BatchExistImpl(const char *key[], ObjLocation location[], uint32_t count, bool *result);
 
     BResult SendNotifyUpdateRequest(bool &flag);
 
@@ -236,14 +308,20 @@ private:
     BResult LoadOriginViewImpl();
     BResult LoadAffinityFlow();
 
+    BResult CreateDataMessageMemLocal();
+    BResult CreateDataMessageMemRemote();
+    BResult CreateDataMessageMem();
+
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
+    void InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota);
     uint32_t CalcPtQuota(CmPtInfo &ptEntry);
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
         uint64_t &index);
-    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
+    BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+        FlowInfo &flowInfo);
     BResult SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
-    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
+    BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, FlowInfo &flowInfo);
     BResult DestroyFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlow(uint16_t ptId);
     BResult DestroyFlow(uint16_t ptId, uint64_t flowId);
@@ -260,11 +338,21 @@ private:
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &indexVec, Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, Callback &callback) const;
     BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
+    BResult SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req,
+        BioAsyncPutCallback asyncPutCallback, void *context);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
+    BResult SendAsyncPutRequest(CmPtInfo &ptEntry, MirrorPut &param, BioAsyncPutCallback callback, void* context);
 
-    BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
-    BResult GetMaster(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);
+    BResult GetServerRemote(GetRequest &req, uint16_t dstNid, char *value, uint64_t &realLen);
+    BResult GetServerRemote(GetRequest &req, uint16_t masterNid, char *value, Callback callback);
+    BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
+    BResult SendBatchGetKeyDiskAddrRequest(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
+    BResult SendBatchGetRequest(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen);
+    BResult GetShmDataCallBack(GetResponse *rsp, uint64_t &realLen, const GetRequest &req, char *value);
+    BResult GetRpcDataCallBack(GetResponse *rsp, const GetRequest &req, char *value, uint64_t &realLen);
+    BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, AsyncOpParam &opParam);
+    BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, AsyncOpParam &opParam);
 
     void DeleteRemote(DeleteRequest &req, CmPtInfo &ptEntry, uint32_t index, Callback &callback);
     void DeleteLocal(DeleteRequest &req, Callback &callback) const;
@@ -273,6 +361,11 @@ private:
     BResult StatRemote(uint16_t dstNid, StatRequest &req, ObjStat &objInfo);
     BResult StatLocal(StatRequest &req, ObjStat &objInfo) const;
     BResult SendStatRequest(CmPtInfo &ptEntry, StatRequest &req, ObjStat &objInfo);
+
+    inline void BatchExistRemote(uint16_t nodeId, uint32_t reqLen, BatchExistRequest *req, Callback &callback);
+    inline void BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback);
+    BResult SendBatchExistRequest(std::unordered_map<uint16_t, BatchExistPlan> &planSend,
+                                                std::vector<BatchExistSendKeyInfo> &keysInfo);
 
     BResult ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
@@ -305,17 +398,17 @@ private:
         return BIO_OK;
     }
 
-    inline BResult Update(uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
+    inline BResult Update(UpdateParams &para)
     {
         mLock.LockWrite();
         if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
             mLock.UnLock();
             return BIO_ERR;
         }
-        auto it = mFlowMap.find(ptId);
+        auto it = mFlowMap.find(para.ptId);
         if (it != mFlowMap.end()) {
             FlowInstancePtr instance = it->second;
-            instance->Update(flowId, ptv, isDegrade);
+            instance->Update(para.flowId, para.ptv, para.isDegrade, para.index, para.offset);
             mLock.UnLock();
             return BIO_OK;
         }
@@ -359,6 +452,10 @@ private:
     uint32_t mTimeOut = NO_60;
     bool mEnableCrc { false };
     BioQosPtr mBioQos = nullptr;
+    uint8_t *mDataMsgMemAddr = nullptr;
+    uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
+    MemoryRegionPtr mDataMsgMemMr;
+    NetBlockPoolPtr mDataMsgMemPool = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
 using MirrorClientPtr = Ref<MirrorClient>;

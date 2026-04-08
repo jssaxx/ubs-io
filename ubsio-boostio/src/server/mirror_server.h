@@ -25,6 +25,9 @@
 
 namespace ock {
 namespace bio {
+constexpr uint16_t SERVER_BATCH_GET_THREAD_NUM = 128;
+constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = 8192;
+
 struct MemFreeHolder {
     uint32_t nodeId;
     uint64_t clientId;
@@ -44,11 +47,13 @@ struct MemFreeHolderEqual {
     }
 };
 
-struct PutSlowRecode {
-    WCacheSlicePtr sliceP;
-    std::atomic<uint32_t> receiveCnt;
-
-    explicit PutSlowRecode(WCacheSlicePtr slice) : sliceP(slice), receiveCnt(0) {}
+struct DataMsgMemItem {
+    int32_t memFd;
+    uint64_t offset;
+    uint64_t length;
+    uint8_t *address;
+    DataMsgMemItem(int32_t fd, uint64_t off, uint64_t len, uint8_t *addr)
+        : memFd(fd), offset(off), length(len), address(addr) {}
 };
 
 class MirrorServer;
@@ -72,8 +77,14 @@ public:
         return instance;
     }
 
+    inline void SetStartWorker(bool value)
+    {
+        std::lock_guard<std::mutex> lock(mStartLock);
+        mStarted = value;
+    }
+
     BResult CreateFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade);
-    BResult CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t &flowId, bool &isDegrade);
+    BResult CreateFlowMaster(uint64_t procId, uint16_t ptId, uint64_t ptv, CreateFlowResponse &flowInfo);
     BResult CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade);
     BResult DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId);
     BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t flowIndex, uint64_t length, WCacheSlicePtr &slice);
@@ -84,9 +95,13 @@ public:
     void QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewResponse &rsp);
     void QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp);
 
+    void RecycleDataMsgMem(uint32_t pid);
+
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy);
     BResult GetConvergence(GetRequest &req, GetResponse &rsp);
+    BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
+    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, pid_t holder);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);
@@ -94,6 +109,7 @@ public:
     BResult AddNewDiskImpl(std::string &diskPath);
     BResult List(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
     BResult Stat(StatRequest &req, ObjStat &objInfo);
+    BResult BatchExist(BatchExistRequest *req, BatchExistResponse &rsp);
     BResult Load(LoadRequest &req);
     BResult NotifyUpdate(NotifyUpdateRequest &req);
     BResult CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp);
@@ -129,10 +145,13 @@ public:
     int32_t MirrorServerQueryNodeView(ServiceContext &ctx, QueryNodeViewRequest *req);
     int32_t MirrorServerQueryPtView(ServiceContext &ctx, QueryPtViewRequest *req);
     int32_t MirrorServerPut(ServiceContext &ctx, PutRequest *req);
+    int32_t MirrorServerBatchParseKeyAddr(ServiceContext &ctx, BatchParseKeyAddrRequest *req);
     int32_t MirrorServerGet(ServiceContext &ctx, GetRequest *req);
+    int32_t MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req);
     int32_t MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req);
     int32_t MirrorServerAddDisk(ServiceContext &ctx, AddDiskRequest *req);
     int32_t MirrorServerStat(ServiceContext &ctx, StatRequest *req);
+    int32_t MirrorServerBtachExist(ServiceContext &ctx, BatchExistRequest *req);
     int32_t MirrorServerNotifyUpdate(ServiceContext &ctx, NotifyUpdateRequest *req);
     int32_t MirrorServerCheckUpdateReady(ServiceContext &ctx, CheckUpdateReadyRequest *req);
     int32_t MirrorServerCheckRemoteUpdateReady(ServiceContext &ctx, CheckRemoteUpdateReadyRequest *req);
@@ -140,12 +159,14 @@ public:
     int32_t MirrorServerLoad(ServiceContext &ctx, LoadRequest *req);
     int32_t MirrorServerCreateFlow(ServiceContext &ctx, CreateFlowRequest *req);
     int32_t MirrorServerDestroyFlow(ServiceContext &ctx, DestroyFlowRequest *req);
+    int32_t MirrorServerCreateDataMsgMemPool(ServiceContext &ctx, CreateDataMsgMemPoolRequest *req);
     int32_t MirrorServerGetSlice(ServiceContext &ctx, GetSliceRequest *req);
     int32_t MirrorServerSyncData(ServiceContext &ctx, SyncDataRequest *req);
     int32_t MirrorServerGetEvictOffset(ServiceContext &ctx, GetEvictRequest *req);
     int32_t MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req);
     int32_t MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnderFsConfigRequest *req);
     int32_t MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req);
+    int32_t MirrorServerProcBrokenSyncFlow(ServiceContext &ctx, ProcFlowSyncRequest *req);
     int32_t MirrorServerGetCacheHit(ServiceContext &ctx);
     int32_t MirrorServerQueryCacheResource(ServiceContext &ctx);
     int32_t MirrorServerGetTracePoints(ServiceContext &ctx);
@@ -159,10 +180,13 @@ public:
     int32_t HandleQueryNodeView(ServiceContext &ctx);
     int32_t HandleQueryPtView(ServiceContext &ctx);
     int32_t HandlePut(ServiceContext &ctx);
+    int32_t HandleBatchParseKeyAddr(ServiceContext &ctx);
     int32_t HandleGet(ServiceContext &ctx);
+    int32_t HandleBatchGet(ServiceContext &ctx);
     int32_t HandleDelete(ServiceContext &ctx);
     int32_t HandleAddDisk(ServiceContext &ctx);
     int32_t HandleStat(ServiceContext &ctx);
+    int32_t HandleBatchExist(ServiceContext &ctx);
     int32_t HandleNotifyUpdate(ServiceContext &ctx);
     int32_t HandleCheckUpdateReady(ServiceContext &ctx);
     int32_t HandleCheckRemoteUpdateReady(ServiceContext &ctx);
@@ -170,12 +194,14 @@ public:
     int32_t HandleLoad(ServiceContext &ctx);
     int32_t HandleCreateFlow(ServiceContext &ctx);
     int32_t HandleDestroyFlow(ServiceContext &ctx);
+    int32_t HandleCreateDataMsgMemPool(ServiceContext &ctx);
     int32_t HandleGetSlice(ServiceContext &ctx);
     int32_t HandleSyncData(ServiceContext &ctx);
     int32_t HandleGetEvictOffset(ServiceContext &ctx);
     int32_t HandleFreeMem(ServiceContext &ctx);
     int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
     int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
+    int32_t HandleProcBrokenSyncFlow(ServiceContext &ctx);
     int32_t HandleGetCacheHit(ServiceContext &ctx);
     int32_t HandleQueryCacheResource(ServiceContext &ctx);
     int32_t HandleGetTracePoints(ServiceContext &ctx);
@@ -185,6 +211,16 @@ public:
     bool CheckFreeMemReq(FreeMemRequest *req);
     bool CheckGetSliceReq(GetSliceRequest *req);
 
+    inline uint64_t TransDataMsgMemAddr(pid_t holder, uint64_t offset)
+    {
+        std::lock_guard<std::mutex> lock(mDataMsgMemLock);
+        auto iter = mDataMsgMemMgr.find(holder);
+        if (iter == mDataMsgMemMgr.end()) {
+            return 0;
+        }
+        return reinterpret_cast<uint64_t>(reinterpret_cast<uintptr_t>(iter->second.address + offset));
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
@@ -192,7 +228,7 @@ private:
     void RegisterOpcode();
     BResult SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);
     BResult GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset);
-    BResult ReaderLocal(const SlicePtr &from, const SlicePtr &to);
+    BResult ReaderLocal(const SlicePtr &from, const SlicePtr &to, PutRequest &req);
     BResult ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx);
     BResult ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
@@ -200,6 +236,7 @@ private:
 
     void InitGetResponse(GetResponse &rsp);
     BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
+    uintptr_t ParseRealAddress(PutRequest *req);
     bool CheckPutReq(PutRequest *req);
     bool CheckGetReq(GetRequest *req);
     bool CheckDeleteReq(DeleteRequest *req);
@@ -214,6 +251,10 @@ private:
     std::mutex mStartLock;
     std::mutex mDiskViewMutex;
     CacheSliceOperator mSliceOp;
+
+    std::mutex mDataMsgMemLock;
+    std::unordered_map<pid_t, DataMsgMemItem> mDataMsgMemMgr;
+
     ReadWriteLock mLock;
     std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,
         MemFreeHolderEqual> mHolders;
@@ -221,6 +262,7 @@ private:
     std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,
         MemFreeHolderEqual> mHoldersList;
 
+    ExecutorServicePtr mBatchGetExecutor{ nullptr };
     BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE
 };

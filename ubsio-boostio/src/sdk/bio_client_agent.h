@@ -34,6 +34,9 @@ public:
         uint16_t opType;
         uint64_t flowId;
         bool isDegrade;
+        uint64_t index;
+        uint64_t offset;
+        bool isNewFlow;
     };
 
 public:
@@ -117,12 +120,21 @@ public:
 
     BResult DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 
+    BResult CreateDataMessageMemPool(pid_t procId, uint64_t &memPoolSize, int32_t &memFd,
+                                     uint64_t &offset, uint64_t &blockSize);
+
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
 
     void PutLocal(PutRequest *req, Callback &callback);
 
     BResult GetLocal(GetRequest &req, char *value, uint64_t &realLen);
+
+    BResult BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
+
+    BResult BatchGetLocal(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen);
+
+    BResult GetLocal(GetRequest &req, char *value, Callback callback);
 
     void DeleteLocal(DeleteRequest &req, Callback &callback);
 
@@ -131,6 +143,8 @@ public:
     BResult ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult StatLocal(StatRequest &req, ObjStat &objInfo);
+
+    void BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback);
 
     BResult NotifyUpdate(bool &flag);
 
@@ -173,6 +187,12 @@ private:
     void SendPutRequestLocal(PutRequest *req, Callback &callback);
 
     BResult SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen);
+
+    BResult SendBatchGetKeyDiskAddrRequestLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
+
+    BResult SendBatchGetRequestLocal(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen);
+
+    BResult SendGetRequestLocal(GetRequest &req, Callback callback);
 
     void SendDeleteRequestLocal(DeleteRequest &req, Callback &callback);
 

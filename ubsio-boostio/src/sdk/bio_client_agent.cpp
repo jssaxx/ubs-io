@@ -273,14 +273,15 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
 {
     BResult ret = BIO_OK;
     QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    QueryQuotaResponse rsp;
-    BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
+    QueryQuotaResponse rsp = { false, 0 };
+    BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, BIO_OK);
     if (mMode == CONVERGENCE) {
         ret = getQuotaInfoOp(&req, &rsp);
     } else {
         ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
+	BIO_TP_END;
     if (ret == BIO_OK) {
         if (rsp.preloadSize > NO_128 * IO_SIZE_1M) { // quota初始预取大小最大不超过128MB.
             CLIENT_LOG_ERROR("Quota preload size too large, preloadSize " << rsp.preloadSize << ".");
@@ -289,7 +290,6 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
         enable = rsp.enable;
         preloadSize = rsp.preloadSize;
     }
-    BIO_TP_END;
     return ret;
 }
 
@@ -601,7 +601,9 @@ void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
 BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     GetResponse rsp;
+    BIO_TRACE_START(SDK_TRACE_GET_LOCAL_SEND);
     auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID, BIO_OP_SDK_GET, req, rsp);
+    BIO_TRACE_END(SDK_TRACE_GET_LOCAL_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
             req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
@@ -658,6 +660,67 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
     return ret;
 }
 
+BResult BioClientAgent::SendBatchGetKeyDiskAddrRequestLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen,
+                                                            KeyAddrInfo* infos)
+{
+    BatchParseKeyAddrResp *rsp = nullptr;
+    uint64_t respLen = 0;
+    auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchParseKeyAddrResp>(INVALID_NID,
+                                                                                  BIO_OP_BATCH_PARSE_KEY_ADDR,
+                                                                                  reinterpret_cast<void*>(req),
+                                                                                  reqLen, &rsp, respLen);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send sync batch get key disk addr request failed, ret:" << ret << ".");
+        return ret;
+    }
+    for (uint32_t i = 0; i < req->count; i++) {
+        infos[i].result = rsp->infos[i].result;
+        if (rsp->infos[i].result == BIO_OK) {
+            infos[i].count = rsp->infos[i].count;
+            auto result = strcpy_s(infos[i].path, DISK_PATH_MAX_SIZE, rsp->infos[i].path);
+            if (result != 0) {
+                infos[i].count = 0;
+                infos[i].result = result;
+                continue;
+            }
+            for (uint32_t j = 0; j < rsp->infos[i].count; j++) {
+                infos[i].offset[j] = rsp->infos[i].offset[j];
+                infos[i].length[j] = rsp->infos[i].length[j];
+            }
+        }
+    }
+    free(rsp);
+    return BIO_OK;
+}
+
+BResult BioClientAgent::SendBatchGetRequestLocal(BatchGetRequest *req, int32_t *results,
+                                                 uint64_t *realLengths, uint32_t reqLen)
+{
+    BatchGetResponse rsp;
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
+    auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchGetRequest, BatchGetResponse>(INVALID_NID,
+        BIO_OP_SDK_BATCH_GET,
+        reinterpret_cast<void*>(req), reqLen, rsp);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send sync batch get request failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    for (uint32_t i = 0; i < req->count; i++) {
+        results[i] = rsp.results[i];
+        realLengths[i] = rsp.realLengths[i];
+    }
+    return BIO_OK;
+}
+
+BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, Callback callback)
+{
+    net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_GET, static_cast<void *>(&req),
+                                                 sizeof(GetRequest), callback);
+    return BIO_OK;
+}
+
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     req.size = req.length;
@@ -686,6 +749,58 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         return ret;
     } else {
         return SendGetRequestLocal(req, value, realLen);
+    }
+}
+
+BResult BioClientAgent::BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos)
+{
+    if (mMode == CONVERGENCE) {
+        CLIENT_LOG_ERROR("Batch get key disk addr does not support converged deployment.");
+        return BIO_INNER_ERR;
+    } else {
+        return SendBatchGetKeyDiskAddrRequestLocal(req, reqLen, infos);
+    }
+}
+
+BResult BioClientAgent::BatchGetLocal(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen)
+{
+    if (mMode == CONVERGENCE) {
+        CLIENT_LOG_ERROR("Batch get does not support converged deployment.");
+        return BIO_INNER_ERR;
+    } else {
+        return SendBatchGetRequestLocal(req, results, realLengths, reqLen);
+    }
+}
+
+BResult BioClientAgent::GetLocal(GetRequest &req, char *value, Callback callback)
+{
+    req.size = req.length;
+    if (mMode == CONVERGENCE) {
+        req.isMr = 0;
+        req.address = reinterpret_cast<uintptr_t>(value);
+        GetResponse rsp;
+        auto ret = getOp(&req, &rsp);
+        if (UNLIKELY(ret != BIO_OK)) {
+            callback.cb(callback.cbCtx, &rsp, sizeof(GetResponse), ret);
+            return ret;
+        }
+
+        if (UNLIKELY(rsp.realLen > req.length)) {
+            callback.cb(callback.cbCtx, &rsp, sizeof(GetResponse), BIO_INNER_ERR);
+            return BIO_INNER_ERR;
+        }
+        if (req.enableCrc) {
+            uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
+            if (UNLIKELY(rsp.dataCrc != currentCrc)) {
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
+                    rsp.dataCrc << ", current crc:" << currentCrc << ".");
+                ret = BIO_CRC_ERR;
+            }
+        }
+        callback.cb(callback.cbCtx, &rsp, sizeof(GetResponse), ret);
+        return ret;
+    } else {
+        return SendGetRequestLocal(req, callback);
     }
 }
 
@@ -811,6 +926,17 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
         return ret;
     } else {
         return SendStatRequestLocal(req, objInfo);
+    }
+}
+
+void BioClientAgent::BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback)
+{
+    if (mMode == CONVERGENCE) {
+        CLIENT_LOG_ERROR("Not supported convergence mode.");
+        return;
+    } else {
+        net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_BATCH_EXIST,
+                                                     static_cast<void *>(req), reqLen, callback);
     }
 }
 

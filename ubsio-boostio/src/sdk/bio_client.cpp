@@ -190,12 +190,7 @@ BResult BioClient::BioInterceptorServerInit(WorkerMode mode)
 
 BResult BioClient::BioClientStartWork()
 {
-    auto ret = mMirror->Start();
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
-        return ret;
-    }
-    return ret;
+    return mMirror->Start();
 }
 
 BResult BioClient::BioClientStartPrometheus()
@@ -439,6 +434,13 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
+	if (mNetEngine->GetHtraceFlag()) {
+        if (BioTraceInit(mode) != BIO_OK) {
+            LOG_ERROR("trace init failed!");
+            return BIO_ERR;
+        }
+    }
+
     if (mode == SEPARATES && optConf.enable != 0) {
         auto expireChecker = ExpireChecker::Instance();
         if (expireChecker == nullptr) {
@@ -477,4 +479,40 @@ void BioClient::Exit()
 #endif
     BioClientLoggerExit(mMode);
     mStarted = false;
+}
+
+BResult BioClient::AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam)
+{
+    BResult ret = mMirror->AsyncGet(param, opParam);
+    LVOS_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
+    LVOS_TP_END;
+    if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
+        BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
+        UfsHelper::ObjStat stat;
+        auto underFsRet = UfsHelper::Instance()->Stat(param.key, stat);
+        LVOS_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &underFsRet, BIO_OK);
+        LVOS_TP_END;
+        if (UNLIKELY(underFsRet != BIO_OK)) {
+            BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
+            return underFsRet;
+        }
+        LVOS_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &stat.size, NO_1024);
+        LVOS_TP_END;
+        if (UNLIKELY(stat.size <= param.offset)) {
+            BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, BIO_INVALID_PARAM);
+            return BIO_INVALID_PARAM;
+        }
+
+        uint64_t length  = param.length;
+        if (param.length + param.offset > stat.size) {
+            length = stat.size - param.offset;
+        }
+        underFsRet = UfsHelper::Instance()->Get(param.key, param.value, length, param.offset);
+        BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
+        if (UNLIKELY(underFsRet == BIO_OK)) {
+            opParam.func(opParam.context, underFsRet, length);
+        }
+        return underFsRet == BIO_OK ? BIO_OK : ret;
+    }
+    return ret;
 }

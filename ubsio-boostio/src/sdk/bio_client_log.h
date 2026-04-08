@@ -124,7 +124,7 @@ public:
 
     static BioClientLog *Instance()
     {
-        static auto *instance = new BioClientLog();
+        static auto *instance = new (std::nothrow)BioClientLog();
         return instance;
     }
 

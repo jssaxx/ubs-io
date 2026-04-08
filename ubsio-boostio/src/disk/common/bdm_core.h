@@ -91,6 +91,8 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint6
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId);
 
+int32_t BdmParseChunkId(uint64_t chunkId, uint64_t *offset, char *path);
+
 int32_t BdmRead(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len);
 
 int32_t BdmWrite(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len);

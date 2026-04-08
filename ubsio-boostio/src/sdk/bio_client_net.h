@@ -95,6 +95,11 @@ public:
         return mEnableCrc;
     }
 
+    inline bool GetHtraceFlag() const
+    {
+        return mEnableHtrace;
+    }
+
     inline bool GetCliFlag() const
     {
         return mEnableCli;
@@ -108,6 +113,16 @@ public:
     inline uint32_t GetDataPage() const
     {
         return mNetEngine->GetDataPage();
+    }
+
+    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
+    {
+        return mNetEngine->RegisterMemoryRegion(addr, size, mr);
+    }
+
+    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
+    {
+        return mNetEngine->RegisterMemoryRegion(size, mr);
     }
 
     inline BResult Alloc(uint64_t size, NetMrInfo &mr)
@@ -130,6 +145,32 @@ public:
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
         return mNetEngine->GetShmAddress(offset, len);
+    }
+
+    BResult ReceiveFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
+    {
+        return mNetEngine->ReceiveFds(targetNodeId, fds, count);
+    }
+
+    template <typename TReq, typename TResp>
+    inline BResult SendSyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, TResp &rsp)
+    {
+        BResult ret = BIO_INNER_ERR;
+        BIO_TP_START(SDK_BIO_MIRROR_SEND_SYNC_FAIL, &ret, BIO_INNER_RETRY);
+        ret = mNetEngine->SyncCallBuff(target, opcode, req, reqLen, rsp);
+        BIO_TP_END;
+        return ret;
+    }
+
+    template <typename TResp>
+    inline BResult SendSyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen,
+                                TResp **rsp, uint64_t &respLen)
+    {
+        BResult ret = BIO_INNER_ERR;
+        BIO_TP_START(SDK_BIO_MIRROR_SEND_SYNC_FAIL, &ret, BIO_INNER_RETRY);
+        ret = mNetEngine->SyncCallBuff(target, opcode, req, reqLen, rsp, respLen);
+        BIO_TP_END;
+        return ret;
     }
 
     template <typename TReq, typename TResp>
@@ -202,6 +243,7 @@ private:
     uint32_t mWorkIoTimeOut = 60;
     uint32_t mWorkNetTimeOut = 16;
     int32_t mLogLevel = 1;
+    bool mEnableHtrace = { false };
     bool mEnableCrc = { false };
     bool mEnableCli = { false };
     NetEnginePtr mNetEngine = nullptr;

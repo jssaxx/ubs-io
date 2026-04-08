@@ -25,6 +25,23 @@ namespace ock {
 namespace bio {
 constexpr uint32_t BIO_IO_MAX_LEN = 4194304;
 
+struct AsyncPutParam {
+    BioAsyncPutCallback callback;
+    void *context;
+};
+
+struct AsyncGetParam {
+    const char *key;
+    uint64_t offset;
+    uint64_t length;
+    char *value;
+};
+
+struct AsyncOpParam {
+    BioGetCallbackFunc func;
+    void *context;
+};
+
 struct LoadPara {
     const char *key;
     uint64_t offset;
@@ -70,6 +87,45 @@ public:
         uint64_t &realLength);
 
     /**
+     * @brief: Batch Get value
+     *
+     * @param[in]: tenantId: tenant id
+     * @param[in]: keys: multiple keys
+     * @param[in]: offset: offsets of multiple keys
+     * @param[in]: length : lengths of the get values
+     * @param[in]: location : location info
+     * @param[out]: valueAddrs : address of the values corresponding to multiple keys, need free
+     * @param[out]: realLength : real length
+     * @param[out]: results : result of getting multiple keys
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult BatchGet(const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
+                     ObjLocation *locations, uintptr_t *valueAddrs,
+                     uint64_t *realLengths, int32_t *results);
+
+    /**
+     * @brief: release the address returned by batchget.
+     *
+     * @param[in]: tenantId: tenant id
+     * @param[in]: valueAddrs: return value of the BioBatchGet method
+     * @param[in]: count: number of addresses in valueAddrs
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count);
+
+    CResult BatchGetKeyDiskAddr(const char **keys, ObjLocation *locations, const uint32_t count, KeyAddrInfo *infos);
+
+    /**
+     * @brief: Get value
+     *
+     * @param[in]: param: get param info
+     * @param[in]: location : location info
+     * @param[out]: opParam : async op param
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpParam &opParam);
+
+    /**
      * @brief: Delete key
      *
      * @param[in]: key: object key
@@ -111,6 +167,18 @@ public:
     CResult Stat(const char *key, const ObjLocation &location, ObjStat &stat);
 
     /**
+     * @brief: Batch exist object
+     *
+     * @param[in]: tenantId: tenant id
+     * @param[in]: key[]: key array
+     * @param[in]: location[] : location info array
+     * @param[in]: count : key count
+     * @param[out]: result[]: exist result
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool result[]);
+
+    /**
      * @brief: Notify update finished
      *
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
@@ -149,6 +217,19 @@ public:
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
     CResult Put(const char *key, CacheSpaceDesc &spaceInfo);
+
+    /**
+     * @brief: Async put value
+     *
+     * @param[in]: key: object key
+     * @param[in]: value: object value
+     * @param[in]: length: value length
+     * @param[in]: location: location info
+     * @param[in]: param: callback param
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult AsyncPut(const char *key, const char *value, uint64_t length, const ObjLocation &location,
+        AsyncPutParam &param);
 
     Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
         : mTenantId(id), mAffinity(affinity), mStrategy(strategy){};

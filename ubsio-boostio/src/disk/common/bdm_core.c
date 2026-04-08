@@ -89,6 +89,29 @@ int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId)
     return BDM_CODE_OK;
 }
 
+int32_t BdmParseChunkId(uint64_t chunkId, uint64_t *offset, char *path)
+{
+    uint32_t bdmId = CHUNK_ID_TO_BDMID(chunkId);
+    BdmObj *bdm = BdmGetBdmObj(bdmId);
+    if (UNLIKELY(bdm == NULL)) {
+        BDM_LOGERROR(0, "Invalid bdm id(%u), not exist.", bdmId);
+        return BDM_CODE_NOT_EXIST;
+    }
+
+    if (UNLIKELY(bdm->ops.parseChunkId == NULL)) {
+        BDM_LOGERROR(0, "Invalid ops, not register.");
+        return BDM_CODE_ERR;
+    }
+
+    uint64_t decodeChunkId = DENCODE_CHUNK_ID(chunkId);
+    int32_t ret = bdm->ops.parseChunkId((uintptr_t)bdm, decodeChunkId, offset, path);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "parse chunkId failed, bdm id(%u) ret(%d).", bdmId, ret);
+        return ret;
+    }
+    return BDM_CODE_OK;
+}
+
 int32_t BdmRead(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
 {
     if (UNLIKELY(len == 0 || len > BDM_MAX_CHUNK_LENGTH || offset > BDM_MAX_CHUNK_LENGTH ||

@@ -77,7 +77,7 @@ BResult BioServer::Start()
     // 1. Initialize infrastructure
     std::string path = "/var/log/boostio/";
 #ifdef DEBUG_UT
-    path = "./";
+    path = "/var/log/boostio/ut/";
 #endif
     std::string logPath = path + "bio.log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
@@ -211,17 +211,17 @@ void BioServer::BioTraceExit()
 
 BResult BioServer::BioUnderFsInit()
 {
-    UnderFsPtr underFsPtr = UnderFs::Instance();
+    UfsHelperPtr underFsPtr = UfsHelper::Instance();
     if (underFsPtr == nullptr) {
         LOG_ERROR("Create underfs instance fail.");
         return BIO_ERR;
     }
-    return underFsPtr->Init();
+    return underFsPtr->Initialize(mConfig->GetUnderFsConfig());
 }
 
 void BioServer::BioUnderFsExit()
 {
-    UnderFs::Instance()->Stop();
+    UfsHelper::Instance()->Stop();
 }
 
 BResult BioServer::BioBdmInit()
@@ -506,9 +506,12 @@ BResult BioServer::BioCacheInit()
         } else {
             ReConnect(nodeId);
         }
+        // Quota资源回收.
         nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
+        // Data message memory资源回收
+        mMirror->RecycleDataMsgMem(pid);
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != BIO_OK) {
@@ -999,9 +1002,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
 
 int32_t AddDisk(AddDiskRequest *req, AddDiskResponse *rsp)
 {
-    BResult ret = BIO_ERR;
-    ret = BioServer::Instance()->GetMirrorServer()->AddDisk(*req);
-    return ret;
+    return BioServer::Instance()->GetMirrorServer()->AddDisk(*req);
 }
 
 inline static void StatisticGetIoSize(uint64_t length)
