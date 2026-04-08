@@ -57,12 +57,16 @@ public:
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
 
+    BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
+
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
         uint64_t &realLen);
 
     BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
     BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
+
+    bool Exist(uint16_t ptId, const Key &key);
 
     BResult List(char *prefix, uint16_t ptId, bool force, std::unordered_map<std::string, CacheObjStat> &objs);
 
@@ -94,11 +98,9 @@ public:
 
     void GetCacheResources(CacheResDescription &desc, CacheType type);
 
-    BResult EvictNegotiate(uint64_t &flowId, uint64_t slices[], std::vector<bool> &result, uint32_t count);
+    BResult EvictNegotiate(uint64_t &flowId, uint64_t &truncateIndex);
 
-    void ShowEvictNegotiateQueue();
-
-    BResult WCacheConsultEvict(uint64_t &flowId, std::vector<uint64_t> slices, std::vector<bool> result);
+    BResult ProcBrokenSyncFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy);
 
 private:
     BResult GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_t length, const uint64_t offset);
@@ -115,6 +117,7 @@ private:
         uint64_t &realLen);
 
 private:
+    bool mUfsEnable = false;
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
     GetLocDiskId mGetLocDiskId{ nullptr };
