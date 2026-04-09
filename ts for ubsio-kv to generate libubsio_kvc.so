@@ -1,0 +1,150 @@
+[1mdiff --git a/ubsio-boostio/src/sdk/bio_client_agent.cpp b/ubsio-boostio/src/sdk/bio_client_agent.cpp[m
+[1mindex d66c05a..1b4f937 100644[m
+[1m--- a/ubsio-boostio/src/sdk/bio_client_agent.cpp[m
+[1m+++ b/ubsio-boostio/src/sdk/bio_client_agent.cpp[m
+[36m@@ -193,6 +193,10 @@[m [mBResult BioClientAgent::InitOperation()[m
+         (LoadFunction("GetTracePointsLocal"))) == nullptr) {[m
+         return BIO_INNER_ERR;[m
+     }[m
+[32m+[m[32m    if ((clearWcacheOp = reinterpret_cast<ClearWcacheFuncPtr>[m
+[32m+[m[32m        (LoadFunction("ClearWcacheLocal"))) == nullptr) {[m
+[32m+[m[32m        return BIO_INNER_ERR;[m
+[32m+[m[32m    }[m
+ [m
+     return InitUpgradeOperation();[m
+ }[m
+[36m@@ -1004,4 +1008,22 @@[m [mBResult BioClientAgent::GetTracePointsLocal(GetTracePointsRequest &req,[m
+ [m
+     nodesTracePoints[req.nodeId] = rsp.traceDatabase;[m
+     return BIO_OK;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mBResult BioClientAgent::ClearWcacheLocal(ClearWcacheRequest &req, ClearWcacheResponse &rsp)[m
+[32m+[m[32m{[m
+[32m+[m[32m    BResult ret = BIO_OK;[m
+[32m+[m[32m    if (mMode == CONVERGENCE) {[m
+[32m+[m[32m        ret = clearWcacheOp(&req, &rsp);[m
+[32m+[m[32m    } else {[m
+[32m+[m[32m        ret = net::BioClientNet::Instance()->SendSync<ClearWcacheRequest, ClearWcacheResponse>([m
+[32m+[m[32m            INVALID_NID, BIO_OP_SDK_CLEAR_WCACHE, req, rsp);[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if (ret != BIO_OK) {[m
+[32m+[m[32m        CLIENT_LOG_ERROR("Clear wcache failed, ret: " << ret << ", pid: " << req.comm.pid);[m
+[32m+[m[32m        return ret;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    CLIENT_LOG_INFO("Clear wcache success, pid: " << req.comm.pid << ", clearedCount: " << rsp.clearedCount);[m
+[32m+[m[32m    return BIO_OK;[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/ubsio-boostio/src/sdk/mirror_client.cpp b/ubsio-boostio/src/sdk/mirror_client.cpp[m
+[1mindex 72f40aa..1299791 100644[m
+[1m--- a/ubsio-boostio/src/sdk/mirror_client.cpp[m
+[1m+++ b/ubsio-boostio/src/sdk/mirror_client.cpp[m
+[36m@@ -1716,6 +1716,106 @@[m [mBResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::v[m
+     return BIO_OK;[m
+ }[m
+ [m
+[32m+[m[32mBResult MirrorClient::ClearWcache()[m
+[32m+[m[32m{[m
+[32m+[m[32m    if (mWcacheMemEvictLevel != NO_100) {[m
+[32m+[m[32m        CLIENT_LOG_ERROR("Clear wcache not supported, wcacheMemEvictLevel:" << mWcacheMemEvictLevel);[m
+[32m+[m[32m        return BIO_NOT_SUPPORTED;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    ClearWcacheRequest req;[m
+[32m+[m[32m    req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };[m
+[32m+[m
+[32m+[m[32m    return SendClearWcacheRequest(req);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mBResult MirrorClient::SendClearWcacheRequest(ClearWcacheRequest &req)[m
+[32m+[m[32m{[m
+[32m+[m[32m    uint16_t localId = UINT16_MAX;[m
+[32m+[m[32m    std::vector<uint16_t> remoteId;[m
+[32m+[m
+[32m+[m[32m    mUpdateView();[m
+[32m+[m[32m    auto nodeView = GetNodeView();[m
+[32m+[m[32m    for (const auto &node : nodeView) {[m
+[32m+[m[32m        if (node.second.status == CM_NODE_FAULT) {[m
+[32m+[m[32m            continue;[m
+[32m+[m[32m        }[m
+[32m+[m[32m        if (node.first.nodeId == mLocalNid.VNodeId()) {[m
+[32m+[m[32m            localId = mLocalNid.VNodeId();[m
+[32m+[m[32m            continue;[m
+[32m+[m[32m        }[m
+[32m+[m[32m        remoteId.emplace_back(node.first.nodeId);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    BResult ret = BIO_OK;[m
+[32m+[m[32m    ret = ClearWcacheLocal(req, localId);[m
+[32m+[m[32m    if (ret != BIO_OK) {[m
+[32m+[m[32m        return ret;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    ret = ClearWcacheRemote(req, remoteId);[m
+[32m+[m[32m    return ret;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mBResult MirrorClient::ClearWcacheLocal(ClearWcacheRequest &req, uint16_t localId)[m
+[32m+[m[32m{[m
+[32m+[m[32m    if (UNLIKELY(localId == UINT16_MAX)) {[m
+[32m+[m[32m        return BIO_OK;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    bool isRetry = false;[m
+[32m+[m[32m    uint64_t startTime = Monotonic::TimeSec();[m
+[32m+[m[32m    uint64_t retryCnt = 0;[m
+[32m+[m[32m    BResult ret = BIO_OK;[m
+[32m+[m
+[32m+[m[32m    do {[m
+[32m+[m[32m        isRetry = false;[m
+[32m+[m[32m        ClearWcacheResponse rsp;[m
+[32m+[m[32m        BIO_TP_START(SDK_MIRROR_CLIENT_CLEAR_WCACHE_SEND_FAIL, &ret, BIO_INNER_ERR);[m
+[32m+[m[32m        ret = agent::BioClientAgent::Instance()->ClearWcacheLocal(req, rsp);[m
+[32m+[m[32m        BIO_TP_END;[m
+[32m+[m[32m        if (ret != BIO_OK) {[m
+[32m+[m[32m            CLIENT_LOG_ERROR("Clear wcache failed on local node " << localId << ", ret:" << ret);[m
+[32m+[m[32m            if (ret == BIO_NET_RETRY || ret == BIO_INNER_RETRY) {[m
+[32m+[m[32m                CLIENT_LOG_INFO("Clear wcache retry on local node, times:" << ++retryCnt);[m
+[32m+[m[32m                isRetry = FailHandler(ret, startTime, mTimeOut);[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m[32m    } while (isRetry);[m
+[32m+[m
+[32m+[m[32m    return ret;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mBResult MirrorClient::ClearWcacheRemote(ClearWcacheRequest &req, std::vector<uint16_t> &remoteId)[m
+[32m+[m[32m{[m
+[32m+[m[32m    BResult ret = BIO_OK;[m
+[32m+[m[32m    for (auto id : remoteId) {[m
+[32m+[m[32m        bool isRetry = false;[m
+[32m+[m[32m        uint64_t startTime = Monotonic::TimeSec();[m
+[32m+[m[32m        uint64_t retryCnt = 0;[m
+[32m+[m
+[32m+[m[32m        do {[m
+[32m+[m[32m            isRetry = false;[m
+[32m+[m[32m            ClearWcacheResponse rsp;[m
+[32m+[m[32m            BIO_TP_START(SDK_MIRROR_CLIENT_CLEAR_WCACHE_SEND_FAIL, &ret, BIO_INNER_ERR);[m
+[32m+[m[32m            ret = net::BioClientNet::Instance()->SendSync<ClearWcacheRequest, ClearWcacheResponse>([m
+[32m+[m[32m                static_cast<BioNodeId>(id), BIO_OP_SDK_CLEAR_WCACHE, req, rsp);[m
+[32m+[m[32m            BIO_TP_END;[m
+[32m+[m[32m            if (ret != BIO_OK) {[m
+[32m+[m[32m                CLIENT_LOG_ERROR("Clear wcache failed on remote node " << id << ", ret:" << ret);[m
+[32m+[m[32m                if (ret == BIO_NET_RETRY || ret == BIO_INNER_RETRY) {[m
+[32m+[m[32m                    CLIENT_LOG_INFO("Clear wcache retry on remote node " << id << ", times:" << ++retryCnt);[m
+[32m+[m[32m                    isRetry = FailHandler(ret, startTime, mTimeOut);[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m[32m        } while (isRetry);[m
+[32m+[m
+[32m+[m[32m        if (ret != BIO_OK) {[m
+[32m+[m[32m            return ret;[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m[32m    return BIO_OK;[m
+[32m+[m[32m}[m
+[32m+[m
+ BResult MirrorClient::GetCacheHitRatioImpl(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)[m
+ {[m
+     CacheHitRequest req;[m

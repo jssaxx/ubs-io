@@ -72,6 +72,8 @@ typedef enum {
 #define CACHE_SPACE_DEC_SIZE (64)
 #define MAX_TRACE_NAME_LEN (64)
 #define TRACE_MAX_NUM (256)
+#define DISK_PATH_MAX_SIZE (128)
+#define CHUNK_ADDR_MAX_SIZE (2)
 
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 
@@ -136,6 +138,14 @@ typedef struct {
     uint64_t wCacheTotalCount;
     uint64_t backendHitCount;
 } CacheHitFinalDesc;
+
+typedef struct {
+    char path[DISK_PATH_MAX_SIZE];
+    uint64_t offset[CHUNK_ADDR_MAX_SIZE];
+    uint64_t length[CHUNK_ADDR_MAX_SIZE];
+    int32_t result;
+    uint8_t count;
+} KeyAddrInfo;
 
 typedef struct {
     LogType logType;                   // STDOUT_TYPE/FILE_TYPE/STDERR_TYPE

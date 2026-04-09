@@ -1,41 +1,50 @@
-#根据模块划分决定是否继续添add_subdirectory加子模块
-file(GLOB_RECURSE KV_CLIENT_SRC *.cc *.cpp *.c)
-
-add_library(kv_client_src_obj OBJECT ${KV_CLIENT_SRC})
-add_dependencies(kv_client_src_obj GeneratedFlatBuffers)
-
-add_library(dfc_client SHARED $<TARGET_OBJECTS:kv_client_src_obj>)
-
-target_link_directories(dfc_client PRIVATE
-        ${TARGET_INSTALL_LIB}/bio
-        ${TARGET_INSTALL_LIB}/hcom
-        ${TARGET_INSTALL_LIB}/zookeeper
-        ${TARGET_INSTALL_LIB}/nds
+file(GLOB_RECURSE KVC_SRC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/kvc/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/nds/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/*.cpp
 )
 
-target_link_libraries(dfc_client
-    -Wl,--start-group
-    pthread
-    common
-    net_engine
-    kv_server
-    dfc_nds
-    -Wl,--end-group
-)
+add_library(ubsio_kvc SHARED ${KVC_SRC})
 
-target_include_directories(kv_client_src_obj PRIVATE
+set(UBSIO_BOOSTIO_DIR ${PROJECT_SOURCE_DIR}/../ubsio-boostio)
+set(UBSIO_NDS_DIR ${PROJECT_SOURCE_DIR}/../ubsio-nds)
+
+target_include_directories(ubsio_kvc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${TARGET_INSTALL_LIB}/3rdparty/nds/include
-    ${SRC_DIR}/dfc/csrc/common/hcom
-    ${SRC_DIR}/dfc/csrc/common/message
-    ${SRC_DIR}/dfc/csrc/common/resource_pool
-    ${SRC_DIR}/dfc/csrc/common/utils
-    ${SRC_DIR}/dfc/csrc/client/kv/nds
-    ${SRC_DIR}/dfc/csrc/client/kv/net_engine
-    ${SRC_DIR}/dfc/csrc/client/kv/kv_server
-    ${SRC_DIR}/dfc/csrc/meta_store/meta_engine/meta_client
-    ${SRC_DIR}/dfc/csrc/meta_store/remote_connection_def
-    ${SRC_DIR}/dfc/csrc/meta_store/meta_engine/meta_net_engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/kvc
+    ${CMAKE_CURRENT_SOURCE_DIR}/nds
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils
+    ${PROJECT_SOURCE_DIR}/include
+    ${UBSIO_BOOSTIO_DIR}/src/sdk
+    ${UBSIO_BOOSTIO_DIR}/src/common
+    ${UBSIO_NDS_DIR}/include
 )
 
-install(TARGETS dfc_client DESTINATION ${TARGET_INSTALL_LIB}/dfc PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+target_link_directories(ubsio_kvc PRIVATE
+    ${UBSIO_BOOSTIO_DIR}/build
+)
+
+target_link_libraries(ubsio_kvc
+    pthread
+    dl
+)
+
+set_target_properties(ubsio_kvc PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+    OUTPUT_NAME ubsio_kvc
+)
+
+set(TARGET_INSTALL_DIR ${OUTPUT_PATH})
+set(TARGET_INSTALL_LIB_DIR ${TARGET_INSTALL_DIR}/lib)
+set(TARGET_INSTALL_INCLUDE_DIR ${TARGET_INSTALL_DIR}/include)
+
+install(TARGETS ubsio_kvc 
+    LIBRARY DESTINATION ${TARGET_INSTALL_LIB_DIR}
+    ARCHIVE DESTINATION ${TARGET_INSTALL_LIB_DIR}
+    RUNTIME DESTINATION ${TARGET_INSTALL_LIB_DIR}
+)
+
+install(FILES ${PROJECT_SOURCE_DIR}/include/ubsio_kvc.h
+    DESTINATION ${TARGET_INSTALL_INCLUDE_DIR}
+)
