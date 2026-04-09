@@ -73,7 +73,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     for (uint32_t i = 0; i < keysCount; ++i) {
         dramAddrsLenVector.emplace_back(std::accumulate(lengthsVector[i].begin(), lengthsVector[i].end(), 0LL));
     }
-    ret = KvcBatchGetData(keyVector, dramAddrsVector.data(), dramAddrsLenVector, batchResult, 0);
+    ret = static_cast<KvcError>(KvcBatchGetData(keyVector, dramAddrsVector.data(), dramAddrsLenVector, batchResult, 0));
     if (UNLIKELY(ret != DFC_OK)) {
         LOG_ERROR("Kv cache batch get data failed, ret:" << ret);
         return DFC_ERR;
@@ -96,19 +96,19 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
         for (uint32_t j = 0; j < npuAddrsVector[i].size(); ++j) {
             void* dst = reinterpret_cast<void*>(npuAddrsVector[i][j]);
             void* src = reinterpret_cast<void*>(reinterpret_cast<char*>(dramAddr) + offset);
-            ret = ACLApi::AclrtMemcpyAsync(dst, lengthsVector[i][j], src, lengthsVector[i][j],
+            int32_t aclRet = ACLApi::AclrtMemcpyAsync(dst, lengthsVector[i][j], src, lengthsVector[i][j],
                 ACL_MEMCPY_HOST_TO_DEVICE, stream);
-            if (UNLIKELY(ret != DFC_OK) {
-                LOG_ERROR("Aclrt memcpy async failed, ret: " << ret);
+            if (UNLIKELY(aclRet != 0)) {
+                LOG_ERROR("Aclrt memcpy async failed, ret: " << aclRet);
                 results[i] = DFC_ERR;
                 break;
             }
             offset += lengthsVector[i][j];
         }
     }
-    ret = ACLApi::AclrtSynchronizeStream(stream);
-    if (UNLIKELY(ret != DFC_OK)) {
-        LOG_ERROR("Aclrt synchronize stream failed, ret: " << ret);
+    int32_t aclRet = ACLApi::AclrtSynchronizeStream(stream);
+    if (UNLIKELY(aclRet != 0)) {
+        LOG_ERROR("Aclrt synchronize stream failed, ret: " << aclRet);
     }
 
     // 3.3 释放dram地址
@@ -118,7 +118,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
             LOG_ERROR("Kvc batch free dram failed, ret:" << ret);
         }
     });
-    return (ret == DFC_OK) ? DFC_OK : DFC_ERR;
+    return (aclRet == 0) ? DFC_OK : DFC_ERR;
 }
 
 } // ubsio
