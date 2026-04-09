@@ -12,8 +12,6 @@
 
 #include <unistd.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <libaio.h>
@@ -134,51 +132,6 @@ static BdmDiskMgr g_bdmDisk = { 0 };
 static uint64_t g_bdmIndex = 0;
 
 static BdmThreadPool g_bdmThreadPool;
-
-static int32_t BdmParseEnvLong(const char *name, long *value)
-{
-    const char *env = getenv(name);
-    if (env == NULL || value == NULL) {
-        return BDM_CODE_ERR;
-    }
-    char *end = NULL;
-    long tmp = strtol(env, &end, 10);
-    if (end == env || *end != '\0') {
-        return BDM_CODE_ERR;
-    }
-    *value = tmp;
-    return BDM_CODE_OK;
-}
-
-static int32_t BdmGetDefaultBindCpu(uint32_t index)
-{
-    const char *numaEnable = getenv("BIO_NUMA_ENABLE");
-    if (numaEnable == NULL || strcmp(numaEnable, "true") != 0) {
-        return BDM_BIND_CPU_DEFAULT;
-    }
-
-    long start = -1;
-    if (BdmParseEnvLong("BIO_NUMA_CPU_START", &start) != BDM_CODE_OK || start < 0) {
-        return BDM_BIND_CPU_DEFAULT;
-    }
-
-    int32_t cpuNum = sysconf(_SC_NPROCESSORS_CONF);
-    if (cpuNum <= 0 || start >= cpuNum) {
-        return BDM_BIND_CPU_DEFAULT;
-    }
-
-    long span = cpuNum - start;
-    long configuredSpan = 0;
-    if (BdmParseEnvLong("BIO_NUMA_CPU_SPAN", &configuredSpan) == BDM_CODE_OK &&
-        configuredSpan > 0 && configuredSpan < span) {
-        span = configuredSpan;
-    }
-    if (span <= 0) {
-        return BDM_BIND_CPU_DEFAULT;
-    }
-
-    return (int32_t)(start + (index % (uint32_t)span));
-}
 
 uint32_t BdmGetNormalDiskNum(void)
 {
@@ -1128,7 +1081,7 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
         close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
-    bdmPool->cpus[index] = BdmGetDefaultBindCpu(index);
+    bdmPool->cpus[index] = BDM_BIND_CPU_DEFAULT;
     return ret;
 }
 

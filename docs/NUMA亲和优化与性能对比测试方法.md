@@ -33,8 +33,9 @@
 4. NetEngine内存池NUMA内存策略
 - 对注册的大块内存应用 `mbind` 策略（`preferred/bind`）。
 
-5. BDM线程池默认NUMA绑核
-- BDM事件线程与提交线程不再默认 `-1` 漂移，启用NUMA时按配置落核。
+5. BDM线程绑核说明
+- 当前分支已移除 BDM 绑核改动，保持 BDM 线程原有行为（不做NUMA绑核控制）。
+- 本次优化聚焦纯内存路径（线程池 + NetEngine内存池）。
 
 ---
 
@@ -196,4 +197,3 @@ bio.numa.cpu_start = -1
 bio.numa.cpu_span = 0
 bio.numa.mem_policy = preferred
 ```
-
