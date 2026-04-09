@@ -67,6 +67,16 @@ const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio
 
 const auto DISK_READ_WRITE_RATIO = std::make_pair("bio.cache.disk_read_write_ratio", "5:5");
 
+const auto NUMA_ENABLE = std::make_pair("bio.numa.enable", "false");
+
+const auto NUMA_MEM_NODE = std::make_pair("bio.numa.mem_node", -1);
+
+const auto NUMA_CPU_START = std::make_pair("bio.numa.cpu_start", -1);
+
+const auto NUMA_CPU_SPAN = std::make_pair("bio.numa.cpu_span", 0);
+
+const auto NUMA_MEM_POLICY = std::make_pair("bio.numa.mem_policy", "preferred");
+
 const auto BIO_CLI_TOOLS_ENABLE = std::make_pair("bio_cli_tools_enable", "false");
 
 const auto WORK_SCENE = std::make_pair("bio.work.scene", "none");
@@ -143,6 +153,11 @@ public:
         std::string diskReadWriteRatio = "5:5";
         long diskReadRatio = 5;
         long diskWriteRatio = 5;
+        bool numaEnable = false;
+        int32_t numaMemNode = -1;
+        int32_t numaCpuStart = -1;
+        int32_t numaCpuSpan = 0;
+        std::string numaMemPolicy = "preferred";
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
         uint32_t workScene = 0;

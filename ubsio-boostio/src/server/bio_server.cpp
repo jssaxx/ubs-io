@@ -12,6 +12,9 @@
 
 #include <dlfcn.h>
 #include <unistd.h>
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
 #include <utility>
 #include "bdm_core.h"
 #include "bio_config_instance.h"
@@ -30,6 +33,69 @@
 
 namespace ock {
 namespace bio {
+namespace {
+constexpr const char *ENV_NUMA_ENABLE = "BIO_NUMA_ENABLE";
+constexpr const char *ENV_NUMA_MEM_NODE = "BIO_NUMA_MEM_NODE";
+constexpr const char *ENV_NUMA_CPU_START = "BIO_NUMA_CPU_START";
+constexpr const char *ENV_NUMA_CPU_SPAN = "BIO_NUMA_CPU_SPAN";
+constexpr const char *ENV_NUMA_MEM_POLICY = "BIO_NUMA_MEM_POLICY";
+
+inline void SetRuntimeEnv(const char *key, const std::string &value)
+{
+    if (setenv(key, value.c_str(), 1) != 0) {
+        LOG_WARN("Set env failed, key:" << key << ", errno:" << errno << ".");
+    }
+}
+
+inline void SetRuntimeEnv(const char *key, int32_t value)
+{
+    char buf[32] = {0};
+    auto ret = snprintf(buf, sizeof(buf), "%d", value);
+    if (ret <= 0 || ret >= static_cast<int32_t>(sizeof(buf))) {
+        LOG_WARN("Build env value failed, key:" << key << ", value:" << value << ".");
+        return;
+    }
+    SetRuntimeEnv(key, std::string(buf));
+}
+
+inline void UnsetRuntimeEnv(const char *key)
+{
+    if (unsetenv(key) != 0) {
+        LOG_WARN("Unset env failed, key:" << key << ", errno:" << errno << ".");
+    }
+}
+
+inline void InitNumaRuntimeEnv(const BioConfig::DaemonConfig &config)
+{
+    if (!config.numaEnable) {
+        UnsetRuntimeEnv(ENV_NUMA_ENABLE);
+        UnsetRuntimeEnv(ENV_NUMA_MEM_NODE);
+        UnsetRuntimeEnv(ENV_NUMA_CPU_START);
+        UnsetRuntimeEnv(ENV_NUMA_CPU_SPAN);
+        UnsetRuntimeEnv(ENV_NUMA_MEM_POLICY);
+        return;
+    }
+
+    SetRuntimeEnv(ENV_NUMA_ENABLE, "true");
+    SetRuntimeEnv(ENV_NUMA_MEM_POLICY, config.numaMemPolicy);
+    if (config.numaMemNode >= 0) {
+        SetRuntimeEnv(ENV_NUMA_MEM_NODE, config.numaMemNode);
+    } else {
+        UnsetRuntimeEnv(ENV_NUMA_MEM_NODE);
+    }
+    if (config.numaCpuStart >= 0) {
+        SetRuntimeEnv(ENV_NUMA_CPU_START, config.numaCpuStart);
+    } else {
+        UnsetRuntimeEnv(ENV_NUMA_CPU_START);
+    }
+    if (config.numaCpuSpan > 0) {
+        SetRuntimeEnv(ENV_NUMA_CPU_SPAN, config.numaCpuSpan);
+    } else {
+        UnsetRuntimeEnv(ENV_NUMA_CPU_SPAN);
+    }
+}
+} // namespace
+
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
@@ -87,6 +153,7 @@ BResult BioServer::Start()
     UnderFs::InitUnderFsConfig(mConfig->GetUnderFsConfig());
     auto &daemonConfig = mConfig->GetDaemonConfig();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
+    InitNumaRuntimeEnv(daemonConfig);
 
     // 2. Initialize boostio service
     ChkTrue(mService != nullptr, BIO_ERR, "Boostio service not created.");

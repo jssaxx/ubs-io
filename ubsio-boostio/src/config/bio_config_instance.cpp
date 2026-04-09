@@ -52,6 +52,11 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
+    AddStrConf(NUMA_ENABLE, VStrBoolRange::Create(NUMA_ENABLE.first));
+    AddIntConf(NUMA_MEM_NODE, VIntRange::Create(NUMA_MEM_NODE.first, -1, 4096));
+    AddIntConf(NUMA_CPU_START, VIntRange::Create(NUMA_CPU_START.first, -1, 8192));
+    AddIntConf(NUMA_CPU_SPAN, VIntRange::Create(NUMA_CPU_SPAN.first, 0, 8192));
+    AddStrConf(NUMA_MEM_POLICY, VStrEnum::Create(NUMA_MEM_POLICY.first, "preferred||bind"));
     AddStrConf(BIO_CLI_TOOLS_ENABLE, VStrBoolRange::Create(BIO_CLI_TOOLS_ENABLE.first));
 
     AddStrConf(WORK_SCENE, VStrEnum::Create(WORK_SCENE.first, "none||bigdata"));
@@ -285,6 +290,13 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     StrUtil::Split(mDaemonConfig.diskReadWriteRatio, ":", ratios);
     StrUtil::StrToLong(ratios[0], mDaemonConfig.diskReadRatio);
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.diskWriteRatio);
+
+    mDaemonConfig.numaEnable = conf->GetStr(NUMA_ENABLE.first) == "true";
+    mDaemonConfig.numaMemNode = conf->GetInt(NUMA_MEM_NODE.first);
+    mDaemonConfig.numaCpuStart = conf->GetInt(NUMA_CPU_START.first);
+    mDaemonConfig.numaCpuSpan = conf->GetInt(NUMA_CPU_SPAN.first);
+    mDaemonConfig.numaMemPolicy = conf->GetStr(NUMA_MEM_POLICY.first);
+
     if (mDaemonConfig.memCap == 0) {
         LOG_INFO("This server config  memory is 0, disk config is invalid , server can not join pt.");
     }

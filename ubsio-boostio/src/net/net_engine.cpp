@@ -14,12 +14,18 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <climits>
+#include <cstring>
+#include <cstdlib>
 #include <unistd.h>
+#include <vector>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <cerrno>
 #include <sys/syscall.h>
 #include <linux/version.h>
+#if defined(__linux__)
+#include <linux/mempolicy.h>
+#endif
 
 #include "securec.h"
 #include "bio_file_util.h"
@@ -41,6 +47,80 @@ static void HcomLog(int level, const char *msg)
 
 constexpr uint16_t WKR_GRP_INDEX_CTRL = 0L;
 constexpr uint16_t WKR_GRP_INDEX_DATA = 1L;
+
+inline bool IsNetEngineNumaRuntimeEnabled()
+{
+    const char *enable = std::getenv("BIO_NUMA_ENABLE");
+    return enable != nullptr && std::string(enable) == "true";
+}
+
+inline bool ParseNetEngineNumaEnvLong(const char *name, long &value)
+{
+    const char *env = std::getenv(name);
+    if (env == nullptr) {
+        return false;
+    }
+    errno = 0;
+    char *end = nullptr;
+    long tmp = std::strtol(env, &end, 10);
+    if (errno != 0 || end == env || *end != '\0') {
+        return false;
+    }
+    value = tmp;
+    return true;
+}
+
+inline bool IsNetEngineBindPolicy()
+{
+    const char *policy = std::getenv("BIO_NUMA_MEM_POLICY");
+    return policy != nullptr && std::string(policy) == "bind";
+}
+
+void ApplyMemoryNumaPolicy(uint8_t *address, uint64_t size)
+{
+#if defined(__linux__) && defined(SYS_mbind)
+    if (address == nullptr || size == 0 || !IsNetEngineNumaRuntimeEnabled()) {
+        return;
+    }
+
+    long node = -1;
+    if (!ParseNetEngineNumaEnvLong("BIO_NUMA_MEM_NODE", node) || node < 0) {
+        return;
+    }
+
+    auto pageSize = static_cast<uint64_t>(sysconf(_SC_PAGESIZE));
+    if (pageSize == 0) {
+        return;
+    }
+    uintptr_t begin = reinterpret_cast<uintptr_t>(address);
+    uintptr_t alignedBegin = begin & ~(pageSize - 1);
+    uintptr_t end = begin + size;
+    uintptr_t alignedEnd = (end + pageSize - 1) & ~(pageSize - 1);
+    unsigned long alignedLen = static_cast<unsigned long>(alignedEnd - alignedBegin);
+    if (alignedLen == 0) {
+        return;
+    }
+
+    unsigned long maxNode = static_cast<unsigned long>(node + 1);
+    constexpr unsigned long BITS_PER_LONG = sizeof(unsigned long) * 8;
+    std::vector<unsigned long> nodeMask((maxNode + BITS_PER_LONG - 1) / BITS_PER_LONG, 0);
+    nodeMask[static_cast<size_t>(node) / BITS_PER_LONG] |=
+        (1UL << (static_cast<size_t>(node) % BITS_PER_LONG));
+
+    int mode = IsNetEngineBindPolicy() ? MPOL_BIND : MPOL_PREFERRED;
+    long ret = syscall(SYS_mbind, reinterpret_cast<void *>(alignedBegin), alignedLen, mode,
+        nodeMask.data(), maxNode, 0);
+    if (ret != 0) {
+        NET_LOG_WARN("Apply NUMA memory policy failed, node:" << node << ", mode:" << mode << ", errno:" <<
+            strerror(errno) << ".");
+    } else {
+        NET_LOG_INFO("Apply NUMA memory policy success, node:" << node << ", mode:" << mode << ".");
+    }
+#else
+    (void)address;
+    (void)size;
+#endif
+}
 
 BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func)
 {
@@ -221,6 +301,7 @@ BResult NetEngine::InitCommMemAllocator()
         return BIO_ALLOC_FAIL;
     }
 
+    ApplyMemoryNumaPolicy(reinterpret_cast<uint8_t *>(mLocalMr.GetAddress()), mOptions.memorySize);
     SetDataPageKb(NO_4 * NO_1024);
     result = mMrBlockPool->Start(mLocalMr.GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
@@ -276,6 +357,7 @@ BResult NetEngine::InitShmMemAllocator()
         mShmFd = -1;
         return BIO_ALLOC_FAIL;
     }
+    ApplyMemoryNumaPolicy(mShareAddress, mOptions.memorySize);
     result = mMrBlockPool->Start(mLocalMr.GetAddress(), mDataPageBytes, mOptions.memorySize / mDataPageBytes);
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");

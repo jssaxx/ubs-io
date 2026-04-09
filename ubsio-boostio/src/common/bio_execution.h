@@ -14,8 +14,12 @@
 #define BOOSTIO_BIO_EXECUTION_SERVICE_H
 
 #include <atomic>
+#include <cerrno>
+#include <cstdlib>
 #include <functional>
+#include <limits>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -72,6 +76,60 @@ private:
 using RunnablePtr = Ref<Runnable>;
 
 constexpr uint32_t ES_MAX_THR_NUM = 256;
+
+inline bool IsNumaRuntimeEnabled()
+{
+    const char *enable = std::getenv("BIO_NUMA_ENABLE");
+    return enable != nullptr && std::string(enable) == "true";
+}
+
+inline bool ParseEnvLong(const char *name, long &value)
+{
+    const char *env = std::getenv(name);
+    if (env == nullptr) {
+        return false;
+    }
+    errno = 0;
+    char *end = nullptr;
+    long tmp = std::strtol(env, &end, 10);
+    if (errno != 0 || end == env || *end != '\0') {
+        return false;
+    }
+    value = tmp;
+    return true;
+}
+
+inline int16_t ResolveNumaCpuStart(uint16_t threadNum, uint16_t &cpuSpan)
+{
+    cpuSpan = 0;
+    if (!IsNumaRuntimeEnabled()) {
+        return -1;
+    }
+
+    long start = -1;
+    if (!ParseEnvLong("BIO_NUMA_CPU_START", start) || start < 0) {
+        return -1;
+    }
+
+    auto cpuNum = static_cast<long>(sysconf(_SC_NPROCESSORS_ONLN));
+    if (cpuNum <= 0 || start >= cpuNum) {
+        return -1;
+    }
+
+    long span = cpuNum - start;
+    long configuredSpan = 0;
+    if (ParseEnvLong("BIO_NUMA_CPU_SPAN", configuredSpan) && configuredSpan > 0 && configuredSpan < span) {
+        span = configuredSpan;
+    }
+    if (span <= 0) {
+        return -1;
+    }
+
+    static std::atomic<uint32_t> rrOffset = 0;
+    auto baseOffset = rrOffset.fetch_add(threadNum) % static_cast<uint32_t>(span);
+    cpuSpan = static_cast<uint16_t>(span);
+    return static_cast<int16_t>(start + baseOffset);
+}
 
 class ExecutorService;
 using ExecutorServicePtr = Ref<ExecutorService>;
@@ -222,8 +280,22 @@ inline bool ExecutorService::Start()
         return false;
     }
 
+    uint16_t numaCpuSpan = 0;
+    int16_t numaCpuStart = mCpuSetStartIdx;
+    if (numaCpuStart < 0) {
+        numaCpuStart = ResolveNumaCpuStart(mThreadNum, numaCpuSpan);
+    }
+
     for (uint16_t i = 0; i < mThreadNum; i++) {
-        auto cpuId = mCpuSetStartIdx < 0 ? -1 : mCpuSetStartIdx + i;
+        auto cpuId = -1;
+        if (mCpuSetStartIdx >= 0) {
+            cpuId = mCpuSetStartIdx + i;
+        } else if (numaCpuStart >= 0) {
+            cpuId = numaCpuStart + i;
+            if (numaCpuSpan > 0) {
+                cpuId = numaCpuStart + i % numaCpuSpan;
+            }
+        }
         std::thread *thr = nullptr;
         BIO_TP_START(EXECUTOR_THREAD_FAIL, &thr, nullptr);
         thr = new (std::nothrow) std::thread(&ExecutorService::RunInThread, this, cpuId);
