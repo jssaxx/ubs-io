@@ -38,13 +38,19 @@ public:
 
     // Establish an IPC connection with the local bio server
     BResult StartPre(WorkerMode mode, const NetOptions netConf);
+
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView, uint16_t protocol,
         const NetOptions netConf);
+
     BResult GetUnderFsConfig(BioConfig::UnderFsConfig &config);
+
     void Exit();
+
     BResult ShmInit();
+
     bool CheckShmInitResp(ShmInitResponse rsp);
+
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
     {
         mCheckOnLine = checkOnLine;
@@ -221,7 +227,7 @@ public:
 
     bool CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp);
 
-    DEFINE_REF_COUNT_FUNCTIONS;
+    DEFINE_REF_COUNT_FUNCTIONS
 
 private:
     BResult CheckShmFd();

@@ -445,13 +445,14 @@ BResult WCacheManager::ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrI
     auto &addrs = sliceRef->GetSlice()->GetAddrs();
     ChkTrue(sliceRef->GetSlice()->GetFlowType() == FLOW_DISK, BIO_INNER_RETRY, "key not in disk");
     ChkTrue(addrs.size() <= NO_2, BIO_INVALID_PARAM, "Key addr size is more 2.");
+
     BResult ret = BIO_OK;
     info->count = 0;
     for (uint8_t i = 0; i < addrs.size(); i++) {
         uint64_t offset = 0;
         ret = BdmParseChunkId(addrs[i].chunkId, &offset, info->path);
-        if (ret != BIO_OK) {
-            LOG_ERROR("Parse key:" << key << ", addr:" << addrs[i].chunkId << " fail, ret:" << ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Parse key:" << key << ", addr:" << addrs[i].chunkId << " failed, ret:" << ret);
             return ret;
         }
         info->offset[i] = offset + addrs[i].chunkOffset;

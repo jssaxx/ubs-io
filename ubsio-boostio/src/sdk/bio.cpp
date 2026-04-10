@@ -359,15 +359,15 @@ CResult Bio::AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpP
     }
 
     StatisticGetIoSize(length);
-    BIO_TRACE_START(SDK_TRACE_GET);
-    MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };
-    BResult ret = gClient->Get(param, realLength);
-    BIO_TRACE_END(SDK_TRACE_GET, ret);
+    BIO_TRACE_START(SDK_TRACE_ASYNC_GET);
+    MirrorClient::MirrorGet getParam{{mTenantId, mAffinity, mStrategy}, key, value, offset, length, location};
+    BResult ret = gClient->AsyncGet(getParam, opParam);
+    BIO_TRACE_END(SDK_TRACE_ASYNC_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+        CLIENT_LOG_ERROR("Async get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
+        CLIENT_LOG_DEBUG("Async get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
             ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
             location.location[1] << ".");
     }
@@ -1150,9 +1150,6 @@ void BioFreeListResources(ObjStat **objs, uint64_t objNum)
 
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
 {
-    if (UNLIKELY(stat == nullptr)) {
-        return RET_CACHE_EPERM;
-    }
     if (UNLIKELY(key == nullptr || stat == nullptr)) {
         return RET_CACHE_ERROR;
     }

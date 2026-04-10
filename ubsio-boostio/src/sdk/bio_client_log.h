@@ -42,6 +42,7 @@ public:
     };
 
     BioClientLog() = default;
+
     ~BioClientLog()
     {
         func = nullptr;
@@ -51,7 +52,7 @@ public:
     {
         minLogLevel = level;
         mMode = mode;
-        if (mode == 1) {
+        if (mode == 1) { // 分离部署场景.
             LoggerOptions options;
             options.logType = (uint8_t)logType;
             options.minLogLevel = level;
@@ -75,7 +76,7 @@ public:
             }
             int32_t ret = -1;
             BIO_TP_START(SDK_BIO_LOG_INIT_FAIL, &ret, -1);
-            ret = mLogger->Init();
+            ret = mUseSpdlog ? mLogger->Init() : mLogger->InitWithoutSpdlog();
             BIO_TP_END;
             if (ret != 0) {
                 std::cout << "Failed to init log, ret:" << ret << "." << std::endl;
@@ -133,6 +134,7 @@ private:
     int32_t minLogLevel = 1;
     int32_t mMode = 0;
     Logger *mLogger = nullptr;
+    bool mUseSpdlog = false;
 };
 
 #ifndef BIO_CLIENT_LOG_FILENAME

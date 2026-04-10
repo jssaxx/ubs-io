@@ -30,16 +30,18 @@ using namespace ock::bio;
 
 static const uint32_t IO_EXTRATEGE_TIME = 3; // IO策略3s过期
 
-BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo)
+BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+    FlowInfo &flowInfo)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
-    if (flowInfo.opType == 0) {
-        req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                flowInfo.opType, 0, false };
-    } else if (flowInfo.opType == 1) {
-        req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowInfo.opType,
-            flowInfo.flowId, flowInfo.isDegrade };
+    if (opType == 0) {
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0, false };
+    } else if (opType == 1) {
+        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
+            opType,
+            flowInfo.flowId,
+            flowInfo.isDegrade };
     }
     static uint32_t createFlowRTimeout = NO_60;
     uint64_t startTime = Monotonic::TimeSec();
@@ -50,7 +52,7 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
         uint64_t retryTime = Monotonic::TimeSec() - startTime;
         if (UNLIKELY(ret == BIO_NOT_READY && retryTime < createFlowRTimeout)) {
             CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" << nodeId <<
-                ", ptId:" << flowInfo.ptId << ".");
+                ", ptId:" << ptId << ".");
             sleep(NO_3);
         } else {
             break;
@@ -58,13 +60,12 @@ BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptE
     } while (ret == BIO_NOT_READY);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << nodeId << ", ptId:" <<
-            flowInfo.ptId << ".");
+            ptId << ".");
         return ret;
     }
 
-    if (flowInfo.opType == 0) {
-        flowInfo.flowId = rsp.flowId;
-        flowInfo.isDegrade = rsp.isDegrade;
+    if (opType == 0) {
+        flowInfo = { rsp.flowId, rsp.isDegrade, rsp.index, rsp.offset, rsp.isNewFlow };
     }
     return ret;
 }
@@ -84,12 +85,13 @@ BResult MirrorClient::SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &pt
     return ret;
 }
 
-BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo)
+BResult MirrorClient::CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
+    FlowInfo &flowInfo)
 {
     if (LIKELY(nodeId == mLocalNid.VNodeId())) {
-        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, flowInfo);
+        return agent::BioClientAgent::Instance()->CreateFlowLocal(getpid(), ptEntry, ptId, opType, flowInfo);
     } else {
-        return SendCreateFlowRequestRemote(nodeId, ptEntry, flowInfo);
+        return SendCreateFlowRequestRemote(nodeId, ptEntry, ptId, opType, flowInfo);
     }
 }
 
@@ -118,8 +120,8 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         return ret;
     }
 
-    FlowInfo flowInfo = {ptId, 0, UINT64_MAX, false};
-    ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, flowInfo);
+    FlowInfo flowInfo = { UINT64_MAX, false, 0, 0, true };
+    ret = CreateFlowImpl(ptEntry.masterNodeId, ptEntry, ptId, 0, flowInfo);
     if (UNLIKELY(ret != BIO_OK || flowInfo.flowId == UINT64_MAX)) {
         CLIENT_LOG_ERROR("Create master flow failed, ret:" << ret << ", ptId:" << ptId << ", masterNid:" <<
             ptEntry.masterNodeId << ".");
@@ -127,32 +129,34 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         return ret;
     }
 
-    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
-        if (ptEntry.copys[idx].nodeId == ptEntry.masterNodeId) {
-            continue;
-        }
-        if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
-            continue;
-        }
-        flowInfo.opType = 1;
-        ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, flowInfo);
-        if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
-                ptEntry.copys[idx].nodeId << ".");
-            Delete(ptId, 0);
-            return ret;
+    if (flowInfo.isNewFlow) {
+        for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
+            if (ptEntry.copys[idx].nodeId == ptEntry.masterNodeId) {
+                continue;
+            }
+            if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
+                continue;
+            }
+            ret = CreateFlowImpl(ptEntry.copys[idx].nodeId, ptEntry, ptId, 1, flowInfo);
+            if (UNLIKELY(ret != BIO_OK)) {
+                CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
+                    ptEntry.copys[idx].nodeId << ".");
+                Delete(ptId, 0);
+                return ret;
+            }
         }
     }
 
-    ret = Update(ptId, ptEntry.version, flowInfo.flowId, flowInfo.isDegrade);
+    UpdateParams para{ ptId, ptEntry.version, flowInfo.flowId, flowInfo.isDegrade, flowInfo.index, flowInfo.offset };
+    ret = Update(para);
     if (ret != BIO_OK) {
         LOG_ERROR("Update flow info failed, ret " << ret);
-        Delete(ptId, 0);
         return ret;
     }
 
     CLIENT_LOG_INFO("Create flow instance success, ptId:" << ptId << ", ptv:" << ptEntry.version << ", flowId:" <<
-        flowInfo.flowId << ", isDegrade:" << flowInfo.isDegrade << ".");
+        flowInfo.flowId << ", isDegrade:" << flowInfo.isDegrade << ", index:" << flowInfo.index << ", offset:" <<
+        flowInfo.offset << ", isNewFlow:" << flowInfo.isNewFlow << ".");
     return BIO_OK;
 }
 
@@ -264,7 +268,7 @@ BResult MirrorClient::CreateDataMessageMemRemote()
 BResult MirrorClient::CreateDataMessageMemLocal()
 {
     // 1. 注册RDMA内存.
-    const uint64_t dataMemSize = (128UL * 1024UL * 1024UL);
+    const uint64_t dataMemSize = (128UL * 1024UL * 1024UL); // 默认128MB内存空间
     auto ret = net::BioClientNet::Instance()->RegisterMemoryRegion(dataMemSize, mDataMsgMemMr);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to register mr by size " << dataMemSize);
@@ -589,7 +593,7 @@ BResult MirrorClient::Put(MirrorPut &param)
                 break;
             }
         }
-        isRetry = FailHandler(ret, startTime, NO_44);
+        isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
 
     if (isAllocMem) {
@@ -978,7 +982,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
     for (uint32_t i = 0; i < param.count; i++) {
         param.results[i] = BIO_OK;
         uintptr_t address = 0;
-        BResult ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+        BResult ret = mDataMsgMemPool->AllocOne(address);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
             for (uint32_t j = 0; j < i; j++) {
@@ -1675,18 +1679,19 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
 
 BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
-    NetMrInfo mr;
-    BResult ret = net::BioClientNet::Instance()->Alloc(param.length, mr);
+    uintptr_t address = 0;
+    BResult ret = mDataMsgMemPool->AllocOne(address);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
         return BIO_ALLOC_FAIL;
     }
 
-    ret = memcpy_s(reinterpret_cast<char *>(mr.address), mr.size, param.value, param.length);
+    ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
-            ", flowOffset:" << param.flowOffset << ", length:" << param.length << ".");
-        net::BioClientNet::Instance()->Free(mr.address);
+            ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" <<
+            mDataMsgMemBlockSize);
+        mDataMsgMemPool->ReleaseOne(address);
         return BIO_ALLOC_FAIL;
     }
 
@@ -1696,12 +1701,14 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     BIO_TP_END;
     if (tmp == nullptr) {
         CLIENT_LOG_ERROR("Alloc memory failed.");
-        net::BioClientNet::Instance()->Free(mr.address);
+        mDataMsgMemPool->ReleaseOne(address);
         return BIO_ALLOC_FAIL;
     }
+    NetMrInfo mr(address, mDataMsgMemBlockSize, mDataMsgMemMr->GetLKey());
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
     req->memFromServer = false;
+    req->mrOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
     return BIO_OK;
 }
 
@@ -1791,14 +1798,13 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
         }
         remoteIdx.emplace_back(idx);
     }
-    if (remoteIdx.size() > 0) {
-        PutRemote(req, ptEntry, remoteIdx, callback);
-    }
-    PutLocal(req, localIdx, callback);
 
+    PutRemote(req, ptEntry, remoteIdx, callback);
+    PutLocal(req, localIdx, callback);
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
-    net::BioClientNet::Instance()->Free(req->mrAddress);
+
+    mDataMsgMemPool->ReleaseOne(req->mrAddress);
     if (cbCtx.result == BIO_OK) {
         mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
         mIoStrategy[ptEntry.ptId]->strategy = ioStrategy.load();
@@ -1997,13 +2003,13 @@ BResult MirrorClient::SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *v
 BResult MirrorClient::SendBatchGetKeyDiskAddrRequest(BatchParseKeyAddrRequest *req, uint32_t reqLen,
                                                      KeyAddrInfo* infos)
 {
-    auto ret = agent::BioClientAgent::Instance()->BatchGetKeyDiskAddrLocal(req, reqLen, infos);
-    return ret;
+    return agent::BioClientAgent::Instance()->BatchGetKeyDiskAddrLocal(req, reqLen, infos);
 }
 
 BResult MirrorClient::SendBatchGetRequest(BatchGetRequest *req, int32_t *results,
                                           uint64_t *realLengths, uint32_t reqLen)
 {
+    // TODO: Get reomote.
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL);
     auto ret = agent::BioClientAgent::Instance()->BatchGetLocal(req, results, realLengths, reqLen);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL, ret);
@@ -2270,23 +2276,23 @@ BResult MirrorClient::SendCheckUpdateReadyRequest()
 BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
     uint64_t maxSize = sizeof(ObjStat) * 1000U;
-    NetMrInfo mr;
-    auto ret = net::BioClientNet::Instance()->Alloc(maxSize, mr);
+    uintptr_t address = 0;
+    BResult ret = mDataMsgMemPool->AllocOne(address);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc rdma memory failed.");
         return BIO_ALLOC_FAIL;
     }
 
-    req.address = mr.address;
+    req.address = address;
     req.size = maxSize;
-    req.mrKey = mr.key;
+    req.mrKey = mDataMsgMemMr->GetLKey();
     ListResponse rsp;
     BIO_TP_START(LISTALL_REMOTE_RSP_OVER_LIMIT, &rsp.num, 1500U);
     ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),
         BIO_OP_SDK_LIST, req, rsp);
     BIO_TP_END;
     if (ret != BIO_OK) {
-        net::BioClientNet::Instance()->Free(mr.address);
+        mDataMsgMemPool->ReleaseOne(address);
         return ret;
     }
     if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0)) {
@@ -2295,7 +2301,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
 
     if (rsp.num != 0) {
         size_t objSize = 0;
-        auto statInfo = reinterpret_cast<ObjStat *>(mr.address);
+        auto statInfo = reinterpret_cast<ObjStat *>(address);
         for (uint32_t i = 0; i < rsp.num; i++) {
             objSize = objs.size();
             BIO_TP_START(LISTALL_REMOTE_OVER_1000, &objSize, 1500U);
@@ -2310,7 +2316,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
             objs.insert({ stat.key, stat });
         }
     }
-    net::BioClientNet::Instance()->Free(mr.address);
+    mDataMsgMemPool->ReleaseOne(address);
     return BIO_OK;
 }
 

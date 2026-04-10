@@ -91,6 +91,7 @@ constexpr size_t IO_SIZE_2M = 2 * 1024 * 1024;
 constexpr size_t IO_SIZE_4M = 4 * 1024 * 1024;
 constexpr size_t IO_SIZE_64M = 64 * 1024 * 1024;
 constexpr size_t IO_SIZE_128M = 128 * 1024 * 1024;
+constexpr uint32_t CLUSTER_SIZEMAX = 256;
 }
 }
 

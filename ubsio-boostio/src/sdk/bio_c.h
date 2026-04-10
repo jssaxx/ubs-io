@@ -180,6 +180,16 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
  */
 void BioExit(void);
 
+/**
+ * @brief: Get the address of an key on the disk
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: key array
+ * @param[in]: locations: location info array
+ * @param[in]: count: key numbers
+ * @param[out]: infos: address of key
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 CResult BioBatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                const uint32_t count, KeyAddrInfo *infos);
 

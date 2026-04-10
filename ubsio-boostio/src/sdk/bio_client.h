@@ -45,9 +45,8 @@ public:
         return instance;
     }
 
-    BResult BioTraceInit(WorkerMode mode);
-
     BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf);
+
     void Exit();
 
     inline bool Ready() const
@@ -261,10 +260,16 @@ public:
     BResult AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
     BResult BioClientTracePointInit(WorkerMode mode);
+    BResult BioClientCertificateExpiration(const ClientOptionsConfig &optConf);
+
+    BResult FillNetOptions(const ClientOptionsConfig &optConf, NetOptions &netConf);
+    BResult BioClientTraceInit();
+    void BioClientTraceExit();
 
 private:
     WorkerMode mMode;

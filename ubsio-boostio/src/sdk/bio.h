@@ -113,6 +113,15 @@ public:
      */
     void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count);
 
+    /**
+     * @brief: Get the address of an key on the disk
+     *
+     * @param[in]: keys: key array
+     * @param[in]: locations: location info array
+     * @param[in]: count: key numbers
+     * @param[out]: infos: address of key
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
     CResult BatchGetKeyDiskAddr(const char **keys, ObjLocation *locations, const uint32_t count, KeyAddrInfo *infos);
 
     /**

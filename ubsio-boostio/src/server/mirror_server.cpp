@@ -759,11 +759,12 @@ BResult MirrorServer::ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrIn
     do {
         isRetry = false;
         ret = Cache::Instance().ParseKeyAddr(key, ptId, info);
-        if (ret != BIO_OK) {
+        if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Parse key:" << key << " addrs fail, ret:" << ret);
         }
         if (UNLIKELY(ret == BIO_INNER_RETRY)) {
             isRetry = true;
+            usleep(100);
         }
     } while (isRetry);
     return ret;
@@ -1178,6 +1179,7 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.ioTimeOut = config.workIoTimeOut;
     rsp.netTimeOut = config.workNetTimeOut;
     rsp.logLevel = config.logLevel;
+    rsp.enableHtrace = config.enableTrace;
     rsp.enableCrc = config.enableCrc;
     rsp.enableCli = config.enableCli;
     rsp.enablePrometheus = config.enablePrometheus;
@@ -1702,7 +1704,6 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
             results[index] = BatchSingleGet(req->keysInfo[index], realLengths[index], req->pid);
             BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, results[index]);
             if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
-                // 最后一个任务唤醒主线程.
                 sem_post(&sem);
             }
         };
@@ -1733,9 +1734,10 @@ int32_t MirrorServer::MirrorServerBatchParseKeyAddr(ServiceContext &ctx, BatchPa
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
+
     uint32_t rspLen = sizeof(BatchParseKeyAddrResp) + sizeof(BatchKeyAddrInfo) * req->count;
     BatchParseKeyAddrResp *rsp = reinterpret_cast<BatchParseKeyAddrResp*>(malloc(rspLen));
-    if (rsp == nullptr) {
+    if (UNLIKELY(rsp == nullptr)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         return BIO_OK;
     }
@@ -1743,10 +1745,6 @@ int32_t MirrorServer::MirrorServerBatchParseKeyAddr(ServiceContext &ctx, BatchPa
         BIO_TRACE_START(MIRROR_TRACE_PARSE_KEY_ADDR);
         rsp->infos[i].result = ParseKeyAddr(req->infos[i].key, req->infos[i].ptId, &(rsp->infos[i]));
         BIO_TRACE_END(MIRROR_TRACE_PARSE_KEY_ADDR, rsp->infos[i].result);
-        LOG_WARN("Batch parse key addr, key" << req->infos[i].key << ", path:" << rsp->infos[i].path <<
-            ", offset1:" << rsp->infos[i].offset[0] << ", offset2:" << rsp->infos[i].offset[1] <<
-            ", length1:" << rsp->infos[i].length[0] << ", length2:" << rsp->infos[i].length[1] <<
-            ", count:" << static_cast<uint32_t>(rsp->infos[i].count));
     }
 
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(rsp), rspLen);
