@@ -44,7 +44,7 @@ public:
     BResult Start(const NetOptions &opt);
     void Stop();
 
-    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
+    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegion &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
@@ -59,7 +59,7 @@ public:
         option = mOptions;
     }
 
-    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
+    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegion &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
@@ -68,7 +68,7 @@ public:
         return mRpcService->RegisterMemoryRegion(size, mr);
     }
 
-    inline void DestroyMemoryRegion(MemoryRegionPtr &mr)
+    inline void DestroyMemoryRegion(MemoryRegion &mr)
     {
         if (UNLIKELY(mRpcService == nullptr)) {
             NET_LOG_ERROR("Net service not ready.");
@@ -77,7 +77,7 @@ public:
         mRpcService->DestroyMemoryRegion(mr);
     }
 
-    static inline NetMrInfo MemoryRegionInfo(MemoryRegionPtr &mr)
+    static inline NetMrInfo MemoryRegionInfo(MemoryRegion &mr)
     {
         return NetMrInfo(mr->GetAddress(), mr->Size(), mr->GetLKey());
     }

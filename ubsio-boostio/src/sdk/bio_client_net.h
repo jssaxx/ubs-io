@@ -121,12 +121,12 @@ public:
         return mNetEngine->GetDataPage();
     }
 
-    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegionPtr &mr)
+    inline BResult RegisterMemoryRegion(uint8_t *addr, uint64_t size, MemoryRegion &mr)
     {
         return mNetEngine->RegisterMemoryRegion(addr, size, mr);
     }
 
-    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegionPtr &mr)
+    inline BResult RegisterMemoryRegion(uint64_t size, MemoryRegion &mr)
     {
         return mNetEngine->RegisterMemoryRegion(size, mr);
     }

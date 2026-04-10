@@ -454,7 +454,7 @@ private:
     BioQosPtr mBioQos = nullptr;
     uint8_t *mDataMsgMemAddr = nullptr;
     uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
-    MemoryRegionPtr mDataMsgMemMr;
+    MemoryRegion mDataMsgMemMr;
     NetBlockPoolPtr mDataMsgMemPool = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
