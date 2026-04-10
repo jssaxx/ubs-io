@@ -744,8 +744,8 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
             break;
         }
         chunk = truncateQ[READ_CACHE_TIER_DISK].End();
-        LVOS_TP_START(RCACHE_EVICT_NULL_CHUNK, &chunk, nullptr);
-        LVOS_TP_END;
+        BIO_TP_START(RCACHE_EVICT_NULL_CHUNK, &chunk, nullptr);
+        BIO_TP_END;
         if (UNLIKELY(chunk == nullptr)) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
             break;
