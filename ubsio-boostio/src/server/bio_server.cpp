@@ -626,7 +626,6 @@ BResult BioServer::BioServerDiagnoseInitInner()
     void *handler = nullptr;
 #ifdef DEBUG_UT
     const char *soFileName = "libserver_diagnose.so";
-    LVOS_TP_START(CLI_SERVER_DIAGNOSE_HANDLER_ERR, &handler, nullptr);
     handler = dlopen(soFileName, RTLD_NOW);
 #else
     std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libserver_diagnose.so";

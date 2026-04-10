@@ -25,7 +25,6 @@
 #include "bio_lock.h"
 #include "mirror_client.h"
 #include "bio_client_net.h"
-#include "ufs_helper.h"
 
 #ifdef USE_PROMETHEUS
 #include "prometheus_manager.h"

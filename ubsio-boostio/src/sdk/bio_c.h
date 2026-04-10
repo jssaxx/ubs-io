@@ -149,8 +149,6 @@ typedef struct {
     uint8_t count;
 } KeyAddrInfo;
 
-typedef void* (*GetZkHandOp)(void);
-
 typedef struct {
     LogType logType;                   // STDOUT_TYPE/FILE_TYPE/STDERR_TYPE
     char logFilePath[PATH_MAX];        // log file path, if log type use FILE_TYPE, need to set this param
