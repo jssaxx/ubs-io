@@ -73,8 +73,6 @@ void MirrorServer::RegisterOpcodeStep2(NetEnginePtr &netEngine)
         std::bind(&MirrorServer::HandleCheckRemoteUpdateReady, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_UFS_CONFIG,
         std::bind(&MirrorServer::HandleGetUnderFsConfig, this, std::placeholders::_1));
-    netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_NEGOTIATE_EVICT,
-        std::bind(&MirrorServer::HandleEvictNegotiateRequest, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SERVER_PROCBROCKEN_SYNC_FLOW,
         std::bind(&MirrorServer::HandleProcBrokenSyncFlow, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_GET_CACHE_HIT,
@@ -2652,35 +2650,6 @@ int32_t MirrorServer::HandleGetUnderFsConfig(ServiceContext &ctx)
 
     auto req = static_cast<GetUnderFsConfigRequest *>(ctx.MessageData());
     return MirrorServerGetUnderFsConfig(ctx, req);
-}
-
-int32_t MirrorServer::HandleEvictNegotiateRequest(ServiceContext &ctx)
-{
-    if (UNLIKELY(!Ready())) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(EvictNegotiateRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive consult evict message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
-    auto req = static_cast<EvictNegotiateRequest *>(ctx.MessageData());
-    return MirrorServerEvictNegotiate(ctx, req);
-}
-
-int32_t MirrorServer::MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req)
-{
-    EvictNegotiateResponse rsp;
-    uint64_t truncateIndex = NO_MAX_VALUE64;
-    auto ret = Cache::Instance().EvictNegotiate(req->flowId, truncateIndex);
-    if (ret == BIO_OK) {
-        rsp.truncateIndex = truncateIndex;
-    }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, &rsp, sizeof(EvictNegotiateResponse));
-    return BIO_OK;
 }
 
 int32_t MirrorServer::HandleProcBrokenSyncFlow(ServiceContext &ctx)

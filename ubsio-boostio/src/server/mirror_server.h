@@ -165,7 +165,6 @@ public:
     int32_t MirrorServerGetEvictOffset(ServiceContext &ctx, GetEvictRequest *req);
     int32_t MirrorServerFreeMem(ServiceContext &ctx, FreeMemRequest *req);
     int32_t MirrorServerGetUnderFsConfig(ServiceContext &ctx, GetUnderFsConfigRequest *req);
-    int32_t MirrorServerEvictNegotiate(ServiceContext &ctx, EvictNegotiateRequest *req);
     int32_t MirrorServerProcBrokenSyncFlow(ServiceContext &ctx, ProcFlowSyncRequest *req);
     int32_t MirrorServerGetCacheHit(ServiceContext &ctx);
     int32_t MirrorServerQueryCacheResource(ServiceContext &ctx);
@@ -200,7 +199,6 @@ public:
     int32_t HandleGetEvictOffset(ServiceContext &ctx);
     int32_t HandleFreeMem(ServiceContext &ctx);
     int32_t HandleGetUnderFsConfig(ServiceContext &ctx);
-    int32_t HandleEvictNegotiateRequest(ServiceContext &ctx);
     int32_t HandleProcBrokenSyncFlow(ServiceContext &ctx);
     int32_t HandleGetCacheHit(ServiceContext &ctx);
     int32_t HandleQueryCacheResource(ServiceContext &ctx);

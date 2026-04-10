@@ -575,15 +575,6 @@ typedef struct {
     HdfsConfigResponse hdfsConfig;
 } GetUnderFsConfigResponse;
 
-typedef struct {
-    RequestComm comm;
-    uint64_t flowId;
-} EvictNegotiateRequest;
-
-typedef struct {
-    uint64_t truncateIndex;
-} EvictNegotiateResponse;
-
 /* Cache Resource */
 typedef struct {
     RequestComm comm;

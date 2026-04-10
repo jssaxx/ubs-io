@@ -1181,35 +1181,6 @@ void WCacheManager::RetryEvictThread()
     }
 }
 
-BResult WCacheManager::EvictNegotiateThread()
-{
-    static uint32_t delayInUs = mNegotiateDelay;
-    BIO_TP_START(WCACHE_NEGOTIATE_FLAG_TRUE, &mNegotiateFlag, true);
-    BIO_TP_END;
-    while (mNegotiateFlag) {
-        mWCacheManagerLock.LockRead();
-        uint32_t wcacheSize = mWCacheManager.size();
-        uint32_t waitSize = 0;
-        for (const auto &item: mWCacheManager) {
-            BResult ret = item.second->StartEvictNegotiateTask();
-            if (ret == BIO_NEED_WAIT) {
-                ++waitSize;
-            }
-        }
-        mWCacheManagerLock.UnLock();
-
-        if (wcacheSize == waitSize) {
-            delayInUs = std::min(MAX_NEGOTIATE_DELAY, delayInUs * NO_2);
-        } else {
-            delayInUs = mNegotiateDelay;
-        }
-        BIO_TP_START(WCACHE_NEGOTIATE_FLAG_CLEAR, &mNegotiateFlag, false);
-        BIO_TP_END;
-        usleep(delayInUs);
-    }
-    return BIO_OK;
-}
-
 void WCacheManager::DestroyEvictThread()
 {
     std::unordered_map<uint64_t, uint64_t> destroyManager;

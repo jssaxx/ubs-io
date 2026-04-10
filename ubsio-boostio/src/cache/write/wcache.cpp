@@ -376,35 +376,6 @@ void WCache::StartEvictTask(WCacheTierType type)
     return;
 }
 
-BResult WCache::StartEvictNegotiateTask()
-{
-    bool expectFlag = false;
-    if (!mIsStartEvictNegotiate.compare_exchange_weak(expectFlag, true)) {
-        return BIO_OK;
-    }
-
-    if (!mIsNormal) {
-        mIsStartEvictNegotiate.store(false);
-        return BIO_OK;
-    }
-
-    if (mCacheTiers[WCACHE_MEMORY]->IsEmptyCursorEvictSlices()) {
-        mIsStartEvictNegotiate.store(false);
-        return BIO_NEED_WAIT;
-    }
-
-    IncreaseRef();
-    auto isSucceed = mEvictNegotiateService->Execute([this]() {
-        EvictNegotiate();
-        DecreaseRef();
-    });
-    if (!isSucceed) {
-        mIsStartEvictNegotiate.store(false);
-        DecreaseRef();
-    }
-    return BIO_OK;
-}
-
 void WCache::RetryEvictTask(WCacheTierType type)
 {
     if (mCacheTiers[type]->IsEmptyEvictSliceQueue()) {
@@ -865,54 +836,6 @@ void WCache::EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCach
     auto ret = mRCacheManager->Put(ptId, key, slice);
     BIO_TRACE_END(WCACHE_TRACE_PUT_RCACHE, ret);
     ChkTrueEx(ret == BIO_OK, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key << ".");
-}
-
-void WCache::EvictNegotiate()
-{
-    BResult ret = BIO_OK;
-    BIO_TP_START(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, 0);
-    if (!mIsMaster) {
-        mIsStartEvictNegotiate.store(false);
-        return;
-    }
-    BIO_TP_END;
-    CmPtInfo cmPtInfo;
-    ret = Cm::Instance()->GetPtInfo(mPtId, cmPtInfo);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get pt cmPtInfo failed, ret:" << ret << ", ptId:" << mPtId << ".");
-        mIsStartEvictNegotiate.store(false);
-        return;
-    }
-    EvictNegotiateRequest req = { { MESSAGE_MAGIC, mPtId, cmPtInfo.version, cmPtInfo.masterNodeId, getpid() }, mFlowId };
-
-    EvictNegotiateResponse resp;
-    auto rpcEngine = BioServer::Instance()->GetNetEngine();
-
-    BIO_TRACE_START(WCACHE_TRACE_GET_NEGOTIATE)
-    uint64_t minTruncateIndex = NO_MAX_VALUE64;
-    for (const auto copyInfo: cmPtInfo.copys) {
-        uint16_t destNid = copyInfo.nodeId;
-        if (UNLIKELY(destNid == cmPtInfo.masterNodeId)) {
-            continue;
-        }
-        ret = rpcEngine->SyncCall<EvictNegotiateRequest, EvictNegotiateResponse>(static_cast<BioNodeId>(destNid),
-                                                                                 BIO_OP_SERVER_NEGOTIATE_EVICT,
-                                                                                 req, resp);
-        if (UNLIKELY(ret != BIO_OK)) {
-            LOG_ERROR("Send evict negotiate request failed, ret:" << ret << ", dstNid:" << destNid <<
-                                                                  ", flow:" << mFlowId << ".");
-            mIsStartEvictNegotiate.store(false);
-            return;
-        }
-        minTruncateIndex = std::min(minTruncateIndex, resp.truncateIndex);
-    }
-
-    BIO_TRACE_END(WCACHE_TRACE_GET_NEGOTIATE, BIO_OK)
-    LOG_TRACE("Get copy min truncateIndex, index:" << minTruncateIndex << ", flow:" << mFlowId << ".");
-    if (minTruncateIndex != NO_MAX_VALUE64) {
-        mCacheTiers[WCACHE_MEMORY]->SetGlobMinTruncateIndex(minTruncateIndex);
-    }
-    mIsStartEvictNegotiate.store(false);
 }
 
 bool WCache::EvictMemSatisfiedCond()

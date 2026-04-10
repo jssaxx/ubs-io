@@ -634,11 +634,6 @@ void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
     }
 }
 
-BResult Cache::EvictNegotiate(uint64_t &flowId, uint64_t &truncateIndex)
-{
-    return mWCacheManager->GetTruncateIndex(flowId, truncateIndex);
-}
-
 BResult Cache::ProcBrokenSyncFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy)
 {
     return mWCacheManager->ProcBrokenSyncOldFlow(flowId, index, offset, needDestroy);

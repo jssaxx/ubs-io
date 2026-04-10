@@ -98,8 +98,6 @@ public:
 
     void GetCacheResources(CacheResDescription &desc, CacheType type);
 
-    BResult EvictNegotiate(uint64_t &flowId, uint64_t &truncateIndex);
-
     BResult ProcBrokenSyncFlow(uint64_t flowId, uint64_t index, uint64_t offset, bool &needDestroy);
 
 private:

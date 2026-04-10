@@ -89,8 +89,6 @@ public:
 
     void StartEvictTask(WCacheTierType type);
 
-    BResult StartEvictNegotiateTask();
-
     void RetryEvictTask(WCacheTierType type);
 
     uint64_t GetCapacity(WCacheTierType type);
@@ -182,8 +180,6 @@ private:
     void EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCacheSlicePtr &slice, bool &isRCache);
     BResult EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const size_t length);
 
-    void EvictNegotiate();
-
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
 
@@ -217,16 +213,13 @@ private:
     std::atomic<bool> mIsNormal { true };
     bool mIsForced { false };
     bool mUfsEnable{ false };
-    std::atomic<bool> mIsStartEvictNegotiate{ false };
+
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
-
-    WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
 
     CacheSliceOperator mSliceOperator;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
-    ExecutorServicePtr mEvictNegotiateService;
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
     GetLocDiskStatus mGetLocDiskStatus{ nullptr };
