@@ -27,17 +27,8 @@ enum RCacheTierType {
     READ_CACHE_TIER_BUTT
 };
 
-enum MqType {
-    MQ_COLD = 0,
-    MQ_WARM = 1,
-    MQ_HOT = 2,
-    MQ_LOAD = 3,
-    MQ_TYPE_BUTT
-};
-
 enum RCacheTrunkListType {
     RCACHE_TRUNK_LIST_TYPE_TRUNCATE = 0,
-    RCACHE_TRUNK_LIST_TYPE_EVICT = 1,
     RCACHE_TRUNK_LIST_TYPE_BUTT
 };
 
@@ -48,7 +39,7 @@ struct RCacheValue {
 
     RCacheValue(uint64_t index, uint64_t offset, uint64_t len) : indexInFlow(index), flowOffset(offset), length(len) {}
 
-    inline std::string ToString()
+    inline std::string ToString() const
     {
         std::ostringstream oss;
         oss << ", indexInFlow " << indexInFlow << ", flowOffset " << flowOffset << ", length " << length;
@@ -61,9 +52,9 @@ using RCacheChunkPtr = Ref<RCacheChunk>;
 
 class RCacheChunk {
 public:
-    RCacheChunk(Key key, RCacheValue &value);
+    RCacheChunk(Key key, RCacheValue &value) : mKey(key), mValue(value), mTierType(READ_CACHE_TIER_BUTT), mState(0) {}
 
-    ~RCacheChunk();
+    ~RCacheChunk() = default;
 
     RCacheChunkPtr prev[RCACHE_TRUNK_LIST_TYPE_BUTT] = { nullptr };
     RCacheChunkPtr next[RCACHE_TRUNK_LIST_TYPE_BUTT] = { nullptr };
@@ -78,24 +69,14 @@ public:
         return mValue;
     }
 
-    inline RCacheTierType GetTierType()
+    inline RCacheTierType GetTierType() const
     {
-        return tierType;
+        return mTierType;
     }
 
     inline void SetTierType(RCacheTierType type)
     {
-        tierType = type;
-    }
-
-    inline MqType GetMqType()
-    {
-        return mMqType;
-    }
-
-    inline void SetMqType(MqType type)
-    {
-        mMqType = type;
+        mTierType = type;
     }
 
     inline void SetValue(RCacheValue value)
@@ -118,31 +99,27 @@ public:
     inline std::string ToString()
     {
         std::ostringstream oss;
-        oss << "chunk info, key " << mKey << ", tier " << tierType << ", mqType " << mMqType << ", hit " << hitCount <<
-            mValue.ToString();
+        oss << "chunk info, key " << mKey << ", tier " << mTierType << mValue.ToString();
         return oss.str();
     }
 
     inline void SetDataCrc(uint32_t crc)
     {
-        dataCrc = crc;
+        mDataCrc = crc;
     }
 
-    inline uint32_t GetDataCrc()
+    inline uint32_t GetDataCrc() const
     {
-        return dataCrc;
+        return mDataCrc;
     }
 
     DEFINE_REF_COUNT_FUNCTIONS
 private:
-    uint32_t dataCrc{ 0 };
+    uint32_t mDataCrc = 0;
     Key mKey;
     RCacheValue mValue;
-    uint32_t aTime;
-    uint16_t hitCount{ 0 };
-    RCacheTierType tierType;
-    MqType mMqType;
-    uint64_t mState{ 0 };
+    RCacheTierType mTierType;
+    uint64_t mState = 0;
 
     DEFINE_REF_COUNT_VARIABLE
 };

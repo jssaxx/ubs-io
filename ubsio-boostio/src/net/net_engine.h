@@ -79,7 +79,7 @@ public:
 
     static inline NetMrInfo MemoryRegionInfo(MemoryRegion &mr)
     {
-        return NetMrInfo(mr.GetAddress(), mr.GetSize(), mr.GetHcomMrs()[0]->GetLKey());
+        return NetMrInfo(mr->GetAddress(), mr->Size(), mr->GetLKey());
     }
 
     inline void SetDataPageKb(uint32_t dataPageKb)
@@ -353,6 +353,30 @@ public:
         }
 
         ret = SyncCallBuffInner(opCode, req, reqLen, resp, ch);
+        BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, ret);
+        return ret;
+    }
+
+    template <typename TResp>
+    BResult SyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, TResp **resp,
+                              uint64_t &respLen)
+    {
+        BIO_TRACE_START(NET_TRACE_SYNC_CALL_BUFF);
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, BIO_INVALID_PARAM);
+            return BIO_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetCtrlChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, BIO_NET_RETRY);
+            return BIO_NET_RETRY;
+        }
+
+        ret = SyncCallBuffInner(opCode, req, reqLen, resp, respLen, ch);
         BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, ret);
         return ret;
     }

@@ -21,35 +21,13 @@
 
 using namespace ock::bio;
 
-BResult BioClient::BioClientUnderfsInit(WorkerMode mode)
-{
-    if (mode == SEPARATES) {
-        BioConfig::UnderFsConfig config;
-        BResult ret = BIO_OK;
-        ret = mNetEngine->GetUnderFsConfig(config);
-        if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Failed to get underfs configs from server, ret:" << ret << ".");
-            return ret;
-        }
-
-        UnderFs::InitUnderFsConfig(config);
-        ret = UnderFs::Instance()->Init();
-        if (ret != BIO_OK) {
-            CLIENT_LOG_ERROR("Failed to init underfs, ret:" << ret << ".");
-            return ret;
-        }
-    }
-    CLIENT_LOG_INFO("Initialize client underfs success.");
-    return BIO_OK;
-}
-
 BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath)
 {
     auto logMode = static_cast<int32_t>(mode);
     auto defaultLogLevel = static_cast<int32_t>(BioClientLog::Level::LOG_LEVEL_INFO);
     auto type = static_cast<uint8_t>(logType);
     auto clientLog = BioClientLog::Instance();
-    if (clientLog == nullptr) {
+    if (UNLIKELY(clientLog == nullptr)) {
         return BIO_ALLOC_FAIL;
     }
     return clientLog->Initialize(logMode, defaultLogLevel, type, logFilePath);
@@ -156,14 +134,12 @@ void BioClient::BioClientUpdateView()
 
 BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 {
-    //  创建Mirror实例.
     mMirror = MakeRef<MirrorClient>(mode);
     if (mMirror == nullptr) {
         CLIENT_LOG_ERROR("Create mirror client instance failed.");
         return BIO_ALLOC_FAIL;
     }
 
-    // 初始化Mirror client
     mIsUpdating = false;
     UpdateView updateView = [this]() { BioClientUpdateView(); };
     bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
@@ -173,14 +149,12 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
-
     return ret;
 }
 
 void BioClient::BioClientMirrorExit()
 {
     mMirror->FreeIoStrategy();
-    return;
 }
 
 BResult BioClient::BioInterceptorServerInit(WorkerMode mode)
@@ -190,12 +164,7 @@ BResult BioClient::BioInterceptorServerInit(WorkerMode mode)
 
 BResult BioClient::BioClientStartWork()
 {
-    auto ret = mMirror->Start();
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
-        return ret;
-    }
-    return ret;
+    return mMirror->Start();
 }
 
 BResult BioClient::BioClientStartPrometheus()
@@ -323,7 +292,7 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
         }
     }
 
-    ret = this->BioDiagnoseSdkInit();
+    ret = BioDiagnoseSdkInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
     }
@@ -345,34 +314,47 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
     return BIO_OK;
 }
 
-BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
+BResult BioClient::BioClientCertificateExpiration(const ClientOptionsConfig &optConf)
 {
-    std::lock_guard<std::mutex> lock(mStartLock);
-    if (mStarted) {
-        return BIO_OK;
+    if (mMode == SEPARATES && optConf.enable != 0) { // 证书过期检查.
+        auto expireChecker = ExpireChecker::Instance();
+        if (expireChecker == nullptr) {
+            LOG_INFO("expire checker alloc fail.");
+            return BIO_ALLOC_FAIL;
+        }
+        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath,
+            optConf.opensslLibDir);
+        if (ret != BIO_OK) {
+            return ret;
+        }
     }
-    mMode = mode;
-    uint64_t startTime = Monotonic::TimeSec();
+    return BIO_OK;
+}
 
-    // 1. 初始化client端Logger.
-    if (BioClientLoggerInit(mode, optConf.logType, optConf.logFilePath) != BIO_OK) {
-        return BIO_ERR;
+BResult BioClient::BioClientTraceInit()
+{
+    auto flag = mNetEngine->GetHtraceFlag();
+    if (flag && mMode == SEPARATES) {
+        const std::string dumpDir = "/var/log/boostio/clienttrace/";
+        auto ret = ock::htracer::HTracerInit(dumpDir);
+        ock::htracer::HTracerSetEnable(true);
+        ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");
+        return ret;
     }
+    return BIO_OK;
 
-    // 2. 初始化client端Agent, 融合部署场景会初始化bio server.
-    if (BioClientAgentInit(mode) != BIO_OK) {
-        return BIO_ERR;
+}
+
+void BioClient::BioClientTraceExit()
+{
+    auto flag = mNetEngine->GetHtraceFlag();
+    if (flag && mMode == SEPARATES) {
+        ock::htracer::HTracerExit();
     }
+}
 
-    // 3. 初始化client端的TP功能, 仅debug生效.
-#ifdef USE_DEBUG_TP_TOOLS
-    if (this->BioClientTracePointInit(mode) != BIO_OK) {
-        return BIO_ERR;
-    }
-#endif
-
-    // 4. 初始化Net第一步, 分离部署场景: 1)创建IPC服务; 2)与本地sever建立连接; 3)创建shm pool; 4)获取配置项.
-    NetOptions netConf;
+BResult BioClient::FillNetOptions(const ClientOptionsConfig &optConf, NetOptions &netConf)
+{
     netConf.FillNetTlsConfigs(optConf.enable, optConf.certificationPath, optConf.caCerPath, optConf.caCrlPath,
         optConf.privateKeyPath, optConf.privateKeyPassword, optConf.decrypterLibPath);
     if (optConf.enable) {
@@ -405,7 +387,38 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
             }
         }
     }
+    return BIO_OK;
+}
 
+BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
+{
+    std::lock_guard<std::mutex> lock(mStartLock);
+    if (mStarted) {
+        return BIO_OK;
+    }
+    mMode = mode;
+    uint64_t startTime = Monotonic::TimeSec();
+
+    // 1. 初始化client端Logger.
+    if (BioClientLoggerInit(mode, optConf.logType, optConf.logFilePath) != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    // 2. 初始化client端Agent, 融合部署场景会初始化bio server.
+    if (BioClientAgentInit(mode) != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    // 3. 初始化client端的TP功能.
+    if (BioClientTracePointInit(mode) != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    // 4. 初始化Net第一步, 分离部署场景: 1)创建IPC服务; 2)与本地sever建立连接; 3)创建shm pool; 4)获取配置项.
+    NetOptions netConf;
+    if (FillNetOptions(optConf, netConf)!= BIO_OK) {
+        return BIO_ERR;
+    }
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
         return BIO_ERR;
     }
@@ -425,12 +438,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
-    // 8. 初始化sdk端underfs
-    if (BioClientUnderfsInit(mode) != BIO_OK) {
-        return BIO_ERR;
-    }
-
-    // 9. bio client开工, mirror client开工去创建亲和的Flow实例.
+    // 8. bio client开工, 1)创建SDK端数据消息内存池; 2)mirror client开工去创建亲和的Flow实例.
     if (BioClientStartWork() != BIO_OK) {
         return BIO_ERR;
     }
@@ -439,17 +447,12 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         return BIO_ERR;
     }
 
-    if (mode == SEPARATES && optConf.enable != 0) {
-        auto expireChecker = ExpireChecker::Instance();
-        if (expireChecker == nullptr) {
-            LOG_INFO("expire checker alloc fail.");
-            return BIO_ALLOC_FAIL;
-        }
-        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath,
-            optConf.opensslLibDir);
-        if (ret != BIO_OK) {
-            return ret;
-        }
+    if (BioClientTraceInit() != BIO_OK) {
+        return BIO_ERR;
+    }
+
+    if (BioClientCertificateExpiration(optConf) != BIO_OK) {
+        return BIO_ERR;
     }
 
 #ifdef USE_PROMETHEUS
@@ -476,5 +479,12 @@ void BioClient::Exit()
     BioClientExitPrometheus();
 #endif
     BioClientLoggerExit(mMode);
+    BioClientTraceExit();
     mStarted = false;
 }
+
+BResult BioClient::AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam)
+{
+    return mMirror->AsyncGet(param, opParam);
+}
+

@@ -37,7 +37,13 @@ int SdkDiagnoseInit()
 using namespace ock::bio;
 typedef void *(*perfTestRunner)(void *param);
 uint64_t gTenantId = UINT64_MAX;
-std::regex pattern("[0-9]+");
+
+const std::regex& GetPattern()
+{
+    static const std::regex pattern("[0-9]+"); // 首次调用时初始化
+    return pattern;
+}
+
 struct PerfTestParam {
     bool done;
     uint32_t tid;
@@ -132,7 +138,7 @@ void diagnose::BioSdkCommand::HandleListCache()
 void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
 {
     for (int i = 1; i <= 3; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!std::regex_match(cmds[i], GetPattern())) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -161,7 +167,7 @@ void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleOpen(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], pattern)) {
+    if (!std::regex_match(cmds[1], GetPattern())) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -184,7 +190,7 @@ void diagnose::BioSdkCommand::HandleOpen(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleDestroy(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], pattern)) {
+    if (!std::regex_match(cmds[1], GetPattern())) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -206,7 +212,7 @@ void diagnose::BioSdkCommand::HandleDestroy(const std::vector<std::string> &cmds
 void diagnose::BioSdkCommand::HandlePut(const std::vector<std::string> &cmds)
 {
     for (int i = 3; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!std::regex_match(cmds[i], GetPattern())) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -257,7 +263,7 @@ void diagnose::BioSdkCommand::HandlePut(const std::vector<std::string> &cmds)
 void diagnose::BioSdkCommand::HandleGet(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!std::regex_match(cmds[i], GetPattern())) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -371,7 +377,7 @@ void diagnose::BioSdkCommand::HandleCheckUpdateReady(const std::vector<std::stri
 
 void diagnose::BioSdkCommand::HandleStat(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[2], pattern)) {
+    if (!std::regex_match(cmds[2], GetPattern())) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -410,7 +416,7 @@ static void TestCallback(void *context, int32_t result)
 void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!std::regex_match(cmds[i], GetPattern())) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -449,7 +455,7 @@ void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleDelete(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[2], pattern)) {
+    if (!std::regex_match(cmds[2], GetPattern())) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -738,7 +744,7 @@ void* diagnose::BioSdkCommand::PerfTestGetImpl(void *param)
 void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!std::regex_match(cmds[i], GetPattern())) {
             mPrintOp("invalid input.\n");
             return;
         }

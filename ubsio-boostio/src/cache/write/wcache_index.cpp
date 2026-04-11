@@ -42,6 +42,24 @@ BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefP
     return BIO_OK;
 }
 
+bool WCacheIndex::Exist(uint16_t ptId, const Key &key)
+{
+    WCacheIndexTable *table = GetIndexTable(ptId);
+    ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Invalid table, ptId:" << ptId << ".");
+    auto bucket = Hash(key);
+    ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+    auto sliceMeta = table->sliceIndex[bucket].find(key);
+    if (UNLIKELY(sliceMeta == table->sliceIndex[bucket].end())) {
+        return false;
+    }
+    auto sliceRef = sliceMeta->second;
+    if (LIKELY(sliceRef->Aquire())) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 WCacheSliceRefPtr WCacheIndex::Aquire(uint16_t ptId, const Key &key)
 {
     WCacheIndexTable *table = GetIndexTable(ptId);

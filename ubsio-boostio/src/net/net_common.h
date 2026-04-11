@@ -38,7 +38,8 @@ using NewRequestHandler = std::function<int32_t(ServiceContext &)>;
 using NewChannelHandler = std::function<int32_t(const ChannelPtr &, const std::string &ipPort, NewChannelResp &)>;
 using ChannelBrokenHandler = std::function<void(uint32_t nodeId, uint32_t procId)>;
 using ServiceProtocol = ock::hcom::UBSHcomServiceProtocol;
-using MemoryRegion = ock::hcom::UBSHcomRegMemoryRegion;
+using MemoryRegion = ock::hcom::UBSHcomNetMemoryRegion;
+using MemoryAllocatorPtr = ock::hcom::UBSHcomNetMemoryAllocatorPtr;
 using NetRequest = ock::hcom::UBSHcomOneSideRequest;
 using NetCallback = ock::hcom::Callback;
 

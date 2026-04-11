@@ -33,6 +33,8 @@ public:
 
     BResult Insert(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef);
 
+    bool Exist(uint16_t ptId, const Key &key);
+
     WCacheSliceRefPtr Aquire(uint16_t ptId, const Key &key);
 
     BResult FuzzyAquire(uint16_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs);

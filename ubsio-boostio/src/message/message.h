@@ -26,14 +26,14 @@ extern "C" {
 
 const uint16_t MESSAGE_MAGIC = 0xABCD;
 const uint32_t KEY_MAX_SIZE = 256;
+const uint32_t KEY_MAX_COUNT = 256;
 const uint32_t IP_MAX_SIZE = 32;
-const uint32_t DISK_MAX_SIZE = 16;
+const uint32_t DISK_MAX_SIZE = 8;
 const uint32_t CLUSTER_NODE_SIZE = 32;
 const uint32_t PT_COPY_MAX_SIZE = 3;
 const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
-const uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
 const uint32_t FILE_PATH_MAX_LEN = 256;
 
@@ -63,6 +63,7 @@ typedef struct {
     int32_t logLevel;
     bool enableCrc;
     bool enableCli;
+    bool enableHtrace;
     bool enablePrometheus;
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
@@ -189,6 +190,9 @@ typedef struct {
 typedef struct {
     uint64_t flowId;
     bool isDegrade;
+    uint64_t index;
+    uint64_t offset;
+    bool isNewFlow;
 } CreateFlowResponse;
 
 /* Destroy flow */
@@ -200,6 +204,18 @@ typedef struct {
 typedef struct {
     uint64_t flowId;
 } DestroyFlowResponse;
+
+/* Create data message memory pool */
+typedef struct {
+    RequestComm comm;
+} CreateDataMsgMemPoolRequest;
+
+typedef struct {
+    int32_t memFd;
+    uint64_t offset;
+    uint64_t poolSize;
+    uint64_t blockSize;
+} CreateDataMsgMemPoolResponse;
 
 /* Get slice */
 typedef struct {
@@ -236,6 +252,7 @@ typedef struct {
     uint64_t flowOffset;
     uint64_t flowIndex;
     uintptr_t mrAddress;
+    uint64_t mrOffset;
     uint64_t mrSize;
     uint64_t mrKey;
     bool memFromServer;
@@ -251,6 +268,30 @@ typedef struct {
 typedef struct {
     uint32_t ioStrategy;
 } PutResponse;
+
+/* Parse key addr */
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint16_t ptId;
+} BatchKeyInfo;
+
+typedef struct {
+    char path[DISK_PATH_MAX_SIZE];
+    uint64_t offset[CHUNK_ADDR_MAX_SIZE];
+    uint64_t length[CHUNK_ADDR_MAX_SIZE];
+    int32_t result;
+    uint8_t count;
+} BatchKeyAddrInfo;
+
+typedef struct {
+    uint16_t magic;
+    uint32_t count;
+    BatchKeyInfo infos[0];
+} BatchParseKeyAddrRequest;
+
+typedef struct {
+    BatchKeyAddrInfo infos[0];
+} BatchParseKeyAddrResp;
 
 /* Get */
 typedef struct {
@@ -284,6 +325,29 @@ typedef struct {
     char key[KEY_MAX_SIZE];
 } DeleteRequest;
 
+/* BatchGet */
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint64_t offset;
+    uint64_t length;
+    uintptr_t addressOffset;
+    uint32_t size;
+    uint16_t ptId;
+} GetKeyInfo;
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    bool isConvDeploy;
+    GetKeyInfo keysInfo[0];
+} BatchGetRequest;
+
+typedef struct {
+    uint64_t realLengths[KEY_MAX_COUNT];
+    int32_t results[KEY_MAX_COUNT];
+    uint32_t count;
+} BatchGetResponse;
+
 /* Stat */
 typedef struct {
     RequestComm comm;
@@ -294,6 +358,33 @@ typedef struct {
     uint32_t size;
     time_t time;
 } StatResponse;
+
+/* BatchExist */
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint16_t index;
+    uint16_t ptVec;
+} BatchExistKeyInfo;
+
+typedef struct {
+    uint32_t count;
+    BatchExistKeyInfo keys[0];
+} BatchExistRequest;
+
+typedef struct {
+    uint16_t index[KEY_MAX_COUNT];
+    bool result[KEY_MAX_COUNT];
+    uint16_t count;
+} BatchExistResponse;
+
+typedef struct {
+    uint32_t count;
+    uint64_t ptV;
+    uint32_t index = 0;
+    uint32_t reqLen = 0;
+    BatchExistRequest *req = nullptr;
+} BatchExistPlan;
+
 
 /* List */
 typedef struct {
@@ -331,16 +422,6 @@ typedef struct {
     uint64_t length;
 } LoadRequest;
 
-/* Report Hb */
-typedef struct {
-    RequestComm comm;
-} HbRequest;
-
-typedef struct {
-    uint64_t curNodeTimes;
-    uint64_t curPtTimes;
-} HbResponse;
-
 /* Sync data */
 typedef struct {
     RequestComm comm;
@@ -351,6 +432,26 @@ typedef struct {
     RequestComm comm;
     uint64_t flowId;
 } GetEvictRequest;
+
+typedef struct {
+    RequestComm comm;
+    uint64_t flowId;
+    bool needDestroy;
+    uint64_t index;
+    uint64_t offset;
+} ProcFlowSyncRequest;
+
+typedef struct {
+    uint32_t nodeId;
+    bool needDestroy;
+} ProcFlowSyncResponse;
+
+typedef struct {
+    int32_t result;
+    uint32_t quota;
+    sem_t sem;
+    bool needDestroy;
+} ProcBrokenCallbackCtx;
 
 /* Free server memory */
 typedef struct {
@@ -368,16 +469,12 @@ typedef struct {
     uint32_t respLen;
 } ClientCallbackCtx;
 
-/* AllocSpace */
 typedef struct {
-    RequestComm comm;
-    uint16_t ptId;
-    uint32_t length;
-    uint64_t flowId;
-    uint64_t offset;
-    uint64_t index;
-    ObjLocation location;
-} AllocSpaceRequest;
+    int32_t result;
+    uint32_t quota;
+    void *resp;
+    uint32_t respLen;
+} AsyncPutCbCtx;
 
 /* Notify Update */
 typedef struct {
@@ -407,11 +504,6 @@ typedef struct {
     uint64_t length;
     uint64_t startTime;
 } InterceptorAllocPageReq;
-
-typedef struct {
-    uint64_t offset;
-    uint64_t size;
-} InterceptorAllocPage;
 
 typedef struct {
     uint32_t pid;
@@ -482,16 +574,6 @@ typedef struct {
     CephConfigResponse cephConfig;
     HdfsConfigResponse hdfsConfig;
 } GetUnderFsConfigResponse;
-
-typedef struct {
-    uint64_t flowId;
-    uint32_t count;
-    uint64_t data[MAX_EVICT_CONSULT_SIZE];
-} EvictNegotiateRequest;
-
-typedef struct {
-    bool negoResult[MAX_EVICT_CONSULT_SIZE];
-} EvictNegotiateResponse;
 
 /* Cache Resource */
 typedef struct {

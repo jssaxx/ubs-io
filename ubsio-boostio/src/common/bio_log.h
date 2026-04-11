@@ -109,6 +109,7 @@ public:
 
     explicit Logger(LoggerOptions options) : mOptions(std::move(options)) {}
 
+    int32_t InitWithoutSpdlog();
     int32_t Init();
     void Exit();
 

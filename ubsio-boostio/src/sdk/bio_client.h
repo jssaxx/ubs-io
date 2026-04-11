@@ -25,7 +25,6 @@
 #include "bio_lock.h"
 #include "mirror_client.h"
 #include "bio_client_net.h"
-#include "underfs.h"
 
 #ifdef USE_PROMETHEUS
 #include "prometheus_manager.h"
@@ -46,6 +45,7 @@ public:
     }
 
     BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf);
+
     void Exit();
 
     inline bool Ready() const
@@ -77,14 +77,12 @@ public:
 
     inline BResult Put(MirrorClient::MirrorPut &param)
     {
-        BResult ret = mMirror->Put(param);
-        if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_QUOTA_NOT_ENOUGH ||
-            ret == BIO_QUOTA_TIMEOUT)) {
-            BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
-            ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
-            BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
-        }
-        return ret;
+        return mMirror->Put(param);
+    }
+
+    inline BResult AsyncPut(MirrorClient::MirrorPut &param, BioAsyncPutCallback callback, void* context)
+    {
+        return mMirror->AsyncPut(param, callback, context);
     }
 
     inline BResult Put(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
@@ -97,32 +95,22 @@ public:
         BResult ret = mMirror->Get(param, length);
         BIO_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
         BIO_TP_END;
-        if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
-            BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
-            UnderFs::ObjStat stat;
-            auto underFsRet = UnderFs::Instance()->Stat(param.key, stat);
-            BIO_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &underFsRet, BIO_OK);
-            BIO_TP_END;
-            if (UNLIKELY(underFsRet != BIO_OK)) {
-                BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
-                return ret;
-            }
-            BIO_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &stat.size, NO_1024);
-            BIO_TP_END;
-            if (UNLIKELY(stat.size <= param.offset)) {
-                BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, BIO_INVALID_PARAM);
-                return BIO_INVALID_PARAM;
-            }
-            if (param.length + param.offset > stat.size) {
-                length = stat.size - param.offset;
-            } else {
-                length = param.length;
-            }
-            underFsRet = UnderFs::Instance()->Get(param.key, param.value, length, param.offset);
-            BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
-            return underFsRet == BIO_OK ? BIO_OK : ret;
-        }
         return ret;
+    }
+
+    inline BResult BatchGetKeyDiskAddr(MirrorClient::MirrorBatchGetKeyAddr &param)
+    {
+        return mMirror->BatchGetKeyDiskAddr(param);
+    }
+
+    inline BResult BatchGet(MirrorClient::MirrorBatchGet &param)
+    {
+        return mMirror->BatchGet(param);
+    }
+
+    inline void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
+    {
+        mMirror->BatchFree(valueAddrs, count);
     }
 
     inline BResult DeleteKey(const char *key, const ObjLocation &location)
@@ -143,6 +131,11 @@ public:
     inline BResult Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     {
         return mMirror->StatObject(key, location, stat);
+    }
+
+    inline BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
+    {
+        return mMirror->BatchExist(key, location, count, result);
     }
 
     inline BResult AddDisk(const char *diskPath)
@@ -257,19 +250,25 @@ public:
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
     void BioClientMirrorExit();
-    BResult BioClientUnderfsInit(WorkerMode mode);
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
     BResult BioClientStartPrometheus();
     void BioClientExitPrometheus();
     void BioClientUpdateHandle();
     void BioClientUpdateView();
+    BResult AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
     BResult BioClientTracePointInit(WorkerMode mode);
+    BResult BioClientCertificateExpiration(const ClientOptionsConfig &optConf);
+
+    BResult FillNetOptions(const ClientOptionsConfig &optConf, NetOptions &netConf);
+    BResult BioClientTraceInit();
+    void BioClientTraceExit();
 
 private:
     WorkerMode mMode;

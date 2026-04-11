@@ -81,15 +81,16 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
     return cachePtr;
 }
 
-BResult RCacheManager::CheckEnoughResource(uint16_t ptId, bool &havaResource)
+bool RCacheManager::IsResourceEnough(uint16_t ptId)
 {
-    havaResource = false;
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
+    if (UNLIKELY(cachePtr == nullptr)) {
+        LOG_ERROR("Get read cache instance failed, ptId:" << ptId << ".");
+        return false;
+    }
     auto config = BioConfig::Instance()->GetDaemonConfig();
     if (config.diskCaps.size() < cachePtr->GetDiskId()) {
-        havaResource = false;
-        return BIO_INVALID_PARAM;
+        return false;
     }
     auto diskCap = static_cast<uint64_t>(config.diskCaps[cachePtr->GetDiskId()]);
     uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
@@ -97,9 +98,9 @@ BResult RCacheManager::CheckEnoughResource(uint16_t ptId, bool &havaResource)
     uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
     uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, cachePtr->GetDiskId());
     if (rcacheMemUsed < rcacheMemCap && rcacheDiskUsed < rcacheDiskCap) {
-        havaResource = true;
+        return true;
     }
-    return BIO_OK;
+    return false;
 }
 
 BResult RCacheManager::AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice)

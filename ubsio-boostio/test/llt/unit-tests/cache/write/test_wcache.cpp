@@ -129,61 +129,6 @@ TEST_F(TestWCache, test_put_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestWCache, test_slave_send_negotiate_case_return_ok)
-{
-    LOG_INFO("test_master_negotiate_case_return_ok");
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
-    auto ret = gWCacheManager->EvictNegotiateThread();
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_slave_send_negotiate_get_masternode_file)
-{
-    LOG_INFO("test_slave_send_negotiate_get_masternode_file");
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
-    auto ret = gWCacheManager->EvictNegotiateThread();
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    BioHvsDeactiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE");
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
-{
-    LOG_INFO("test_slave_send_negotiate_get_vectory_empty");
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
-    auto ret = gWCacheManager->EvictNegotiateThread();
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    BioHvsDeactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
-    uint64_t slices[NO_3];
-    slices[0] = 0;
-    slices[NO_1] = NO_1;
-    slices[NO_2] = NO_2;
-    std::vector<bool> reslut;
-    reslut.push_back(false);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
-    gWCacheManager->MasterEvictNegotiate(g_flowId, slices, reslut, NO_3);
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 TEST_F(TestWCache, test_get_evict_negotiate_info_case)
 {
     LOG_INFO("test_get_evict_negotiate_info_case");
