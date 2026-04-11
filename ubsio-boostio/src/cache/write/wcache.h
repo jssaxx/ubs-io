@@ -147,11 +147,6 @@ public:
         mProcId = procId;
     }
 
-    inline bool GetStartEvictNegotiateFlag()
-    {
-        return mIsStartEvictNegotiate.load();
-    }
-
     using RecoverCallback = std::function<BResult(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
     BResult Recover(RecoverCallback recoverCallback);
 

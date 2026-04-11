@@ -230,13 +230,9 @@ BResult WCacheManager::DeleteWCache(uint64_t flowId)
     }
 
     WCachePtr wcache = iter->second;
-    while (wcache->GetStartEvictNegotiateFlag()) {
-        usleep(NO_10000);
-    }
     wcache->Destroy();
     mWCacheManager.erase(iter);
     mWCacheManagerLock.UnLock();
-
     LOG_INFO("Delete cache, procId:" << wcache->GetProcId() << ", flowId:" << wcache->GetFlowId() << ", ptId:" <<
         wcache->GetPtId() << ", ptv:" << wcache->GetPtv());
     return BIO_OK;
