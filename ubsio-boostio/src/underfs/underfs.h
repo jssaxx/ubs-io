@@ -17,7 +17,7 @@
 #include "bio_ref.h"
 #include "file_system.h"
 #include "file_system_factory.h"
-#include "underfs_config.h"
+#include "underfs_c.h"
 
 namespace ock {
 namespace bio {
