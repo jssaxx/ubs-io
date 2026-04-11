@@ -212,6 +212,8 @@ private:
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
 
+    WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
+
     CacheSliceOperator mSliceOperator;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];

@@ -70,7 +70,6 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     }
 
     mRCacheManager = rCacheManager;
-    mNegotiateDelay = BioConfig::Instance()->GetDaemonConfig().negotiateDelay;
     return BIO_OK;
 }
 
@@ -937,8 +936,8 @@ void WCacheManager::HandleProcBrokenDestroyFlow(WCachePtr flow, uint32_t localNi
     BResult ret = BIO_OK;
 
     do {
-        LVOS_TP_START(WCACHE_DESTROY_LOCAL_FALSE, &destroyLocal, true);
-        LVOS_TP_END;
+        BIO_TP_START(WCACHE_DESTROY_LOCAL_FALSE, &destroyLocal, true);
+        BIO_TP_END;
         if (!destroyLocal) {
             ret = DestroyWCache(procId, flowId, ptId, ptV);
             if (ret == BIO_OK) {
@@ -958,8 +957,8 @@ void WCacheManager::HandleProcBrokenDestroyFlow(WCachePtr flow, uint32_t localNi
                 break;
             }
         }
-        LVOS_TP_START(BROCK_DESTROY_FLOW_OK, &ret, BIO_OK);
-        LVOS_TP_END;
+        BIO_TP_START(BROCK_DESTROY_FLOW_OK, &ret, BIO_OK);
+        BIO_TP_END;
     } while (ret != BIO_OK);
 }
 

@@ -772,12 +772,12 @@ BResult WCache::AllocRCacheResource(const WCacheSlicePtr &srcSlice, WCacheSliceP
     BResult ret = BIO_INNER_ERR;
     uint16_t ptId = CacheFlowIdManager::GetPtId(srcSlice->GetFlowId());
     void *memAddr = nullptr;
-    LVOS_TP_START(NO_PROCESS_RESOURCE_ENOUGH, 0);
+    BIO_TP_START(NO_PROCESS_RESOURCE_ENOUGH, 0);
     bool enoughResource = mRCacheManager->IsResourceEnough(ptId);
     if (enoughResource) {
         mRCacheManager->AllocResources(ptId, srcSlice->GetLength(), dstSlice);
     }
-    LVOS_TP_END;
+    BIO_TP_END;
 
     if (UNLIKELY(dstSlice == nullptr)) {
         memAddr = malloc(srcSlice->GetLength());
@@ -789,8 +789,8 @@ BResult WCache::AllocRCacheResource(const WCacheSlicePtr &srcSlice, WCacheSliceP
         dstSlice = MakeRef<WCacheSlice>(0, 0, 0, srcSlice->GetLength(), addrVec, FLOW_MEMORY);
     }
 
-    LVOS_TP_START(ALLOC_DEST_SLICE_NULL, &dstSlice, nullptr);
-    LVOS_TP_END;
+    BIO_TP_START(ALLOC_DEST_SLICE_NULL, &dstSlice, nullptr);
+    BIO_TP_END;
     if (LIKELY(dstSlice != nullptr)) {
         ret = mSliceOperator.Copy(srcSlice.Get(), dstSlice.Get());
         if (UNLIKELY(ret != BIO_OK)) {
@@ -835,7 +835,7 @@ void WCache::EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCach
     BIO_TRACE_START(WCACHE_TRACE_PUT_RCACHE);
     auto ret = mRCacheManager->Put(ptId, key, slice);
     BIO_TRACE_END(WCACHE_TRACE_PUT_RCACHE, ret);
-    ChkTrueEx(ret == BIO_OK, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key << ".");
+    ChkTrueVoid(ret == BIO_OK, "Failed to put slice to rcache, ptId:" << ptId << " key:" << key << ".");
 }
 
 bool WCache::EvictMemSatisfiedCond()

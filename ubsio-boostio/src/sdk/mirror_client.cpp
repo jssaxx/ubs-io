@@ -1979,7 +1979,7 @@ BResult MirrorClient::GetFromServer(GetRequest &req, uint16_t serverNid, char *v
     CLIENT_LOG_DEBUG("Get master start, serverNid:" << serverNid << ", localNid:" << mLocalNid.VNodeId() << ", key:" <<
         req.key << ", offset:" << req.offset << ", length:" << req.length << ".");
     BResult ret = BIO_INNER_ERR;
-    LVOS_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
+    BIO_TP_START(SDK_MIRROR_GET_RECV_FAIL, &ret, BIO_INNER_RETRY);
     if (serverNid == mLocalNid.VNodeId()) {
         BIO_TRACE_START(SDK_TRACE_GET_LOCAL);
         ret = agent::BioClientAgent::Instance()->GetLocal(req, value, realLen);
@@ -1989,7 +1989,7 @@ BResult MirrorClient::GetFromServer(GetRequest &req, uint16_t serverNid, char *v
         ret = GetServerRemote(req, serverNid, value, realLen);
         BIO_TRACE_END(SDK_TRACE_GET_REMOTE, ret);
     }
-    LVOS_TP_END;
+    BIO_TP_END;
     return ret;
 }
 
@@ -2009,7 +2009,6 @@ BResult MirrorClient::SendBatchGetKeyDiskAddrRequest(BatchParseKeyAddrRequest *r
 BResult MirrorClient::SendBatchGetRequest(BatchGetRequest *req, int32_t *results,
                                           uint64_t *realLengths, uint32_t reqLen)
 {
-    // TODO: Get reomote.
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL);
     auto ret = agent::BioClientAgent::Instance()->BatchGetLocal(req, results, realLengths, reqLen);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL, ret);

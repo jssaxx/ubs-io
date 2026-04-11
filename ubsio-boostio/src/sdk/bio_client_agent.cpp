@@ -543,8 +543,8 @@ BResult BioClientAgent::CreateDataMessageMemPool(pid_t procId, uint64_t &memPool
     CreateDataMsgMemPoolResponse rsp;
     auto ret = net::BioClientNet::Instance()->SendSync<CreateDataMsgMemPoolRequest, CreateDataMsgMemPoolResponse>(
         INVALID_NID, BIO_OP_SDK_CREATE_DATA_MSG_MEM_POOL, req, rsp);
-    LVOS_TP_START(SDK_CREATE_DATA_MESSAGE_MEM_POOL_SEND_SUCCESS, &ret, BIO_OK);
-    LVOS_TP_END;
+    BIO_TP_START(SDK_CREATE_DATA_MESSAGE_MEM_POOL_SEND_SUCCESS, &ret, BIO_OK);
+    BIO_TP_END;
     if (ret != BIO_OK) {
         return ret;
     }
