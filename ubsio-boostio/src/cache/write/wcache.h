@@ -39,8 +39,8 @@ public:
     using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
 
-    BResult Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-        const RCacheManagerPtr rCacheManager, bool isRecover);
+    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
+        bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,

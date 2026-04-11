@@ -29,8 +29,8 @@ constexpr uint32_t EVICT_MEM_HLEVEL = 90;
 constexpr uint32_t EVICT_DISK_HLEVEL = 98;
 constexpr uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 
-BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-    const RCacheManagerPtr rCacheManager, bool isRecover)
+BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
+    bool isRecover)
 {
     BResult ret = BIO_INNER_ERR;
     for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
@@ -44,7 +44,6 @@ BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorSe
 
     mEvictService[WCACHE_MEMORY] = evictService[WCACHE_MEMORY];
     mEvictService[WCACHE_DISK] = evictService[WCACHE_DISK];
-    mEvictNegotiateService = evictNegoService;
     mEvictRef[WCACHE_MEMORY] = false;
     mEvictRef[WCACHE_DISK] = false;
     mOnFlyRef = 0;
@@ -66,7 +65,7 @@ BResult WCache::Init(const ExecutorServicePtr evictNegoService, const ExecutorSe
     if (mIsMaster) {
         mCacheTiers[WCACHE_MEMORY]->SetGlobMinTruncateIndex(NO_U64_0);
     }
-    mCopyNum = BioConfig::Instance()->GetCmConfig().copyNum;
+
     LOG_INFO("init wcache success, ptId:" << mPtId << ", flowId:" << mFlowId << ", isMaster:" << mIsMaster << ".");
     return BIO_OK;
 }
