@@ -119,6 +119,13 @@ void Logger::Destroy()
     }
 }
 
+int32_t Logger::InitWithoutSpdlog()
+{
+    mSpdLogger = nullptr;
+    gInited = true;
+    return 0;
+}
+
 int32_t Logger::Init()
 {
     std::lock_guard<std::mutex> guard(gMutex);

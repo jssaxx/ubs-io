@@ -32,28 +32,26 @@ public:
 
     int32_t StartUp(const std::string &dumpDir);
     void ShutDown();
+    static bool mDumpEnable;
 
-public:
     HTracerService(const HTracerService &) = delete;
     HTracerService &operator = (const HTracerService &) = delete;
     HTracerService(HTracerService &&) = delete;
     HTracerService &operator = (HTracerService &&) = delete;
 
-public:
     std::string GetTraceInfo();
     void ClearTraceInfo();
+    void OverrideWrite(std::stringstream &ss);
 
 private:
     void GenerateTraceStream(std::stringstream &ss, bool needTotal = false);
     void DumpTraceInfos();
     void DumpTraceInfoPeriod();
     void WriteTraceInfo(std::stringstream &ss);
-    void OverrideWrite(std::stringstream &ss);
     int PrepareDumpFile(const std::string &dumpDir);
     void CreateHeadLine();
     void StartDump();
 
-private:
     HTracerService() = default;
     ~HTracerService() = default;
 

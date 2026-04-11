@@ -57,6 +57,7 @@ public:
     {
         mLock.lock();
     }
+
     inline void UnLock()
     {
         mLock.unlock();
@@ -72,6 +73,7 @@ public:
     {
         pthread_rwlock_init(&mLock, nullptr);
     }
+
     ~ReadWriteLock()
     {
         pthread_rwlock_destroy(&mLock);

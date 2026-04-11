@@ -149,7 +149,7 @@ public:
         }
     }
 
-    DEFINE_REF_COUNT_FUNCTIONS;
+    DEFINE_REF_COUNT_FUNCTIONS
 
 private:
     BResult Recover();
