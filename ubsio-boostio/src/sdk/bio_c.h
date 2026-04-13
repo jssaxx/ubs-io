@@ -76,6 +76,8 @@ typedef enum {
 #define CHUNK_ADDR_MAX_SIZE (2)
 
 typedef void (*BioLoadCallback)(void *context, int32_t result);
+typedef void (*BioGetCallbackFunc)(void *context, int32_t result, uint32_t realLen);
+typedef void (*BioAsyncPutCallback)(void *context, int32_t result);
 
 typedef struct {
     char key[MAX_KEY_SIZE];
@@ -177,6 +179,19 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
 void BioExit(void);
 
 /**
+ * @brief: Get the address of an key on the disk
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: key array
+ * @param[in]: locations: location info array
+ * @param[in]: count: key numbers
+ * @param[out]: infos: address of key
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
+                               const uint32_t count, KeyAddrInfo *infos);
+
+/**
  * @brief: Show cache resource information
  *
  * @param[out]: nodeDesc: Cache Resource Description array
@@ -261,6 +276,21 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
 CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location);
 
 /**
+ * @brief: Async Put value
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: key: key
+ * @param[in]: value: value
+ * @param[in]: length: value length
+ * @param[in]: location: location info
+ * @param[in]: callback: async put callback function
+ * @param[in]: context: callback context
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioAsyncPut(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location,
+    BioAsyncPutCallback callback, void* context);
+
+/**
  * @brief: Get value
  *
  * @param[in]: tenantId: tenant id
@@ -274,6 +304,49 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
  */
 CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
     uint64_t *realLength);
+
+/**
+ * @brief: Batch Get value
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: multiple keys
+ * @param[in]: offset: offsets of multiple keys
+ * @param[in]: length : lengths of the get values
+ * @param[in]: location : location info
+ * @param[out]: valueAddrs : address of the values corresponding to multiple keys, need free
+ * @param[out]: realLength : real length
+ * @param[out]: results : result of getting multiple keys
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGet(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
+                    ObjLocation *locations, uintptr_t *valueAddrs,
+                    uint64_t *realLengths, int32_t *results);
+
+/**
+ * @brief: release the address returned by batchget.
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: valueAddrs: return value of the BioBatchGet method
+ * @param[in]: count: number of addresses in valueAddrs
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetFree(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count);
+
+/**
+ * @brief: Async Get value
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: key: key
+ * @param[in]: offset: offset of the get value
+ * @param[in]: length : length of the get value
+ * @param[in]: location : location info
+ * @param[out]: value : value
+ * @param[in]: callback : async callback func
+ * @param[in]: context : async call context
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioAsyncGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
+    char *value, BioGetCallbackFunc callback, void *context);
 
 /**
  * @brief: Delete object
@@ -330,6 +403,18 @@ void BioFreeListResources(ObjStat **objs, uint64_t objNum);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat);
+
+/**
+ * @brief: Batch exist object
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: key[]: key array
+ * @param[in]: location[] : location info array
+ * @param[in]: count : key count
+ * @param[out]: result[]: exist result
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchExist(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[]);
 
 /**
  * @brief: Notify boostio upgrade prepare

@@ -38,7 +38,7 @@ target_link_libraries(bio_sdk_static
         pthread dl expire_checker rados
         hcom_lib
         boundscheck_lib
-        htracer bio_common bio_net bio_interceptor_server bio_underfs
+        htracer bio_common bio_net bio_interceptor_server
         -Wl,--end-group
 )
 

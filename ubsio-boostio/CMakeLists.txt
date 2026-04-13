@@ -58,15 +58,16 @@ include_directories(
         ${SRC_DIR}/cache/write
         ${SRC_DIR}/cache/overloadctrl
         ${SRC_DIR}/cluster
-		${SRC_DIR}/cluster/common
+	${SRC_DIR}/cluster/common
         ${SRC_DIR}/config
         ${SRC_DIR}/disk/common
-		${SRC_DIR}/flow
-		${SRC_DIR}/htracer
+	${SRC_DIR}/flow
+	${SRC_DIR}/htracer
         ${SRC_DIR}/message
         ${SRC_DIR}/net
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
+	${SRC_DIR}/ufs
         ${SRC_DIR}/underfs
         ${SRC_DIR}/io_interceptor
         ${SRC_DIR}/interceptor

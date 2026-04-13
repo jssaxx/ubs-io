@@ -179,6 +179,35 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
     return ToCResult(ret);
 }
 
+CResult Bio::AsyncPut(const char *key, const char *value, uint64_t length, const ObjLocation &location,
+    AsyncPutParam &cbParam)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
+        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length <<
+            ", max length:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        return RET_CACHE_EPERM;
+    }
+
+    StatisticPutIoSize(length);
+    BIO_TRACE_START(SDK_TRACE_ASYNC_PUT);
+    MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
+                                      const_cast<char *>(value), length, location, 0 };
+    BResult ret = gClient->AsyncPut(param, cbParam.callback, cbParam.context);
+    BIO_TRACE_END(SDK_TRACE_ASYNC_PUT, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Async put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
+            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Async put value success, key:" << key << ", length:" << length << ", location0:" <<
+            location.location[0] << ", location1:" << location.location[1] << ".");
+    }
+    return ToCResult(ret);
+}
+
 CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
 {
     if (UNLIKELY(!gClient->Ready())) {
@@ -216,6 +245,22 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
     return ToCResult(ret);
 }
 
+CResult Bio::BatchGetKeyDiskAddr(const char **keys, ObjLocation *locations, const uint32_t count, KeyAddrInfo *infos)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+        if (UNLIKELY(!KeyValid(keys[i]))) {
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr.");
+            return RET_CACHE_EPERM;
+        }
+    }
+    MirrorClient::MirrorBatchGetKeyAddr param{ count, keys, locations, infos };
+    BResult ret = gClient->BatchGetKeyDiskAddr(param);
+    return ToCResult(ret);
+}
+
 CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value,
     uint64_t &realLength)
 {
@@ -223,6 +268,76 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
         return RET_CACHE_NOT_READY;
     }
 
+    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
+        CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
+        return RET_CACHE_EPERM;
+    }
+
+    StatisticGetIoSize(length);
+    BIO_TRACE_START(SDK_TRACE_GET);
+    MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };
+    BResult ret = gClient->Get(param, realLength);
+    BIO_TRACE_END(SDK_TRACE_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+            length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
+            ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
+            location.location[1] << ".");
+    }
+    return ToCResult(ret);
+}
+
+CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
+                      ObjLocation *locations, uintptr_t *valueAddrs,
+                      uint64_t *realLengths, int32_t *results)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(keys == nullptr || lengths == nullptr || offsets == nullptr ||
+        locations == nullptr || valueAddrs == nullptr || realLengths == nullptr || results == nullptr) ||
+        count > KEY_MAX_COUNT) {
+        return RET_CACHE_EPERM;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+        if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ".");
+            return RET_CACHE_EPERM;
+        }
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET);
+    MirrorClient::MirrorBatchGet param{ { mTenantId, mAffinity, mStrategy },
+                                        keys, count, offsets, lengths, locations,
+                                        valueAddrs, realLengths, results };
+    BResult ret = gClient->BatchGet(param);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
+    }
+    return ToCResult(ret);
+}
+
+void Bio::BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
+{
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_FREE);
+    gClient->BatchGetFree(valueAddrs, count);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_FREE, BIO_OK);
+}
+
+CResult Bio::AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpParam &opParam)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    const char *key = param.key;
+    char *value = param.value;
+    uint64_t offset = param.offset;
+    uint64_t length = param.length;
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
         CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
@@ -244,15 +359,15 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
     }
 
     StatisticGetIoSize(length);
-    BIO_TRACE_START(SDK_TRACE_GET);
-    MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };
-    BResult ret = gClient->Get(param, realLength);
-    BIO_TRACE_END(SDK_TRACE_GET, ret);
+    BIO_TRACE_START(SDK_TRACE_ASYNC_GET);
+    MirrorClient::MirrorGet getParam{{mTenantId, mAffinity, mStrategy}, key, value, offset, length, location};
+    BResult ret = gClient->AsyncGet(getParam, opParam);
+    BIO_TRACE_END(SDK_TRACE_ASYNC_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
+        CLIENT_LOG_ERROR("Async get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
-        CLIENT_LOG_DEBUG("Get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
+        CLIENT_LOG_DEBUG("Async get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
             ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
             location.location[1] << ".");
     }
@@ -353,6 +468,25 @@ CResult Bio::Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     BIO_TRACE_START(SDK_TRACE_STAT);
     auto ret = gClient->Stat(key, location, stat);
     BIO_TRACE_END(SDK_TRACE_STAT, ret);
+    return ToCResult(ret);
+}
+
+CResult Bio::BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(key == nullptr || result == nullptr || location == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    if (count > KEY_MAX_COUNT) {
+        CLIENT_LOG_ERROR("Bio batch get count:" << count << " more 256.");
+        return RET_CACHE_NOT_READY;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_EXIST);
+    auto ret = gClient->BatchExist(key, location, count, result);
+    BIO_TRACE_END(SDK_TRACE_BATCH_EXIST, ret);
     return ToCResult(ret);
 }
 
@@ -606,6 +740,22 @@ static void BioCacheResourceCalc(CacheResourcesDesc **nodeDesc, const std::vecto
     }
 }
 
+CResult BioBatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
+                               const uint32_t count, KeyAddrInfo *infos)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    return bioInstance->BatchGetKeyDiskAddr(keys, locations, count, infos);
+}
+
 CResult BioShowCacheResource(CacheResourcesDesc **nodeDesc, uint64_t *nodeNum)
 {
     if (UNLIKELY(nodeNum == nullptr || nodeDesc == nullptr)) {
@@ -832,6 +982,22 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
     return bioInstance->Put(key, value, length, location);
 }
 
+CResult BioAsyncPut(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location,
+    BioAsyncPutCallback callback, void* context)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    AsyncPutParam cbParam = {callback, context};
+    return bioInstance->AsyncPut(key, value, length, location, cbParam);
+}
+
 CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
     uint64_t *realLength)
 {
@@ -851,6 +1017,55 @@ CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t len
     auto ret = bioInstance->Get(key, offset, length, location, value, outLen);
     *realLength = outLen;
     return ret;
+}
+
+CResult BioBatchGet(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
+                    ObjLocation *locations, uintptr_t *valueAddrs,
+                    uint64_t *realLengths, int32_t *results)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGet(keys, count, offsets, lengths, locations, valueAddrs, realLengths, results);
+}
+
+CResult BioBatchGetFree(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    uint64_t outLen = 0;
+    bioInstance->BatchGetFree(valueAddrs, count);
+    return RET_CACHE_OK;
+}
+
+CResult BioAsyncGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
+    char *value, BioGetCallbackFunc callback, void *context)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    AsyncGetParam param = { key, offset, length, value };
+    AsyncOpParam opParam = { callback, context };
+    return bioInstance->AsyncGet(param, location, opParam);
 }
 
 CResult BioDelete(uint64_t tenantId, const char *key, ObjLocation location)
@@ -935,9 +1150,6 @@ void BioFreeListResources(ObjStat **objs, uint64_t objNum)
 
 CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjStat *stat)
 {
-    if (UNLIKELY(stat == nullptr)) {
-        return RET_CACHE_EPERM;
-    }
     if (UNLIKELY(key == nullptr || stat == nullptr)) {
         return RET_CACHE_ERROR;
     }
@@ -959,6 +1171,20 @@ CResult BioStat(uint64_t tenantId, const char *key, ObjLocation location, ObjSta
     return ret;
 }
 
+CResult BioBatchExist(uint64_t tenantId, const char *key[], ObjLocation location[], uint32_t count, bool result[])
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+
+    return bioInstance->BatchExist(key, location, count, result);
+}
 
 CResult BioNotifyUpgradePrepare(uint64_t tenantId)
 {

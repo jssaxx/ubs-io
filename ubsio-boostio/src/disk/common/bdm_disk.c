@@ -288,6 +288,35 @@ int32_t BdmDiskFree(uintptr_t objPtr, uint64_t len, uint64_t chunkId)
     return BDM_CODE_OK;
 }
 
+int32_t BdmDiskParseChunkId(uintptr_t objPtr, uint64_t chunkId, uint64_t *offset, char *path)
+{
+    if (UNLIKELY(path == NULL)) {
+        BDM_LOGERROR(0, "Path is null.");
+        return BDM_CODE_INVALID_PARAM;
+    }
+    BdmObj *obj = (BdmObj *)objPtr;
+    BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
+    if (UNLIKELY(item == NULL)) {
+        BDM_LOGERROR(0, "Get bdm disk item failed.");
+        return BDM_CODE_ERR;
+    }
+
+    int32_t ret = BdmAllocatorCheckChunk(item->allocator, chunkId, 0, 0);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGWARN(0, "Bdm read check failed, bdm id(%u) chunk id(%llu) ret(%d).", obj->bdmId, chunkId, ret);
+        return ret;
+    }
+
+    *offset = item->offset + item->dataOffset + item->minChunkSize * chunkId;
+    ret = memcpy_s(path, BDM_NAME_LEN, item->name, BDM_NAME_LEN);
+    path[BDM_NAME_LEN - 1] = '\0';
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Memcpy bdm name failed, name(%s).", item->name);
+        return BDM_CODE_ERR;
+    }
+    return BDM_CODE_OK;
+}
+
 int32_t BdmDiskRead(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *buf, uint64_t len)
 {
     BdmObj *obj = (BdmObj *)objPtr;
@@ -579,7 +608,7 @@ void *BdmDiskEventsThread(void *argsP)
     struct epoll_event *epeventP = &bdmPool->epevent[threadIdx];
     int32_t epfd = bdmPool->epfd[threadIdx];
     int32_t recvs;
-    int32_t fdNum = 8UL;
+    int32_t fdNum = BDM_WORKER_THREAD_NUM;
 
     BDM_LOGINFO(0, "bdm disk events thread start.");
     BdmThreadBindCPUs("bdm_events", bdmPool->cpus[threadIdx]);
@@ -864,6 +893,7 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->maxChunkSize = item->maxChunkSize;
     obj->ops.alloc = BdmDiskAlloc;
     obj->ops.free = BdmDiskFree;
+    obj->ops.parseChunkId = BdmDiskParseChunkId;
     obj->ops.read = BdmDiskRead;
     obj->ops.write = BdmDiskWrite;
     obj->ops.readAsync = BdmDiskReadAsync;

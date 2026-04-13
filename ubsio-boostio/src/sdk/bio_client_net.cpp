@@ -187,6 +187,7 @@ BResult BioClientNet::ShmInit()
         return BIO_INNER_ERR;
     }
 
+    mEnableHtrace = rsp.enableHtrace;
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
     mShmOffset = rsp.offset;
@@ -203,8 +204,8 @@ BResult BioClientNet::ShmInit()
     rsp.listenAddress[MAX_LISTEN_ADDRESS_LENGTH - 1] = '\0';
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
-    CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
-        mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
+    CLIENT_LOG_INFO("Bio client configuration, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize <<
+        ", io timeout:" << mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
 
     mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut)); // 更新消息请求发送超时参数.
     ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.
@@ -240,7 +241,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
     }
 
     // 1. Initialize net engine
-    int16_t timeoutSec = NO_16;
+    int16_t timeoutSec = NO_32;
     auto ret = mNetEngine->Initialize(timeoutSec, 0, NO_1024, Log);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
@@ -282,7 +283,8 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.port = port;
     netOptions.role = Role::NET_CLIENT;
     netOptions.isBusyLoop = false;
-    netOptions.memorySize = defaultMemorySize;
+    netOptions.isCreateMemPool = false;
+    netOptions.memoryPoolSize = defaultMemorySize;
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;
