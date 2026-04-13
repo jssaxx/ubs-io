@@ -142,6 +142,7 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
 
+    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE);
     InterceptorPwriteOut resp;
     auto ret = BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL);
     if (UNLIKELY(ret != 0)) {

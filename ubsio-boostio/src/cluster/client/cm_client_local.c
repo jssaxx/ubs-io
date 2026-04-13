@@ -240,16 +240,13 @@ int32_t CmClientLocalGetNode(uint16_t poolId, NodeInfo *nodeInfo)
 
 static int32_t CmClientLocalCheckDisk(DiskList *diskList, DiskList *diskListBak)
 {
-    uint32_t i = 0;
-    uint32_t j = 0;
-
     if (diskList->num != diskListBak->num) {
         CM_LOGERROR("DiskNum not same, pre(%u) now(%u).", diskListBak->num, diskList->num);
         return CM_ERR;
     }
 
-    for (i = 0; i < diskListBak->num; i++) {
-        for (j = 0; j < diskList->num; j++) {
+    for (uint32_t i = 0; i < diskListBak->num; i++) {
+        for (uint32_t j = 0; j < diskList->num; j++) {
             if (diskListBak->list[i].diskId == diskList->list[j].diskId) {
                 break;
             }

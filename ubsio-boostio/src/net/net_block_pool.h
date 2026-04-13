@@ -77,6 +77,9 @@ public:
             NET_LOG_ERROR("Net block pool not ready.");
             return;
         }
+        if (address == 0) {
+            return;
+        }
         PushFront(address);
     }
 

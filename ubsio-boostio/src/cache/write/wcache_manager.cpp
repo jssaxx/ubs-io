@@ -194,6 +194,8 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
     };
 
     wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
+    auto ret = wcache->Init(mEvictService, mRCacheManager, isRecover);
+    ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);

@@ -149,7 +149,7 @@ public:
         mUsedBlock -= NO_1;
     }
 
-    int QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
+    BResult QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
     {
         fd = mShmFd;
         offset = mShareOffset;

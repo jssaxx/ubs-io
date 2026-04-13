@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <libaio.h>
 #include "bio_server.h"
+#include "bio_server_c.h"
 #include "bio_mock.h"
 #include "bio_config_instance.h"
 #include "cache_slice_operator.h"
