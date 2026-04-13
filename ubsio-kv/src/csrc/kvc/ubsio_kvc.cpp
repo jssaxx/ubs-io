@@ -22,7 +22,7 @@ using namespace ock::ubsio;
 
 namespace {
 constexpr int MAX_KEY_LENGTH = 255;
-constexpr int MAX_BATCH_OP_COUNT = 256;
+constexpr int MAX_BATCH_OP_COUNT = 16 << 10; // 16K
 constexpr int MAX_KV_LAYER_NUM = 2 * 512; // k layer + v layer
 constexpr int64_t MAX_KV_LAYER_LENGTH = 2 * 1024 * 1024 * 1024LL; // 2G
 }
