@@ -380,11 +380,10 @@ typedef struct {
 typedef struct {
     uint32_t count;
     uint64_t ptV;
-    uint32_t index = 0;
-    uint32_t reqLen = 0;
-    BatchExistRequest *req = nullptr;
+    uint32_t index;
+    uint32_t reqLen;
+    BatchExistRequest *req;
 } BatchExistPlan;
-
 
 /* List */
 typedef struct {

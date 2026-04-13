@@ -194,10 +194,10 @@ void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
     }
 }
 
-BResult BioQuota::Initialize(uint32_t scene)
+BResult BioQuota::Initialize()
 {
     // 1. 获取流控的配置信息
-    auto ret = agent::BioClientAgent::Instance()->GetLocalQuotaInfo(scene, mEnable, mPreloadSize);
+    auto ret = agent::BioClientAgent::Instance()->GetLocalQuotaInfo(mEnable, mPreloadSize);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get local qos info failed, ret:" << ret << ", nodeId:" << mLocalNodeId << ", clientId" <<
             mClientId << ".");
@@ -231,7 +231,7 @@ BResult BioQos::Initialize(uint32_t nodeId, WorkerMode mode, uint32_t scene)
         CLIENT_LOG_ERROR("Bio quota instance failed, nodeId:" << nodeId << ", pid:" << pid << ".");
         return BIO_INNER_ERR;
     }
-    BResult ret = mQuota->Initialize(scene);
+    BResult ret = mQuota->Initialize();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Bio quota initialize failed, ret:" << ret << ".");
         return ret;

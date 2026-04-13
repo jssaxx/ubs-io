@@ -129,13 +129,6 @@ TEST_F(TestWCache, test_put_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestWCache, test_get_evict_negotiate_info_case)
-{
-    LOG_INFO("test_get_evict_negotiate_info_case");
-    auto ret = gWCacheManager->GetEvictNegotiateInfo();
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
 {
     LOG_INFO("test_put_state_not_normal_case_return_fail");

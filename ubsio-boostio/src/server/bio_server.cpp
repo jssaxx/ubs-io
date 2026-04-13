@@ -77,14 +77,13 @@ BResult BioServer::Start()
     // 1. Initialize infrastructure
     std::string path = "/var/log/boostio/";
 #ifdef DEBUG_UT
-    path = "/var/log/boostio/ut/";
+    path = "./";
 #endif
     std::string logPath = path + "bio.log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
 
-    UnderFs::InitUnderFsConfig(mConfig->GetUnderFsConfig());
     auto &daemonConfig = mConfig->GetDaemonConfig();
     BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
 
@@ -331,8 +330,7 @@ BResult BioServer::BioNetInit()
     netOptions.role = Role::NET_SERVER;
     netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
     netOptions.isCreateMemPool = true;
-    netOptions.memoryPoolSize = mConfig->GetDaemonConfig().memCap;
-    netOptions.regShmMem = true;
+    netOptions.memorySize = mConfig->GetDaemonConfig().memCap;
     netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
     netOptions.connCount = netConfig.rpcDataWorkersCnt;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
@@ -556,47 +554,31 @@ void BioServer::BioFlowExit()
 using CLIAgentInitFunc = int (*)(uint32_t, char *);
 BResult BioServer::BioServerDiagnoseInit()
 {
-    CLIAgentInitFunc cliAgentInitFunc = nullptr;
+#ifdef DEBUG_UT
+    return BIO_OK;
+#endif
+
 #ifdef OPEN_RELEASE
     if (!mConfig->GetDaemonConfig().enableCli) {
         LOG_DEBUG("not open cli, skip");
         return BIO_OK;
     }
 #endif
-#ifdef USE_DEBUG_TP_TOOLS
-    cliAgentInitFunc = reinterpret_cast<CLIAgentInitFunc>(CLI_AgentInit);
-#endif
-    void *handler = nullptr;
-    if (cliAgentInitFunc == nullptr) {
-#ifdef DEBUG_UT
-        const char *soFileName = "libcli_agent.so";
-        handler = dlopen(soFileName, RTLD_NOW);
-#else
-        std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libcli_agent.so";
-        char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-        if (canonicalPath == nullptr) {
-            LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-            return BIO_NOT_EXISTS;
-        }
-
-        handler = dlopen(canonicalPath, RTLD_NOW);
-        free(canonicalPath);
-        canonicalPath = nullptr;
-#endif
-        if (handler == nullptr) {
-            LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
-            return BIO_INNER_ERR;
-        }
-
-        auto ptr = LoadFunction("CLI_AgentInit", handler);
-        if (ptr == nullptr) {
-            LOG_ERROR("Failed to load function CLI_AgentInit.");
-            dlclose(handler);
-            return BIO_ERR;
-        }
-
-        cliAgentInitFunc = reinterpret_cast<CLIAgentInitFunc>(ptr);
+    const char* soFileName = "libcli_agent.so";
+    void *handler = dlopen(soFileName, RTLD_NOW);
+    if (handler == nullptr) {
+        LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
+        return BIO_INNER_ERR;
     }
+
+    auto ptr = LoadFunction("CLI_AgentInit", handler);
+    if (ptr == nullptr) {
+        LOG_ERROR("Failed to load function CLI_AgentInit.");
+        dlclose(handler);
+        return BIO_ERR;
+    }
+
+    auto cliAgentInitFunc = reinterpret_cast<CLIAgentInitFunc>(ptr);
     uint32_t procPid = 456U;
     std::string diagName = "bio_server";
 
@@ -604,19 +586,15 @@ BResult BioServer::BioServerDiagnoseInit()
     ret = cliAgentInitFunc(procPid, const_cast<char *>(diagName.c_str()));
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
-        if (handler != nullptr) {
-            dlclose(handler);
-        }
+        dlclose(handler);
         return BIO_INNER_ERR;
     }
 
     ret = this->BioServerDiagnoseInitInner();
     if (ret != BIO_OK) {
         LOG_ERROR("inner init bio server diagnose fail.");
-        if (handler != nullptr) {
-            dlclose(handler);
-        }
     }
+    dlclose(handler);
     return ret;
 }
 
@@ -628,7 +606,7 @@ BResult BioServer::BioServerDiagnoseInitInner()
     const char *soFileName = "libserver_diagnose.so";
     handler = dlopen(soFileName, RTLD_NOW);
 #else
-    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libserver_diagnose.so";
+    std::string soFileName = "/usr/lib64/libserver_diagnose.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
         LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");

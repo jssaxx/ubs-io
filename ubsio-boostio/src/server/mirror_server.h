@@ -14,6 +14,7 @@
 #define MIRROR_SERVER_H
 
 #include <utility>
+#include <sys/mman.h>
 #include "bio_ref.h"
 #include "bio_err.h"
 #include "net_engine.h"

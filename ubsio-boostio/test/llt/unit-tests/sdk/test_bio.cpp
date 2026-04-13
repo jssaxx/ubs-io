@@ -1708,7 +1708,7 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
     BioHvsActiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
     bool enable = true;
     uint64_t load = 1;
-    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(1, enable, load);
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(enable, load);
     EXPECT_EQ(ret, BIO_OK);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
 }

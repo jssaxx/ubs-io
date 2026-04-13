@@ -30,8 +30,6 @@ RCache::RCache(uint16_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         flow[tier] = nullptr;
         flow[tier] = nullptr;
-        cacheData[tier] = 0ULL;
-        gcData[tier] = 0ULL;
     }
 }
 
@@ -40,8 +38,6 @@ RCache::~RCache()
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         flow[tier] = nullptr;
         flow[tier] = nullptr;
-        cacheData[tier] = 0ULL;
-        gcData[tier] = 0ULL;
     }
 }
 
@@ -375,8 +371,6 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     AddToTruncateList(READ_CACHE_TIER_MEM, chunk);
     BIO_TRACE_END(RCACHE_TRACE_PUT_INSERT_TRUNC, 0);
     chunk->lock.unlock();
-
-    IncCacheData(READ_CACHE_TIER_MEM, chunk->GetValue().length);
     return BIO_OK;
 }
 
@@ -543,7 +537,6 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
 
     AddToTruncateList(READ_CACHE_TIER_MEM, chunk);
     chunk->lock.unlock();
-    IncCacheData(READ_CACHE_TIER_MEM, chunk->GetValue().length);
     return BIO_OK;
 }
 
@@ -566,7 +559,6 @@ BResult RCache::Delete(const Key &key)
     chunk->lock.lock();
     chunk->SetState(1);
     chunk->lock.unlock();
-    IncGCData(chunk->GetTierType(), chunk->GetValue().length);
     return BIO_OK;
 }
 
@@ -725,8 +717,6 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         return BIO_ALLOC_FAIL;
     }
 
-    DecCacheData(READ_CACHE_TIER_MEM, haveEvictData);
-    IncCacheData(READ_CACHE_TIER_DISK, haveEvictData);
     return BIO_OK;
 }
 
@@ -795,6 +785,5 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         return BIO_ALLOC_FAIL;
     }
 
-    DecCacheData(READ_CACHE_TIER_DISK, haveEvictData);
     return BIO_OK;
 }

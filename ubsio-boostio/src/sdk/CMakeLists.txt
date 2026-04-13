@@ -6,10 +6,10 @@ add_library(bio_sdk SHARED ${BIO_SDK_SRCS})
 
 target_link_libraries(bio_sdk
         -Wl,--start-group
-        pthread dl expire_checker rados
+        pthread dl expire_checker
         hcom_lib
         boundscheck_lib
-        htracer bio_common bio_net bio_interceptor_server bio_underfs
+        htracer bio_common bio_net bio_interceptor_server
         -Wl,--end-group)
 
 set(LIB_VERSION_MAJOR 1)
@@ -35,7 +35,7 @@ set_target_properties(bio_sdk_static PROPERTIES
 target_link_libraries(bio_sdk_static
         PRIVATE
         -Wl,--start-group
-        pthread dl expire_checker rados
+        pthread dl expire_checker
         hcom_lib
         boundscheck_lib
         htracer bio_common bio_net bio_interceptor_server

@@ -79,7 +79,7 @@ public:
 
     static inline NetMrInfo MemoryRegionInfo(MemoryRegion &mr)
     {
-        return NetMrInfo(mr->GetAddress(), mr->Size(), mr->GetLKey());
+        return NetMrInfo(mr.GetAddress(), mr.GetSize(), mr.GetHcomMrs()[0]->GetLKey());
     }
 
     inline void SetDataPageKb(uint32_t dataPageKb)
@@ -635,16 +635,6 @@ public:
         return mDataChannelMgr;
     }
 
-    ServiceProtocol GetNetProtocol()
-    {
-        return mOptions.protocol;
-    }
-
-    uint16_t GeConnectCount()
-    {
-        return mOptions.connCount;
-    }
-
     inline BResult GetCtrlChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
         BIO_TRACE_START(NET_TRACE_GET_CTRL_CHANNEL);
@@ -680,9 +670,9 @@ public:
     inline NetRequest InitNetRequest(uintptr_t la, uintptr_t ra, uint64_t lk, uint64_t rk, uint32_t size)
     {
         NetRequest req;
-        ock::hcom::UBSHcomMemoryKey lKey;
+        ock::hcom::UBSHcomMemoryKey lKey{};
         lKey.keys[0] = lk;
-        ock::hcom::UBSHcomMemoryKey rKey;
+        ock::hcom::UBSHcomMemoryKey rKey{};
         rKey.keys[0] = rk;
         req.lKey = lKey;
         req.rKey = rKey;
@@ -694,6 +684,8 @@ public:
 
     void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, ock::hcom::UBSHcomConnectOptions &op);
     BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
+    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
+    void DestroyShmFdWithPid(int32_t &shmFd, uint8_t *addr, uint32_t pid, uint64_t size);
 
     BResult InitCommMemAllocator();
     BResult InitShmMemAllocator();
@@ -714,12 +706,8 @@ private:
     BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr);
     BResult StartRpcService(const NetOptions &opt);
     void SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt);
-
     BResult PrepareTlsDecrypter(const NetOptions &config);
-
     void StopInner();
-
-    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
 
     inline void RegisterDecryptHandler(const DecryptFunc &h)
     {
@@ -785,6 +773,33 @@ private:
             return respMsg.errorCode;
         }
 
+        return BIO_OK;
+    }
+
+    template <typename TResp>
+    BResult SyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, TResp **resp,
+                              uint64_t &respLen, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        UBSHcomRequest reqMsg(req, reqLen, opCode);
+        UBSHcomResponse respMsg{};
+#ifndef DEBUG_UT
+        auto result = ch->Call(reqMsg, respMsg);
+#else
+        auto result = NetStub::Call(reqMsg, respMsg);
+#endif
+        if (UNLIKELY(result != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+
+        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
+            return respMsg.errorCode;
+        }
+
+        *resp = reinterpret_cast<TResp *>(respMsg.address);
+        respLen = respMsg.size;
         return BIO_OK;
     }
 

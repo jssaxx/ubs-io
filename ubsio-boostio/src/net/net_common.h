@@ -38,8 +38,7 @@ using NewRequestHandler = std::function<int32_t(ServiceContext &)>;
 using NewChannelHandler = std::function<int32_t(const ChannelPtr &, const std::string &ipPort, NewChannelResp &)>;
 using ChannelBrokenHandler = std::function<void(uint32_t nodeId, uint32_t procId)>;
 using ServiceProtocol = ock::hcom::UBSHcomServiceProtocol;
-using MemoryRegion = ock::hcom::UBSHcomNetMemoryRegion;
-using MemoryAllocatorPtr = ock::hcom::UBSHcomNetMemoryAllocatorPtr;
+using MemoryRegion = ock::hcom::UBSHcomRegMemoryRegion;
 using NetRequest = ock::hcom::UBSHcomOneSideRequest;
 using NetCallback = ock::hcom::Callback;
 
@@ -108,8 +107,8 @@ struct NetOptions {
     uint16_t handlerCount = 1;                           /* handler count */
     uint16_t connCount = 1;                              /* connect count */
     bool isBusyLoop = false;                             /* busy for rdma only */
+    bool isCreateMemPool = false;                        /* create net memory pool */
     uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
-    bool regShmMem = false;                              /* register the memory to shared */
     Role role = Role::NET_BUTT;                          /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs

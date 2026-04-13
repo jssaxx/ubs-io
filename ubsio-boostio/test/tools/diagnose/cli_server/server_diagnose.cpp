@@ -203,9 +203,6 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         for (auto iter = holders.begin(); iter != holders.end(); iter++) {
             mPrintOp("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
-    } else if (cmdType == "evict") {
-        Cache::Instance().ShowEvictNegotiateQueue();
-        mPrintOp("Show evict negotiate queue success, please see log file.\n");
     } else {
         mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
     }

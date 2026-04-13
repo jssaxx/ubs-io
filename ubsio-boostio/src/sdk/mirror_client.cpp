@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <dlfcn.h>
+#include <sys/mman.h>
 #include "bio_tracepoint_helper.h"
 #include "bio_client_log.h"
 #include "bio_trace.h"
@@ -274,7 +275,7 @@ BResult MirrorClient::CreateDataMessageMemLocal()
         CLIENT_LOG_ERROR("Failed to register mr by size " << dataMemSize);
         return ret;
     }
-    mDataMsgMemAddr = reinterpret_cast<uint8_t *>(mDataMsgMemMr->GetAddress());
+    mDataMsgMemAddr = reinterpret_cast<uint8_t *>(mDataMsgMemMr.GetAddress());
 
     // 2. 创建memory block分配器.
     mDataMsgMemPool = MakeRef<NetBlockPool>();
@@ -1260,9 +1261,7 @@ BResult MirrorClient::BatchExistImpl(const char *key[], ObjLocation location[], 
         keysInfo.emplace_back(ptEntry);
         for (auto copy : ptEntry.copys) {
             if (planSend.find(copy.nodeId) == planSend.end()) {
-                planSend.insert(std::pair<uint16_t, BatchExistPlan>(copy.nodeId,
-                                                                    {1, ptEntry.version,
-                                                                     0, 0, nullptr}));
+                planSend.insert(std::pair<uint16_t, BatchExistPlan>(copy.nodeId, { 1, ptEntry.version, 0, 0, nullptr}));
             } else {
                 planSend.find(copy.nodeId)->second.count++;
             }
@@ -1270,7 +1269,7 @@ BResult MirrorClient::BatchExistImpl(const char *key[], ObjLocation location[], 
     }
 
     auto it = planSend.begin();
-    for (uint16_t i = 0; i < planSend.size(); i++) {
+    for (size_t i = 0; i < planSend.size(); i++) {
         size_t reqLen = sizeof(BatchExistRequest) + it->second.count * sizeof(BatchExistKeyInfo);
         it->second.req = reinterpret_cast<BatchExistRequest*>(malloc(reqLen));
         if (UNLIKELY(it->second.req == nullptr)) {
@@ -1704,7 +1703,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         mDataMsgMemPool->ReleaseOne(address);
         return BIO_ALLOC_FAIL;
     }
-    NetMrInfo mr(address, mDataMsgMemBlockSize, mDataMsgMemMr->GetLKey());
+    NetMrInfo mr(address, mDataMsgMemBlockSize, mDataMsgMemMr.GetHcomMrs()[0]->GetLKey());
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
     req->memFromServer = false;
@@ -1930,7 +1929,7 @@ BResult MirrorClient::GetServerRemote(GetRequest &req, uint16_t dstNid, char *va
     req.isMr = 1;
     req.address = address;
     req.size = mDataMsgMemBlockSize;
-    req.mrKey = mDataMsgMemMr->GetLKey();
+    req.mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
 
     GetResponse rsp;
     ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(static_cast<BioNodeId>(dstNid),
@@ -2284,7 +2283,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
 
     req.address = address;
     req.size = maxSize;
-    req.mrKey = mDataMsgMemMr->GetLKey();
+    req.mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
     ListResponse rsp;
     BIO_TP_START(LISTALL_REMOTE_RSP_OVER_LIMIT, &rsp.num, 1500U);
     ret = net::BioClientNet::Instance()->SendSync<ListRequest, ListResponse>(static_cast<BioNodeId>(nid),

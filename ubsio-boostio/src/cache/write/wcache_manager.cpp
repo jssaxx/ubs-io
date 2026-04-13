@@ -146,7 +146,6 @@ BResult WCacheManager::DelayDestroyExecutorInit()
 void WCacheManager::Exit()
 {
     mRunning = false;
-    mNegotiateFlag = false;
     mCacheIndex->Exit();
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
@@ -195,9 +194,6 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
     };
 
     wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
-
-    auto ret = wcache->Init(mEvictNegotiateService, mEvictService, mRCacheManager, isRecover);
-    ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
     {
         WriteLocker<ReadWriteLock> lock(&mWCacheManagerLock);
