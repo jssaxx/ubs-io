@@ -141,7 +141,7 @@ public:
         return instance;
     }
 
-    BResult Initialize(uint32_t scene);
+    BResult Initialize();
 
     inline bool Enable() const
     {

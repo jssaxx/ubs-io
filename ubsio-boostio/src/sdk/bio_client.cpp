@@ -319,10 +319,11 @@ BResult BioClient::BioClientCertificateExpiration(const ClientOptionsConfig &opt
     if (mMode == SEPARATES && optConf.enable != 0) { // 证书过期检查.
         auto expireChecker = ExpireChecker::Instance();
         if (expireChecker == nullptr) {
-            LOG_INFO("expire checker alloc fail.");
+            LOG_ERROR("expire checker alloc fail.");
             return BIO_ALLOC_FAIL;
         }
-        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath,
+
+        auto ret = expireChecker->ExpireCheckerInit(optConf.caCerPath, optConf.certificationPath,
             optConf.opensslLibDir);
         if (ret != BIO_OK) {
             return ret;
@@ -342,7 +343,6 @@ BResult BioClient::BioClientTraceInit()
         return ret;
     }
     return BIO_OK;
-
 }
 
 void BioClient::BioClientTraceExit()

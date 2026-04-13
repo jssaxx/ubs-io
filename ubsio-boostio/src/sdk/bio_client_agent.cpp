@@ -32,7 +32,7 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
         const char *soFileName = "libbio_server.so";
         handler = dlopen(soFileName, RTLD_NOW);
 #else
-        std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libbio_server.so";
+        std::string soFileName = "/usr/lib64/libbio_server.so";
         char *canonicalPath = realpath(soFileName.c_str(), nullptr);
         if (canonicalPath == nullptr) {
             CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
@@ -269,19 +269,18 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     return ret;
 }
 
-BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t &preloadSize)
+BResult BioClientAgent::GetLocalQuotaInfo(bool &enable, uint64_t &preloadSize)
 {
     BResult ret = BIO_OK;
     QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryQuotaResponse rsp = { false, 0 };
-    BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, BIO_OK);
+    BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
     if (mMode == CONVERGENCE) {
         ret = getQuotaInfoOp(&req, &rsp);
     } else {
         ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
             BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
-	BIO_TP_END;
     if (ret == BIO_OK) {
         if (rsp.preloadSize > NO_128 * IO_SIZE_1M) { // quota初始预取大小最大不超过128MB.
             CLIENT_LOG_ERROR("Quota preload size too large, preloadSize " << rsp.preloadSize << ".");
@@ -290,6 +289,7 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
         enable = rsp.enable;
         preloadSize = rsp.preloadSize;
     }
+    BIO_TP_END;
     return ret;
 }
 

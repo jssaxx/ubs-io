@@ -201,6 +201,19 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     return BIO_OK;
 }
 
+void NetEngine::DestroyShmFdWithPid(int32_t &shmFd, uint8_t *addr, uint32_t pid, uint64_t size)
+{
+    if (munmap(addr, size) == -1) {
+        NET_LOG_ERROR("munmap address failed.");
+        return;
+    }
+    close(shmFd);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(NO_3, NO_17, 0)
+    std::string shmName = "bio_data_msg_mem_pool" + std::to_string(pid);
+    shm_unlink(shmName.c_str());
+#endif
+}
+
 BResult NetEngine::InitCommMemAllocator()
 {
     auto result = RegisterMemoryRegion(mOptions.memorySize, mLocalMr);
@@ -284,8 +297,8 @@ BResult NetEngine::InitShmMemAllocator()
 
 BResult NetEngine::InitMemoryAllocator()
 {
-    if (mOptions.regShmMem) {
-        return InitShmMemAllocator();
+    if (mOptions.isCreateMemPool) {
+        return InitShmMemAllocator(); // 创建server端的内存分配器
     }
     return InitCommMemAllocator();
 }

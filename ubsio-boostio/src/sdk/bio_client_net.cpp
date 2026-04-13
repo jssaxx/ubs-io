@@ -284,7 +284,7 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.role = Role::NET_CLIENT;
     netOptions.isBusyLoop = false;
     netOptions.isCreateMemPool = false;
-    netOptions.memoryPoolSize = defaultMemorySize;
+    netOptions.memorySize = defaultMemorySize;
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;

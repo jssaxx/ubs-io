@@ -19,8 +19,8 @@
 #include <mutex>
 #include <string>
 #include "bio_c.h"
-#include "dfc_log.h"
-#include "dfc_err.h"
+#include "ubsio_kvc_log.h"
+#include "ubsio_kvc_err.h"
 
 namespace ock {
 namespace ubsio {
@@ -65,7 +65,7 @@ public:
     static CResult Get(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
                 uint64_t *realLength)
     {
-        return static_cast<CResult>(pBioGet(tenantId, key, offset, length, location, value, realLength);
+        return static_cast<CResult>(pBioGet(tenantId, key, offset, length, location, value, realLength));
     }
 
     static CResult Put(uint64_t tenantId, const char *key, const char *value, uint64_t length, ObjLocation location)

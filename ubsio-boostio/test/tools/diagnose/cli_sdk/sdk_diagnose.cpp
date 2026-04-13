@@ -377,14 +377,14 @@ void diagnose::BioSdkCommand::HandleCheckUpdateReady(const std::vector<std::stri
 
 void diagnose::BioSdkCommand::HandleStat(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[2], GetPattern())) {
+    if (!std::regex_match(cmds[NO_2], GetPattern())) {
         mPrintOp("Invalid input.\n");
         return;
     }
     uint64_t location = 0;
     auto key = cmds[1].c_str();
     try {
-        location = std::stoull(cmds[2]);
+        location = std::stoull(cmds[NO_2]);
     } catch (std::exception e) {
         mPrintOp("Invalid input.\n");
         return;

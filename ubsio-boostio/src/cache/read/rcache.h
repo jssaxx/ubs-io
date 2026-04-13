@@ -88,53 +88,9 @@ public:
         mIsNormal = false;
     }
 
-    inline uint64_t GetCacheData(RCacheTierType tierType)
-    {
-        return cacheData[tierType];
-    }
+    BResult EvictMemData(uint64_t needEvictData, uint64_t &haveEvictData);
 
-    inline void IncCacheData(RCacheTierType tierType, uint64_t len)
-    {
-        if (UINT64_MAX - cacheData[tierType] < len) {
-            return;
-        }
-        cacheData[tierType] += len;
-    }
-
-    inline void DecCacheData(RCacheTierType tierType, uint64_t len)
-    {
-        if (cacheData[tierType] > len) {
-            return;
-        }
-
-        cacheData[tierType] -= len;
-    }
-
-    inline uint64_t GetGCData(RCacheTierType tierType)
-    {
-        return gcData[tierType];
-    }
-
-    inline void IncGCData(RCacheTierType tierType, uint64_t len)
-    {
-        if (UINT64_MAX - gcData[tierType] < len) {
-            return;
-        }
-        gcData[tierType] += len;
-    }
-
-    inline void DecGCData(RCacheTierType tierType, uint64_t len)
-    {
-        if (gcData[tierType] > len) {
-            return;
-        }
-
-        gcData[tierType] -= len;
-    }
-
-    BResult EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictData);
-
-    BResult EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData);
+    BResult EvictDiskData(uint64_t needEvictData, uint64_t &haveEvictData);
 
     bool IsEmptyEvict();
 
@@ -169,10 +125,6 @@ private:
 private:
     std::atomic<bool> mMemEvict{ false };
     std::atomic<bool> mDiskEvict{ false };
-
-    std::atomic<uint64_t> cacheData[READ_CACHE_TIER_BUTT];
-    std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
-
     bool mIsNormal{ true };
     bool mCrcEnable{ true };
     uint64_t mFlowId;
@@ -182,12 +134,9 @@ private:
     uint32_t mWorkIndex;
     SpinLock indexLock[READ_CACHE_META_HASH_BUCKET_NUM];
     std::unordered_map<std::string, RCacheChunkPtr> index[READ_CACHE_META_HASH_BUCKET_NUM]; // read cache index
-
     RCacheFlowPtr flow[READ_CACHE_TIER_BUTT]; // read cache data
-
     SpinLock truncateLock[READ_CACHE_TIER_BUTT];
     BioDoubleList<RCacheChunkPtr> truncateQ[READ_CACHE_TIER_BUTT]; // truncate cache list
-
     CacheSliceOperator mSliceOperator;
     DEFINE_REF_COUNT_VARIABLE
 };
