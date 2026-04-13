@@ -81,7 +81,7 @@ private:
 #endif
 #define INTERCEPTOR_LOG(level, args)                                                                                \
     do {                                                                                                            \
-        if ((level) >= InterceptorLog::Instance()->GetMinLogLevel()) {                                              \
+        if ((level) >= static_cast<int>(InterceptorLog::Instance()->GetMinLogLevel())) {                            \
             std::ostringstream oss;                                                                                 \
             oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] " << \
                 args;                                                                                               \
