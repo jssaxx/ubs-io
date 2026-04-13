@@ -85,7 +85,7 @@ private:
             std::ostringstream oss;                                                                                 \
             oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] " << \
                 args;                                                                                               \
-            InterceptorLog::Instance()->Log(level, oss);                                                            \
+            InterceptorLog::Instance()->Log(static_cast<int>(level), oss);                                                            \
         }                                                                                                           \
     } while (0)
 
