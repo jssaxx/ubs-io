@@ -115,7 +115,7 @@ bool ProxyOperationsLoader::LoadPreLoadPath()
 bool ProxyOperationsLoader::LoadProxyDLL()
 {
     for (auto& item : components) {
-        std::string proxyName = std::string("/libock_").append(item).append("_proxy.so");
+        std::string proxyName = std::string("/usr/lib64/libock_").append(item).append("_proxy.so");
         std::string prefixPath = ldPrePath;
         std::string proxyPath = prefixPath.append(proxyName);
         if (!CanonicalPath(proxyPath)) {
