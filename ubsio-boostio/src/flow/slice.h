@@ -57,7 +57,7 @@ public:
         return mFlowType;
     }
 
-    inline uint64_t GetLength() const
+    inline uint32_t GetLength() const
     {
         return mLength;
     }

@@ -368,8 +368,7 @@ CResult Bio::AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpP
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     } else {
         CLIENT_LOG_DEBUG("Async get value success, key:" << key << ", offset:" << offset << ", length:" << length <<
-            ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
-            location.location[1] << ".");
+            ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
     }
     return ToCResult(ret);
 }

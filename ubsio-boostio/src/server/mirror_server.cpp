@@ -762,7 +762,7 @@ BResult MirrorServer::ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrIn
         }
         if (UNLIKELY(ret == BIO_INNER_RETRY)) {
             isRetry = true;
-            usleep(100);
+            usleep(NO_100);
         }
     } while (isRetry);
     return ret;

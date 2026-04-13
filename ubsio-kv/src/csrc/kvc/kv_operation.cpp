@@ -67,7 +67,7 @@ int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **
     std::vector<uint64_t> offsets(keysCount, 0);
     std::vector<const char*> keys(keysCount);
     for (size_t i = 0; i < keysCount; i++) {
-        ObjLocation> location;
+        ObjLocation location;
         CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), &location);
         if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
             LOG_ERROR("Calc location failed, status:" << status);

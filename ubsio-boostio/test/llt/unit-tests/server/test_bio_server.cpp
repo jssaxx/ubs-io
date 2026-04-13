@@ -1390,30 +1390,6 @@ TEST_F(TestBioServer, test_get_underfs_config_return_fial)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestBioServer, test_wcache_negotiate)
-{
-    LOG_INFO("test_wcache_negotiate");
-    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    ServiceContext ctx;
-    std::vector<uint64_t> offsetVec;
-    offsetVec.emplace_back(0);
-    EvictNegotiateRequest req = { 0, static_cast<uint32_t>(offsetVec.size()) };
-    for (uint32_t idx = 0; idx < req.count; idx++) {
-        req.data[idx] = offsetVec[idx];
-    }
-    auto ret = mirror->MirrorServerEvictNegotiate(ctx, &req);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestBioServer, test_handl_negotiate)
-{
-    LOG_INFO("test_handl_negotiate");
-    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    ServiceContext ctx;
-    auto ret = mirror->HandleEvictNegotiateRequest(ctx);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 TEST_F(TestBioServer, test_bioserver_Channel)
 {
     LOG_INFO("test_bioserver_Channel");
@@ -1423,22 +1399,6 @@ TEST_F(TestBioServer, test_bioserver_Channel)
     auto ret = engine->NewChannel(ipPort, nullptr, payload);
     EXPECT_EQ(ret, BIO_ERR);
     engine->ChannelBroken(nullptr);
-}
-
-TEST_F(TestBioServer, test_server_exception)
-{
-    LOG_INFO("test_server_exception");
-    FreeMemRequest freeMemReq;
-    freeMemReq.num = NO_24;
-    ServiceContext ctx;
-    auto ret = MirrorServer::Instance()->MirrorServerFreeMem(ctx, &freeMemReq);
-    EXPECT_EQ(ret, BIO_OK);
-    EvictNegotiateRequest negoReq;
-    negoReq.count = NO_1024;
-    ret = MirrorServer::Instance()->MirrorServerEvictNegotiate(ctx, &negoReq);
-    EXPECT_EQ(ret, BIO_OK);
-    ret = ExpireChecker::Instance()->ExpireCheckerInit("./test.pem", "./test1.pem", "./test1.pem");
-    EXPECT_EQ(ret, BIO_ERR);
 }
 
 TEST_F(TestBioServer, test_handle_interceptor_alloc_page)

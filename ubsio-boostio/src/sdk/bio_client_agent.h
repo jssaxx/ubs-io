@@ -30,8 +30,6 @@ using BioClientAgentPtr = Ref<BioClientAgent>;
 class BioClientAgent {
 public:
     struct FlowInfo {
-        uint16_t ptId;
-        uint16_t opType;
         uint64_t flowId;
         bool isDegrade;
         uint64_t index;
@@ -106,7 +104,7 @@ public:
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
 
-    BResult GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t &preloadSize);
+    BResult GetLocalQuotaInfo(bool &enable, uint64_t &preloadSize);
 
     BResult AllocQuota(AllocQuotaRequest &req, uint64_t &expectPreloadSize);
 
