@@ -21,6 +21,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <cstdlib>
+#include <cstring>
 
 namespace ock {
 namespace bio {
@@ -36,7 +38,11 @@ public:
         LOG_LEVEL_BUTT
     };
 
-    InterceptorLog() = default;
+    InterceptorLog()
+    {
+        minLogLevel = ParseLogLevelFromEnv();
+    }
+
     ~InterceptorLog()
     {
         func = nullptr;
@@ -73,8 +79,34 @@ public:
     }
 
 private:
+    static int32_t ParseLogLevelFromEnv()
+    {
+        const char *envVar = std::getenv("INTERCEPTOR_LOG_LEVEL");
+        if (envVar == nullptr || strlen(envVar) == 0) {
+            return static_cast<int32_t>(Level::LOG_LEVEL_ERROR);
+        }
+
+        if (strcasecmp(envVar, "debug") == 0) {
+            return static_cast<int32_t>(Level::LOG_LEVEL_DEBUG);
+        } else if (strcasecmp(envVar, "info") == 0) {
+            return static_cast<int32_t>(Level::LOG_LEVEL_INFO);
+        } else if (strcasecmp(envVar, "warn") == 0) {
+            return static_cast<int32_t>(Level::LOG_LEVEL_WARN);
+        } else if (strcasecmp(envVar, "error") == 0) {
+            return static_cast<int32_t>(Level::LOG_LEVEL_ERROR);
+        }
+
+        int32_t level = atoi(envVar);
+        if (level >= static_cast<int32_t>(Level::LOG_LEVEL_DEBUG) &&
+            level < static_cast<int32_t>(Level::LOG_LEVEL_BUTT)) {
+            return level;
+        }
+
+        return static_cast<int32_t>(Level::LOG_LEVEL_ERROR);
+    }
+
     LogFunc func = nullptr;
-    int32_t minLogLevel = 3;
+    int32_t minLogLevel;
 };
 
 #ifndef INTERCEPTOR_LOG_FILENAME

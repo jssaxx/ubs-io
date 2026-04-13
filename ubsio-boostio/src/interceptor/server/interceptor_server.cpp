@@ -52,7 +52,7 @@ BResult InterceptorServer::RegisterOpcode()
 
 bool InterceptorServer::CheckInterceptorReadReq(InterceptorPreadIn *req)
 {
-    if (req->nbytes > IO_SIZE_8K || req->nbytes == 0) {
+    if (req->nbytes > IO_SIZE_4M || req->nbytes == 0) {
         return false;
     }
     return true;
@@ -114,7 +114,7 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
 
 bool InterceptorServer::CheckInterceptorWriteReq(InterceptorPwriteIn *req)
 {
-    if (req->nbytes > IO_SIZE_4K || req->nbytes == 0) {
+    if (req->nbytes > IO_SIZE_8K || req->nbytes == 0) {
         return false;
     }
     return true;
@@ -161,7 +161,7 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 
 bool InterceptorServer::CheckInterceptorAllocPageReq(InterceptorAllocPageReq *req)
 {
-    return (req->length == IO_SIZE_4M);
+    return (req->length <= IO_SIZE_4M && req->length > 0);
 }
 
 BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
@@ -213,7 +213,7 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
 
 bool InterceptorServer::CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req)
 {
-    if (req->nbytes != IO_SIZE_4M) {
+    if (req->nbytes > IO_SIZE_4M || req->nbytes == 0) {
         return false;
     }
     return true;
@@ -247,9 +247,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
         addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ".");
     InterceptorPwriteOut resp;
-    resp.ret = 0;
-    resp.dataLen = static_cast<int64_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
-    if (UNLIKELY(resp.dataLen < 0)) {
+    resp.ret = static_cast<int32_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
+    if (UNLIKELY(resp.ret < 0)) {
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;

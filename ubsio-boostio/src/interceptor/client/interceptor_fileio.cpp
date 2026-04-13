@@ -36,7 +36,8 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
         return -1;
     }
 
-    if (count > INTERCEPTOR_RDWR_BUFFER_SIZE) {
+    if (count > MAX_LARGE_WRITE_SIZE) {
+        CLOG_ERROR("count > MAX_LARGE_WRITE_SIZE fd:" << fd << ",count: " << count);
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
@@ -110,6 +111,7 @@ ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
     CLOG_DEBUG("Read fd:" << fd << ", length:" << nbytes << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_ERROR("file == nullptr. fd:" << fd);
         return CONTEXT.GetOperations()->read(fd, buf, nbytes);
     }
 
@@ -122,6 +124,7 @@ ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
 
     auto ret = PreadInner(fd, buf, nbytes, offset);
     if (UNLIKELY(ret < 0)) {
+        CLOG_ERROR("PreadInner. fd:" << fd);
         errno = EIO;
         return -1;
     }
@@ -214,7 +217,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    size_t realCount = std::min(count, INTERCEPTOR_RDWR_BUFFER_SIZE);
+    size_t realCount = std::min(count, MAX_SMALL_WRITE_SIZIE);
     size_t reqLen = sizeof(InterceptorPwriteIn) + realCount;
     char *tmpPtr = new (std::nothrow) char[reqLen];
     if (UNLIKELY(tmpPtr == nullptr)) {
@@ -239,9 +242,9 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     InterceptorPwriteOut resp;
     ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
-    if (UNLIKELY(ret != 0 || resp.dataLen == 0 || resp.dataLen != count)) {
-        CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", req->offset" << request->offset << ", count" <<
-            count << ", rsp len:" << resp.dataLen << ".");
+    if (UNLIKELY(ret != 0 || resp.dataLen == 0 || resp.dataLen != realCount)) {
+        CLOG_DEBUG("Write ret: " << ret << ",fd:" << fd << ", offset:" << offset << ", req->offset"
+            << request->offset << ", count" << count << ", rsp len:" << resp.dataLen << ".");
         delete[] tmpPtr;
         tmpPtr = nullptr;
         return -1;
@@ -250,7 +253,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     delete[] tmpPtr;
     tmpPtr = nullptr;
     CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << resp.dataLen << ".");
-    return count;
+    return static_cast<ssize_t>(resp.dataLen);
 }
 
 ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
@@ -260,7 +263,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    if (count != MAX_LARGE_WRITE_SIZE) {
+    if (count > MAX_LARGE_WRITE_SIZE) {
         return CONTEXT.GetOperations()->write(fd, buf, count);
     }
 
@@ -274,10 +277,10 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorAllocPageReq, InterceptorAllocPageRsp>(
         INVALID_NID, BIO_OP_INTERCEPTOR_ALLOC_BUFF, req, resp);
     if (UNLIKELY(ret != 0 || resp.address.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
-        CLOG_ERROR("Send large write io request failed:" << ret << ".");
+        CLOG_ERROR("PwriteLargeInner: alloc page failed, ret:" << ret << ", addressNum:" << resp.address.addressNum << ".");
         return -1;
     }
-    CLOG_DEBUG("Alloc write large space:" << count << ", location0:" << resp.address.loc.location[0] <<
+    CLOG_DEBUG("PwriteLargeInner: alloc page success, count:" << count << ", location0:" << resp.address.loc.location[0] <<
         ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<
         ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
 
@@ -285,21 +288,30 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
         totalLen += resp.address.address[i].size;
     }
+
     if (totalLen < count) {
+        CLOG_ERROR("PwriteLargeInner: totalLen " << totalLen << " < count " << count << ".");
         return -1;
     }
+
     char *copyBuff = static_cast<char *>(const_cast<void *>(buf));
-    for (uint32_t i = 0; i < resp.address.addressNum; i++) {
+    size_t remainLen = count;
+    for (uint32_t i = 0; i < resp.address.addressNum && remainLen > 0; i++) {
         void *dataBuff =
             InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i], resp.address.address[i].size);
         if (dataBuff == nullptr) {
+            CLOG_ERROR("PwriteLargeInner: get shm address failed, idx:" << i << ", offset:" << resp.addrOffset[i] <<
+                ", size:" << resp.address.address[i].size << ".");
             return -1;
         }
-        ret = memcpy_s(dataBuff, resp.address.address[i].size, (const char *)copyBuff, resp.address.address[i].size);
+        size_t copyLen = std::min(remainLen, static_cast<size_t>(resp.address.address[i].size));
+        ret = memcpy_s(dataBuff, resp.address.address[i].size, (const char *)copyBuff, copyLen);
         if (UNLIKELY(ret != 0)) {
+            CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ", idx:" << i << ".");
             return -1;
         }
-        copyBuff += resp.address.address[i].size;
+        copyBuff += copyLen;
+        remainLen -= copyLen;
     }
 
     writeReq.pid = static_cast<uint32_t>(getpid());
@@ -311,12 +323,13 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     InterceptorPwriteOut writeResp;
     ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
-    if (UNLIKELY(ret != 0 || writeResp.dataLen == 0)) {
+    if (UNLIKELY(ret != 0)) {
+        CLOG_ERROR("PwriteLargeInner: large write failed, ret:" << ret << ".");
         return -1;
     }
 
-    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << writeResp.dataLen);
-    return count;
+    CLOG_DEBUG("PwriteLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
+    return static_cast<ssize_t>(count);
 }
 
 ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
