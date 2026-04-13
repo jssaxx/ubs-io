@@ -38,8 +38,27 @@ using namespace ock::bio;
 
 #define CONTEXT BioInterceptorContext::GetInstance()
 
+InterceptorLog::Level ProxyOperations::GetInterceptorLog()
+{
+    const char* envLevel = std::getenv("BOOSTIO_INTERCEPTOR_LOGLEVEL");
+    if (UNLIKELY(!envLevel)) {
+        return InterceptorLog::Level::LOG_LEVEL_BUTT;
+    }
+    static const std::unordered_map<std::string, InterceptorLog::Level> levelMap = {
+            {"debug", InterceptorLog::Level::LOG_LEVEL_DEBUG}, {"info", InterceptorLog::Level::LOG_LEVEL_INFO},
+            {"warn", InterceptorLog::Level::LOG_LEVEL_WARN}, {"error", InterceptorLog::Level::LOG_LEVEL_ERROR},
+            {"null", InterceptorLog::Level::LOG_LEVEL_BUTT}
+    };
+    std::string levelStr(envLevel);
+    std::transform(levelStr.begin(), levelStr.end(), levelStr.begin(), ::tolower);
+
+    auto level = levelMap.find(levelStr);
+    return level != levelMap.end() ? level->second : InterceptorLog::Level::LOG_LEVEL_BUTT;
+}
+
 void ProxyOperations::FillInterceptorOps(InterceptorProxyOperations &ops)
 {
+    InterceptorLog::Instance()->Initialize(GetInterceptorLog());
     ops.open = OpenProxy;
     ops.open64 = Open64Proxy;
     ops.openat = OpenAtProxy;

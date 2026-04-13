@@ -20,6 +20,7 @@
 #include <string>
 #include "interceptor.h"
 #include "message.h"
+#include "interceptor_log.h"
 
 namespace ock {
 namespace bio {
@@ -30,6 +31,7 @@ const size_t MAX_LARGE_WRITE_SIZE = (4 * 1024 * 1024L);
 class ProxyOperations {
 public:
     static void FillInterceptorOps(InterceptorProxyOperations &ops);
+    static inline InterceptorLog::Level GetInterceptorLog();
     static struct InterceptorProxyOperations *GetOperations() noexcept;
 
 public:

@@ -42,13 +42,12 @@ public:
         func = nullptr;
     }
 
-    int32_t Initialize(int32_t level)
+    void Initialize(Level level)
     {
         minLogLevel = level;
-        return 0;
     }
 
-    inline int32_t GetMinLogLevel() const
+    inline Level GetMinLogLevel() const
     {
         return minLogLevel;
     }
@@ -74,7 +73,7 @@ public:
 
 private:
     LogFunc func = nullptr;
-    int32_t minLogLevel = 3;
+    Level minLogLevel = Level::LOG_LEVEL_ERROR;
 };
 
 #ifndef INTERCEPTOR_LOG_FILENAME
