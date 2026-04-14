@@ -12,7 +12,7 @@
 
 #include <mockcpp/mockcpp.hpp>
 #include <cstdint>
-#include "underfs.h"
+#include "ufs_helper.h"
 #include "bio_server.h"
 #include "bio_mock.h"
 #include "bio_config_instance.h"
@@ -176,7 +176,7 @@ TEST_F(TestRCache, test_rcache_load_ok)
     LOG_INFO("test_rcache_load_ok");
     Key key = "123123key2";
     uint64_t len = strlen(G_VALUE) + 1;
-    auto ret = UnderFs::Instance()->Put(key, G_VALUE, len);
+    auto ret = UfsHelper::Instance()->Put(key, G_VALUE, len);
     EXPECT_EQ(ret, BIO_OK);
 
     uint64_t realLen;
