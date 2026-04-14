@@ -195,6 +195,10 @@ BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
         return BIO_OK;
     }
 
+    if (addressInfo.addressNum == 1) {
+        addressInfo.address[1].size = 0;
+    }
+
     CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->length << ", location0:" <<
         addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
         addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
