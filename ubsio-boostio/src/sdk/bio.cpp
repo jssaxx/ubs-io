@@ -297,8 +297,7 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
         return RET_CACHE_NOT_READY;
     }
     if (UNLIKELY(keys == nullptr || lengths == nullptr || offsets == nullptr ||
-        locations == nullptr || valueAddrs == nullptr || realLengths == nullptr || results == nullptr) ||
-        count > KEY_MAX_COUNT) {
+        locations == nullptr || valueAddrs == nullptr || realLengths == nullptr || results == nullptr)) {
         return RET_CACHE_EPERM;
     }
     for (uint32_t i = 0; i < count; i++) {
@@ -477,10 +476,6 @@ CResult Bio::BatchExist(const char *key[], ObjLocation location[], uint32_t coun
     }
     if (UNLIKELY(key == nullptr || result == nullptr || location == nullptr)) {
         return RET_CACHE_EPERM;
-    }
-    if (count > KEY_MAX_COUNT) {
-        CLIENT_LOG_ERROR("Bio batch get count:" << count << " more 256.");
-        return RET_CACHE_NOT_READY;
     }
 
     BIO_TRACE_START(SDK_TRACE_BATCH_EXIST);

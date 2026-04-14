@@ -468,6 +468,7 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     char *value0 = new char[realLen0];
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -476,6 +477,7 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
     delete[] value0;
 }
@@ -489,6 +491,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_fail)
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -497,6 +500,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_fail)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL");
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -511,6 +515,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_underfs)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -523,6 +528,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_underfs)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
@@ -536,6 +542,7 @@ TEST_F(TestBio, test_bio_get_external_malloc)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -546,6 +553,7 @@ TEST_F(TestBio, test_bio_get_external_malloc)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
@@ -603,7 +611,7 @@ TEST_F(TestBio, test_bio_get_case_return_fail)
     uint64_t realLen = 3300000UL;
     char *value = new char[realLen];
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, 0, g_Location, value, &realLen);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_READ_EXCEED);
     delete[] value;
 
     uint64_t realLen1 = 4194305UL;
@@ -653,7 +661,7 @@ TEST_F(TestBio, test_bio_stat)
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     ret = BioStat(G_TENANT_ID, G_KEY, g_Location, nullptr);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
 
     ret = BioStat(G_INVALID_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);

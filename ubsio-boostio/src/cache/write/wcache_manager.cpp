@@ -445,6 +445,7 @@ BResult WCacheManager::ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrI
         uint64_t offset = 0;
         ret = BdmParseChunkId(addrs[i].chunkId, &offset, info->path);
         if (UNLIKELY(ret != BIO_OK)) {
+            sliceRef->Release();
             LOG_ERROR("Parse key:" << key << ", addr:" << addrs[i].chunkId << " failed, ret:" << ret);
             return ret;
         }
@@ -452,6 +453,7 @@ BResult WCacheManager::ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrI
         info->length[i] = addrs[i].chunkLen;
         info->count++;
     }
+    sliceRef->Release();
     return ret;
 }
 
