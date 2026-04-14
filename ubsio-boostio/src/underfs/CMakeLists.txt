@@ -1,3 +1,4 @@
 file(GLOB_RECURSE BIO_UNDERFS_SRCS *.cpp *.h)
-add_library(bio_underfs STATIC ${BIO_UNDERFS_SRCS})
-target_link_libraries(bio_underfs PRIVATE dl)
+add_library(bio_underfs SHARED ${BIO_UNDERFS_SRCS})
+target_link_libraries(bio_underfs PRIVATE dl rados)
+install(TARGETS bio_underfs DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
