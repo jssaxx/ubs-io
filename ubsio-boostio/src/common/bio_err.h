@@ -42,6 +42,7 @@ enum Error : int32_t {
     BIO_NET_RETRY = 100,
     BIO_DISK_IOERR = 201,
     BIO_UFS_IOERR = 301,
+    BIO_UNDER_API_UNLOAD = 302,
 
     BIO_MAX,
 };

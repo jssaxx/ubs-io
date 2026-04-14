@@ -308,6 +308,12 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     return ToCResult(ret);
 }
 
+CResult BatchGetWithHbm(const char **keys, const uint32_t count, uint64_t *offsets, ObjLocation *locations,
+                            uint64_t **lengths, uintptr_t **valueAddrs, uint64_t **realLengths, int32_t *results)
+{
+    return 0;
+}
+
 void Bio::BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
 {
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_FREE);

@@ -36,6 +36,15 @@ const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
 const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
 const uint32_t FILE_PATH_MAX_LEN = 256;
+const uint32_t MAX_UUID_SIZE = 64;
+const uint32_t MAX_KV_HBM_SIZE = 256;
+
+typedef enum DataTransType : uint8_t {
+    HOST_RDMA_TRANS_TYPE = 0,   // 远端client通过rdma访问本地server的内存
+    HOST_SHM_TRANS_TYPE = 1,    // 本地client通过shared memory访问本地server的内存
+    DEVICE_SDMA_TRANS_TYPE = 2, // client通过sdma访问本地server的内存
+    TRANS_TYPE_BUTT
+};
 
 typedef struct {
     uint16_t magic;
@@ -247,7 +256,9 @@ typedef struct {
     uint64_t tenantId;
     uint8_t affinity;
     uint8_t strategy;
+    uint8_t msgType;
     char key[KEY_MAX_SIZE];
+    char uuid[MAX_UUID_SIZE];   // trans uuid
     uint64_t length;
     uint64_t flowId;
     uint64_t flowOffset;
@@ -263,6 +274,8 @@ typedef struct {
     uint64_t quotaNid;
     uint64_t quotaCid;
     uint32_t dataCrc;
+    uintptr_t localTrancAddr;
+    uint64_t transDataLen;
     char sliceBuf[0];
 } PutRequest;
 
@@ -357,6 +370,23 @@ struct BatchGetPlan {
     BatchGetPlan(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam, BatchGetRequest *reqParam) :
         count(countParam), index(indexParam), reqLen(reqLenParam), req(reqParam) {}
 };
+
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint16_t ptId;
+    uint32_t size;
+    uint32_t count;
+    uintptr_t hbmAddr[MAX_KV_HBM_SIZE];
+    uint64_t hbmLength[MAX_KV_HBM_SIZE];
+} GetKeHbmInfo;
+
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    bool isConvDeploy;
+    GetKeHbmInfo keysInfo[0];
+} BatchGetRequestByHbm;
 
 typedef struct {
     uint64_t realLengths[KEY_MAX_COUNT];
