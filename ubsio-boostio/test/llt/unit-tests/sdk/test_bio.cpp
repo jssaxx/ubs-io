@@ -457,7 +457,7 @@ TEST_F(TestBio, test_bio_get_external_stat)
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
     delete[] value0;
 }
 
@@ -478,7 +478,7 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
     delete[] value0;
 }
 
