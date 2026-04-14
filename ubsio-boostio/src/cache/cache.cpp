@@ -278,6 +278,8 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     BIO_TP_END;
     BIO_TP_START(GET_UNDERFS_MODIFY_REALLENGTH, &realLen, NO_60*NO_100);
     BIO_TP_END;
+    BIO_TP_START(GET_UNDERFS_MODIFY_TOTALLENGTH, &totalLen, NO_60*NO_100);
+    BIO_TP_END;
 
     // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
     bool isFromRCache = true;
