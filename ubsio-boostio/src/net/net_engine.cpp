@@ -421,11 +421,11 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
 BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
     std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mIpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
+    mIpcService->AddWorkerGroup(NO_1, opt.handlerCount, workerGroupCpuIdsRange);
 
     UBSHcomHeartBeatOptions hbOpt;
     hbOpt.heartBeatIdleSec = NO_5;
-    hbOpt.heartBeatProbeIntervalSec = 1;
+    hbOpt.heartBeatProbeIntervalSec = NO_1;
     mIpcService->SetHeartBeatOptions(hbOpt);
     mIpcService->SetMaxSendRecvDataCount(NO_1024);
     mIpcService->SetSendQueueSize(NO_128);

@@ -13,6 +13,7 @@
 #include "wcache.h"
 
 #include <utility>
+#include "unistd.h"
 #include "cache_slice_operator.h"
 #include "securec.h"
 #include "flow_manager.h"
@@ -323,15 +324,7 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
 
 BResult WCache::Seal(WCacheTierType type)
 {
-    BResult ret = BIO_OK;
-
-    ret = mCacheTiers[type]->Seal();
-    if (ret != BIO_OK) {
-        LOG_ERROR("Seal cacheTier fail:" << ret << ", type:" << type << ", flowId:" << mFlowId);
-        return ret;
-    }
-
-    return BIO_OK;
+    return mCacheTiers[type]->Seal();
 }
 
 void WCache::Destroy()

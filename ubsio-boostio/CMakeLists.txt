@@ -67,7 +67,6 @@ include_directories(
         ${SRC_DIR}/net
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server
-	    ${SRC_DIR}/ufs
         ${SRC_DIR}/underfs
         ${SRC_DIR}/io_interceptor
         ${SRC_DIR}/interceptor
