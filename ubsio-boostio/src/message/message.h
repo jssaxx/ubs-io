@@ -389,6 +389,23 @@ typedef struct {
 } BatchGetRequestByHbm;
 
 typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint16_t ptId;
+    uint32_t size;
+    uint32_t count;
+    uintptr_t hbmAddr[MAX_KV_HBM_SIZE];
+    uint64_t hbmLength[MAX_KV_HBM_SIZE];
+} GetKeHbmInfo;
+
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    bool isConvDeploy;
+    GetKeHbmInfo keysInfo[0];
+} BatchGetRequestByHbm;
+
+typedef struct {
     uint64_t realLengths[KEY_MAX_COUNT];
     int32_t results[KEY_MAX_COUNT];
     uint32_t count;
