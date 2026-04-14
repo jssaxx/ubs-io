@@ -54,6 +54,7 @@ bool WCacheIndex::Exist(uint16_t ptId, const Key &key)
     }
     auto sliceRef = sliceMeta->second;
     if (LIKELY(sliceRef->Aquire())) {
+        sliceRef->Release();
         return true;
     } else {
         return false;
