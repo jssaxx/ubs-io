@@ -37,7 +37,6 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     }
 
     if (count > MAX_LARGE_WRITE_SIZE) {
-        CLOG_ERROR("count > MAX_LARGE_WRITE_SIZE fd:" << fd << ",count: " << count);
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
@@ -111,20 +110,17 @@ ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
     CLOG_DEBUG("Read fd:" << fd << ", length:" << nbytes << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
-        CLOG_ERROR("file == nullptr. fd:" << fd);
         return CONTEXT.GetOperations()->read(fd, buf, nbytes);
     }
 
     off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
     if (UNLIKELY(offset == -1)) {
-        CLOG_ERROR("Lseek:" << fd << " failed.");
         errno = EIO;
         return -1;
     }
 
     auto ret = PreadInner(fd, buf, nbytes, offset);
     if (UNLIKELY(ret < 0)) {
-        CLOG_ERROR("PreadInner. fd:" << fd);
         errno = EIO;
         return -1;
     }
@@ -217,7 +213,11 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    size_t realCount = std::min(count, MAX_SMALL_WRITE_SIZIE);
+    if (count > MAX_LARGE_WRITE_SIZE) {
+        return CONTEXT.GetOperations()->write(fd, buf, count);
+    }
+
+    size_t realCount = std::min(count, MAX_LARGE_WRITE_SIZE);
     size_t reqLen = sizeof(InterceptorPwriteIn) + realCount;
     char *tmpPtr = new (std::nothrow) char[reqLen];
     if (UNLIKELY(tmpPtr == nullptr)) {
@@ -243,7 +243,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
     if (UNLIKELY(ret != 0 || resp.dataLen == 0 || resp.dataLen != realCount)) {
-        CLOG_DEBUG("Write ret: " << ret << ",fd:" << fd << ", offset:" << offset << ", req->offset"
+        CLOG_ERROR("Send Sync Buff Write ret: " << ret << ",fd:" << fd << ", offset:" << offset << ", req->offset"
             << request->offset << ", count" << count << ", rsp len:" << resp.dataLen << ".");
         delete[] tmpPtr;
         tmpPtr = nullptr;

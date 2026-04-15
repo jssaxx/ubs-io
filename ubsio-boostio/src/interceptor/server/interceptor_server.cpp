@@ -114,7 +114,7 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
 
 bool InterceptorServer::CheckInterceptorWriteReq(InterceptorPwriteIn *req)
 {
-    if (req->nbytes > IO_SIZE_8K || req->nbytes == 0) {
+    if (req->nbytes > IO_SIZE_4M || req->nbytes == 0) {
         return false;
     }
     return true;
