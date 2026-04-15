@@ -11,6 +11,7 @@
  */
 
 #include <ctime>
+#include <atomic>
 #include "bio_c.h"
 #include "bio_trace.h"
 #include "bio_client_log.h"
@@ -260,19 +261,38 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd << " shmOffset:" << req->shmOffset);
 
-    uint8_t *shmAddr = BioClientNet::Instance()->GetNetEngine()->GetShmAddress(req->shmOffset, req->nbytes);
-    if (UNLIKELY(shmAddr == nullptr)) {
+    uint8_t *srcAddr = BioClientNet::Instance()->GetNetEngine()->GetShmAddress(req->shmOffset, req->nbytes);
+    if (UNLIKELY(srcAddr == nullptr)) {
         CLIENT_LOG_ERROR("Get shm address failed, shmOffset:" << req->shmOffset << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
 
+    uint64_t tenantId = 1;
+    static std::atomic<uint64_t> objectId{1};
     CacheSpaceDesc addressInfo;
     addressInfo.allocLoc = 1;
-    addressInfo.addressNum = 1;
-    addressInfo.address[0].address = reinterpret_cast<uint64_t>(shmAddr);
-    addressInfo.address[0].size = static_cast<uint32_t>(req->nbytes);
+    auto ret = BioAllocCacheSpace(tenantId, objectId.fetch_add(1), req->nbytes, &addressInfo);
+    if (UNLIKELY(ret != 0)) {
+        CLIENT_LOG_ERROR("Alloc cache space failed, ret:" << ret << ".");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
+        return BIO_OK;
+    }
+
+    for (uint32_t i = 0; i < addressInfo.addressNum; i++) {
+        uint8_t *dstAddr = reinterpret_cast<uint8_t *>(addressInfo.address[i].address);
+        uint32_t copyLen = addressInfo.address[i].size;
+        ret = memcpy_s(dstAddr, copyLen, srcAddr, copyLen);
+        if (UNLIKELY(ret != 0)) {
+            CLIENT_LOG_ERROR("memcpy_s failed, ret:" << ret << ", idx:" << i << ".");
+            BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+            BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
+            return BIO_OK;
+        }
+        srcAddr += copyLen;
+    }
 
     InterceptorPwriteOut resp;
     resp.ret = static_cast<int32_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
