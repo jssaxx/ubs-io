@@ -17,62 +17,12 @@
 #include <atomic>
 #include "net_engine.h"
 #include "net_common.h"
+#include "net_block_pool.h"
 #include "bio_ref.h"
 #include "bio_err.h"
 
 namespace ock {
 namespace bio {
-constexpr uint64_t SHM_POOL_BLOCK_SIZE = 4 * 1024 * 1024ULL;
-constexpr uint64_t SHM_POOL_MAX_BLOCKS = 256;
-
-class ShmPool {
-public:
-    ShmPool() = default;
-    ~ShmPool() = default;
-
-    void Init(uint8_t *baseAddr, uint64_t totalSize)
-    {
-        mBaseAddr = baseAddr;
-        mTotalSize = totalSize;
-        mUsedOffset.store(0);
-        mMaxBlocks = totalSize / SHM_POOL_BLOCK_SIZE;
-        if (mMaxBlocks > SHM_POOL_MAX_BLOCKS) {
-            mMaxBlocks = SHM_POOL_MAX_BLOCKS;
-        }
-    }
-
-    uint64_t Alloc(uint64_t size)
-    {
-        if (size == 0 || size > SHM_POOL_BLOCK_SIZE) {
-            return INVALID_OFFSET;
-        }
-
-        std::lock_guard<std::mutex> lock(mLock);
-        uint64_t offset = mUsedOffset.fetch_add(SHM_POOL_BLOCK_SIZE);
-        if (offset + SHM_POOL_BLOCK_SIZE > mTotalSize) {
-            mUsedOffset.store(0);
-            offset = 0;
-        }
-        return offset;
-    }
-
-    uint8_t *GetAddress(uint64_t offset)
-    {
-        if (offset >= mTotalSize) {
-            return nullptr;
-        }
-        return mBaseAddr + offset;
-    }
-
-    static constexpr uint64_t INVALID_OFFSET = UINT64_MAX;
-
-private:
-    std::mutex mLock;
-    uint8_t *mBaseAddr = nullptr;
-    uint64_t mTotalSize = 0;
-    std::atomic<uint64_t> mUsedOffset{0};
-    uint64_t mMaxBlocks = 0;
-};
 
 class InterceptorClientNetService {
 public:
@@ -83,33 +33,41 @@ public:
     }
 
     int32_t StartNetService();
-    BResult CorrectFd();
-    BResult CheckShmFd();
-    BResult ShmInitInner();
-    BResult ShmInit();
+    BResult CreateDataMessageMem();
 
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
         return mNetEngine->GetShmAddress(offset, len);
     }
 
-    uint64_t AllocShmBlock()
+    BResult AllocShmBlock(uintptr_t &address, uint64_t &mrOffset)
     {
         if (UNLIKELY(!mReady.load())) {
             auto ret = StartNetService();
             if (ret != 0) {
-                return ShmPool::INVALID_OFFSET;
+                return BIO_NOT_READY;
             }
         }
-        return mShmPool.Alloc(SHM_POOL_BLOCK_SIZE);
+
+        if (UNLIKELY(mDataMsgMemPool == nullptr)) {
+            return BIO_NOT_READY;
+        }
+
+        auto ret = mDataMsgMemPool->AllocOne(address);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return ret;
+        }
+
+        mrOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
+        return BIO_OK;
     }
 
-    uint8_t *GetShmBlockAddr(uint64_t offset)
+    uint8_t *GetShmBlockAddr(uint64_t mrOffset)
     {
-        if (UNLIKELY(!mReady.load())) {
+        if (UNLIKELY(!mReady.load()) || mDataMsgMemAddr == nullptr) {
             return nullptr;
         }
-        return mShmPool.GetAddress(offset);
+        return mDataMsgMemAddr + mrOffset;
     }
 
     template <typename TReq, typename TResp>
@@ -161,7 +119,10 @@ private:
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint8_t *mShmAddr = nullptr;
-    ShmPool mShmPool;
+
+    NetBlockPoolPtr mDataMsgMemPool = nullptr;
+    uint8_t *mDataMsgMemAddr = nullptr;
+    uint64_t mDataMsgMemBlockSize = 0;
 };
 }
 }

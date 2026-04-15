@@ -430,6 +430,17 @@ typedef struct {
 } InterceptorAllocPageRsp;
 
 typedef struct {
+    RequestComm comm;
+} InterceptorCreateDataMsgMemPoolRequest;
+
+typedef struct {
+    int32_t memFd;
+    uint64_t offset;
+    uint64_t poolSize;
+    uint64_t blockSize;
+} InterceptorCreateDataMsgMemPoolResponse;
+
+typedef struct {
     uint32_t pid;
     int32_t fd;
     uint64_t inode;
@@ -462,7 +473,7 @@ typedef struct {
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
-    uint64_t shmOffset;
+    uint64_t mrOffset;
 } InterceptorLargePwriteIn;
 
 typedef struct {
@@ -472,7 +483,7 @@ typedef struct {
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
-    uint64_t shmOffset;
+    uint64_t mrOffset;
 } InterceptorLargePreadIn;
 
 typedef struct {

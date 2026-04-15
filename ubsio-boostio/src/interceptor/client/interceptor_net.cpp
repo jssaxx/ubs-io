@@ -77,9 +77,9 @@ int32_t InterceptorClientNetService::StartNetService()
         return ret;
     }
 
-    ret = ShmInit();
+    ret = CreateDataMessageMem();
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Init share memory failed:" << ret << ".");
+        CLOG_ERROR("Create data message memory failed:" << ret << ".");
         return ret;
     }
 
@@ -88,82 +88,81 @@ int32_t InterceptorClientNetService::StartNetService()
     return 0;
 }
 
-BResult InterceptorClientNetService::CorrectFd()
+BResult InterceptorClientNetService::CreateDataMessageMem()
 {
+    InterceptorCreateDataMsgMemPoolRequest req;
+    req.comm.magic = MESSAGE_MAGIC;
+    req.comm.pid = mPid;
+
+    InterceptorCreateDataMsgMemPoolResponse rsp;
+    auto ret = mNetEngine->SyncCall<InterceptorCreateDataMsgMemPoolRequest, InterceptorCreateDataMsgMemPoolResponse>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_CREATE_DATA_MSG_MEM_POOL, req, rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Send create data message mem pool request failed:" << ret << ".");
+        return ret;
+    }
+
     int32_t realFd = -1;
-    auto result = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
-    if (UNLIKELY(result != BIO_OK)) {
-        CLOG_ERROR("receive file mem fd failed, ret:" << result << ".");
+    ret = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Receive file mem fd failed, ret:" << ret << ".");
         return BIO_ERR;
     }
+
     mShmFd = realFd;
-    return BIO_OK;
-}
+    mShmOffset = rsp.offset;
+    mShmLength = rsp.poolSize;
+    mDataMsgMemBlockSize = rsp.blockSize;
 
-BResult InterceptorClientNetService::CheckShmFd()
-{
-    struct stat buffer {};
-    auto ret = fstat(mShmFd, &buffer);
-    if (UNLIKELY(ret < 0)) {
-        CLOG_ERROR("Read file failed, ret:" << ret << ".");
-        return BIO_ERR;
-    }
-
-    if (UNLIKELY(mShmOffset + mShmLength > static_cast<uint64_t>(buffer.st_size))) {
-        CLOG_ERROR("Share memory size:" << mShmOffset + mShmLength << " not equal to file size:" << buffer.st_size);
-        return BIO_ERR;
-    }
-    return BIO_OK;
-}
-
-BResult InterceptorClientNetService::ShmInitInner()
-{
-    if (UNLIKELY(CheckShmFd() != BIO_OK)) {
-        mShmFd = -1;
-        return BIO_ERR;
-    }
-    auto offset = static_cast<off_t>(mShmOffset);
-    auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
-    if (UNLIKELY(address == MAP_FAILED)) {
-        CLOG_ERROR("Map share memory offset:" << offset << ", size:" << mShmLength << " failed.");
+    if (mShmLength == 0 || mDataMsgMemBlockSize == 0) {
+        CLOG_ERROR("Invalid pool size:" << mShmLength << " or block size:" << mDataMsgMemBlockSize << ".");
         close(mShmFd);
         mShmFd = -1;
         return BIO_ERR;
     }
+
+    off_t offset = static_cast<off_t>(mShmOffset);
+    auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    if (UNLIKELY(address == MAP_FAILED)) {
+        CLOG_ERROR("Mmap shm size " << mShmLength << " offset " << offset << " failed, error:" << strerror(errno));
+        close(mShmFd);
+        mShmFd = -1;
+        return BIO_ERR;
+    }
+
     mShmAddr = static_cast<uint8_t *>(address);
-    return BIO_OK;
-}
+    mDataMsgMemAddr = mShmAddr;
 
-BResult InterceptorClientNetService::ShmInit()
-{
-    uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
-    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    ShmInitResponse rsp;
-    BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
+    uint64_t blockCount = mShmLength / mDataMsgMemBlockSize;
+    mDataMsgMemPool = MakeRef<NetBlockPool>();
+    if (mDataMsgMemPool == nullptr) {
+        CLOG_ERROR("Alloc net block pool failed.");
+        if (munmap(mShmAddr, mShmLength) == -1) {
+            CLOG_ERROR("Munmap address failed.");
+        }
+        close(mShmFd);
+        mShmFd = -1;
+        mShmAddr = nullptr;
+        mDataMsgMemAddr = nullptr;
+        return BIO_ALLOC_FAIL;
+    }
+
+    ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr), mDataMsgMemBlockSize, blockCount);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Send share memory init message failed:" << ret << ".");
-        return ret;
-    }
-
-    mShmFd = rsp.memFd;
-    mShmOffset = rsp.offset;
-    mShmLength = rsp.length;
-    if (UNLIKELY(mShmOffset != 0 || mShmLength > defaultMaxShmSize)) {
-        CLOG_ERROR("Get share memory offset:" << mShmOffset << ", length:" << mShmLength << " wrong.");
-        return BIO_ERR;
-    }
-
-    if (UNLIKELY(CorrectFd() != BIO_OK)) {
-        return BIO_ERR;
-    }
-
-    if (UNLIKELY((ret = ShmInitInner()) != BIO_OK)) {
+        CLOG_ERROR("Start net block pool failed, ret:" << ret << ".");
+        mDataMsgMemPool = nullptr;
+        if (munmap(mShmAddr, mShmLength) == -1) {
+            CLOG_ERROR("Munmap address failed.");
+        }
+        close(mShmFd);
+        mShmFd = -1;
+        mShmAddr = nullptr;
+        mDataMsgMemAddr = nullptr;
         return ret;
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
-    mShmPool.Init(mShmAddr, mShmLength);
-    CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength <<
-        "success.");
+    CLOG_DEBUG("Interceptor create data message memory success, poolSize:" << mShmLength <<
+        ", blockSize:" << mDataMsgMemBlockSize << ", blockCount:" << blockCount << ".");
     return BIO_OK;
 }

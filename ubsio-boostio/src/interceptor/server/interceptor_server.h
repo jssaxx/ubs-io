@@ -13,7 +13,8 @@
 #ifndef BOOSTIO_INTERCEPTOR_SERVER_H
 #define BOOSTIO_INTERCEPTOR_SERVER_H
 
-#include <utility>
+#include <mutex>
+#include <unordered_map>
 #include <cstdint>
 
 #include "bio_err.h"
@@ -21,6 +22,19 @@
 
 namespace ock {
 namespace bio {
+
+struct DataMsgMemItem {
+    int32_t shmFd;
+    uint64_t offset;
+    uint64_t size;
+    uint8_t *address;
+
+    DataMsgMemItem() : shmFd(-1), offset(0), size(0), address(nullptr) {}
+
+    DataMsgMemItem(int32_t fd, uint64_t off, uint64_t sz, uint8_t *addr)
+        : shmFd(fd), offset(off), size(sz), address(addr) {}
+};
+
 class InterceptorServer {
 public:
     static InterceptorServer &GetInstance()
@@ -36,6 +50,7 @@ public:
     BResult HandleInterceptorAllocPage(ServiceContext &ctx);
     BResult HandleInterceptorLargeWrite(ServiceContext &ctx);
     BResult HandleInterceptorLargeRead(ServiceContext &ctx);
+    BResult HandleInterceptorCreateDataMsgMemPool(ServiceContext &ctx);
 
     bool CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req);
     bool CheckInterceptorLargeReadReq(InterceptorLargePreadIn *req);
@@ -43,8 +58,13 @@ public:
     bool CheckInterceptorWriteReq(InterceptorPwriteIn *req);
     bool CheckInterceptorReadReq(InterceptorPreadIn *req);
 
+    uint8_t *TransDataMsgMemAddr(uint32_t pid, uint64_t mrOffset);
+
 private:
     BResult RegisterOpcode();
+
+    std::mutex mDataMsgMemLock;
+    std::unordered_map<uint32_t, DataMsgMemItem> mDataMsgMemMgr;
 };
 }
 }
