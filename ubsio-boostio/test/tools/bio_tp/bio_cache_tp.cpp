@@ -156,6 +156,7 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(FLOW_DATA_FLOW_ERR, "wcache tier data flow err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(GET_UNDERFS_NO_STAT, "underfs stat ok", CommonTp::IntValueCallback);
     BIO_TP_REG(GET_UNDERFS_MODIFY_REALLENGTH, "external get modify real length", CommonTp::IntValueCallback);
+    BIO_TP_REG(GET_UNDERFS_MODIFY_TOTALLENGTH, "external get modify real length", CommonTp::IntValueCallback);
     BIO_TP_REG(GET_UNDERFS_NOT_ENOUGHRESOURCE, "external get not enough resource", CommonTp::BoolValueCallback);
     BIO_TP_REG(GET_UNDERFS_ENABLE_CRC, "external get enable crc", CommonTp::BoolValueCallback);
     BIO_TP_REG(GET_EXTERNAL_GETUNDERFS_OK, "external get underfs ok", CommonTp::BoolValueCallback);
@@ -307,6 +308,7 @@ void tp::CacheTp::Deregister() noexcept
     BIO_TP_UNREG(FLOW_DATA_FLOW_ERR);
     BIO_TP_UNREG(GET_UNDERFS_NO_STAT);
     BIO_TP_UNREG(GET_UNDERFS_MODIFY_REALLENGTH);
+    BIO_TP_UNREG(GET_UNDERFS_MODIFY_TOTALLENGTH);
     BIO_TP_UNREG(GET_UNDERFS_NOT_ENOUGHRESOURCE);
     BIO_TP_UNREG(GET_UNDERFS_ENABLE_CRC);
     BIO_TP_UNREG(GET_EXTERNAL_GETUNDERFS_OK);
