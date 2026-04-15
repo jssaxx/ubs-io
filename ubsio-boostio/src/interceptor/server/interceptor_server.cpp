@@ -12,6 +12,7 @@
 
 #include <ctime>
 #include <atomic>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include "bio_c.h"
 #include "bio_trace.h"
@@ -278,33 +279,45 @@ BResult InterceptorServer::HandleInterceptorCreateDataMsgMemPool(ServiceContext 
     auto *req = static_cast<InterceptorCreateDataMsgMemPoolRequest *>(ctx.MessageData());
     CLIENT_LOG_DEBUG("Receive interceptor create data msg mem pool request, pid:" << req->comm.pid);
 
-    uint64_t sdkPoolSize = BioConfig::Instance()->GetDaemonConfig().sdkPoolSize;
-    int32_t shmFd = 0;
-    std::string shmName = "interceptor_data_msg_mem_pool_" + std::to_string(req->comm.pid);
-    auto ret = BioClientNet::Instance()->GetNetEngine()->CreateShmFdWithName(shmFd, sdkPoolSize, shmName);
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Failed to create shm fd, size:" << sdkPoolSize << ", name:" << shmName << ".");
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+    uint64_t blockSize = BioConfig::Instance()->GetDaemonConfig().segment;
+    uint64_t poolSize = 256ULL * blockSize;
+    std::string shmName = "/interceptor_mem_pool_" + std::to_string(req->comm.pid);
+
+    int fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        CLIENT_LOG_ERROR("shm_open failed, name:" << shmName << ", error:" << strerror(errno));
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
 
+    if (ftruncate(fd, static_cast<off_t>(poolSize)) < 0) {
+        CLIENT_LOG_ERROR("ftruncate failed, size:" << poolSize << ", error:" << strerror(errno));
+        shm_unlink(shmName.c_str());
+        close(fd);
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
+
+    int32_t shmFd = fd;
     off_t offset = 0;
-    auto address = mmap(nullptr, sdkPoolSize, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, offset);
+    auto address = mmap(nullptr, poolSize, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, offset);
     if (address == MAP_FAILED) {
-        CLIENT_LOG_ERROR("Mmap shm size " << sdkPoolSize << " offset " << offset << " failed, error:" << strerror(errno));
+        CLIENT_LOG_ERROR("Mmap shm size " << poolSize << " offset " << offset << " failed, error:" << strerror(errno));
+        shm_unlink(shmName.c_str());
         close(shmFd);
         shmFd = -1;
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
         return BIO_OK;
     }
-    memset_s(address, sdkPoolSize, 0, sdkPoolSize);
+    memset_s(address, poolSize, 0, poolSize);
 
-    ret = BioClientNet::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &shmFd, NO_1);
+    auto ret = BioClientNet::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &shmFd, NO_1);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send fds failed, ret:" << ret << ", name:" << shmName << ".");
-        if (munmap(address, sdkPoolSize) == -1) {
+        if (munmap(address, poolSize) == -1) {
             CLIENT_LOG_ERROR("Munmap address failed.");
         }
+        shm_unlink(shmName.c_str());
         close(shmFd);
         shmFd = -1;
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
@@ -313,16 +326,16 @@ BResult InterceptorServer::HandleInterceptorCreateDataMsgMemPool(ServiceContext 
 
     {
         std::lock_guard<std::mutex> lock(mDataMsgMemLock);
-        mDataMsgMemMgr.emplace(req->comm.pid, DataMsgMemItem(shmFd, offset, sdkPoolSize, static_cast<uint8_t *>(address)));
+        mDataMsgMemMgr.emplace(req->comm.pid, DataMsgMemItem(shmFd, offset, poolSize, static_cast<uint8_t *>(address)));
     }
-    CLIENT_LOG_INFO("Succeed to create interceptor data message memory pool, size:" << sdkPoolSize <<
-        ", holder:" << req->comm.pid << ".");
+    CLIENT_LOG_INFO("Succeed to create interceptor data message memory pool, size:" << poolSize <<
+        ", blockSize:" << blockSize << ", holder:" << req->comm.pid << ".");
 
     InterceptorCreateDataMsgMemPoolResponse rsp;
     rsp.memFd = shmFd;
     rsp.offset = offset;
-    rsp.poolSize = sdkPoolSize;
-    rsp.blockSize = BioConfig::Instance()->GetDaemonConfig().segment;
+    rsp.poolSize = poolSize;
+    rsp.blockSize = blockSize;
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(InterceptorCreateDataMsgMemPoolResponse));
     return BIO_OK;
 }
