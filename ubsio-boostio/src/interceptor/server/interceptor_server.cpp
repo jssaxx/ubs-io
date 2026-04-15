@@ -135,7 +135,6 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE);
     auto *req = static_cast<InterceptorPwriteIn *>(ctx.MessageData());
     if ((ctx.MessageDataLen() < (sizeof(InterceptorPwriteIn) + req->nbytes)) || !CheckInterceptorWriteReq(req)) {
         CLIENT_LOG_ERROR("Invalid request message.");
@@ -149,15 +148,17 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
 
-    InterceptorPwriteOut resp;
+    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE);
     auto ret = BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL);
     if (UNLIKELY(ret != 0)) {
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
-    resp.dataLen = req->nbytes;
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
+
+    InterceptorPwriteOut resp;
+    resp.dataLen = req->nbytes;
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY);
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),

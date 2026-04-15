@@ -478,7 +478,7 @@ typedef struct {
 typedef struct {
     int32_t ret;
     uint32_t unused;
-    int64_t dataLen;
+    uint64_t dataLen;
 } InterceptorPwriteOut;
 
 typedef struct {
