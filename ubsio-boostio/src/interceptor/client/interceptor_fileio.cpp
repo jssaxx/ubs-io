@@ -130,6 +130,7 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
         INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_READ, request, resp);
     if (UNLIKELY(ret != 0 || resp.dataLen <= 0)) {
         CLOG_ERROR("PreadLargeInner: large read failed, ret:" << ret << ", dataLen:" << resp.dataLen << ".");
+        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
 
@@ -137,9 +138,11 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
     ret = memcpy_s(buf, count, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PreadLargeInner: memcpy_s failed, ret:" << ret << ".");
+        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
 
+    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
     CLOG_DEBUG("PreadLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count <<
         ", dataLen:" << resp.dataLen << ".");
     return static_cast<ssize_t>(resp.dataLen);
@@ -340,6 +343,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), count, buf, count);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ".");
+        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
 
@@ -357,9 +361,11 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PwriteLargeInner: large write failed, ret:" << ret << ".");
+        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
 
+    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
     CLOG_DEBUG("PwriteLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
     return static_cast<ssize_t>(count);
 }

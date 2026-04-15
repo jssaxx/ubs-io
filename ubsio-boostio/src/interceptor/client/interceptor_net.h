@@ -70,6 +70,15 @@ public:
         return mDataMsgMemAddr + mrOffset;
     }
 
+    void ReleaseShmBlock(uint64_t mrOffset)
+    {
+        if (UNLIKELY(!mReady.load()) || mDataMsgMemPool == nullptr || mDataMsgMemAddr == nullptr) {
+            return;
+        }
+        uintptr_t address = reinterpret_cast<uintptr_t>(mDataMsgMemAddr + mrOffset);
+        mDataMsgMemPool->ReleaseOne(address);
+    }
+
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp)
     {
