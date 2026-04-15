@@ -95,11 +95,20 @@ public:
 
     uint64_t AllocShmBlock()
     {
+        if (UNLIKELY(!mReady.load())) {
+            auto ret = StartNetService();
+            if (ret != 0) {
+                return ShmPool::INVALID_OFFSET;
+            }
+        }
         return mShmPool.Alloc(SHM_POOL_BLOCK_SIZE);
     }
 
     uint8_t *GetShmBlockAddr(uint64_t offset)
     {
+        if (UNLIKELY(!mReady.load())) {
+            return nullptr;
+        }
         return mShmPool.GetAddress(offset);
     }
 
