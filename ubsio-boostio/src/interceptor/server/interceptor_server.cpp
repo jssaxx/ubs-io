@@ -284,9 +284,9 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     for (uint32_t i = 0; i < addressInfo.addressNum; i++) {
         uint8_t *dstAddr = reinterpret_cast<uint8_t *>(addressInfo.address[i].address);
         uint32_t copyLen = addressInfo.address[i].size;
-        ret = memcpy_s(dstAddr, copyLen, srcAddr, copyLen);
-        if (UNLIKELY(ret != 0)) {
-            CLIENT_LOG_ERROR("memcpy_s failed, ret:" << ret << ", idx:" << i << ".");
+        errno_t cpRet = memcpy_s(dstAddr, copyLen, srcAddr, copyLen);
+        if (UNLIKELY(cpRet != 0)) {
+            CLIENT_LOG_ERROR("memcpy_s failed, ret:" << cpRet << ", idx:" << i << ".");
             BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
             BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
             return BIO_OK;
