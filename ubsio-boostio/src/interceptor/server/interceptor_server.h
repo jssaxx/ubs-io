@@ -35,8 +35,10 @@ public:
     BResult HandleInterceptorWrite(ServiceContext &ctx);
     BResult HandleInterceptorAllocPage(ServiceContext &ctx);
     BResult HandleInterceptorLargeWrite(ServiceContext &ctx);
+    BResult HandleInterceptorLargeRead(ServiceContext &ctx);
 
     bool CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req);
+    bool CheckInterceptorLargeReadReq(InterceptorLargePreadIn *req);
     bool CheckInterceptorAllocPageReq(InterceptorAllocPageReq *req);
     bool CheckInterceptorWriteReq(InterceptorPwriteIn *req);
     bool CheckInterceptorReadReq(InterceptorPreadIn *req);

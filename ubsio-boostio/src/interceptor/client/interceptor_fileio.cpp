@@ -40,6 +40,20 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
+    if (count <= MAX_SMALL_WRITE_SIZIE) {
+        return PreadSmallInner(fd, buf, count, offset);
+    } else {
+        return PreadLargeInner(fd, buf, count, offset);
+    }
+}
+
+ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t offset)
+{
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        return -1;
+    }
+
     InterceptorPreadIn request;
     request.pid = static_cast<uint32_t>(getpid());
     request.fd = fd;
@@ -81,6 +95,58 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     free(resp);
     resp = nullptr;
     return retLen;
+}
+
+ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t offset)
+{
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        return -1;
+    }
+
+    if (count > MAX_LARGE_WRITE_SIZE) {
+        return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
+    }
+
+    uint64_t shmOffset = InterceptorClientNetService::Instance().AllocShmBlock();
+    if (shmOffset == ShmPool::INVALID_OFFSET) {
+        CLOG_ERROR("PreadLargeInner: alloc shm block failed.");
+        return -1;
+    }
+
+    uint8_t *shmAddr = InterceptorClientNetService::Instance().GetShmBlockAddr(shmOffset);
+    if (shmAddr == nullptr) {
+        CLOG_ERROR("PreadLargeInner: get shm address failed, offset:" << shmOffset << ".");
+        return -1;
+    }
+
+    InterceptorLargePreadIn request;
+    request.pid = static_cast<uint32_t>(getpid());
+    request.fd = fd;
+    request.inode = file->GetInode();
+    request.offset = offset;
+    request.nbytes = count;
+    request.shmOffset = shmOffset;
+    request.startTime = Monotonic::TimeNs();
+
+    InterceptorLargePreadOut resp;
+    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePreadIn, InterceptorLargePreadOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_READ, request, resp);
+    if (UNLIKELY(ret != 0 || resp.dataLen <= 0)) {
+        CLOG_ERROR("PreadLargeInner: large read failed, ret:" << ret << ", dataLen:" << resp.dataLen << ".");
+        return -1;
+    }
+
+    size_t copyLen = std::min(count, static_cast<size_t>(resp.dataLen));
+    ret = memcpy_s(buf, count, shmAddr, copyLen);
+    if (UNLIKELY(ret != 0)) {
+        CLOG_ERROR("PreadLargeInner: memcpy_s failed, ret:" << ret << ".");
+        return -1;
+    }
+
+    CLOG_DEBUG("PreadLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count <<
+        ", dataLen:" << resp.dataLen << ".");
+    return static_cast<ssize_t>(resp.dataLen);
 }
 
 ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
@@ -267,59 +333,33 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return CONTEXT.GetOperations()->write(fd, buf, count);
     }
 
-    InterceptorAllocPageReq req;
+    uint64_t shmOffset = InterceptorClientNetService::Instance().AllocShmBlock();
+    if (shmOffset == ShmPool::INVALID_OFFSET) {
+        CLOG_ERROR("PwriteLargeInner: alloc shm block failed.");
+        return -1;
+    }
+
+    uint8_t *shmAddr = InterceptorClientNetService::Instance().GetShmBlockAddr(shmOffset);
+    if (shmAddr == nullptr) {
+        CLOG_ERROR("PwriteLargeInner: get shm address failed, offset:" << shmOffset << ".");
+        return -1;
+    }
+
+    auto ret = memcpy_s(shmAddr, SHM_POOL_BLOCK_SIZE, buf, count);
+    if (UNLIKELY(ret != 0)) {
+        CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ".");
+        return -1;
+    }
+
     InterceptorLargePwriteIn writeReq;
-    writeReq.startTime = Monotonic::TimeNs();
-
-    req.pid = static_cast<uint32_t>(getpid());
-    req.length = count;
-    InterceptorAllocPageRsp resp;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorAllocPageReq, InterceptorAllocPageRsp>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_ALLOC_BUFF, req, resp);
-    if (UNLIKELY(ret != 0 || resp.address.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
-        CLOG_ERROR("PwriteLargeInner: alloc page failed, ret:" << ret << ", addressNum:" << resp.address.addressNum << ".");
-        return -1;
-    }
-    CLOG_DEBUG("PwriteLargeInner: alloc page success, count:" << count << ", location0:" << resp.address.loc.location[0] <<
-        ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<
-        ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
-
-    uint64_t totalLen = 0;
-    for (uint32_t i = 0; i < resp.address.addressNum; i++) {
-        totalLen += resp.address.address[i].size;
-    }
-
-    if (totalLen < count) {
-        CLOG_ERROR("PwriteLargeInner: totalLen " << totalLen << " < count " << count << ".");
-        return -1;
-    }
-
-    char *copyBuff = static_cast<char *>(const_cast<void *>(buf));
-    size_t remainLen = count;
-    for (uint32_t i = 0; i < resp.address.addressNum && remainLen > 0; i++) {
-        void *dataBuff =
-            InterceptorClientNetService::Instance().GetShmAddress(resp.addrOffset[i], resp.address.address[i].size);
-        if (dataBuff == nullptr) {
-            CLOG_ERROR("PwriteLargeInner: get shm address failed, idx:" << i << ", offset:" << resp.addrOffset[i] <<
-                ", size:" << resp.address.address[i].size << ".");
-            return -1;
-        }
-        size_t copyLen = std::min(remainLen, static_cast<size_t>(resp.address.address[i].size));
-        ret = memcpy_s(dataBuff, resp.address.address[i].size, (const char *)copyBuff, copyLen);
-        if (UNLIKELY(ret != 0)) {
-            CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ", idx:" << i << ".");
-            return -1;
-        }
-        copyBuff += copyLen;
-        remainLen -= copyLen;
-    }
-
     writeReq.pid = static_cast<uint32_t>(getpid());
     writeReq.fd = static_cast<uint64_t>(fd);
     writeReq.inode = file->GetInode();
     writeReq.offset = offset;
     writeReq.nbytes = count;
-    writeReq.address = resp.address;
+    writeReq.shmOffset = shmOffset;
+    writeReq.startTime = Monotonic::TimeNs();
+
     InterceptorPwriteOut writeResp;
     ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);

@@ -162,6 +162,7 @@ BResult InterceptorClientNetService::ShmInit()
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
+    mShmPool.Init(mShmAddr, mShmLength);
     CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength <<
         "success.");
     return BIO_OK;

@@ -46,6 +46,12 @@ BResult InterceptorServer::RegisterOpcode()
         std::bind(&InterceptorServer::HandleInterceptorLargeWrite, this, std::placeholders::_1));
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Register interceptor large write message handle failed, ret:" << ret << ".");
+        return ret;
+    }
+    ret = netEngine->RegisterNewRequestHandler(BIO_OP_INTERCEPTOR_LARGE_READ,
+        std::bind(&InterceptorServer::HandleInterceptorLargeRead, this, std::placeholders::_1));
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Register interceptor large read message handle failed, ret:" << ret << ".");
     }
     return ret;
 }
@@ -223,6 +229,14 @@ bool InterceptorServer::CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *
     return true;
 }
 
+bool InterceptorServer::CheckInterceptorLargeReadReq(InterceptorLargePreadIn *req)
+{
+    if (req->nbytes > IO_SIZE_4M || req->nbytes == 0) {
+        return false;
+    }
+    return true;
+}
+
 BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorLargePwriteIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
@@ -244,12 +258,22 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
 
     CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
-        " len:" << req->nbytes << " fd:" << req->fd);
+        " len:" << req->nbytes << " fd:" << req->fd << " shmOffset:" << req->shmOffset);
 
-    CacheSpaceDesc addressInfo = req->address;
-    CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->nbytes << ", location0:" <<
-        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
-        addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ".");
+    uint8_t *shmAddr = BioClientNet::Instance()->GetNetEngine()->GetShmAddress(req->shmOffset, req->nbytes);
+    if (UNLIKELY(shmAddr == nullptr)) {
+        CLIENT_LOG_ERROR("Get shm address failed, shmOffset:" << req->shmOffset << ".");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
+        return BIO_OK;
+    }
+
+    CacheSpaceDesc addressInfo;
+    addressInfo.allocLoc = 1;
+    addressInfo.addressNum = 1;
+    addressInfo.address[0].address = reinterpret_cast<uint64_t>(shmAddr);
+    addressInfo.address[0].size = static_cast<uint32_t>(req->nbytes);
+
     InterceptorPwriteOut resp;
     resp.ret = static_cast<int32_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
     if (UNLIKELY(resp.ret < 0)) {
@@ -263,6 +287,52 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY, 0);
+    return BIO_OK;
+}
+
+BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
+{
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorLargePreadIn)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        CLIENT_LOG_ERROR("Receive interceptor large read message len:" << ctx.MessageDataLen() <<
+            " or message data invalid.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto *req = static_cast<InterceptorLargePreadIn *>(ctx.MessageData());
+    if (!CheckInterceptorLargeReadReq(req)) {
+        CLIENT_LOG_ERROR("Invalid request message.");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    CLIENT_LOG_DEBUG("Receive interceptor large read message inode:" << req->inode << " offset:" << req->offset <<
+        " len:" << req->nbytes << " fd:" << req->fd << " shmOffset:" << req->shmOffset);
+
+    uint8_t *shmAddr = BioClientNet::Instance()->GetNetEngine()->GetShmAddress(req->shmOffset, req->nbytes);
+    if (UNLIKELY(shmAddr == nullptr)) {
+        CLIENT_LOG_ERROR("Get shm address failed, shmOffset:" << req->shmOffset << ".");
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
+
+    int readLen = 0;
+    int ret = BioReadHook(req->inode, reinterpret_cast<char *>(shmAddr), req->nbytes, req->offset, &readLen);
+    if (UNLIKELY(ret != 0 || readLen <= 0)) {
+        CLIENT_LOG_ERROR("BioReadHook failed, ret:" << ret << ", readLen:" << readLen << ".");
+        InterceptorLargePreadOut resp;
+        resp.ret = ret;
+        resp.dataLen = 0;
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
+            sizeof(InterceptorLargePreadOut));
+        return BIO_OK;
+    }
+
+    InterceptorLargePreadOut resp;
+    resp.ret = 0;
+    resp.dataLen = static_cast<int64_t>(readLen);
+    BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
+        sizeof(InterceptorLargePreadOut));
     return BIO_OK;
 }
 
