@@ -67,6 +67,8 @@ typedef struct {
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
     uint32_t wcacheMemEvictLevel;
+    uint64_t sdkPoolSize;
+    uint64_t segment;
 } ShmInitResponse;
 
 /* Query cache resource quota */

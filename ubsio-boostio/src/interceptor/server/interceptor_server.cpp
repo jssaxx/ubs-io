@@ -17,7 +17,7 @@
 #include "bio_c.h"
 #include "bio_trace.h"
 #include "bio_client_log.h"
-#include "bio_config.h"
+#include "bio_client_net.h"
 #include "message.h"
 #include "message_op.h"
 #include "interceptor_server.h"
@@ -279,8 +279,8 @@ BResult InterceptorServer::HandleInterceptorCreateDataMsgMemPool(ServiceContext 
     auto *req = static_cast<InterceptorCreateDataMsgMemPoolRequest *>(ctx.MessageData());
     CLIENT_LOG_DEBUG("Receive interceptor create data msg mem pool request, pid:" << req->comm.pid);
 
-    uint64_t poolSize = BioConfig::Instance()->GetDaemonConfig().sdkPoolSize;
-    uint64_t blockSize = BioConfig::Instance()->GetDaemonConfig().segment;
+    uint64_t poolSize = BioClientNet::Instance()->GetSdkPoolSize();
+    uint64_t blockSize = BioClientNet::Instance()->GetSegment();
     std::string shmName = "/interceptor_mem_pool_" + std::to_string(req->comm.pid);
 
     int fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
