@@ -220,6 +220,7 @@ BResult InterceptorServer::HandleInterceptorCreateDataMsgMemPool(ServiceContext 
     uint64_t poolSize = BioClientNet::Instance()->GetSdkPoolSize();
     uint64_t blockSize = BioClientNet::Instance()->GetSegment();
     std::string shmName = "/interceptor_mem_pool_" + std::to_string(req->comm.pid);
+    shm_unlink(shmName.c_str());
 
     int fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
     if (fd < 0) {

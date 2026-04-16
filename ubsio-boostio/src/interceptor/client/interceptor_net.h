@@ -42,14 +42,16 @@ public:
             mDataMsgMemPool = nullptr;
         }
         if (mShmAddr != nullptr && mShmLength > 0) {
-            if (munmap(mShmAddr, mShmLength) == -1) {
-                CLOG_ERROR("Munmap shm address failed in destructor.");
-            }
+            munmap(mShmAddr, mShmLength);
             mShmAddr = nullptr;
         }
         if (mShmFd >= 0) {
             close(mShmFd);
             mShmFd = -1;
+        }
+        if (mPid != 0) {
+            std::string shmName = "/interceptor_mem_pool_" + std::to_string(mPid);
+            shm_unlink(shmName.c_str());
         }
     }
 
