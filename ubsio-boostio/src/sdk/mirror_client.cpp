@@ -1107,10 +1107,11 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
 BResult MirrorClient::DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc *addr, uint64_t *offset,
     uint32_t addrNum)
 {
-    // 检查slice内存大小是否大于等于fromLen.
+    CLIENT_LOG_INFO("DataCopy: fromLen=" << fromLen << ", addrNum=" << addrNum);
     uint64_t totalLen = 0;
     for (uint32_t i = 0; i < addrNum; i++) {
         totalLen += addr[i].chunkLen;
+        CLIENT_LOG_INFO("DataCopy chunk[" << i << "]: chunkLen=" << addr[i].chunkLen << ", offset=" << offset[i]);
     }
     if (totalLen < fromLen) {
         return BIO_INNER_ERR;
