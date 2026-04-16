@@ -526,7 +526,6 @@ BResult BioServer::BioCacheInit()
         nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
         QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
-        InterceptorServer::GetInstance().RecycleDataMsgMem(pid);
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != BIO_OK) {
