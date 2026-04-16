@@ -327,6 +327,8 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return CONTEXT.GetOperations()->write(fd, buf, count);
     }
 
+    auto t0 = Monotonic::TimeNs();
+
     uintptr_t shmAddr = 0;
     uint64_t mrOffset = 0;
     auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
@@ -335,12 +337,16 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
+    auto t1 = Monotonic::TimeNs();
+
     ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), count, buf, count);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ".");
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
+
+    auto t2 = Monotonic::TimeNs();
 
     InterceptorLargePwriteIn writeReq;
     writeReq.pid = static_cast<uint32_t>(getpid());
@@ -360,8 +366,16 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
+    auto t3 = Monotonic::TimeNs();
+
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-    CLOG_DEBUG("PwriteLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
+
+    auto t4 = Monotonic::TimeNs();
+    CLOG_ERROR("PwriteLargeInner latency(us): alloc=" << (t1 - t0) / 1000 <<
+        " memcpy=" << (t2 - t1) / 1000 <<
+        " rpc=" << (t3 - t2) / 1000 <<
+        " release=" << (t4 - t3) / 1000 <<
+        " total=" << (t4 - t0) / 1000);
     return static_cast<ssize_t>(count);
 }
 
