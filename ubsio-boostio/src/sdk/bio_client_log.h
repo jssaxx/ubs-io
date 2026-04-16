@@ -86,8 +86,12 @@ public:
                 return -1;
             }
         }
-        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
-        func = logFunc;
+        if (mUseSpdlog) {
+            auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
+            func = logFunc;
+        } else {
+            func = nullptr;
+        }
         return 0;
     }
 
