@@ -57,6 +57,8 @@ const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 
+const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("bio.sdkmem.size_in_mb", 1);
+
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.evict_water_level", 0);
@@ -73,6 +75,7 @@ const auto WORK_SCENE = std::make_pair("bio.work.scene", "none");
 const auto WORK_IO_ALIGNSIZE = std::make_pair("bio.work.io.alignsize", 1);
 const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
 const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
+const auto BATCH_GET_THREAD_NUM = std::make_pair("bio.batchget.thread.num", 32);
 
 const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("bio.underfs.file_system_type", "ceph");
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
