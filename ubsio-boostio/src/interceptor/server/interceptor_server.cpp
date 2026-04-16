@@ -371,22 +371,14 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    CacheSpaceDesc addressInfo;
-    addressInfo.allocLoc = 1;
-    addressInfo.addressNum = 1;
-    addressInfo.address[0].address = reinterpret_cast<uintptr_t>(srcAddr);
-    addressInfo.address[0].size = static_cast<uint32_t>(req->nbytes);
-    addressInfo.loc.location[0] = 0;
-    addressInfo.loc.location[1] = 0;
-    addressInfo.descriptorSize = 0;
-
     InterceptorPwriteOut resp;
-    resp.ret = static_cast<int32_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
-    if (UNLIKELY(resp.ret < 0)) {
+    resp.ret = static_cast<int32_t>(BioWriteHook(req->inode, reinterpret_cast<char *>(srcAddr), req->nbytes, req->offset, 0ULL));
+    if (UNLIKELY(resp.ret != 0)) {
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
         BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, BIO_ERR);
         return BIO_OK;
     }
+    resp.dataLen = req->nbytes;
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
 
     BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY);
