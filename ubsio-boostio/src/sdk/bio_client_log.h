@@ -130,7 +130,7 @@ public:
 
 private:
     LogFunc func = nullptr;
-    int32_t minLogLevel = 1;
+    int32_t minLogLevel = static_cast<int32_t>(Level::LOG_LEVEL_ERROR);
     int32_t mMode = 0;
     Logger *mLogger = nullptr;
 };
