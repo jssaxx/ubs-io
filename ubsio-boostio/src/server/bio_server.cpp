@@ -606,7 +606,7 @@ BResult BioServer::BioServerDiagnoseInitInner()
     const char *soFileName = "libserver_diagnose.so";
     handler = dlopen(soFileName, RTLD_NOW);
 #else
-    std::string soFileName = "/usr/lib64/libserver_diagnose.so";
+    std::string soFileName = "/usr/lib64/boostio/test_tools/libserver_diagnose.so";
     char *canonicalPath = realpath(soFileName.c_str(), nullptr);
     if (canonicalPath == nullptr) {
         LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
