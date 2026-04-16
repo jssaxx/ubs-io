@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <cstdlib>
 #include "bio_log.h"
 #include "bio_tracepoint_helper.h"
 #include "bio_file_util.h"
@@ -52,6 +53,8 @@ public:
     {
         minLogLevel = level;
         mMode = mode;
+        const char *envVal = std::getenv("BIO_SDK_LOG_ENABLE");
+        mUseSpdlog = (envVal != nullptr && std::string(envVal) == "1");
         if (mode == 1) { // 分离部署场景.
             LoggerOptions options;
             options.logType = (uint8_t)logType;
@@ -83,8 +86,12 @@ public:
                 return -1;
             }
         }
-        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
-        func = logFunc;
+        if (mUseSpdlog) {
+            auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
+            func = logFunc;
+        } else {
+            func = nullptr;
+        }
         return 0;
     }
 
