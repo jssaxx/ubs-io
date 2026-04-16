@@ -18,6 +18,7 @@
 #include <utility>
 #include "ubsio_kvc_operation.h"
 #include "ubsio_kvc_stream_manager.h"
+#include "ubsio_nds_manager.h"
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_def.h"
 #include "ubsio_kvc_err.h"
@@ -28,7 +29,7 @@ using namespace ock::ubsio::nds;
 namespace py = pybind11;
 
 constexpr int MAX_KEY_LENGTH = 255;
-constexpr int MAX_BATCH_OP_COUNT = 256;
+constexpr int MAX_BATCH_OP_COUNT = 16 << 10; // 16k
 DfcNdsManager &g_ndsManager = DfcNdsManager::Instance();
 
 int32_t PyKvcKvClientInit(int32_t dev_id)
