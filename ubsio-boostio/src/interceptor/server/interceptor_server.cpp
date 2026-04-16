@@ -83,8 +83,8 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_READ_START);
-    BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_READ_START, 0, req->startTime);
+    BIO_TRACE_ASYNC_BEGIN(INTERCEPTOR_READ_START);
+    BIO_TRACE_ASYNC_END(INTERCEPTOR_READ_START, 0, req->startTime);
 
     CLIENT_LOG_DEBUG("Receive interceptor read message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
@@ -146,8 +146,8 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_WRITE_START);
-    BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
+    BIO_TRACE_ASYNC_BEGIN(INTERCEPTOR_WRITE_START);
+    BIO_TRACE_ASYNC_END(INTERCEPTOR_WRITE_START, 0, req->startTime);
 
     CLIENT_LOG_DEBUG("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
@@ -296,18 +296,16 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    BIO_TRACE_ASYNC_BEGIN(MIRROR_TRACE_INTERCEPTOR_WRITE_START);
-    BIO_TRACE_ASYNC_END(MIRROR_TRACE_INTERCEPTOR_WRITE_START, 0, req->startTime);
+    BIO_TRACE_ASYNC_BEGIN(INTERCEPTOR_WRITE_START);
+    BIO_TRACE_ASYNC_END(INTERCEPTOR_WRITE_START, 0, req->startTime);
 
     CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd << " mrOffset:" << req->mrOffset);
 
-    BIO_TRACE_START(INTERCEPTOR_LARGE_WRITE);
     uint8_t *srcAddr = TransDataMsgMemAddr(req->pid, req->mrOffset);
     if (UNLIKELY(srcAddr == nullptr)) {
         CLIENT_LOG_ERROR("Get data msg mem address failed, pid:" << req->pid << ", mrOffset:" << req->mrOffset << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        BIO_TRACE_END(INTERCEPTOR_LARGE_WRITE, BIO_ERR);
         return BIO_OK;
     }
 
@@ -318,10 +316,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         InterceptorPwriteOut resp;
         resp.ret = writeRet;
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        BIO_TRACE_END(INTERCEPTOR_LARGE_WRITE, BIO_ERR);
         return BIO_OK;
     }
-    BIO_TRACE_END(INTERCEPTOR_LARGE_WRITE, 0);
 
     InterceptorPwriteOut resp;
     resp.ret = 0;
@@ -349,12 +345,10 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor large read message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd << " mrOffset:" << req->mrOffset);
 
-    BIO_TRACE_START(INTERCEPTOR_LARGE_READ);
     uint8_t *shmAddr = TransDataMsgMemAddr(req->pid, req->mrOffset);
     if (UNLIKELY(shmAddr == nullptr)) {
         CLIENT_LOG_ERROR("Get data msg mem address failed, pid:" << req->pid << ", mrOffset:" << req->mrOffset << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        BIO_TRACE_END(INTERCEPTOR_LARGE_READ, BIO_ERR);
         return BIO_OK;
     }
 
@@ -369,14 +363,12 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
         resp.dataLen = 0;
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
             sizeof(InterceptorLargePreadOut));
-        BIO_TRACE_END(INTERCEPTOR_LARGE_READ, BIO_ERR);
         return BIO_OK;
     }
 
     InterceptorLargePreadOut resp;
     resp.ret = 0;
     resp.dataLen = static_cast<uint64_t>(readLen);
-    BIO_TRACE_END(INTERCEPTOR_LARGE_READ, 0);
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorLargePreadOut));
     return BIO_OK;
