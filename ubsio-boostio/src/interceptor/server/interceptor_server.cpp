@@ -89,30 +89,32 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor read message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
 
-    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_SMALL_READ);
+    BIO_TRACE_START(INTERCEPTOR_SMALL_READ);
     auto resp = static_cast<InterceptorPreadOut *>(malloc(sizeof(InterceptorPreadOut) + req->nbytes));
     if (UNLIKELY(resp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc memory failed, inode:" << req->inode << " offset:" << req->offset << " len:" <<
             req->nbytes << " fd:" << req->fd << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_SMALL_READ, BIO_ALLOC_FAIL);
+        BIO_TRACE_END(INTERCEPTOR_SMALL_READ, BIO_ALLOC_FAIL);
         return BIO_OK;
     }
 
     int readLen = static_cast<int>(req->nbytes);
+    BIO_TRACE_START(INTERCEPTOR_READ_HOOK);
     auto ret = BioReadHook(req->inode, resp->data, req->nbytes, req->offset, &readLen);
+    BIO_TRACE_END(INTERCEPTOR_READ_HOOK, ret);
     if (UNLIKELY(ret != 0)) {
         CLIENT_LOG_ERROR("Read hook failed, inode:" << req->inode << " offset:" << req->offset << " len:" <<
             req->nbytes << " fd:" << req->fd << ", readLen:" << readLen << ", ret:" << ret << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_SMALL_READ, BIO_ALLOC_FAIL);
+        BIO_TRACE_END(INTERCEPTOR_SMALL_READ, BIO_ALLOC_FAIL);
         free(resp);
         resp = nullptr;
         return BIO_OK;
     }
 
     resp->dataLen = static_cast<uint64_t>(readLen);
-    BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_SMALL_READ, 0);
+    BIO_TRACE_END(INTERCEPTOR_SMALL_READ, 0);
 
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(resp),
         sizeof(InterceptorPreadOut) + readLen);
@@ -150,14 +152,16 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
 
-    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_SMALL_WRITE);
+    BIO_TRACE_START(INTERCEPTOR_SMALL_WRITE);
+    BIO_TRACE_START(INTERCEPTOR_WRITE_HOOK);
     auto ret = BioWriteHook(req->inode, req->data, req->nbytes, req->offset, 0ULL);
+    BIO_TRACE_END(INTERCEPTOR_WRITE_HOOK, ret);
     if (UNLIKELY(ret != 0)) {
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_SMALL_WRITE, BIO_ERR);
+        BIO_TRACE_END(INTERCEPTOR_SMALL_WRITE, BIO_ERR);
         return BIO_OK;
     }
-    BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_SMALL_WRITE, 0);
+    BIO_TRACE_END(INTERCEPTOR_SMALL_WRITE, 0);
 
     InterceptorPwriteOut resp;
     resp.ret = 0;
@@ -298,24 +302,29 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd << " mrOffset:" << req->mrOffset);
 
-    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_LARGE_WRITE);
+    BIO_TRACE_START(INTERCEPTOR_LARGE_WRITE);
     uint8_t *srcAddr = TransDataMsgMemAddr(req->pid, req->mrOffset);
     if (UNLIKELY(srcAddr == nullptr)) {
         CLIENT_LOG_ERROR("Get data msg mem address failed, pid:" << req->pid << ", mrOffset:" << req->mrOffset << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_LARGE_WRITE, BIO_ERR);
+        BIO_TRACE_END(INTERCEPTOR_LARGE_WRITE, BIO_ERR);
         return BIO_OK;
     }
+
+    BIO_TRACE_START(INTERCEPTOR_WRITE_HOOK);
+    int32_t writeRet = static_cast<int32_t>(BioWriteHook(req->inode, reinterpret_cast<char *>(srcAddr), req->nbytes, req->offset, 0ULL));
+    BIO_TRACE_END(INTERCEPTOR_WRITE_HOOK, writeRet);
+    if (UNLIKELY(writeRet != 0)) {
+        InterceptorPwriteOut resp;
+        resp.ret = writeRet;
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BIO_TRACE_END(INTERCEPTOR_LARGE_WRITE, BIO_ERR);
+        return BIO_OK;
+    }
+    BIO_TRACE_END(INTERCEPTOR_LARGE_WRITE, 0);
 
     InterceptorPwriteOut resp;
-    resp.ret = static_cast<int32_t>(BioWriteHook(req->inode, reinterpret_cast<char *>(srcAddr), req->nbytes, req->offset, 0ULL));
-    if (UNLIKELY(resp.ret != 0)) {
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_LARGE_WRITE, BIO_ERR);
-        return BIO_OK;
-    }
-    BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_LARGE_WRITE, 0);
-
+    resp.ret = 0;
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
     return BIO_OK;
@@ -340,17 +349,19 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor large read message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd << " mrOffset:" << req->mrOffset);
 
-    BIO_TRACE_START(MIRROR_TRACE_INTERCEPTOR_LARGE_READ);
+    BIO_TRACE_START(INTERCEPTOR_LARGE_READ);
     uint8_t *shmAddr = TransDataMsgMemAddr(req->pid, req->mrOffset);
     if (UNLIKELY(shmAddr == nullptr)) {
         CLIENT_LOG_ERROR("Get data msg mem address failed, pid:" << req->pid << ", mrOffset:" << req->mrOffset << ".");
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_LARGE_READ, BIO_ERR);
+        BIO_TRACE_END(INTERCEPTOR_LARGE_READ, BIO_ERR);
         return BIO_OK;
     }
 
     int readLen = 0;
+    BIO_TRACE_START(INTERCEPTOR_READ_HOOK);
     int ret = BioReadHook(req->inode, reinterpret_cast<char *>(shmAddr), req->nbytes, req->offset, &readLen);
+    BIO_TRACE_END(INTERCEPTOR_READ_HOOK, ret);
     if (UNLIKELY(ret != 0 || readLen <= 0)) {
         CLIENT_LOG_ERROR("BioReadHook failed, ret:" << ret << ", readLen:" << readLen << ".");
         InterceptorLargePreadOut resp;
@@ -358,14 +369,14 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
         resp.dataLen = 0;
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
             sizeof(InterceptorLargePreadOut));
-        BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_LARGE_READ, BIO_ERR);
+        BIO_TRACE_END(INTERCEPTOR_LARGE_READ, BIO_ERR);
         return BIO_OK;
     }
 
     InterceptorLargePreadOut resp;
     resp.ret = 0;
     resp.dataLen = static_cast<uint64_t>(readLen);
-    BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_LARGE_READ, 0);
+    BIO_TRACE_END(INTERCEPTOR_LARGE_READ, 0);
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorLargePreadOut));
     return BIO_OK;
