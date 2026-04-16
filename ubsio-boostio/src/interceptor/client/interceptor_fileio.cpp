@@ -135,12 +135,7 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
     }
 
     size_t copyLen = std::min(count, static_cast<size_t>(resp.dataLen));
-    ret = memcpy_s(buf, count, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("PreadLargeInner: memcpy_s failed, ret:" << ret << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        return -1;
-    }
+    memcpy(buf, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
 
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
     CLOG_DEBUG("PreadLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count <<
@@ -339,12 +334,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     auto t1 = Monotonic::TimeNs();
 
-    ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), count, buf, count);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        return -1;
-    }
+    memcpy(reinterpret_cast<uint8_t *>(shmAddr), buf, count);
 
     auto t2 = Monotonic::TimeNs();
 
