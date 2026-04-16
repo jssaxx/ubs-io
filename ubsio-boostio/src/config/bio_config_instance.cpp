@@ -334,6 +334,12 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 {
     mUnderFsConfig.underFsType = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first);
     mUnderFsConfig.cephConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
+    if (mUnderFsConfig.underFsType == "ceph") {
+        if (!FileUtil::CanonicalPath(mUnderFsConfig.cephConfig.cfgPath)) {
+            LOG_ERROR("Ceph config path not exist, value:" << mUnderFsConfig.cephConfig.cfgPath);
+            return BIO_ERR;
+        }
+    }
     mUnderFsConfig.cephConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
     mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);
