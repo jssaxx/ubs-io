@@ -371,11 +371,33 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
 
     auto t4 = Monotonic::TimeNs();
-    CLOG_ERROR("PwriteLargeInner latency(us): alloc=" << (t1 - t0) / 1000 <<
-        " memcpy=" << (t2 - t1) / 1000 <<
-        " rpc=" << (t3 - t2) / 1000 <<
-        " release=" << (t4 - t3) / 1000 <<
-        " total=" << (t4 - t0) / 1000);
+
+    static uint64_t sCount = 0;
+    static uint64_t sAllocUs = 0;
+    static uint64_t sMemcpyUs = 0;
+    static uint64_t sRpcUs = 0;
+    static uint64_t sReleaseUs = 0;
+    static uint64_t sTotalUs = 0;
+    sCount++;
+    sAllocUs += (t1 - t0) / 1000;
+    sMemcpyUs += (t2 - t1) / 1000;
+    sRpcUs += (t3 - t2) / 1000;
+    sReleaseUs += (t4 - t3) / 1000;
+    sTotalUs += (t4 - t0) / 1000;
+    if (sCount >= 1000) {
+        CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
+            " io: alloc=" << sAllocUs / sCount <<
+            " memcpy=" << sMemcpyUs / sCount <<
+            " rpc=" << sRpcUs / sCount <<
+            " release=" << sReleaseUs / sCount <<
+            " total=" << sTotalUs / sCount);
+        sCount = 0;
+        sAllocUs = 0;
+        sMemcpyUs = 0;
+        sRpcUs = 0;
+        sReleaseUs = 0;
+        sTotalUs = 0;
+    }
     return static_cast<ssize_t>(count);
 }
 
