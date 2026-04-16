@@ -292,7 +292,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
 
     InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
     request->pid = static_cast<uint32_t>(getpid());
-    request->fd = static_cast<uint64_t>(fd);
+    request->fd = fd;
     request->inode = file->GetInode();
     request->offset = offset;
     request->nbytes = realCount;
@@ -307,9 +307,9 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     InterceptorPwriteOut resp;
     ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
-    if (UNLIKELY(ret != 0 || resp.dataLen == 0 || resp.dataLen != realCount)) {
-        CLOG_ERROR("Send Sync Buff Write ret: " << ret << ",fd:" << fd << ", offset:" << offset << ", req->offset"
-            << request->offset << ", count" << count << ", rsp len:" << resp.dataLen << ".");
+    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
+        CLOG_ERROR("Send Sync Buff Write ret: " << ret << ", resp.ret:" << resp.ret << ", fd:" << fd <<
+            ", offset:" << offset << ", count:" << count << ".");
         delete[] tmpPtr;
         tmpPtr = nullptr;
         return -1;
@@ -317,8 +317,8 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
 
     delete[] tmpPtr;
     tmpPtr = nullptr;
-    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count" << count << ", rspLen:" << resp.dataLen << ".");
-    return static_cast<ssize_t>(resp.dataLen);
+    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
+    return static_cast<ssize_t>(realCount);
 }
 
 ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
@@ -349,7 +349,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     InterceptorLargePwriteIn writeReq;
     writeReq.pid = static_cast<uint32_t>(getpid());
-    writeReq.fd = static_cast<uint64_t>(fd);
+    writeReq.fd = fd;
     writeReq.inode = file->GetInode();
     writeReq.offset = offset;
     writeReq.nbytes = count;

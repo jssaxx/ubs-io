@@ -436,14 +436,13 @@ typedef struct {
 
 typedef struct {
     int32_t ret;
-    uint32_t unused;
     uint64_t dataLen;
     char data[];
 } InterceptorPreadOut;
 
 typedef struct {
     uint32_t pid;
-    uint64_t fd;
+    int32_t fd;
     uint64_t inode;
     uint64_t nbytes;
     int64_t offset;
@@ -452,8 +451,12 @@ typedef struct {
 } InterceptorPwriteIn;
 
 typedef struct {
+    int32_t ret;
+} InterceptorPwriteOut;
+
+typedef struct {
     uint32_t pid;
-    uint64_t fd;
+    int32_t fd;
     uint64_t inode;
     uint64_t nbytes;
     int64_t offset;
@@ -473,14 +476,7 @@ typedef struct {
 
 typedef struct {
     int32_t ret;
-    uint32_t unused;
     uint64_t dataLen;
-} InterceptorPwriteOut;
-
-typedef struct {
-    int32_t ret;
-    uint32_t unused;
-    int64_t dataLen;
 } InterceptorLargePreadOut;
 
 typedef struct {

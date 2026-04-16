@@ -160,7 +160,7 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
 
     InterceptorPwriteOut resp;
-    resp.dataLen = req->nbytes;
+    resp.ret = 0;
 
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
@@ -314,7 +314,6 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
         return BIO_OK;
     }
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE, 0);
-    resp.dataLen = req->nbytes;
 
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
@@ -361,7 +360,7 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
 
     InterceptorLargePreadOut resp;
     resp.ret = 0;
-    resp.dataLen = static_cast<int64_t>(readLen);
+    resp.dataLen = static_cast<uint64_t>(readLen);
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorLargePreadOut));
     return BIO_OK;
