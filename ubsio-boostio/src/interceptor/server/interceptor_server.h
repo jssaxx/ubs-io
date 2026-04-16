@@ -60,26 +60,6 @@ public:
 
     uint8_t *TransDataMsgMemAddr(uint32_t pid, uint64_t mrOffset);
 
-    void RecycleDataMsgMem(uint32_t pid)
-    {
-        std::lock_guard<std::mutex> lock(mDataMsgMemLock);
-        auto iter = mDataMsgMemMgr.find(pid);
-        if (iter == mDataMsgMemMgr.end()) {
-            return;
-        }
-        auto item = iter->second;
-        if (item.address != nullptr && item.size > 0) {
-            munmap(item.address, item.size);
-        }
-        if (item.shmFd >= 0) {
-            close(item.shmFd);
-        }
-        std::string shmName = "/interceptor_mem_pool_" + std::to_string(pid);
-        shm_unlink(shmName.c_str());
-        mDataMsgMemMgr.erase(iter);
-        CLIENT_LOG_INFO("Succeed to recycle data message memory, holder:" << pid << ".");
-    }
-
 private:
     BResult RegisterOpcode();
 
