@@ -70,6 +70,7 @@ void BioConfig::LoadDefaultConf()
 
     /* load underfs config */
     AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||none"));
+    AddStrConf(UNDERFS_CEPH_CFG_PATH);
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
