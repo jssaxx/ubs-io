@@ -53,7 +53,7 @@ namespace bio {
             const char *soFileName = "libbio_underfs.so";
             handler = dlopen(soFileName, RTLD_NOW);
 #else
-            std::string soFileName = "/usr/lib64/boostio/libbio_underfs.so";
+            std::string soFileName = "/usr/lib64/libbio_underfs.so";
 
             char *canonicalPath = realpath(soFileName.c_str(), nullptr);
             if (canonicalPath == nullptr) {
