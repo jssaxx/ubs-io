@@ -16,6 +16,8 @@
 #include <mutex>
 #include <unordered_map>
 #include <cstdint>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include "bio_err.h"
 #include "bio_client_net.h"
@@ -41,6 +43,23 @@ public:
     {
         static InterceptorServer instance;
         return instance;
+    }
+
+    ~InterceptorServer()
+    {
+        std::lock_guard<std::mutex> lock(mDataMsgMemLock);
+        for (auto &iter : mDataMsgMemMgr) {
+            auto &item = iter.second;
+            if (item.address != nullptr && item.size > 0) {
+                munmap(item.address, item.size);
+            }
+            if (item.shmFd >= 0) {
+                close(item.shmFd);
+            }
+            std::string shmName = "/interceptor_mem_pool_" + std::to_string(iter.first);
+            shm_unlink(shmName.c_str());
+        }
+        mDataMsgMemMgr.clear();
     }
 
     BResult Initialize();

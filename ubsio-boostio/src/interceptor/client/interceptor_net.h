@@ -15,11 +15,14 @@
 
 #include <mutex>
 #include <atomic>
+#include <sys/mman.h>
+#include <unistd.h>
 #include "net_engine.h"
 #include "net_common.h"
 #include "net_block_pool.h"
 #include "bio_ref.h"
 #include "bio_err.h"
+#include "interceptor_log.h"
 
 namespace ock {
 namespace bio {
@@ -30,6 +33,24 @@ public:
     {
         static InterceptorClientNetService instance;
         return instance;
+    }
+
+    ~InterceptorClientNetService()
+    {
+        if (mDataMsgMemPool != nullptr) {
+            mDataMsgMemPool->Stop();
+            mDataMsgMemPool = nullptr;
+        }
+        if (mShmAddr != nullptr && mShmLength > 0) {
+            if (munmap(mShmAddr, mShmLength) == -1) {
+                CLOG_ERROR("Munmap shm address failed in destructor.");
+            }
+            mShmAddr = nullptr;
+        }
+        if (mShmFd >= 0) {
+            close(mShmFd);
+            mShmFd = -1;
+        }
     }
 
     int32_t StartNetService();
