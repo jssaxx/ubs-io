@@ -108,8 +108,29 @@ $BUILD_CMD || {
     exit 1
 }
 
+# PYTHON_HOME后续按照正式编译工程适配 /opt/buildtools/python-3.10
+
+if pip3 show wheel; then
+  echo "wheel has been installed"
+else
+  echo "wheel installing"
+  pip3 install wheel
+fi
+
+\cp -v ${PROJ_DIR}/Build/src/python/sdk/c2python_sdk.cpython*.so ${PROJ_DIR}/python_whl/pykvc/pykvc/
+
+cd ${PROJ_DIR}/python_whl/pykvc/
+rm -rf build/
+rm -rf dist/
+rm -rf *.egg-info/
+python3 setup.py bdist_wheel --py-limited-api=cp37
+
+mkdir -p ${PROJ_DIR}/dist/pkg
+\cp -rf ${PROJ_DIR}/python_whl/pykvc/dist/pykvc-1.0.0-cp37-abi3-linux_aarch64.whl ${PROJ_DIR}/dist/pkg
+
 echo ""
 echo "Build completed successfully!"
 echo "Output files:"
+echo "  Whl pkg: ${PROJ_DIR}/dist/pkg/"
 echo "  Library: ${PROJ_DIR}/dist/lib/"
 echo "  Header:  ${PROJ_DIR}/dist/include/"
