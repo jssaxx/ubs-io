@@ -40,12 +40,6 @@ BResult InterceptorServer::RegisterOpcode()
         CLIENT_LOG_ERROR("Register interceptor write message handle failed, ret:" << ret << ".");
         return ret;
     }
-    ret = netEngine->RegisterNewRequestHandler(BIO_OP_INTERCEPTOR_ALLOC_BUFF,
-        std::bind(&InterceptorServer::HandleInterceptorAllocPage, this, std::placeholders::_1));
-    if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Register interceptor alloc buffer message handle failed, ret:" << ret << ".");
-        return ret;
-    }
     ret = netEngine->RegisterNewRequestHandler(BIO_OP_INTERCEPTOR_LARGE_WRITE,
         std::bind(&InterceptorServer::HandleInterceptorLargeWrite, this, std::placeholders::_1));
     if (ret != BIO_OK) {
@@ -174,62 +168,6 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorPwriteOut));
     BIO_TRACE_END(MIRROR_TRACE_INTERCEPTOR_WRITE_REPLY, 0);
-    return BIO_OK;
-}
-
-bool InterceptorServer::CheckInterceptorAllocPageReq(InterceptorAllocPageReq *req)
-{
-    return (req->length <= IO_SIZE_4M && req->length > 0);
-}
-
-BResult InterceptorServer::HandleInterceptorAllocPage(ServiceContext &ctx)
-{
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorAllocPageReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        CLIENT_LOG_ERROR("Receive interceptor alloc message len:" << ctx.MessageDataLen() << " or message is invalid.");
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-    auto *req = static_cast<InterceptorAllocPageReq *>(ctx.MessageData());
-    if (!CheckInterceptorAllocPageReq(req)) {
-        CLIENT_LOG_DEBUG("Invalid request message.");
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-    CLIENT_LOG_DEBUG("Receive interceptor alloc message pid:" << req->pid << " length:" << req->length);
-
-    uint64_t tenantId = 1;
-    static uint64_t objectId = 1;
-    CacheSpaceDesc addressInfo;
-    addressInfo.allocLoc = 1;
-    auto ret = BioAllocCacheSpace(tenantId, objectId++, req->length, &addressInfo);
-    if (UNLIKELY(ret != 0)) {
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (UNLIKELY(addressInfo.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
-        CLIENT_LOG_ERROR("addressNum: " << addressInfo.addressNum << " is invalid.");
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (addressInfo.addressNum == 1) {
-        addressInfo.address[1].size = 0;
-    }
-
-    CLIENT_LOG_DEBUG("Alloc put value with space length:" << req->length << ", location0:" <<
-        addressInfo.loc.location[0] << ", location1:" << addressInfo.loc.location[1] << ", address0 size:" <<
-        addressInfo.address[0].size << ", address1 size:" << addressInfo.address[1].size << ", address num:" <<
-        addressInfo.addressNum << ".");
-
-    InterceptorAllocPageRsp rsp;
-    rsp.address = addressInfo;
-    for (uint16_t idx = 0; idx < addressInfo.addressNum; idx++) {
-        rsp.addrOffset[idx] =
-            BioClientNet::Instance()->GetNetEngine()->GetAddressOffset(addressInfo.address[idx].address);
-    }
-    BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
-        sizeof(InterceptorAllocPageRsp));
     return BIO_OK;
 }
 

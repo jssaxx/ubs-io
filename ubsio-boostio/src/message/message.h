@@ -415,23 +415,6 @@ typedef struct {
 } CheckRemoteUpdateReadyResponse;
 
 typedef struct {
-    uint32_t pid;
-    uint64_t length;
-    uint64_t startTime;
-} InterceptorAllocPageReq;
-
-typedef struct {
-    uint64_t offset;
-    uint64_t size;
-} InterceptorAllocPage;
-
-typedef struct {
-    uint32_t pid;
-    uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
-    CacheSpaceDesc address;
-} InterceptorAllocPageRsp;
-
-typedef struct {
     RequestComm comm;
 } InterceptorCreateDataMsgMemPoolRequest;
 
