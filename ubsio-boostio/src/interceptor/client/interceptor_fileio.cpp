@@ -278,12 +278,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    if (count > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->write(fd, buf, count);
-    }
-
-    size_t realCount = std::min(count, MAX_LARGE_WRITE_SIZE);
-    size_t reqLen = sizeof(InterceptorPwriteIn) + realCount;
+    size_t reqLen = sizeof(InterceptorPwriteIn) + count;
     char *tmpPtr = new (std::nothrow) char[reqLen];
     if (UNLIKELY(tmpPtr == nullptr)) {
         CLOG_ERROR("Memory allocation failed.");
@@ -295,9 +290,9 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     request->fd = fd;
     request->inode = file->GetInode();
     request->offset = offset;
-    request->nbytes = realCount;
+    request->nbytes = count;
     request->startTime = Monotonic::TimeNs();
-    auto ret = memcpy_s(request->data, realCount, (const char *)buf, realCount);
+    auto ret = memcpy_s(request->data, count, (const char *)buf, count);
     if (UNLIKELY(ret != 0)) {
         delete[] tmpPtr;
         tmpPtr = nullptr;
@@ -318,7 +313,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     delete[] tmpPtr;
     tmpPtr = nullptr;
     CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
-    return static_cast<ssize_t>(realCount);
+    return static_cast<ssize_t>(count);
 }
 
 ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
