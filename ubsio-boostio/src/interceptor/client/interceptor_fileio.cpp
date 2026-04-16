@@ -369,6 +369,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     auto t3 = Monotonic::TimeNs();
 
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
+    CLOG_DEBUG("PwriteLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
 
     auto t4 = Monotonic::TimeNs();
 
