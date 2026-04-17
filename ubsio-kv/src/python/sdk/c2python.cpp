@@ -63,17 +63,17 @@ int32_t PyKvcKvPutData(const std::string &key, py::bytes value)
 std::vector<int> PyKvcKvBatchGetData(const std::vector<std::string> &keys, std::vector<py::bytes> &values)
 {
     int32_t ret = 0;
+    std::vector<int> results(keys.size(), -1);
     if (keys.empty() || values.empty() || keys.size() != values.size()) {
         LOG_ERROR("keys or values is empty");
-        return {};
+        return results;
     }
     if (keys.size() > MAX_BATCH_OP_COUNT || keys.size() < 1) {
         LOG_ERROR("keys length exceeds limit");
-        return {};
+        return results;
     }
     std::vector<void *> data_ptrs;
     std::vector<size_t> lengths;
-    std::vector<int> results(keys.size(), -1);
     std::vector<void *> getDataPtr(keys.size(), nullptr);
     data_ptrs.reserve(values.size());
     lengths.reserve(values.size());
@@ -103,15 +103,15 @@ std::vector<int> PyKvcKvBatchGetData(const std::vector<std::string> &keys, std::
 
 std::vector<bool> PyKvcKvBatchExist(const std::vector<std::string> &keys)
 {
+    std::vector<bool> result(keys.size(), false);
     if (keys.empty()) {
         LOG_ERROR("keys is empty");
-        return {};
+        return result;
     }
     if (keys.size() > MAX_BATCH_OP_COUNT || keys.size() < 1) {
         LOG_ERROR("keys length exceeds limit");
-        return {};
+        return result;
     }
-    std::vector<bool> result(keys.size(), false);
     auto results = new (std::nothrow) bool[keys.size()];
     if (results == nullptr) {
         LOG_ERROR("new bool array failed");

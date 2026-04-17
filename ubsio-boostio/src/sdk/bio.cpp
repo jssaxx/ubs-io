@@ -122,22 +122,7 @@ inline static void StatisticGetIoSize(uint64_t length)
 
 inline static bool KeyValid(const char *key)
 {
-    if (UNLIKELY(key == nullptr)) {
-        return false;
-    }
-
-    const char* end = (const char*)memchr(key, '\0', KEY_MAX_SIZE);
-    if (UNLIKELY(end == nullptr)) {
-        return false;
-    }
-
-    size_t len = end - key;
-    if (UNLIKELY(len == 0 || len >= KEY_MAX_SIZE)) {
-        return false;
-    }
-
-    std::string keyStr(key, len);
-    if ((keyStr[0] == '/') || keyStr.find("..") != std::string::npos) {
+    if (UNLIKELY(key == nullptr || strlen(key) == 0)) {
         return false;
     }
     return true;
