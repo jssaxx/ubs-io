@@ -311,7 +311,35 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     }
 
     BIO_TRACE_START(INTERCEPTOR_WRITE_HOOK);
-    int32_t writeRet = static_cast<int32_t>(BioWriteHook(req->inode, reinterpret_cast<char *>(srcAddr), req->nbytes, req->offset, 0ULL));
+    uint64_t tenantId = 1;
+    static std::atomic<uint64_t> objectId{1};
+    CacheSpaceDesc addressInfo{};
+    addressInfo.allocLoc = 1;
+    auto allocRet = BioAllocCacheSpace(tenantId, objectId.fetch_add(1), req->nbytes, &addressInfo);
+    if (UNLIKELY(allocRet != RET_CACHE_OK)) {
+        CLIENT_LOG_ERROR("Alloc cache space failed, ret:" << allocRet << ".");
+        BIO_TRACE_END(INTERCEPTOR_WRITE_HOOK, BIO_ALLOC_FAIL);
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        return BIO_OK;
+    }
+
+    BIO_TRACE_START(INTERCEPTOR_WRITE_MEMCPY);
+    uint8_t *src = srcAddr;
+    for (uint32_t i = 0; i < addressInfo.addressNum; i++) {
+        uint8_t *dstAddr = reinterpret_cast<uint8_t *>(addressInfo.address[i].address);
+        uint32_t copyLen = addressInfo.address[i].size;
+        memcpy(dstAddr, src, copyLen);
+        src += copyLen;
+    }
+    for (uint32_t i = addressInfo.addressNum; i < CACHE_SPACE_ADDRESS_SIZE; i++) {
+        addressInfo.address[i].address = 0;
+        addressInfo.address[i].size = 0;
+    }
+    BIO_TRACE_END(INTERCEPTOR_WRITE_MEMCPY, 0);
+
+    BIO_TRACE_START(INTERCEPTOR_WRITE_COPYFREE);
+    int32_t writeRet = static_cast<int32_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
+    BIO_TRACE_END(INTERCEPTOR_WRITE_COPYFREE, writeRet);
     BIO_TRACE_END(INTERCEPTOR_WRITE_HOOK, writeRet);
     if (UNLIKELY(writeRet != 0)) {
         InterceptorPwriteOut resp;
