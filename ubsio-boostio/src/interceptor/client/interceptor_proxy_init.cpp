@@ -11,7 +11,9 @@
  */
 
 #include <cstdio>
+#include <cstdlib>
 #include "interceptor.h"
+#include "interceptor_context.h"
 #include "interceptor_log.h"
 #include "interceptor_net.h"
 
@@ -25,9 +27,19 @@ int InitializeProxyContext()
         return 0;
     }
 
+    const char *mountPoint = std::getenv("JFS_MOUNT_POINT");
+    if (mountPoint != nullptr && mountPoint[0] != '\0') {
+        BioInterceptorContext::GetInstance().mountPoint = mountPoint;
+    }
+
+    auto ret = InterceptorClientNetService::Instance().StartNetService();
+    if (ret != 0) {
+        CLOG_WARN("Prewarm interceptor net service failed, ret:" << ret << ".");
+    }
+
     g_initialized.store(true);
 
-    CLOG_DEBUG("Init bio interceptor ok.");
+    CLOG_DEBUG("Init bio interceptor ok, mount point:" << BioInterceptorContext::GetInstance().mountPoint << ".");
     return 0;
 }
 

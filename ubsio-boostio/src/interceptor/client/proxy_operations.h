@@ -53,6 +53,11 @@ public:
     static ssize_t preadv64(int fd, const struct iovec *vector, int iovcnt, off64_t offset);
 
     static ssize_t Write(int fd, const void *buf, size_t nbytes);
+    static ssize_t Pwrite(int fd, const void *buf, size_t count, off_t offset);
+    static ssize_t Pwrite64(int fd, const void *buf, size_t count, off64_t offset);
+    static ssize_t Writev(int fd, const struct iovec *vector, int count);
+    static ssize_t Pwritev(int fd, const struct iovec *vector, int count, off_t offset);
+    static ssize_t Pwritev64(int fd, const struct iovec *vector, int count, off64_t offset);
 
 private:
     static int32_t FullPath(const char *nativePath, std::string &realPath);

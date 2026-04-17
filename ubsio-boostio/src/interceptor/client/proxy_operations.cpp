@@ -52,6 +52,11 @@ void ProxyOperations::FillInterceptorOps(InterceptorProxyOperations &ops)
     ops.pread64 = Pread64;
     ops.preadv64 = preadv64;
     ops.write = Write;
+    ops.pwrite = Pwrite;
+    ops.pwrite64 = Pwrite64;
+    ops.writev = Writev;
+    ops.pwritev = Pwritev;
+    ops.pwritev64 = Pwritev64;
 }
 
 struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
@@ -118,8 +123,20 @@ int32_t ProxyOperations::FullPath(int dirFd, const char *nativePath, std::string
 
 int ProxyOperations::CheckSelfPath(const std::string &mountPoint, const std::string &restoredPath)
 {
+    if (mountPoint.empty()) {
+        return -1;
+    }
+    if (mountPoint == "/") {
+        return restoredPath.empty() ? -1 : 0;
+    }
     size_t pointLen = mountPoint.size();
-    return restoredPath.compare(0, pointLen, mountPoint, 0, pointLen);
+    if (restoredPath.compare(0, pointLen, mountPoint, 0, pointLen) != 0) {
+        return -1;
+    }
+    if (restoredPath.size() == pointLen) {
+        return 0;
+    }
+    return restoredPath[pointLen] == '/' ? 0 : -1;
 }
 
 int ProxyOperations::OpenProxy(const char *path, int flags, va_list args)

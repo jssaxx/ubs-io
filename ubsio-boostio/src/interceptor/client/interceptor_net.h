@@ -72,6 +72,11 @@ public:
         return mBioShmAddr;
     }
 
+    uint64_t GetBioShmLength() const
+    {
+        return mBioShmLength;
+    }
+
     bool IsBioShmReady() const
     {
         return mBioShmAddr != nullptr;
@@ -80,6 +85,11 @@ public:
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
         return mNetEngine->GetShmAddress(offset, len);
+    }
+
+    uint64_t GetDataMsgMemBlockSize() const
+    {
+        return mDataMsgMemBlockSize;
     }
 
     BResult AllocShmBlock(uintptr_t &address, uint64_t &mrOffset)

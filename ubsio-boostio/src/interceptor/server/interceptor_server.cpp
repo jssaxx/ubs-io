@@ -199,6 +199,27 @@ bool InterceptorServer::CheckInterceptorLargeReadReq(InterceptorLargePreadIn *re
     return true;
 }
 
+static bool TranslateCopyFreeSpace(CacheSpaceDesc &spaceInfo, uint8_t *bioShmBase, uint64_t bioShmLength,
+    uint64_t expectedLen)
+{
+    if (bioShmBase == nullptr || spaceInfo.addressNum == 0 || spaceInfo.addressNum > CACHE_SPACE_ADDRESS_SIZE) {
+        return false;
+    }
+
+    uint64_t totalLen = 0;
+    for (uint32_t i = 0; i < spaceInfo.addressNum; i++) {
+        uint64_t offset = spaceInfo.address[i].address;
+        uint64_t size = spaceInfo.address[i].size;
+        if (size == 0 || offset >= bioShmLength || size > bioShmLength - offset) {
+            return false;
+        }
+        totalLen += size;
+        spaceInfo.address[i].address = reinterpret_cast<uint64_t>(bioShmBase + offset);
+    }
+
+    return totalLen == expectedLen;
+}
+
 uint8_t *InterceptorServer::TransDataMsgMemAddr(uint32_t pid, uint64_t mrOffset)
 {
     std::lock_guard<std::mutex> lock(mDataMsgMemLock);
@@ -332,8 +353,11 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 
     BIO_TRACE_START(INTERCEPTOR_WRITE_HOOK);
     CacheSpaceDesc addressInfo = req->spaceInfo;
-    for (uint32_t i = 0; i < addressInfo.addressNum; i++) {
-        addressInfo.address[i].address = reinterpret_cast<uint64_t>(bioShmBase + addressInfo.address[i].address);
+    if (UNLIKELY(!TranslateCopyFreeSpace(addressInfo, bioShmBase, tmpLen, req->nbytes))) {
+        CLIENT_LOG_ERROR("Invalid copy-free address info, inode:" << req->inode << ", offset:" << req->offset <<
+            ", len:" << req->nbytes << ", addressNum:" << addressInfo.addressNum << ".");
+        netEngine->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
     }
 
     BIO_TRACE_START(INTERCEPTOR_WRITE_COPYFREE);
@@ -384,7 +408,7 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
     BIO_TRACE_START(INTERCEPTOR_READ_HOOK);
     int ret = BioReadHook(req->inode, reinterpret_cast<char *>(shmAddr), req->nbytes, req->offset, &readLen);
     BIO_TRACE_END(INTERCEPTOR_READ_HOOK, ret);
-    if (UNLIKELY(ret != 0 || readLen <= 0)) {
+    if (UNLIKELY(ret != 0 || readLen < 0)) {
         CLIENT_LOG_ERROR("BioReadHook failed, ret:" << ret << ", readLen:" << readLen << ".");
         InterceptorLargePreadOut resp;
         resp.ret = ret;
