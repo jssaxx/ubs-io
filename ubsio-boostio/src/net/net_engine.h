@@ -188,13 +188,6 @@ public:
             return BIO_ERR;
         }
         ch->SetChannelTimeOut(mTimeout, mTimeout);
-
-        ret = GetDataChanel(targetNodeId, ch);
-        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
-            return BIO_ERR;
-        }
-        ch->SetChannelTimeOut(mTimeout, mTimeout);
         return BIO_OK;
     }
 

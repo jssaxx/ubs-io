@@ -60,6 +60,7 @@ const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("bio.sdkmem.size_in_mb", 1);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
+const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("bio.sdkmem.size_in_mb", 5120);
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.evict_water_level", 0);
 
