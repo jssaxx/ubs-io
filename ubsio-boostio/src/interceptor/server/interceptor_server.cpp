@@ -315,10 +315,18 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd);
 
-    uint8_t *bioShmBase = BioClientNet::Instance()->GetShmAddr();
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    int32_t tmpFd = -1;
+    uint64_t tmpOff = 0;
+    uint64_t tmpLen = 0;
+    uint64_t tmpKey = 0;
+    uint8_t *bioShmBase = nullptr;
+    if (netEngine->QueryShmInfo(tmpFd, tmpOff, tmpLen, tmpKey) == BIO_OK && tmpLen > 0) {
+        bioShmBase = netEngine->GetShmAddress(tmpOff, tmpLen);
+    }
     if (UNLIKELY(bioShmBase == nullptr)) {
         CLIENT_LOG_ERROR("Bio shm base address is null.");
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        netEngine->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
         return BIO_OK;
     }
 
@@ -409,23 +417,27 @@ BResult InterceptorServer::HandleInterceptorInitBioShm(ServiceContext &ctx)
 
     auto *req = static_cast<InterceptorInitBioShmReq *>(ctx.MessageData());
 
-    int32_t bioShmFd = BioClientNet::Instance()->GetShmFd();
-    uint64_t bioShmOffset = BioClientNet::Instance()->GetShmOffset();
-    uint64_t bioShmLength = BioClientNet::Instance()->GetShmLength();
-    if (UNLIKELY(bioShmFd < 0 || bioShmLength == 0)) {
-        CLIENT_LOG_ERROR("Bio shm not available, fd:" << bioShmFd << ", length:" << bioShmLength << ".");
+    int32_t bioShmFd = -1;
+    uint64_t bioShmOffset = 0;
+    uint64_t bioShmLength = 0;
+    uint64_t bioShmKey = 0;
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    auto queryRet = netEngine->QueryShmInfo(bioShmFd, bioShmOffset, bioShmLength, bioShmKey);
+    if (UNLIKELY(queryRet != BIO_OK || bioShmFd < 0 || bioShmLength == 0)) {
+        CLIENT_LOG_ERROR("Bio shm not available, queryRet:" << queryRet << ", fd:" << bioShmFd <<
+            ", length:" << bioShmLength << ".");
         InterceptorInitBioShmResp resp;
         resp.ret = -1;
         resp.offset = 0;
         resp.length = 0;
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorInitBioShmResp));
+        netEngine->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorInitBioShmResp));
         return BIO_OK;
     }
 
-    auto ret = BioClientNet::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &bioShmFd, NO_1);
+    auto ret = netEngine->SendFds(ctx.Channel(), &bioShmFd, NO_1);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send bio shm fd failed, ret:" << ret << ".");
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
+        netEngine->Reply(ctx, BIO_ERR, nullptr, 0);
         return BIO_OK;
     }
 
@@ -433,7 +445,7 @@ BResult InterceptorServer::HandleInterceptorInitBioShm(ServiceContext &ctx)
     resp.ret = 0;
     resp.offset = bioShmOffset;
     resp.length = bioShmLength;
-    BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorInitBioShmResp));
+    netEngine->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorInitBioShmResp));
     CLIENT_LOG_INFO("Init bio shm for pid:" << req->pid << ", offset:" << bioShmOffset <<
         ", length:" << bioShmLength << ".");
     return BIO_OK;
@@ -451,6 +463,19 @@ BResult InterceptorServer::HandleInterceptorAllocCacheSpace(ServiceContext &ctx)
 
     auto *req = static_cast<InterceptorAllocCacheSpaceReq *>(ctx.MessageData());
 
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    int32_t tmpFd = -1;
+    uint64_t bioShmOffset = 0;
+    uint64_t bioShmLength = 0;
+    uint64_t tmpKey = 0;
+    if (netEngine->QueryShmInfo(tmpFd, bioShmOffset, bioShmLength, tmpKey) != BIO_OK || bioShmLength == 0) {
+        CLIENT_LOG_ERROR("Bio shm not available for alloc cache space.");
+        InterceptorAllocCacheSpaceResp resp;
+        resp.ret = -1;
+        netEngine->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorAllocCacheSpaceResp));
+        return BIO_OK;
+    }
+
     uint64_t tenantId = 1;
     static std::atomic<uint64_t> objectId{1};
     CacheSpaceDesc spaceInfo{};
@@ -460,11 +485,11 @@ BResult InterceptorServer::HandleInterceptorAllocCacheSpace(ServiceContext &ctx)
         CLIENT_LOG_ERROR("Alloc cache space failed, ret:" << allocRet << ".");
         InterceptorAllocCacheSpaceResp resp;
         resp.ret = -1;
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorAllocCacheSpaceResp));
+        netEngine->Reply(ctx, BIO_OK, &resp, sizeof(InterceptorAllocCacheSpaceResp));
         return BIO_OK;
     }
 
-    uint8_t *bioShmBase = BioClientNet::Instance()->GetShmAddr();
+    uint8_t *bioShmBase = netEngine->GetShmAddress(bioShmOffset, bioShmLength);
     if (UNLIKELY(bioShmBase == nullptr)) {
         CLIENT_LOG_ERROR("Bio shm base address is null.");
         InterceptorAllocCacheSpaceResp resp;
