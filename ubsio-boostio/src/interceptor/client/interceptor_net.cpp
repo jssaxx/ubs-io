@@ -85,7 +85,7 @@ int32_t InterceptorClientNetService::StartNetService()
 
     ret = InitBioShm();
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_WARN("Init bio shm failed:" << ret << ", copy-free write disabled.");
+        CLOG_ERROR("Init bio shm failed:" << ret << ", copy-free write disabled.");
     }
 
     CLOG_DEBUG("Start net service success.");
