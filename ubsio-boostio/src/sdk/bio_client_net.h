@@ -115,6 +115,26 @@ public:
         return mSegment;
     }
 
+    inline int32_t GetShmFd() const
+    {
+        return mShmFd;
+    }
+
+    inline uint8_t *GetShmAddr() const
+    {
+        return mShmAddr;
+    }
+
+    inline uint64_t GetShmOffset() const
+    {
+        return mShmOffset;
+    }
+
+    inline uint64_t GetShmLength() const
+    {
+        return mShmLength;
+    }
+
     inline NetEnginePtr GetNetEngine() const
     {
         return mNetEngine;

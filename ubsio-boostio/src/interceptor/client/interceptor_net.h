@@ -53,10 +53,29 @@ public:
             std::string shmName = "/interceptor_mem_pool_" + std::to_string(mPid);
             shm_unlink(shmName.c_str());
         }
+        if (mBioShmAddr != nullptr && mBioShmLength > 0) {
+            munmap(mBioShmAddr, mBioShmLength);
+            mBioShmAddr = nullptr;
+        }
+        if (mBioShmFd >= 0) {
+            close(mBioShmFd);
+            mBioShmFd = -1;
+        }
     }
 
     int32_t StartNetService();
     BResult CreateDataMessageMem();
+    BResult InitBioShm();
+
+    uint8_t *GetBioShmAddr() const
+    {
+        return mBioShmAddr;
+    }
+
+    bool IsBioShmReady() const
+    {
+        return mBioShmAddr != nullptr;
+    }
 
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
@@ -155,6 +174,11 @@ private:
     NetBlockPoolPtr mDataMsgMemPool = nullptr;
     uint8_t *mDataMsgMemAddr = nullptr;
     uint64_t mDataMsgMemBlockSize = 0;
+
+    int32_t mBioShmFd = -1;
+    uint64_t mBioShmOffset = 0;
+    uint64_t mBioShmLength = 0;
+    uint8_t *mBioShmAddr = nullptr;
 };
 }
 }

@@ -35,6 +35,7 @@ public:
         LOG_LEVEL_INFO = 1,
         LOG_LEVEL_WARN = 2,
         LOG_LEVEL_ERROR = 3,
+        LOG_LEVEL_OFF = 4,
         LOG_LEVEL_BUTT
     };
 
@@ -94,6 +95,8 @@ private:
             return static_cast<int32_t>(Level::LOG_LEVEL_WARN);
         } else if (strcasecmp(envVar, "error") == 0) {
             return static_cast<int32_t>(Level::LOG_LEVEL_ERROR);
+        } else if (strcasecmp(envVar, "off") == 0) {
+            return static_cast<int32_t>(Level::LOG_LEVEL_OFF);
         }
 
         int32_t level = atoi(envVar);

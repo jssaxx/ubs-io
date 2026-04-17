@@ -462,6 +462,7 @@ typedef struct {
     int64_t offset;
     uint64_t startTime;
     uint64_t mrOffset;
+    CacheSpaceDesc spaceInfo;
 } InterceptorLargePwriteIn;
 
 typedef struct {
@@ -478,6 +479,26 @@ typedef struct {
     int32_t ret;
     uint64_t dataLen;
 } InterceptorLargePreadOut;
+
+typedef struct {
+    uint32_t pid;
+} InterceptorInitBioShmReq;
+
+typedef struct {
+    int32_t ret;
+    uint64_t offset;
+    uint64_t length;
+} InterceptorInitBioShmResp;
+
+typedef struct {
+    uint32_t pid;
+    uint64_t nbytes;
+} InterceptorAllocCacheSpaceReq;
+
+typedef struct {
+    int32_t ret;
+    CacheSpaceDesc spaceInfo;
+} InterceptorAllocCacheSpaceResp;
 
 typedef struct {
     RequestComm comm;

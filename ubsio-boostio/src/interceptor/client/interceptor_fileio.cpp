@@ -17,6 +17,7 @@
 #include "securec.h"
 #include "bio_def.h"
 #include "message_op.h"
+#include "message.h"
 #include "interceptor_log.h"
 #include "interceptor_net.h"
 #include "proxy_operations.h"
@@ -324,17 +325,34 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     auto t0 = Monotonic::TimeNs();
 
-    uintptr_t shmAddr = 0;
-    uint64_t mrOffset = 0;
-    auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
-    if (UNLIKELY(ret != BIO_OK || shmAddr == 0)) {
-        CLOG_ERROR("PwriteLargeInner: alloc shm block failed, ret:" << ret << ".");
+    uint8_t *bioShmBase = InterceptorClientNetService::Instance().GetBioShmAddr();
+    if (UNLIKELY(bioShmBase == nullptr)) {
+        CLOG_ERROR("PwriteLargeInner: bio shm not ready.");
+        return -1;
+    }
+
+    InterceptorAllocCacheSpaceReq allocReq;
+    allocReq.pid = static_cast<uint32_t>(getpid());
+    allocReq.nbytes = count;
+
+    InterceptorAllocCacheSpaceResp allocResp;
+    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorAllocCacheSpaceReq,
+        InterceptorAllocCacheSpaceResp>(INVALID_NID, BIO_OP_INTERCEPTOR_ALLOC_CACHE_SPACE, allocReq, allocResp);
+    if (UNLIKELY(ret != BIO_OK || allocResp.ret != 0)) {
+        CLOG_ERROR("PwriteLargeInner: alloc cache space failed, ret:" << ret << ", resp.ret:" << allocResp.ret << ".");
         return -1;
     }
 
     auto t1 = Monotonic::TimeNs();
 
-    memcpy(reinterpret_cast<uint8_t *>(shmAddr), buf, count);
+    CacheSpaceDesc spaceInfo = allocResp.spaceInfo;
+    const uint8_t *src = static_cast<const uint8_t *>(buf);
+    for (uint32_t i = 0; i < spaceInfo.addressNum; i++) {
+        uint8_t *dstAddr = bioShmBase + spaceInfo.address[i].address;
+        uint32_t copyLen = spaceInfo.address[i].size;
+        memcpy(dstAddr, src, copyLen);
+        src += copyLen;
+    }
 
     auto t2 = Monotonic::TimeNs();
 
@@ -344,49 +362,40 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     writeReq.inode = file->GetInode();
     writeReq.offset = offset;
     writeReq.nbytes = count;
-    writeReq.mrOffset = mrOffset;
+    writeReq.mrOffset = 0;
     writeReq.startTime = Monotonic::TimeNs();
+    writeReq.spaceInfo = spaceInfo;
 
     InterceptorPwriteOut writeResp;
     ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(INVALID_NID,
         BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PwriteLargeInner: large write failed, ret:" << ret << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
 
     auto t3 = Monotonic::TimeNs();
 
-    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-    CLOG_DEBUG("PwriteLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
-
-    auto t4 = Monotonic::TimeNs();
-
     static uint64_t sCount = 0;
     static uint64_t sAllocUs = 0;
     static uint64_t sMemcpyUs = 0;
     static uint64_t sRpcUs = 0;
-    static uint64_t sReleaseUs = 0;
     static uint64_t sTotalUs = 0;
     sCount++;
     sAllocUs += (t1 - t0) / 1000;
     sMemcpyUs += (t2 - t1) / 1000;
     sRpcUs += (t3 - t2) / 1000;
-    sReleaseUs += (t4 - t3) / 1000;
-    sTotalUs += (t4 - t0) / 1000;
+    sTotalUs += (t3 - t0) / 1000;
     if (sCount >= 1000) {
         CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
             " io: alloc=" << sAllocUs / sCount <<
             " memcpy=" << sMemcpyUs / sCount <<
             " rpc=" << sRpcUs / sCount <<
-            " release=" << sReleaseUs / sCount <<
             " total=" << sTotalUs / sCount);
         sCount = 0;
         sAllocUs = 0;
         sMemcpyUs = 0;
         sRpcUs = 0;
-        sReleaseUs = 0;
         sTotalUs = 0;
     }
     return static_cast<ssize_t>(count);

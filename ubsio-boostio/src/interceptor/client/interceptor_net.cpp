@@ -83,6 +83,11 @@ int32_t InterceptorClientNetService::StartNetService()
         return ret;
     }
 
+    ret = InitBioShm();
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_WARN("Init bio shm failed:" << ret << ", copy-free write disabled.");
+    }
+
     CLOG_DEBUG("Start net service success.");
     mReady.store(true);
     return 0;
@@ -164,5 +169,55 @@ BResult InterceptorClientNetService::CreateDataMessageMem()
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
     CLOG_DEBUG("Interceptor create data message memory success, poolSize:" << mShmLength <<
         ", blockSize:" << mDataMsgMemBlockSize << ", blockCount:" << blockCount << ".");
+    return BIO_OK;
+}
+
+BResult InterceptorClientNetService::InitBioShm()
+{
+    InterceptorInitBioShmReq req;
+    req.pid = mPid;
+
+    InterceptorInitBioShmResp rsp;
+    auto ret = mNetEngine->SyncCall<InterceptorInitBioShmReq, InterceptorInitBioShmResp>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_INIT_BIO_SHM, req, rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Send init bio shm request failed:" << ret << ".");
+        return ret;
+    }
+    if (rsp.ret != 0) {
+        CLOG_ERROR("Init bio shm response ret:" << rsp.ret << ".");
+        return BIO_ERR;
+    }
+
+    int32_t realFd = -1;
+    ret = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Receive bio shm fd failed, ret:" << ret << ".");
+        return BIO_ERR;
+    }
+
+    mBioShmFd = realFd;
+    mBioShmOffset = rsp.offset;
+    mBioShmLength = rsp.length;
+
+    if (mBioShmLength == 0) {
+        CLOG_ERROR("Invalid bio shm length:" << mBioShmLength << ".");
+        close(mBioShmFd);
+        mBioShmFd = -1;
+        return BIO_ERR;
+    }
+
+    off_t offset = static_cast<off_t>(mBioShmOffset);
+    auto address = mmap(nullptr, mBioShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mBioShmFd, offset);
+    if (UNLIKELY(address == MAP_FAILED)) {
+        CLOG_ERROR("Mmap bio shm size " << mBioShmLength << " offset " << offset << " failed, error:" <<
+            strerror(errno));
+        close(mBioShmFd);
+        mBioShmFd = -1;
+        return BIO_ERR;
+    }
+
+    mBioShmAddr = static_cast<uint8_t *>(address);
+    CLOG_DEBUG("Init bio shm success, offset:" << mBioShmOffset << ", length:" << mBioShmLength << ".");
     return BIO_OK;
 }

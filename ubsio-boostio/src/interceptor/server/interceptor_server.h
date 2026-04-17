@@ -52,6 +52,8 @@ public:
     BResult HandleInterceptorLargeWrite(ServiceContext &ctx);
     BResult HandleInterceptorLargeRead(ServiceContext &ctx);
     BResult HandleInterceptorCreateDataMsgMemPool(ServiceContext &ctx);
+    BResult HandleInterceptorInitBioShm(ServiceContext &ctx);
+    BResult HandleInterceptorAllocCacheSpace(ServiceContext &ctx);
 
     bool CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req);
     bool CheckInterceptorLargeReadReq(InterceptorLargePreadIn *req);
