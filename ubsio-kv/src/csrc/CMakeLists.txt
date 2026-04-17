@@ -22,10 +22,12 @@ target_include_directories(ubsio_kvc PRIVATE
 
 target_link_directories(ubsio_kvc PRIVATE
     ${UBSIO_BOOSTIO_DIR}/build
+    ${UBSIO_NDS_DIR}/lib
 )
 
 target_link_libraries(ubsio_kvc
     pthread
+    nds_file
     dl
 )
 

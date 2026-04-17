@@ -15,7 +15,6 @@ target_include_directories(c2python_sdk PRIVATE
     ${UBSIO_BOOSTIO_DIR}/src/sdk
     ${UBSIO_BOOSTIO_DIR}/src/common
     ${UBSIO_NDS_DIR}/include
-    ${TARGET_INSTALL_LIB}/3rdparty/nds/include
 )
 
 target_link_libraries(c2python_sdk PRIVATE
