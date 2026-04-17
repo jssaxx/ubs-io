@@ -376,6 +376,7 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
 CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space);
 
 typedef int (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
+typedef int (*ReadCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *, int *);
 typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
 typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *);
 
@@ -390,6 +391,7 @@ typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *)
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
+int BioReadCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space, int *readLen);
 
 /**
  * @brief: Interceptor write hook
@@ -421,6 +423,14 @@ int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheS
  * @return: void
  */
 void BioRegisterInterceptorRead(ReadHook rh);
+
+/**
+ * @brief: Register interceptor read interface with copy free
+ *
+ * @param[in]: rh: read hook
+ * @return: void
+ */
+void BioRegisterInterceptorReadCopyFree(ReadCopyFreeHook rh);
 
 /**
  * @brief: Register interceptor write interface

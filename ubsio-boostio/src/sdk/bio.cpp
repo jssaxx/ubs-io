@@ -1039,6 +1039,7 @@ CResult BioCheckUpgradeReady(uint64_t tenantId)
 }
 
 ReadHook g_readHook = nullptr;
+ReadCopyFreeHook g_readCopyFreeHook = nullptr;
 WriteHook g_writeHook = nullptr;
 WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
 
@@ -1060,6 +1061,15 @@ int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, ui
     return g_writeHook(inode, buff, count, offset, fh);
 }
 
+int BioReadCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space, int *readLen)
+{
+    if (g_readCopyFreeHook == nullptr) {
+        CLIENT_LOG_ERROR("g_readCopyFreeHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
+    return g_readCopyFreeHook(inode, offset, count, space, readLen);
+}
+
 int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space)
 {
     if (g_writeCopyFreeHook == nullptr) {
@@ -1072,6 +1082,11 @@ int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheS
 void BioRegisterInterceptorRead(ReadHook rh)
 {
     g_readHook = rh;
+}
+
+void BioRegisterInterceptorReadCopyFree(ReadCopyFreeHook rh)
+{
+    g_readCopyFreeHook = rh;
 }
 
 void BioRegisterInterceptorWrite(WriteHook wh)

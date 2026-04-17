@@ -1,144 +1,126 @@
 # 读写 Copy-Free 改造总结
 
-## 1. 目标
+## 目标
 
-本轮改造的目标是把 `interceptor -> JuiceFS -> ubs-io put/get` 的主路径尽量收敛成：
+本轮改造的目标是把 `interceptor -> JuiceFS -> ubs-io` 的主路径尽量收敛成：
 
-- 写：
-  应用 `buf/iov` -> `bio shm` 拷贝一次
-- 读：
-  服务端/JuiceFS -> `shm`，客户端再从 `shm` 拷贝到应用 `buf/iov` 一次
+- 写：应用 `buf/iov -> bio shm` 只拷一次
+- 读：服务端/JuiceFS 直接写 `shm`，客户端只做 `shm -> 应用 buf/iov` 一次拷贝
 
-其中“只拷一次”是按当前用户态链路来定义，不包含底层设备、RDMA、内核态细节。
+这里的“一次拷贝”只按当前用户态链路定义，不包含内核态和更底层设备路径。
 
-## 2. 已完成修改
+## 已完成改动
 
-### 2.1 写路径
+### 写路径
 
-- `write/pwrite/pwrite64` 统一收敛到 `copy-free` 主路径。
-- `writev/pwritev/pwritev64` 不再先拍平到临时平坦 buffer，而是直接把 `iov` 散拷到 `bio shm`。
-- 大于 `4M` 的写会在客户端按段拆分，每段单独申请 `cache space` 并提交。
-- 服务端增加了 `spaceInfo` 地址范围与长度校验，避免非法地址或长度不一致。
-- JuiceFS `WriteWithSpace` 支持跨 `meta.ChunkSize` 拆成多个子视图，不再因为跨 chunk 把数据重新复制进 JuiceFS page。
+- `write/pwrite/pwrite64` 统一走 `copy-free` 主路径。
+- `writev/pwritev/pwritev64` 不再先拍平成临时 buffer，而是直接把 `iov` 散拷到 `bio shm`。
+- 超过 `4M` 的写会在客户端按段拆分，每段单独申请 `cache space` 并提交。
+- 服务端会校验 `spaceInfo` 的地址范围和总长度，防止非法地址直接下传。
+- JuiceFS `WriteWithSpace` 支持跨 `meta.ChunkSize` 把同一段 `spaceInfo` 切成多个子视图继续下传。
 
-### 2.2 读路径
+### 读路径
 
 - `read/pread/pread64` 统一走 `BIO_OP_INTERCEPTOR_LARGE_READ + shm`。
-- `readv/preadv64` 直接从 `shm` 散写回 `iov`，不再先读到临时平坦 buffer。
-- 大于单个 data-message shm block 的读会按 block size 分段读取。
-- 服务端 `LARGE_READ` 修正了 EOF 语义，允许 `readLen == 0` 作为正常文件尾返回。
+- `readv/preadv64` 直接从 `shm` 散写回 `iov`，去掉了临时平坦 buffer。
+- 服务端新增 `BioReadCopyFreeHook` 路径，把现有 data-message shm 包装成 `spaceInfo`，直接传给 JuiceFS。
+- JuiceFS 新增独立的 `ReadWithSpace` / `ReadAtWithSpace` 旁路，不再复用原来的 `page.Data -> copy(buf)` 读路径。
+- 当 chunk 启用了压缩时，新读旁路会显式回退旧路径，不强行走 copy-free。
 
-### 2.3 运行时安全性
+### 本轮补上的读路径缺口
 
-- 读路径不再硬编码 data-message shm block 为 `4M`，改为使用运行时返回的 `segment` 大小。
-- 写路径和读路径都保留了长度/地址校验，避免直接把非法 `spaceInfo` 或异常 `dataLen` 继续下传。
+- 客户端读分段长度改成 `min(data-message shm block size, 4M)`，避免运行时 block size 大于协议上限时被服务端拒绝。
+- 服务端大读入口新增 `mrOffset + nbytes` 的完整 shm 范围校验，不再只检查起始地址。
+- 服务端大读在 `RET_CACHE_NOT_SUPPORTED` 时自动回退旧 `BioReadHook`。
+- `LARGE_READ` 保留了 `readLen == 0` 表示 EOF 的语义，不再把 EOF 当错误。
 
-## 3. 当前路径判断
+## 当前读写主路径
 
-### 3.1 写路径是否做到主路径一次拷贝
-
-结论：在当前用户态主路径上，基本做到了。
+### 写
 
 当前写主路径是：
 
 1. 应用 `buf/iov` 拷贝到 `bio shm`
-2. 服务端把 `spaceInfo` 翻译成真实地址
-3. JuiceFS `WriteWithSpace` 持有这段 `spaceInfo`
-4. `PutWithSpaceNew -> BioPutWithCopyFree` 直接引用这段空间
+2. `interceptor server` 翻译 `spaceInfo`
+3. JuiceFS `WriteWithSpace`
+4. `PutWithSpaceNew -> BioPutWithCopyFree`
 
-在这条链路上，`interceptor` 和 JuiceFS 不再把数据重新 materialize 成普通 page 再上传。
-
-### 3.2 读路径是否做到主路径一次拷贝
-
-结论：客户端侧做到了，但 JuiceFS 内部还没有做到“绝对一次拷贝”。
-
-当前读主路径是：
-
-1. 服务端/JuiceFS 把数据写到 data-message `shm`
-2. 客户端从 `shm` 拷贝到应用 `buf/iov`
-
-但 JuiceFS 内部读链路仍然会经过 `slice/page` 缓冲，再通过 `copy(buf, s.page.Data[...])` 拷到目标缓冲区，所以：
-
-- `interceptor client` 侧只剩一次拷贝
-- `JuiceFS reader` 内部仍存在一次 `page -> target buf` 拷贝
-
-因此读路径目前不能说是“端到端只有一次拷贝”。
-
-## 4. 正确性检查结论
-
-### 4.1 静态检查确认没问题的部分
-
-- 大于 `4M` 的读写都按偏移顺序分段，偏移累加逻辑正确。
-- `writev/readv` 保持 `iov` 顺序，没有乱序拼接。
-- EOF 语义在 `LARGE_READ` 上已经修正，`readLen == 0` 不再被误判为错误。
-- data-message shm 的分段长度已经改为运行时 block size，不再依赖固定常量。
-- `git diff --check` 已通过，没有明显格式或空白问题。
-
-### 4.2 当前仍然存在的主要风险
-
-#### 风险 1：跨 chunk 的 copy-free 写，静态上无法完全证明安全
-
-当前 `WriteWithSpace` 跨 `meta.ChunkSize` 的实现，是把一个 `spaceInfo` 切成多个子视图，分别交给多个 JuiceFS slice。
-
-这个实现的前提是假设：
-
-- `BioPutWithCopyFree` 接受“同一份 descriptor / location 的子区间写”
-- 并且允许多个 JuiceFS slice 复用同一底层 descriptor 的不同字节区间
-
-从现有静态代码无法完全证明这个假设一定成立。
-
-换句话说：
-
-- 不跨 chunk 的 copy-free 写，当前逻辑基本成立
-- 跨 chunk 的 copy-free 写，仍然需要实际回写验证
-
-建议必须补一组运行时验证：
-
-- 连续写跨 `64MiB` 边界
-- 再顺序读回做字节级比对
-- 再做 `writev/pwritev` 跨 `64MiB` 边界校验
-
-#### 风险 2：读路径还不是端到端一次拷贝
-
-JuiceFS `reader.go` 内部仍然通过 page cache / `copy` 把数据拷到目标缓冲区。
-
-因此当前只能说：
-
-- `interceptor` 层已经统一到 `shm`
-- 但 JuiceFS 内部读链路还没改成“直接写目标缓冲区”
-
-## 5. 后续可继续优化的点
-
-### 5.1 优先级最高
-
-- 给跨 `64MiB` 的 copy-free 写补运行时回归验证，确认 descriptor 子视图语义是否真的成立。
-
-### 5.2 读路径进一步降拷贝
-
-- 在 JuiceFS `reader` 增加“直接读到目标 buffer”的能力，尽量绕过 `page -> buf` 这次 copy。
-- 如果底层对象读取接口允许，也可以增加“直接读到 shm 地址”的 reader 分支。
-
-### 5.3 清理项
-
-- 老的 `PreadSmallInner/PreadLargeInner` 现在已经不是主路径，可在验证完成后清理。
-- 服务端 `HandleInterceptorRead` 也不再是主路径，可在验证完成后考虑降级或移除。
-- 客户端未使用的辅助函数可以在稳定后再清理，当前先保留，避免影响回滚和对比。
-
-## 6. 本轮结论
-
-### 写
-
-- 主路径已经基本收敛到一次拷贝
-- 但跨 chunk 的 `spaceInfo` 子视图语义仍需要运行时证明
+结论：当前用户态主路径上，写已经基本收敛成一次拷贝。
 
 ### 读
 
-- `interceptor` 层已经统一走 `shm`
-- 客户端侧只剩 `shm -> buf/iov` 一次拷贝
-- JuiceFS 内部读链路仍有额外一次 `page -> buf` 拷贝
+当前读主路径是：
 
-### 验证现状
+1. `interceptor client` 申请 data-message shm block
+2. `interceptor server` 把这段 shm 包装成 `spaceInfo`
+3. JuiceFS `ReadWithSpace -> ReadAtWithSpace`
+4. 底层对象存储/磁盘缓存直接把数据写到 shm
+5. 客户端从 shm 拷回应用 `buf/iov`
 
-- 已完成静态代码检查
-- 未完成编译和真实读写回归验证
+结论：
 
+- 非压缩 chunk 的读主路径，已经绕过了 JuiceFS 原来的 `page.Data -> buf` 那次拷贝
+- 压缩 chunk 会显式回退旧路径
+
+所以现在可以说：
+
+- 写主路径基本做到一次拷贝
+- 读主路径在非压缩场景下也基本做到一次拷贝
+- 压缩读场景还不是一次拷贝
+
+## 从 interceptor 重新检查后的结论
+
+### 已确认正确的点
+
+- 客户端读写大包都会按顺序分段，偏移累加逻辑正确。
+- `readv/writev` 维持原始 `iov` 顺序，没有重排。
+- 大读返回的 `dataLen` 会在客户端再次校验，防止超过本次请求长度。
+- 服务端读路径现在会校验整段 shm 范围，避免 `mrOffset` 合法但 `mrOffset + len` 越界。
+- 运行时 data-message block size 已经和协议上限对齐，不会再因为 block 太大而被 server 拒绝。
+- 新读旁路只挂在大读路径上，没有重构普通 JuiceFS reader。
+
+### 仍然保留的限制
+
+#### 1. 压缩读会回退旧路径
+
+这是刻意保守处理。
+
+原因是当前 `ReadAtWithSpace` 旁路直接把对象存储/缓存内容写到 shm，没有再经过原来的解压和 page 体系；如果压缩开启，强行走新路径会直接破坏数据语义。
+
+所以当前策略是：
+
+- 非压缩：走 copy-free 读旁路
+- 压缩：返回 `not supported`，回退旧读路径
+
+#### 2. 跨 chunk 的 copy-free 写仍需实测
+
+当前写路径跨 `64MiB` chunk 时，是把一个 `spaceInfo` 切成多个子视图分别交给多个 slice。
+
+静态代码无法完全证明底层 `BioPutWithCopyFree` 一定支持“同一 descriptor/location 的子区间写”。
+
+所以：
+
+- 不跨 chunk 的 copy-free 写，当前逻辑基本成立
+- 跨 chunk 的 copy-free 写，仍然需要真实写回并读回做字节级校验
+
+## 建议的最小验证
+
+建议至少补下面几组回归：
+
+1. 非压缩场景下的大读顺序校验
+2. 非压缩场景下的 `readv/preadv64` 校验
+3. 跨 `64MiB` 的 copy-free 写后再读回做字节对比
+4. 压缩开启时确认大读确实回退旧路径且数据一致
+
+## 静态检查现状
+
+- `git diff --check` 已通过
+- 当前环境没有 `go` 命令，所以没做 JuiceFS 的包级编译验证
+- 还没有做真实读写回归
+
+## 结论
+
+- 写路径当前用户态主路径已经基本做到一次拷贝
+- 读路径新增了一套独立 copy-free 旁路，非压缩场景已经基本做到一次拷贝
+- 这次重新检查后补上了两个实际缺口：读分段大小和 shm 全范围校验
+- 当前最大的剩余风险不是读，而是跨 chunk copy-free 写的真实语义还需要实测

@@ -60,7 +60,7 @@ public:
     bool CheckInterceptorWriteReq(InterceptorPwriteIn *req);
     bool CheckInterceptorReadReq(InterceptorPreadIn *req);
 
-    uint8_t *TransDataMsgMemAddr(uint32_t pid, uint64_t mrOffset);
+    uint8_t *TransDataMsgMemAddr(uint32_t pid, uint64_t mrOffset, uint64_t length);
 
 private:
     BResult RegisterOpcode();

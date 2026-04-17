@@ -151,10 +151,19 @@ static ssize_t SubmitLargeWriteRequest(int fd, uint64_t inode, size_t count, off
     return static_cast<ssize_t>(count);
 }
 
+static size_t GetLargeReadChunkSize()
+{
+    size_t shmBlockSize = static_cast<size_t>(InterceptorClientNetService::Instance().GetDataMsgMemBlockSize());
+    if (shmBlockSize == 0) {
+        return 0;
+    }
+    return std::min(shmBlockSize, MAX_LARGE_WRITE_SIZE);
+}
+
 static ssize_t PreadShmToBuffer(int fd, uint64_t inode, uint8_t *buf, size_t count, off_t offset)
 {
     size_t readed = 0;
-    size_t shmBlockSize = static_cast<size_t>(InterceptorClientNetService::Instance().GetDataMsgMemBlockSize());
+    size_t shmBlockSize = GetLargeReadChunkSize();
     if (UNLIKELY(shmBlockSize == 0)) {
         CLOG_ERROR("PreadShmToBuffer: invalid shm block size.");
         return -1;
@@ -208,7 +217,7 @@ static ssize_t PreadShmToBuffer(int fd, uint64_t inode, uint8_t *buf, size_t cou
 static ssize_t PreadShmToBufVec(int fd, uint64_t inode, BufVec &bufVec, off_t offset)
 {
     size_t readed = 0;
-    size_t shmBlockSize = static_cast<size_t>(InterceptorClientNetService::Instance().GetDataMsgMemBlockSize());
+    size_t shmBlockSize = GetLargeReadChunkSize();
     if (UNLIKELY(shmBlockSize == 0)) {
         CLOG_ERROR("PreadShmToBufVec: invalid shm block size.");
         return -1;
