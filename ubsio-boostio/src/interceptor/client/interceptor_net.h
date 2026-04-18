@@ -65,6 +65,8 @@ public:
     int32_t StartNetService();
     BResult CreateDataMessageMem();
     BResult InitBioShm();
+
+    uint8_t *GetBioShmAddr()
     {
         return mBioShmAddr;
     }
