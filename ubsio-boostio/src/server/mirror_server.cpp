@@ -1498,47 +1498,6 @@ BResult MirrorServer::SendFlowGetEvictOffset(uint16_t ptId, uint64_t flowId, uin
     return ret;
 }
 
-bool MirrorServer::CheckPutReq(PutRequest *req)
-{
-    if (req->affinity > AFFINITY_BUTT || req->affinity < LOCAL_AFFINITY) {
-        return false;
-    }
-    if (req->strategy > STRATEGY_BUTT || req->strategy < WRITE_BACK) {
-        return false;
-    }
-    req->key[KEY_MAX_SIZE - 1] = '\0';
-    std::string key(req->key);
-    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
-        return false;
-    }
-    if (req->length == 0 || req->length > BIO_IO_MAX_LEN) {
-        return false;
-    }
-    if (req->ioStrategy > WRITE_UNDERFS_BACK) {
-        return false;
-    }
-
-    if (!req->memFromServer) { // case 1: slice资源来自于SDK端, 则校验MR有效, sliceLen为0
-        if (req->sliceLen != 0) {
-            return false;
-        }
-        if (req->mrSize == 0 || req->mrSize > BIO_IO_MAX_LEN) {
-            return false;
-        }
-        if (req->mrAddress == 0) {
-            return false;
-        }
-    } else { // case2: slice资源来自于Server端, 则校验MR无效, sliceLen不为0
-        if (req->sliceLen == 0) {
-            return false;
-        }
-        if (req->mrAddress != 0 && req->mrSize != 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool MirrorServer::IsValidSliceAddress(WCacheSlicePtr &sliceP)
 {
     auto addrVec = sliceP->GetAddrs();
@@ -1563,11 +1522,6 @@ uintptr_t MirrorServer::ParseRealAddress(PutRequest *req)
 
 int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 {
-    if (!CheckPutReq(req)) { // 检查Put请求各个参数的合法性
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) { // case 1：slice资源来自于SDK端, 使用req中的MR信息
         auto realAddr = ParseRealAddress(req);
@@ -1643,35 +1597,8 @@ int32_t MirrorServer::HandlePut(ServiceContext &ctx)
     return MirrorServerPut(ctx, req);
 }
 
-bool MirrorServer::CheckGetReq(GetRequest *req)
-{
-    req->key[KEY_MAX_SIZE - 1] = '\0';
-    std::string key(req->key);
-    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
-        return false;
-    }
-    if (req->offset > BIO_IO_MAX_LEN || req->length == 0 || req->length > BIO_IO_MAX_LEN) {
-        return false;
-    }
-    if (req->offset + req->length > BIO_IO_MAX_LEN) {
-        return false;
-    }
-    if (req->size == 0 || req->size > BIO_IO_MAX_LEN) {
-        return false;
-    }
-    if (req->ptId > NO_8192) {
-        return false;
-    }
-    return true;
-}
-
 int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 {
-    if (!CheckGetReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
     GetResponse rsp;
     BResult result;
     BIO_TP_START(MIRROR_SERVER_HDL_GET_FAIL, &result, BIO_INNER_RETRY);
@@ -1801,24 +1728,8 @@ int32_t MirrorServer::HandleBatchGet(ServiceContext &ctx)
     return MirrorServerBatchGet(ctx, req);
 }
 
-bool MirrorServer::CheckDeleteReq(DeleteRequest *req)
-{
-    req->key[KEY_MAX_SIZE - 1] = '\0';
-    std::string key(req->key);
-    if ((key.empty()) || (key[0] == '/') || key.find("..") != std::string::npos) {
-        return false;
-    }
-    return true;
-}
-
 int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)
 {
-    if (!CheckDeleteReq(req)) {
-        LOG_ERROR("Mirror server check delete request failed.");
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
     BResult result;
     BIO_TP_START(MIRROR_SERVER_HDL_DELETE_FAIL, &result, BIO_INNER_RETRY);
     result = Delete(*req);
@@ -1878,23 +1789,8 @@ int32_t MirrorServer::HandleAddDisk(ServiceContext &ctx)
     return MirrorServerAddDisk(ctx, req);
 }
 
-bool MirrorServer::CheckStatReq(StatRequest *req)
-{
-    req->key[KEY_MAX_SIZE - 1] = '\0';
-    std::string key(req->key);
-    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
-        return false;
-    }
-    return true;
-}
-
 int32_t MirrorServer::MirrorServerStat(ServiceContext &ctx, StatRequest *req)
 {
-    if (!CheckStatReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
     ObjStat objInfo;
     BResult ret = BIO_INNER_ERR;
     BIO_TP_START(MIRROR_SERVER_HDL_STAT_FAIL, &ret, BIO_INNER_RETRY);
@@ -1956,26 +1852,8 @@ int32_t MirrorServer::HandleBatchExist(ServiceContext &ctx)
     return MirrorServerBtachExist(ctx, req);
 }
 
-bool MirrorServer::CheckListReq(ListRequest *req)
-{
-    if (req->size != (sizeof(ObjStat) * 1000U) && req->size != 0) {
-        return false;
-    }
-    req->prefix[KEY_MAX_SIZE - 1] = '\0';
-    std::string prefix(req->prefix);
-    if ((prefix.size() == 0) || (prefix[0] == '/') || prefix.find("..") != std::string::npos) {
-        return false;
-    }
-    return true;
-}
-
 int32_t MirrorServer::MirrorServerList(ServiceContext &ctx, ListRequest *req)
 {
-    if (!CheckListReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
-        return BIO_OK;
-    }
-
     std::unordered_map<std::string, ObjStat> objs;
     BResult ret = BIO_INNER_ERR;
     BIO_TP_START(MIRROR_SERVER_HDL_LIST_FAIL, &ret, BIO_INNER_RETRY);
@@ -2011,29 +1889,8 @@ int32_t MirrorServer::HandleList(ServiceContext &ctx)
     return MirrorServerList(ctx, req);
 }
 
-bool MirrorServer::CheckLoadReq(LoadRequest *req)
-{
-    req->key[KEY_MAX_SIZE - 1] = '\0';
-    std::string key(req->key);
-    if ((key.size() == 0) || (key[0] == '/') || key.find("..") != std::string::npos) {
-        return false;
-    }
-    if (req->offset != 0) {
-        return false;
-    }
-    if (req->length == 0 || req->length > BIO_IO_MAX_LEN) {
-        return false;
-    }
-    return true;
-}
-
 int32_t MirrorServer::MirrorServerLoad(ServiceContext &ctx, LoadRequest *req)
 {
-    if (!CheckLoadReq(req)) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
-        return BIO_OK;
-    }
-
     BResult ret = BIO_INNER_ERR;
     BIO_TP_START(MIRROR_SERVER_HDL_LOAD_FAIL, &ret, BIO_INNER_RETRY);
     ret = Load(*req);

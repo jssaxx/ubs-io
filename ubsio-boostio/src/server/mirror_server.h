@@ -236,13 +236,8 @@ private:
     void InitGetResponse(GetResponse &rsp);
     BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
     uintptr_t ParseRealAddress(PutRequest *req);
-    bool CheckPutReq(PutRequest *req);
-    bool CheckGetReq(GetRequest *req);
-    bool CheckDeleteReq(DeleteRequest *req);
-    bool CheckStatReq(StatRequest *req);
-    bool CheckListReq(ListRequest *req);
-    bool CheckLoadReq(LoadRequest *req);
     bool IsValidSliceAddress(WCacheSlicePtr &sliceP);
+
 private:
     uint64_t mflowNum { 0 };
     ReadWriteLock flowNumLock;

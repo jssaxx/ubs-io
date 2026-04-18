@@ -28,8 +28,7 @@ const size_t MAX_FILENAME_LENGTH = 255;
 
 inline static bool KeyValid(const char *key)
 {
-    if (UNLIKELY(key == nullptr || strlen(key) == 0 || strlen(key) >= UFS_KEY_MAX_SIZE) || (key[0] == '/') ||
-        std::strstr(key, "..")) {
+    if (UNLIKELY(key == nullptr || strlen(key) == 0 || strlen(key) >= UFS_KEY_MAX_SIZE)) {
         return false;
     }
     return true;
