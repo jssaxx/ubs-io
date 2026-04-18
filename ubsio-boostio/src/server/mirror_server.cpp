@@ -1170,6 +1170,7 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
 
     ShmInitResponse rsp;
     auto config = mBioConfig->GetDaemonConfig();
+    rsp.netSegmentSize = mBioConfig->GetNetConfig().netSegmentSize;
     rsp.serverPid = getpid();
     rsp.scene = config.workScene;
     rsp.alignSize = config.workIoAlignSize;

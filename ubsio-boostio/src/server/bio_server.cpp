@@ -324,6 +324,7 @@ BResult BioServer::BioNetInit()
     ChkTrue(ret == BIO_OK, ret, "Net engine initialize failed, result:" << ret << ".");
 
     NetOptions netOptions;
+    netOptions.netSegmentSize = netConfig.netSegmentSize;
     netOptions.ipMask = netConfig.dataIpMask;
     netOptions.port = netConfig.dataPort;
     netOptions.isBusyLoop = netConfig.isRpcBusyLoop;

@@ -37,7 +37,7 @@ public:
     }
 
     // Establish an IPC connection with the local bio server
-    BResult StartPre(WorkerMode mode, const NetOptions netConf);
+    BResult StartPre(WorkerMode mode, NetOptions &netConf);
 
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView, uint16_t protocol,
@@ -255,6 +255,7 @@ private:
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
+    uint32_t mNetSegmentSize = 256;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint64_t mShmKey = 0;

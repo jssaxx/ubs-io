@@ -585,7 +585,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     mOptions = opt;
     bool isOobSvr = opt.role != Role::NET_CLIENT;
     UBSHcomServiceOptions options;
-    options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
+    options.mrSendReceiveSegSize = opt.netSegmentSize * NO_1024;
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;
     options.workerThreadPriority = 0;
