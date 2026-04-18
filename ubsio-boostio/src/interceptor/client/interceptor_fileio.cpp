@@ -105,6 +105,23 @@ static bool CopyBufVecToCopyFreeSpace(BufVec &bufVec, const CacheSpaceDesc &spac
     return true;
 }
 
+static void WarmupCopyFreeSpacePages(const CacheSpaceDesc &spaceInfo, uint8_t *bioShmBase)
+{
+    static const size_t pageSize = 4096;
+    volatile uint8_t sink = 0;
+    for (uint32_t i = 0; i < spaceInfo.addressNum; i++) {
+        uint8_t *dstAddr = bioShmBase + spaceInfo.address[i].address;
+        uint32_t copyLen = spaceInfo.address[i].size;
+        for (size_t offset = 0; offset < copyLen; offset += pageSize) {
+            sink ^= dstAddr[offset];
+        }
+        if (copyLen > 0) {
+            sink ^= dstAddr[copyLen - 1];
+        }
+    }
+    (void)sink;
+}
+
 static ssize_t SubmitLargeWriteRequest(int fd, uint64_t inode, size_t count, off_t offset, const CacheSpaceDesc &spaceInfo)
 {
     InterceptorLargePwriteIn writeReq;
@@ -285,101 +302,6 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
     return PreadShmToBuffer(fd, file->GetInode(), static_cast<uint8_t *>(buf), count, offset);
 }
 
-ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t offset)
-{
-    auto &file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    InterceptorPreadIn request;
-    request.pid = InterceptorClientNetService::Instance().GetSendPid();
-    request.fd = fd;
-    request.inode = file->GetInode();
-    request.offset = offset;
-    request.nbytes = count;
-    request.startTime = Monotonic::TimeNs();
-
-    InterceptorPreadOut *resp = nullptr;
-    uint64_t rspLen = 0;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
-    if (UNLIKELY(ret != 0 || resp == nullptr)) {
-        CLOG_ERROR("Send read failed inode:" << request.inode << ", offset:" << request.offset << ", length:" <<
-            request.nbytes << ".");
-        return -1;
-    }
-
-    const uint64_t headerSize = sizeof(InterceptorPreadOut);
-    if (resp->dataLen == 0 || rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
-        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " << sizeof(InterceptorPreadOut) <<
-            " and dataLen: " << resp->dataLen << ".");
-        free(resp);
-        resp = nullptr;
-        return -1;
-    }
-    CLOG_DEBUG("Read inode:" << request.inode << ", offset:" << request.offset << ", length:" << request.nbytes <<
-        "rsp len:" << resp->dataLen << ".");
-
-    ret = memcpy_s(buf, count, resp->data, resp->dataLen);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("Memory copy read data:" << resp->dataLen << ", buff size:" << count << " failed:" << ret);
-        free(resp);
-        resp = nullptr;
-        return -1;
-    }
-
-    auto retLen = static_cast<ssize_t>(resp->dataLen);
-    free(resp);
-    resp = nullptr;
-    return retLen;
-}
-
-ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t offset)
-{
-    auto &file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    if (count > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
-    }
-
-    uintptr_t shmAddr = 0;
-    uint64_t mrOffset = 0;
-    auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
-    if (UNLIKELY(ret != BIO_OK || shmAddr == 0)) {
-        CLOG_ERROR("PreadLargeInner: alloc shm block failed, ret:" << ret << ".");
-        return -1;
-    }
-
-    InterceptorLargePreadIn request;
-    request.pid = InterceptorClientNetService::Instance().GetSendPid();
-    request.fd = fd;
-    request.inode = file->GetInode();
-    request.offset = offset;
-    request.nbytes = count;
-    request.mrOffset = mrOffset;
-    request.startTime = Monotonic::TimeNs();
-
-    InterceptorLargePreadOut resp;
-    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePreadIn, InterceptorLargePreadOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_READ, request, resp);
-    if (UNLIKELY(ret != 0 || resp.dataLen <= 0)) {
-        CLOG_ERROR("PreadLargeInner: large read failed, ret:" << ret << ", dataLen:" << resp.dataLen << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        return -1;
-    }
-
-    size_t copyLen = std::min(count, static_cast<size_t>(resp.dataLen));
-    memcpy(buf, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
-    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-    CLOG_DEBUG("PreadLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count <<
-        ", dataLen:" << resp.dataLen << ".");
-    return static_cast<ssize_t>(resp.dataLen);
-}
-
 ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
 {
     CLOG_DEBUG("Pread fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
@@ -487,49 +409,6 @@ ssize_t ProxyOperations::PwriteInner(int fd, const void *buf, size_t count, off_
     return PwriteLargeInner(fd, buf, count, offset);
 }
 
-ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset)
-{
-    auto &file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    size_t reqLen = sizeof(InterceptorPwriteIn) + count;
-    auto *tmpPtr = static_cast<uint8_t *>(malloc(reqLen));
-    if (UNLIKELY(tmpPtr == nullptr)) {
-        CLOG_ERROR("Memory allocation failed.");
-        errno = ENOMEM;
-        return -1;
-    }
-
-    InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
-    request->pid = InterceptorClientNetService::Instance().GetSendPid();
-    request->inode = file->GetInode();
-    request->offset = offset;
-    request->nbytes = count;
-    request->startTime = Monotonic::TimeNs();
-
-    auto mcRet = memcpy_s(request->data, count, buf, count);
-    if (UNLIKELY(mcRet != 0)) {
-        CLOG_ERROR("Memory copy write data:" << count << " failed:" << mcRet);
-        free(tmpPtr);
-        return -1;
-    }
-
-    InterceptorPwriteOut resp;
-    auto ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_WRITE, request, static_cast<uint32_t>(reqLen), resp);
-    free(tmpPtr);
-    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
-        CLOG_ERROR("Send Sync Buff Write ret: " << ret << ", resp.ret:" << resp.ret << ", fd:" << fd <<
-            ", offset:" << offset << ", count:" << count << ".");
-        return -1;
-    }
-
-    CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
-    return static_cast<ssize_t>(count);
-}
-
 ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
 {
     auto &file = CONTEXT.files.At(fd);
@@ -551,39 +430,47 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     auto t1 = Monotonic::TimeNs();
 
+    WarmupCopyFreeSpacePages(spaceInfo, bioShmBase);
+
+    auto t2 = Monotonic::TimeNs();
+
     if (UNLIKELY(!CopyBufferToCopyFreeSpace(static_cast<const uint8_t *>(buf), spaceInfo, bioShmBase))) {
         return -1;
     }
 
-    auto t2 = Monotonic::TimeNs();
+    auto t3 = Monotonic::TimeNs();
 
     auto ret = SubmitLargeWriteRequest(fd, file->GetInode(), count, offset, spaceInfo);
     if (UNLIKELY(ret < 0)) {
         return -1;
     }
 
-    auto t3 = Monotonic::TimeNs();
+    auto t4 = Monotonic::TimeNs();
 
-    static uint64_t sCount = 0;
-    static uint64_t sAllocUs = 0;
-    static uint64_t sMemcpyUs = 0;
-    static uint64_t sRpcUs = 0;
-    static uint64_t sTotalUs = 0;
+    static thread_local uint64_t sCount = 0;
+    static thread_local uint64_t sAllocUs = 0;
+    static thread_local uint64_t sWarmupUs = 0;
+    static thread_local uint64_t sMemcpyUs = 0;
+    static thread_local uint64_t sIpcUs = 0;
+    static thread_local uint64_t sTotalUs = 0;
     sCount++;
     sAllocUs += (t1 - t0) / 1000;
-    sMemcpyUs += (t2 - t1) / 1000;
-    sRpcUs += (t3 - t2) / 1000;
-    sTotalUs += (t3 - t0) / 1000;
+    sWarmupUs += (t2 - t1) / 1000;
+    sMemcpyUs += (t3 - t2) / 1000;
+    sIpcUs += (t4 - t3) / 1000;
+    sTotalUs += (t4 - t0) / 1000;
     if (sCount >= 1000) {
         CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
             " io: alloc=" << sAllocUs / sCount <<
+            " warmup=" << sWarmupUs / sCount <<
             " memcpy=" << sMemcpyUs / sCount <<
-            " rpc=" << sRpcUs / sCount <<
+            " ipc=" << sIpcUs / sCount <<
             " total=" << sTotalUs / sCount);
         sCount = 0;
         sAllocUs = 0;
+        sWarmupUs = 0;
         sMemcpyUs = 0;
-        sRpcUs = 0;
+        sIpcUs = 0;
         sTotalUs = 0;
     }
     return static_cast<ssize_t>(count);

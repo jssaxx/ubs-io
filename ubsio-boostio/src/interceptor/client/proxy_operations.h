@@ -23,8 +23,6 @@
 
 namespace ock {
 namespace bio {
-const size_t INTERCEPTOR_RDWR_BUFFER_SIZE = 8192L;
-const size_t MAX_SMALL_WRITE_SIZIE = 4096L;
 const size_t MAX_LARGE_WRITE_SIZE = (4 * 1024 * 1024L);
 
 class ProxyOperations {
@@ -68,10 +66,7 @@ private:
     static int32_t OpenInner(int dirFd, const char *path, int fd);
     static int32_t CreateInner(const char *path, int fd);
     static ssize_t PreadInner(int fd, void *buf, size_t count, off_t offset);
-    static ssize_t PreadSmallInner(int fd, void *buf, size_t count, off_t offset);
-    static ssize_t PreadLargeInner(int fd, void *buf, size_t count, off_t offset);
     static ssize_t PwriteInner(int fd, const void *buf, size_t count, off_t offset);
-    static ssize_t PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset);
     static ssize_t PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset);
 };
 }
