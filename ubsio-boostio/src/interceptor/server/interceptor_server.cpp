@@ -413,9 +413,9 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
     int readLen = 0;
     BIO_TRACE_START(INTERCEPTOR_READ_HOOK);
     CacheSpaceDesc spaceInfo {};
-    spaceInfo.AddressNum = 1;
-    spaceInfo.Address[0].Address = reinterpret_cast<uint64_t>(shmAddr);
-    spaceInfo.Address[0].Size = static_cast<uint32_t>(req->nbytes);
+    spaceInfo.addressNum = 1;
+    spaceInfo.address[0].address = reinterpret_cast<uint64_t>(shmAddr);
+    spaceInfo.address[0].size = static_cast<uint32_t>(req->nbytes);
 
     int ret = BioReadCopyFreeHook(req->inode, req->offset, req->nbytes, &spaceInfo, &readLen);
     if (ret == RET_CACHE_NOT_SUPPORTED) {
