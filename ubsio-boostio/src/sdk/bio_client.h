@@ -245,7 +245,7 @@ public:
     void BioClientLoggerExit(WorkerMode mode);
     BResult BioClientAgentInit(WorkerMode mode);
     void BioClientAgentExit();
-    BResult BioClientNetPreInit(WorkerMode mode, const NetOptions netConf);
+    BResult BioClientNetPreInit(WorkerMode mode, NetOptions &netConf);
     BResult BioClientNetPostInit(const NetOptions netConf);
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);

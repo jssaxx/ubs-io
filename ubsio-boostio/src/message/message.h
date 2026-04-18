@@ -60,6 +60,7 @@ typedef struct {
     uint32_t alignSize;
     uint32_t ioTimeOut;
     uint32_t netTimeOut;
+    uint32_t netSegmentSize;
     int32_t logLevel;
     bool enableCrc;
     bool enableCli;
