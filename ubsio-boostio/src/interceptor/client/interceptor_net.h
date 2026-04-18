@@ -23,7 +23,6 @@
 #include "bio_ref.h"
 #include "bio_err.h"
 #include "interceptor_log.h"
-
 namespace ock {
 namespace bio {
 
@@ -66,8 +65,6 @@ public:
     int32_t StartNetService();
     BResult CreateDataMessageMem();
     BResult InitBioShm();
-
-    uint8_t *GetBioShmAddr() const
     {
         return mBioShmAddr;
     }

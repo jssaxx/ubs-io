@@ -373,7 +373,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     if (UNLIKELY(writeRet != 0)) {
         InterceptorPwriteOut resp;
         resp.ret = writeRet;
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
+            sizeof(InterceptorPwriteOut));
         return BIO_OK;
     }
 
