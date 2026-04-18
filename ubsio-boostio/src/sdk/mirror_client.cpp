@@ -1713,7 +1713,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
 
 BResult MirrorClient::Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
-    if (IsExistLocalCopy(ptEntry)) {
+    if (IsExistLocalCopy(ptEntry) && param.attr.affinity != GLOBAL_BALANCE) {
         return PrepareFromServer(ptEntry, param, req); // 写资源从本地server申请.
     } else {
         return PrepareFromClient(ptEntry, param, req); // 写资源从client端申请.
