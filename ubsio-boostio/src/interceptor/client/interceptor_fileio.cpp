@@ -14,6 +14,14 @@
 #include <cstring>
 #include <cerrno>
 #include <cstdio>
+#include <cstdint>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <sched.h>
+#ifdef __linux__
+#include <linux/perf_event.h>
+#endif
 #include "securec.h"
 #include "bio_def.h"
 #include "message_op.h"
@@ -28,6 +36,92 @@
 using namespace ock::bio;
 
 #define CONTEXT BioInterceptorContext::GetInstance()
+
+namespace {
+struct ThreadPerfSnapshot {
+    int cpu = -1;
+    int node = -1;
+    int64_t minflt = 0;
+    int64_t majflt = 0;
+    int64_t nvcsw = 0;
+    int64_t nivcsw = 0;
+    uint64_t cacheMisses = 0;
+    bool cacheMissesValid = false;
+};
+
+static uint64_t PerfDelta(uint64_t begin, uint64_t end)
+{
+    return end >= begin ? (end - begin) : 0;
+}
+
+static int64_t PerfDelta(int64_t begin, int64_t end)
+{
+    return end >= begin ? (end - begin) : 0;
+}
+
+static pid_t GetCurrentTid()
+{
+#ifdef SYS_gettid
+    return static_cast<pid_t>(syscall(SYS_gettid));
+#else
+    return getpid();
+#endif
+}
+
+static bool ReadThreadCacheMisses(uint64_t &value)
+{
+#if defined(__linux__) && defined(__NR_perf_event_open)
+    static thread_local int perfFd = -2;
+    if (perfFd == -2) {
+        perf_event_attr attr {};
+        attr.size = sizeof(attr);
+        attr.type = PERF_TYPE_HARDWARE;
+        attr.config = PERF_COUNT_HW_CACHE_MISSES;
+        attr.disabled = 0;
+        attr.exclude_kernel = 1;
+        attr.exclude_hv = 1;
+        perfFd = static_cast<int>(syscall(__NR_perf_event_open, &attr, 0, -1, -1, 0));
+    }
+    if (perfFd < 0) {
+        return false;
+    }
+    return read(perfFd, &value, sizeof(value)) == static_cast<ssize_t>(sizeof(value));
+#else
+    (void)value;
+    return false;
+#endif
+}
+
+static ThreadPerfSnapshot CaptureThreadPerfSnapshot()
+{
+    ThreadPerfSnapshot snapshot;
+#if defined(__linux__) && defined(SYS_getcpu)
+    unsigned cpu = 0;
+    unsigned node = 0;
+    if (syscall(SYS_getcpu, &cpu, &node, nullptr) == 0) {
+        snapshot.cpu = static_cast<int>(cpu);
+        snapshot.node = static_cast<int>(node);
+    } else {
+        snapshot.cpu = sched_getcpu();
+    }
+#else
+    snapshot.cpu = sched_getcpu();
+#endif
+
+#ifdef RUSAGE_THREAD
+    rusage usage {};
+    if (getrusage(RUSAGE_THREAD, &usage) == 0) {
+        snapshot.minflt = usage.ru_minflt;
+        snapshot.majflt = usage.ru_majflt;
+        snapshot.nvcsw = usage.ru_nvcsw;
+        snapshot.nivcsw = usage.ru_nivcsw;
+    }
+#endif
+
+    snapshot.cacheMissesValid = ReadThreadCacheMisses(snapshot.cacheMisses);
+    return snapshot;
+}
+}
 
 static bool CheckCopyFreeSpace(const CacheSpaceDesc &spaceInfo, uint64_t shmLength, size_t expectedLen)
 {
@@ -421,6 +515,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     }
 
     auto t0 = Monotonic::TimeNs();
+    auto perf0 = CaptureThreadPerfSnapshot();
 
     uint8_t *bioShmBase = nullptr;
     CacheSpaceDesc spaceInfo {};
@@ -446,6 +541,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     }
 
     auto t4 = Monotonic::TimeNs();
+    auto perf4 = CaptureThreadPerfSnapshot();
 
     static thread_local uint64_t sCount = 0;
     static thread_local uint64_t sAllocUs = 0;
@@ -453,25 +549,70 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     static thread_local uint64_t sMemcpyUs = 0;
     static thread_local uint64_t sIpcUs = 0;
     static thread_local uint64_t sTotalUs = 0;
+    static thread_local uint64_t sAddressNum = 0;
+    static thread_local uint64_t sMinflt = 0;
+    static thread_local uint64_t sMajflt = 0;
+    static thread_local uint64_t sNvcsw = 0;
+    static thread_local uint64_t sNivcsw = 0;
+    static thread_local uint64_t sCacheMisses = 0;
+    static thread_local uint64_t sCpuMigrate = 0;
+    static thread_local uint64_t sNodeMigrate = 0;
+    static thread_local int sLastStartCpu = -1;
+    static thread_local int sLastStartNode = -1;
+    static thread_local int sLastEndCpu = -1;
+    static thread_local int sLastEndNode = -1;
     sCount++;
     sAllocUs += (t1 - t0) / 1000;
     sWarmupUs += (t2 - t1) / 1000;
     sMemcpyUs += (t3 - t2) / 1000;
     sIpcUs += (t4 - t3) / 1000;
     sTotalUs += (t4 - t0) / 1000;
+    sAddressNum += spaceInfo.addressNum;
+    sMinflt += static_cast<uint64_t>(PerfDelta(perf0.minflt, perf4.minflt));
+    sMajflt += static_cast<uint64_t>(PerfDelta(perf0.majflt, perf4.majflt));
+    sNvcsw += static_cast<uint64_t>(PerfDelta(perf0.nvcsw, perf4.nvcsw));
+    sNivcsw += static_cast<uint64_t>(PerfDelta(perf0.nivcsw, perf4.nivcsw));
+    if (perf0.cacheMissesValid && perf4.cacheMissesValid) {
+        sCacheMisses += PerfDelta(perf0.cacheMisses, perf4.cacheMisses);
+    }
+    sCpuMigrate += (perf0.cpu >= 0 && perf4.cpu >= 0 && perf0.cpu != perf4.cpu) ? 1 : 0;
+    sNodeMigrate += (perf0.node >= 0 && perf4.node >= 0 && perf0.node != perf4.node) ? 1 : 0;
+    sLastStartCpu = perf0.cpu;
+    sLastStartNode = perf0.node;
+    sLastEndCpu = perf4.cpu;
+    sLastEndNode = perf4.node;
     if (sCount >= 1000) {
         CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
             " io: alloc=" << sAllocUs / sCount <<
             " warmup=" << sWarmupUs / sCount <<
             " memcpy=" << sMemcpyUs / sCount <<
             " ipc=" << sIpcUs / sCount <<
-            " total=" << sTotalUs / sCount);
+            " total=" << sTotalUs / sCount <<
+            " addressNum=" << sAddressNum / sCount <<
+            " minflt=" << sMinflt / sCount <<
+            " majflt=" << sMajflt / sCount <<
+            " nvcsw=" << sNvcsw / sCount <<
+            " nivcsw=" << sNivcsw / sCount <<
+            " cacheMisses=" << sCacheMisses / sCount <<
+            " cpuMigrate=" << sCpuMigrate <<
+            " nodeMigrate=" << sNodeMigrate <<
+            " lastCpu=" << sLastStartCpu << "->" << sLastEndCpu <<
+            " lastNode=" << sLastStartNode << "->" << sLastEndNode <<
+            " tid=" << GetCurrentTid());
         sCount = 0;
         sAllocUs = 0;
         sWarmupUs = 0;
         sMemcpyUs = 0;
         sIpcUs = 0;
         sTotalUs = 0;
+        sAddressNum = 0;
+        sMinflt = 0;
+        sMajflt = 0;
+        sNvcsw = 0;
+        sNivcsw = 0;
+        sCacheMisses = 0;
+        sCpuMigrate = 0;
+        sNodeMigrate = 0;
     }
     return static_cast<ssize_t>(count);
 }

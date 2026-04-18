@@ -12,8 +12,16 @@
 
 #include <ctime>
 #include <atomic>
+#include <cstdint>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <sched.h>
+#ifdef __linux__
+#include <linux/perf_event.h>
+#endif
 #include "bio_c.h"
 #include "bio_trace.h"
 #include "bio_client_log.h"
@@ -24,6 +32,92 @@
 
 using namespace ock::bio;
 using namespace ock::bio::net;
+
+namespace {
+struct ThreadPerfSnapshot {
+    int cpu = -1;
+    int node = -1;
+    int64_t minflt = 0;
+    int64_t majflt = 0;
+    int64_t nvcsw = 0;
+    int64_t nivcsw = 0;
+    uint64_t cacheMisses = 0;
+    bool cacheMissesValid = false;
+};
+
+static uint64_t PerfDelta(uint64_t begin, uint64_t end)
+{
+    return end >= begin ? (end - begin) : 0;
+}
+
+static int64_t PerfDelta(int64_t begin, int64_t end)
+{
+    return end >= begin ? (end - begin) : 0;
+}
+
+static pid_t GetCurrentTid()
+{
+#ifdef SYS_gettid
+    return static_cast<pid_t>(syscall(SYS_gettid));
+#else
+    return getpid();
+#endif
+}
+
+static bool ReadThreadCacheMisses(uint64_t &value)
+{
+#if defined(__linux__) && defined(__NR_perf_event_open)
+    static thread_local int perfFd = -2;
+    if (perfFd == -2) {
+        perf_event_attr attr {};
+        attr.size = sizeof(attr);
+        attr.type = PERF_TYPE_HARDWARE;
+        attr.config = PERF_COUNT_HW_CACHE_MISSES;
+        attr.disabled = 0;
+        attr.exclude_kernel = 1;
+        attr.exclude_hv = 1;
+        perfFd = static_cast<int>(syscall(__NR_perf_event_open, &attr, 0, -1, -1, 0));
+    }
+    if (perfFd < 0) {
+        return false;
+    }
+    return read(perfFd, &value, sizeof(value)) == static_cast<ssize_t>(sizeof(value));
+#else
+    (void)value;
+    return false;
+#endif
+}
+
+static ThreadPerfSnapshot CaptureThreadPerfSnapshot()
+{
+    ThreadPerfSnapshot snapshot;
+#if defined(__linux__) && defined(SYS_getcpu)
+    unsigned cpu = 0;
+    unsigned node = 0;
+    if (syscall(SYS_getcpu, &cpu, &node, nullptr) == 0) {
+        snapshot.cpu = static_cast<int>(cpu);
+        snapshot.node = static_cast<int>(node);
+    } else {
+        snapshot.cpu = sched_getcpu();
+    }
+#else
+    snapshot.cpu = sched_getcpu();
+#endif
+
+#ifdef RUSAGE_THREAD
+    rusage usage {};
+    if (getrusage(RUSAGE_THREAD, &usage) == 0) {
+        snapshot.minflt = usage.ru_minflt;
+        snapshot.majflt = usage.ru_majflt;
+        snapshot.nvcsw = usage.ru_nvcsw;
+        snapshot.nivcsw = usage.ru_nivcsw;
+    }
+#endif
+
+    snapshot.cacheMissesValid = ReadThreadCacheMisses(snapshot.cacheMisses);
+    return snapshot;
+}
+}
 
 BResult InterceptorServer::RegisterOpcode()
 {
@@ -160,6 +254,8 @@ BResult InterceptorServer::HandleInterceptorWrite(ServiceContext &ctx)
 
     BIO_TRACE_ASYNC_BEGIN(INTERCEPTOR_WRITE_START);
     BIO_TRACE_ASYNC_END(INTERCEPTOR_WRITE_START, 0, req->startTime);
+    auto totalBegin = Monotonic::TimeNs();
+    auto perf0 = CaptureThreadPerfSnapshot();
 
     CLIENT_LOG_DEBUG("Receive interceptor write message inode:" << req->inode << " offset:" << req->offset << " len:" <<
         req->nbytes << " fd:" << req->fd);
@@ -367,9 +463,72 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     }
 
     BIO_TRACE_START(INTERCEPTOR_WRITE_COPYFREE);
+    auto hookBegin = Monotonic::TimeNs();
     int32_t writeRet = static_cast<int32_t>(BioWriteCopyFreeHook(req->inode, req->offset, req->nbytes, &addressInfo));
+    auto hookEnd = Monotonic::TimeNs();
     BIO_TRACE_END(INTERCEPTOR_WRITE_COPYFREE, writeRet);
     BIO_TRACE_END(INTERCEPTOR_WRITE_HOOK, writeRet);
+    auto totalEnd = Monotonic::TimeNs();
+    auto perf4 = CaptureThreadPerfSnapshot();
+    static thread_local uint64_t sCount = 0;
+    static thread_local uint64_t sHookUs = 0;
+    static thread_local uint64_t sTotalUs = 0;
+    static thread_local uint64_t sAddressNum = 0;
+    static thread_local uint64_t sMinflt = 0;
+    static thread_local uint64_t sMajflt = 0;
+    static thread_local uint64_t sNvcsw = 0;
+    static thread_local uint64_t sNivcsw = 0;
+    static thread_local uint64_t sCacheMisses = 0;
+    static thread_local uint64_t sCpuMigrate = 0;
+    static thread_local uint64_t sNodeMigrate = 0;
+    static thread_local int sLastStartCpu = -1;
+    static thread_local int sLastStartNode = -1;
+    static thread_local int sLastEndCpu = -1;
+    static thread_local int sLastEndNode = -1;
+    sCount++;
+    sHookUs += (hookEnd - hookBegin) / 1000;
+    sTotalUs += (totalEnd - totalBegin) / 1000;
+    sAddressNum += req->spaceInfo.addressNum;
+    sMinflt += static_cast<uint64_t>(PerfDelta(perf0.minflt, perf4.minflt));
+    sMajflt += static_cast<uint64_t>(PerfDelta(perf0.majflt, perf4.majflt));
+    sNvcsw += static_cast<uint64_t>(PerfDelta(perf0.nvcsw, perf4.nvcsw));
+    sNivcsw += static_cast<uint64_t>(PerfDelta(perf0.nivcsw, perf4.nivcsw));
+    if (perf0.cacheMissesValid && perf4.cacheMissesValid) {
+        sCacheMisses += PerfDelta(perf0.cacheMisses, perf4.cacheMisses);
+    }
+    sCpuMigrate += (perf0.cpu >= 0 && perf4.cpu >= 0 && perf0.cpu != perf4.cpu) ? 1 : 0;
+    sNodeMigrate += (perf0.node >= 0 && perf4.node >= 0 && perf0.node != perf4.node) ? 1 : 0;
+    sLastStartCpu = perf0.cpu;
+    sLastStartNode = perf0.node;
+    sLastEndCpu = perf4.cpu;
+    sLastEndNode = perf4.node;
+    if (sCount >= 1000) {
+        CLIENT_LOG_INFO("HandleInterceptorLargeWrite avg latency(us) over " << sCount <<
+            " io: hook=" << sHookUs / sCount <<
+            " total=" << sTotalUs / sCount <<
+            " addressNum=" << sAddressNum / sCount <<
+            " minflt=" << sMinflt / sCount <<
+            " majflt=" << sMajflt / sCount <<
+            " nvcsw=" << sNvcsw / sCount <<
+            " nivcsw=" << sNivcsw / sCount <<
+            " cacheMisses=" << sCacheMisses / sCount <<
+            " cpuMigrate=" << sCpuMigrate <<
+            " nodeMigrate=" << sNodeMigrate <<
+            " lastCpu=" << sLastStartCpu << "->" << sLastEndCpu <<
+            " lastNode=" << sLastStartNode << "->" << sLastEndNode <<
+            " tid=" << GetCurrentTid());
+        sCount = 0;
+        sHookUs = 0;
+        sTotalUs = 0;
+        sAddressNum = 0;
+        sMinflt = 0;
+        sMajflt = 0;
+        sNvcsw = 0;
+        sNivcsw = 0;
+        sCacheMisses = 0;
+        sCpuMigrate = 0;
+        sNodeMigrate = 0;
+    }
     if (UNLIKELY(writeRet != 0)) {
         InterceptorPwriteOut resp;
         resp.ret = writeRet;

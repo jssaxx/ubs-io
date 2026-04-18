@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "bio_monotonic.h"
 #include "net_common.h"
 
 namespace ock {
@@ -65,8 +66,30 @@ public:
             NET_LOG_ERROR("Net block pool not ready.");
             return BIO_NOT_READY;
         }
-        if (!Pop(address)) {
+        auto begin = Monotonic::TimeNs();
+        uint16_t scannedBuckets = 0;
+        uint16_t emptyBuckets = 0;
+        if (!Pop(address, &scannedBuckets, &emptyBuckets)) {
             return BIO_ALLOC_FAIL;
+        }
+        auto end = Monotonic::TimeNs();
+        static thread_local uint64_t sCount = 0;
+        static thread_local uint64_t sAllocUs = 0;
+        static thread_local uint64_t sScannedBuckets = 0;
+        static thread_local uint64_t sEmptyBuckets = 0;
+        sCount++;
+        sAllocUs += (end - begin) / 1000;
+        sScannedBuckets += scannedBuckets;
+        sEmptyBuckets += emptyBuckets;
+        if (sCount >= 10000) {
+            NET_LOG_INFO("NetBlockPool::AllocOne avg over " << sCount <<
+                " alloc: us=" << sAllocUs / sCount <<
+                " scannedBuckets=" << sScannedBuckets / sCount <<
+                " emptyBuckets=" << sEmptyBuckets / sCount);
+            sCount = 0;
+            sAllocUs = 0;
+            sScannedBuckets = 0;
+            sEmptyBuckets = 0;
         }
         return BIO_OK;
     }
@@ -116,15 +139,21 @@ private:
         buckets->lock.UnLock();
     }
 
-    inline bool Pop(uintptr_t &item)
+    inline bool Pop(uintptr_t &item, uint16_t *scannedBuckets = nullptr, uint16_t *emptyBuckets = nullptr)
     {
         uint16_t leftBucketsCount = BUCKET_COUNT;
         do {
+            if (scannedBuckets != nullptr) {
+                (*scannedBuckets)++;
+            }
             BioBucketLinkedListMeta *buckets = &mBuckets[__sync_fetch_and_add(&mPopRRIdx, 1) % BUCKET_COUNT];
 
             buckets->lock.Lock();
             if (UNLIKELY(buckets->count == 0)) {
                 buckets->lock.UnLock();
+                if (emptyBuckets != nullptr) {
+                    (*emptyBuckets)++;
+                }
                 continue;
             }
 
