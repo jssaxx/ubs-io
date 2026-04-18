@@ -73,8 +73,8 @@ int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **
             LOG_ERROR("Calc location failed, status:" << status);
             return DFC_ERR;
         }
-        locationVec.emplace_back(location);
-        keys.emplace_back(key[i].c_str());
+        locationVec[i] = location;
+        keys[i] = key[i].c_str();
     }
 
     return DlBioSdkApi::BatchGet(tenantId, keys.data(), keysCount, offsets.data(), lengths.data(), locationVec.data(),
@@ -93,8 +93,8 @@ int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *
             LOG_ERROR("Calc location failed, status:" << status);
             return DFC_ERR;
         }
-        locationVec.emplace_back(location);
-        keys.emplace_back(key[i].c_str());
+        locationVec[i] = location;
+        keys[i] = key[i].c_str();
     }
 
     int ret = DlBioSdkApi::BatchExist(tenantId, keys.data(), locationVec.data(), keysCount, results);
