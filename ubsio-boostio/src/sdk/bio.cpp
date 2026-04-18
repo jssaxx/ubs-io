@@ -123,6 +123,7 @@ inline static void StatisticGetIoSize(uint64_t length)
 inline static bool KeyValid(const char *key)
 {
     if (UNLIKELY(key == nullptr)) {
+        CLIENT_LOG_ERROR("Parameter key is nullptr.");
         return false;
     }
     size_t len = strlen(key);
@@ -292,7 +293,7 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ".");
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
             return RET_CACHE_EPERM;
         }
     }
