@@ -17,9 +17,15 @@ target_include_directories(c2python_sdk PRIVATE
     ${UBSIO_NDS_DIR}/include
 )
 
+target_link_directories(c2python_sdk PRIVATE
+    ${UBSIO_BOOSTIO_DIR}/build
+    ${UBSIO_NDS_DIR}/lib
+)
+
 target_link_libraries(c2python_sdk PRIVATE
     -Wl,--start-group
     pthread dl rt
+    nds_file
     ubsio_kvc
     ${Python3_LIBRARIES}
     -Wl,--end-group
