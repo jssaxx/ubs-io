@@ -640,9 +640,6 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         uint64_t off = 0;
         uint64_t cpyLength = req.length;
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
-            if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
-                return BIO_INVALID_PARAM;
-            }
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx], rsp.addrLen[idx]);
             if (UNLIKELY(addr == nullptr)) {
                 CLIENT_LOG_ERROR("Send sync request get shm addr failed.");

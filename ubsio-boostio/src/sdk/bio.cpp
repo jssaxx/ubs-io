@@ -123,6 +123,7 @@ inline static void StatisticGetIoSize(uint64_t length)
 inline static bool KeyValid(const char *key)
 {
     if (UNLIKELY(key == nullptr)) {
+        CLIENT_LOG_ERROR("Parameter key is nullptr.");
         return false;
     }
     size_t len = strlen(key);
@@ -147,9 +148,8 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0 || length > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length <<
-            ", max length:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+    if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
+        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
@@ -177,8 +177,7 @@ CResult Bio::AsyncPut(const char *key, const char *value, uint64_t length, const
     }
 
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
-        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length <<
-            ", max length:" << (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
+        CLIENT_LOG_ERROR("Invalid put parameter, key or value pointers is nullptr, length:" << length << "(Mb).");
         return RET_CACHE_EPERM;
     }
 
@@ -292,7 +291,7 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ".");
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
             return RET_CACHE_EPERM;
         }
     }
@@ -330,21 +329,6 @@ CResult Bio::AsyncGet(AsyncGetParam param, const ObjLocation &location, AsyncOpP
     if (UNLIKELY(!KeyValid(key) || value == nullptr || length == 0)) {
         CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << length << ".");
         return RET_CACHE_EPERM;
-    }
-    if (UNLIKELY(offset > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read offset exceed limit, offset" << offset << ", limits:" <<
-            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
-        return RET_CACHE_READ_EXCEED;
-    }
-    if (UNLIKELY(length > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read length exceed limit, length" << length << ", limits:" <<
-            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
-        return RET_CACHE_READ_EXCEED;
-    }
-    if (UNLIKELY((offset + length) > BIO_IO_MAX_LEN)) {
-        CLIENT_LOG_ERROR("Read length exceed limit, offset" << offset << "length:" << length << ", limits:" <<
-            (BIO_IO_MAX_LEN / NO_1024 / NO_1024) << "(Mb).");
-        return RET_CACHE_READ_EXCEED;
     }
 
     StatisticGetIoSize(length);
@@ -391,8 +375,7 @@ CResult Bio::Load(LoadPara &para, const ObjLocation location, const BioLoadCallb
         return RET_CACHE_NOT_READY;
     }
 
-    if (UNLIKELY(!KeyValid(para.key) || context == nullptr || para.offset != 0 || para.length == 0 ||
-        para.length > BIO_IO_MAX_LEN)) {
+    if (UNLIKELY(!KeyValid(para.key) || context == nullptr || para.offset != 0 || para.length == 0)) {
         CLIENT_LOG_ERROR("Invalid load parameter, key:" << para.key << ".");
         return RET_CACHE_EPERM;
     }
