@@ -482,7 +482,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     }
 
     UBSHcomServiceOptions options;
-    options.maxSendRecvDataSize = (NO_64 * NO_1024);
+    options.maxSendRecvDataSize = opt.netSegmentSize * NO_1024;;
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;
     options.workerThreadPriority = 0;
@@ -514,7 +514,8 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         return BIO_ERR;
     }
 
-    NET_LOG_INFO("Bio server Start ipc service success, protocol:" << opt.protocol << ".");
+    NET_LOG_INFO("Bio server Start ipc service success, protocol:" << opt.protocol <<
+        ",net segment size:" << opt.netSegmentSize * 1024);
     return BIO_OK;
 }
 
@@ -623,7 +624,8 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
         return BIO_ERR;
     }
 
-    NET_LOG_INFO("Bio server start rpc service success, protocol:" << opt.protocol << ".");
+    NET_LOG_INFO("Bio server start rpc service success, protocol:" << opt.protocol <<
+        ", net segment Size:" << opt.netSegmentSize);
     return BIO_OK;
 }
 
