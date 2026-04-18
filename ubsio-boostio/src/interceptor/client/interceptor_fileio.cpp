@@ -57,7 +57,7 @@ static bool PrepareLargeWriteSpace(size_t count, uint8_t *&bioShmBase, CacheSpac
     }
 
     InterceptorAllocCacheSpaceReq allocReq;
-    allocReq.pid = static_cast<uint32_t>(getpid());
+    allocReq.pid = InterceptorClientNetService::Instance().GetSendPid();
     allocReq.nbytes = count;
 
     InterceptorAllocCacheSpaceResp allocResp;
@@ -108,7 +108,7 @@ static bool CopyBufVecToCopyFreeSpace(BufVec &bufVec, const CacheSpaceDesc &spac
 static ssize_t SubmitLargeWriteRequest(int fd, uint64_t inode, size_t count, off_t offset, const CacheSpaceDesc &spaceInfo)
 {
     InterceptorLargePwriteIn writeReq;
-    writeReq.pid = static_cast<uint32_t>(getpid());
+    writeReq.pid = InterceptorClientNetService::Instance().GetSendPid();
     writeReq.fd = fd;
     writeReq.inode = inode;
     writeReq.offset = offset;
@@ -156,7 +156,7 @@ static ssize_t PreadShmToBuffer(int fd, uint64_t inode, uint8_t *buf, size_t cou
         }
 
         InterceptorLargePreadIn request;
-        request.pid = static_cast<uint32_t>(getpid());
+        request.pid = InterceptorClientNetService::Instance().GetSendPid();
         request.fd = fd;
         request.inode = inode;
         request.offset = offset + static_cast<off_t>(readed);
@@ -209,7 +209,7 @@ static ssize_t PreadShmToBufVec(int fd, uint64_t inode, BufVec &bufVec, off_t of
         }
 
         InterceptorLargePreadIn request;
-        request.pid = static_cast<uint32_t>(getpid());
+        request.pid = InterceptorClientNetService::Instance().GetSendPid();
         request.fd = fd;
         request.inode = inode;
         request.offset = offset + static_cast<off_t>(readed);
@@ -293,7 +293,7 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
     }
 
     InterceptorPreadIn request;
-    request.pid = static_cast<uint32_t>(getpid());
+    request.pid = InterceptorClientNetService::Instance().GetSendPid();
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -355,7 +355,7 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
     }
 
     InterceptorLargePreadIn request;
-    request.pid = static_cast<uint32_t>(getpid());
+    request.pid = InterceptorClientNetService::Instance().GetSendPid();
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -503,7 +503,7 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     }
 
     InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
-    request->pid = static_cast<uint32_t>(getpid());
+    request->pid = InterceptorClientNetService::Instance().GetSendPid();
     request->inode = file->GetInode();
     request->offset = offset;
     request->nbytes = count;
