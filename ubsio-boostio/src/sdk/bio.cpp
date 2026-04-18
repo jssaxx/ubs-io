@@ -127,6 +127,7 @@ inline static bool KeyValid(const char *key)
     }
     size_t len = strlen(key);
     if (UNLIKELY(len == 0 || len >= KEY_MAX_SIZE)) {
+        CLIENT_LOG_ERROR("Invalid parameter key, len:" << len << ".");
         return false;
     }
     return true;
