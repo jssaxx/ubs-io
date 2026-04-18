@@ -540,6 +540,15 @@ CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc);
  */
 CResult BioAddDisk(const char *diskPath);
 
+/**
+ * @brief:Register Mem to bio
+ * @param deviceId        [in] the rank which kv cache addresses are from
+ * @param addrs           [in] Array of kv cache addresses to be registered
+ * @param sizes           [in] Array of kv cache sizes to be registered
+ * @param count           [in] Number of kv caches to be registered
+ */
+CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint32_t count);
+
 #ifdef __cplusplus
 }
 #endif

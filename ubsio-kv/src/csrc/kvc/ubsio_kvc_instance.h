@@ -27,6 +27,7 @@ public:
                   std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                   const std::vector<std::vector<size_t>> &lengthsVector,
                   int *results) noexcept;
+    int32_t inline GetDeviceId() const noexcept { return m_deviceId; }
 
 public:
     KvcInstance(const KvcInstance&) = delete;

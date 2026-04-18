@@ -40,6 +40,7 @@ using BioBatchFreeFunc = CResult (*)(uint64_t tenantId, uintptr_t *valueAddrs, c
 using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location);
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                                const uint32_t count, KeyAddrInfo *infos);
+using BioRegisterMemFunc = CResult (*)(int32_t deviceId, uint64_t *addrs, uint64_t *size, uint32_t count);
 
 class DlBioSdkApi {
 public:
@@ -113,6 +114,11 @@ public:
         return static_cast<CResult>(pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos));
     }
 
+    static CResult RegisterMem(int32_t deviceId, uint64_t *addrs, uint64_t *size, uint32_t count)
+    {
+        return static_cast<CResult>(pBioRegisterMem(deviceId, addrs, size, count));
+    }
+
 private:
     static std::mutex gMutex;
     static bool gLoaded;
@@ -131,6 +137,7 @@ private:
     static BioBatchFreeFunc pBioBatchGetFree;
     static BioDeleteFunc pBioDelete;
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
+    static BioRegisterMemFunc pBioRegisterMem;
 };
 
 }  // namespace ubsio

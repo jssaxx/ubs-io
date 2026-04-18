@@ -1315,3 +1315,24 @@ CResult BioAddDisk(const char *diskPath)
     CLIENT_LOG_INFO("Add disk sucess! disk path: " << diskPath << ".");
     return RET_CACHE_OK;
 }
+
+CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint32_t count)
+{
+    if (UNLIKELY(address == nullptr || size == 0 || count == 0 || deviceId < 0)) {
+        CLIENT_LOG_ERROR("Invalid input parameter, address: " << address << ", size: "
+                         << size << ", count: " << count << ", deviceId: " << deviceId << ".");
+        return RET_CACHE_EPERM;
+    }
+
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    
+    auto ret = gClient->GetMirror()->RegisterMem(address, size, count);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to register mem, ret:" << ret << ".");
+        return ToCResult(ret);
+    }
+    CLIENT_LOG_INFO("Register mem sucess!");
+    return RET_CACHE_OK;
+}

@@ -44,6 +44,8 @@ public:
 public:
     ~KvOperation() = default;
     int32_t Initialize(const std::string &path);
+    int32_t KvOperation::KvcRegisterKvCache(int32_t devId, std::vector<uint64_t> &kvCacheAddrs,
+                                            std::vector<uint64_t> &kvCacheSizes);
     void UnInitialize();
 
     // kv operation
