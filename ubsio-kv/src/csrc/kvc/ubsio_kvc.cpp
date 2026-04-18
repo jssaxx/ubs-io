@@ -82,8 +82,8 @@ UBSIO_API int32_t UbsioKvCacheBatchGet(const char **keys,
             LOG_ERROR("Get invalid lengths [" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        keyVector.emplace_back(keys[i]);
-        lengthsVector.emplace_back(lengths[i]);
+        keyVector[i] = keys[i];
+        lengthsVector[i] = lengths[i];
     }
 
     auto ret = KvcBatchGetData(keyVector, bufs, lengthsVector, batchResult, flags);
@@ -139,12 +139,12 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
                 LOG_ERROR("Get invalid npuAddrs[" << i << "][" << j << "]");
                 return DFC_INVALID_PARAM;
             }
-            layerLengths.emplace_back(lengths[i][j]);
-            layerAddrs.emplace_back(reinterpret_cast<uintptr_t>(bufs[i][j]));
+            layerLengths[j] = lengths[i][j];
+            layerAddrs[j] = reinterpret_cast<uintptr_t>(bufs[i][j]);
         }
-        keyVector.emplace_back(keys[i]);
-        lengthsVector.emplace_back(layerLengths);
-        npuAddrsVector.emplace_back(layerAddrs);
+        keyVector[i] = keys[i];
+        lengthsVector[i] = layerLengths;
+        npuAddrsVector[i] = layerAddrs;
     }
 
     return KvcInstance::Instance().Read(keyVector, npuAddrsVector, lengthsVector, results);
@@ -171,7 +171,7 @@ UBSIO_API int32_t UbsioKvCacheBatchExist(const char **keys, uint32_t keysCount, 
             LOG_ERROR("Get invalid key length[" << i << "]");
             return DFC_INVALID_PARAM;
         }
-        keyVector.emplace_back(keys[i]);
+        keyVector[i] = keys[i];
     }
 
     auto ret = KvcBatchExistKey(keyVector, results, flags);
