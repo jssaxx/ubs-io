@@ -254,6 +254,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
 
     // 2. start ipc service, 固定配置4个worker，4条EP链接.
     NetOptions netOptions;
+    netOptions.netSegmentSize = NO_128 * NO_1024;
     netOptions.FillNetBaseConfigs(NO_4, NO_4, Role::NET_CLIENT, ServiceProtocol::SHM);
     netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
         netConf.privateKeyPath, netConf.privateKeyPassword, netConf.decrypterLibPath);
