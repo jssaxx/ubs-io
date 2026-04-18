@@ -200,11 +200,17 @@ public:
 
     uint8_t *GetShmAddress(uint64_t offset, uint64_t len)
     {
-        if (UNLIKELY(offset < mShareOffset ||
+        if (UNLIKELY(mShareAddress == nullptr || mShmSize == 0)) {
+            NET_LOG_ERROR("Shm not initialized, shareAddress is null or size is 0.");
+            return nullptr;
+        }
+        if (UNLIKELY(len == 0 ||
+                    offset < mShareOffset ||
                     offset >= mShareOffset + mShmSize ||
-                    len >= mShareOffset + mShmSize ||
+                    len > mShareOffset + mShmSize ||
                     offset > mShareOffset + mShmSize - len)) {
-            NET_LOG_ERROR("Shm info, offset:" << mShareOffset << ", size:" << mShmSize << ".");
+            NET_LOG_ERROR("Shm info, offset:" << offset << ", len:" << len <<
+                ", shareOffset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }
         return (mShareAddress + (offset - mShareOffset));
