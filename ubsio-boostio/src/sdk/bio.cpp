@@ -122,7 +122,12 @@ inline static void StatisticGetIoSize(uint64_t length)
 
 inline static bool KeyValid(const char *key)
 {
-    if (UNLIKELY(key == nullptr || strlen(key) == 0)) {
+    if (UNLIKELY(key == nullptr)) {
+        return false;
+    }
+    size_t len = strlen(key);
+    if (UNLIKELY(len == 0 || len >= KEY_MAX_SIZE)) {
+        CLIENT_LOG_ERROR("Invalid parameter key, len:" << len << ".");
         return false;
     }
     return true;
