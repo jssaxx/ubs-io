@@ -16,6 +16,8 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -161,14 +163,8 @@ static bool CheckCopyFreeSpace(const CacheSpaceDesc &spaceInfo, uint64_t shmLeng
     return totalLen == expectedLen;
 }
 
-static bool PrepareLargeWriteSpace(size_t count, uint8_t *&bioShmBase, CacheSpaceDesc &spaceInfo)
+static bool RequestLargeWriteSpace(size_t count, CacheSpaceDesc &spaceInfo)
 {
-    bioShmBase = InterceptorClientNetService::Instance().GetBioShmAddr();
-    if (UNLIKELY(bioShmBase == nullptr)) {
-        CLOG_ERROR("PrepareLargeWriteSpace: bio shm not ready.");
-        return false;
-    }
-
     InterceptorAllocCacheSpaceReq allocReq;
     allocReq.pid = InterceptorClientNetService::Instance().GetSendPid();
     allocReq.nbytes = count;
@@ -177,7 +173,7 @@ static bool PrepareLargeWriteSpace(size_t count, uint8_t *&bioShmBase, CacheSpac
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorAllocCacheSpaceReq,
         InterceptorAllocCacheSpaceResp>(INVALID_NID, BIO_OP_INTERCEPTOR_ALLOC_CACHE_SPACE, allocReq, allocResp);
     if (UNLIKELY(ret != BIO_OK || allocResp.ret != 0)) {
-        CLOG_ERROR("PrepareLargeWriteSpace: alloc cache space failed, ret:" << ret <<
+        CLOG_ERROR("RequestLargeWriteSpace failed, ret:" << ret <<
             ", resp.ret:" << allocResp.ret << ".");
         return false;
     }
@@ -218,7 +214,7 @@ static bool CopyBufVecToCopyFreeSpace(BufVec &bufVec, const CacheSpaceDesc &spac
     return true;
 }
 
-static void WarmupCopyFreeSpacePages(const CacheSpaceDesc &spaceInfo, uint8_t *bioShmBase)
+static void TouchCopyFreeSpacePages(const CacheSpaceDesc &spaceInfo, uint8_t *bioShmBase)
 {
     static const size_t pageSize = 4096;
     volatile uint8_t sink = 0;
@@ -233,6 +229,94 @@ static void WarmupCopyFreeSpacePages(const CacheSpaceDesc &spaceInfo, uint8_t *b
         }
     }
     (void)sink;
+}
+
+class LargeWriteSpacePrefetcher {
+public:
+    bool TryConsume(size_t count, CacheSpaceDesc &spaceInfo)
+    {
+        if (count != MAX_LARGE_WRITE_SIZE) {
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(mLock);
+        if (!mReady) {
+            return false;
+        }
+
+        spaceInfo = mSpaceInfo;
+        mReady = false;
+        return true;
+    }
+
+    void Schedule(size_t count)
+    {
+        if (count != MAX_LARGE_WRITE_SIZE) {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(mLock);
+        if (mReady || mPrefetching) {
+            return;
+        }
+
+        mPrefetching = true;
+        std::thread([this]() { PrefetchWorker(); }).detach();
+    }
+
+private:
+    void PrefetchWorker()
+    {
+        CacheSpaceDesc spaceInfo {};
+        bool success = false;
+
+        auto *bioShmBase = InterceptorClientNetService::Instance().GetBioShmAddr();
+        if (bioShmBase != nullptr && RequestLargeWriteSpace(MAX_LARGE_WRITE_SIZE, spaceInfo)) {
+            TouchCopyFreeSpacePages(spaceInfo, bioShmBase);
+            success = true;
+        }
+
+        std::lock_guard<std::mutex> lock(mLock);
+        if (success) {
+            mSpaceInfo = spaceInfo;
+            mReady = true;
+        }
+        mPrefetching = false;
+    }
+
+private:
+    std::mutex mLock;
+    CacheSpaceDesc mSpaceInfo {};
+    bool mReady = false;
+    bool mPrefetching = false;
+};
+
+static LargeWriteSpacePrefetcher &GetLargeWriteSpacePrefetcher()
+{
+    static LargeWriteSpacePrefetcher prefetcher;
+    return prefetcher;
+}
+
+static bool PrepareLargeWriteSpace(size_t count, uint8_t *&bioShmBase, CacheSpaceDesc &spaceInfo)
+{
+    bioShmBase = InterceptorClientNetService::Instance().GetBioShmAddr();
+    if (UNLIKELY(bioShmBase == nullptr)) {
+        CLOG_ERROR("PrepareLargeWriteSpace: bio shm not ready.");
+        return false;
+    }
+
+    auto &prefetcher = GetLargeWriteSpacePrefetcher();
+    if (!prefetcher.TryConsume(count, spaceInfo) && UNLIKELY(!RequestLargeWriteSpace(count, spaceInfo))) {
+        return false;
+    }
+
+    prefetcher.Schedule(count);
+    return true;
+}
+
+static void WarmupCopyFreeSpacePages(const CacheSpaceDesc &spaceInfo, uint8_t *bioShmBase)
+{
+    TouchCopyFreeSpacePages(spaceInfo, bioShmBase);
 }
 
 static ssize_t SubmitLargeWriteRequest(int fd, uint64_t inode, size_t count, off_t offset, const CacheSpaceDesc &spaceInfo)
