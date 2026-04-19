@@ -67,6 +67,8 @@ typedef struct {
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
     uint32_t wcacheMemEvictLevel;
+    uint64_t sdkPoolSize;
+    uint64_t segment;
 } ShmInitResponse;
 
 /* Query cache resource quota */
@@ -413,21 +415,15 @@ typedef struct {
 } CheckRemoteUpdateReadyResponse;
 
 typedef struct {
-    uint32_t pid;
-    uint64_t length;
-    uint64_t startTime;
-} InterceptorAllocPageReq;
+    RequestComm comm;
+} InterceptorCreateDataMsgMemPoolRequest;
 
 typedef struct {
+    int32_t memFd;
     uint64_t offset;
-    uint64_t size;
-} InterceptorAllocPage;
-
-typedef struct {
-    uint32_t pid;
-    uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
-    CacheSpaceDesc address;
-} InterceptorAllocPageRsp;
+    uint64_t poolSize;
+    uint64_t blockSize;
+} InterceptorCreateDataMsgMemPoolResponse;
 
 typedef struct {
     uint32_t pid;
@@ -440,14 +436,13 @@ typedef struct {
 
 typedef struct {
     int32_t ret;
-    uint32_t unused;
     uint64_t dataLen;
     char data[];
 } InterceptorPreadOut;
 
 typedef struct {
     uint32_t pid;
-    uint64_t fd;
+    int32_t fd;
     uint64_t inode;
     uint64_t nbytes;
     int64_t offset;
@@ -456,20 +451,33 @@ typedef struct {
 } InterceptorPwriteIn;
 
 typedef struct {
+    int32_t ret;
+} InterceptorPwriteOut;
+
+typedef struct {
     uint32_t pid;
-    uint64_t fd;
+    int32_t fd;
     uint64_t inode;
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
-    CacheSpaceDesc address;
+    uint64_t mrOffset;
 } InterceptorLargePwriteIn;
 
 typedef struct {
+    uint32_t pid;
+    int32_t fd;
+    uint64_t inode;
+    uint64_t nbytes;
+    int64_t offset;
+    uint64_t startTime;
+    uint64_t mrOffset;
+} InterceptorLargePreadIn;
+
+typedef struct {
     int32_t ret;
-    uint32_t unused;
-    int64_t dataLen;
-} InterceptorPwriteOut;
+    uint64_t dataLen;
+} InterceptorLargePreadOut;
 
 typedef struct {
     RequestComm comm;

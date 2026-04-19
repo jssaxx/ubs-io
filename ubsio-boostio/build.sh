@@ -155,10 +155,6 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi
 
-if [[ "$BUILD_UT" == 'ON' ]]; then
-    \cp 3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
-fi
-
 rm -rf boostio
 mv bio boostio
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio

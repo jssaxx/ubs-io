@@ -204,9 +204,11 @@ BResult BioClientNet::ShmInit()
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
     mWcacheMemEvictLevel = rsp.wcacheMemEvictLevel;
+    mSdkPoolSize = rsp.sdkPoolSize;
+    mSegment = rsp.segment;
     CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
         mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ", wcacheMemEvictLevel:" <<
-        mWcacheMemEvictLevel << ".");
+        mWcacheMemEvictLevel << ", sdkPoolSize:" << mSdkPoolSize << ", segment:" << mSegment << ".");
 
     mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut)); // 更新消息请求发送超时参数.
     ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.

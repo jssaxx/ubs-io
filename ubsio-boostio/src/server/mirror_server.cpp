@@ -1067,6 +1067,8 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.enablePrometheus = config.enablePrometheus;
     rsp.scrapeIntervalSec = config.scrapeIntervalSec;
     rsp.wcacheMemEvictLevel = config.wcacheMemEvictLevel;
+    rsp.sdkPoolSize = config.sdkPoolSize;
+    rsp.segment = config.segment;
     auto ret = strcpy_s(rsp.listenAddress, sizeof(rsp.listenAddress), config.listenAddress.c_str());
     if (ret != 0) {
         return BIO_ERR;
