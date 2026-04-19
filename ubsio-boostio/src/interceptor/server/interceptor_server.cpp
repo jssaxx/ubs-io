@@ -434,6 +434,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
 
     BIO_TRACE_ASYNC_BEGIN(INTERCEPTOR_WRITE_START);
     BIO_TRACE_ASYNC_END(INTERCEPTOR_WRITE_START, 0, req->startTime);
+    auto totalBegin = Monotonic::TimeNs();
+    auto perf0 = CaptureThreadPerfSnapshot();
 
     CLIENT_LOG_DEBUG("Receive interceptor large write message inode:" << req->inode << " offset:" << req->offset <<
         " len:" << req->nbytes << " fd:" << req->fd);
