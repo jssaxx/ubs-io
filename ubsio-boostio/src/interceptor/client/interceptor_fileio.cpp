@@ -11,6 +11,7 @@
  */
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <cerrno>
 #include <cstdio>
@@ -120,6 +121,24 @@ static ThreadPerfSnapshot CaptureThreadPerfSnapshot()
 
     snapshot.cacheMissesValid = ReadThreadCacheMisses(snapshot.cacheMisses);
     return snapshot;
+}
+
+static bool IsCopyFreePrefaultEnabled()
+{
+    static int enabled = -1;
+    if (enabled != -1) {
+        return enabled == 1;
+    }
+
+    const char *value = getenv("INTERCEPTOR_PREFAULT");
+    if (value == nullptr) {
+        enabled = 0;
+        return false;
+    }
+
+    enabled = (strcmp(value, "1") == 0 || strcmp(value, "true") == 0 ||
+        strcmp(value, "on") == 0 || strcmp(value, "yes") == 0) ? 1 : 0;
+    return enabled == 1;
 }
 }
 
@@ -525,7 +544,10 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     auto t1 = Monotonic::TimeNs();
 
-    WarmupCopyFreeSpacePages(spaceInfo, bioShmBase);
+    bool prefaultEnabled = IsCopyFreePrefaultEnabled();
+    if (prefaultEnabled) {
+        WarmupCopyFreeSpacePages(spaceInfo, bioShmBase);
+    }
 
     auto t2 = Monotonic::TimeNs();
 
@@ -582,23 +604,42 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     sLastEndCpu = perf4.cpu;
     sLastEndNode = perf4.node;
     if (sCount >= 1000) {
-        CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
-            " io: alloc=" << sAllocUs / sCount <<
-            " warmup=" << sWarmupUs / sCount <<
-            " memcpy=" << sMemcpyUs / sCount <<
-            " ipc=" << sIpcUs / sCount <<
-            " total=" << sTotalUs / sCount <<
-            " addressNum=" << sAddressNum / sCount <<
-            " minflt=" << sMinflt / sCount <<
-            " majflt=" << sMajflt / sCount <<
-            " nvcsw=" << sNvcsw / sCount <<
-            " nivcsw=" << sNivcsw / sCount <<
-            " cacheMisses=" << sCacheMisses / sCount <<
-            " cpuMigrate=" << sCpuMigrate <<
-            " nodeMigrate=" << sNodeMigrate <<
-            " lastCpu=" << sLastStartCpu << "->" << sLastEndCpu <<
-            " lastNode=" << sLastStartNode << "->" << sLastEndNode <<
-            " tid=" << GetCurrentTid());
+        if (prefaultEnabled) {
+            CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
+                " io: alloc=" << sAllocUs / sCount <<
+                " warmup=" << sWarmupUs / sCount <<
+                " memcpy=" << sMemcpyUs / sCount <<
+                " ipc=" << sIpcUs / sCount <<
+                " total=" << sTotalUs / sCount <<
+                " addressNum=" << sAddressNum / sCount <<
+                " minflt=" << sMinflt / sCount <<
+                " majflt=" << sMajflt / sCount <<
+                " nvcsw=" << sNvcsw / sCount <<
+                " nivcsw=" << sNivcsw / sCount <<
+                " cacheMisses=" << sCacheMisses / sCount <<
+                " cpuMigrate=" << sCpuMigrate <<
+                " nodeMigrate=" << sNodeMigrate <<
+                " lastCpu=" << sLastStartCpu << "->" << sLastEndCpu <<
+                " lastNode=" << sLastStartNode << "->" << sLastEndNode <<
+                " tid=" << GetCurrentTid());
+        } else {
+            CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
+                " io: alloc=" << sAllocUs / sCount <<
+                " memcpy=" << sMemcpyUs / sCount <<
+                " ipc=" << sIpcUs / sCount <<
+                " total=" << sTotalUs / sCount <<
+                " addressNum=" << sAddressNum / sCount <<
+                " minflt=" << sMinflt / sCount <<
+                " majflt=" << sMajflt / sCount <<
+                " nvcsw=" << sNvcsw / sCount <<
+                " nivcsw=" << sNivcsw / sCount <<
+                " cacheMisses=" << sCacheMisses / sCount <<
+                " cpuMigrate=" << sCpuMigrate <<
+                " nodeMigrate=" << sNodeMigrate <<
+                " lastCpu=" << sLastStartCpu << "->" << sLastEndCpu <<
+                " lastNode=" << sLastStartNode << "->" << sLastEndNode <<
+                " tid=" << GetCurrentTid());
+        }
         sCount = 0;
         sAllocUs = 0;
         sWarmupUs = 0;
