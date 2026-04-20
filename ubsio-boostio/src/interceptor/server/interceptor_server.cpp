@@ -44,8 +44,6 @@ void CleanupDataMsgMemItem(uint32_t pid, DataMsgMemItem &item)
         shm_unlink(shmName.c_str());
     }
 }
-
-}
 }
 
 InterceptorServer::~InterceptorServer()
