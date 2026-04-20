@@ -640,13 +640,13 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     }
 
     auto t3 = Monotonic::TimeNs();
-
-    auto ret = SubmitLargeWriteRequest(fd, file->GetInode(), count, offset, spaceInfo);
-    if (UNLIKELY(ret < 0)) {
-        return -1;
-    }
-
-    auto t4 = Monotonic::TimeNs();
+//
+//    auto ret = SubmitLargeWriteRequest(fd, file->GetInode(), count, offset, spaceInfo);
+//    if (UNLIKELY(ret < 0)) {
+//        return -1;
+//    }
+//
+//    auto t4 = Monotonic::TimeNs();
     auto perf4 = CaptureThreadPerfSnapshot();
 
     static thread_local uint64_t sCount = 0;
@@ -671,8 +671,8 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     sAllocUs += (t1 - t0) / 1000;
     sWarmupUs += (t2 - t1) / 1000;
     sMemcpyUs += (t3 - t2) / 1000;
-    sIpcUs += (t4 - t3) / 1000;
-    sTotalUs += (t4 - t0) / 1000;
+//    sIpcUs += (t4 - t3) / 1000;
+    sTotalUs += (t3 - t0) / 1000;
     sAddressNum += spaceInfo.addressNum;
     sMinflt += static_cast<uint64_t>(PerfDelta(perf0.minflt, perf4.minflt));
     sMajflt += static_cast<uint64_t>(PerfDelta(perf0.majflt, perf4.majflt));
