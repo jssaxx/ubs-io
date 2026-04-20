@@ -37,7 +37,7 @@ BResult Cm::Start()
     strcpy_s(pools.poolName, POOL_NAME_LEN, "bio");
     pools.poolId = mOptions.groups.groupId;
     pools.type = DISK_TYPE_DRAM;
-    pools.redundance = (mOptions.groups.replicaNum == 2U) ? PT_REP_DOUBLE : PT_REP_TRIPLE;
+    pools.redundance = static_cast<PtRedundanceMode>(mOptions.groups.replicaNum);
     pools.initialNodeNum = mOptions.groups.initialNodeNum;
     pools.maxNodeNum = mOptions.groups.maxNodeNum;
     pools.maxPtNum = mOptions.groups.maxPtNum;

@@ -103,6 +103,7 @@ enum class Role {
 struct NetOptions {
     // Net base configs
     std::string ipMask;                                  /* ip mask */
+    uint32_t netSegmentSize;                             /* net receive and send segment size */
     uint16_t port = 0;                                   /* listen port */
     uint16_t handlerCount = 1;                           /* handler count */
     uint16_t connCount = 1;                              /* connect count */
