@@ -25,7 +25,6 @@
 #include "expire_checker.h"
 #include "flow_manager.h"
 #include "htracer.h"
-#include "interceptor_server.h"
 #include "bio_server.h"
 
 namespace ock {

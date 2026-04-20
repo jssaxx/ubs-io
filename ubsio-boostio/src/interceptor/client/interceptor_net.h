@@ -13,13 +13,20 @@
 #ifndef BOOSTIO_INTERCEPTOR_NET_H
 #define BOOSTIO_INTERCEPTOR_NET_H
 
+#include <mutex>
+#include <atomic>
+#include <sys/mman.h>
+#include <unistd.h>
 #include "net_engine.h"
 #include "net_common.h"
+#include "net_block_pool.h"
 #include "bio_ref.h"
 #include "bio_err.h"
+#include "interceptor_log.h"
 
 namespace ock {
 namespace bio {
+
 class InterceptorClientNetService {
 public:
     static InterceptorClientNetService &Instance()
@@ -28,15 +35,71 @@ public:
         return instance;
     }
 
+    ~InterceptorClientNetService()
+    {
+        if (mDataMsgMemPool != nullptr) {
+            mDataMsgMemPool->Stop();
+            mDataMsgMemPool = nullptr;
+        }
+        if (mShmAddr != nullptr && mShmLength > 0) {
+            munmap(mShmAddr, mShmLength);
+            mShmAddr = nullptr;
+        }
+        if (mShmFd >= 0) {
+            close(mShmFd);
+            mShmFd = -1;
+        }
+        if (mPid != 0) {
+            std::string shmName = "/interceptor_mem_pool_" + std::to_string(mPid);
+            shm_unlink(shmName.c_str());
+        }
+    }
+
     int32_t StartNetService();
-    BResult CorrectFd();
-    BResult CheckShmFd();
-    BResult ShmInitInner();
-    BResult ShmInit();
+    BResult CreateDataMessageMem();
 
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
         return mNetEngine->GetShmAddress(offset, len);
+    }
+
+    BResult AllocShmBlock(uintptr_t &address, uint64_t &mrOffset)
+    {
+        if (UNLIKELY(!mReady.load())) {
+            auto ret = StartNetService();
+            if (ret != 0) {
+                return BIO_NOT_READY;
+            }
+        }
+
+        if (UNLIKELY(mDataMsgMemPool == nullptr)) {
+            return BIO_NOT_READY;
+        }
+
+        auto ret = mDataMsgMemPool->AllocOne(address);
+        if (UNLIKELY(ret != BIO_OK)) {
+            return ret;
+        }
+
+        mrOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
+        return BIO_OK;
+    }
+
+    uint8_t *GetShmBlockAddr(uint64_t mrOffset)
+    {
+        if (UNLIKELY(!mReady.load()) || mDataMsgMemAddr == nullptr) {
+            return nullptr;
+        }
+        return mDataMsgMemAddr + mrOffset;
+    }
+
+    void ReleaseShmBlock(uint64_t mrOffset)
+    {
+        if (UNLIKELY(!mReady.load()) || mDataMsgMemPool == nullptr || mDataMsgMemAddr == nullptr) {
+            return;
+        }
+        uintptr_t address = reinterpret_cast<uintptr_t>(mDataMsgMemAddr + mrOffset);
+        mDataMsgMemPool->ReleaseOne(address);
     }
 
     template <typename TReq, typename TResp>
@@ -88,6 +151,10 @@ private:
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint8_t *mShmAddr = nullptr;
+
+    NetBlockPoolPtr mDataMsgMemPool = nullptr;
+    uint8_t *mDataMsgMemAddr = nullptr;
+    uint64_t mDataMsgMemBlockSize = 0;
 };
 }
 }

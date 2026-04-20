@@ -673,8 +673,22 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
         mgr->RemoveChannel(dstNid, ch);
     }
 
-    if (mHandlerBroken != nullptr) {
-        mHandlerBroken(dstNid.nid, dstNid.pid);
+    std::vector<ChannelBrokenHandler> innerHandlers;
+    ChannelBrokenHandler upperHandler = nullptr;
+    {
+        std::lock_guard<std::mutex> guard(mMutex);
+        innerHandlers = mInnerBrokenHandlers;
+        upperHandler = mHandlerBroken;
+    }
+
+    for (auto &handler : innerHandlers) {
+        if (handler != nullptr) {
+            handler(dstNid.nid, dstNid.pid);
+        }
+    }
+
+    if (upperHandler != nullptr) {
+        upperHandler(dstNid.nid, dstNid.pid);
     }
 }
 

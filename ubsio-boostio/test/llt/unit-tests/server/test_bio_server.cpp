@@ -1441,30 +1441,12 @@ TEST_F(TestBioServer, test_server_exception)
     EXPECT_EQ(ret, BIO_ERR);
 }
 
-TEST_F(TestBioServer, test_handle_interceptor_alloc_page)
-{
-    LOG_INFO("test_handle_interceptor_alloc_page");
-    ServiceContext ctx;
-    auto ret = InterceptorServer::GetInstance().HandleInterceptorAllocPage(ctx);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
-TEST_F(TestBioServer, test_check_interceptor_alloc_page_req)
-{
-    LOG_INFO("test_check_interceptor_alloc_page");
-    InterceptorAllocPageReq *req = new InterceptorAllocPageReq();
-    req->length =IO_SIZE_4M;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorAllocPageReq(req);
-    EXPECT_EQ(ret, true);
-    free(req);
-}
-
 TEST_F(TestBioServer, test_check_interceptor_large_write_req)
 {
     LOG_INFO("test_check_interceptor_large_write_req");
     InterceptorLargePwriteIn *req = new InterceptorLargePwriteIn();
     req->offset = 0;
-    req->nbytes = 1;
+    req->nbytes = 0;
     auto ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(req);
     EXPECT_EQ(ret, false);
     req->nbytes = IO_SIZE_4M;
@@ -1477,13 +1459,12 @@ TEST_F(TestBioServer, test_check_interceptor_write_req)
 {
     LOG_INFO("test_check_interceptor_write_req");
     InterceptorPwriteIn *req = (InterceptorPwriteIn *) new char[sizeof(InterceptorPwriteIn) + 128];
-    req->nbytes = IO_SIZE_8K + 1;
-    req->offset = IO_SIZE_4M + 1;
+    req->nbytes = 0;
     auto ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
     EXPECT_EQ(ret, false);
-    req->offset = 0;
+    req->nbytes = IO_SIZE_8K + 1;
     ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
-    EXPECT_EQ(ret, false);
+    EXPECT_EQ(ret, true);
     free(req);
 }
 
