@@ -23,6 +23,7 @@ namespace bio {
 
 constexpr uint32_t TRANS_EXCUTE_POOL_SIZE = 4;
 constexpr uint32_t TRANS_EXCUTE_POOL_QUEUE_SIZE = 1024;
+constexpr uint32_t RPC_PORT_BUF_LEN = 16;
 
 void* DlMfApi::mfHandle;
 std::mutex DlMfApi::gMutex;
@@ -43,6 +44,7 @@ mfSmemTransWriteFunc DlMfApi::mfSmemTransWrite = nullptr;
 mfSmemTransBatchWriteFunc DlMfApi::mfSmemTransBatchWrite = nullptr;
 mfSmemTransReadFunc DlMfApi::mfSmemTransRead = nullptr;
 mfSmemTransBatchReadFunc DlMfApi::mfSmemTransBatchRead = nullptr;
+mfSemTransGetRpcPortFunc DlMfApi::mfSemTransGetRpcPort = nullptr;
 
 int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
 {
@@ -74,6 +76,7 @@ int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
     DL_LOAD_SYM(mfSmemTransBatchWrite, mfSmemTransBatchWriteFunc, mfHandle, "smem_trans_batch_write");
     DL_LOAD_SYM(mfSmemTransRead, mfSmemTransReadFunc, mfHandle, "smem_trans_read");
     DL_LOAD_SYM(mfSmemTransBatchRead, mfSmemTransBatchReadFunc, mfHandle, "smem_trans_batch_read");
+    DL_LOAD_SYM(mfSemTransGetRpcPort, mfSemTransGetRpcPortFunc, mfHandle, "smem_trans_get_rpc_port");
     
     gLoaded = true;
     return BIO_OK;
@@ -99,6 +102,7 @@ void DlMfApi::CleanupLibrary()
     mfSmemTransBatchWrite = nullptr;
     mfSmemTransRead = nullptr;
     mfSmemTransBatchRead = nullptr;
+    mfSemTransGetRpcPort = nullptr;
 
     if (mfHandle != nullptr) {
         dlclose(mfHandle);
@@ -244,7 +248,7 @@ BResult MfTransEngine::Read(TransParam& param)
     }
 
     BResult ret = DlMfApi::MfSmemTransRead(mTransHandler, param.remoteAddrs[0], param.localAddrs[0],
-                                           param.lengths[0], 0);
+                                           param.lengths[0], SMEMB_COPY_GH2H, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to read from mf trans, ret: " << ret);
         return ret;
@@ -268,7 +272,7 @@ BResult MfTransEngine::BatchRead(std::vector<TransParam>& params)
 
     BResult ret = DlMfApi::MfSmemTransBatchRead(mTransHandler, params.remotesAddrs.data(),
                                                 params.localesAddrs.data(), params.lengths.data(),
-                                                params.localesAddrs.size(), 0);
+                                                params.localesAddrs.size(), SMEMB_COPY_GH2H, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to batch read from mf trans, ret: " << ret);
         return ret;
@@ -288,7 +292,7 @@ BResult MfTransEngine::Write(TransParam& param)
     }
 
     BResult ret = DlMfApi::MfSmemTransWrite(mTransHandler, param.localAddrs[0],
-                                            param.remoteAddrs[0], param.lengths[0], 0);
+                                            param.remoteAddrs[0], param.lengths[0], SMEMB_COPY_H2G, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to write to mf trans, ret: " << ret);
         return ret;
@@ -310,7 +314,7 @@ BResult MfTransEngine::BatchWrite(std::vector<TransParam>& params)
 
     BResult ret = DlMfApi::MfSmemTransBatchWrite(mTransHandler, params.localesAddrs.data(),
                                                  params.remotesAddrs.data(), params.lengths.data(),
-                                                 params.localesAddrs.size(), 0);
+                                                 params.localesAddrs.size(), SMEMB_COPY_H2G, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to batch write to mf trans, ret: " << ret);
         return ret;
@@ -340,8 +344,15 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
         NET_LOG_ERROR("Invalid ipMask format: " << opt.ipMask << ", should be ip/mask, e.g. 192.168.1.100/24")
         return BIO_ERR;
     }
-    mLocalUniqueId = ip + ":" + DlMfApi::GetRpcPort(); // 内部生成还是，让mf新增接口生成？
+    char buffer[RPC_PORT_BUF_LEN];
+    BResult ret = DlMfApi::MfSemTransGetRpcPort(buffer, RPC_PORT_BUF_LEN);
+    if (ret != BIO_OK) {
+        NET_LOG_ERROR("Failed to get rpc port from mf trans, ret: " << ret);
+        return ret;
+    }
+    mLocalUniqueId = ip + ":" + std::string(buffer);
     mStoreUrl = opt.transStoreUrl;
+    NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl <<);
     return BIO_OK;
 }
 

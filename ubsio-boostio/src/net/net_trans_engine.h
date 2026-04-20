@@ -45,6 +45,24 @@ typedef enum {
     SMEMB_DATA_OP_BUTT
 } smem_bm_data_op_type;
 
+/**
+* @brief Data copy direction
+*/
+typedef enum {
+    SMEMB_COPY_L2G = 0,  /* copy data from local hbm to global space */
+    SMEMB_COPY_G2L = 1,  /* copy data from global space to local hbm */
+    SMEMB_COPY_G2H = 2,  /* copy data from global space to local host dram */
+    SMEMB_COPY_H2G = 3,  /* copy data from local host dram to global space */
+    SMEMB_COPY_L2GH = 4, /* copy data from local hbm to global host space */
+    SMEMB_COPY_GH2L = 5, /* copy data from global host space to local hbm */
+    SMEMB_COPY_GH2H = 6, /* copy data from global host space to host memory */
+    SMEMB_COPY_H2GH = 7, /* copy data from host memory to global host space */
+    SMEMB_COPY_G2G = 8,  /* copy data from global space to global space */
+    SMEMB_COPY_AUTO = 9, /* data copy direction is automatically selected */
+    /* add here */
+    SMEMB_COPY_BUTT
+} smem_bm_copy_type;
+
 /*
  * @brief Transfer role, i.e. sender/receiver
  */
@@ -87,13 +105,13 @@ using mfSmemTransFreeFunc = int32_t (*)(smem_trans_t, void *);
 using mfSmemTransRegisterMemFunc = int32_t (*)(smem_trans_t, void *, size_t, uint32_t);
 using mfSmemTransBatchRegisterMemFunc = int32_t (*)(smem_trans_t, void **, size_t *, uint32_t, uint32_t);
 using mfSmemTransDeRegisterMemFunc = int32_t (*)(smem_trans_t, void *);
-using mfSmemTransWriteFunc = int32_t (*)(smem_trans_t, const void *, const char *, void *, size_t, uint32_t);
+using mfSmemTransWriteFunc = int32_t (*)(smem_trans_t, const void *, const char *, void *, size_t, int32_t, uint32_t);
 using mfSmemTransBatchWriteFunc = int32_t (*)(smem_trans_t, const void **, const char *,
-                                              void **, size_t *, uint32_t, uint32_t);
-using mfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, const void *, size_t, uint32_t);
+                                              void **, size_t *, uint32_t, int32_t, uint32_t);
+using mfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, const void *, size_t, int32_t, uint32_t);
 using mfSmemTransBatchReadFunc = int32_t (*)(smem_trans_t, void **, const char *,
-                                             const void **, size_t *, uint32_t, uint32_t);
-
+                                             const void **, size_t *, uint32_t, int32_t, uint32_t);
+using mfSemTransGetRpcPortFunc = int32_t (*)(const char *, int32_t *);
 
 class DlMfApi {
 public:
@@ -186,42 +204,50 @@ public:
     }
 
     static inline BResult MfSmemTransWrite(smem_trans_t handle, const void *localAddr, const char *remoteUniqueId,
-                                           void *remoteAddr, size_t dataSize, uint32_t flags)
+                                           void *remoteAddr, size_t dataSize, int32_t opcode, uint32_t flags)
     {
         if (mfSmemTransWrite == nullptr) {
             return BIO_UNDER_API_UNLOAD;
         }
-        return mfSmemTransWrite(handle, localAddr, remoteUniqueId, remoteAddr, dataSize, flags);
+        return mfSmemTransWrite(handle, localAddr, remoteUniqueId, remoteAddr, dataSize, opcode, flags);
     }
 
     static inline BResult MfSmemTransBatchWrite(smem_trans_t handle, const void *localAddrs[],
                                                 const char *remoteUniqueId, void *remoteAddrs[],
-                                                size_t dataSizes[], uint32_t batchSize, uint32_t flags)
+                                                size_t dataSizes[], uint32_t batchSize, int32_t opcode, uint32_t flags)
     {
         if (mfSmemTransBatchWrite == nullptr) {
             return BIO_UNDER_API_UNLOAD;
         }
-        return mfSmemTransBatchWrite(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, flags);
+        return mfSmemTransBatchWrite(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, opcode, flags);
 
     }
 
     static inline BResult MfSmemTransRead(smem_trans_t handle, void *localAddr, const char *remoteUniqueId,
-                                          const void *remoteAddr, size_t dataSize, uint32_t flags)
+                                          const void *remoteAddr, size_t dataSize, int32_t opcode, uint32_t flags)
     {
         if (mfSmemTransRead == nullptr) {
             return BIO_UNDER_API_UNLOAD;
         }
-        return mfSmemTransRead(handle, localAddr, remoteUniqueId, remoteAddr, dataSize, flags);
+        return mfSmemTransRead(handle, localAddr, remoteUniqueId, remoteAddr, dataSize, opcode, flags);
     }
 
     static inline BResult MfSmemTransBatchRead(smem_trans_t handle, void *localAddrs[],
                                                const char *remoteUniqueId, const void *remoteAddrs[],
-                                               size_t dataSizes[], uint32_t batchSize, uint32_t flags)
+                                               size_t dataSizes[], uint32_t batchSize, int32_t opcode, uint32_t flags)
     {
         if (mfSmemTransBatchRead == nullptr) {
             return BIO_UNDER_API_UNLOAD;
         }
-        return mfSmemTransBatchRead(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, flags);
+        return mfSmemTransBatchRead(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, opcode, flags);
+    }
+
+    static inline BResult MfSemTransGetRpcPort(char *portStr, size_t portStrLen)
+    {
+        if (mfSemTransGetRpcPort == nullptr) {
+            return BIO_UNDER_API_UNLOAD;
+        }
+        return mfSemTransGetRpcPort(portStr, portStrLen);
     }
 
 private:
@@ -244,6 +270,7 @@ private:
     static mfSmemTransBatchWriteFunc mfSmemTransBatchWrite;
     static mfSmemTransReadFunc mfSmemTransRead;
     static mfSmemTransBatchReadFunc mfSmemTransBatchRead;
+    static mfSemTransGetRpcPortFunc mfSemTransGetRpcPort;
 };
 
 class NetTransEngine {

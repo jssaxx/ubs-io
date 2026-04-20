@@ -39,6 +39,7 @@ typedef enum {
     RET_CACHE_EXISTS = 15,       // cache already exists
     RET_CACHE_DISK_FAULT = 16,   // cache disk fault
     RET_CACHE_UFS_FAULT = 17,    // cache ufs fault
+    RET_CACHE_IN_DRAM = 18,      // data in dram, need h2d
     RET_CACHE_BUTT
 } CResult;
 
@@ -560,6 +561,49 @@ CResult BioAddDisk(const char *diskPath);
  * @param count           [in] Number of kv caches to be registered
  */
 CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint32_t count);
+
+/**
+ * @brief:Query whether the target belongs to a remote or local location.
+ * @param keys            [in] Array of keys to be queried
+ * @param count           [in] NUmber of keys to be queried
+ * @param position        [out] Array of positions of the keys(0:local, 1:remote)
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioGetPosition(const char **keys, uint32_t count, uint8_t *position);
+
+/**
+ * @brief: Batch Get locaL value
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: multiple keys
+ * @param[in]: length : lengths of the get values
+ * @param[in]: location : location info
+ * @param[out]: valueAddrs : address of the values corresponding to multiple keys, need free
+ * @param[out]: results : result of getting multiple keys
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                         ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
+
+/**
+ * @brief: Batch Get locaL value
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: keys: multiple keys
+ * @param[in]: location : location info
+ * @param[in]: memAddr : kv cache address:[[k1_l1, k1_l2, k1_l3], [k2_l1, k2_l2, k2_l3], ...]
+ * @param[in]: memSize : length of kv cache address, same shape of kv cache address
+ * @param[in]: row : the row of kv cache address
+ * @param[in]: col : the column of kv cache address
+ * @param[out]: valueAddrs : used when return value is RET_CACHE_IN_DRAM,
+ * valueAddrs : address of the values corresponding to multiple keys, need free
+ * @param[out]: results : result of getting multiple keys
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,
+                          ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                          uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
+
 
 #ifdef __cplusplus
 }
