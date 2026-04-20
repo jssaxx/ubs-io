@@ -102,7 +102,7 @@ public:
     BResult GetConvergence(GetRequest &req, GetResponse &rsp);
     BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
-    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, pid_t holder);
+    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);
@@ -135,6 +135,8 @@ public:
     BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp, GetRequest &req);
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx, GetRequest &req);
+    BResult BatchSingleWriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
+                                    std::vector<NetMrInfo> &rMrVec, BatchGetRequest *req);
     TraceDatabase GetTraceData();
 
     int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);

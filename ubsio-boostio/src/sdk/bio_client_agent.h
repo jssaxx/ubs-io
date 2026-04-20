@@ -131,7 +131,7 @@ public:
 
     BResult BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
 
-    BResult BatchGetLocal(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen);
+    void BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callback callback);
 
     BResult GetLocal(GetRequest &req, char *value, Callback callback);
 
