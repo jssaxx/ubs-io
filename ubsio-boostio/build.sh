@@ -118,7 +118,7 @@ else
     CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
-if [[ "$PROMETHEUS_FLAG" == 'ON' ]]; then
+if [[ "$PROMETHEUS_FLAG" == "ON" ]]; then
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=ON "
 else
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
@@ -139,7 +139,7 @@ $BUILD_CMD || {
 	  exit 1
 }
 cd ${PROJ_DIR}/dist
-if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
+if [[ "$PROMETHEUS_FLAG" == "ON" ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 
@@ -155,8 +155,10 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi
 
-if [[ "$BUILD_UT" == 'ON' ]]; then
-    \cp 3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
+if [[ "$BUILD_UT" == "ON" ]]; then
+    if [[ ! -f "/usr/lib64/libboundscheck.so" ]]; then
+        \cp 3rdparty/libboundscheck/lib/libboundscheck.so bio/lib/.
+    fi
 fi
 
 rm -rf boostio
