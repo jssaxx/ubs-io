@@ -476,10 +476,10 @@ static ssize_t PwriteLargeVecInner(int fd, uint64_t inode, BufVec &bufVec, off_t
             return written > 0 ? static_cast<ssize_t>(written) : -1;
         }
 
-        auto ret = SubmitLargeWriteRequest(fd, inode, copyLen, offset + static_cast<off_t>(written), spaceInfo);
-        if (UNLIKELY(ret < 0)) {
-            return written > 0 ? static_cast<ssize_t>(written) : -1;
-        }
+        // auto ret = SubmitLargeWriteRequest(fd, inode, copyLen, offset + static_cast<off_t>(written), spaceInfo);
+        // if (UNLIKELY(ret < 0)) {
+        //     return written > 0 ? static_cast<ssize_t>(written) : -1;
+        // }
         written += copyLen;
     }
 

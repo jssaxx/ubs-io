@@ -47,9 +47,6 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
                 CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;
             }
-            size_t oldCopyBytes = copyBytes;
-            size_t oldInnerOffset = innerOffset;
-            size_t oldTotalOffset = totalOffset;
             copyBytes += bytes;
             innerOffset += bytes;
             if (SIZE_MAX - totalOffset < bytes) {
