@@ -988,6 +988,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         bool isGetLocal = IsExistLocalCopy(ptEntry);
         nodes[i] = isGetLocal ? mLocalNid.VNodeId() : ptEntry.masterNodeId;
         if (planSend.find(nodes[i]) == planSend.end()) {
+
             planSend.emplace(std::pair<uint16_t, BatchGetPlan>(nodes[i],
                                                                {1, 0, 0, nullptr}));
         } else {
@@ -1041,7 +1042,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         param.valuesAddr[i] = address;
         auto& plan = planSend[nodes[i]];
         plan.req->keysInfo[plan.index].address = address;
-        plan.req->keysInfo[plan.index].mrKey = mDataMsgMemMr->GetLKey();
+        plan.req->keysInfo[plan.index].mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();;
         plan.req->keysInfo[plan.index].addressOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
         CopyKey(plan.req->keysInfo[plan.index].key, param.keys[i], KEY_MAX_SIZE);
         plan.req->keysInfo[plan.index].offset = param.offsets[i];

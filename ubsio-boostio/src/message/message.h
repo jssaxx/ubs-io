@@ -348,12 +348,14 @@ typedef struct {
     GetKeyInfo keysInfo[0];
 } BatchGetRequest;
 
-typedef struct {
+struct BatchGetPlan {
     uint32_t count;
     uint32_t index = 0;
     uint32_t reqLen = 0;
     BatchGetRequest *req = nullptr;
-} BatchGetPlan;
+    BatchGetPlan(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam, BatchGetRequest *reqParam) :
+        count(countParam), index(indexParam), reqLen(reqLenParam), req(reqParam) {}
+};
 
 typedef struct {
     uint64_t realLengths[KEY_MAX_COUNT];
