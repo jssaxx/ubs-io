@@ -472,7 +472,7 @@ int32_t ViewCalcBuildPreCheck(CalcCore *calc, uint16_t *index, PtEntry *ptEntry,
         diskId = ptEntry->copyList[*index + calc->copyNum].diskId;
         *index = *index + calc->copyNum;
     }
-    if (ptEntry->masterNodeId == nodeId && ptEntry->masterDiskId == diskId) {
+    if (calc->copyNum != 1 && ptEntry->masterNodeId == nodeId && ptEntry->masterDiskId == diskId) {
         return CM_OK;
     }
     if (nodeId == NODE_ID_INVALID || diskId == DISK_ID_INVALID) {
