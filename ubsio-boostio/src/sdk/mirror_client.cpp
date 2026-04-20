@@ -988,8 +988,8 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         bool isGetLocal = IsExistLocalCopy(ptEntry);
         nodes[i] = isGetLocal ? mLocalNid.VNodeId() : ptEntry.masterNodeId;
         if (planSend.find(nodes[i]) == planSend.end()) {
-            BatchGetPlan plan = { 1, 0, 0, nullptr };
-            planSend.emplace(std::pair<uint16_t, BatchGetPlan>(nodes[i], plan));
+            planSend.emplace(std::pair<uint16_t, BatchGetPlan>(nodes[i],
+                                                               {1, 0, 0, nullptr}));
         } else {
             planSend.find(nodes[i])->second.count++;
         }
