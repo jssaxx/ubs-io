@@ -17,7 +17,6 @@
 #include "bio_trace.h"
 #include "bio_client_log.h"
 #include "bio_client_net.h"
-#include "bio_monotonic.h"
 #include "message.h"
 #include "message_op.h"
 #include "interceptor_server.h"
@@ -46,30 +45,6 @@ void CleanupDataMsgMemItem(uint32_t pid, DataMsgMemItem &item)
     }
 }
 
-struct ReadServerStats {
-    uint64_t count = 0;
-    uint64_t hookUs = 0;
-    uint64_t replyUs = 0;
-    uint64_t totalUs = 0;
-};
-
-static thread_local ReadServerStats gSmallReadStats;
-static thread_local ReadServerStats gLargeReadStats;
-
-static void RecordServerReadStats(const char *tag, ReadServerStats &stats, uint64_t hookUs, uint64_t replyUs,
-                                  uint64_t totalUs)
-{
-    stats.count++;
-    stats.hookUs += hookUs;
-    stats.replyUs += replyUs;
-    stats.totalUs += totalUs;
-    if (stats.count >= 1000) {
-        CLIENT_LOG_INFO(tag << " avg latency(us) over " << stats.count <<
-                            " io: hook=" << stats.hookUs / stats.count <<
-                            " reply=" << stats.replyUs / stats.count <<
-                            " total=" << stats.totalUs / stats.count);
-        stats = {};
-    }
 }
 }
 
@@ -143,7 +118,6 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
         req->nbytes << " fd:" << req->fd);
 
     BIO_TRACE_START(INTERCEPTOR_SMALL_READ);
-    auto t0 = Monotonic::TimeNs();
     uint8_t respBuf[sizeof(InterceptorPreadOut) + MAX_SMALL_WRITE_SIZE] = {};
     auto resp = reinterpret_cast<InterceptorPreadOut *>(respBuf);
 
@@ -151,7 +125,6 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     BIO_TRACE_START(INTERCEPTOR_READ_HOOK);
     auto ret = BioReadHook(req->inode, resp->data, req->nbytes, req->offset, &readLen);
     BIO_TRACE_END(INTERCEPTOR_READ_HOOK, ret);
-    auto t1 = Monotonic::TimeNs();
     if (UNLIKELY(ret != 0)) {
         CLIENT_LOG_ERROR("Read hook failed, inode:" << req->inode << " offset:" << req->offset << " len:" <<
             req->nbytes << " fd:" << req->fd << ", readLen:" << readLen << ", ret:" << ret << ".");
@@ -162,9 +135,6 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
 
     resp->dataLen = static_cast<uint64_t>(readLen);
     BIO_TRACE_END(INTERCEPTOR_SMALL_READ, 0);
-    auto t2 = Monotonic::TimeNs();
-    RecordServerReadStats("HandleInterceptorRead", gSmallReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t2 - t0) / 1000);
 
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(resp),
         sizeof(InterceptorPreadOut) + readLen);
@@ -447,12 +417,10 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    auto t0 = Monotonic::TimeNs();
     int readLen = 0;
     BIO_TRACE_START(INTERCEPTOR_READ_HOOK);
     int ret = BioReadHook(req->inode, reinterpret_cast<char *>(shmAddr), req->nbytes, req->offset, &readLen);
     BIO_TRACE_END(INTERCEPTOR_READ_HOOK, ret);
-    auto t1 = Monotonic::TimeNs();
     if (UNLIKELY(ret != 0)) {
         CLIENT_LOG_ERROR("BioReadHook failed, ret:" << ret << ", readLen:" << readLen << ".");
         InterceptorLargePreadOut resp;
@@ -466,9 +434,6 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
     InterceptorLargePreadOut resp;
     resp.ret = 0;
     resp.dataLen = static_cast<uint64_t>(readLen);
-    auto t2 = Monotonic::TimeNs();
-    RecordServerReadStats("HandleInterceptorLargeRead", gLargeReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t2 - t0) / 1000);
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorLargePreadOut));
     return BIO_OK;

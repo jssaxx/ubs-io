@@ -43,14 +43,15 @@ struct CachedWriteBlock {
         }
     }
 };
+}
 
-static thread_local CachedWriteBlock g_CachedWriteBlock;
+static thread_local CachedWriteBlock g_cachedWriteBlock;
 
 static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool &fromCache)
 {
-    if (g_CachedWriteBlock.address != 0) {
-        shmAddr = g_CachedWriteBlock.address;
-        mrOffset = g_CachedWriteBlock.mrOffset;
+    if (g_cachedWriteBlock.address != 0) {
+        shmAddr = g_cachedWriteBlock.address;
+        mrOffset = g_cachedWriteBlock.mrOffset;
         fromCache = true;
         return true;
     }
@@ -67,8 +68,8 @@ static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool 
 
 static void CacheLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset)
 {
-    g_CachedWriteBlock.address = shmAddr;
-    g_CachedWriteBlock.mrOffset = mrOffset;
+    g_cachedWriteBlock.address = shmAddr;
+    g_cachedWriteBlock.mrOffset = mrOffset;
 }
 
 static void ReleaseLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset, bool fromCache)
@@ -87,38 +88,6 @@ static char *GetSmallWriteScratch(size_t reqLen)
         scratch.resize(reqLen);
     }
     return scratch.data();
-}
-
-struct ReadLatencyStats {
-    uint64_t count = 0;
-    uint64_t allocUs = 0;
-    uint64_t ipcUs = 0;
-    uint64_t copyUs = 0;
-    uint64_t totalUs = 0;
-};
-
-static thread_local ReadLatencyStats gSmallReadStats;
-static thread_local ReadLatencyStats gSmallReadVecStats;
-static thread_local ReadLatencyStats gLargeReadStats;
-static thread_local ReadLatencyStats gLargeReadVecStats;
-
-static void RecordReadLatency(const char *tag, ReadLatencyStats &stats, uint64_t allocUs, uint64_t ipcUs,
-    uint64_t copyUs, uint64_t totalUs)
-{
-    stats.count++;
-    stats.allocUs += allocUs;
-    stats.ipcUs += ipcUs;
-    stats.copyUs += copyUs;
-    stats.totalUs += totalUs;
-    if (stats.count >= 1000) {
-        CLOG_ERROR(tag << " avg latency(us) over " << stats.count <<
-            " io: alloc=" << stats.allocUs / stats.count <<
-            " ipc=" << stats.ipcUs / stats.count <<
-            " copy=" << stats.copyUs / stats.count <<
-            " total=" << stats.totalUs / stats.count);
-        stats = {};
-    }
-}
 }
 
 ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offset)
@@ -167,7 +136,6 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
     request.offset = offset;
     request.nbytes = count;
     request.startTime = Monotonic::TimeNs();
-    auto t0 = Monotonic::TimeNs();
 
     InterceptorPreadOut *resp = nullptr;
     uint64_t rspLen = 0;
@@ -178,7 +146,6 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
             request.nbytes << ".");
         return -1;
     }
-    auto t1 = Monotonic::TimeNs();
 
     const uint64_t headerSize = sizeof(InterceptorPreadOut);
     if (rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
@@ -199,10 +166,7 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
         return -1;
     }
 
-    auto t2 = Monotonic::TimeNs();
     auto retLen = static_cast<ssize_t>(resp->dataLen);
-    RecordReadLatency("PreadSmallInner", gSmallReadStats, 0, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t2 - t0) / 1000);
     free(resp);
     resp = nullptr;
     return retLen;
@@ -222,7 +186,6 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
     request.offset = offset;
     request.nbytes = bufVec.size;
     request.startTime = Monotonic::TimeNs();
-    auto t0 = Monotonic::TimeNs();
 
     InterceptorPreadOut *resp = nullptr;
     uint64_t rspLen = 0;
@@ -233,7 +196,6 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
             request.nbytes << ".");
         return -1;
     }
-    auto t1 = Monotonic::TimeNs();
 
     const uint64_t headerSize = sizeof(InterceptorPreadOut);
     if (rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
@@ -250,7 +212,6 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
         return 0;
     }
 
-    auto t2 = Monotonic::TimeNs();
     ret = static_cast<int32_t>(bufVec.Write(reinterpret_cast<uint8_t *>(resp->data), resp->dataLen));
     if (UNLIKELY(ret < 0)) {
         free(resp);
@@ -258,10 +219,7 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
         return -1;
     }
 
-    auto t3 = Monotonic::TimeNs();
     auto retLen = static_cast<ssize_t>(resp->dataLen);
-    RecordReadLatency("PreadSmallInner(vec)", gSmallReadVecStats, 0, (t1 - t0) / 1000, (t3 - t2) / 1000,
-        (t3 - t0) / 1000);
     free(resp);
     resp = nullptr;
     return retLen;
@@ -278,7 +236,6 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
-    auto t0 = Monotonic::TimeNs();
     uintptr_t shmAddr = 0;
     uint64_t mrOffset = 0;
     auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
@@ -286,7 +243,6 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
         CLOG_ERROR("PreadLargeInner: alloc shm block failed, ret:" << ret << ".");
         return -1;
     }
-    auto t1 = Monotonic::TimeNs();
 
     InterceptorLargePreadIn request;
     request.pid = static_cast<uint32_t>(getpid());
@@ -305,24 +261,23 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
-    auto t2 = Monotonic::TimeNs();
 
     if (resp.dataLen == 0) {
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        RecordReadLatency("PreadLargeInner", gLargeReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000, 0,
-            (t2 - t0) / 1000);
         return 0;
     }
 
     size_t copyLen = std::min(count, static_cast<size_t>(resp.dataLen));
-    memcpy(buf, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
-    auto t3 = Monotonic::TimeNs();
+    ret = memcpy_s(buf, count, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
+    if (UNLIKELY(ret != 0)) {
+        CLOG_ERROR("PreadLargeInner: memcpy_s failed, ret:" << ret << ".");
+        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
+        return -1;
+    }
 
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
     CLOG_DEBUG("PreadLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count <<
         ", dataLen:" << resp.dataLen << ".");
-    RecordReadLatency("PreadLargeInner", gLargeReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t3 - t2) / 1000, (t3 - t0) / 1000);
     return static_cast<ssize_t>(resp.dataLen);
 }
 
@@ -333,7 +288,6 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
         return -1;
     }
 
-    auto t0 = Monotonic::TimeNs();
     uintptr_t shmAddr = 0;
     uint64_t mrOffset = 0;
     auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
@@ -341,7 +295,6 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
         CLOG_ERROR("PreadLargeInner: alloc shm block failed, ret:" << ret << ".");
         return -1;
     }
-    auto t1 = Monotonic::TimeNs();
 
     InterceptorLargePreadIn request;
     request.pid = static_cast<uint32_t>(getpid());
@@ -360,17 +313,13 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return -1;
     }
-    auto t2 = Monotonic::TimeNs();
 
     if (resp.dataLen == 0) {
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        RecordReadLatency("PreadLargeInner(vec)", gLargeReadVecStats, (t1 - t0) / 1000, (t2 - t1) / 1000, 0,
-            (t2 - t0) / 1000);
         return 0;
     }
 
     ret = static_cast<int32_t>(bufVec.Write(reinterpret_cast<uint8_t *>(shmAddr), resp.dataLen));
-    auto t3 = Monotonic::TimeNs();
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
     if (UNLIKELY(ret < 0)) {
         return -1;
@@ -378,8 +327,6 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
 
     CLOG_DEBUG("PreadLargeInner(vec): success, fd:" << fd << ", offset:" << offset << ", count:" << bufVec.size <<
         ", dataLen:" << resp.dataLen << ".");
-    RecordReadLatency("PreadLargeInner(vec)", gLargeReadVecStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t3 - t2) / 1000, (t3 - t0) / 1000);
     return static_cast<ssize_t>(resp.dataLen);
 }
 
@@ -544,8 +491,6 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return CONTEXT.GetOperations()->write(fd, buf, count);
     }
 
-    auto t0 = Monotonic::TimeNs();
-
     uintptr_t shmAddr = 0;
     uint64_t mrOffset = 0;
     bool fromCache = false;
@@ -553,11 +498,12 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    auto t1 = Monotonic::TimeNs();
-
-    memcpy(reinterpret_cast<uint8_t *>(shmAddr), buf, count);
-
-    auto t2 = Monotonic::TimeNs();
+    ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), MAX_LARGE_WRITE_SIZE, buf, count);
+    if (UNLIKELY(ret != 0)) {
+        CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ".");
+        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
+        return -1;
+    }
 
     InterceptorLargePwriteIn writeReq;
     writeReq.pid = static_cast<uint32_t>(getpid());
@@ -570,46 +516,22 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
 
     InterceptorPwriteOut writeResp;
     auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
-            INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
+        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
     if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("PwriteLargeInner: large write failed, ret:" << ret << ".");
+        CLOG_ERROR("Send sync large write failed, ret:" << ret << ".");
+        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
+        return -1;
+    }
+    
+    if (UNLIKELY(writeResp.ret != 0)) {
+        CLOG_ERROR("large write failed, respRet:" << writeResp.ret << ".");
         ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
         return -1;
     }
 
-    auto t3 = Monotonic::TimeNs();
-
     CacheLargeWriteBlock(shmAddr, mrOffset);
     CLOG_DEBUG("PwriteLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
 
-    auto t4 = Monotonic::TimeNs();
-
-    static thread_local uint64_t sCount = 0;
-    static thread_local uint64_t sAllocUs = 0;
-    static thread_local uint64_t sMemcpyUs = 0;
-    static thread_local uint64_t sIpcUs = 0;
-    static thread_local uint64_t sReleaseUs = 0;
-    static thread_local uint64_t sTotalUs = 0;
-    sCount++;
-    sAllocUs += (t1 - t0) / NO_1000;
-    sMemcpyUs += (t2 - t1) / NO_1000;
-    sIpcUs += (t3 - t2) / NO_1000;
-    sReleaseUs += (t4 - t3) / NO_1000;
-    sTotalUs += (t4 - t0) / NO_1000;
-    if (sCount >= NO_1000) {
-        CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
-            " io: alloc=" << sAllocUs / sCount <<
-            " memcpy=" << sMemcpyUs / sCount <<
-            " ipc=" << sIpcUs / sCount <<
-            " release=" << sReleaseUs / sCount <<
-            " total=" << sTotalUs / sCount);
-        sCount = 0;
-        sAllocUs = 0;
-        sMemcpyUs = 0;
-        sIpcUs = 0;
-        sReleaseUs = 0;
-        sTotalUs = 0;
-    }
     return static_cast<ssize_t>(count);
 }
 
