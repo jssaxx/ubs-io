@@ -25,6 +25,54 @@
 using namespace ock::bio;
 using namespace ock::bio::net;
 
+namespace {
+void CleanupDataMsgMemItem(uint32_t pid, DataMsgMemItem &item)
+{
+    if (item.address != nullptr && item.size > 0) {
+        if (munmap(item.address, item.size) == -1) {
+            CLIENT_LOG_ERROR("Munmap data msg mem failed, pid:" << pid << ", error:" << strerror(errno) << ".");
+        }
+        item.address = nullptr;
+    }
+
+    if (item.shmFd >= 0) {
+        close(item.shmFd);
+        item.shmFd = -1;
+    }
+
+    if (pid != 0) {
+        std::string shmName = "/interceptor_mem_pool_" + std::to_string(pid);
+        shm_unlink(shmName.c_str());
+    }
+}
+
+struct ReadServerStats {
+    uint64_t count = 0;
+    uint64_t hookUs = 0;
+    uint64_t replyUs = 0;
+    uint64_t totalUs = 0;
+};
+
+static thread_local ReadServerStats gSmallReadStats;
+static thread_local ReadServerStats gLargeReadStats;
+
+static void RecordServerReadStats(const char *tag, ReadServerStats &stats, uint64_t hookUs, uint64_t replyUs,
+                                  uint64_t totalUs)
+{
+    stats.count++;
+    stats.hookUs += hookUs;
+    stats.replyUs += replyUs;
+    stats.totalUs += totalUs;
+    if (stats.count >= 1000) {
+        CLIENT_LOG_INFO(tag << " avg latency(us) over " << stats.count <<
+                            " io: hook=" << stats.hookUs / stats.count <<
+                            " reply=" << stats.replyUs / stats.count <<
+                            " total=" << stats.totalUs / stats.count);
+        stats = {};
+    }
+}
+}
+
 InterceptorServer::~InterceptorServer()
 {
     ReleaseAllDataMsgMemItems();
