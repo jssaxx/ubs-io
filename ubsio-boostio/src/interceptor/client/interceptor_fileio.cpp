@@ -498,7 +498,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
-    ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), MAX_LARGE_WRITE_SIZE, buf, count);
+    auto ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), MAX_LARGE_WRITE_SIZE, buf, count);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PwriteLargeInner: memcpy_s failed, ret:" << ret << ".");
         ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
@@ -515,7 +515,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     writeReq.startTime = Monotonic::TimeNs();
 
     InterceptorPwriteOut writeResp;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
+    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
         INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("Send sync large write failed, ret:" << ret << ".");
