@@ -53,8 +53,8 @@ struct ReadServerStats {
     uint64_t totalUs = 0;
 };
 
-static thread_local ReadServerStats gSmallReadStats;
-static thread_local ReadServerStats gLargeReadStats;
+static thread_local ReadServerStats g_smallReadStats;
+static thread_local ReadServerStats g_largeReadStats;
 
 static void RecordServerReadStats(const char *tag, ReadServerStats &stats, uint64_t hookUs, uint64_t replyUs,
                                   uint64_t totalUs)
@@ -63,7 +63,7 @@ static void RecordServerReadStats(const char *tag, ReadServerStats &stats, uint6
     stats.hookUs += hookUs;
     stats.replyUs += replyUs;
     stats.totalUs += totalUs;
-    if (stats.count >= 1000) {
+    if (stats.count >= NO_1000) {
         CLIENT_LOG_INFO(tag << " avg latency(us) over " << stats.count <<
                             " io: hook=" << stats.hookUs / stats.count <<
                             " reply=" << stats.replyUs / stats.count <<
@@ -163,8 +163,8 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     resp->dataLen = static_cast<uint64_t>(readLen);
     BIO_TRACE_END(INTERCEPTOR_SMALL_READ, 0);
     auto t2 = Monotonic::TimeNs();
-    RecordServerReadStats("HandleInterceptorRead", gSmallReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t2 - t0) / 1000);
+    RecordServerReadStats("HandleInterceptorRead", g_smallReadStats, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000,
+        (t2 - t0) / NO_1000);
 
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(resp),
         sizeof(InterceptorPreadOut) + readLen);
@@ -467,8 +467,8 @@ BResult InterceptorServer::HandleInterceptorLargeRead(ServiceContext &ctx)
     resp.ret = 0;
     resp.dataLen = static_cast<uint64_t>(readLen);
     auto t2 = Monotonic::TimeNs();
-    RecordServerReadStats("HandleInterceptorLargeRead", gLargeReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t2 - t0) / 1000);
+    RecordServerReadStats("HandleInterceptorLargeRead", g_largeReadStats, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000,
+        (t2 - t0) / NO_1000);
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp),
         sizeof(InterceptorLargePreadOut));
     return BIO_OK;

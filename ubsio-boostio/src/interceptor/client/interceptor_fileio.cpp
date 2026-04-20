@@ -44,13 +44,13 @@ struct CachedWriteBlock {
     }
 };
 
-static thread_local CachedWriteBlock g_CachedWriteBlock;
+static thread_local CachedWriteBlock g_cachedWriteBlock;
 
 static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool &fromCache)
 {
-    if (g_CachedWriteBlock.address != 0) {
-        shmAddr = g_CachedWriteBlock.address;
-        mrOffset = g_CachedWriteBlock.mrOffset;
+    if (g_cachedWriteBlock.address != 0) {
+        shmAddr = g_cachedWriteBlock.address;
+        mrOffset = g_cachedWriteBlock.mrOffset;
         fromCache = true;
         return true;
     }
@@ -67,8 +67,8 @@ static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool 
 
 static void CacheLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset)
 {
-    g_CachedWriteBlock.address = shmAddr;
-    g_CachedWriteBlock.mrOffset = mrOffset;
+    g_cachedWriteBlock.address = shmAddr;
+    g_cachedWriteBlock.mrOffset = mrOffset;
 }
 
 static void ReleaseLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset, bool fromCache)
@@ -97,10 +97,10 @@ struct ReadLatencyStats {
     uint64_t totalUs = 0;
 };
 
-static thread_local ReadLatencyStats gSmallReadStats;
-static thread_local ReadLatencyStats gSmallReadVecStats;
-static thread_local ReadLatencyStats gLargeReadStats;
-static thread_local ReadLatencyStats gLargeReadVecStats;
+static thread_local ReadLatencyStats g_smallReadStats;
+static thread_local ReadLatencyStats g_smallReadVecStats;
+static thread_local ReadLatencyStats g_largeReadStats;
+static thread_local ReadLatencyStats g_largeReadVecStats;
 
 static void RecordReadLatency(const char *tag, ReadLatencyStats &stats, uint64_t allocUs, uint64_t ipcUs,
     uint64_t copyUs, uint64_t totalUs)
@@ -110,7 +110,7 @@ static void RecordReadLatency(const char *tag, ReadLatencyStats &stats, uint64_t
     stats.ipcUs += ipcUs;
     stats.copyUs += copyUs;
     stats.totalUs += totalUs;
-    if (stats.count >= 1000) {
+    if (stats.count >= NO_1000) {
         CLOG_ERROR(tag << " avg latency(us) over " << stats.count <<
             " io: alloc=" << stats.allocUs / stats.count <<
             " ipc=" << stats.ipcUs / stats.count <<
@@ -201,8 +201,8 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
 
     auto t2 = Monotonic::TimeNs();
     auto retLen = static_cast<ssize_t>(resp->dataLen);
-    RecordReadLatency("PreadSmallInner", gSmallReadStats, 0, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t2 - t0) / 1000);
+    RecordReadLatency("PreadSmallInner", g_smallReadStats, 0, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000,
+        (t2 - t0) / NO_1000);
     free(resp);
     resp = nullptr;
     return retLen;
@@ -260,8 +260,8 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
 
     auto t3 = Monotonic::TimeNs();
     auto retLen = static_cast<ssize_t>(resp->dataLen);
-    RecordReadLatency("PreadSmallInner(vec)", gSmallReadVecStats, 0, (t1 - t0) / 1000, (t3 - t2) / 1000,
-        (t3 - t0) / 1000);
+    RecordReadLatency("PreadSmallInner(vec)", g_smallReadVecStats, 0, (t1 - t0) / NO_1000, (t3 - t2) / NO_1000,
+        (t3 - t0) / NO_1000);
     free(resp);
     resp = nullptr;
     return retLen;
@@ -309,8 +309,8 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
 
     if (resp.dataLen == 0) {
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        RecordReadLatency("PreadLargeInner", gLargeReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000, 0,
-            (t2 - t0) / 1000);
+        RecordReadLatency("PreadLargeInner", g_largeReadStats, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000, 0,
+            (t2 - t0) / NO_1000);
         return 0;
     }
 
@@ -321,8 +321,8 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
     CLOG_DEBUG("PreadLargeInner: success, fd:" << fd << ", offset:" << offset << ", count:" << count <<
         ", dataLen:" << resp.dataLen << ".");
-    RecordReadLatency("PreadLargeInner", gLargeReadStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t3 - t2) / 1000, (t3 - t0) / 1000);
+    RecordReadLatency("PreadLargeInner", g_largeReadStats, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000,
+        (t3 - t2) / NO_1000, (t3 - t0) / NO_1000);
     return static_cast<ssize_t>(resp.dataLen);
 }
 
@@ -364,8 +364,8 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
 
     if (resp.dataLen == 0) {
         InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        RecordReadLatency("PreadLargeInner(vec)", gLargeReadVecStats, (t1 - t0) / 1000, (t2 - t1) / 1000, 0,
-            (t2 - t0) / 1000);
+        RecordReadLatency("PreadLargeInner(vec)", g_largeReadVecStats, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000, 0,
+            (t2 - t0) / NO_1000);
         return 0;
     }
 
@@ -378,8 +378,8 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
 
     CLOG_DEBUG("PreadLargeInner(vec): success, fd:" << fd << ", offset:" << offset << ", count:" << bufVec.size <<
         ", dataLen:" << resp.dataLen << ".");
-    RecordReadLatency("PreadLargeInner(vec)", gLargeReadVecStats, (t1 - t0) / 1000, (t2 - t1) / 1000,
-        (t3 - t2) / 1000, (t3 - t0) / 1000);
+    RecordReadLatency("PreadLargeInner(vec)", g_largeReadVecStats, (t1 - t0) / NO_1000, (t2 - t1) / NO_1000,
+        (t3 - t2) / NO_1000, (t3 - t0) / NO_1000);
     return static_cast<ssize_t>(resp.dataLen);
 }
 
