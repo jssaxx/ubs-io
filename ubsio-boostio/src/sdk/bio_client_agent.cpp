@@ -109,23 +109,23 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((getTimeOut = reinterpret_cast<GetBioServertimeOutFuncPtr>
-    (LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
+        (LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getScene = reinterpret_cast<GetBioServerSceneFuncPtr>
-    (LoadFunction("GetNegoWorkScene"))) == nullptr) {
+        (LoadFunction("GetNegoWorkScene"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getAlignSize = reinterpret_cast<GetBioServerAlignSizeFuncPtr>
-    (LoadFunction("GetNegoWorkIoAlignSize"))) == nullptr) {
+        (LoadFunction("GetNegoWorkIoAlignSize"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getScrapeIntervalSec = reinterpret_cast<GetBioServerScrapeIntervalSecFuncPtr>
-    (LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
+        (LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getWcacheMemEvictLevel = reinterpret_cast<GetBioServerWcacheMemEvictLevelFuncPtr>
-    (LoadFunction("GetWcacheMemEvictLevel"))) == nullptr) {
+        (LoadFunction("GetWcacheMemEvictLevel"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {

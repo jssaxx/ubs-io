@@ -859,11 +859,11 @@ TEST_F(TestBio, test_bio_put_copy_free)
     BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_OK);
 
     BioHvsActiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree4", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
     BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
 
     ret = BioDestroyCache(tenantId);

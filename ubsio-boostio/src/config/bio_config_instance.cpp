@@ -176,7 +176,7 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
         mNetConfig.protocol = 0;
     } else if (protocol == "tcp") {
         mNetConfig.protocol = 1;
-	} else if (protocol == "ub") {
+    } else if (protocol == "ub") {
         mNetConfig.protocol = NO_7;
     } else {
         LOG_ERROR("Invalid configuration with protocol items: " << protocol);
@@ -310,8 +310,8 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
         mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
     }
 
-    if (mDaemonConfig.diskCaps.size() == 0) {
-		mDaemonConfig.diskCaps.emplace_back(0);
+    if (mDaemonConfig.diskCaps.empty()) {
+        mDaemonConfig.diskCaps.emplace_back(0);
         return BIO_OK;
     }
 
