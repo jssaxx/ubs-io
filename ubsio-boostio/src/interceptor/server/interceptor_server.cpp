@@ -402,7 +402,8 @@ BResult InterceptorServer::HandleInterceptorLargeWrite(ServiceContext &ctx)
     }
 
     BIO_TRACE_START(INTERCEPTOR_WRITE_HOOK);
-    int32_t writeRet = static_cast<int32_t>(BioWriteHook(req->inode, reinterpret_cast<char *>(srcAddr), req->nbytes, req->offset, 0ULL));
+    int32_t writeRet = static_cast<int32_t>(BioWriteHook(req->inode, reinterpret_cast<char *>(srcAddr), req->nbytes,
+                                                         req->offset, 0ULL));
     BIO_TRACE_END(INTERCEPTOR_WRITE_HOOK, writeRet);
     if (UNLIKELY(writeRet != 0)) {
         InterceptorPwriteOut resp;

@@ -39,10 +39,7 @@ public:
         LOG_LEVEL_BUTT
     };
 
-    InterceptorLog()
-    {
-        minLogLevel = ParseLogLevelFromEnv();
-    }
+    InterceptorLog() : minLogLevel(ParseLogLevelFromEnv()) {}
 
     ~InterceptorLog()
     {

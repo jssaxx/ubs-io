@@ -95,8 +95,8 @@ BResult InterceptorClientNetService::CreateDataMessageMem()
     req.comm.pid = mPid;
 
     InterceptorCreateDataMsgMemPoolResponse rsp;
-    auto ret = mNetEngine->SyncCall<InterceptorCreateDataMsgMemPoolRequest, InterceptorCreateDataMsgMemPoolResponse>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_CREATE_DATA_MSG_MEM_POOL, req, rsp);
+    auto ret = mNetEngine->SyncCall<InterceptorCreateDataMsgMemPoolRequest,
+        InterceptorCreateDataMsgMemPoolResponse>(INVALID_NID, BIO_OP_INTERCEPTOR_CREATE_DATA_MSG_MEM_POOL, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Send create data message mem pool request failed:" << ret << ".");
         return ret;
@@ -121,7 +121,7 @@ BResult InterceptorClientNetService::CreateDataMessageMem()
         return BIO_ERR;
     }
 
-    off_t offset = static_cast<off_t>(mShmOffset);
+    auto offset = static_cast<off_t>(mShmOffset);
     auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
     if (UNLIKELY(address == MAP_FAILED)) {
         CLOG_ERROR("Mmap shm size " << mShmLength << " offset " << offset << " failed, error:" << strerror(errno));

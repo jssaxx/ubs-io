@@ -44,13 +44,13 @@ struct CachedWriteBlock {
     }
 };
 
-static thread_local CachedWriteBlock gCachedWriteBlock;
+static thread_local CachedWriteBlock g_CachedWriteBlock;
 
 static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool &fromCache)
 {
-    if (gCachedWriteBlock.address != 0) {
-        shmAddr = gCachedWriteBlock.address;
-        mrOffset = gCachedWriteBlock.mrOffset;
+    if (g_CachedWriteBlock.address != 0) {
+        shmAddr = g_CachedWriteBlock.address;
+        mrOffset = g_CachedWriteBlock.mrOffset;
         fromCache = true;
         return true;
     }
@@ -67,8 +67,8 @@ static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool 
 
 static void CacheLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset)
 {
-    gCachedWriteBlock.address = shmAddr;
-    gCachedWriteBlock.mrOffset = mrOffset;
+    g_CachedWriteBlock.address = shmAddr;
+    g_CachedWriteBlock.mrOffset = mrOffset;
 }
 
 static void ReleaseLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset, bool fromCache)
@@ -569,8 +569,8 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     writeReq.startTime = Monotonic::TimeNs();
 
     InterceptorPwriteOut writeResp;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
+    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
+            INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
     if (UNLIKELY(ret != 0)) {
         CLOG_ERROR("PwriteLargeInner: large write failed, ret:" << ret << ".");
         ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
@@ -591,12 +591,12 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     static thread_local uint64_t sReleaseUs = 0;
     static thread_local uint64_t sTotalUs = 0;
     sCount++;
-    sAllocUs += (t1 - t0) / 1000;
-    sMemcpyUs += (t2 - t1) / 1000;
-    sIpcUs += (t3 - t2) / 1000;
-    sReleaseUs += (t4 - t3) / 1000;
-    sTotalUs += (t4 - t0) / 1000;
-    if (sCount >= 1000) {
+    sAllocUs += (t1 - t0) / NO_1000;
+    sMemcpyUs += (t2 - t1) / NO_1000;
+    sIpcUs += (t3 - t2) / NO_1000;
+    sReleaseUs += (t4 - t3) / NO_1000;
+    sTotalUs += (t4 - t0) / NO_1000;
+    if (sCount >= NO_1000) {
         CLOG_ERROR("PwriteLargeInner avg latency(us) over " << sCount <<
             " io: alloc=" << sAllocUs / sCount <<
             " memcpy=" << sMemcpyUs / sCount <<

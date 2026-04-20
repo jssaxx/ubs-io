@@ -117,7 +117,8 @@ BResult NetEngine::Start(const NetOptions &opt)
         }
     }
 
-    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA || opt.protocol == ServiceProtocol::UBC) {
+    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA ||
+        opt.protocol == ServiceProtocol::UBC) {
         BIO_TP_START(SDK_BIO_NET_START_RPC_FAIL, &result, BIO_INNER_ERR);
         result = StartRpcService(opt);
         BIO_TP_END;
