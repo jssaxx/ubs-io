@@ -331,22 +331,35 @@ typedef struct {
     char key[KEY_MAX_SIZE];
     uint64_t offset;
     uint64_t length;
+    uintptr_t address;
     uintptr_t addressOffset;
+    uint64_t mrKey;
     uint32_t size;
     uint16_t ptId;
+    uint64_t *realLength;
+    int32_t *result;
 } GetKeyInfo;
 
 typedef struct {
     uint32_t count;
     pid_t pid;
+    uint16_t srcNid;
     bool isConvDeploy;
     GetKeyInfo keysInfo[0];
 } BatchGetRequest;
 
 typedef struct {
+    uint32_t count;
+    uint32_t index = 0;
+    uint32_t reqLen = 0;
+    BatchGetRequest *req = nullptr;
+} BatchGetPlan;
+
+typedef struct {
     uint64_t realLengths[KEY_MAX_COUNT];
     int32_t results[KEY_MAX_COUNT];
     uint32_t count;
+    uint16_t nodeId;
 } BatchGetResponse;
 
 /* Stat */
