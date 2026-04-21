@@ -142,6 +142,14 @@ CResult Bio::CalculateLocation(uint64_t objectId, ObjLocation &location)
     return ToCResult(gClient->CalculateLocation(objectId, mAffinity, location));
 }
 
+void Bio::IsCachedLocal(const uint64_t **objectId, const uint32_t count, bool **result)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    ToCResult(gClient->IsCachedLocal(mAffinity, objectId, count, result));
+}
+
 CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjLocation &location)
 {
     if (UNLIKELY(!gClient->Ready())) {
@@ -903,6 +911,23 @@ CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *locat
     location->location[0] = outLocation.location[0];
     location->location[1] = outLocation.location[1];
     return ret;
+}
+
+void BioIsCachedLocal(uint64_t tenantId, const uint64_t **objectId, const uint32_t count, bool **result)
+{
+    if (UNLIKELY(objectId == nullptr || result == nullptr || count == 0)) {
+        return RET_CACHE_EPERM;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    bioInstance->IsCachedLocal(objectId, count, result);
 }
 
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space)

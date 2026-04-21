@@ -79,6 +79,7 @@ typedef void (*BioLoadCallback)(void *context, int32_t result);
 typedef void (*BioGetCallbackFunc)(void *context, int32_t result, uint32_t realLen);
 typedef void (*BioAsyncPutCallback)(void *context, int32_t result);
 
+
 typedef struct {
     char key[MAX_KEY_SIZE];
     uint32_t size;
@@ -262,6 +263,17 @@ CResult BioDestroyCache(uint64_t tenantId);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
+
+/**
+ * @brief: Calculate object location info
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: objectId:  objects id
+ * @param[in]: count: number of objects
+ * @param[out]: result: query result, true-cached local, false-cached remote
+ * @return: void
+ */
+void BioIsCachedLocal(uint64_t tenantId, const uint64_t **objectId, const uint32_t count, bool **result);
 
 /**
  * @brief: Put value

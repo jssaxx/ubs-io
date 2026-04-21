@@ -62,6 +62,15 @@ public:
     CResult CalculateLocation(uint64_t objectId, ObjLocation &location);
 
     /**
+    * @brief: Calculate object location info
+    *
+    * @param[in]: key: keys: multiple keys
+    * @param[out]: result: query result, true-cached local, false-cached remote
+    * @return: void
+    */
+    void IsCachedLocal(const char **keys, const uint32_t count, bool **result);
+
+    /**
      * @brief: Put value
      *
      * @param[in]: key: object key
