@@ -1,27 +1,49 @@
 # Usage Example
 ```
-import pykvc
+import pydfc
 
-ret = pykvc.initialize()
+ret = pydfc.initialize()
 assert(ret == 0)
 
 value = bytes(b"hello")
-ret = pykvc.put("key", value)
+ret = pydfc.put("key", value)
 assert(ret == 0)
 
-value1 = bytes(b"world")
-ret = pykvc.put("key1", value1)
+value = bytes(5)
+ret = pydfc.get("key", value)
+assert(ret == 0)
+print(value)
+
+ret = pydfc.exist("key")
 assert(ret == 0)
 
-keys = ["key", "key1"]
+ret = pydfc.delete("key")
+assert(ret == 0)
+
+length = pydfc.get_length("key")
+assert(length != 0)
+print(length)
+
+
+keys = ["key1", "key2", "key3"]
+values = [b"value1" * 1024, b"value2" * 2 * 1024, b"value3" * 3 * 1024]
+
+ret = pydfc.batch_put(keys, values)
+print(ret)
+
 ret = pydfc.batch_exist(keys)
 print(ret)
 
-values = [bytes(6 * 1024), bytes(2 * 6 * 1024)]
+values = [bytes(6 * 1024), bytes(2 * 6 * 1024), bytes(3 * 6 * 1024)]
 ret = pydfc.batch_get(keys, values)
 print(ret)
 
-value == values[0]
-value1 == values[1]
+lengths = pydfc.batch_get_length(keys)
+print(lengths) 
+
+ret = pydfc.batch_delete(keys)
+print(ret)
+
+pydfc.exit()
 
 ```

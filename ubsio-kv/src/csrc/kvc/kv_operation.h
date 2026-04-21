@@ -48,12 +48,21 @@ public:
 
     // kv operation
     int32_t KvPutData(const std::string &key, void *value, size_t len);
+    int32_t KvGetData(const std::string &key, void *value, size_t len);
+    int32_t KvDeleteKey(const std::string &key);
+    bool KvExistKey(const std::string &key);
+    int32_t KvGetLengthKey(const std::string &key, uint32_t &length);
+    int32_t BatchKvPutData(const std::vector<std::string> &key,
+                           std::vector<void *> &value,
+                           std::vector<size_t> &lengths,
+                           std::vector<int> &results);
     int32_t BatchKvGetData(const std::vector<std::string> &key,
                            void **bufs,
                            std::vector<size_t> &lengths,
                            std::vector<int> &results);
     int32_t BatchKvExistKey(const std::vector<std::string> &key, bool *results);
-    
+    int32_t BatchKvDeleteKey(const std::vector<std::string> &key, std::vector<int> &results);
+    int32_t BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths, std::vector<int> &results);    
     inline int32_t InitKvExecutor(void)
     {
         mKvExecutor = ExecutorService::Create(KV_THREAD_NUM, KV_QUEUE_SIZE);
