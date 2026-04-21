@@ -50,6 +50,11 @@ public:
     static ssize_t preadv64(int fd, const struct iovec *vector, int iovcnt, off64_t offset);
 
     static ssize_t Write(int fd, const void *buf, size_t nbytes);
+    static ssize_t Pwrite(int fd, const void *buf, size_t count, off_t offset);
+    static ssize_t Pwrite64(int fd, const void *buf, size_t count, off64_t offset);
+    static ssize_t Writev(int fd, const struct iovec *vector, int count);
+    static ssize_t pwritev(int fd, const struct iovec *vector, int count, off_t offset);
+    static ssize_t pwritev64(int fd, const struct iovec *vector, int count, off64_t offset);
 
 private:
     static int32_t FullPath(const char *nativePath, std::string &realPath);
@@ -66,8 +71,11 @@ private:
     static ssize_t PreadLargeInner(int fd, void *buf, size_t count, off_t offset);
     static ssize_t PreadLargeInner(int fd, BufVec &bufVec, off_t offset);
     static ssize_t PwriteInner(int fd, const void *buf, size_t count, off_t offset);
+    static ssize_t PwriteInner(int fd, BufVec &bufVec, off_t offset);
     static ssize_t PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset);
+    static ssize_t PwriteSmallInner(int fd, BufVec &bufVec, off_t offset);
     static ssize_t PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset);
+    static ssize_t PwriteLargeInner(int fd, BufVec &bufVec, off_t offset);
 };
 }
 }

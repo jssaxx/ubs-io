@@ -443,6 +443,17 @@ ssize_t ProxyOperations::PwriteInner(int fd, const void *buf, size_t count, off_
     return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
 }
 
+ssize_t ProxyOperations::PwriteInner(int fd, BufVec &bufVec, off_t offset)
+{
+    if (bufVec.size <= MAX_SMALL_WRITE_SIZE) {
+        return PwriteSmallInner(fd, bufVec, offset);
+    }
+    if (bufVec.size <= MAX_LARGE_WRITE_SIZE) {
+        return PwriteLargeInner(fd, bufVec, offset);
+    }
+    return CONTEXT.GetOperations()->pwritev64(fd, bufVec.iov, bufVec.count, offset);
+}
+
 ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset)
 {
     auto &file = CONTEXT.files.At(fd);
@@ -476,6 +487,40 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
 
     CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
     return static_cast<ssize_t>(count);
+}
+
+ssize_t ProxyOperations::PwriteSmallInner(int fd, BufVec &bufVec, off_t offset)
+{
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        return -1;
+    }
+
+    size_t reqLen = sizeof(InterceptorPwriteIn) + bufVec.size;
+    char *tmpPtr = GetSmallWriteScratch(reqLen);
+
+    InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
+    request->pid = static_cast<uint32_t>(getpid());
+    request->fd = fd;
+    request->inode = file->GetInode();
+    request->offset = offset;
+    request->nbytes = bufVec.size;
+    request->startTime = Monotonic::TimeNs();
+    auto ret = bufVec.Read(reinterpret_cast<uint8_t *>(request->data), bufVec.size);
+    if (UNLIKELY(ret < 0 || static_cast<size_t>(ret) != bufVec.size)) {
+        return -1;
+    }
+
+    InterceptorPwriteOut resp;
+    ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
+        BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
+    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
+        CLOG_ERROR("Send Sync Buff Write vec ret: " << ret << ", resp.ret:" << resp.ret << ", fd:" << fd <<
+            ", offset:" << offset << ", count:" << bufVec.size << ".");
+        return -1;
+    }
+
+    return static_cast<ssize_t>(bufVec.size);
 }
 
 ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
@@ -529,6 +574,54 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     return static_cast<ssize_t>(count);
 }
 
+ssize_t ProxyOperations::PwriteLargeInner(int fd, BufVec &bufVec, off_t offset)
+{
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        return -1;
+    }
+
+    uintptr_t shmAddr = 0;
+    uint64_t mrOffset = 0;
+    bool fromCache = false;
+    if (UNLIKELY(!AcquireLargeWriteBlock(shmAddr, mrOffset, fromCache))) {
+        return -1;
+    }
+
+    auto ret = bufVec.Read(reinterpret_cast<uint8_t *>(shmAddr), bufVec.size);
+    if (UNLIKELY(ret < 0 || static_cast<size_t>(ret) != bufVec.size)) {
+        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
+        return -1;
+    }
+
+    InterceptorLargePwriteIn writeReq;
+    writeReq.pid = static_cast<uint32_t>(getpid());
+    writeReq.fd = fd;
+    writeReq.inode = file->GetInode();
+    writeReq.offset = offset;
+    writeReq.nbytes = bufVec.size;
+    writeReq.mrOffset = mrOffset;
+    writeReq.startTime = Monotonic::TimeNs();
+
+    InterceptorPwriteOut writeResp;
+    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
+    if (UNLIKELY(ret != 0)) {
+        CLOG_ERROR("Send sync large write vec failed, ret:" << ret << ".");
+        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
+        return -1;
+    }
+
+    if (UNLIKELY(writeResp.ret != 0)) {
+        CLOG_ERROR("large write vec failed, respRet:" << writeResp.ret << ".");
+        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
+        return -1;
+    }
+
+    CacheLargeWriteBlock(shmAddr, mrOffset);
+    return static_cast<ssize_t>(bufVec.size);
+}
+
 ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
 {
     CLOG_DEBUG("Write fd:" << fd << ", count" << nbytes << ".");
@@ -550,5 +643,108 @@ ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
     }
 
     offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
+    return ret;
+}
+
+ssize_t ProxyOperations::Pwrite(int fd, const void *buf, size_t count, off_t offset)
+{
+    CLOG_DEBUG("Pwrite fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
+    auto &file = CONTEXT.files.At(fd);
+    if (file == nullptr) {
+        return CONTEXT.GetOperations()->pwrite(fd, buf, count, offset);
+    }
+
+    auto ret = PwriteInner(fd, buf, count, offset);
+    if (UNLIKELY(ret < 0)) {
+        errno = EIO;
+        return -1;
+    }
+    return ret;
+}
+
+ssize_t ProxyOperations::Pwrite64(int fd, const void *buf, size_t count, off64_t offset)
+{
+    CLOG_DEBUG("Pwrite64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
+    auto &file = CONTEXT.files.At(fd);
+    if (file == nullptr) {
+        return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
+    }
+
+    auto ret = PwriteInner(fd, buf, count, offset);
+    if (UNLIKELY(ret < 0)) {
+        errno = EIO;
+        return -1;
+    }
+    return ret;
+}
+
+ssize_t ProxyOperations::Writev(int fd, const struct iovec *vector, int count)
+{
+    CLOG_DEBUG("Writev fd:" << fd << ", count:" << count << ".");
+    auto &file = CONTEXT.files.At(fd);
+    if (file == nullptr) {
+        return CONTEXT.GetOperations()->writev(fd, vector, count);
+    }
+
+    off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
+    if (UNLIKELY(offset == -1)) {
+        errno = EIO;
+        return -1;
+    }
+
+    BufVec bufVec(vector, count);
+    if (UNLIKELY(bufVec.size == 0)) {
+        return -1;
+    }
+
+    auto ret = PwriteInner(fd, bufVec, offset);
+    if (UNLIKELY(ret < 0)) {
+        errno = EIO;
+        return -1;
+    }
+
+    offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
+    return ret;
+}
+
+ssize_t ProxyOperations::pwritev(int fd, const struct iovec *vector, int count, off_t offset)
+{
+    CLOG_DEBUG("pwritev fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
+    auto &file = CONTEXT.files.At(fd);
+    if (file == nullptr) {
+        return CONTEXT.GetOperations()->pwritev(fd, vector, count, offset);
+    }
+
+    BufVec bufVec(vector, count);
+    if (UNLIKELY(bufVec.size == 0)) {
+        return -1;
+    }
+
+    auto ret = PwriteInner(fd, bufVec, offset);
+    if (UNLIKELY(ret < 0)) {
+        errno = EIO;
+        return -1;
+    }
+    return ret;
+}
+
+ssize_t ProxyOperations::pwritev64(int fd, const struct iovec *vector, int count, off64_t offset)
+{
+    CLOG_DEBUG("pwritev64 fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
+    auto &file = CONTEXT.files.At(fd);
+    if (file == nullptr) {
+        return CONTEXT.GetOperations()->pwritev64(fd, vector, count, offset);
+    }
+
+    BufVec bufVec(vector, count);
+    if (UNLIKELY(bufVec.size == 0)) {
+        return -1;
+    }
+
+    auto ret = PwriteInner(fd, bufVec, offset);
+    if (UNLIKELY(ret < 0)) {
+        errno = EIO;
+        return -1;
+    }
     return ret;
 }
