@@ -34,7 +34,7 @@ void BioConfig::LoadDefaultConf()
     /* load net config for cm */
     /* don't allow empty */
     AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
+        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_512));
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
 

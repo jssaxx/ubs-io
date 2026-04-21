@@ -71,7 +71,7 @@ private:
 };
 using RunnablePtr = Ref<Runnable>;
 
-constexpr uint32_t ES_MAX_THR_NUM = 256;
+constexpr uint32_t ES_MAX_THR_NUM = 1024;
 
 class ExecutorService;
 using ExecutorServicePtr = Ref<ExecutorService>;
