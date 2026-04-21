@@ -71,6 +71,23 @@ static BResult ParseUInt16Env(const char *envName, uint16_t defaultValue, uint16
     return BIO_OK;
 }
 
+static std::string FormatWorkerGroupCpuIdsRange(const std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i != 0) {
+            oss << ",";
+        }
+        const auto &range = ranges[i];
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            oss << "-1";
+        } else {
+            oss << range.first << "-" << range.second;
+        }
+    }
+    return oss.str();
+}
+
 int32_t InterceptorClientNetService::StartNetService()
 {
     mNetEngine = MakeRef<NetEngine>();
@@ -89,18 +106,31 @@ int32_t InterceptorClientNetService::StartNetService()
     NetOptions netOptions;
     netOptions.role = Role::NET_CLIENT;
     netOptions.protocol = ServiceProtocol::SHM;
+    const char *connCountEnv = std::getenv("INTERCEPTOR_IPC_CONN_COUNT");
     ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_4, netOptions.connCount);
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed.");
         return ret;
     }
+    if (connCountEnv != nullptr && strlen(connCountEnv) > 0) {
+        CLOG_INFO("Apply INTERCEPTOR_IPC_CONN_COUNT success, value:" << netOptions.connCount << ".");
+    }
+
+    const char *busyLoopEnv = std::getenv("INTERCEPTOR_IPC_BUSY_LOOP");
     netOptions.isBusyLoop = ParseBoolEnv("INTERCEPTOR_IPC_BUSY_LOOP", false);
+    if (busyLoopEnv != nullptr && strlen(busyLoopEnv) > 0) {
+        CLOG_INFO("Apply INTERCEPTOR_IPC_BUSY_LOOP success, value:" <<
+            (netOptions.isBusyLoop ? "true" : "false") << ".");
+    }
+
     const char *cpuIdsEnv = std::getenv("INTERCEPTOR_IPC_CPUIDS");
     if (cpuIdsEnv != nullptr && strlen(cpuIdsEnv) > 0) {
         if (!ParseWorkerGroupCpuIdsRange(cpuIdsEnv, netOptions.workerGroupCpuIdsRange)) {
             CLOG_ERROR("Parse INTERCEPTOR_IPC_CPUIDS failed, value:" << cpuIdsEnv << ".");
             return BIO_INVALID_PARAM;
         }
+        CLOG_INFO("Apply INTERCEPTOR_IPC_CPUIDS success, value:" <<
+            FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
     }
     if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(netOptions.workerGroupCpuIdsRange, netOptions.connCount)) {
         CLOG_ERROR("INTERCEPTOR_IPC_CPUIDS not match INTERCEPTOR_IPC_CONN_COUNT, connCount:" <<
