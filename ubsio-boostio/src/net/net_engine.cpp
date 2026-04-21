@@ -418,8 +418,6 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
 
 BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
-    mIpcService->AddWorkerGroup(1, opt.handlerCount, opt.workerGroupCpuIdsRange[1]);
-
     UBSHcomHeartBeatOptions hbOpt;
     hbOpt.heartBeatIdleSec = NO_5;
     hbOpt.heartBeatProbeIntervalSec = 1;
@@ -749,10 +747,15 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
-void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, UBSHcomConnectOptions &op)
+void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, bool isCtrl, std::string &prefix,
+    UBSHcomConnectOptions &op)
 {
     op.linkCount = mOptions.connCount;
-    if (isCtrl) {
+    if (mode == ConnectMode::CONNECT_IPC) {
+        op.clientGroupId = WKR_GRP_INDEX_CTRL;
+        op.serverGroupId = WKR_GRP_INDEX_CTRL;
+        prefix = isCtrl ? CONN_PAYLOAD_PREFIX_CTRL : CONN_PAYLOAD_PREFIX_DATA;
+    } else if (isCtrl) {
         op.clientGroupId = WKR_GRP_INDEX_CTRL;
         op.serverGroupId = WKR_GRP_INDEX_CTRL;
         prefix = CONN_PAYLOAD_PREFIX_CTRL;
@@ -778,7 +781,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 
     UBSHcomConnectOptions options;
     std::string prefix;
-    FillConnectOption(info, isCtrlPanel, prefix, options);
+    FillConnectOption(mode, info, isCtrlPanel, prefix, options);
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         if (mode == ConnectMode::CONNECT_IPC) {

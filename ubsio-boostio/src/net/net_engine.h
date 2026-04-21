@@ -681,7 +681,8 @@ public:
         return req;
     }
 
-    void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, ock::hcom::UBSHcomConnectOptions &op);
+    void FillConnectOption(ConnectMode mode, ConnectInfo &info, bool isCtrl, std::string &prefix,
+        ock::hcom::UBSHcomConnectOptions &op);
     BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
 
     BResult InitCommMemAllocator();
