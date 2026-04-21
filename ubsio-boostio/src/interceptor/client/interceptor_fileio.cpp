@@ -406,7 +406,7 @@ ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
     return ret;
 }
 
-ssize_t ProxyOperations::preadv64(int fd, const struct iovec *vector, int iovcnt, off64_t offset)
+ssize_t ProxyOperations::Preadv64(int fd, const struct iovec *vector, int iovcnt, off64_t offset)
 {
     CLOG_DEBUG("preadv64 fd:" << fd << ", offset:" << offset << ", io count" << iovcnt << ".");
     auto &file = CONTEXT.files.At(fd);
@@ -707,7 +707,7 @@ ssize_t ProxyOperations::Writev(int fd, const struct iovec *vector, int count)
     return ret;
 }
 
-ssize_t ProxyOperations::pwritev(int fd, const struct iovec *vector, int count, off_t offset)
+ssize_t ProxyOperations::Pwritev(int fd, const struct iovec *vector, int count, off_t offset)
 {
     CLOG_DEBUG("pwritev fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
@@ -728,7 +728,7 @@ ssize_t ProxyOperations::pwritev(int fd, const struct iovec *vector, int count, 
     return ret;
 }
 
-ssize_t ProxyOperations::pwritev64(int fd, const struct iovec *vector, int count, off64_t offset)
+ssize_t ProxyOperations::Pwritev64(int fd, const struct iovec *vector, int count, off64_t offset)
 {
     CLOG_DEBUG("pwritev64 fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
     auto &file = CONTEXT.files.At(fd);

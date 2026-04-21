@@ -50,13 +50,13 @@ void ProxyOperations::FillInterceptorOps(InterceptorProxyOperations &ops)
     ops.readv = Readv;
     ops.pread = Pread;
     ops.pread64 = Pread64;
-    ops.preadv64 = preadv64;
+    ops.preadv64 = Preadv64;
     ops.write = Write;
     ops.pwrite = Pwrite;
     ops.pwrite64 = Pwrite64;
     ops.writev = Writev;
-    ops.pwritev = pwritev;
-    ops.pwritev64 = pwritev64;
+    ops.pwritev = Pwritev;
+    ops.pwritev64 = Pwritev64;
 }
 
 struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
