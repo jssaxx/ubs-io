@@ -781,13 +781,16 @@ BResult BioClientAgent::BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, 
     }
 }
 
-BResult BioClientAgent::BatchGetLocal(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen)
+void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callback callback)
 {
-    if (UNLIKELY(mMode == CONVERGENCE)) {
+    if (mMode == CONVERGENCE) {
         CLIENT_LOG_ERROR("Batch get does not support converged deployment.");
-        return BIO_INNER_ERR;
+        return;
     } else {
-        return SendBatchGetRequestLocal(req, results, realLengths, reqLen);
+        BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
+        net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_BATCH_GET,
+                                                     static_cast<void *>(req), reqLen, callback);
+        BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, BIO_OK);
     }
 }
 

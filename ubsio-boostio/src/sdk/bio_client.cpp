@@ -61,7 +61,7 @@ void BioClient::BioClientAgentExit()
     agent::BioClientAgent::Instance()->Exit();
 }
 
-BResult BioClient::BioClientNetPreInit(WorkerMode mode, const NetOptions netConf)
+BResult BioClient::BioClientNetPreInit(WorkerMode mode, NetOptions &netConf)
 {
     // 创建client net引擎实例, 并且执行前置初始化.
     mNetEngine = net::BioClientNet::Instance();

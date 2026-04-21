@@ -30,7 +30,7 @@ void BioConfig::LoadDefaultConf()
     /* don't allow empty */
     AddStrConf(NET_DATA_IP_MASK, VIpv4MaskValidator::Create(NET_DATA_IP_MASK.first, false));
     AddIntConf(NET_DATA_PORT, VIntRange::Create(NET_DATA_PORT.first, NO_7201, NO_7800));
-
+    AddIntConf(NET_SEGMENT_SIZE);
     /* load net config for cm */
     /* don't allow empty */
     AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
@@ -118,6 +118,7 @@ BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
 BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 {
     /* auto config cm port and ip mask */
+    mNetConfig.netSegmentSize = conf->GetInt(NET_SEGMENT_SIZE.first);
     mNetConfig.dataIpMask = conf->GetStr(NET_DATA_IP_MASK.first);
     mNetConfig.dataPort = conf->GetInt(NET_DATA_PORT.first);
 

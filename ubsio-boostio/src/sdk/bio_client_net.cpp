@@ -43,7 +43,7 @@ static void Log(int level, const char *msg)
     }
 }
 
-BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
+BResult BioClientNet::StartPre(WorkerMode mode, NetOptions &netConf)
 {
     mMode = mode;
     BResult ret = BIO_OK;
@@ -54,6 +54,9 @@ BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
         }
     } else { // 分离部署场景创建IPC服务.
         ret = StartIpcService(netConf);
+        if (ret == BIO_OK) {
+            netConf.netSegmentSize = mNetSegmentSize;
+        }
     }
     return ret;
 }
@@ -187,6 +190,7 @@ BResult BioClientNet::ShmInit()
         return BIO_INNER_ERR;
     }
 
+    mNetSegmentSize = rsp.netSegmentSize;
     mEnableHtrace = rsp.enableHtrace;
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
@@ -250,6 +254,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
 
     // 2. start ipc service, 固定配置4个worker，4条EP链接.
     NetOptions netOptions;
+    netOptions.netSegmentSize = NO_128 * NO_1024;
     netOptions.FillNetBaseConfigs(NO_4, NO_4, Role::NET_CLIENT, ServiceProtocol::SHM);
     netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
         netConf.privateKeyPath, netConf.privateKeyPassword, netConf.decrypterLibPath);
@@ -288,6 +293,7 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.protocol = protocol;
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;
+    netOptions.netSegmentSize = netConf.netSegmentSize;
     netOptions.enableTls = netConf.enableTls;
     netOptions.certificationPath = netConf.certificationPath;    /* certification path */
     netOptions.caCerPath = netConf.caCerPath;                    /* caCer path */

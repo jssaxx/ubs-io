@@ -348,7 +348,8 @@ private:
     BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
     BResult SendBatchGetKeyDiskAddrRequest(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
-    BResult SendBatchGetRequest(BatchGetRequest *req, int32_t *results, uint64_t *realLengths, uint32_t reqLen);
+    void BatchGetRemote(uint16_t nodeId, uint32_t reqLen, BatchGetRequest *req, Callback &callback);
+    BResult SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetPlan> &planSend);
     BResult GetShmDataCallBack(GetResponse *rsp, uint64_t &realLen, const GetRequest &req, char *value);
     BResult GetRpcDataCallBack(GetResponse *rsp, const GetRequest &req, char *value, uint64_t &realLen);
     BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, AsyncOpParam &opParam);
