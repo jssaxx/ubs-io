@@ -91,6 +91,24 @@ static bool CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(
     return true;
 }
 
+static std::string FormatWorkerGroupCpuIdsRangeForConfig(
+    const std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i != 0) {
+            oss << ",";
+        }
+        const auto &range = ranges[i];
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            oss << "-1";
+        } else {
+            oss << range.first << "-" << range.second;
+        }
+    }
+    return oss.str();
+}
+
 void BioConfig::LoadDefaultConf()
 {
     /* load net config for fs */
@@ -208,6 +226,9 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
             ", workers_count:" << mNetConfig.rpcDataWorkersCnt << ".");
         return BIO_ERR;
     }
+    LOG_INFO("Apply net rpc config success, workers_count:" << mNetConfig.rpcDataWorkersCnt <<
+        ", busy_polling_mode:" << (mNetConfig.isRpcBusyLoop ? "true" : "false") <<
+        ", cpuids:" << FormatWorkerGroupCpuIdsRangeForConfig(mNetConfig.rpcDataCpuIds) << ".");
 
     mNetConfig.isIpcBusyLoop = conf->GetStr(NET_IPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
@@ -217,6 +238,9 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
             ", workers_count:" << mNetConfig.ipcDataWorkersCnt << ".");
         return BIO_ERR;
     }
+    LOG_INFO("Apply net ipc config success, workers_count:" << mNetConfig.ipcDataWorkersCnt <<
+        ", busy_polling_mode:" << (mNetConfig.isIpcBusyLoop ? "true" : "false") <<
+        ", cpuids:" << FormatWorkerGroupCpuIdsRangeForConfig(mNetConfig.ipcDataCpuIds) << ".");
 
     mNetConfig.enableTls = conf->GetStr(NET_TLS_ENABLE_SWITCH.first) == "true";
     mNetConfig.tlsCaCertPath = conf->GetStr(NET_TLS_CA_CERT_PATH.first);
