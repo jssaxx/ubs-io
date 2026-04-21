@@ -29,6 +29,11 @@ extern "C" {
  */
 int32_t UbsioKvCacheInit(int32_t devId);
 
+ /** 
+  * @brief Exit UBS-IO KV Cache 
+  */ 
+ void UbsioKvCacheExit(void);
+
 /**
  * @brief Put data of object with key into UBS-IO KV Cache
  * This data operation default supports async
@@ -40,6 +45,38 @@ int32_t UbsioKvCacheInit(int32_t devId);
  * @return 0 if successful
  */
 int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flags);
+
+ /** 
+  * @brief Put multiple data objects into UBS-IO KV Cache 
+  * This data operation default supports async 
+  * 
+  * @param keys           [in] Array of keys for the data objects 
+  * @param keysCount      [in] Number of keys in the array 
+  * @param bufs           [in] Array of data buffers to be put 
+  * @param length         [in] Size of data buf in data buffers 
+  * @param results        [out] result of data to be put in data buffers 
+  * @param flags          [in] Optional flags, reserved 
+  * @return 0 if successful 
+  */ 
+ int32_t UbsioKvCacheBatchPut(const char **keys, 
+                              uint32_t keysCount, 
+                              void **bufs, 
+                              size_t *lengths, 
+                              int *results, 
+                              uint32_t flags);
+
+
+ /** 
+  * @brief Get data of object by key from UBS-IO KV Cache 
+  * This data operation default supports async 
+  * 
+  * @param key              [in] key of data, less than 256 
+  * @param buf              [in] data to be gotten 
+  * @param length           [in] data size 
+  * @param options          [in] options for get policy 
+  * @return 0 if successful 
+  */ 
+ int32_t UbsioKvCacheGet(const char *key, void *buf, size_t length, uint32_t flags);
 
 /**
  * @brief Get multiple data objects by keys from UBS-IO KV Cache
@@ -89,6 +126,15 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
                                    int *results,
                                    uint32_t flags);
 
+ /** 
+  * @brief Determine whether the key is within the UBS-IO KV Cache 
+  * 
+  * @param key              [in] key of data, less than 256 
+  * @param flags            [in] optional flags, reserved 
+  * @return 0 if successfully 
+  */ 
+ bool UbsioKvCacheExist(const char *key, uint32_t flags);
+
 /**
  * @brief Determine whether the list of keys is within the UBS-IO KV Cache
  *
@@ -98,6 +144,48 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
  * @return 0 if successfully
  */
 int32_t UbsioKvCacheBatchExist(const char **keys, uint32_t keysCount, bool *results, uint32_t flags);
+
+ /** 
+  * @brief Delete the object with key from UBS-IO KV Cache 
+  * 
+  * @param key              [in] key of data, less than 256 
+  * @param flags            [in] optional flags, reserved 
+  * @return  0 if successful 
+  */ 
+ int32_t UbsioKvCacheDelete(const char *key, uint32_t flags);
+
+ /** 
+  * @brief Delete multiple keys from the UBS-IO KV Cache 
+  * 
+  * @param keys             [in] List of keys to be deteled from the UBS-IO KV Cache 
+  * @param keysCount        [in] Count of keys 
+  * @param results          [out] Results of each delete operation 
+  * @param flags            [in] Flags for the operation 
+  * @return 0 if successfully, positive value if error happens 
+  */ 
+ int32_t UbsioKvCacheBatchDelete(const char **keys, uint32_t keysCount, int32_t *results, uint32_t flags);
+
+ /** 
+  * @brief Get the length of object 
+  * 
+  * @param key              [in]  key of data, less than 256 
+  * @param length           [out] size of data 
+  * @param flags            [in]  optional flags, reserved 
+  * @return  0 if successful 
+  */ 
+ int32_t UbsioKvCacheGetLength(const char *key, size_t *length, uint32_t flags);
+
+ /** 
+  * @brief Get multiple keys length from the UBS-IO KV Cache 
+  * 
+  * @param keys             [in] List of keys to be deteled from the UBS-IO KV Cache 
+  * @param keysCount        [in] Count of keys 
+  * @param lengths          [out] length of each get key 
+  * @param results          [out] Results of each get length operation 
+  * @param flags            [in] Flags for the operation 
+  * @return 0 if successfully, positive value if error happens 
+  */ 
+ int32_t UbsioKvCacheBatchGetLength(const char **keys, uint32_t keysCount, size_t *lengths, int32_t *results, uint32_t flags);
 
 /**
  * @brief Free shm address within the UBS-IO KV Cache

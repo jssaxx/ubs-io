@@ -9,5 +9,6 @@ current_path = os.path.abspath(__file__)
 current_dir = os.path.dirname(current_path)
 sys.path.append(current_dir)
 
-from .pykvc import (initialize, put, batch_get, batch_exist, 
+from .pykvc import (initialize, exit, put, get, exist, delete, get_length,
+                    batch_put, batch_get, batch_exist, batch_delete, batch_get_length,
                     nds_init, nds_uninit, nds_regmem, nds_unregmem, nds_read, nds_batch_read)
