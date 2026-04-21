@@ -119,6 +119,7 @@ struct NetOptions {
     std::string privateKeyPath;                          /* private key path */
     std::string privateKeyPassword;                      /* private key password */
     std::string decrypterLibPath;                        /* decrypter lib path */
+    std::vector<std::pair<uint32_t, uint32_t>> workerGroupCpuIdsRange; /* worker bind cpus */
 
     NetOptions() = default;
     ~NetOptions() = default;

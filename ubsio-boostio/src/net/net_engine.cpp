@@ -414,8 +414,7 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
 
 BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
-    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mIpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
+    mIpcService->AddWorkerGroup(1, opt.handlerCount, opt.workerGroupCpuIdsRange[1]);
 
     UBSHcomHeartBeatOptions hbOpt;
     hbOpt.heartBeatIdleSec = NO_5;
@@ -476,6 +475,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     }
 
     UBSHcomServiceOptions options;
+    options.workerGroupCpuIdsRange = opt.workerGroupCpuIdsRange[0];
     options.maxSendRecvDataSize = (NO_64 * NO_1024);
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;

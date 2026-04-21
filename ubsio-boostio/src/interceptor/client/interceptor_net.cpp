@@ -57,11 +57,12 @@ int32_t InterceptorClientNetService::StartNetService()
     }
 
     NetOptions netOptions;
-    netOptions.isBusyLoop = false;
+    netOptions.workerGroupCpuIdsRange = {{UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}}; // 环境变量设置
+    netOptions.isBusyLoop = false; // 环境变量设置
     netOptions.role = Role::NET_CLIENT;
     netOptions.protocol = ServiceProtocol::SHM;
-    netOptions.connCount = NO_4;
-    netOptions.handlerCount = 1;
+    netOptions.connCount = NO_4; // 环境变量设置
+    netOptions.handlerCount = netOptions.connCount;
     ret = mNetEngine->Start(netOptions);
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Start ipc engine failed:" << ret << ".");
