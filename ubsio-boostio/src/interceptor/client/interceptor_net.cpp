@@ -108,7 +108,7 @@ int32_t InterceptorClientNetService::StartNetService()
     netOptions.protocol = ServiceProtocol::SHM;
     netOptions.workerGroupCpuIdsRange = DefaultWorkerGroupCpuIdsRange(IPC_WORKER_GROUP_CPU_RANGE_COUNT);
     const char *connCountEnv = std::getenv("INTERCEPTOR_IPC_CONN_COUNT");
-    ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_2, netOptions.connCount);
+    ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_1, netOptions.connCount);
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed.");
         return ret;
