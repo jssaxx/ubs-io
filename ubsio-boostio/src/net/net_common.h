@@ -14,6 +14,9 @@
 #define NET_COMMON_H
 
 #include <map>
+#include <vector>
+#include <string>
+#include <limits>
 #include <functional>
 #include <utility>
 
@@ -119,7 +122,9 @@ struct NetOptions {
     std::string privateKeyPath;                          /* private key path */
     std::string privateKeyPassword;                      /* private key password */
     std::string decrypterLibPath;                        /* decrypter lib path */
-    std::vector<std::pair<uint32_t, uint32_t>> workerGroupCpuIdsRange; /* worker bind cpus */
+    std::vector<std::pair<uint32_t, uint32_t>> workerGroupCpuIdsRange = {
+        { UINT32_MAX, UINT32_MAX }, { UINT32_MAX, UINT32_MAX }
+    }; /* worker bind cpus */
 
     NetOptions() = default;
     ~NetOptions() = default;
@@ -145,6 +150,73 @@ struct NetOptions {
         decrypterLibPath = decLibPath;
     }
 };
+
+constexpr size_t WORKER_GROUP_CPU_RANGE_COUNT = 2;
+
+inline std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange()
+{
+    return {{UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}};
+}
+
+inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    ranges = DefaultWorkerGroupCpuIdsRange();
+    if (value.empty() || value == "-1") {
+        return true;
+    }
+
+    std::vector<std::string> rangeStrs;
+    StrUtil::Split(value, ",", rangeStrs);
+    if (rangeStrs.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+        return false;
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> parsed;
+    parsed.reserve(rangeStrs.size());
+    for (const auto &rangeStr : rangeStrs) {
+        std::vector<std::string> startEnd;
+        StrUtil::Split(rangeStr, "-", startEnd);
+        if (startEnd.size() != NO_2) {
+            return false;
+        }
+
+        long start = 0;
+        long end = 0;
+        if (!StrUtil::StrToLong(startEnd[0], start) || !StrUtil::StrToLong(startEnd[1], end)) {
+            return false;
+        }
+        if (start < 0 || end < 0 || start > end ||
+            end > static_cast<long>(std::numeric_limits<uint32_t>::max())) {
+            return false;
+        }
+        parsed.emplace_back(static_cast<uint32_t>(start), static_cast<uint32_t>(end));
+    }
+
+    ranges = std::move(parsed);
+    return true;
+}
+
+inline bool CheckWorkerGroupCpuIdsRangeMatchConnCount(const std::vector<std::pair<uint32_t, uint32_t>> &ranges,
+    uint16_t connCount)
+{
+    if (ranges.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+        return false;
+    }
+
+    for (const auto &range : ranges) {
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            continue;
+        }
+        if (range.first > range.second) {
+            return false;
+        }
+        auto cpuCount = static_cast<uint64_t>(range.second) - static_cast<uint64_t>(range.first) + 1;
+        if (cpuCount != connCount) {
+            return false;
+        }
+    }
+    return true;
+}
 
 const std::string CONN_PAYLOAD_PREFIX_CTRL = "bio-ctrl-";
 const std::string CONN_PAYLOAD_PREFIX_DATA = "bio-data-";

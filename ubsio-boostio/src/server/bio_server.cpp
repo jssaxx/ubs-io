@@ -343,6 +343,7 @@ BResult BioServer::BioNetInit()
     netOptions.regShmMem = true;
     netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
     netOptions.connCount = netConfig.rpcDataWorkersCnt;
+    netOptions.workerGroupCpuIdsRange = netConfig.rpcDataCpuIds;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
     netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
     netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
@@ -358,6 +359,7 @@ BResult BioServer::BioNetInit()
     netOptions.protocol = ServiceProtocol::SHM;
     netOptions.handlerCount = netConfig.ipcDataWorkersCnt;
     netOptions.connCount = netConfig.ipcDataWorkersCnt;
+    netOptions.workerGroupCpuIdsRange = netConfig.ipcDataCpuIds;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
     netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
     netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */

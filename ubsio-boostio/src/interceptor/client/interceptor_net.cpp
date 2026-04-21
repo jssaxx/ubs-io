@@ -11,6 +11,9 @@
  */
 
 #include <utility>
+#include <limits>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -41,6 +44,33 @@ static void Log(int level, const char *msg)
     }
 }
 
+static bool ParseBoolEnv(const char *envName, bool defaultValue)
+{
+    const char *envValue = std::getenv(envName);
+    if (envValue == nullptr || strlen(envValue) == 0) {
+        return defaultValue;
+    }
+    return strcasecmp(envValue, "1") == 0 || strcasecmp(envValue, "true") == 0 ||
+           strcasecmp(envValue, "yes") == 0 || strcasecmp(envValue, "on") == 0;
+}
+
+static BResult ParseUInt16Env(const char *envName, uint16_t defaultValue, uint16_t &value)
+{
+    value = defaultValue;
+    const char *envValue = std::getenv(envName);
+    if (envValue == nullptr || strlen(envValue) == 0) {
+        return BIO_OK;
+    }
+
+    long parsed = 0;
+    if (!StrUtil::StrToLong(envValue, parsed) || parsed <= 0 ||
+        parsed > static_cast<long>(std::numeric_limits<uint16_t>::max())) {
+        return BIO_INVALID_PARAM;
+    }
+    value = static_cast<uint16_t>(parsed);
+    return BIO_OK;
+}
+
 int32_t InterceptorClientNetService::StartNetService()
 {
     mNetEngine = MakeRef<NetEngine>();
@@ -57,11 +87,26 @@ int32_t InterceptorClientNetService::StartNetService()
     }
 
     NetOptions netOptions;
-    netOptions.workerGroupCpuIdsRange = {{UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}}; // 环境变量设置
-    netOptions.isBusyLoop = false; // 环境变量设置
     netOptions.role = Role::NET_CLIENT;
     netOptions.protocol = ServiceProtocol::SHM;
-    netOptions.connCount = NO_4; // 环境变量设置
+    ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_4, netOptions.connCount);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed.");
+        return ret;
+    }
+    netOptions.isBusyLoop = ParseBoolEnv("INTERCEPTOR_IPC_BUSY_LOOP", false);
+    const char *cpuIdsEnv = std::getenv("INTERCEPTOR_IPC_CPUIDS");
+    if (cpuIdsEnv != nullptr && strlen(cpuIdsEnv) > 0) {
+        if (!ParseWorkerGroupCpuIdsRange(cpuIdsEnv, netOptions.workerGroupCpuIdsRange)) {
+            CLOG_ERROR("Parse INTERCEPTOR_IPC_CPUIDS failed, value:" << cpuIdsEnv << ".");
+            return BIO_INVALID_PARAM;
+        }
+    }
+    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(netOptions.workerGroupCpuIdsRange, netOptions.connCount)) {
+        CLOG_ERROR("INTERCEPTOR_IPC_CPUIDS not match INTERCEPTOR_IPC_CONN_COUNT, connCount:" <<
+            netOptions.connCount << ".");
+        return BIO_INVALID_PARAM;
+    }
     netOptions.handlerCount = netOptions.connCount;
     ret = mNetEngine->Start(netOptions);
     if (UNLIKELY(ret != BIO_OK)) {

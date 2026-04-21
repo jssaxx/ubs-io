@@ -110,6 +110,10 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
 BResult NetEngine::Start(const NetOptions &opt)
 {
     int32_t result = BIO_INNER_ERR;
+    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(opt.workerGroupCpuIdsRange, opt.connCount)) {
+        NET_LOG_ERROR("Worker cpu ids range not match connCount:" << opt.connCount << ".");
+        return BIO_INVALID_PARAM;
+    }
     if (opt.protocol == ServiceProtocol::SHM || opt.protocol == ServiceProtocol::UDS) {
         result = StartIpcService(opt);
         if (result != BIO_OK) {
@@ -522,8 +526,7 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
         return BIO_ERR;
     }
 
-    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mRpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
+    mRpcService->AddWorkerGroup(1, opt.handlerCount, opt.workerGroupCpuIdsRange[1]);
 
     UBSHcomHeartBeatOptions hbOpt;
     hbOpt.heartBeatIdleSec = NO_1;
@@ -579,6 +582,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     mOptions = opt;
     bool isOobSvr = opt.role != Role::NET_CLIENT;
     UBSHcomServiceOptions options;
+    options.workerGroupCpuIdsRange = opt.workerGroupCpuIdsRange[0];
     options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;

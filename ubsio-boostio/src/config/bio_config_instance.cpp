@@ -14,6 +14,7 @@
 #include "bio_log.h"
 #include "bio_ip_util.h"
 #include "bio_file_util.h"
+#include "net_common.h"
 
 namespace ock {
 namespace bio {
@@ -25,8 +26,10 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma||ub"));
     AddStrConf(NET_RPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_DATA_BUSY_POLL_MODE.first));
     AddIntConf(NET_RPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_RPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
+    AddStrConf(NET_RPC_DATA_CPUIDS);
     AddStrConf(NET_IPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_DATA_BUSY_POLL_MODE.first));
     AddIntConf(NET_IPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_IPC_DATA_WORKERS_COUNT.first, NO_1, NO_128));
+    AddStrConf(NET_IPC_DATA_CPUIDS);
     /* don't allow empty */
     AddStrConf(NET_DATA_IP_MASK, VIpv4MaskValidator::Create(NET_DATA_IP_MASK.first, false));
     AddIntConf(NET_DATA_PORT, VIntRange::Create(NET_DATA_PORT.first, NO_7201, NO_7800));
@@ -128,9 +131,21 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.isRpcBusyLoop = conf->GetStr(NET_RPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.rpcDataWorkersCnt = conf->GetInt(NET_RPC_DATA_WORKERS_COUNT.first);
+    if (!ParseWorkerGroupCpuIdsRange(conf->GetStr(NET_RPC_DATA_CPUIDS.first), mNetConfig.rpcDataCpuIds) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCount(mNetConfig.rpcDataCpuIds, mNetConfig.rpcDataWorkersCnt)) {
+        LOG_ERROR("Invalid net rpc cpuids config, cpuids:" << conf->GetStr(NET_RPC_DATA_CPUIDS.first) <<
+            ", workers_count:" << mNetConfig.rpcDataWorkersCnt << ".");
+        return BIO_ERR;
+    }
 
     mNetConfig.isIpcBusyLoop = conf->GetStr(NET_IPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
+    if (!ParseWorkerGroupCpuIdsRange(conf->GetStr(NET_IPC_DATA_CPUIDS.first), mNetConfig.ipcDataCpuIds) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCount(mNetConfig.ipcDataCpuIds, mNetConfig.ipcDataWorkersCnt)) {
+        LOG_ERROR("Invalid net ipc cpuids config, cpuids:" << conf->GetStr(NET_IPC_DATA_CPUIDS.first) <<
+            ", workers_count:" << mNetConfig.ipcDataWorkersCnt << ".");
+        return BIO_ERR;
+    }
 
     mNetConfig.enableTls = conf->GetStr(NET_TLS_ENABLE_SWITCH.first) == "true";
     mNetConfig.tlsCaCertPath = conf->GetStr(NET_TLS_CA_CERT_PATH.first);
