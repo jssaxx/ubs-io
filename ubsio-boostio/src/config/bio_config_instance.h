@@ -27,11 +27,11 @@ const auto NET_DATA_PROTOCOL = std::make_pair("bio.net.data.protocol", "tcp");
 const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.rpc.data.busy_polling_mode", "false");
 const auto NET_RPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.rpc.data.workers_count", 4);
 const auto NET_RPC_DATA_CPUIDS =
-    std::make_pair("bio.net.rpc.data.cpuids", "-1");
+    std::make_pair("bio.net.rpc.data.cpuids", "-1,-1");
 const auto NET_IPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.ipc.data.busy_polling_mode", "false");
 const auto NET_IPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.ipc.data.workers_count", 4);
 const auto NET_IPC_DATA_CPUIDS =
-    std::make_pair("bio.net.ipc.data.cpuids", "-1");
+    std::make_pair("bio.net.ipc.data.cpuids", "-1,-1");
 const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/24");
 const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);

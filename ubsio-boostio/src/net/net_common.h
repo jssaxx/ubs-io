@@ -161,7 +161,10 @@ inline std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange(
 inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<std::pair<uint32_t, uint32_t>> &ranges)
 {
     ranges = DefaultWorkerGroupCpuIdsRange();
-    if (value.empty() || value == "-1") {
+    if (value.empty()) {
+        return true;
+    }
+    if (value == "-1") {
         return true;
     }
 
@@ -174,6 +177,10 @@ inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<st
     std::vector<std::pair<uint32_t, uint32_t>> parsed;
     parsed.reserve(rangeStrs.size());
     for (const auto &rangeStr : rangeStrs) {
+        if (rangeStr == "-1") {
+            parsed.emplace_back(UINT32_MAX, UINT32_MAX);
+            continue;
+        }
         std::vector<std::string> startEnd;
         StrUtil::Split(rangeStr, "-", startEnd);
         if (startEnd.size() != NO_2) {
