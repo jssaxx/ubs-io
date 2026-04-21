@@ -488,7 +488,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     }
 
     if (count > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->write(fd, buf, count);
+        return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
     }
 
     uintptr_t shmAddr = 0;
