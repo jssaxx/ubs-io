@@ -1028,7 +1028,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
             for (uint32_t j = 0; j < i; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valuesAddr[i]);  // rollback.
+                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
             }
             auto callbackIt = planSend.begin();
             for (uint16_t i = 0; i < planSend.size(); i++) {
