@@ -41,6 +41,13 @@ using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocatio
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                                const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMemFunc = CResult (*)(int32_t deviceId, uint64_t *addrs, uint64_t *size, uint32_t count);
+using BioBatchGetPositionsFunc = CResult (*)(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations, uint8_t *position);
+using BioBatchGetLocalFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                                         ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
+using BioBatchGetRemoteFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count,
+                                          ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                                          uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
+
 
 class DlBioSdkApi {
 public:
@@ -119,6 +126,26 @@ public:
         return static_cast<CResult>(pBioRegisterMem(deviceId, addrs, size, count));
     }
 
+    static CResult BatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count,
+                                     ObjLocation *locations, uint8_t *position)
+    {
+        return static_cast<CResult>(pBioBatchGetPositions(tenantId, keys, count, position));
+    }
+
+    static CResult BatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                                 ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results)
+    {
+        return static_cast<CResult>(pBioBatchGetLocal(tenantId, keys, count, lengths, locations, valueAddrs, results));
+    }
+
+    static CResult BatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,
+                                 ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                                 uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results)
+    {
+        return static_cast<CResult>(pBioBatchGetRemote(tenantId, keys, count, locations, memAddr, memSize,
+                                    row, col, valueAddrs, results));
+    }
+
 private:
     static std::mutex gMutex;
     static bool gLoaded;
@@ -138,6 +165,9 @@ private:
     static BioDeleteFunc pBioDelete;
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
     static BioRegisterMemFunc pBioRegisterMem;
+    static BioBatchGetPositionsFunc pBioBatchGetPositions;
+    static BioBatchGetLocalFunc pBioBatchGetLocal;
+    static BioBatchGetRemoteFunc pBioBatchGetRemote;
 };
 
 }  // namespace ubsio

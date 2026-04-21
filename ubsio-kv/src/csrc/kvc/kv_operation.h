@@ -65,6 +65,17 @@ public:
     int32_t BatchKvExistKey(const std::vector<std::string> &key, bool *results);
     int32_t BatchKvDeleteKey(const std::vector<std::string> &key, std::vector<int> &results);
     int32_t BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths, std::vector<int> &results);    
+
+    int32_t KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_t> &positions);
+
+    int32_t KvBatchGetLocalData(const std::vector<std::string> &keys, void **bufs,
+                                std::vector<size_t> &lengths,
+                                std::vector<int32_t> &results);
+    
+    int32_t KvBatchGetRemoteData(const std::vector<std::string> &keys, uintptr_t **npuAddrs,
+                                 std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
+                                 std::vector<int32_t> &results);
+    
     inline int32_t InitKvExecutor(void)
     {
         mKvExecutor = ExecutorService::Create(KV_THREAD_NUM, KV_QUEUE_SIZE);

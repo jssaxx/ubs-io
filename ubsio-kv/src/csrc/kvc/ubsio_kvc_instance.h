@@ -21,13 +21,13 @@ namespace ubsio {
 
 class KvcInstance {
 public:
-    static KvcInstance &Instance() noexcept;
-    KvcError Initialize(int32_t device) noexcept;
+    static KvcInstance &Instance();
+    KvcError Initialize(int32_t device);
     KvcError Read(const std::vector<std::string> &keyVector,
                   std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                   const std::vector<std::vector<size_t>> &lengthsVector,
-                  int *results) noexcept;
-    int32_t inline GetDeviceId() const noexcept { return m_deviceId; }
+                  int *results);
+    int32_t inline GetDeviceId() const { return m_deviceId; }
 
 public:
     KvcInstance(const KvcInstance&) = delete;
@@ -36,6 +36,30 @@ public:
     KvcInstance& operator=(KvcInstance&&) = delete;
 
 private:
+    struct H2DParams {
+        H2DParams() = delete;
+        H2DParams(std::vector<std::vector<uintptr_t>>& npuAddrVec,
+                  std::vector<std::vector<size_t>>& lengthVec,
+                  std::vector<std::vector<void *>>& hostAddrVec)
+                  : npuAddrs(npuAddrVec), lengths(lengthVec), hostAddrs(hostAddrVec) {}
+        std::vector<std::vector<uintptr_t>>& npuAddrs;
+        std::vector<std::vector<size_t>>& lengths;
+        std::vector<std::vector<void *>>& hostAddrs;
+    };
+
+    struct ReadParams {
+        ReadParams() = delete;
+        ReadParams(uint32_t count) {
+            keys.reserve(count);
+            npuAddrs.reserve(count);
+            lengths.reserve(count);
+            oriIndex.reserve(count);
+        }
+        std::vector<std::string> keys;
+        std::vector<std::vector<uintptr_t>> npuAddrs;
+        std::vector<std::vector<size_t>> lengths;
+        std::vector<uint32_t> oriIndex;
+    };
     KvcInstance() = default;
 
     ~KvcInstance()
@@ -44,6 +68,18 @@ private:
             m_readExecutor = nullptr;
         }
     }
+    KvcError ReadLocal(const std::vector<std::string> &keyVector,
+                  std::vector<std::vector<uintptr_t>> &npuAddrsVector,
+                  const std::vector<std::vector<size_t>> &lengthsVector,
+                  int *results);
+    
+    KvcError ReadRemote(const std::vector<std::string> &keyVector,
+                  std::vector<std::vector<uintptr_t>> &npuAddrsVector,
+                  const std::vector<std::vector<size_t>> &lengthsVector,
+                  int *results);
+
+    KvcError CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
+                         const std::vector<uint32_t> &origIndex, int *results);
 
 private:
     ExecutorServicePtr m_readExecutor{ nullptr };

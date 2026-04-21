@@ -564,22 +564,23 @@ CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint3
 
 /**
  * @brief:Query whether the target belongs to a remote or local location.
+ * @param tenantId        [in] tenant id
  * @param keys            [in] Array of keys to be queried
  * @param count           [in] NUmber of keys to be queried
+ * @param locations        [in] Array of locations to be queried
  * @param position        [out] Array of positions of the keys(0:local, 1:remote)
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioGetPosition(const char **keys, uint32_t count, uint8_t *position);
+CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations, int32_t *position);
 
 /**
  * @brief: Batch Get locaL value
- *
- * @param[in]: tenantId: tenant id
- * @param[in]: keys: multiple keys
- * @param[in]: length : lengths of the get values
- * @param[in]: location : location info
- * @param[out]: valueAddrs : address of the values corresponding to multiple keys, need free
- * @param[out]: results : result of getting multiple keys
+ * @param tenantId:        [in]: tenant id
+ * @param keys             [in]: multiple keys
+ * @param length           [in]: lengths of the get values
+ * @param location         [in]: location : location info
+ * @param valueAddrs       [out]: address of the values corresponding to multiple keys, need free
+ * @param results          [out]: result of getting multiple keys
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioBatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
@@ -588,16 +589,16 @@ CResult BioBatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t co
 /**
  * @brief: Batch Get locaL value
  *
- * @param[in]: tenantId: tenant id
- * @param[in]: keys: multiple keys
- * @param[in]: location : location info
- * @param[in]: memAddr : kv cache address:[[k1_l1, k1_l2, k1_l3], [k2_l1, k2_l2, k2_l3], ...]
- * @param[in]: memSize : length of kv cache address, same shape of kv cache address
- * @param[in]: row : the row of kv cache address
- * @param[in]: col : the column of kv cache address
- * @param[out]: valueAddrs : used when return value is RET_CACHE_IN_DRAM,
+ * @param tenantId          [in]: tenant id
+ * @param keys              [in]: multiple keys
+ * @param location          [in]: location info
+ * @param memAddr           [in]: kv cache address:[[k1_l1, k1_l2, k1_l3], [k2_l1, k2_l2, k2_l3], ...]
+ * @param memSize           [in]: length of kv cache address, same shape of kv cache address
+ * @param row               [in]: the row of kv cache address
+ * @param col               [in]: the column of kv cache address
+ * @param valueAddrs        [out]: used when return value is RET_CACHE_IN_DRAM,
  * valueAddrs : address of the values corresponding to multiple keys, need free
- * @param[out]: results : result of getting multiple keys
+ * @param results           [out]: result of getting multiple keys
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioBatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,

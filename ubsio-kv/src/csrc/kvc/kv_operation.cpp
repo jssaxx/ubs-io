@@ -274,5 +274,82 @@ int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std:
     sem_destroy(&sem);
     return UBSIO_KVC_OK;
 }
+int32_t KvOperation::KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_t> &positions)
+{
+    DFC_ASSERT_RETURN(DFC_OK == keys.size() == positions.size(), DFC_INVALID_PARAM, "Invalid param");
+    uint32_t keysCount = keys.size();
+    std::vector<const char *> keysChar(keysCount);
+    std::vector<ObjLocation> locationVec(keysCount);
+    for (size_t i = 0; i < keysCount; i++) {
+        ObjLocation location;
+        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), &location);
+        if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+            LOG_ERROR("Calc location failed, status:" << status);
+            return DFC_ERR;
+        }
+        locationVec[i] = location;
+        keysChar[i] = keys[i].c_str();
+    }
+    int ret = DlBioSdkApi::BatchGetPositions(keysChar.data(), keysCount, positions.data());
+    if (ret != DFC_OK) {
+        LOG_ERROR("GetPositions failed with returned status " << ret);
+        return DFC_ERR;
+    }
+    return DFC_OK;
+}
+
+int32_t KvOperation::KvBatchGetLocalData(const std::vector<std::string> &keys, void **bufs, std::vector<size_t> &lengths,
+                                         std::vector<int32_t> &results)
+{
+    DFC_ASSERT_RETURN(keys.size() != 0, DFC_INVALID_PARAM, "Invalid param");
+    DFC_ASSERT_RETURN(keys.size() == lengths.size() && keys.size() == results.size(), DFC_INVALID_PARAM, "Invalid param");
+    
+    uint32_t keysCount = keys.size();
+    std::vector<ObjLocation> locationVec(keysCount);
+    std::vector<const char*> keysChar(keysCount);
+    for (size_t i = 0; i < keysCount; i++) {
+        ObjLocation location;
+        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(keys[i])), &location);
+        if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+            LOG_ERROR("Calc location failed, status:" << status);
+            return DFC_ERR;
+        }
+        locationVec[i] = location;
+        keysChar[i] = keys[i].c_str();
+    }
+
+    return DlBioSdkApi::BatchGetLocal(tenantId, keysChar.data(), keysCount, lengths.data(), locationVec.data(),
+                                      reinterpret_cast<uintptr_t *>(bufs), results.data());
+}
+
+int32_t KvOperation::KvBatchGetRemoteData(const std::vector<std::string> &keys, uintptr_t **npuAddrs,
+                                          std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
+                                          std::vector<int32_t> &results)
+{
+    DFC_ASSERT_RETURN(keys.size() != 0, DFC_INVALID_PARAM, "Invalid param");
+    DFC_ASSERT_RETURN(keys.size() == lengths.size() && keys.size() == results.size(), DFC_INVALID_PARAM, "Invalid param");
+    DFC_ASSERT_RETURN(lengths.size() != 0 && lengths[0].size() != 0, DFC_INVALID_PARAM, "Invalid param");
+    DFC_ASSERT_RETURN(npuAddrs != nullptr, DFC_INVALID_PARAM, "Invalid param");
+
+    uint32_t keysCount = keys.size();
+    std::vector<ObjLocation> locationVec(keysCount);
+    std::vector<const char*> keysChar(keysCount);
+    std::vector<size_t*> lengthsVec(keysCount);
+    for (size_t i = 0; i < keysCount; i++) {
+        ObjLocation location;
+        CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(keys[i])), &location);
+        if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
+            LOG_ERROR("Calc location failed, status:" << status);
+            return DFC_ERR;
+        }
+        locationVec[i] = location;
+        keysChar[i] = keys[i].c_str();
+        lengthsVec[i] = lengths[i].data();
+    }
+    return DlBioSdkApi::BatchGetRemote(tenantId, keysChar.data(), keysCount, locationVec.data(),
+                                       npuAddrs, lengthsVec.data(), lengths.size(), lengths[0].size(),
+                                       dramAddrs, results.data());
+}
+
 }; // namespace ubsio
 } // namespace ock

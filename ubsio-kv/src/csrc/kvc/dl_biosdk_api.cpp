@@ -41,6 +41,9 @@ BioBatchFreeFunc DlBioSdkApi::pBioBatchGetFree = nullptr;
 BioDeleteFunc DlBioSdkApi::pBioDelete = nullptr;
 BioBatchGetKeyDiskAddrFunc DlBioSdkApi::pBioBatchGetKeyDiskAddr = nullptr;
 BioRegisterMemFunc DlBioSdkApi::pBioRegisterMem = nullptr;
+BioBatchGetPositionsFunc DlBioSdkApi::pBioBatchGetPositions = nullptr;
+BioBatchGetLocalFunc DlBioSdkApi::pBioBatchGetLocal = nullptr;
+BioBatchGetRemoteFunc DlBioSdkApi::pBioBatchGetRemote = nullptr;
 
 int32_t DlBioSdkApi::LoadLibrary()
 {
@@ -70,6 +73,9 @@ int32_t DlBioSdkApi::LoadLibrary()
     DL_LOAD_SYM(pBioDelete, BioDeleteFunc, bioSdkHandle, "BioDelete");
     DL_LOAD_SYM(pBioBatchGetKeyDiskAddr, BioBatchGetKeyDiskAddrFunc, bioSdkHandle, "BioBatchGetKeyDiskAddr");
     DL_LOAD_SYM(pBioRegisterMem, BioRegisterMemFunc, bioSdkHandle, "BioRegisterMem");
+    DL_LOAD_SYM(pBioBatchGetPositions, BioBatchGetPositionsFunc, bioSdkHandle, "BioBatchGetPositions");
+    DL_LOAD_SYM(pBioBatchGetLocal, BioBatchGetLocalFunc, bioSdkHandle, "BioBatchGetLocal");
+    DL_LOAD_SYM(pBioBatchGetRemote, BioBatchGetRemoteFunc, bioSdkHandle, "BioBatchGetRemote");
 
     gLoaded = true;
     return 0;
@@ -95,6 +101,9 @@ void DlBioSdkApi::CleanupLibrary()
     pBioDelete = nullptr;
     pBioBatchGetKeyDiskAddr = nullptr;
     pBioRegisterMem = nullptr;
+    pBioBatchGetPositions = nullptr;
+    pBioBatchGetLocal = nullptr;
+    pBioBatchGetRemote = nullptr;
 
     if (bioSdkHandle != nullptr) {
         dlclose(bioSdkHandle);
