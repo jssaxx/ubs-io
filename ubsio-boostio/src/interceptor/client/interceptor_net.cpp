@@ -106,8 +106,9 @@ int32_t InterceptorClientNetService::StartNetService()
     NetOptions netOptions;
     netOptions.role = Role::NET_CLIENT;
     netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.workerGroupCpuIdsRange = DefaultWorkerGroupCpuIdsRange(IPC_WORKER_GROUP_CPU_RANGE_COUNT);
     const char *connCountEnv = std::getenv("INTERCEPTOR_IPC_CONN_COUNT");
-    ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_4, netOptions.connCount);
+    ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_2, netOptions.connCount);
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed.");
         return ret;
@@ -125,14 +126,16 @@ int32_t InterceptorClientNetService::StartNetService()
 
     const char *cpuIdsEnv = std::getenv("INTERCEPTOR_IPC_CPUIDS");
     if (cpuIdsEnv != nullptr && strlen(cpuIdsEnv) > 0) {
-        if (!ParseWorkerGroupCpuIdsRange(cpuIdsEnv, netOptions.workerGroupCpuIdsRange)) {
+        if (!ParseWorkerGroupCpuIdsRange(cpuIdsEnv, netOptions.workerGroupCpuIdsRange,
+            IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
             CLOG_ERROR("Parse INTERCEPTOR_IPC_CPUIDS failed, value:" << cpuIdsEnv << ".");
             return BIO_INVALID_PARAM;
         }
         CLOG_INFO("Apply INTERCEPTOR_IPC_CPUIDS success, value:" <<
             FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
     }
-    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(netOptions.workerGroupCpuIdsRange, netOptions.connCount)) {
+    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(netOptions.workerGroupCpuIdsRange, netOptions.connCount,
+        IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
         CLOG_ERROR("INTERCEPTOR_IPC_CPUIDS not match INTERCEPTOR_IPC_CONN_COUNT, connCount:" <<
             netOptions.connCount << ".");
         return BIO_INVALID_PARAM;

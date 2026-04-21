@@ -19,24 +19,25 @@ namespace ock {
 namespace bio {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
-constexpr size_t WORKER_GROUP_CPU_RANGE_COUNT = 2;
+constexpr size_t RPC_WORKER_GROUP_CPU_RANGE_COUNT = 2;
+constexpr size_t IPC_WORKER_GROUP_CPU_RANGE_COUNT = 1;
 
-static std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange()
+static std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange(size_t groupCount)
 {
-    return {{UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}};
+    return std::vector<std::pair<uint32_t, uint32_t>>(groupCount, {UINT32_MAX, UINT32_MAX});
 }
 
 static bool ParseWorkerGroupCpuIdsRangeForConfig(const std::string &value,
-    std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+    std::vector<std::pair<uint32_t, uint32_t>> &ranges, size_t groupCount)
 {
-    ranges = DefaultWorkerGroupCpuIdsRange();
+    ranges = DefaultWorkerGroupCpuIdsRange(groupCount);
     if (value.empty() || value == "-1") {
         return true;
     }
 
     std::vector<std::string> rangeStrs;
     StrUtil::Split(value, ",", rangeStrs);
-    if (rangeStrs.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+    if (rangeStrs.size() != groupCount) {
         return false;
     }
 
@@ -70,9 +71,9 @@ static bool ParseWorkerGroupCpuIdsRangeForConfig(const std::string &value,
 }
 
 static bool CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(
-    const std::vector<std::pair<uint32_t, uint32_t>> &ranges, uint16_t connCount)
+    const std::vector<std::pair<uint32_t, uint32_t>> &ranges, uint16_t connCount, size_t groupCount)
 {
-    if (ranges.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+    if (ranges.size() != groupCount) {
         return false;
     }
 
@@ -220,8 +221,10 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.isRpcBusyLoop = conf->GetStr(NET_RPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.rpcDataWorkersCnt = conf->GetInt(NET_RPC_DATA_WORKERS_COUNT.first);
-    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_RPC_DATA_CPUIDS.first), mNetConfig.rpcDataCpuIds) ||
-        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.rpcDataCpuIds, mNetConfig.rpcDataWorkersCnt)) {
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_RPC_DATA_CPUIDS.first), mNetConfig.rpcDataCpuIds,
+        RPC_WORKER_GROUP_CPU_RANGE_COUNT) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.rpcDataCpuIds, mNetConfig.rpcDataWorkersCnt,
+            RPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
         LOG_ERROR("Invalid net rpc cpuids config, cpuids:" << conf->GetStr(NET_RPC_DATA_CPUIDS.first) <<
             ", workers_count:" << mNetConfig.rpcDataWorkersCnt << ".");
         return BIO_ERR;
@@ -232,8 +235,10 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.isIpcBusyLoop = conf->GetStr(NET_IPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
-    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_IPC_DATA_CPUIDS.first), mNetConfig.ipcDataCpuIds) ||
-        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.ipcDataCpuIds, mNetConfig.ipcDataWorkersCnt)) {
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_IPC_DATA_CPUIDS.first), mNetConfig.ipcDataCpuIds,
+        IPC_WORKER_GROUP_CPU_RANGE_COUNT) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.ipcDataCpuIds, mNetConfig.ipcDataWorkersCnt,
+            IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
         LOG_ERROR("Invalid net ipc cpuids config, cpuids:" << conf->GetStr(NET_IPC_DATA_CPUIDS.first) <<
             ", workers_count:" << mNetConfig.ipcDataWorkersCnt << ".");
         return BIO_ERR;

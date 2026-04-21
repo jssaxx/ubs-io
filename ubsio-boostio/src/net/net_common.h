@@ -151,16 +151,18 @@ struct NetOptions {
     }
 };
 
-constexpr size_t WORKER_GROUP_CPU_RANGE_COUNT = 2;
+constexpr size_t RPC_WORKER_GROUP_CPU_RANGE_COUNT = 2;
+constexpr size_t IPC_WORKER_GROUP_CPU_RANGE_COUNT = 1;
 
-inline std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange()
+inline std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange(size_t groupCount)
 {
-    return {{UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}};
+    return std::vector<std::pair<uint32_t, uint32_t>>(groupCount, {UINT32_MAX, UINT32_MAX});
 }
 
-inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<std::pair<uint32_t, uint32_t>> &ranges,
+    size_t groupCount)
 {
-    ranges = DefaultWorkerGroupCpuIdsRange();
+    ranges = DefaultWorkerGroupCpuIdsRange(groupCount);
     if (value.empty()) {
         return true;
     }
@@ -170,7 +172,7 @@ inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<st
 
     std::vector<std::string> rangeStrs;
     StrUtil::Split(value, ",", rangeStrs);
-    if (rangeStrs.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+    if (rangeStrs.size() != groupCount) {
         return false;
     }
 
@@ -204,9 +206,9 @@ inline bool ParseWorkerGroupCpuIdsRange(const std::string &value, std::vector<st
 }
 
 inline bool CheckWorkerGroupCpuIdsRangeMatchConnCount(const std::vector<std::pair<uint32_t, uint32_t>> &ranges,
-    uint16_t connCount)
+    uint16_t connCount, size_t groupCount)
 {
-    if (ranges.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+    if (ranges.size() != groupCount) {
         return false;
     }
 

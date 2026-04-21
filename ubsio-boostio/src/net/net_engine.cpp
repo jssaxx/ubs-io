@@ -110,7 +110,9 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
 BResult NetEngine::Start(const NetOptions &opt)
 {
     int32_t result = BIO_INNER_ERR;
-    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(opt.workerGroupCpuIdsRange, opt.connCount)) {
+    size_t workerGroupCount = (opt.protocol == ServiceProtocol::SHM || opt.protocol == ServiceProtocol::UDS) ?
+        IPC_WORKER_GROUP_CPU_RANGE_COUNT : RPC_WORKER_GROUP_CPU_RANGE_COUNT;
+    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(opt.workerGroupCpuIdsRange, opt.connCount, workerGroupCount)) {
         NET_LOG_ERROR("Worker cpu ids range not match connCount:" << opt.connCount << ".");
         return BIO_INVALID_PARAM;
     }
@@ -747,15 +749,10 @@ int32_t NetEngine::OneSideDone(const ServiceContext &ctx)
     return BIO_OK;
 }
 
-void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, bool isCtrl, std::string &prefix,
-    UBSHcomConnectOptions &op)
+void NetEngine::FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, UBSHcomConnectOptions &op)
 {
     op.linkCount = mOptions.connCount;
-    if (mode == ConnectMode::CONNECT_IPC) {
-        op.clientGroupId = WKR_GRP_INDEX_CTRL;
-        op.serverGroupId = WKR_GRP_INDEX_CTRL;
-        prefix = isCtrl ? CONN_PAYLOAD_PREFIX_CTRL : CONN_PAYLOAD_PREFIX_DATA;
-    } else if (isCtrl) {
+    if (isCtrl) {
         op.clientGroupId = WKR_GRP_INDEX_CTRL;
         op.serverGroupId = WKR_GRP_INDEX_CTRL;
         prefix = CONN_PAYLOAD_PREFIX_CTRL;
@@ -781,7 +778,7 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 
     UBSHcomConnectOptions options;
     std::string prefix;
-    FillConnectOption(mode, info, isCtrlPanel, prefix, options);
+    FillConnectOption(info, isCtrlPanel, prefix, options);
     int32_t result = 0;
     for (uint16_t i = 0; i < info.retryTimes; ++i) {
         if (mode == ConnectMode::CONNECT_IPC) {
