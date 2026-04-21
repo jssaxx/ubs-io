@@ -14,12 +14,83 @@
 #include "bio_log.h"
 #include "bio_ip_util.h"
 #include "bio_file_util.h"
-#include "net_common.h"
 
 namespace ock {
 namespace bio {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
+constexpr size_t WORKER_GROUP_CPU_RANGE_COUNT = 2;
+
+static std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange()
+{
+    return {{UINT32_MAX, UINT32_MAX}, {UINT32_MAX, UINT32_MAX}};
+}
+
+static bool ParseWorkerGroupCpuIdsRangeForConfig(const std::string &value,
+    std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    ranges = DefaultWorkerGroupCpuIdsRange();
+    if (value.empty() || value == "-1") {
+        return true;
+    }
+
+    std::vector<std::string> rangeStrs;
+    StrUtil::Split(value, ",", rangeStrs);
+    if (rangeStrs.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+        return false;
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> parsed;
+    parsed.reserve(rangeStrs.size());
+    for (const auto &rangeStr : rangeStrs) {
+        if (rangeStr == "-1") {
+            parsed.emplace_back(UINT32_MAX, UINT32_MAX);
+            continue;
+        }
+
+        std::vector<std::string> startEnd;
+        StrUtil::Split(rangeStr, "-", startEnd);
+        if (startEnd.size() != NO_2) {
+            return false;
+        }
+
+        long start = 0;
+        long end = 0;
+        if (!StrUtil::StrToLong(startEnd[0], start) || !StrUtil::StrToLong(startEnd[1], end)) {
+            return false;
+        }
+        if (start < 0 || end < 0 || start > end || end > static_cast<long>(UINT32_MAX)) {
+            return false;
+        }
+        parsed.emplace_back(static_cast<uint32_t>(start), static_cast<uint32_t>(end));
+    }
+
+    ranges = std::move(parsed);
+    return true;
+}
+
+static bool CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(
+    const std::vector<std::pair<uint32_t, uint32_t>> &ranges, uint16_t connCount)
+{
+    if (ranges.size() != WORKER_GROUP_CPU_RANGE_COUNT) {
+        return false;
+    }
+
+    for (const auto &range : ranges) {
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            continue;
+        }
+        if (range.first > range.second) {
+            return false;
+        }
+        auto cpuCount = static_cast<uint64_t>(range.second) - static_cast<uint64_t>(range.first) + 1;
+        if (cpuCount != connCount) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void BioConfig::LoadDefaultConf()
 {
     /* load net config for fs */
@@ -131,8 +202,8 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.isRpcBusyLoop = conf->GetStr(NET_RPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.rpcDataWorkersCnt = conf->GetInt(NET_RPC_DATA_WORKERS_COUNT.first);
-    if (!ParseWorkerGroupCpuIdsRange(conf->GetStr(NET_RPC_DATA_CPUIDS.first), mNetConfig.rpcDataCpuIds) ||
-        !CheckWorkerGroupCpuIdsRangeMatchConnCount(mNetConfig.rpcDataCpuIds, mNetConfig.rpcDataWorkersCnt)) {
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_RPC_DATA_CPUIDS.first), mNetConfig.rpcDataCpuIds) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.rpcDataCpuIds, mNetConfig.rpcDataWorkersCnt)) {
         LOG_ERROR("Invalid net rpc cpuids config, cpuids:" << conf->GetStr(NET_RPC_DATA_CPUIDS.first) <<
             ", workers_count:" << mNetConfig.rpcDataWorkersCnt << ".");
         return BIO_ERR;
@@ -140,8 +211,8 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.isIpcBusyLoop = conf->GetStr(NET_IPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
-    if (!ParseWorkerGroupCpuIdsRange(conf->GetStr(NET_IPC_DATA_CPUIDS.first), mNetConfig.ipcDataCpuIds) ||
-        !CheckWorkerGroupCpuIdsRangeMatchConnCount(mNetConfig.ipcDataCpuIds, mNetConfig.ipcDataWorkersCnt)) {
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_IPC_DATA_CPUIDS.first), mNetConfig.ipcDataCpuIds) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.ipcDataCpuIds, mNetConfig.ipcDataWorkersCnt)) {
         LOG_ERROR("Invalid net ipc cpuids config, cpuids:" << conf->GetStr(NET_IPC_DATA_CPUIDS.first) <<
             ", workers_count:" << mNetConfig.ipcDataWorkersCnt << ".");
         return BIO_ERR;
