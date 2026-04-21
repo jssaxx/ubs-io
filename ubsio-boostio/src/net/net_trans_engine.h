@@ -274,6 +274,7 @@ private:
 };
 
 class NetTransEngine {
+public:
     virtual BResult Initialize(const NetOptions &opt) = 0;
 
     virtual BResult Destroy() = 0;
@@ -294,6 +295,9 @@ class NetTransEngine {
 
     virtual BResult BatchWrite(TransParam& param) = 0;
 
+    DEFINE_REF_COUNT_FUNCTIONS;
+private:
+    DEFINE_REF_COUNT_VARIABLE
 };
 
 using NetTransEnginePtr = Ref<NetTransEngine>;
