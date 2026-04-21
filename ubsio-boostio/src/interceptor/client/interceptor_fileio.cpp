@@ -232,10 +232,6 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
         return -1;
     }
 
-    if (count > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
-    }
-
     uintptr_t shmAddr = 0;
     uint64_t mrOffset = 0;
     auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
@@ -440,9 +436,11 @@ ssize_t ProxyOperations::PwriteInner(int fd, const void *buf, size_t count, off_
 {
     if (count <= MAX_SMALL_WRITE_SIZE) {
         return PwriteSmallInner(fd, buf, count, offset);
-    } else {
+    }
+    if (count <= MAX_LARGE_WRITE_SIZE) {
         return PwriteLargeInner(fd, buf, count, offset);
     }
+    return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset)
@@ -485,10 +483,6 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     auto &file = CONTEXT.files.At(fd);
     if (UNLIKELY(file == nullptr)) {
         return -1;
-    }
-
-    if (count > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
     }
 
     uintptr_t shmAddr = 0;
