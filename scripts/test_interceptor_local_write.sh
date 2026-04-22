@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# 功能：
+# 1. 覆盖 write / pwrite / pwrite64 / writev / pwritev / pwritev64
+# 2. 覆盖小中大以及大于 4MiB 的写入大小
+# 3. 每次写入后在本地立即读回，校验数据一致性
+# 4. 大于 4MiB 的用例用于验证功能正确性和原生回退路径
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then

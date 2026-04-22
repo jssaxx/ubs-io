@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# 功能：
+# 1. 读取本地写脚本生成的所有 case 文件
+# 2. 覆盖 read / pread / pread64 / readv / preadv64
+# 3. 覆盖小中大以及大于 4MiB 的读取大小
+# 4. 按确定性数据模式校验远端读取结果和写入内容一致
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then

@@ -14,14 +14,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#if defined(__APPLE__)
-typedef off_t off64_t;
-#define pread64  pread
-#define pwrite64 pwrite
-#define preadv64 preadv
-#define pwritev64 pwritev
-#endif
-
 struct write_case {
     const char *name;
     int id;
