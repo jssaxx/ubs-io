@@ -142,12 +142,12 @@ CResult Bio::CalculateLocation(uint64_t objectId, ObjLocation &location)
     return ToCResult(gClient->CalculateLocation(objectId, mAffinity, location));
 }
 
-void Bio::IsCachedLocal(const uint64_t **objectId, const uint32_t count, bool **result)
+CResult Bio::BatchGetPositions(ObjLocation *locations, uint32_t count, int32_t *position)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
-    ToCResult(gClient->IsCachedLocal(mAffinity, objectId, count, result));
+    return ToCResult(gClient->BatchGetPositions(locations, count, position));
 }
 
 CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjLocation &location)
@@ -1360,4 +1360,22 @@ CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint3
     }
     CLIENT_LOG_INFO("Register mem sucess!");
     return RET_CACHE_OK;
+}
+
+CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations,
+                             int32_t *position)
+{
+    if (UNLIKELY(locations == nullptr || position == nullptr || count == 0)) {
+        return RET_CACHE_EPERM;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGetPositions(locations, count, position);
 }

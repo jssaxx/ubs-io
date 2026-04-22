@@ -64,11 +64,12 @@ public:
     /**
     * @brief: Calculate object location info
     *
-    * @param[in]: key: keys: multiple keys
-    * @param[out]: result: query result, true-cached local, false-cached remote
+    * @param[in]: locations: multiple key locations
+    * @param[in]: count: keys: batch get key count
+    * @param[out]: position: query result, 0-local, 1-remote
     * @return: void
     */
-    void IsCachedLocal(const char **keys, const uint32_t count, bool **result);
+    CResult BatchGetPositions(ObjLocation *locations, uint32_t count, int32_t *position);
 
     /**
      * @brief: Put value

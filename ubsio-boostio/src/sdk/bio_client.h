@@ -70,28 +70,26 @@ public:
         return BIO_OK;
     }
 
-    void IsCachedLocal(AffinityStrategy affinity, const uint64_t **objectId, const uint32_t count, bool **result)
+    BResult BatchGetPositions(ObjLocation *locations, uint32_t count, int32_t *position)
     {
         uint16_t ptId = UINT16_MAX;
-        CmPtInfo ptEntry;
+        CmPtInfo ptEntry{};
         for (uint32_t idx = 0; idx < count; idx++) {
-            result[idx] = false;
-            ptId = mMirror->SelectingPt(objectId[idx], affinity);
-            if (UNLIKELY(ptId == UINT16_MAX)) {
-                return;
-            }
+            position[idx] = 1;
+            uint16_t ptId = static_cast<uint16_t>(locations[idx].location[0]);
             auto ret = mMirror->GetPtEntry(ptId, ptEntry);
             if (UNLIKELY(ret != BIO_OK)) {
                 CLIENT_LOG_ERROR("Get pt entry failed, invalid pt id:" << ptId << ".");
-                return;
+                return BIO_ERR;
             }
             for (auto &cpy : ptEntry.copys) {
                 if (cpy.nodeId == mNodeId.VNodeId()) {
-                    result[idx] = true;
+                    result[idx] = 0;
                     break;
                 }
             }
         }
+        return BIO_OK;
     }
 
     inline BResult ParseLocation(ObjLocation &location)
