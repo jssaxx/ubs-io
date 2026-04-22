@@ -57,7 +57,7 @@ UBSIO_API int32_t UbsioKvCacheRegister(uint64_t *addrs, uint64_t *sizes, uint32_
 
     std::vector<uint64_t> addrsVector(addrs, addrs + count);
     std::vector<uint64_t> sizesVector(sizes, sizes + count);
-    return KvcRegisterKvCache(devId, addrsVector, sizesVector);
+    return KvcRegisterKvCache(addrsVector, sizesVector);
 }
 
 UBSIO_API int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flags)

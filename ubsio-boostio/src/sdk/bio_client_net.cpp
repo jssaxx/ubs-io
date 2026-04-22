@@ -67,6 +67,20 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
+    //初始化trans engine
+    if (netConf.isDevicetrans) {
+        mTransEngine = MakeRef<MfTransEngine>();
+        if (mTransEngine == nullptr) {
+            CLIENT_LOG_ERROR("Failed to create trans instance.");
+            return BIO_ALLOC_FAIL;
+        }
+        auto ret = mTransEngine->Initialize(netConf);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to init trans engine, ret:" << ret << ".");
+            return ret;
+        }
+        CLIENT_LOG_INFO("Start trans engine success.");
+    }
     mLocalNid = localNid;
     mNetEngine->SetLocalNodeId(localNid);
 
@@ -481,4 +495,9 @@ bool BioClientNet::CheckShmInitResp(ShmInitResponse rsp)
     bool validLogLevel = rsp.logLevel <= NO_4;
     bool validScene = rsp.scene <= NO_1;
     return validAlignSize && validIoTimeOut && validNetTimeOut && validLogLevel && validScene;
+}
+
+BResult BioClientNet::RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes)
+{
+    return mTransEngine->BatchRegisterMem(addresses, sizes);
 }

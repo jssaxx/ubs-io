@@ -25,7 +25,7 @@ void KvcExit();
 
 int32_t KvcOperationInit(int32_t devId);
 
-int32_t KvcRegisterKvCache(int32_t devId, std::vector<uint64_t> &kvCacheAddrs,
+int32_t KvcRegisterKvCache(std::vector<uint64_t> &kvCacheAddrs,
                            std::vector<uint64_t> &kvCacheSizes);
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags);

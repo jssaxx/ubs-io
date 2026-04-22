@@ -86,7 +86,7 @@ BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
         return mMirror->CheckIsOnline(nodeId, ip, port);
     };
     mNetEngine->RegCheckNodeOnline(checkHandle);
-
+    netConf.transDeviceId = mDeivceId;
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
         mMirror->GetNetProtocol(), netConf);
 }
@@ -94,6 +94,7 @@ BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
 void BioClient::BioClientNetExit()
 {
     mNetEngine->Exit();
+    mTransEngine->Destroy();
 }
 
 void BioClient::BioClientUpdateHandle()
@@ -394,13 +395,14 @@ BResult BioClient::FillNetOptions(const ClientOptionsConfig &optConf, NetOptions
     return BIO_OK;
 }
 
-BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
+BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
         return BIO_OK;
     }
     mMode = mode;
+    mDeivceId = devId;
     uint64_t startTime = Monotonic::TimeSec();
 
     // 1. 初始化client端Logger.
@@ -490,5 +492,20 @@ void BioClient::Exit()
 BResult BioClient::AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam)
 {
     return mMirror->AsyncGet(param, opParam);
+}
+
+BResult BioClient::RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
+{
+    if (mTransEngine == nullptr) {
+        LOG_ERROR("trans engine not init.");
+        return BIO_ERR;
+    }
+    std::vector<void*> addrsVec;
+    std::vector<size_t> sizesVec;
+    for (uint32_t i = 0; i < count; i++) {
+        addrsVec.emplace_back(reinterpret_cast<void*>(addresses[i]));
+        sizesVec.emplace_back(sizes[i]);
+    }
+    return mTransEngine->RegisterMem(addrsVec, sizesVec);
 }
 

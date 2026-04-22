@@ -628,14 +628,14 @@ CResult BioService::BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDe
     return ToCResult(ret);
 }
 
-CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf)
+CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId)
 {
     auto bioClient = BioClient::Instance();
     if (UNLIKELY(bioClient == nullptr)) {
         CLIENT_LOG_ERROR("Make bio client instance failed.");
         return RET_CACHE_ERROR;
     }
-    return ToCResult(bioClient->Start(mode, optConf));
+    return ToCResult(bioClient->Start(mode, optConf, int32_t devId));
 }
 
 void BioService::Exit()
@@ -683,18 +683,18 @@ static bool CheckClientConfig(const ClientOptionsConfig &optConf)
     return true;
 }
 
-CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
+CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf, int32_t devId)
 {
     if (optConf == nullptr) {
         ClientOptionsConfig config{};
         config.enable = false;
-        return BioService::Initialize(mode, config);
+        return BioService::Initialize(mode, config, devId);
     }
 
     if (!CheckClientConfig(*optConf)) {
         return RET_CACHE_EPERM;
     }
-    return BioService::Initialize(mode, *optConf);
+    return BioService::Initialize(mode, *optConf, devId);
 }
 
 void BioExit(void)
@@ -1341,19 +1341,24 @@ CResult BioAddDisk(const char *diskPath)
     return RET_CACHE_OK;
 }
 
-CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint32_t count)
+CResult BioRegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
 {
-    if (UNLIKELY(address == nullptr || size == 0 || count == 0 || deviceId < 0)) {
-        CLIENT_LOG_ERROR("Invalid input parameter, address: " << address << ", size: "
-                         << size << ", count: " << count << ", deviceId: " << deviceId << ".");
+    if (UNLIKELY(addresses == nullptr || sizes == nullptr || count == 0)) {
+        CLIENT_LOG_ERROR("Invalid input parameter, address: " << addresses << ", size: "
+                         << sizes << ", count: " << count);
         return RET_CACHE_EPERM;
     }
 
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
-    
-    auto ret = gClient->GetMirror()->RegisterMem(address, size, count);
+    std::vector<void *> addrsVec(count);
+    std::vector<size_t> sizesVec(count);
+    for (uint32_t i = 0; i < count; i++) {
+        addrsVec[i] = reinterpret_cast<void *>(addresses[i]);
+        sizesVec[i] = sizes[i];
+    }
+    auto ret = gClient->GetNetEngine()->RegisterMem(addrsVec, sizesVec);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to register mem, ret:" << ret << ".");
         return ToCResult(ret);

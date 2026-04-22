@@ -22,6 +22,7 @@
 #include "bio.h"
 #include "bio_config_instance.h"
 #include "message.h"
+#include "net_trans_engine.h"
 
 namespace ock {
 namespace bio {
@@ -234,6 +235,8 @@ public:
 
     bool CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp);
 
+    BResult BioClientNet::RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes)
+
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
@@ -260,6 +263,7 @@ private:
     bool mEnableCrc = { false };
     bool mEnableCli = { false };
     NetEnginePtr mNetEngine = nullptr;
+    NetTransEnginePtr mTransEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
     uint32_t mNetSegmentSize = 256;

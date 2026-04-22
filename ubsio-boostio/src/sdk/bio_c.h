@@ -171,7 +171,7 @@ typedef struct {
  * @param[in]: option: log options and security options
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
+CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf, int32_t devId);
 
 /**
  * @brief: Exit boostio service
@@ -555,19 +555,18 @@ CResult BioAddDisk(const char *diskPath);
 
 /**
  * @brief:Register Mem to bio
- * @param deviceId        [in] the rank which kv cache addresses are from
- * @param addrs           [in] Array of kv cache addresses to be registered
- * @param sizes           [in] Array of kv cache sizes to be registered
+ * @param addresses         [in] Array of kv cache addresses to be registered
+ * @param sizes            [in] Array of kv cache sizes to be registered
  * @param count           [in] Number of kv caches to be registered
  */
-CResult BioRegisterMem(int32_t deviceId, uint64_t *address, uint64_t size, uint32_t count);
+CResult BioRegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count);
 
 /**
  * @brief:Query whether the target belongs to a remote or local location.
  * @param tenantId        [in] tenant id
  * @param keys            [in] Array of keys to be queried
  * @param count           [in] NUmber of keys to be queried
- * @param locations        [in] Array of locations to be queried
+ * @param locations       [in] Array of locations to be queried
  * @param position        [out] Array of positions of the keys(0:local, 1:remote)
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */

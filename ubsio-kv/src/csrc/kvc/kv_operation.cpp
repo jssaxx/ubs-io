@@ -37,7 +37,7 @@ int32_t KvOperation::Initialize(const std::string &path)
     return UBSIO_KVC_OK;
 }
 
-int32_t KvOperation::KvcRegisterKvCache(int32_t devId, std::vector<uint64_t> &kvCacheAddrs,
+int32_t KvOperation::KvcRegisterKvCache(std::vector<uint64_t> &kvCacheAddrs,
                                         std::vector<uint64_t> &kvCacheSizes)
 {
     std::lock_guard<std::mutex> guard(mMutex);
@@ -45,7 +45,7 @@ int32_t KvOperation::KvcRegisterKvCache(int32_t devId, std::vector<uint64_t> &kv
         LOG_ERROR("Kv operation has not been initialized");
         return DFC_ERR;
     }
-    int32_t ret = DlBioSdkApi::RegisterMem(devId, kvCacheAddrs.data(), kvCacheSizes.data(), kvCacheAddrs.size());
+    int32_t ret = DlBioSdkApi::RegisterMem(kvCacheAddrs.data(), kvCacheSizes.data(), kvCacheAddrs.size());
     if (ret != DFC_OK) {
         LOG_ERROR("Register kv cache failed with returned status " << ret);
         return DFC_ERR;

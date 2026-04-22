@@ -113,6 +113,10 @@ void DlMfApi::CleanupLibrary()
 
 BResult MfTransEngine::Initialize(const NetOptions &opt)
 {
+    if (opt.transDeviceId < 0) {
+        NET_LOG_WARN("transDeviceId is: " << opt.transDeviceId << ", will not use device transfer");
+        return BIO_OK;
+    }
     BResult ret = PreInit(opt);
     if (ret != BIO_OK) {
         return ret;
@@ -128,8 +132,6 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
     config.deviceId = opt.transDeviceId;
     if (opt.deviceTransType == "device_sdma") {
         config.dataOpType = SMEMB_DATA_OP_SDMA;
-    } else if (opt.deviceTransType == "device_rdma") {
-        config.dataOpType = SMEMB_DATA_OP_DEVICE_RDMA;
     } else {
         NET_LOG_ERROR("Unsupported deviceTransType: " << opt.deviceTransType);
         return BIO_ERR;
@@ -159,6 +161,7 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
     // }
     const std::chrono::seconds WAIT_TIME(10);
     std::this_thread::sleep_for(WAIT_TIME); // 等待初始化完成
+    NET_LOG_INFO("MfTransEngine initialize success");
     return BIO_OK;
 }
 

@@ -65,9 +65,9 @@ void KvcExit(void)
     DlBioSdkApi::Exit();
 }
 
-int32_t KvcRegisterKvCache(int32_t devId, std::vector<uint64_t> &kvCacheAddrs, std::vector<uint64_t> &kvCacheSizes)
+int32_t KvcRegisterKvCache(std::vector<uint64_t> &kvCacheAddrs, std::vector<uint64_t> &kvCacheSizes)
 {
-    return g_kvOperation->KvcRegisterKvCache(devId, kvCacheAddrs, kvCacheSizes);
+    return g_kvOperation->KvcRegisterKvCache(kvCacheAddrs, kvCacheSizes);
 }
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags)

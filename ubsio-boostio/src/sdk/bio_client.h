@@ -44,7 +44,7 @@ public:
         return instance;
     }
 
-    BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf);
+    BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId);
 
     void Exit();
 
@@ -305,6 +305,7 @@ private:
     net::BioClientNetPtr mNetEngine = nullptr;
     std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
+    int32_t mDeivceId = -1;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }
