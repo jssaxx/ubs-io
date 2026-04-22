@@ -223,9 +223,26 @@ int main(int argc, char **argv)
         fprintf(stderr, "[FAIL] malloc expect 失败\n");
         return 1;
     }
-    memcpy(expect, part1, sizeof(part1));
-    memcpy(expect + 1024, part2, sizeof(part2));
-    memcpy(expect + sizeof(part1), append, sizeof(append));
+    memset(expect, 0, (size_t)expect_size);
+    if ((size_t)expect_size >= sizeof(part1)) {
+        memcpy(expect, part1, sizeof(part1));
+    } else {
+        memcpy(expect, part1, (size_t)expect_size);
+    }
+    if ((size_t)expect_size > 1024) {
+        size_t part2_len = (size_t)expect_size - 1024;
+        if (part2_len > sizeof(part2)) {
+            part2_len = sizeof(part2);
+        }
+        memcpy(expect + 1024, part2, part2_len);
+    }
+    if ((size_t)expect_size > sizeof(part1)) {
+        size_t append_len = (size_t)expect_size - sizeof(part1);
+        if (append_len > sizeof(append)) {
+            append_len = sizeof(append);
+        }
+        memcpy(expect + sizeof(part1), append, append_len);
+    }
 
     if (check_file_size(file1, expect_size) != 0) {
         free(expect);
