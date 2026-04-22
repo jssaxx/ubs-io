@@ -110,7 +110,8 @@ int32_t InterceptorClientNetService::StartNetService()
     const char *connCountEnv = std::getenv("INTERCEPTOR_IPC_CONN_COUNT");
     ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_1, netOptions.connCount);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed.");
+        CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed, value:" <<
+            (connCountEnv == nullptr ? "<null>" : connCountEnv) << ".");
         return ret;
     }
     if (connCountEnv != nullptr && strlen(connCountEnv) > 0) {
@@ -143,7 +144,10 @@ int32_t InterceptorClientNetService::StartNetService()
     netOptions.handlerCount = netOptions.connCount;
     ret = mNetEngine->Start(netOptions);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Start ipc engine failed:" << ret << ".");
+        CLOG_ERROR("Start ipc engine failed, ret:" << ret << ", connCount:" << netOptions.connCount <<
+            ", handlerCount:" << netOptions.handlerCount << ", busyLoop:" <<
+            (netOptions.isBusyLoop ? "true" : "false") << ", cpuIds:" <<
+            FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
         return ret;
     }
 
@@ -152,17 +156,20 @@ int32_t InterceptorClientNetService::StartNetService()
     info.isSelfPoll = true;
     ret = mNetEngine->SyncConnect(info);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Start connect ipc engine failed:" << ret << ".");
+        CLOG_ERROR("Connect interceptor ipc channel failed, ret:" << ret << ", pid:" << mPid << ".");
         return ret;
     }
 
     ret = CreateDataMessageMem();
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Create data message memory failed:" << ret << ".");
+        CLOG_ERROR("Create interceptor data message memory failed, ret:" << ret << ", pid:" << mPid << ".");
         return ret;
     }
 
-    CLOG_DEBUG("Start net service success.");
+    CLOG_INFO("Start interceptor net service success, pid:" << mPid << ", connCount:" << netOptions.connCount <<
+        ", handlerCount:" << netOptions.handlerCount << ", busyLoop:" <<
+        (netOptions.isBusyLoop ? "true" : "false") << ", cpuIds:" <<
+        FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
     mReady.store(true);
     return 0;
 }
@@ -177,14 +184,14 @@ BResult InterceptorClientNetService::CreateDataMessageMem()
     auto ret = mNetEngine->SyncCall<InterceptorCreateDataMsgMemPoolRequest,
         InterceptorCreateDataMsgMemPoolResponse>(INVALID_NID, BIO_OP_INTERCEPTOR_CREATE_DATA_MSG_MEM_POOL, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Send create data message mem pool request failed:" << ret << ".");
+        CLOG_ERROR("Send create data message mem pool request failed, ret:" << ret << ", pid:" << mPid << ".");
         return ret;
     }
 
     int32_t realFd = -1;
     ret = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Receive file mem fd failed, ret:" << ret << ".");
+        CLOG_ERROR("Receive data message memory fd failed, ret:" << ret << ", pid:" << mPid << ".");
         return BIO_ERR;
     }
 
@@ -241,7 +248,8 @@ BResult InterceptorClientNetService::CreateDataMessageMem()
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
-    CLOG_DEBUG("Interceptor create data message memory success, poolSize:" << mShmLength <<
-        ", blockSize:" << mDataMsgMemBlockSize << ", blockCount:" << blockCount << ".");
+    CLOG_INFO("Create interceptor data message memory success, shmFd:" << mShmFd << ", poolSize:" << mShmLength <<
+        ", blockSize:" << mDataMsgMemBlockSize << ", blockCount:" << blockCount << ", shmOffset:" << mShmOffset <<
+        ", pid:" << mPid << ".");
     return BIO_OK;
 }
