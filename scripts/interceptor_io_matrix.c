@@ -260,16 +260,27 @@ static int write_case_pwritev_common(int fd, const uint8_t *data, size_t size, i
         off += second_parts[i];
         c2++;
     }
-    ssize_t ret1 = use64
-        ? pwritev64(fd, iov1, c1, 0)
-        : pwritev(fd, iov1, c1, 0);
-    if (ret1 != (ssize_t)half) {
-        return -1;
+    if (c1 > 0) {
+        ssize_t ret1 = use64
+            ? pwritev64(fd, iov1, c1, 0)
+            : pwritev(fd, iov1, c1, 0);
+        if (ret1 != (ssize_t)half) {
+            fprintf(stderr, "[FAIL] pwritev first stage failed size=%zu half=%zu ret=%zd c1=%d errno=%d\n",
+                size, half, ret1, c1, errno);
+            return -1;
+        }
     }
-    ssize_t ret2 = use64
-        ? pwritev64(fd, iov2, c2, (off64_t)half)
-        : pwritev(fd, iov2, c2, (off_t)half);
-    return ret2 == (ssize_t)tail ? 0 : -1;
+    if (c2 > 0) {
+        ssize_t ret2 = use64
+            ? pwritev64(fd, iov2, c2, (off64_t)half)
+            : pwritev(fd, iov2, c2, (off_t)half);
+        if (ret2 != (ssize_t)tail) {
+            fprintf(stderr, "[FAIL] pwritev second stage failed size=%zu tail=%zu ret=%zd c2=%d errno=%d\n",
+                size, tail, ret2, c2, errno);
+            return -1;
+        }
+    }
+    return 0;
 }
 
 static int write_one_file(const char *path, const char *api_name, int api_id, size_t size)
