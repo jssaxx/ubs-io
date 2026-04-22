@@ -124,45 +124,6 @@ static int make_case_dir(char *buf, size_t cap, const char *root)
     return ensure_dir(buf);
 }
 
-static int write_full(int fd, const uint8_t *buf, size_t len)
-{
-    size_t done = 0;
-    while (done < len) {
-        ssize_t ret = write(fd, buf + done, len - done);
-        if (ret < 0) {
-            return -1;
-        }
-        done += (size_t)ret;
-    }
-    return 0;
-}
-
-static int pwrite_full(int fd, const uint8_t *buf, size_t len, off_t off)
-{
-    size_t done = 0;
-    while (done < len) {
-        ssize_t ret = pwrite(fd, buf + done, len - done, off + (off_t)done);
-        if (ret < 0) {
-            return -1;
-        }
-        done += (size_t)ret;
-    }
-    return 0;
-}
-
-static int pwrite64_full(int fd, const uint8_t *buf, size_t len, off64_t off)
-{
-    size_t done = 0;
-    while (done < len) {
-        ssize_t ret = pwrite64(fd, buf + done, len - done, off + (off64_t)done);
-        if (ret < 0) {
-            return -1;
-        }
-        done += (size_t)ret;
-    }
-    return 0;
-}
-
 static int read_full(int fd, uint8_t *buf, size_t len)
 {
     size_t done = 0;
@@ -236,45 +197,16 @@ static void split_three(size_t total, size_t parts[3])
 
 static int write_case_write(int fd, const uint8_t *data, size_t size)
 {
-    size_t parts[3];
-    split_three(size, parts);
-    size_t off = 0;
-    for (int i = 0; i < 3; ++i) {
-        if (parts[i] == 0) {
-            continue;
-        }
-        if (write_full(fd, data + off, parts[i]) != 0) {
-            return -1;
-        }
-        off += parts[i];
-    }
-    return 0;
+    ssize_t ret = write(fd, data, size);
+    return ret == (ssize_t)size ? 0 : -1;
 }
 
 static int write_case_pwrite_common(int fd, const uint8_t *data, size_t size, int use64)
 {
-    size_t parts[3];
-    split_three(size, parts);
-    off_t offsets[3];
-    offsets[0] = (off_t)parts[1];
-    offsets[1] = 0;
-    offsets[2] = (off_t)(parts[0] + parts[1]);
-    const uint8_t *ptrs[3];
-    ptrs[0] = data + parts[0];
-    ptrs[1] = data;
-    ptrs[2] = data + parts[0] + parts[1];
-    for (int i = 0; i < 3; ++i) {
-        if (parts[i] == 0) {
-            continue;
-        }
-        int rc = use64
-            ? pwrite64_full(fd, ptrs[i], parts[i], (off64_t)offsets[i])
-            : pwrite_full(fd, ptrs[i], parts[i], offsets[i]);
-        if (rc != 0) {
-            return -1;
-        }
-    }
-    return 0;
+    ssize_t ret = use64
+        ? pwrite64(fd, data, size, (off64_t)0)
+        : pwrite(fd, data, size, (off_t)0);
+    return ret == (ssize_t)size ? 0 : -1;
 }
 
 static int write_case_writev(int fd, const uint8_t *data, size_t size)
@@ -389,8 +321,25 @@ static int write_one_file(const char *path, const char *api_name, int api_id, si
         free(verify);
         return -1;
     }
+    if (close(fd) != 0) {
+        perror("close");
+        free(data);
+        free(verify);
+        return -1;
+    }
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        perror("open verify");
+        free(data);
+        free(verify);
+        return -1;
+    }
     if (pread_full(fd, verify, size, 0) != 0) {
-        fprintf(stderr, "[FAIL] local verify read failed %s size=%zu errno=%d\n", api_name, size, errno);
+        struct stat st;
+        int stat_rc = stat(path, &st);
+        long long actual_size = stat_rc == 0 ? (long long)st.st_size : -1;
+        fprintf(stderr, "[FAIL] local verify read failed %s size=%zu errno=%d file_size=%lld\n",
+            api_name, size, errno, actual_size);
         close(fd);
         free(data);
         free(verify);
