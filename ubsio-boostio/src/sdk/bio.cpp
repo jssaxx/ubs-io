@@ -316,11 +316,62 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     return ToCResult(ret);
 }
 
-CResult BatchGetWithHbm(const char **keys, const uint32_t count, uint64_t *offsets, ObjLocation *locations,
-                            uint64_t **lengths, uintptr_t **valueAddrs, uint64_t **realLengths, int32_t *results)
+CResult Bio::BatchGetLocal(const char **keys, const uint32_t count, uint64_t *lengths,
+                           ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results)
 {
-    return 0;
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(keys == nullptr || lengths == nullptr ||
+                 locations == nullptr || valueAddrs == nullptr || results == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+        if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
+            return RET_CACHE_EPERM;
+        }
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET);
+    MirrorClient::MirrorBatchGetLocalHbm param{ { mTenantId, mAffinity, mStrategy },
+                                        keys, count, lengths, locations,
+                                        valueAddrs, results };
+    BResult ret = gClient->BatchGetLocal(param);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
+    }
+    return ToCResult(ret);
 }
+
+CResult Bio::BatchGetRemote(const char **keys, const uint32_t count,
+                            ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                            uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(keys == nullptr || memAddr == nullptr ||
+                 locations == nullptr || valueAddrs == nullptr || results == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET);
+    MirrorClient::MirrorBatchGetRemoteHbm param{ { mTenantId, mAffinity, mStrategy },
+                                                keys, count, locations, memAddr, memSize, row, col, valueAddrs, results };
+    BResult ret = gClient->BatchGetRemote(param);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
+    }
+    return ToCResult(ret);
+}
+
 
 void Bio::BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
 {
@@ -1029,6 +1080,37 @@ CResult BioBatchGet(uint64_t tenantId, const char **keys, const uint32_t count, 
         bioInstance = iter->second;
     }
     return bioInstance->BatchGet(keys, count, offsets, lengths, locations, valueAddrs, realLengths, results);
+}
+
+CResult BioBatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                         ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGetLocal(keys, count, lengths, locations, valueAddrs, results);
+}
+
+CResult BioBatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,
+                          ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                          uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGetRemote(keys, count, lengths, locations, valueAddrs, results);
 }
 
 CResult BioBatchGetFree(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count)

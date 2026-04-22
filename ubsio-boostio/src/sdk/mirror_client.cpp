@@ -1078,6 +1078,38 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
     return BIO_OK;
 }
 
+BResult MirrorClient::BatchGetLocal(MirrorBatchGetLocalHbm &param)
+{
+    bool isRetry = false;
+    uint64_t startTime = Monotonic::TimeSec();
+    BResult ret = BIO_OK;
+    do {
+        isRetry = false;
+        ret = BatchGetLocalImpl(param);
+        if (LIKELY(ret == BIO_OK)) {
+            break;
+        }
+        isRetry = FailHandler(ret, startTime, mTimeOut);
+    } while (isRetry);
+    return ret;
+}
+
+BResult MirrorClient::BatchGetRemote(MirrorBatchGetRemoteHbm &param)
+{
+    bool isRetry = false;
+    uint64_t startTime = Monotonic::TimeSec();
+    BResult ret = BIO_OK;
+    do {
+        isRetry = false;
+        ret = BatchGetRemoteImpl(param);
+        if (LIKELY(ret == BIO_OK)) {
+            break;
+        }
+        isRetry = FailHandler(ret, startTime, mTimeOut);
+    } while (isRetry);
+    return ret;
+}
+
 void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 {
     for (uint32_t i = 0; i < count; i++) {
@@ -1253,6 +1285,162 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
             free(plan.second.req);
         }
     }
+    return ret;
+}
+
+BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
+{
+    BResult ret = BIO_OK;
+    std::vector<uint32_t> nodes;
+    nodes.reserve(param.count);
+    std::unordered_map<uint16_t, BatchGetPlanHbm> planSend;
+    for (uint32_t i = 0; i < param.count; i++) {
+        uint16_t ptId =  ParseLocation(param.locations[i]);
+        CmPtInfo ptEntry;
+        ret = GetPtEntry(ptId, ptEntry);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Get pt entry failed ret:" << ret << ", ptId:" << ptId << ".");
+            return ret;
+        }
+        nodes[i] = ptEntry.masterNodeId;
+        if (planSend.find(nodes[i]) == planSend.end()) {
+
+            planSend.emplace(std::pair<uint16_t, BatchGetPlanHbm>(nodes[i],
+                                                               {1, 0, 0, nullptr}));
+        } else {
+            planSend.find(nodes[i])->second.count++;
+        }
+    }
+
+    auto it = planSend.begin();
+    for (uint16_t i = 0; i < planSend.size(); i++) {
+        size_t reqLen = 0;
+        if (mEnableTrance) {
+            it->second.req->enableTrance = true;
+            // todo 拷贝uuid
+            reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * (sizeof(GetKeyRemoteHbmInfo) + param.col * (sizeof(uintptr_t) + sizeof(size_t)));
+        } else {
+            reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * sizeof(GetKeyRemoteHbmInfo);
+        }
+
+        it->second.req = reinterpret_cast<BatchGetRemoteHbmRequest*>(malloc(reqLen));
+        if (UNLIKELY(it->second.req == nullptr)) {
+            CLIENT_LOG_ERROR("Alloc batch get request memory failed.");
+            // todo 异常回退资源；
+            auto callbackIt = planSend.begin();
+            for (uint16_t j = 0; j < i; j++) {
+                if (callbackIt->second.req != nullptr) {
+                    free(callbackIt->second.req);
+                }
+                callbackIt++;
+            }
+            return BIO_ALLOC_FAIL;
+        }
+        it->second.reqLen = reqLen;
+        it->second.req->count = it->second.count;
+        it->second.req->pid = getpid();
+        it->second.req->srcNid = mLocalNid.VNodeId();
+        it->second.req->isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
+
+        it++;
+    }
+
+    for (uint32_t i = 0; i < param.count; i++) {
+        param.results[i] = BIO_OK;
+        uintptr_t address = 0;
+        BResult ret = BIO_OK;
+        auto& plan = planSend[nodes[i]];
+        if (mEnableTrance) {
+            plan.req->keysInfo[plan.index].memCount = param.col;
+            for (uint32_t j = 0; j < param.col; j++) {
+                plan.req->keysInfo[plan.index].hbmMemAddr[j] = param.memAddr[i][j];
+                plan.req->keysInfo[plan.index].memSize[j] = param.memSize[i][j];
+            }
+        } else {
+            ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+            if (UNLIKELY(ret != BIO_OK)) {
+                CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
+                BatchGetHbmRecycleResouces(i, param);
+                auto callbackIt = planSend.begin();
+                for (uint16_t i = 0; i < planSend.size(); i++) {
+                    if (callbackIt->second.req != nullptr) {
+                        free(callbackIt->second.req);
+                    }
+                    callbackIt++;
+                }
+                return BIO_ALLOC_FAIL;
+            }
+            param.valueAddrs[i] = address;
+            plan.req->keysInfo[plan.index].address = address;
+            plan.req->keysInfo[plan.index].size = mDataMsgMemBlockSize; // 4M
+            plan.req->keysInfo[plan.index].mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+        }
+        CopyKey(plan.req->keysInfo[plan.index].key, param.keys[i], KEY_MAX_SIZE);
+        plan.req->keysInfo[plan.index].ptId = param.locations[i].location[0];
+        plan.req->keysInfo[plan.index].result = &(param.results[i]);
+        plan.index++;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND);
+    ret = SendBatchGetRemoteHbmRequest(planSend);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
+    }
+
+    // todo 清理req;
+    for (auto plan : planSend) {
+        if (plan.second.req != nullptr) {
+            free(plan.second.req);
+        }
+    }
+    return ret;
+}
+
+BResult MirrorClient::BatchGetLocalImpl(MirrorBatchGetLocalHbm &param)
+{
+    size_t reqLen = sizeof(BatchGetLocalHbmRequest) + param.count * sizeof(GetKeyLocalHbmInfo);
+    BatchGetLocalHbmRequest *req = reinterpret_cast<BatchGetLocalHbmRequest*>(malloc(reqLen));
+    if (UNLIKELY(req == nullptr)) {
+        CLIENT_LOG_ERROR("Alloc batch get request memory failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    BResult ret = BIO_OK;
+    for (uint32_t i = 0; i < param.count; i++) {
+        param.results[i] = BIO_OK;
+        uintptr_t address = 0;
+        ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
+            for (uint32_t j = 0; j < i; j++) {
+                mDataMsgMemPool->ReleaseOne(param.valuesAddr[i]);  // rollback.
+            }
+            free(req);
+            return BIO_ALLOC_FAIL;
+        }
+        param.valuesAddr[i] = address;
+        req->keysInfo[i].addressOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
+        CopyKey(req->keysInfo[i].key, param.keys[i], KEY_MAX_SIZE);
+        req->keysInfo[i].length = param.lengths[i];
+        req->keysInfo[i].ptId = param.locations[i].location[0];
+        req->keysInfo[i].size = mDataMsgMemBlockSize; // 4M
+        req->keysInfo[i].result = &(param.results[i]);
+    }
+    req->count = param.count;
+    req->pid = getpid();
+    req->isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND);
+    ret = SendBatchGetLocalHbmRequest(req,  reqLen);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
+        for (uint32_t j = 0; j < param.count; j++) {
+            mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
+        }
+    }
+    free(req);
     return ret;
 }
 
@@ -2298,7 +2486,7 @@ BResult MirrorClient::SendBatchGetKeyDiskAddrRequest(BatchParseKeyAddrRequest *r
     return agent::BioClientAgent::Instance()->BatchGetKeyDiskAddrLocal(req, reqLen, infos);
 }
 
-void MirrorClient::BatchGetRemote(uint16_t nodeId, uint32_t reqLen, BatchGetRequest *req, Callback &callback)
+void MirrorClient::SendBatchGetRemote(uint16_t nodeId, uint32_t reqLen, BatchGetRequest *req, Callback &callback)
 {
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_REMOTE_SYNC);
     net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(nodeId), BIO_OP_SDK_BATCH_GET,
@@ -2338,7 +2526,7 @@ BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetP
             continue;
         }
         BIO_TRACE_START(SDK_TRACE_BATCH_GET_REMOTE);
-        BatchGetRemote(plan.first, plan.second.reqLen, plan.second.req, callback);
+        SendBatchGetRemote(plan.first, plan.second.reqLen, plan.second.req, callback);
         BIO_TRACE_END(SDK_TRACE_BATCH_GET_REMOTE, BIO_OK);
     }
 
@@ -2352,6 +2540,51 @@ BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetP
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
     return cbCtx.result;
+}
+
+BResult MirrorClient::SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, BatchGetPlanHbm> &planSend)
+{
+    uint16_t quota = planSend.size();
+    ClientCallbackCtx cbCtx;
+    InitCallbackCtx(cbCtx, quota);
+    auto cbFunc = [&planSend](void *ctx, void *resp, uint32_t len, int32_t result) {
+        auto *cbCtx = (ClientCallbackCtx *)ctx;
+        if (UNLIKELY(result != BIO_OK)) {
+            cbCtx->result = result;
+        } else if (resp != nullptr) {
+            auto rsp = static_cast<BatchGetResponse *>(resp);
+            for (uint32_t i = 0; i < rsp->count; i++) {
+                *(planSend[rsp->nodeId].req->keysInfo[i].result) = rsp->results[i];
+            }
+        } else {
+            cbCtx->result = BIO_INVALID_PARAM;
+        }
+        if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
+            sem_post(&cbCtx->sem);
+        }
+    };
+    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+
+    auto it = planSend.begin();
+    for (auto plan : planSend) {
+        BIO_TRACE_START(SDK_TRACE_BATCH_GET_REMOTE);
+        net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(plan.first), BIO_OP_SDK_BATCH_GET_REMTOE_HBM,
+                                                     static_cast<void *>(plan.second.req), plan.second.reqLen, callback);
+        BIO_TRACE_END(SDK_TRACE_BATCH_GET_REMOTE, BIO_OK);
+    }
+
+
+    sem_wait(&cbCtx.sem);
+    sem_destroy(&cbCtx.sem);
+    return cbCtx.result;
+}
+
+BResult MirrorClient::SendBatchGetLocalHbmRequest(BatchGetLocalHbmRequest *req, uint32_t reqLen)
+{
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL);
+    auto ret = agent::BioClientAgent::Instance()->BatchGetLocalHbm(req, reqLen);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL, ret);
+    return ret;
 }
 
 BResult MirrorClient::GetShmDataCallBack(GetResponse *rsp, uint64_t &realLen, const GetRequest &req, char *value)

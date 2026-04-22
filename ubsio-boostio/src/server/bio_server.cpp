@@ -314,6 +314,7 @@ BResult BioServer::BioNetInit()
     if (mNetEngineInited) {
         return BIO_OK;
     }
+
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
 
@@ -358,6 +359,7 @@ BResult BioServer::BioNetInit()
     netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
+
     mNetEngineInited = true;
     return BIO_OK;
 }

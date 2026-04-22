@@ -133,6 +133,8 @@ public:
 
     void BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callback callback);
 
+    BResult BatchGetLocalHbm(BatchGetLocalHbmRequest *req,  uint32_t reqLen);
+
     BResult GetLocal(GetRequest &req, char *value, Callback callback);
 
     void DeleteLocal(DeleteRequest &req, Callback &callback);

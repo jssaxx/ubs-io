@@ -114,6 +114,23 @@ public:
                      uint64_t *realLengths, int32_t *results);
 
     /**
+     * @brief: Batch Get locaL value
+     *
+     * @param[in]: keys: multiple keys
+     * @param[in]: length : lengths of the get values
+     * @param[in]: location : location info
+     * @param[out]: valueAddrs : address of the values corresponding to multiple keys, need free
+     * @param[out]: results : result of getting multiple keys
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult BatchGetLocal(const char **keys, const uint32_t count, uint64_t *lengths,
+                               ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
+
+
+    CResult BatchGetRemote(const char **keys, const uint32_t count,
+                                ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                                uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
+    /**
      * @brief: Batch Get value
      *
      * @param[in]: tenantId: tenant id

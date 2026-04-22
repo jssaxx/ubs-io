@@ -110,6 +110,10 @@ void MirrorServer::RegisterOpcode()
         std::bind(&MirrorServer::HandleGet, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_BATCH_GET,
         std::bind(&MirrorServer::HandleBatchGet, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_BATCH_GET_LOCAL_HBM,
+        std::bind(&MirrorServer::HandleBatchGetHbm, this, std::placeholders::_1));
+    netEngine->RegisterNewRequestHandler(BIO_OP_SDK_BATCH_GET_REMTOE_HBM,
+        std::bind(&MirrorServer::HandleBatchGetHbm, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DELETE,
         std::bind(&MirrorServer::HandleDelete, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_STAT,
@@ -705,6 +709,48 @@ BResult MirrorServer::BatchSingleWriterRemote(bool isAlloc, std::vector<NetMrInf
     return ret;
 }
 
+BResult MirrorServer::BatchSingleWriterRemoteHbm(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
+                                              std::vector<NetMrInfo> &rMrVec, BatchGetRemoteHbmRequest *req)
+{
+    auto rMrSize = rMrVec.size();
+    if (UNLIKELY(rMrSize != NO_1)) {
+        if (isAlloc) {
+            for (auto mr : lMrVec) {
+                BioServer::Instance()->MemFree(mr.address);
+            }
+        }
+        LOG_ERROR("Remote addr size not equal to 1, size:" << rMrVec.size() << ".");
+        return BIO_INNER_ERR;
+    }
+    uint64_t off = 0;
+    BResult ret = BIO_OK;
+    BIO_TRACE_START(MIRROR_TRACE_GET_WRITE_DATA);
+    for (uint32_t idx = 0; idx < lMrVec.size(); idx++) {
+        if (UNLIKELY(lMrVec[idx].size + off) > rMrVec[0].size) {
+            ret = BIO_INNER_ERR;
+            break;
+        }
+        NetRequest rReq = BioServer::Instance()->GetNetEngine()->InitNetRequest(lMrVec[idx].address,
+                                                                                rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
+        uint32_t dstPid = req->isConvDeploy ? 0 : static_cast<uint32_t>(req->pid); // 融合部署场景目的端PID填充0
+        ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req->srcNid, dstPid, rReq);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lKey:" << lMrVec[idx].key <<
+                                                ", rKey:" << rMrVec[0].key << ", size:" << lMrVec[idx].size << ".");
+            break;
+        }
+        off += lMrVec[idx].size;
+    }
+    if (isAlloc) {
+        for (auto mr : lMrVec) {
+            BioServer::Instance()->MemFree(mr.address);
+        }
+    }
+    BIO_TRACE_END(MIRROR_TRACE_GET_WRITE_DATA, ret);
+
+    return ret;
+}
+
 BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
     ServiceContext &netCtx, GetRequest &req)
 {
@@ -918,6 +964,173 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
     }
     return ret;
 }
+
+BResult MirrorServer::WriterParseMrInfoHbm(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
+                                        std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc)
+{
+    // 1. parse remote mr info
+    uint64_t totalLen = 0;
+    for (auto addr : to->GetAddrs()) {
+        MrInfo mr;
+        addr.ToMrInfo(mr);
+        rMrVec.emplace_back(NetMrInfo(mr.address, mr.size, rKey));
+        totalLen += mr.size;
+    }
+
+    // 2. parse local mr info
+    NetMrInfo bioMr;
+
+    BResult ret = BioServer::Instance()->GetNetTransEngine()->MallocMem(totalLen, bioMr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
+        return ret;
+    }
+    ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address), totalLen);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+        BioServer::Instance()->MemFree(bioMr.address);
+        return ret;
+    }
+    isAlloc = true;
+    lMrVec.emplace_back(bioMr);
+    return BIO_OK;
+}
+
+BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, BatchGetRemoteHbmRequest *req)
+{
+    MrInfo mrInfo;
+    uint16_t localNid = Cm::Instance()->GetCmLocalNodeId().VNodeId();
+    RCacheSlicePtr sliceP = nullptr;
+    if (req->enableTrance) {
+        std::vector<FlowAddr> addrVec;
+        uint64_t length = 0;
+        for (uint32_t i = 0; i < req->count; i ++) {
+            mrInfo = {keyInfo.hbmMemAddr[i], static_cast<uint32_t>(keyInfo.memSize[i])};
+            addrVec.emplace_back(mrInfo);
+            length += keyInfo.memSize[i];
+        }
+        sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, length, addrVec);
+    } else {
+        mrInfo = { keyInfo.address, static_cast<uint32_t>(keyInfo.size) };
+        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+        sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.size, addrVec);
+    }
+
+    if (UNLIKELY(sliceP == nullptr)) {
+        LOG_ERROR("Make rcache slice failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    LOG_DEBUG("Mirror server get, key:" << keyInfo.key << ", mr size:" << keyInfo.size << ", slice: " <<
+                                        sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << "."
+                                        << " ptVersion:" << BioServer::Instance()->GetPtEntry(keyInfo.ptId).version <<
+                                        ", ptId:" << keyInfo.ptId);
+
+    auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+
+        if (req->enableTrance) {
+            // 1. parse remote mr info
+//            size_t totalLen = 0;
+//            for (auto addr : to->GetAddrs()) {
+//                MrInfo mr;
+//                addr.ToMrInfo(mr);
+//                totalLen += mr.size;
+//            }
+
+            NetMrInfo bioMr;
+            void* tranceMem;
+            BResult ret = BioServer::Instance()->GetNetTransEngine()->MallocMem(from->GetLength(), tranceMem);
+            if (UNLIKELY(ret != BIO_OK)) {
+                LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
+                return ret;
+            }
+            ret = mSliceOp.Copy(from, reinterpret_cast<char *>(tranceMem), from->GetLength());
+            if (UNLIKELY(ret != BIO_OK)) {
+                LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+                BioServer::Instance()->GetNetTransEngine()->FreeMem(tranceMem);
+                return ret;
+            }
+            TransParam transReq;
+            transReq.remoteUniqueId = std::string(req->uuid);
+            std::vector<void*> localAddrs;
+            std::vector<void*> remoteAddrs;
+            std::vector<size_t> dataSizes;
+            localAddrs.reserve(keyInfo.memCount);
+            remoteAddrs.reserve(keyInfo.memCount);
+            dataSizes.reserve(keyInfo.memCount);
+            size_t dataSize = 0;
+            for (uint32_t i = 0; i < keyInfo.memCount; i++) {
+                localAddrs.emplace_back(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(tranceMem) + dataSize));
+                remoteAddrs.emplace_back(reinterpret_cast<void*>(keyInfo.hbmMemAddr[i]));
+                dataSizes.emplace_back(keyInfo.memSize[i]);
+                dataSize += keyInfo.memSize[i];
+            }
+            transReq.remoteAddrs = remoteAddrs;
+            transReq.dataSizes = dataSizes;
+            transReq.localAddrs = localAddrs;
+            ret = BioServer::Instance()->GetNetTransEngine()->Write(transReq);
+            if (ret != BIO_OK) {
+                LOG_ERROR("Trans net write fail, ret:" << ret << ".");
+            }
+            BioServer::Instance()->GetNetTransEngine()->FreeMem(tranceMem);
+            return ret;
+        } else {
+            bool isAlloc = false;
+            std::vector<NetMrInfo> rMrVec;
+            std::vector<NetMrInfo> lMrVec;
+            BResult ret = WriterParseMrInfo(from, to, rMrVec, lMrVec, keyInfo.mrKey, isAlloc);
+            if (ret != BIO_OK) {
+                return ret;
+            }
+            return BatchSingleWriterRemoteHbm(isAlloc, lMrVec, rMrVec, req);
+        }
+    };
+
+    uint64_t realLen = 0;
+    BIO_TRACE_START(MIRROR_TRACE_GET);
+    BResult ret = Cache::Instance().Get(keyInfo.key, 0, sliceP, writer, realLen);
+    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << keyInfo.key << ".");
+    }
+    return ret;
+}
+
+
+BResult MirrorServer::BatchSingleGetLocalHbm(GetKeyLocalHbmInfo &keyInfo, BatchGetLocalHbmRequest *req)
+{
+    MrInfo mrInfo;
+    uint16_t localNid = Cm::Instance()->GetCmLocalNodeId().VNodeId();
+    RCacheSlicePtr sliceP = nullptr;
+    auto localAddr = TransDataMsgMemAddr(req->pid, keyInfo.addressOffset);
+    mrInfo = { localAddr, static_cast<uint32_t>(keyInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+    sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.length, addrVec);
+    if (UNLIKELY(sliceP == nullptr)) {
+        LOG_ERROR("Make rcache slice failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    LOG_DEBUG("Mirror server get, key:" << keyInfo.key <<
+                                        ", length:" << keyInfo.length << ", mr size:" << keyInfo.size << ", slice: " <<
+                                        sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << "."
+                                        << " ptVersion:" << BioServer::Instance()->GetPtEntry(keyInfo.ptId).version <<
+                                        ", ptId:" << keyInfo.ptId);
+
+    auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        return mSliceOp.Copy(from, to);
+    };
+
+    uint64_t realLen = 0;
+    BIO_TRACE_START(MIRROR_TRACE_GET);
+    BResult ret = Cache::Instance().Get(keyInfo.key, 0, sliceP, writer, realLen);
+    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << keyInfo.key << ".");
+    }
+    return ret;
+}
+
 
 BResult MirrorServer::Delete(DeleteRequest &req)
 {
@@ -1731,6 +1944,88 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
     return BIO_OK;
 }
 
+int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGetLocalHbmRequest *req)
+{
+    volatile uint32_t keyNum = req->count;
+    sem_t sem;
+    sem_init(&sem, 0, 0);
+    std::vector<uint64_t> realLengths(req->count);
+    std::vector<int32_t> results(req->count);
+
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
+    for (uint32_t i = 0; i < req->count; i++) {
+        uint32_t index = i;
+        std::function<void()> func = [&, index]() {
+            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_LOCAL);
+            results[index] = BatchSingleGetLocalHbm(req->keysInfo[index], req);
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_LOCAL, results[index]);
+            if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
+                // 最后一个任务唤醒主线程.
+                sem_post(&sem);
+            }
+        };
+
+        if (!mBatchGetExecutor->Execute(func)) {
+            LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+            return BIO_OK;
+        }
+    }
+    sem_wait(&sem);
+    sem_destroy(&sem);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
+
+    BatchGetLocalHbmResponse rsp;
+    rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
+    rsp.count = req->count;
+    for (uint32_t i = 0; i < req->count; i++) {
+        rsp.results[i] = results[i];
+    }
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetLocalHbmResponse));
+    return BIO_OK;
+}
+
+int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGetRemoteHbmRequest *req)
+{
+    volatile uint32_t keyNum = req->count;
+    sem_t sem;
+    sem_init(&sem, 0, 0);
+    std::vector<uint64_t> realLengths(req->count);
+    std::vector<int32_t> results(req->count);
+
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
+    for (uint32_t i = 0; i < req->count; i++) {
+        uint32_t index = i;
+        std::function<void()> func = [&, index]() {
+            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET);
+            results[index] = BatchSingleGetHbm(req->keysInfo[index], req);
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, results[index]);
+            if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
+                // 最后一个任务唤醒主线程.
+                sem_post(&sem);
+            }
+        };
+
+        if (!mBatchGetExecutor->Execute(func)) {
+            LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+            return BIO_OK;
+        }
+    }
+    sem_wait(&sem);
+    sem_destroy(&sem);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
+
+    BatchGetRemoteHbmResponse rsp;
+    rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
+    rsp.count = req->count;
+    for (uint32_t i = 0; i < req->count; i++) {
+        rsp.results[i] = results[i];
+    }
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetRemoteHbmResponse));
+    return BIO_OK;
+}
+
 int32_t MirrorServer::MirrorServerBatchParseKeyAddr(ServiceContext &ctx, BatchParseKeyAddrRequest *req)
 {
     if (UNLIKELY(req->count > NO_1024)) {
@@ -1805,6 +2100,40 @@ int32_t MirrorServer::HandleBatchGet(ServiceContext &ctx)
 
     auto req = static_cast<BatchGetRequest *>(ctx.MessageData());
     return MirrorServerBatchGet(ctx, req);
+}
+
+int32_t MirrorServer::HandleBatchGetLocalHbm(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(BatchGetHbmLocalRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<BatchGetHbmLocalRequest *>(ctx.MessageData());
+    return MirrorServerBatchGetLocalHbm(ctx, req);
+}
+
+int32_t MirrorServer::HandleBatchGetRemoteHbm(ServiceContext &ctx)
+{
+    if (UNLIKELY(!Ready())) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+        return BIO_OK;
+    }
+
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(BatchGetRemoteHbmRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto req = static_cast<BatchGetRemoteHbmRequest *>(ctx.MessageData());
+    return MirrorServerBatchGetRemoteHbm(ctx, req);
 }
 
 int32_t MirrorServer::MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req)

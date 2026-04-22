@@ -111,6 +111,29 @@ public:
                        realLengths(realLengthsParam), results(resultsParam) {}
     };
 
+    struct MirrorBatchGetLocalHbm {
+        CacheAttr attr;
+        const char **keys;
+        uint32_t count;
+        uint64_t *lengths;
+        ObjLocation *locations;
+        uintptr_t *valuesAddr;
+        int32_t *results;
+    };
+
+    struct MirrorBatchGetRemoteHbm {
+        CacheAttr attr;
+        const char **keys;
+        const uint32_t count;
+        ObjLocation *locations;
+        uintptr_t **memAddr;
+        size_t **memSize;
+        uint32_t row;
+        uint32_t col;
+        uintptr_t *valueAddrs;
+        int32_t *results;
+    };
+
     struct BatchExistSendKeyInfo {
         CmPtInfo ptEntry;
         bool result = true;
@@ -172,6 +195,10 @@ public:
     BResult DispathBatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets,
                                           uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
                                           uint64_t *realLengths, int32_t *results);
+
+    BResult BatchGetLocal(MirrorBatchGetLocalHbm &param);
+
+    BResult BatchGetRemote(MirrorBatchGetRemoteHbm &param);
 
     void BatchFree(uintptr_t *valueAddrs, const uint32_t count);
 
@@ -297,6 +324,23 @@ private:
 
     BResult BatchGetImpl(MirrorBatchGet &param);
 
+    inline void BatchGetHbmRecycleResouces(uint32_t index, MirrorBatchGetHbm &param)
+    {
+        if (mEnableTrance) {
+            for (uint32_t j = 0; j < index; j++) {
+                // todo 清理req;
+            }
+        } else {
+            for (uint32_t j = 0; j < index; j++) {
+                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
+            }
+        }
+    }
+
+    BResult BatchGetLocalImpl(MirrorBatchGetLocalHbm &param);
+
+    BResult BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param);
+
     BResult GetImpl(MirrorGet &param, AsyncOpParam &opParam);
 
     BResult DeleteKeyImpl(const char *key, const ObjLocation &location);
@@ -376,8 +420,10 @@ private:
     BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, uint64_t &realLen);
     BResult SendGetRequest(CmPtInfo &ptEntry, GetRequest &req, char *value, uint64_t &realLen);
     BResult SendBatchGetKeyDiskAddrRequest(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
-    void BatchGetRemote(uint16_t nodeId, uint32_t reqLen, BatchGetRequest *req, Callback &callback);
+    void SendBatchGetRemote(uint16_t nodeId, uint32_t reqLen, BatchGetRequest *req, Callback &callback);
     BResult SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetPlan> &planSend);
+    BResult SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, BatchGetPlanHbm> &planSend);
+    BResult SendBatchGetLocalHbmRequest(BatchGetLocalHbmRequest *req, uint32_t reqLen);
     BResult GetShmDataCallBack(GetResponse *rsp, uint64_t &realLen, const GetRequest &req, char *value);
     BResult GetRpcDataCallBack(GetResponse *rsp, const GetRequest &req, char *value, uint64_t &realLen);
     BResult GetFromServer(GetRequest &req, uint16_t serverNid, char *value, AsyncOpParam &opParam);
@@ -480,6 +526,7 @@ private:
     uint32_t mAlignSize = NO_1;
     uint32_t mTimeOut = NO_60;
     bool mEnableCrc { false };
+    bool mEnableTrance { false };
     BioQosPtr mBioQos = nullptr;
     uint8_t *mDataMsgMemAddr = nullptr;
     uint64_t mDataMsgMemSize = 0;

@@ -372,45 +372,72 @@ struct BatchGetPlan {
 };
 
 typedef struct {
-    char key[KEY_MAX_SIZE];
-    uint16_t ptId;
-    uint32_t size;
-    uint32_t count;
-    uintptr_t hbmAddr[MAX_KV_HBM_SIZE];
-    uint64_t hbmLength[MAX_KV_HBM_SIZE];
-} GetKeHbmInfo;
-
-
-typedef struct {
-    uint32_t count;
-    pid_t pid;
-    bool isConvDeploy;
-    GetKeHbmInfo keysInfo[0];
-} BatchGetRequestByHbm;
-
-typedef struct {
-    char key[KEY_MAX_SIZE];
-    uint16_t ptId;
-    uint32_t size;
-    uint32_t count;
-    uintptr_t hbmAddr[MAX_KV_HBM_SIZE];
-    uint64_t hbmLength[MAX_KV_HBM_SIZE];
-} GetKeHbmInfo;
-
-
-typedef struct {
-    uint32_t count;
-    pid_t pid;
-    bool isConvDeploy;
-    GetKeHbmInfo keysInfo[0];
-} BatchGetRequestByHbm;
-
-typedef struct {
     uint64_t realLengths[KEY_MAX_COUNT];
     int32_t results[KEY_MAX_COUNT];
     uint32_t count;
     uint16_t nodeId;
 } BatchGetResponse;
+
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint64_t length;
+    uintptr_t addressOffset;
+    uint32_t size;
+    uint16_t ptId;
+    int32_t *result;
+} GetKeyLocalHbmInfo;
+
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uintptr_t address;
+    uint64_t mrKey;
+    uint32_t size;
+    uint16_t ptId;
+    int32_t *result;
+    uint32_t memCount;
+    uintptr_t *hbmMemAddr;
+    size_t *memSize;
+} GetKeyRemoteHbmInfo;
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    uint16_t srcNid;
+    bool isConvDeploy;
+    bool enableTrance = false;
+    char uuid[MAX_UUID_SIZE];
+    GetKeyRemoteHbmInfo keysInfo[0];
+} BatchGetRemoteHbmRequest;
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    uint16_t srcNid;
+    bool isConvDeploy;
+    GetKeyLocalHbmInfo keysInfo[0];
+} BatchGetLocalHbmRequest;
+
+struct BatchGetPlanHbm {
+    uint32_t count;
+    uint32_t index;
+    uint32_t reqLen;
+    BatchGetRemoteHbmRequest *req;
+    BatchGetPlanHbm() : count(0), index(0), reqLen(0), req(nullptr) {}
+    BatchGetPlanHbm(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam, BatchGetRemoteHbmRequest *reqParam) :
+            count(countParam), index(indexParam), reqLen(reqLenParam), req(reqParam) {}
+};
+
+typedef struct {
+    int32_t results[KEY_MAX_COUNT];
+    uint16_t nodeId;
+    uint32_t count;
+} BatchGetLocalHbmResponse;
+
+typedef struct {
+    int32_t results[KEY_MAX_COUNT];
+    uint16_t nodeId;
+    uint32_t count;
+} BatchGetRemoteHbmResponse;
 
 /* Stat */
 typedef struct {

@@ -133,6 +133,16 @@ public:
                                         valueAddrs, realLengths, results);
     }
 
+    inline BResult BatchGetLocal(MirrorClient::MirrorBatchGetLocalHbm &param)
+    {
+        return mMirror->BatchGetLocal(param);
+    }
+
+    inline BResult BatchGetRemote(MirrorClient::MirrorBatchGetRemoteHbm &param)
+    {
+        return mMirror->BatchGetRemote(param);
+    }
+
     inline void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
     {
         mMirror->BatchFree(valueAddrs, count);
