@@ -43,24 +43,6 @@ struct CachedWriteBlock {
         }
     }
 };
-
-inline const char *GetIoPathType(size_t requestLen)
-{
-    if (requestLen <= MAX_SMALL_WRITE_SIZE) {
-        return "small";
-    }
-    if (requestLen <= MAX_LARGE_WRITE_SIZE) {
-        return "large";
-    }
-    return "native";
-}
-
-inline void LogIoSuccess(const char *api, const char *pathType, int fd, uint64_t inode, off_t offset,
-    size_t requestLen, ssize_t retLen)
-{
-    CLOG_DEBUG("Interceptor " << api << " " << pathType << " success, fd:" << fd << ", inode:" << inode <<
-        ", offset:" << offset << ", requestLen:" << requestLen << ", ret:" << retLen << ".");
-}
 }
 
 static thread_local CachedWriteBlock g_cachedWriteBlock;
@@ -358,9 +340,7 @@ ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
-    auto ret = PreadInner(fd, buf, count, offset);
-    LogIoSuccess("pread", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
-    return ret;
+    return PreadInner(fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::Pread64(int fd, void *buf, size_t count, off64_t offset)
@@ -371,9 +351,7 @@ ssize_t ProxyOperations::Pread64(int fd, void *buf, size_t count, off64_t offset
         return CONTEXT.GetOperations()->pread64(fd, buf, count, offset);
     }
 
-    auto ret = PreadInner(fd, buf, count, offset);
-    LogIoSuccess("pread64", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
-    return ret;
+    return PreadInner(fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
@@ -397,7 +375,6 @@ ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
     }
 
     offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
-    LogIoSuccess("read", GetIoPathType(nbytes), fd, file->GetInode(), offset - ret, nbytes, ret);
     return ret;
 }
 
@@ -432,7 +409,6 @@ ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
     }
 
     offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
-    LogIoSuccess("readv", GetIoPathType(bufVec.size), fd, file->GetInode(), offset - ret, bufVec.size, ret);
     return ret;
 }
 
@@ -459,7 +435,6 @@ ssize_t ProxyOperations::Preadv64(int fd, const struct iovec *vector, int iovcnt
         return -1;
     }
 
-    LogIoSuccess("preadv64", GetIoPathType(bufVec.size), fd, file->GetInode(), offset, bufVec.size, ret);
     return ret;
 }
 
@@ -680,7 +655,6 @@ ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
     }
 
     offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
-    LogIoSuccess("write", GetIoPathType(nbytes), fd, file->GetInode(), offset - ret, nbytes, ret);
     return ret;
 }
 
@@ -697,7 +671,6 @@ ssize_t ProxyOperations::Pwrite(int fd, const void *buf, size_t count, off_t off
         errno = EIO;
         return -1;
     }
-    LogIoSuccess("pwrite", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
     return ret;
 }
 
@@ -714,7 +687,6 @@ ssize_t ProxyOperations::Pwrite64(int fd, const void *buf, size_t count, off64_t
         errno = EIO;
         return -1;
     }
-    LogIoSuccess("pwrite64", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
     return ret;
 }
 
@@ -744,7 +716,6 @@ ssize_t ProxyOperations::Writev(int fd, const struct iovec *vector, int count)
     }
 
     offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
-    LogIoSuccess("writev", GetIoPathType(bufVec.size), fd, file->GetInode(), offset - ret, bufVec.size, ret);
     return ret;
 }
 
@@ -766,7 +737,6 @@ ssize_t ProxyOperations::Pwritev(int fd, const struct iovec *vector, int count, 
         errno = EIO;
         return -1;
     }
-    LogIoSuccess("pwritev", GetIoPathType(bufVec.size), fd, file->GetInode(), offset, bufVec.size, ret);
     return ret;
 }
 
@@ -788,6 +758,5 @@ ssize_t ProxyOperations::Pwritev64(int fd, const struct iovec *vector, int count
         errno = EIO;
         return -1;
     }
-    LogIoSuccess("pwritev64", GetIoPathType(bufVec.size), fd, file->GetInode(), offset, bufVec.size, ret);
     return ret;
 }

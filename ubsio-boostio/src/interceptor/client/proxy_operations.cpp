@@ -289,13 +289,12 @@ int ProxyOperations::Close(int fd)
     }
 
     CONTEXT.files.Erase(fd);
-    auto ret = CONTEXT.GetOperations()->close(fd);
-    CLOG_DEBUG("Interceptor close complete, fd:" << fd << ", ret:" << ret << ".");
-    return ret;
+    return CONTEXT.GetOperations()->close(fd);
 }
 
 int32_t ProxyOperations::OpenInner(const char *path, int fd)
 {
+    CLOG_DEBUG("Open file::" << path << ", fd:" << fd << ".");
     std::string restoredPath;
     auto ret = FullPath(path, restoredPath);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -316,8 +315,6 @@ int32_t ProxyOperations::OpenInner(const char *path, int fd)
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
-        CLOG_DEBUG("Interceptor open success, path:" << restoredPath << ", fd:" << fd <<
-            ", inode:" << statBuf.st_ino << ".");
     }
 
     return BIO_OK;
@@ -325,6 +322,7 @@ int32_t ProxyOperations::OpenInner(const char *path, int fd)
 
 int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
 {
+    CLOG_DEBUG("Open dir fd:" << dirFd << ", file:" << path << ", fd:" << fd << ".");
     std::string restoredPath;
     auto ret = FullPath(dirFd, path, restoredPath);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -345,8 +343,6 @@ int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
-        CLOG_DEBUG("Interceptor openat success, dirFd:" << dirFd << ", path:" << restoredPath << ", fd:" << fd <<
-            ", inode:" << statBuf.st_ino << ".");
     }
 
     return BIO_OK;
@@ -354,6 +350,7 @@ int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
 
 int32_t ProxyOperations::CreateInner(const char *path, int fd)
 {
+    CLOG_DEBUG("Create file:" << path << ", fd:" << fd << ".");
     std::string restoredPath;
     auto ret = FullPath(path, restoredPath);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -374,8 +371,6 @@ int32_t ProxyOperations::CreateInner(const char *path, int fd)
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
-        CLOG_DEBUG("Interceptor create success, path:" << restoredPath << ", fd:" << fd <<
-            ", inode:" << statBuf.st_ino << ".");
     }
 
     return BIO_OK;
