@@ -62,7 +62,7 @@ typedef enum {
     /* add here */
     SMEMB_COPY_BUTT
 } smem_bm_copy_type;
-
+typedef smem_bm_copy_type smem_bm_copy_type_t; /* renamed to smem_bm_copy_type_t */
 /*
  * @brief Transfer role, i.e. sender/receiver
  */
@@ -105,12 +105,12 @@ using mfSmemTransFreeFunc = int32_t (*)(smem_trans_t, void *);
 using mfSmemTransRegisterMemFunc = int32_t (*)(smem_trans_t, void *, size_t, uint32_t);
 using mfSmemTransBatchRegisterMemFunc = int32_t (*)(smem_trans_t, void **, size_t *, uint32_t, uint32_t);
 using mfSmemTransDeRegisterMemFunc = int32_t (*)(smem_trans_t, void *);
-using mfSmemTransWriteFunc = int32_t (*)(smem_trans_t, const void *, const char *, void *, size_t, int32_t, uint32_t);
+using mfSmemTransWriteFunc = int32_t (*)(smem_trans_t, const void *, const char *, void *, size_t, smem_bm_copy_type, uint32_t);
 using mfSmemTransBatchWriteFunc = int32_t (*)(smem_trans_t, const void **, const char *,
-                                              void **, size_t *, uint32_t, int32_t, uint32_t);
-using mfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, const void *, size_t, int32_t, uint32_t);
+                                              void **, size_t *, uint32_t, smem_bm_copy_type, uint32_t);
+using mfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, const void *, size_t, smem_bm_copy_type, uint32_t);
 using mfSmemTransBatchReadFunc = int32_t (*)(smem_trans_t, void **, const char *,
-                                             const void **, size_t *, uint32_t, int32_t, uint32_t);
+                                             const void **, size_t *, uint32_t, smem_bm_copy_type, uint32_t);
 using mfSemTransGetRpcPortFunc = int32_t (*)(const char *, int32_t *);
 
 class DlMfApi {
