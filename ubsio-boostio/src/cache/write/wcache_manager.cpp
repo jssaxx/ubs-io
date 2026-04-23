@@ -76,6 +76,10 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 
 BResult WCacheManager::EvictNegotiateExecutorInit()
 {
+    if (BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel == NO_100) {
+        LOG_INFO("wcacheMemEvictLevel is 100, skip evict negotiate service init");
+        return BIO_OK;
+    }
     mEvictNegotiateService = ExecutorService::Create(NEGOTIATE_EVICT_THREAD_NUM, NEGOTIATE_QUEUE_SIZE);
     if (UNLIKELY(mEvictNegotiateService == nullptr)) {
         LOG_ERROR("Failed to start execution service for consult evict, probably out of memory");
@@ -921,6 +925,32 @@ BResult WCacheManager::ClearProcCache(uint32_t procId)
     ChkTrue(result, BIO_INNER_ERR, "Execute destroy evict service failed.");
     BIO_TP_END;
 
+    return BIO_OK;
+}
+
+BResult WCacheManager::ClearClientCache(uint64_t procId, uint32_t &clearedCount)
+{
+    clearedCount = 0;
+    LOG_INFO("Clear client cache, procId:" << procId);
+
+    std::vector<uint64_t> flowIdsToClear;
+    {
+        ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+        for (const auto &flowIt : mWCacheManager) {
+            if (procId == flowIt.second->GetProcId()) {
+                flowIdsToClear.push_back(flowIt.first);
+            }
+        }
+    }
+
+    for (uint64_t flowId : flowIdsToClear) {
+        BResult ret = DeleteWCache(flowId);
+        if (ret == BIO_OK) {
+            clearedCount++;
+        }
+    }
+
+    LOG_INFO("Clear client cache done, procId:" << procId << ", clearedCount:" << clearedCount);
     return BIO_OK;
 }
 

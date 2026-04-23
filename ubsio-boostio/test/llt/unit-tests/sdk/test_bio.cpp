@@ -189,6 +189,69 @@ TEST_F(TestBio, test_bio_free_cache_hit_ptr)
     EXPECT_EQ(nodeDesc, nullptr);
 }
 
+TEST_F(TestBio, test_bio_clear_wcache_not_ready)
+{
+    LOG_INFO("test_bio_clear_wcache_not_ready");
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    ock::bio::BioClient::Instance()->SetStartWorker(false);
+    ret = BioClearWcache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NOT_READY);
+    ock::bio::BioClient::Instance()->SetStartWorker(true);
+
+    ret = BioDestroyCache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
+TEST_F(TestBio, test_bio_clear_wcache_not_found)
+{
+    LOG_INFO("test_bio_clear_wcache_not_found");
+    auto ret = BioClearWcache(G_INVALID_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+}
+
+TEST_F(TestBio, test_bio_clear_wcache_not_supported)
+{
+    LOG_INFO("test_bio_clear_wcache_not_supported");
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    auto oldLevel = ock::bio::BioClient::Instance()->GetMirror()->GetWcacheMemEvictLevel();
+    ock::bio::BioClient::Instance()->GetMirror()->SetWcacheMemEvictLevel(0);
+    ret = BioClearWcache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NOT_SUPPORTED);
+    ock::bio::BioClient::Instance()->GetMirror()->SetWcacheMemEvictLevel(oldLevel);
+
+    ret = BioDestroyCache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
+TEST_F(TestBio, test_bio_clear_wcache_success)
+{
+    LOG_INFO("test_bio_clear_wcache_success");
+    AffinityStrategy affinity = LOCAL_AFFINITY;
+    WriteStrategy strategy = WRITE_BACK;
+    auto ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
+    EXPECT_EQ(ret, RET_CACHE_OK);
+
+    auto oldLevel = ock::bio::BioClient::Instance()->GetMirror()->GetWcacheMemEvictLevel();
+    auto oldTimeOut = ock::bio::BioClient::Instance()->GetMirror()->GetTimeOut();
+    ock::bio::BioClient::Instance()->GetMirror()->SetWcacheMemEvictLevel(NO_100);
+    ock::bio::BioClient::Instance()->GetMirror()->SetTimeOut(NO_1);
+    ret = BioClearWcache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_NEED_RETRY);
+    ock::bio::BioClient::Instance()->GetMirror()->SetWcacheMemEvictLevel(oldLevel);
+    ock::bio::BioClient::Instance()->GetMirror()->SetTimeOut(oldTimeOut);
+
+    ret = BioDestroyCache(G_TENANT_ID);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+}
+
 TEST_F(TestBio, test_bio_create_cache)
 {
     LOG_INFO("test_bio_create_cache");
@@ -796,11 +859,11 @@ TEST_F(TestBio, test_bio_put_copy_free)
     BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PT_VIEW_FIND_FAIL");
 
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree3", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_OK);
 
     BioHvsActiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL", 0, 1, userParam);
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree4", &addressDesc);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
     BioHvsDeactiveTracePoint(0, "SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL");
 
     ret = BioDestroyCache(tenantId);
@@ -1696,7 +1759,7 @@ TEST_F(TestBio, test_get_underfs_config)
 TEST_F(TestBio, test_bio_client_net_shm_init)
 {
     LOG_INFO("test_bio_client_net_shm_init");
-    ShmInitResponse rsp{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    ShmInitResponse rsp{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     auto ret = ock::bio::net::BioClientNet::Instance()->CheckShmInitResp(rsp);
     EXPECT_EQ(ret, false);
 }

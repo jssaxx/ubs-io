@@ -492,6 +492,11 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
 
 BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
+    if (UnderFs::IsNone()) {
+        LOG_ERROR("UnderFS is none, cannot load from underfs, key:" << key);
+        return BIO_ERR;
+    }
+
     auto config = BioConfig::Instance()->GetDaemonConfig();
     auto diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
     uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;

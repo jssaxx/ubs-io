@@ -39,6 +39,7 @@ typedef enum {
     RET_CACHE_EXISTS = 15,       // cache already exists
     RET_CACHE_DISK_FAULT = 16,   // cache disk fault
     RET_CACHE_UFS_FAULT = 17,    // cache ufs fault
+    RET_CACHE_NOT_SUPPORTED = 18, // operation not supported
     RET_CACHE_BUTT
 } CResult;
 
@@ -202,6 +203,14 @@ CResult BioShowCacheHitRatio(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDe
  * @return: void
  */
 void BioFreeCacheHitPtr(CacheHitFinalDesc **nodeDesc, uint64_t nodeNum);
+
+/**
+ * @brief: Clear wcache for current process
+ *
+ * @param[in]: tenantId: tenant id
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioClearWcache(uint64_t tenantId);
 
 /**
  * @brief: Create cache instance

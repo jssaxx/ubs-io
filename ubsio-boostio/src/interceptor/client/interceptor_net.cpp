@@ -11,6 +11,9 @@
  */
 
 #include <utility>
+#include <limits>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -41,6 +44,50 @@ static void Log(int level, const char *msg)
     }
 }
 
+static bool ParseBoolEnv(const char *envName, bool defaultValue)
+{
+    const char *envValue = std::getenv(envName);
+    if (envValue == nullptr || strlen(envValue) == 0) {
+        return defaultValue;
+    }
+    return strcasecmp(envValue, "1") == 0 || strcasecmp(envValue, "true") == 0 ||
+           strcasecmp(envValue, "yes") == 0 || strcasecmp(envValue, "on") == 0;
+}
+
+static BResult ParseUInt16Env(const char *envName, uint16_t defaultValue, uint16_t &value)
+{
+    value = defaultValue;
+    const char *envValue = std::getenv(envName);
+    if (envValue == nullptr || strlen(envValue) == 0) {
+        return BIO_OK;
+    }
+
+    long parsed = 0;
+    if (!StrUtil::StrToLong(envValue, parsed) || parsed <= 0 ||
+        parsed > static_cast<long>(std::numeric_limits<uint16_t>::max())) {
+        return BIO_INVALID_PARAM;
+    }
+    value = static_cast<uint16_t>(parsed);
+    return BIO_OK;
+}
+
+static std::string FormatWorkerGroupCpuIdsRange(const std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i != 0) {
+            oss << ",";
+        }
+        const auto &range = ranges[i];
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            oss << "-1";
+        } else {
+            oss << range.first << "-" << range.second;
+        }
+    }
+    return oss.str();
+}
+
 int32_t InterceptorClientNetService::StartNetService()
 {
     mNetEngine = MakeRef<NetEngine>();
@@ -57,14 +104,50 @@ int32_t InterceptorClientNetService::StartNetService()
     }
 
     NetOptions netOptions;
-    netOptions.isBusyLoop = false;
     netOptions.role = Role::NET_CLIENT;
     netOptions.protocol = ServiceProtocol::SHM;
-    netOptions.connCount = NO_4;
-    netOptions.handlerCount = 1;
+    netOptions.workerGroupCpuIdsRange = DefaultWorkerGroupCpuIdsRange(IPC_WORKER_GROUP_CPU_RANGE_COUNT);
+    const char *connCountEnv = std::getenv("INTERCEPTOR_IPC_CONN_COUNT");
+    ret = ParseUInt16Env("INTERCEPTOR_IPC_CONN_COUNT", NO_1, netOptions.connCount);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed, value:" <<
+            (connCountEnv == nullptr ? "<null>" : connCountEnv) << ".");
+        return ret;
+    }
+    if (connCountEnv != nullptr && strlen(connCountEnv) > 0) {
+        CLOG_INFO("Apply INTERCEPTOR_IPC_CONN_COUNT success, value:" << netOptions.connCount << ".");
+    }
+
+    const char *busyLoopEnv = std::getenv("INTERCEPTOR_IPC_BUSY_LOOP");
+    netOptions.isBusyLoop = ParseBoolEnv("INTERCEPTOR_IPC_BUSY_LOOP", false);
+    if (busyLoopEnv != nullptr && strlen(busyLoopEnv) > 0) {
+        CLOG_INFO("Apply INTERCEPTOR_IPC_BUSY_LOOP success, value:" <<
+            (netOptions.isBusyLoop ? "true" : "false") << ".");
+    }
+
+    const char *cpuIdsEnv = std::getenv("INTERCEPTOR_IPC_CPUIDS");
+    if (cpuIdsEnv != nullptr && strlen(cpuIdsEnv) > 0) {
+        if (!ParseWorkerGroupCpuIdsRange(cpuIdsEnv, netOptions.workerGroupCpuIdsRange,
+            IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
+            CLOG_ERROR("Parse INTERCEPTOR_IPC_CPUIDS failed, value:" << cpuIdsEnv << ".");
+            return BIO_INVALID_PARAM;
+        }
+        CLOG_INFO("Apply INTERCEPTOR_IPC_CPUIDS success, value:" <<
+            FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
+    }
+    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(netOptions.workerGroupCpuIdsRange, netOptions.connCount,
+        IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
+        CLOG_ERROR("INTERCEPTOR_IPC_CPUIDS not match INTERCEPTOR_IPC_CONN_COUNT, connCount:" <<
+            netOptions.connCount << ".");
+        return BIO_INVALID_PARAM;
+    }
+    netOptions.handlerCount = netOptions.connCount;
     ret = mNetEngine->Start(netOptions);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Start ipc engine failed:" << ret << ".");
+        CLOG_ERROR("Start ipc engine failed, ret:" << ret << ", connCount:" << netOptions.connCount <<
+            ", handlerCount:" << netOptions.handlerCount << ", busyLoop:" <<
+            (netOptions.isBusyLoop ? "true" : "false") << ", cpuIds:" <<
+            FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
         return ret;
     }
 
@@ -73,96 +156,100 @@ int32_t InterceptorClientNetService::StartNetService()
     info.isSelfPoll = true;
     ret = mNetEngine->SyncConnect(info);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Start connect ipc engine failed:" << ret << ".");
+        CLOG_ERROR("Connect interceptor ipc channel failed, ret:" << ret << ", pid:" << mPid << ".");
         return ret;
     }
 
-    ret = ShmInit();
+    ret = CreateDataMessageMem();
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Init share memory failed:" << ret << ".");
+        CLOG_ERROR("Create interceptor data message memory failed, ret:" << ret << ", pid:" << mPid << ".");
         return ret;
     }
 
-    CLOG_DEBUG("Start net service success.");
+    CLOG_INFO("Start interceptor net service success, pid:" << mPid << ", connCount:" << netOptions.connCount <<
+        ", handlerCount:" << netOptions.handlerCount << ", busyLoop:" <<
+        (netOptions.isBusyLoop ? "true" : "false") << ", cpuIds:" <<
+        FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
     mReady.store(true);
     return 0;
 }
 
-BResult InterceptorClientNetService::CorrectFd()
+BResult InterceptorClientNetService::CreateDataMessageMem()
 {
+    InterceptorCreateDataMsgMemPoolRequest req;
+    req.comm.magic = MESSAGE_MAGIC;
+    req.comm.pid = mPid;
+
+    InterceptorCreateDataMsgMemPoolResponse rsp;
+    auto ret = mNetEngine->SyncCall<InterceptorCreateDataMsgMemPoolRequest,
+        InterceptorCreateDataMsgMemPoolResponse>(INVALID_NID, BIO_OP_INTERCEPTOR_CREATE_DATA_MSG_MEM_POOL, req, rsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Send create data message mem pool request failed, ret:" << ret << ", pid:" << mPid << ".");
+        return ret;
+    }
+
     int32_t realFd = -1;
-    auto result = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
-    if (UNLIKELY(result != BIO_OK)) {
-        CLOG_ERROR("receive file mem fd failed, ret:" << result << ".");
+    ret = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Receive data message memory fd failed, ret:" << ret << ", pid:" << mPid << ".");
         return BIO_ERR;
     }
+
     mShmFd = realFd;
-    return BIO_OK;
-}
+    mShmOffset = rsp.offset;
+    mShmLength = rsp.poolSize;
+    mDataMsgMemBlockSize = rsp.blockSize;
 
-BResult InterceptorClientNetService::CheckShmFd()
-{
-    struct stat buffer {};
-    auto ret = fstat(mShmFd, &buffer);
-    if (UNLIKELY(ret < 0)) {
-        CLOG_ERROR("Read file failed, ret:" << ret << ".");
-        return BIO_ERR;
-    }
-
-    if (UNLIKELY(mShmOffset + mShmLength > static_cast<uint64_t>(buffer.st_size))) {
-        CLOG_ERROR("Share memory size:" << mShmOffset + mShmLength << " not equal to file size:" << buffer.st_size);
-        return BIO_ERR;
-    }
-    return BIO_OK;
-}
-
-BResult InterceptorClientNetService::ShmInitInner()
-{
-    if (UNLIKELY(CheckShmFd() != BIO_OK)) {
-        mShmFd = -1;
-        return BIO_ERR;
-    }
-    auto offset = static_cast<off_t>(mShmOffset);
-    auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
-    if (UNLIKELY(address == MAP_FAILED)) {
-        CLOG_ERROR("Map share memory offset:" << offset << ", size:" << mShmLength << " failed.");
+    if (mShmLength == 0 || mDataMsgMemBlockSize == 0) {
+        CLOG_ERROR("Invalid pool size:" << mShmLength << " or block size:" << mDataMsgMemBlockSize << ".");
         close(mShmFd);
         mShmFd = -1;
         return BIO_ERR;
     }
+
+    auto offset = static_cast<off_t>(mShmOffset);
+    auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
+    if (UNLIKELY(address == MAP_FAILED)) {
+        CLOG_ERROR("Mmap shm size " << mShmLength << " offset " << offset << " failed, error:" << strerror(errno));
+        close(mShmFd);
+        mShmFd = -1;
+        return BIO_ERR;
+    }
+
     mShmAddr = static_cast<uint8_t *>(address);
-    return BIO_OK;
-}
+    mDataMsgMemAddr = mShmAddr;
 
-BResult InterceptorClientNetService::ShmInit()
-{
-    uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
-    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
-    ShmInitResponse rsp;
-    BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
+    uint64_t blockCount = mShmLength / mDataMsgMemBlockSize;
+    mDataMsgMemPool = MakeRef<NetBlockPool>();
+    if (mDataMsgMemPool == nullptr) {
+        CLOG_ERROR("Alloc net block pool failed.");
+        if (munmap(mShmAddr, mShmLength) == -1) {
+            CLOG_ERROR("Munmap address failed.");
+        }
+        close(mShmFd);
+        mShmFd = -1;
+        mShmAddr = nullptr;
+        mDataMsgMemAddr = nullptr;
+        return BIO_ALLOC_FAIL;
+    }
+
+    ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr), mDataMsgMemBlockSize, blockCount);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Send share memory init message failed:" << ret << ".");
-        return ret;
-    }
-
-    mShmFd = rsp.memFd;
-    mShmOffset = rsp.offset;
-    mShmLength = rsp.length;
-    if (UNLIKELY(mShmOffset != 0 || mShmLength > defaultMaxShmSize)) {
-        CLOG_ERROR("Get share memory offset:" << mShmOffset << ", length:" << mShmLength << " wrong.");
-        return BIO_ERR;
-    }
-
-    if (UNLIKELY(CorrectFd() != BIO_OK)) {
-        return BIO_ERR;
-    }
-
-    if (UNLIKELY((ret = ShmInitInner()) != BIO_OK)) {
+        CLOG_ERROR("Start net block pool failed, ret:" << ret << ".");
+        mDataMsgMemPool = nullptr;
+        if (munmap(mShmAddr, mShmLength) == -1) {
+            CLOG_ERROR("Munmap address failed.");
+        }
+        close(mShmFd);
+        mShmFd = -1;
+        mShmAddr = nullptr;
+        mDataMsgMemAddr = nullptr;
         return ret;
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
-    CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength <<
-        "success.");
+    CLOG_INFO("Create interceptor data message memory success, shmFd:" << mShmFd << ", poolSize:" << mShmLength <<
+        ", blockSize:" << mDataMsgMemBlockSize << ", blockCount:" << blockCount << ", shmOffset:" << mShmOffset <<
+        ", pid:" << mPid << ".");
     return BIO_OK;
 }

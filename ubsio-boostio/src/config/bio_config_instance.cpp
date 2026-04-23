@@ -19,14 +19,107 @@ namespace ock {
 namespace bio {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
+constexpr size_t RPC_WORKER_GROUP_CPU_RANGE_COUNT = 2;
+constexpr size_t IPC_WORKER_GROUP_CPU_RANGE_COUNT = 1;
+
+static std::vector<std::pair<uint32_t, uint32_t>> DefaultWorkerGroupCpuIdsRange(size_t groupCount)
+{
+    return std::vector<std::pair<uint32_t, uint32_t>>(groupCount, {UINT32_MAX, UINT32_MAX});
+}
+
+static bool ParseWorkerGroupCpuIdsRangeForConfig(const std::string &value,
+    std::vector<std::pair<uint32_t, uint32_t>> &ranges, size_t groupCount)
+{
+    ranges = DefaultWorkerGroupCpuIdsRange(groupCount);
+    if (value.empty() || value == "-1") {
+        return true;
+    }
+
+    std::vector<std::string> rangeStrs;
+    StrUtil::Split(value, ",", rangeStrs);
+    if (rangeStrs.size() != groupCount) {
+        return false;
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> parsed;
+    parsed.reserve(rangeStrs.size());
+    for (const auto &rangeStr : rangeStrs) {
+        if (rangeStr == "-1") {
+            parsed.emplace_back(UINT32_MAX, UINT32_MAX);
+            continue;
+        }
+
+        std::vector<std::string> startEnd;
+        StrUtil::Split(rangeStr, "-", startEnd);
+        if (startEnd.size() != NO_2) {
+            return false;
+        }
+
+        long start = 0;
+        long end = 0;
+        if (!StrUtil::StrToLong(startEnd[0], start) || !StrUtil::StrToLong(startEnd[1], end)) {
+            return false;
+        }
+        if (start < 0 || end < 0 || start > end || end > static_cast<long>(UINT32_MAX)) {
+            return false;
+        }
+        parsed.emplace_back(static_cast<uint32_t>(start), static_cast<uint32_t>(end));
+    }
+
+    ranges = std::move(parsed);
+    return true;
+}
+
+static bool CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(
+    const std::vector<std::pair<uint32_t, uint32_t>> &ranges, uint16_t connCount, size_t groupCount)
+{
+    if (ranges.size() != groupCount) {
+        return false;
+    }
+
+    for (const auto &range : ranges) {
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            continue;
+        }
+        if (range.first > range.second) {
+            return false;
+        }
+        auto cpuCount = static_cast<uint64_t>(range.second) - static_cast<uint64_t>(range.first) + 1;
+        if (cpuCount != connCount) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static std::string FormatWorkerGroupCpuIdsRangeForConfig(
+    const std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i != 0) {
+            oss << ",";
+        }
+        const auto &range = ranges[i];
+        if (range.first == UINT32_MAX && range.second == UINT32_MAX) {
+            oss << "-1";
+        } else {
+            oss << range.first << "-" << range.second;
+        }
+    }
+    return oss.str();
+}
+
 void BioConfig::LoadDefaultConf()
 {
     /* load net config for fs */
-    AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma"));
+    AddStrConf(NET_DATA_PROTOCOL, VStrEnum::Create(NET_DATA_PROTOCOL.first, "tcp||rdma||ub"));
     AddStrConf(NET_RPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_DATA_BUSY_POLL_MODE.first));
     AddIntConf(NET_RPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_RPC_DATA_WORKERS_COUNT.first, NO_1, NO_16));
+    AddStrConf(NET_RPC_DATA_CPUIDS);
     AddStrConf(NET_IPC_DATA_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_DATA_BUSY_POLL_MODE.first));
     AddIntConf(NET_IPC_DATA_WORKERS_COUNT, VIntRange::Create(NET_IPC_DATA_WORKERS_COUNT.first, NO_1, NO_128));
+    AddStrConf(NET_IPC_DATA_CPUIDS);
     /* don't allow empty */
     AddStrConf(NET_DATA_IP_MASK, VIpv4MaskValidator::Create(NET_DATA_IP_MASK.first, false));
     AddIntConf(NET_DATA_PORT, VIntRange::Create(NET_DATA_PORT.first, NO_7201, NO_7800));
@@ -60,16 +153,16 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(WORK_NET_TIMEOUT, VIntRange::Create(WORK_NET_TIMEOUT.first, NO_16, NO_128));
 
     /* load cluster manager config */
-    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_2, NO_256));
-    AddIntConf(CM_COPY_NUM, VStrEnum::Create(CM_COPY_NUM.first, "2"));
-    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, NO_2, NO_8192));
+    AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, 1, NO_256));
+    AddIntConf(CM_COPY_NUM, VStrEnum::Create(CM_COPY_NUM.first, "2||1"));
+    AddIntConf(CM_PT_NUM, VIntRange::Create(CM_PT_NUM.first, 1, NO_8192));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
     AddIntConf(CM_NODE_REGISTER_PERM_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_PERM_TIMEOUT.first, NO_60, NO_600));
     AddStrConf(CM_ZK_HOST, VIpv4PortListValidator::Create(CM_ZK_HOST.first));
 
     /* load underfs config */
-    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs"));
-    AddStrConf(UNDERFS_CEPH_CFG_PATH, VStrRealPath::Create(UNDERFS_CEPH_CFG_PATH.first));
+    AddStrConf(UNDERFS_FILE_SYSTEM_TYPE, VStrEnum::Create(UNDERFS_FILE_SYSTEM_TYPE.first, "ceph||hdfs||none"));
+    AddStrConf(UNDERFS_CEPH_CFG_PATH);
     AddStrConf(UNDERFS_CEPH_CLUSTER, VStrNotNull::Create(UNDERFS_CEPH_CLUSTER.first));
     AddStrConf(UNDERFS_CEPH_USER, VStrNotNull::Create(UNDERFS_CEPH_USER.first));
     AddStrConf(UNDERFS_CEPH_POOL, VStrCephPool::Create(UNDERFS_CEPH_POOL.first));
@@ -128,9 +221,31 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.isRpcBusyLoop = conf->GetStr(NET_RPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.rpcDataWorkersCnt = conf->GetInt(NET_RPC_DATA_WORKERS_COUNT.first);
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_RPC_DATA_CPUIDS.first), mNetConfig.rpcDataCpuIds,
+        RPC_WORKER_GROUP_CPU_RANGE_COUNT) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.rpcDataCpuIds, mNetConfig.rpcDataWorkersCnt,
+            RPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
+        LOG_ERROR("Invalid net rpc cpuids config, cpuids:" << conf->GetStr(NET_RPC_DATA_CPUIDS.first) <<
+            ", workers_count:" << mNetConfig.rpcDataWorkersCnt << ".");
+        return BIO_ERR;
+    }
+    LOG_INFO("Apply net rpc config success, workers_count:" << mNetConfig.rpcDataWorkersCnt <<
+        ", busy_polling_mode:" << (mNetConfig.isRpcBusyLoop ? "true" : "false") <<
+        ", cpuids:" << FormatWorkerGroupCpuIdsRangeForConfig(mNetConfig.rpcDataCpuIds) << ".");
 
     mNetConfig.isIpcBusyLoop = conf->GetStr(NET_IPC_DATA_BUSY_POLL_MODE.first) == "true";
     mNetConfig.ipcDataWorkersCnt = conf->GetInt(NET_IPC_DATA_WORKERS_COUNT.first);
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_IPC_DATA_CPUIDS.first), mNetConfig.ipcDataCpuIds,
+        IPC_WORKER_GROUP_CPU_RANGE_COUNT) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(mNetConfig.ipcDataCpuIds, mNetConfig.ipcDataWorkersCnt,
+            IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
+        LOG_ERROR("Invalid net ipc cpuids config, cpuids:" << conf->GetStr(NET_IPC_DATA_CPUIDS.first) <<
+            ", workers_count:" << mNetConfig.ipcDataWorkersCnt << ".");
+        return BIO_ERR;
+    }
+    LOG_INFO("Apply net ipc config success, workers_count:" << mNetConfig.ipcDataWorkersCnt <<
+        ", busy_polling_mode:" << (mNetConfig.isIpcBusyLoop ? "true" : "false") <<
+        ", cpuids:" << FormatWorkerGroupCpuIdsRangeForConfig(mNetConfig.ipcDataCpuIds) << ".");
 
     mNetConfig.enableTls = conf->GetStr(NET_TLS_ENABLE_SWITCH.first) == "true";
     mNetConfig.tlsCaCertPath = conf->GetStr(NET_TLS_CA_CERT_PATH.first);
@@ -176,6 +291,8 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
         mNetConfig.protocol = 0;
     } else if (protocol == "tcp") {
         mNetConfig.protocol = 1;
+    } else if (protocol == "ub") {
+        mNetConfig.protocol = NO_7;
     } else {
         LOG_ERROR("Invalid configuration with protocol items: " << protocol);
         mNetConfig.protocol = NO_255;
@@ -263,6 +380,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.segment = static_cast<uint32_t>(NO_4 * MB_SIZE);
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
+    mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_POOL_SIZE_MB.first) * MB_SIZE);
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {
         LOG_ERROR("Failed to set mem cap " << mDaemonConfig.memCap << ", over system free mem cap " << sysFreeMemCap);
@@ -307,9 +425,8 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
         mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
     }
 
-    if (mDaemonConfig.diskCaps.size() == 0) {
-        mDaemonConfig.memCap = 0;
-        LOG_INFO("This server config disk is null, memory reset to 0, server can not join pt.");
+    if (mDaemonConfig.diskCaps.empty()) {
+        mDaemonConfig.diskCaps.emplace_back(0);
         return BIO_OK;
     }
 
@@ -331,6 +448,12 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
 {
     mUnderFsConfig.underFsType = conf->GetStr(UNDERFS_FILE_SYSTEM_TYPE.first);
     mUnderFsConfig.cephConfig.cfgPath = conf->GetStr(UNDERFS_CEPH_CFG_PATH.first);
+    if (mUnderFsConfig.underFsType == "ceph") {
+        if (!FileUtil::CanonicalPath(mUnderFsConfig.cephConfig.cfgPath)) {
+            LOG_ERROR("Ceph config path not exist, value:" << mUnderFsConfig.cephConfig.cfgPath);
+            return BIO_ERR;
+        }
+    }
     mUnderFsConfig.cephConfig.cluster = conf->GetStr(UNDERFS_CEPH_CLUSTER.first);
     mUnderFsConfig.cephConfig.user = conf->GetStr(UNDERFS_CEPH_USER.first);
     mUnderFsConfig.hdfsConfig.nameNode = conf->GetStr(UNDERFS_HDFS_NAMENODE.first);

@@ -40,6 +40,7 @@ public:
     static void HandleShow(const std::vector<std::string> &cmds);
     static void HandleShowCacheHit(const std::vector<std::string> &cmds);
     static void HandleShowCacheResource(const std::vector<std::string> &cmds);
+    static void HandleClearWcache();
     static void HandleNotifyUpdatePrepare(const std::vector<std::string> &cmds);
     static void HandleNotifyUpdateFinish(const std::vector<std::string> &cmds);
     static void HandleCheckUpdateReady(const std::vector<std::string> &cmds);

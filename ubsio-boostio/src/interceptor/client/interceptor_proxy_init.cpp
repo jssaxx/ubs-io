@@ -27,7 +27,7 @@ int InitializeProxyContext()
 
     g_initialized.store(true);
 
-    CLOG_DEBUG("Init bio interceptor ok.");
+    CLOG_INFO("Initialize interceptor proxy context success.");
     return 0;
 }
 
