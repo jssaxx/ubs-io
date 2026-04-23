@@ -290,7 +290,9 @@ int ProxyOperations::Close(int fd)
 
     CONTEXT.files.Erase(fd);
     auto ret = CONTEXT.GetOperations()->close(fd);
-    CLOG_DEBUG("Interceptor close complete, fd:" << fd << ", ret:" << ret << ".");
+    if (ret == 0) {
+        CLOG_DEBUG("Interceptor close complete, fd:" << fd << ", ret:" << ret << ".");
+    }
     return ret;
 }
 
