@@ -105,7 +105,7 @@ public:
         pBioExit();
     }
 
-    static int32_t DfcKvBioInit(void);
+    static int32_t KvBioInit(void);
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)

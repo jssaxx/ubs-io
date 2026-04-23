@@ -68,14 +68,14 @@ public:
         mKvExecutor = ExecutorService::Create(KV_THREAD_NUM, KV_QUEUE_SIZE);
         if (UNLIKELY(mKvExecutor == nullptr)) {
             LOG_ERROR("Failed to create execution service for get kv, probably out of memory");
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         auto result = mKvExecutor->Start();
         if (!result) {
             LOG_ERROR("Failed to start execution service for get kv, probably out of memory");
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     }
 
 private:

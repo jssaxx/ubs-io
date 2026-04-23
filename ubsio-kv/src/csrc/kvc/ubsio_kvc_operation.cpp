@@ -29,35 +29,35 @@ int32_t KvcOperationInit(int32_t devId)
 {
     // 1. init acl stream
     if (devId >= 0) {
-        if (ACLApi::LoadLibrary() != DFC_OK) {
-            return DFC_ERR;
+        if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
+            return UBSIO_KVC_ERR;
         }
-        if (KvcStreamManager::InitAclStream(devId) != DFC_OK) {
-            return DFC_ERR;
+        if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
+            return UBSIO_KVC_ERR;
         }
     }
     
     // 2. dlopen and init boostio
     int ret = DlBioSdkApi::LoadLibrary();
-    if (UNLIKELY(ret != DFC_OK)) {
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::DfcKvBioInit();
-    if (UNLIKELY(ret != DFC_OK)) {
+    ret = DlBioSdkApi::KvBioInit();
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
 
     // 3. init kv operation executor
     ret = g_kvOperation->InitKvExecutor();
-    if (ret != DFC_OK) {
+    if (ret != UBSIO_KVC_OK) {
         LOG_ERROR("kv init executor failed");
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
 
     LOG_INFO("Init ubsio kv cache success, deviceId:" << devId);
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 void KvcExit(void)

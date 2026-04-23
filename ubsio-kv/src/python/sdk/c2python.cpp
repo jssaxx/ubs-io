@@ -30,7 +30,7 @@ namespace py = pybind11;
 
 constexpr int MAX_KEY_LENGTH = 255;
 constexpr int MAX_BATCH_OP_COUNT = 16 << 10; // 16k
-DfcNdsManager &g_ndsManager = DfcNdsManager::Instance();
+NdsManager &g_ndsManager = NdsManager::Instance();
 
 int32_t PyKvcKvClientInit(int32_t dev_id)
 {

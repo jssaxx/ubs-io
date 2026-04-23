@@ -74,14 +74,14 @@ public:
     static inline int32_t AclrtSetDevice(int32_t deviceId, bool force = false)
     {
         if (pAclrtSetDevice == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         if (force) {
             return pAclrtSetDevice(deviceId);
         }
         int32_t nowDeviceId = -1;
         if (AclrtGetDevice(&nowDeviceId) == 0 && nowDeviceId == deviceId) {
-            return DFC_OK;
+            return UBSIO_KVC_OK;
         } else {
             return pAclrtSetDevice(deviceId);
         }
@@ -90,7 +90,7 @@ public:
     static inline int32_t AclrtGetDevice(int32_t *deviceId)
     {
         if (pAclrtGetDevice == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtGetDevice(deviceId);
     }
@@ -98,7 +98,7 @@ public:
     static inline int32_t AclrtCreateStream(void **stream)
     {
         if (pAclrtCreateStream == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtCreateStream(stream);
     }
@@ -106,7 +106,7 @@ public:
     static inline int32_t AclrtCreateStreamWithConfig(void **stream, uint32_t prot, uint32_t config)
     {
         if (pAclrtCreateStreamWithConfig == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtCreateStreamWithConfig(stream, prot, config);
     }
@@ -114,7 +114,7 @@ public:
     static inline int32_t AclrtDestroyStream(void *stream)
     {
         if (pAclrtDestroyStream == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtDestroyStream(stream);
     }
@@ -122,7 +122,7 @@ public:
     static inline int32_t AclrtSynchronizeStream(void *stream)
     {
         if (pAclrtSynchronizeStream == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtSynchronizeStream(stream);
     }
@@ -130,7 +130,7 @@ public:
     static inline int32_t AclrtMalloc(void **ptr, size_t count, uint32_t type)
     {
         if (pAclrtMalloc == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMalloc(ptr, count, type);
     }
@@ -138,7 +138,7 @@ public:
     static inline int32_t AclrtFree(void *ptr)
     {
         if (pAclrtFree == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtFree(ptr);
     }
@@ -146,7 +146,7 @@ public:
     static inline int32_t AclrtMallocHost(void **ptr, size_t count)
     {
         if (pAclrtMallocHost == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMallocHost(ptr, count);
     }
@@ -154,7 +154,7 @@ public:
     static inline int32_t AclrtFreeHost(void *ptr)
     {
         if (pAclrtFreeHost == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtFreeHost(ptr);
     }
@@ -162,7 +162,7 @@ public:
     static inline int32_t AclrtMemcpy(void *dst, size_t destMax, const void *src, size_t count, uint32_t kind)
     {
         if (pAclrtMemcpy == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMemcpy(dst, destMax, src, count, kind);
     }
@@ -171,7 +171,7 @@ public:
                                           void *stream)
     {
         if (pAclrtMemcpyAsync == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMemcpyAsync(dst, destMax, src, count, kind, stream);
     }
@@ -182,7 +182,7 @@ public:
                                           size_t numAttrs, size_t *failIndex)
     {
         if (pAclrtMemcpyBatch == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMemcpyBatch(dsts, destMax, srcs, sizes, numBatches, attrs, attrsIndexes, numAttrs, failIndex);
     }
@@ -191,7 +191,7 @@ public:
                                        size_t width, size_t height, uint32_t kind)
     {
         if (pAclrtMemcpy2d == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMemcpy2d(dst, dpitch, src, spitch, width, height, kind);
     }
@@ -200,7 +200,7 @@ public:
                                             size_t width, size_t height, uint32_t kind, void *stream)
     {
         if (pAclrtMemcpy2dAsync == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMemcpy2dAsync(dst, dpitch, src, spitch, width, height, kind, stream);
     }
@@ -208,7 +208,7 @@ public:
     static inline int32_t AclrtMemset(void *dst, size_t destMax, int32_t value, size_t count)
     {
         if (pAclrtMemset == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pAclrtMemset(dst, destMax, value, count);
     }
@@ -216,7 +216,7 @@ public:
     static inline int32_t RtGetDeviceInfo(uint32_t deviceId, int32_t moduleType, int32_t infoType, int64_t *val)
     {
         if (pRtGetDeviceInfo == nullptr) {
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         return pRtGetDeviceInfo(deviceId, moduleType, infoType, val);
     }

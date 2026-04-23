@@ -149,56 +149,56 @@ private:
     ExternalAuditLog auditLogFunc_ = nullptr;
 };
 
-#define DFC_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-#define DFC_LOG_FORMAT "[DFC " << DFC_LOG_FILENAME << ":" << __LINE__ << " " << __FUNCTION__ << "] "
-#define DFC_LOG_INTERNAL(level, msg)                            \
+#define UBSIO_KVC_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define UBSIO_KVC_LOG_FORMAT "[UBSIO_KVC " << UBSIO_KVC_LOG_FILENAME << ":" << __LINE__ << " " << __FUNCTION__ << "] "
+#define UBSIO_KVC_LOG_INTERNAL(level, msg)                            \
     do {                                                        \
         std::ostringstream oss;                                 \
-        oss << DFC_LOG_FORMAT << msg;                           \
+        oss << UBSIO_KVC_LOG_FORMAT << msg;                           \
         ock::ubsio::UbsioLog::Instance().Log(level, oss);     \
     } while (0)
 
-#define DFC_LOG_ERROR_WITH_ERRCODE(ARGS, ERRCODE)                           \
+#define UBSIO_KVC_LOG_ERROR_WITH_ERRCODE(ARGS, ERRCODE)                           \
     do {                                                                    \
         std::ostringstream oss;                                             \
-        oss << DFC_LOG_FORMAT << ARGS << ", error code " << ERRCODE;        \
+        oss << UBSIO_KVC_LOG_FORMAT << ARGS << ", error code " << ERRCODE;        \
         ock::ubsio::UbsioLog::Instance().Log(ERROR_LEVEL, oss);           \
     } while (0)
 
-#define LOG_ERROR(msg) DFC_LOG_INTERNAL(ERROR_LEVEL, msg)
-#define LOG_WARN(msg) DFC_LOG_INTERNAL(WARN_LEVEL, msg)
-#define LOG_INFO(msg) DFC_LOG_INTERNAL(INFO_LEVEL, msg)
-#define LOG_DEBUG(msg) DFC_LOG_INTERNAL(DEBUG_LEVEL, msg)
+#define LOG_ERROR(msg) UBSIO_KVC_LOG_INTERNAL(ERROR_LEVEL, msg)
+#define LOG_WARN(msg) UBSIO_KVC_LOG_INTERNAL(WARN_LEVEL, msg)
+#define LOG_INFO(msg) UBSIO_KVC_LOG_INTERNAL(INFO_LEVEL, msg)
+#define LOG_DEBUG(msg) UBSIO_KVC_LOG_INTERNAL(DEBUG_LEVEL, msg)
 
 // if ARGS is false, print error
-#define DFC_ASSERT_RETURN(ARGS, RET)             \
+#define UBSIO_KVC_ASSERT_RETURN(ARGS, RET)             \
     do {                                         \
         if (__builtin_expect(!(ARGS), 0) != 0) { \
-            LOG_ERROR("Assert " << #ARGS);       \
+            LOG_ERROR("Assert " #ARGS);       \
             return RET;                          \
         }                                        \
     } while (0)
 
-#define DFC_ASSERT_RET_VOID(ARGS)                \
+#define UBSIO_KVC_ASSERT_RET_VOID(ARGS)                \
     do {                                         \
         if (__builtin_expect(!(ARGS), 0) != 0) { \
-            LOG_ERROR("Assert " << #ARGS);       \
+            LOG_ERROR("Assert " #ARGS);       \
             return;                              \
         }                                        \
     } while (0)
 
-#define DFC_ASSERT(ARGS)                         \
+#define UBSIO_KVC_ASSERT(ARGS)                         \
     do {                                         \
         if (__builtin_expect(!(ARGS), 0) != 0) { \
-            LOG_ERROR("Assert " << #ARGS);       \
+            LOG_ERROR("Assert " #ARGS);       \
         }                                        \
     } while (0)
 
-#define DFC_RETURN_ERROR(result, msg)                     \
+#define UBSIO_KVC_RETURN_ERROR(result, msg)                     \
     do {                                                  \
         auto innerResult = (result);                      \
         if (UNLIKELY(innerResult != 0)) {                 \
-            DFC_LOG_ERROR_WITH_ERRCODE(msg, innerResult); \
+            UBSIO_KVC_LOG_ERROR_WITH_ERRCODE(msg, innerResult); \
             return innerResult;                           \
         }                                                 \
     } while (0)
@@ -216,7 +216,7 @@ inline void SafeCloseFd(int32_t &fd)
 
 inline void HcomPrint(int level, const char *msg)
 {
-    DFC_LOG_INTERNAL(level, msg);
+    UBSIO_KVC_LOG_INTERNAL(level, msg);
 }
 
 } // namespace ubsio

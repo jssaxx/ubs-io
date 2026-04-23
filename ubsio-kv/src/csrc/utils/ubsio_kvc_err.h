@@ -19,16 +19,15 @@ namespace ock {
 namespace ubsio {
 
 enum KvcError : int32_t {
-    DFC_OK = 0,
-    DFC_ERR = 1,
-    DFC_INNER_ERR = 2,
-    DFC_INVALID_PARAM = 3,
-    DFC_ALLOC_FAIL = 4,
-    DFC_EAGAIN = 5,
-    DFC_BIO_ERR = 6,
-    DFC_NO_NDS = 7,
-
-    DFC_MAX,
+    UBSIO_KVC_OK = 0,
+    UBSIO_KVC_ERR = 1,
+    UBSIO_KVC_INNER_ERR = 2,
+    UBSIO_KVC_INVALID_PARAM = 3,
+    UBSIO_KVC_ALLOC_FAIL = 4,
+    UBSIO_KVC_EAGAIN = 5,
+    UBSIO_KVC_BIO_ERR = 6,
+    UBSIO_KVC_NO_NDS = 7,
+    UBSIO_KVC_MAX = 8,
 };
 
 }

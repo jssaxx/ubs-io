@@ -24,12 +24,12 @@ int32_t KvcStreamManager::InitAclStream(int32_t deviceId)
 {
     std::lock_guard<std::mutex> guard(mutex_);
     if (stream_ != nullptr) {
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     }
     auto ret = ACLApi::AclrtSetDevice(deviceId);
-    if (ret != DFC_OK) {
+    if (ret != UBSIO_KVC_OK) {
         LOG_ERROR("Set device failed, device id:" << deviceId);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     
     uint32_t aclStreamFastLaunch = 1U;
@@ -37,10 +37,10 @@ int32_t KvcStreamManager::InitAclStream(int32_t deviceId)
     ret = ACLApi::AclrtCreateStreamWithConfig(&stream_, 0, aclStreamFastLaunch | aclStreamFastSync);
     if (ret != 0) {
         LOG_ERROR("Create stream failed, ret:" << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     LOG_INFO("Init acl stream success, device id:" << deviceId);
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 void KvcStreamManager::DestroyAclStream()

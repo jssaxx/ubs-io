@@ -100,7 +100,7 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::DfcKvBioInit()
+int32_t DlBioSdkApi::KvBioInit()
 {
     LOG_INFO("Start boostio begin...");
     ClientOptionsConfig optConf;
