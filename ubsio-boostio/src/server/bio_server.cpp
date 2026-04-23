@@ -317,7 +317,8 @@ BResult BioServer::BioNetInit()
 
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
-
+    mTransEngine = MakeRef<TransportEngine>();
+    ChkTrue(mTransEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
     int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
     auto ret =
@@ -360,6 +361,8 @@ BResult BioServer::BioNetInit()
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
 
+    ret = mTransEngine->Initialize(netOptions);
+    ChkTrue(ret == BIO_OK, ret, "Trans engine initialize failed, result:" << ret << ".");
     mNetEngineInited = true;
     return BIO_OK;
 }

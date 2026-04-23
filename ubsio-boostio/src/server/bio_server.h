@@ -195,9 +195,9 @@ public:
         return mNetEngine;
     }
 
-    inline NetTransEnginePtr GetNetTransEngine()
+    inline NetTransEnginePtr GetTransEngine()
     {
-        return mNetTransEngine;
+        return mTransEngine;
     }
 
     inline MirrorServerPtr GetMirrorServer()
@@ -421,7 +421,7 @@ private:
     BioServiceProcPtr mService = nullptr;
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
-    NetTransEnginePtr mNetTransEngine = nullptr;
+    NetTransEnginePtr mTransEngine = nullptr;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
     MirrorServerCrbPtr mMirrorCrb = nullptr;
