@@ -359,9 +359,7 @@ ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
     }
 
     auto ret = PreadInner(fd, buf, count, offset);
-    if (ret >= 0) {
-        LogIoSuccess("pread", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
-    }
+    LogIoSuccess("pread", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
     return ret;
 }
 
@@ -374,9 +372,7 @@ ssize_t ProxyOperations::Pread64(int fd, void *buf, size_t count, off64_t offset
     }
 
     auto ret = PreadInner(fd, buf, count, offset);
-    if (ret >= 0) {
-        LogIoSuccess("pread64", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
-    }
+    LogIoSuccess("pread64", GetIoPathType(count), fd, file->GetInode(), offset, count, ret);
     return ret;
 }
 
