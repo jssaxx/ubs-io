@@ -381,7 +381,7 @@ UBSIO_API int32_t UbsioKvCacheBatchFree(void **bufs, uint32_t keysCount)
 
     int ret = KvcBatchFreeGetAddress(bufs, keysCount);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
-        LOG_ERROR("Dfc batch free address failed, ret:" << ret);
+        LOG_ERROR("Kvc batch free address failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
     return UBSIO_KVC_OK;

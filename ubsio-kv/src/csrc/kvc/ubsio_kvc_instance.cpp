@@ -53,7 +53,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
                            const std::vector<std::vector<size_t>> &lengthsVector, int *results) noexcept
 {
     // 1. 优先选择NDS.
-    auto ret = DfcNdsManager::Instance().BatchDirectRead(keyVector, npuAddrsVector, lengthsVector);
+    auto ret = NdsManager::Instance().BatchDirectRead(keyVector, npuAddrsVector, lengthsVector);
     uint32_t keysCount = keyVector.size();
     if (LIKELY(ret == UBSIO_KVC_OK)) {
         std::fill(results, results + keysCount, UBSIO_KVC_OK);

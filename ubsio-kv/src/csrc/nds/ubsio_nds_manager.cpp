@@ -29,27 +29,27 @@ constexpr int MAX_THREAD_CNT = 256;
 constexpr int DEFAULT_THREAD_CNT = 32;
 constexpr int TALENT_ID = 1;
 
-DfcNdsManager &DfcNdsManager::Instance() noexcept
+NdsManager &NdsManager::Instance() noexcept
 {
-    static DfcNdsManager instance;
+    static NdsManager instance;
     return instance;
 }
 
-DfcNdsManager::~DfcNdsManager() noexcept
+NdsManager::~NdsManager() noexcept
 {
     this->UnInitialize();
 }
 
-KvcError DfcNdsManager::Initialize(int device) noexcept
+KvcError NdsManager::Initialize(int device) noexcept
 {
     if (ndsInit) {
         LOG_INFO("Nds has been initialized, which device id is " << deviceId);
         return UBSIO_KVC_OK;
     }
 
-    char *bioDisks = std::getenv("DFC_BIO_DISKS");
+    char *bioDisks = std::getenv("UBSIO_BIO_DISKS");
     if (bioDisks == nullptr || *bioDisks == '\0') {
-        LOG_WARN("Nds env DFC_BIO_DISKS not set or empty, disable the NDS feature.");
+        LOG_WARN("Nds env UBSIO_BIO_DISKS not set or empty, disable the NDS feature.");
         return UBSIO_KVC_ERR;
     }
 
@@ -59,7 +59,7 @@ KvcError DfcNdsManager::Initialize(int device) noexcept
     }
 
     deviceId = device;
-    useIOURing = std::getenv("DFC_USE_IO_URING") != nullptr;
+    useIOURing = std::getenv("UBSIO_USE_IO_URING") != nullptr;
     int ret = 0;
     if (useIOURing) {
         ret = nds_init_async(deviceId);
@@ -84,11 +84,11 @@ KvcError DfcNdsManager::Initialize(int device) noexcept
     }
 
     long threadCnt = DEFAULT_THREAD_CNT;
-    char *threadEnv = std::getenv("DFC_NDS_READ_THREAD");
+    char *threadEnv = std::getenv("UBSIO_NDS_READ_THREAD");
     if (threadEnv != nullptr) {
         auto threadCntValid = StrUtil::StrToLong(threadEnv, threadCnt);
         if (!threadCntValid || threadCnt <= 0 || threadCnt > MAX_THREAD_CNT) {
-            LOG_ERROR("Nds env is invalid, DFC_NDS_READ_THREAD range is (0, " << MAX_THREAD_CNT << "]");
+            LOG_ERROR("Nds env is invalid, UBSIO_NDS_READ_THREAD range is (0, " << MAX_THREAD_CNT << "]");
             return UBSIO_KVC_ERR;
         }
     }
@@ -111,7 +111,7 @@ KvcError DfcNdsManager::Initialize(int device) noexcept
     return UBSIO_KVC_OK;
 }
 
-KvcError DfcNdsManager::UnInitialize() noexcept
+KvcError NdsManager::UnInitialize() noexcept
 {
     if (nds_uninit() != 0) {
         LOG_ERROR("Nds unInitialize failed.");
@@ -127,7 +127,7 @@ KvcError DfcNdsManager::UnInitialize() noexcept
     return UBSIO_KVC_OK;
 }
 
-KvcError DfcNdsManager::RegisterMemory(const void *addr, size_t length) noexcept
+KvcError NdsManager::RegisterMemory(const void *addr, size_t length) noexcept
 {
     for (const auto &[diskPath, fid]: diskFdMap) {
         int ret = nds_regmem(fid, addr, length);
@@ -140,7 +140,7 @@ KvcError DfcNdsManager::RegisterMemory(const void *addr, size_t length) noexcept
     return UBSIO_KVC_OK;
 }
 
-KvcError DfcNdsManager::UnRegisterMemory(const void *addr, size_t length) noexcept
+KvcError NdsManager::UnRegisterMemory(const void *addr, size_t length) noexcept
 {
     for (const auto &[diskPath, fid]: diskFdMap) {
         if (nds_unregmem(fid, addr, length) < 0) {
@@ -151,7 +151,7 @@ KvcError DfcNdsManager::UnRegisterMemory(const void *addr, size_t length) noexce
     return UBSIO_KVC_OK;
 }
 
-ssize_t DfcNdsManager::SingleRead(const KeyAddrInfo &addrInfo,
+ssize_t NdsManager::SingleRead(const KeyAddrInfo &addrInfo,
                                   const std::vector<uintptr_t> &buffers,
                                   const std::vector<size_t> &sizes,
                                   TaskResults &taskResults) noexcept
@@ -165,7 +165,7 @@ ssize_t DfcNdsManager::SingleRead(const KeyAddrInfo &addrInfo,
         return -1;
     }
     if (UNLIKELY(diskFdMap.find(diskPath) == diskFdMap.end())) {
-        LOG_ERROR("Bio get invalid disk path: " << diskPath << ", env DFC_BIO_DISKS may not be set correctly.");
+        LOG_ERROR("Bio get invalid disk path: " << diskPath << ", env UBSIO_BIO_DISKS may not be set correctly.");
         return -1;
     }
 
@@ -210,7 +210,7 @@ ssize_t DfcNdsManager::SingleRead(const KeyAddrInfo &addrInfo,
     return static_cast<ssize_t>(recordReadSize);
 }
 
-ssize_t DfcNdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
+ssize_t NdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
                                          const std::vector<uintptr_t> &buffers,
                                          const std::vector<size_t> &sizes) noexcept
 {
@@ -223,7 +223,7 @@ ssize_t DfcNdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
         return -1;
     }
     if (UNLIKELY(diskFdMap.find(diskPath) == diskFdMap.end())) {
-        LOG_ERROR("Bio get invalid disk path: " << diskPath << ", env DFC_BIO_DISKS may not be set correctly.");
+        LOG_ERROR("Bio get invalid disk path: " << diskPath << ", env UBSIO_BIO_DISKS may not be set correctly.");
         return -1;
     }
 
@@ -250,7 +250,7 @@ ssize_t DfcNdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
 
             if (bioBlkLeftLen == 0 && blkIdx < blkCnt - 1) {
                 auto readRet = nds_readv_batch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
-                DFC_ASSERT_RETURN(readRet >= 0, -1);
+                UBSIO_KVC_ASSERT_RETURN(readRet >= 0, -1);
                 blkIdx++;
                 bioBlkLeftLen = readLens[blkIdx];
                 fileOffset = fileOffsets[blkIdx];
@@ -261,7 +261,7 @@ ssize_t DfcNdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
 
             if (count == IO_URING_MAX_DEPTH - 1) {
                 auto readRet = nds_readv_batch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
-                DFC_ASSERT_RETURN(readRet >= 0, -1);
+                UBSIO_KVC_ASSERT_RETURN(readRet >= 0, -1);
                 fileOffset += iovecReadBytes;
                 iovecReadBytes = 0UL;
                 memset(vecs, 0, sizeof(vecs));
@@ -272,7 +272,7 @@ ssize_t DfcNdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
     return static_cast<ssize_t>(totalReadBytes);
 }
 
-KvcError DfcNdsManager::DirectRead(const std::string &key,
+KvcError NdsManager::DirectRead(const std::string &key,
                                    const std::vector<uintptr_t> &buffers,
                                    const std::vector<size_t> &sizes) noexcept
 {
@@ -324,7 +324,7 @@ KvcError DfcNdsManager::DirectRead(const std::string &key,
     return UBSIO_KVC_OK;
 }
 
-KvcError DfcNdsManager::BatchDirectRead(const std::vector<std::string> &keys,
+KvcError NdsManager::BatchDirectRead(const std::vector<std::string> &keys,  
                                         const std::vector<std::vector<uintptr_t>> &buffers,
                                         const std::vector<std::vector<size_t>> &sizes) noexcept
 {
