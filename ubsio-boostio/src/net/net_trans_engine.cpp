@@ -15,6 +15,12 @@
 #include <cstdlib>
 #include <chrono>
 #include <thread>
+#include <random>
+#include <stdexcept>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cerrno>
 #include "net_log.h"
 #include "net_trans_engine.h"
 
@@ -23,7 +29,7 @@ namespace bio {
 
 constexpr uint32_t TRANS_EXCUTE_POOL_SIZE = 4;
 constexpr uint32_t TRANS_EXCUTE_POOL_QUEUE_SIZE = 1024;
-constexpr uint32_t RPC_PORT_BUF_LEN = 16;
+constexpr uint16_t INVALID_RPC_PORT = 0;
 
 void* DlMfApi::mfHandle;
 std::mutex DlMfApi::gMutex;
@@ -44,7 +50,6 @@ mfSmemTransWriteFunc DlMfApi::mfSmemTransWrite = nullptr;
 mfSmemTransBatchWriteFunc DlMfApi::mfSmemTransBatchWrite = nullptr;
 mfSmemTransReadFunc DlMfApi::mfSmemTransRead = nullptr;
 mfSmemTransBatchReadFunc DlMfApi::mfSmemTransBatchRead = nullptr;
-mfSemTransGetRpcPortFunc DlMfApi::mfSemTransGetRpcPort = nullptr;
 
 int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
 {
@@ -76,7 +81,6 @@ int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
     DL_LOAD_SYM(mfSmemTransBatchWrite, mfSmemTransBatchWriteFunc, mfHandle, "smem_trans_batch_write");
     DL_LOAD_SYM(mfSmemTransRead, mfSmemTransReadFunc, mfHandle, "smem_trans_read");
     DL_LOAD_SYM(mfSmemTransBatchRead, mfSmemTransBatchReadFunc, mfHandle, "smem_trans_batch_read");
-    DL_LOAD_SYM(mfSemTransGetRpcPort, mfSemTransGetRpcPortFunc, mfHandle, "smem_trans_get_rpc_port");
     
     gLoaded = true;
     return BIO_OK;
@@ -102,7 +106,6 @@ void DlMfApi::CleanupLibrary()
     mfSmemTransBatchWrite = nullptr;
     mfSmemTransRead = nullptr;
     mfSmemTransBatchRead = nullptr;
-    mfSemTransGetRpcPort = nullptr;
 
     if (mfHandle != nullptr) {
         dlclose(mfHandle);
@@ -347,16 +350,97 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
         NET_LOG_ERROR("Invalid ipMask format: " << opt.ipMask << ", should be ip/mask, e.g. 192.168.1.100/24")
         return BIO_ERR;
     }
-    char buffer[RPC_PORT_BUF_LEN];
-    BResult ret = DlMfApi::MfSemTransGetRpcPort(buffer, RPC_PORT_BUF_LEN);
-    if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to get rpc port from mf trans, ret: " << ret);
-        return ret;
+    int32_t socketFd = -1;
+    uint16_t port = FindAvailableTcpPort(socketFd);
+    if (port == INVALID_RPC_PORT) {
+        NET_LOG_ERROR("Failed to get rpc port , port: " << port);
+        return BIO_ERR;
     }
-    mLocalUniqueId = ip + ":" + std::string(buffer);
+    pid_t currentPid = getpid();
+    std::string portWithPid = std::to_string(port) + "_" + std::to_string(currentPid);
+    mLocalUniqueId = ip + ":" + portWithPid;
     mStoreUrl = opt.transStoreUrl;
     NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl <<);
     return BIO_OK;
+}
+
+BResult MfTransEngine::BindTcpPortV4(int32_t &sockfd, int32_t port)
+{
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd != -1) {
+        int32_t on_v4 = 1;
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on_v4, sizeof(on_v4)) == 0) {
+            sockaddr_in bind_address_v4{};
+            bind_address_v4.sin_family = AF_INET;
+            bind_address_v4.sin_port = htons(port);
+            bind_address_v4.sin_addr.s_addr = INADDR_ANY;
+
+            if (bind(sockfd, reinterpret_cast<sockaddr *>(&bind_address_v4), sizeof(bind_address_v4)) == 0) {
+                return 0;
+            }
+        }
+        close(sockfd);
+        sockfd = -1;
+    }
+    return -1;
+}
+
+BResult MfTransEngine::BindTcpPortV6(int32_t &sockfd, int32_t port)
+{
+    sockfd = socket(AF_INET6, SOCK_STREAM, 0);
+    if (sockfd != -1) {
+        int32_t on_v6 = 1;
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on_v6, sizeof(on_v6)) == 0) {
+            sockaddr_in6 bind_address_v6{};
+            bind_address_v6.sin6_family = AF_INET6;
+            bind_address_v6.sin6_port = htons(port);
+            bind_address_v6.sin6_addr = in6addr_any;
+
+            if (bind(sockfd, reinterpret_cast<sockaddr *>(&bind_address_v6), sizeof(bind_address_v6)) == 0) {
+                return 0;
+            }
+        }
+        close(sockfd);
+        sockfd = -1;
+    }
+    return -1;
+}
+
+uint16_t MfTransEngine::FindAvailableTcpPort(int32_t &sockfd)
+{
+    static std::random_device rd;
+    const int32_t min_port = 15000;
+    const int32_t max_port = 25000;
+    const int32_t max_attempts = 1000;
+    const int32_t offset_bit = 32;
+    uint64_t seed = 1;
+    seed |= static_cast<uint64_t>(getpid()) << offset_bit;
+    seed |= static_cast<uint64_t>(std::chrono::system_clock::now().time_since_epoch().count()) & 0xFFFFFFFFULL;
+    static std::mt19937_64 gen(seed);
+    std::uniform_int_distribution<> dis(min_port, max_port);
+
+    bool supports_ipv6 = false;
+    int32_t sockfd_check = socket(AF_INET6, SOCK_STREAM, 0);
+    if (sockfd_check != -1) {
+        supports_ipv6 = true;
+        close(sockfd_check);
+    }
+
+    for (int32_t attempt = 0; attempt < max_attempts; ++attempt) {
+        int32_t port = dis(gen);
+        auto ret = BindTcpPortV4(sockfd, port);
+        if (ret == 0) {
+            return port;
+        }
+        if (supports_ipv6) {
+            ret = BindTcpPortV6(sockfd, port);
+            if (ret == 0) {
+                return port;
+            }
+        }
+    }
+    NET_LOG_ERROR("Not find a available tcp port");
+    return 0;
 }
 
 }

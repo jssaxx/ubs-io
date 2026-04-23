@@ -242,14 +242,6 @@ public:
         return mfSmemTransBatchRead(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, opcode, flags);
     }
 
-    static inline BResult MfSemTransGetRpcPort(char *portStr, size_t portStrLen)
-    {
-        if (mfSemTransGetRpcPort == nullptr) {
-            return BIO_UNDER_API_UNLOAD;
-        }
-        return mfSemTransGetRpcPort(portStr, portStrLen);
-    }
-
 private:
     static void* mfHandle;
     static std::mutex gMutex;
@@ -270,7 +262,6 @@ private:
     static mfSmemTransBatchWriteFunc mfSmemTransBatchWrite;
     static mfSmemTransReadFunc mfSmemTransRead;
     static mfSmemTransBatchReadFunc mfSmemTransBatchRead;
-    static mfSemTransGetRpcPortFunc mfSemTransGetRpcPort;
 };
 
 class NetTransEngine {
@@ -339,6 +330,12 @@ public:
 
 private:
     BResult PreInit(const NetOptions &opt);
+
+    BResult BindTcpPortV4(int32_t &sockfd, int32_t port);
+
+    BResult BindTcpPortV6(int32_t &sockfd, int32_t port);
+
+    uint16_t FindAvailableTcpPort(int32_t &sockfd)
 
 private:
     void* mTransHandler = nullptr;
