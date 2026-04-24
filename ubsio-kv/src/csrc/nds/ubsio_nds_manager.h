@@ -47,9 +47,9 @@ struct TaskResults {
     }
 };
 
-class DfcNdsManager {
+class NdsManager {
 public:
-    static DfcNdsManager &Instance() noexcept;
+    static NdsManager &Instance() noexcept;
 
     KvcError Initialize(int device) noexcept;
 
@@ -68,10 +68,10 @@ public:
                              const std::vector<std::vector<size_t>> &sizes) noexcept;
 
 public:
-    DfcNdsManager(const DfcNdsManager&) = delete;
-    DfcNdsManager& operator=(const DfcNdsManager&) = delete;
-    DfcNdsManager(DfcNdsManager&&) = delete;
-    DfcNdsManager& operator=(DfcNdsManager&&) = delete;
+    NdsManager(const NdsManager&) = delete;
+    NdsManager& operator=(const NdsManager&) = delete;
+    NdsManager(NdsManager&&) = delete;
+    NdsManager& operator=(NdsManager&&) = delete;
 
 private:
     ssize_t SingleRead(const KeyAddrInfo &addrInfo,
@@ -84,8 +84,8 @@ private:
                               const std::vector<size_t> &sizes) noexcept;
 
 private:
-    DfcNdsManager() = default;
-    ~DfcNdsManager() noexcept;
+    NdsManager() = default;
+    ~NdsManager() noexcept;
 
 private:
     int deviceId{};

@@ -56,14 +56,14 @@ int32_t ACLApi::LoadLibrary()
     char *path = std::getenv("ASCEND_HOME_PATH");
     if (path == nullptr) {
         LOG_ERROR("ASCEND_HOME_PATH is not set");
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     std::string libPath = std::string(path) + "/lib64/" + g_ascendAclLibName;
     /* dlopen library */
     aclHandle = dlopen(libPath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     if (aclHandle == nullptr) {
         LOG_ERROR("Failed to open library [" << libPath << "], error: " << dlerror());
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
 
     /* load sym */

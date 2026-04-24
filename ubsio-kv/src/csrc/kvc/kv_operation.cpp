@@ -31,10 +31,10 @@ int32_t KvOperation::Initialize(const std::string &path)
     std::lock_guard<std::mutex> guard(mMutex);
     if (mInited) {
         LOG_INFO("Kv operation has been initialized");
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     }
     mInited = true;
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 void KvOperation::UnInitialize(void)
@@ -53,7 +53,7 @@ int32_t KvOperation::KvPutData(const std::string &key, void *value, size_t len)
     CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
     if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
         LOG_ERROR("Calc location failed, status:" << status);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     return DlBioSdkApi::Put(tenantId, key.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, location);
 }
@@ -64,7 +64,7 @@ int32_t KvOperation::KvGetData(const std::string &key, void *value, size_t len)
     CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
     if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
         LOG_ERROR("CalcLocation failed with returned status " << status);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     uint64_t outLength = 0;
     return DlBioSdkApi::Get(tenantId, key.c_str(), 0, (uint64_t)len, location, reinterpret_cast<char*>(value), &outLength);
@@ -76,7 +76,7 @@ int32_t KvOperation::KvDeleteKey(const std::string &key)
     CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
     if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
         LOG_ERROR("CalcLocation failed with returned status " << status);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     return DlBioSdkApi::Delete(tenantId, key.c_str(), location);
 }
@@ -104,17 +104,17 @@ int32_t KvOperation::KvGetLengthKey(const std::string &key, uint32_t &length)
     CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
     if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
         LOG_ERROR("CalcLocation failed with returned status " << status);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     ObjStat stat;
     stat.size = 0;
     auto ret = DlBioSdkApi::Stat(tenantId, key.c_str(), location, &stat);
     if ((ret != CResult::RET_CACHE_OK) || (stat.size == 0)) {
         LOG_ERROR("Exist data from meta failed, ret: " << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     length = stat.size;
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **bufs,
@@ -130,7 +130,7 @@ int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **
         CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), &location);
         if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
             LOG_ERROR("Calc location failed, status:" << status);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         locationVec[i] = location;
         keys[i] = key[i].c_str();
@@ -150,18 +150,18 @@ int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *
         CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(key[i])), &location);
         if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
             LOG_ERROR("Calc location failed, status:" << status);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         locationVec[i] = location;
         keys[i] = key[i].c_str();
     }
 
     int ret = DlBioSdkApi::BatchExist(tenantId, keys.data(), locationVec.data(), keysCount, results);
-    if (ret != DFC_OK) {
+    if (ret != UBSIO_KVC_OK) {
         LOG_ERROR("BioBatchExist failed with returned status " << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::vector<void*> &value,
@@ -174,7 +174,7 @@ int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::ve
         auto index = i;
         std::function<void()> func = [&, index]() {
             auto ret = KvPutData(key[index], value[index], lengths[index]);
-            if (ret != DFC_OK) {
+            if (ret != UBSIO_KVC_OK) {
                 LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
             }
             results[index] = ret;
@@ -188,12 +188,12 @@ int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::ve
         if (!result) {
             LOG_ERROR("Execute batch put data, batch num: " << key.size() << " i:" << i);
             sem_destroy(&sem);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::BatchKvDeleteKey(const std::vector<std::string> &key, std::vector<int> &results)
@@ -205,7 +205,7 @@ int32_t KvOperation::BatchKvDeleteKey(const std::vector<std::string> &key, std::
         auto index = i;
         std::function<void()> func = [&, index]() {
             auto ret = KvDeleteKey(key[index]);
-            if (ret != DFC_OK) {
+            if (ret != UBSIO_KVC_OK) {
                 LOG_ERROR("Batch delete key failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
             }
             results[index] = ret;
@@ -219,12 +219,12 @@ int32_t KvOperation::BatchKvDeleteKey(const std::vector<std::string> &key, std::
         if (!result) {
             LOG_ERROR("Execute batch delete key, batch num: " << key.size() << " i:" << i);
             sem_destroy(&sem);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths,
@@ -237,7 +237,7 @@ int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std:
         auto index = i;
         std::function<void()> func = [&, index]() {
             auto ret = KvGetLengthKey(key[index], lengths[index]);
-            if (ret != DFC_OK) {
+            if (ret != UBSIO_KVC_OK) {
                 LOG_ERROR("Batch get length failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
             }
             results[index] = ret;
@@ -251,12 +251,12 @@ int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std:
         if (!result) {
             LOG_ERROR("Execute batch get length, batch num: " << key.size() << " i:" << i);
             sem_destroy(&sem);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 }; // namespace ubsio
 } // namespace ock

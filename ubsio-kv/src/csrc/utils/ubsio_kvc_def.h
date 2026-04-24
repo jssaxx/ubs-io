@@ -29,7 +29,7 @@ extern "C" {
         if ((TARGET_FUNC_VAR) == nullptr) {                                                \
             LOG_ERROR("Failed to call dlsym to load SYMBOL_NAME, error" << dlerror());     \
             dlclose(FILE_HANDLE);                                                          \
-            return DFC_ERR;                                                                \
+            return UBSIO_KVC_ERR;                                                                \
         }                                                                                  \
     } while (0)
 
