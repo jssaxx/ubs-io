@@ -741,6 +741,108 @@ void* diagnose::BioSdkCommand::PerfTestGetImpl(void *param)
     return nullptr;
 }
 
+void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmds)
+{
+    uint32_t bs = (std::stoul(cmds[1]) * 1024);
+    uint32_t batchNum = std::stoul(cmds[2]);
+    char key[128];
+    std::vector<std::string> prepareKeys;
+    std::vector<std::shared_ptr<ObjLocation>> prepareLocations;
+    uint32_t keyIndex = 0;
+    char **values = reinterpret_cast<char**>(malloc(sizeof(char*) * batchNum));
+    for (uint32_t idx = 0; idx < batchNum; idx++) {
+        sprintf(key, "file_%u_%d", getpid(), keyIndex);
+
+        std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
+        auto ret = BioCalcLocation(gTenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
+        if (ret != RET_CACHE_OK) {
+            mPrintOp("Calculate location failed, result:%d.\n", ret);
+            return;
+        }
+        char *value = new char[bs];
+        ret = BioPut(gTenantId, key, value, bs, *location);
+        if (ret != RET_CACHE_OK) {
+            mPrintOp("Put key(%s) fail, result:%d\n", key, ret);
+            return;
+        }
+        values[idx] = value;
+        keyIndex++;
+        prepareKeys.emplace_back(key);
+        prepareLocations.emplace_back(location);
+    }
+    char **keys = reinterpret_cast<char**>(malloc(sizeof(char*) * batchNum));
+    uint64_t *offsets = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
+    uint64_t *lengths = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
+    ObjLocation *locations = reinterpret_cast<ObjLocation*>(malloc(sizeof(ObjLocation) * batchNum));
+    uintptr_t *valueAddrs = reinterpret_cast<uintptr_t*>(malloc(sizeof(uintptr_t) * batchNum));
+    uint64_t *realLengths = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
+    int32_t *results = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t) * batchNum));
+    bool* existFlags = reinterpret_cast<bool*>(malloc(sizeof(bool) * batchNum));
+    KeyAddrInfo *infos = reinterpret_cast<KeyAddrInfo*>(malloc(sizeof(KeyAddrInfo) * batchNum));
+    if (keys == nullptr || offsets == nullptr || lengths == nullptr || locations == nullptr ||
+        valueAddrs == nullptr || realLengths == nullptr || results == nullptr || existFlags == nullptr) {
+        mPrintOp("Malloc fail.");
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        keys[i] = const_cast<char*>(prepareKeys[i].c_str());
+        offsets[i] = 0;
+        lengths[i] = bs;
+        locations[i] = *(prepareLocations[i]);
+        valueAddrs[i] = 0;
+        results[i] = 0;
+        realLengths[i] = 0;
+    }
+
+    auto result = BioBatchExist(gTenantId, const_cast<const char **>(keys), locations, batchNum, existFlags);
+    if (result != 0) {
+        mPrintOp("Bio batch exist fail, ret:%d.\n", result);
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        if (!existFlags[i]) {
+            mPrintOp("Bio batch exit, key:%s is not exist.\n", keys[i]);
+            return;
+        }
+    }
+    sleep(5);
+    result = BioBatchGetKeyDiskAddr(gTenantId, const_cast<const char **>(keys), locations, batchNum, infos);
+    if (result != 0) {
+        mPrintOp("Bio batch get key disk addr fail, ret:%d.\n", result);
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        if (infos[i].result != BIO_OK) {
+            mPrintOp("get key disk addr fail key:%s, ret:%d\n", keys[i], infos[i].result);
+            continue;
+        }
+        mPrintOp("key:%s\n", keys[i]);
+        for (uint32_t j = 0; j < infos[i].count; j++) {
+            mPrintOp("=====index:%u\n", j);
+            mPrintOp("=====path:%s\n", infos[i].path);
+            mPrintOp("=====offset:%llu\n", infos[i].offset[j]);
+            mPrintOp("=====length:%llu\n", infos[i].length[j]);
+        }
+    }
+
+    result = BioBatchGet(gTenantId, const_cast<const char **>(keys), batchNum, offsets, lengths, locations, valueAddrs, realLengths, results);
+
+    if (result != 0) {
+        mPrintOp("Bio batch get fail, ret:%d.\n", result);
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        if (results[i] != 0) {
+            mPrintOp("Bio batch get fail, key:%s, ret:%d.\n", keys[i], result);
+            return;
+        }
+    }
+    if (BioBatchGetFree(gTenantId, valueAddrs, batchNum) != 0) {
+        mPrintOp("Bio batch get free shm fail.\n");
+    }
+    mPrintOp("Bio batch get success!\n");
+}
+
 void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
@@ -874,6 +976,7 @@ void diagnose::BioSdkCommand::BioSdkDebugHelp(char *command, int detail) noexcep
     mPrintOp("\tAdd disk: sdk adddisk [diskPath]\n");
     mPrintOp("\tCache resource: sdk cacheresource\n");
     mPrintOp("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
+    mPrintOp("\tperf test: sdk batchget [bs(Kb)] [batchNUM]\n");
     mPrintOp("\tupdate prepare: sdk notifyupdate [tenantId]\n");
     mPrintOp("\tupdate check: sdk checkupdate [tenantId]\n");
     mPrintOp("\tupdate finish: sdk finishupdate [tenantId]\n");
@@ -998,6 +1101,12 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
             return;
         }
         HandlePerf(cmds);
+    } else if (cmdType == "batchget") {
+        if (cmds.size() != 3) {
+            mPrintOp("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleBatchGet(cmds);
     } else if (cmdType == "notifyupdate") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u\n", cmds.size());
