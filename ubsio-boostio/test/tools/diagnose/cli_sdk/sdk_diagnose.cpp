@@ -19,6 +19,7 @@
 #include "htracer.h"
 #include "bio_client.h"
 #include "bio_lock.h"
+#include "bio_crc_util.h"
 #include "sdk_diagnose.h"
 
 #ifdef __cplusplus
@@ -810,24 +811,6 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
         }
     }
     sleep(5);
-    result = BioBatchGetKeyDiskAddr(gTenantId, const_cast<const char **>(keys), locations, batchNum, infos);
-    if (result != 0) {
-        mPrintOp("Bio batch get key disk addr fail, ret:%d.\n", result);
-        return;
-    }
-    for (uint32_t i = 0; i < batchNum; i++) {
-        if (infos[i].result != BIO_OK) {
-            mPrintOp("get key disk addr fail key:%s, ret:%d\n", keys[i], infos[i].result);
-            continue;
-        }
-        mPrintOp("key:%s\n", keys[i]);
-        for (uint32_t j = 0; j < infos[i].count; j++) {
-            mPrintOp("=====index:%u\n", j);
-            mPrintOp("=====path:%s\n", infos[i].path);
-            mPrintOp("=====offset:%llu\n", infos[i].offset[j]);
-            mPrintOp("=====length:%llu\n", infos[i].length[j]);
-        }
-    }
 
     result = BioBatchGet(gTenantId, const_cast<const char **>(keys), batchNum, offsets, lengths, locations, valueAddrs, realLengths, results);
 
@@ -838,6 +821,10 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
     for (uint32_t i = 0; i < batchNum; i++) {
         if (results[i] != 0) {
             mPrintOp("Bio batch get fail, key:%s, ret:%d.\n", keys[i], result);
+            return;
+        }
+        if (BioCrcUtil::Crc32(reinterpret_cast<void*>(values[i]), bs) != BioCrcUtil::Crc32(reinterpret_cast<void*>(valueAddrs[i]), bs)) {
+            mPrintOp("Bio batch get fail, key:%s, crc check fail.\n", keys[i]);
             return;
         }
     }
