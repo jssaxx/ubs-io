@@ -786,8 +786,8 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
     }
 
     for (uint32_t i = 0; i < batchNum; i++) {
-        memcpy(reinterpret_cast<void*>(key[i] + i * 256), prepareKeys[i].c_str(), prepareKeys[i].size());
-        reinterpret_cast<char*>(key[i] + i * 256)[prepareKeys[i].size()] = '\0';
+        memcpy(reinterpret_cast<void*>(keys[i] + i * 256), prepareKeys[i].c_str(), prepareKeys[i].size());
+        reinterpret_cast<char*>(keys[i] + i * 256)[prepareKeys[i].size()] = '\0';
 //        keys[i] = const_cast<char*>(prepareKeys[i].c_str());
         offsets[i] = 0;
         lengths[i] = bs;
