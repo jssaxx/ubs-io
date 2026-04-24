@@ -31,6 +31,12 @@ using namespace ock::bio;
 
 static const uint32_t IO_EXTRATEGE_TIME = 3; // IO策略3s过期
 
+constexpr uint16_t SDK_DISPATH_BATCH_GET_THREAD_NUM = 128;
+constexpr uint16_t SDK_DISPATH_BATCH_GET_QUEUE_SIZE = 8192;
+constexpr uint16_t SDK_DISPATH_BATCH_EXIST_THREAD_NUM = 128;
+constexpr uint16_t SDK_DISPATH_BATCH_EXIST_QUEUE_SIZE = 8192;
+constexpr uint16_t SDK_DISPATH_BATCH_COUNT_MAX_NUM = 128;
+
 BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     FlowInfo &flowInfo)
 {
@@ -526,6 +532,30 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t
         return ret;
     }
 
+    mBatchGetExecutor = ExecutorService::Create(SDK_DISPATH_BATCH_GET_THREAD_NUM,
+                                                SDK_DISPATH_BATCH_GET_QUEUE_SIZE);
+    if (UNLIKELY(mBatchGetExecutor == nullptr)) {
+        LOG_ERROR("Failed to create execution service for get kv, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+    ret = mBatchGetExecutor->Start();
+    if (!ret) {
+        LOG_ERROR("Failed to start execution service for get kv, probably out of memory");
+        return BIO_INNER_ERR;
+    }
+
+    mBatchExistExecutor = ExecutorService::Create(SDK_DISPATH_BATCH_EXIST_THREAD_NUM,
+                                                  SDK_DISPATH_BATCH_EXIST_QUEUE_SIZE);
+    if (UNLIKELY(mBatchExistExecutor == nullptr)) {
+        LOG_ERROR("Failed to create execution service for get kv, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+    ret = mBatchExistExecutor->Start();
+    if (!ret) {
+        LOG_ERROR("Failed to start execution service for get kv, probably out of memory");
+        return BIO_INNER_ERR;
+    }
+
     CLIENT_LOG_INFO("Mirror client initialize, clcEnable: " << mEnableCrc << "， scene:" << mScene << ", alignSize:" <<
         mAlignSize << ", timeOut:" << mTimeOut << ".");
     return BIO_OK;
@@ -892,6 +922,81 @@ BResult MirrorClient::BatchGet(MirrorBatchGet &param)
     return ret;
 }
 
+inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum, DispathBatchGetResult *taskResults,
+                                                     uintptr_t *valueAddrs)
+{
+    for (uint32_t i = 0; i < parallelNum; i++) {
+        if (taskResults[i].result == BIO_OK) {
+            uint32_t basic = i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+            for (uint32_t j = 0; j < taskResults[i].count; i++) {
+                mDataMsgMemPool->ReleaseOne(valueAddrs[basic + j]);
+            }
+        }
+    }
+}
+
+BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets,
+                                      uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                                      uint64_t *realLengths, int32_t *results)
+{
+    BResult ret = BIO_OK;
+    volatile uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+    sem_t sem;
+    sem_init(&sem, 0, 0);
+    uint32_t index = 0;
+    uint32_t keyNum = 0;
+    uint32_t resultIndex = 0;
+    DispathBatchGetResult *taskResults =
+            reinterpret_cast<DispathBatchGetResult *>(malloc(sizeof(DispathBatchGetResult) * parallelNum));
+    for (uint32_t i = 0; i < parallelNum; i++) {
+        if (i < parallelNum - 1) {
+            keyNum = SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+        } else {
+            keyNum = count - i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+        }
+        MirrorBatchGet param;
+        param.attr = attr;
+        param.keys = keys + 256 * index;
+        param.count = keyNum;
+        param.offsets = offsets + index;
+        param.lengths = lengths + index;
+        param.locations = locations + index;
+        param.valuesAddr = valueAddrs + index;
+        param.realLengths = realLengths + index;
+        param.results = results + index;
+        resultIndex = i;
+        std::function<void()> func = [&, resultIndex]() {
+            taskResults[resultIndex].result = BatchGet(param);
+            if (__sync_sub_and_fetch(&parallelNum, 1) == 0) {
+                // 最后一个任务唤醒主线程.
+                sem_post(&sem);
+            }
+        };
+
+        if (!mBatchGetExecutor->Execute(func)) {
+            LOG_ERROR("Execute disapth batch get failed, batch num: " << param.count << " i:" << i);
+            ret = BIO_INNER_ERR;
+        }
+        index += keyNum;
+    }
+    sem_wait(&sem);
+    sem_destroy(&sem);
+    if (ret != BIO_OK) {
+        // TODO 资源回收
+        DispathBatchGetRecycleResource(parallelNum, taskResults, valueAddrs);
+        return ret;
+    } else {
+        for (uint32_t i = 0; i < parallelNum; i++) {
+            if (taskResults[i].result != BIO_OK) {
+                // TODO 资源回收
+                DispathBatchGetRecycleResource(parallelNum, taskResults, valueAddrs);
+                return taskResults[i].result;
+            }
+        }
+    }
+    return BIO_OK;
+}
+
 void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 {
     for (uint32_t i = 0; i < count; i++) {
@@ -1231,6 +1336,55 @@ BResult MirrorClient::StatObjectImpl(const char *key, const ObjLocation &locatio
         CLIENT_LOG_ERROR("Send stat request failed, ret:" << ret << ", ptId:" << ptId << ", key:" << key << ".");
     }
     return ret;
+}
+
+BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
+{
+    BResult ret = BIO_OK;
+    volatile uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+    sem_t sem;
+    sem_init(&sem, 0, 0);
+    uint32_t index = 0;
+    uint32_t keyNum = 0;
+    uint32_t resultIndex = 0;
+    BResult *taskResults = reinterpret_cast<BResult*>(malloc(sizeof(BResult) * parallelNum));
+    for (uint32_t i = 0; i < parallelNum; i++) {
+        if (i < parallelNum - 1) {
+            keyNum = SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+        } else {
+            keyNum = count - i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+        }
+        const char **keys = key + 256 * index;
+        ObjLocation *locations = locations + index;
+        uint32_t counts = keyNum;
+        bool *results = result + index;
+        resultIndex = i;
+        std::function<void()> func = [&, resultIndex]() {
+            taskResults[resultIndex] = BatchExist(keys, locations, counts, results);
+            if (__sync_sub_and_fetch(&parallelNum, 1) == 0) {
+                // 最后一个任务唤醒主线程.
+                sem_post(&sem);
+            }
+        };
+
+        if (!mBatchExistExecutor->Execute(func)) {
+            LOG_ERROR("Execute disapth batch get failed, batch num: " << count << " i:" << i);
+            ret = BIO_INNER_ERR;
+        }
+        index += keyNum;
+    }
+    sem_wait(&sem);
+    sem_destroy(&sem);
+    if (ret != BIO_OK) {
+        return ret;
+    } else {
+        for (uint32_t i = 0; i < parallelNum; i++) {
+            if (taskResults[resultIndex] != BIO_OK) {
+                return taskResults[resultIndex];
+            }
+        }
+    }
+    return BIO_OK;
 }
 
 BResult MirrorClient::BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)

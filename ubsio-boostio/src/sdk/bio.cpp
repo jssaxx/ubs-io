@@ -297,10 +297,10 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
 
     BIO_TRACE_START(SDK_TRACE_BATCH_GET);
-    MirrorClient::MirrorBatchGet param{ { mTenantId, mAffinity, mStrategy },
-                                        keys, count, offsets, lengths, locations,
-                                        valueAddrs, realLengths, results };
-    BResult ret = gClient->BatchGet(param);
+
+
+    BResult ret = gClient->BatchGet({ mTenantId, mAffinity, mStrategy }, keys, count, offsets, lengths, locations,
+                                    valueAddrs, realLengths, results);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
