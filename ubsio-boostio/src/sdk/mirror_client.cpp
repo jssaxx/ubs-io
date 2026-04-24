@@ -940,7 +940,8 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
                                       uint64_t *realLengths, int32_t *results)
 {
     BResult ret = BIO_OK;
-    volatile uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+    uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+    volatile uint32_t taskNum = parallelNum;
     sem_t sem;
     sem_init(&sem, 0, 0);
     uint32_t index = 0;
@@ -967,7 +968,7 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
         resultIndex = i;
         std::function<void()> func = [&, resultIndex]() {
             taskResults[resultIndex].result = BatchGet(param);
-            if (__sync_sub_and_fetch(&parallelNum, 1) == 0) {
+            if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
                 sem_post(&sem);
             }
@@ -1341,7 +1342,8 @@ BResult MirrorClient::StatObjectImpl(const char *key, const ObjLocation &locatio
 BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
 {
     BResult ret = BIO_OK;
-    volatile uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+    uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+    volatile uint32_t taskNum = parallelNum;
     sem_t sem;
     sem_init(&sem, 0, 0);
     uint32_t index = 0;
@@ -1361,7 +1363,7 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
         resultIndex = i;
         std::function<void()> func = [&, resultIndex]() {
             taskResults[resultIndex] = BatchExist(keys, locations, counts, results);
-            if (__sync_sub_and_fetch(&parallelNum, 1) == 0) {
+            if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
                 sem_post(&sem);
             }
