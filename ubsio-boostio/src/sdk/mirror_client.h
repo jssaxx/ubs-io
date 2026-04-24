@@ -91,6 +91,7 @@ public:
     };
 
     struct MirrorBatchGet {
+
         CacheAttr attr;
         const char **keys;
         uint32_t count;
@@ -100,9 +101,7 @@ public:
         uintptr_t *valuesAddr;
         uint64_t *realLengths;
         int32_t *results;
-        MirrorBatchGet() : attr(0, AFFINITY_BUTT, STRATEGY_BUTT), keys(nullptr), count(0), offsets(nullptr),
-                                            lengths(nullptr), locations(nullptr), valuesAddr(nullptr),
-                                            realLengths(nullptr), results(nullptr) {}
+        MirrorBatchGet() {};
         MirrorBatchGet(CacheAttr attrParam, const char **keysParam, uint32_t countParam,
                        uint64_t *offsetsParam, uint64_t *lengthsParam, ObjLocation *locationsParam,
                        uintptr_t *valuesAddrParam, uint64_t *realLengthsParam,int32_t *resultsParam) : attr(attrParam),
@@ -161,7 +160,9 @@ public:
 
     BResult Get(MirrorGet &param, uint64_t &realLen);
 
-    BResult BatchGet(MirrorBatchGet &param);
+    BResult BatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets,
+                     uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                     uint64_t *realLengths, int32_t *results);
 
     inline void DispathBatchGetRecycleResource(uint32_t parallelNum, DispathBatchGetResult *taskResults,
                                                          uintptr_t *valueAddrs);

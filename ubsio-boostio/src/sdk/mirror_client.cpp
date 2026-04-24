@@ -906,7 +906,9 @@ BResult MirrorClient::BatchGetKeyDiskAddr(MirrorBatchGetKeyAddr &param)
     return ret;
 }
 
-BResult MirrorClient::BatchGet(MirrorBatchGet &param)
+BResult MirrorClient::BatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets,
+                               uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                               uint64_t *realLengths, int32_t *results)
 {
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
@@ -956,18 +958,21 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
             keyNum = count - i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
         }
         MirrorBatchGet param;
-        param.attr = attr;
-        param.keys = keys + 256 * index;
-        param.count = keyNum;
-        param.offsets = offsets + index;
-        param.lengths = lengths + index;
-        param.locations = locations + index;
-        param.valuesAddr = valueAddrs + index;
-        param.realLengths = realLengths + index;
-        param.results = results + index;
+        const char ** keysParam = keys + 256 * index;
+        uint32_t countParam = keyNum;
+        uint64_t *offsetsParam = offsets + index;
+        uint64_t *lengthsParam = lengths + index;
+        ObjLocation *locationsParam = locations + index;
+        uintptr_t *valuesAddrParam = valueAddrs + index;
+        uint64_t *realLengthsParam = realLengths + index;
+        int32_t *resultsParam = results + index;
         resultIndex = i;
-        std::function<void()> func = [&, resultIndex]() {
-            taskResults[resultIndex].result = BatchGet(param);
+        std::function<void()> func = [ &, resultIndex,
+                                       keysParam, countParam, offsetsParam, lengthsParam,
+                                       locationsParam, valuesAddrParam, realLengthsParam, resultsParam]() {
+            taskResults[resultIndex].result = BatchGet({attr.mTenantId, attr.affinity, attr.strategy}, keysParam, countParam, offsetsParam,
+                                                       lengthsParam, locationsParam, valuesAddrParam,
+                                                       realLengthsParam, resultsParam);
             if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
                 sem_post(&sem);
@@ -1361,7 +1366,7 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
         uint32_t counts = keyNum;
         bool *results = result + index;
         resultIndex = i;
-        std::function<void()> func = [&, resultIndex]() {
+        std::function<void()> func = [&, resultIndex, keys, locations, counts, results]() {
             taskResults[resultIndex] = BatchExist(keys, locations, counts, results);
             if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
