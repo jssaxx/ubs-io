@@ -910,6 +910,9 @@ BResult MirrorClient::BatchGet(CacheAttr attr, const char **keys, const uint32_t
                                uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
                                uint64_t *realLengths, int32_t *results)
 {
+    MirrorClient::MirrorBatchGet param{ { attr.mTenantId, attr.affinity, attr.strategy },
+                                        keys, count, offsets, lengths, locations,
+                                        valueAddrs, realLengths, results };
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
     BResult ret = BIO_OK;
