@@ -30,6 +30,8 @@ namespace bio {
 constexpr uint32_t TRANS_EXCUTE_POOL_SIZE = 4;
 constexpr uint32_t TRANS_EXCUTE_POOL_QUEUE_SIZE = 1024;
 constexpr uint16_t INVALID_RPC_PORT = 0;
+constexpr uint32_t MAX_TRANS_SEGMENT_SIZE = 1024 * 1024 *1024; // 1G
+constexpr uint64_t MAX_TRANS_MEM_SIZE = 40 * 1024 * 1024 *1024; // 40G
 
 void* DlMfApi::mfHandle;
 std::mutex DlMfApi::gMutex;
@@ -151,25 +153,22 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
         NET_LOG_ERROR("Failed to create mf trans");
         return BIO_ERR;
     }
-    // mExecutorPool可以取消
-    // mExecutorPool = MakeRef<NetExecutorPool>("NetTransExecutor");
-    // if (mExecutorPool == nullptr) {
-    //     NET_LOG_ERROR("Failed to create NetExecutorPool");
-    //     return BIO_ERR;
-    // }
-    // ret = mExecutorPool->Start(TRANS_EXCUTE_POOL_SIZE, TRANS_EXCUTE_POOL_QUEUE_SIZE);
-    // if (ret != BIO_OK) {
-    //     NET_LOG_ERROR("Failed to start NetExecutorPool, ret: " << ret);
-    //     return ret;
-    // }
+    
     const std::chrono::seconds WAIT_TIME(10);
     std::this_thread::sleep_for(WAIT_TIME); // 等待初始化完成
+    ret = InitMsgBlockPool(opt);
+    if (ret != BIO_OK) {
+        return ret;
+    }
     NET_LOG_INFO("MfTransEngine initialize success");
     return BIO_OK;
 }
 
 BResult MfTransEngine::Destroy()
 {
+    if (mTransMemBase != nullptr) {
+        (void)FreeMem(mTransMemBase);
+    }
     if (mTransHandler != nullptr) {
         DlMfApi::MfSmemTransDestroy(mTransHandler, 0);
         mTransHandler = nullptr;
@@ -361,6 +360,91 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
     mLocalUniqueId = ip + ":" + portWithPid;
     mStoreUrl = opt.transStoreUrl;
     NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl <<);
+    return BIO_OK;
+}
+
+BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
+{
+    if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.netSegmentSize > MAX_TRANS_SEGMENT_SIZE) {
+        NET_LOG_ERROR("transMemSize or netSegmentSize is too large, transMemSize: " << opt.transMemSize
+                      << ", netSegmentSize: " << opt.netSegmentSize <<);
+        return BIO_ERR;
+    }
+    mTransMemSize = opt.transMemSize;
+    mTransSegmentSize = opt.netSegmentSize;
+    mMsgBlookPool = MakeRef<NetBlockPool>();
+    if (mMsgBlookPool == nullptr) {
+        NET_LOG_ERROR("Failed to create msg block pool");
+        return BIO_ERR;
+    }
+    auto ret = MallocMem(mTransMemSize, mTransMemBase);
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    
+    ret = mMsgBlookPool->Start(reinterpret_cast<uintptr_t>(mTransMemBase), mTransSegmentSize,
+                         mTransMemSize / mTransSegmentSize);
+    if (ret != BIO_OK) {
+        NET_LOG_ERROR("Failed to start msg block pool, ret: " << ret);
+        (void)FreeMem(mTransMemBase);
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult MfTransEngine::AllocOneBlock(uintptr_t& address)
+{
+    if (mMsgBlookPool == nullptr) {
+        NET_LOG_ERROR("mMsgBlookPool is nullptr, please init trans");
+        return BIO_ERR;
+    }
+    auto ret = mMsgBlookPool->AllocOne(address);
+    if (ret != BIO_OK) {
+        NET_LOG_ERROR("Failed to alloc one block, ret: " << ret);
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult MfTransEngine::AllocBlocks(uint32_t count, std::vector<uintptr_t> &addresses)
+{
+    if (mMsgBlookPool == nullptr) {
+        NET_LOG_ERROR("mMsgBlookPool is nullptr, please init trans");
+        return BIO_ERR;
+    }
+    auto ret = mMsgBlookPool->AllocMany(count, addresses);
+    if (ret != BIO_OK) {
+        NET_LOG_ERROR("Failed to alloc many blocks, ret: " << ret);
+        return ret;
+    }
+    return BIO_OK;
+}
+
+BResult MfTransEngine::FreeOneBlock(uintptr_t address)
+{
+    if (mMsgBlookPool == nullptr) {
+        NET_LOG_ERROR("mMsgBlookPool is nullptr, please init trans");
+        return BIO_ERR;
+    }
+    auto ret = mMsgBlookPool->ReleaseOne(address);
+    if (ret != BIO_OK) {
+        NET_LOG_ERROR("Failed to free one block, ret: " << ret);
+        return ret;
+    }
+    return BIO_OK;
+}
+    
+BResult MfTransEngine::FreeBlocks(std::vector<uintptr_t> &addresses)
+{
+    if (mMsgBlookPool == nullptr) {
+        NET_LOG_ERROR("mMsgBlookPool is nullptr, please init trans");
+        return BIO_ERR;
+    }
+    auto ret = mMsgBlookPool->ReleaseMany(addresses);
+    if (ret != BIO_OK) {
+        NET_LOG_ERROR("Failed to free many blocks, ret: " << ret);
+        return ret;
+        }
     return BIO_OK;
 }
 

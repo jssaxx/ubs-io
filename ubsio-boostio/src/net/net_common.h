@@ -117,6 +117,7 @@ struct NetOptions {
     uint16_t transDeviceId = 0;                          /* net trans device id */
     std::string deviceTransType = "NULL";                /* net trans type: device_sdma */
     std::string transStoreUrl = "tcp://127.0.0.1:9798";  /* net trans store url */
+    uint64_t transMemSize = 1024 * 1024 * 1024;;                        /* net trans memory size */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
     bool enableTls = false;                              /* tls switch */

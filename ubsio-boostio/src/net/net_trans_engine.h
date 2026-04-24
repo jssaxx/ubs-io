@@ -22,6 +22,7 @@
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
 #include "net_common.h"
+#include "net_block_pool.h"
 #include "net_executor_pool.h"
 
 namespace ock {
@@ -328,8 +329,18 @@ public:
         return mLocalUniqueId;
     }
 
+    BResult AllocOneBlock(uintptr_t& address);
+
+    BResult AllocBlocks(uint32_t count, std::vector<uintptr_t> &addresses);
+
+    BResult FreeOneBlock(uintptr_t address);
+
+    BResult FreeBlocks(std::vector<uintptr_t> &addresses);
+
 private:
     BResult PreInit(const NetOptions &opt);
+
+    BResult InitMsgBlockPool(const NetOptions &opt);
 
     BResult BindTcpPortV4(int32_t &sockfd, int32_t port);
 
@@ -342,6 +353,10 @@ private:
     //NetExecutorPoolPtr mExecutorPool = nullptr;
     std::string mLocalUniqueId = ""; // ip:port_pid
     std::string mStoreUrl = ""; // meta store url, format: tcp://ip:port
+    NetBlockPoolPtr mMsgBlookPool = nullptr;
+    void *mTransMemBase = nullptr;
+    uint64_t mTransMemSize;
+    uint32_t mTransSegmentSize;
 };
 
 }
