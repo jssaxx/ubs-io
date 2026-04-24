@@ -770,7 +770,7 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
         prepareKeys.emplace_back(key);
         prepareLocations.emplace_back(location);
     }
-    char **keys = reinterpret_cast<char**>(malloc(sizeof(char) * 256 * batchNum));
+    char **keys = reinterpret_cast<char**>(malloc(sizeof(char*) * batchNum));
     uint64_t *offsets = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
     uint64_t *lengths = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
     ObjLocation *locations = reinterpret_cast<ObjLocation*>(malloc(sizeof(ObjLocation) * batchNum));
@@ -786,8 +786,9 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
     }
 
     for (uint32_t i = 0; i < batchNum; i++) {
-        memcpy(reinterpret_cast<void*>(keys[i] + i * 256), prepareKeys[i].c_str(), prepareKeys[i].size());
-        reinterpret_cast<char*>(keys[i] + i * 256)[prepareKeys[i].size()] = '\0';
+        keys[i] = reinterpret_cast<char*>(malloc(sizeof(char) * 256));
+        memcpy(reinterpret_cast<void*>(keys[i]), prepareKeys[i].c_str(), prepareKeys[i].size());
+        reinterpret_cast<char*>(keys[i])[prepareKeys[i].size()] = '\0';
 //        keys[i] = const_cast<char*>(prepareKeys[i].c_str());
         offsets[i] = 0;
         lengths[i] = bs;
