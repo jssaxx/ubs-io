@@ -961,7 +961,7 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
             keyNum = count - i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
         }
         MirrorBatchGet param;
-        const char ** keysParam = keys + 256 * index;
+        const char ** keysParam = keys + index;
         uint32_t countParam = keyNum;
         uint64_t *offsetsParam = offsets + index;
         uint64_t *lengthsParam = lengths + index;
@@ -1364,8 +1364,8 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
         } else {
             keyNum = count - i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
         }
-        const char **keys = key + 256 * index;
-        ObjLocation *locations = locations + index;
+        const char **keys = key + index;
+        ObjLocation *locations = location + index;
         uint32_t counts = keyNum;
         bool *results = result + index;
         resultIndex = i;
