@@ -101,7 +101,9 @@ public:
         uintptr_t *valuesAddr;
         uint64_t *realLengths;
         int32_t *results;
-        MirrorBatchGet() {};
+        MirrorBatchGet() : attr(0, AFFINITY_BUTT, STRATEGY_BUTT), keys(nullptr), count(0), offsets(nullptr),
+                           lengths(nullptr), locations(nullptr), valuesAddr(nullptr),
+                           realLengths(nullptr), results(nullptr) {}
         MirrorBatchGet(CacheAttr attrParam, const char **keysParam, uint32_t countParam,
                        uint64_t *offsetsParam, uint64_t *lengthsParam, ObjLocation *locationsParam,
                        uintptr_t *valuesAddrParam, uint64_t *realLengthsParam,int32_t *resultsParam) : attr(attrParam),
