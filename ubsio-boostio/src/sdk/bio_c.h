@@ -266,17 +266,6 @@ CResult BioDestroyCache(uint64_t tenantId);
 CResult BioCalcLocation(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 
 /**
- * @brief: Calculate object location info
- *
- * @param[in]: tenantId: tenant id
- * @param[in]: objectId:  objects id
- * @param[in]: count: number of objects
- * @param[out]: result: query result, true-cached local, false-cached remote
- * @return: void
- */
-void BioIsCachedLocal(uint64_t tenantId, const uint64_t **objectId, const uint32_t count, bool **result);
-
-/**
  * @brief: Put value
  *
  * @param[in]: tenantId: tenant id

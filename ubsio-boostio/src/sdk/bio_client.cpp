@@ -502,6 +502,8 @@ BResult BioClient::RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t co
     }
     std::vector<void*> addrsVec;
     std::vector<size_t> sizesVec;
+    addrsVec.reserve(count);
+    sizesVec.reserve(count);
     for (uint32_t i = 0; i < count; i++) {
         addrsVec.emplace_back(reinterpret_cast<void*>(addresses[i]));
         sizesVec.emplace_back(sizes[i]);

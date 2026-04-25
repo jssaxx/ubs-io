@@ -292,7 +292,7 @@ public:
     void BioClientUpdateHandle();
     void BioClientUpdateView();
     BResult AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam);
-
+    BResult RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:

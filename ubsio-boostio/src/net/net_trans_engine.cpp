@@ -31,7 +31,7 @@ constexpr uint32_t TRANS_EXCUTE_POOL_SIZE = 4;
 constexpr uint32_t TRANS_EXCUTE_POOL_QUEUE_SIZE = 1024;
 constexpr uint16_t INVALID_RPC_PORT = 0;
 constexpr uint32_t MAX_TRANS_SEGMENT_SIZE = 1024 * 1024 *1024; // 1G
-constexpr uint64_t MAX_TRANS_MEM_SIZE = 40 * 1024 * 1024 *1024; // 40G
+constexpr uint64_t MAX_TRANS_MEM_SIZE = 40ULL * 1024 * 1024 *1024; // 40G
 
 void* DlMfApi::mfHandle;
 std::mutex DlMfApi::gMutex;
@@ -164,7 +164,7 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
     return BIO_OK;
 }
 
-BResult MfTransEngine::Destroy()
+void MfTransEngine::Destroy()
 {
     if (mTransMemBase != nullptr) {
         (void)FreeMem(mTransMemBase);
@@ -247,13 +247,13 @@ BResult MfTransEngine::Read(TransParam& param)
         return BIO_ERR;
     }
 
-    if (param.remoteAddrs.size() != 1 || param.localAddrs.size() != 1 || param.lengths.size() != 1) {
+    if (param.remoteAddrs.size() != 1 || param.localAddrs.size() != 1 || param.dataSizes.size() != 1) {
         NET_LOG_ERROR("Read param size is not 1, plesase use BatchRead");
         return BIO_ERR;
     }
 
-    BResult ret = DlMfApi::MfSmemTransRead(mTransHandler, param.remoteAddrs[0], param.localAddrs[0],
-                                           param.lengths[0], SMEMB_COPY_GH2H, 0);
+    BResult ret = DlMfApi::MfSmemTransRead(mTransHandler, param.localAddrs[0], param.remoteUniqueId.c_str(),
+                                           param.remoteAddrs[0], param.dataSizes[0], SMEMB_COPY_GH2H, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to read from mf trans, ret: " << ret);
         return ret;
@@ -262,22 +262,23 @@ BResult MfTransEngine::Read(TransParam& param)
     return BIO_OK;
 }
 
-BResult MfTransEngine::BatchRead(std::vector<TransParam>& params)
+BResult MfTransEngine::BatchRead(TransParam& param)
 {
     if (mTransHandler == nullptr) {
         NET_LOG_ERROR("mTransHandler is nullptr, please init trans");
         return BIO_ERR;
     }
 
-    if (params.localesAddrs.size() != params.remotesAddrs.size() ||
-        params.localesAddrs.size() != params.lengths.size()) {
-        NET_LOG_ERROR("localesAddrs size is not equal to remotesAddrs size or lengths size");
+    if (param.localAddrs.size() != param.remoteAddrs.size() ||
+        param.localAddrs.size() != param.dataSizes.size()) {
+        NET_LOG_ERROR("localAddrs size is not equal to remoteAddrs size or dataSizes size");
         return BIO_ERR;
     }
 
-    BResult ret = DlMfApi::MfSmemTransBatchRead(mTransHandler, params.remotesAddrs.data(),
-                                                params.localesAddrs.data(), params.lengths.data(),
-                                                params.localesAddrs.size(), SMEMB_COPY_GH2H, 0);
+    BResult ret = DlMfApi::MfSmemTransBatchRead(mTransHandler, param.localAddrs.data(),
+                                                param.remoteUniqueId.c_str(), const_cast<const void**>(param.remoteAddrs.data()),
+                                                param.dataSizes.data(), param.localAddrs.size(),
+                                                SMEMB_COPY_GH2H, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to batch read from mf trans, ret: " << ret);
         return ret;
@@ -291,13 +292,13 @@ BResult MfTransEngine::Write(TransParam& param)
         NET_LOG_ERROR("mTransHandler is nullptr, please init trans");
         return BIO_ERR;
     }
-    if (param.remoteAddrs.size() != 1 || param.localAddrs.size() != 1 || param.lengths.size() != 1) {
+    if (param.remoteAddrs.size() != 1 || param.localAddrs.size() != 1 || param.dataSizes.size() != 1) {
         NET_LOG_ERROR("Write param size is not 1, plesase use BatchWrite");
         return BIO_ERR;
     }
 
-    BResult ret = DlMfApi::MfSmemTransWrite(mTransHandler, param.localAddrs[0],
-                                            param.remoteAddrs[0], param.lengths[0], SMEMB_COPY_H2G, 0);
+    BResult ret = DlMfApi::MfSmemTransWrite(mTransHandler, param.localAddrs[0], param.remoteUniqueId.c_str(),
+                                            param.remoteAddrs[0], param.dataSizes[0], SMEMB_COPY_H2G, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to write to mf trans, ret: " << ret);
         return ret;
@@ -305,21 +306,22 @@ BResult MfTransEngine::Write(TransParam& param)
     return BIO_OK;
 }
 
-BResult MfTransEngine::BatchWrite(std::vector<TransParam>& params)
+BResult MfTransEngine::BatchWrite(TransParam& param)
 {
     if (mTransHandler == nullptr) {
         NET_LOG_ERROR("mTransHandler is nullptr, please init trans");
         return BIO_ERR;
     }
-    if (params.localesAddrs.size() != params.remotesAddrs.size() ||
-        params.localesAddrs.size() != params.lengths.size()) {
-        NET_LOG_ERROR("localesAddrs size is not equal to remotesAddrs size or lengths size");
+    if (param.localAddrs.size() != param.remoteAddrs.size() ||
+        param.localAddrs.size() != param.dataSizes.size()) {
+        NET_LOG_ERROR("localAddrs size is not equal to remoteAddrs size or dataSizes size");
         return BIO_ERR;
     }
 
-    BResult ret = DlMfApi::MfSmemTransBatchWrite(mTransHandler, params.localesAddrs.data(),
-                                                 params.remotesAddrs.data(), params.lengths.data(),
-                                                 params.localesAddrs.size(), SMEMB_COPY_H2G, 0);
+    BResult ret = DlMfApi::MfSmemTransBatchWrite(mTransHandler, const_cast<const void**>(param.localAddrs.data()),
+                                                 param.remoteUniqueId.c_str(),
+                                                 param.remoteAddrs.data(), param.dataSizes.data(),
+                                                 param.localAddrs.size(), SMEMB_COPY_H2G, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to batch write to mf trans, ret: " << ret);
         return ret;
@@ -346,7 +348,7 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
     if (slashPos != std::string::npos) {
         ip = opt.ipMask.substr(0, slashPos);
     } else {
-        NET_LOG_ERROR("Invalid ipMask format: " << opt.ipMask << ", should be ip/mask, e.g. 192.168.1.100/24")
+        NET_LOG_ERROR("Invalid ipMask format: " << opt.ipMask << ", should be ip/mask, e.g. 192.168.1.100/24");
         return BIO_ERR;
     }
     int32_t socketFd = -1;
@@ -359,7 +361,7 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
     std::string portWithPid = std::to_string(port) + "_" + std::to_string(currentPid);
     mLocalUniqueId = ip + ":" + portWithPid;
     mStoreUrl = opt.transStoreUrl;
-    NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl <<);
+    NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl);
     return BIO_OK;
 }
 
@@ -367,7 +369,7 @@ BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
 {
     if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.netSegmentSize > MAX_TRANS_SEGMENT_SIZE) {
         NET_LOG_ERROR("transMemSize or netSegmentSize is too large, transMemSize: " << opt.transMemSize
-                      << ", netSegmentSize: " << opt.netSegmentSize <<);
+                      << ", netSegmentSize: " << opt.netSegmentSize);
         return BIO_ERR;
     }
     mTransMemSize = opt.transMemSize;
@@ -426,11 +428,7 @@ BResult MfTransEngine::FreeOneBlock(uintptr_t address)
         NET_LOG_ERROR("mMsgBlookPool is nullptr, please init trans");
         return BIO_ERR;
     }
-    auto ret = mMsgBlookPool->ReleaseOne(address);
-    if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to free one block, ret: " << ret);
-        return ret;
-    }
+    mMsgBlookPool->ReleaseOne(address);
     return BIO_OK;
 }
     
@@ -440,11 +438,7 @@ BResult MfTransEngine::FreeBlocks(std::vector<uintptr_t> &addresses)
         NET_LOG_ERROR("mMsgBlookPool is nullptr, please init trans");
         return BIO_ERR;
     }
-    auto ret = mMsgBlookPool->ReleaseMany(addresses);
-    if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to free many blocks, ret: " << ret);
-        return ret;
-        }
+    mMsgBlookPool->ReleaseMany(addresses);
     return BIO_OK;
 }
 

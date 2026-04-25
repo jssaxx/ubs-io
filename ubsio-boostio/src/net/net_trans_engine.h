@@ -205,7 +205,7 @@ public:
     }
 
     static inline BResult MfSmemTransWrite(smem_trans_t handle, const void *localAddr, const char *remoteUniqueId,
-                                           void *remoteAddr, size_t dataSize, int32_t opcode, uint32_t flags)
+                                           void *remoteAddr, size_t dataSize, smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransWrite == nullptr) {
             return BIO_UNDER_API_UNLOAD;
@@ -215,7 +215,7 @@ public:
 
     static inline BResult MfSmemTransBatchWrite(smem_trans_t handle, const void *localAddrs[],
                                                 const char *remoteUniqueId, void *remoteAddrs[],
-                                                size_t dataSizes[], uint32_t batchSize, int32_t opcode, uint32_t flags)
+                                                size_t dataSizes[], uint32_t batchSize, smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransBatchWrite == nullptr) {
             return BIO_UNDER_API_UNLOAD;
@@ -225,7 +225,7 @@ public:
     }
 
     static inline BResult MfSmemTransRead(smem_trans_t handle, void *localAddr, const char *remoteUniqueId,
-                                          const void *remoteAddr, size_t dataSize, int32_t opcode, uint32_t flags)
+                                          const void *remoteAddr, size_t dataSize, smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransRead == nullptr) {
             return BIO_UNDER_API_UNLOAD;
@@ -235,7 +235,7 @@ public:
 
     static inline BResult MfSmemTransBatchRead(smem_trans_t handle, void *localAddrs[],
                                                const char *remoteUniqueId, const void *remoteAddrs[],
-                                               size_t dataSizes[], uint32_t batchSize, int32_t opcode, uint32_t flags)
+                                               size_t dataSizes[], uint32_t batchSize, smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransBatchRead == nullptr) {
             return BIO_UNDER_API_UNLOAD;
@@ -269,7 +269,7 @@ class NetTransEngine {
 public:
     virtual BResult Initialize(const NetOptions &opt) = 0;
 
-    virtual BResult Destroy() = 0;
+    virtual void Destroy() = 0;
 
     virtual BResult MallocMem(size_t size, void*& address) = 0;
 
@@ -277,7 +277,7 @@ public:
 
     virtual BResult RegisterMem(void* address, size_t size) = 0;
 
-    virtual BResult BatchRegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes) override;
+    virtual BResult BatchRegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes) = 0;
 
     virtual BResult Read(TransParam& param) = 0;
 
@@ -304,7 +304,7 @@ public:
     }
     BResult Initialize(const NetOptions &opt) override;
 
-    BResult Destroy() override;
+    void Destroy() override;
 
     BResult MallocMem(size_t size, void*& address) override;
 
@@ -346,7 +346,7 @@ private:
 
     BResult BindTcpPortV6(int32_t &sockfd, int32_t port);
 
-    uint16_t FindAvailableTcpPort(int32_t &sockfd)
+    uint16_t FindAvailableTcpPort(int32_t &sockfd);
 
 private:
     void* mTransHandler = nullptr;

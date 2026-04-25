@@ -235,7 +235,7 @@ public:
 
     bool CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp);
 
-    BResult BioClientNet::RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes)
+    BResult RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes);
 
     DEFINE_REF_COUNT_FUNCTIONS
 

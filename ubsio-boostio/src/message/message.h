@@ -39,7 +39,7 @@ const uint32_t FILE_PATH_MAX_LEN = 256;
 const uint32_t MAX_UUID_SIZE = 64;
 const uint32_t MAX_KV_HBM_SIZE = 256;
 
-typedef enum DataTransType : uint8_t {
+enum DataTransType : uint8_t {
     HOST_RDMA_TRANS_TYPE = 0,   // 远端client通过rdma访问本地server的内存
     HOST_SHM_TRANS_TYPE = 1,    // 本地client通过shared memory访问本地server的内存
     DEVICE_SDMA_TRANS_TYPE = 2, // client通过sdma访问本地server的内存
