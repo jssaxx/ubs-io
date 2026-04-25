@@ -297,8 +297,6 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
 
     BIO_TRACE_START(SDK_TRACE_BATCH_GET);
-
-
     BResult ret = gClient->BatchGet({ mTenantId, mAffinity, mStrategy }, keys, count, offsets, lengths, locations,
                                     valueAddrs, realLengths, results);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);

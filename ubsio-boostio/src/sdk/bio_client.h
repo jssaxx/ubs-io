@@ -103,11 +103,12 @@ public:
         return mMirror->BatchGetKeyDiskAddr(param);
     }
 
-    inline BResult BatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
-                            ObjLocation *locations, uintptr_t *valueAddrs,
+    inline BResult BatchGet(CacheAttr attr, const char **keys, const uint32_t count,
+                            uint64_t *offsets, uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
                             uint64_t *realLengths, int32_t *results)
     {
-        return mMirror->DispathBatchGet(attr, keys, count, offsets, lengths, locations, valueAddrs, realLengths, results);
+        return mMirror->DispathBatchGet(attr, keys, count, offsets, lengths, locations,
+                                        valueAddrs, realLengths, results);
     }
 
     inline void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)

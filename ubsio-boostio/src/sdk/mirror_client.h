@@ -91,7 +91,6 @@ public:
     };
 
     struct MirrorBatchGet {
-
         CacheAttr attr;
         const char **keys;
         uint32_t count;
@@ -106,7 +105,7 @@ public:
                            realLengths(nullptr), results(nullptr) {}
         MirrorBatchGet(CacheAttr attrParam, const char **keysParam, uint32_t countParam,
                        uint64_t *offsetsParam, uint64_t *lengthsParam, ObjLocation *locationsParam,
-                       uintptr_t *valuesAddrParam, uint64_t *realLengthsParam,int32_t *resultsParam) : attr(attrParam),
+                       uintptr_t *valuesAddrParam, uint64_t *realLengthsParam, int32_t *resultsParam) : attr(attrParam),
                        keys(keysParam), count(countParam), offsets(offsetsParam),
                        lengths(lengthsParam), locations(locationsParam), valuesAddr(valuesAddrParam),
                        realLengths(realLengthsParam), results(resultsParam) {}

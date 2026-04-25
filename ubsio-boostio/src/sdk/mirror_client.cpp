@@ -927,13 +927,13 @@ BResult MirrorClient::BatchGet(CacheAttr attr, const char **keys, const uint32_t
     return ret;
 }
 
-inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum, DispathBatchGetResult *taskResults,
-                                                     uintptr_t *valueAddrs)
+inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum,
+                                                         DispathBatchGetResult *taskResults, uintptr_t *valueAddrs)
 {
     for (uint32_t i = 0; i < parallelNum; i++) {
         if (taskResults[i].result == BIO_OK) {
             uint32_t basic = i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
-            for (uint32_t j = 0; j < taskResults[i].count; i++) {
+            for (uint32_t j = 0; j < taskResults[i].count; j++) {
                 mDataMsgMemPool->ReleaseOne(valueAddrs[basic + j]);
             }
         }
@@ -954,6 +954,10 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
     uint32_t resultIndex = 0;
     DispathBatchGetResult *taskResults =
             reinterpret_cast<DispathBatchGetResult *>(malloc(sizeof(DispathBatchGetResult) * parallelNum));
+    if (taskResults == nullptr) {
+        LOG_ERROR("Dispath batch get malloc mem fail.");
+        return BIO_ALLOC_FAIL;
+    }
     for (uint32_t i = 0; i < parallelNum; i++) {
         if (i < parallelNum - 1) {
             keyNum = SDK_DISPATH_BATCH_COUNT_MAX_NUM;
@@ -973,7 +977,8 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
         std::function<void()> func = [ &, resultIndex,
                                        keysParam, countParam, offsetsParam, lengthsParam,
                                        locationsParam, valuesAddrParam, realLengthsParam, resultsParam]() {
-            taskResults[resultIndex].result = BatchGet({attr.mTenantId, attr.affinity, attr.strategy}, keysParam, countParam, offsetsParam,
+            taskResults[resultIndex].result = BatchGet({attr.mTenantId, attr.affinity, attr.strategy},
+                                                       keysParam, countParam, offsetsParam,
                                                        lengthsParam, locationsParam, valuesAddrParam,
                                                        realLengthsParam, resultsParam);
             if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
@@ -1358,6 +1363,10 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
     uint32_t keyNum = 0;
     uint32_t resultIndex = 0;
     BResult *taskResults = reinterpret_cast<BResult*>(malloc(sizeof(BResult) * parallelNum));
+    if (taskResults == nullptr) {
+        LOG_ERROR("Dispath batch exist malloc mem fail.");
+        return BIO_ALLOC_FAIL;
+    }
     for (uint32_t i = 0; i < parallelNum; i++) {
         if (i < parallelNum - 1) {
             keyNum = SDK_DISPATH_BATCH_COUNT_MAX_NUM;
