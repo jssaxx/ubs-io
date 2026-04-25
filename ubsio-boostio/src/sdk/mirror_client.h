@@ -84,6 +84,12 @@ public:
         ObjLocation location;
     };
 
+    struct DispathBatchGetResult {
+        BResult result;
+        uint32_t index;
+        uint32_t count;
+    };
+
     struct MirrorBatchGet {
         CacheAttr attr;
         const char **keys;
@@ -94,6 +100,15 @@ public:
         uintptr_t *valuesAddr;
         uint64_t *realLengths;
         int32_t *results;
+        MirrorBatchGet() : attr(0, AFFINITY_BUTT, STRATEGY_BUTT), keys(nullptr), count(0), offsets(nullptr),
+                           lengths(nullptr), locations(nullptr), valuesAddr(nullptr),
+                           realLengths(nullptr), results(nullptr) {}
+        MirrorBatchGet(CacheAttr attrParam, const char **keysParam, uint32_t countParam,
+                       uint64_t *offsetsParam, uint64_t *lengthsParam, ObjLocation *locationsParam,
+                       uintptr_t *valuesAddrParam, uint64_t *realLengthsParam, int32_t *resultsParam) : attr(attrParam),
+                       keys(keysParam), count(countParam), offsets(offsetsParam),
+                       lengths(lengthsParam), locations(locationsParam), valuesAddr(valuesAddrParam),
+                       realLengths(realLengthsParam), results(resultsParam) {}
     };
 
     struct BatchExistSendKeyInfo {
@@ -146,7 +161,16 @@ public:
 
     BResult Get(MirrorGet &param, uint64_t &realLen);
 
-    BResult BatchGet(MirrorBatchGet &param);
+    BResult BatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets,
+                     uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                     uint64_t *realLengths, int32_t *results);
+
+    inline void DispathBatchGetRecycleResource(uint32_t parallelNum, DispathBatchGetResult *taskResults,
+                                                         uintptr_t *valueAddrs);
+
+    BResult DispathBatchGet(CacheAttr attr, const char **keys, const uint32_t count, uint64_t *offsets,
+                                          uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                                          uint64_t *realLengths, int32_t *results);
 
     void BatchFree(uintptr_t *valueAddrs, const uint32_t count);
 
@@ -163,6 +187,8 @@ public:
     BResult StatObject(const char *key, const ObjLocation &location, ObjStat &stat);
 
     BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
+
+    BResult DispathBatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result);
 
     BResult GetFileLocation(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &fileLocationQueryRsp);
 
@@ -457,6 +483,8 @@ private:
     uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
     MemoryRegion mDataMsgMemMr;
     NetBlockPoolPtr mDataMsgMemPool = nullptr;
+    ExecutorServicePtr mBatchGetExecutor{ nullptr };
+    ExecutorServicePtr mBatchExistExecutor{ nullptr };
     DEFINE_REF_COUNT_VARIABLE
 };
 using MirrorClientPtr = Ref<MirrorClient>;

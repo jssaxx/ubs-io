@@ -26,7 +26,7 @@ extern "C" {
 
 const uint16_t MESSAGE_MAGIC = 0xABCD;
 const uint32_t KEY_MAX_SIZE = 256;
-const uint32_t KEY_MAX_COUNT = 4096;
+const uint32_t KEY_MAX_COUNT = 256;
 const uint32_t IP_MAX_SIZE = 32;
 const uint32_t DISK_MAX_SIZE = 8;
 const uint32_t CLUSTER_NODE_SIZE = 32;
