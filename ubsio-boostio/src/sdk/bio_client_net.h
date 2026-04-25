@@ -157,6 +157,16 @@ public:
         return ret;
     }
 
+    template <typename TResp>
+    inline BResult SendSyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, TResp &rsp)
+    {
+        BResult ret = BIO_INNER_ERR;
+        BIO_TP_START(SDK_BIO_MIRROR_SEND_SYNC_FAIL, &ret, BIO_INNER_RETRY);
+        ret = mNetEngine->SyncCallBuff(target, opcode, req, reqLen, rsp);
+        BIO_TP_END;
+        return ret;
+    }
+
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp **rsp, uint64_t &respLen)
     {

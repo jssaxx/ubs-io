@@ -614,13 +614,25 @@ void BioClientAgent::SendPutRequestLocal(PutRequest *req, Callback &callback)
         sizeof(PutRequest) + req->sliceLen, callback);
 }
 
+BResult BioClientAgent::PutLocal(PutRequest *req, PutResponse &rsp)
+{
+    BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
+    BResult ret = BIO_INNER_ERR;
+    if (mMode == CONVERGENCE) {
+        ret = putOp(req, &rsp);
+    } else {
+        ret = net::BioClientNet::Instance()->SendSyncBuff(INVALID_NID, BIO_OP_SDK_PUT, static_cast<void *>(req),
+            sizeof(PutRequest) + req->sliceLen, rsp);
+    }
+    BIO_TRACE_END(SDK_TRACE_PUT_LOCAL_SYNC, ret);
+    return ret;
+}
+
 void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
 {
     if (mMode == CONVERGENCE) {
         PutResponse rsp;
-        BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
-        auto ret = putOp(req, &rsp);
-        BIO_TRACE_END(SDK_TRACE_PUT_LOCAL_SYNC, ret);
+        auto ret = PutLocal(req, rsp);
         callback.cb(callback.cbCtx, &rsp, sizeof(PutResponse), ret);
     } else {
         BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
@@ -691,9 +703,11 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
 
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
+    req.isMr = 0;
+    req.address = 0;
     req.size = req.length;
+    req.mrKey = 0;
     if (mMode == CONVERGENCE) {
-        req.isMr = 0;
         req.address = reinterpret_cast<uintptr_t>(value);
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);

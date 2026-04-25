@@ -685,7 +685,7 @@ BResult MirrorClient::GetImpl(MirrorGet &param, uint64_t &realLen)
         return ret;
     }
 
-    GetRequest req;
+    GetRequest req{};
     req.comm = { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     CopyKey(req.key, param.key, KEY_MAX_SIZE);
     req.ptId = ptId;
@@ -1271,6 +1271,34 @@ void MirrorClient::InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota)
 BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
+    uint32_t localIdx = UINT32_MAX;
+    std::vector<uint32_t> remoteIdx;
+    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
+        if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
+            continue;
+        }
+        if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
+            localIdx = idx;
+            continue;
+        }
+        remoteIdx.emplace_back(idx);
+    }
+
+    if (quota == 1 && localIdx != UINT32_MAX && remoteIdx.empty()) {
+        PutResponse rsp{};
+        auto ret = agent::BioClientAgent::Instance()->PutLocal(req, rsp);
+        net::BioClientNet::Instance()->Free(req->mrAddress);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+        if (rsp.ioStrategy > WRITE_UNDERFS_BACK) {
+            return BIO_INVALID_PARAM;
+        }
+        mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
+        mIoStrategy[ptEntry.ptId]->strategy = rsp.ioStrategy;
+        return BIO_OK;
+    }
+
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
     std::atomic<uint32_t> ioStrategy(0);
@@ -1297,18 +1325,6 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     };
     Callback callback(cbFunc, static_cast<void *>(&cbCtx));
 
-    uint32_t localIdx = UINT32_MAX;
-    std::vector<uint32_t> remoteIdx;
-    for (uint32_t idx = 0; idx < ptEntry.copys.size(); idx++) {
-        if (ptEntry.copys[idx].state != CM_COPY_RUNNING && ptEntry.copys[idx].state != CM_COPY_RECOVERY) {
-            continue;
-        }
-        if (ptEntry.copys[idx].nodeId == mLocalNid.VNodeId()) {
-            localIdx = idx;
-            continue;
-        }
-        remoteIdx.emplace_back(idx);
-    }
     PutRemote(req, ptEntry, remoteIdx, callback);
     PutLocal(req, localIdx, callback);
 
