@@ -41,4 +41,12 @@ int InitializeProxyContext()
     return 0;
 }
 
-void CleanProxyContext() {}
+void CleanProxyContext()
+{
+    if (!g_initialized.load()) {
+        return;
+    }
+
+    InterceptorClientNetService::Instance().StopNetService();
+    g_initialized.store(false);
+}
