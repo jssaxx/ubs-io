@@ -28,15 +28,16 @@ int InitializeProxyContext()
         return 0;
     }
 
+    auto &ctx = BioInterceptorContext::GetInstance();
     const char *mountPoint = std::getenv("INTERCEPTOR_MOUNT_POINT");
     if (mountPoint != nullptr && std::strlen(mountPoint) != 0) {
-        CONTEXT.SetMountPoint(mountPoint);
-        CLOG_INFO("Apply INTERCEPTOR_MOUNT_POINT success, value:" << CONTEXT.mountPoint << ".");
+        ctx.SetMountPoint(mountPoint);
+        CLOG_INFO("Apply INTERCEPTOR_MOUNT_POINT success, value:" << ctx.mountPoint << ".");
     }
 
     g_initialized.store(true);
 
-    CLOG_INFO("Initialize interceptor proxy context success, mountPoint:" << CONTEXT.mountPoint << ".");
+    CLOG_INFO("Initialize interceptor proxy context success, mountPoint:" << ctx.mountPoint << ".");
     return 0;
 }
 
