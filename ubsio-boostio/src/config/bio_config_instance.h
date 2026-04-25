@@ -64,7 +64,7 @@ const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 
-const auto SDK_POOL_SIZE_MB = std::make_pair("bio.sdk.pool.size_in_mb", 1024);
+const auto SDK_POOL_SIZE_MB = std::make_pair("bio.sdk.pool.size_in_mb", 128);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
@@ -148,7 +148,7 @@ public:
         uint32_t negotiateDelay = 100;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
-        uint64_t sdkPoolSize = 1073741824; // 1GB (256 * 4MB)
+        uint64_t sdkPoolSize = 134217728; // 128MB
         uint64_t wcacheMemEvictLevel = 0;
         uint64_t wcacheDiskEvictLevel = 0;
         uint64_t rcacheMemEvictLevel = 90;
