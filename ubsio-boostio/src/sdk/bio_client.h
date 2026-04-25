@@ -103,9 +103,12 @@ public:
         return mMirror->BatchGetKeyDiskAddr(param);
     }
 
-    inline BResult BatchGet(MirrorClient::MirrorBatchGet &param)
+    inline BResult BatchGet(CacheAttr attr, const char **keys, const uint32_t count,
+                            uint64_t *offsets, uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                            uint64_t *realLengths, int32_t *results)
     {
-        return mMirror->BatchGet(param);
+        return mMirror->DispathBatchGet(attr, keys, count, offsets, lengths, locations,
+                                        valueAddrs, realLengths, results);
     }
 
     inline void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
@@ -135,7 +138,7 @@ public:
 
     inline BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
     {
-        return mMirror->BatchExist(key, location, count, result);
+        return mMirror->DispathBatchExist(key, location, count, result);
     }
 
     inline BResult AddDisk(const char *diskPath)
