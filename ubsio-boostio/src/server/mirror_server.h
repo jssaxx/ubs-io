@@ -105,7 +105,6 @@ public:
     BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req);
     BResult BatchSingleGetLocalHbm(GetKeyLocalHbmInfo &keyInfo, BatchGetLocalHbmRequest *req);
     BResult BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, BatchGetRemoteHbmRequest *req);
-    BResult BatchSingleGetHbm(GetKeHbmInfo &keyInfo, BatchGetHbmRequest *req);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);
@@ -142,7 +141,7 @@ public:
         ServiceContext &netCtx, GetRequest &req);
     BResult BatchSingleWriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
                                     std::vector<NetMrInfo> &rMrVec, BatchGetRequest *req);
-    BResult MirrorServer::BatchSingleWriterRemoteHbm(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
+    BResult BatchSingleWriterRemoteHbm(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
                                                      std::vector<NetMrInfo> &rMrVec, BatchGetRemoteHbmRequest *req);
     TraceDatabase GetTraceData();
 

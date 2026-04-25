@@ -1998,7 +1998,7 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
             BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET);
-            results[index] = BatchSingleGetHbm(req->keysInfo[index], req);
+            results[index] = BatchSingleGetRemoteHbm(req->keysInfo[index], req);
             BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, results[index]);
             if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
@@ -2109,13 +2109,13 @@ int32_t MirrorServer::HandleBatchGetLocalHbm(ServiceContext &ctx)
         return BIO_OK;
     }
 
-    if (UNLIKELY(ctx.MessageDataLen() < sizeof(BatchGetHbmLocalRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+    if (UNLIKELY(ctx.MessageDataLen() < sizeof(BatchGetLocalHbmRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " or message data invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
 
-    auto req = static_cast<BatchGetHbmLocalRequest *>(ctx.MessageData());
+    auto req = static_cast<BatchGetLocalHbmRequest *>(ctx.MessageData());
     return MirrorServerBatchGetLocalHbm(ctx, req);
 }
 
