@@ -44,6 +44,14 @@ enum WorkerScene : uint32_t {
     SCENE_BIGDATA = 1
 };
 
+struct ClientConfig {
+    bool enableCrc;
+    uint32_t wcacheMemEvictLevel;
+    uint32_t workScene;
+    uint32_t workIoAlignSize;
+    uint32_t workIoTimeOut;
+};
+
 struct IoStrategy {
     std::atomic<uint64_t> expired;
     std::atomic<uint32_t> strategy;
@@ -73,7 +81,7 @@ public:
 
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
-    BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc);
+    BResult Initialize(UpdateView updateView, const ClientConfig &config);
     BResult Start();
 
     void FreeIoStrategy();
@@ -116,6 +124,28 @@ public:
 
     BResult QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &nodeDesc);
 
+    BResult ClearWcache();
+
+    inline uint32_t GetWcacheMemEvictLevel() const
+    {
+        return mWcacheMemEvictLevel;
+    }
+
+    inline void SetWcacheMemEvictLevel(uint32_t level)
+    {
+        mWcacheMemEvictLevel = level;
+    }
+
+    inline uint32_t GetTimeOut() const
+    {
+        return mTimeOut;
+    }
+
+    inline void SetTimeOut(uint32_t timeOut)
+    {
+        mTimeOut = timeOut;
+    }
+
     DEFINE_REF_COUNT_FUNCTIONS
 
     std::vector<uint16_t> ListLocalAffinityPt();
@@ -152,7 +182,7 @@ public:
         mLock.UnLock();
         return false;
     }
-
+    
     inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView()
     {
         ReadLocker<ReadWriteLock> locker(&mLock);
@@ -339,10 +369,16 @@ private:
         mFlowMap.erase(it);
         mLock.UnLock();
 
-        DestroyFlow(ptId, flowId);
+        if (mWcacheMemEvictLevel != NO_100) {
+            DestroyFlow(ptId, flowId);
+        }
     }
 
 private:
+    BResult SendClearWcacheRequest(ClearWcacheRequest &req);
+    BResult ClearWcacheLocal(ClearWcacheRequest &req, uint16_t localId);
+    BResult ClearWcacheRemote(ClearWcacheRequest &req, std::vector<uint16_t> &remoteId);
+
     std::unordered_map<uint16_t, FlowInstancePtr> mFlowMap;
     ReadWriteLock mLock;
     WorkerMode mMode;
@@ -359,6 +395,7 @@ private:
     uint32_t mTimeOut = NO_60;
     bool mEnableCrc { false };
     BioQosPtr mBioQos = nullptr;
+    uint32_t mWcacheMemEvictLevel = 0;
     DEFINE_REF_COUNT_VARIABLE
 };
 using MirrorClientPtr = Ref<MirrorClient>;

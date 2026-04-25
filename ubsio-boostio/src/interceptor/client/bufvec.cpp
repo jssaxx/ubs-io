@@ -47,9 +47,6 @@ ssize_t BufVec::Read(uint8_t *buf, size_t length) noexcept
                 CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;
             }
-            size_t oldCopyBytes = copyBytes;
-            size_t oldInnerOffset = innerOffset;
-            size_t oldTotalOffset = totalOffset;
             copyBytes += bytes;
             innerOffset += bytes;
             if (SIZE_MAX - totalOffset < bytes) {
@@ -78,9 +75,6 @@ ssize_t BufVec::Write(const uint8_t *buf, size_t length) noexcept
                 CLOG_ERROR("Memory copy failed, ret:" << ret << ".");
                 return -1;
             }
-            size_t oldCopyBytes = copyBytes;
-            size_t oldInnerOffset = innerOffset;
-            size_t oldTotalOffset = totalOffset;
             copyBytes += bytes;
             innerOffset += bytes;
             if (SIZE_MAX - totalOffset < bytes) {
@@ -106,7 +100,6 @@ size_t BufVec::ComputeSize(const iovec *vec, int cnt) noexcept
 
     size_t computeSize = 0;
     for (auto i = 0; i < cnt; i++) {
-        size_t oldComputeSize = computeSize;
         if (SIZE_MAX - computeSize < vec[i].iov_len) {
             CLOG_ERROR("Sum over SIZE_MAX.");
             errno = E2BIG;

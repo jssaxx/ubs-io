@@ -99,6 +99,8 @@ public:
 
     BResult HandleProcBrokenHdl(uint64_t procId);
 
+    BResult ClearClientCache(uint64_t procId, uint32_t &clearedCount);
+
     BResult MasterEvictNegotiate(uint64_t flowId, uint64_t offsets[], std::vector<bool> &result, uint32_t count);
 
     BResult GetEvictNegotiateInfo();

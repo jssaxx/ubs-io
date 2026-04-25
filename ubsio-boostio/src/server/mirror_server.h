@@ -149,6 +149,8 @@ public:
     int32_t MirrorServerGetCacheHit(ServiceContext &ctx);
     int32_t MirrorServerQueryCacheResource(ServiceContext &ctx);
     int32_t MirrorServerGetTracePoints(ServiceContext &ctx);
+    int32_t MirrorServerClearWcache(ServiceContext &ctx, ClearWcacheRequest *req);
+    BResult ClearWcacheLocal(ClearWcacheRequest *req, ClearWcacheResponse *rsp);
 
     int32_t HandleShmInit(ServiceContext &ctx);
     int32_t HandleQueryNodeInfo(ServiceContext &ctx);
@@ -179,6 +181,7 @@ public:
     int32_t HandleGetCacheHit(ServiceContext &ctx);
     int32_t HandleQueryCacheResource(ServiceContext &ctx);
     int32_t HandleGetTracePoints(ServiceContext &ctx);
+    int32_t HandleClearWcache(ServiceContext &ctx);
 
     bool CheckUpdateReadyReq(CheckUpdateReadyRequest *req);
     bool CheckNotifyUpdateReq(NotifyUpdateRequest *req);

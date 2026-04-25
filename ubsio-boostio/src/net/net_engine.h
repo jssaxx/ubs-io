@@ -14,6 +14,7 @@
 #define NET_ENGINE_H
 
 #include <cstdint>
+#include <vector>
 #include <arpa/inet.h>
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
@@ -596,6 +597,18 @@ public:
         return BIO_OK;
     }
 
+    BResult RegisterInnerChannelBrokenHandler(const ChannelBrokenHandler &h)
+    {
+        if (UNLIKELY(h == nullptr)) {
+            NET_LOG_ERROR("Invalid inner channel broken handler");
+            return BIO_INVALID_PARAM;
+        }
+
+        std::lock_guard<std::mutex> guard(mMutex);
+        mInnerBrokenHandlers.emplace_back(h);
+        return BIO_OK;
+    }
+
     inline void SetLocalNodeId(const uint16_t &nodeId)
     {
         mLocalNodeId = nodeId;
@@ -923,6 +936,7 @@ private:
     DEFINE_REF_COUNT_VARIABLE
     uint16_t mLocalNodeId = UINT16_MAX;
     ChannelBrokenHandler mHandlerBroken = nullptr;
+    std::vector<ChannelBrokenHandler> mInnerBrokenHandlers;
     ock::hcom::UBSHcomService *mRpcService = nullptr;
     ock::hcom::UBSHcomService *mIpcService = nullptr;
     std::mutex mMutex;
@@ -940,4 +954,3 @@ using NetEnginePtr = Ref<NetEngine>;
 }
 }
 #endif // NET_ENGINE_H
-

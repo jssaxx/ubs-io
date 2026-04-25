@@ -150,6 +150,13 @@ public:
      */
     CResult Put(const char *key, CacheSpaceDesc &spaceInfo);
 
+    /**
+     * @brief: Clear wcache for current process
+     *
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult ClearWcache();
+
     Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
         : mTenantId(id), mAffinity(affinity), mStrategy(strategy){};
 

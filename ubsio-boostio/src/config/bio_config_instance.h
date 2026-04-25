@@ -13,6 +13,9 @@
 #ifndef BOOSTIO_BIO_CONFIG_INSTANCE_H
 #define BOOSTIO_BIO_CONFIG_INSTANCE_H
 
+#include <vector>
+#include <utility>
+
 #include "bio_config.h"
 #include "bio_err.h"
 
@@ -23,8 +26,12 @@ const auto LOG_LEVEL = std::make_pair("bio.log.level", "info");
 const auto NET_DATA_PROTOCOL = std::make_pair("bio.net.data.protocol", "tcp");
 const auto NET_RPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.rpc.data.busy_polling_mode", "false");
 const auto NET_RPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.rpc.data.workers_count", 4);
+const auto NET_RPC_DATA_CPUIDS =
+    std::make_pair("bio.net.rpc.data.cpuids", "-1,-1");
 const auto NET_IPC_DATA_BUSY_POLL_MODE = std::make_pair("bio.net.ipc.data.busy_polling_mode", "false");
 const auto NET_IPC_DATA_WORKERS_COUNT = std::make_pair("bio.net.ipc.data.workers_count", 4);
+const auto NET_IPC_DATA_CPUIDS =
+    std::make_pair("bio.net.ipc.data.cpuids", "-1");
 const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/24");
 const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
@@ -56,6 +63,8 @@ const auto BIO_WCACHE_NEGOTIATE_DELAY = std::make_pair("bio.wcache.negotiate.del
 const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
+
+const auto SDK_POOL_SIZE_MB = std::make_pair("bio.sdk.pool.size_in_mb", 1024);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
@@ -103,8 +112,14 @@ public:
         uint16_t protocol = 1;
         bool isRpcBusyLoop = false;
         uint16_t rpcDataWorkersCnt = 4;
+        std::vector<std::pair<uint32_t, uint32_t>> rpcDataCpuIds = {
+            { UINT32_MAX, UINT32_MAX }, { UINT32_MAX, UINT32_MAX }
+        };
         bool isIpcBusyLoop = false;
         uint16_t ipcDataWorkersCnt = 4;
+        std::vector<std::pair<uint32_t, uint32_t>> ipcDataCpuIds = {
+            { UINT32_MAX, UINT32_MAX }
+        };
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
         bool enableTls = true;
@@ -133,6 +148,7 @@ public:
         uint32_t negotiateDelay = 100;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
+        uint64_t sdkPoolSize = 1073741824; // 1GB (256 * 4MB)
         uint64_t wcacheMemEvictLevel = 0;
         uint64_t wcacheDiskEvictLevel = 0;
         uint64_t rcacheMemEvictLevel = 90;

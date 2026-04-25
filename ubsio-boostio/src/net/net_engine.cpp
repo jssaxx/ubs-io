@@ -34,6 +34,11 @@ namespace ock {
 namespace bio {
 using namespace ock::hcom;
 
+static void HcomLog(int level, const char *msg)
+{
+    NET_BASE_LOG(level, msg);
+}
+
 constexpr uint16_t WKR_GRP_INDEX_CTRL = 0L;
 constexpr uint16_t WKR_GRP_INDEX_DATA = 1L;
 
@@ -97,7 +102,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         NET_LOG_ERROR("Make net service log fail.");
         return BIO_ALLOC_FAIL;
     }
-    serviceLog->SetExternalLogFunction(func);
+    serviceLog->SetExternalLogFunction(HcomLog);
     mStarted = true;
     return BIO_OK;
 }
@@ -105,13 +110,21 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
 BResult NetEngine::Start(const NetOptions &opt)
 {
     int32_t result = BIO_INNER_ERR;
+    size_t workerGroupCount = (opt.protocol == ServiceProtocol::SHM || opt.protocol == ServiceProtocol::UDS) ?
+        IPC_WORKER_GROUP_CPU_RANGE_COUNT : RPC_WORKER_GROUP_CPU_RANGE_COUNT;
+    if (!CheckWorkerGroupCpuIdsRangeMatchConnCount(opt.workerGroupCpuIdsRange, opt.connCount, workerGroupCount)) {
+        NET_LOG_ERROR("Worker cpu ids range not match connCount:" << opt.connCount << ".");
+        return BIO_INVALID_PARAM;
+    }
     if (opt.protocol == ServiceProtocol::SHM || opt.protocol == ServiceProtocol::UDS) {
         result = StartIpcService(opt);
         if (result != BIO_OK) {
             return result;
         }
     }
-    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA) {
+
+    if (opt.protocol == ServiceProtocol::TCP || opt.protocol == ServiceProtocol::RDMA ||
+        opt.protocol == ServiceProtocol::UBC) {
         BIO_TP_START(SDK_BIO_NET_START_RPC_FAIL, &result, BIO_INNER_ERR);
         result = StartRpcService(opt);
         BIO_TP_END;
@@ -407,9 +420,6 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
 
 BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
 {
-    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mIpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
-
     UBSHcomHeartBeatOptions hbOpt;
     hbOpt.heartBeatIdleSec = NO_5;
     hbOpt.heartBeatProbeIntervalSec = 1;
@@ -469,6 +479,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     }
 
     UBSHcomServiceOptions options;
+    options.workerGroupCpuIdsRange = opt.workerGroupCpuIdsRange[0];
     options.maxSendRecvDataSize = (NO_64 * NO_1024);
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;
@@ -515,8 +526,7 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
         return BIO_ERR;
     }
 
-    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
-    mRpcService->AddWorkerGroup(1, opt.handlerCount, workerGroupCpuIdsRange);
+    mRpcService->AddWorkerGroup(1, opt.handlerCount, opt.workerGroupCpuIdsRange[1]);
 
     UBSHcomHeartBeatOptions hbOpt;
     hbOpt.heartBeatIdleSec = NO_1;
@@ -572,6 +582,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     mOptions = opt;
     bool isOobSvr = opt.role != Role::NET_CLIENT;
     UBSHcomServiceOptions options;
+    options.workerGroupCpuIdsRange = opt.workerGroupCpuIdsRange[0];
     options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.workerGroupId = 0;
     options.workerGroupThreadCount = opt.handlerCount;
@@ -667,8 +678,22 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
         mgr->RemoveChannel(dstNid, ch);
     }
 
-    if (mHandlerBroken != nullptr) {
-        mHandlerBroken(dstNid.nid, dstNid.pid);
+    std::vector<ChannelBrokenHandler> innerHandlers;
+    ChannelBrokenHandler upperHandler = nullptr;
+    {
+        std::lock_guard<std::mutex> guard(mMutex);
+        innerHandlers = mInnerBrokenHandlers;
+        upperHandler = mHandlerBroken;
+    }
+
+    for (auto &handler : innerHandlers) {
+        if (handler != nullptr) {
+            handler(dstNid.nid, dstNid.pid);
+        }
+    }
+
+    if (upperHandler != nullptr) {
+        upperHandler(dstNid.nid, dstNid.pid);
     }
 }
 

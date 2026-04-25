@@ -95,7 +95,7 @@ private:
         if (((level) + 1) >= NetLog::Instance()->GetMinLogLevel()) {                                      \
             std::ostringstream oss;                                                                       \
             oss << "[NET " << __FUNCTION__ << ":" << NET_LOG_FILENAME << ":" << __LINE__ << "] " << args; \
-            NetLog::Instance()->Log(level, oss);                                                          \
+            NetLog::Instance()->Log(level + 1, oss);                                                      \
         }                                                                                                 \
     } while (0)
 

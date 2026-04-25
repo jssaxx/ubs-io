@@ -44,7 +44,10 @@ public:
     using GetBioServerPromethuesToggleFuncPtr = bool (*)();
     using GetBioServerListenAddressFuncPtr = const char *(*)();
     using GetBioServertimeOutFuncPtr = uint32_t (*)();
+    using GetBioServerSceneFuncPtr = uint32_t (*)();
+    using GetBioServerAlignSizeFuncPtr = uint32_t (*)();
     using GetBioServerScrapeIntervalSecFuncPtr = uint32_t (*)();
+    using GetBioServerWcacheMemEvictLevelFuncPtr = uint32_t (*)();
     using GetBioServerNetEngineFuncPtr = uintptr_t (*)();
     using GetLocalNidFuncPtr = int32_t (*)(GetLocalNidResponse *);
     using GetQuotaInfoFuncPtr = int32_t (*)(QueryQuotaRequest *, QueryQuotaResponse *);
@@ -68,6 +71,7 @@ public:
     using GetCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
     using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceResponse *);
     using GetTracePointsLocalFuncPtr = int32_t (*)(GetTracePointsResponse *);
+    using ClearWcacheFuncPtr = int32_t (*)(ClearWcacheRequest *, ClearWcacheResponse *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -96,6 +100,12 @@ public:
     bool GetConfigPrometheusToggle();
 
     const char *GetPrometheusListenAddress();
+
+    uint32_t GetWcacheMemEvictLevel();
+
+    uint32_t GetNegoWorkScene();
+
+    uint32_t GetNegoWorkIoAlignSize();
 
     uint32_t GetNegoWorkIoTimeOut();
 
@@ -150,6 +160,8 @@ public:
 
     BResult GetTracePointsLocal(GetTracePointsRequest &req,
                                 std::map<uint16_t, TraceDatabase> &nodesTracePoints);
+
+    BResult ClearWcacheLocal(ClearWcacheRequest &req, ClearWcacheResponse &rsp);
 
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
@@ -207,7 +219,10 @@ private:
     GetBioServerPromethuesToggleFuncPtr getPrometheusToggle = nullptr;
     GetBioServerListenAddressFuncPtr getListenAddress = nullptr;
     GetBioServertimeOutFuncPtr getTimeOut = nullptr;
+    GetBioServerSceneFuncPtr getScene = nullptr;
+    GetBioServerAlignSizeFuncPtr getAlignSize = nullptr;
     GetBioServerScrapeIntervalSecFuncPtr getScrapeIntervalSec = nullptr;
+    GetBioServerWcacheMemEvictLevelFuncPtr getWcacheMemEvictLevel = nullptr;
     GetBioServerNetEngineFuncPtr getNetEngineOp = nullptr;
     GetLocalNidFuncPtr getLocalNidOp = nullptr;
     GetQuotaInfoFuncPtr getQuotaInfoOp = nullptr;
@@ -231,6 +246,7 @@ private:
     GetCacheHitLocalFuncPtr cacheHitOp = nullptr;
     CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
     GetTracePointsLocalFuncPtr getTracePointsOp = nullptr;
+    ClearWcacheFuncPtr clearWcacheOp = nullptr;
 };
 }
 }
