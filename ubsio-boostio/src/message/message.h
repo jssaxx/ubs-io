@@ -70,6 +70,10 @@ typedef struct {
     uint32_t ioTimeOut;
     uint32_t netTimeOut;
     uint32_t netSegmentSize;
+    bool isDevicetrans;                          /* net trans service switch */
+    char deviceTransType[128];                /* net trans type: device_sdma */
+    char transStoreUrl[128];  /* net trans store url */
+    uint64_t transMemSize;
     int32_t logLevel;
     bool enableCrc;
     bool enableCli;

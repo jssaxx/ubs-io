@@ -1464,7 +1464,19 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.enableCli = config.enableCli;
     rsp.enablePrometheus = config.enablePrometheus;
     rsp.scrapeIntervalSec = config.scrapeIntervalSec;
-    auto ret = strcpy_s(rsp.listenAddress, sizeof(rsp.listenAddress), config.listenAddress.c_str());
+    rsp.isDevicetrans = mBioConfig->GetNetConfig().isDevicetrans;
+    rsp.transMemSize = mBioConfig->GetNetConfig().transMemSize;
+    auto ret = strcpy_s(rsp.transStoreUrl, sizeof(rsp.transStoreUrl), mBioConfig->GetNetConfig().transStoreUrl.c_str());
+    if (ret != 0) {
+        return BIO_ERR;
+    }
+
+    ret = strcpy_s(rsp.deviceTransType, sizeof(rsp.deviceTransType), mBioConfig->GetNetConfig().deviceTransType.c_str());
+    if (ret != 0) {
+        return BIO_ERR;
+    }
+
+    ret = strcpy_s(rsp.listenAddress, sizeof(rsp.listenAddress), config.listenAddress.c_str());
     if (ret != 0) {
         return BIO_ERR;
     }

@@ -56,6 +56,14 @@ BResult BioClientNet::StartPre(WorkerMode mode, NetOptions &netConf)
         ret = StartIpcService(netConf);
         if (ret == BIO_OK) {
             netConf.netSegmentSize = mNetSegmentSize;
+            netConf.isDevicetrans = mIsDevicetrans;
+            netConf.deviceTransType = mDeviceTransType;
+            netConf.transMemSize = mTransMemSize;
+            netConf.transStoreUrl = mTransStoreUrl;
+            if (netConf.isDevicetrans) {
+                CLIENT_LOG_INFO("Get server device trance type:" << netConf.deviceTransType <<
+                ", trans store url:" << netConf.transStoreUrl << ", trans mem size:" << netConf.transMemSize);
+            }
         }
     }
     return ret;
@@ -204,6 +212,10 @@ BResult BioClientNet::ShmInit()
         return BIO_INNER_ERR;
     }
 
+    mIsDevicetrans = rsp.isDevicetrans;
+    mDeviceTransType = rsp.deviceTransType;
+    mTransStoreUrl = rsp.transStoreUrl;
+    mTransMemSize = rsp.transMemSize;
     mNetSegmentSize = rsp.netSegmentSize;
     mEnableHtrace = rsp.enableHtrace;
     mShmFd = rsp.memFd;

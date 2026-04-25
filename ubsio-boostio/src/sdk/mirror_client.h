@@ -324,7 +324,7 @@ private:
 
     BResult BatchGetImpl(MirrorBatchGet &param);
 
-    inline void BatchGetHbmRecycleResouces(uint32_t index, MirrorBatchGetHbm &param)
+    inline void BatchGetHbmRecycleResouces(uint32_t index, MirrorBatchGetRemoteHbm &param)
     {
         if (mEnableTrance) {
             for (uint32_t j = 0; j < index; j++) {
@@ -332,7 +332,7 @@ private:
             }
         } else {
             for (uint32_t j = 0; j < index; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
+                mDataMsgMemPool->ReleaseOne(param.valueAddrs[j]);  // rollback.
             }
         }
     }

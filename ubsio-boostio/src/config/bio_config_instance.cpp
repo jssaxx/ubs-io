@@ -38,6 +38,13 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
 
+    AddStrConf(NET_TRANS_SERVICE_SWITCH, VStrBoolRange::Create(NET_TRANS_SERVICE_SWITCH.first));
+    AddStrConf(NET_TRANS_SERVICE_ROLE, VStrBoolRange::Create(NET_TRANS_SERVICE_ROLE.first));
+    AddIntConf(NET_TRANS_DEVICE_ID);
+    AddStrConf(NET_TRANS_TYPE, VStrEnum::Create(NET_TRANS_TYPE.first, "device_sdma"));
+    AddStrConf(NET_TRANS_STORE_URL);
+    AddIntConf(NET_TRANS_MEMORY_SIZE);
+
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
@@ -187,6 +194,13 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.handleRequestThreadNum = conf->GetInt(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first);
     mNetConfig.handleRequestQueueSize = conf->GetInt(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first);
+
+    mNetConfig.isDevicetrans = conf->GetStr(NET_TRANS_SERVICE_SWITCH.first) == "true";
+    mNetConfig.isSender = conf->GetStr(NET_TRANS_SERVICE_ROLE.first) == "true";
+    mNetConfig.transDeviceId = conf->GetInt(NET_TRANS_DEVICE_ID.first);
+    mNetConfig.deviceTransType  = conf->GetStr(NET_TRANS_TYPE.first);
+    mNetConfig.transStoreUrl = conf->GetStr(NET_TRANS_STORE_URL.first);
+    mNetConfig.transMemSize = conf->GetInt(NET_TRANS_MEMORY_SIZE.first);
 
     return BIO_OK;
 }

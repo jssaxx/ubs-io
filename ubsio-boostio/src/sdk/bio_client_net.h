@@ -267,6 +267,10 @@ private:
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
     uint32_t mNetSegmentSize = 256;
+    bool mIsDevicetrans = false;
+    std::string mDeviceTransType = "NULL";
+    std::string mTransStoreUrl;
+    uint64_t mTransMemSize = 0;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint64_t mShmKey = 0;
