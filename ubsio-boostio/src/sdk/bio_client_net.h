@@ -232,7 +232,7 @@ private:
     std::string mPrometheusListenAddress = "127.0.0.1:7204";
     uint32_t mPrometheusScrapeIntervalSec = 15;
     uint32_t mWcacheMemEvictLevel = 0;
-    uint64_t mSdkPoolSize = 1073741824;
+    uint64_t mSdkPoolSize = 134217728;
     uint64_t mSegment = 4194304;
     DEFINE_REF_COUNT_VARIABLE;
 };
