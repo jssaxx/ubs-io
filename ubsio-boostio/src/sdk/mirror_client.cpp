@@ -1150,6 +1150,81 @@ bool MirrorClient::IsExistLocalCopy(CmPtInfo &ptEntry)
     return false;
 }
 
+bool MirrorClient::IsSingleLocalCopy(CmPtInfo &ptEntry)
+{
+    bool hasLocalCopy = false;
+    for (const auto &copy : ptEntry.copys) {
+        if (copy.state != CM_COPY_RUNNING && copy.state != CM_COPY_RECOVERY) {
+            continue;
+        }
+        if (copy.nodeId != mLocalNid.VNodeId()) {
+            return false;
+        }
+        if (hasLocalCopy) {
+            return false;
+        }
+        hasLocalCopy = true;
+    }
+    return hasLocalCopy;
+}
+
+BResult MirrorClient::SendPutRequestLocalOnly(CmPtInfo &ptEntry, MirrorPut &param)
+{
+    GetSliceResponse *rsp = nullptr;
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_GET_SLICE);
+    auto ret = agent::BioClientAgent::Instance()->PrepareResource(ptEntry, param.flowId, param.flowOffset,
+        param.flowIndex, param.length, &rsp);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_GET_SLICE, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Prepare local put resource failed, ret:" << ret << ", key:" << param.key << ", flowId:" <<
+            param.flowId << ", flowOffset:" << param.flowOffset << ", length:" << param.length << ".");
+        return ret;
+    }
+    if (UNLIKELY(rsp == nullptr)) {
+        return BIO_ERR;
+    }
+
+    if (UNLIKELY(rsp->addrNum > SLICE_ADDR_MAX_SIZE || rsp->sliceLen >= NO_512)) {
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        return BIO_INNER_ERR;
+    }
+    for (uint32_t idx = 0; idx < rsp->addrNum; idx++) {
+        if (UNLIKELY(rsp->addr[idx].chunkLen > IO_SIZE_4M)) {
+            delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+            return BIO_INNER_ERR;
+        }
+    }
+
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_COPY_DATA);
+    ret = DataCopy(param.value, param.length, rsp->addr, rsp->addrOffset, rsp->addrNum);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_COPY_DATA, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Copy local put data failed, ret:" << ret << ", key:" << param.key << ", flowId:" <<
+            param.flowId << ", flowOffset:" << param.flowOffset << ", length:" << param.length << ".");
+        delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+        return ret;
+    }
+
+    alignas(PutRequest) uint8_t reqBuf[sizeof(PutRequest) + NO_512] = {};
+    auto *req = static_cast<PutRequest *>(static_cast<void *>(reqBuf));
+    ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, rsp);
+    req->memFromServer = true;
+    req->dataCrc = mEnableCrc ? BioCrcUtil::Crc32(param.value, param.length) : 0;
+    delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
+
+    PutResponse putRsp{};
+    ret = agent::BioClientAgent::Instance()->PutLocal(req, putRsp);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    if (UNLIKELY(putRsp.ioStrategy > WRITE_UNDERFS_BACK)) {
+        return BIO_INVALID_PARAM;
+    }
+    mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
+    mIoStrategy[ptEntry.ptId]->strategy = putRsp.ioStrategy;
+    return BIO_OK;
+}
+
 BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
     GetSliceResponse *rsp = nullptr;
@@ -1340,6 +1415,13 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
 
 BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 {
+    if (mMode == CONVERGENCE && IsSingleLocalCopy(ptEntry)) {
+        BIO_TRACE_START(SDK_TRACE_PUT_SEND);
+        auto ret = SendPutRequestLocalOnly(ptEntry, param);
+        BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
+        return ret;
+    }
+
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
     BResult ret = BIO_OK;

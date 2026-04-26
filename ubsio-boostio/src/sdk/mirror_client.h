@@ -284,6 +284,8 @@ private:
         uint64_t flowIndex, NetMrInfo &mr);
     BResult DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
     bool IsExistLocalCopy(CmPtInfo &ptEntry);
+    bool IsSingleLocalCopy(CmPtInfo &ptEntry);
+    BResult SendPutRequestLocalOnly(CmPtInfo &ptEntry, MirrorPut &param);
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
