@@ -37,25 +37,11 @@ public:
 
     ~InterceptorClientNetService()
     {
-        if (mDataMsgMemPool != nullptr) {
-            mDataMsgMemPool->Stop();
-            mDataMsgMemPool = nullptr;
-        }
-        if (mShmAddr != nullptr && mShmLength > 0) {
-            munmap(mShmAddr, mShmLength);
-            mShmAddr = nullptr;
-        }
-        if (mShmFd >= 0) {
-            close(mShmFd);
-            mShmFd = -1;
-        }
-        if (mPid != 0) {
-            std::string shmName = "/interceptor_mem_pool_" + std::to_string(mPid);
-            shm_unlink(shmName.c_str());
-        }
+        StopNetService();
     }
 
     int32_t StartNetService();
+    void StopNetService();
     BResult CreateDataMessageMem();
 
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)

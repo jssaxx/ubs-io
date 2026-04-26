@@ -44,6 +44,37 @@ void CleanupDataMsgMemItem(uint32_t pid, DataMsgMemItem &item)
         shm_unlink(shmName.c_str());
     }
 }
+
+BResult CreateDataMsgMemItem(uint32_t pid, uint64_t poolSize, DataMsgMemItem &item)
+{
+    std::string shmName = "/interceptor_mem_pool_" + std::to_string(pid);
+    shm_unlink(shmName.c_str());
+
+    int fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        CLIENT_LOG_ERROR("shm_open failed, pid:" << pid << ", name:" << shmName << ", error:" << strerror(errno));
+        return BIO_INNER_ERR;
+    }
+
+    if (ftruncate(fd, static_cast<off_t>(poolSize)) < 0) {
+        CLIENT_LOG_ERROR("ftruncate failed, pid:" << pid << ", size:" << poolSize << ", error:" << strerror(errno));
+        shm_unlink(shmName.c_str());
+        close(fd);
+        return BIO_INNER_ERR;
+    }
+
+    auto *address = static_cast<uint8_t *>(mmap(nullptr, poolSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
+    if (address == MAP_FAILED) {
+        CLIENT_LOG_ERROR("mmap failed, pid:" << pid << ", size:" << poolSize << ", error:" << strerror(errno));
+        shm_unlink(shmName.c_str());
+        close(fd);
+        return BIO_ERR;
+    }
+
+    (void)memset_s(address, poolSize, 0, poolSize);
+    item = DataMsgMemItem(fd, 0, poolSize, address);
+    return BIO_OK;
+}
 }
 
 InterceptorServer::~InterceptorServer()
@@ -244,6 +275,7 @@ void InterceptorServer::ReleaseDataMsgMemItem(uint32_t pid)
 
     if (found) {
         CleanupDataMsgMemItem(pid, item);
+        CLIENT_LOG_INFO("Succeed to recycle interceptor data message memory, holder:" << pid << ".");
     }
 }
 
@@ -285,62 +317,33 @@ BResult InterceptorServer::HandleInterceptorCreateDataMsgMemPool(ServiceContext 
     uint64_t poolSize = BioClientNet::Instance()->GetSdkPoolSize();
     uint64_t blockSize = BioClientNet::Instance()->GetSegment();
     ReleaseDataMsgMemItem(req->comm.pid);
-    std::string shmName = "/interceptor_mem_pool_" + std::to_string(req->comm.pid);
-    shm_unlink(shmName.c_str());
-
-    int fd = shm_open(shmName.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
-    if (fd < 0) {
-        CLIENT_LOG_ERROR("shm_open failed, name:" << shmName << ", error:" << strerror(errno));
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
-
-    if (ftruncate(fd, static_cast<off_t>(poolSize)) < 0) {
-        CLIENT_LOG_ERROR("ftruncate failed, size:" << poolSize << ", error:" << strerror(errno));
-        shm_unlink(shmName.c_str());
-        close(fd);
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
-        return BIO_OK;
-    }
-
-    int32_t shmFd = fd;
-    off_t offset = 0;
-    auto address = mmap(nullptr, poolSize, PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, offset);
-    if (address == MAP_FAILED) {
-        CLIENT_LOG_ERROR("Mmap shm size " << poolSize << " offset " << offset << " failed, error:" << strerror(errno));
-        shm_unlink(shmName.c_str());
-        close(shmFd);
-        shmFd = -1;
-        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
-        return BIO_OK;
-    }
-
-    (void)memset_s(address, poolSize, 0, poolSize);
-
-    auto ret = BioClientNet::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &shmFd, NO_1);
+    DataMsgMemItem item;
+    auto ret = CreateDataMsgMemItem(req->comm.pid, poolSize, item);
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Send fds failed, ret:" << ret << ", name:" << shmName << ".");
-        if (munmap(address, poolSize) == -1) {
-            CLIENT_LOG_ERROR("Munmap address failed.");
-        }
-        shm_unlink(shmName.c_str());
-        close(shmFd);
-        shmFd = -1;
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
+
+    auto shmFd = item.shmFd;
+    ret = BioClientNet::Instance()->GetNetEngine()->SendFds(ctx.Channel(), &shmFd, NO_1);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Send fds failed, ret:" << ret << ", pid:" << req->comm.pid << ".");
+        CleanupDataMsgMemItem(req->comm.pid, item);
         BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_ERR, nullptr, 0);
         return BIO_OK;
     }
 
     {
         std::lock_guard<std::mutex> lock(mDataMsgMemLock);
-        mDataMsgMemMgr[req->comm.pid] = DataMsgMemItem(shmFd, offset, poolSize, static_cast<uint8_t *>(address));
+        mDataMsgMemMgr[req->comm.pid] = item;
     }
 
     CLIENT_LOG_INFO("Succeed to create interceptor data message memory pool, size:" << poolSize <<
         ", blockSize:" << blockSize << ", holder:" << req->comm.pid << ".");
 
     InterceptorCreateDataMsgMemPoolResponse rsp;
-    rsp.memFd = shmFd;
-    rsp.offset = offset;
+    rsp.memFd = item.shmFd;
+    rsp.offset = item.offset;
     rsp.poolSize = poolSize;
     rsp.blockSize = blockSize;
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, &rsp, sizeof(InterceptorCreateDataMsgMemPoolResponse));

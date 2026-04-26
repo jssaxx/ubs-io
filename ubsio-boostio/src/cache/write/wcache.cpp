@@ -835,6 +835,10 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 
 void WCache::AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum)
 {
+    if (refNum == 0) {
+        mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(sliceRef);
+        return;
+    }
     mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateMap(sliceRef);
     mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateIndexMap(sliceRef->GetSlice()->GetIndexInFlow(), refNum);
 }

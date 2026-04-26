@@ -174,6 +174,43 @@ int32_t InterceptorClientNetService::StartNetService()
     return 0;
 }
 
+void InterceptorClientNetService::StopNetService()
+{
+    mReady.store(false);
+
+    if (mDataMsgMemPool != nullptr) {
+        mDataMsgMemPool->Stop();
+        mDataMsgMemPool = nullptr;
+    }
+
+    if (mShmAddr != nullptr && mShmLength > 0) {
+        munmap(mShmAddr, mShmLength);
+        mShmAddr = nullptr;
+    }
+
+    if (mShmFd >= 0) {
+        close(mShmFd);
+        mShmFd = -1;
+    }
+
+    if (mPid != 0) {
+        std::string shmName = "/interceptor_mem_pool_" + std::to_string(mPid);
+        shm_unlink(shmName.c_str());
+    }
+
+    mShmOffset = 0;
+    mShmLength = 0;
+    mDataMsgMemAddr = nullptr;
+    mDataMsgMemBlockSize = 0;
+
+    if (mNetEngine != nullptr) {
+        mNetEngine->Stop();
+        mNetEngine = nullptr;
+    }
+
+    mPid = 0;
+}
+
 BResult InterceptorClientNetService::CreateDataMessageMem()
 {
     InterceptorCreateDataMsgMemPoolRequest req;
