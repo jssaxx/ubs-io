@@ -124,7 +124,13 @@ int32_t ProxyOperations::FullPath(int dirFd, const char *nativePath, std::string
 int ProxyOperations::CheckSelfPath(const std::string &mountPoint, const std::string &restoredPath)
 {
     size_t pointLen = mountPoint.size();
-    return restoredPath.compare(0, pointLen, mountPoint, 0, pointLen);
+    if (restoredPath.compare(0, pointLen, mountPoint, 0, pointLen) != 0) {
+        return BIO_ERR;
+    }
+    if (restoredPath.size() == pointLen || restoredPath[pointLen] == '/') {
+        return BIO_OK;
+    }
+    return BIO_ERR;
 }
 
 int ProxyOperations::OpenProxy(const char *path, int flags, va_list args)

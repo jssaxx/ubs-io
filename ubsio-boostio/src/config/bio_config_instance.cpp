@@ -143,7 +143,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
-    AddIntConf(SDK_POOL_SIZE_MB, VIntRange::Create(SDK_POOL_SIZE_MB.first, 0, NO_1024 * NO_512));
+    AddIntConf(SDK_POOL_SIZE_MB, VIntRange::Create(SDK_POOL_SIZE_MB.first, NO_4, NO_1024 * NO_512));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
     AddStrConf(BIO_CLI_TOOLS_ENABLE, VStrBoolRange::Create(BIO_CLI_TOOLS_ENABLE.first));

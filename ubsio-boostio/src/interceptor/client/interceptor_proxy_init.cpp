@@ -13,6 +13,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <climits>
+#include <string>
+#include <unistd.h>
 #include "interceptor.h"
 #include "interceptor_context.h"
 #include "interceptor_log.h"
@@ -22,6 +25,26 @@ using namespace ock::bio;
 
 static std::atomic<bool> g_initialized{ false };
 
+namespace {
+bool NormalizeMountPoint(const char *mountPoint, std::string &normalizedPath)
+{
+    if (mountPoint == nullptr || std::strlen(mountPoint) == 0 || mountPoint[0] != '/') {
+        return false;
+    }
+
+    char realPath[PATH_MAX] = { 0 };
+    if (realpath(mountPoint, realPath) == nullptr) {
+        return false;
+    }
+
+    normalizedPath = realPath;
+    while (normalizedPath.size() > 1 && normalizedPath.back() == '/') {
+        normalizedPath.pop_back();
+    }
+    return true;
+}
+}
+
 int InitializeProxyContext()
 {
     if (g_initialized.load()) {
@@ -30,9 +53,12 @@ int InitializeProxyContext()
 
     auto &ctx = BioInterceptorContext::GetInstance();
     const char *mountPoint = std::getenv("INTERCEPTOR_MOUNT_POINT");
-    if (mountPoint != nullptr && std::strlen(mountPoint) != 0) {
-        ctx.SetMountPoint(mountPoint);
+    std::string normalizedMountPoint;
+    if (NormalizeMountPoint(mountPoint, normalizedMountPoint)) {
+        ctx.SetMountPoint(normalizedMountPoint);
         CLOG_INFO("Apply INTERCEPTOR_MOUNT_POINT success, value:" << ctx.mountPoint << ".");
+    } else if (mountPoint != nullptr && std::strlen(mountPoint) != 0) {
+        CLOG_WARN("Ignore invalid INTERCEPTOR_MOUNT_POINT:" << mountPoint << ".");
     }
 
     g_initialized.store(true);
