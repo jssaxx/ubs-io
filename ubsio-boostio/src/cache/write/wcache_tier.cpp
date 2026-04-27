@@ -72,15 +72,18 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_META_GETSLICE, res);
     ChkTrue(res == BIO_OK, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
+    BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_PREPARE_META);
     WFlowSliceMeta sliceMeta{};
     auto ret = memcpy_s(sliceMeta.key, (NO_512 - NO_32), key, (strlen(key) + 1UL));
     if (ret != 0) {
+        BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_PREPARE_META, BIO_INNER_RETRY);
         return BIO_INNER_RETRY;
     }
     sliceMeta.offset = slice->GetOffsetInFlow();
     sliceMeta.length = slice->GetLength();
     sliceMeta.magic = slice->GetFlowId();
     sliceMeta.hasEvict = 0;
+    BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_PREPARE_META, BIO_OK);
     BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_META_COPY);
     ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
     BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_META_COPY, ret);
@@ -100,7 +103,9 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     ChkTrueNot(ret == BIO_OK, ret);
 
     if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
+        BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_CRC);
         ret = dataSlice->VerifyDataCrc(slice->GetDataCrc(), 0, dataSlice->GetLength(), dataSlice.Get());
+        BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_CRC, ret);
         if (ret != BIO_OK) {
             LOG_ERROR("Server put failed to verify the CRC fail, key:" << key << ", ret:" << ret);
             return ret;
@@ -371,11 +376,15 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
 inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
     std::vector<FlowAddr> flowAddrs;
+    BIO_TRACE_START(WCACHE_TRACE_TIER_GETSLICE_GETADDR);
     auto ret = flow->GetAddrByOffset(sliceKey.flowOffset, sliceKey.length, flowAddrs);
+    BIO_TRACE_END(WCACHE_TRACE_TIER_GETSLICE_GETADDR, ret);
     ChkTrueNot(ret == BIO_OK, ret);
 
+    BIO_TRACE_START(WCACHE_TRACE_TIER_GETSLICE_MAKE_REF);
     slice = MakeRef<WCacheSlice>(sliceKey.flowId, sliceKey.flowOffset, sliceKey.indexInFlow,
         sliceKey.length, flowAddrs, flow->GetFlowType());
+    BIO_TRACE_END(WCACHE_TRACE_TIER_GETSLICE_MAKE_REF, slice == nullptr ? BIO_INNER_RETRY : BIO_OK);
     if (slice == nullptr) {
         return BIO_INNER_RETRY;
     }
@@ -386,10 +395,14 @@ inline BResult WCacheTier::GetSlice(const FlowPtr &flow, uint64_t offset, uint64
     WCacheSlicePtr &slice)
 {
     std::vector<FlowAddr> flowAddrs;
+    BIO_TRACE_START(WCACHE_TRACE_TIER_GETSLICE_GETADDR);
     auto ret = flow->GetAddrByOffset(offset, length, flowAddrs);
+    BIO_TRACE_END(WCACHE_TRACE_TIER_GETSLICE_GETADDR, ret);
     ChkTrueNot(ret == BIO_OK, ret);
 
+    BIO_TRACE_START(WCACHE_TRACE_TIER_GETSLICE_MAKE_REF);
     slice = MakeRef<WCacheSlice>(flow->GetFlowId(), offset, index, length, flowAddrs, flow->GetFlowType());
+    BIO_TRACE_END(WCACHE_TRACE_TIER_GETSLICE_MAKE_REF, slice == nullptr ? BIO_INNER_RETRY : BIO_OK);
     if (slice == nullptr) {
         return BIO_INNER_RETRY;
     }
