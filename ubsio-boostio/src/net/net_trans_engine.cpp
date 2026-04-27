@@ -120,7 +120,7 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
 {
     NET_LOG_INFO("Start iniitalize MfTransEngine, transDeviceId: " << opt.transDeviceId << ", deviceTransType: "
         << opt.deviceTransType << ", ipMask: " << opt.ipMask << ", transStoreUrl: " << opt.transStoreUrl
-        << ", transMemSize: " << opt.transMemSize << ", netSegmentSize: " << opt.netSegmentSize << ", isSender: "
+        << ", transMemSize: " << opt.transMemSize << ", transSegmentSize: " << opt.transSegmentSize << ", isSender: "
         << opt.isSender);
     if (opt.transDeviceId < 0) {
         NET_LOG_WARN("transDeviceId is: " << opt.transDeviceId << ", will not use device transfer");
@@ -371,13 +371,13 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
 
 BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
 {
-    if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.netSegmentSize > MAX_TRANS_SEGMENT_SIZE) {
-        NET_LOG_ERROR("transMemSize or netSegmentSize is too large, transMemSize: " << opt.transMemSize
-                      << ", netSegmentSize: " << opt.netSegmentSize);
+    if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.transSegmentSize > MAX_TRANS_SEGMENT_SIZE) {
+        NET_LOG_ERROR("transMemSize or transSegmentSize is too large, transMemSize: " << opt.transMemSize
+                      << ", transSegmentSize: " << opt.transSegmentSize);
         return BIO_ERR;
     }
     mTransMemSize = opt.transMemSize;
-    mTransSegmentSize = opt.netSegmentSize;
+    mTransSegmentSize = opt.transSegmentSize;
     mMsgBlookPool = MakeRef<NetBlockPool>();
     if (mMsgBlookPool == nullptr) {
         NET_LOG_ERROR("Failed to create msg block pool");
