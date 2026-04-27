@@ -452,11 +452,17 @@ void WCache::RetryEvictTask(WCacheTierType type)
 
 uint64_t WCache::GetCapacity(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[type]->GetDataCapacity();
 }
 
 uint64_t WCache::GetVirCapacity(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[type]->GetDataVirCapacity();
 }
 
