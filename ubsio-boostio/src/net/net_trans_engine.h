@@ -337,7 +337,6 @@ public:
 
     BResult FreeBlocks(std::vector<uintptr_t> &addresses);
 
-    DEFINE_REF_COUNT_FUNCTIONS
 
 private:
     BResult PreInit(const NetOptions &opt);
@@ -360,7 +359,6 @@ private:
     uint64_t mTransMemSize;
     uint32_t mTransSegmentSize;
 
-    DEFINE_REF_COUNT_VARIABLE
 };
 
 using MfTransEnginePtr = Ref<MfTransEngine>;
