@@ -125,7 +125,6 @@ BResult BioConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
 BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 {
     /* auto config cm port and ip mask */
-    mNetConfig.transSegmentSize =static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mNetConfig.netSegmentSize = conf->GetInt(NET_SEGMENT_SIZE.first);
     mNetConfig.dataIpMask = conf->GetStr(NET_DATA_IP_MASK.first);
     mNetConfig.dataPort = conf->GetInt(NET_DATA_PORT.first);
