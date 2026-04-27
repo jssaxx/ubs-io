@@ -494,7 +494,7 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
 {
     if (UnderFs::IsNone()) {
         LOG_ERROR("UnderFS is none, cannot load from underfs, key:" << key);
-        return BIO_ERR;
+        return BIO_NOT_EXISTS;
     }
 
     auto config = BioConfig::Instance()->GetDaemonConfig();

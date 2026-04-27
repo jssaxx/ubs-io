@@ -187,7 +187,7 @@ BResult Cache::GetFromUnderFS(const Key &key, WCacheSlicePtr &slice, const size_
 {
     if (UnderFs::IsNone()) {
         LOG_ERROR("UnderFS is none, cannot get from underfs, key:" << key);
-        return BIO_ERR;
+        return BIO_NOT_EXISTS;
     }
 
     BResult ret = BIO_OK;
@@ -221,7 +221,7 @@ BResult Cache::GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint6
 {
     if (UnderFs::IsNone()) {
         LOG_ERROR("UnderFS is none, cannot stat from underfs, key:" << key);
-        return BIO_ERR;
+        return BIO_NOT_EXISTS;
     }
 
     UnderFs::ObjStat stat;

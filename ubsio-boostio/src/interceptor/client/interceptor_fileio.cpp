@@ -95,11 +95,13 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
 {
     auto &file = CONTEXT.files.At(fd);
     if (UNLIKELY(file == nullptr)) {
-        CLOG_ERROR("Get open file context failed, fd:" << fd << ".");
-        return -1;
+        CLOG_DEBUG("Fallback pread to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
+        return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
     if (count > MAX_LARGE_WRITE_SIZE) {
+        CLOG_DEBUG("Fallback pread to native for oversize request, fd:" << fd << ", inode:" << file->GetInode() <<
+            ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
@@ -112,9 +114,17 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
 
 ssize_t ProxyOperations::PreadInner(int fd, BufVec &bufVec, off_t offset)
 {
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        CLOG_DEBUG("Fallback preadv64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" <<
+            bufVec.size << ".");
+        return CONTEXT.GetOperations()->preadv64(fd, bufVec.iov, bufVec.count, offset);
+    }
+
     if (bufVec.size > MAX_LARGE_WRITE_SIZE) {
-        errno = EIO;
-        return -1;
+        CLOG_DEBUG("Fallback preadv64 to native for oversize request, fd:" << fd << ", inode:" <<
+            file->GetInode() << ", offset:" << offset << ", nbytes:" << bufVec.size << ".");
+        return CONTEXT.GetOperations()->preadv64(fd, bufVec.iov, bufVec.count, offset);
     }
 
     if (bufVec.size <= MAX_SMALL_WRITE_SIZE) {
@@ -170,6 +180,8 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
     auto retLen = static_cast<ssize_t>(resp->dataLen);
     free(resp);
     resp = nullptr;
+    CLOG_INFO("Intercept small read success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
+        offset << ", nbytes:" << count << ", ret:" << retLen << ".");
     return retLen;
 }
 
@@ -225,6 +237,8 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
     auto retLen = static_cast<ssize_t>(resp->dataLen);
     free(resp);
     resp = nullptr;
+    CLOG_INFO("Intercept small read vec success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
+        offset << ", nbytes:" << bufVec.size << ", ret:" << retLen << ".");
     return retLen;
 }
 
@@ -279,6 +293,8 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
     }
 
     InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
+    CLOG_INFO("Intercept large read success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
+        offset << ", nbytes:" << count << ", ret:" << resp.dataLen << ", mrOffset:" << mrOffset << ".");
     return static_cast<ssize_t>(resp.dataLen);
 }
 
@@ -329,6 +345,8 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
         return -1;
     }
 
+    CLOG_INFO("Intercept large read vec success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
+        offset << ", nbytes:" << bufVec.size << ", ret:" << resp.dataLen << ", mrOffset:" << mrOffset << ".");
     return static_cast<ssize_t>(resp.dataLen);
 }
 
@@ -337,6 +355,7 @@ ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
     CLOG_DEBUG("Pread fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback pread to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
@@ -348,6 +367,8 @@ ssize_t ProxyOperations::Pread64(int fd, void *buf, size_t count, off64_t offset
     CLOG_DEBUG("Pread64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback pread64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count <<
+            ".");
         return CONTEXT.GetOperations()->pread64(fd, buf, count, offset);
     }
 
@@ -359,6 +380,7 @@ ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
     CLOG_DEBUG("Read fd:" << fd << ", length:" << nbytes << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback read to native, fd:" << fd << ", nbytes:" << nbytes << ".");
         return CONTEXT.GetOperations()->read(fd, buf, nbytes);
     }
 
@@ -383,6 +405,7 @@ ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
     CLOG_DEBUG("Readv fd:" << fd << ", length:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback readv to native, fd:" << fd << ", iovcnt:" << count << ".");
         return CONTEXT.GetOperations()->readv(fd, vector, count);
     }
 
@@ -417,6 +440,8 @@ ssize_t ProxyOperations::Preadv64(int fd, const struct iovec *vector, int iovcnt
     CLOG_DEBUG("Preadv64 fd:" << fd << ", offset:" << offset << ", io count:" << iovcnt << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback preadv64 to native, fd:" << fd << ", offset:" << offset << ", iovcnt:" << iovcnt <<
+            ".");
         return CONTEXT.GetOperations()->preadv64(fd, vector, iovcnt, offset);
     }
 
@@ -440,23 +465,40 @@ ssize_t ProxyOperations::Preadv64(int fd, const struct iovec *vector, int iovcnt
 
 ssize_t ProxyOperations::PwriteInner(int fd, const void *buf, size_t count, off_t offset)
 {
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        CLOG_DEBUG("Fallback pwrite to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
+        return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
+    }
+
     if (count <= MAX_SMALL_WRITE_SIZE) {
         return PwriteSmallInner(fd, buf, count, offset);
     }
     if (count <= MAX_LARGE_WRITE_SIZE) {
         return PwriteLargeInner(fd, buf, count, offset);
     }
+    CLOG_DEBUG("Fallback pwrite to native for oversize request, fd:" << fd << ", inode:" << file->GetInode() <<
+        ", offset:" << offset << ", nbytes:" << count << ".");
     return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::PwriteInner(int fd, BufVec &bufVec, off_t offset)
 {
+    auto &file = CONTEXT.files.At(fd);
+    if (UNLIKELY(file == nullptr)) {
+        CLOG_DEBUG("Fallback pwritev64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" <<
+            bufVec.size << ".");
+        return CONTEXT.GetOperations()->pwritev64(fd, bufVec.iov, bufVec.count, offset);
+    }
+
     if (bufVec.size <= MAX_SMALL_WRITE_SIZE) {
         return PwriteSmallInner(fd, bufVec, offset);
     }
     if (bufVec.size <= MAX_LARGE_WRITE_SIZE) {
         return PwriteLargeInner(fd, bufVec, offset);
     }
+    CLOG_DEBUG("Fallback pwritev64 to native for oversize request, fd:" << fd << ", inode:" <<
+        file->GetInode() << ", offset:" << offset << ", nbytes:" << bufVec.size << ".");
     return CONTEXT.GetOperations()->pwritev64(fd, bufVec.iov, bufVec.count, offset);
 }
 
@@ -491,6 +533,8 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
         return -1;
     }
 
+    CLOG_INFO("Intercept small write success, fd:" << fd << ", inode:" << request->inode << ", offset:" <<
+        offset << ", nbytes:" << count << ", ret:" << count << ".");
     return static_cast<ssize_t>(count);
 }
 
@@ -525,6 +569,8 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, BufVec &bufVec, off_t offset)
         return -1;
     }
 
+    CLOG_INFO("Intercept small write vec success, fd:" << fd << ", inode:" << request->inode << ", offset:" <<
+        offset << ", nbytes:" << bufVec.size << ", ret:" << bufVec.size << ".");
     return static_cast<ssize_t>(bufVec.size);
 }
 
@@ -579,6 +625,9 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     }
 
     CacheLargeWriteBlock(shmAddr, mrOffset);
+    CLOG_INFO("Intercept large write success, fd:" << fd << ", inode:" << writeReq.inode << ", offset:" <<
+        writeReq.offset << ", nbytes:" << writeReq.nbytes << ", ret:" << count << ", mrOffset:" <<
+        writeReq.mrOffset << ".");
     return static_cast<ssize_t>(count);
 }
 
@@ -631,6 +680,9 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, BufVec &bufVec, off_t offset)
     }
 
     CacheLargeWriteBlock(shmAddr, mrOffset);
+    CLOG_INFO("Intercept large write vec success, fd:" << fd << ", inode:" << writeReq.inode << ", offset:" <<
+        writeReq.offset << ", nbytes:" << writeReq.nbytes << ", ret:" << bufVec.size << ", mrOffset:" <<
+        writeReq.mrOffset << ".");
     return static_cast<ssize_t>(bufVec.size);
 }
 
@@ -639,6 +691,7 @@ ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
     CLOG_DEBUG("Write fd:" << fd << ", count:" << nbytes << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback write to native, fd:" << fd << ", nbytes:" << nbytes << ".");
         return CONTEXT.GetOperations()->write(fd, buf, nbytes);
     }
 
@@ -663,6 +716,7 @@ ssize_t ProxyOperations::Pwrite(int fd, const void *buf, size_t count, off_t off
     CLOG_DEBUG("Pwrite fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback pwrite to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pwrite(fd, buf, count, offset);
     }
 
@@ -679,6 +733,8 @@ ssize_t ProxyOperations::Pwrite64(int fd, const void *buf, size_t count, off64_t
     CLOG_DEBUG("Pwrite64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback pwrite64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count <<
+            ".");
         return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
     }
 
@@ -695,6 +751,7 @@ ssize_t ProxyOperations::Writev(int fd, const struct iovec *vector, int count)
     CLOG_DEBUG("Writev fd:" << fd << ", count:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback writev to native, fd:" << fd << ", iovcnt:" << count << ".");
         return CONTEXT.GetOperations()->writev(fd, vector, count);
     }
 
@@ -724,6 +781,8 @@ ssize_t ProxyOperations::Pwritev(int fd, const struct iovec *vector, int count, 
     CLOG_DEBUG("Pwritev fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback pwritev to native, fd:" << fd << ", offset:" << offset << ", iovcnt:" << count <<
+            ".");
         return CONTEXT.GetOperations()->pwritev(fd, vector, count, offset);
     }
 
@@ -745,6 +804,8 @@ ssize_t ProxyOperations::Pwritev64(int fd, const struct iovec *vector, int count
     CLOG_DEBUG("Pwritev64 fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
     auto &file = CONTEXT.files.At(fd);
     if (file == nullptr) {
+        CLOG_DEBUG("Fallback pwritev64 to native, fd:" << fd << ", offset:" << offset << ", iovcnt:" << count <<
+            ".");
         return CONTEXT.GetOperations()->pwritev64(fd, vector, count, offset);
     }
 

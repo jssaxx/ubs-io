@@ -124,7 +124,13 @@ int32_t ProxyOperations::FullPath(int dirFd, const char *nativePath, std::string
 int ProxyOperations::CheckSelfPath(const std::string &mountPoint, const std::string &restoredPath)
 {
     size_t pointLen = mountPoint.size();
-    return restoredPath.compare(0, pointLen, mountPoint, 0, pointLen);
+    if (restoredPath.compare(0, pointLen, mountPoint, 0, pointLen) != 0) {
+        return BIO_ERR;
+    }
+    if (restoredPath.size() == pointLen || restoredPath[pointLen] == '/') {
+        return BIO_OK;
+    }
+    return BIO_ERR;
 }
 
 int ProxyOperations::OpenProxy(const char *path, int flags, va_list args)
@@ -285,9 +291,11 @@ int ProxyOperations::Close(int fd)
     CLOG_DEBUG("Close file fd:" << fd << ".");
     auto &file = CONTEXT.files.At(fd);
     if (UNLIKELY(file == nullptr)) {
+        CLOG_DEBUG("Fallback close to native, fd:" << fd << ".");
         return CONTEXT.GetOperations()->close(fd);
     }
 
+    CLOG_INFO("Close intercepted file success, fd:" << fd << ", inode:" << file->GetInode() << ".");
     CONTEXT.files.Erase(fd);
     return CONTEXT.GetOperations()->close(fd);
 }
@@ -302,7 +310,6 @@ int32_t ProxyOperations::OpenInner(const char *path, int fd)
     }
 
     if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
-        std::string &&suffix = GetPathNoPrefix(path, CONTEXT.mountPoint);
         struct stat statBuf;
         ret = stat(restoredPath.c_str(), &statBuf);
         if (UNLIKELY(ret != 0)) {
@@ -315,6 +322,10 @@ int32_t ProxyOperations::OpenInner(const char *path, int fd)
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
+        CLOG_INFO("Open intercepted file success, path:" << restoredPath << ", fd:" << fd <<
+            ", inode:" << statBuf.st_ino << ".");
+    } else {
+        CLOG_DEBUG("Fallback open to native, path:" << restoredPath << ", fd:" << fd << ".");
     }
 
     return BIO_OK;
@@ -330,7 +341,6 @@ int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
     }
 
     if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
-        std::string &&suffix = GetPathNoPrefix(path, CONTEXT.mountPoint);
         struct stat statBuf;
         ret = stat(restoredPath.c_str(), &statBuf);
         if (UNLIKELY(ret != 0)) {
@@ -343,6 +353,10 @@ int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
+        CLOG_INFO("Open intercepted file success, path:" << restoredPath << ", fd:" << fd <<
+            ", inode:" << statBuf.st_ino << ".");
+    } else {
+        CLOG_DEBUG("Fallback openat to native, path:" << restoredPath << ", fd:" << fd << ".");
     }
 
     return BIO_OK;
@@ -358,7 +372,6 @@ int32_t ProxyOperations::CreateInner(const char *path, int fd)
     }
 
     if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
-        std::string &&suffix = GetPathNoPrefix(path, CONTEXT.mountPoint);
         struct stat statBuf;
         ret = stat(restoredPath.c_str(), &statBuf);
         if (UNLIKELY(ret != 0)) {
@@ -371,6 +384,10 @@ int32_t ProxyOperations::CreateInner(const char *path, int fd)
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
+        CLOG_INFO("Create intercepted file success, path:" << restoredPath << ", fd:" << fd <<
+            ", inode:" << statBuf.st_ino << ".");
+    } else {
+        CLOG_DEBUG("Fallback create to native, path:" << restoredPath << ", fd:" << fd << ".");
     }
 
     return BIO_OK;

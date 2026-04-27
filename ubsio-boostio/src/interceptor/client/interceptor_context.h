@@ -36,6 +36,11 @@ struct BioInterceptorContext {
         nativeOperations = native;
     }
 
+    void SetMountPoint(const std::string &mountPath)
+    {
+        mountPoint = mountPath;
+    }
+
     const InterceptorNativeOperations *GetOperations()
     {
         return nativeOperations;
