@@ -138,6 +138,7 @@ void BioClientNet::Exit()
     if (mMode == SEPARATES) {
         StopInner();
     }
+    mTransEngine->Destroy();
 }
 
 BResult BioClientNet::CorrectFd()
@@ -511,5 +512,9 @@ bool BioClientNet::CheckShmInitResp(ShmInitResponse rsp)
 
 BResult BioClientNet::RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes)
 {
+    if (mTransEngine == nullptr) {
+        CLIENT_LOG_ERROR("trans engine is null");
+        return BIO_ERROR;
+    }
     return mTransEngine->BatchRegisterMem(addresses, sizes);
 }

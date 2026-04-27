@@ -94,7 +94,6 @@ BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
 void BioClient::BioClientNetExit()
 {
     mNetEngine->Exit();
-    mTransEngine->Destroy();
 }
 
 void BioClient::BioClientUpdateHandle()
@@ -496,10 +495,6 @@ BResult BioClient::AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opPara
 
 BResult BioClient::RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
 {
-    if (mTransEngine == nullptr) {
-        LOG_ERROR("trans engine not init.");
-        return BIO_ERR;
-    }
     std::vector<void*> addrsVec;
     std::vector<size_t> sizesVec;
     addrsVec.reserve(count);
@@ -508,6 +503,6 @@ BResult BioClient::RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t co
         addrsVec.emplace_back(reinterpret_cast<void*>(addresses[i]));
         sizesVec.emplace_back(sizes[i]);
     }
-    return mTransEngine->RegisterMem(addrsVec, sizesVec);
+    return net::BioClientNet::Instance()->RegisterMem(addrsVec, sizesVec);
 }
 
