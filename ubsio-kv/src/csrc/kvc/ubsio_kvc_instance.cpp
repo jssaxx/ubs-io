@@ -207,14 +207,19 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     }
     sem_t sem;
     sem_init(&sem, 0, 0);
-    // read remote
-    m_readExecutor->Execute([&remoteParams, results, &sem]()->void {
-        auto ret = ReadRemote(remoteParams, results);
-        if (UNLIKELY(ret != DFC_OK)) {
-            LOG_ERROR("Kvc batch get reomte data failed, ret:" << ret);
-        }
+    KvcError remoteRet = DFC_OK;
+    // read remote //增加远端判断
+    if (!remoteParams.keys.empty()) {
+        m_readExecutor->Execute([&remoteParams, results, &sem, &remoteRet]()->void {
+            remoteRet = ReadRemote(remoteParams, results);
+            if (UNLIKELY(remoteRet != DFC_OK)) {
+                LOG_ERROR("Kvc batch get reomte data failed, ret:" << remoteRet);
+            }
+            sem_post(&sem);
+        });
+    } else {
         sem_post(&sem);
-    });
+    }
 
     // read local
     ret = ReadLocal(localParams, results);
@@ -223,7 +228,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     }
     sme_wait(&sem);
     sem_destroy(&sem);
-    return ret;
+    return (ret == DFC_OK && remoteRet == DFC_OK) ? DFC_OK : DFC_ERR;
 }
 
 } // ubsio
