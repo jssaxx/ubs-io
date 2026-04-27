@@ -11,9 +11,13 @@
  */
 
 #include <chrono>
+#include <cerrno>
 #include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
 #include <iostream>
 #include <memory>
+#include <unistd.h>
 #include "htracer.h"
 #include "bio_client.h"
 #include "bio_config_instance.h"
@@ -32,6 +36,7 @@ std::regex serverPattern("[0-9]+");
 namespace {
 constexpr uint64_t DIAG_ALIGN_SIZE = 4096;
 constexpr uint64_t DIAG_KB_SIZE = 1024;
+constexpr uint64_t DIAG_RAW_WINDOW_SIZE = 16 * 1024 * 1024;
 constexpr double DIAG_MB_SIZE = 1024.0 * 1024.0;
 
 char *AllocAlignedBuf(uint64_t len)
@@ -46,6 +51,22 @@ char *AllocAlignedBuf(uint64_t len)
 double ToUs(const std::chrono::steady_clock::duration &duration)
 {
     return std::chrono::duration<double, std::micro>(duration).count();
+}
+
+int32_t WriteFull(int fd, const char *buf, uint64_t len, uint64_t offset)
+{
+    uint64_t written = 0;
+    while (written < len) {
+        auto ret = pwrite(fd, buf + written, static_cast<size_t>(len - written), static_cast<off_t>(offset + written));
+        if (ret < 0 && errno == EINTR) {
+            continue;
+        }
+        if (ret <= 0) {
+            return errno == 0 ? BIO_INNER_ERR : errno;
+        }
+        written += static_cast<uint64_t>(ret);
+    }
+    return BIO_OK;
 }
 }
 
@@ -294,40 +315,46 @@ void diagnose::BioServerCommand::HandleRawPerf(const std::vector<std::string> &c
         return;
     }
 
-    if (diskId >= BdmGetDiskCount()) {
-        mPrintOp("Invalid diskId:%llu, diskCount:%u.\n", diskId, BdmGetDiskCount());
+    auto &daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+    if (diskId >= daemonConfig.diskList.size()) {
+        mPrintOp("Invalid diskId:%llu, diskCount:%llu.\n",
+            diskId, static_cast<unsigned long long>(daemonConfig.diskList.size()));
         return;
     }
 
     uint64_t ioLen = bsKb * DIAG_KB_SIZE;
-    if (ioLen == 0 || ioLen > BDM_MAX_CHUNK_LENGTH) {
-        mPrintOp("Invalid bsKB:%llu, ioLen:%llu, max:%lu.\n", bsKb, ioLen, BDM_MAX_CHUNK_LENGTH);
+    if (ioLen == 0 || ioLen > DIAG_RAW_WINDOW_SIZE || ioLen % DIAG_ALIGN_SIZE != 0) {
+        mPrintOp("Invalid bsKB:%llu, ioLen:%llu, max:%llu, align:%llu.\n",
+            bsKb, ioLen, DIAG_RAW_WINDOW_SIZE, DIAG_ALIGN_SIZE);
+        return;
+    }
+
+    auto &diskPath = daemonConfig.diskList[diskId];
+    int openFlag = O_RDWR | O_SYNC;
+#ifdef O_DIRECT
+    openFlag |= O_DIRECT;
+#endif
+    int fd = open(diskPath.c_str(), openFlag);
+    if (fd < 0) {
+        mPrintOp("Open disk failed, path:%s, errno:%d(%s).\n", diskPath.c_str(), errno, strerror(errno));
         return;
     }
 
     char *src = AllocAlignedBuf(ioLen);
     char *dst = AllocAlignedBuf(ioLen);
     if (src == nullptr || dst == nullptr) {
+        close(fd);
         free(src);
         free(dst);
         mPrintOp("Alloc buffer failed, ioLen:%llu.\n", ioLen);
         return;
     }
 
-    if (memset_s(src, ioLen, 0x5A, ioLen) != BDM_CODE_OK || memset_s(dst, ioLen, 0, ioLen) != BDM_CODE_OK) {
+    if (memset_s(src, ioLen, 0x5A, ioLen) != 0 || memset_s(dst, ioLen, 0, ioLen) != 0) {
+        close(fd);
         free(src);
         free(dst);
         mPrintOp("Init buffer failed, ioLen:%llu.\n", ioLen);
-        return;
-    }
-
-    uint64_t chunkId = 0;
-    uint64_t chunkLen = BDM_MAX_CHUNK_LENGTH;
-    auto ret = BdmAlloc(static_cast<uint32_t>(diskId), 0, 0, chunkLen, &chunkId);
-    if (ret != BDM_CODE_OK) {
-        free(src);
-        free(dst);
-        mPrintOp("BdmAlloc failed, diskId:%llu, len:%llu, ret:%d.\n", diskId, chunkLen, ret);
         return;
     }
 
@@ -335,34 +362,35 @@ void diagnose::BioServerCommand::HandleRawPerf(const std::vector<std::string> &c
     std::chrono::steady_clock::duration copyCost = std::chrono::steady_clock::duration::zero();
     std::chrono::steady_clock::duration writeCost = std::chrono::steady_clock::duration::zero();
     uint64_t done = 0;
-    uint64_t slotNum = chunkLen / ioLen;
+    uint64_t slotNum = DIAG_RAW_WINDOW_SIZE / ioLen;
+    int32_t ret = BIO_OK;
     for (; done < count; ++done) {
         uint64_t offset = (done % slotNum) * ioLen;
-        BIO_TRACE_START(BDM_TRACE_DIAG_MEMCPY_WRITE);
+        BIO_TRACE_START(DIAG_TRACE_MEMCPY_DISK_WRITE);
 
         auto copyBegin = std::chrono::steady_clock::now();
-        BIO_TRACE_START(BDM_TRACE_DIAG_MEMCPY);
+        BIO_TRACE_START(DIAG_TRACE_MEMCPY);
         ret = memcpy_s(dst, ioLen, src, ioLen);
-        BIO_TRACE_END(BDM_TRACE_DIAG_MEMCPY, ret);
+        BIO_TRACE_END(DIAG_TRACE_MEMCPY, ret);
         copyCost += std::chrono::steady_clock::now() - copyBegin;
-        if (ret != BDM_CODE_OK) {
-            BIO_TRACE_END(BDM_TRACE_DIAG_MEMCPY_WRITE, ret);
+        if (ret != BIO_OK) {
+            BIO_TRACE_END(DIAG_TRACE_MEMCPY_DISK_WRITE, ret);
             break;
         }
 
         auto writeBegin = std::chrono::steady_clock::now();
-        BIO_TRACE_START(BDM_TRACE_DIAG_WRITE);
-        ret = BdmWrite(chunkId, offset, dst, ioLen);
-        BIO_TRACE_END(BDM_TRACE_DIAG_WRITE, ret);
+        BIO_TRACE_START(DIAG_TRACE_DISK_WRITE);
+        ret = WriteFull(fd, dst, ioLen, offset);
+        BIO_TRACE_END(DIAG_TRACE_DISK_WRITE, ret);
         writeCost += std::chrono::steady_clock::now() - writeBegin;
-        BIO_TRACE_END(BDM_TRACE_DIAG_MEMCPY_WRITE, ret);
-        if (ret != BDM_CODE_OK) {
+        BIO_TRACE_END(DIAG_TRACE_MEMCPY_DISK_WRITE, ret);
+        if (ret != BIO_OK) {
             break;
         }
     }
     auto totalCost = std::chrono::steady_clock::now() - totalBegin;
 
-    auto freeRet = BdmFree(static_cast<uint32_t>(diskId), chunkLen, chunkId);
+    close(fd);
     free(src);
     free(dst);
 
@@ -371,18 +399,18 @@ void diagnose::BioServerCommand::HandleRawPerf(const std::vector<std::string> &c
     double writeUs = ToUs(writeCost);
     double totalUs = ToUs(totalCost);
     mPrintOp("Raw Perf Result:\n");
-    mPrintOp("  diskId:%llu, bs:%llu bytes, count:%llu/%llu, chunkId:%llu, chunkLen:%llu\n",
-        diskId, ioLen, done, count, chunkId, chunkLen);
+    mPrintOp("  diskId:%llu, path:%s, bs:%llu bytes, count:%llu/%llu, window:%llu\n",
+        diskId, diskPath.c_str(), ioLen, done, count, DIAG_RAW_WINDOW_SIZE);
     mPrintOp("  memcpy   total:%.3f us, avg:%.3f us, throughput:%.3f MB/s\n",
         copyUs, done == 0 ? 0.0 : copyUs / static_cast<double>(done),
         copyUs <= 0 ? 0.0 : dataMb * 1000000.0 / copyUs);
-    mPrintOp("  bdmWrite total:%.3f us, avg:%.3f us, throughput:%.3f MB/s\n",
+    mPrintOp("  diskWrite total:%.3f us, avg:%.3f us, throughput:%.3f MB/s\n",
         writeUs, done == 0 ? 0.0 : writeUs / static_cast<double>(done),
         writeUs <= 0 ? 0.0 : dataMb * 1000000.0 / writeUs);
     mPrintOp("  end2end  total:%.3f us, avg:%.3f us, throughput:%.3f MB/s\n",
         totalUs, done == 0 ? 0.0 : totalUs / static_cast<double>(done),
         totalUs <= 0 ? 0.0 : dataMb * 1000000.0 / totalUs);
-    mPrintOp("  ret:%d, freeRet:%d\n", ret, freeRet);
+    mPrintOp("  ret:%d\n", ret);
 }
 
 void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> &cmds)
