@@ -317,8 +317,7 @@ BResult BioServer::BioNetInit()
 
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
-    mTransEngine = MakeRef<MfTransEngine>();
-    ChkTrue(mTransEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
+    
     int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
     auto ret =
@@ -367,8 +366,12 @@ BResult BioServer::BioNetInit()
     netOptions.deviceTransType = netConfig.deviceTransType;
     netOptions.transStoreUrl = netConfig.transStoreUrl;
     netOptions.transMemSize = netConfig.transMemSize;
-    ret = mTransEngine->Initialize(netOptions);
-    ChkTrue(ret == BIO_OK, ret, "Trans engine initialize failed, result:" << ret << ".");
+    if (netOptions.isDevicetrans) {
+        mTransEngine = MakeRef<MfTransEngine>();
+        ChkTrue(mTransEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
+        ret = mTransEngine->Initialize(netOptions);
+        ChkTrue(ret == BIO_OK, ret, "Trans engine initialize failed, result:" << ret << ".");
+    }
     mNetEngineInited = true;
     return BIO_OK;
 }
