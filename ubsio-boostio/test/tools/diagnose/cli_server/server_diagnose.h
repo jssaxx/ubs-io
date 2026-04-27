@@ -37,6 +37,7 @@ public:
     static void HandleRCachePut(const std::vector<std::string> &cmds);
     static void HandleRCacheGet(const std::vector<std::string> &cmds);
     static void HandleRCacheDelete(const std::vector<std::string> &cmds);
+    static void HandleRawPerf(const std::vector<std::string> &cmds);
 
 private:
     static bool mInited;
