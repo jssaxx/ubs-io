@@ -278,10 +278,17 @@ typedef struct {
     uint64_t quotaNid;
     uint64_t quotaCid;
     uint32_t dataCrc;
-    uintptr_t localTrancAddr;
+    bool enableTrans;
+    uintptr_t localTransAddr;
     uint64_t transDataLen;
     char sliceBuf[0];
 } PutRequest;
+
+typedef struct {
+    bool enableTrans;
+    uintptr_t localTransAddr;
+    uint64_t transDataLen;
+} TransData;
 
 typedef struct {
     uint32_t ioStrategy;

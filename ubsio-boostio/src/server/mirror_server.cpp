@@ -505,38 +505,93 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     return ret;
 }
 
+BResult MirrorServer::ReaderRemoteTrans(const SlicePtr &from, const SlicePtr &to, PutRequest &req)
+{
+    std::vector<void*> localAddrs;
+    std::vector<void*> remoteAddrs;
+    std::vector<size_t> dataSizes;
+
+    std::vector<FlowAddr> remoteAddr = from->GetAddrs();
+    size_t dataSize = 0;
+    for (auto addr : remoteAddr) {
+        remoteAddrs.emplace_back(reinterpret_cast<void *>(addr.chunkId + addr.chunkOffset));
+        dataSizes.emplace_back(addr.chunkLen);
+        dataSize += addr.chunkLen;
+    }
+
+    uintptr_t tranceMem;
+    auto ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << req.transDataLen << ".");
+        return ret;
+    }
+
+    size_t beginSize = 0;
+    for (auto addr : remoteAddr) {
+        localAddrs.emplace_back(reinterpret_cast<void*>(tranceMem + beginSize));
+        beginSize += addr.chunkLen;
+    }
+
+    TransParam transParam;
+    transParam.remoteUniqueId = std::string(req.uuid);
+    transParam.localAddrs = localAddrs;
+    transParam.remoteAddrs = remoteAddrs;
+    transParam.dataSizes = dataSizes;
+    ret = BioServer::Instance()->GetTransEngine()->Read(transParam);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Read from remote trans failed, ret:" << ret << ", length:" << dataSize << ".");
+        BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+        return ret;
+    }
+
+    ret = mSliceOp.Copy(reinterpret_cast<char *>(tranceMem), to);
+    BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+    if (UNLIKELY( ret != BIO_OK)) {
+        LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+    }
+    return ret;
+}
+
 BResult MirrorServer::ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx)
 {
-    // 1. parse remote mr info
-    BIO_TRACE_START(MIRROR_TRACE_PUT_READ_DATA);
-    std::vector<FlowAddr> rFlowAddr = from->GetAddrs();
-    std::vector<NetMrInfo> rMrVec;
-    for (auto &addr : rFlowAddr) {
-        MrInfo mr;
-        addr.ToMrInfo(mr);
-        rMrVec.emplace_back(NetMrInfo(mr.address, mr.size, req.mrKey));
-    }
-
-    // 2. parse local mr info
-    std::vector<FlowAddr> lFlowAddr = to->GetAddrs();
-    std::vector<NetMrInfo> lMrVec;
-    for (auto &addr : lFlowAddr) {
-        MrInfo mr;
-        addr.ToMrInfo(mr);
-        lMrVec.emplace_back(NetMrInfo(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey()));
-    }
-
-    // 3. one side read
     BResult ret = BIO_OK;
-    if (lMrVec.size() > rMrVec.size()) {
-        ret = ReaderRemoteNotEquals(req, lMrVec, rMrVec, netCtx);
-    } else if (lMrVec.size() == rMrVec.size()) {
-        ret = ReaderRemoteEquals(req, lMrVec, rMrVec, netCtx);
+    if (req.enableTrans) {
+        ret = ReaderRemoteTrans(from, to, req);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Read remote trans failed, ret:" << ret  << "length:" << ".");
+            return ret;
+        }
     } else {
-        LOG_ERROR("Slice addr num not match, lAddrNum:" << lMrVec.size() << ", rAddrNum:" << rMrVec.size() << ".");
-        ret = BIO_INNER_ERR;
+        // 1. parse remote mr info
+        BIO_TRACE_START(MIRROR_TRACE_PUT_READ_DATA);
+        std::vector<FlowAddr> rFlowAddr = from->GetAddrs();
+        std::vector<NetMrInfo> rMrVec;
+        for (auto &addr : rFlowAddr) {
+            MrInfo mr;
+            addr.ToMrInfo(mr);
+            rMrVec.emplace_back(NetMrInfo(mr.address, mr.size, req.mrKey));
+        }
+
+        // 2. parse local mr info
+        std::vector<FlowAddr> lFlowAddr = to->GetAddrs();
+        std::vector<NetMrInfo> lMrVec;
+        for (auto &addr : lFlowAddr) {
+            MrInfo mr;
+            addr.ToMrInfo(mr);
+            lMrVec.emplace_back(NetMrInfo(mr.address, mr.size, BioServer::Instance()->GetLocalMrKey()));
+        }
+
+        // 3. one side read
+        if (lMrVec.size() > rMrVec.size()) {
+            ret = ReaderRemoteNotEquals(req, lMrVec, rMrVec, netCtx);
+        } else if (lMrVec.size() == rMrVec.size()) {
+            ret = ReaderRemoteEquals(req, lMrVec, rMrVec, netCtx);
+        } else {
+            LOG_ERROR("Slice addr num not match, lAddrNum:" << lMrVec.size() << ", rAddrNum:" << rMrVec.size() << ".");
+            ret = BIO_INNER_ERR;
+        }
+        BIO_TRACE_END(MIRROR_TRACE_PUT_READ_DATA, ret);
     }
-    BIO_TRACE_END(MIRROR_TRACE_PUT_READ_DATA, ret);
     return ret;
 }
 
@@ -979,8 +1034,8 @@ BResult MirrorServer::WriterParseMrInfoHbm(const SlicePtr &from, const SlicePtr 
 
     // 2. parse local mr info
     NetMrInfo bioMr;
-
-    BResult ret = BioServer::Instance()->GetNetTransEngine()->MallocMem(totalLen, bioMr);
+    uintptr_t tranceMem;
+    BResult ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << totalLen << ".");
         return ret;
@@ -988,10 +1043,12 @@ BResult MirrorServer::WriterParseMrInfoHbm(const SlicePtr &from, const SlicePtr 
     ret = mSliceOp.Copy(from, reinterpret_cast<char *>(bioMr.address), totalLen);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
-        BioServer::Instance()->MemFree(bioMr.address);
+        BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
         return ret;
     }
     isAlloc = true;
+    bioMr.address = tranceMem;
+    bioMr.size = BioServer::Instance()->GetConfig()->GetDaemonConfig().segment;
     lMrVec.emplace_back(bioMr);
     return BIO_OK;
 }
@@ -1809,15 +1866,22 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
 {
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) { // case 1：slice资源来自于SDK端, 使用req中的MR信息
-        auto realAddr = ParseRealAddress(req);
+        uintptr_t realAddr = 0;
+        uint32_t realSize = 0;
+        if (!req->enableTrans) {
+            realAddr = ParseRealAddress(req);
+            realSize = static_cast<uint32_t>(req->mrSize);
+        } else {
+            realAddr = req->localTransAddr;
+            realSize = static_cast<uint32_t>(req->transDataLen);
+        }
+        
         if (UNLIKELY(realAddr == 0)) {
-            LOG_ERROR("Put data message memory address invalid, pid:" << req->comm.pid <<
-                                                                      ", offset:" << req->mrOffset <<
-                                                                      ", size:" << req->mrSize << ".");
+            LOG_ERROR("Put data message memory address invalid");
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
             return BIO_OK;
         }
-        MrInfo mrInfo = { realAddr, static_cast<uint32_t>(req->mrSize) };
+        MrInfo mrInfo = { realAddr, realSize };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         BIO_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);

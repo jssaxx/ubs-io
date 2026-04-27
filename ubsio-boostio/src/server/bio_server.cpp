@@ -317,7 +317,7 @@ BResult BioServer::BioNetInit()
 
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
-    mTransEngine = MakeRef<TransportEngine>();
+    mTransEngine = MakeRef<MfTransEngine>();
     ChkTrue(mTransEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
     int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();

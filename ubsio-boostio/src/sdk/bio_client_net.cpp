@@ -514,7 +514,7 @@ BResult BioClientNet::RegisterMem(std::vector<void*>& addresses, std::vector<siz
 {
     if (mTransEngine == nullptr) {
         CLIENT_LOG_ERROR("trans engine is null");
-        return BIO_ERROR;
+        return BIO_ERR;
     }
     return mTransEngine->BatchRegisterMem(addresses, sizes);
 }

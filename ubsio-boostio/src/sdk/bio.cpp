@@ -1093,7 +1093,7 @@ CResult BioBatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t c
         }
         bioInstance = iter->second;
     }
-    return bioInstance->BatchGetRemote(keys, count, lengths, locations, valueAddrs, results);
+    return bioInstance->BatchGetRemote(keys, count, locations, memAddr, memSize, row, col, valueAddrs, results);
 }
 
 CResult BioBatchGetFree(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count)

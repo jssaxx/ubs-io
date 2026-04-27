@@ -401,7 +401,7 @@ private:
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
         uint64_t flowIndex, GetSliceResponse *rsp);
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
-        uint64_t flowIndex, NetMrInfo &mr);
+        uint64_t flowIndex, NetMrInfo &mr, TransData &transeData);
     BResult DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
     bool IsExistLocalCopy(CmPtInfo &ptEntry);
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);

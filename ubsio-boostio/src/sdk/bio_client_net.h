@@ -124,6 +124,11 @@ public:
         return mNetEngine;
     }
 
+    inline MfTransEnginePtr GetTransNetEngine() const
+    {
+        return mTransEngine;
+    }
+
     inline uint32_t GetDataPage() const
     {
         return mNetEngine->GetDataPage();
@@ -263,7 +268,7 @@ private:
     bool mEnableCrc = { false };
     bool mEnableCli = { false };
     NetEnginePtr mNetEngine = nullptr;
-    NetTransEnginePtr mTransEngine = nullptr;
+    MfTransEnginePtr mTransEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
     uint32_t mNetSegmentSize = 256;

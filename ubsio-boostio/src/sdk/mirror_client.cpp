@@ -2045,7 +2045,7 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
 }
 
 void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId,
-    uint64_t flowOffset, uint64_t flowIndex, NetMrInfo &mr)
+    uint64_t flowOffset, uint64_t flowIndex, NetMrInfo &mr, TransData &transData)
 {
     req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     req->tenantId = param.attr.mTenantId;
@@ -2061,6 +2061,11 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = mr.size;
     req->mrKey = mr.key;
     req->sliceLen = 0;
+    std::string uniqueId = net::BioClientNet::Instance()->GetTransNetEngine()->GetLocalUniqueId();
+    CopyKey(req->uuid, uniqueId.c_str(), MAX_UUID_SIZE);
+    req->localTransAddr = transData.localTransAddr;
+    req->transDataLen = transData.enableTrans ? transData.transDataLen : 0;
+    req->enableTrans = transData.enableTrans;
     mBioQos->GetKey(req->quotaNid, req->quotaCid);
     if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
         req->ioStrategy = mIoStrategy[ptEntry.ptId]->strategy;
@@ -2168,19 +2173,40 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
 BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
     uintptr_t address = 0;
-    BResult ret = mDataMsgMemPool->AllocOne(address);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
-        return BIO_ALLOC_FAIL;
-    }
+    uintptr_t transMem = 0;
+    TransData transData;
+    if (ptEntry.copys[0].nodeId == mLocalNid.VNodeId() || !mEnableTrance) {
+        BResult ret = mDataMsgMemPool->AllocOne(address);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
+            return BIO_ALLOC_FAIL;
+        }
 
-    ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
-            ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" <<
-            mDataMsgMemBlockSize);
-        mDataMsgMemPool->ReleaseOne(address);
-        return BIO_ALLOC_FAIL;
+        ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
+                ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" << mDataMsgMemBlockSize);
+            mDataMsgMemPool->ReleaseOne(address);
+            return BIO_ALLOC_FAIL;
+        }
+    } else{
+        auto ret = net::BioClientNet::Instance()->GetTransNetEngine()->AllocOneBlock(transMem);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Alloc memory failed, ret:" << ret << ", key:" << param.key << ".");
+            return BIO_ALLOC_FAIL;
+        }
+
+        ret = memcpy_s(reinterpret_cast<char *>(transMem), mDataMsgMemBlockSize, param.value, param.length);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
+                ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" << mDataMsgMemBlockSize);
+            net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(transMem);
+            return BIO_ALLOC_FAIL;
+        }
+
+        transData.localTransAddr = transMem;
+        transData.transDataLen = param.length;
+        transData.enableTrans = req->enableTrans;
     }
 
     uint8_t* tmp = nullptr;
@@ -2189,12 +2215,17 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     BIO_TP_END;
     if (tmp == nullptr) {
         CLIENT_LOG_ERROR("Alloc memory failed.");
-        mDataMsgMemPool->ReleaseOne(address);
+        if (address) {
+            mDataMsgMemPool->ReleaseOne(address);
+        }
+        if (transMem) {
+            net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(transMem);
+        }
         return BIO_ALLOC_FAIL;
     }
     NetMrInfo mr(address, mDataMsgMemBlockSize, mDataMsgMemMr.GetHcomMrs()[0]->GetLKey());
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
-    ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
+    ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr, transData);
     req->memFromServer = false;
     req->mrOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
     return BIO_OK;
@@ -2292,7 +2323,12 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
 
-    mDataMsgMemPool->ReleaseOne(req->mrAddress);
+    if (req->mrAddress) {
+        mDataMsgMemPool->ReleaseOne(req->mrAddress);
+    }
+    if (req->localTransAddr) {
+        net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(req->localTransAddr);
+    }
     if (cbCtx.result == BIO_OK) {
         mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
         mIoStrategy[ptEntry.ptId]->strategy = ioStrategy.load();

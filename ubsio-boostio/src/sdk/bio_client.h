@@ -83,8 +83,8 @@ public:
                 return BIO_ERR;
             }
             for (auto &cpy : ptEntry.copys) {
-                if (cpy.nodeId == mNodeId.VNodeId()) {
-                    result[idx] = 0;
+                if (cpy.nodeId == mMirror->GetLocalNodeInfo().VNodeId()) {
+                    position[idx] = 0;
                     break;
                 }
             }
