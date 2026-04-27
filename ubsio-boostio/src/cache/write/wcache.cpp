@@ -835,7 +835,8 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 
 void WCache::AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum)
 {
-    if (refNum == 0) {
+    auto wcacheMemEvictLevel = BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel;
+    if (refNum == 0 && wcacheMemEvictLevel != NO_100) {
         mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(sliceRef);
         return;
     }
