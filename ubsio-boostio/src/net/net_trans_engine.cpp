@@ -118,6 +118,10 @@ void DlMfApi::CleanupLibrary()
 
 BResult MfTransEngine::Initialize(const NetOptions &opt)
 {
+    NET_LOG_INFO("Start iniitalize MfTransEngine, transDeviceId: " << opt.transDeviceId << ", deviceTransType: "
+        << opt.deviceTransType << ", ipMask: " << opt.ipMask << ", transStoreUrl: " << opt.transStoreUrl
+        << ", transMemSize: " << opt.transMemSize << ", netSegmentSize: " << opt.netSegmentSize << ", isSender: "
+        << opt.isSender);
     if (opt.transDeviceId < 0) {
         NET_LOG_WARN("transDeviceId is: " << opt.transDeviceId << ", will not use device transfer");
         return BIO_OK;
