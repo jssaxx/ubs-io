@@ -452,11 +452,17 @@ void WCache::RetryEvictTask(WCacheTierType type)
 
 uint64_t WCache::GetCapacity(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[type]->GetDataCapacity();
 }
 
 uint64_t WCache::GetVirCapacity(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[type]->GetDataVirCapacity();
 }
 
@@ -835,7 +841,8 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 
 void WCache::AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum)
 {
-    if (refNum == 0) {
+    auto wcacheMemEvictLevel = BioConfig::Instance()->GetDaemonConfig().wcacheMemEvictLevel;
+    if (refNum == 0 && wcacheMemEvictLevel != NO_100) {
         mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(sliceRef);
         return;
     }
