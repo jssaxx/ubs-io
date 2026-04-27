@@ -2061,7 +2061,9 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = mr.size;
     req->mrKey = mr.key;
     req->sliceLen = 0;
-    std::string uniqueId = net::BioClientNet::Instance()->GetTransNetEngine()->GetLocalUniqueId();
+    if (mEnableTrance) {
+        std::string uniqueId = net::BioClientNet::Instance()->GetTransNetEngine()->GetLocalUniqueId();
+    }
     CopyKey(req->uuid, uniqueId.c_str(), MAX_UUID_SIZE);
     req->localTransAddr = transData.localTransAddr;
     req->transDataLen = transData.enableTrans ? transData.transDataLen : 0;

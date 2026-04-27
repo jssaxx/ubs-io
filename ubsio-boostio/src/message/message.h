@@ -285,7 +285,7 @@ typedef struct {
 } PutRequest;
 
 typedef struct {
-    bool enableTrans;
+    bool enableTrans = false;
     uintptr_t localTransAddr;
     uint64_t transDataLen;
 } TransData;
