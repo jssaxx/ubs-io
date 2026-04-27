@@ -46,13 +46,13 @@ UBSIO_API int32_t UbsioKvCacheRegister(uint64_t *addrs, uint64_t *sizes, uint32_
 {
     if (UNLIKELY(addrs == nullptr || sizes == nullptr || count == 0)) {
         LOG_ERROR("Invalid parma, addrs:" << addrs << ", sizes:" << sizes << ", count:" << count);
-        return DFC_INVALID_PARAM;
+        return UBSIO_KVC_INVALID_PARAM;
     }
 
     int32_t devId = KvcInstance::Instance().GetDeviceId();
     if (UNLIKELY(devId < 0)) {
         LOG_ERROR("Invalid device id: " << devId);
-        return DFC_INVALID_PARAM;
+        return UBSIO_KVC_INVALID_PARAM;
     }
 
     std::vector<uint64_t> addrsVector(addrs, addrs + count);

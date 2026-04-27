@@ -63,7 +63,7 @@ KvcError KvcInstance::Initialize(int32_t device)
     auto &lengthsVector = params.lengths;
     for (uint32_t i = 0; i < count; ++i) {
         results[origIndex[i]] = batchResult[i];
-        if (batchResult[i] != DFC_OK) {
+        if (batchResult[i] != UBSIO_KVC_OK) {
             continue;
         }
         void* dramAddr = dramAddrsVector[i];
@@ -76,7 +76,7 @@ KvcError KvcInstance::Initialize(int32_t device)
                 ACL_MEMCPY_HOST_TO_DEVICE, stream);
             if (UNLIKELY(aclRet != 0)) {
                 LOG_ERROR("Aclrt memcpy async failed, ret: " << aclRet);
-                results[origIndex[i]] = DFC_ERR;
+                results[origIndex[i]] = UBSIO_KVC_ERR;
                 break;
             }
             offset += lengthsVector[i][j];
@@ -90,7 +90,7 @@ KvcError KvcInstance::Initialize(int32_t device)
     // 释放dram地址
     m_readExecutor->Execute([dramAddr = std::move(dramAddrsVector), count]()->void {
         auto ret = KvcBatchFreeGetAddress(const_cast<void **>(dramAddr.data()), count);
-        if (UNLIKELY(ret != DFC_OK)) {
+        if (UNLIKELY(ret != UBSIO_KVC_OK)) {
             LOG_ERROR("Kvc batch free dram failed, ret:" << ret);
         }
     });
@@ -100,7 +100,7 @@ KvcError KvcInstance::Initialize(int32_t device)
 KvcError KvcInstance::ReadLocal(ReadParams &params, int *results)
 {
     if (params.keys.empty()) {
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     }
     // 1. 优先选择NDS.
     auto &keysVector = params.keys;
@@ -108,20 +108,20 @@ KvcError KvcInstance::ReadLocal(ReadParams &params, int *results)
     auto &lengthsVector = params.lengths;
     auto &oriIndex = params.oriIndex;
     uint32_t keysCount = params.keys.size();
-    auto ret = DfcNdsManager::Instance().BatchDirectRead(keysVector, npuAddrsVector, lengthsVector);
-    if (ret == DFC_OK) {
+    auto ret = NdsManager::Instance().BatchDirectRead(keysVector, npuAddrsVector, lengthsVector);
+    if (ret == UBSIO_KVC_OK) {
         for (uint32_t i = 0; i < keysCount; ++i) {
-            results[oriIndex[i]] = DFC_OK;
+            results[oriIndex[i]] = UBSIO_KVC_OK;
         }
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     }
-    if (ret != DFC_NO_NDS) {
+    if (ret != UBSIO_KVC_NO_NDS) {
         LOG_WARN("nds read failed, ret: " << ret << ", try to read from disk");
     }
 
     // 2. NDS失败则从走原生读.
     // 2.1 读到dram.
-    std::vector<int32_t> batchResult(keysCount, DFC_ERR);
+    std::vector<int32_t> batchResult(keysCount, UBSIO_KVC_ERR);
     std::vector<void *> dramAddrsVector;
     std::vector<size_t> dramAddrsLenVector;
     dramAddrsVector.resize(keysCount);
@@ -130,9 +130,9 @@ KvcError KvcInstance::ReadLocal(ReadParams &params, int *results)
         dramAddrsLenVector.emplace_back(std::accumulate(lengthsVector[i].begin(), lengthsVector[i].end(), 0LL));
     }
     ret = static_cast<KvcError>(KvBatchGetLocalData(keysVector, dramAddrsVector.data(), dramAddrsLenVector, batchResult, 0));
-    if (UNLIKELY(ret != DFC_OK)) {
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("Kv cache batch get data failed, ret:" << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
 
     // 2.2 将数据从dram拷贝到hbm中.
@@ -143,7 +143,7 @@ KvcError KvcInstance::ReadLocal(ReadParams &params, int *results)
 KvcError KvcInstance::ReadRemote(ReadParams &params, int *results)
 {
     if (params.keys.empty()) {
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     }
     auto &keysVector = params.keys;
     auto &npuAddrsVector = params.npuAddrs;
@@ -151,7 +151,7 @@ KvcError KvcInstance::ReadRemote(ReadParams &params, int *results)
     auto &oriIndex = params.oriIndex;
     uint32_t keysCount = keysVector.size();
     
-    std::vector<int32_t> batchResult(keysCount, DFC_ERR);
+    std::vector<int32_t> batchResult(keysCount, UBSIO_KVC_ERR);
     std::vector<void *> dramAddrsVector;
     dramAddrsVector.resize(keysCount);
     std::vector<uintptr_t *> npuAddrs;
@@ -162,11 +162,11 @@ KvcError KvcInstance::ReadRemote(ReadParams &params, int *results)
     auto ret = static_cast<KvcError>(KvBatchGetRemoteData(keysVector, npuAddrs.data(), lengthsVector,
                                      reinterpret_cast<uintptr_t *>(dramAddrsVector.data()), batchResult, 0));
     // rh2d
-    if (ret == DFC_OK) {
+    if (ret == UBSIO_KVC_OK) {
         for (uint32_t i = 0; i < keysCount; ++i) {
             results[oriIndex[i]] = batchResult[i];
         }
-        return DFC_OK;
+        return UBSIO_KVC_OK;
     } else if (ret != static_cast<KvcError>(CResult::RET_CACHE_IN_DRAM)) {
         LOG_ERROR("Kv cache batch get data failed, ret:" << ret);
         return ret;
@@ -180,11 +180,11 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
                            std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                            const std::vector<std::vector<size_t>> &lengthsVector, int *results)
 {
-    std::fill(results, results + keyVector.size(), DFC_ERR);
+    std::fill(results, results + keyVector.size(), UBSIO_KVC_ERR);
     uint32_t keysCount = keyVector.size();
     std::vector<uint8_t> positions(keysCount);
     auto ret = static_cast<KvcError>(KvcGetPositions(keyVector, positions));
-    if (UNLIKELY(ret != DFC_OK)) {
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("Kv cache get positions failed, ret:" << ret);
         return ret;
     }
@@ -207,12 +207,12 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     }
     sem_t sem;
     sem_init(&sem, 0, 0);
-    KvcError remoteRet = DFC_OK;
+    KvcError remoteRet = UBSIO_KVC_OK;
     // read remote //增加远端判断
     if (!remoteParams.keys.empty()) {
         m_readExecutor->Execute([this, &remoteParams, results, &sem, &remoteRet]()->void {
             remoteRet = ReadRemote(remoteParams, results);
-            if (UNLIKELY(remoteRet != DFC_OK)) {
+            if (UNLIKELY(remoteRet != UBSIO_KVC_OK)) {
                 LOG_ERROR("Kvc batch get reomte data failed, ret:" << remoteRet);
             }
             sem_post(&sem);
@@ -223,12 +223,12 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
 
     // read local
     ret = ReadLocal(localParams, results);
-    if (UNLIKELY(ret != DFC_OK)) {
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("Kvc batch get local data failed, ret:" << ret);
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    return (ret == DFC_OK && remoteRet == DFC_OK) ? DFC_OK : DFC_ERR;
+    return (ret == UBSIO_KVC_OK && remoteRet == UBSIO_KVC_OK) ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 
 } // ubsio

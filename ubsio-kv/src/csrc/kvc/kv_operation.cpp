@@ -43,14 +43,14 @@ int32_t KvOperation::KvcRegisterKvCache(std::vector<uint64_t> &kvCacheAddrs,
     std::lock_guard<std::mutex> guard(mMutex);
     if (!mInited) {
         LOG_ERROR("Kv operation has not been initialized");
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
     int32_t ret = DlBioSdkApi::RegisterMem(kvCacheAddrs.data(), kvCacheSizes.data(), kvCacheAddrs.size());
-    if (ret != DFC_OK) {
+    if (ret != UBSIO_KVC_OK) {
         LOG_ERROR("Register kv cache failed with returned status " << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 void KvOperation::UnInitialize(void)
@@ -276,8 +276,8 @@ int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std:
 }
 int32_t KvOperation::KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_t> &positions)
 {
-    DFC_ASSERT_RETURN(keys.size() != 0, DFC_INVALID_PARAM);
-    DFC_ASSERT_RETURN(keys.size() == positions.size(), DFC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(keys.size() != 0, UBSIO_KVC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(keys.size() == positions.size(), UBSIO_KVC_INVALID_PARAM);
     uint32_t keysCount = keys.size();
     std::vector<const char *> keysChar(keysCount);
     std::vector<ObjLocation> locationVec(keysCount);
@@ -286,24 +286,24 @@ int32_t KvOperation::KvcGetPositions(const std::vector<std::string> &keys, std::
         CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(keys[i])), &location);
         if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
             LOG_ERROR("Calc location failed, status:" << status);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         locationVec[i] = location;
         keysChar[i] = keys[i].c_str();
     }
     int ret = DlBioSdkApi::BatchGetPositions(tenantId, keysChar.data(), keysCount, locationVec.data(), positions.data());
-    if (ret != DFC_OK) {
+    if (ret != UBSIO_KVC_OK) {
         LOG_ERROR("GetPositions failed with returned status " << ret);
-        return DFC_ERR;
+        return UBSIO_KVC_ERR;
     }
-    return DFC_OK;
+    return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::KvBatchGetLocalData(const std::vector<std::string> &keys, void **bufs, std::vector<size_t> &lengths,
                                          std::vector<int32_t> &results)
 {
-    DFC_ASSERT_RETURN(keys.size() != 0, DFC_INVALID_PARAM);
-    DFC_ASSERT_RETURN(keys.size() == lengths.size() && keys.size() == results.size(), DFC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(keys.size() != 0, UBSIO_KVC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(keys.size() == lengths.size() && keys.size() == results.size(), UBSIO_KVC_INVALID_PARAM);
     
     uint32_t keysCount = keys.size();
     std::vector<ObjLocation> locationVec(keysCount);
@@ -313,7 +313,7 @@ int32_t KvOperation::KvBatchGetLocalData(const std::vector<std::string> &keys, v
         CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(keys[i])), &location);
         if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
             LOG_ERROR("Calc location failed, status:" << status);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         locationVec[i] = location;
         keysChar[i] = keys[i].c_str();
@@ -327,10 +327,10 @@ int32_t KvOperation::KvBatchGetRemoteData(const std::vector<std::string> &keys, 
                                           std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
                                           std::vector<int32_t> &results)
 {
-    DFC_ASSERT_RETURN(keys.size() != 0, DFC_INVALID_PARAM);
-    DFC_ASSERT_RETURN(keys.size() == lengths.size() && keys.size() == results.size(), DFC_INVALID_PARAM);
-    DFC_ASSERT_RETURN(lengths.size() != 0 && lengths[0].size() != 0, DFC_INVALID_PARAM);
-    DFC_ASSERT_RETURN(npuAddrs != nullptr, DFC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(keys.size() != 0, UBSIO_KVC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(keys.size() == lengths.size() && keys.size() == results.size(), UBSIO_KVC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(lengths.size() != 0 && lengths[0].size() != 0, UBSIO_KVC_INVALID_PARAM);
+    UBSIO_KVC_ASSERT_RETURN(npuAddrs != nullptr, UBSIO_KVC_INVALID_PARAM);
 
     uint32_t keysCount = keys.size();
     std::vector<ObjLocation> locationVec(keysCount);
@@ -341,7 +341,7 @@ int32_t KvOperation::KvBatchGetRemoteData(const std::vector<std::string> &keys, 
         CResult status = DlBioSdkApi::CalcLocation(tenantId, static_cast<uint64_t>(std::hash<std::string>{}(keys[i])), &location);
         if (UNLIKELY(status != CResult::RET_CACHE_OK)) {
             LOG_ERROR("Calc location failed, status:" << status);
-            return DFC_ERR;
+            return UBSIO_KVC_ERR;
         }
         locationVec[i] = location;
         keysChar[i] = keys[i].c_str();
