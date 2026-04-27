@@ -359,7 +359,7 @@ void WCache::StartEvictTask(WCacheTierType type)
     }
 
     bool expectval = false;
-    if (!mEvictRef[type].compare_exchange_weak(expectval, true)) {
+    if (!mEvictRef[type].compare_exchange_strong(expectval, true)) {
         return;
     }
 
@@ -946,6 +946,7 @@ BResult WCache::EvictAllMemSliceToDisk()
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_DEBUG("Evict all mem slice memory, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
                 ", IndexInFlow:" << sliceRef->GetSlice()->GetIndexInFlow());
+            mEvictRef[WCACHE_MEMORY].store(false);
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return ret;
         }
@@ -967,6 +968,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     isSatisfied = EvictDiskSatisfiedCond();
     BIO_TP_END;
     if (!isSatisfied && !mIsForced) {
+        mEvictRef[WCACHE_DISK].store(false);
         mRetryCallback(mFlowId, WCACHE_DISK);
         return BIO_OK;
     }
@@ -978,6 +980,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         BIO_TP_END;
         if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
             LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
+            mEvictRef[WCACHE_DISK].store(false);
             mRetryCallback(mFlowId, WCACHE_DISK);
             return ret;
         }
@@ -995,12 +998,14 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         uint64_t sliceEvictOffset = slice->GetOffsetInFlow() + slice->GetLength();
         if (globEvictOffset < sliceEvictOffset) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+            mEvictRef[WCACHE_DISK].store(false);
             mRetryCallback(mFlowId, WCACHE_DISK);
             return BIO_OK;
         }
         auto ret = EvictFromDiskToUnderFs(sliceRef, isMaster);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+            mEvictRef[WCACHE_DISK].store(false);
             mRetryCallback(mFlowId, WCACHE_DISK);
             return ret;
         }
