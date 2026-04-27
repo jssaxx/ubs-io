@@ -51,8 +51,17 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
 
     if (to->GetFlowType() == FLOW_MEMORY) {
         auto &toAddrs = to->GetAddrs();
+        if (toAddrs.size() == 1) {
+            const auto &toAddr = toAddrs[0];
+            BIO_TP_START(SLICE_OPERATOR_FLOW_MEMORY, &ret, BIO_ERR);
+            ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset), toAddr.chunkLen,
+                reinterpret_cast<void *>(const_cast<char *>(from)), toAddr.chunkLen);
+            BIO_TP_END;
+            ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << toAddr.chunkLen);
+            return BIO_OK;
+        }
         uint64_t offset = 0;
-        for (auto toAddr : toAddrs) {
+        for (const auto &toAddr : toAddrs) {
             BIO_TP_START(SLICE_OPERATOR_FLOW_MEMORY, &ret, BIO_ERR);
             ret = memcpy_s(reinterpret_cast<void *>(toAddr.chunkId + toAddr.chunkOffset), toAddr.chunkLen,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);
@@ -64,7 +73,7 @@ BResult CacheSliceOperator::Copy(const char *from, const SlicePtr &to)
     } else {
         auto &toAddrs = to->GetAddrs();
         uint64_t offset = 0;
-        for (auto toAddr : toAddrs) {
+        for (const auto &toAddr : toAddrs) {
             BIO_TRACE_START(BDM_TRACE_WRITE_SYNC);
             ret = BdmWrite(toAddr.chunkId, toAddr.chunkOffset,
                 reinterpret_cast<void *>(const_cast<char *>(from + offset)), toAddr.chunkLen);

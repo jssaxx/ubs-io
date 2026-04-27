@@ -19,12 +19,18 @@
 namespace ock {
 namespace bio {
 constexpr uint32_t HASH_BUCKET_NUM = 1024;
+constexpr uint32_t HASH_BUCKET_RESERVE_NUM = 256;
 
 struct WCacheIndexTable {
     ReadWriteLock sliceIndexLock[HASH_BUCKET_NUM];
     std::unordered_map<std::string, WCacheSliceRefPtr> sliceIndex[HASH_BUCKET_NUM];
 
-    WCacheIndexTable() = default;
+    WCacheIndexTable()
+    {
+        for (auto &index : sliceIndex) {
+            index.reserve(HASH_BUCKET_RESERVE_NUM);
+        }
+    }
 };
 
 class WCacheIndex {

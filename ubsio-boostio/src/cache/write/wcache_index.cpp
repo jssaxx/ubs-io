@@ -43,11 +43,10 @@ BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefP
         WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
         BIO_TRACE_END(WCACHE_TRACE_INDEX_LOCK, BIO_OK);
         BIO_TRACE_START(WCACHE_TRACE_INDEX_MAP);
-        auto sliceMeta = table->sliceIndex[bucket].find(key);
-        if (UNLIKELY(sliceMeta != table->sliceIndex[bucket].end())) {
+        auto result = table->sliceIndex[bucket].emplace(key, sliceRef);
+        if (UNLIKELY(!result.second)) {
             LOG_WARN("Repeat put, key:" << key);
         }
-        table->sliceIndex[bucket].emplace(key, sliceRef);
         BIO_TRACE_END(WCACHE_TRACE_INDEX_MAP, BIO_OK);
     }
     return BIO_OK;
