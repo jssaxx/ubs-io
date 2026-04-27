@@ -111,9 +111,9 @@ void MirrorServer::RegisterOpcode()
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_BATCH_GET,
         std::bind(&MirrorServer::HandleBatchGet, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_BATCH_GET_LOCAL_HBM,
-        std::bind(&MirrorServer::HandleBatchGetHbm, this, std::placeholders::_1));
+        std::bind(&MirrorServer::HandleBatchGetLocalHbm, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_BATCH_GET_REMTOE_HBM,
-        std::bind(&MirrorServer::HandleBatchGetHbm, this, std::placeholders::_1));
+        std::bind(&MirrorServer::HandleBatchGetRemoteHbm, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_DELETE,
         std::bind(&MirrorServer::HandleDelete, this, std::placeholders::_1));
     netEngine->RegisterNewRequestHandler(BIO_OP_SDK_STAT,
@@ -1025,21 +1025,12 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                                         sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << "."
                                         << " ptVersion:" << BioServer::Instance()->GetPtEntry(keyInfo.ptId).version <<
                                         ", ptId:" << keyInfo.ptId);
-
     auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
 
         if (req->enableTrance) {
-            // 1. parse remote mr info
-//            size_t totalLen = 0;
-//            for (auto addr : to->GetAddrs()) {
-//                MrInfo mr;
-//                addr.ToMrInfo(mr);
-//                totalLen += mr.size;
-//            }
-
             NetMrInfo bioMr;
-            void* tranceMem;
-            BResult ret = BioServer::Instance()->GetNetTransEngine()->MallocMem(from->GetLength(), tranceMem);
+            uintptr_t tranceMem;
+            BResult ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
                 return ret;
@@ -1047,7 +1038,7 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             ret = mSliceOp.Copy(from, reinterpret_cast<char *>(tranceMem), from->GetLength());
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Slice copy failed, ret:" << ret << ".");
-                BioServer::Instance()->GetNetTransEngine()->FreeMem(tranceMem);
+                BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
                 return ret;
             }
             TransParam transReq;
@@ -1068,11 +1059,11 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             transReq.remoteAddrs = remoteAddrs;
             transReq.dataSizes = dataSizes;
             transReq.localAddrs = localAddrs;
-            ret = BioServer::Instance()->GetNetTransEngine()->Write(transReq);
+            ret = BioServer::Instance()->GetTransEngine()->Write(transReq);
             if (ret != BIO_OK) {
                 LOG_ERROR("Trans net write fail, ret:" << ret << ".");
             }
-            BioServer::Instance()->GetNetTransEngine()->FreeMem(tranceMem);
+            BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
             return ret;
         } else {
             bool isAlloc = false;

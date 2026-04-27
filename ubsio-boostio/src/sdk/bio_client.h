@@ -281,7 +281,7 @@ public:
     BResult BioClientAgentInit(WorkerMode mode);
     void BioClientAgentExit();
     BResult BioClientNetPreInit(WorkerMode mode, NetOptions &netConf);
-    BResult BioClientNetPostInit(const NetOptions netConf);
+    BResult BioClientNetPostInit(NetOptions &netConf);
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
     void BioClientMirrorExit();
@@ -292,7 +292,7 @@ public:
     void BioClientUpdateHandle();
     void BioClientUpdateView();
     BResult AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam);
-    BResult RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
+    BResult RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count);
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:

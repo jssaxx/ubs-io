@@ -425,6 +425,7 @@ struct BatchGetPlanHbm {
     uint32_t count;
     uint32_t index;
     uint32_t reqLen;
+    char *enableMem;
     BatchGetRemoteHbmRequest *req;
     BatchGetPlanHbm() : count(0), index(0), reqLen(0), req(nullptr) {}
     BatchGetPlanHbm(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam, BatchGetRemoteHbmRequest *reqParam) :

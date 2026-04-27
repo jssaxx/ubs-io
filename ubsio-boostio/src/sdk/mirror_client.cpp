@@ -1318,6 +1318,7 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         if (mEnableTrance) {
             it->second.req->enableTrance = true;
             // todo 拷贝uuid
+
             reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * (sizeof(GetKeyRemoteHbmInfo) + param.col * (sizeof(uintptr_t) + sizeof(size_t)));
         } else {
             reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * sizeof(GetKeyRemoteHbmInfo);
@@ -1336,6 +1337,11 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
             }
             return BIO_ALLOC_FAIL;
         }
+        if (mEnableTrance) {
+            it->second.enableMem = reinterpret_cast<char *>(it->second.req) +
+                                                               sizeof(BatchGetRemoteHbmRequest) +
+                                                               it->second.count * sizeof(GetKeyRemoteHbmInfo);
+        }
         it->second.reqLen = reqLen;
         it->second.req->count = it->second.count;
         it->second.req->pid = getpid();
@@ -1351,6 +1357,8 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         BResult ret = BIO_OK;
         auto& plan = planSend[nodes[i]];
         if (mEnableTrance) {
+            plan.req->keysInfo[plan.index].hbmMemAddr = reinterpret_cast<uintptr_t*>(plan.enableMem + plan.index * (param.col * (sizeof(uintptr_t) + sizeof(size_t))));
+            plan.req->keysInfo[plan.index].memSize = reinterpret_cast<size_t*>(reinterpret_cast<char*>(plan.req->keysInfo[plan.index].hbmMemAddr) + param.col * sizeof(uintptr_t));
             plan.req->keysInfo[plan.index].memCount = param.col;
             for (uint32_t j = 0; j < param.col; j++) {
                 plan.req->keysInfo[plan.index].hbmMemAddr[j] = param.memAddr[i][j];
