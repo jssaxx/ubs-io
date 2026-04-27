@@ -351,20 +351,26 @@ void WCache::Destroy()
 
 void WCache::StartEvictTask(WCacheTierType type)
 {
+    BIO_TRACE_START(WCACHE_TRACE_START_EVICT_TASK);
     bool isNormal = false;
+    BIO_TRACE_START(WCACHE_TRACE_START_EVICT_CHECK_DISK);
     mGetLocDiskStatus(mPtId, mDiskId, isNormal);
+    BIO_TRACE_END(WCACHE_TRACE_START_EVICT_CHECK_DISK, BIO_OK);
     if (!isNormal) {
         mEvictRef[type].store(false); // break task
+        BIO_TRACE_END(WCACHE_TRACE_START_EVICT_TASK, BIO_ERR);
         return;
     }
 
     bool expectval = false;
-    if (!mEvictRef[type].compare_exchange_weak(expectval, true)) {
+    if (!mEvictRef[type].compare_exchange_strong(expectval, true)) {
+        BIO_TRACE_END(WCACHE_TRACE_START_EVICT_TASK, BIO_OK);
         return;
     }
 
     bool isSucceed;
     IncreaseRef();
+    BIO_TRACE_START(WCACHE_TRACE_START_EVICT_SUBMIT);
     if (type == WCACHE_MEMORY) {
         isSucceed = mEvictService[type]->Execute([this]() {
             EvictAllMemSliceToDisk();
@@ -376,11 +382,13 @@ void WCache::StartEvictTask(WCacheTierType type)
             DecreaseRef();
         });
     }
+    BIO_TRACE_END(WCACHE_TRACE_START_EVICT_SUBMIT, isSucceed ? BIO_OK : BIO_ERR);
 
     if (!isSucceed) {
         mEvictRef[type].store(false);
         DecreaseRef();
     }
+    BIO_TRACE_END(WCACHE_TRACE_START_EVICT_TASK, isSucceed ? BIO_OK : BIO_ERR);
     return;
 }
 
@@ -778,8 +786,12 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
 BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
 {
     if (!isFront && !sliceRef->OpLock()) {
+        BIO_TRACE_START(WCACHE_TRACE_EVICT_MEM_OPLOCK);
+        BIO_TRACE_END(WCACHE_TRACE_EVICT_MEM_OPLOCK, BIO_INNER_RETRY);
         return BIO_INNER_RETRY;
     }
+    BIO_TRACE_START(WCACHE_TRACE_EVICT_MEM_OPLOCK);
+    BIO_TRACE_END(WCACHE_TRACE_EVICT_MEM_OPLOCK, BIO_OK);
     BResult ret = EvictFromMemToDiskImpl(sliceRef, isFront);
     sliceRef->OpUnLock();
     return ret;
@@ -788,8 +800,12 @@ BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
 BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
 {
     if (!isFront && !sliceRef->OpLock()) {
+        BIO_TRACE_START(WCACHE_TRACE_EVICT_DISK_OPLOCK);
+        BIO_TRACE_END(WCACHE_TRACE_EVICT_DISK_OPLOCK, BIO_INNER_RETRY);
         return BIO_INNER_RETRY;
     }
+    BIO_TRACE_START(WCACHE_TRACE_EVICT_DISK_OPLOCK);
+    BIO_TRACE_END(WCACHE_TRACE_EVICT_DISK_OPLOCK, BIO_OK);
     BResult ret = EvictFromDiskToUnderFsImpl(sliceRef, isMaster, isFront);
     sliceRef->OpUnLock();
     return ret;
@@ -836,7 +852,9 @@ BResult WCache::EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void 
 void WCache::AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum)
 {
     if (refNum == 0) {
+        BIO_TRACE_START(WCACHE_TRACE_ADD_EVICT_QUEUE);
         mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(sliceRef);
+        BIO_TRACE_END(WCACHE_TRACE_ADD_EVICT_QUEUE, BIO_OK);
         return;
     }
     mCacheTiers[WCACHE_MEMORY]->AddEvictNegotiateMap(sliceRef);
@@ -934,9 +952,13 @@ bool WCache::EvictDiskSatisfiedCond()
 
 BResult WCache::EvictAllMemSliceToDisk()
 {
+    BIO_TRACE_START(WCACHE_TRACE_EVICT_MEM_COND);
     bool isSatisfied = EvictMemSatisfiedCond();
+    BIO_TRACE_END(WCACHE_TRACE_EVICT_MEM_COND, isSatisfied ? BIO_OK : BIO_NEED_WAIT);
     while (isSatisfied || mIsForced) {
+        BIO_TRACE_START(WCACHE_TRACE_EVICT_MEM_GET_QUEUE);
         WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
+        BIO_TRACE_END(WCACHE_TRACE_EVICT_MEM_GET_QUEUE, sliceRef == nullptr ? BIO_NEED_WAIT : BIO_OK);
         if (sliceRef == nullptr) {
             break;
         }
@@ -946,10 +968,13 @@ BResult WCache::EvictAllMemSliceToDisk()
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_DEBUG("Evict all mem slice memory, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
                 ", IndexInFlow:" << sliceRef->GetSlice()->GetIndexInFlow());
+            mEvictRef[WCACHE_MEMORY].store(false);
             mRetryCallback(mFlowId, WCACHE_MEMORY);
             return ret;
         }
+        BIO_TRACE_START(WCACHE_TRACE_EVICT_MEM_COND);
         isSatisfied = EvictMemSatisfiedCond();
+        BIO_TRACE_END(WCACHE_TRACE_EVICT_MEM_COND, isSatisfied ? BIO_OK : BIO_NEED_WAIT);
     }
 
     mEvictRef[WCACHE_MEMORY].store(false);
@@ -964,9 +989,12 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 
     bool isSatisfied = false;
     BIO_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
+    BIO_TRACE_START(WCACHE_TRACE_EVICT_DISK_COND);
     isSatisfied = EvictDiskSatisfiedCond();
+    BIO_TRACE_END(WCACHE_TRACE_EVICT_DISK_COND, isSatisfied ? BIO_OK : BIO_NEED_WAIT);
     BIO_TP_END;
     if (!isSatisfied && !mIsForced) {
+        mEvictRef[WCACHE_DISK].store(false);
         mRetryCallback(mFlowId, WCACHE_DISK);
         return BIO_OK;
     }
@@ -978,13 +1006,16 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         BIO_TP_END;
         if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
             LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
+            mEvictRef[WCACHE_DISK].store(false);
             mRetryCallback(mFlowId, WCACHE_DISK);
             return ret;
         }
     }
 
     while (isSatisfied || mIsForced) {
+        BIO_TRACE_START(WCACHE_TRACE_EVICT_DISK_GET_QUEUE);
         WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
+        BIO_TRACE_END(WCACHE_TRACE_EVICT_DISK_GET_QUEUE, sliceRef == nullptr ? BIO_NEED_WAIT : BIO_OK);
         if (sliceRef == nullptr) {
             break;
         }
@@ -995,16 +1026,20 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         uint64_t sliceEvictOffset = slice->GetOffsetInFlow() + slice->GetLength();
         if (globEvictOffset < sliceEvictOffset) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+            mEvictRef[WCACHE_DISK].store(false);
             mRetryCallback(mFlowId, WCACHE_DISK);
             return BIO_OK;
         }
         auto ret = EvictFromDiskToUnderFs(sliceRef, isMaster);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+            mEvictRef[WCACHE_DISK].store(false);
             mRetryCallback(mFlowId, WCACHE_DISK);
             return ret;
         }
+        BIO_TRACE_START(WCACHE_TRACE_EVICT_DISK_COND);
         isSatisfied = EvictDiskSatisfiedCond();
+        BIO_TRACE_END(WCACHE_TRACE_EVICT_DISK_COND, isSatisfied ? BIO_OK : BIO_NEED_WAIT);
     }
 
     mEvictRef[WCACHE_DISK].store(false);

@@ -65,9 +65,11 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     }
     auto metaFlowOffset = slice->GetIndexInFlow() * sizeof(WFlowSliceMeta);
     WCacheSlicePtr metaSlice;
+    BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_META_GETSLICE);
     BIO_TP_START(WCACHE_GET_MEM_SLICE_FAIL, &res, BIO_INNER_RETRY);
     res = GetSlice(mMetaFlow, metaFlowOffset, slice->GetIndexInFlow(), sizeof(WFlowSliceMeta), metaSlice);
     BIO_TP_END;
+    BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_META_GETSLICE, res);
     ChkTrue(res == BIO_OK, res, "Failed to get meta slice, flowId" <<
         mMetaFlow->GetFlowId() << " ret:" << res);
     WFlowSliceMeta sliceMeta{};
@@ -79,16 +81,22 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
     sliceMeta.length = slice->GetLength();
     sliceMeta.magic = slice->GetFlowId();
     sliceMeta.hasEvict = 0;
+    BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_META_COPY);
     ret = mSliceOperator.Copy(reinterpret_cast<const char *>(&sliceMeta), metaSlice.Get());
+    BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_META_COPY, ret);
     ChkTrueNot(ret == BIO_OK, ret);
 
     // fill data flow.
     WCacheSlicePtr dataSlice;
+    BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_DATA_GETSLICE);
     res = GetSlice(mDataFlow, slice->GetOffsetInFlow(), slice->GetIndexInFlow(),
         slice->GetLength(), dataSlice);
+    BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_DATA_GETSLICE, res);
     ChkTrue(res == BIO_OK, res, "Failed to get data slice, flowId:" <<
         mDataFlow->GetFlowId() << " ret:" << res);
+    BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_DATA_COPY);
     ret = sliceReader(slice.Get(), dataSlice.Get());
+    BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_DATA_COPY, ret);
     ChkTrueNot(ret == BIO_OK, ret);
 
     if (BioConfig::Instance()->GetDaemonConfig().enableCrc) {
@@ -99,7 +107,9 @@ BResult WCacheTier::Write(const Key &key, const WCacheSlicePtr &slice, const Sli
         }
     }
 
+    BIO_TRACE_START(WCACHE_TRACE_TIER_WRITE_REF_ALLOC);
     destSliceRef = MakeRef<WCacheSliceRef>(dataSlice);
+    BIO_TRACE_END(WCACHE_TRACE_TIER_WRITE_REF_ALLOC, destSliceRef == nullptr ? BIO_ALLOC_FAIL : BIO_OK);
     ChkTrueNot(destSliceRef != nullptr, BIO_INNER_RETRY);
     return BIO_OK;
 }

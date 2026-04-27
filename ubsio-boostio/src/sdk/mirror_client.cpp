@@ -496,13 +496,16 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
 
     uint8_t *reqTmp = nullptr;
     BIO_TP_START(SDK_MIRROR_PREPARE_PUT_WITH_SPACE_FAIL, 0);
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_ALLOC_REQ);
     reqTmp = new(std::nothrow) uint8_t[sizeof(PutRequest) + spaceInfo.descriptorSize];
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_ALLOC_REQ, reqTmp == nullptr ? BIO_ALLOC_FAIL : BIO_OK);
     BIO_TP_END;
     if (UNLIKELY(reqTmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put memory failed, len:" << sizeof(PutRequest) + spaceInfo.descriptorSize << ".");
         return BIO_INNER_ERR;
     }
 
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_CONSTRUCT_REQ);
     req = static_cast<PutRequest *>(static_cast<void *>(reqTmp));
     req->comm = { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() };
     req->tenantId = param.attr.mTenantId;
@@ -520,6 +523,7 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     }
     req->memFromServer = true;
     req->mrAddress = 0ULL;
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_CONSTRUCT_REQ, BIO_OK);
     auto ret = memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
@@ -1183,7 +1187,9 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
         return ret;
     }
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_ALLOC_REQ);
     auto tmp = new (std::nothrow) uint8_t[sizeof(PutRequest) + rsp->sliceLen];
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_ALLOC_REQ, tmp == nullptr ? BIO_ALLOC_FAIL : BIO_OK);
     if (UNLIKELY(tmp == nullptr)) {
         CLIENT_LOG_ERROR("Alloc put request memory failed, len:" << sizeof(PutRequest) + rsp->sliceLen << ".");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
@@ -1192,7 +1198,9 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
 
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION);
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
+    BIO_TRACE_START(SDK_TRACE_PUT_PREPARE_CONSTRUCT_REQ);
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, rsp);
+    BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_CONSTRUCT_REQ, BIO_OK);
     req->memFromServer = true;
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE_SLICE_SERIALIZATION, ret);
     delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));

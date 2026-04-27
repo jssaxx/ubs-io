@@ -11,6 +11,7 @@
  */
 
 #include "bio_tracepoint_helper.h"
+#include "bio_trace.h"
 #include "wcache_index.h"
 
 namespace ock {
@@ -30,15 +31,25 @@ inline uint32_t WCacheIndex::Hash(const Key &key)
 
 BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)
 {
+    BIO_TRACE_START(WCACHE_TRACE_INDEX_GET_TABLE);
     WCacheIndexTable *table = GetIndexTable(ptId);
+    BIO_TRACE_END(WCACHE_TRACE_INDEX_GET_TABLE, table == nullptr ? BIO_INVALID_PARAM : BIO_OK);
     ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Get write cache index table fail, ptId:" << ptId << ", key:" << key);
+    BIO_TRACE_START(WCACHE_TRACE_INDEX_HASH);
     auto bucket = Hash(key);
-    WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
-    auto sliceMeta = table->sliceIndex[bucket].find(key);
-    if (UNLIKELY(sliceMeta != table->sliceIndex[bucket].end())) {
-        LOG_WARN("Repeat put, key:" << key);
+    BIO_TRACE_END(WCACHE_TRACE_INDEX_HASH, BIO_OK);
+    {
+        BIO_TRACE_START(WCACHE_TRACE_INDEX_LOCK);
+        WriteLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+        BIO_TRACE_END(WCACHE_TRACE_INDEX_LOCK, BIO_OK);
+        BIO_TRACE_START(WCACHE_TRACE_INDEX_MAP);
+        auto sliceMeta = table->sliceIndex[bucket].find(key);
+        if (UNLIKELY(sliceMeta != table->sliceIndex[bucket].end())) {
+            LOG_WARN("Repeat put, key:" << key);
+        }
+        table->sliceIndex[bucket].emplace(key, sliceRef);
+        BIO_TRACE_END(WCACHE_TRACE_INDEX_MAP, BIO_OK);
     }
-    table->sliceIndex[bucket].emplace(key, sliceRef);
     return BIO_OK;
 }
 

@@ -1005,19 +1005,23 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
         }
         sliceP->SetDataCrc(req->dataCrc);
     } else {
+        BIO_TRACE_START(MIRROR_TRACE_PUT_LOCAL_DESERIALIZE);
         BIO_TP_START(PUT_ALLOC_SLICE_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>();
         BIO_TP_END;
         if (UNLIKELY(sliceP == nullptr)) {
             LOG_ERROR("Make wcache slice failed.");
+            BIO_TRACE_END(MIRROR_TRACE_PUT_LOCAL_DESERIALIZE, BIO_ALLOC_FAIL);
             return BIO_ALLOC_FAIL;
         }
         ret = sliceP->Deserialize(req->sliceBuf, req->sliceLen);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Deserialize slice failed, ret:" << ret << ".");
+            BIO_TRACE_END(MIRROR_TRACE_PUT_LOCAL_DESERIALIZE, ret);
             return ret;
         }
         sliceP->SetDataCrc(req->dataCrc);
+        BIO_TRACE_END(MIRROR_TRACE_PUT_LOCAL_DESERIALIZE, BIO_OK);
     }
 
     StatisticPutIoSize(req->length);
