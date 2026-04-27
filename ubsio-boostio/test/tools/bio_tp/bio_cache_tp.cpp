@@ -117,8 +117,6 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(MIRROR_SERVER_HDL_LIST_FAIL, "mirror server handle list err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(WCACHE_GET_MEM_SLICE_FAIL, "wcache get mem slice fail", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(WCACHE_GET_DISK_SLICE_FAIL, "wcache get disk slice fail", tp::CommonTp::IntValueCallback);
-    BIO_TP_REG(WCACHE_GET_EVICT_OFFSET_FAIL, "wcache get evict offset fail", tp::CommonTp::IntValueCallback);
-    BIO_TP_REG(WCACHE_CHECK_RCACHE_LEVEL_FAIL, "wcache check rcache level fail", tp::CommonTp::BoolValueCallback);
     BIO_TP_REG(WCACHE_FLUSH_FAIL, "wcache flush fail", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(WCACHE_EXPIRE_FAIL, "wcache flush fail", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(RCACHE_GET_MEM_SLICE_FAIL, "rcache get mem slice fail", tp::CommonTp::IntValueCallback);
@@ -269,8 +267,6 @@ void tp::CacheTp::Deregister() noexcept
     BIO_TP_UNREG(MIRROR_SERVER_HDL_LIST_FAIL);
     BIO_TP_UNREG(WCACHE_GET_MEM_SLICE_FAIL);
     BIO_TP_UNREG(WCACHE_GET_DISK_SLICE_FAIL);
-    BIO_TP_UNREG(WCACHE_GET_EVICT_OFFSET_FAIL);
-    BIO_TP_UNREG(WCACHE_CHECK_RCACHE_LEVEL_FAIL);
     BIO_TP_UNREG(WCACHE_FLUSH_FAIL);
     BIO_TP_UNREG(WCACHE_EXPIRE_FAIL);
     BIO_TP_UNREG(RCACHE_GET_MEM_SLICE_FAIL);

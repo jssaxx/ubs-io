@@ -964,9 +964,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << mPtId);
 
     bool isSatisfied = false;
-    BIO_TP_START(WCACHE_CHECK_RCACHE_LEVEL_FAIL, &isSatisfied, false);
     isSatisfied = EvictDiskSatisfiedCond();
-    BIO_TP_END;
     if (!isSatisfied && !mIsForced) {
         mEvictRef[WCACHE_DISK].store(false);
         mRetryCallback(mFlowId, WCACHE_DISK);
@@ -975,9 +973,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
 
     uint64_t globEvictOffset = NO_MAX_VALUE64;
     if (!isMaster && !mIsForced) {
-        BIO_TP_START(WCACHE_GET_EVICT_OFFSET_FAIL, &ret, BIO_INNER_RETRY);
         ret = mGlobEvictOffset(static_cast<uint16_t>(mPtId), mFlowId, globEvictOffset);
-        BIO_TP_END;
         if ((ret != BIO_OK) && (ret != BIO_NOT_EXISTS)) {
             LOG_WARN("Get evict offset fail:" << ret << ", ptId:" << mPtId << ", flowId:" << mFlowId);
             mEvictRef[WCACHE_DISK].store(false);
@@ -1002,7 +998,7 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
             mRetryCallback(mFlowId, WCACHE_DISK);
             return BIO_OK;
         }
-        auto ret = EvictFromDiskToUnderFs(sliceRef, isMaster);
+        ret = EvictFromDiskToUnderFs(sliceRef, isMaster);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
             mEvictRef[WCACHE_DISK].store(false);
