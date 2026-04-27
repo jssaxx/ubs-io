@@ -49,7 +49,7 @@ KvcError KvcInstance::Initialize(int32_t device)
     return UBSIO_KVC_OK;
 }
 
- KvcError CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
+ KvcError KvcInstance::CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
                          const std::vector<uint32_t> &origIndex, int *results)
 {
     void* stream = KvcStreamManager::GetAclStream();
@@ -160,20 +160,20 @@ KvcError KvcInstance::ReadRemote(ReadParams &params, int *results)
         npuAddrs[i] = npuAddrsVector[i].data();
     }
     auto ret = static_cast<KvcError>(KvBatchGetRemoteData(keysVector, npuAddrs.data(), lengthsVector,
-                                              dramAddrsVector.data(), batchResult, 0));
+                                     reinterpret_cast<uintptr_t *>(dramAddrsVector.data()), batchResult, 0));
     // rh2d
     if (ret == DFC_OK) {
         for (uint32_t i = 0; i < keysCount; ++i) {
             results[oriIndex[i]] = batchResult[i];
         }
         return DFC_OK;
-    } else if (ret != CResult::RET_CACHE_IN_DRAM) {
+    } else if (ret != static_cast<KvcError>(CResult::RET_CACHE_IN_DRAM)) {
         LOG_ERROR("Kv cache batch get data failed, ret:" << ret);
         return ret;
     }
     // rh2h, need to copy
-    H2DParams params(npuAddrsVector, lengthsVector, dramAddrsVector);
-    return CopyDataH2D(params, batchResult, oriIndex, results);
+    H2DParams h2dParams(npuAddrsVector, lengthsVector, dramAddrsVector);
+    return CopyDataH2D(h2dParams, batchResult, oriIndex, results);
 }
 
 KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
@@ -210,7 +210,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     KvcError remoteRet = DFC_OK;
     // read remote //增加远端判断
     if (!remoteParams.keys.empty()) {
-        m_readExecutor->Execute([&remoteParams, results, &sem, &remoteRet]()->void {
+        m_readExecutor->Execute([this, &remoteParams, results, &sem, &remoteRet]()->void {
             remoteRet = ReadRemote(remoteParams, results);
             if (UNLIKELY(remoteRet != DFC_OK)) {
                 LOG_ERROR("Kvc batch get reomte data failed, ret:" << remoteRet);
@@ -226,7 +226,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     if (UNLIKELY(ret != DFC_OK)) {
         LOG_ERROR("Kvc batch get local data failed, ret:" << ret);
     }
-    sme_wait(&sem);
+    sem_wait(&sem);
     sem_destroy(&sem);
     return (ret == DFC_OK && remoteRet == DFC_OK) ? DFC_OK : DFC_ERR;
 }

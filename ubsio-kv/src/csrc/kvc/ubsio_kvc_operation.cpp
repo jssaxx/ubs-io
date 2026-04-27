@@ -43,7 +43,7 @@ int32_t KvcOperationInit(int32_t devId)
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::KvBioInit();
+    ret = DlBioSdkApi::KvBioInit(devId);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
         return UBSIO_KVC_ERR;

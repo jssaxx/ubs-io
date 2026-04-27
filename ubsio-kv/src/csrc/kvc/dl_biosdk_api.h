@@ -113,7 +113,7 @@ public:
         pBioExit();
     }
 
-    static int32_t KvBioInit(void);
+    static int32_t KvBioInit(int32_t devId);
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
@@ -129,7 +129,7 @@ public:
     static CResult BatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count,
                                      ObjLocation *locations, uint8_t *position)
     {
-        return static_cast<CResult>(pBioBatchGetPositions(tenantId, keys, count, position));
+        return static_cast<CResult>(pBioBatchGetPositions(tenantId, keys, count, locations, position));
     }
 
     static CResult BatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,

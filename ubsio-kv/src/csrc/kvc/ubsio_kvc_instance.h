@@ -40,11 +40,11 @@ private:
         H2DParams() = delete;
         H2DParams(std::vector<std::vector<uintptr_t>>& npuAddrVec,
                   std::vector<std::vector<size_t>>& lengthVec,
-                  std::vector<std::vector<void *>>& hostAddrVec)
+                  std::vector<void *>& hostAddrVec)
                   : npuAddrs(npuAddrVec), lengths(lengthVec), hostAddrs(hostAddrVec) {}
         std::vector<std::vector<uintptr_t>>& npuAddrs;
         std::vector<std::vector<size_t>>& lengths;
-        std::vector<std::vector<void *>>& hostAddrs;
+        std::vector<void *>& hostAddrs;
     };
 
     struct ReadParams {
@@ -68,15 +68,9 @@ private:
             m_readExecutor = nullptr;
         }
     }
-    KvcError ReadLocal(const std::vector<std::string> &keyVector,
-                  std::vector<std::vector<uintptr_t>> &npuAddrsVector,
-                  const std::vector<std::vector<size_t>> &lengthsVector,
-                  int *results);
+    KvcError ReadLocal(ReadParams &params, int *results);
     
-    KvcError ReadRemote(const std::vector<std::string> &keyVector,
-                  std::vector<std::vector<uintptr_t>> &npuAddrsVector,
-                  const std::vector<std::vector<size_t>> &lengthsVector,
-                  int *results);
+    KvcError ReadRemote(ReadParams &params, int *results);
 
     KvcError CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
                          const std::vector<uint32_t> &origIndex, int *results);

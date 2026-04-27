@@ -112,7 +112,7 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::KvBioInit()
+int32_t DlBioSdkApi::KvBioInit(int32_t devId)
 {
     LOG_INFO("Start boostio begin...");
     ClientOptionsConfig optConf;
@@ -121,7 +121,7 @@ int32_t DlBioSdkApi::KvBioInit()
     std::string logDir = "/var/log/boostio";
     std::snprintf(optConf.logFilePath, sizeof(optConf.logFilePath), "%s", logDir.c_str());
 
-    auto ret = Initialize(WorkerMode::SEPARATES, &optConf);
+    auto ret = Initialize(WorkerMode::SEPARATES, &optConf, devId);
     if (ret != 0) {
         LOG_ERROR("boostio initialize failed, ret: " << ret);
         return -1;

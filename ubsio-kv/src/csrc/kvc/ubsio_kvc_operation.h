@@ -65,7 +65,7 @@ int32_t KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_
 
 int32_t KvBatchGetLocalData(const std::vector<std::string> &keys, void **bufs,
                             std::vector<size_t> &lengths,
-                            std::vector<int32_t> &results
+                            std::vector<int32_t> &results,
                             uint32_t flags);
 
 int32_t KvBatchGetRemoteData(const std::vector<std::string> &keys, uintptr_t **npuAddrs,
