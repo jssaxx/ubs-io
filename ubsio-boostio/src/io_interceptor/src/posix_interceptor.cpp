@@ -592,5 +592,16 @@ int HookRemove(const char *path)
     }
     return PROXY(remove)(path);
 }
+
+pid_t HookFork(void)
+{
+    if (!InitNativeHook() || CHECKNATIVEFUNC(fork)) {
+        return -1;
+    }
+    if (CHECKPROXYLOADED || CHECKPROXYFUNC(fork)) {
+        return NATIVE(fork)();
+    }
+    return PROXY(fork)();
+}
 }
 }
