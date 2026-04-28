@@ -190,6 +190,13 @@ public:
         return mObj;
     }
 
+    inline T *Detach()
+    {
+        T *obj = mObj;
+        mObj = nullptr;
+        return obj;
+    }
+
     inline void Set(T *newObj)
     {
         if (newObj == mObj) {
