@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 #include <cerrno>
 #include <sys/syscall.h>
 #include <linux/version.h>
@@ -174,9 +175,63 @@ int32_t InterceptorClientNetService::StartNetService()
     return 0;
 }
 
+void InterceptorClientNetService::OrphanInheritedState(uint32_t currentPid)
+{
+    CLOG_WARN("Orphan inherited interceptor net service, oldPid:" << mPid << ", currentPid:" << currentPid << ".");
+    mReady.store(false);
+
+    if (mDataMsgMemPool != nullptr) {
+        (void)mDataMsgMemPool.Detach();
+    }
+    if (mNetEngine != nullptr) {
+        (void)mNetEngine.Detach();
+    }
+
+    mShmFd = -1;
+    mShmOffset = 0;
+    mShmLength = 0;
+    mShmAddr = nullptr;
+    mDataMsgMemAddr = nullptr;
+    mDataMsgMemBlockSize = 0;
+    mPid = 0;
+}
+
+BResult InterceptorClientNetService::EnsureReadyForCurrentProcess()
+{
+    uint32_t currentPid = static_cast<uint32_t>(getpid());
+    if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
+        OrphanInheritedState(currentPid);
+    }
+    if (LIKELY(mReady.load())) {
+        return BIO_OK;
+    }
+    auto ret = StartNetService();
+    return ret == 0 ? BIO_OK : ret;
+}
+
+BResult InterceptorClientNetService::PrepareAfterForkChild()
+{
+    uint32_t currentPid = static_cast<uint32_t>(getpid());
+    if (mPid != 0 && mPid != currentPid) {
+        OrphanInheritedState(currentPid);
+    }
+    return BIO_OK;
+}
+
 void InterceptorClientNetService::StopNetService()
 {
+    uint32_t currentPid = static_cast<uint32_t>(getpid());
+    if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
+        OrphanInheritedState(currentPid);
+        return;
+    }
+
     mReady.store(false);
+
+    if (mNetEngine != nullptr) {
+        mNetEngine->Stop();
+        mNetEngine = nullptr;
+    }
 
     if (mDataMsgMemPool != nullptr) {
         mDataMsgMemPool->Stop();
@@ -203,11 +258,6 @@ void InterceptorClientNetService::StopNetService()
     mDataMsgMemAddr = nullptr;
     mDataMsgMemBlockSize = 0;
 
-    if (mNetEngine != nullptr) {
-        mNetEngine->Stop();
-        mNetEngine = nullptr;
-    }
-
     mPid = 0;
 }
 
@@ -228,8 +278,15 @@ BResult InterceptorClientNetService::CreateDataMessageMem()
     int32_t realFd = -1;
     ret = mNetEngine->ReceiveFds(INVALID_NID, &realFd, 1U);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLOG_ERROR("Receive data message memory fd failed, ret:" << ret << ", pid:" << mPid << ".");
-        return BIO_ERR;
+        CLOG_WARN("Receive data message memory fd failed, try shm_open fallback, ret:" << ret << ", pid:" << mPid <<
+            ".");
+        std::string shmName = "/interceptor_mem_pool_" + std::to_string(mPid);
+        realFd = shm_open(shmName.c_str(), O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR);
+        if (realFd < 0) {
+            CLOG_ERROR("Open data message memory by name failed, pid:" << mPid << ", name:" << shmName <<
+                ", error:" << strerror(errno) << ".");
+            return BIO_ERR;
+        }
     }
 
     mShmFd = realFd;
