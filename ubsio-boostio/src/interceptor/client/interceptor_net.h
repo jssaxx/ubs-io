@@ -37,25 +37,28 @@ public:
 
     ~InterceptorClientNetService()
     {
-        StopNetService();
+        AbandonNetService();
     }
 
     int32_t StartNetService();
     void StopNetService();
+    void AbandonNetService();
     BResult CreateDataMessageMem();
+    BResult PrepareAfterForkChild();
 
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
     {
+        if (UNLIKELY(EnsureReadyForCurrentProcess() != BIO_OK) || mNetEngine == nullptr) {
+            return nullptr;
+        }
         return mNetEngine->GetShmAddress(offset, len);
     }
 
     BResult AllocShmBlock(uintptr_t &address, uint64_t &mrOffset)
     {
-        if (UNLIKELY(!mReady.load())) {
-            auto ret = StartNetService();
-            if (ret != 0) {
-                return BIO_NOT_READY;
-            }
+        auto readyRet = EnsureReadyForCurrentProcess();
+        if (UNLIKELY(readyRet != BIO_OK)) {
+            return readyRet;
         }
 
         if (UNLIKELY(mDataMsgMemPool == nullptr)) {
@@ -73,7 +76,7 @@ public:
 
     uint8_t *GetShmBlockAddr(uint64_t mrOffset)
     {
-        if (UNLIKELY(!mReady.load()) || mDataMsgMemAddr == nullptr) {
+        if (UNLIKELY(EnsureReadyForCurrentProcess() != BIO_OK) || mDataMsgMemAddr == nullptr) {
             return nullptr;
         }
         return mDataMsgMemAddr + mrOffset;
@@ -81,6 +84,11 @@ public:
 
     void ReleaseShmBlock(uint64_t mrOffset)
     {
+        uint32_t currentPid = static_cast<uint32_t>(getpid());
+        if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
+            OrphanInheritedState(currentPid);
+            return;
+        }
         if (UNLIKELY(!mReady.load()) || mDataMsgMemPool == nullptr || mDataMsgMemAddr == nullptr) {
             return;
         }
@@ -91,11 +99,9 @@ public:
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp)
     {
-        if (UNLIKELY(!mReady.load())) {
-            auto ret = StartNetService();
-            if (ret != 0) {
-                return ret;
-            }
+        auto readyRet = EnsureReadyForCurrentProcess();
+        if (UNLIKELY(readyRet != BIO_OK)) {
+            return readyRet;
         }
         return mNetEngine->SyncCall(target, opcode, req, rsp);
     }
@@ -103,11 +109,9 @@ public:
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp **rsp, uint64_t &respLen)
     {
-        if (UNLIKELY(!mReady.load())) {
-            auto ret = StartNetService();
-            if (ret != 0) {
-                return ret;
-            }
+        auto readyRet = EnsureReadyForCurrentProcess();
+        if (UNLIKELY(readyRet != BIO_OK)) {
+            return readyRet;
         }
         return mNetEngine->SyncCall(target, opcode, req, rsp, respLen);
     }
@@ -115,19 +119,22 @@ public:
     template <typename TResp>
     inline BResult SendSyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, TResp &rsp)
     {
-        if (UNLIKELY(!mReady.load())) {
-            auto ret = StartNetService();
-            if (ret != 0) {
-                return ret;
-            }
+        auto readyRet = EnsureReadyForCurrentProcess();
+        if (UNLIKELY(readyRet != BIO_OK)) {
+            return readyRet;
         }
         return mNetEngine->SyncCallBuff(target, opcode, req, reqLen, rsp);
     }
 
     inline uint32_t GetSendPid()
     {
+        (void)EnsureReadyForCurrentProcess();
         return mPid;
     }
+
+private:
+    BResult EnsureReadyForCurrentProcess();
+    void OrphanInheritedState(uint32_t currentPid);
 
 private:
     uint32_t mPid = 0;

@@ -72,6 +72,7 @@ void NativeOperationsLoader::LoadControlProxy()
     LoadProxy("dup2", operations.dup2);
     LoadProxy("dup3", operations.dup3);
     LoadProxy("remove", operations.remove);
+    LoadProxy("fork", operations.fork);
 }
 
 void NativeOperationsLoader::LoadFileIOProxy()
