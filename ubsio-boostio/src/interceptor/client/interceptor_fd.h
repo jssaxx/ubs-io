@@ -62,9 +62,11 @@ public:
 
     bool Add(int fd, std::shared_ptr<OpenFile> &&file);
 
-    std::shared_ptr<OpenFile> &At(int fd);
+    std::shared_ptr<OpenFile> At(int fd);
 
     void Erase(int fd);
+
+    bool Empty();
 
 private:
     ReadWriteLock filesMtx;

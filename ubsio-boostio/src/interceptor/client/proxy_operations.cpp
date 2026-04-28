@@ -32,6 +32,7 @@
 #include "interceptor_path.h"
 #include "interceptor_context.h"
 #include "interceptor_log.h"
+#include "interceptor_net.h"
 #include "proxy_operations.h"
 
 using namespace ock::bio;
@@ -57,6 +58,7 @@ void ProxyOperations::FillInterceptorOps(InterceptorProxyOperations &ops)
     ops.writev = Writev;
     ops.pwritev = Pwritev;
     ops.pwritev64 = Pwritev64;
+    ops.fork = Fork;
 }
 
 struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
@@ -71,6 +73,18 @@ struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
         initialized = true;
     }
     return &operations;
+}
+
+pid_t ProxyOperations::Fork(void)
+{
+    pid_t pid = CONTEXT.GetOperations()->fork();
+    if (pid == 0) {
+        auto ret = InterceptorClientNetService::Instance().PrepareAfterForkChild();
+        if (ret != BIO_OK) {
+            CLOG_ERROR("Prepare interceptor after fork failed, ret:" << ret << ", pid:" << getpid() << ".");
+        }
+    }
+    return pid;
 }
 
 int32_t ProxyOperations::FullPath(const char *nativePath, std::string &realPath)
@@ -289,7 +303,7 @@ int ProxyOperations::Creat64(const char *path, mode_t mode)
 int ProxyOperations::Close(int fd)
 {
     CLOG_DEBUG("Close file fd:" << fd << ".");
-    auto &file = CONTEXT.files.At(fd);
+    auto file = CONTEXT.files.At(fd);
     if (UNLIKELY(file == nullptr)) {
         CLOG_DEBUG("Fallback close to native, fd:" << fd << ".");
         return CONTEXT.GetOperations()->close(fd);
@@ -297,7 +311,12 @@ int ProxyOperations::Close(int fd)
 
     CLOG_INFO("Close intercepted file success, fd:" << fd << ", inode:" << file->GetInode() << ".");
     CONTEXT.files.Erase(fd);
-    return CONTEXT.GetOperations()->close(fd);
+    int ret = CONTEXT.GetOperations()->close(fd);
+    CLOG_INFO("Close native intercepted file finished, fd:" << fd << ", ret:" << ret << ".");
+    if (CONTEXT.files.Empty()) {
+        InterceptorClientNetService::Instance().StopNetService();
+    }
+    return ret;
 }
 
 int32_t ProxyOperations::OpenInner(const char *path, int fd)

@@ -55,6 +55,7 @@ public:
     static ssize_t Writev(int fd, const struct iovec *vector, int count);
     static ssize_t Pwritev(int fd, const struct iovec *vector, int count, off_t offset);
     static ssize_t Pwritev64(int fd, const struct iovec *vector, int count, off64_t offset);
+    static pid_t Fork(void);
 
 private:
     static int32_t FullPath(const char *nativePath, std::string &realPath);
