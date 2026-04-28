@@ -43,6 +43,7 @@ public:
     int32_t StartNetService();
     void StopNetService();
     BResult CreateDataMessageMem();
+    BResult PrepareBeforeFork();
     BResult PrepareAfterForkChild();
 
     uint8_t *GetShmAddress(uint64_t offset, uint32_t len)

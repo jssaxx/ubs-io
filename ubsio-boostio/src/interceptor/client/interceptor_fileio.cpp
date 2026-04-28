@@ -100,6 +100,13 @@ static char *GetSmallWriteScratch(size_t reqLen)
     return scratch.data();
 }
 
+void ProxyOperations::DropCachedWriteBlock()
+{
+    g_cachedWriteBlock.address = 0;
+    g_cachedWriteBlock.mrOffset = 0;
+    g_cachedWriteBlock.pid = 0;
+}
+
 ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offset)
 {
     auto file = CONTEXT.files.At(fd);

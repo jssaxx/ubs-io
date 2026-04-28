@@ -77,8 +77,15 @@ struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
 
 pid_t ProxyOperations::Fork(void)
 {
+    DropCachedWriteBlock();
+    auto prepareRet = InterceptorClientNetService::Instance().PrepareBeforeFork();
+    if (prepareRet != BIO_OK) {
+        CLOG_ERROR("Prepare interceptor before fork failed, ret:" << prepareRet << ", pid:" << getpid() << ".");
+    }
+
     pid_t pid = CONTEXT.GetOperations()->fork();
     if (pid == 0) {
+        DropCachedWriteBlock();
         auto ret = InterceptorClientNetService::Instance().PrepareAfterForkChild();
         if (ret != BIO_OK) {
             CLOG_ERROR("Prepare interceptor after fork failed, ret:" << ret << ", pid:" << getpid() << ".");

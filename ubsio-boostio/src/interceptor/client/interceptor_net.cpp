@@ -209,6 +209,19 @@ BResult InterceptorClientNetService::EnsureReadyForCurrentProcess()
     return ret == 0 ? BIO_OK : ret;
 }
 
+BResult InterceptorClientNetService::PrepareBeforeFork()
+{
+    uint32_t currentPid = static_cast<uint32_t>(getpid());
+    if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
+        OrphanInheritedState(currentPid);
+        return BIO_OK;
+    }
+    if (mReady.load() || mNetEngine != nullptr || mDataMsgMemPool != nullptr) {
+        StopNetService();
+    }
+    return BIO_OK;
+}
+
 BResult InterceptorClientNetService::PrepareAfterForkChild()
 {
     uint32_t currentPid = static_cast<uint32_t>(getpid());
