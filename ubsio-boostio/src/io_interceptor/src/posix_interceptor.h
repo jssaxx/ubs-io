@@ -110,6 +110,8 @@ namespace interceptor {
     int HookSyncFs(int fd);
 
     int HookRemove(const char* path);
+
+    pid_t HookFork(void);
 }
 }
 

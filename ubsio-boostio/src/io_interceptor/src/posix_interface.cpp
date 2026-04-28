@@ -307,4 +307,10 @@ INTERCEPTOR_API int remove(const char* path)
     INTERCEPTORLOG_DEBUG("Hooking remove %s succeeded.", path);
     return HookRemove(path);
 }
+
+INTERCEPTOR_API pid_t fork(void)
+{
+    INTERCEPTORLOG_DEBUG("Hooking fork succeeded.");
+    return HookFork();
+}
 }

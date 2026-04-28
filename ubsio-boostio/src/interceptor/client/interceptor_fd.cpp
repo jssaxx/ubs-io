@@ -41,17 +41,17 @@ bool OpenFileMap::Add(int fd, std::shared_ptr<OpenFile> &&file)
     return ret.second;
 }
 
-std::shared_ptr<OpenFile> &OpenFileMap::At(int fd)
+std::shared_ptr<OpenFile> OpenFileMap::At(int fd)
 {
-    static std::shared_ptr<OpenFile> nullRef;
     filesMtx.LockRead();
     auto iter = files.find(fd);
     if (iter != files.end()) {
+        auto file = iter->second;
         filesMtx.UnLock();
-        return iter->second;
+        return file;
     }
     filesMtx.UnLock();
-    return nullRef;
+    return nullptr;
 }
 
 void OpenFileMap::Erase(int fd)
