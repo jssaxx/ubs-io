@@ -33,6 +33,7 @@ namespace {
 struct CachedWriteBlock {
     uintptr_t address = 0;
     uint64_t mrOffset = 0;
+    uint32_t pid = 0;
 
     ~CachedWriteBlock()
     {
@@ -40,6 +41,7 @@ struct CachedWriteBlock {
             InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
             address = 0;
             mrOffset = 0;
+            pid = 0;
         }
     }
 };
@@ -50,10 +52,16 @@ static thread_local CachedWriteBlock g_cachedWriteBlock;
 static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool &fromCache)
 {
     if (g_cachedWriteBlock.address != 0) {
-        shmAddr = g_cachedWriteBlock.address;
-        mrOffset = g_cachedWriteBlock.mrOffset;
-        fromCache = true;
-        return true;
+        if (UNLIKELY(g_cachedWriteBlock.pid != static_cast<uint32_t>(getpid()))) {
+            g_cachedWriteBlock.address = 0;
+            g_cachedWriteBlock.mrOffset = 0;
+            g_cachedWriteBlock.pid = 0;
+        } else {
+            shmAddr = g_cachedWriteBlock.address;
+            mrOffset = g_cachedWriteBlock.mrOffset;
+            fromCache = true;
+            return true;
+        }
     }
 
     auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
@@ -71,6 +79,7 @@ static void CacheLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset)
 {
     g_cachedWriteBlock.address = shmAddr;
     g_cachedWriteBlock.mrOffset = mrOffset;
+    g_cachedWriteBlock.pid = static_cast<uint32_t>(getpid());
 }
 
 static void ReleaseLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset, bool fromCache)
@@ -107,9 +116,8 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
 
     if (count <= MAX_SMALL_WRITE_SIZE) {
         return PreadSmallInner(fd, buf, count, offset);
-    } else {
-        return PreadLargeInner(fd, buf, count, offset);
     }
+    return PreadLargeInner(fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::PreadInner(int fd, BufVec &bufVec, off_t offset)
@@ -141,7 +149,7 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t 
     }
 
     InterceptorPreadIn request;
-    request.pid = static_cast<uint32_t>(getpid());
+    request.pid = InterceptorClientNetService::Instance().GetSendPid();
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -193,7 +201,7 @@ ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
     }
 
     InterceptorPreadIn request;
-    request.pid = static_cast<uint32_t>(getpid());
+    request.pid = InterceptorClientNetService::Instance().GetSendPid();
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -259,7 +267,7 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t 
     }
 
     InterceptorLargePreadIn request;
-    request.pid = static_cast<uint32_t>(getpid());
+    request.pid = InterceptorClientNetService::Instance().GetSendPid();
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -315,7 +323,7 @@ ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
     }
 
     InterceptorLargePreadIn request;
-    request.pid = static_cast<uint32_t>(getpid());
+    request.pid = InterceptorClientNetService::Instance().GetSendPid();
     request.fd = fd;
     request.inode = file->GetInode();
     request.offset = offset;
@@ -597,7 +605,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     }
 
     InterceptorLargePwriteIn writeReq;
-    writeReq.pid = static_cast<uint32_t>(getpid());
+    writeReq.pid = InterceptorClientNetService::Instance().GetSendPid();
     writeReq.fd = fd;
     writeReq.inode = file->GetInode();
     writeReq.offset = offset;
@@ -652,7 +660,7 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, BufVec &bufVec, off_t offset)
     }
 
     InterceptorLargePwriteIn writeReq;
-    writeReq.pid = static_cast<uint32_t>(getpid());
+    writeReq.pid = InterceptorClientNetService::Instance().GetSendPid();
     writeReq.fd = fd;
     writeReq.inode = file->GetInode();
     writeReq.offset = offset;

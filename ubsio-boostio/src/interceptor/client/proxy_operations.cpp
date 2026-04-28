@@ -32,6 +32,7 @@
 #include "interceptor_path.h"
 #include "interceptor_context.h"
 #include "interceptor_log.h"
+#include "interceptor_net.h"
 #include "proxy_operations.h"
 
 using namespace ock::bio;
@@ -57,6 +58,7 @@ void ProxyOperations::FillInterceptorOps(InterceptorProxyOperations &ops)
     ops.writev = Writev;
     ops.pwritev = Pwritev;
     ops.pwritev64 = Pwritev64;
+    ops.fork = Fork;
 }
 
 struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
@@ -71,6 +73,18 @@ struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
         initialized = true;
     }
     return &operations;
+}
+
+pid_t ProxyOperations::Fork(void)
+{
+    pid_t pid = CONTEXT.GetOperations()->fork();
+    if (pid == 0) {
+        auto ret = InterceptorClientNetService::Instance().PrepareAfterForkChild();
+        if (ret != BIO_OK) {
+            CLOG_ERROR("Prepare interceptor after fork failed, ret:" << ret << ", pid:" << getpid() << ".");
+        }
+    }
+    return pid;
 }
 
 int32_t ProxyOperations::FullPath(const char *nativePath, std::string &realPath)
