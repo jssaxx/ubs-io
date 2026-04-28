@@ -77,6 +77,7 @@ private:
     static ssize_t PwriteSmallInner(int fd, BufVec &bufVec, off_t offset);
     static ssize_t PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset);
     static ssize_t PwriteLargeInner(int fd, BufVec &bufVec, off_t offset);
+    static void DropCachedWriteBlock();
 };
 }
 }

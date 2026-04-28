@@ -209,6 +209,19 @@ BResult InterceptorClientNetService::EnsureReadyForCurrentProcess()
     return ret == 0 ? BIO_OK : ret;
 }
 
+BResult InterceptorClientNetService::PrepareBeforeFork()
+{
+    uint32_t currentPid = static_cast<uint32_t>(getpid());
+    if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
+        OrphanInheritedState(currentPid);
+        return BIO_OK;
+    }
+    if (mReady.load() || mNetEngine != nullptr || mDataMsgMemPool != nullptr) {
+        StopNetService();
+    }
+    return BIO_OK;
+}
+
 BResult InterceptorClientNetService::PrepareAfterForkChild()
 {
     uint32_t currentPid = static_cast<uint32_t>(getpid());
@@ -227,11 +240,6 @@ void InterceptorClientNetService::StopNetService()
     }
 
     mReady.store(false);
-
-    if (mNetEngine != nullptr) {
-        mNetEngine->Stop();
-        mNetEngine = nullptr;
-    }
 
     if (mDataMsgMemPool != nullptr) {
         mDataMsgMemPool->Stop();
@@ -257,6 +265,11 @@ void InterceptorClientNetService::StopNetService()
     mShmLength = 0;
     mDataMsgMemAddr = nullptr;
     mDataMsgMemBlockSize = 0;
+
+    if (mNetEngine != nullptr) {
+        mNetEngine->Stop();
+        mNetEngine = nullptr;
+    }
 
     mPid = 0;
 }
