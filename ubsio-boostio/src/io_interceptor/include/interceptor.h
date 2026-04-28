@@ -133,6 +133,8 @@ struct InterceptorProxyOperations {
     long int (*ftell)(FILE *fp);
 
     void (*rewind)(FILE *fp);
+
+    pid_t (*fork)(void);
 };
 
 struct InterceptorNativeOperations {
@@ -247,6 +249,8 @@ struct InterceptorNativeOperations {
     long int (*ftell)(FILE *fp);
 
     void (*rewind)(FILE *fp);
+
+    pid_t (*fork)(void);
 };
 
 struct InterceptorNativeOperations *GetNativeOperations();

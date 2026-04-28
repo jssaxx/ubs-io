@@ -73,6 +73,6 @@ void CleanProxyContext()
         return;
     }
 
-    InterceptorClientNetService::Instance().StopNetService();
+    InterceptorClientNetService::Instance().AbandonNetService();
     g_initialized.store(false);
 }
