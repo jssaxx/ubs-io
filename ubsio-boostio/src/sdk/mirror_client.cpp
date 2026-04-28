@@ -2061,12 +2061,12 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = mr.size;
     req->mrKey = mr.key;
     req->sliceLen = 0;
-    if (mEnableTrance) {
+    if (transData.enableTrans) {
         std::string uniqueId = net::BioClientNet::Instance()->GetTransNetEngine()->GetLocalUniqueId();
         CopyKey(req->uuid, uniqueId.c_str(), MAX_UUID_SIZE);
     }
     req->localTransAddr = transData.localTransAddr;
-    req->transDataLen = transData.enableTrans ? transData.transDataLen : 0;
+    req->transDataLen = transData.transDataLen;
     req->enableTrans = transData.enableTrans;
     mBioQos->GetKey(req->quotaNid, req->quotaCid);
     if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
@@ -2191,6 +2191,9 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             mDataMsgMemPool->ReleaseOne(address);
             return BIO_ALLOC_FAIL;
         }
+        transData.enableTrans = false;
+        transData.localTransAddr = 0;
+        transData.transDataLen = 0;
     } else{
         auto ret = net::BioClientNet::Instance()->GetTransNetEngine()->AllocOneBlock(transMem);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -2205,10 +2208,9 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(transMem);
             return BIO_ALLOC_FAIL;
         }
-
+        transData.enableTrans = true;
         transData.localTransAddr = transMem;
         transData.transDataLen = param.length;
-        transData.enableTrans = req->enableTrans;
     }
 
     uint8_t* tmp = nullptr;
@@ -2328,7 +2330,7 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     if (req->mrAddress) {
         mDataMsgMemPool->ReleaseOne(req->mrAddress);
     }
-    if (req->localTransAddr) {
+    if (req->enableTrans || req->localTransAddr != 0) {
         net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(req->localTransAddr);
     }
     if (cbCtx.result == BIO_OK) {

@@ -286,8 +286,8 @@ typedef struct {
 
 typedef struct {
     bool enableTrans = false;
-    uintptr_t localTransAddr;
-    uint64_t transDataLen;
+    uintptr_t localTransAddr = 0;
+    uint64_t transDataLen = 0;
 } TransData;
 
 typedef struct {
