@@ -139,6 +139,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create slave flow failed, ret:" << ret << ", ptId:" << ptId << ", slaveNid:" <<
                 ptEntry.copys[idx].nodeId << ".");
+            (void)DestroyFlow(ptId, flowInfo.flowId);
             Delete(ptId, 0);
             return ret;
         }
@@ -147,6 +148,7 @@ BResult MirrorClient::CreateFlow(uint16_t ptId)
     ret = Update(ptId, ptEntry.version, flowInfo.flowId, flowInfo.isDegrade);
     if (ret != BIO_OK) {
         LOG_ERROR("Update flow info failed, ret " << ret);
+        (void)DestroyFlow(ptId, flowInfo.flowId);
         Delete(ptId, 0);
         return ret;
     }
@@ -184,7 +186,17 @@ BResult MirrorClient::LoadAffinityFlow()
 {
     std::vector<uint16_t> ptVec = ListLocalAffinityPt();
     for (uint16_t &ptId : ptVec) {
-        BResult ret = CreateFlow(ptId);
+        bool isRetry = false;
+        uint64_t startTime = Monotonic::TimeSec();
+        BResult ret = BIO_OK;
+        do {
+            isRetry = false;
+            ret = CreateFlow(ptId);
+            if (LIKELY(ret == BIO_OK)) {
+                break;
+            }
+            isRetry = FailHandler(ret, startTime, mTimeOut);
+        } while (isRetry);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Create affinity flow instance failed, ret:" << ret << ", ptId:" << ptId << ".");
         } else {
