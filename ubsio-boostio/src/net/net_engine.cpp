@@ -157,6 +157,14 @@ void NetEngine::StopInner()
         mConnector = nullptr;
     }
 
+    mCtrlChannelMgr->UnInitialize();
+    mDataChannelMgr->UnInitialize();
+
+    if (mMrBlockPool != nullptr) {
+        mMrBlockPool->Stop();
+        mMrBlockPool = nullptr;
+    }
+
     if (mRpcService != nullptr) {
         if (!mLocalMr.GetHcomMrs().empty()) {
             mRpcService->DestroyMemoryRegion(mLocalMr);
@@ -168,14 +176,6 @@ void NetEngine::StopInner()
     if (mIpcService != nullptr) {
         mIpcService->Destroy(IPC_SERVICE_NAME);
         mIpcService = nullptr;
-    }
-
-    mCtrlChannelMgr->UnInitialize();
-    mDataChannelMgr->UnInitialize();
-
-    if (mMrBlockPool != nullptr) {
-        mMrBlockPool->Stop();
-        mMrBlockPool = nullptr;
     }
 
     mDataChannelMgr = nullptr;

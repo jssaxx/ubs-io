@@ -228,11 +228,6 @@ void InterceptorClientNetService::StopNetService()
 
     mReady.store(false);
 
-    if (mNetEngine != nullptr) {
-        mNetEngine->Stop();
-        mNetEngine = nullptr;
-    }
-
     if (mDataMsgMemPool != nullptr) {
         mDataMsgMemPool->Stop();
         mDataMsgMemPool = nullptr;
@@ -257,6 +252,11 @@ void InterceptorClientNetService::StopNetService()
     mShmLength = 0;
     mDataMsgMemAddr = nullptr;
     mDataMsgMemBlockSize = 0;
+
+    if (mNetEngine != nullptr) {
+        mNetEngine->Stop();
+        mNetEngine = nullptr;
+    }
 
     mPid = 0;
 }
