@@ -264,7 +264,134 @@ private:
     static mfSmemTransReadFunc mfSmemTransRead;
     static mfSmemTransBatchReadFunc mfSmemTransBatchRead;
 };
+/*
+class TransMemoryManager {
+public:
+    TransMemoryManager() = default;
+    ~TransMemoryManager() {
+        if (mAllBlocks) {
+            delete[] mAllBlocks;
+        }
+    }
 
+    TransMemoryManager(const TransMemoryManager&) = delete;
+    TransMemoryManager& operator=(const TransMemoryManager&) = delete;
+    BResult Start(uintptr_t address, uint64_t blockSize, uint64_t count)
+    {
+        if (blockSize == 0 || count == 0) {
+            NET_LOG_ERROR("Invalid blockSize or count");
+            return BIO_ERR;
+        }
+
+        mBlockSize = blockSize;
+        mTotalBlocks = count;
+        baseAddr = address;
+        mAllBlocks = new TransMemBlock[mTotalBlocks];
+        if (!mAllBlocks) {
+            NET_LOG_ERROR("Failed to allocate mAllBlocks");
+            return BIO_ERR;
+        }
+        for (size_t i = 0; i < mTotalBlocks; ++i) {
+            mAllBlocks[i].memAddr = baseAddr + i * mBlockSize;
+            mAllBlocks[i].next = (i == mTotalBlocks - 1) ? nullptr : &mAllBlocks[i + 1];
+        }
+        mFreeHead = mAllBlocks;
+        mFreeBlockCount = mTotalBlocks;
+
+        NET_LOG_INFO("TransMemoryManager started successfully" << ", mTotalBlocks: " << mTotalBlocks);
+        return BIO_OK;
+    }
+
+    BResult Allocate(size_t blockNum, std::vector<uintptr_t>& outBlocks) {
+        outBlocks.clear();
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (blockNum == 0 || mFreeBlockCount.load() < blockNum) {
+            return BIO_ERR;
+        }
+        TransMemBlock* start = mFreeHead;
+        TransMemBlock* end = start;
+        for (size_t i = 0; i < blockNum - 1; ++i) {
+            end = end->next;
+            if (!end) {
+                return BIO_ERR;
+            }
+        }
+        mFreeHead = end->next;
+        TransMemBlock* curr = start;
+        while (curr != end->next) {
+            outBlocks.push_back(curr->memAddr);
+            curr = curr->next;
+        }
+
+        mFreeBlockCount -= blockNum;
+        return BIO_OK;
+    }
+
+    void Free(const std::vector<uintptr_t>& blocks) {
+        if (blocks.empty()) {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(mMutex);
+
+        TransMemBlock* first = nullptr;
+        TransMemBlock* last = nullptr;
+        const size_t freeNum = blocks.size();
+
+        for (uintptr_t addr : blocks) {
+            size_t index = (addr - baseAddr) / mBlockSize;
+            if (index >= mTotalBlocks || ((addr - baseAddr) % mBlockSize) != 0) {
+                NET_LOG_ERROR("Free invalid address: " << addr);
+                continue;
+            }
+            TransMemBlock* node = &mAllBlocks[index];
+
+            if (!first) first = node;
+            if (last) last->next = node;
+            last = node;
+        }
+
+        // insert list head
+        last->next = mFreeHead;
+        mFreeHead = first;
+
+        mFreeBlockCount += freeNum;
+    }
+
+    BResult AllocateSingle(uintptr_t& outBlock) {
+        std::vector<uintptr_t> temp;
+        Allocate(1, temp);
+        if (!temp.empty()) {
+            outBlock = temp[0];
+            return BIO_OK;
+        }
+        outBlock = 0;
+        return BIO_ERR;
+    }
+
+    
+    void FreeSingle(uintptr_t block) {
+        std::vector<uintptr_t> temp = {block};
+        Free(temp);
+    }
+
+    size_t GetFreeBlockCount() const {
+        return mFreeBlockCount.load();
+    }
+private:
+    struct TransMemBlock {
+        uintptr_t memAddr = nullptr
+        TransMemBlock* next = nullptr;
+    };
+    uintptr_t baseAddr;
+    size_t mBlockSize;
+    size_t mTotalBlocks;
+    TransMemBlock* mFreeHead = nullptr;
+    TransMemBlock* mAllBlocks = nullptr;
+    std::mutex mMutex;         
+    std::atomic<size_t> mFreeBlockCount = 0;
+};
+*/
 class NetTransEngine {
 public:
     virtual BResult Initialize(const NetOptions &opt) = 0;

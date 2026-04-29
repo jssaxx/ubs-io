@@ -79,7 +79,7 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
 )
-
+add_compile_options(-D_GLIBCXX_USE_CXX11_ABI=0)
 if ("${OPEN_PROMETHEUS}" STREQUAL "ON")
     include_directories(
             ${PROJECT_SOURCE_DIR}/test/tools/prometheus

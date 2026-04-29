@@ -60,7 +60,7 @@ int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
         return BIO_OK;
     }
 
-    std::string libPath = std::string(libDirPath) + gMfLibName;
+    std::string libPath = std::string(libDirPath)+ "/" + gMfLibName;
     /* dlopen library */
     mfHandle = dlopen(libPath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     if (mfHandle == nullptr) {
@@ -387,7 +387,6 @@ BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
     if (ret != BIO_OK) {
         return ret;
     }
-    
     ret = mMsgBlookPool->Start(reinterpret_cast<uintptr_t>(mTransMemBase), mTransSegmentSize,
                          mTransMemSize / mTransSegmentSize);
     if (ret != BIO_OK) {
@@ -395,6 +394,7 @@ BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
         (void)FreeMem(mTransMemBase);
         return ret;
     }
+    NET_LOG_ERROR("InitMsgBlockPool success");
     return BIO_OK;
 }
 
