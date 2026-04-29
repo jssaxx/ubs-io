@@ -951,7 +951,7 @@ void diagnose::BioSdkCommand::HandleBatchGetLocal(const std::vector<std::string>
                                              remoteResults);
 
         if (remoteResult != 0) {
-            mPrintOp("Bio batch get remote fail, ret:%d.\n", result);
+            mPrintOp("Bio batch get remote fail, ret:%d.\n", remoteResult);
             return;
         }
         for (uint32_t i = 0; i < remoteKeys.size(); i++) {
