@@ -70,12 +70,26 @@ BResult BioClientNet::StartPre(WorkerMode mode, NetOptions &netConf)
 }
 
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView,
-    uint16_t protocol, const NetOptions netConf)
+    uint16_t protocol, NetOptions &netConf)
 {
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
     //初始化trans engine
+    std::string ipMask;
+    uint16_t port = UINT16_MAX;
+    for (auto &node : nodeView) {
+        if (node.second.id.VNodeId() == localNid) {
+            ipMask = node.second.ip;
+            port = node.second.port;
+            break;
+        }
+    }
+    if (port == UINT16_MAX) {
+        CLIENT_LOG_ERROR("Not found local node info.");
+        return BIO_OK;
+    }
+    netConf.ipMask = ipMask + "/24";
     if (netConf.isDevicetrans) {
         mTransEngine = MakeRef<MfTransEngine>();
         if (mTransEngine == nullptr) {
@@ -91,21 +105,6 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
     }
     mLocalNid = localNid;
     mNetEngine->SetLocalNodeId(localNid);
-
-    std::string ipMask;
-    uint16_t port = UINT16_MAX;
-    for (auto &node : nodeView) {
-        if (node.second.id.VNodeId() == localNid) {
-            ipMask = node.second.ip;
-            port = node.second.port;
-            break;
-        }
-    }
-    if (port == UINT16_MAX) {
-        CLIENT_LOG_ERROR("Not found local node info.");
-        return BIO_OK;
-    }
-
     auto ret = StartRpcService((ipMask + "/24"), port, static_cast<ServiceProtocol>(protocol), NO_4, netConf);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Bio client start rpc service failed, result:" << ret << ".");

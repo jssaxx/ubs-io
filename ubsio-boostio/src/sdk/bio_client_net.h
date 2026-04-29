@@ -44,7 +44,7 @@ public:
 
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView, uint16_t protocol,
-        const NetOptions netConf);
+        NetOptions &netConf);
 
     BResult GetUnderFsConfig(BioConfig::UnderFsConfig &config);
 
