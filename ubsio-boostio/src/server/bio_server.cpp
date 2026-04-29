@@ -359,9 +359,8 @@ BResult BioServer::BioNetInit()
     netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
-
+    netOptions.isDevicetrans = netConfig.isDevicetrans;
     if (netOptions.isDevicetrans) {
-        netOptions.isDevicetrans = netConfig.isDevicetrans;
         netOptions.isSender = netConfig.isSender;
         netOptions.transDeviceId = netConfig.transDeviceId;
         netOptions.deviceTransType = netConfig.deviceTransType;
