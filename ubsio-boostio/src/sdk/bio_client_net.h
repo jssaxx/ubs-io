@@ -275,6 +275,7 @@ private:
     bool mIsDevicetrans = false;
     std::string mDeviceTransType = "NULL";
     std::string mTransStoreUrl;
+    uint32_t mMemSegmentSize = 4096 * 1024;
     uint64_t mTransMemSize = 0;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;

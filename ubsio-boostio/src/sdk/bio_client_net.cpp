@@ -60,6 +60,7 @@ BResult BioClientNet::StartPre(WorkerMode mode, NetOptions &netConf)
             netConf.deviceTransType = mDeviceTransType;
             netConf.transMemSize = mTransMemSize;
             netConf.transStoreUrl = mTransStoreUrl;
+            netConf.transSegmentSize = mMemSegmentSize;
             if (netConf.isDevicetrans) {
                 CLIENT_LOG_INFO("Get server device trance type:" << netConf.deviceTransType <<
                 ", trans store url:" << netConf.transStoreUrl << ", trans mem size:" << netConf.transMemSize);
@@ -217,6 +218,7 @@ BResult BioClientNet::ShmInit()
     mTransStoreUrl = rsp.transStoreUrl;
     mTransMemSize = rsp.transMemSize;
     mNetSegmentSize = rsp.netSegmentSize;
+    mMemSegmentSize = rsp.memSegmentSize;
     mEnableHtrace = rsp.enableHtrace;
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;

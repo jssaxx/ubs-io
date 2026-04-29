@@ -943,11 +943,27 @@ void diagnose::BioSdkCommand::HandleBatchGetLocal(const std::vector<std::string>
             mPrintOp("Bio batch get free shm fail.\n");
         }
     }
+
     if (remoteKeys.size() != 0) {
+        uint32_t singleMemSize = bs / 4;
+        uintptr_t **memAddrs = reinterpret_cast<uintptr_t **>(malloc(sizeof(uintptr_t*) * remoteKeys.size()));
+        size_t **memSizes = reinterpret_cast<size_t **>(malloc(sizeof(size_t*) * remoteKeys.size()));
+        for (uint32_t i = 0; i < remoteKeys.size(); i++) {
+            uintptr_t *memAddr = reinterpret_cast<uintptr_t*>(malloc(sizeof(uintptr_t) * 4));
+            size_t *memSize = reinterpret_cast<size_t*>(malloc(sizeof(size_t) * 4));
+            for (uint32_t j = 0; j < 4; j++) {
+                uintptr_t addr = reinterpret_cast<uintptr_t>(malloc(singleMemSize));
+                memAddr[j] = addr;
+                memSize[j] = singleMemSize;
+            }
+            memAddrs[i] = memAddr;
+            memSizes[i] = memSize;
+        }
         uintptr_t *remoteValueAddrs = reinterpret_cast<uintptr_t *>(malloc(sizeof(uintptr_t) * remoteKeys.size()));
         int32_t *remoteResults = reinterpret_cast<int32_t *>(malloc(sizeof(int32_t) * remoteKeys.size()));
-        auto remoteResult = BioBatchGetLocal(gTenantId, const_cast<const char **>(remoteKeys.data()), remoteKeys.size(),
-                                             remoteLengths.data(), remoteLocations.data(), remoteValueAddrs,
+
+        auto remoteResult = BioBatchGetRemote(gTenantId, const_cast<const char **>(remoteKeys.data()), remoteKeys.size(),
+                                             remoteLocations.data(), memAddrs, memSizes, remoteKeys.size(), 4, remoteValueAddrs,
                                              remoteResults);
 
         if (remoteResult != 0) {
@@ -959,15 +975,17 @@ void diagnose::BioSdkCommand::HandleBatchGetLocal(const std::vector<std::string>
                 mPrintOp("Bio batch get fail, key:%s, ret:%d.\n", remoteKeys[i], remoteResults[i]);
                 return;
             }
+            char *resultMem = reinterpret_cast<char*>(malloc(bs));
+            for (uint32_t j = 0; j < 4; j++) {
+                memcpy(reinterpret_cast<void*>(resultMem + j * singleMemSize), reinterpret_cast<void*>(memAddrs[i][j]), singleMemSize);
+            }
             if (BioCrcUtil::Crc32(reinterpret_cast<void *>(remoteValues[i]), bs) !=
-                BioCrcUtil::Crc32(reinterpret_cast<void *>(remoteValueAddrs[i]), bs)) {
+                BioCrcUtil::Crc32(reinterpret_cast<void *>(resultMem), bs)) {
                 mPrintOp("Bio batch get fail, key:%s, crc check fail.\n", remoteKeys[i]);
                 return;
             }
         }
-        if (BioBatchGetFree(gTenantId, remoteValueAddrs, remoteKeys.size()) != 0) {
-            mPrintOp("Bio batch get free shm fail.\n");
-        }
+
     }
     mPrintOp("Bio batch get success!\n");
 }

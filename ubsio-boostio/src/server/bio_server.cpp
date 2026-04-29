@@ -360,13 +360,14 @@ BResult BioServer::BioNetInit()
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
 
-    netOptions.isDevicetrans = netConfig.isDevicetrans;
-    netOptions.isSender = netConfig.isSender;
-    netOptions.transDeviceId = netConfig.transDeviceId;
-    netOptions.deviceTransType = netConfig.deviceTransType;
-    netOptions.transStoreUrl = netConfig.transStoreUrl;
-    netOptions.transMemSize = netConfig.transMemSize;
     if (netOptions.isDevicetrans) {
+        netOptions.isDevicetrans = netConfig.isDevicetrans;
+        netOptions.isSender = netConfig.isSender;
+        netOptions.transDeviceId = netConfig.transDeviceId;
+        netOptions.deviceTransType = netConfig.deviceTransType;
+        netOptions.transStoreUrl = netConfig.transStoreUrl;
+        netOptions.transMemSize = netConfig.transMemSize;
+        netOptions.transSegmentSize = netConfig.memSegmentSize;
         mTransEngine = MakeRef<MfTransEngine>();
         ChkTrue(mTransEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
         ret = mTransEngine->Initialize(netOptions);
