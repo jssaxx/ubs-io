@@ -179,16 +179,16 @@ void ProxyOperationsLoader::LoadProxyExitFunc()
     if (handle == nullptr) {
         return;
     }
+    operations = nullptr;
+
     ProxyExitFunc proxyExitFunc =
         reinterpret_cast<ProxyExitFunc>(dlsym(handle, proxyExitFuncName.c_str()));
     if (proxyExitFunc == nullptr) {
         INTERCEPTORLOG_DEBUG("Symbol(%s) of %s is ambiguous, error(%s)", proxyExitFuncName.c_str(),
             workProxy.c_str(), dlerror());
-        operations = nullptr;
         dlclose(handle);
         return;
     }
     proxyExitFunc();
     dlclose(handle);
-    operations = nullptr;
 }

@@ -91,6 +91,10 @@ static std::string FormatWorkerGroupCpuIdsRange(const std::vector<std::pair<uint
 
 int32_t InterceptorClientNetService::StartNetService()
 {
+    if (UNLIKELY(mShutdown.load())) {
+        return BIO_NOT_READY;
+    }
+
     mNetEngine = MakeRef<NetEngine>();
     if (mNetEngine == nullptr) {
         return BIO_ALLOC_FAIL;
@@ -101,6 +105,7 @@ int32_t InterceptorClientNetService::StartNetService()
     uint32_t queueSize = NO_128;
     auto ret = mNetEngine->Initialize(timeoutSec, coreThreadNum, queueSize, Log);
     if (UNLIKELY(ret != BIO_OK)) {
+        StopNetServiceLocked();
         return ret;
     }
 
@@ -113,6 +118,7 @@ int32_t InterceptorClientNetService::StartNetService()
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Parse INTERCEPTOR_IPC_CONN_COUNT failed, value:" <<
             (connCountEnv == nullptr ? "<null>" : connCountEnv) << ".");
+        StopNetServiceLocked();
         return ret;
     }
     if (connCountEnv != nullptr && strlen(connCountEnv) > 0) {
@@ -131,6 +137,7 @@ int32_t InterceptorClientNetService::StartNetService()
         if (!ParseWorkerGroupCpuIdsRange(cpuIdsEnv, netOptions.workerGroupCpuIdsRange,
             IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
             CLOG_ERROR("Parse INTERCEPTOR_IPC_CPUIDS failed, value:" << cpuIdsEnv << ".");
+            StopNetServiceLocked();
             return BIO_INVALID_PARAM;
         }
         CLOG_INFO("Apply INTERCEPTOR_IPC_CPUIDS success, value:" <<
@@ -140,6 +147,7 @@ int32_t InterceptorClientNetService::StartNetService()
         IPC_WORKER_GROUP_CPU_RANGE_COUNT)) {
         CLOG_ERROR("INTERCEPTOR_IPC_CPUIDS not match INTERCEPTOR_IPC_CONN_COUNT, connCount:" <<
             netOptions.connCount << ".");
+        StopNetServiceLocked();
         return BIO_INVALID_PARAM;
     }
     netOptions.handlerCount = netOptions.connCount;
@@ -149,6 +157,7 @@ int32_t InterceptorClientNetService::StartNetService()
             ", handlerCount:" << netOptions.handlerCount << ", busyLoop:" <<
             (netOptions.isBusyLoop ? "true" : "false") << ", cpuIds:" <<
             FormatWorkerGroupCpuIdsRange(netOptions.workerGroupCpuIdsRange) << ".");
+        StopNetServiceLocked();
         return ret;
     }
 
@@ -158,12 +167,14 @@ int32_t InterceptorClientNetService::StartNetService()
     ret = mNetEngine->SyncConnect(info);
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Connect interceptor ipc channel failed, ret:" << ret << ", pid:" << mPid << ".");
+        StopNetServiceLocked();
         return ret;
     }
 
     ret = CreateDataMessageMem();
     if (UNLIKELY(ret != BIO_OK)) {
         CLOG_ERROR("Create interceptor data message memory failed, ret:" << ret << ", pid:" << mPid << ".");
+        StopNetServiceLocked();
         return ret;
     }
 
@@ -198,7 +209,28 @@ void InterceptorClientNetService::OrphanInheritedState(uint32_t currentPid)
 
 BResult InterceptorClientNetService::EnsureReadyForCurrentProcess()
 {
+    if (UNLIKELY(mShutdown.load())) {
+        return BIO_NOT_READY;
+    }
+
     uint32_t currentPid = static_cast<uint32_t>(getpid());
+    if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
+        std::lock_guard<std::mutex> lock(mStartLock);
+        if (UNLIKELY(mShutdown.load())) {
+            return BIO_NOT_READY;
+        }
+        if (mPid != 0 && mPid != currentPid) {
+            OrphanInheritedState(currentPid);
+        }
+    }
+    if (LIKELY(mReady.load())) {
+        return BIO_OK;
+    }
+    std::lock_guard<std::mutex> lock(mStartLock);
+    if (UNLIKELY(mShutdown.load())) {
+        return BIO_NOT_READY;
+    }
+    currentPid = static_cast<uint32_t>(getpid());
     if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
         OrphanInheritedState(currentPid);
     }
@@ -211,13 +243,14 @@ BResult InterceptorClientNetService::EnsureReadyForCurrentProcess()
 
 BResult InterceptorClientNetService::PrepareBeforeFork()
 {
+    std::lock_guard<std::mutex> lock(mStartLock);
     uint32_t currentPid = static_cast<uint32_t>(getpid());
     if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
         OrphanInheritedState(currentPid);
         return BIO_OK;
     }
     if (mReady.load() || mNetEngine != nullptr || mDataMsgMemPool != nullptr) {
-        StopNetService();
+        StopNetServiceLocked();
     }
     return BIO_OK;
 }
@@ -232,6 +265,17 @@ BResult InterceptorClientNetService::PrepareAfterForkChild()
 }
 
 void InterceptorClientNetService::StopNetService()
+{
+    std::lock_guard<std::mutex> lock(mStartLock);
+    StopNetServiceLocked();
+}
+
+void InterceptorClientNetService::ShutdownNetService()
+{
+    mShutdown.store(true);
+}
+
+void InterceptorClientNetService::StopNetServiceLocked()
 {
     uint32_t currentPid = static_cast<uint32_t>(getpid());
     if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
