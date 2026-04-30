@@ -161,7 +161,7 @@ public:
 
     static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
 
-    BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc);
+    BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc, bool enableTrans);
     BResult Start();
     BResult RecoverDataMessageMem();
 

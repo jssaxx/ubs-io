@@ -76,7 +76,7 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode, NetOptions &netConf)
     }
 
     // 根据配置文件中的日志等级重新设置Client端的日志打印等级.
-    BioClientLog::Instance()->ResetLogLevel(mNetEngine->GetNegoLogLevel());
+    BioClientLog::Instance()->ResetLogLevel(mNetEngine->GetNegoLogLevel());mEnableTrance
     return BIO_OK;
 }
 
@@ -132,7 +132,7 @@ void BioClient::BioClientUpdateView()
     return;
 }
 
-BResult BioClient::BioClientMirrorInit(WorkerMode mode)
+BResult BioClient::BioClientMirrorInit(WorkerMode mode, bool enableTrans)
 {
     mMirror = MakeRef<MirrorClient>(mode);
     if (mMirror == nullptr) {
@@ -145,7 +145,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
         mNetEngine->GetCrcFlag();
     auto ret = mMirror->Initialize(updateView, mNetEngine->GetNegoWorkScene(), mNetEngine->GetNegoWorkIoAlignSize(),
-        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
+        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc, enableTrans);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
         return ret;
@@ -153,6 +153,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     if (mode == SEPARATES) {
         mNetEngine->RegIpcRecoveredHandler([this]() { return mMirror->RecoverDataMessageMem(); });
     }
+
     return ret;
 }
 
@@ -429,7 +430,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf, in
     }
 
     // 5. 初始化Mirror client.
-    if (BioClientMirrorInit(mode) != BIO_OK) {
+    if (BioClientMirrorInit(mode, netConf.isDevicetrans) != BIO_OK) {
         return BIO_ERR;
     }
 

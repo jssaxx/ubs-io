@@ -283,7 +283,7 @@ public:
     BResult BioClientNetPreInit(WorkerMode mode, NetOptions &netConf);
     BResult BioClientNetPostInit(NetOptions &netConf);
     void BioClientNetExit();
-    BResult BioClientMirrorInit(WorkerMode mode);
+    BResult BioClientMirrorInit(WorkerMode mode, bool enableTrans);
     void BioClientMirrorExit();
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();

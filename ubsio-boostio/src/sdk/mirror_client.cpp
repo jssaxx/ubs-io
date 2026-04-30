@@ -575,8 +575,9 @@ uint32_t MirrorClient::CalcPtQuota(CmPtInfo &ptEntry)
 }
 
 BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize,
-    uint32_t timeOut, bool enableCrc)
+    uint32_t timeOut, bool enableCrc, bool enableTrans)
 {
+    mEnableTrance = enableTrans;
     mEnableCrc = enableCrc;
     mUpdateView = updateView;
     mScene = static_cast<WorkerScene>(scene);
