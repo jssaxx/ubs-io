@@ -76,7 +76,7 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode, NetOptions &netConf)
     }
 
     // 根据配置文件中的日志等级重新设置Client端的日志打印等级.
-    BioClientLog::Instance()->ResetLogLevel(mNetEngine->GetNegoLogLevel());mEnableTrance
+    BioClientLog::Instance()->ResetLogLevel(mNetEngine->GetNegoLogLevel());
     return BIO_OK;
 }
 
