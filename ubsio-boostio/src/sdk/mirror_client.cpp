@@ -1304,7 +1304,6 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         }
         nodes[i] = ptEntry.masterNodeId;
         if (planSend.find(nodes[i]) == planSend.end()) {
-
             planSend.emplace(std::pair<uint16_t, BatchGetPlanHbm>(nodes[i],
                                                                {1, 0, 0, nullptr}));
         } else {
@@ -1316,9 +1315,6 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
     for (uint16_t i = 0; i < planSend.size(); i++) {
         size_t reqLen = 0;
         if (mEnableTrance) {
-            it->second.req->enableTrance = true;
-            // todo 拷贝uuid
-
             reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * (sizeof(GetKeyRemoteHbmInfo) + param.col * (sizeof(uintptr_t) + sizeof(size_t)));
         } else {
             reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * sizeof(GetKeyRemoteHbmInfo);
@@ -1338,16 +1334,18 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
             return BIO_ALLOC_FAIL;
         }
         if (mEnableTrance) {
+            it->second.req->enableTrance = true;
             it->second.enableMem = reinterpret_cast<char *>(it->second.req) +
                                                                sizeof(BatchGetRemoteHbmRequest) +
                                                                it->second.count * sizeof(GetKeyRemoteHbmInfo);
+            std::string uniqueId = net::BioClientNet::Instance()->GetTransNetEngine()->GetLocalUniqueId();
+            CopyKey(it->second.req->uuid, uniqueId.c_str(), MAX_UUID_SIZE);
         }
         it->second.reqLen = reqLen;
         it->second.req->count = it->second.count;
         it->second.req->pid = getpid();
         it->second.req->srcNid = mLocalNid.VNodeId();
         it->second.req->isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
-
         it++;
     }
 
@@ -1360,9 +1358,12 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
             plan.req->keysInfo[plan.index].hbmMemAddr = reinterpret_cast<uintptr_t*>(plan.enableMem + plan.index * (param.col * (sizeof(uintptr_t) + sizeof(size_t))));
             plan.req->keysInfo[plan.index].memSize = reinterpret_cast<size_t*>(reinterpret_cast<char*>(plan.req->keysInfo[plan.index].hbmMemAddr) + param.col * sizeof(uintptr_t));
             plan.req->keysInfo[plan.index].memCount = param.col;
+            CLIENT_LOG_INFO("Batch get open trans key:" << plan.req->keysInfo[plan.index].key << ", hbmMemAddr addr:" << plan.req->keysInfo[plan.index].hbmMemAddr <<
+                ", memsize addr:" << plan.req->keysInfo[plan.index].memSize);
             for (uint32_t j = 0; j < param.col; j++) {
                 plan.req->keysInfo[plan.index].hbmMemAddr[j] = param.memAddr[i][j];
                 plan.req->keysInfo[plan.index].memSize[j] = param.memSize[i][j];
+                CLIENT_LOG_INFO("index:" << j << ", hbmMemAddr:" << plan.req->keysInfo[plan.index].hbmMemAddr[j] << ", memSize:" << plan.req->keysInfo[plan.index].memSize[j]);
             }
         } else {
             ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.

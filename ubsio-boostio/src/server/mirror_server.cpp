@@ -1116,7 +1116,9 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             transReq.remoteAddrs = remoteAddrs;
             transReq.dataSizes = dataSizes;
             transReq.localAddrs = localAddrs;
-            ret = BioServer::Instance()->GetTransEngine()->Write(transReq);
+            BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_BATCH_WRITE);
+            ret = BioServer::Instance()->GetTransEngine()->BatchWrite(transReq);
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_BATCH_WRITE, ret);
             if (ret != BIO_OK) {
                 LOG_ERROR("Trans net write fail, ret:" << ret << ".");
             }
