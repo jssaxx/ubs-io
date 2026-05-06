@@ -1058,13 +1058,18 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
     MrInfo mrInfo;
     uint16_t localNid = Cm::Instance()->GetCmLocalNodeId().VNodeId();
     RCacheSlicePtr sliceP = nullptr;
+    uintptr_t *hbmMemAddr = nullptr;
+    size_t *memSize = nullptr;
     if (req->enableTrance) {
+        char *reqBase = reinterpret_cast<char *>(req);
+        hbmMemAddr = reinterpret_cast<uintptr_t *>(reqBase + keyInfo.hbmMemAddrOffset);
+        memSize = reinterpret_cast<size_t *>(reqBase + keyInfo.memSizeOffset);
         std::vector<FlowAddr> addrVec;
         uint64_t length = 0;
         for (uint32_t i = 0; i < keyInfo.memCount; i ++) {
-            mrInfo = {keyInfo.hbmMemAddr[i], static_cast<uint32_t>(keyInfo.memSize[i])};
+            mrInfo = {hbmMemAddr[i], static_cast<uint32_t>(memSize[i])};
             addrVec.emplace_back(mrInfo);
-            length += keyInfo.memSize[i];
+            length += memSize[i];
         }
         sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, length, addrVec);
     } else {
@@ -1082,7 +1087,7 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                                         sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << "."
                                         << " ptVersion:" << BioServer::Instance()->GetPtEntry(keyInfo.ptId).version <<
                                         ", ptId:" << keyInfo.ptId);
-    auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+    auto writer = [&keyInfo, req, localNid, hbmMemAddr, memSize, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
 
         if (req->enableTrance) {
             NetMrInfo bioMr;
@@ -1109,9 +1114,9 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             size_t dataSize = 0;
             for (uint32_t i = 0; i < keyInfo.memCount; i++) {
                 localAddrs.emplace_back(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(tranceMem) + dataSize));
-                remoteAddrs.emplace_back(reinterpret_cast<void*>(keyInfo.hbmMemAddr[i]));
-                dataSizes.emplace_back(keyInfo.memSize[i]);
-                dataSize += keyInfo.memSize[i];
+                remoteAddrs.emplace_back(reinterpret_cast<void*>(hbmMemAddr[i]));
+                dataSizes.emplace_back(memSize[i]);
+                dataSize += memSize[i];
             }
             transReq.remoteAddrs = remoteAddrs;
             transReq.dataSizes = dataSizes;
@@ -2203,6 +2208,28 @@ int32_t MirrorServer::HandleBatchGetRemoteHbm(ServiceContext &ctx)
     }
 
     auto req = static_cast<BatchGetRemoteHbmRequest *>(ctx.MessageData());
+    size_t minReqLen = sizeof(BatchGetRemoteHbmRequest) + req->count * sizeof(GetKeyRemoteHbmInfo);
+    if (UNLIKELY(ctx.MessageDataLen() < minReqLen)) {
+        LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " less than req len:" << minReqLen << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+    if (req->enableTrance) {
+        for (uint32_t i = 0; i < req->count; i++) {
+            auto &keyInfo = req->keysInfo[i];
+            size_t addrEnd = static_cast<size_t>(keyInfo.hbmMemAddrOffset) +
+                keyInfo.memCount * sizeof(uintptr_t);
+            size_t sizeEnd = static_cast<size_t>(keyInfo.memSizeOffset) +
+                keyInfo.memCount * sizeof(size_t);
+            if (UNLIKELY(addrEnd > ctx.MessageDataLen()) || UNLIKELY(sizeEnd > ctx.MessageDataLen())) {
+                LOG_ERROR("Receive get message hbm info invalid, len:" << ctx.MessageDataLen() <<
+                    ", index:" << i << ", memCount:" << keyInfo.memCount <<
+                    ", addrOffset:" << keyInfo.hbmMemAddrOffset << ", sizeOffset:" << keyInfo.memSizeOffset << ".");
+                BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+                return BIO_OK;
+            }
+        }
+    }
     return MirrorServerBatchGetRemoteHbm(ctx, req);
 }
 
@@ -3222,4 +3249,3 @@ int32_t MirrorServer::MirrorServerGetCacheHit(ServiceContext &ctx)
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheHitResponse));
     return BIO_OK;
 }
-

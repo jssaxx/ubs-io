@@ -407,8 +407,8 @@ typedef struct {
     uint16_t ptId;
     int32_t *result;
     uint32_t memCount;
-    uintptr_t *hbmMemAddr;
-    size_t *memSize;
+    uint32_t hbmMemAddrOffset;
+    uint32_t memSizeOffset;
 } GetKeyRemoteHbmInfo;
 
 typedef struct {
@@ -435,9 +435,9 @@ struct BatchGetPlanHbm {
     uint32_t reqLen;
     char *enableMem;
     BatchGetRemoteHbmRequest *req;
-    BatchGetPlanHbm() : count(0), index(0), reqLen(0), req(nullptr) {}
+    BatchGetPlanHbm() : count(0), index(0), reqLen(0), enableMem(nullptr), req(nullptr) {}
     BatchGetPlanHbm(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam, BatchGetRemoteHbmRequest *reqParam) :
-            count(countParam), index(indexParam), reqLen(reqLenParam), req(reqParam) {}
+            count(countParam), index(indexParam), reqLen(reqLenParam), enableMem(nullptr), req(reqParam) {}
 };
 
 typedef struct {
