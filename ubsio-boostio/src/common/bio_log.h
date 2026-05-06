@@ -122,6 +122,10 @@ public:
         return nowLevel >= mOptions.minLogLevel;
     }
 
+    inline int32_t GetLogLevel() const
+    {
+        return mOptions.minLogLevel;
+    }
     static Logger *gInstance;
 
 private:

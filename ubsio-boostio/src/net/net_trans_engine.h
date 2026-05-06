@@ -113,6 +113,8 @@ using mfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, cons
 using mfSmemTransBatchReadFunc = int32_t (*)(smem_trans_t, void **, const char *,
                                              const void **, size_t *, uint32_t, smem_bm_copy_type, uint32_t);
 using mfSemTransGetRpcPortFunc = int32_t (*)(const char *, int32_t *);
+using mfSemSetExternLoggerFunc = int32_t (*)(void (*)(int32_t, const char *));
+using mfSemSetLogLevelFunc = int32_t (*)(int32_t);
 
 class DlMfApi {
 public:
@@ -243,6 +245,23 @@ public:
         return mfSmemTransBatchRead(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, opcode, flags);
     }
 
+    static inline BResult MfSmemSetExternLogger(void (*logger)(int32_t, const char *))
+    {
+        if (mfSemSetExternLogger == nullptr) {
+            return BIO_UNDER_API_UNLOAD;
+        }
+        return mfSemSetExternLogger(logger);
+    }
+
+    static inline BResult MfSmemSetLogLevel(int32_t level)
+    {
+        if (mfSemSetLogLevel == nullptr) {
+            return BIO_UNDER_API_UNLOAD;
+        }
+        return mfSemSetLogLevel(level);
+    }
+
+
 private:
     static void* mfHandle;
     static std::mutex gMutex;
@@ -263,6 +282,8 @@ private:
     static mfSmemTransBatchWriteFunc mfSmemTransBatchWrite;
     static mfSmemTransReadFunc mfSmemTransRead;
     static mfSmemTransBatchReadFunc mfSmemTransBatchRead;
+    static mfSemSetExternLoggerFunc mfSemSetExternLogger;
+    static mfSemSetLogLevelFunc mfSemSetLogLevel;
 };
 /*
 class TransMemoryManager {
