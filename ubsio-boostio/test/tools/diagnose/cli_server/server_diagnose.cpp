@@ -213,7 +213,7 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         uint64_t existHit = WCacheStatistic::Instance().GetExistHitCount();
         mPrintOp("Exist times:%lu\n", existTotol);
         mPrintOp("Exist hit times:%lu\n", existHit);
-        mPrintOp("Exist hit ratio:%2f%%\n", static_cast<float>(existHit) / static_cast<float>(existTotol));
+        mPrintOp("Exist hit ratio:%2f%%\n", static_cast<float>(existHit) * NO_100 / static_cast<float>(existTotol));
     } else {
         mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
     }
