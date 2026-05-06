@@ -243,7 +243,7 @@ void diagnose::BioServerCommand::BioServerDebugHelp(char *command, int detail) n
     mPrintOp("\tchange water level: bioserver chgwlv [tier] [water_level]\n");
     mPrintOp("\tchange memory read write ratio: bioserver chgmr [memory ratio]\n");
     mPrintOp("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
-    mPrintOp("\tshow: bioserver show [disk/net/olc/evict]\n");
+    mPrintOp("\tshow: bioserver show [disk/net/olc/evict/existHit]\n");
     mPrintOp("\ttrace: bioserver trace [show/clear]\n");
     mPrintOp("\tRCache put: bioserver RCachePut [key] [filePath] [ptId] [length]\n");
     mPrintOp("\tRCache get: bioserver RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
