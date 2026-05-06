@@ -469,9 +469,13 @@ BResult Cache::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
 
 bool Cache::Exist(uint16_t ptId, const Key &key)
 {
+    WCacheStatistic::Instance().IncExistTotalCount();
     BIO_TRACE_START(WCACHE_TRACE_EXIST);
     auto ret = mWCacheManager->Exist(ptId, key);
     BIO_TRACE_END(WCACHE_TRACE_EXIST, ret ? BIO_OK : BIO_NOT_EXISTS);
+    if (ret == true) {
+        WCacheStatistic::Instance().IncExistHitCount();
+    }
     return ret;
 }
 

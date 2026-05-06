@@ -26,6 +26,26 @@ public:
         return instance;
     }
 
+    inline void IncExistHitCount()
+    {
+        existHitCount.fetch_add(1ULL);
+    }
+
+    inline void IncExistTotalCount()
+    {
+        existCount.fetch_add(1ULL);
+    }
+
+    uint64_t GetExistTotalCount()
+    {
+        return existCount.load();
+    }
+
+    uint64_t GetExistHitCount()
+    {
+        return existHitCount.load();
+    }
+
     inline void IncHitCount()
     {
         hitCount.fetch_add(1ULL);
@@ -87,6 +107,8 @@ private:
     std::atomic<uint64_t> hitCount;
     std::atomic<uint64_t> hitMemCount;
     std::atomic<uint64_t> hitDiskCount;
+    std::atomic<uint64_t> existCount;
+    std::atomic<uint64_t> existHitCount;
 };
 }
 }

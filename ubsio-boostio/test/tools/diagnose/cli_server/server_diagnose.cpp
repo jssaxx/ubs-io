@@ -21,6 +21,7 @@
 #include "bio_server.h"
 #include "bio_functions.h"
 #include "cache_overload_ctrl.h"
+#include "wcache_statistic.h"
 #include "server_diagnose.h"
 
 using namespace ock::bio;
@@ -203,6 +204,16 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         for (auto iter = holders.begin(); iter != holders.end(); iter++) {
             mPrintOp("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
+    } else if (cmdType == "existHit") {
+        if (cmds.size() != 2) {
+            mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        uint64_t existTotol = WCacheStatistic::Instance().GetExistTotalCount();
+        uint64_t existHit = WCacheStatistic::Instance().GetExistHitCount();
+        mPrintOp("Exist times:%lu\n", existTotol);
+        mPrintOp("Exist hit times:%lu\n", existHit);
+        mPrintOp("Exist hit ratio:%2f%%\n", static_cast<float>(existHit) / static_cast<float>(existTotol));
     } else {
         mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
     }
