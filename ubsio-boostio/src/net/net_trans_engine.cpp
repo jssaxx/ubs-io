@@ -52,6 +52,8 @@ mfSmemTransWriteFunc DlMfApi::mfSmemTransWrite = nullptr;
 mfSmemTransBatchWriteFunc DlMfApi::mfSmemTransBatchWrite = nullptr;
 mfSmemTransReadFunc DlMfApi::mfSmemTransRead = nullptr;
 mfSmemTransBatchReadFunc DlMfApi::mfSmemTransBatchRead = nullptr;
+mfSemSetExternLoggerFunc DlMfApi::mfSemSetExternLogger = nullptr;
+mfSemSetLogLevelFunc DlMfApi::mfSemSetLogLevel = nullptr;
 
 int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
 {
