@@ -35,13 +35,11 @@ public:
         return instance;
     }
 
-    ~InterceptorClientNetService()
-    {
-        StopNetService();
-    }
+    ~InterceptorClientNetService() = default;
 
     int32_t StartNetService();
     void StopNetService();
+    void ShutdownNetService();
     BResult CreateDataMessageMem();
     BResult PrepareBeforeFork();
     BResult PrepareAfterForkChild();
@@ -135,10 +133,13 @@ public:
 private:
     BResult EnsureReadyForCurrentProcess();
     void OrphanInheritedState(uint32_t currentPid);
+    void StopNetServiceLocked();
 
 private:
+    std::mutex mStartLock;
     uint32_t mPid = 0;
     std::atomic<bool> mReady = { false };
+    std::atomic<bool> mShutdown = { false };
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     uint64_t mShmOffset = 0;
