@@ -1,0 +1,56 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+#ifndef MMS_TRACE_H
+#define MMS_TRACE_H
+
+#include "tracer.h"
+
+namespace ock {
+namespace mms {
+constexpr uint32_t SERVICE_ID = 0;
+
+enum SdkTracerType {
+    SDK_TRACE_START = tracemark::GetTraceId(SERVICE_ID, 0U),
+    SDK_TRACE_PUT,
+    SDK_TRACE_GET,
+    SDK_TRACE_UPDATE,
+    SDK_TRACE_DELETE,
+    SDK_TRACE_REPLACE,
+    SDK_TRACE_CATCH_UP,
+    SDK_TRACE_END,
+};
+
+enum NetTracerType {
+    NET_TRACE_START = SDK_TRACE_END,
+    NET_TRACE_IPC_HDL,
+    NET_TRACE_SEND_REQ,
+    NET_TRACE_END,
+};
+
+enum CrbTracerType {
+    CRB_TRACE_START = NET_TRACE_END,
+    CRB_COPY_VALUE_TO_BUFF,
+    CRB_BATCH_SEND_BUFF,
+    CRB_TRACE_END,
+};
+
+enum CacheTraceType {
+    CACHE_TRACE_START = CRB_TRACE_END,
+    CACHE_ALLOC_BLOCK,
+    CACHE_FREE_BLOCK,
+    CACHE_TRACE_PUT,
+    CACHE_TRACE_UPDATE,
+    CACHE_TRACE_DELETE,
+    CACHE_TRACE_REPLACE,
+    CACHE_TRACE_END,
+};
+
+#define MMS_TRACE_START(TP_ID) TRACE_DELAY_BEGIN(TP_ID)
+#define MMS_TRACE_END(TP_ID, RET_CODE) TRACE_DELAY_END(TP_ID, RET_CODE)
+#define MMS_TRACE_ASYNC_BEGIN(TP_ID) TRACE_ASYNC_DELAY_BEGIN(TP_ID)
+#define MMS_TRACE_ASYNC_END(TP_ID, RET_CODE, START_TIME) TRACE_ASYNC_DELAY_END(TP_ID, RET_CODE, START_TIME)
+}
+}
+#endif // BIO_TRACE_H
