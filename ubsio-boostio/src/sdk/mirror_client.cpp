@@ -1359,6 +1359,8 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
             plan.req->keysInfo[plan.index].hbmMemAddr = reinterpret_cast<uintptr_t*>(plan.enableMem + plan.index * (param.col * (sizeof(uintptr_t) + sizeof(size_t))));
             plan.req->keysInfo[plan.index].memSize = reinterpret_cast<size_t*>(reinterpret_cast<char*>(plan.req->keysInfo[plan.index].hbmMemAddr) + param.col * sizeof(uintptr_t));
             plan.req->keysInfo[plan.index].memCount = param.col;
+            plan.req->keysInfo[plan.index].hbmMemPosition = reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].hbmMemAddr) - reinterpret_cast<uintptr_t>(plan.req);
+            plan.req->keysInfo[plan.index].memSizePosition = reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].memSize) - reinterpret_cast<uintptr_t>(plan.req);
             CLIENT_LOG_INFO("Batch get open trans key:" << plan.req->keysInfo[plan.index].key << ", hbmMemAddr addr:" << plan.req->keysInfo[plan.index].hbmMemAddr <<
                 ", memsize addr:" << plan.req->keysInfo[plan.index].memSize);
             for (uint32_t j = 0; j < param.col; j++) {

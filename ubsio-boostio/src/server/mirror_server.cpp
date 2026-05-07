@@ -1061,6 +1061,8 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
     if (req->enableTrance) {
         std::vector<FlowAddr> addrVec;
         uint64_t length = 0;
+        keyInfo.hbmMemAddr = reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(req) + keyInfo.hbmMemPosition);
+        keyInfo.memSize = reinterpret_cast<size_t*>(reinterpret_cast<uintptr_t>(req) + keyInfo.memSizePosition);
         for (uint32_t i = 0; i < keyInfo.memCount; i ++) {
             mrInfo = {keyInfo.hbmMemAddr[i], static_cast<uint32_t>(keyInfo.memSize[i])};
             addrVec.emplace_back(mrInfo);

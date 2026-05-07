@@ -407,6 +407,8 @@ typedef struct {
     uint16_t ptId;
     int32_t *result;
     uint32_t memCount;
+    uint32_t hbmMemPosition;
+    uint32_t memSizePosition;
     uintptr_t *hbmMemAddr;
     size_t *memSize;
 } GetKeyRemoteHbmInfo;
