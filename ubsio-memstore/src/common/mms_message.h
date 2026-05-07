@@ -147,14 +147,6 @@ struct IOCtxItem {
     IOCtxItem(uint64_t buff, uint64_t reqLen) : buff(buff), reqLen(reqLen){};
 };
 
-BResult EncodePutRequest(PutItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
-                         const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodePutRequest(std::vector<PutItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
-
-BResult EncodeUpdateRequest(UpdateItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
-                            const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodeUpdateRequest(std::vector<UpdateItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
-
 BResult EncodeDeleteRequest(DeleteItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                             const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
 BResult DeCodeDeleteRequest(std::vector<DeleteItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);

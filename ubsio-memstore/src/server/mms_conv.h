@@ -2,8 +2,8 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
  */
 
-#ifndef MMS_H
-#define MMS_H
+#ifndef MMS_CONV_H
+#define MMS_CONV_H
 
 #include <functional>
 #include <string>
@@ -13,7 +13,7 @@
 
 namespace ock {
 namespace mms {
-class Mms {
+class MmsConv {
 public:
     /**
      * @brief: Initialize mms service
@@ -51,13 +51,13 @@ public:
     static CResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Replace object
-     *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
-     */
+    * @brief: Replace object
+    *
+    * @param[in]: userId: user id
+    * @param[in]: itemList: key/value desc list
+    * @param[in]: num: batch num
+    * @return: return RET_MMS_OK mean ok, others, return non-zero value
+    */
     static CResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
 };
 }

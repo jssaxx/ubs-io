@@ -42,10 +42,7 @@ public:
     void FreeBlocks(std::vector<IOCtxItem> &ctxItems);
     BResult SendSingleReq(uint64_t userId, const IoHandle &handle, IOCtxItem &item);
     BResult HandleSendReqs(std::vector<IOCtxItem> &ctxItems, uint64_t userId, const IoHandle &handle);
-    BResult PutLocal(void *ioBuff, uint32_t ioLen);
-    BResult Put(uint64_t userId, PutItems *itemList, uint32_t itemNum);
     BResult Get(uint64_t userId, GetItems *itemList, uint32_t itemNum);
-    BResult Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
     BResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
     BResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
 
@@ -62,27 +59,6 @@ private:
     void RegisterOpcode();
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
-
-    BResult HandlePut(ServiceContext &ctx);
-    BResult HandlePutDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandlePutMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandlePutRemote(ServiceContext &ctx);
-    BResult HandlePutRemoteMulti(ServiceContext &ctx);
-
-    void PutRemoteMulticast(const std::unordered_set<std::string> &remoteIps, void *ioBuff, uint32_t ioLen,
-                            Callback &callback);
-    void PutRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
-
-    BResult HandleUpdate(ServiceContext &ctx);
-    BResult HandleUpdateDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleUpdateMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleUpdateRemote(ServiceContext &ctx);
-    BResult HandleUpdateRemoteMulti(ServiceContext &ctx);
-
-    void UpdateRemoteMulticast(const std::unordered_set<std::string> &remoteIps, void *ioBuff, uint32_t ioLen,
-                               Callback &callback);
-    void UpdateRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
-    BResult UpdateLocal(void *ioBuff, uint32_t ioLen);
 
     BResult HandleDelete(ServiceContext &ctx);
     BResult HandleDeleteDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
