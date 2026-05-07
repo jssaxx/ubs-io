@@ -115,13 +115,9 @@ public:
         mIsRecovering.store(isRecovering, std::memory_order_release);
     }
 
-    BResult HandlePutExistingNode(IndexNode *existingNode, const char *key, const char *value, uint64_t length);
     BResult HandleReplacePut(IndexNode &curNode, const char *key, const char *value, uint64_t length);
-    BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key);
 
-    BResult Put(const char *key, const char *value, uint64_t length, uint32_t version, MmsPtId ptId);
     BResult Get(const char *key, uint64_t offset, uint64_t length, char *value, uint64_t *realLength);
-    BResult Update(const char *key, const char *value, uint64_t offset, uint64_t length, uint32_t version);
     BResult Delete(const char *key, uint32_t version);
     BResult Replace(const ReplacePara &para);
 

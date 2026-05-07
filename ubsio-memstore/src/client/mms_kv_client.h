@@ -42,11 +42,7 @@ public:
 
     BResult HandleSendReqs(uint16_t numaId, uint64_t userId, MmsOpCode opCode, std::vector<IOCtxItem> &ctxItems);
 
-    BResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum);
-
     BResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum);
-
-    BResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
 
     BResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
 
