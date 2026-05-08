@@ -1292,8 +1292,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
 {
     BResult ret = BIO_OK;
-    std::vector<uint32_t> nodes;
-    nodes.reserve(param.count);
+    std::vector<uint32_t> nodes(param.count);
     std::unordered_map<uint16_t, BatchGetPlanHbm> planSend;
     for (uint32_t i = 0; i < param.count; i++) {
         uint16_t ptId =  ParseLocation(param.locations[i]);
@@ -1334,6 +1333,7 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
             }
             return BIO_ALLOC_FAIL;
         }
+        it->second.req->enableTrance = false;
         if (mEnableTrance) {
             it->second.req->enableTrance = true;
             it->second.enableMem = reinterpret_cast<char *>(it->second.req) +
@@ -2604,7 +2604,7 @@ BResult MirrorClient::SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, 
         if (UNLIKELY(result != BIO_OK)) {
             cbCtx->result = result;
         } else if (resp != nullptr) {
-            auto rsp = static_cast<BatchGetResponse *>(resp);
+            auto rsp = static_cast<BatchGetRemoteHbmResponse *>(resp);
             for (uint32_t i = 0; i < rsp->count; i++) {
                 *(planSend[rsp->nodeId].req->keysInfo[i].result) = rsp->results[i];
             }
