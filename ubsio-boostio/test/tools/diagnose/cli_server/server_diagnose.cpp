@@ -211,6 +211,10 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         }
         uint64_t existTotol = WCacheStatistic::Instance().GetExistTotalCount();
         uint64_t existHit = WCacheStatistic::Instance().GetExistHitCount();
+        if (existTotol == 0) {
+            mPrintOp("Did not execute exist.\n");
+            return;
+        }
         mPrintOp("Exist times:%lu\n", existTotol);
         mPrintOp("Exist hit times:%lu\n", existHit);
         mPrintOp("Exist hit ratio:%2f%%\n", static_cast<float>(existHit) * NO_100 / static_cast<float>(existTotol));
