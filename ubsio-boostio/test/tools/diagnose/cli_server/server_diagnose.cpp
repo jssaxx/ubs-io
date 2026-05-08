@@ -21,6 +21,7 @@
 #include "bio_server.h"
 #include "bio_functions.h"
 #include "cache_overload_ctrl.h"
+#include "wcache_statistic.h"
 #include "server_diagnose.h"
 
 using namespace ock::bio;
@@ -203,6 +204,20 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         for (auto iter = holders.begin(); iter != holders.end(); iter++) {
             mPrintOp("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
+    } else if (cmdType == "existHit") {
+        if (cmds.size() != 2) {
+            mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        uint64_t existTotol = WCacheStatistic::Instance().GetExistTotalCount();
+        uint64_t existHit = WCacheStatistic::Instance().GetExistHitCount();
+        if (existTotol == 0) {
+            mPrintOp("Did not execute exist.\n");
+            return;
+        }
+        mPrintOp("Exist times:%lu\n", existTotol);
+        mPrintOp("Exist hit times:%lu\n", existHit);
+        mPrintOp("Exist hit ratio:%2f%%\n", static_cast<float>(existHit) * NO_100 / static_cast<float>(existTotol));
     } else {
         mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -232,7 +247,7 @@ void diagnose::BioServerCommand::BioServerDebugHelp(char *command, int detail) n
     mPrintOp("\tchange water level: bioserver chgwlv [tier] [water_level]\n");
     mPrintOp("\tchange memory read write ratio: bioserver chgmr [memory ratio]\n");
     mPrintOp("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
-    mPrintOp("\tshow: bioserver show [disk/net/olc/evict]\n");
+    mPrintOp("\tshow: bioserver show [disk/net/olc/evict/existHit]\n");
     mPrintOp("\ttrace: bioserver trace [show/clear]\n");
     mPrintOp("\tRCache put: bioserver RCachePut [key] [filePath] [ptId] [length]\n");
     mPrintOp("\tRCache get: bioserver RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
