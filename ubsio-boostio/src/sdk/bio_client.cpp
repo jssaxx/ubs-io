@@ -275,9 +275,9 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
             return BIO_INNER_ERR;
         }
 
-        auto ptr = LoadFunction("CLI_AgentInit", handler);
+        auto ptr = LoadFunction("cli_agent_init", handler);
         if (ptr == nullptr) {
-            LOG_ERROR("Failed to load function CLI_AgentInit.");
+            LOG_ERROR("Failed to load function cli_agent_init.");
             dlclose(handler);
             return BIO_ERR;
         }
