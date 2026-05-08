@@ -41,9 +41,9 @@ int32_t diagnose::BioServerCommand::LoadSymbols()
         return BIO_INNER_ERR;
     }
 
-    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "CLI_RegCmd"));
-    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "CLI_UnRegCmd"));
-    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "CLI_PrintBuf"));
+    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "cli_register_command"));
+    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "cli_unregister_command"));
+    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "cli_print_buffer"));
     if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
         LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
@@ -65,11 +65,11 @@ int diagnose::BioServerCommand::Initialize() noexcept
         return ret;
     }
 
-    CLI_CMD_S command;
-    strncpy(command.szCommand, "bioServer", CLI_MAX_COMMAND_LEN);
-    strncpy(command.szDescription, "bioServer commands.", CLI_MAX_CMD_DESC_LEN);
-    command.fnCmdDo = BioServerDebugProcess;
-    command.fnPrintCmdHelp = BioServerDebugHelp;
+    CliCommand command;
+    strncpy(command.command, "bioServer", CLI_MAX_COMMAND_LEN);
+    strncpy(command.description, "bioServer commands.", CLI_MAX_CMD_DESC_LEN);
+    command.handler = BioServerDebugProcess;
+    command.help_handler = BioServerDebugHelp;
     auto result = mRegOp(&command);
     if (result == 0) {
         mInited = true;
@@ -80,7 +80,7 @@ int diagnose::BioServerCommand::Initialize() noexcept
 void diagnose::BioServerCommand::Destroy() noexcept
 {
     if (mInited && mUnRegOp) {
-        mUnRegOp((char *)"sdk");
+        mUnRegOp((char *)"bioServer");
         mInited = false;
     }
 

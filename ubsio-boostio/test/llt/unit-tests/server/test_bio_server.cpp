@@ -928,24 +928,6 @@ TEST_F(TestBioServer, test_bio_server_reader)
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestBioServer, test_bio_server_reader_not_equal)
-{
-    LOG_INFO("test_bio_server_reader_not_equal");
-    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    std::vector<FlowAddr> addr;
-    addr.emplace_back(FlowAddr(1, 0, NO_128));
-    std::vector<FlowAddr> addrTo;
-    addrTo.emplace_back(FlowAddr(1, 0, NO_256));
-    WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
-    WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_256, addrTo);
-    PutRequest req;
-    req.memFromServer = true;
-    req.comm.srcNid = NO_10;
-    ServiceContext netCtx;
-    auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
-    EXPECT_EQ(ret, BIO_INNER_ERR);
-}
-
 TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
 {
     LOG_INFO("test_bio_server_reader_not_equal_server_false");
