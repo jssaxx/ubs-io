@@ -17,15 +17,24 @@ remove_libraries() {
     echo "[1/2] Removing libraries..."
     
     rm -rf /usr/lib64/boostio/
-    rm -f /usr/lib64/libubsio_kvc.so*
-    rm -f /usr/lib64/libbio_*
-    rm -f /usr/lib64/libcli_agent.so
-    rm -f /usr/lib64/libock_i*
-    rm -f /usr/lib64/libtracepoint.*
-    rm -f /usr/lib64/libzookeeper_mt.so*
-    rm -f /usr/lib64/libsdk_diagnose.so
-    rm -f /usr/lib64/libserver_diagnose.so
-    rm -f /usr/lib64/libhcom*
+    
+    rm -f /usr/lib64/libbio_interceptor_server.so
+    rm -f /usr/lib64/libbio_sdk.a
+    rm -f /usr/lib64/libbio_sdk.so
+    rm -f /usr/lib64/libbio_sdk.so.1
+    rm -f /usr/lib64/libbio_sdk.so.1.0.0
+    rm -f /usr/lib64/libbio_server.so
+    rm -f /usr/lib64/libbio_underfs.so
+    rm -f /usr/lib64/libhcom.so
+    rm -f /usr/lib64/libhcom.so.0
+    rm -f /usr/lib64/libhcom.so.0.0.1
+    rm -f /usr/lib64/libhcom_static.a
+    rm -f /usr/lib64/libnds_file.so
+    rm -f /usr/lib64/libock_interceptor.so
+    rm -f /usr/lib64/libock_iofwd_proxy.so
+    rm -f /usr/lib64/libubsio_kvc.so
+    rm -f /usr/lib64/libubsio_kvc.so.1
+    rm -f /usr/lib64/libubsio_kvc.so.1.0.0
     
     echo "  Libraries removed."
 }
