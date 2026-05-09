@@ -9,6 +9,14 @@ from setuptools.dist import Distribution
 os.environ['SOURCE_DATE_EPOCH'] = '315532800'
 
 
+def get_version():
+    version_file = os.path.join(os.path.dirname(__file__), '../../../../VERSION')
+    if os.path.exists(version_file):
+        with open(version_file, 'r') as f:
+            return f.read().strip()
+    return '1.0.0'
+
+
 class BinaryDistribution(Distribution):
     def has_ext_modules(foo):
         return True
@@ -16,7 +24,7 @@ class BinaryDistribution(Distribution):
 
 setuptools.setup(
     name="pykvc",
-    version="1.0.0",
+    version=get_version(),
     author="",
     author_email="",
     description="python api for ubsio_kvc",
