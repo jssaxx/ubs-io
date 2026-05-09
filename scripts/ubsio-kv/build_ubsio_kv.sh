@@ -11,11 +11,11 @@ set -e
 BUILD_TYPE="release"
 ZK_BUILD_DIR="/tmp/zookeeper-build"
 
-CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
-PROJ_DIR="$(realpath "${CURRENT_PATH}/../..")"
+CURRENT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJ_DIR="$(cd "${CURRENT_PATH}/../.." && pwd)"
 KV_DIR="${PROJ_DIR}/ubsio-kv"
 BOOSTIO_DIR="${PROJ_DIR}/ubsio-boostio"
-OUTPUT_DIR="${PROJ_DIR}/dist"
+OUTPUT_DIR="${KV_DIR}/dist/pkg"
 
 if [ -f "${PROJ_DIR}/VERSION" ]; then
     VERSION=$(cat "${PROJ_DIR}/VERSION")
@@ -92,14 +92,17 @@ check_source_code() {
 build_ubsio_kv() {
     echo "[2/4] Building UBSIO-KV (includes ubsio-boostio)..."
 
+    local original_dir=$(pwd)
     cd "${KV_DIR}"
     bash build.sh -t ${BUILD_TYPE}
 
     if [ $? -ne 0 ]; then
         echo "  Error: Failed to build UBSIO-KV"
+        cd "${original_dir}"
         exit 1
     fi
 
+    cd "${original_dir}"
     echo "  UBSIO-KV built successfully."
 }
 

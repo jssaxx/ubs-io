@@ -46,11 +46,14 @@ check_dependencies() {
     if ! command -v mvn &> /dev/null; then
         missing="${missing} maven"
     fi
+    if ! command -v hostname &> /dev/null; then
+        missing="${missing} hostname"
+    fi
 
     if [ -n "$missing" ]; then
         echo "  Error: Missing dependencies:${missing}"
         echo "  Please install dependencies first:"
-        echo "    yum install -y cmake gcc gcc-c++ autoconf automake libtool maven java-1.8.0-openjdk"
+        echo "    yum install -y cmake gcc gcc-c++ autoconf automake libtool maven java-1.8.0-openjdk hostname"
         exit 1
     fi
 

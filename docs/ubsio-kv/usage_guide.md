@@ -1,7 +1,7 @@
 
 # UBSIO-KV 使用指导
 
-> 安装部署：[UBSIO-KV 安装指导](UBSIO-KV%20安装指导.md)
+> 安装部署：[安装指南](install_guide.md)
 
 ---
 

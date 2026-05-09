@@ -17,9 +17,8 @@
 ### 1.2 安装编译依赖
 
 ```bash
-yum install -y cmake gcc gcc-c++ python3 python3-pip make \
-    autoconf automake libtool maven java-1.8.0-openjdk \
-    libboundscheck libaio-devel librados-devel liburing-devel pybind11-devel
+yum install -y hostname autoconf automake libtool maven java-1.8.0-openjdk \
+    libaio-devel librados-devel liburing-devel pybind11-devel
 ```
 
 ### 1.3 安装 Zookeeper Server
@@ -45,13 +44,13 @@ bash build_zookeeper.sh
 
 ```bash
 cd scripts/ubsio-kv/
-bash build_ubsio.sh
+bash build_ubsio_kv.sh
 ```
 
-编译完成后，产物位于 `dist/` 目录：
+编译完成后，产物位于 `ubsio-kv/dist/pkg/` 目录：
 
 ```
-dist/
+ubsio-kv/dist/pkg/
 └── ubsio-kv-1.0.0.tar.gz    # 部署包
 ```
 
