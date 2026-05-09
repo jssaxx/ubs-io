@@ -35,7 +35,7 @@ yum install -y java-1.8.0-openjdk zookeeper
 ### 2.1 编译 Zookeeper Client
 
 ```bash
-cd scripts/
+cd scripts/ubsio-kv/
 bash build_zookeeper.sh
 ```
 
@@ -44,7 +44,7 @@ bash build_zookeeper.sh
 > `ubsio-kv` 编译会同步编译其依赖的 `ubsio-boostio` 模块
 
 ```bash
-cd scripts/
+cd scripts/ubsio-kv/
 bash build_ubsio.sh
 ```
 

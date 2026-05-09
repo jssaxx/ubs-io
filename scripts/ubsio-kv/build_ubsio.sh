@@ -12,7 +12,7 @@ BUILD_TYPE="release"
 ZK_BUILD_DIR="/tmp/zookeeper-build"
 
 CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
-PROJ_DIR="$(realpath "${CURRENT_PATH}/..")"
+PROJ_DIR="$(realpath "${CURRENT_PATH}/../..")"
 KV_DIR="${PROJ_DIR}/ubsio-kv"
 BOOSTIO_DIR="${PROJ_DIR}/ubsio-boostio"
 OUTPUT_DIR="${PROJ_DIR}/dist"
