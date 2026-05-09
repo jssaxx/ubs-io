@@ -383,9 +383,9 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
         NET_LOG_ERROR("Failed to get rpc port , port: " << port);
         return BIO_ERR;
     }
-    pid_t currentPid = getpid();
-    std::string portWithPid = std::to_string(port) + "_" + std::to_string(currentPid);
-    mLocalUniqueId = ip + ":" + portWithPid;
+    //pid_t currentPid = getpid();
+    //std::string portWithPid = std::to_string(port) + "_" + std::to_string(currentPid);
+    mLocalUniqueId = ip + ":" + std::to_string(port);
     mStoreUrl = opt.transStoreUrl;
     NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl);
     return BIO_OK;

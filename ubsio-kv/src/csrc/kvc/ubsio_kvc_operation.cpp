@@ -136,7 +136,7 @@ int32_t KvcBatchFreeGetAddress(void **bufs, uint32_t keys_count)
     return DlBioSdkApi::BatchGetFree(tenantId, reinterpret_cast<uintptr_t*>(bufs), keys_count);
 }
 
-int32_t KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_t> &positions, uint32_t flags)
+int32_t KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_t> &positions)
 {
     return g_kvOperation->KvcGetPositions(keys, positions);
 }
