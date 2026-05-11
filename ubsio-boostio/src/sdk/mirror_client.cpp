@@ -1193,8 +1193,7 @@ BResult MirrorClient::BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param)
 BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 {
     BResult ret = BIO_OK;
-    std::vector<uint32_t> nodes;
-    nodes.reserve(param.count);
+    std::vector<uint32_t> nodes(param.count)
     std::unordered_map<uint16_t, BatchGetPlan> planSend;
     for (uint32_t i = 0; i < param.count; i++) {
         uint16_t ptId =  ParseLocation(param.locations[i]);

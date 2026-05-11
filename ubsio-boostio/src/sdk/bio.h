@@ -69,7 +69,7 @@ public:
     * @param[out]: position: query result, 0-local, 1-remote
     * @return: void
     */
-    CResult BatchGetPositions(ObjLocation *locations, uint32_t count, int32_t *position);
+    CResult BatchGetPositions(ObjLocation *locations, uint32_t count, uint8_t *position);
 
     /**
      * @brief: Put value

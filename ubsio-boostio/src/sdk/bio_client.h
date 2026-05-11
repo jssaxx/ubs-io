@@ -70,7 +70,7 @@ public:
         return BIO_OK;
     }
 
-    BResult BatchGetPositions(ObjLocation *locations, uint32_t count, int32_t *position)
+    BResult BatchGetPositions(ObjLocation *locations, uint32_t count, uint8_t *position)
     {
         uint16_t ptId = UINT16_MAX;
         CmPtInfo ptEntry{};

@@ -225,9 +225,8 @@ UBSIO_API int32_t UbsioKvCacheBatchGetLength(const char **keys,
     } 
     std::vector<std::string> key_vector; 
     std::vector<int> length_results_vector(keysCount, UBSIO_KVC_ERR); 
-    std::vector<uint32_t> get_lengths; 
+    std::vector<uint32_t> get_lengths(keysCount, 0); 
     key_vector.reserve(keysCount); 
-    get_lengths.reserve(keysCount); 
 
 
     for (size_t i = 0; i < keysCount; i++) { 

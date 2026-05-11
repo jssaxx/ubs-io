@@ -142,7 +142,7 @@ CResult Bio::CalculateLocation(uint64_t objectId, ObjLocation &location)
     return ToCResult(gClient->CalculateLocation(objectId, mAffinity, location));
 }
 
-CResult Bio::BatchGetPositions(ObjLocation *locations, uint32_t count, int32_t *position)
+CResult Bio::BatchGetPositions(ObjLocation *locations, uint32_t count, uint8_t *position)
 {
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
@@ -1433,7 +1433,7 @@ CResult BioRegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
 }
 
 CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations,
-                             int32_t *position)
+                             uint8_t *position)
 {
     if (UNLIKELY(locations == nullptr || position == nullptr || count == 0)) {
         return RET_CACHE_EPERM;
