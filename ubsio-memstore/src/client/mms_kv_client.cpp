@@ -126,8 +126,8 @@ BResult MmsKvClient::MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNu
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            CLIENT_LOG_DEBUG("Send batch put success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                            << ".");
+            CLIENT_LOG_DEBUG("Send batch put success, total send:" << curItemIndex
+                                                                   << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
             CLIENT_LOG_ERROR("Encode put request failed, ret:" << ret << ".");
@@ -368,8 +368,8 @@ BResult MmsKvClient::MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t 
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            CLIENT_LOG_DEBUG("Send batch update success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                               << ".");
+            CLIENT_LOG_DEBUG("Send batch update success, total send:" << curItemIndex
+                                                                      << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
             CLIENT_LOG_ERROR("Encode update request failed, ret:" << ret << ".");
@@ -406,8 +406,8 @@ BResult MmsKvClient::MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t 
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            CLIENT_LOG_DEBUG("Send batch delete success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                               << ".");
+            CLIENT_LOG_DEBUG("Send batch delete success, total send:" << curItemIndex
+                                                                      << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
             CLIENT_LOG_ERROR("Encode delete request failed, ret:" << ret << ".");
@@ -444,8 +444,8 @@ BResult MmsKvClient::MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            CLIENT_LOG_DEBUG("Send batch replace success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                                << ".");
+            CLIENT_LOG_DEBUG("Send batch replace success, total send:" << curItemIndex
+                                                                       << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
             CLIENT_LOG_ERROR("Encode replace request failed, ret:" << ret << ".");

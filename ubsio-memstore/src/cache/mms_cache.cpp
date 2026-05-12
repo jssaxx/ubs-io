@@ -346,10 +346,10 @@ BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t
 
     indexValue->next = bucketNode->head;
     bucketNode->head = {hashCode, FLAG_VALID, numaId, indexNumaOffset, indexValueAddr};
-    CacheWriteUnLock(&bucketNode->status);
 
     // insert art tree
     mLsmArtTree.Insert(std::move(keyStr), indexValue);
+    CacheWriteUnLock(&bucketNode->status);
     CACHE_LOG_DEBUG("Put success, key:" << key << ", length:" << length << ", ptId:" << ptId << ", version:" << version
                                         << ".");
     return MMS_OK;
@@ -474,7 +474,7 @@ BResult Cache::UpdateDataInBlockList(IndexValue *indexValue, const char *data, u
             return MMS_INNER_ERR;
         }
 
-        //复活墓碑数据
+        // 复活墓碑数据
         BResult ret = PutDataIntoBlockList(indexValue, data, dataLen);
         if (UNLIKELY(ret != MMS_OK)) {
             CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key <<  ".");
@@ -561,6 +561,7 @@ BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32
     indexValue->version = version;
     indexValue->isDelete = DATA_DELETED;
     indexValue->firstBlockOffset = INVALID_BLOCK_OFFSET;
+    indexValue->bucketNode = bucketNode;
 
     ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, strlen(key));
     if (UNLIKELY(ret != 0)) {
@@ -735,8 +736,8 @@ BResult Cache::Replace(const ReplacePara &para)
     bucketNode->head = curNode;
     indexValue->bucketNode = bucketNode;
 
-    CacheWriteUnLock(&bucketNode->status);
     mLsmArtTree.Insert(std::move(keyStr), indexValue);
+    CacheWriteUnLock(&bucketNode->status);
     CACHE_LOG_DEBUG("Put success, key:" << para.key << ", length:" << para.length << ", ptId:" << para.ptId
                                         << ", version:" << para.version << ".");
     return MMS_OK;
@@ -811,26 +812,29 @@ static int ArtSearchCallBack(void *data, const unsigned char *key, uint32_t keyL
     auto bucketNode = indexValue->bucketNode;
     CacheReadLock(&bucketNode->status);
     char *valueBuff = new (std::nothrow) char[indexValue->totalDataLen];
-    if (UNLIKELY(keyBuff == nullptr)) {
+    if (UNLIKELY(valueBuff == nullptr)) {
+        CacheReadUnLock(&bucketNode->status);
         delete[] keyBuff;
         freeMemFuc();
         return MMS_ALLOC_FAIL;
     }
 
     keyValues->push_back({keyBuff, valueBuff, indexValue->totalDataLen});
-    int32_t ret = strncpy_s(keyBuff, MAX_KEY_SIZE, indexValue->key, keyLen);
+    int32_t ret = strncpy_s(keyBuff, keyLen + NO_1, indexValue->key, keyLen);
     if (UNLIKELY(ret != 0)) {
+        CacheReadUnLock(&bucketNode->status);
         freeMemFuc();
         return MMS_INNER_ERR;
     }
 
     uint64_t readLen = insCtx->GetDataFromBlockList(indexValue, valueBuff, 0, indexValue->totalDataLen);
     if (UNLIKELY(readLen == 0)) {
+        CacheReadUnLock(&bucketNode->status);
         freeMemFuc();
         return MMS_INNER_ERR;
     }
-    CacheReadUnLock(&bucketNode->status);
 
+    CacheReadUnLock(&bucketNode->status);
     return 0;
 }
 
@@ -939,7 +943,8 @@ BResult Cache::GetKeysByRange(const char *keyStart, const char *keyEnd, std::vec
     };
 
     matchedKeys.clear();
-    art_range_bound startBound = {reinterpret_cast<const unsigned char *>(keyStart), static_cast<int>(strlen(keyStart))};
+    art_range_bound startBound = {reinterpret_cast<const unsigned char *>(keyStart),
+                                  static_cast<int>(strlen(keyStart))};
     art_range_bound endBound = {reinterpret_cast<const unsigned char *>(keyEnd), static_cast<int>(strlen(keyEnd))};
     int searchRet = mLsmArtTree.SearchRange(startBound, endBound, callback, &matchedKeys);
     if (UNLIKELY(searchRet != 0)) {

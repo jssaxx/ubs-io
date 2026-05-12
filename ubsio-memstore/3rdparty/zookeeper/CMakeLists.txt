@@ -6,7 +6,7 @@ if(NOT LIBS_BUILT_ZK)
     include(FetchContent)
     FetchContent_Declare(
             zookeeper
-            GIT_REPOSITORY https://github.com/apache/zookeeper.git
+            GIT_REPOSITORY https://gitcode.com/gh_mirrors/zo/zookeeper.git
             GIT_TAG release-3.9.5
             SOURCE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/zookeeper"
     )

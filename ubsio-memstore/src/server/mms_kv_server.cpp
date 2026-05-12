@@ -120,10 +120,10 @@ void MmsKvServer::RegisterOpcode()
         std::bind(&MmsKvServer::HandleDeleteRemoteMulti, this, std::placeholders::_1)); // 处理组播delete
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_DELETE_BY_RANGE,
-          std::bind(&MmsKvServer::HandleRangeDeleteRemote, this, std::placeholders::_1));
+        std::bind(&MmsKvServer::HandleRangeDeleteRemote, this, std::placeholders::_1));
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_MULTI_DELETE_BY_RANGE,
-          std::bind(&MmsKvServer::HandleRangeDeleteRemoteMulti, this, std::placeholders::_1));
+        std::bind(&MmsKvServer::HandleRangeDeleteRemoteMulti, this, std::placeholders::_1));
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_S_GET_SEQNO_LIST,
         std::bind(&MmsKvServer::HandleGetSeqNoList, this, std::placeholders::_1));
@@ -135,13 +135,13 @@ void MmsKvServer::RegisterOpcode()
         std::bind(&MmsKvServer::HandleUpdatePtVersion, this, std::placeholders::_1));
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_GET_BY_PREFIX,
-          std::bind(&MmsKvServer::HandlePrefixSearch, this, std::placeholders::_1));
+        std::bind(&MmsKvServer::HandlePrefixSearch, this, std::placeholders::_1));
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_GET_BY_RANGE,
-          std::bind(&MmsKvServer::HandleRangeSearch, this, std::placeholders::_1));
+        std::bind(&MmsKvServer::HandleRangeSearch, this, std::placeholders::_1));
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_DELETE_BY_RANGE,
-          std::bind(&MmsKvServer::HandleRangeDelete, this, std::placeholders::_1));
+        std::bind(&MmsKvServer::HandleRangeDelete, this, std::placeholders::_1));
 }
 
 void MmsKvServer::FreeBlocks(std::vector<IOCtxItem> &ctxItems)
@@ -1804,8 +1804,7 @@ BResult MmsKvServer::PutSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtIn
             return DeleteLocal(data, len);
         } else if (req->head.opcode == MMS_OP_S_DELETE_BY_RANGE || req->head.opcode == MMS_OP_S_MULTI_DELETE_BY_RANGE) {
             return RangeDeleteLocal(data, len);
-        }
-        else {
+        } else {
             LOG_ERROR("Impossible, invalid opcode:" << req->head.opcode);
             return MMS_ERR;
         }
@@ -1945,7 +1944,7 @@ static BResult CreateSearchMem(ValueInfo *valueInfoItems, uint64_t itemNum, Sear
         return MMS_ALLOC_FAIL;
     }
 
-    memCtx.ptr = mmap(NULL, memCtx.totalSize, PROT_READ | PROT_WRITE, MAP_SHARED, memCtx.fd, 0);
+    memCtx.ptr = mmap(nullptr, memCtx.totalSize, PROT_READ | PROT_WRITE, MAP_SHARED, memCtx.fd, 0);
     if (UNLIKELY(memCtx.ptr == MAP_FAILED)) {
         LOG_ERROR("Memory map failed.");
         memCtx.ptr = nullptr;

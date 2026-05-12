@@ -247,7 +247,7 @@ CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uin
 
 CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
 {
-    return ock::mms::Mms::GetValuesByRange(start,end,valueInfoItems,itemNum);
+    return ock::mms::Mms::GetValuesByRange(start, end, valueInfoItems, itemNum);
 }
 
 void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
@@ -279,5 +279,3 @@ CResult MmsStartCatchUpTask()
 {
     return ock::mms::Mms::StartCatchUpTask();
 }
-
-

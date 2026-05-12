@@ -153,9 +153,9 @@ typedef struct {
     char prefix[MAX_KEY_SIZE];
 } PrefixSearchReq;
 
-typedef struct  {
+typedef struct {
     uint64_t keyLen : 16;
-    uint64_t valueLen: 48;
+    uint64_t valueLen : 48;
 } ValueDesInfo;
 
 typedef struct {

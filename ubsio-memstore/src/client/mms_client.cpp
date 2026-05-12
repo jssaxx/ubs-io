@@ -224,8 +224,8 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
 
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         std::thread t([this, nodeId]() {
-            auto ret = mStartService->Execute([this]() { BuildThreadTask(); });
-            if (ret != MMS_OK) {
+            bool ret = mStartService->Execute([this]() { BuildThreadTask(); });
+            if (!ret) {
                 CLIENT_LOG_ERROR("Execute build services failed.");
                 return;
             }

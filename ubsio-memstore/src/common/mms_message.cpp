@@ -126,6 +126,10 @@ BResult DeCodePutRequest(std::vector<PutItems> &itemList, uint32_t &itemNum, uin
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
     itemNum = req->num;
+    static uint32_t maxSize = static_cast<uint32_t>(itemList.size());
+    if (itemNum > maxSize) {
+        return MMS_INVALID_PARAM;
+    }
 
     if (gCrcSwitch) {
         static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
@@ -248,6 +252,10 @@ BResult DeCodeUpdateRequest(std::vector<UpdateItems> &itemList, uint32_t &itemNu
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
     itemNum = req->num;
+    static uint32_t maxSize = static_cast<uint32_t>(itemList.size());
+    if (itemNum > maxSize) {
+        return MMS_INVALID_PARAM;
+    }
 
     if (gCrcSwitch) {
         static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
@@ -357,6 +365,10 @@ BResult DeCodeDeleteRequest(std::vector<DeleteItems> &itemList, uint32_t &itemNu
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(buff);
     itemNum = req->num;
+    static uint32_t maxSize = static_cast<uint32_t>(itemList.size());
+    if (itemNum > maxSize) {
+        return MMS_INVALID_PARAM;
+    }
 
     if (gCrcSwitch) {
         static uint32_t skip = sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);

@@ -31,6 +31,7 @@ namespace mms {
 
 static constexpr uint16_t FLUSH_WATERMARK = 1024;
 static constexpr uint16_t ELASTIC_CAPACITY = 2048;  // 防止vector触发扩容
+static constexpr uint8_t BUFF_SIZE_FACTOR = 2;
 
 struct KVPair {
     std::string key;
@@ -131,7 +132,7 @@ private:
     void CollectBufferData(MergeContext &ctx, std::vector<KVPair> &pendingInserts, FilterFunc &&filter)
     {
         std::vector<const KVPair *> rawPtrs;
-        rawPtrs.reserve(ELASTIC_CAPACITY * 2);
+        rawPtrs.reserve(ELASTIC_CAPACITY * BUFF_SIZE_FACTOR);
 
         mActiveLock.Lock();
         for (const auto &kv : mFlushBuffer) {
@@ -183,5 +184,5 @@ private:
 };
 }
 }
-#endif  //MMSCORE_LSM_ART_TREE_H
+#endif  // MMSCORE_LSM_ART_TREE_H
 
