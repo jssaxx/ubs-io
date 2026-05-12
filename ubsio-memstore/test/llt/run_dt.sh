@@ -55,7 +55,15 @@ mkdir -p "${UT_RUN_DIR}" "${UT_CONF_DIR}" "${REPORT_DIR}"
 cp -r "${PROJECT_HOME}/conf/." "${UT_CONF_DIR}/"
 
 cd "${UT_RUN_DIR}"
-export LD_LIBRARY_PATH="${PROJECT_HOME}/output/mms/lib:${LD_LIBRARY_PATH:-}"
+RUNTIME_LIB_DIRS=(
+    "${BUILD_DIR}/src/client"
+    "${BUILD_DIR}/src/server"
+    "${PROJECT_HOME}/output/mms/lib"
+    "${PROJECT_HOME}/output/3rdparty/libboundscheck/lib"
+    "${PROJECT_HOME}/output/3rdparty/ubs-comm/lib"
+    "${PROJECT_HOME}/output/3rdparty/zookeeper/lib"
+)
+export LD_LIBRARY_PATH="$(IFS=:; echo "${RUNTIME_LIB_DIRS[*]}"):${LD_LIBRARY_PATH:-}"
 ./mms_test --gtest_output=xml:report.xml "$@"
 cp report.xml "${REPORT_DIR}/report.xml"
 

@@ -13,7 +13,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-set(MMS_MOCKCPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mockcpp)
+set(MMS_MOCKCPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third-party/mockcpp)
 if (EXISTS ${MMS_MOCKCPP_DIR}/CMakeLists.txt)
         add_subdirectory(${MMS_MOCKCPP_DIR} ${CMAKE_BINARY_DIR}/mockcpp)
 else()
