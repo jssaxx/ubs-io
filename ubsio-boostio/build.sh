@@ -143,7 +143,11 @@ if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 
-if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
+if [[ "$CLI_FLAG" == "ON" && "$BUILD_UT" != "ON" ]]; then
+    cd ${PROJ_DIR}/../ubsio-common/cli
+    dos2unix build.sh
+    sh build.sh
+    cd ${PROJ_DIR}/dist
     mkdir -p test_tools
     mkdir -p test_tools/bin
     mkdir -p test_tools/lib
@@ -151,6 +155,9 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mv bio/bin/bio_console test_tools/bin/.
     mv bio/lib/libsdk_diagnose.so test_tools/lib/.
     mv bio/lib/libserver_diagnose.so test_tools/lib/.
+    mv ${PROJ_DIR}/../ubsio-common/cli/Build/src/libcli_agent.so test_tools/lib/.
+    mv ${PROJ_DIR}/../ubsio-common/cli/Build/src/cli_server test_tools/bin/.
+    mv ${PROJ_DIR}/../ubsio-common/cli/Build/src/cli_client test_tools/bin/.
     \cp ../configs/bio_sdk_test.conf test_tools/conf/.
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi

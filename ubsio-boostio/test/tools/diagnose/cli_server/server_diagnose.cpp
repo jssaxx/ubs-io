@@ -244,14 +244,14 @@ void diagnose::BioServerCommand::HandleServerTrace(const std::vector<std::string
 
 void diagnose::BioServerCommand::BioServerDebugHelp(char *command, int detail) noexcept
 {
-    mPrintOp("\tchange water level: bioserver chgwlv [tier] [water_level]\n");
-    mPrintOp("\tchange memory read write ratio: bioserver chgmr [memory ratio]\n");
-    mPrintOp("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
-    mPrintOp("\tshow: bioserver show [disk/net/olc/evict/existHit]\n");
-    mPrintOp("\ttrace: bioserver trace [show/clear]\n");
-    mPrintOp("\tRCache put: bioserver RCachePut [key] [filePath] [ptId] [length]\n");
-    mPrintOp("\tRCache get: bioserver RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
-    mPrintOp("\tDelete rCache: bioserver RCacheDelete [ptId] [key]\n");
+    mPrintOp("\tchange water level: bioServer chgwlv [tier] [water_level]\n");
+    mPrintOp("\tchange memory read write ratio: bioServer chgmr [memory ratio]\n");
+    mPrintOp("\tchange disk read write ratio: bioServer chgdr [disk ratio]\n");
+    mPrintOp("\tshow: bioServer show [disk/net/olc/evict/existHit]\n");
+    mPrintOp("\ttrace: bioServer trace [show/clear]\n");
+    mPrintOp("\tRCache put: bioServer RCachePut [key] [filePath] [ptId] [length]\n");
+    mPrintOp("\tRCache get: bioServer RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
+    mPrintOp("\tDelete rCache: bioServer RCacheDelete [ptId] [key]\n");
     mPrintOp("\texit: exit console\n");
 }
 
