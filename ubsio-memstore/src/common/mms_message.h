@@ -35,6 +35,9 @@ enum MmsOpCode : uint16_t {
     MMS_OP_C_REPLACE,
     MMS_OP_C_UPDATE_PT_VERSION,
     MMS_OP_C_CRB_START_CATCH_UP,
+    MMS_OP_C_GET_BY_PREFIX,
+    MMS_OP_C_GET_BY_RANGE,
+    MMS_OP_C_DELETE_BY_RANGE,
     MMS_OP_S_CRB_START_RECOVER,
     MMS_OP_S_CRB_RECEIVE_DATA,
     MMS_OP_S_PUT,
@@ -47,6 +50,8 @@ enum MmsOpCode : uint16_t {
     MMS_OP_S_MULTI_REPLACE,
     MMS_OP_S_GET_SEQNO_LIST,
     MMS_OP_S_GET_SEQNO_DATA,
+    MMS_OP_S_DELETE_BY_RANGE,
+    MMS_OP_S_MULTI_DELETE_BY_RANGE,
     MMS_OP_BUTT
 };
 
@@ -143,6 +148,38 @@ struct KvCbCtx {
     KvCbCtx(uint16_t q, int32_t r) : quota(q), result(r) {}
 };
 
+typedef struct {
+    ReqHead head;
+    char prefix[MAX_KEY_SIZE];
+} PrefixSearchReq;
+
+typedef struct  {
+    uint64_t keyLen : 16;
+    uint64_t valueLen: 48;
+} ValueDesInfo;
+
+typedef struct {
+    uint64_t itemNum;
+    uint64_t totalSize;
+    ValueDesInfo values[0];
+} PrefixSearchDes;
+
+typedef struct {
+    uint64_t totalSize;
+} PrefixSearchRsp;
+
+typedef struct {
+    ReqHead head;
+    char startKey[MAX_KEY_SIZE];
+    char endKey[MAX_KEY_SIZE];
+} RangeSearchReq;
+
+typedef struct {
+    IoDataRequest dataReq;
+    char startKey[MAX_KEY_SIZE];
+    char endKey[MAX_KEY_SIZE];
+} RangeDeleteDataRequest;
+
 void UpdateCrcSwitch(bool crcSwitch);
 void UpdateLocalPtVersion(uint64_t ptVersion);
 
@@ -170,6 +207,10 @@ BResult DeCodeDeleteRequest(std::vector<DeleteItems> &itemList, uint32_t &itemNu
 BResult EncodeReplaceRequest(ReplaceItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                              const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
 BResult DeCodeReplaceRequest(std::vector<ReplaceItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
+
+BResult EncodeRangeDeleteRequest(const char *start, const char *end, std::vector<IOCtxItem> &ctxItems,
+                                 const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
+BResult DeCodeRangeDeleteRequest(const char *&start, const char *&end, uint64_t buff, uint64_t realLen);
 }
 }
 #endif // MMS_MESSAGE_H

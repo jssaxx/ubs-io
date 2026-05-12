@@ -390,6 +390,53 @@ BResult DeCodeReplaceRequest(std::vector<ReplaceItems> &itemList, uint32_t &item
 {
     return DeCodeUpdateRequest(itemList, itemNum, buff, realLen);
 }
+
+BResult EncodeRangeDeleteRequest(const char *start, const char *end, std::vector<IOCtxItem> &ctxItems,
+                                 const AllocFunc &allocFunc, uint32_t ioCtxBuffLen)
+{
+    uint16_t numaId;
+    uintptr_t buff;
+    auto allocRet = allocFunc(ioCtxBuffLen, numaId, buff);
+    if (UNLIKELY(allocRet != MMS_OK)) {
+        return MMS_ALLOC_FAIL;
+    }
+
+    RangeDeleteDataRequest *req = reinterpret_cast<RangeDeleteDataRequest *>(buff);
+    *req = {};
+    if (UNLIKELY(strncpy_s(req->startKey, MAX_KEY_SIZE, start, strlen(start)) != MMS_OK ||
+                 strncpy_s(req->endKey, MAX_KEY_SIZE, end, strlen(end)) != MMS_OK)) {
+        ctxItems.emplace_back(buff, sizeof(RangeDeleteDataRequest));
+        return MMS_ERR;
+    }
+
+    if (gCrcSwitch) {
+        static uint32_t skip = sizeof(req->dataReq.head) + sizeof(req->dataReq.seqNo) +
+                               sizeof(req->dataReq.negoSeqNo) + sizeof(req->dataReq.crc);
+        req->dataReq.crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(buff + skip),
+                                             sizeof(RangeDeleteDataRequest) - skip);
+    }
+
+    ctxItems.emplace_back(buff, sizeof(RangeDeleteDataRequest));
+    return MMS_OK;
+}
+
+BResult DeCodeRangeDeleteRequest(const char *&start, const char *&end, uint64_t buff, uint64_t realLen)
+{
+    RangeDeleteDataRequest *req = reinterpret_cast<RangeDeleteDataRequest *>(buff);
+    if (gCrcSwitch) {
+        static uint32_t skip = sizeof(req->dataReq.head) + sizeof(req->dataReq.seqNo) +
+                               sizeof(req->dataReq.negoSeqNo) + sizeof(req->dataReq.crc);
+        uint32_t crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(buff + skip), realLen - skip);
+        if (req->dataReq.crc != crc) {
+            return MMS_CRC_ERR;
+        }
+    }
+
+    start = req->startKey;
+    end = req->endKey;
+    return MMS_OK;
+}
+
 }
 }
 

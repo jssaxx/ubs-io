@@ -15,6 +15,8 @@
 
 #include <functional>
 #include <algorithm>
+#include <string>
+#include <vector>
 
 #include "mms_err.h"
 #include "mms_ref.h"
@@ -23,6 +25,8 @@
 #include "mms_cache_lock.h"
 #include "mms_mem_allocator.h"
 #include "mms_mem_mgr.h"
+#include "art_index/art_range.h"
+#include "art_index/lsm_art_tree.h"
 
 namespace ock {
 namespace mms {
@@ -42,6 +46,11 @@ struct IndexNode {
     uint64_t indexValueAddr; // 下一个节点的index value地址
 };
 
+struct BucketNode {
+    struct RwLockStatus status;
+    IndexNode head;
+};
+
 struct IndexValue {
     IndexNode next;
     char key[MAX_KEY_SIZE];
@@ -50,17 +59,13 @@ struct IndexValue {
     uint32_t version;
     uint64_t totalDataLen;
     uint64_t firstBlockOffset;
+    BucketNode *bucketNode;
 };
 
 struct DataHeader {
     uint64_t nextBlockOffset;
     uint64_t blockSize; // block里的数据部分长度，不包含DataHeader的长度
     char data[0];
-};
-
-struct BucketNode {
-    struct RwLockStatus status;
-    IndexNode head;
 };
 
 struct UpdateInfo {
@@ -124,7 +129,7 @@ public:
     }
 
     BResult HandlePutExistingNode(IndexNode *existingNode, const char *key, const char *value, uint64_t length);
-    BResult HandleReplacePut(IndexNode &curNode, const char *key, const char *value, uint64_t length);
+    BResult HandleReplacePut(IndexNode &curNode, const std::string &key, const char *value, uint64_t length);
     BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key);
 
     BResult Put(const char *key, const char *value, uint64_t length, uint32_t version, MmsPtId ptId);
@@ -136,6 +141,10 @@ public:
     // 返回实际读取到的字节数
     uint64_t GetDataFromBlockList(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
     void ClearDeletedData();
+
+    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
+    BResult GetValuesByRange(const char *keyStart, const char *keyEnd, ValueInfo **valueInfoItems, uint64_t *itemNum);
+    BResult GetKeysByRange(const char *keyStart, const char *keyEnd, std::vector<std::string> &matchedKeys);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -168,6 +177,8 @@ private:
     uint64_t mMaxBlockSize = 0;
 
     std::atomic<bool> mIsRecovering{false};
+
+    LsmArtTree mLsmArtTree;
 
     DEFINE_REF_COUNT_VARIABLE;
 };

@@ -57,6 +57,11 @@ inline static bool KeyValid(const char *key)
     return true;
 }
 
+inline static bool RangeValid(const char *start, const char *end)
+{
+    return KeyValid(start) && KeyValid(end) && strcmp(start, end) <= 0;
+}
+
 CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
 {
     if (UNLIKELY(gClient == nullptr)) {
@@ -106,6 +111,51 @@ CResult Mms::Get(uint64_t userId, GetItems *itemList, uint32_t itemNum)
     auto ret = ToCResult(gClient->MmsGet(userId, itemList, itemNum));
     MMS_TRACE_END(SDK_TRACE_GET, ret);
     return ret;
+}
+
+CResult Mms::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    if (UNLIKELY(!KeyValid(prefix) || valueInfoItems == nullptr || itemNum == nullptr)) {
+        return RET_MMS_EPERM;
+    }
+
+    MMS_TRACE_START(SDK_TRACE_PREFIX_SEARCH);
+    CResult ret = ToCResult(gClient->GetValuesByPrefix(prefix, valueInfoItems, itemNum));
+    MMS_TRACE_END(SDK_TRACE_PREFIX_SEARCH, ret);
+    return ret;
+}
+
+CResult Mms::GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    if (UNLIKELY(!RangeValid(start, end) || valueInfoItems == nullptr || itemNum == nullptr)) {
+        return RET_MMS_EPERM;
+    }
+
+    MMS_TRACE_START(SDK_TRACE_RANGE_SEARCH);
+    CResult ret = ToCResult(gClient->GetValuesByRange(start, end, valueInfoItems, itemNum));
+    MMS_TRACE_END(SDK_TRACE_RANGE_SEARCH, ret);
+    return ret;
+}
+
+CResult Mms::BatchDeleteByRange(const char *start, const char *end)
+{
+    if (UNLIKELY(!RangeValid(start, end))) {
+        return RET_MMS_EPERM;
+    }
+
+    MMS_TRACE_START(SDK_TRACE_RANGE_DELETE);
+    CResult ret = ToCResult(gClient->BatchDeleteByRange(start, end));
+    MMS_TRACE_END(SDK_TRACE_RANGE_DELETE, ret);
+    return ret;
+}
+
+void Mms::FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
+{
+    if (valueInfoItems == nullptr || *valueInfoItems == nullptr || itemNum == 0) {
+        return;
+    }
+
+    gClient->FreeResources(valueInfoItems, itemNum);
 }
 
 CResult Mms::Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
@@ -190,6 +240,21 @@ CResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum)
     return ock::mms::Mms::Get(userId, itemList, itemNum);
 }
 
+CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    return ock::mms::Mms::GetValuesByPrefix(prefix, valueInfoItems, itemNum);
+}
+
+CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    return ock::mms::Mms::GetValuesByRange(start,end,valueInfoItems,itemNum);
+}
+
+void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
+{
+    return ock::mms::Mms::FreeResources(valueInfoItems, itemNum);
+}
+
 CResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
 {
     return ock::mms::Mms::Update(userId, itemList, itemNum);
@@ -198,6 +263,11 @@ CResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
 CResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum)
 {
     return ock::mms::Mms::Delete(userId, itemList, itemNum);
+}
+
+CResult MmsBatchDeleteByRange(const char *start, const char *end)
+{
+    return ock::mms::Mms::BatchDeleteByRange(start, end);
 }
 
 CResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum)

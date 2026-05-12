@@ -75,6 +75,7 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
+        ${PROJECT_3RDPARTY_BIN_DIR}/libart/src
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
