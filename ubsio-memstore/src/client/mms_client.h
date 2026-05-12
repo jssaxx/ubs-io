@@ -92,10 +92,6 @@ public:
 
     void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
     {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return;
-        }
         mKvClient->FreeResources(valueInfoItems, itemNum);
     }
 

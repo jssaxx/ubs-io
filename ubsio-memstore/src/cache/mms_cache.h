@@ -23,6 +23,7 @@
 #include "mms_types.h"
 #include "mms_cache_log.h"
 #include "mms_cache_lock.h"
+#include "mms_lock.h"
 #include "mms_mem_allocator.h"
 #include "mms_mem_mgr.h"
 #include "art_index/art_range.h"
@@ -179,6 +180,7 @@ private:
     std::atomic<bool> mIsRecovering{false};
 
     LsmArtTree mLsmArtTree;
+    ReadWriteLock mArtValueLock;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
@@ -186,4 +188,3 @@ private:
 }
 
 #endif // MMS_CACHE_H
-

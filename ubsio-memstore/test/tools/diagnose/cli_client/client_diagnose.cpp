@@ -273,12 +273,12 @@ static void HandlePrefix(std::vector<std::string> cmds)
     uint64_t count = 0;
     int ret = MmsGetValuesByPrefix(prefix, &items, &count);
     if (ret != 0) {
-        CLI_PrintBuf("get values by prefix failed, prefix:%s", prefix);
+        cli_print_buffer("get values by prefix failed, prefix:%s", prefix);
         return;
     }
 
     MmsFreeResources(&items, count);
-    CLI_PrintBuf("success, prefix:%s, count:%d\n", prefix, count);
+    cli_print_buffer("success, prefix:%s, count:%d\n", prefix, count);
 }
 
 static void HandleRange(std::vector<std::string> cmds)
@@ -290,9 +290,9 @@ static void HandleRange(std::vector<std::string> cmds)
     if (op == "delete") {
         int ret = MmsBatchDeleteByRange(start, end);
         if (ret == 0) {
-            CLI_PrintBuf("batch delete by range success, start:%s, end%s\n", start, end);
+            cli_print_buffer("batch delete by range success, start:%s, end%s\n", start, end);
         } else {
-            CLI_PrintBuf("batch delete by range failed, start:%s, end%s\n", start, end);
+            cli_print_buffer("batch delete by range failed, start:%s, end%s\n", start, end);
         }
 
         return;
@@ -302,12 +302,12 @@ static void HandleRange(std::vector<std::string> cmds)
     uint64_t count = 0;
     int ret = MmsGetValuesByRange(start, end, &items, &count);
     if (ret != 0) {
-        CLI_PrintBuf("get values by range failed, start:%s, end%s\n", start, end);
+        cli_print_buffer("get values by range failed, start:%s, end%s\n", start, end);
         return;
     }
 
     MmsFreeResources(&items, count);
-    CLI_PrintBuf("success, start:%s, end:%s, count:%d\n", start, end, count);
+    cli_print_buffer("success, start:%s, end:%s, count:%d\n", start, end, count);
 }
 
 static void *PerfTestPutImpl(void *param)
@@ -839,13 +839,13 @@ static void MmsClientDebugProcess(int argc, char *argv[]) noexcept
         HandleSet(cmds);
     } else if (cmdType == "prefix") {
         if (cmds.size() != 2) {
-            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
             return;
         }
         HandlePrefix(cmds);
     } else if (cmdType == "range") {
         if (cmds.size() != 4) {
-            CLI_PrintBuf("Input parameters failed!, num:%u.\n", cmds.size());
+            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
             return;
         }
         HandleRange(cmds);

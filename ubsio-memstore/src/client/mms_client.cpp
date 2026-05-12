@@ -88,7 +88,7 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
     if (options.tlsEnable) {
         auto expireChecker = ExpireChecker::Instance();
         if (expireChecker == nullptr) {
-            LOG_INFO("expire checker alloc fail.");
+            CLIENT_LOG_ERROR("expire checker alloc fail.");
             return MMS_ALLOC_FAIL;
         }
         ret = expireChecker->ExpireCheckerInit(options.caCerPath, options.certificationPath,

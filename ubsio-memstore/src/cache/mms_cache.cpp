@@ -583,6 +583,7 @@ BResult Cache::Delete(const char *key, uint32_t version)
     uint64_t bucketAddr = GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
 
+    mArtValueLock.LockWrite();
     CacheWriteLock(&bucketNode->status);
     IndexNode *node = &bucketNode->head;
     while (node->valid == FLAG_VALID) {
@@ -597,6 +598,7 @@ BResult Cache::Delete(const char *key, uint32_t version)
             indexValue->version = version;
             CacheWriteUnLock(&bucketNode->status);
             mLsmArtTree.Delete(std::move(keyStr));
+            mArtValueLock.UnLock();
             return MMS_OK;
         }
 
@@ -618,6 +620,7 @@ BResult Cache::Delete(const char *key, uint32_t version)
         CacheWriteUnLock(&bucketNode->status);
         mIndexMemAllocator->MmsFree(indexValueAddr);
         mLsmArtTree.Delete(std::move(keyStr));
+        mArtValueLock.UnLock();
         CACHE_LOG_DEBUG("delete success, key:" << key << ".");
         return MMS_OK;
     }
@@ -627,12 +630,14 @@ BResult Cache::Delete(const char *key, uint32_t version)
         BResult ret = InsertTombEntry(bucketNode, hashCode, version, key);
         if (UNLIKELY(ret != MMS_OK)) {
             CacheWriteUnLock(&bucketNode->status);
+            mArtValueLock.UnLock();
             CACHE_LOG_ERROR("Insert a tomb entry failed, ret:" << ret << ", key:" << key << ".");
             return ret;
         }
     }
 
     CacheWriteUnLock(&bucketNode->status);
+    mArtValueLock.UnLock();
     CACHE_LOG_DEBUG("Key not found, skipping deletion, key:" << key << ".");
     return MMS_KEY_NOT_EXISTS;
 }
@@ -840,8 +845,10 @@ BResult Cache::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems,
         }
     };
 
+    mArtValueLock.LockRead();
     int ret = mLsmArtTree.SearchPrefix(reinterpret_cast<const unsigned char *>(prefix),
                                        static_cast<int>(strlen(prefix)), ArtSearchCallBack, &ctx);
+    mArtValueLock.UnLock();
     if (UNLIKELY(ret != 0)) {
         CACHE_LOG_ERROR("Search prefix in art tree failed, ret:" << ret << ".");
         return ret;
@@ -887,7 +894,9 @@ BResult Cache::GetValuesByRange(const char *keyStart, const char *keyEnd, ValueI
     art_range_bound startBound = {reinterpret_cast<const unsigned char *>(keyStart),
                                   static_cast<int>(strlen(keyStart))};
     art_range_bound endBound = {reinterpret_cast<const unsigned char *>(keyEnd), static_cast<int>(strlen(keyEnd))};
+    mArtValueLock.LockRead();
     int ret = mLsmArtTree.SearchRange(startBound, endBound, ArtSearchCallBack, &ctx);
+    mArtValueLock.UnLock();
     if (UNLIKELY(ret != 0)) {
         CACHE_LOG_ERROR("Search prefix in art tree failed, ret:" << ret << ".");
         return ret;
