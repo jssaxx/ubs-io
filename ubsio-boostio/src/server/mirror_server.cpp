@@ -438,7 +438,7 @@ BResult MirrorServer::ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrIn
     // 当前版本该场景的远端MrVec的size必须为1.
     ChkTrue(rMrVec.size() == 1, BIO_INNER_ERR, "Slice addr num not match, rAddrNum:" << rMrVec.size() << ".");
     uintptr_t rMrAddr = rMrVec[0].address;
-    uint32_t rMrKey = rMrVec[0].key;
+    uint64_t rMrKey = rMrVec[0].key;
     uint64_t remoteSize = rMrVec[0].size;
     uint64_t totalSize = 0;
 
@@ -548,7 +548,7 @@ void MirrorServer::InitGetResponse(GetResponse &rsp)
     rsp.realLen = 0;
 }
 
-BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey)
+BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint64_t rKey)
 {
     std::vector<NetMrInfo> rMrVec;
     for (auto addr : to->GetAddrs()) {
@@ -568,7 +568,7 @@ BResult MirrorServer::WriterLocalSameProcess(const SlicePtr &from, const SlicePt
 }
 
 BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
-    std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc)
+    std::vector<NetMrInfo> &lMrVec, uint64_t rKey, bool &isAlloc)
 {
     // 1. parse remote mr info
     uint64_t totalLen = 0;

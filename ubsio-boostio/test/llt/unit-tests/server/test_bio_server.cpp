@@ -1001,7 +1001,7 @@ TEST_F(TestBioServer, test_bio_server_writer)
     rMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
     std::vector<NetMrInfo> lMrVec;
     lMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
-    uint32_t rKey = 1;
+    uint64_t rKey = 0x100000001ULL;
     bool isAlloc = true;
     auto ret = mirror->WriterParseMrInfo(from.Get(), to.Get(), rMrVec, lMrVec, rKey, isAlloc);
     free(src);
@@ -1032,7 +1032,7 @@ TEST_F(TestBioServer, test_bio_server_writer_copy_slice_fail)
     rMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
     std::vector<NetMrInfo> lMrVec;
     lMrVec.emplace_back(NetMrInfo(123U, 128U, 1));
-    uint32_t rKey = 1;
+    uint64_t rKey = 0x100000001ULL;
     bool isAlloc = true;
     auto ret = mirror->WriterParseMrInfo(from.Get(), to.Get(), rMrVec, lMrVec, rKey, isAlloc);
     EXPECT_EQ(ret, BIO_DISK_IOERR);
