@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #include <functional>
@@ -93,6 +101,43 @@ BResult MmsKvClient::HandleSendReqs(uint16_t numaId, uint64_t userId, MmsOpCode 
     return MMS_OK;
 }
 
+BResult MmsKvClient::MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum)
+{
+    uint32_t curItemIndex = 0;
+    std::vector<IOCtxItem> ctxItems{};
+    BResult ret;
+    uint16_t numaId = mMemAllocator->GetNumaId();
+
+    while (curItemIndex < itemNum) {
+        ctxItems.clear();
+        ret = EncodePutRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc, mMaxMsgBuffSize);
+        if (LIKELY(ret == MMS_OK)) {
+            ret = HandleSendReqs(numaId, userId, MMS_OP_C_PUT, ctxItems);
+            if (UNLIKELY(ret != MMS_OK)) {
+                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                return ret;
+            }
+            return MMS_OK;
+        } else if (ret == MMS_ALLOC_FAIL && !ctxItems.empty()) {
+            ret = HandleSendReqs(numaId, userId, MMS_OP_C_PUT, ctxItems);
+            if (UNLIKELY(ret != MMS_OK)) {
+                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                return ret;
+            }
+            curItemIndex += ctxItems.size();
+            LOG_DEBUG("Send batch put success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
+                                                            << ".");
+            continue;
+        } else {
+            LOG_ERROR("Encode put request failed, ret:" << ret << ".");
+            FreeBlocks(ctxItems);
+            return ret;
+        }
+    }
+
+    return MMS_OK;
+}
+
 BResult MmsKvClient::MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum)
 {
     uint16_t index;
@@ -109,6 +154,44 @@ BResult MmsKvClient::MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNu
             continue;
         } else {
             CLIENT_LOG_ERROR("Get cache failed, ret:" << ret << ", key:" << itemList[index].key << ".");
+            return ret;
+        }
+    }
+
+    return MMS_OK;
+}
+
+BResult MmsKvClient::MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
+{
+    uint32_t curItemIndex = 0;
+    std::vector<IOCtxItem> ctxItems{};
+    BResult ret;
+    uint16_t numaId = mMemAllocator->GetNumaId();
+
+    while (curItemIndex < itemNum) {
+        ctxItems.clear();
+        ret = EncodeUpdateRequest(&itemList[curItemIndex], itemNum - curItemIndex, ctxItems, allocFunc,
+                                  mMaxMsgBuffSize);
+        if (LIKELY(ret == MMS_OK)) {
+            ret = HandleSendReqs(numaId, userId, MMS_OP_C_UPDATE, ctxItems);
+            if (UNLIKELY(ret != MMS_OK)) {
+                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                return ret;
+            }
+            return MMS_OK;
+        } else if (ret == MMS_ALLOC_FAIL && !ctxItems.empty()) {
+            ret = HandleSendReqs(numaId, userId, MMS_OP_C_UPDATE, ctxItems);
+            if (UNLIKELY(ret != MMS_OK)) {
+                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                return ret;
+            }
+            curItemIndex += ctxItems.size();
+            LOG_DEBUG("Send batch update success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
+                                                               << ".");
+            continue;
+        } else {
+            LOG_ERROR("Encode update request failed, ret:" << ret << ".");
+            FreeBlocks(ctxItems);
             return ret;
         }
     }
@@ -190,6 +273,45 @@ BResult MmsKvClient::MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_
     }
 
     return MMS_OK;
+}
+
+void MmsKvClient::HandleUpdatePtVersion(uint64_t ptVersion)
+{
+    mPtVersion.store(ptVersion, std::memory_order_release);
+    UpdateLocalPtVersion(ptVersion);
+    LOG_INFO("Update client pt version:" << ptVersion << ".");
+}
+
+BResult MmsKvClient::UpdateClientPtVersion()
+{
+    BResult ret = MMS_OK;
+    UpdatePtVRsp rsp;
+    BasicRequest req = {{0, MMS_OP_C_UPDATE_PT_VERSION, 0, 0, 0}};
+    uint16_t retryCount = 0;
+
+    do {
+        ret = mNetEngine->SyncCall<BasicRequest, UpdatePtVRsp>(INVALID_NID, 0, MMS_OP_C_UPDATE_PT_VERSION,
+                                                               req, rsp);
+        if (LIKELY(ret == MMS_OK)) {
+            HandleUpdatePtVersion(rsp.ptVersion);
+            break;
+        }
+
+        LOG_ERROR("Send request failed, ret:" << ret << ", retry count:" << ++retryCount << ".");
+        if (retryCount > RETRY_COUNT) {
+            LOG_ERROR("Send request failed after " << retryCount << " retries, exiting.");
+            break;
+        }
+
+        sleep(RETRY_SLEEP);
+        bool isContinue =
+            (ret == MMS_ALLOC_FAIL || ret == MMS_INNER_RETRY || ret == MMS_NET_RETRY || ret == MMS_CHECK_PT_FAIL);
+        if (!isContinue) {
+            break;
+        }
+    } while (true);
+
+    return ret;
 }
 
 BResult MmsKvClient::FailHandle(BResult lastRet, MmsOpCode opCode, IoCtrlRequest &req, BResult &rsp)

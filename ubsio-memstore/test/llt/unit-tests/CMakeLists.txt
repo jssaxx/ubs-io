@@ -1,47 +1,51 @@
-include(FetchContent)
+cmake_minimum_required(VERSION 3.13)
+if(COMMAND cmake_policy)
+    cmake_policy(SET CMP0003 NEW)
+endif(COMMAND cmake_policy)
+set(CMAKE_CXX_STANDARD 11)
 
-set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
-set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+aux_source_directory(cache MMS_TEST)
+aux_source_directory(cluster MMS_TEST)
+aux_source_directory(common MMS_TEST)
+aux_source_directory(config MMS_TEST)
+aux_source_directory(tracer MMS_TEST)
+aux_source_directory(client MMS_TEST)
+aux_source_directory(memory MMS_TEST)
+aux_source_directory(net MMS_TEST)
+aux_source_directory(server MMS_TEST)
+add_executable(mms_test ${MMS_TEST} main.cpp ut_common.cpp ut_common.h)
 
-FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://codehub.devcloud.cn-north-4.huaweicloud.com/aca5f619a7a34d3fb99b76a842fda236/googletest.git
-        GIT_TAG        release-1.12.1
-        GIT_SHALLOW    true
-        GIT_PROGRESS   true
-)
-FetchContent_MakeAvailable(googletest)
-
-set(MMS_MOCKCPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mockcpp)
-if (EXISTS ${MMS_MOCKCPP_DIR}/CMakeLists.txt)
-    add_subdirectory(${MMS_MOCKCPP_DIR} ${CMAKE_BINARY_DIR}/mockcpp)
-else()
-    message(FATAL_ERROR "mockcpp CMakeLists.txt not found: ${MMS_MOCKCPP_DIR}")
-endif()
-
-set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/unit-tests)
-
-include_directories(${SRC_DIR}/cache
-        ${SRC_DIR}/mock
+set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mms_test PRIVATE
+        ${TEST_DIR}/mock
+        ${TEST_DIR}/cache
+        ${TEST_DIR}/cluster
+        ${TEST_DIR}/common
+        ${TEST_DIR}/config
+        ${TEST_DIR}/tracer
+        ${TEST_DIR}/client
+        ${TEST_DIR}/memory
+        ${TEST_DIR}/net
+        ${SRC_DIR}/cache
         ${SRC_DIR}/cluster
         ${SRC_DIR}/common
         ${SRC_DIR}/config
-        ${SRC_DIR}/tracer
+        ${UBSIO_COMMON_TRACER_DIR}
         ${SRC_DIR}/client
         ${SRC_DIR}/memory
         ${SRC_DIR}/net
-        ${SRC_DIR}/server
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
-        ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
-        ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include/zookeeper
-        ${TEST_DIR}/cluster
-        ${TEST_DIR}/server)
+        ${SRC_DIR}/server)
 
-link_directories(
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/
-        ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/lib64/
-        ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/
-)
+target_link_libraries(mms_test GTest::gtest mockcpp mms_client mms_server
+        -Wl,--start-group
+        pthread dl rt
+        -Wl,--end-group)
 
-add_subdirectory(unit-tests)
+find_library(AIO_LIBRARY aio)
+if (AIO_LIBRARY)
+    target_link_libraries(mms_test ${AIO_LIBRARY})
+endif()
+
+set_target_properties(mms_test PROPERTIES OUTPUT_NAME "mms_test")
+set_target_properties(mms_test PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+set_target_properties(mms_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test/llt")

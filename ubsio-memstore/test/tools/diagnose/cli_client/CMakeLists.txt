@@ -1,0 +1,6 @@
+aux_source_directory(. CLIENT_DIAGNOSE_SRCS)
+add_library(client_diagnose_shared SHARED ${CLIENT_DIAGNOSE_SRCS})
+set_target_properties(client_diagnose_shared PROPERTIES OUTPUT_NAME client_diagnose)
+target_include_directories(client_diagnose_shared PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+target_link_libraries(client_diagnose_shared PUBLIC cli_agent_shared mms_client mms_conf)
+target_include_directories(client_diagnose_shared PUBLIC ${CMAKE_SOURCE_DIR}/src/client)

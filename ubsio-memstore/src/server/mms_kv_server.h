@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #ifndef MMS_KV_SERVER_H
@@ -42,7 +50,10 @@ public:
     void FreeBlocks(std::vector<IOCtxItem> &ctxItems);
     BResult SendSingleReq(uint64_t userId, const IoHandle &handle, IOCtxItem &item);
     BResult HandleSendReqs(std::vector<IOCtxItem> &ctxItems, uint64_t userId, const IoHandle &handle);
+    BResult PutLocal(void *ioBuff, uint32_t ioLen);
+    BResult Put(uint64_t userId, PutItems *itemList, uint32_t itemNum);
     BResult Get(uint64_t userId, GetItems *itemList, uint32_t itemNum);
+    BResult Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
     BResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
     BResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
 
@@ -60,14 +71,30 @@ private:
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
 
+    BResult HandlePut(ServiceContext &ctx);
+    BResult HandlePutDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandlePutMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandlePutRemote(ServiceContext &ctx);
+    BResult HandlePutRemoteMulti(ServiceContext &ctx);
+
+    void SendRemoteMulticast(void *ioBuff, uint32_t ioLen, Callback &callback);
+    void PutRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
+
+    BResult HandleUpdate(ServiceContext &ctx);
+    BResult HandleUpdateDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandleUpdateMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandleUpdateRemote(ServiceContext &ctx);
+    BResult HandleUpdateRemoteMulti(ServiceContext &ctx);
+
+    void UpdateRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
+    BResult UpdateLocal(void *ioBuff, uint32_t ioLen);
+
     BResult HandleDelete(ServiceContext &ctx);
     BResult HandleDeleteDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
     BResult HandleDeleteMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
     BResult HandleDeleteRemote(ServiceContext &ctx);
     BResult HandleDeleteRemoteMulti(ServiceContext &ctx);
 
-    void DeleteRemoteMulticast(const std::unordered_set<std::string> &remoteIps, void *ioBuff, uint32_t ioLen,
-                               Callback &callback);
     void DeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult DeleteLocal(void *ioBuff, uint32_t ioLen);
 
@@ -76,13 +103,8 @@ private:
     BResult HandleReplaceMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceRemote(ServiceContext &ctx);
     BResult HandleReplaceRemoteMulti(ServiceContext &ctx);
-
-    void ReplaceRemoteMulticast(const std::unordered_set<std::string> &remoteIps, void *ioBuff, uint32_t ioLen,
-                                Callback &callback);
     void ReplaceRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult ReplaceLocal(void *ioBuff, uint32_t ioLen);
-
-    BResult FailHandle(BResult lastRet, uint64_t userId, void *ioBuff, uint32_t ioLen, const IoHandle &handle);
 
     BResult NotifyPtMigrateImpl(uint16_t ptId);
     BResult GetSeqNoList(uint64_t seqList[], uint32_t &seqNum, uint16_t ptId, uint64_t ptv,

@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #ifndef MMS_CACHE_H
@@ -115,9 +123,13 @@ public:
         mIsRecovering.store(isRecovering, std::memory_order_release);
     }
 
+    BResult HandlePutExistingNode(IndexNode *existingNode, const char *key, const char *value, uint64_t length);
     BResult HandleReplacePut(IndexNode &curNode, const char *key, const char *value, uint64_t length);
+    BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key);
 
+    BResult Put(const char *key, const char *value, uint64_t length, uint32_t version, MmsPtId ptId);
     BResult Get(const char *key, uint64_t offset, uint64_t length, char *value, uint64_t *realLength);
+    BResult Update(const char *key, const char *value, uint64_t offset, uint64_t length, uint32_t version);
     BResult Delete(const char *key, uint32_t version);
     BResult Replace(const ReplacePara &para);
 

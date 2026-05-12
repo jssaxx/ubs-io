@@ -1,0 +1,13 @@
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${TARGET_INSTALL_LIB_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${TARGET_INSTALL_LIB_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${TARGET_INSTALL_BIN_DIR})
+SET(MMS_TOOLS_INCLUDE_DIR
+    ${UBSIO_COMMON_CLI_DIR}/include/
+    ${PROJECT_SOURCE_DIR}/test/tools/diagnose/cli_client/
+    ${PROJECT_SOURCE_DIR}/test/tools/diagnose/cli_server/
+    PARENT_SCOPE)
+
+link_directories(${TARGET_INSTALL_LIB_DIR})
+
+add_subdirectory(${UBSIO_COMMON_CLI_DIR} ${CMAKE_BINARY_DIR}/ubsio-common/cli)
+add_subdirectory(diagnose)

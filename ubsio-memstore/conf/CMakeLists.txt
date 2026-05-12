@@ -1,0 +1,10 @@
+exec_program(dos2unix ${OUTPUT_DIR} ARGS  ${PROJECT_SOURCE_DIR}/conf/*.conf RETURN_VALUE SUCCESS)
+if (SUCCESS EQUAL 1)
+    message(FATAL_ERROR "-- failed to dos2unix conf file")
+else()
+    message("-- dos2unix conf files done")
+endif (SUCCESS EQUAL 1)
+
+set(TARGET_INSTALL_CONF ${TARGET_INSTALL_DIR}/conf)
+file(GLOB CONF_FILES ${PROJECT_SOURCE_DIR}/conf/*.conf)
+install(FILES ${CONF_FILES} DESTINATION ${TARGET_INSTALL_CONF}/ PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ)
