@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #ifndef MMS_CLIENT_H
@@ -37,6 +45,15 @@ public:
     BResult Initialize(const MmsOptions &options, ServiceCallback service);
     void Exit();
 
+    BResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum)
+    {
+        if (UNLIKELY(!mServiceable)) {
+            CLIENT_LOG_WARN("Service is not available.");
+            return MMS_NOT_READY;
+        }
+        return mKvClient->MmsPut(userId, itemList, itemNum);
+    }
+
     BResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
@@ -44,6 +61,15 @@ public:
             return MMS_NOT_READY;
         }
         return mKvClient->MmsGet(userId, itemList, itemNum);
+    }
+
+    BResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
+    {
+        if (UNLIKELY(!mServiceable)) {
+            CLIENT_LOG_WARN("Service is not available.");
+            return MMS_NOT_READY;
+        }
+        return mKvClient->MmsUpdate(userId, itemList, itemNum);
     }
 
     BResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum)
@@ -63,6 +89,8 @@ public:
         }
         return mKvClient->MmsReplace(userId, itemList, itemNum);
     }
+
+    BResult MmsStartCatchUpTask(void);
 
 private:
     void BackCheckStateTask();
@@ -117,7 +145,7 @@ private:
     std::atomic<bool> mServiceable {false};
     ServiceCallback mServiceCallback = nullptr;
 
-    bool mServiceCheckStarted = false;
+    std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};
 
     DEFINE_REF_COUNT_VARIABLE;

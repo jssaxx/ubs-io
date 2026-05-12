@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #include "mms_trace.h"
@@ -51,6 +59,41 @@ inline static bool KeyValid(const char *key)
     return true;
 }
 
+CResult MmsConv::Initialize(const MmsOptions &options, ServiceCallback service)
+{
+    auto mmsServer = MmsServer::Instance();
+    auto ret = mmsServer->Start(service);
+    return ToCResult(ret);
+}
+
+void MmsConv::Exit()
+{
+    auto mmsServer = MmsServer::Instance();
+    mmsServer->Exit();
+}
+
+CResult MmsConv::Put(uint64_t userId, PutItems *itemList, uint32_t itemNum)
+{
+    MMS_TRACE_START(SDK_TRACE_PUT);
+    if (isSeparateMode) {
+        return RET_MMS_PROTECTED;
+    }
+
+    if (UNLIKELY(itemList == nullptr || itemNum == 0)) {
+        return RET_MMS_EPERM;
+    }
+
+    for (uint32_t i = 0; i < itemNum; i++) {
+        if (UNLIKELY(!KeyValid(itemList[i].key) || itemList[i].value == nullptr || itemList[i].length == 0)) {
+            return RET_MMS_EPERM;
+        }
+    }
+
+    auto ret = ToCResult(gServer->Put(userId, itemList, itemNum));
+    MMS_TRACE_END(SDK_TRACE_PUT, ret);
+    return ret;
+}
+
 CResult MmsConv::Get(uint64_t userId, GetItems *itemList, uint32_t itemNum)
 {
     MMS_TRACE_START(SDK_TRACE_GET);
@@ -71,6 +114,27 @@ CResult MmsConv::Get(uint64_t userId, GetItems *itemList, uint32_t itemNum)
 
     auto ret = ToCResult(gServer->Get(userId, itemList, itemNum));
     MMS_TRACE_END(SDK_TRACE_GET, ret);
+    return ret;
+}
+
+CResult MmsConv::Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
+{
+    MMS_TRACE_START(SDK_TRACE_UPDATE);
+    if (isSeparateMode) {
+        return RET_MMS_PROTECTED;
+    }
+    if (UNLIKELY(itemList == nullptr || itemNum == 0)) {
+        return RET_MMS_EPERM;
+    }
+
+    for (uint32_t i = 0; i < itemNum; i++) {
+        if (UNLIKELY(!KeyValid(itemList[i].key) || itemList[i].value == nullptr || itemList[i].length == 0)) {
+            return RET_MMS_EPERM;
+        }
+    }
+
+    auto ret = ToCResult(gServer->Update(userId, itemList, itemNum));
+    MMS_TRACE_END(SDK_TRACE_UPDATE, ret);
     return ret;
 }
 
@@ -114,12 +178,41 @@ CResult MmsConv::Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemN
     MMS_TRACE_END(SDK_TRACE_REPLACE, ret);
     return ret;
 }
+
+CResult MmsConv::StartCatchUpTask()
+{
+    MMS_TRACE_START(SDK_TRACE_CATCH_UP);
+    auto mmsServer = MmsServer::Instance();
+    CResult ret = ToCResult(mmsServer->GetCrbScheduler()->StartCatchUp());
+    MMS_TRACE_END(SDK_TRACE_CATCH_UP, ret)
+    return ret;
 }
+}
+}
+
+CResult MmsInitialize(MmsOptions &options, ServiceCallback service)
+{
+    return ock::mms::MmsConv::Initialize(options, service);
+}
+
+void MmsExit()
+{
+    ock::mms::MmsConv::Exit();
+}
+
+CResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum)
+{
+    return ock::mms::MmsConv::Put(userId, itemList, itemNum);
 }
 
 CResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum)
 {
     return ock::mms::MmsConv::Get(userId, itemList, itemNum);
+}
+
+CResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
+{
+    return ock::mms::MmsConv::Update(userId, itemList, itemNum);
 }
 
 CResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum)
@@ -131,3 +224,9 @@ CResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum)
 {
     return ock::mms::MmsConv::Replace(userId, itemList, itemNum);
 }
+
+CResult MmsStartCatchUpTask()
+{
+    return ock::mms::MmsConv::StartCatchUpTask();
+}
+

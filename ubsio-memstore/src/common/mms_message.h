@@ -1,5 +1,13 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * ubs-io is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
  */
 
 #ifndef MMS_MESSAGE_H
@@ -146,6 +154,14 @@ struct IOCtxItem {
 
     IOCtxItem(uint64_t buff, uint64_t reqLen) : buff(buff), reqLen(reqLen){};
 };
+
+BResult EncodePutRequest(PutItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
+                         const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
+BResult DeCodePutRequest(std::vector<PutItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
+
+BResult EncodeUpdateRequest(UpdateItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
+                            const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
+BResult DeCodeUpdateRequest(std::vector<UpdateItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
 
 BResult EncodeDeleteRequest(DeleteItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                             const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
