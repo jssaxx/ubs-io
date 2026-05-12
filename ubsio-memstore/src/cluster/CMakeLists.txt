@@ -1,0 +1,10 @@
+file(GLOB_RECURSE BIO_CLUSTER_SRCS *.c *.cpp *.h)
+include_directories(${PROJECT_3RDPARTY_SRC_DIR}/zookeeper/)
+add_library(bio_cluster STATIC ${BIO_CLUSTER_SRCS})
+target_compile_options(bio_cluster PUBLIC -D_GNU_SOURCE -DTHREADED)
+target_link_libraries(bio_cluster PRIVATE dl)
+
+target_include_directories(bio_cluster PRIVATE client)
+target_include_directories(bio_cluster PRIVATE common)
+target_include_directories(bio_cluster PRIVATE server)
+target_include_directories(bio_cluster PRIVATE server/pt)
