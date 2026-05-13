@@ -18,7 +18,6 @@
 #include "ubsio_kvc_str_util.h"
 #include "dl_biosdk_api.h"
 #include "ubsio_nds_manager.h"
-#include "ubsio_nds_dl_api.h"
 
 using namespace ock::ubsio;
 using namespace ock::ubsio::nds;
@@ -60,7 +59,7 @@ KvcError NdsManager::Initialize(int device) noexcept
     }
 
     // Load libnds_file.so dynamically
-    if (!g_ndsDlApi.Load()) {
+    if (NdsApi::LoadLibrary() != 0) {
         LOG_WARN("Failed to load libnds_file.so, disable the NDS feature.");
         return UBSIO_KVC_ERR;
     }
@@ -69,17 +68,9 @@ KvcError NdsManager::Initialize(int device) noexcept
     useIOURing = std::getenv("UBSIO_USE_IO_URING") != nullptr;
     int ret = 0;
     if (useIOURing) {
-        if (!g_ndsDlApi.nds_init_async) {
-            LOG_ERROR("nds_init_async not available");
-            return UBSIO_KVC_ERR;
-        }
-        ret = g_ndsDlApi.nds_init_async(deviceId);
+        ret = NdsApi::NdsInitAsync(deviceId);
     } else {
-        if (!g_ndsDlApi.nds_init) {
-            LOG_ERROR("nds_init not available");
-            return UBSIO_KVC_ERR;
-        }
-        ret = g_ndsDlApi.nds_init(deviceId);
+        ret = NdsApi::NdsInit(deviceId);
     }
     if (ret < 0) {
         LOG_ERROR("Nds initialize failed with device " << deviceId);
@@ -89,12 +80,8 @@ KvcError NdsManager::Initialize(int device) noexcept
     std::set<std::string> diskPaths;
     StrUtil::Split(bioDisks, ",", diskPaths);
 
-    if (!g_ndsDlApi.nds_open) {
-        LOG_ERROR("nds_open not available");
-        return UBSIO_KVC_ERR;
-    }
     for (const auto &diskPath: diskPaths) {
-        int fd = g_ndsDlApi.nds_open(diskPath.c_str(), O_RDONLY | O_DIRECT);
+        int fd = NdsApi::NdsOpen(diskPath.c_str(), O_RDONLY | O_DIRECT);
         if (fd < 0) {
             LOG_ERROR("Nds open failed with device " << deviceId << ", errno: " << errno << ":" << strerror(errno));
             return UBSIO_KVC_ERR;
@@ -132,12 +119,7 @@ KvcError NdsManager::Initialize(int device) noexcept
 
 KvcError NdsManager::UnInitialize() noexcept
 {
-    if (g_ndsDlApi.nds_uninit) {
-        if (g_ndsDlApi.nds_uninit() != 0) {
-            LOG_ERROR("Nds unInitialize failed.");
-            return UBSIO_KVC_ERR;
-        }
-    }
+    NdsApi::NdsUninit();
     for (const auto &[diskPath, fid]: diskFdMap) {
         close(fid.fd);
     }
@@ -145,18 +127,16 @@ KvcError NdsManager::UnInitialize() noexcept
     if (ndsReadPool.Get() != nullptr) {
         ndsReadPool = nullptr;
     }
-    g_ndsDlApi.Unload();
+    NdsApi::CleanupLibrary();
+    ndsInit = false;
+    ndsNormal = false;
     return UBSIO_KVC_OK;
 }
 
 KvcError NdsManager::RegisterMemory(const void *addr, size_t length) noexcept
 {
-    if (!g_ndsDlApi.nds_regmem) {
-        LOG_ERROR("nds_regmem not available");
-        return UBSIO_KVC_ERR;
-    }
     for (const auto &[diskPath, fid]: diskFdMap) {
-        int ret = g_ndsDlApi.nds_regmem(fid, addr, length);
+        int ret = NdsApi::NdsRegmem(fid, addr, length);
         if (ret < 0) {
             LOG_ERROR("Nds register memory failed with device " << fid.deviceID << ", length " << length);
             return UBSIO_KVC_ERR;
@@ -168,12 +148,8 @@ KvcError NdsManager::RegisterMemory(const void *addr, size_t length) noexcept
 
 KvcError NdsManager::UnRegisterMemory(const void *addr, size_t length) noexcept
 {
-    if (!g_ndsDlApi.nds_unregmem) {
-        LOG_ERROR("nds_unregmem not available");
-        return UBSIO_KVC_ERR;
-    }
     for (const auto &[diskPath, fid]: diskFdMap) {
-        if (g_ndsDlApi.nds_unregmem(fid, addr, length) < 0) {
+        if (NdsApi::NdsUnregmem(fid, addr, length) < 0) {
             LOG_ERROR("Nds unregister memory failed.");
             return UBSIO_KVC_ERR;
         }
@@ -216,12 +192,7 @@ ssize_t NdsManager::SingleRead(const KeyAddrInfo &addrInfo,
                 static_cast<off_t>(fileOffset)
             };
             ndsReadPool->Execute([this, info, &taskResults]() -> void {
-                if (!g_ndsDlApi.nds_read) {
-                    LOG_ERROR("nds_read not available");
-                    taskResults.failed.fetch_add(1UL);
-                    return;
-                }
-                auto readBytes = g_ndsDlApi.nds_read(diskFdMap[info.path], info.buffer,
+                auto readBytes = NdsApi::NdsRead(diskFdMap[info.path], info.buffer,
                     info.bufferOffset, info.size, info.fileOffset);
                 if (UNLIKELY(readBytes < 0 || readBytes != info.size)) {
                     taskResults.failed.fetch_add(1UL);
@@ -284,11 +255,7 @@ ssize_t NdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
             totalReadBytes += needReadBytes;
 
             if (bioBlkLeftLen == 0 && blkIdx < blkCnt - 1) {
-                if (!g_ndsDlApi.nds_readv_batch) {
-                    LOG_ERROR("nds_readv_batch not available");
-                    return -1;
-                }
-                auto readRet = g_ndsDlApi.nds_readv_batch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
+                auto readRet = NdsApi::NdsReadvBatch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
                 UBSIO_KVC_ASSERT_RETURN(readRet >= 0, -1);
                 blkIdx++;
                 bioBlkLeftLen = readLens[blkIdx];
@@ -299,11 +266,7 @@ ssize_t NdsManager::IOURingSingleRead(const KeyAddrInfo &addrInfo,
             }
 
             if (count == IO_URING_MAX_DEPTH - 1) {
-                if (!g_ndsDlApi.nds_readv_batch) {
-                    LOG_ERROR("nds_readv_batch not available");
-                    return -1;
-                }
-                auto readRet = g_ndsDlApi.nds_readv_batch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
+                auto readRet = NdsApi::NdsReadvBatch(diskFdMap[diskPath], vecs, count, static_cast<off_t>(fileOffset));
                 UBSIO_KVC_ASSERT_RETURN(readRet >= 0, -1);
                 fileOffset += iovecReadBytes;
                 iovecReadBytes = 0UL;

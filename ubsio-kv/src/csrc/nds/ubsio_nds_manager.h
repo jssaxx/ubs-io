@@ -20,12 +20,7 @@
 #include "bio_c.h"
 #include "ubsio_kvc_err.h"
 #include "ubsio_kvc_execution.h"
-
-// Forward declaration from nds_file.h
-typedef struct nds_fileid {
-    int fd;
-    int deviceID;
-} nds_fileid_t;
+#include "ubsio_nds_dl_api.h"
 
 namespace ock {
 namespace ubsio {
