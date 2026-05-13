@@ -18,9 +18,14 @@
 #include <vector>
 #include <unordered_map>
 #include "bio_c.h"
-#include "nds_file.h"
 #include "ubsio_kvc_err.h"
 #include "ubsio_kvc_execution.h"
+
+// Forward declaration from nds_file.h
+typedef struct nds_fileid {
+    int fd;
+    int deviceID;
+} nds_fileid_t;
 
 namespace ock {
 namespace ubsio {
