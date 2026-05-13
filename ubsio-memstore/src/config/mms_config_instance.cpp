@@ -389,7 +389,7 @@ BResult MmsConfig::CheckNumaInfo(uint16_t numaNum, uint16_t numaId[])
 
 BResult MmsConfig::Initialize(const std::string &homePath)
 {
-    std::string configurePath = homePath + "/conf/mms.conf";
+    std::string configurePath = homePath + "/mms.conf";
     LOG_INFO("start to read config file : " << configurePath);
 
     if (mInited) {

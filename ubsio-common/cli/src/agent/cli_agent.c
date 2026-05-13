@@ -30,6 +30,43 @@ static AgentState g_agent = {
 
 static __thread AgentCmdContext *g_ctx = NULL;
 
+static size_t format_text(char *buf, size_t size, const char *fmt, ...)
+{
+    if (buf == NULL || size == 0 || fmt == NULL) {
+        return 0;
+    }
+
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, size, fmt, ap);
+    va_end(ap);
+    if (n < 0) {
+        buf[0] = '\0';
+        return 0;
+    }
+    if ((size_t)n >= size) {
+        return size - 1;
+    }
+    return (size_t)n;
+}
+
+static int write_file_all(FILE *fp, const void *buf, size_t len)
+{
+    const char *p = (const char *)buf;
+    while (len > 0) {
+        size_t n = fwrite(p, 1, len, fp);
+        if (n == 0) {
+            if (ferror(fp)) {
+                clearerr(fp);
+            }
+            return RETURN_ERROR;
+        }
+        p += n;
+        len -= n;
+    }
+    return RETURN_OK;
+}
+
 static int command_name_valid(const char *name)
 {
     if (name == NULL) {
@@ -113,7 +150,10 @@ static void flush_print_buffer(AgentCmdContext *ctx)
     if (ctx == NULL || ctx->print_len == 0) {
         return;
     }
-    (void)agent_send(CLI_FRAME_DATA, ctx->client_id, ctx->print_buf, (uint32_t)ctx->print_len);
+    if (agent_send(CLI_FRAME_DATA, ctx->client_id, ctx->print_buf, (uint32_t)ctx->print_len) != RETURN_OK) {
+        ctx->print_len = 0;
+        return;
+    }
     ctx->print_len = 0;
 }
 
@@ -139,17 +179,18 @@ static void append_print_buffer(AgentCmdContext *ctx, const char *text, size_t l
 static void print_agent_help(AgentCmdContext *ctx)
 {
     append_print_buffer(ctx, "<command>        <description>\n", strlen("<command>        <description>\n"));
-    append_print_buffer(ctx, " help            show help information\n", strlen(" help            show help information\n"));
+    append_print_buffer(ctx, " help            show help information\n",
+        strlen(" help            show help information\n"));
     for (int i = 0; i < CLI_AGENT_MAX_COMMANDS; i++) {
         if (!g_agent.commands[i].used) {
             continue;
         }
         char line[160];
-        int n = snprintf(line, sizeof(line), " %-16s %s\n",
-                         g_agent.commands[i].cmd.command,
-                         g_agent.commands[i].cmd.description);
-        if (n > 0) {
-            append_print_buffer(ctx, line, (size_t)n);
+        size_t n = format_text(line, sizeof(line), " %-16s %s\n",
+                               g_agent.commands[i].cmd.command,
+                               g_agent.commands[i].cmd.description);
+        if (n != 0) {
+            append_print_buffer(ctx, line, n);
         }
     }
 }
@@ -183,9 +224,9 @@ static void execute_command(const CliFrame *frame)
     AgentCommand *cmd = find_command(args.argv[0]);
     if (cmd == NULL) {
         char msg[128];
-        int n = snprintf(msg, sizeof(msg), "Unknown command: %s\nTry `help`.\n", args.argv[0]);
-        if (n > 0) {
-            append_print_buffer(&ctx, msg, (size_t)n);
+        size_t n = format_text(msg, sizeof(msg), "Unknown command: %s\nTry `help`.\n", args.argv[0]);
+        if (n != 0) {
+            append_print_buffer(&ctx, msg, n);
         }
         goto done;
     }
@@ -195,7 +236,10 @@ static void execute_command(const CliFrame *frame)
 
 done:
     flush_print_buffer(&ctx);
-    (void)agent_send(CLI_FRAME_DONE, frame->header.client_id, NULL, 0);
+    if (agent_send(CLI_FRAME_DONE, frame->header.client_id, NULL, 0) != RETURN_OK) {
+        g_ctx = NULL;
+        return;
+    }
     g_ctx = NULL;
 }
 
@@ -275,7 +319,9 @@ int32_t cli_agent_init(uint32_t current_pid, char *app_name)
         return RETURN_ERROR;
     }
 
-    (void)signal(SIGPIPE, SIG_IGN);
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        return RETURN_ERROR;
+    }
     pthread_mutex_lock(&g_agent.lock);
     if (g_agent.running) {
         pthread_mutex_unlock(&g_agent.lock);
@@ -284,7 +330,7 @@ int32_t cli_agent_init(uint32_t current_pid, char *app_name)
 
     g_agent.fd = -1;
     g_agent.id = current_pid;
-    (void)snprintf(g_agent.name, sizeof(g_agent.name), "%s", app_name);
+    format_text(g_agent.name, sizeof(g_agent.name), "%s", app_name);
     g_agent.running = 1;
 
     int ret = pthread_create(&g_agent.thread, NULL, agent_thread_main, NULL);
@@ -295,7 +341,13 @@ int32_t cli_agent_init(uint32_t current_pid, char *app_name)
         return RETURN_ERROR;
     }
     g_agent.thread_started = 1;
-    (void)pthread_detach(g_agent.thread);
+    ret = pthread_detach(g_agent.thread);
+    if (ret != 0) {
+        g_agent.running = 0;
+        g_agent.thread_started = 0;
+        pthread_mutex_unlock(&g_agent.lock);
+        return RETURN_ERROR;
+    }
     pthread_mutex_unlock(&g_agent.lock);
     return RETURN_OK;
 }
@@ -313,7 +365,13 @@ int32_t cli_agent_destroy(uint32_t current_pid)
     }
     g_agent.running = 0;
     if (g_agent.fd >= 0) {
-        (void)cli_send_frame(g_agent.fd, CLI_FRAME_BYE, 0, g_agent.id, NULL, 0);
+        if (cli_send_frame(g_agent.fd, CLI_FRAME_BYE, 0, g_agent.id, NULL, 0) != RETURN_OK) {
+            shutdown(g_agent.fd, SHUT_RDWR);
+            close(g_agent.fd);
+            g_agent.fd = -1;
+            pthread_mutex_unlock(&g_agent.lock);
+            return RETURN_OK;
+        }
         shutdown(g_agent.fd, SHUT_RDWR);
         close(g_agent.fd);
         g_agent.fd = -1;
@@ -340,11 +398,15 @@ void cli_print(const char *format, ...)
         len = sizeof(buffer) - 1;
     }
     if (g_ctx == NULL) {
-        (void)fwrite(buffer, 1, len, stderr);
+        if (write_file_all(stderr, buffer, len) != RETURN_OK) {
+            return;
+        }
         return;
     }
     flush_print_buffer(g_ctx);
-    (void)agent_send(CLI_FRAME_DATA, g_ctx->client_id, buffer, (uint32_t)len);
+    if (agent_send(CLI_FRAME_DATA, g_ctx->client_id, buffer, (uint32_t)len) != RETURN_OK) {
+        return;
+    }
 }
 
 void cli_print_buffer(const char *format, ...)
@@ -365,7 +427,9 @@ void cli_print_buffer(const char *format, ...)
         len = sizeof(buffer) - 1;
     }
     if (g_ctx == NULL) {
-        (void)fwrite(buffer, 1, len, stderr);
+        if (write_file_all(stderr, buffer, len) != RETURN_OK) {
+            return;
+        }
         return;
     }
     append_print_buffer(g_ctx, buffer, len);
@@ -504,7 +568,7 @@ int32_t cli_get_option(int32_t argc, char *argv[], const char *option_string, Cl
     const char *found = strchr(option_string, opt);
     if (found == NULL) {
         opt_info->option = opt;
-        (void)snprintf(opt_info->error_msg, sizeof(opt_info->error_msg), "invalid option -- '%c'", opt);
+        format_text(opt_info->error_msg, sizeof(opt_info->error_msg), "invalid option -- '%c'", opt);
         opt_info->option_index = index + 1;
         return '?';
     }
@@ -518,7 +582,8 @@ int32_t cli_get_option(int32_t argc, char *argv[], const char *option_string, Cl
             opt_info->option_index = index + 2;
         } else {
             opt_info->option = opt;
-            (void)snprintf(opt_info->error_msg, sizeof(opt_info->error_msg), "option requires an argument -- '%c'", opt);
+            format_text(opt_info->error_msg, sizeof(opt_info->error_msg),
+                        "option requires an argument -- '%c'", opt);
             opt_info->option_index = index + 1;
             return '?';
         }

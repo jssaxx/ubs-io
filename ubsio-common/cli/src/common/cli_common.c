@@ -54,6 +54,9 @@ static int cli_write_exact(int fd, const void *buf, size_t len)
             }
             return RETURN_ERROR;
         }
+        if (n == 0) {
+            return RETURN_ERROR;
+        }
         p += n;
         len -= (size_t)n;
     }
@@ -68,7 +71,10 @@ int cli_open_server(uint16_t port)
     }
 
     int on = 1;
-    (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
+        close(fd);
+        return RETURN_ERROR;
+    }
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));

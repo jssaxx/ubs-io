@@ -9,7 +9,7 @@ target_link_libraries(mmsd
 	-pie
 	-Wl,--start-group
 	pthread dl
-	${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+	hcom_lib
 	${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
 	mms_server
 	-Wl,--end-group)

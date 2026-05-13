@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +24,26 @@
 
 static CliConn g_conn[CLI_SERVER_MAX_CONN];
 static uint32_t g_next_client_id = 1;
+
+static size_t format_text(char *buf, size_t size, const char *fmt, ...)
+{
+    if (buf == NULL || size == 0 || fmt == NULL) {
+        return 0;
+    }
+
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, size, fmt, ap);
+    va_end(ap);
+    if (n < 0) {
+        buf[0] = '\0';
+        return 0;
+    }
+    if ((size_t)n >= size) {
+        return size - 1;
+    }
+    return (size_t)n;
+}
 
 static void server_usage(void)
 {
@@ -90,12 +111,16 @@ static void drop_duplicate_agent(CliConn *self, uint32_t id)
 
 static void send_done(CliConn *client)
 {
-    (void)cli_send_frame(client->fd, CLI_FRAME_DONE, client->id, client->attached_id, NULL, 0);
+    if (cli_send_frame(client->fd, CLI_FRAME_DONE, client->id, client->attached_id, NULL, 0) != RETURN_OK) {
+        return;
+    }
 }
 
 static void send_client_text(CliConn *client, const char *text)
 {
-    (void)cli_send_text(client->fd, CLI_FRAME_DATA, client->id, client->attached_id, text);
+    if (cli_send_text(client->fd, CLI_FRAME_DATA, client->id, client->attached_id, text) != RETURN_OK) {
+        return;
+    }
 }
 
 static void handle_ls(CliConn *client)
@@ -104,8 +129,8 @@ static void handle_ls(CliConn *client)
     for (int i = 0; i < CLI_SERVER_MAX_CONN; i++) {
         if (g_conn[i].fd >= 0 && g_conn[i].kind == CONN_AGENT) {
             char line[160];
-            (void)snprintf(line, sizeof(line), " %-16u %-16s %s\n",
-                           g_conn[i].id, "online", g_conn[i].name);
+            format_text(line, sizeof(line), " %-16u %-16s %s\n",
+                        g_conn[i].id, "online", g_conn[i].name);
             send_client_text(client, line);
         }
     }
@@ -138,7 +163,8 @@ static void handle_attach(CliConn *client, CliArgs *args)
     }
 
     if (id != CLI_INVALID_ID && find_agent(id) == NULL) {
-        send_client_text(client, "Error attach: beyond domanial argument.\nUsage: attach AppId.\nTry `ls` to find available AppId.\n");
+        send_client_text(client,
+            "Error attach: beyond domanial argument.\nUsage: attach AppId.\nTry `ls` to find available AppId.\n");
         send_done(client);
         return;
     }
@@ -146,9 +172,9 @@ static void handle_attach(CliConn *client, CliArgs *args)
     client->attached_id = id;
     char line[96];
     if (id == CLI_INVALID_ID) {
-        (void)snprintf(line, sizeof(line), "Detach success\n");
+        format_text(line, sizeof(line), "Detach success\n");
     } else {
-        (void)snprintf(line, sizeof(line), "Attach AppId<%u> success\n", id);
+        format_text(line, sizeof(line), "Attach AppId<%u> success\n", id);
     }
     send_client_text(client, line);
     send_done(client);
@@ -165,9 +191,9 @@ static void forward_to_agent(CliConn *client, const CliFrame *frame)
     CliConn *agent = find_agent(client->attached_id);
     if (agent == NULL) {
         char line[128];
-        (void)snprintf(line, sizeof(line),
-                       "Can't find attached AppId<%u>. make sure the agent is alive, and try again.\n",
-                       client->attached_id);
+        format_text(line, sizeof(line),
+                    "Can't find attached AppId<%u>. make sure the agent is alive, and try again.\n",
+                    client->attached_id);
         send_client_text(client, line);
         send_done(client);
         return;
@@ -197,7 +223,7 @@ static void handle_client_cmd(CliConn *client, const CliFrame *frame)
     }
 
     char command[CLI_MAX_LINE];
-    (void)snprintf(command, sizeof(command), "%s", args.argv[0]);
+    format_text(command, sizeof(command), "%s", args.argv[0]);
     cli_lower(command);
 
     if (strcmp(command, "ls") == 0) {
@@ -222,8 +248,10 @@ static void forward_to_client(const CliFrame *frame)
     if (client == NULL) {
         return;
     }
-    (void)cli_send_frame(client->fd, frame->header.type, client->id, frame->header.agent_id,
-                         frame->data, frame->header.length);
+    if (cli_send_frame(client->fd, frame->header.type, client->id, frame->header.agent_id,
+                       frame->data, frame->header.length) != RETURN_OK) {
+        return;
+    }
 }
 
 static void handle_hello_client(CliConn *conn, const CliFrame *frame)
@@ -237,7 +265,9 @@ static void handle_hello_client(CliConn *conn, const CliFrame *frame)
     if (conn->attached_id != CLI_INVALID_ID && find_agent(conn->attached_id) == NULL) {
         conn->attached_id = CLI_INVALID_ID;
     }
-    (void)cli_send_text(conn->fd, CLI_FRAME_CONTROL, conn->id, conn->attached_id, "client ready");
+    if (cli_send_text(conn->fd, CLI_FRAME_CONTROL, conn->id, conn->attached_id, "client ready") != RETURN_OK) {
+        conn_reset(conn);
+    }
 }
 
 static void handle_hello_agent(CliConn *conn, const CliFrame *frame)
@@ -249,41 +279,43 @@ static void handle_hello_agent(CliConn *conn, const CliFrame *frame)
     drop_duplicate_agent(conn, frame->header.agent_id);
     conn->kind = CONN_AGENT;
     conn->id = frame->header.agent_id;
-    (void)snprintf(conn->name, sizeof(conn->name), "%s", frame->data[0] == '\0' ? "unknown" : frame->data);
-    (void)cli_send_text(conn->fd, CLI_FRAME_CONTROL, 0, conn->id, "agent ready");
+    format_text(conn->name, sizeof(conn->name), "%s", frame->data[0] == '\0' ? "unknown" : frame->data);
+    if (cli_send_text(conn->fd, CLI_FRAME_CONTROL, 0, conn->id, "agent ready") != RETURN_OK) {
+        conn_reset(conn);
+    }
 }
 
 static void handle_frame(CliConn *conn, const CliFrame *frame)
 {
     switch (frame->header.type) {
-    case CLI_FRAME_HELLO_CLIENT:
-        handle_hello_client(conn, frame);
-        break;
-    case CLI_FRAME_HELLO_AGENT:
-        handle_hello_agent(conn, frame);
-        break;
-    case CLI_FRAME_CMD:
-        if (conn->kind == CONN_CLIENT) {
-            handle_client_cmd(conn, frame);
-        }
-        break;
-    case CLI_FRAME_PROMPT_REPLY:
-        if (conn->kind == CONN_CLIENT) {
-            forward_to_agent(conn, frame);
-        }
-        break;
-    case CLI_FRAME_DATA:
-    case CLI_FRAME_DONE:
-    case CLI_FRAME_PROMPT:
-        if (conn->kind == CONN_AGENT) {
-            forward_to_client(frame);
-        }
-        break;
-    case CLI_FRAME_BYE:
-        conn_reset(conn);
-        break;
-    default:
-        break;
+        case CLI_FRAME_HELLO_CLIENT:
+            handle_hello_client(conn, frame);
+            break;
+        case CLI_FRAME_HELLO_AGENT:
+            handle_hello_agent(conn, frame);
+            break;
+        case CLI_FRAME_CMD:
+            if (conn->kind == CONN_CLIENT) {
+                handle_client_cmd(conn, frame);
+            }
+            break;
+        case CLI_FRAME_PROMPT_REPLY:
+            if (conn->kind == CONN_CLIENT) {
+                forward_to_agent(conn, frame);
+            }
+            break;
+        case CLI_FRAME_DATA:
+        case CLI_FRAME_DONE:
+        case CLI_FRAME_PROMPT:
+            if (conn->kind == CONN_AGENT) {
+                forward_to_client(frame);
+            }
+            break;
+        case CLI_FRAME_BYE:
+            conn_reset(conn);
+            break;
+        default:
+            break;
     }
 }
 
@@ -306,7 +338,9 @@ static uint16_t parse_server_port(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    (void)signal(SIGPIPE, SIG_IGN);
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        fprintf(stderr, "cli_server: failed to ignore SIGPIPE\n");
+    }
     conn_table_init();
 
     uint16_t port = parse_server_port(argc, argv);

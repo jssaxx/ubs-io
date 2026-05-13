@@ -31,6 +31,26 @@ static int g_raw_enabled = 0;
 static struct termios g_old_termios;
 static FILE *g_log_file = NULL;
 
+static size_t format_text(char *buf, size_t size, const char *fmt, ...)
+{
+    if (buf == NULL || size == 0 || fmt == NULL) {
+        return 0;
+    }
+
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, size, fmt, ap);
+    va_end(ap);
+    if (n < 0) {
+        buf[0] = '\0';
+        return 0;
+    }
+    if ((size_t)n >= size) {
+        return size - 1;
+    }
+    return (size_t)n;
+}
+
 static char *client_strdup(const char *s)
 {
     size_t len = strlen(s) + 1;
@@ -48,15 +68,23 @@ static void log_write(const char *fmt, ...)
     }
     va_list ap;
     va_start(ap, fmt);
-    (void)vfprintf(g_log_file, fmt, ap);
+    if (vfprintf(g_log_file, fmt, ap) < 0) {
+        va_end(ap);
+        return;
+    }
     va_end(ap);
-    (void)fflush(g_log_file);
+    if (fflush(g_log_file) != 0) {
+        clearerr(g_log_file);
+    }
 }
 
 static void disable_raw_mode(void)
 {
     if (g_raw_enabled) {
-        (void)tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_old_termios);
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_old_termios) != 0) {
+            g_raw_enabled = 0;
+            return;
+        }
         g_raw_enabled = 0;
     }
 }
@@ -98,21 +126,48 @@ static void history_add(History *history, const char *line)
     history->items[history->count++] = client_strdup(line);
 }
 
+static int write_all(int fd, const void *buf, size_t len)
+{
+    const char *p = (const char *)buf;
+    while (len > 0) {
+        ssize_t n = write(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return RETURN_ERROR;
+        }
+        if (n == 0) {
+            return RETURN_ERROR;
+        }
+        p += n;
+        len -= (size_t)n;
+    }
+    return RETURN_OK;
+}
+
+static void write_stdout_best_effort(const void *buf, size_t len)
+{
+    if (write_all(STDOUT_FILENO, buf, len) != RETURN_OK) {
+        return;
+    }
+}
+
 static void redraw_line(const char *prompt, const char *buf, size_t len, size_t cursor)
 {
-    (void)write(STDOUT_FILENO, "\r", 1);
+    write_stdout_best_effort("\r", 1);
     if (prompt != NULL) {
-        (void)write(STDOUT_FILENO, prompt, strlen(prompt));
+        write_stdout_best_effort(prompt, strlen(prompt));
     }
     if (len != 0) {
-        (void)write(STDOUT_FILENO, buf, len);
+        write_stdout_best_effort(buf, len);
     }
-    (void)write(STDOUT_FILENO, "\x1b[K", 3);
+    write_stdout_best_effort("\x1b[K", 3);
     if (len > cursor) {
         char seq[32];
-        int n = snprintf(seq, sizeof(seq), "\x1b[%zuD", len - cursor);
-        if (n > 0) {
-            (void)write(STDOUT_FILENO, seq, (size_t)n);
+        size_t n = format_text(seq, sizeof(seq), "\x1b[%zuD", len - cursor);
+        if (n != 0) {
+            write_stdout_best_effort(seq, n);
         }
     }
 }
@@ -147,7 +202,7 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
     char editing_backup[CLI_MAX_LINE] = {0};
 
     if (prompt != NULL) {
-        (void)write(STDOUT_FILENO, prompt, strlen(prompt));
+        write_stdout_best_effort(prompt, strlen(prompt));
     }
 
     for (;;) {
@@ -157,7 +212,7 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
         }
 
         if (ch == '\r' || ch == '\n') {
-            (void)write(STDOUT_FILENO, "\n", 1);
+            write_stdout_best_effort("\n", 1);
             buf[len] = '\0';
             if (out_size != 0) {
                 size_t n = len < out_size - 1 ? len : out_size - 1;
@@ -171,7 +226,7 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
         }
 
         if (ch == 3) {
-            (void)write(STDOUT_FILENO, "^C\n", 3);
+            write_stdout_best_effort("^C\n", 3);
             out[0] = '\0';
             return RETURN_ERROR;
         }
@@ -271,8 +326,9 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
 static int read_line_plain(FILE *input, const char *prompt, char *out, size_t out_size)
 {
     if (prompt != NULL && isatty(STDIN_FILENO)) {
-        fputs(prompt, stdout);
-        fflush(stdout);
+        if (fputs(prompt, stdout) == EOF || fflush(stdout) != 0) {
+            return RETURN_ERROR;
+        }
     }
     if (fgets(out, (int)out_size, input) == NULL) {
         return RETURN_ERROR;
@@ -320,9 +376,9 @@ static int parse_args(ClientConfig *cfg, int argc, char *argv[])
         } else if (strcmp(argv[i], "--set-cli") == 0 || strcmp(argv[i], "--set-debug") == 0) {
             continue;
         } else if (strncmp(argv[i], "--script=", 9) == 0) {
-            (void)snprintf(cfg->script_file, sizeof(cfg->script_file), "%s", argv[i] + 9);
+            format_text(cfg->script_file, sizeof(cfg->script_file), "%s", argv[i] + 9);
         } else if (strncmp(argv[i], "--log-file=", 11) == 0) {
-            (void)snprintf(cfg->log_file, sizeof(cfg->log_file), "%s", argv[i] + 11);
+            format_text(cfg->log_file, sizeof(cfg->log_file), "%s", argv[i] + 11);
         } else if (strncmp(argv[i], "--server-port=", 14) == 0) {
             cfg->port = cli_parse_port_arg(argv[i] + 14, cfg->port);
         } else if (strncmp(argv[i], "--attach=", 9) == 0) {
@@ -353,30 +409,33 @@ static int client_wait_command(int fd, uint32_t *client_id, uint32_t *attach_id,
         *attach_id = frame.header.agent_id;
 
         switch (frame.header.type) {
-        case CLI_FRAME_DATA:
-            if (frame.header.length != 0) {
-                (void)fwrite(frame.data, 1, frame.header.length, stdout);
-                (void)fflush(stdout);
-                log_write("%.*s", (int)frame.header.length, frame.data);
+            case CLI_FRAME_DATA:
+                if (frame.header.length != 0) {
+                    if (fwrite(frame.data, 1, frame.header.length, stdout) != frame.header.length ||
+                        fflush(stdout) != 0) {
+                        fprintf(stderr, "cli_client: failed to write output\n");
+                        return RETURN_ERROR;
+                    }
+                    log_write("%.*s", (int)frame.header.length, frame.data);
+                }
+                break;
+            case CLI_FRAME_PROMPT: {
+                char input[CLI_MAX_LINE];
+                const char *prompt = frame.data[0] == '\0' ? ":" : frame.data;
+                if (read_command_line(stdin, prompt, input, sizeof(input), history, 0) != RETURN_OK) {
+                    input[0] = '\0';
+                }
+                if (cli_send_text(fd, CLI_FRAME_PROMPT_REPLY, *client_id, *attach_id, input) != RETURN_OK) {
+                    return RETURN_ERROR;
+                }
+                break;
             }
-            break;
-        case CLI_FRAME_PROMPT: {
-            char input[CLI_MAX_LINE];
-            const char *prompt = frame.data[0] == '\0' ? ":" : frame.data;
-            if (read_command_line(stdin, prompt, input, sizeof(input), history, 0) != RETURN_OK) {
-                input[0] = '\0';
-            }
-            if (cli_send_text(fd, CLI_FRAME_PROMPT_REPLY, *client_id, *attach_id, input) != RETURN_OK) {
-                return RETURN_ERROR;
-            }
-            break;
-        }
-        case CLI_FRAME_DONE:
-            return RETURN_OK;
-        case CLI_FRAME_CONTROL:
-            break;
-        default:
-            break;
+            case CLI_FRAME_DONE:
+                return RETURN_OK;
+            case CLI_FRAME_CONTROL:
+                break;
+            default:
+                break;
         }
     }
 }
@@ -418,14 +477,14 @@ static int handle_local_command(int fd, uint32_t *client_id, uint32_t *attach_id
                                 char *line, History *history, int *should_exit)
 {
     char copy[CLI_MAX_LINE];
-    (void)snprintf(copy, sizeof(copy), "%s", line);
+    format_text(copy, sizeof(copy), "%s", line);
     CliArgs args;
     if (cli_split_args(copy, &args) != RETURN_OK || args.argc == 0) {
         return RETURN_OK;
     }
 
     char command[CLI_MAX_LINE];
-    (void)snprintf(command, sizeof(command), "%s", args.argv[0]);
+    format_text(command, sizeof(command), "%s", args.argv[0]);
     cli_lower(command);
 
     if (strcmp(command, "quit") == 0 || strcmp(command, "exit") == 0) {
@@ -446,7 +505,9 @@ static int handle_local_command(int fd, uint32_t *client_id, uint32_t *attach_id
 
 int main(int argc, char *argv[])
 {
-    (void)signal(SIGPIPE, SIG_IGN);
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        fprintf(stderr, "cli_client: failed to ignore SIGPIPE\n");
+    }
 
     ClientConfig cfg;
     if (parse_args(&cfg, argc, argv) != RETURN_OK) {
@@ -491,7 +552,9 @@ int main(int argc, char *argv[])
             return 1;
         }
     } else if (isatty(STDIN_FILENO)) {
-        (void)enable_raw_mode();
+        if (enable_raw_mode() != RETURN_OK) {
+            fprintf(stderr, "cli_client: failed to enable raw mode\n");
+        }
     }
 
     History history;
@@ -506,7 +569,7 @@ int main(int argc, char *argv[])
             if (attach_id == CLI_INVALID_ID) {
                 prompt_text = "cli> ";
             } else {
-                (void)snprintf(prompt, sizeof(prompt), "%u:/cli> ", attach_id);
+                format_text(prompt, sizeof(prompt), "%u:/cli> ", attach_id);
                 prompt_text = prompt;
             }
         }
@@ -522,7 +585,19 @@ int main(int argc, char *argv[])
         }
     }
 
-    (void)cli_send_frame(fd, CLI_FRAME_BYE, client_id, attach_id, NULL, 0);
+    if (cli_send_frame(fd, CLI_FRAME_BYE, client_id, attach_id, NULL, 0) != RETURN_OK) {
+        close(fd);
+        if (input != stdin) {
+            fclose(input);
+        }
+        if (g_log_file != NULL) {
+            fclose(g_log_file);
+        }
+        for (int i = 0; i < history.count; i++) {
+            free(history.items[i]);
+        }
+        return 1;
+    }
     close(fd);
     if (input != stdin) {
         fclose(input);
