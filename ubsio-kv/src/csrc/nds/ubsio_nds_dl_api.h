@@ -23,12 +23,13 @@
 namespace ock {
 namespace ubsio {
 
-#define IO_URING_MAX_DEPTH 4096
+static constexpr int IO_URING_MAX_DEPTH = 4096;
 
-typedef struct nds_fileid {
+struct NdsFileid {
     int fd;
     int deviceID;
-} nds_fileid_t;
+};
+using nds_fileid_t = NdsFileid;
 
 using NdsInitFunc = int (*)(int);
 using NdsInitAsyncFunc = int (*)(int);
@@ -45,7 +46,8 @@ public:
     static int32_t LoadLibrary();
     static void CleanupLibrary();
 
-    static inline int NdsInit(int deviceID) {
+    static inline int NdsInit(int deviceID)
+    {
         if (pNdsInit == nullptr) {
             LOG_ERROR("nds_init not available");
             return UBSIO_KVC_ERR;
@@ -53,7 +55,8 @@ public:
         return pNdsInit(deviceID);
     }
 
-    static inline int NdsInitAsync(int deviceID) {
+    static inline int NdsInitAsync(int deviceID)
+    {
         if (pNdsInitAsync == nullptr) {
             LOG_ERROR("nds_init_async not available");
             return UBSIO_KVC_ERR;
@@ -61,7 +64,8 @@ public:
         return pNdsInitAsync(deviceID);
     }
 
-    static inline int NdsUninit() {
+    static inline int NdsUninit()
+    {
         if (pNdsUninit == nullptr) {
             LOG_ERROR("nds_uninit not available");
             return UBSIO_KVC_ERR;
@@ -69,7 +73,8 @@ public:
         return pNdsUninit();
     }
 
-    static inline int NdsOpen(const char* path, int oflag, ...) {
+    static inline int NdsOpen(const char* path, int oflag, ...)
+    {
         if (pNdsOpen == nullptr) {
             LOG_ERROR("nds_open not available");
             return UBSIO_KVC_ERR;
@@ -77,7 +82,8 @@ public:
         return pNdsOpen(path, oflag);
     }
 
-    static inline int NdsRegmem(nds_fileid_t fid, const void* addr, size_t len) {
+    static inline int NdsRegmem(nds_fileid_t fid, const void* addr, size_t len)
+    {
         if (pNdsRegmem == nullptr) {
             LOG_ERROR("nds_regmem not available");
             return UBSIO_KVC_ERR;
@@ -85,7 +91,8 @@ public:
         return pNdsRegmem(fid, addr, len);
     }
 
-    static inline int NdsUnregmem(nds_fileid_t fid, const void* addr, size_t len) {
+    static inline int NdsUnregmem(nds_fileid_t fid, const void* addr, size_t len)
+    {
         if (pNdsUnregmem == nullptr) {
             LOG_ERROR("nds_unregmem not available");
             return UBSIO_KVC_ERR;
@@ -93,7 +100,8 @@ public:
         return pNdsUnregmem(fid, addr, len);
     }
 
-    static inline ssize_t NdsRead(nds_fileid_t fid, void* buf, off_t buf_offset, size_t nbyte, off_t f_offset) {
+    static inline ssize_t NdsRead(nds_fileid_t fid, void* buf, off_t buf_offset, size_t nbyte, off_t f_offset)
+    {
         if (pNdsRead == nullptr) {
             LOG_ERROR("nds_read not available");
             return -1;
@@ -101,7 +109,8 @@ public:
         return pNdsRead(fid, buf, buf_offset, nbyte, f_offset);
     }
 
-    static inline ssize_t NdsReadvBatch(nds_fileid_t fid, const struct iovec* iovs, size_t iov_cnt, off_t f_offset, size_t ring_id = 0) {
+    static inline ssize_t NdsReadvBatch(nds_fileid_t fid, const struct iovec* iovs, size_t iov_cnt, off_t f_offset, size_t ring_id = 0)
+    {
         if (pNdsReadvBatch == nullptr) {
             LOG_ERROR("nds_readv_batch not available");
             return -1;
