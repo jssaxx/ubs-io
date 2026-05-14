@@ -64,6 +64,6 @@ done
 lcov "${LCOV_ARGS[@]}" -o hdt.info --rc lcov_branch_coverage=1
 
 #删除不统计的目录、文件
-lcov -r hdt.info "*/llt/*" "/usr/*"  "*/build/*" "*/test/*" "*7.3.0*" "*/3rdparty/*" "*/client/*" "*/cluster/*" "*/net/*" "*/tracer/common/*" "*/server/*" -o hdt.info --rc lcov_branch_coverage=1
+lcov -r hdt.info "*/llt/*" "/usr/*"  "*/build/*" "*/test/*" "*7.3.0*" "*/3rdparty/*" "*/client/*" "*/cluster/*" "*/net/*" "*/server/*" -o hdt.info --rc lcov_branch_coverage=1
 
 genhtml -o hdt_report hdt.info --rc genhtml_branch_coverage=1

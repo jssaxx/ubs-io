@@ -43,7 +43,7 @@ public:
      *
      * @param[in]: userId: user id
      * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
+     * @param[in]: itemNum: batch num
      * @return: return RET_MMS_OK mean success, others, return non-zero value
      */
     static CResult Put(uint64_t userId, PutItems *itemList, uint32_t itemNum);
@@ -53,17 +53,56 @@ public:
      *
      * @param[in]: userId: user id
      * @param[in/out]: itemList: key/value desc list
-     * @param[in]: num: batch num
+     * @param[in]: itemNum: batch num
      * @return: return RET_MMS_OK mean success, others, return non-zero value
      */
     static CResult Get(uint64_t userId, GetItems *itemList, uint32_t itemNum);
+
+    /**
+      * @brief: Get values by prefix
+      *
+      * @param[in]: prefix: prefix of key
+      * @param[in/out]: valueInfoItems: Matched value infos
+      * @param[in/out]: itemNum: Matched value item count
+      * @return: return RET_MMS_OK mean success, others, return non-zero value
+      */
+    static CResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
+
+    /**
+     * @brief: Get values by key range
+     *
+     * @param[in]: start: start key of the range query
+     * @param[in]: end: end key of the range query
+     * @param[in/out]: valueInfoItems: matched value infos
+     * @param[in/out]: itemNum: matched value count
+     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     */
+    static CResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
+
+    /**
+     * @brief: Delete values by key range
+     *
+     * @param[in]: start: start key of the range delete
+     * @param[in]: end: end key of the range delete
+     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     */
+    static CResult BatchDeleteByRange(const char *start, const char *end);
+
+    /**
+     * @brief: release resources for prefix queries or range queries
+     *
+     * @param[in]: valueInfoItems: values
+     * @param[in]: itemNum: value count
+     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     */
+    static void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
 
     /**
      * @brief: Get value
      *
      * @param[in]: userId: user id
      * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
+     * @param[in]: itemNum: batch num
      * @return: return RET_MMS_OK mean success, others, return non-zero value
      */
     static CResult Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
@@ -73,7 +112,7 @@ public:
      *
      * @param[in]: userId: user id
      * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
+     * @param[in]: itemNum: batch num
      * @return: return RET_MMS_OK mean ok, others, return non-zero value
      */
     static CResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
@@ -83,7 +122,7 @@ public:
     *
     * @param[in]: userId: user id
     * @param[in]: itemList: key/value desc list
-    * @param[in]: num: batch num
+    * @param[in]: itemNum: batch num
     * @return: return RET_MMS_OK mean ok, others, return non-zero value
     */
     static CResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);

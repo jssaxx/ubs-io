@@ -83,6 +83,12 @@ typedef struct {
     uint64_t version;
 } DeleteItems;
 
+typedef struct {
+    char *key;
+    char *value;
+    uint64_t length;
+} ValueInfo;
+
 typedef void (*ServiceCallback)(bool serviceable);
 
 /**
@@ -106,7 +112,7 @@ void MmsExit(void);
  *
  * @param[in]: userId: user id
  * @param[in]: itemList: key/value desc list
- * @param[in]: num: batch num
+ * @param[in]: itemNum: batch num
  * @return: return RET_MMS_OK mean success, others, return non-zero value
  */
 CResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum);
@@ -116,16 +122,55 @@ CResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum);
  *
  * @param[in]: userId: user id
  * @param[in/out]: itemList: key/value desc list
- * @param[in]: num: batch num
+ * @param[in]: itemNum: batch num
  * @return: return RET_MMS_OK mean success, others, return non-zero value, item's realLength == 0: key not found
  */
 CResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum);
 
 /**
+  * @brief: Get values by prefix
+  *
+  * @param[in]: prefix: prefix of key
+  * @param[in/out]: valueInfoItems: matched value infos
+  * @param[in/out]: itemNum: matched value count
+  * @return: return RET_MMS_OK mean success, others, return non-zero value
+  */
+CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
+
+/**
+ * @brief: Get values by key range
+ *
+ * @param[in]: start: start key of the range query
+ * @param[in]: end: end key of the range query
+ * @param[in/out]: valueInfoItems: matched value infos
+ * @param[in/out]: itemNum: matched value count
+ * @return: return RET_MMS_OK mean success, others, return non-zero value
+ */
+CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
+
+/**
+ * @brief: Delete values by key range
+ *
+ * @param[in]: start: start key of the range delete
+ * @param[in]: end: end key of the range delete
+ * @return: return RET_MMS_OK mean success, others, return non-zero value
+ */
+CResult MmsBatchDeleteByRange(const char *start, const char *end);
+
+/**
+ * @brief: release resources for prefix queries or range queries
+ *
+ * @param[in]: valueInfoItems: values
+ * @param[in]: itemNum: value count
+ * @return: return RET_MMS_OK mean success, others, return non-zero value
+ */
+void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
+
+/**
  *
  * @param[in]: userId: user id
  * @param[in]: itemList: key/value desc list
- * @param[in]: num: batch num
+ * @param[in]: itemNum: batch num
  * @return: return RET_MMS_OK mean success, others, return non-zero value
  */
 CResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
@@ -135,7 +180,7 @@ CResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
  *
  * @param[in]: userId: user id
  * @param[in]: itemList: key/value desc list
- * @param[in]: num: batch num
+ * @param[in]: itemNum: batch num
  * @return: return RET_MMS_OK mean ok, others, return non-zero value
  */
 CResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
@@ -144,7 +189,7 @@ CResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
  *
  * @param[in]: userId: user id
  * @param[in]: itemList: key/value desc list
- * @param[in]: num: batch num
+ * @param[in]: itemNum: batch num
  * @return: return RET_MMS_OK mean success, others, return non-zero value
  */
 CResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
@@ -160,4 +205,3 @@ CResult MmsStartCatchUpTask(void);
 }
 #endif
 #endif // MMS_C_H
-

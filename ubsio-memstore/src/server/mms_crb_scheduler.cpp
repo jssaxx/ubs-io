@@ -10,12 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "mms_crb_scheduler.h"
+#include <cstring>
 #include "mms_def.h"
 #include "mms_server.h"
 #include "mms_crc_util.h"
 #include "mms_trace.h"
-#include <cstring>
+#include "mms_crb_scheduler.h"
 
 namespace ock {
 namespace mms {

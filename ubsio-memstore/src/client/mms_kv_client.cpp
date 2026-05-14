@@ -15,6 +15,7 @@
 #include <vector>
 #include <sched.h>
 #include <dlfcn.h>
+#include <sys/mman.h>
 #include "mms_comm.h"
 #include "mms_client_log.h"
 #include "mms_trace.h"
@@ -91,7 +92,7 @@ BResult MmsKvClient::HandleSendReqs(uint16_t numaId, uint64_t userId, MmsOpCode 
                              item.reqLen};
         ret = SendSingleReq(req);
         if (UNLIKELY(ret != MMS_OK)) {
-            LOG_ERROR("Send single request failed, ret:" << ret << ", opCode:" << opCode << ".");
+            CLIENT_LOG_ERROR("Send single request failed, ret:" << ret << ", opCode:" << opCode << ".");
             FreeBlocks(ctxItems);
             return ret;
         }
@@ -114,22 +115,22 @@ BResult MmsKvClient::MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNu
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_PUT, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             return MMS_OK;
         } else if (ret == MMS_ALLOC_FAIL && !ctxItems.empty()) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_PUT, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            LOG_DEBUG("Send batch put success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                            << ".");
+            CLIENT_LOG_DEBUG("Send batch put success, total send:" << curItemIndex
+                                                                   << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
-            LOG_ERROR("Encode put request failed, ret:" << ret << ".");
+            CLIENT_LOG_ERROR("Encode put request failed, ret:" << ret << ".");
             FreeBlocks(ctxItems);
             return ret;
         }
@@ -161,6 +162,187 @@ BResult MmsKvClient::MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNu
     return MMS_OK;
 }
 
+BResult MmsKvClient::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    PrefixSearchRsp rsp;
+    BResult ret = SendPrefixSearchReq(prefix, rsp);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    return ReceiveSearchResult(rsp, valueInfoItems, itemNum);
+}
+
+BResult MmsKvClient::GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    PrefixSearchRsp rsp;
+    BResult ret = SendRangeSearchReq(start, end, rsp);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
+    }
+
+    return ReceiveSearchResult(rsp, valueInfoItems, itemNum);
+}
+
+BResult MmsKvClient::BatchDeleteByRange(const char *start, const char *end)
+{
+    return SendRangeDeleteReq(start, end);
+}
+
+BResult MmsKvClient::SendPrefixSearchReq(const char *prefix, PrefixSearchRsp &rsp)
+{
+    PrefixSearchReq req = {{0, MMS_OP_C_GET_BY_PREFIX, 0, 0, 0}, {0}};
+    uint16_t keyLen = strlen(prefix);
+    auto ret = strncpy_s(req.prefix, MAX_KEY_SIZE, prefix, keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("string copy failed.");
+        return MMS_ERR;
+    }
+
+    uint64_t startTime = Monotonic::TimeSec();
+    uint16_t retryCount = 0;
+    do {
+        ret = mNetEngine->SyncCall<PrefixSearchReq, PrefixSearchRsp>(INVALID_NID, 0, MMS_OP_C_GET_BY_PREFIX, req, rsp);
+        if (LIKELY(ret == MMS_OK)) {
+            return MMS_OK;
+        }
+
+        CLIENT_LOG_ERROR("Send prefix get request failed, ret:" << ret << ", retry count:" << ++retryCount << ".");
+
+        bool isContinue = (ret == MMS_ALLOC_FAIL || ret == MMS_INNER_RETRY ||
+                           ret == MMS_NET_RETRY || ret == MMS_CHECK_PT_FAIL);
+        if (!isContinue) {
+            break;
+        }
+
+        sleep(IO_RETRY_INTERAL);
+        uint64_t costTime = Monotonic::TimeSec() - startTime;
+        if (costTime >= mIoTimeOut) {
+            break;
+        }
+    } while (true);
+
+    return ret;
+}
+
+BResult MmsKvClient::SendRangeSearchReq(const char *start, const char *end, PrefixSearchRsp &rsp)
+{
+    RangeSearchReq req = {{0, MMS_OP_C_GET_BY_RANGE, 0, 0, 0}, {0}, {0}};
+    if (UNLIKELY(strncpy_s(req.startKey, MAX_KEY_SIZE, start, strlen(start)) != MMS_OK ||
+                 strncpy_s(req.endKey, MAX_KEY_SIZE, end, strlen(end)) != MMS_OK)) {
+        CLIENT_LOG_ERROR("string copy failed.");
+        return MMS_ERR;
+    }
+
+    BResult ret = MMS_OK;
+    uint64_t startTime = Monotonic::TimeSec();
+    uint16_t retryCount = 0;
+    do {
+        ret = mNetEngine->SyncCall<RangeSearchReq, PrefixSearchRsp>(INVALID_NID, 0, MMS_OP_C_GET_BY_RANGE, req, rsp);
+        if (LIKELY(ret == MMS_OK)) {
+            return MMS_OK;
+        }
+
+        CLIENT_LOG_ERROR("Send range get request failed, ret:" << ret << ", retry count:" << ++retryCount << ".");
+        bool isContinue = (ret == MMS_ALLOC_FAIL || ret == MMS_INNER_RETRY ||
+                           ret == MMS_NET_RETRY || ret == MMS_CHECK_PT_FAIL);
+        if (!isContinue || Monotonic::TimeSec() - startTime >= mIoTimeOut) {
+            break;
+        }
+        sleep(IO_RETRY_INTERAL);
+    } while (true);
+
+    return ret;
+}
+
+BResult MmsKvClient::SendRangeDeleteReq(const char *start, const char *end)
+{
+    std::vector<IOCtxItem> ctxItems{};
+    BResult ret = EncodeRangeDeleteRequest(start, end, ctxItems, allocFunc, mMaxMsgBuffSize);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Encode range delete request failed, ret:" << ret << ".");
+        FreeBlocks(ctxItems);
+        return ret;
+    }
+
+    uint64_t numaOffset;
+    IOCtxItem &item = ctxItems[0];
+    mMemMgr->Trans2Offset(MMAP_AREA_IOCTX, item.buff, numaOffset);
+    IoCtrlRequest req = {{0, MMS_OP_C_DELETE_BY_RANGE, 0, 0, mPtVersion.load(std::memory_order_acquire)},
+                         0,
+                         mMemAllocator->GetNumaId(),
+                         numaOffset,
+                         item.reqLen};
+    ret = SendSingleReq(req);
+    FreeBlocks(ctxItems);
+    return ret;
+}
+
+BResult MmsKvClient::ReceiveSearchResult(PrefixSearchRsp &rsp, ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    *valueInfoItems = nullptr;
+    *itemNum = 0;
+    if (rsp.totalSize == 0) {
+        return MMS_OK;
+    }
+
+    int32_t fds[NO_1];
+    BResult ret = mNetEngine->ReceiveFds(INVALID_NID, fds, NO_1);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Receive file mem fd failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    int32_t mfd = fds[0];
+    void *dataPtr = mmap(NULL, rsp.totalSize, PROT_READ, MAP_SHARED, mfd, 0);
+    close(mfd);
+    if (UNLIKELY(dataPtr == MAP_FAILED)) {
+        CLIENT_LOG_ERROR("Memory map failed in client.");
+        return MMS_INNER_ERR;
+    }
+
+    return FillValueInfoItems(dataPtr, rsp, valueInfoItems, itemNum);
+}
+
+BResult MmsKvClient::FillValueInfoItems(void *dataPtr, PrefixSearchRsp &rsp, ValueInfo **valueInfoItems,
+                                        uint64_t *itemNum)
+{
+    char *memAddr = static_cast<char *>(dataPtr);
+    PrefixSearchDes *des = reinterpret_cast<PrefixSearchDes *>(memAddr);
+    *itemNum = des->itemNum;
+    *valueInfoItems = new (std::nothrow) ValueInfo[des->itemNum];
+    if (UNLIKELY(*valueInfoItems == nullptr)) {
+        munmap(dataPtr, rsp.totalSize);
+        return MMS_ALLOC_FAIL;
+    }
+
+    uint64_t memOffset = sizeof(PrefixSearchDes) + des->itemNum * sizeof(ValueDesInfo);
+    for (uint64_t idx = 0; idx < des->itemNum; idx++) {
+        (*valueInfoItems)[idx].key = memAddr + memOffset;
+        memOffset += des->values[idx].keyLen;
+        (*valueInfoItems)[idx].value = memAddr + memOffset;
+        (*valueInfoItems)[idx].length = des->values[idx].valueLen;
+        memOffset += des->values[idx].valueLen;
+    }
+    return MMS_OK;
+}
+
+void MmsKvClient::FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
+{
+    if (valueInfoItems == nullptr || *valueInfoItems == nullptr || itemNum == 0) {
+        return;
+    }
+
+    uint64_t memOffset = sizeof(PrefixSearchDes) + itemNum * sizeof(ValueDesInfo);
+    char *shmAddr = (*valueInfoItems)[0].key - memOffset;
+    PrefixSearchDes *des = reinterpret_cast<PrefixSearchDes *>(shmAddr);
+    if (UNLIKELY(munmap(shmAddr, des->totalSize) != MMS_OK)) {
+        CLIENT_LOG_ERROR("Memory unmap failed, error:" << strerror(errno) << ".");
+    }
+    delete[] *valueInfoItems;
+    *valueInfoItems = nullptr;
+}
+
 BResult MmsKvClient::MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
 {
     uint32_t curItemIndex = 0;
@@ -175,22 +357,22 @@ BResult MmsKvClient::MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t 
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_UPDATE, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             return MMS_OK;
         } else if (ret == MMS_ALLOC_FAIL && !ctxItems.empty()) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_UPDATE, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            LOG_DEBUG("Send batch update success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                               << ".");
+            CLIENT_LOG_DEBUG("Send batch update success, total send:" << curItemIndex
+                                                                      << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
-            LOG_ERROR("Encode update request failed, ret:" << ret << ".");
+            CLIENT_LOG_ERROR("Encode update request failed, ret:" << ret << ".");
             FreeBlocks(ctxItems);
             return ret;
         }
@@ -213,22 +395,22 @@ BResult MmsKvClient::MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t 
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_DELETE, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             return MMS_OK;
         } else if (ret == MMS_ALLOC_FAIL && !ctxItems.empty()) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_DELETE, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            LOG_DEBUG("Send batch delete success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                               << ".");
+            CLIENT_LOG_DEBUG("Send batch delete success, total send:" << curItemIndex
+                                                                      << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
-            LOG_ERROR("Encode delete request failed, ret:" << ret << ".");
+            CLIENT_LOG_ERROR("Encode delete request failed, ret:" << ret << ".");
             FreeBlocks(ctxItems);
             return ret;
         }
@@ -251,22 +433,22 @@ BResult MmsKvClient::MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_
         if (LIKELY(ret == MMS_OK)) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_REPLACE, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             return MMS_OK;
         } else if (ret == MMS_ALLOC_FAIL && !ctxItems.empty()) {
             ret = HandleSendReqs(numaId, userId, MMS_OP_C_REPLACE, ctxItems);
             if (UNLIKELY(ret != MMS_OK)) {
-                LOG_ERROR("Send reqs failed, ret:" << ret << ".");
+                CLIENT_LOG_ERROR("Send reqs failed, ret:" << ret << ".");
                 return ret;
             }
             curItemIndex += ctxItems.size();
-            LOG_DEBUG("Send batch replace success, total send:" << curItemIndex << ", current batch:" << ctxItems.size()
-                                                                << ".");
+            CLIENT_LOG_DEBUG("Send batch replace success, total send:" << curItemIndex
+                                                                       << ", current batch:" << ctxItems.size() << ".");
             continue;
         } else {
-            LOG_ERROR("Encode replace request failed, ret:" << ret << ".");
+            CLIENT_LOG_ERROR("Encode replace request failed, ret:" << ret << ".");
             FreeBlocks(ctxItems);
             return ret;
         }
@@ -279,7 +461,7 @@ void MmsKvClient::HandleUpdatePtVersion(uint64_t ptVersion)
 {
     mPtVersion.store(ptVersion, std::memory_order_release);
     UpdateLocalPtVersion(ptVersion);
-    LOG_INFO("Update client pt version:" << ptVersion << ".");
+    CLIENT_LOG_INFO("Update client pt version:" << ptVersion << ".");
 }
 
 BResult MmsKvClient::UpdateClientPtVersion()
@@ -297,9 +479,9 @@ BResult MmsKvClient::UpdateClientPtVersion()
             break;
         }
 
-        LOG_ERROR("Send request failed, ret:" << ret << ", retry count:" << ++retryCount << ".");
+        CLIENT_LOG_ERROR("Send request failed, ret:" << ret << ", retry count:" << ++retryCount << ".");
         if (retryCount > RETRY_COUNT) {
-            LOG_ERROR("Send request failed after " << retryCount << " retries, exiting.");
+            CLIENT_LOG_ERROR("Send request failed after " << retryCount << " retries, exiting.");
             break;
         }
 
@@ -344,7 +526,7 @@ BResult MmsKvClient::FailHandle(BResult lastRet, MmsOpCode opCode, IoCtrlRequest
 
         ret = mNetEngine->SyncCall<IoCtrlRequest, BResult>(INVALID_NID, 0, opCode, req, rsp);
         if (UNLIKELY(ret != MMS_OK)) {
-            LOG_ERROR("Send request failed, ret:" << ret << ".");
+            CLIENT_LOG_ERROR("Send request failed, ret:" << ret << ".");
         }
     } while (true);
 
