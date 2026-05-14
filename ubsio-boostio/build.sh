@@ -164,6 +164,20 @@ fi
 
 rm -rf boostio
 mv bio boostio
+if [[ "$arch" == "aarch64" ]]; then
+    mkdir -p ${PROJ_DIR}/dist/boostio/kv
+    mkdir -p ${PROJ_DIR}/dist/boostio/kv/lib
+    mkdir -p ${PROJ_DIR}/dist/boostio/kv/include
+    mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
+    cd ${PROJ_DIR}/../ubsio-kv/
+    dos2unix build.sh
+    sh build.sh
+    cd ${PROJ_DIR}/dist
+    \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
+    \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.
+    \cp ${PROJ_DIR}/../ubsio-kv/dist/pkg/* ${PROJ_DIR}/dist/boostio/kv/pkg/.
+fi
+
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
 
 
