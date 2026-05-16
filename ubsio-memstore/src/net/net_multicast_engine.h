@@ -16,10 +16,10 @@
 #include "net_common.h"
 #include "mms_message.h"
 #include "cm.h"
-#include "hcom/multicast_publisher_service.h"
-#include "hcom/multicast_publisher.h"
-#include "hcom/multicast_subscriber_service.h"
-#include "hcom/multicast_subscriber.h"
+#include "hcom/multicast/multicast_publisher_service.h"
+#include "hcom/multicast/multicast_publisher.h"
+#include "hcom/multicast/multicast_subscriber_service.h"
+#include "hcom/multicast/multicast_subscriber.h"
 #include "net_engine.h"
 #include "mms_config_instance.h"
 #include "multicast_connector.h"
@@ -182,4 +182,3 @@ private:
 }
 
 #endif // MMSCORE_NET_MULTICAST_ENGINE_H
-

@@ -635,18 +635,9 @@ BResult MmsClient::ClientDiagnoseInit(void)
         return MMS_INNER_ERR;
     }
 
-    std::string soFileName = std::string(PROJECT_PATH_PREFIX) + "/lib/libclient_diagnose.so";
-    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
-        CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-        return MMS_NOT_EXISTS;
-    }
-
-    void *handler = dlopen(canonicalPath, RTLD_NOW);
-    free(canonicalPath);
-    canonicalPath = nullptr;
+    void *handler = dlopen("libclient_diagnose.so", RTLD_NOW);
     if (handler == nullptr) {
-        CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
+        CLIENT_LOG_ERROR("Failed to open library libclient_diagnose.so, error " << dlerror() << ".");
         return MMS_INNER_ERR;
     }
     ClientDiagnose clientInitFunc = reinterpret_cast<ClientDiagnose>(dlsym(handler, "ClientDiagnoseInit"));

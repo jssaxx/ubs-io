@@ -13,10 +13,10 @@ if (${DEBUG_UT} MATCHES "OFF")
 	endif()
 
 	target_link_libraries(mms_console
-        -pie
-        -Wl,--start-group
-        pthread dl
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
-        mms_client
-        -Wl,--end-group)
+		-pie
+		-Wl,--start-group
+		pthread dl
+		hcom_lib
+		mms_client
+		-Wl,--end-group)
 endif()

@@ -13,7 +13,7 @@ target_link_libraries(mms_server -Wl,--start-group -Wl,--end-group)
 target_link_libraries(mms_server
         -Wl,--start-group
         pthread dl expire_checker boundscheck_lib
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+        hcom_lib
         ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/libzookeeper_mt.so
         tracer mms_common mms_memory mms_net mms_conf mms_cluster mms_cache
         -Wl,--end-group)

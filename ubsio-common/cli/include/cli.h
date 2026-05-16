@@ -40,16 +40,14 @@ int32_t cli_agent_destroy(uint32_t current_pid);
 typedef void (*CliCommandHandler)(int32_t argc, char *argv[]);
 typedef void (*CliCommandHelpHandler)(char *command, int32_t show_detail);
 
-typedef struct
-{
+typedef struct {
     char command[CLI_MAX_COMMAND_LEN];
     char description[CLI_MAX_CMD_DESC_LEN];
     CliCommandHandler handler;
     CliCommandHelpHandler help_handler;
 } CliCommand;
 
-typedef struct
-{
+typedef struct {
     char *option_arg;
     int32_t option_index;
     char option;

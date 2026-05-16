@@ -36,7 +36,7 @@ target_include_directories(mms_test PRIVATE
         ${SRC_DIR}/net
         ${SRC_DIR}/server)
 
-target_link_libraries(mms_test GTest::gtest mockcpp mms_client mms_server
+target_link_libraries(mms_test GTest::gtest mockcpp hcom_lib mms_client mms_server
         -Wl,--start-group
         pthread dl rt
         -Wl,--end-group)

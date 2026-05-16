@@ -110,7 +110,7 @@ fi
 
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
-BUILD_CMD="make install -j ${CPU_PROCESSOR_NUM}"
+BUILD_CMD="make install -j 16"
 cd $BUILD_DIR
 echo $CMAKE_CMD
 $CMAKE_CMD || {
@@ -124,7 +124,9 @@ $BUILD_CMD || {
 }
 cd ${PROJ_DIR}/output
 \cp 3rdparty/zookeeper/lib/* mms/lib/
-\cp -d 3rdparty/ubs-comm/lib/libhcom.so* mms/lib/
+if compgen -G "3rdparty/ubs-comm/lib/libhcom.so*" > /dev/null; then
+    \cp -d 3rdparty/ubs-comm/lib/libhcom.so* mms/lib/
+fi
 \cp ./3rdparty/libboundscheck/lib/libboundscheck.so mms/lib/
 \cp -r ../scripts mms/.
 
@@ -134,4 +136,3 @@ fi
 
 mv mms mmscore
 tar -czvf mmscore_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz mmscore
-

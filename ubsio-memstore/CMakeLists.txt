@@ -50,7 +50,7 @@ set(TARGET_INSTALL_BIN_DIR ${TARGET_INSTALL_DIR}/bin)
 set(TARGET_INSTALL_INCLUDE_DIR ${TARGET_INSTALL_DIR}/include)
 set(TARGET_INSTALL_LIB_DIR ${TARGET_INSTALL_DIR}/lib)
 
-set(PROJECT_PATH_PREFIX "/opt/mms")
+set(PROJECT_PATH_PREFIX "/etc/mms")
 
 message(STATUS "3rdparty src dir ${PROJECT_3RDPARTY_SRC_DIR}")
 message(STATUS "3rdparty bin dir ${PROJECT_3RDPARTY_BIN_DIR}")
@@ -73,9 +73,11 @@ include_directories(
         ${SRC_DIR}/security/openssl_tools
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
+        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
 		${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
         ${PROJECT_3RDPARTY_BIN_DIR}/libart/src
+        /usr/include/hcom
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")

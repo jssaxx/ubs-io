@@ -15,6 +15,6 @@ target_link_libraries(mms_client -Wl,--start-group -Wl,--end-group)
 target_link_libraries(mms_client
         -Wl,--start-group
         pthread dl expire_checker boundscheck_lib
-        ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/libhcom.so
+        hcom_lib
         tracer mms_common mms_memory mms_net mms_cache
         -Wl,--end-group)
