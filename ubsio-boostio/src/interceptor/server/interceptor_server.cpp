@@ -34,6 +34,630 @@
 using namespace ock::bio;
 using namespace ock::bio::net;
 
+namespace {
+constexpr uint32_t INTERCEPTOR_READ_BUFFER_ALLOC_RETRY = 3;
+
+struct PreparedWCacheSliceDescriptor {
+    uint64_t flowId = 0;
+    uint64_t flowOffset = 0;
+    uint64_t flowIndex = 0;
+    uint32_t dataCrc = 0;
+    FlowType flowType = FLOW_MEMORY;
+    uint64_t length = 0;
+    std::vector<FlowAddr> addrs;
+};
+
+bool CopyDescriptorField(char *dst, uint64_t dstLen, uint64_t &pos, const void *src, uint64_t len)
+{
+    if (dst == nullptr || src == nullptr || pos > dstLen || len > dstLen - pos) {
+        return false;
+    }
+    if (memcpy_s(dst + pos, dstLen - pos, src, len) != BIO_OK) {
+        return false;
+    }
+    pos += len;
+    return true;
+}
+
+bool ReadDescriptorField(const char *src, uint64_t srcLen, uint64_t &pos, void *dst, uint64_t len)
+{
+    if (src == nullptr || dst == nullptr || pos > srcLen || len > srcLen - pos) {
+        return false;
+    }
+    if (memcpy_s(dst, len, src + pos, len) != BIO_OK) {
+        return false;
+    }
+    pos += len;
+    return true;
+}
+
+bool DecodePreparedWCacheDescriptor(const CacheSpaceDesc &space, PreparedWCacheSliceDescriptor &desc)
+{
+    if (space.descriptorSize == 0 || space.descriptorSize > CACHE_SPACE_DEC_SIZE) {
+        return false;
+    }
+
+    uint64_t pos = 0;
+    size_t addrNum = 0;
+    const char *data = space.descriptorInfo;
+    uint64_t len = space.descriptorSize;
+    if (!ReadDescriptorField(data, len, pos, &desc.flowId, sizeof(desc.flowId)) ||
+        !ReadDescriptorField(data, len, pos, &desc.flowOffset, sizeof(desc.flowOffset)) ||
+        !ReadDescriptorField(data, len, pos, &desc.flowIndex, sizeof(desc.flowIndex)) ||
+        !ReadDescriptorField(data, len, pos, &desc.dataCrc, sizeof(desc.dataCrc)) ||
+        !ReadDescriptorField(data, len, pos, &desc.flowType, sizeof(desc.flowType)) ||
+        !ReadDescriptorField(data, len, pos, &desc.length, sizeof(desc.length)) ||
+        !ReadDescriptorField(data, len, pos, &addrNum, sizeof(addrNum)) ||
+        addrNum > CACHE_SPACE_ADDRESS_SIZE) {
+        return false;
+    }
+
+    desc.addrs.clear();
+    desc.addrs.reserve(addrNum);
+    for (size_t idx = 0; idx < addrNum; ++idx) {
+        FlowAddr addr{};
+        if (!ReadDescriptorField(data, len, pos, &addr, sizeof(addr))) {
+            return false;
+        }
+        desc.addrs.push_back(addr);
+    }
+    return true;
+}
+
+bool EncodePreparedWCacheDescriptor(const PreparedWCacheSliceDescriptor &desc, CacheSpaceDesc &space)
+{
+    if (desc.addrs.size() > CACHE_SPACE_ADDRESS_SIZE) {
+        return false;
+    }
+
+    uint64_t pos = 0;
+    size_t addrNum = desc.addrs.size();
+    if (!CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &desc.flowId, sizeof(desc.flowId)) ||
+        !CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &desc.flowOffset,
+            sizeof(desc.flowOffset)) ||
+        !CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &desc.flowIndex,
+            sizeof(desc.flowIndex)) ||
+        !CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &desc.dataCrc, sizeof(desc.dataCrc)) ||
+        !CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &desc.flowType, sizeof(desc.flowType)) ||
+        !CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &desc.length, sizeof(desc.length)) ||
+        !CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &addrNum, sizeof(addrNum))) {
+        return false;
+    }
+
+    for (const auto &addr : desc.addrs) {
+        if (!CopyDescriptorField(space.descriptorInfo, CACHE_SPACE_DEC_SIZE, pos, &addr, sizeof(addr))) {
+            return false;
+        }
+    }
+    space.descriptorSize = static_cast<uint16_t>(pos);
+    return true;
+}
+
+uint64_t InterceptorWindowId(uint64_t offset)
+{
+    return offset / INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+}
+
+uint64_t InterceptorDataWindowKey(uint64_t inode, uint64_t offset)
+{
+    uint64_t windowId = InterceptorWindowId(offset);
+    return InterceptorReadIndexHash(inode, windowId);
+}
+
+bool IsSingleDirectSpaceWindowRange(uint64_t offset, uint64_t length)
+{
+    if (length == 0 || length > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        return false;
+    }
+    uint64_t end = offset + length - 1U;
+    return end >= offset && InterceptorWindowId(offset) == InterceptorWindowId(end);
+}
+
+bool SplitDirectSpaceRange(uint64_t offset, uint64_t nbytes, InterceptorPwriteSpaceSegment *segs, uint32_t &segNum)
+{
+    if (segs == nullptr || nbytes == 0 || nbytes > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        return false;
+    }
+    if (offset > UINT64_MAX - nbytes) {
+        return false;
+    }
+
+    uint64_t cur = offset;
+    uint64_t left = nbytes;
+    segNum = 0;
+    while (left > 0) {
+        if (segNum >= INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS) {
+            return false;
+        }
+        uint64_t windowOffset = InterceptorWindowId(cur) * INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+        uint64_t inWindow = cur - windowOffset;
+        uint64_t windowLeft = INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE - inWindow;
+        uint64_t piece = std::min<uint64_t>(left, windowLeft);
+        if (piece == 0 || !IsSingleDirectSpaceWindowRange(cur, piece)) {
+            return false;
+        }
+        segs[segNum] = {};
+        segs[segNum].offset = cur;
+        segs[segNum].nbytes = piece;
+        ++segNum;
+        cur += piece;
+        left -= piece;
+    }
+    return segNum > 0;
+}
+
+bool ValidateDirectSpaceSegments(uint64_t offset, uint64_t nbytes, const InterceptorPwriteSpaceSegment *segs,
+    uint32_t segNum)
+{
+    if (segs == nullptr || segNum == 0 || segNum > INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS ||
+        nbytes == 0 || nbytes > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE || offset > UINT64_MAX - nbytes) {
+        return false;
+    }
+
+    uint64_t expectedOffset = offset;
+    uint64_t endOffset = offset + nbytes;
+    for (uint32_t idx = 0; idx < segNum; ++idx) {
+        if (segs[idx].offset != expectedOffset || segs[idx].nbytes == 0 ||
+            segs[idx].nbytes > endOffset - expectedOffset ||
+            !IsSingleDirectSpaceWindowRange(segs[idx].offset, segs[idx].nbytes)) {
+            return false;
+        }
+        expectedOffset += segs[idx].nbytes;
+    }
+    return expectedOffset == endOffset;
+}
+
+bool HasLocalCopy(const ObjLocation &location)
+{
+    auto mirror = BioClient::Instance()->GetMirror();
+    if (mirror == nullptr) {
+        return true;
+    }
+
+    uint16_t ptId = mirror->ParseLocation(location);
+    CmPtInfo ptEntry{};
+    if (mirror->GetPtEntry(ptId, ptEntry) != BIO_OK) {
+        return true;
+    }
+    uint16_t localNid = mirror->GetLocalNodeInfo().VNodeId();
+    for (const auto &copy : ptEntry.copys) {
+        if ((copy.state == CM_COPY_RUNNING || copy.state == CM_COPY_RECOVERY) && copy.nodeId == localNid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ReleasePreparedStagingSegment(const InterceptorPwriteSpaceSegment &seg)
+{
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    if (netEngine == nullptr) {
+        return;
+    }
+    for (uint32_t idx = 0; idx < seg.space.addressNum && idx < CACHE_SPACE_ADDRESS_SIZE; ++idx) {
+        uintptr_t address = static_cast<uintptr_t>(seg.space.address[idx].address);
+        if (address != 0) {
+            netEngine->FreeLocalMrSingle(address);
+        }
+    }
+}
+
+void AbortPreparedDescriptorFlow(const InterceptorPwriteSpaceSegment &seg)
+{
+    CacheSpaceDesc space = seg.space;
+    if (space.descriptorSize == 0) {
+        return;
+    }
+    CResult ret = BioAbortCacheSpaceDescriptor(1, &space);
+    if (ret != RET_CACHE_OK && ret != RET_CACHE_NOT_FOUND) {
+        CLIENT_LOG_DEBUG("Abort prepared direct write descriptor failed, offset:" << seg.offset <<
+            ", nbytes:" << seg.nbytes << ", ret:" << ret << ".");
+    }
+}
+
+void ReleasePreparedDirectSpaceSegment(const InterceptorPwriteSpaceSegment &seg)
+{
+    if (seg.mode == INTERCEPTOR_WRITE_MODE_REMOTE) {
+        ReleasePreparedStagingSegment(seg);
+        return;
+    }
+
+    CacheSpaceDesc space = seg.space;
+    BResult ret = agent::BioClientAgent::Instance()->ReleasePreparedWCacheSpace(space);
+    if (ret != BIO_OK && ret != BIO_NOT_EXISTS) {
+        CLIENT_LOG_DEBUG("Release prepared direct write cache space failed, offset:" << seg.offset <<
+            ", nbytes:" << seg.nbytes << ", ret:" << ret << ".");
+    }
+}
+
+void AbortPreparedDirectSpaceSegment(const InterceptorPwriteSpaceSegment &seg)
+{
+    if (seg.mode == INTERCEPTOR_WRITE_MODE_REMOTE) {
+        ReleasePreparedStagingSegment(seg);
+        AbortPreparedDescriptorFlow(seg);
+        return;
+    }
+    ReleasePreparedDirectSpaceSegment(seg);
+}
+
+void AbortPreparedDirectSpaceSegments(const InterceptorPwriteSpaceSegment *segs, uint32_t segNum)
+{
+    if (segs == nullptr) {
+        return;
+    }
+    for (uint32_t idx = 0; idx < segNum && idx < INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS; ++idx) {
+        AbortPreparedDirectSpaceSegment(segs[idx]);
+    }
+}
+
+struct PreparedDirectWriteRecord {
+    int32_t fd = 0;
+    uint64_t inode = 0;
+    int64_t offset = 0;
+    uint64_t nbytes = 0;
+    std::vector<InterceptorPwriteSpaceSegment> segs;
+};
+
+std::mutex g_preparedDirectWriteLock;
+std::unordered_map<uint32_t, std::vector<PreparedDirectWriteRecord>> g_preparedDirectWrites;
+
+bool SamePreparedSegment(const InterceptorPwriteSpaceSegment &left, const InterceptorPwriteSpaceSegment &right,
+    bool matchNbytes)
+{
+    if (left.ret != right.ret || left.mode != right.mode || left.addrNum != right.addrNum ||
+        left.offset != right.offset || (matchNbytes && left.nbytes != right.nbytes) ||
+        left.space.allocLoc != right.space.allocLoc || left.space.addressNum != right.space.addressNum ||
+        left.space.descriptorSize != right.space.descriptorSize ||
+        left.space.loc.location[0] != right.space.loc.location[0] ||
+        left.space.loc.location[1] != right.space.loc.location[1]) {
+        return false;
+    }
+    if (std::memcmp(left.space.descriptorInfo, right.space.descriptorInfo, left.space.descriptorSize) != 0) {
+        return false;
+    }
+    for (uint32_t idx = 0; idx < CACHE_SPACE_ADDRESS_SIZE; ++idx) {
+        if (left.space.address[idx].address != right.space.address[idx].address ||
+            left.space.address[idx].size != right.space.address[idx].size ||
+            left.addrOffset[idx] != right.addrOffset[idx] || left.addrLen[idx] != right.addrLen[idx]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SamePreparedSegments(const PreparedDirectWriteRecord &record, const InterceptorPwriteSpaceSegment *segs,
+    uint32_t segNum, bool matchNbytes)
+{
+    if (segs == nullptr || record.segs.size() != segNum) {
+        return false;
+    }
+    for (uint32_t idx = 0; idx < segNum; ++idx) {
+        if (!SamePreparedSegment(record.segs[idx], segs[idx], matchNbytes)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void TrackPreparedDirectWrite(uint32_t pid, int32_t fd, uint64_t inode, int64_t offset, uint64_t nbytes,
+    const InterceptorPwriteSpaceSegment *segs, uint32_t segNum)
+{
+    if (pid == 0 || segs == nullptr || segNum == 0 || segNum > INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS) {
+        return;
+    }
+    PreparedDirectWriteRecord record;
+    record.fd = fd;
+    record.inode = inode;
+    record.offset = offset;
+    record.nbytes = nbytes;
+    record.segs.assign(segs, segs + segNum);
+    std::lock_guard<std::mutex> lock(g_preparedDirectWriteLock);
+    g_preparedDirectWrites[pid].push_back(record);
+}
+
+bool TakePreparedDirectWrite(uint32_t pid, int32_t fd, uint64_t inode, int64_t offset, uint64_t nbytes,
+    const InterceptorPwriteSpaceSegment *segs, uint32_t segNum, bool matchNbytes, PreparedDirectWriteRecord &record)
+{
+    std::lock_guard<std::mutex> lock(g_preparedDirectWriteLock);
+    auto iter = g_preparedDirectWrites.find(pid);
+    if (iter == g_preparedDirectWrites.end()) {
+        return false;
+    }
+    auto &records = iter->second;
+    for (auto recordIter = records.begin(); recordIter != records.end(); ++recordIter) {
+        if (recordIter->fd != fd || recordIter->inode != inode || recordIter->offset != offset ||
+            (matchNbytes && recordIter->nbytes != nbytes) ||
+            !SamePreparedSegments(*recordIter, segs, segNum, matchNbytes)) {
+            continue;
+        }
+        record = *recordIter;
+        records.erase(recordIter);
+        if (records.empty()) {
+            g_preparedDirectWrites.erase(iter);
+        }
+        return true;
+    }
+    return false;
+}
+
+std::vector<PreparedDirectWriteRecord> TakePreparedDirectWritesByPid(uint32_t pid)
+{
+    std::lock_guard<std::mutex> lock(g_preparedDirectWriteLock);
+    auto iter = g_preparedDirectWrites.find(pid);
+    if (iter == g_preparedDirectWrites.end()) {
+        return {};
+    }
+    std::vector<PreparedDirectWriteRecord> records = iter->second;
+    g_preparedDirectWrites.erase(iter);
+    return records;
+}
+
+std::vector<PreparedDirectWriteRecord> TakeAllPreparedDirectWrites()
+{
+    std::lock_guard<std::mutex> lock(g_preparedDirectWriteLock);
+    std::vector<PreparedDirectWriteRecord> records;
+    for (auto &item : g_preparedDirectWrites) {
+        records.insert(records.end(), item.second.begin(), item.second.end());
+    }
+    g_preparedDirectWrites.clear();
+    return records;
+}
+
+void AbortPreparedDirectWriteRecords(const std::vector<PreparedDirectWriteRecord> &records)
+{
+    for (const auto &record : records) {
+        if (!record.segs.empty()) {
+            AbortPreparedDirectSpaceSegments(record.segs.data(), static_cast<uint32_t>(record.segs.size()));
+        }
+    }
+}
+
+bool AllocateDirectWriteStaging(uint64_t nbytes, uintptr_t &address)
+{
+    address = 0;
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    if (netEngine == nullptr || nbytes == 0 || nbytes > UINT32_MAX || netEngine->GetDataPage() < nbytes) {
+        return false;
+    }
+
+    uint64_t mrKey = 0;
+    BResult ret = netEngine->AllocLocalMrSingle(address, mrKey);
+    if (ret != BIO_OK || address == 0) {
+        address = 0;
+        return false;
+    }
+    if (netEngine->GetAddressOffset(address) == UINT64_MAX) {
+        netEngine->FreeLocalMrSingle(address);
+        address = 0;
+        return false;
+    }
+    return true;
+}
+
+void FreeDirectWriteStaging(uintptr_t address)
+{
+    if (address == 0) {
+        return;
+    }
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    if (netEngine != nullptr) {
+        netEngine->FreeLocalMrSingle(address);
+    }
+}
+
+bool BuildStagingSpaceFromDescriptor(uint64_t nbytes, uintptr_t address, CacheSpaceDesc &space)
+{
+    PreparedWCacheSliceDescriptor desc{};
+    if (!DecodePreparedWCacheDescriptor(space, desc)) {
+        return false;
+    }
+
+    if (address == 0 || nbytes == 0 || nbytes > UINT32_MAX) {
+        return false;
+    }
+
+    desc.length = nbytes;
+    desc.flowType = FLOW_MEMORY;
+    desc.addrs.clear();
+    desc.addrs.emplace_back(address, 0, static_cast<uint32_t>(nbytes));
+    if (!EncodePreparedWCacheDescriptor(desc, space)) {
+        return false;
+    }
+
+    space.allocLoc = CACHE_SPACE_SOURCE_COPY_REQUIRED;
+    space.addressNum = 1;
+    space.address[0].address = address;
+    space.address[0].size = static_cast<uint32_t>(nbytes);
+    for (uint32_t idx = 1; idx < CACHE_SPACE_ADDRESS_SIZE; ++idx) {
+        space.address[idx] = {};
+    }
+    return true;
+}
+
+CResult PrepareDirectSpaceSegment(uint64_t inode, InterceptorPwriteSpaceSegment &seg)
+{
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    if (UNLIKELY(netEngine == nullptr)) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    ObjLocation location{};
+    CResult locRet = BioCalcLocation(1, InterceptorDataWindowKey(inode, seg.offset), &location);
+    if (UNLIKELY(locRet != 0)) {
+        return locRet;
+    }
+
+    seg.space.loc = location;
+    bool hasLocalCopy = HasLocalCopy(location);
+    uintptr_t stagingAddress = 0;
+    if (!hasLocalCopy && !AllocateDirectWriteStaging(seg.nbytes, stagingAddress)) {
+        return RET_CACHE_NOT_SUPPORTED;
+    }
+
+    seg.space.allocLoc = 0;
+    CResult allocRet = RET_CACHE_OK;
+    if (hasLocalCopy) {
+        allocRet = BioAllocCacheSpace(1, InterceptorDataWindowKey(inode, seg.offset), seg.nbytes, &seg.space);
+    } else {
+        allocRet = BioAllocCacheSpaceDescriptor(1, InterceptorDataWindowKey(inode, seg.offset), seg.nbytes,
+            &seg.space);
+    }
+    if (UNLIKELY(allocRet != 0)) {
+        FreeDirectWriteStaging(stagingAddress);
+        return allocRet;
+    }
+
+    seg.mode = hasLocalCopy ? INTERCEPTOR_WRITE_MODE_LOCAL : INTERCEPTOR_WRITE_MODE_REMOTE;
+    if (seg.mode == INTERCEPTOR_WRITE_MODE_REMOTE &&
+        !BuildStagingSpaceFromDescriptor(seg.nbytes, stagingAddress, seg.space)) {
+        FreeDirectWriteStaging(stagingAddress);
+        AbortPreparedDescriptorFlow(seg);
+        return RET_CACHE_NOT_SUPPORTED;
+    }
+    if (UNLIKELY(seg.space.addressNum == 0 || seg.space.addressNum > CACHE_SPACE_ADDRESS_SIZE)) {
+        AbortPreparedDirectSpaceSegment(seg);
+        return RET_CACHE_NOT_SUPPORTED;
+    }
+    for (uint32_t addrIdx = 0; addrIdx < seg.space.addressNum; ++addrIdx) {
+        uint64_t addrOffset = netEngine->GetAddressOffset(seg.space.address[addrIdx].address);
+        if (UNLIKELY(addrOffset == UINT64_MAX || seg.space.address[addrIdx].size == 0)) {
+            AbortPreparedDirectSpaceSegment(seg);
+            return RET_CACHE_NOT_SUPPORTED;
+        }
+        seg.addrOffset[addrIdx] = addrOffset;
+        seg.addrLen[addrIdx] = seg.space.address[addrIdx].size;
+    }
+    seg.ret = 0;
+    seg.addrNum = seg.space.addressNum;
+    return RET_CACHE_OK;
+}
+
+bool ClipCacheSpaceDesc(CacheSpaceDesc &space, uint64_t dataLen)
+{
+    if (dataLen == 0 || space.addressNum == 0 || space.addressNum > CACHE_SPACE_ADDRESS_SIZE) {
+        return false;
+    }
+
+    uint64_t left = dataLen;
+    uint16_t used = 0;
+    for (uint32_t idx = 0; idx < space.addressNum && left > 0; ++idx) {
+        if (space.address[idx].size == 0) {
+            return false;
+        }
+        if (space.address[idx].size > left) {
+            space.address[idx].size = static_cast<uint32_t>(left);
+        }
+        left -= space.address[idx].size;
+        ++used;
+    }
+    for (uint32_t idx = used; idx < CACHE_SPACE_ADDRESS_SIZE; ++idx) {
+        space.address[idx] = {};
+    }
+    space.addressNum = used;
+    return left == 0;
+}
+
+bool RewritePreparedSpaceForCommit(CacheSpaceDesc &space, uint64_t dataLen)
+{
+    PreparedWCacheSliceDescriptor desc{};
+    if (!DecodePreparedWCacheDescriptor(space, desc)) {
+        return false;
+    }
+
+    uint64_t left = dataLen;
+    desc.addrs.clear();
+    for (uint32_t idx = 0; idx < space.addressNum && left > 0; ++idx) {
+        uint32_t addrLen = space.address[idx].size;
+        if (addrLen == 0) {
+            return false;
+        }
+        uint32_t curLen = static_cast<uint32_t>(std::min<uint64_t>(addrLen, left));
+        desc.addrs.emplace_back(space.address[idx].address, 0, curLen);
+        left -= curLen;
+    }
+    if (left != 0) {
+        return false;
+    }
+
+    desc.length = dataLen;
+    return EncodePreparedWCacheDescriptor(desc, space);
+}
+
+bool GetPreparedSpaceLength(const CacheSpaceDesc &space, uint64_t &length)
+{
+    PreparedWCacheSliceDescriptor desc{};
+    if (!DecodePreparedWCacheDescriptor(space, desc)) {
+        return false;
+    }
+    length = desc.length;
+    return true;
+}
+
+int32_t CommitDirectSpaceSegment(uint64_t inode, const InterceptorPwriteSpaceSegment &seg, bool &localCommitted)
+{
+    localCommitted = false;
+    CacheSpaceDesc commitSpace = seg.space;
+    uint64_t preparedLength = 0;
+    bool hasPreparedDescriptor = commitSpace.descriptorSize != 0 &&
+        GetPreparedSpaceLength(commitSpace, preparedLength);
+    if (!ClipCacheSpaceDesc(commitSpace, seg.nbytes)) {
+        return RET_CACHE_EPERM;
+    }
+    if (commitSpace.descriptorSize == 0) {
+        return RET_CACHE_EPERM;
+    } else if (!RewritePreparedSpaceForCommit(commitSpace, seg.nbytes)) {
+        return RET_CACHE_EPERM;
+    }
+    int32_t ret = static_cast<int32_t>(BioWriteCopyFreeHook(inode, seg.offset, seg.nbytes, &commitSpace));
+    if (ret == 0) {
+        localCommitted = (commitSpace.allocLoc & CACHE_SPACE_LOCAL_COMMITTED) != 0;
+        if (hasPreparedDescriptor && preparedLength > seg.nbytes) {
+            CacheSpaceDesc shrinkSpace = seg.space;
+            BioShrinkCacheSpaceDescriptor(1, &shrinkSpace, seg.nbytes);
+        }
+    }
+    return ret;
+}
+
+void FillReadRespFromDesc(const CacheReadAddrDesc &desc, InterceptorPreadOut &resp)
+{
+    resp.ret = 0;
+    resp.dataLen = desc.realLen;
+    resp.addrNum = desc.addressNum;
+    resp.dataSource = INTERCEPTOR_PREAD_DATA_BIO_SHM;
+    for (uint32_t idx = 0; idx < resp.addrNum && idx < SLICE_ADDR_SIZE; idx++) {
+        resp.addrOffset[idx] = desc.address[idx].offset;
+        resp.addrLen[idx] = desc.address[idx].size;
+    }
+}
+
+bool FillReadRespFromSpace(CacheSpaceDesc &space, uint64_t dataLen, InterceptorPreadOut &resp)
+{
+    if (dataLen == 0 || space.addressNum == 0 || space.addressNum > CACHE_SPACE_ADDRESS_SIZE ||
+        space.addressNum > SLICE_ADDR_SIZE) {
+        return false;
+    }
+
+    uint64_t left = dataLen;
+    auto netEngine = BioClientNet::Instance()->GetNetEngine();
+    resp = {};
+    resp.ret = 0;
+    resp.dataLen = dataLen;
+    resp.dataSource = INTERCEPTOR_PREAD_DATA_BIO_SHM;
+    for (uint32_t idx = 0; idx < space.addressNum && left > 0; ++idx) {
+        uint64_t addrOffset = netEngine->GetAddressOffset(space.address[idx].address);
+        if (addrOffset == UINT64_MAX || space.address[idx].size == 0) {
+            return false;
+        }
+        uint64_t addrLen = space.address[idx].size < left ? space.address[idx].size : left;
+        resp.addrOffset[resp.addrNum] = addrOffset;
+        resp.addrLen[resp.addrNum] = addrLen;
+        resp.addrNum++;
+        left -= addrLen;
+    }
+    return left == 0 && resp.addrNum > 0;
+}
+
 bool FillReadRespFromBuffer(uint64_t addrOffset, uint64_t dataLen, uint64_t windowOffset, uint64_t windowDataLen,
     uint64_t windowAddrOffset, uint64_t windowAddrLen, InterceptorPreadOut &resp)
 {
