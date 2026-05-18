@@ -461,13 +461,28 @@ TEST_F(TestServer, test_mms_range_invalid_params)
 {
     ValueInfo *values = nullptr;
     uint64_t itemNum = 0;
+
     EXPECT_EQ(MmsConv::GetValuesByPrefix(nullptr, &values, &itemNum), RET_MMS_EPERM);
     EXPECT_EQ(MmsConv::GetValuesByPrefix("", &values, &itemNum), RET_MMS_EPERM);
     EXPECT_EQ(MmsConv::GetValuesByPrefix("range", nullptr, &itemNum), RET_MMS_EPERM);
     EXPECT_EQ(MmsConv::GetValuesByPrefix("range", &values, nullptr), RET_MMS_EPERM);
+
+    EXPECT_EQ(MmsConv::GetValuesByRange(nullptr, "z", &values, &itemNum), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::GetValuesByRange("a", nullptr, &values, &itemNum), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::GetValuesByRange("", "z", &values, &itemNum), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::GetValuesByRange("a", "", &values, &itemNum), RET_MMS_EPERM);
     EXPECT_EQ(MmsConv::GetValuesByRange("z", "a", &values, &itemNum), RET_MMS_EPERM);
     EXPECT_EQ(MmsConv::GetValuesByRange("a", "z", nullptr, &itemNum), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::GetValuesByRange("a", "z", &values, nullptr), RET_MMS_EPERM);
+
+    EXPECT_EQ(MmsConv::BatchDeleteByRange(nullptr, "z"), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::BatchDeleteByRange("a", nullptr), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::BatchDeleteByRange("", "z"), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::BatchDeleteByRange("a", ""), RET_MMS_EPERM);
     EXPECT_EQ(MmsConv::BatchDeleteByRange("z", "a"), RET_MMS_EPERM);
-    MmsConv::FreeResources(nullptr, 0);
-    MmsConv::FreeResources(&values, 0);
+
+    EXPECT_NO_THROW(MmsConv::FreeResources(nullptr, 0));
+    EXPECT_NO_THROW(MmsConv::FreeResources(&values, 0));
+    EXPECT_NO_THROW(MmsConv::FreeResources(&values, NO_1));
+    EXPECT_EQ(values, nullptr);
 }
