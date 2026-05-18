@@ -15,14 +15,12 @@
 
 #include <mutex>
 #include <atomic>
-#include <sys/mman.h>
-#include <unistd.h>
 #include "net_engine.h"
 #include "net_common.h"
-#include "net_block_pool.h"
 #include "bio_ref.h"
 #include "bio_err.h"
 #include "interceptor_log.h"
+#include "interceptor_read_index.h"
 
 namespace ock {
 namespace bio {
@@ -40,64 +38,52 @@ public:
     int32_t StartNetService();
     void StopNetService();
     void ShutdownNetService();
-    BResult CreateDataMessageMem();
+    BResult CreateBioServerMem();
     BResult PrepareBeforeFork();
     BResult PrepareAfterForkChild();
-
-    uint8_t *GetShmAddress(uint64_t offset, uint32_t len)
+    BResult InitNetForCurrentProcess()
     {
-        if (UNLIKELY(EnsureReadyForCurrentProcess() != BIO_OK) || mNetEngine == nullptr) {
-            return nullptr;
-        }
-        return mNetEngine->GetShmAddress(offset, len);
+        return EnsureStartedForCurrentProcess();
     }
 
-    BResult AllocShmBlock(uintptr_t &address, uint64_t &mrOffset)
+    BResult GetReadySendPid(uint32_t &pid)
     {
-        auto readyRet = EnsureReadyForCurrentProcess();
+        auto readyRet = EnsureStartedForCurrentProcess();
         if (UNLIKELY(readyRet != BIO_OK)) {
+            pid = 0;
             return readyRet;
         }
-
-        if (UNLIKELY(mDataMsgMemPool == nullptr)) {
-            return BIO_NOT_READY;
-        }
-
-        auto ret = mDataMsgMemPool->AllocOne(address);
-        if (UNLIKELY(ret != BIO_OK)) {
-            return ret;
-        }
-
-        mrOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
-        return BIO_OK;
+        pid = mPid.load(std::memory_order_relaxed);
+        return pid == 0 ? BIO_NOT_READY : BIO_OK;
     }
 
-    uint8_t *GetShmBlockAddr(uint64_t mrOffset)
+    BResult EnsureBioShmForCurrentProcess();
+
+    uint8_t *GetBioShmAddress(uint64_t offset, uint32_t len);
+    bool FindReadIndexCache(uint64_t inode, uint64_t offset, uint64_t minLen, InterceptorReadIndexCache &cache);
+    bool CopyFromReadIndex(uint64_t inode, uint64_t offset, size_t count, void *buf,
+        InterceptorReadIndexCache *cache = nullptr);
+
+    uint8_t *GetBioShmAddressFast(uint64_t offset, uint64_t len)
     {
-        if (UNLIKELY(EnsureReadyForCurrentProcess() != BIO_OK) || mDataMsgMemAddr == nullptr) {
+        if (UNLIKELY(mBioShmAddr == nullptr)) {
             return nullptr;
         }
-        return mDataMsgMemAddr + mrOffset;
-    }
 
-    void ReleaseShmBlock(uint64_t mrOffset)
-    {
-        uint32_t currentPid = static_cast<uint32_t>(getpid());
-        if (UNLIKELY(mPid != 0 && mPid != currentPid)) {
-            OrphanInheritedState(currentPid);
-            return;
+        if (UNLIKELY(offset < mBioShmOffset)) {
+            return nullptr;
         }
-        if (UNLIKELY(!mReady.load()) || mDataMsgMemPool == nullptr || mDataMsgMemAddr == nullptr) {
-            return;
+        uint64_t relativeOffset = offset - mBioShmOffset;
+        if (UNLIKELY(len > mBioShmLength || relativeOffset > mBioShmLength - len)) {
+            return nullptr;
         }
-        uintptr_t address = reinterpret_cast<uintptr_t>(mDataMsgMemAddr + mrOffset);
-        mDataMsgMemPool->ReleaseOne(address);
+        return mBioShmAddr + relativeOffset;
     }
 
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp &rsp)
     {
-        auto readyRet = EnsureReadyForCurrentProcess();
+        auto readyRet = EnsureStartedForCurrentProcess();
         if (UNLIKELY(readyRet != BIO_OK)) {
             return readyRet;
         }
@@ -107,7 +93,7 @@ public:
     template <typename TReq, typename TResp>
     inline BResult SendSync(const BioNodeId target, uint16_t opcode, TReq &req, TResp **rsp, uint64_t &respLen)
     {
-        auto readyRet = EnsureReadyForCurrentProcess();
+        auto readyRet = EnsureStartedForCurrentProcess();
         if (UNLIKELY(readyRet != BIO_OK)) {
             return readyRet;
         }
@@ -117,38 +103,46 @@ public:
     template <typename TResp>
     inline BResult SendSyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, TResp &rsp)
     {
-        auto readyRet = EnsureReadyForCurrentProcess();
+        auto readyRet = EnsureStartedForCurrentProcess();
         if (UNLIKELY(readyRet != BIO_OK)) {
             return readyRet;
         }
         return mNetEngine->SyncCallBuff(target, opcode, req, reqLen, rsp);
     }
 
+    template <typename TReq>
+    inline BResult SendAsyncNoResp(const BioNodeId target, uint16_t opcode, TReq &req)
+    {
+        auto readyRet = EnsureStartedForCurrentProcess();
+        if (UNLIKELY(readyRet != BIO_OK)) {
+            return readyRet;
+        }
+        return mNetEngine->AsyncCallWithoutResponse(target, opcode, req);
+    }
+
     inline uint32_t GetSendPid()
     {
-        (void)EnsureReadyForCurrentProcess();
-        return mPid;
+        return mPid.load(std::memory_order_relaxed);
     }
 
 private:
-    BResult EnsureReadyForCurrentProcess();
+    BResult EnsureStartedForCurrentProcess();
     void OrphanInheritedState(uint32_t currentPid);
     void StopNetServiceLocked();
 
 private:
     std::mutex mStartLock;
-    uint32_t mPid = 0;
+    std::atomic<uint32_t> mPid = { 0 };
     std::atomic<bool> mReady = { false };
     std::atomic<bool> mShutdown = { false };
     NetEnginePtr mNetEngine = nullptr;
-    int32_t mShmFd = -1;
-    uint64_t mShmOffset = 0;
-    uint64_t mShmLength = 0;
-    uint8_t *mShmAddr = nullptr;
-
-    NetBlockPoolPtr mDataMsgMemPool = nullptr;
-    uint8_t *mDataMsgMemAddr = nullptr;
-    uint64_t mDataMsgMemBlockSize = 0;
+    int32_t mBioShmFd = -1;
+    uint64_t mBioShmOffset = 0;
+    uint64_t mBioShmLength = 0;
+    uint8_t *mBioShmAddr = nullptr;
+    int32_t mReadIndexFd = -1;
+    uint64_t mReadIndexLength = 0;
+    InterceptorReadIndexHeader *mReadIndex = nullptr;
 };
 }
 }

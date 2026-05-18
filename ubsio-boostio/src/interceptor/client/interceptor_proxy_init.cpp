@@ -10,16 +10,17 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <climits>
 #include <string>
+#include <atomic>
 #include <unistd.h>
 #include "interceptor.h"
 #include "interceptor_context.h"
 #include "interceptor_log.h"
 #include "interceptor_net.h"
+#include "proxy_operations.h"
 
 using namespace ock::bio;
 
@@ -61,6 +62,10 @@ int InitializeProxyContext()
         CLOG_WARN("Ignore invalid INTERCEPTOR_MOUNT_POINT:" << mountPoint << ".");
     }
 
+    auto &netService = InterceptorClientNetService::Instance();
+    if (netService.InitNetForCurrentProcess() == BIO_OK) {
+        (void)netService.EnsureBioShmForCurrentProcess();
+    }
     g_initialized.store(true);
 
     CLOG_INFO("Initialize interceptor proxy context success, mountPoint:" << ctx.mountPoint << ".");
@@ -73,6 +78,8 @@ void CleanProxyContext()
         return;
     }
 
+    ProxyOperations::FlushAllPendingWriteWindows();
+    ProxyOperations::FlushPendingReadBufferReleaseForCurrentThread();
     InterceptorClientNetService::Instance().ShutdownNetService();
     g_initialized.store(false);
 }
