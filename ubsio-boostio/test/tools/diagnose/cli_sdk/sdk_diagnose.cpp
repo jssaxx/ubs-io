@@ -871,7 +871,7 @@ void diagnose::BioSdkCommand::HandleBatchGetLocal(const std::vector<std::string>
     uintptr_t *valueAddrs = reinterpret_cast<uintptr_t*>(malloc(sizeof(uintptr_t) * batchNum));
     int32_t *results = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t) * batchNum));
     KeyAddrInfo *infos = reinterpret_cast<KeyAddrInfo*>(malloc(sizeof(KeyAddrInfo) * batchNum));
-    int32_t *positions = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t) * batchNum));
+    uint8_t *positions = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * batchNum));
     if (keys == nullptr || offsets == nullptr || lengths == nullptr || locations == nullptr ||
         valueAddrs == nullptr || results == nullptr) {
         mPrintOp("Malloc fail.");
