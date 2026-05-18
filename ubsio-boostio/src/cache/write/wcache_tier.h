@@ -115,6 +115,8 @@ public:
 
     BResult Evict(const WCacheSlicePtr &slice);
 
+    BResult ReleasePreparedDataSlice(const WCacheSlicePtr &slice);
+
     bool IsEmptyEvictSliceQueue();
 
     bool IsEmptyNegotiateMap();
@@ -145,6 +147,8 @@ private:
 
     CacheSliceOperator mSliceOperator;
     WFlowTruncateCursorPtr mFlowTruncateCursor;
+    std::mutex mPreparedDataReleaseLock;
+    std::map<uint64_t, WCacheSlicePtr> mPreparedDataReleases;
 
     SpinLock mEvictSliceQueueLock;
     std::list<WCacheSliceRefPtr> mEvictSliceQueue;

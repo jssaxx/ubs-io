@@ -132,6 +132,11 @@ public:
         return ret;
     }
 
+    inline BResult GetAddress(MirrorClient::MirrorGet &param, CacheReadAddrDesc &desc)
+    {
+        return mMirror->GetAddress(param, desc);
+    }
+
     inline BResult DeleteKey(const char *key, const ObjLocation &location)
     {
         return mMirror->DeleteKey(key, location);
@@ -170,6 +175,21 @@ public:
     inline BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
     {
         return mMirror->AllocSpace(param, spaceInfo);
+    }
+
+    inline BResult AllocSpaceDescriptor(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
+    {
+        return mMirror->AllocSpaceDescriptor(param, spaceInfo);
+    }
+
+    inline BResult AbortSpaceDescriptor(CacheSpaceDesc &spaceInfo)
+    {
+        return mMirror->AbortSpaceDescriptor(spaceInfo);
+    }
+
+    inline BResult ShrinkSpaceDescriptor(CacheSpaceDesc &spaceInfo, uint64_t usedLength)
+    {
+        return mMirror->ShrinkSpaceDescriptor(spaceInfo, usedLength);
     }
 
     inline BResult GetCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)

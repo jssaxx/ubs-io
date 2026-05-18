@@ -124,9 +124,9 @@ else
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
-CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
+CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
-BUILD_CMD="make install -j 16" # CI环境核数会波动, 默认只用16
+BUILD_CMD="make install -j 16" # ci编译多核有问题
 cd $BUILD_DIR
 echo $CMAKE_CMD
 $CMAKE_CMD || {

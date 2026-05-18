@@ -58,6 +58,8 @@ public:
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
+    BResult ReleasePreparedDataSlice(const WCacheSlicePtr &slice);
+
     BResult Seal(WCacheTierType type);
 
     void Destroy();

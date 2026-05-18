@@ -14,7 +14,6 @@
 #define INTERCEPTOR_H
 #include <unistd.h>
 #include <cstdlib>
-#include <sys/uio.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <stdio.h>
@@ -46,25 +45,15 @@ struct InterceptorProxyOperations {
 
     ssize_t (*pread64)(int fildes, void *buf, size_t nbyte, off64_t offset);
 
-    ssize_t (*readv)(int fd, const struct iovec *vector, int count);
-
-    ssize_t (*preadv)(int fd, const struct iovec *vector, int count, off_t offset);
-
-    ssize_t (*preadv64)(int fd, const struct iovec *vector, int iovcnt, off64_t offset);
-
     ssize_t (*write)(int fildes, const void *buf, size_t nbyte);
 
     ssize_t (*pwrite)(int fildes, const void *buf, size_t nbyte, off_t offset);
 
     ssize_t (*pwrite64)(int fildes, const void *buf, size_t nbyte, off64_t offset);
 
-    ssize_t (*writev)(int fd, const struct iovec *vector, int count);
-
-    ssize_t (*pwritev)(int fd, const struct iovec *vector, int count, off_t offset);
-
-    ssize_t (*pwritev64)(int fd, const struct iovec *vector, int count, off64_t offset);
-
     int (*fsync)(int fd);
+
+    int (*fdatasync)(int fd);
 
     void (*sync)(void);
 
@@ -162,25 +151,15 @@ struct InterceptorNativeOperations {
 
     ssize_t (*pread64)(int fildes, void *buf, size_t nbyte, off64_t offset);
 
-    ssize_t (*readv)(int fd, const struct iovec *vector, int count);
-
-    ssize_t (*preadv)(int fd, const struct iovec *vector, int count, off_t offset);
-
-    ssize_t (*preadv64)(int fd, const struct iovec *vector, int iovcnt, off64_t offset);
-
     ssize_t (*write)(int fildes, const void *buf, size_t nbyte);
 
     ssize_t (*pwrite)(int fildes, const void *buf, size_t nbyte, off_t offset);
 
     ssize_t (*pwrite64)(int fildes, const void *buf, size_t nbyte, off64_t offset);
 
-    ssize_t (*writev)(int fd, const struct iovec *vector, int count);
-
-    ssize_t (*pwritev)(int fd, const struct iovec *vector, int count, off_t offset);
-
-    ssize_t (*pwritev64)(int fd, const struct iovec *vector, int count, off64_t offset);
-
     int (*fsync)(int fd);
+
+    int (*fdatasync)(int fd);
 
     void (*sync)(void);
 

@@ -69,6 +69,12 @@ public:
     CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value,
         uint64_t &realLength);
 
+    CResult GetToShmSpace(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+        CacheSpaceDesc &space, uint64_t spaceOffset, uint64_t &realLength);
+
+    CResult GetAddress(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location,
+        CacheReadAddrDesc &desc);
+
     /**
      * @brief: Delete key
      *
@@ -140,6 +146,12 @@ public:
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
     CResult AllocSpace(uint64_t objectId, uint64_t length, CacheSpaceDesc &spaceInfo);
+
+    CResult AllocSpaceDescriptor(uint64_t objectId, uint64_t length, CacheSpaceDesc &spaceInfo);
+
+    CResult AbortSpaceDescriptor(CacheSpaceDesc &spaceInfo);
+
+    CResult ShrinkSpaceDescriptor(CacheSpaceDesc &spaceInfo, uint64_t usedLength);
 
     /**
      * @brief: put for copy free

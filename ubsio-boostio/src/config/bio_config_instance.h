@@ -36,6 +36,7 @@ const auto NET_DATA_IP_MASK = std::make_pair("bio.net.data.ip_mask", "127.0.0.1/
 const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("bio.net.request.executor.queue.size", 1024);
+const auto NET_RECV_REQUEST_HANDLE_CPUIDS = std::make_pair("bio.net.request.executor.cpuids", "-1");
 const auto NET_TLS_ENABLE_SWITCH = std::make_pair("bio.net.tls.enable.switch", "true");
 const auto NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path", "/path/CA/cacert.pem");
 const auto NET_TLS_CA_CRL_PATH = std::make_pair("bio.net.tls.ca.crl.path", "");
@@ -63,8 +64,6 @@ const auto BIO_WCACHE_NEGOTIATE_DELAY = std::make_pair("bio.wcache.negotiate.del
 const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
-
-const auto SDK_POOL_SIZE_MB = std::make_pair("bio.sdk.pool.size_in_mb", 128);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
 
@@ -122,6 +121,7 @@ public:
         };
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
+        int16_t handleRequestCpuStartIdx = -1;
         bool enableTls = true;
         std::string tlsCaCertPath = "/path/CA/cacert.pem";                  /* CA根证书 */
         std::string tlsCaCrlPath = "";                                      /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
@@ -148,7 +148,6 @@ public:
         uint32_t negotiateDelay = 100;
         uint32_t segment = 4194304;    // 4MB
         uint64_t memCap = 53687091200; // 50GB
-        uint64_t sdkPoolSize = 134217728; // 128MB
         uint64_t wcacheMemEvictLevel = 0;
         uint64_t wcacheDiskEvictLevel = 0;
         uint64_t rcacheMemEvictLevel = 90;

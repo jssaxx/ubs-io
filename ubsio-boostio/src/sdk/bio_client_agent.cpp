@@ -11,14 +11,16 @@
  */
 
 #include <iostream>
+#include <cstring>
 #include <dlfcn.h>
-#include "bio_functions.h"
 #include "bio_client_log.h"
-#include "message_op.h"
-#include "bio_trace.h"
-#include "bio_tracepoint_helper.h"
 #include "bio_client_net.h"
 #include "bio_crc_util.h"
+#include "bio_functions.h"
+#include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
+#include "message_op.h"
+#include "securec.h"
 #include "bio_client_agent.h"
 
 using namespace ock::bio;
@@ -159,6 +161,10 @@ BResult BioClientAgent::InitOperation()
         return BIO_INNER_ERR;
     }
     if ((getSliceOp = reinterpret_cast<GetSliceFuncPtr>(LoadFunction("GetSlice"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((releasePreparedWCacheSpaceOp = reinterpret_cast<ReleasePreparedWCacheSpaceFuncPtr>
+        (LoadFunction("ReleasePreparedWCacheSpace"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((putOp = reinterpret_cast<PutFuncPtr>(LoadFunction("Put"))) == nullptr) {
@@ -608,6 +614,14 @@ BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint
     }
 }
 
+BResult BioClientAgent::ReleasePreparedWCacheSpace(CacheSpaceDesc &space)
+{
+    if (mMode != CONVERGENCE || releasePreparedWCacheSpaceOp == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    return static_cast<BResult>(releasePreparedWCacheSpaceOp(&space));
+}
+
 void BioClientAgent::SendPutRequestLocal(PutRequest *req, Callback &callback)
 {
     net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_PUT, static_cast<void *>(req),
@@ -645,25 +659,24 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
             return BIO_INNER_ERR;
         }
         uint64_t off = 0;
-        uint64_t cpyLength = req.length;
         for (uint32_t idx = 0; idx < rsp.num; idx++) {
             if (rsp.addrLen[idx] > BIO_IO_MAX_LEN) {
                 return BIO_INVALID_PARAM;
+            }
+            if (UNLIKELY(rsp.addrLen[idx] > req.length - off)) {
+                return BIO_INNER_ERR;
             }
             uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset[idx], rsp.addrLen[idx]);
             if (addr == nullptr) {
                 CLIENT_LOG_ERROR("Send sync request get shm addr failed.");
                 break;
             }
-            ret =
-                memcpy_s(static_cast<void *>(value + off), cpyLength, reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
-            if (UNLIKELY(ret != 0)) {
-                CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
-                    rsp.addrLen[idx] << ".");
-                break;
+            int copyRet = memcpy_s(static_cast<void *>(value + off), req.length - off,
+                reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
+            if (UNLIKELY(copyRet != 0)) {
+                return BIO_INNER_ERR;
             }
             off += rsp.addrLen[idx];
-            cpyLength -= rsp.addrLen[idx];
         }
 
         if (rsp.isAlloc) {
@@ -718,6 +731,39 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
     } else {
         return SendGetRequestLocal(req, value, realLen);
     }
+}
+
+BResult BioClientAgent::GetLocalAddress(GetRequest &req, GetResponse &rsp)
+{
+    req.size = req.length;
+    req.address = 0;
+    req.isMr = GET_REQUEST_MR_CACHE_SPACE;
+    if (mMode == CONVERGENCE) {
+        return getOp(&req, &rsp);
+    }
+    return net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID, BIO_OP_SDK_GET, req, rsp);
+}
+
+BResult BioClientAgent::GetLocalToShmSpace(GetRequest &req, uint64_t &realLen)
+{
+    req.size = req.length;
+    req.isMr = GET_REQUEST_MR_TO_SHM_SPACE;
+
+    GetResponse rsp;
+    BResult ret;
+    if (mMode == CONVERGENCE) {
+        ret = getOp(&req, &rsp);
+    } else {
+        ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID, BIO_OP_SDK_GET, req, rsp);
+    }
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    if (UNLIKELY(rsp.realLen > req.length)) {
+        return BIO_INNER_ERR;
+    }
+    realLen = rsp.realLen;
+    return BIO_OK;
 }
 
 void BioClientAgent::SendDeleteRequestLocal(DeleteRequest &req, Callback &callback)
@@ -934,6 +980,8 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
     tempDesc.rCacheMemUsedSize = rsp.rCacheMemUsedSize;
     tempDesc.wCacheMemUsedSize = rsp.wCacheMemUsedSize;
     tempDesc.wCacheDiskUsedSize = rsp.wCacheDiskUsedSize;
+    tempDesc.actualMemUsedSize = rsp.actualMemUsedSize;
+    tempDesc.otherMemUsedSize = rsp.otherMemUsedSize;
     nodeDesc.push_back(tempDesc);
     return ret;
 }

@@ -13,9 +13,13 @@
 #ifndef BOOSTIO_BIO_MONOTONIC_H
 #define BOOSTIO_BIO_MONOTONIC_H
 
+#include <cerrno>
+#include <cstring>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
+#include <vector>
 #ifdef __x86_64__
 #include <cmath>
 #include <x86intrin.h>

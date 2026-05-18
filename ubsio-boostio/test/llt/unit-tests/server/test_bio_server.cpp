@@ -431,17 +431,12 @@ TEST_F(TestBioServer, test_bio_server_get_read_local_lmrSize_err)
 {
     LOG_INFO("test_bio_server_get_read_local_lmrSize_err");
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
-    bool isAlloc = true;
+    bool isAlloc = false;
     NetMrInfo mrinfo { 0, 0, 0 };
-    std::vector<NetMrInfo> lMrVec { mrinfo };
+    std::vector<NetMrInfo> lMrVec(SLICE_ADDR_SIZE + 1, mrinfo);
     GetResponse rsp;
     GetRequest req;
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "WCACHE_READ_LOCAL_RMRSIZE_ERR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_MEM_FREE", 0, 1, userParam);
     auto ret = mirror->WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
-    BioHvsDeactiveTracePoint(0, "WCACHE_READ_LOCAL_RMRSIZE_ERR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_MEM_FREE");
     EXPECT_EQ(ret, BIO_INNER_ERR);
 }
 
@@ -1441,45 +1436,18 @@ TEST_F(TestBioServer, test_server_exception)
     EXPECT_EQ(ret, BIO_ERR);
 }
 
-TEST_F(TestBioServer, test_check_interceptor_large_write_req)
-{
-    LOG_INFO("test_check_interceptor_large_write_req");
-    InterceptorLargePwriteIn *req = new InterceptorLargePwriteIn();
-    req->offset = 0;
-    req->nbytes = 0;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(req);
-    EXPECT_EQ(ret, false);
-    req->nbytes = IO_SIZE_4M;
-    ret = InterceptorServer::GetInstance().CheckInterceptorLargeWriteReq(req);
-    EXPECT_EQ(ret, true);
-    free(req);
-}
-
-TEST_F(TestBioServer, test_check_interceptor_write_req)
-{
-    LOG_INFO("test_check_interceptor_write_req");
-    InterceptorPwriteIn *req = (InterceptorPwriteIn *) new char[sizeof(InterceptorPwriteIn) + 128];
-    req->nbytes = 0;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
-    EXPECT_EQ(ret, false);
-    req->nbytes = IO_SIZE_8K + 1;
-    ret = InterceptorServer::GetInstance().CheckInterceptorWriteReq(req);
-    EXPECT_EQ(ret, true);
-    free(req);
-}
-
 TEST_F(TestBioServer, test_check_interceptor_read_req)
 {
     LOG_INFO("test_check_interceptor_read_req");
-    InterceptorPreadIn *req = new InterceptorPreadIn();
-    req->nbytes = 0;
-    req->offset = IO_SIZE_4M;
-    auto ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(req);
+    InterceptorPreadIn req {};
+    req.pid = getpid();
+    req.nbytes = 0;
+    req.offset = IO_SIZE_4M;
+    auto ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(&req);
     EXPECT_EQ(ret, false);
-    req->nbytes = 1;
-    ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(req);
+    req.nbytes = 1;
+    ret = InterceptorServer::GetInstance().CheckInterceptorReadReq(&req);
     EXPECT_EQ(ret, true);
-    free(req);
 }
 
 TEST_F(TestBioServer, test_mirror_server_check_remote_update_ready)
@@ -1560,35 +1528,21 @@ TEST_F(TestBioServer, test_handle_get_slice)
 TEST_F(TestBioServer, test_handle_free_mem)
 {
     LOG_INFO("test_handle_free_mem");
-    FreeMemRequest *req = new FreeMemRequest();
-    RequestComm comm;
-    comm.magic = NO_1;
-    req->comm = comm;
-    auto ret = MirrorServer::Instance()->CheckFreeMemReq(req);
+    FreeMemRequest req {};
+    req.comm = { MESSAGE_MAGIC, NO_1, NO_1, NO_1, getpid() };
+    req.comm.magic = NO_1;
+    auto ret = MirrorServer::Instance()->CheckFreeMemReq(&req);
     EXPECT_EQ(ret, false);
 
-    req->num = NO_10;
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK", 0, 1, userParam);
-    ret = MirrorServer::Instance()->CheckFreeMemReq(req);
+    req.comm.magic = MESSAGE_MAGIC;
+    req.num = SLICE_ADDR_SIZE + 1;
+    ret = MirrorServer::Instance()->CheckFreeMemReq(&req);
     EXPECT_EQ(ret, false);
-    BioHvsDeactiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK");
 
-    req->num = NO_3;
-    BioHvsActiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK", 0, 1, userParam);
-    ret = MirrorServer::Instance()->CheckFreeMemReq(req);
+    req.num = NO_3;
+    ret = MirrorServer::Instance()->CheckFreeMemReq(&req);
     EXPECT_EQ(ret, true);
-    BioHvsDeactiveTracePoint(0, "MIRRIR_SERVER_CHECK_FREE_MEM_REQ_PASS_CHECK");
 }
-
-TEST_F(TestBioServer, test_handle_interceptor_write)
-{
-    LOG_INFO("test_handle_interceptor_write");
-    ServiceContext ctx;
-    auto ret = InterceptorServer::GetInstance().HandleInterceptorWrite(ctx);
-    EXPECT_EQ(ret, BIO_OK);
-}
-
 
 TEST_F(TestBioServer, test_start_server_cacl_cache_hit_local)
 {

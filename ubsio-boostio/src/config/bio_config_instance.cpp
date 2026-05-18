@@ -130,6 +130,7 @@ void BioConfig::LoadDefaultConf()
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
+    AddStrConf(NET_RECV_REQUEST_HANDLE_CPUIDS);
 
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
@@ -143,7 +144,6 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
-    AddIntConf(SDK_POOL_SIZE_MB, VIntRange::Create(SDK_POOL_SIZE_MB.first, NO_4, NO_1024 * NO_512));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
     AddStrConf(BIO_CLI_TOOLS_ENABLE, VStrBoolRange::Create(BIO_CLI_TOOLS_ENABLE.first));
@@ -301,6 +301,22 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
 
     mNetConfig.handleRequestThreadNum = conf->GetInt(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first);
     mNetConfig.handleRequestQueueSize = conf->GetInt(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first);
+    std::vector<std::pair<uint32_t, uint32_t>> requestExecutorCpuIds;
+    if (!ParseWorkerGroupCpuIdsRangeForConfig(conf->GetStr(NET_RECV_REQUEST_HANDLE_CPUIDS.first),
+        requestExecutorCpuIds, 1) ||
+        !CheckWorkerGroupCpuIdsRangeMatchConnCountForConfig(requestExecutorCpuIds,
+            mNetConfig.handleRequestThreadNum, 1)) {
+        LOG_ERROR("Invalid net request executor cpuids config, cpuids:" <<
+            conf->GetStr(NET_RECV_REQUEST_HANDLE_CPUIDS.first) << ", thread_num:" <<
+            mNetConfig.handleRequestThreadNum << ".");
+        return BIO_ERR;
+    }
+    if (requestExecutorCpuIds[0].first != UINT32_MAX) {
+        mNetConfig.handleRequestCpuStartIdx = static_cast<int16_t>(requestExecutorCpuIds[0].first);
+    }
+    LOG_INFO("Apply net request executor config success, thread_num:" << mNetConfig.handleRequestThreadNum <<
+        ", queue_size:" << mNetConfig.handleRequestQueueSize << ", cpuids:" <<
+        FormatWorkerGroupCpuIdsRangeForConfig(requestExecutorCpuIds) << ".");
 
     return BIO_OK;
 }
@@ -381,7 +397,6 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.segment = static_cast<uint32_t>(NO_4 * MB_SIZE);
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
-    mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_POOL_SIZE_MB.first) * MB_SIZE);
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {
         LOG_ERROR("Failed to set mem cap " << mDaemonConfig.memCap << ", over system free mem cap " << sysFreeMemCap);

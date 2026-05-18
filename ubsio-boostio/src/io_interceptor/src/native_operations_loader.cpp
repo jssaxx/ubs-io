@@ -83,13 +83,8 @@ void NativeOperationsLoader::LoadFileIOProxy()
     LoadProxy("pwrite", operations.pwrite);
     LoadProxy("pread64", operations.pread64);
     LoadProxy("pwrite64", operations.pwrite64);
-    LoadProxy("readv", operations.readv);
-    LoadProxy("writev", operations.writev);
-    LoadProxy("preadv", operations.preadv);
-    LoadProxy("preadv64", operations.preadv64);
-    LoadProxy("pwritev", operations.pwritev);
-    LoadProxy("pwritev64", operations.pwritev64);
     LoadProxy("fsync", operations.fsync);
+    LoadProxy("fdatasync", operations.fdatasync);
     LoadProxy("sync", operations.sync);
     LoadProxy("syncfs", operations.syncfs);
 }

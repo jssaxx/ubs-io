@@ -76,6 +76,23 @@ public:
         return;
     }
 
+    inline bool ReleaseOffsetRange(uint64_t offset, uint64_t len, uint64_t index)
+    {
+        if (len > ~static_cast<uint64_t>(0) - offset || index == ~static_cast<uint64_t>(0)) {
+            return false;
+        }
+        return true;
+    }
+
+    inline bool ReleaseOffsetTail(uint64_t offset, uint64_t oldLen, uint64_t usedLen, uint64_t index)
+    {
+        if (usedLen >= oldLen || oldLen > ~static_cast<uint64_t>(0) - offset ||
+            index == ~static_cast<uint64_t>(0)) {
+            return false;
+        }
+        return true;
+    }
+
     inline uint64_t GetOffset()
     {
         return mOffset;

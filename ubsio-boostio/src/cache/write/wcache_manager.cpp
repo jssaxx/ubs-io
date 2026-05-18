@@ -578,6 +578,18 @@ BResult WCacheManager::Delete(uint16_t ptId, const Key &key)
     return BIO_OK;
 }
 
+BResult WCacheManager::ReleasePreparedDataSlice(const WCacheSlicePtr &slice)
+{
+    if (slice == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    auto wcache = GetWCache(slice->GetFlowId());
+    if (wcache == nullptr) {
+        return BIO_NOT_EXISTS;
+    }
+    return wcache->ReleasePreparedDataSlice(slice);
+}
+
 void WCacheManager::RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus)
 {
     LOG_INFO("Register get loc disk status func");

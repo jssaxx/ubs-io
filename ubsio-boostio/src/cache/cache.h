@@ -68,6 +68,8 @@ public:
 
     BResult Delete(uint16_t ptId, const Key &key);
 
+    BResult ReleasePreparedWCacheSlice(const WCacheSlicePtr &slice);
+
     FlowCache GetFlowCache(uint64_t flowId);
 
     void RegGetLocDiskId(GetLocDiskId getLocDiskId);

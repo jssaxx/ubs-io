@@ -229,39 +229,6 @@ ssize_t HookPread64(int fd, void *buf, size_t nbyte, off64_t offset)
     return PROXY(pread64)(fd, buf, nbyte, offset);
 }
 
-ssize_t HookReadv(int fd, const struct iovec *vector, int count)
-{
-    if (!CheckPointer(vector) || !InitNativeHook() || CHECKNATIVEFUNC(readv)) {
-        return -1;
-    }
-    if (CHECKPROXYLOADED || CHECKPROXYFUNC(readv)) {
-        return NATIVE(readv)(fd, vector, count);
-    }
-    return PROXY(readv)(fd, vector, count);
-}
-
-ssize_t HookPreadv(int fd, const struct iovec *vector, int count, off_t offset)
-{
-    if (!CheckPointer(vector) || !InitNativeHook() || CHECKNATIVEFUNC(preadv)) {
-        return -1;
-    }
-    if (CHECKPROXYLOADED || CHECKPROXYFUNC(preadv)) {
-        return NATIVE(preadv)(fd, vector, count, offset);
-    }
-    return PROXY(preadv)(fd, vector, count, offset);
-}
-
-ssize_t HookPreadv64(int fd, const struct iovec *vector, int iovcnt, off64_t offset)
-{
-    if (!CheckPointer(vector) || !InitNativeHook() || CHECKNATIVEFUNC(preadv64)) {
-        return -1;
-    }
-    if (CHECKPROXYLOADED || CHECKPROXYFUNC(preadv64)) {
-        return NATIVE(preadv64)(fd, vector, iovcnt, offset);
-    }
-    return PROXY(preadv64)(fd, vector, iovcnt, offset);
-}
-
 ssize_t HookWrite(int fd, const void *buf, size_t nbytes)
 {
     if (!CheckPointer(buf) || !InitNativeHook() || CHECKNATIVEFUNC(write)) {
@@ -293,39 +260,6 @@ ssize_t HookPwrite64(int fd, const void *buf, size_t count, off64_t offset)
         return NATIVE(pwrite64)(fd, buf, count, offset);
     }
     return PROXY(pwrite64)(fd, buf, count, offset);
-}
-
-ssize_t HookWritev(int fd, const struct iovec *vector, int count)
-{
-    if (!CheckPointer(vector) || !InitNativeHook() || CHECKNATIVEFUNC(writev)) {
-        return -1;
-    }
-    if (CHECKPROXYLOADED || CHECKPROXYFUNC(writev)) {
-        return NATIVE(writev)(fd, vector, count);
-    }
-    return PROXY(writev)(fd, vector, count);
-}
-
-ssize_t HookPwritev(int fd, const struct iovec *vector, int count, off_t offset)
-{
-    if (!CheckPointer(vector) || !InitNativeHook() || CHECKNATIVEFUNC(pwritev)) {
-        return -1;
-    }
-    if (CHECKPROXYLOADED || CHECKPROXYFUNC(pwritev)) {
-        return NATIVE(pwritev)(fd, vector, count, offset);
-    }
-    return PROXY(pwritev)(fd, vector, count, offset);
-}
-
-ssize_t HookPwritev64(int fd, const struct iovec *vector, int count, off64_t offset)
-{
-    if (!CheckPointer(vector) || !InitNativeHook() || CHECKNATIVEFUNC(pwritev64)) {
-        return -1;
-    }
-    if (CHECKPROXYLOADED || CHECKPROXYFUNC(pwritev64)) {
-        return NATIVE(pwritev64)(fd, vector, count, offset);
-    }
-    return PROXY(pwritev64)(fd, vector, count, offset);
 }
 
 int HookTruncate(const char *path, off_t length)
@@ -557,6 +491,17 @@ int HookFsync(int fd)
         return NATIVE(fsync)(fd);
     }
     return PROXY(fsync)(fd);
+}
+
+int HookFdatasync(int fd)
+{
+    if (!InitNativeHook() || CHECKNATIVEFUNC(fdatasync)) {
+        return -1;
+    }
+    if (CHECKPROXYLOADED || CHECKPROXYFUNC(fdatasync)) {
+        return NATIVE(fdatasync)(fd);
+    }
+    return PROXY(fdatasync)(fd);
 }
 
 void HookSync(void)

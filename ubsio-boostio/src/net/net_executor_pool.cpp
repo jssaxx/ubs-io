@@ -14,7 +14,7 @@
 
 namespace ock {
 namespace bio {
-BResult NetExecutorPool::Start(uint32_t coreThreadNum, uint32_t queueSize)
+BResult NetExecutorPool::Start(uint32_t coreThreadNum, uint32_t queueSize, int16_t cpuStartIdx)
 {
     std::lock_guard<std::mutex> guard(mMutex);
     if (mStarted) {
@@ -29,6 +29,7 @@ BResult NetExecutorPool::Start(uint32_t coreThreadNum, uint32_t queueSize)
     }
 
     mExeService->SetThreadName(mName);
+    mExeService->SetCpuSetStartIndex(cpuStartIdx);
     if (!(mExeService->Start())) {
         NET_LOG_ERROR("Failed to start execution service for " << mName << ".");
         StopInner();

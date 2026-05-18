@@ -41,7 +41,8 @@ public:
     NetEngine() = default;
     ~NetEngine() = default;
 
-    BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func);
+    BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
+        int16_t requestExecutorCpuStartIdx = -1);
     BResult Start(const NetOptions &opt);
     void Stop();
 
@@ -100,13 +101,14 @@ public:
             return BIO_NOT_READY;
         }
         outKey = mLocalMr.GetHcomMrs()[0]->GetLKey();
-        return mMrBlockPool->AllocMany(count, address);
+        auto ret = mMrBlockPool->AllocMany(count, address);
+        if (ret == BIO_OK) {
+            mUsedBlock += address.size();
+        }
+        return ret;
     }
 
-    inline uint64_t GetUsedBlockSize()
-    {
-        return mUsedBlock.load() * mDataPageBytes;
-    }
+    uint64_t GetUsedBlockSize() const;
 
     inline BResult AllocLocalMrSingle(uintptr_t &address, uint64_t &outKey)
     {
@@ -139,6 +141,7 @@ public:
             return;
         }
         mMrBlockPool->ReleaseMany(address);
+        mUsedBlock -= address.size();
     }
 
     inline void FreeLocalMrSingle(uintptr_t address)

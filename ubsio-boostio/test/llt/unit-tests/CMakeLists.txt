@@ -64,6 +64,8 @@ target_include_directories(bio_test PRIVATE
         ${SRC_DIR}/config
         ${SRC_DIR}/disk
         ${SRC_DIR}/htracer
+        ${SRC_DIR}/interceptor
+        ${SRC_DIR}/interceptor/client
 		${SRC_DIR}/net
         ${SRC_DIR}/sdk
         ${SRC_DIR}/server

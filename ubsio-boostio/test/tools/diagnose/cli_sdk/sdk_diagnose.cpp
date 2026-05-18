@@ -657,6 +657,9 @@ void diagnose::BioSdkCommand::HandleShowCacheResource(const std::vector<std::str
                          rCacheDiskWaterLevel * NO_100);
             }
         }
+        mPrintOp("actualMemUsedSize %llu   wCacheMemUsedSize %llu   rCacheMemUsedSize %llu   otherMemUsedSize %llu \n",
+                 nodeDesc[i].actualMemUsedSize / NO_1048576, nodeDesc[i].wCacheMemUsedSize / NO_1048576,
+                 nodeDesc[i].rCacheMemUsedSize / NO_1048576, nodeDesc[i].otherMemUsedSize / NO_1048576);
         mPrintOp("--------------------------------\n");
     }
     BioFreeCacheResourcePtr(&nodeDesc, nodeNum);

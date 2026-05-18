@@ -329,8 +329,8 @@ BResult BioServer::BioNetInit()
 
     int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
-    auto ret =
-        mNetEngine->Initialize(timeoutSec, netConfig.handleRequestThreadNum, netConfig.handleRequestQueueSize, Log);
+    auto ret = mNetEngine->Initialize(timeoutSec, netConfig.handleRequestThreadNum,
+        netConfig.handleRequestQueueSize, Log, netConfig.handleRequestCpuStartIdx);
     ChkTrue(ret == BIO_OK, ret, "Net engine initialize failed, result:" << ret << ".");
 
     NetOptions netOptions;
@@ -955,6 +955,24 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     }
 
     return BIO_OK;
+}
+
+int32_t ReleasePreparedWCacheSpace(CacheSpaceDesc *space)
+{
+    if (space == nullptr || space->descriptorSize == 0 || space->descriptorSize > CACHE_SPACE_DEC_SIZE) {
+        return BIO_INVALID_PARAM;
+    }
+
+    WCacheSlicePtr slice = MakeRef<WCacheSlice>();
+    if (slice == nullptr) {
+        return BIO_ALLOC_FAIL;
+    }
+
+    BResult ret = slice->Deserialize(space->descriptorInfo, space->descriptorSize);
+    if (ret != BIO_OK) {
+        return static_cast<int32_t>(ret);
+    }
+    return static_cast<int32_t>(Cache::Instance().ReleasePreparedWCacheSlice(slice));
 }
 
 inline static void StatisticPutIoSize(uint64_t length)

@@ -45,23 +45,11 @@ namespace interceptor {
 
     ssize_t HookPread64(int fd, void *buf, size_t nbyte, off64_t offset);
 
-    ssize_t HookReadv(int fd, const struct iovec* vector, int count);
-
-    ssize_t HookPreadv(int fd, const struct iovec* vector, int count, off_t offset);
-
-    ssize_t HookPreadv64(int fd, const struct iovec* vector, int iovcnt, off64_t offset);
-
     ssize_t HookWrite(int fd, const void* buf, size_t nbytes);
 
     ssize_t HookPwrite64(int fd, const void* buf, size_t count, off64_t offset);
 
     ssize_t HookPwrite(int fd, const void* buf, size_t count, off_t offset);
-
-    ssize_t HookWritev(int fd, const struct iovec* vector, int count);
-
-    ssize_t HookPwritev(int fd, const struct iovec* vector, int count, off_t offset);
-
-    ssize_t HookPwritev64(int fd, const struct iovec* vector, int count, off64_t offset);
 
     int HookTruncate(const char* path, off_t length);
 
@@ -104,6 +92,8 @@ namespace interceptor {
     int HookUtimes(const char *path, const struct timeval times[2]);
 
     int HookFsync(int fd);
+
+    int HookFdatasync(int fd);
 
     void HookSync(void);
 

@@ -16,7 +16,6 @@
 #include "cm.h"
 #include "net_engine.h"
 #include "message.h"
-#include "cache_slice.h"
 #include "bio_err.h"
 #include "bio_tracepoint_helper.h"
 #include "bio_ref.h"
@@ -61,6 +60,7 @@ public:
     using NotifyUpdateFuncPtr = int32_t (*)(NotifyUpdateRequest *);
     using CheckUpdateReadyFuncPtr = int32_t (*)(CheckUpdateReadyRequest *, CheckUpdateReadyResponse *);
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
+    using ReleasePreparedWCacheSpaceFuncPtr = int32_t (*)(CacheSpaceDesc *);
     using PutFuncPtr = int32_t (*)(PutRequest *, PutResponse *);
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
     using DeleteFuncPtr = int32_t (*)(DeleteRequest *);
@@ -130,9 +130,13 @@ public:
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
 
+    BResult ReleasePreparedWCacheSpace(CacheSpaceDesc &space);
+
     void PutLocal(PutRequest *req, Callback &callback);
 
     BResult GetLocal(GetRequest &req, char *value, uint64_t &realLen);
+    BResult GetLocalAddress(GetRequest &req, GetResponse &rsp);
+    BResult GetLocalToShmSpace(GetRequest &req, uint64_t &realLen);
 
     void DeleteLocal(DeleteRequest &req, Callback &callback);
 
@@ -236,6 +240,7 @@ private:
     NotifyUpdateFuncPtr notifyUpdateOp = nullptr;
     CheckUpdateReadyFuncPtr checkUpdateReadyOp = nullptr;
     GetSliceFuncPtr getSliceOp = nullptr;
+    ReleasePreparedWCacheSpaceFuncPtr releasePreparedWCacheSpaceOp = nullptr;
     PutFuncPtr putOp = nullptr;
     GetFuncPtr getOp = nullptr;
     DeleteFuncPtr deleteOp = nullptr;

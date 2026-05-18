@@ -70,7 +70,8 @@ typedef enum {
 #define LOCATION_SIZE (2)
 #define NODE_DESC_SIZE (16)
 #define CACHE_SPACE_ADDRESS_SIZE (2)
-#define CACHE_SPACE_DEC_SIZE (64)
+#define CACHE_READ_ADDRESS_SIZE (64)
+#define CACHE_SPACE_DEC_SIZE (256)
 #define MAX_TRACE_NAME_LEN (64)
 #define TRACE_MAX_NUM (256)
 
@@ -113,6 +114,21 @@ typedef struct {
     char descriptorInfo[CACHE_SPACE_DEC_SIZE];
 } CacheSpaceDesc;
 
+#define CACHE_SPACE_ALLOC_AUTO_LOCATION 1U
+#define CACHE_SPACE_SOURCE_COPY_REQUIRED (1U << 1U)
+#define CACHE_SPACE_LOCAL_COMMITTED (1U << 2U)
+
+typedef struct {
+    uint64_t offset;
+    uint32_t size;
+} CacheReadAddress;
+
+typedef struct {
+    uint16_t addressNum;
+    uint64_t realLen;
+    CacheReadAddress address[CACHE_READ_ADDRESS_SIZE];
+} CacheReadAddrDesc;
+
 typedef struct {
     uint16_t nodeId;
     uint64_t rCacheMemCapacity;
@@ -123,6 +139,8 @@ typedef struct {
     uint64_t rCacheDiskUsedSize;
     uint64_t wCacheMemUsedSize;
     uint64_t wCacheDiskUsedSize;
+    uint64_t actualMemUsedSize;
+    uint64_t otherMemUsedSize;
 } CacheResourcesDesc;
 
 typedef struct {
@@ -274,6 +292,12 @@ CResult BioPut(uint64_t tenantId, const char *key, const char *value, uint64_t l
 CResult BioGet(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location, char *value,
     uint64_t *realLength);
 
+CResult BioGetToShmSpace(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
+    CacheSpaceDesc *space, uint64_t spaceOffset, uint64_t *realLength);
+
+CResult BioGetAddress(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
+    CacheReadAddrDesc *desc);
+
 /**
  * @brief: Delete object
  *
@@ -365,6 +389,12 @@ CResult BioCheckUpgradeReady(uint64_t tenantId);
  */
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
 
+CResult BioAllocCacheSpaceDescriptor(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
+
+CResult BioAbortCacheSpaceDescriptor(uint64_t tenantId, CacheSpaceDesc *space);
+
+CResult BioShrinkCacheSpaceDescriptor(uint64_t tenantId, CacheSpaceDesc *space, uint64_t usedLength);
+
 /**
  * @brief: Put with copy free
  *
@@ -376,6 +406,8 @@ CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length
 CResult BioPutWithCopyFree(uint64_t tenantId, const char *key, CacheSpaceDesc *space);
 
 typedef int (*ReadHook)(uint64_t, char *, uint64_t, uint64_t, int *);
+typedef int (*ReadAddrHook)(uint64_t, uint64_t, uint64_t, CacheReadAddrDesc *);
+typedef int (*ReadToSpaceHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *, int *);
 typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
 typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *);
 
@@ -390,6 +422,10 @@ typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *)
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
+
+int BioReadToSpaceHook(uint64_t inode, uint64_t count, uint64_t offset, CacheSpaceDesc *space, int *readLen);
+
+int BioReadAddrHook(uint64_t inode, uint64_t count, uint64_t offset, CacheReadAddrDesc *desc);
 
 /**
  * @brief: Interceptor write hook
@@ -421,6 +457,10 @@ int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheS
  * @return: void
  */
 void BioRegisterInterceptorRead(ReadHook rh);
+
+void BioRegisterInterceptorReadToSpace(ReadToSpaceHook rh);
+
+void BioRegisterInterceptorReadAddr(ReadAddrHook rh);
 
 /**
  * @brief: Register interceptor write interface

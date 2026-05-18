@@ -61,7 +61,7 @@ public:
         Stop();
     }
 
-    BResult Start(uint32_t coreThreadNum, uint32_t queueSiz);
+    BResult Start(uint32_t coreThreadNum, uint32_t queueSiz, int16_t cpuStartIdx = -1);
 
     void Stop();
 
