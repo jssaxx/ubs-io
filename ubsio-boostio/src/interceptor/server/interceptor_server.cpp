@@ -1041,44 +1041,6 @@ bool InterceptorServer::UntrackReadBufferLocked(uint32_t pid, uintptr_t address)
     return false;
 }
 
-void InterceptorServer::TryReleaseReadBufferFromRequest(const InterceptorPreadIn *req)
-{
-    if (req == nullptr || req->releaseLength == 0) {
-        return;
-    }
-    BIO_TRACE_START(INTERCEPTOR_READ_PIGGYBACK_RELEASE);
-    auto netEngine = BioClientNet::Instance()->GetNetEngine();
-    if (netEngine == nullptr) {
-        BIO_TRACE_END(INTERCEPTOR_READ_PIGGYBACK_RELEASE, BIO_NOT_READY);
-        return;
-    }
-    uint8_t *address = netEngine->GetShmAddress(req->releaseAddrOffset, req->releaseLength);
-    if (UNLIKELY(address == nullptr)) {
-        CLIENT_LOG_ERROR("Invalid piggyback read shm release, pid:" << req->pid << ", offset:" <<
-            req->releaseAddrOffset << ", length:" << req->releaseLength << ".");
-        BIO_TRACE_END(INTERCEPTOR_READ_PIGGYBACK_RELEASE, BIO_INVALID_PARAM);
-        return;
-    }
-    BResult ret = BIO_OK;
-    bool released = false;
-    {
-        std::lock_guard<std::mutex> lock(mReadBufferLock);
-        released = UntrackReadBufferLocked(req->pid, reinterpret_cast<uintptr_t>(address));
-        if (released) {
-            --mReadBufferAllocatedCount;
-        }
-    }
-    if (released) {
-        netEngine->FreeLocalMrSingle(reinterpret_cast<uintptr_t>(address));
-    } else {
-        CLIENT_LOG_ERROR("Piggyback read shm release missed buffer, pid:" << req->pid << ", address:" <<
-            reinterpret_cast<uintptr_t>(address) << ", offset:" << req->releaseAddrOffset << ", length:" <<
-            req->releaseLength << ".");
-        ret = BIO_ERR;
-    }
-    BIO_TRACE_END(INTERCEPTOR_READ_PIGGYBACK_RELEASE, ret);
-}
-
 BResult InterceptorServer::AcquireReadBuffer(uint32_t pid, uintptr_t &address)
 {
     address = 0;
@@ -1139,23 +1101,6 @@ bool InterceptorServer::ReleaseReadBuffer(uint32_t pid, uintptr_t address)
         }
     }
     return released;
-}
-
-void InterceptorServer::ReleaseReadBufferFromResp(uint32_t pid, const InterceptorPreadOut &resp)
-{
-    if (resp.dataSource != INTERCEPTOR_PREAD_DATA_READ_SHM || resp.addrNum == 0) {
-        return;
-    }
-    uint64_t addrOffset = resp.windowAddrLen != 0 ? resp.windowAddrOffset : resp.addrOffset[0];
-    uint64_t addrLen = resp.windowAddrLen != 0 ? resp.windowAddrLen : resp.addrLen[0];
-    auto netEngine = BioClientNet::Instance()->GetNetEngine();
-    if (netEngine == nullptr || addrLen == 0) {
-        return;
-    }
-    uint8_t *address = netEngine->GetShmAddress(addrOffset, addrLen);
-    if (address != nullptr) {
-        ReleaseReadBuffer(pid, reinterpret_cast<uintptr_t>(address));
-    }
 }
 
 void InterceptorServer::ReleaseReadBuffersByPid(uint32_t pid)
@@ -1384,12 +1329,6 @@ BResult InterceptorServer::HandleInterceptorWritePrepareSpace(ServiceContext &ct
 
     TrackPreparedDirectWrite(req->pid, req->fd, req->inode, req->offset, req->nbytes, resp.segs, resp.segNum);
     resp.ret = 0;
-    resp.addrNum = resp.segs[0].addrNum;
-    resp.space = resp.segs[0].space;
-    for (uint32_t idx = 0; idx < resp.addrNum; ++idx) {
-        resp.addrOffset[idx] = resp.segs[0].addrOffset[idx];
-        resp.addrLen[idx] = resp.segs[0].addrLen[idx];
-    }
     CLIENT_LOG_DEBUG("Prepare direct write space success, inode:" << req->inode << ", fd:" << req->fd <<
         ", offset:" << req->offset << ", nbytes:" << req->nbytes << ", segNum:" << resp.segNum << ".");
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp), sizeof(resp));
@@ -1450,9 +1389,7 @@ BResult InterceptorServer::HandleInterceptorWriteCommitSpace(ServiceContext &ctx
         BIO_TRACE_ASYNC_END(INTERCEPTOR_WRITE_START, 0, req->startTime);
     }
     InvalidateReadIndex(req->inode, static_cast<uint64_t>(req->offset), req->nbytes);
-    if (req->invalidateRemoteReadIndex != 0) {
-        BroadcastReadIndexInvalidate(req->inode, static_cast<uint64_t>(req->offset), req->nbytes);
-    }
+    BroadcastReadIndexInvalidate(req->inode, static_cast<uint64_t>(req->offset), req->nbytes);
     uint64_t committedBytes = 0;
     for (uint32_t segIdx = 0; segIdx < req->segNum; ++segIdx) {
         auto &seg = req->segs[segIdx];
@@ -1614,9 +1551,6 @@ BResult InterceptorServer::HandleInterceptorRead(ServiceContext &ctx)
     BIO_TRACE_ASYNC_END(INTERCEPTOR_READ_START, 0, req->startTime);
     CLIENT_LOG_DEBUG("Receive interceptor read request, inode:" << req->inode << ", fd:" << req->fd <<
         ", offset:" << req->offset << ", nbytes:" << req->nbytes << ", pid:" << req->pid << ".");
-    BIO_TRACE_START(INTERCEPTOR_SERVER_READ_RELEASE_HANDLE);
-    TryReleaseReadBufferFromRequest(req);
-    BIO_TRACE_END(INTERCEPTOR_SERVER_READ_RELEASE_HANDLE, BIO_OK);
     BIO_TRACE_START(INTERCEPTOR_SERVER_READ_HANDLE);
     CacheReadAddrDesc desc{};
     bool prefetch = (req->flags & INTERCEPTOR_PREAD_FLAG_PREFETCH) != 0;

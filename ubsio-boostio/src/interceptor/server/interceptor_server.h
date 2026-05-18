@@ -59,10 +59,8 @@ private:
     BResult AcquireReadBuffer(uint32_t pid, uintptr_t &address);
     void TrackReadBufferLocked(uint32_t pid, uintptr_t address);
     bool UntrackReadBufferLocked(uint32_t pid, uintptr_t address);
-    void TryReleaseReadBufferFromRequest(const InterceptorPreadIn *req);
     void GetReadBufferPoolState(uint64_t &allocated, uint64_t &freeCount);
     bool ReleaseReadBuffer(uint32_t pid, uintptr_t address);
-    void ReleaseReadBufferFromResp(uint32_t pid, const InterceptorPreadOut &resp);
     void ReleaseReadBuffersByPid(uint32_t pid);
     void CleanupReadBuffers();
     int ReadDataToReadBuffer(uint32_t pid, uint64_t inode, uint64_t offset, uint64_t nbytes, bool prefetch,

@@ -40,8 +40,6 @@ using namespace ock::bio;
 namespace {
 constexpr ssize_t AGGREGATE_WRITE_FALLBACK = -2;
 constexpr ssize_t DIRECT_WRITE_FALLBACK = -2;
-constexpr uint32_t INVALIDATE_REMOTE_READ_INDEX = 1U;
-constexpr uint64_t REMOTE_READ_PREFETCH_TRIGGER_BYTES = 1024 * 1024;
 constexpr uint64_t REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES = 128 * 1024;
 constexpr uint64_t REMOTE_READ_LARGE_IO_PREFETCH_BYTES = 1024 * 1024;
 constexpr uint64_t REMOTE_READ_PREFETCH_WAIT_NS = 50 * 1000 * 1000;
@@ -335,14 +333,6 @@ static bool InvalidateReadIndexForNativeWrite(uint64_t inode, off_t offset, uint
     return InvalidateReadIndexOnNode(INVALID_NID, inode, writeOffset, length, true);
 }
 
-static void QueueRemoteReadWindowRelease(const RemoteReadWindowCache &cache)
-{
-    if (!cache.active || cache.addrLen == 0) {
-        return;
-    }
-    QueueReadBufferReleaseAsync(cache.addrOffset, cache.addrLen);
-}
-
 static void DropReadCaches(const std::shared_ptr<OpenFile> &file)
 {
     std::array<RemoteReadWindowCache, REMOTE_READ_WINDOW_CACHE_SLOTS> evicted{};
@@ -374,18 +364,6 @@ static void ReleaseReadBufferIfNeeded(const InterceptorPreadOut &resp)
         return;
     }
 
-    if (IsRemoteReadWindowResp(resp)) {
-        QueueReadBufferReleaseAsync(resp.windowAddrOffset, resp.windowAddrLen);
-    } else {
-        QueueReadBufferReleaseAsync(resp.addrOffset[0], resp.addrLen[0]);
-    }
-}
-
-static void QueueReadBufferReleaseIfNeeded(const InterceptorPreadOut &resp)
-{
-    if (resp.dataSource != INTERCEPTOR_PREAD_DATA_READ_SHM || resp.addrNum == 0) {
-        return;
-    }
     if (IsRemoteReadWindowResp(resp)) {
         QueueReadBufferReleaseAsync(resp.windowAddrOffset, resp.windowAddrLen);
     } else {
@@ -499,7 +477,7 @@ static bool CopyFromRemoteReadWindowCache(const std::shared_ptr<OpenFile> &file,
 }
 
 static bool StoreRemoteReadWindowCache(const std::shared_ptr<OpenFile> &file, const InterceptorPreadOut &resp,
-    const uint64_t *generation = nullptr, bool queueRelease = true, const uint64_t *protectedOffset = nullptr)
+    const uint64_t *generation = nullptr, const uint64_t *protectedOffset = nullptr)
 {
     if (!IsRemoteReadWindowResp(resp)) {
         return false;
@@ -553,11 +531,7 @@ static bool StoreRemoteReadWindowCache(const std::shared_ptr<OpenFile> &file, co
     if (resp.windowDataLen < INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
         file->MarkRemoteReadEof(resp.windowOffset + resp.windowDataLen);
     }
-    if (queueRelease) {
-        QueueRemoteReadWindowRelease(evicted);
-    } else {
-        ReleaseRemoteReadWindow(evicted);
-    }
+    ReleaseRemoteReadWindow(evicted);
     return true;
 }
 
@@ -702,30 +676,26 @@ static bool IsSingleReadIndexWindow(const InterceptorReadIndexCache &cache)
 }
 
 static bool CopyFromReadIndexCacheWindowed(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count,
-    void *buf, InterceptorReadIndexCache *lastHitCache = nullptr)
+    void *buf)
 {
     uint64_t left = static_cast<uint64_t>(count);
     uint64_t curOffset = offset;
     size_t copied = 0;
-    InterceptorReadIndexCache cache{};
     while (left > 0) {
         uint64_t piece = BytesUntilReadIndexWindowEnd(curOffset, left);
         if (!CopyFromReadIndexCache(file, curOffset, static_cast<size_t>(piece),
-            static_cast<uint8_t *>(buf) + copied, &cache)) {
+            static_cast<uint8_t *>(buf) + copied)) {
             return false;
         }
         curOffset += piece;
         copied += static_cast<size_t>(piece);
         left -= piece;
     }
-    if (lastHitCache != nullptr && IsSingleReadIndexWindow(cache)) {
-        *lastHitCache = cache;
-    }
     return true;
 }
 
 static bool CopyFromGlobalReadIndexWindowed(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count,
-    void *buf, InterceptorReadIndexCache *lastHitCache = nullptr)
+    void *buf)
 {
     uint64_t left = static_cast<uint64_t>(count);
     uint64_t curOffset = offset;
@@ -744,9 +714,6 @@ static bool CopyFromGlobalReadIndexWindowed(const std::shared_ptr<OpenFile> &fil
         curOffset += piece;
         copied += static_cast<size_t>(piece);
         left -= piece;
-    }
-    if (lastHitCache != nullptr && IsSingleReadIndexWindow(cache)) {
-        *lastHitCache = cache;
     }
     return true;
 }
@@ -819,9 +786,9 @@ static void StartRemoteReadWindowPrefetch(const std::shared_ptr<OpenFile> &file,
             file->MarkRemoteReadEof(prefetchOffset);
         }
         bool stored = ret == 0 && IsRemoteReadWindowResp(resp) && file->IsActive() &&
-            StoreRemoteReadWindowCache(file, resp, &generation, false, &protectedOffset);
+            StoreRemoteReadWindowCache(file, resp, &generation, &protectedOffset);
         if (!stored) {
-            QueueReadBufferReleaseIfNeeded(resp);
+            ReleaseReadBufferIfNeeded(resp);
         }
         file->FinishRemoteReadPrefetch(prefetchOffset, generation);
     }).detach();
@@ -841,12 +808,11 @@ static void MaybePrefetchNextRemoteReadWindow(const std::shared_ptr<OpenFile> &f
 
     uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
     uint64_t readEnd = offset + static_cast<uint64_t>(count);
-    uint64_t triggerBytes = sequential ? REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES : REMOTE_READ_PREFETCH_TRIGGER_BYTES;
     if (readEnd < offset) {
         return;
     }
 
-    if (!remoteWindowLoaded && readEnd - windowOffset < triggerBytes) {
+    if (!remoteWindowLoaded && readEnd - windowOffset < REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES) {
         return;
     }
 
@@ -918,14 +884,12 @@ ssize_t ProxyOperations::PreadShmInner(const std::shared_ptr<OpenFile> &file, in
     off_t offset)
 {
     if (offset >= 0) {
-        InterceptorReadIndexCache localCache{};
-        if (CopyFromReadIndexCacheWindowed(file, static_cast<uint64_t>(offset), count, buf, &localCache)) {
+        if (CopyFromReadIndexCacheWindowed(file, static_cast<uint64_t>(offset), count, buf)) {
             LogReadPathSuccess("local_read_index", fd, file->GetInode(), offset, count, static_cast<ssize_t>(count));
             return static_cast<ssize_t>(count);
         }
 
-        InterceptorReadIndexCache cache{};
-        bool hit = CopyFromGlobalReadIndexWindowed(file, static_cast<uint64_t>(offset), count, buf, &cache);
+        bool hit = CopyFromGlobalReadIndexWindowed(file, static_cast<uint64_t>(offset), count, buf);
         if (hit) {
             if (g_lastReadIndexFile == file.get()) {
                 g_lastReadIndexFile = nullptr;
@@ -1146,8 +1110,6 @@ static ssize_t CommitDirectSpaceWrite(const std::shared_ptr<OpenFile> &file, int
     commitReq.nbytes = nbytes;
     commitReq.startTime = prepareReq.startTime;
     commitReq.segNum = prepareResp.segNum;
-    commitReq.invalidateRemoteReadIndex = INVALIDATE_REMOTE_READ_INDEX;
-    commitReq.space = prepareResp.segs[0].space;
     for (uint32_t segIdx = 0; segIdx < prepareResp.segNum; ++segIdx) {
         commitReq.segs[segIdx] = prepareResp.segs[segIdx];
     }
@@ -1497,8 +1459,6 @@ static InterceptorPwriteCommitSpaceIn BuildDirectSpaceWriteCommitReq(const std::
     commitReq.nbytes = window.dataLen;
     commitReq.startTime = Monotonic::TimeNs();
     commitReq.segNum = window.segNum;
-    commitReq.invalidateRemoteReadIndex = INVALIDATE_REMOTE_READ_INDEX;
-    commitReq.space = window.segs[0].space;
     for (uint32_t idx = 0; idx < window.segNum; ++idx) {
         commitReq.segs[idx] = window.segs[idx];
     }

@@ -454,10 +454,6 @@ typedef struct {
 typedef struct {
     int32_t ret;
     uint32_t segNum;
-    uint32_t addrNum;
-    CacheSpaceDesc space;
-    uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
-    uint64_t addrLen[CACHE_SPACE_ADDRESS_SIZE];
     InterceptorPwriteSpaceSegment segs[INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS];
 } InterceptorPwritePrepareSpaceOut;
 
@@ -468,9 +464,7 @@ typedef struct {
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
-    CacheSpaceDesc space;
     uint32_t segNum;
-    uint32_t invalidateRemoteReadIndex;
     uint32_t abortOnly;
     InterceptorPwriteSpaceSegment segs[INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS];
 } InterceptorPwriteCommitSpaceIn;
@@ -506,8 +500,6 @@ typedef struct {
     int64_t offset;
     uint64_t startTime;
     uint32_t flags;
-    uint64_t releaseAddrOffset;
-    uint64_t releaseLength;
 } InterceptorPreadIn;
 
 typedef struct {
