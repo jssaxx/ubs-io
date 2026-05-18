@@ -37,6 +37,652 @@ using namespace ock::bio;
 
 #define CONTEXT BioInterceptorContext::GetInstance()
 
+namespace {
+constexpr ssize_t AGGREGATE_WRITE_FALLBACK = -2;
+constexpr ssize_t DIRECT_WRITE_FALLBACK = -2;
+constexpr uint32_t INVALIDATE_REMOTE_READ_INDEX = 1U;
+constexpr uint64_t REMOTE_READ_PREFETCH_TRIGGER_BYTES = 1024 * 1024;
+constexpr uint64_t REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES = 128 * 1024;
+constexpr uint64_t REMOTE_READ_LARGE_IO_PREFETCH_BYTES = 1024 * 1024;
+constexpr uint64_t REMOTE_READ_PREFETCH_WAIT_NS = 50 * 1000 * 1000;
+constexpr uint32_t REMOTE_READ_PREFETCH_WAIT_SPIN = 8;
+constexpr uint32_t REMOTE_READ_PREFETCH_WAIT_SLEEP_US = 100;
+constexpr uint32_t READ_BUFFER_RELEASE_FLUSH_WAIT_MS = 100;
+constexpr uint32_t READ_BUFFER_RELEASE_RETRY_WAIT_MS = 1;
+constexpr uint64_t DIRECT_WRITE_PREPARE_AHEAD_TRIGGER_BYTES = INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE / 2;
+
+void LogReadPathSuccess(const char *path, int fd, uint64_t inode, off_t offset, size_t nbytes, ssize_t ret)
+{
+    CLOG_DEBUG("Interceptor read path success, path:" << path << ", fd:" << fd << ", inode:" << inode <<
+        ", offset:" << offset << ", nbytes:" << nbytes << ", ret:" << ret << ".");
+}
+
+void LogWritePathSuccess(const char *path, int fd, uint64_t inode, off_t offset, size_t nbytes, ssize_t ret)
+{
+    CLOG_DEBUG("Interceptor write path success, path:" << path << ", fd:" << fd << ", inode:" << inode <<
+        ", offset:" << offset << ", nbytes:" << nbytes << ", ret:" << ret << ".");
+}
+
+void LogReadInterceptSuccess(const char *api, int fd, uint64_t inode, off_t offset, size_t nbytes)
+{
+    CLOG_DEBUG("Interceptor read success, api:" << api << ", fd:" << fd << ", inode:" << inode <<
+        ", offset:" << offset << ", nbytes:" << nbytes << ".");
+}
+
+void LogWriteInterceptSuccess(const char *api, int fd, uint64_t inode, off_t offset, size_t nbytes)
+{
+    CLOG_DEBUG("Interceptor write success, api:" << api << ", fd:" << fd << ", inode:" << inode <<
+        ", offset:" << offset << ", nbytes:" << nbytes << ".");
+}
+
+bool IsDirectSpaceWriteSupported(off_t offset, size_t count)
+{
+    if (offset < 0 || count == 0 || count > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        return false;
+    }
+    uint64_t end = static_cast<uint64_t>(offset) + static_cast<uint64_t>(count) - 1U;
+    return end >= static_cast<uint64_t>(offset);
+}
+
+uint64_t WriteAggregateWindowBase(uint64_t offset)
+{
+    return offset / MAX_INTERCEPTOR_IO_SIZE * MAX_INTERCEPTOR_IO_SIZE;
+}
+
+bool IsWriteAggregateWindowStart(uint64_t offset)
+{
+    return offset == WriteAggregateWindowBase(offset);
+}
+
+bool ParseDirectWriteBoolEnv(const char *name, bool defaultValue)
+{
+    const char *value = std::getenv(name);
+    if (value == nullptr || value[0] == '\0') {
+        return defaultValue;
+    }
+    return value[0] == '1' || value[0] == 't' || value[0] == 'T' ||
+        value[0] == 'y' || value[0] == 'Y' || value[0] == 'o' || value[0] == 'O';
+}
+
+bool DirectWriteAggregateEnabled()
+{
+    static const bool enabled = ParseDirectWriteBoolEnv("INTERCEPTOR_DIRECT_WRITE_AGGREGATE", true);
+    return enabled;
+}
+
+}
+
+static thread_local OpenFile *g_lastReadIndexFile = nullptr;
+static thread_local InterceptorReadIndexCache g_lastReadIndexCache{};
+
+static BResult ReleaseReadBuffer(uint64_t addrOffset, uint64_t length);
+
+struct PendingReadBuffer {
+    uint64_t addrOffset = 0;
+    uint64_t length = 0;
+};
+
+class AsyncReadBufferReleaser {
+public:
+    ~AsyncReadBufferReleaser()
+    {
+        Stop();
+    }
+
+    void Push(uint64_t addrOffset, uint64_t length)
+    {
+        if (length == 0) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(mMutex);
+        StartLocked();
+        PendingReadBuffer pending;
+        pending.addrOffset = addrOffset;
+        pending.length = length;
+        mBuffers.push_back(pending);
+        mCond.notify_one();
+    }
+
+    void Flush()
+    {
+        std::unique_lock<std::mutex> lock(mMutex);
+        if (!mStarted) {
+            return;
+        }
+        mDrained.wait_for(lock, std::chrono::milliseconds(READ_BUFFER_RELEASE_FLUSH_WAIT_MS), [this] {
+            return mBuffers.empty() && !mProcessing;
+        });
+    }
+
+    void Shutdown()
+    {
+        Flush();
+        Stop();
+    }
+
+private:
+    void StartLocked()
+    {
+        if (mStarted) {
+            return;
+        }
+        mStarted = true;
+        mWorker = std::thread([this] {
+            WorkerLoop();
+        });
+    }
+
+    void WorkerLoop()
+    {
+        while (true) {
+            PendingReadBuffer pending;
+            {
+                std::unique_lock<std::mutex> lock(mMutex);
+                mCond.wait(lock, [this] {
+                    return mStopping.load(std::memory_order_acquire) || !mBuffers.empty();
+                });
+                if (mStopping.load(std::memory_order_acquire)) {
+                    mBuffers.clear();
+                    mDrained.notify_all();
+                    return;
+                }
+                pending = mBuffers.front();
+                mBuffers.pop_front();
+                mProcessing = true;
+            }
+
+            BResult ret = ReleaseReadBuffer(pending.addrOffset, pending.length);
+            if ((ret == BIO_NET_RETRY || ret == BIO_NOT_READY) && !mStopping.load(std::memory_order_acquire)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(READ_BUFFER_RELEASE_RETRY_WAIT_MS));
+                std::lock_guard<std::mutex> lock(mMutex);
+                mBuffers.push_front(pending);
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mMutex);
+                mProcessing = false;
+                if (mBuffers.empty()) {
+                    mDrained.notify_all();
+                }
+            }
+        }
+    }
+
+    void Stop()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mMutex);
+            mStopping.store(true, std::memory_order_release);
+            mBuffers.clear();
+            mCond.notify_all();
+        }
+        if (mWorker.joinable()) {
+            mWorker.join();
+        }
+    }
+
+    std::mutex mMutex;
+    std::condition_variable mCond;
+    std::condition_variable mDrained;
+    std::deque<PendingReadBuffer> mBuffers;
+    std::thread mWorker;
+    bool mStarted = false;
+    std::atomic<bool> mStopping{false};
+    bool mProcessing = false;
+};
+
+static AsyncReadBufferReleaser g_readBufferReleaser;
+
+void ProxyOperations::FlushPendingReadBufferReleaseForCurrentThread()
+{
+    g_readBufferReleaser.Shutdown();
+}
+
+static bool IsReadRespValid(const InterceptorPreadOut &resp, uint64_t reqLen)
+{
+    if (resp.ret != 0 || resp.dataLen > reqLen) {
+        return false;
+    }
+    if (resp.dataLen == 0) {
+        return true;
+    }
+    if (resp.dataSource != INTERCEPTOR_PREAD_DATA_BIO_SHM &&
+        resp.dataSource != INTERCEPTOR_PREAD_DATA_READ_SHM) {
+        return false;
+    }
+    if (resp.addrNum == 0 || resp.addrNum > SLICE_ADDR_SIZE) {
+        return false;
+    }
+
+    uint64_t addrLen = 0;
+    for (uint32_t idx = 0; idx < resp.addrNum; idx++) {
+        addrLen += resp.addrLen[idx];
+    }
+    return addrLen >= resp.dataLen;
+}
+
+static void QueueReadBufferReleaseAsync(uint64_t addrOffset, uint64_t length)
+{
+    g_readBufferReleaser.Push(addrOffset, length);
+}
+
+void ProxyOperations::QueueReadBufferRelease(uint64_t addrOffset, uint64_t length)
+{
+    QueueReadBufferReleaseAsync(addrOffset, length);
+}
+
+static BResult ReleaseReadBuffer(uint64_t addrOffset, uint64_t length)
+{
+    if (length == 0) {
+        return BIO_OK;
+    }
+    InterceptorReadBufferReleaseIn req{};
+    auto pidRet = InterceptorClientNetService::Instance().GetReadySendPid(req.pid);
+    if (UNLIKELY(pidRet != BIO_OK || req.pid == 0)) {
+        CLOG_DEBUG("Release read shm buffer skipped because net service is not ready, pidRet:" << pidRet <<
+            ", offset:" << addrOffset << ", length:" << length << ".");
+        return pidRet != BIO_OK ? pidRet : BIO_NOT_READY;
+    }
+    req.addrOffset = addrOffset;
+    req.length = length;
+    uint32_t *rsp = nullptr;
+    uint64_t rspLen = 0;
+    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorReadBufferReleaseIn, uint32_t>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_READ_BUFFER_RELEASE, req, &rsp, rspLen);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_DEBUG("Release read shm buffer failed, pid:" << req.pid << ", offset:" << req.addrOffset <<
+            ", length:" << req.length << ", ret:" << ret << ".");
+        return ret;
+    }
+    return BIO_OK;
+}
+
+static void ReleaseRemoteReadWindow(const RemoteReadWindowCache &cache)
+{
+    if (!cache.active || cache.addrLen == 0) {
+        return;
+    }
+    QueueReadBufferReleaseAsync(cache.addrOffset, cache.addrLen);
+}
+
+static bool InvalidateReadIndexOnNode(BioNodeId nodeId, uint64_t inode, uint64_t offset, uint64_t length,
+    bool broadcastRemote)
+{
+    InterceptorReadIndexInvalidateIn req{};
+    req.inode = inode;
+    req.offset = offset;
+    req.length = length;
+    req.broadcastRemote = broadcastRemote ? 1U : 0U;
+    uint32_t *rsp = nullptr;
+    uint64_t rspLen = 0;
+    BResult ret = InterceptorClientNetService::Instance().SendSync<InterceptorReadIndexInvalidateIn, uint32_t>(
+        nodeId, BIO_OP_INTERCEPTOR_READ_INDEX_INVALIDATE, req, &rsp, rspLen);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLOG_ERROR("Invalidate read-index failed, dstNid:" << nodeId << ", inode:" << inode <<
+            ", offset:" << offset << ", length:" << length << ", ret:" << ret << ".");
+        return false;
+    }
+    return true;
+}
+
+static bool InvalidateReadIndexForNativeWrite(uint64_t inode, off_t offset, uint64_t length)
+{
+    if (offset < 0 || length == 0) {
+        return true;
+    }
+
+    uint64_t writeOffset = static_cast<uint64_t>(offset);
+    return InvalidateReadIndexOnNode(INVALID_NID, inode, writeOffset, length, true);
+}
+
+static void QueueRemoteReadWindowRelease(const RemoteReadWindowCache &cache)
+{
+    if (!cache.active || cache.addrLen == 0) {
+        return;
+    }
+    QueueReadBufferReleaseAsync(cache.addrOffset, cache.addrLen);
+}
+
+static void DropReadCaches(const std::shared_ptr<OpenFile> &file)
+{
+    std::array<RemoteReadWindowCache, REMOTE_READ_WINDOW_CACHE_SLOTS> evicted{};
+    file->DropReadAddrCache();
+    file->InvalidateRemoteReadWindowCache(&evicted);
+    for (const auto &cache : evicted) {
+        ReleaseRemoteReadWindow(cache);
+    }
+}
+
+static void ReleaseRemoteReadWindowsBefore(const std::shared_ptr<OpenFile> &file, uint64_t offset)
+{
+    std::array<RemoteReadWindowCache, REMOTE_READ_WINDOW_CACHE_SLOTS> evicted{};
+    file->EvictRemoteReadWindowsBefore(InterceptorReadIndexBlockOffset(offset), &evicted);
+    for (const auto &cache : evicted) {
+        ReleaseRemoteReadWindow(cache);
+    }
+}
+
+static bool IsRemoteReadWindowResp(const InterceptorPreadOut &resp)
+{
+    return resp.dataSource == INTERCEPTOR_PREAD_DATA_READ_SHM && resp.windowDataLen != 0 &&
+        resp.windowAddrLen >= resp.windowDataLen;
+}
+
+static void ReleaseReadBufferIfNeeded(const InterceptorPreadOut &resp)
+{
+    if (resp.dataSource != INTERCEPTOR_PREAD_DATA_READ_SHM || resp.addrNum == 0) {
+        return;
+    }
+
+    if (IsRemoteReadWindowResp(resp)) {
+        QueueReadBufferReleaseAsync(resp.windowAddrOffset, resp.windowAddrLen);
+    } else {
+        QueueReadBufferReleaseAsync(resp.addrOffset[0], resp.addrLen[0]);
+    }
+}
+
+static void QueueReadBufferReleaseIfNeeded(const InterceptorPreadOut &resp)
+{
+    if (resp.dataSource != INTERCEPTOR_PREAD_DATA_READ_SHM || resp.addrNum == 0) {
+        return;
+    }
+    if (IsRemoteReadWindowResp(resp)) {
+        QueueReadBufferReleaseAsync(resp.windowAddrOffset, resp.windowAddrLen);
+    } else {
+        QueueReadBufferReleaseAsync(resp.addrOffset[0], resp.addrLen[0]);
+    }
+}
+
+static int SendReadRequest(int fd, uint64_t inode, uint32_t pid, uint64_t nbytes, int64_t offset,
+    uint64_t startTime, InterceptorPreadOut &resp, bool logError = true, uint32_t flags = 0)
+{
+    InterceptorPreadIn request{};
+    request.pid = pid;
+    request.fd = fd;
+    request.inode = inode;
+    request.offset = offset;
+    request.nbytes = nbytes;
+    request.startTime = startTime;
+    request.flags = flags;
+
+    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_READ, request, resp);
+    uint64_t elapsedNs = Monotonic::TimeNs() - startTime;
+    bool success = (ret == 0 && IsReadRespValid(resp, nbytes));
+    if (UNLIKELY(!success)) {
+        if (!logError) {
+            return -1;
+        }
+        CLOG_ERROR("Interceptor read failed, sendRet:" << ret << ", respRet:" << resp.ret << ", fd:" << fd <<
+            ", inode:" << inode << ", offset:" << offset << ", nbytes:" << nbytes << ", dataLen:" << resp.dataLen <<
+            ", addrNum:" << resp.addrNum << ", flags:" << flags << ", elapsed_ns:" << elapsedNs << ".");
+        return -1;
+    }
+    return 0;
+}
+
+static ssize_t CopyReadResp(int fd, const InterceptorPreadOut &resp, void *buf, size_t count, bool releaseAfterCopy)
+{
+    size_t copied = 0;
+    uint64_t left = resp.dataLen;
+    for (uint32_t idx = 0; idx < resp.addrNum; idx++) {
+        uint64_t copyLen = std::min<uint64_t>(resp.addrLen[idx], left);
+        if (copyLen == 0) {
+            continue;
+        }
+        if (UNLIKELY(copyLen > count - copied)) {
+            if (releaseAfterCopy) {
+                ReleaseReadBufferIfNeeded(resp);
+            }
+            return -1;
+        }
+        uint8_t *src = InterceptorClientNetService::Instance().GetBioShmAddress(resp.addrOffset[idx], copyLen);
+        if (UNLIKELY(src == nullptr)) {
+            CLOG_ERROR("Get bio shm read address failed, fd:" << fd << ", idx:" << idx << ", offset:" <<
+                resp.addrOffset[idx] << ", len:" << copyLen << ".");
+            if (releaseAfterCopy) {
+                ReleaseReadBufferIfNeeded(resp);
+            }
+            return -1;
+        }
+        int ret = memcpy_s(static_cast<uint8_t *>(buf) + copied, count - copied, src, static_cast<size_t>(copyLen));
+        if (UNLIKELY(ret != 0)) {
+            if (releaseAfterCopy) {
+                ReleaseReadBufferIfNeeded(resp);
+            }
+            return -1;
+        }
+        copied += copyLen;
+        left -= copyLen;
+        if (left == 0) {
+            break;
+        }
+    }
+    if (releaseAfterCopy) {
+        ReleaseReadBufferIfNeeded(resp);
+    }
+    return (left == 0) ? static_cast<ssize_t>(resp.dataLen) : -1;
+}
+
+static bool CopyFromRemoteReadWindowCache(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count,
+    void *buf)
+{
+    RemoteReadWindowCache evicted{};
+    bool needRelease = false;
+    bool hit = false;
+    {
+        std::lock_guard<std::mutex> lock(file->RemoteReadWindowMutex());
+        auto &caches = file->RemoteReadWindows();
+        for (size_t idx = 0; idx < file->RemoteReadWindowSlotCount(); ++idx) {
+            auto &cache = caches[idx];
+            if (!cache.Contains(offset, count)) {
+                continue;
+            }
+            uint64_t skip = offset - cache.fileOffset;
+            uint8_t *src = InterceptorClientNetService::Instance().GetBioShmAddress(cache.addrOffset + skip,
+                static_cast<uint32_t>(count));
+            if (UNLIKELY(src == nullptr)) {
+                evicted = cache;
+                cache.Reset();
+                needRelease = true;
+            } else {
+                int ret = memcpy_s(buf, count, src, count);
+                hit = (ret == 0);
+            }
+            break;
+        }
+    }
+    if (needRelease) {
+        ReleaseRemoteReadWindow(evicted);
+    }
+    return hit;
+}
+
+static bool StoreRemoteReadWindowCache(const std::shared_ptr<OpenFile> &file, const InterceptorPreadOut &resp,
+    const uint64_t *generation = nullptr, bool queueRelease = true, const uint64_t *protectedOffset = nullptr)
+{
+    if (!IsRemoteReadWindowResp(resp)) {
+        return false;
+    }
+    RemoteReadWindowCache evicted{};
+    {
+        std::lock_guard<std::mutex> lock(file->RemoteReadWindowMutex());
+        if (generation != nullptr && file->RemoteReadWindowGeneration() != *generation) {
+            return false;
+        }
+        auto &caches = file->RemoteReadWindows();
+        RemoteReadWindowCache *target = nullptr;
+        size_t slotCount = file->RemoteReadWindowSlotCount();
+        for (size_t idx = 0; idx < slotCount; ++idx) {
+            auto &cache = caches[idx];
+            if (cache.active && cache.fileOffset == resp.windowOffset) {
+                target = &cache;
+                break;
+            }
+        }
+        if (target == nullptr) {
+            for (size_t idx = 0; idx < slotCount; ++idx) {
+                auto &cache = caches[idx];
+                if (!cache.active) {
+                    target = &cache;
+                    break;
+                }
+            }
+        }
+        if (target == nullptr) {
+            for (size_t idx = 0; idx < slotCount; ++idx) {
+                auto &cache = caches[idx];
+                if (protectedOffset == nullptr || !cache.Contains(*protectedOffset, 1U)) {
+                    target = &cache;
+                    break;
+                }
+            }
+        }
+        if (target == nullptr) {
+            return false;
+        }
+        if (target->active && target->addrOffset != resp.windowAddrOffset) {
+            evicted = *target;
+        }
+        target->active = true;
+        target->fileOffset = resp.windowOffset;
+        target->dataLen = resp.windowDataLen;
+        target->addrOffset = resp.windowAddrOffset;
+        target->addrLen = resp.windowAddrLen;
+    }
+    if (resp.windowDataLen < INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        file->MarkRemoteReadEof(resp.windowOffset + resp.windowDataLen);
+    }
+    if (queueRelease) {
+        QueueRemoteReadWindowRelease(evicted);
+    } else {
+        ReleaseRemoteReadWindow(evicted);
+    }
+    return true;
+}
+
+static bool CopyFromReadIndexCache(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count, void *buf,
+    InterceptorReadIndexCache *hitCache = nullptr)
+{
+    InterceptorReadIndexCache cache{};
+    OpenFile *filePtr = file.get();
+    if (g_lastReadIndexFile == filePtr && g_lastReadIndexCache.entry != nullptr &&
+        g_lastReadIndexCache.dataLen != 0 && offset >= g_lastReadIndexCache.fileOffset &&
+        count <= g_lastReadIndexCache.dataLen &&
+        offset - g_lastReadIndexCache.fileOffset <= g_lastReadIndexCache.dataLen - count) {
+        cache = g_lastReadIndexCache;
+    } else if (file->LoadLocalReadIndexCache(offset, count, cache)) {
+        g_lastReadIndexFile = filePtr;
+        g_lastReadIndexCache = cache;
+    } else {
+        return false;
+    }
+
+    uint64_t seq = __atomic_load_n(&cache.entry->seq, __ATOMIC_ACQUIRE);
+    if (UNLIKELY(seq == 0 || (seq & 1U) != 0 || seq != cache.seq || cache.inode != file->GetInode() ||
+        cache.addrNum == 0 || cache.addrNum > SLICE_ADDR_SIZE || offset < cache.fileOffset)) {
+        if (g_lastReadIndexFile == filePtr) {
+            g_lastReadIndexFile = nullptr;
+            g_lastReadIndexCache = {};
+        }
+        file->InvalidateLocalReadIndexCache();
+        return false;
+    }
+
+    uint64_t skip = offset - cache.fileOffset;
+    uint64_t left = static_cast<uint64_t>(count);
+    if (UNLIKELY(left > cache.dataLen || skip > cache.dataLen - left)) {
+        return false;
+    }
+
+    if (cache.addrNum == 1U) {
+        if (UNLIKELY(skip > cache.addrLen[0] || left > cache.addrLen[0] - skip)) {
+            return false;
+        }
+        uint8_t *src = InterceptorClientNetService::Instance().GetBioShmAddressFast(
+            cache.addrOffset[0] + skip, left);
+        if (UNLIKELY(src == nullptr)) {
+            if (g_lastReadIndexFile == filePtr) {
+                g_lastReadIndexFile = nullptr;
+                g_lastReadIndexCache = {};
+            }
+            file->InvalidateLocalReadIndexCache();
+            return false;
+        }
+        int ret = memcpy_s(buf, count, src, static_cast<size_t>(left));
+        if (UNLIKELY(ret != 0)) {
+            return false;
+        }
+        uint64_t seqDone = __atomic_load_n(&cache.entry->seq, __ATOMIC_ACQUIRE);
+        if (UNLIKELY(seqDone != seq || (seqDone & 1U) != 0)) {
+            if (g_lastReadIndexFile == filePtr) {
+                g_lastReadIndexFile = nullptr;
+                g_lastReadIndexCache = {};
+            }
+            file->InvalidateLocalReadIndexCache();
+            return false;
+        }
+        if (hitCache != nullptr) {
+            cache.seq = seqDone;
+            *hitCache = cache;
+        }
+        return true;
+    }
+
+    uint8_t *srcAddr[SLICE_ADDR_SIZE] = {};
+    uint64_t copyLen[SLICE_ADDR_SIZE] = {};
+    uint32_t copyNum = 0;
+    for (uint32_t idx = 0; idx < cache.addrNum && left > 0; ++idx) {
+        if (skip >= cache.addrLen[idx]) {
+            skip -= cache.addrLen[idx];
+            continue;
+        }
+
+        copyLen[copyNum] = std::min<uint64_t>(cache.addrLen[idx] - skip, left);
+        srcAddr[copyNum] = InterceptorClientNetService::Instance().GetBioShmAddressFast(
+            cache.addrOffset[idx] + skip, copyLen[copyNum]);
+        if (UNLIKELY(srcAddr[copyNum] == nullptr)) {
+            if (g_lastReadIndexFile == filePtr) {
+                g_lastReadIndexFile = nullptr;
+                g_lastReadIndexCache = {};
+            }
+            file->InvalidateLocalReadIndexCache();
+            return false;
+        }
+
+        left -= copyLen[copyNum];
+        skip = 0;
+        ++copyNum;
+    }
+    if (UNLIKELY(left != 0)) {
+        return false;
+    }
+
+    size_t copied = 0;
+    for (uint32_t idx = 0; idx < copyNum; ++idx) {
+        int ret = memcpy_s(static_cast<uint8_t *>(buf) + copied, count - copied, srcAddr[idx],
+            static_cast<size_t>(copyLen[idx]));
+        if (UNLIKELY(ret != 0)) {
+            return false;
+        }
+        copied += static_cast<size_t>(copyLen[idx]);
+    }
+    uint64_t seqDone = __atomic_load_n(&cache.entry->seq, __ATOMIC_ACQUIRE);
+    if (UNLIKELY(seqDone != seq || (seqDone & 1U) != 0)) {
+        if (g_lastReadIndexFile == filePtr) {
+            g_lastReadIndexFile = nullptr;
+            g_lastReadIndexCache = {};
+        }
+        file->InvalidateLocalReadIndexCache();
+        return false;
+    }
+    if (hitCache != nullptr) {
+        cache.seq = seqDone;
+        *hitCache = cache;
+    }
+    return true;
+}
+
 static uint64_t BytesUntilReadIndexWindowEnd(uint64_t offset, uint64_t left)
 {
     uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
@@ -187,19 +833,23 @@ static void MaybePrefetchNextRemoteReadWindow(const std::shared_ptr<OpenFile> &f
     if (count == 0) {
         return;
     }
+
     bool sequential = file->RecordRemoteRead(offset, count);
     if (!sequential) {
         return;
     }
+
     uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
     uint64_t readEnd = offset + static_cast<uint64_t>(count);
     uint64_t triggerBytes = sequential ? REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES : REMOTE_READ_PREFETCH_TRIGGER_BYTES;
     if (readEnd < offset) {
         return;
     }
+
     if (!remoteWindowLoaded && readEnd - windowOffset < triggerBytes) {
         return;
     }
+
     const auto &config = GetRemoteReadPrefetchConfig();
     size_t depth = config.depth;
     uint64_t nextOffset = windowOffset;
@@ -245,14 +895,15 @@ ssize_t ProxyOperations::PreadInner(const char *api, const std::shared_ptr<OpenF
         LogReadInterceptSuccess(api, fd, file->GetInode(), offset, count);
         return 0;
     }
+
     if (UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
         errno = EIO;
         return -1;
     }
+
     if (count > MAX_INTERCEPTOR_IO_SIZE) {
         CLOG_DEBUG("Fallback " << api << " to native for oversize request, fd:" << fd << ", inode:" <<
-            file->GetInode() <<
-            ", offset:" << offset << ", nbytes:" << count << ".");
+            file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
@@ -380,8 +1031,7 @@ ssize_t ProxyOperations::Pread64(int fd, void *buf, size_t count, off64_t offset
     CLOG_DEBUG("Pread64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
     const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
-        CLOG_DEBUG("Fallback pread64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count <<
-            ".");
+        CLOG_DEBUG("Fallback pread64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pread64(fd, buf, count, offset);
     }
 
@@ -431,8 +1081,7 @@ ssize_t ProxyOperations::PwriteInner(const char *api, const std::shared_ptr<Open
         return ret;
     }
     CLOG_DEBUG("Fallback " << api << " to native for oversize request, fd:" << fd << ", inode:" <<
-        file->GetInode() <<
-        ", offset:" << offset << ", nbytes:" << count << ".");
+        file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ".");
     if (UNLIKELY(!InvalidateReadIndexForNativeWrite(file->GetInode(), offset, count))) {
         errno = EIO;
         return -1;
@@ -1056,8 +1705,7 @@ ssize_t ProxyOperations::Pwrite64(int fd, const void *buf, size_t count, off64_t
     CLOG_DEBUG("Pwrite64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
     const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
-        CLOG_DEBUG("Fallback pwrite64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count <<
-            ".");
+        CLOG_DEBUG("Fallback pwrite64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
     }
 
