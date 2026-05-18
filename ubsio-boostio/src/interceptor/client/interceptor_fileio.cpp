@@ -11,731 +11,1039 @@
  */
 
 #include <algorithm>
-#include <cstring>
+#include <atomic>
 #include <cerrno>
-#include <cstdio>
-#include <vector>
-#include "securec.h"
+#include <chrono>
+#include <climits>
+#include <condition_variable>
+#include <cstdlib>
+#include <deque>
+#include <exception>
+#include <future>
+#include <sys/uio.h>
+#include <thread>
+#include "bio_c.h"
 #include "bio_def.h"
-#include "message_op.h"
+#include "bio_err.h"
+#include "bio_monotonic.h"
+#include "interceptor_context.h"
 #include "interceptor_log.h"
 #include "interceptor_net.h"
+#include "message_op.h"
+#include "securec.h"
 #include "proxy_operations.h"
-#include "interceptor_context.h"
-#include "bio_monotonic.h"
-#include "bufvec.h"
 
 using namespace ock::bio;
 
 #define CONTEXT BioInterceptorContext::GetInstance()
 
-namespace {
-struct CachedWriteBlock {
-    uintptr_t address = 0;
-    uint64_t mrOffset = 0;
-    uint32_t pid = 0;
-
-    ~CachedWriteBlock()
-    {
-        if (address != 0) {
-            InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-            address = 0;
-            mrOffset = 0;
-            pid = 0;
-        }
-    }
-};
+static uint64_t BytesUntilReadIndexWindowEnd(uint64_t offset, uint64_t left)
+{
+    uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
+    uint64_t inWindow = offset - windowOffset;
+    uint64_t windowLeft = MAX_INTERCEPTOR_IO_SIZE - inWindow;
+    return std::min<uint64_t>(left, windowLeft);
 }
 
-static thread_local CachedWriteBlock g_cachedWriteBlock;
-
-static bool AcquireLargeWriteBlock(uintptr_t &shmAddr, uint64_t &mrOffset, bool &fromCache)
+static bool IsSingleReadIndexWindow(const InterceptorReadIndexCache &cache)
 {
-    if (g_cachedWriteBlock.address != 0) {
-        if (UNLIKELY(g_cachedWriteBlock.pid != static_cast<uint32_t>(getpid()))) {
-            g_cachedWriteBlock.address = 0;
-            g_cachedWriteBlock.mrOffset = 0;
-            g_cachedWriteBlock.pid = 0;
-        } else {
-            shmAddr = g_cachedWriteBlock.address;
-            mrOffset = g_cachedWriteBlock.mrOffset;
-            fromCache = true;
-            return true;
-        }
-    }
-
-    auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
-    if (UNLIKELY(ret != BIO_OK || shmAddr == 0)) {
-        CLOG_ERROR("Alloc large write shm block failed, ret:" << ret << ", shmAddr:" << shmAddr <<
-            ", mrOffset:" << mrOffset << ".");
+    if (cache.dataLen == 0) {
         return false;
     }
+    uint64_t startBlock = InterceptorReadIndexBlockOffset(cache.fileOffset);
+    uint64_t lastOffset = cache.fileOffset + cache.dataLen - 1U;
+    return lastOffset >= cache.fileOffset && InterceptorReadIndexBlockOffset(lastOffset) == startBlock;
+}
 
-    fromCache = false;
+static bool CopyFromReadIndexCacheWindowed(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count,
+    void *buf, InterceptorReadIndexCache *lastHitCache = nullptr)
+{
+    uint64_t left = static_cast<uint64_t>(count);
+    uint64_t curOffset = offset;
+    size_t copied = 0;
+    InterceptorReadIndexCache cache{};
+    while (left > 0) {
+        uint64_t piece = BytesUntilReadIndexWindowEnd(curOffset, left);
+        if (!CopyFromReadIndexCache(file, curOffset, static_cast<size_t>(piece),
+            static_cast<uint8_t *>(buf) + copied, &cache)) {
+            return false;
+        }
+        curOffset += piece;
+        copied += static_cast<size_t>(piece);
+        left -= piece;
+    }
+    if (lastHitCache != nullptr && IsSingleReadIndexWindow(cache)) {
+        *lastHitCache = cache;
+    }
     return true;
 }
 
-static void CacheLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset)
+static bool CopyFromGlobalReadIndexWindowed(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count,
+    void *buf, InterceptorReadIndexCache *lastHitCache = nullptr)
 {
-    g_cachedWriteBlock.address = shmAddr;
-    g_cachedWriteBlock.mrOffset = mrOffset;
-    g_cachedWriteBlock.pid = static_cast<uint32_t>(getpid());
+    uint64_t left = static_cast<uint64_t>(count);
+    uint64_t curOffset = offset;
+    size_t copied = 0;
+    InterceptorReadIndexCache cache{};
+    while (left > 0) {
+        uint64_t piece = BytesUntilReadIndexWindowEnd(curOffset, left);
+        bool hit = InterceptorClientNetService::Instance().CopyFromReadIndex(file->GetInode(), curOffset,
+            static_cast<size_t>(piece), static_cast<uint8_t *>(buf) + copied, &cache);
+        if (!hit) {
+            return false;
+        }
+        if (IsSingleReadIndexWindow(cache)) {
+            file->StoreLocalReadIndexCache(cache);
+        }
+        curOffset += piece;
+        copied += static_cast<size_t>(piece);
+        left -= piece;
+    }
+    if (lastHitCache != nullptr && IsSingleReadIndexWindow(cache)) {
+        *lastHitCache = cache;
+    }
+    return true;
 }
 
-static void ReleaseLargeWriteBlock(uintptr_t shmAddr, uint64_t mrOffset, bool fromCache)
+static int LoadReadResp(const std::shared_ptr<OpenFile> &file, int fd, size_t count, off_t offset,
+    InterceptorPreadOut &resp, bool prefetch = false)
 {
-    if (fromCache) {
+    uint32_t pid = 0;
+    auto pidRet = InterceptorClientNetService::Instance().GetReadySendPid(pid);
+    if (UNLIKELY(pidRet != BIO_OK || pid == 0)) {
+        CLOG_ERROR("Load interceptor read failed because net service is not ready, fd:" << fd << ", inode:" <<
+            file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ", ret:" << pidRet << ".");
+        return -1;
+    }
+    uint64_t inode = file->GetInode();
+
+    uint64_t reqLen = count;
+    int64_t reqOffset = static_cast<int64_t>(offset);
+    uint64_t startTime = Monotonic::TimeNs();
+
+    CLOG_DEBUG("Load interceptor read, fd:" << fd << ", inode:" << inode <<
+        ", offset:" << reqOffset << ", nbytes:" << reqLen << ".");
+    uint32_t flags = INTERCEPTOR_PREAD_FLAG_BIO_FALLBACK;
+    if (prefetch) {
+        flags |= INTERCEPTOR_PREAD_FLAG_PREFETCH;
+    }
+    int ret = SendReadRequest(fd, inode, pid, reqLen, reqOffset, startTime, resp, false, flags);
+    if (UNLIKELY(ret != 0)) {
+        return ret;
+    }
+
+    return 0;
+}
+
+static bool WaitRemoteReadPrefetch(const std::shared_ptr<OpenFile> &file, uint64_t offset, size_t count, void *buf)
+{
+    if (!file->IsRemoteReadPrefetchInFlight(offset, count)) {
+        return false;
+    }
+    uint64_t deadline = Monotonic::TimeNs() + REMOTE_READ_PREFETCH_WAIT_NS;
+    uint32_t waitLoops = 0;
+    do {
+        if (CopyFromRemoteReadWindowCache(file, offset, count, buf)) {
+            return true;
+        }
+        if (waitLoops++ < REMOTE_READ_PREFETCH_WAIT_SPIN) {
+            std::this_thread::yield();
+        } else {
+            std::this_thread::sleep_for(std::chrono::microseconds(REMOTE_READ_PREFETCH_WAIT_SLEEP_US));
+        }
+    } while (file->IsRemoteReadPrefetchInFlight(offset, count) && Monotonic::TimeNs() < deadline);
+    return CopyFromRemoteReadWindowCache(file, offset, count, buf);
+}
+
+static void StartRemoteReadWindowPrefetch(const std::shared_ptr<OpenFile> &file, int fd, uint64_t prefetchOffset,
+    uint64_t protectedOffset)
+{
+    uint64_t generation = 0;
+    if (!file->TryStartRemoteReadPrefetch(prefetchOffset, generation, GetRemoteReadPrefetchConfig().depth)) {
         return;
     }
-    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-    (void)shmAddr;
+
+    std::thread([file, fd, prefetchOffset, protectedOffset, generation]() {
+        InterceptorPreadOut resp{};
+        int ret = -1;
+        if (file->IsActive()) {
+            ret = LoadReadResp(file, fd, 1U, static_cast<off_t>(prefetchOffset), resp, true);
+        }
+        if (ret == 0 && resp.dataLen == 0) {
+            file->MarkRemoteReadEof(prefetchOffset);
+        }
+        bool stored = ret == 0 && IsRemoteReadWindowResp(resp) && file->IsActive() &&
+            StoreRemoteReadWindowCache(file, resp, &generation, false, &protectedOffset);
+        if (!stored) {
+            QueueReadBufferReleaseIfNeeded(resp);
+        }
+        file->FinishRemoteReadPrefetch(prefetchOffset, generation);
+    }).detach();
 }
 
-static char *GetSmallWriteScratch(size_t reqLen)
+static void MaybePrefetchNextRemoteReadWindow(const std::shared_ptr<OpenFile> &file, int fd, uint64_t offset,
+    size_t count, bool remoteWindowLoaded = false)
 {
-    static thread_local std::vector<char> scratch;
-    if (scratch.size() < reqLen) {
-        scratch.resize(reqLen);
+    if (count == 0) {
+        return;
     }
-    return scratch.data();
+    bool sequential = file->RecordRemoteRead(offset, count);
+    if (!sequential) {
+        return;
+    }
+    uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
+    uint64_t readEnd = offset + static_cast<uint64_t>(count);
+    uint64_t triggerBytes = sequential ? REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES : REMOTE_READ_PREFETCH_TRIGGER_BYTES;
+    if (readEnd < offset) {
+        return;
+    }
+    if (!remoteWindowLoaded && readEnd - windowOffset < triggerBytes) {
+        return;
+    }
+    const auto &config = GetRemoteReadPrefetchConfig();
+    size_t depth = config.depth;
+    uint64_t nextOffset = windowOffset;
+    for (size_t idx = 0; idx < depth; ++idx) {
+        if (nextOffset > UINT64_MAX - INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+            return;
+        }
+        nextOffset += INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+        StartRemoteReadWindowPrefetch(file, fd, nextOffset, windowOffset);
+    }
 }
 
-void ProxyOperations::DropCachedWriteBlock()
+static void MaybePrefetchRemoteReadAtStart(const std::shared_ptr<OpenFile> &file, int fd, uint64_t offset,
+    size_t count)
 {
-    g_cachedWriteBlock.address = 0;
-    g_cachedWriteBlock.mrOffset = 0;
-    g_cachedWriteBlock.pid = 0;
-}
-
-ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        CLOG_DEBUG("Fallback pread to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
-        return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
+    const auto &config = GetRemoteReadPrefetchConfig();
+    if (count == 0 || config.depth == 0) {
+        return;
     }
 
-    if (count > MAX_LARGE_WRITE_SIZE) {
-        CLOG_DEBUG("Fallback pread to native for oversize request, fd:" << fd << ", inode:" << file->GetInode() <<
+    bool sequential = file->IsRemoteReadSequential(offset);
+    bool largeIo = count >= REMOTE_READ_LARGE_IO_PREFETCH_BYTES;
+    if (!sequential || (!config.fromStart && !largeIo)) {
+        return;
+    }
+
+    uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
+    size_t depth = config.depth;
+    uint64_t nextOffset = windowOffset;
+    for (size_t idx = 0; idx < depth; ++idx) {
+        if (nextOffset > UINT64_MAX - INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+            return;
+        }
+        nextOffset += INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+        StartRemoteReadWindowPrefetch(file, fd, nextOffset, windowOffset);
+    }
+}
+
+ssize_t ProxyOperations::PreadInner(const char *api, const std::shared_ptr<OpenFile> &file, int fd, void *buf,
+    size_t count, off_t offset)
+{
+    if (count == 0) {
+        LogReadInterceptSuccess(api, fd, file->GetInode(), offset, count);
+        return 0;
+    }
+    if (UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
+        errno = EIO;
+        return -1;
+    }
+    if (count > MAX_INTERCEPTOR_IO_SIZE) {
+        CLOG_DEBUG("Fallback " << api << " to native for oversize request, fd:" << fd << ", inode:" <<
+            file->GetInode() <<
             ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
-    if (count <= MAX_SMALL_WRITE_SIZE) {
-        return PreadSmallInner(fd, buf, count, offset);
+    ssize_t ret = PreadShmInner(file, fd, buf, count, offset);
+    if (ret >= 0) {
+        LogReadInterceptSuccess(api, fd, file->GetInode(), offset, count);
     }
-    return PreadLargeInner(fd, buf, count, offset);
+    return ret;
 }
 
-ssize_t ProxyOperations::PreadInner(int fd, BufVec &bufVec, off_t offset)
+ssize_t ProxyOperations::PreadShmInner(const std::shared_ptr<OpenFile> &file, int fd, void *buf, size_t count,
+    off_t offset)
 {
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        CLOG_DEBUG("Fallback preadv64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" <<
-            bufVec.size << ".");
-        return CONTEXT.GetOperations()->preadv64(fd, bufVec.iov, bufVec.count, offset);
+    if (offset >= 0) {
+        InterceptorReadIndexCache localCache{};
+        if (CopyFromReadIndexCacheWindowed(file, static_cast<uint64_t>(offset), count, buf, &localCache)) {
+            LogReadPathSuccess("local_read_index", fd, file->GetInode(), offset, count, static_cast<ssize_t>(count));
+            return static_cast<ssize_t>(count);
+        }
+
+        InterceptorReadIndexCache cache{};
+        bool hit = CopyFromGlobalReadIndexWindowed(file, static_cast<uint64_t>(offset), count, buf, &cache);
+        if (hit) {
+            if (g_lastReadIndexFile == file.get()) {
+                g_lastReadIndexFile = nullptr;
+                g_lastReadIndexCache = {};
+            }
+            LogReadPathSuccess("global_read_index", fd, file->GetInode(), offset, count, static_cast<ssize_t>(count));
+            return static_cast<ssize_t>(count);
+        }
+
+        if (CopyFromRemoteReadWindowCache(file, static_cast<uint64_t>(offset), count, buf)) {
+            ReleaseRemoteReadWindowsBefore(file, static_cast<uint64_t>(offset));
+            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count);
+            LogReadPathSuccess("remote_read_window", fd, file->GetInode(), offset, count,
+                static_cast<ssize_t>(count));
+            return static_cast<ssize_t>(count);
+        }
+
+        if (WaitRemoteReadPrefetch(file, static_cast<uint64_t>(offset), count, buf)) {
+            ReleaseRemoteReadWindowsBefore(file, static_cast<uint64_t>(offset));
+            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count);
+            LogReadPathSuccess("remote_read_prefetch", fd, file->GetInode(), offset, count,
+                static_cast<ssize_t>(count));
+            return static_cast<ssize_t>(count);
+        }
+
+        MaybePrefetchRemoteReadAtStart(file, fd, static_cast<uint64_t>(offset), count);
+
+        InterceptorPreadOut resp{};
+        int loadRet = LoadReadResp(file, fd, count, offset, resp);
+        if (UNLIKELY(loadRet != 0)) {
+            return -1;
+        }
+
+        if (resp.dataLen == 0) {
+            file->MarkRemoteReadEof(static_cast<uint64_t>(offset));
+            return 0;
+        }
+
+        bool cacheRemoteWindow = IsRemoteReadWindowResp(resp);
+        ssize_t retLen = CopyReadResp(fd, resp, buf, count, !cacheRemoteWindow);
+        if (UNLIKELY(retLen < 0)) {
+            if (cacheRemoteWindow) {
+                ReleaseReadBufferIfNeeded(resp);
+            }
+            return -1;
+        }
+        if (cacheRemoteWindow) {
+            StoreRemoteReadWindowCache(file, resp);
+            ReleaseRemoteReadWindowsBefore(file, static_cast<uint64_t>(offset));
+            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count,
+                resp.windowDataLen >= INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE);
+        }
+
+        LogReadPathSuccess("hook", fd, file->GetInode(), offset, count, retLen);
+        return retLen;
     }
 
-    if (bufVec.size > MAX_LARGE_WRITE_SIZE) {
-        CLOG_DEBUG("Fallback preadv64 to native for oversize request, fd:" << fd << ", inode:" <<
-            file->GetInode() << ", offset:" << offset << ", nbytes:" << bufVec.size << ".");
-        return CONTEXT.GetOperations()->preadv64(fd, bufVec.iov, bufVec.count, offset);
-    }
-
-    if (bufVec.size <= MAX_SMALL_WRITE_SIZE) {
-        return PreadSmallInner(fd, bufVec, offset);
-    }
-    return PreadLargeInner(fd, bufVec, offset);
-}
-
-ssize_t ProxyOperations::PreadSmallInner(int fd, void *buf, size_t count, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    InterceptorPreadIn request;
-    request.pid = InterceptorClientNetService::Instance().GetSendPid();
-    request.fd = fd;
-    request.inode = file->GetInode();
-    request.offset = offset;
-    request.nbytes = count;
-    request.startTime = Monotonic::TimeNs();
-
-    InterceptorPreadOut *resp = nullptr;
-    uint64_t rspLen = 0;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
-    if (UNLIKELY(ret != 0 || resp == nullptr)) {
-        CLOG_ERROR("Send small read request failed, ret:" << ret << ", fd:" << fd << ", inode:" << request.inode <<
-            ", offset:" << request.offset << ", nbytes:" << request.nbytes << ", resp:" << resp << ".");
-        return -1;
-    }
-
-    const uint64_t headerSize = sizeof(InterceptorPreadOut);
-    if (rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
-        CLOG_ERROR("Invalid small read response, fd:" << fd << ", inode:" << request.inode << ", offset:" <<
-            request.offset << ", rspLen:" << rspLen << ", headerSize:" << sizeof(InterceptorPreadOut) <<
-            ", dataLen:" << resp->dataLen << ".");
-        free(resp);
-        resp = nullptr;
-        return -1;
-    }
-
-    ret = memcpy_s(buf, count, resp->data, resp->dataLen);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("Copy small read response failed, ret:" << ret << ", fd:" << fd << ", inode:" << request.inode <<
-            ", offset:" << request.offset << ", dataLen:" << resp->dataLen << ", bufSize:" << count << ".");
-        free(resp);
-        resp = nullptr;
-        return -1;
-    }
-
-    auto retLen = static_cast<ssize_t>(resp->dataLen);
-    free(resp);
-    resp = nullptr;
-    CLOG_INFO("Intercept small read success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
-        offset << ", nbytes:" << count << ", ret:" << retLen << ".");
-    return retLen;
-}
-
-ssize_t ProxyOperations::PreadSmallInner(int fd, BufVec &bufVec, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    InterceptorPreadIn request;
-    request.pid = InterceptorClientNetService::Instance().GetSendPid();
-    request.fd = fd;
-    request.inode = file->GetInode();
-    request.offset = offset;
-    request.nbytes = bufVec.size;
-    request.startTime = Monotonic::TimeNs();
-
-    InterceptorPreadOut *resp = nullptr;
-    uint64_t rspLen = 0;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
-    if (UNLIKELY(ret != 0 || resp == nullptr)) {
-        CLOG_ERROR("Send small read vec request failed, ret:" << ret << ", fd:" << fd << ", inode:" <<
-            request.inode << ", offset:" << request.offset << ", nbytes:" << request.nbytes << ", resp:" <<
-            resp << ".");
-        return -1;
-    }
-
-    const uint64_t headerSize = sizeof(InterceptorPreadOut);
-    if (rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
-        CLOG_ERROR("Invalid small read vec response, fd:" << fd << ", inode:" << request.inode << ", offset:" <<
-            request.offset << ", rspLen:" << rspLen << ", headerSize:" << sizeof(InterceptorPreadOut) <<
-            ", dataLen:" << resp->dataLen << ".");
-        free(resp);
-        resp = nullptr;
-        return -1;
-    }
-
-    if (resp->dataLen == 0) {
-        free(resp);
-        resp = nullptr;
-        return 0;
-    }
-
-    ret = static_cast<int32_t>(bufVec.Write(reinterpret_cast<uint8_t *>(resp->data), resp->dataLen));
-    if (UNLIKELY(ret < 0)) {
-        free(resp);
-        resp = nullptr;
-        return -1;
-    }
-
-    auto retLen = static_cast<ssize_t>(resp->dataLen);
-    free(resp);
-    resp = nullptr;
-    CLOG_INFO("Intercept small read vec success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
-        offset << ", nbytes:" << bufVec.size << ", ret:" << retLen << ".");
-    return retLen;
-}
-
-ssize_t ProxyOperations::PreadLargeInner(int fd, void *buf, size_t count, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    uintptr_t shmAddr = 0;
-    uint64_t mrOffset = 0;
-    auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
-    if (UNLIKELY(ret != BIO_OK || shmAddr == 0)) {
-        CLOG_ERROR("Alloc large read shm block failed, ret:" << ret << ", fd:" << fd << ", offset:" << offset <<
-            ", nbytes:" << count << ".");
-        return -1;
-    }
-
-    InterceptorLargePreadIn request;
-    request.pid = InterceptorClientNetService::Instance().GetSendPid();
-    request.fd = fd;
-    request.inode = file->GetInode();
-    request.offset = offset;
-    request.nbytes = count;
-    request.mrOffset = mrOffset;
-    request.startTime = Monotonic::TimeNs();
-
-    InterceptorLargePreadOut resp;
-    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePreadIn, InterceptorLargePreadOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_READ, request, resp);
-    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
-        CLOG_ERROR("Large read failed, sendRet:" << ret << ", respRet:" << resp.ret << ", fd:" << fd <<
-            ", inode:" << request.inode << ", offset:" << request.offset << ", nbytes:" << request.nbytes <<
-            ", mrOffset:" << request.mrOffset << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
+    InterceptorPreadOut resp{};
+    int loadRet = LoadReadResp(file, fd, count, offset, resp);
+    if (UNLIKELY(loadRet != 0)) {
         return -1;
     }
 
     if (resp.dataLen == 0) {
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
         return 0;
     }
 
-    size_t copyLen = std::min(count, static_cast<size_t>(resp.dataLen));
-    ret = memcpy_s(buf, count, reinterpret_cast<uint8_t *>(shmAddr), copyLen);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("Copy large read response failed, ret:" << ret << ", fd:" << fd << ", offset:" << offset <<
-            ", copyLen:" << copyLen << ", bufSize:" << count << ", dataLen:" << resp.dataLen << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
+    bool cacheRemoteWindow = IsRemoteReadWindowResp(resp);
+    ssize_t retLen = CopyReadResp(fd, resp, buf, count, !cacheRemoteWindow);
+    if (UNLIKELY(retLen < 0)) {
+        if (cacheRemoteWindow) {
+            ReleaseReadBufferIfNeeded(resp);
+        }
         return -1;
     }
-
-    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-    CLOG_INFO("Intercept large read success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
-        offset << ", nbytes:" << count << ", ret:" << resp.dataLen << ", mrOffset:" << mrOffset << ".");
-    return static_cast<ssize_t>(resp.dataLen);
-}
-
-ssize_t ProxyOperations::PreadLargeInner(int fd, BufVec &bufVec, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
+    if (cacheRemoteWindow) {
+        StoreRemoteReadWindowCache(file, resp);
+        if (offset >= 0) {
+            ReleaseRemoteReadWindowsBefore(file, static_cast<uint64_t>(offset));
+            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count,
+                resp.windowDataLen >= INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE);
+        }
     }
 
-    uintptr_t shmAddr = 0;
-    uint64_t mrOffset = 0;
-    auto ret = InterceptorClientNetService::Instance().AllocShmBlock(shmAddr, mrOffset);
-    if (UNLIKELY(ret != BIO_OK || shmAddr == 0)) {
-        CLOG_ERROR("Alloc large read vec shm block failed, ret:" << ret << ", fd:" << fd << ", offset:" << offset <<
-            ", nbytes:" << bufVec.size << ".");
-        return -1;
-    }
-
-    InterceptorLargePreadIn request;
-    request.pid = InterceptorClientNetService::Instance().GetSendPid();
-    request.fd = fd;
-    request.inode = file->GetInode();
-    request.offset = offset;
-    request.nbytes = bufVec.size;
-    request.mrOffset = mrOffset;
-    request.startTime = Monotonic::TimeNs();
-
-    InterceptorLargePreadOut resp;
-    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePreadIn, InterceptorLargePreadOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_READ, request, resp);
-    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
-        CLOG_ERROR("Large read vec failed, sendRet:" << ret << ", respRet:" << resp.ret << ", fd:" << fd <<
-            ", inode:" << request.inode << ", offset:" << request.offset << ", nbytes:" << request.nbytes <<
-            ", mrOffset:" << request.mrOffset << ".");
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        return -1;
-    }
-
-    if (resp.dataLen == 0) {
-        InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-        return 0;
-    }
-
-    ret = static_cast<int32_t>(bufVec.Write(reinterpret_cast<uint8_t *>(shmAddr), resp.dataLen));
-    InterceptorClientNetService::Instance().ReleaseShmBlock(mrOffset);
-    if (UNLIKELY(ret < 0)) {
-        return -1;
-    }
-
-    CLOG_INFO("Intercept large read vec success, fd:" << fd << ", inode:" << file->GetInode() << ", offset:" <<
-        offset << ", nbytes:" << bufVec.size << ", ret:" << resp.dataLen << ", mrOffset:" << mrOffset << ".");
-    return static_cast<ssize_t>(resp.dataLen);
+    LogReadPathSuccess("hook", fd, file->GetInode(), offset, count, retLen);
+    return retLen;
 }
 
 ssize_t ProxyOperations::Pread(int fd, void *buf, size_t count, off_t offset)
 {
     CLOG_DEBUG("Pread fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
+    const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
         CLOG_DEBUG("Fallback pread to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
     }
 
-    return PreadInner(fd, buf, count, offset);
+    return PreadInner("pread", file, fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::Pread64(int fd, void *buf, size_t count, off64_t offset)
 {
     CLOG_DEBUG("Pread64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
+    const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
         CLOG_DEBUG("Fallback pread64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count <<
             ".");
         return CONTEXT.GetOperations()->pread64(fd, buf, count, offset);
     }
 
-    return PreadInner(fd, buf, count, offset);
+    return PreadInner("pread64", file, fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::Read(int fd, void *buf, size_t nbytes)
 {
     CLOG_DEBUG("Read fd:" << fd << ", length:" << nbytes << ".");
-    auto file = CONTEXT.files.At(fd);
+    const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
         CLOG_DEBUG("Fallback read to native, fd:" << fd << ", nbytes:" << nbytes << ".");
         return CONTEXT.GetOperations()->read(fd, buf, nbytes);
     }
 
-    off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
-    if (UNLIKELY(offset == -1)) {
-        errno = EIO;
-        return -1;
-    }
+    off_t offset = file->ReserveOffset(nbytes);
 
-    auto ret = PreadInner(fd, buf, nbytes, offset);
+    auto ret = PreadInner("read", file, fd, buf, nbytes, offset);
     if (UNLIKELY(ret < 0)) {
+        file->CompleteReservedOffset(nbytes, 0);
         errno = EIO;
         return -1;
     }
 
-    offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
+    file->CompleteReservedOffset(nbytes, ret);
     return ret;
 }
 
-ssize_t ProxyOperations::Readv(int fd, const struct iovec *vector, int count)
+ssize_t ProxyOperations::PwriteInner(const char *api, const std::shared_ptr<OpenFile> &file, int fd,
+    const void *buf, size_t count, off_t offset)
 {
-    CLOG_DEBUG("Readv fd:" << fd << ", length:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
-    if (file == nullptr) {
-        CLOG_DEBUG("Fallback readv to native, fd:" << fd << ", iovcnt:" << count << ".");
-        return CONTEXT.GetOperations()->readv(fd, vector, count);
+    if (count == 0) {
+        LogWriteInterceptSuccess(api, fd, file->GetInode(), offset, count);
+        return 0;
     }
-
-    off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
-    if (UNLIKELY(offset == -1)) {
-        CLOG_ERROR("Get current offset for readv failed, fd:" << fd << ", errno:" << errno << ".");
+    if (count > MAX_INTERCEPTOR_IO_SIZE && UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
         errno = EIO;
         return -1;
     }
-
-    BufVec bufVec(vector, count);
-    if (UNLIKELY(bufVec.size == 0)) {
-        return -1;
+    DropReadCaches(file);
+    if (count <= MAX_INTERCEPTOR_IO_SIZE) {
+        bool intercepted = false;
+        ssize_t ret = PwriteShmInner(file, fd, buf, count, offset, &intercepted);
+        if (ret >= 0 && intercepted) {
+            LogWriteInterceptSuccess(api, fd, file->GetInode(), offset, count);
+        }
+        return ret;
     }
-
-    if (bufVec.size > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->readv(fd, vector, count);
-    }
-
-    auto ret = PreadInner(fd, bufVec, offset);
-    if (UNLIKELY(ret < 0)) {
+    CLOG_DEBUG("Fallback " << api << " to native for oversize request, fd:" << fd << ", inode:" <<
+        file->GetInode() <<
+        ", offset:" << offset << ", nbytes:" << count << ".");
+    if (UNLIKELY(!InvalidateReadIndexForNativeWrite(file->GetInode(), offset, count))) {
         errno = EIO;
         return -1;
     }
-
-    offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
+    ssize_t ret = CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
+    if (ret > 0 && UNLIKELY(!InvalidateReadIndexForNativeWrite(file->GetInode(), offset,
+        static_cast<uint64_t>(ret)))) {
+        errno = EIO;
+        return -1;
+    }
     return ret;
 }
 
-ssize_t ProxyOperations::Preadv64(int fd, const struct iovec *vector, int iovcnt, off64_t offset)
+static bool PrepareDirectSpaceWrite(const std::shared_ptr<OpenFile> &file, int fd, uint64_t nbytes, off_t offset,
+    const char *api, InterceptorPwritePrepareSpaceIn &prepareReq, InterceptorPwritePrepareSpaceOut &prepareResp)
 {
-    CLOG_DEBUG("Preadv64 fd:" << fd << ", offset:" << offset << ", io count:" << iovcnt << ".");
-    auto file = CONTEXT.files.At(fd);
-    if (file == nullptr) {
-        CLOG_DEBUG("Fallback preadv64 to native, fd:" << fd << ", offset:" << offset << ", iovcnt:" << iovcnt <<
-            ".");
-        return CONTEXT.GetOperations()->preadv64(fd, vector, iovcnt, offset);
+    auto shmRet = InterceptorClientNetService::Instance().EnsureBioShmForCurrentProcess();
+    if (UNLIKELY(shmRet != BIO_OK)) {
+        CLOG_DEBUG("Direct write without bio shm, api:" << api << ", ret:" << shmRet << ", fd:" << fd <<
+            ", inode:" << file->GetInode() << ", offset:" << offset << ", nbytes:" << nbytes << ".");
+        return false;
     }
 
-    BufVec bufVec(vector, iovcnt);
-    if (UNLIKELY(bufVec.size == 0)) {
-        return -1;
-    }
+    prepareReq = {};
+    prepareReq.pid = InterceptorClientNetService::Instance().GetSendPid();
+    prepareReq.fd = fd;
+    prepareReq.inode = file->GetInode();
+    prepareReq.offset = offset;
+    prepareReq.nbytes = nbytes;
+    prepareReq.startTime = Monotonic::TimeNs();
 
-    if (bufVec.size > MAX_LARGE_WRITE_SIZE) {
-        return CONTEXT.GetOperations()->preadv64(fd, vector, iovcnt, offset);
+    auto &service = InterceptorClientNetService::Instance();
+    int32_t ret = service.SendSync<InterceptorPwritePrepareSpaceIn, InterceptorPwritePrepareSpaceOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_WRITE_PREPARE_SPACE, prepareReq, prepareResp);
+    if (UNLIKELY(ret != BIO_OK || prepareResp.ret != 0 || prepareResp.segNum == 0 ||
+        prepareResp.segNum > INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS)) {
+        CLOG_DEBUG("Prepare direct write space failed, api:" << api << ", sendRet:" << ret << ", respRet:" <<
+            prepareResp.ret << ", fd:" << fd << ", inode:" << file->GetInode() << ", offset:" << offset <<
+            ", nbytes:" << nbytes << ", segNum:" << prepareResp.segNum << ".");
+        return false;
     }
-
-    auto ret = PreadInner(fd, bufVec, offset);
-    if (UNLIKELY(ret < 0)) {
-        errno = EIO;
-        return -1;
-    }
-
-    return ret;
+    return true;
 }
 
-ssize_t ProxyOperations::PwriteInner(int fd, const void *buf, size_t count, off_t offset)
+static bool IsValidDirectSpaceWriteSegment(const InterceptorPwriteSpaceSegment &seg, uint64_t expectedOffset,
+    uint64_t requestEnd)
 {
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        CLOG_DEBUG("Fallback pwrite to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
-        return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
+    return seg.ret == 0 && seg.offset == expectedOffset && seg.nbytes != 0 &&
+        seg.nbytes <= requestEnd - expectedOffset && seg.addrNum != 0 && seg.addrNum <= CACHE_SPACE_ADDRESS_SIZE &&
+        (seg.mode == INTERCEPTOR_WRITE_MODE_LOCAL || seg.mode == INTERCEPTOR_WRITE_MODE_REMOTE);
+}
+
+static ssize_t CommitDirectSpaceWrite(const std::shared_ptr<OpenFile> &file, int fd, uint64_t nbytes, off_t offset,
+    const char *api, const InterceptorPwritePrepareSpaceIn &prepareReq,
+    const InterceptorPwritePrepareSpaceOut &prepareResp)
+{
+    InterceptorPwriteCommitSpaceIn commitReq{};
+    commitReq.pid = prepareReq.pid;
+    commitReq.fd = fd;
+    commitReq.inode = prepareReq.inode;
+    commitReq.offset = offset;
+    commitReq.nbytes = nbytes;
+    commitReq.startTime = prepareReq.startTime;
+    commitReq.segNum = prepareResp.segNum;
+    commitReq.invalidateRemoteReadIndex = INVALIDATE_REMOTE_READ_INDEX;
+    commitReq.space = prepareResp.segs[0].space;
+    for (uint32_t segIdx = 0; segIdx < prepareResp.segNum; ++segIdx) {
+        commitReq.segs[segIdx] = prepareResp.segs[segIdx];
     }
 
-    if (count <= MAX_SMALL_WRITE_SIZE) {
-        return PwriteSmallInner(fd, buf, count, offset);
+    InterceptorPwriteCommitSpaceOut commitResp{};
+    int32_t ret = InterceptorClientNetService::Instance().SendSync<InterceptorPwriteCommitSpaceIn,
+        InterceptorPwriteCommitSpaceOut>(INVALID_NID, BIO_OP_INTERCEPTOR_WRITE_COMMIT_SPACE, commitReq,
+            commitResp);
+    if (UNLIKELY(ret != BIO_OK || commitResp.ret != 0)) {
+        CLOG_DEBUG("Commit direct write space failed, api:" << api << ", sendRet:" << ret << ", respRet:" <<
+            commitResp.ret << ", fd:" << fd << ", inode:" << file->GetInode() << ", offset:" << offset <<
+            ", nbytes:" << nbytes << ", committedBytes:" << commitResp.committedBytes << ".");
+        if (ret == BIO_OK && commitResp.committedBytes != 0 &&
+            commitResp.committedBytes < static_cast<uint64_t>(SSIZE_MAX)) {
+            return static_cast<ssize_t>(commitResp.committedBytes);
+        }
+        return -1;
     }
-    if (count <= MAX_LARGE_WRITE_SIZE) {
-        return PwriteLargeInner(fd, buf, count, offset);
+    return static_cast<ssize_t>(nbytes);
+}
+
+static void AbortPreparedDirectSpaceWrite(int fd, uint64_t inode, int64_t offset, uint32_t segNum,
+    const InterceptorPwriteSpaceSegment *segs)
+{
+    if (segNum == 0 || segNum > INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS || segs == nullptr) {
+        return;
     }
-    CLOG_DEBUG("Fallback pwrite to native for oversize request, fd:" << fd << ", inode:" << file->GetInode() <<
+
+    InterceptorPwriteCommitSpaceIn commitReq{};
+    commitReq.pid = InterceptorClientNetService::Instance().GetSendPid();
+    commitReq.fd = fd;
+    commitReq.inode = inode;
+    commitReq.offset = offset;
+    commitReq.segNum = segNum;
+    commitReq.abortOnly = 1;
+    for (uint32_t idx = 0; idx < segNum; ++idx) {
+        commitReq.segs[idx] = segs[idx];
+    }
+
+    InterceptorPwriteCommitSpaceOut commitResp{};
+    int32_t ret = InterceptorClientNetService::Instance().SendSync<InterceptorPwriteCommitSpaceIn,
+        InterceptorPwriteCommitSpaceOut>(INVALID_NID, BIO_OP_INTERCEPTOR_WRITE_COMMIT_SPACE, commitReq,
+            commitResp);
+    if (UNLIKELY(ret != BIO_OK || commitResp.ret != 0)) {
+        CLOG_DEBUG("Abort direct write space failed, sendRet:" << ret << ", respRet:" << commitResp.ret <<
+            ", fd:" << fd << ", inode:" << inode << ", offset:" << offset << ", segNum:" << segNum << ".");
+    }
+}
+
+static void AbortPreparedDirectSpaceWrite(int fd, uint64_t inode, int64_t offset,
+    const InterceptorPwritePrepareSpaceOut &prepareResp)
+{
+    AbortPreparedDirectSpaceWrite(fd, inode, offset, prepareResp.segNum, prepareResp.segs);
+}
+
+static ssize_t PwriteNativeFallback(const std::shared_ptr<OpenFile> &file, int fd, const void *buf, size_t count,
+    off_t offset)
+{
+    CLOG_DEBUG("Fallback write to native pwrite64, fd:" << fd << ", inode:" << file->GetInode() <<
         ", offset:" << offset << ", nbytes:" << count << ".");
     return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
 }
 
-ssize_t ProxyOperations::PwriteInner(int fd, BufVec &bufVec, off_t offset)
+ssize_t ProxyOperations::PwriteDirectSpaceInner(const std::shared_ptr<OpenFile> &file, int fd, const void *buf,
+    size_t count, off_t offset)
 {
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        CLOG_DEBUG("Fallback pwritev64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" <<
-            bufVec.size << ".");
-        return CONTEXT.GetOperations()->pwritev64(fd, bufVec.iov, bufVec.count, offset);
+    if (!IsDirectSpaceWriteSupported(offset, count)) {
+        return DIRECT_WRITE_FALLBACK;
     }
 
-    if (bufVec.size <= MAX_SMALL_WRITE_SIZE) {
-        return PwriteSmallInner(fd, bufVec, offset);
+    InterceptorPwritePrepareSpaceIn prepareReq{};
+    InterceptorPwritePrepareSpaceOut prepareResp{};
+    if (!PrepareDirectSpaceWrite(file, fd, count, offset, "direct", prepareReq, prepareResp)) {
+        return -1;
     }
-    if (bufVec.size <= MAX_LARGE_WRITE_SIZE) {
-        return PwriteLargeInner(fd, bufVec, offset);
+
+    uint64_t expectedOffset = static_cast<uint64_t>(offset);
+    uint64_t requestEnd = expectedOffset + static_cast<uint64_t>(count);
+    size_t copied = 0;
+    for (uint32_t segIdx = 0; segIdx < prepareResp.segNum; ++segIdx) {
+        auto &seg = prepareResp.segs[segIdx];
+        if (UNLIKELY(!IsValidDirectSpaceWriteSegment(seg, expectedOffset, requestEnd))) {
+            CLOG_DEBUG("Invalid direct write segment, fd:" << fd << ", inode:" << file->GetInode() <<
+                ", segIdx:" << segIdx << ", segRet:" << seg.ret << ", segOffset:" << seg.offset <<
+                ", expectedOffset:" << expectedOffset << ", segLen:" << seg.nbytes << ", addrNum:" <<
+                seg.addrNum << ".");
+            AbortPreparedDirectSpaceWrite(fd, file->GetInode(), offset, prepareResp);
+            return -1;
+        }
+
+        uint64_t segLeft = seg.nbytes;
+        size_t segCopied = 0;
+        for (uint32_t addrIdx = 0; addrIdx < seg.addrNum && segLeft > 0; ++addrIdx) {
+            uint64_t copyLen = std::min<uint64_t>(seg.addrLen[addrIdx], segLeft);
+            if (copyLen == 0) {
+                continue;
+            }
+            uint8_t *dst = InterceptorClientNetService::Instance().GetBioShmAddressFast(
+                seg.addrOffset[addrIdx], copyLen);
+            if (UNLIKELY(dst == nullptr)) {
+                CLOG_DEBUG("Get direct write bio shm address failed, fd:" << fd << ", inode:" <<
+                    file->GetInode() << ", segIdx:" << segIdx << ", addrIdx:" << addrIdx << ", offset:" <<
+                    seg.addrOffset[addrIdx] << ", len:" << copyLen << ".");
+                AbortPreparedDirectSpaceWrite(fd, file->GetInode(), offset, prepareResp);
+                return -1;
+            }
+            int ret = memcpy_s(dst, static_cast<size_t>(copyLen),
+                static_cast<const uint8_t *>(buf) + copied + segCopied, static_cast<size_t>(copyLen));
+            if (UNLIKELY(ret != 0)) {
+                AbortPreparedDirectSpaceWrite(fd, file->GetInode(), offset, prepareResp);
+                return -1;
+            }
+            segCopied += static_cast<size_t>(copyLen);
+            segLeft -= copyLen;
+        }
+        if (UNLIKELY(segLeft != 0 || segCopied != seg.nbytes)) {
+            CLOG_DEBUG("Direct write segment copied length mismatch, fd:" << fd << ", inode:" <<
+                file->GetInode() << ", segIdx:" << segIdx << ", copied:" << segCopied << ", nbytes:" <<
+                seg.nbytes << ".");
+            AbortPreparedDirectSpaceWrite(fd, file->GetInode(), offset, prepareResp);
+            return -1;
+        }
+        copied += static_cast<size_t>(seg.nbytes);
+        expectedOffset += seg.nbytes;
     }
-    CLOG_DEBUG("Fallback pwritev64 to native for oversize request, fd:" << fd << ", inode:" <<
-        file->GetInode() << ", offset:" << offset << ", nbytes:" << bufVec.size << ".");
-    return CONTEXT.GetOperations()->pwritev64(fd, bufVec.iov, bufVec.count, offset);
+    if (UNLIKELY(copied != count || expectedOffset != requestEnd)) {
+        CLOG_DEBUG("Direct write copied length mismatch, fd:" << fd << ", inode:" << file->GetInode() <<
+            ", copied:" << copied << ", nbytes:" << count << ", expectedOffset:" << expectedOffset <<
+            ", requestEnd:" << requestEnd << ".");
+        AbortPreparedDirectSpaceWrite(fd, file->GetInode(), offset, prepareResp);
+        return -1;
+    }
+
+    return CommitDirectSpaceWrite(file, fd, count, offset, "direct", prepareReq, prepareResp);
 }
 
-ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count, off_t offset)
+static bool PrepareDirectSpaceWriteWindow(const std::shared_ptr<OpenFile> &file, int fd, uint64_t baseOffset,
+    PendingDirectSpaceWriteWindow &window)
 {
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
+    auto shmRet = InterceptorClientNetService::Instance().EnsureBioShmForCurrentProcess();
+    if (UNLIKELY(shmRet != BIO_OK)) {
+        CLOG_DEBUG("Prepare direct-space write window without bio shm, ret:" << shmRet << ", fd:" << fd <<
+            ", inode:" << file->GetInode() << ", baseOffset:" << baseOffset << ".");
+        return false;
     }
 
-    size_t reqLen = sizeof(InterceptorPwriteIn) + count;
-    char *tmpPtr = GetSmallWriteScratch(reqLen);
+    InterceptorPwritePrepareSpaceIn prepareReq{};
+    prepareReq.pid = InterceptorClientNetService::Instance().GetSendPid();
+    prepareReq.fd = fd;
+    prepareReq.inode = file->GetInode();
+    prepareReq.offset = static_cast<int64_t>(baseOffset);
+    prepareReq.nbytes = INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+    prepareReq.startTime = Monotonic::TimeNs();
 
-    InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
-    request->pid = static_cast<uint32_t>(getpid());
-    request->fd = fd;
-    request->inode = file->GetInode();
-    request->offset = offset;
-    request->nbytes = count;
-    request->startTime = Monotonic::TimeNs();
-    auto ret = memcpy_s(request->data, count, (const char *)buf, count);
-    if (UNLIKELY(ret != 0)) {
-        return -1;
+    InterceptorPwritePrepareSpaceOut prepareResp{};
+    int32_t ret = BIO_ERR;
+    auto &service = InterceptorClientNetService::Instance();
+    ret = service.SendSync<InterceptorPwritePrepareSpaceIn, InterceptorPwritePrepareSpaceOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_WRITE_PREPARE_SPACE, prepareReq, prepareResp);
+    if (UNLIKELY(ret != BIO_OK || prepareResp.ret != 0 || prepareResp.segNum != 1 ||
+        prepareResp.segs[0].ret != 0 || prepareResp.segs[0].offset != baseOffset ||
+        prepareResp.segs[0].nbytes != INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE ||
+        prepareResp.segs[0].addrNum == 0 || prepareResp.segs[0].addrNum > CACHE_SPACE_ADDRESS_SIZE ||
+        (prepareResp.segs[0].mode != INTERCEPTOR_WRITE_MODE_LOCAL &&
+            prepareResp.segs[0].mode != INTERCEPTOR_WRITE_MODE_REMOTE))) {
+        CLOG_DEBUG("Prepare direct-space write window failed, sendRet:" << ret << ", respRet:" << prepareResp.ret <<
+            ", fd:" << fd << ", inode:" << file->GetInode() << ", baseOffset:" << baseOffset <<
+            ", segNum:" << prepareResp.segNum << ".");
+        return false;
     }
 
-    InterceptorPwriteOut resp;
-    ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
-    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
-        CLOG_ERROR("Small write failed, sendRet:" << ret << ", respRet:" << resp.ret << ", fd:" << fd <<
-            ", inode:" << request->inode << ", offset:" << offset << ", nbytes:" << count << ".");
-        return -1;
+    window.Reset();
+    window.active = true;
+    window.baseOffset = baseOffset;
+    window.dataLen = 0;
+    window.segNum = prepareResp.segNum;
+    window.segs[0] = prepareResp.segs[0];
+    return true;
+}
+
+static void AbortPreparedNextWriteWindow(const std::shared_ptr<OpenFile> &file, int fd,
+    PreparedDirectSpaceWriteWindow &prepared)
+{
+    if (!prepared.ok || !prepared.window.active) {
+        prepared.window.Reset();
+        return;
+    }
+    AbortPreparedDirectSpaceWrite(fd, file->GetInode(), static_cast<int64_t>(prepared.window.baseOffset),
+        prepared.window.segNum, prepared.window.segs);
+    prepared.window.Reset();
+    prepared.ok = false;
+}
+
+static PreparedDirectSpaceWriteWindow PrepareNextDirectSpaceWriteWindow(const std::shared_ptr<OpenFile> &file,
+    int fd, uint64_t baseOffset)
+{
+    PreparedDirectSpaceWriteWindow prepared{};
+    if (file == nullptr || !file->IsActive()) {
+        return prepared;
+    }
+    prepared.ok = PrepareDirectSpaceWriteWindow(file, fd, baseOffset, prepared.window);
+    if (prepared.ok && !file->IsActive()) {
+        AbortPreparedNextWriteWindow(file, fd, prepared);
+    }
+    return prepared;
+}
+
+static bool GetNextDirectSpaceWritePrepareResultLocked(const std::shared_ptr<OpenFile> &file, int fd,
+    uint64_t &preparedOffset, PreparedDirectSpaceWriteWindow &prepared)
+{
+    if (!file->HasNextDirectSpaceWritePrepare()) {
+        return false;
+    }
+    std::future<PreparedDirectSpaceWriteWindow> future = file->TakeNextDirectSpaceWritePrepare(preparedOffset);
+    if (!future.valid()) {
+        return false;
+    }
+    try {
+        prepared = future.get();
+    } catch (const std::exception &e) {
+        CLOG_DEBUG("Prepare next direct-space write window failed with exception, fd:" << fd << ", inode:" <<
+            file->GetInode() << ", baseOffset:" << preparedOffset << ", error:" << e.what() << ".");
+        return false;
+    } catch (...) {
+        CLOG_DEBUG("Prepare next direct-space write window failed with unknown exception, fd:" << fd <<
+            ", inode:" << file->GetInode() << ", baseOffset:" << preparedOffset << ".");
+        return false;
+    }
+    return true;
+}
+
+static void ClearNextDirectSpaceWritePrepareLocked(const std::shared_ptr<OpenFile> &file, int fd)
+{
+    uint64_t preparedOffset = 0;
+    PreparedDirectSpaceWriteWindow prepared{};
+    if (GetNextDirectSpaceWritePrepareResultLocked(file, fd, preparedOffset, prepared)) {
+        AbortPreparedNextWriteWindow(file, fd, prepared);
+    }
+}
+
+static bool ConsumeNextDirectSpaceWritePrepareLocked(const std::shared_ptr<OpenFile> &file, int fd,
+    uint64_t baseOffset, PendingDirectSpaceWriteWindow &window)
+{
+    uint64_t preparedOffset = 0;
+    PreparedDirectSpaceWriteWindow prepared{};
+    if (!GetNextDirectSpaceWritePrepareResultLocked(file, fd, preparedOffset, prepared)) {
+        return false;
+    }
+    if (!prepared.ok || !prepared.window.active || preparedOffset != baseOffset ||
+        prepared.window.baseOffset != baseOffset) {
+        AbortPreparedNextWriteWindow(file, fd, prepared);
+        return false;
+    }
+    window = prepared.window;
+    prepared.window.Reset();
+    prepared.ok = false;
+    return true;
+}
+
+static void MaybeStartNextDirectSpaceWritePrepareLocked(const std::shared_ptr<OpenFile> &file, int fd,
+    const PendingDirectSpaceWriteWindow &window)
+{
+    if (!window.active || window.dataLen < DIRECT_WRITE_PREPARE_AHEAD_TRIGGER_BYTES ||
+        file->HasNextDirectSpaceWritePrepare() ||
+        window.baseOffset > UINT64_MAX - INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        return;
+    }
+    uint64_t nextOffset = window.baseOffset + INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+    try {
+        auto future = std::async(std::launch::async, PrepareNextDirectSpaceWriteWindow, file, fd, nextOffset);
+        file->StartNextDirectSpaceWritePrepare(nextOffset, std::move(future));
+    } catch (const std::exception &e) {
+        CLOG_DEBUG("Start next direct-space write prepare failed, fd:" << fd << ", inode:" << file->GetInode() <<
+            ", baseOffset:" << nextOffset << ", error:" << e.what() << ".");
+    } catch (...) {
+        CLOG_DEBUG("Start next direct-space write prepare failed with unknown exception, fd:" << fd <<
+            ", inode:" << file->GetInode() << ", baseOffset:" << nextOffset << ".");
+    }
+}
+
+static bool CopyToDirectSpaceSegment(const InterceptorPwriteSpaceSegment &seg, uint64_t segOffset, const void *buf,
+    size_t count, uint32_t &failedAddrIdx, uint64_t &failedAddrOffset, uint64_t &failedLen)
+{
+    failedAddrIdx = UINT32_MAX;
+    failedAddrOffset = 0;
+    failedLen = 0;
+    if (UNLIKELY(segOffset > seg.nbytes || count > seg.nbytes - segOffset)) {
+        return false;
     }
 
-    CLOG_INFO("Intercept small write success, fd:" << fd << ", inode:" << request->inode << ", offset:" <<
-        offset << ", nbytes:" << count << ", ret:" << count << ".");
+    const auto *src = static_cast<const uint8_t *>(buf);
+    uint64_t skip = segOffset;
+    size_t copied = 0;
+    for (uint32_t addrIdx = 0; addrIdx < seg.addrNum && copied < count; ++addrIdx) {
+        uint64_t addrLen = seg.addrLen[addrIdx];
+        if (skip >= addrLen) {
+            skip -= addrLen;
+            continue;
+        }
+        uint64_t copyLen = std::min<uint64_t>(addrLen - skip, static_cast<uint64_t>(count - copied));
+        uint8_t *dst = InterceptorClientNetService::Instance().GetBioShmAddressFast(
+            seg.addrOffset[addrIdx] + skip, copyLen);
+        if (UNLIKELY(dst == nullptr)) {
+            failedAddrIdx = addrIdx;
+            failedAddrOffset = seg.addrOffset[addrIdx] + skip;
+            failedLen = copyLen;
+            return false;
+        }
+        int ret = memcpy_s(dst, static_cast<size_t>(copyLen), src + copied, static_cast<size_t>(copyLen));
+        if (UNLIKELY(ret != 0)) {
+            return false;
+        }
+        copied += static_cast<size_t>(copyLen);
+        skip = 0;
+    }
+    return copied == count;
+}
+
+static bool SendDirectSpaceWriteCommit(uint64_t inode, int fd, InterceptorPwriteCommitSpaceIn &commitReq,
+    uint64_t baseOffset, uint64_t dataLen)
+{
+    InterceptorPwriteCommitSpaceOut commitResp{};
+    int32_t ret = BIO_ERR;
+    ret = InterceptorClientNetService::Instance().SendSync<InterceptorPwriteCommitSpaceIn,
+        InterceptorPwriteCommitSpaceOut>(INVALID_NID, BIO_OP_INTERCEPTOR_WRITE_COMMIT_SPACE, commitReq,
+            commitResp);
+    bool ok = ret == BIO_OK && commitResp.ret == 0 && commitResp.committedBytes == dataLen;
+    if (UNLIKELY(!ok)) {
+        CLOG_ERROR("Commit direct-space write window failed, sendRet:" << ret << ", respRet:" << commitResp.ret <<
+            ", fd:" << fd << ", inode:" << inode << ", baseOffset:" << baseOffset << ", dataLen:" << dataLen <<
+            ", committedBytes:" << commitResp.committedBytes << ".");
+    } else {
+        CLOG_DEBUG("Commit direct-space write window success, fd:" << fd << ", inode:" << inode <<
+            ", baseOffset:" << baseOffset << ", dataLen:" << dataLen << ".");
+    }
+    return ok;
+}
+
+static InterceptorPwriteCommitSpaceIn BuildDirectSpaceWriteCommitReq(const std::shared_ptr<OpenFile> &file, int fd,
+    const PendingDirectSpaceWriteWindow &window)
+{
+    InterceptorPwriteCommitSpaceIn commitReq{};
+    commitReq.pid = InterceptorClientNetService::Instance().GetSendPid();
+    commitReq.fd = fd;
+    commitReq.inode = file->GetInode();
+    commitReq.offset = static_cast<int64_t>(window.baseOffset);
+    commitReq.nbytes = window.dataLen;
+    commitReq.startTime = Monotonic::TimeNs();
+    commitReq.segNum = window.segNum;
+    commitReq.invalidateRemoteReadIndex = INVALIDATE_REMOTE_READ_INDEX;
+    commitReq.space = window.segs[0].space;
+    for (uint32_t idx = 0; idx < window.segNum; ++idx) {
+        commitReq.segs[idx] = window.segs[idx];
+    }
+    commitReq.segs[0].nbytes = window.dataLen;
+    return commitReq;
+}
+
+static void AbortDirectSpaceWriteWindow(const std::shared_ptr<OpenFile> &file, int fd,
+    PendingDirectSpaceWriteWindow &window)
+{
+    if (!window.active) {
+        return;
+    }
+    AbortPreparedDirectSpaceWrite(fd, file->GetInode(), static_cast<int64_t>(window.baseOffset), window.segNum,
+        window.segs);
+    window.Reset();
+}
+
+static bool CommitDirectSpaceWriteWindowLocked(const std::shared_ptr<OpenFile> &file, int fd,
+    PendingDirectSpaceWriteWindow &window)
+{
+    if (!window.active) {
+        return true;
+    }
+    if (window.dataLen == 0) {
+        AbortDirectSpaceWriteWindow(file, fd, window);
+        return true;
+    }
+
+    InterceptorPwriteCommitSpaceIn commitReq = BuildDirectSpaceWriteCommitReq(file, fd, window);
+    uint64_t baseOffset = window.baseOffset;
+    uint64_t dataLen = window.dataLen;
+    bool ok = SendDirectSpaceWriteCommit(file->GetInode(), fd, commitReq, baseOffset, dataLen);
+    window.Reset();
+    return ok;
+}
+
+bool ProxyOperations::FlushPendingWriteWindow(const std::shared_ptr<OpenFile> &file, int fd)
+{
+    if (file == nullptr) {
+        return true;
+    }
+    std::lock_guard<std::mutex> lock(file->PendingWriteMutex());
+    auto &directWindow = file->DirectSpaceWriteWindow();
+    bool ok = CommitDirectSpaceWriteWindowLocked(file, fd, directWindow);
+    ClearNextDirectSpaceWritePrepareLocked(file, fd);
+    return ok;
+}
+
+ssize_t ProxyOperations::PwriteAggregatedDirectSpaceInner(const std::shared_ptr<OpenFile> &file, int fd,
+    const void *buf, size_t count, off_t offset)
+{
+    if (!DirectWriteAggregateEnabled()) {
+        return AGGREGATE_WRITE_FALLBACK;
+    }
+    if (offset < 0 || count == 0 || count > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        return AGGREGATE_WRITE_FALLBACK;
+    }
+
+    std::lock_guard<std::mutex> lock(file->PendingWriteMutex());
+
+    auto &window = file->DirectSpaceWriteWindow();
+    uint64_t writeOffset = static_cast<uint64_t>(offset);
+    uint64_t baseOffset = WriteAggregateWindowBase(writeOffset);
+    if (window.active) {
+        uint64_t expected = window.baseOffset + window.dataLen;
+        if (writeOffset != expected || baseOffset != window.baseOffset ||
+            count > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE - window.dataLen) {
+            if (UNLIKELY(!CommitDirectSpaceWriteWindowLocked(file, fd, window))) {
+                ClearNextDirectSpaceWritePrepareLocked(file, fd);
+                return -1;
+            }
+            ClearNextDirectSpaceWritePrepareLocked(file, fd);
+            return AGGREGATE_WRITE_FALLBACK;
+        }
+    } else {
+        if (!IsWriteAggregateWindowStart(writeOffset)) {
+            ClearNextDirectSpaceWritePrepareLocked(file, fd);
+            return AGGREGATE_WRITE_FALLBACK;
+        }
+        if (!ConsumeNextDirectSpaceWritePrepareLocked(file, fd, baseOffset, window) &&
+            !PrepareDirectSpaceWriteWindow(file, fd, baseOffset, window)) {
+            return AGGREGATE_WRITE_FALLBACK;
+        }
+    }
+
+    uint32_t failedAddrIdx = UINT32_MAX;
+    uint64_t failedAddrOffset = 0;
+    uint64_t failedLen = 0;
+    if (UNLIKELY(!CopyToDirectSpaceSegment(window.segs[0], window.dataLen, buf, count,
+        failedAddrIdx, failedAddrOffset, failedLen))) {
+        CLOG_DEBUG("Copy direct-space write window failed, fd:" << fd << ", inode:" <<
+            file->GetInode() << ", baseOffset:" << window.baseOffset << ", dataLen:" << window.dataLen <<
+            ", count:" << count << ", addrIdx:" << failedAddrIdx << ", addrOffset:" << failedAddrOffset <<
+            ", len:" << failedLen << ".");
+        AbortPreparedDirectSpaceWrite(fd, file->GetInode(), static_cast<int64_t>(window.baseOffset), window.segNum,
+            window.segs);
+        window.Reset();
+        return -1;
+    }
+    window.dataLen += static_cast<uint64_t>(count);
+    if (window.dataLen == INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+        if (UNLIKELY(!CommitDirectSpaceWriteWindowLocked(file, fd, window))) {
+            ClearNextDirectSpaceWritePrepareLocked(file, fd);
+            return -1;
+        }
+    } else {
+        MaybeStartNextDirectSpaceWritePrepareLocked(file, fd, window);
+    }
     return static_cast<ssize_t>(count);
 }
 
-ssize_t ProxyOperations::PwriteSmallInner(int fd, BufVec &bufVec, off_t offset)
+ssize_t ProxyOperations::PwriteShmInner(const std::shared_ptr<OpenFile> &file, int fd, const void *buf,
+    size_t count, off_t offset, bool *intercepted)
 {
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
+    if (intercepted != nullptr) {
+        *intercepted = false;
+    }
+    ssize_t directAggregateRet = PwriteAggregatedDirectSpaceInner(file, fd, buf, count, offset);
+    if (directAggregateRet >= 0 || directAggregateRet == -1) {
+        if (directAggregateRet >= 0) {
+            LogWritePathSuccess("aggregate", fd, file->GetInode(), offset, count, directAggregateRet);
+            if (intercepted != nullptr) {
+                *intercepted = true;
+            }
+        }
+        return directAggregateRet;
     }
 
-    size_t reqLen = sizeof(InterceptorPwriteIn) + bufVec.size;
-    char *tmpPtr = GetSmallWriteScratch(reqLen);
-
-    InterceptorPwriteIn *request = static_cast<InterceptorPwriteIn *>(static_cast<void *>(tmpPtr));
-    request->pid = static_cast<uint32_t>(getpid());
-    request->fd = fd;
-    request->inode = file->GetInode();
-    request->offset = offset;
-    request->nbytes = bufVec.size;
-    request->startTime = Monotonic::TimeNs();
-    auto ret = bufVec.Read(reinterpret_cast<uint8_t *>(request->data), bufVec.size);
-    if (UNLIKELY(ret < 0 || static_cast<size_t>(ret) != bufVec.size)) {
-        return -1;
+    ssize_t ret = PwriteDirectSpaceInner(file, fd, buf, count, offset);
+    if (ret >= 0) {
+        LogWritePathSuccess("direct", fd, file->GetInode(), offset, count, ret);
+        if (intercepted != nullptr) {
+            *intercepted = true;
+        }
+        return ret;
+    }
+    if (ret == DIRECT_WRITE_FALLBACK) {
+        ret = PwriteNativeFallback(file, fd, buf, count, offset);
+        return ret;
     }
 
-    InterceptorPwriteOut resp;
-    ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
-    if (UNLIKELY(ret != 0 || resp.ret != 0)) {
-        CLOG_ERROR("Small write vec failed, sendRet:" << ret << ", respRet:" << resp.ret << ", fd:" << fd <<
-            ", inode:" << request->inode << ", offset:" << offset << ", nbytes:" << bufVec.size << ".");
-        return -1;
-    }
-
-    CLOG_INFO("Intercept small write vec success, fd:" << fd << ", inode:" << request->inode << ", offset:" <<
-        offset << ", nbytes:" << bufVec.size << ", ret:" << bufVec.size << ".");
-    return static_cast<ssize_t>(bufVec.size);
-}
-
-ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    uintptr_t shmAddr = 0;
-    uint64_t mrOffset = 0;
-    bool fromCache = false;
-    if (UNLIKELY(!AcquireLargeWriteBlock(shmAddr, mrOffset, fromCache))) {
-        return -1;
-    }
-
-    auto ret = memcpy_s(reinterpret_cast<uint8_t *>(shmAddr), MAX_LARGE_WRITE_SIZE, buf, count);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("Copy user buffer to large write shm failed, ret:" << ret << ", fd:" << fd << ", offset:" <<
-            offset << ", nbytes:" << count << ", mrOffset:" << mrOffset << ".");
-        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
-        return -1;
-    }
-
-    InterceptorLargePwriteIn writeReq;
-    writeReq.pid = InterceptorClientNetService::Instance().GetSendPid();
-    writeReq.fd = fd;
-    writeReq.inode = file->GetInode();
-    writeReq.offset = offset;
-    writeReq.nbytes = count;
-    writeReq.mrOffset = mrOffset;
-    writeReq.startTime = Monotonic::TimeNs();
-
-    InterceptorPwriteOut writeResp;
-    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("Send large write request failed, ret:" << ret << ", fd:" << fd << ", inode:" <<
-            writeReq.inode << ", offset:" << writeReq.offset << ", nbytes:" << writeReq.nbytes <<
-            ", mrOffset:" << writeReq.mrOffset << ".");
-        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
-        return -1;
-    }
-    
-    if (UNLIKELY(writeResp.ret != 0)) {
-        CLOG_ERROR("Large write failed, respRet:" << writeResp.ret << ", fd:" << fd << ", inode:" <<
-            writeReq.inode << ", offset:" << writeReq.offset << ", nbytes:" << writeReq.nbytes <<
-            ", mrOffset:" << writeReq.mrOffset << ".");
-        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
-        return -1;
-    }
-
-    CacheLargeWriteBlock(shmAddr, mrOffset);
-    CLOG_INFO("Intercept large write success, fd:" << fd << ", inode:" << writeReq.inode << ", offset:" <<
-        writeReq.offset << ", nbytes:" << writeReq.nbytes << ", ret:" << count << ", mrOffset:" <<
-        writeReq.mrOffset << ".");
-    return static_cast<ssize_t>(count);
-}
-
-ssize_t ProxyOperations::PwriteLargeInner(int fd, BufVec &bufVec, off_t offset)
-{
-    auto file = CONTEXT.files.At(fd);
-    if (UNLIKELY(file == nullptr)) {
-        return -1;
-    }
-
-    uintptr_t shmAddr = 0;
-    uint64_t mrOffset = 0;
-    bool fromCache = false;
-    if (UNLIKELY(!AcquireLargeWriteBlock(shmAddr, mrOffset, fromCache))) {
-        return -1;
-    }
-
-    auto ret = bufVec.Read(reinterpret_cast<uint8_t *>(shmAddr), bufVec.size);
-    if (UNLIKELY(ret < 0 || static_cast<size_t>(ret) != bufVec.size)) {
-        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
-        return -1;
-    }
-
-    InterceptorLargePwriteIn writeReq;
-    writeReq.pid = InterceptorClientNetService::Instance().GetSendPid();
-    writeReq.fd = fd;
-    writeReq.inode = file->GetInode();
-    writeReq.offset = offset;
-    writeReq.nbytes = bufVec.size;
-    writeReq.mrOffset = mrOffset;
-    writeReq.startTime = Monotonic::TimeNs();
-
-    InterceptorPwriteOut writeResp;
-    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
-        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
-    if (UNLIKELY(ret != 0)) {
-        CLOG_ERROR("Send large write vec request failed, ret:" << ret << ", fd:" << fd << ", inode:" <<
-            writeReq.inode << ", offset:" << writeReq.offset << ", nbytes:" << writeReq.nbytes <<
-            ", mrOffset:" << writeReq.mrOffset << ".");
-        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
-        return -1;
-    }
-
-    if (UNLIKELY(writeResp.ret != 0)) {
-        CLOG_ERROR("Large write vec failed, respRet:" << writeResp.ret << ", fd:" << fd << ", inode:" <<
-            writeReq.inode << ", offset:" << writeReq.offset << ", nbytes:" << writeReq.nbytes <<
-            ", mrOffset:" << writeReq.mrOffset << ".");
-        ReleaseLargeWriteBlock(shmAddr, mrOffset, fromCache);
-        return -1;
-    }
-
-    CacheLargeWriteBlock(shmAddr, mrOffset);
-    CLOG_INFO("Intercept large write vec success, fd:" << fd << ", inode:" << writeReq.inode << ", offset:" <<
-        writeReq.offset << ", nbytes:" << writeReq.nbytes << ", ret:" << bufVec.size << ", mrOffset:" <<
-        writeReq.mrOffset << ".");
-    return static_cast<ssize_t>(bufVec.size);
+    CLOG_ERROR("Direct-space write failed without fallback, fd:" << fd << ", inode:" <<
+        file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ".");
+    return -1;
 }
 
 ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
 {
     CLOG_DEBUG("Write fd:" << fd << ", count:" << nbytes << ".");
-    auto file = CONTEXT.files.At(fd);
+    const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
         CLOG_DEBUG("Fallback write to native, fd:" << fd << ", nbytes:" << nbytes << ".");
         return CONTEXT.GetOperations()->write(fd, buf, nbytes);
     }
-
-    off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
-    if (UNLIKELY(offset == -1)) {
-        errno = EIO;
-        return -1;
+    if (file->IsAppend()) {
+        if (UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
+            errno = EIO;
+            return -1;
+        }
+        DropReadCaches(file);
+        ssize_t ret = CONTEXT.GetOperations()->write(fd, buf, nbytes);
+        if (ret >= 0) {
+            off64_t cur = CONTEXT.GetOperations()->lseek64(fd, 0, SEEK_CUR);
+            if (cur >= 0) {
+                file->SetOffset(cur);
+            }
+        }
+        return ret;
     }
 
-    auto ret = PwriteInner(fd, buf, nbytes, offset);
+    off_t offset = file->ReserveOffset(nbytes);
+
+    auto ret = PwriteInner("write", file, fd, buf, nbytes, offset);
     if (UNLIKELY(ret < 0)) {
+        file->CompleteReservedOffset(nbytes, 0);
         errno = EIO;
         return -1;
     }
 
-    offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
+    file->CompleteReservedOffset(nbytes, ret);
     return ret;
 }
 
 ssize_t ProxyOperations::Pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
     CLOG_DEBUG("Pwrite fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
+    const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
         CLOG_DEBUG("Fallback pwrite to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count << ".");
         return CONTEXT.GetOperations()->pwrite(fd, buf, count, offset);
     }
 
-    auto ret = PwriteInner(fd, buf, count, offset);
+    auto ret = PwriteInner("pwrite", file, fd, buf, count, offset);
     if (UNLIKELY(ret < 0)) {
         errno = EIO;
         return -1;
@@ -746,90 +1054,14 @@ ssize_t ProxyOperations::Pwrite(int fd, const void *buf, size_t count, off_t off
 ssize_t ProxyOperations::Pwrite64(int fd, const void *buf, size_t count, off64_t offset)
 {
     CLOG_DEBUG("Pwrite64 fd:" << fd << ", offset:" << offset << ", length:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
+    const auto &file = CONTEXT.files.AtCached(fd);
     if (file == nullptr) {
         CLOG_DEBUG("Fallback pwrite64 to native, fd:" << fd << ", offset:" << offset << ", nbytes:" << count <<
             ".");
         return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
     }
 
-    auto ret = PwriteInner(fd, buf, count, offset);
-    if (UNLIKELY(ret < 0)) {
-        errno = EIO;
-        return -1;
-    }
-    return ret;
-}
-
-ssize_t ProxyOperations::Writev(int fd, const struct iovec *vector, int count)
-{
-    CLOG_DEBUG("Writev fd:" << fd << ", count:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
-    if (file == nullptr) {
-        CLOG_DEBUG("Fallback writev to native, fd:" << fd << ", iovcnt:" << count << ".");
-        return CONTEXT.GetOperations()->writev(fd, vector, count);
-    }
-
-    off_t offset = CONTEXT.GetOperations()->lseek(fd, 0, SEEK_CUR);
-    if (UNLIKELY(offset == -1)) {
-        errno = EIO;
-        return -1;
-    }
-
-    BufVec bufVec(vector, count);
-    if (UNLIKELY(bufVec.size == 0)) {
-        return -1;
-    }
-
-    auto ret = PwriteInner(fd, bufVec, offset);
-    if (UNLIKELY(ret < 0)) {
-        errno = EIO;
-        return -1;
-    }
-
-    offset = CONTEXT.GetOperations()->lseek(fd, offset + ret, SEEK_SET);
-    return ret;
-}
-
-ssize_t ProxyOperations::Pwritev(int fd, const struct iovec *vector, int count, off_t offset)
-{
-    CLOG_DEBUG("Pwritev fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
-    if (file == nullptr) {
-        CLOG_DEBUG("Fallback pwritev to native, fd:" << fd << ", offset:" << offset << ", iovcnt:" << count <<
-            ".");
-        return CONTEXT.GetOperations()->pwritev(fd, vector, count, offset);
-    }
-
-    BufVec bufVec(vector, count);
-    if (UNLIKELY(bufVec.size == 0)) {
-        return -1;
-    }
-
-    auto ret = PwriteInner(fd, bufVec, offset);
-    if (UNLIKELY(ret < 0)) {
-        errno = EIO;
-        return -1;
-    }
-    return ret;
-}
-
-ssize_t ProxyOperations::Pwritev64(int fd, const struct iovec *vector, int count, off64_t offset)
-{
-    CLOG_DEBUG("Pwritev64 fd:" << fd << ", offset:" << offset << ", count:" << count << ".");
-    auto file = CONTEXT.files.At(fd);
-    if (file == nullptr) {
-        CLOG_DEBUG("Fallback pwritev64 to native, fd:" << fd << ", offset:" << offset << ", iovcnt:" << count <<
-            ".");
-        return CONTEXT.GetOperations()->pwritev64(fd, vector, count, offset);
-    }
-
-    BufVec bufVec(vector, count);
-    if (UNLIKELY(bufVec.size == 0)) {
-        return -1;
-    }
-
-    auto ret = PwriteInner(fd, bufVec, offset);
+    auto ret = PwriteInner("pwrite64", file, fd, buf, count, offset);
     if (UNLIKELY(ret < 0)) {
         errno = EIO;
         return -1;
