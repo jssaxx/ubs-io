@@ -2187,7 +2187,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
             return BIO_ALLOC_FAIL;
         }
-        CLIENT_LOG_ERROR("put local start copy data to trans mem, src:" << std::hex << std::showbase << param.value 
+        CLIENT_LOG_ERROR("put local start copy data to trans mem, src:" << std::hex << std::showbase << (uintptr_t)(param.value) 
                  << ", dst:" << transMem 
                  << ", len:" << std::dec << param.length);
         ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
@@ -2207,7 +2207,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             CLIENT_LOG_ERROR("Alloc memory failed, ret:" << ret << ", key:" << param.key << ".");
             return BIO_ALLOC_FAIL;
         }
-        CLIENT_LOG_ERROR("put remote start copy data to trans mem, src:" << std::hex << std::showbase << param.value 
+        CLIENT_LOG_ERROR("put remote start copy data to trans mem, src:" << std::hex << std::showbase << (uintptr_t)(param.value) 
                  << ", dst:" << transMem 
                  << ", len:" << std::dec << param.length);
         ret = memcpy_s(reinterpret_cast<char *>(transMem), mDataMsgMemBlockSize, param.value, param.length);
