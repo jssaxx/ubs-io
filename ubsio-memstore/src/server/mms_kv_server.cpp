@@ -681,7 +681,10 @@ BResult MmsKvServer::HandlePutRemoteMulti(ServiceContext &ctx)
         return MMS_OK;
     }
 
+    MMS_TRACE_START(SERVER_TRACE_PUT_LOCAL);
     auto ret = PutLocal(ctx.MessageData(), ctx.MessageDataLen());
+    MMS_TRACE_END(SERVER_TRACE_PUT_LOCAL, ret);
+
     mMulticastEngine->Reply(ctx, ret, nullptr, 0);
     return MMS_OK;
 }

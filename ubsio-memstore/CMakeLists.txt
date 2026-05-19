@@ -85,7 +85,7 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
 endif()
 
 if (${DEBUG_UT} MATCHES "ON")
-    set(PROJECT_PATH_PREFIX "..")
+    set(PROJECT_PATH_PREFIX "../conf")
 	add_compile_definitions(DEBUG_UT)
     add_compile_options(-ftest-coverage -fprofile-arcs)
     add_compile_options(-fno-inline)

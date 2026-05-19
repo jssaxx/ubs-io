@@ -13,6 +13,7 @@
 #include <thread>
 #include <chrono>
 #include "mms_server.h"
+#include "mms_trace.h"
 #include "net_multicast_engine.h"
 
 namespace ock {
@@ -522,9 +523,11 @@ void NetMulticastEngine::MulticastAsyncCallBuff(void *req, uint32_t reqLen, Call
     opInfo.timeout = mTimeout;
     ock::hcom::MultiRequest multiReq(req, reqLen, mMemList.mr[MMAP_AREA_IOCTX_INDEX]->GetLKey());
 
+    uint64_t timeStart = Monotonic::TimeNs();
     auto *netCallback = ock::hcom::NewMultiCastCallback(
-        [this, callback](PublisherContext  &context) {
+        [this, callback, timeStart](PublisherContext  &context) {
             const std::vector<ock::hcom::SubscriberRspInfo> &infos = context.GetSubscriberRspInfo();
+            MMS_TRACE_ASYNC_END(NET_HCOM_MULTICAST_SEND, MMS_OK, timeStart);
             for (auto &item : infos) {
                 if (item.GetStatus() != ock::hcom::SubscriberRspStatus::SUCCESS) {
                     std::string remoteIp = item.GetSubInfos()->GetIp();
@@ -552,6 +555,7 @@ void NetMulticastEngine::MulticastAsyncCallBuff(void *req, uint32_t reqLen, Call
         },
         std::placeholders::_1);
 
+    MMS_TRACE_ASYNC_BEGIN(NET_HCOM_MULTICAST_SEND);
     auto ret = mPublisher->Call(opInfo, multiReq, netCallback);
     if (ret != MMS_OK) {
         NET_LOG_ERROR("Multicast async call failed, ret:" << ret << ", error:" << UBSHcomNetErrStr(ret) << ".");
