@@ -2181,6 +2181,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     uintptr_t address = 0;
     uintptr_t transMem = 0;
     TransData transData;
+    CLIENT_LOG_ERROR("PrepareFromClient start");
     if (ptEntry.copys[0].nodeId == mLocalNid.VNodeId() || !mEnableTrance) {
         BResult ret = mDataMsgMemPool->AllocOne(address);
         if (UNLIKELY(ret != BIO_OK)) {
