@@ -32,12 +32,19 @@ const uint32_t CLUSTER_NODE_SIZE = 32;
 const uint32_t PT_COPY_MAX_SIZE = 3;
 const uint32_t PT_SIZE = 64;
 const uint32_t SLICE_ADDR_MAX_SIZE = 16;
-const uint32_t SLICE_ADDR_SIZE = 4;
+const uint32_t SLICE_ADDR_SIZE = 64;
 const uint32_t MAX_EVICT_CONSULT_SIZE = 50;
 const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
 const uint32_t FILE_PATH_MAX_LEN = 256;
-const uint32_t MAX_SMALL_WRITE_SIZE = 4096;
-const uint32_t MAX_LARGE_WRITE_SIZE = 4 * 1024 * 1024;
+const uint32_t MAX_INTERCEPTOR_IO_SIZE = 4 * 1024 * 1024;
+const uint64_t INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE = MAX_INTERCEPTOR_IO_SIZE;
+const uint32_t INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS = 2;
+const uint64_t INTERCEPTOR_JUICEFS_CHUNK_SIZE = 64ULL * 1024ULL * 1024ULL;
+const uint32_t INTERCEPTOR_SHM_FD_MAX_COUNT = 2;
+const uint32_t INTERCEPTOR_SHM_FD_WITH_READ_INDEX_COUNT = 2;
+const uint32_t INTERCEPTOR_SHM_FD_WITHOUT_READ_INDEX_COUNT = 1;
+const uint32_t INTERCEPTOR_WRITE_MODE_LOCAL = 0;  // Prepared space is owned by local WCache after commit.
+const uint32_t INTERCEPTOR_WRITE_MODE_REMOTE = 1; // Prepared space is only a source buffer and can be released.
 
 typedef struct {
     uint16_t magic;
@@ -69,8 +76,10 @@ typedef struct {
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
     uint32_t wcacheMemEvictLevel;
-    uint64_t sdkPoolSize;
     uint64_t segment;
+    int32_t readIndexFd;
+    uint32_t readIndexEntryCount;
+    uint64_t readIndexLength;
 } ShmInitResponse;
 
 /* Query cache resource quota */
@@ -253,6 +262,7 @@ typedef struct {
     uint64_t mrSize;
     uint64_t mrKey;
     bool memFromServer;
+    bool sourceCopyRequired;
     bool isDegrade;
     uint32_t ioStrategy;
     uint64_t sliceLen;
@@ -265,6 +275,11 @@ typedef struct {
 typedef struct {
     uint32_t ioStrategy;
 } PutResponse;
+
+constexpr uint8_t GET_REQUEST_MR_NORMAL = 0;
+constexpr uint8_t GET_REQUEST_MR_REMOTE = 1;
+constexpr uint8_t GET_REQUEST_MR_CACHE_SPACE = 2;
+constexpr uint8_t GET_REQUEST_MR_TO_SHM_SPACE = 3;
 
 /* Get */
 typedef struct {
@@ -417,15 +432,30 @@ typedef struct {
 } CheckRemoteUpdateReadyResponse;
 
 typedef struct {
-    RequestComm comm;
-} InterceptorCreateDataMsgMemPoolRequest;
+    uint32_t pid;
+    int32_t fd;
+    uint64_t inode;
+    uint64_t nbytes;
+    int64_t offset;
+    uint64_t startTime;
+} InterceptorPwritePrepareSpaceIn;
 
 typedef struct {
-    int32_t memFd;
+    int32_t ret;
+    uint32_t mode;
+    uint32_t addrNum;
     uint64_t offset;
-    uint64_t poolSize;
-    uint64_t blockSize;
-} InterceptorCreateDataMsgMemPoolResponse;
+    uint64_t nbytes;
+    CacheSpaceDesc space;
+    uint64_t addrOffset[CACHE_SPACE_ADDRESS_SIZE];
+    uint64_t addrLen[CACHE_SPACE_ADDRESS_SIZE];
+} InterceptorPwriteSpaceSegment;
+
+typedef struct {
+    int32_t ret;
+    uint32_t segNum;
+    InterceptorPwriteSpaceSegment segs[INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS];
+} InterceptorPwritePrepareSpaceOut;
 
 typedef struct {
     uint32_t pid;
@@ -434,52 +464,56 @@ typedef struct {
     uint64_t nbytes;
     int64_t offset;
     uint64_t startTime;
+    uint32_t segNum;
+    uint32_t abortOnly;
+    InterceptorPwriteSpaceSegment segs[INTERCEPTOR_DIRECT_SPACE_MAX_SEGMENTS];
+} InterceptorPwriteCommitSpaceIn;
+
+typedef struct {
+    int32_t ret;
+    uint64_t committedBytes;
+} InterceptorPwriteCommitSpaceOut;
+
+typedef struct {
+    uint64_t inode;
+    uint64_t offset;
+    uint64_t length;
+    uint32_t broadcastRemote;
+} InterceptorReadIndexInvalidateIn;
+
+typedef struct {
+    uint32_t pid;
+    uint64_t addrOffset;
+    uint64_t length;
+} InterceptorReadBufferReleaseIn;
+
+constexpr uint32_t INTERCEPTOR_PREAD_FLAG_BIO_FALLBACK = 1U << 3U;
+constexpr uint32_t INTERCEPTOR_PREAD_FLAG_PREFETCH = 1U << 4U;
+constexpr uint32_t INTERCEPTOR_PREAD_DATA_BIO_SHM = 0;
+constexpr uint32_t INTERCEPTOR_PREAD_DATA_READ_SHM = 2;
+
+typedef struct {
+    uint32_t pid;
+    int32_t fd;
+    uint64_t inode;
+    uint64_t nbytes;
+    int64_t offset;
+    uint64_t startTime;
+    uint32_t flags;
 } InterceptorPreadIn;
 
 typedef struct {
     int32_t ret;
     uint64_t dataLen;
-    char data[];
+    uint32_t addrNum;
+    uint32_t dataSource;
+    uint64_t addrOffset[SLICE_ADDR_SIZE];
+    uint64_t addrLen[SLICE_ADDR_SIZE];
+    uint64_t windowOffset;
+    uint64_t windowDataLen;
+    uint64_t windowAddrOffset;
+    uint64_t windowAddrLen;
 } InterceptorPreadOut;
-
-typedef struct {
-    uint32_t pid;
-    int32_t fd;
-    uint64_t inode;
-    uint64_t nbytes;
-    int64_t offset;
-    uint64_t startTime;
-    char data[];
-} InterceptorPwriteIn;
-
-typedef struct {
-    int32_t ret;
-} InterceptorPwriteOut;
-
-typedef struct {
-    uint32_t pid;
-    int32_t fd;
-    uint64_t inode;
-    uint64_t nbytes;
-    int64_t offset;
-    uint64_t startTime;
-    uint64_t mrOffset;
-} InterceptorLargePwriteIn;
-
-typedef struct {
-    uint32_t pid;
-    int32_t fd;
-    uint64_t inode;
-    uint64_t nbytes;
-    int64_t offset;
-    uint64_t startTime;
-    uint64_t mrOffset;
-} InterceptorLargePreadIn;
-
-typedef struct {
-    int32_t ret;
-    uint64_t dataLen;
-} InterceptorLargePreadOut;
 
 typedef struct {
     RequestComm comm;
@@ -527,6 +561,8 @@ typedef struct {
     uint64_t rCacheDiskUsedSize;
     uint64_t wCacheMemUsedSize;
     uint64_t wCacheDiskUsedSize;
+    uint64_t actualMemUsedSize;
+    uint64_t otherMemUsedSize;
     uint16_t nodeId;
 } CacheResourceResponse;
 

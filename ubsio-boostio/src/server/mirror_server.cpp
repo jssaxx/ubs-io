@@ -18,6 +18,7 @@
 #include "bio_functions.h"
 #include "message_op.h"
 #include "bio_crc_util.h"
+#include "cache_slice_operator.h"
 #include "cache_overload_ctrl.h"
 #include "bdm_core.h"
 #include "bdm_disk.h"
@@ -25,6 +26,16 @@
 
 using namespace ock::bio;
 using namespace ock::hcom;
+
+namespace {
+void FillActualCacheResource(CacheResourceResponse &rsp)
+{
+    uint64_t actual = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
+    uint64_t accounted = rsp.wCacheMemUsedSize + rsp.rCacheMemUsedSize;
+    rsp.actualMemUsedSize = actual;
+    rsp.otherMemUsedSize = actual > accounted ? actual - accounted : 0;
+}
+}
 
 bool MirrorServer::CheckMagic(RequestComm &reqComm)
 {
@@ -512,6 +523,10 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
 
     auto reader = [&req, &netCtx, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) {
+            if (req.sourceCopyRequired) {
+                CacheSliceOperator sliceOperator;
+                return sliceOperator.Copy(from, to);
+            }
             return BIO_OK;
         } else {
             return ReaderRemote(from, to, req, netCtx);
@@ -597,6 +612,27 @@ BResult MirrorServer::WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to
     return BIO_OK;
 }
 
+BResult MirrorServer::WriterParseCacheMrInfo(const SlicePtr &from, std::vector<NetMrInfo> &lMrVec)
+{
+    if (UNLIKELY(from->GetAddrs().size() > SLICE_ADDR_SIZE)) {
+        LOG_ERROR("Slice address count exceeds response limit, addrNum:" << from->GetAddrs().size() <<
+            ", limit:" << SLICE_ADDR_SIZE << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    for (auto addr : from->GetAddrs()) {
+        MrInfo mr{};
+        addr.ToMrInfo(mr);
+        auto addrOffset = BioServer::Instance()->GetNetEngine()->GetAddressOffset(mr.address);
+        if (UNLIKELY(addrOffset == UINT64_MAX)) {
+            LOG_DEBUG("Slice address is not in local net mr, address:" << mr.address << ", size:" << mr.size << ".");
+            return BIO_NOT_EXISTS;
+        }
+        lMrVec.emplace_back(NetMrInfo(mr.address, mr.size, 0));
+    }
+    return BIO_OK;
+}
+
 BResult MirrorServer::WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp,
     GetRequest &req)
 {
@@ -658,7 +694,9 @@ BResult MirrorServer::WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req.comm.srcNid, dstPid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Sync write failed, ret:" << ret << ", index:" << idx << ", lKey:" << lMrVec[idx].key <<
-                ", rKey:" << rMrVec[0].key << ", size:" << lMrVec[idx].size << ".");
+                ", rKey:" << rMrVec[0].key << ", size:" << lMrVec[idx].size << ", srcNid:" << req.comm.srcNid <<
+                ", dstPid:" << dstPid << ", remoteAddr:" << rMrVec[0].address + off << ", localAddr:" <<
+                lMrVec[idx].address << ".");
             break;
         }
         off += lMrVec[idx].size;
@@ -695,6 +733,15 @@ BResult MirrorServer::GetConvergence(GetRequest &req, GetResponse &rsp)
         sliceP->ToString() << ", rFlowSize:" << sliceP->GetAddrs().size() << ".");
 
     auto writer = [&req, &rsp, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        if (req.isMr == GET_REQUEST_MR_CACHE_SPACE) {
+            bool isAlloc = false;
+            std::vector<NetMrInfo> lMrVec;
+            BResult ret = WriterParseCacheMrInfo(from, lMrVec);
+            if (ret != BIO_OK) {
+                return ret;
+            }
+            return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
+        }
         // case 1: 同节点同进程的缓存客户端读请求处理
         return WriterLocalSameProcess(from, to, req.mrKey);
     };
@@ -703,7 +750,9 @@ BResult MirrorServer::GetConvergence(GetRequest &req, GetResponse &rsp)
     BResult ret = Cache::Instance().Get(req.key, req.offset, sliceP, writer, rsp.realLen);
     BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
+        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset <<
+            ", length:" << req.length << ", srcNid:" << req.comm.srcNid << ", pid:" << req.comm.pid <<
+            ", isMr:" << static_cast<uint32_t>(req.isMr) << ", mrKey:" << req.mrKey << ".");
     } else {
         if (mBioConfig->GetDaemonConfig().enableCrc) {
             rsp.dataCrc = sliceP->GetDataCrc();
@@ -737,13 +786,36 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
         bool isAlloc = false;
         std::vector<NetMrInfo> rMrVec;
         std::vector<NetMrInfo> lMrVec;
+        if (req.isMr == GET_REQUEST_MR_CACHE_SPACE) {
+            BResult ret = WriterParseCacheMrInfo(from, lMrVec);
+            if (ret != BIO_OK) {
+                return ret;
+            }
+            return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
+        }
+        bool copyToShmSpace = req.isMr == GET_REQUEST_MR_TO_SHM_SPACE;
+        if (!copyToShmSpace &&
+            (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
+            BResult ret = WriterParseCacheMrInfo(from, lMrVec);
+            if (ret != BIO_OK) {
+                lMrVec.clear();
+            } else {
+                return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
+            }
+        }
+
+        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid == getpid())) {
+            return WriterLocalSameProcess(from, to, req.mrKey);
+        }
+
         BResult ret = WriterParseMrInfo(from, to, rMrVec, lMrVec, req.mrKey, isAlloc);
         if (ret != BIO_OK) {
             return ret;
         }
 
         // case 1: 同节点跨进程的缓存客户端读请求处理.
-        if ((req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
+        if (!copyToShmSpace &&
+            (req.comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId()) && (req.comm.pid != getpid())) {
             return WriterLocalDiffProcess(isAlloc, lMrVec, rsp, req);
         }
 
@@ -755,7 +827,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     BResult ret = Cache::Instance().Get(req.key, req.offset, sliceP, writer, rsp.realLen);
     BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset << ".");
+        LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset <<
+            ", length:" << req.length << ", srcNid:" << req.comm.srcNid << ", pid:" << req.comm.pid <<
+            ", isMr:" << static_cast<uint32_t>(req.isMr) << ", mrKey:" << req.mrKey << ".");
     } else {
         if (mBioConfig->GetDaemonConfig().enableCrc) {
             rsp.dataCrc = sliceP->GetDataCrc();
@@ -1054,7 +1128,7 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
         return BIO_OK;
     }
 
-    ShmInitResponse rsp;
+    ShmInitResponse rsp{};
     auto config = mBioConfig->GetDaemonConfig();
     rsp.serverPid = getpid();
     rsp.scene = config.workScene;
@@ -1067,7 +1141,6 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
     rsp.enablePrometheus = config.enablePrometheus;
     rsp.scrapeIntervalSec = config.scrapeIntervalSec;
     rsp.wcacheMemEvictLevel = config.wcacheMemEvictLevel;
-    rsp.sdkPoolSize = config.sdkPoolSize;
     rsp.segment = config.segment;
     auto ret = strcpy_s(rsp.listenAddress, sizeof(rsp.listenAddress), config.listenAddress.c_str());
     if (ret != 0) {
@@ -1404,6 +1477,9 @@ bool MirrorServer::CheckPutReq(PutRequest *req)
     if (req->ioStrategy > WRITE_UNDERFS_BACK) {
         return false;
     }
+    if (req->sourceCopyRequired && !req->memFromServer) {
+        return false;
+    }
 
     if (!req->memFromServer) { // case 1: slice资源来自于SDK端, 则校验MR有效, sliceLen为0
         if (req->sliceLen != 0) {
@@ -1545,6 +1621,9 @@ bool MirrorServer::CheckGetReq(GetRequest *req)
 int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 {
     if (!CheckGetReq(req)) {
+        LOG_ERROR("Invalid mirror get request, key:" << req->key << ", offset:" << req->offset << ", length:" <<
+            req->length << ", size:" << req->size << ", ptId:" << req->ptId << ", srcNid:" << req->comm.srcNid <<
+            ", pid:" << req->comm.pid << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
@@ -1555,6 +1634,9 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
     result = Get(*req, rsp, ctx);
     BIO_TP_END;
     if (result != BIO_OK) {
+        LOG_ERROR("Mirror server get failed, ret:" << result << ", key:" << req->key << ", offset:" <<
+            req->offset << ", length:" << req->length << ", srcNid:" << req->comm.srcNid << ", pid:" <<
+            req->comm.pid << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, result, nullptr, 0);
         return BIO_OK;
     }
@@ -2378,6 +2460,7 @@ BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
     rsp->rCacheDiskCapacity = desc.diskCapacity;
     rsp->rCacheMemUsedSize = desc.memUsedSize;
     rsp->rCacheDiskUsedSize = desc.diskUsedSize;
+    FillActualCacheResource(*rsp);
     return BIO_OK;
 }
 
@@ -2545,6 +2628,7 @@ int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
     rsp.rCacheDiskCapacity = desc.diskCapacity;
     rsp.rCacheMemUsedSize = desc.memUsedSize;
     rsp.rCacheDiskUsedSize = desc.diskUsedSize;
+    FillActualCacheResource(rsp);
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheResourceResponse));
     return BIO_OK;
 }
@@ -2598,4 +2682,3 @@ int32_t MirrorServer::HandleClearWcache(ServiceContext &ctx)
     auto req = static_cast<ClearWcacheRequest *>(ctx.MessageData());
     return MirrorServerClearWcache(ctx, req);
 }
-

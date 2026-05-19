@@ -25,7 +25,6 @@
 #include "server/pt/cm_pt_calc_fixed_state.h"
 #include "cm_comm.h"
 #include "server/pt/cm_pt_calc_fixed.h"
-#include "server/interceptor_server.h"
 #include "tracepoint.h"
 #include "test_bio.h"
 #include "bio_client_agent.h"

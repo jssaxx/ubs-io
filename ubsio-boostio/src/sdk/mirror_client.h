@@ -25,8 +25,6 @@
 #include "flow.h"
 #include "slice.h"
 #include "cache_def.h"
-#include "cache_slice.h"
-#include "cache_slice_operator.h"
 #include "bio_qos.h"
 #include "bio_client_agent.h"
 
@@ -101,6 +99,8 @@ public:
     BResult Put(MirrorPut &param, CacheSpaceDesc &spaceInfo);
 
     BResult Get(MirrorGet &param, uint64_t &realLen);
+    BResult GetToShmSpace(MirrorGet &param, CacheSpaceDesc &space, uint64_t spaceOffset, uint64_t &realLen);
+    BResult GetAddress(MirrorGet &param, CacheReadAddrDesc &desc);
 
     BResult DeleteKey(const char *key, const ObjLocation &location);
 
@@ -113,6 +113,9 @@ public:
     BResult GetFileLocation(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &fileLocationQueryRsp);
 
     BResult AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo);
+    BResult AllocSpaceDescriptor(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo);
+    BResult AbortSpaceDescriptor(CacheSpaceDesc &spaceInfo);
+    BResult ShrinkSpaceDescriptor(CacheSpaceDesc &spaceInfo, uint64_t usedLength);
 
     BResult NotifyUpdate(bool &flag);
 
@@ -231,6 +234,8 @@ private:
     BResult PutCheckPtState(CmPtInfo ptEntry);
 
     BResult GetImpl(MirrorGet &param, uint64_t &realLen);
+    BResult GetToShmSpaceImpl(MirrorGet &param, CacheSpaceDesc &space, uint64_t spaceOffset, uint64_t &realLen);
+    BResult GetAddressImpl(MirrorGet &param, CacheReadAddrDesc &desc);
 
     BResult DeleteKeyImpl(const char *key, const ObjLocation &location);
 
@@ -261,6 +266,8 @@ private:
                                  std::vector<CacheResourcesDesc> &nodeDesc);
 
     BResult AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut &param, CacheSpaceDesc &spaceInfo);
+    BResult AllocSpaceDescriptorImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut &param, CacheSpaceDesc &spaceInfo);
+    void ReleaseSpaceDescriptorQuota(CmPtInfo &ptEntry, uint64_t length);
     BResult InitializeBioQos();
     BResult LoadOriginView();
     BResult LoadOriginViewImpl();
@@ -289,7 +296,7 @@ private:
     BResult Prepare(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
     void PutRemote(PutRequest *req, CmPtInfo &ptEntry, std::vector<uint32_t> &indexVec, Callback &callback);
     void PutLocal(PutRequest *req, uint32_t localIdx, Callback &callback) const;
-    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req);
+    BResult SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req, bool &localCommitted);
     BResult SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param);
 
     BResult GetMasterRemote(GetRequest &req, uint16_t masterNid, char *value, uint64_t &realLen);

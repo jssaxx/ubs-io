@@ -70,6 +70,8 @@ public:
 
     const RCachePtr GetRCacheInstanceByPtId(uint16_t ptId);
 
+    const RCachePtr FindRCacheInstanceByPtId(uint16_t ptId);
+
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:

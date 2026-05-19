@@ -324,6 +324,14 @@ BResult WCache::Delete(const Key &key, const WCacheSliceRefPtr &sliceRef)
     return BIO_OK;
 }
 
+BResult WCache::ReleasePreparedDataSlice(const WCacheSlicePtr &slice)
+{
+    if (slice == nullptr || mCacheTiers[WCACHE_MEMORY] == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    return mCacheTiers[WCACHE_MEMORY]->ReleasePreparedDataSlice(slice);
+}
+
 BResult WCache::Seal(WCacheTierType type)
 {
     BResult ret = BIO_OK;

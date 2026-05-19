@@ -67,17 +67,26 @@ void RCacheManager::Exit()
     rCacheEvict->Destroy();
 }
 
-const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
+const RCachePtr RCacheManager::FindRCacheInstanceByPtId(uint16_t ptId)
 {
     cacheLock.LockRead();
     auto iter = cache.find(ptId);
     if (UNLIKELY(iter == cache.end())) {
         cacheLock.UnLock();
-        LOG_WARN("Read cache pt id " << ptId << " do not exist.");
         return nullptr;
     }
     RCachePtr cachePtr = iter->second;
     cacheLock.UnLock();
+    return cachePtr;
+}
+
+const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
+{
+    RCachePtr cachePtr = FindRCacheInstanceByPtId(ptId);
+    if (UNLIKELY(cachePtr == nullptr)) {
+        LOG_WARN("Read cache pt id " << ptId << " do not exist.");
+        return nullptr;
+    }
     return cachePtr;
 }
 
@@ -243,7 +252,7 @@ BResult RCacheManager::RecoverCache(FlowPtr dataFlow)
 BResult RCacheManager::ExpiredClear(uint16_t ptId, uint64_t ptv)
 {
     LOG_INFO("RCache expired clear, ptId:" << ptId << ", ptv:" << ptv << ".");
-    RCachePtr rCache = GetRCacheInstanceByPtId(ptId);
+    RCachePtr rCache = FindRCacheInstanceByPtId(ptId);
     if (UNLIKELY(rCache == nullptr)) {
         LOG_INFO("No needed, not exist, ptId:" << ptId << ", ptv:" << ptv);
         return BIO_OK;

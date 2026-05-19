@@ -64,6 +64,8 @@ int32_t DestroyFlow(DestroyFlowRequest *req);
 
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp);
 
+int32_t ReleasePreparedWCacheSpace(CacheSpaceDesc *space);
+
 int32_t Put(PutRequest *req, PutResponse *rsp);
 
 int32_t Get(GetRequest *req, GetResponse *rsp);

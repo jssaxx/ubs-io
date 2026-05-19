@@ -34,6 +34,11 @@ namespace ock {
 namespace bio {
 using namespace ock::hcom;
 
+uint64_t NetEngine::GetUsedBlockSize() const
+{
+    return mUsedBlock.load(std::memory_order_relaxed) * mDataPageBytes;
+}
+
 static void HcomLog(int level, const char *msg)
 {
     NET_BASE_LOG(level, msg);
@@ -42,7 +47,8 @@ static void HcomLog(int level, const char *msg)
 constexpr uint16_t WKR_GRP_INDEX_CTRL = 0L;
 constexpr uint16_t WKR_GRP_INDEX_DATA = 1L;
 
-BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func)
+BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
+    int16_t requestExecutorCpuStartIdx)
 {
     std::lock_guard<std::mutex> guard(mMutex);
     if (mStarted) {
@@ -91,7 +97,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
             return BIO_ALLOC_FAIL;
         }
 
-        ret = mRequestExecutor->Start(reqExecutorNum, queueSize);
+        ret = mRequestExecutor->Start(reqExecutorNum, queueSize, requestExecutorCpuStartIdx);
         if (ret != BIO_OK) {
             NET_LOG_ERROR("Failed to start request executor, ret:" << ret << ".");
             return ret;

@@ -15,26 +15,18 @@
 
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <cstdint>
-#include <sys/mman.h>
-#include <unistd.h>
 
 #include "bio_err.h"
 #include "bio_client_net.h"
+#include "interceptor_read_index.h"
 
 namespace ock {
 namespace bio {
 
-struct DataMsgMemItem {
-    int32_t shmFd;
-    uint64_t offset;
-    uint64_t size;
-    uint8_t *address;
-
-    DataMsgMemItem() : shmFd(-1), offset(0), size(0), address(nullptr) {}
-
-    DataMsgMemItem(int32_t fd, uint64_t off, uint64_t sz, uint8_t *addr)
-        : shmFd(fd), offset(off), size(sz), address(addr) {}
+struct InterceptorReadBufferSlot {
+    uintptr_t address = 0;
 };
 
 class InterceptorServer {
@@ -50,25 +42,44 @@ public:
     BResult Initialize();
 
     BResult HandleInterceptorRead(ServiceContext &ctx);
-    BResult HandleInterceptorWrite(ServiceContext &ctx);
-    BResult HandleInterceptorLargeWrite(ServiceContext &ctx);
-    BResult HandleInterceptorLargeRead(ServiceContext &ctx);
-    BResult HandleInterceptorCreateDataMsgMemPool(ServiceContext &ctx);
+    BResult HandleInterceptorWritePrepareSpace(ServiceContext &ctx);
+    BResult HandleInterceptorWriteCommitSpace(ServiceContext &ctx);
+    BResult HandleInterceptorBioShmInit(ServiceContext &ctx);
+    BResult HandleInterceptorReadIndexInvalidate(ServiceContext &ctx);
+    BResult HandleInterceptorReadBufferRelease(ServiceContext &ctx);
 
-    bool CheckInterceptorLargeWriteReq(InterceptorLargePwriteIn *req);
-    bool CheckInterceptorLargeReadReq(InterceptorLargePreadIn *req);
-    bool CheckInterceptorWriteReq(InterceptorPwriteIn *req);
     bool CheckInterceptorReadReq(InterceptorPreadIn *req);
 
 private:
     BResult RegisterOpcode();
-    uint8_t *TransDataMsgMemAddr(uint32_t pid, uint64_t mrOffset);
     void HandleProcBroken(uint32_t pid);
-    void ReleaseDataMsgMemItem(uint32_t pid);
-    void ReleaseAllDataMsgMemItems();
+    BResult EnsureReadIndex();
+    void CleanupReadIndex();
+    void CleanupReadIndexLocked();
+    BResult AcquireReadBuffer(uint32_t pid, uintptr_t &address);
+    void TrackReadBufferLocked(uint32_t pid, uintptr_t address);
+    bool UntrackReadBufferLocked(uint32_t pid, uintptr_t address);
+    void GetReadBufferPoolState(uint64_t &allocated, uint64_t &freeCount);
+    bool ReleaseReadBuffer(uint32_t pid, uintptr_t address);
+    void ReleaseReadBuffersByPid(uint32_t pid);
+    void CleanupReadBuffers();
+    int ReadDataToReadBuffer(uint32_t pid, uint64_t inode, uint64_t offset, uint64_t nbytes, bool prefetch,
+        InterceptorPreadOut &resp);
+    bool TryReplyReadDataFallback(ServiceContext &ctx, const InterceptorPreadIn *req, bool prefetch,
+        int readAddrRet, const CacheReadAddrDesc &desc, int &traceRet);
+    void ReplyReadError(ServiceContext &ctx, const InterceptorPreadIn *req, int ret, const CacheReadAddrDesc &desc);
+    void ReplyReadAddress(ServiceContext &ctx, const InterceptorPreadIn *req, const CacheReadAddrDesc &desc);
+    void PublishReadIndex(uint64_t inode, uint64_t offset, const InterceptorPreadOut &resp);
+    void InvalidateReadIndex(uint64_t inode, uint64_t offset, uint64_t length);
+    void BroadcastReadIndexInvalidate(uint64_t inode, uint64_t offset, uint64_t length);
 
-    std::mutex mDataMsgMemLock;
-    std::unordered_map<uint32_t, DataMsgMemItem> mDataMsgMemMgr;
+    std::mutex mReadIndexLock;
+    int32_t mReadIndexFd = -1;
+    uint64_t mReadIndexLength = 0;
+    InterceptorReadIndexHeader *mReadIndex = nullptr;
+    std::mutex mReadBufferLock;
+    std::unordered_map<uint32_t, std::vector<InterceptorReadBufferSlot>> mReadBuffers;
+    uint64_t mReadBufferAllocatedCount = 0;
 };
 }
 }

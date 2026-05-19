@@ -54,9 +54,43 @@ std::shared_ptr<OpenFile> OpenFileMap::At(int fd)
     return nullptr;
 }
 
+const std::shared_ptr<OpenFile> &OpenFileMap::AtCached(int fd)
+{
+    struct CachedOpenFile {
+        int fd = -1;
+        std::shared_ptr<OpenFile> file = nullptr;
+    };
+    static thread_local CachedOpenFile cachedFile;
+
+    if (cachedFile.fd == fd && cachedFile.file != nullptr && cachedFile.file->IsActive()) {
+        return cachedFile.file;
+    }
+
+    auto file = At(fd);
+    cachedFile.fd = fd;
+    cachedFile.file = std::move(file);
+    return cachedFile.file;
+}
+
+std::vector<std::pair<int, std::shared_ptr<OpenFile>>> OpenFileMap::Snapshot()
+{
+    std::vector<std::pair<int, std::shared_ptr<OpenFile>>> snapshot;
+    filesMtx.LockRead();
+    snapshot.reserve(files.size());
+    for (auto &item : files) {
+        snapshot.emplace_back(item.first, item.second);
+    }
+    filesMtx.UnLock();
+    return snapshot;
+}
+
 void OpenFileMap::Erase(int fd)
 {
     filesMtx.LockWrite();
-    files.erase(fd);
+    auto iter = files.find(fd);
+    if (iter != files.end()) {
+        iter->second->Deactivate();
+        files.erase(iter);
+    }
     filesMtx.UnLock();
 }

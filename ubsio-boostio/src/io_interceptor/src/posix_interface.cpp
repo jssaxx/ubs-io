@@ -95,13 +95,13 @@ INTERCEPTOR_API off64_t lseek64(int fd, __off64_t offset, int whence)
 
 INTERCEPTOR_API ssize_t read(int fd, void* buf, size_t nbytes)
 {
-    INTERCEPTORLOG_DEBUG("Hooking read %d %llu succeeded.", fd, nbytes);
+    INTERCEPTORLOG_DEBUG("Hooking read %d %llu entered.", fd, nbytes);
     return HookRead(fd, buf, nbytes);
 }
 
 INTERCEPTOR_API ssize_t pread(int fd, void* buf, size_t nbyte, off_t offset)
 {
-    INTERCEPTORLOG_DEBUG("Hooking pread %d %llu %lld succeeded.", fd, nbyte, offset);
+    INTERCEPTORLOG_DEBUG("Hooking pread %d %llu %lld entered.", fd, nbyte, offset);
     return HookPread(fd, buf, nbyte, offset);
 }
 
@@ -110,58 +110,22 @@ INTERCEPTOR_API ssize_t pread64(int fildes, void *buf, size_t nbyte, off64_t off
     return HookPread64(fildes, buf, nbyte, offset);
 }
 
-INTERCEPTOR_API ssize_t readv(int fd, const struct iovec* vector, int count)
-{
-    INTERCEPTORLOG_DEBUG("Hooking readv %d %d succeeded.", fd, count);
-    return HookReadv(fd, vector, count);
-}
-
-INTERCEPTOR_API ssize_t preadv(int fd, const struct iovec* vector, int iovcnt, off_t offset)
-{
-    INTERCEPTORLOG_DEBUG("Hooking preadv %d %d %lld succeeded.", fd, iovcnt, offset);
-    return HookPreadv(fd, vector, iovcnt, offset);
-}
-
-INTERCEPTOR_API ssize_t preadv64(int fd, const struct iovec* vector, int iovcnt, off64_t offset)
-{
-    INTERCEPTORLOG_DEBUG("Hooking preadv64 %d %d %lld succeeded.", fd, iovcnt, offset);
-    return HookPreadv64(fd, vector, iovcnt, offset);
-}
-
 INTERCEPTOR_API ssize_t write(int fd, const void* buf, size_t nbytes)
 {
-    INTERCEPTORLOG_DEBUG("Hooking write %d %llu succeeded.", fd, nbytes);
+    INTERCEPTORLOG_DEBUG("Hooking write %d %llu entered.", fd, nbytes);
     return HookWrite(fd, buf, nbytes);
 }
 
 INTERCEPTOR_API ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset)
 {
-    INTERCEPTORLOG_DEBUG("Hooking pwrite %d %llu %lld succeeded.", fd, count, offset);
+    INTERCEPTORLOG_DEBUG("Hooking pwrite %d %llu %lld entered.", fd, count, offset);
     return HookPwrite(fd, buf, count, offset);
 }
 
 INTERCEPTOR_API ssize_t pwrite64(int fd, const void* buf, size_t count, off_t offset)
 {
-    INTERCEPTORLOG_DEBUG("Hooking pwrite64 %d %llu %lld succeeded.", fd, count, offset);
+    INTERCEPTORLOG_DEBUG("Hooking pwrite64 %d %llu %lld entered.", fd, count, offset);
     return HookPwrite64(fd, buf, count, offset);
-}
-
-INTERCEPTOR_API ssize_t writev(int fd, const struct iovec* vector, int count)
-{
-    INTERCEPTORLOG_DEBUG("Hooking writev %d %d succeeded.", fd, count);
-    return HookWritev(fd, vector, count);
-}
-
-INTERCEPTOR_API ssize_t pwritev(int fd, const struct iovec* vector, int iovcnt, off_t offset)
-{
-    INTERCEPTORLOG_DEBUG("Hooking pwritev %d %d %lld succeeded.", fd, iovcnt, offset);
-    return HookPwritev(fd, vector, iovcnt, offset);
-}
-
-INTERCEPTOR_API ssize_t pwritev64(int fd, const struct iovec* vector, int iovcnt, off64_t offset)
-{
-    INTERCEPTORLOG_DEBUG("Hooking pwritev64 %d %d %lld succeeded.", fd, iovcnt, offset);
-    return HookPwritev64(fd, vector, iovcnt, offset);
 }
 
 INTERCEPTOR_API int dup(int fd)
@@ -252,6 +216,12 @@ INTERCEPTOR_API int fsync(int fd)
 {
     INTERCEPTORLOG_DEBUG("Hooking fsync %d succeeded.", fd);
     return HookFsync(fd);
+}
+
+INTERCEPTOR_API int fdatasync(int fd)
+{
+    INTERCEPTORLOG_DEBUG("Hooking fdatasync %d succeeded.", fd);
+    return HookFdatasync(fd);
 }
 
 INTERCEPTOR_API void sync(void)

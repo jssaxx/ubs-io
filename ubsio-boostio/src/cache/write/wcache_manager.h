@@ -83,6 +83,8 @@ public:
 
     BResult Delete(uint16_t ptId, const Key &key);
 
+    BResult ReleasePreparedDataSlice(const WCacheSlicePtr &slice);
+
     void RegGetLocDiskStatus(GetLocDiskStatus getLocDiskStatus);
 
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);

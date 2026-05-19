@@ -533,6 +533,14 @@ BResult Cache::Delete(uint16_t ptId, const Key &key)
     return ret;
 }
 
+BResult Cache::ReleasePreparedWCacheSlice(const WCacheSlicePtr &slice)
+{
+    if (slice == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    return mWCacheManager->ReleasePreparedDataSlice(slice);
+}
+
 FlowCache Cache::GetFlowCache(uint64_t flowId)
 {
     uint64_t type = CacheFlowIdManager::GetType(flowId);

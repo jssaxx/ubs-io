@@ -105,11 +105,6 @@ public:
         return mWcacheMemEvictLevel;
     }
 
-    inline uint64_t GetSdkPoolSize() const
-    {
-        return mSdkPoolSize;
-    }
-
     inline uint64_t GetSegment() const
     {
         return mSegment;
@@ -118,6 +113,21 @@ public:
     inline NetEnginePtr GetNetEngine() const
     {
         return mNetEngine;
+    }
+
+    inline int32_t GetShmFd() const
+    {
+        return mShmFd;
+    }
+
+    inline uint64_t GetShmOffset() const
+    {
+        return mShmOffset;
+    }
+
+    inline uint64_t GetShmLength() const
+    {
+        return mShmLength;
     }
 
     inline uint32_t GetDataPage() const
@@ -232,7 +242,6 @@ private:
     std::string mPrometheusListenAddress = "127.0.0.1:7204";
     uint32_t mPrometheusScrapeIntervalSec = 15;
     uint32_t mWcacheMemEvictLevel = 0;
-    uint64_t mSdkPoolSize = 134217728;
     uint64_t mSegment = 4194304;
     DEFINE_REF_COUNT_VARIABLE;
 };

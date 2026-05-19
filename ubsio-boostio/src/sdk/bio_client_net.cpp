@@ -204,12 +204,10 @@ BResult BioClientNet::ShmInit()
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
     mWcacheMemEvictLevel = rsp.wcacheMemEvictLevel;
-    mSdkPoolSize = rsp.sdkPoolSize;
     mSegment = rsp.segment;
     CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
         mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel
-        << ", wcacheMemEvictLevel:" << mWcacheMemEvictLevel << ", sdkPoolSize:" << mSdkPoolSize
-        << ", segment:" << mSegment << ".");
+        << ", wcacheMemEvictLevel:" << mWcacheMemEvictLevel << ", segment:" << mSegment << ".");
 
     mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut)); // 更新消息请求发送超时参数.
     ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.
@@ -281,7 +279,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
 BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
     const NetOptions netConf)
 {
-    const uint64_t defaultMemorySize = (128UL * 1024UL * 1024UL); // 128M
+    const uint64_t defaultMemorySize = (128UL * 1024UL * 1024UL);
     NetOptions netOptions;
     netOptions.ipMask = std::move(ipMask);
     netOptions.port = port;

@@ -358,6 +358,39 @@ BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
     return BIO_OK;
 }
 
+BResult WCacheTier::ReleasePreparedDataSlice(const WCacheSlicePtr &slice)
+{
+    if (slice == nullptr || mDataFlow == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+
+    std::lock_guard<std::mutex> lock(mPreparedDataReleaseLock);
+    mPreparedDataReleases[slice->GetOffsetInFlow()] = slice;
+    while (!mPreparedDataReleases.empty()) {
+        auto iter = mPreparedDataReleases.begin();
+        WCacheSlicePtr releaseSlice = iter->second;
+        uint64_t curOffset = mDataFlow->GetTruncateOffset();
+        uint64_t sliceOffset = releaseSlice->GetOffsetInFlow();
+        if (sliceOffset < curOffset) {
+            mPreparedDataReleases.erase(iter);
+            continue;
+        }
+        if (sliceOffset != curOffset) {
+            break;
+        }
+        if (releaseSlice->GetLength() > UINT64_MAX - sliceOffset) {
+            return BIO_INVALID_PARAM;
+        }
+        uint64_t nextOffset = sliceOffset + releaseSlice->GetLength();
+        mPreparedDataReleases.erase(iter);
+        BResult ret = mDataFlow->TruncateOffset(nextOffset);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+    }
+    return BIO_OK;
+}
+
 inline BResult WCacheTier::GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice)
 {
     std::vector<FlowAddr> flowAddrs;

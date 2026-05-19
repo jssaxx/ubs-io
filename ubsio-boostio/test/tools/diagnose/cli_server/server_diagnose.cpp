@@ -158,11 +158,19 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         }
         CacheResDescription desc;
         Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
+        uint64_t wCacheMemUsed = desc.memUsedSize;
         mPrintOp("WCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
             desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
         Cache::Instance().GetCacheResources(desc, READ_CACHE);
+        uint64_t rCacheMemUsed = desc.memUsedSize;
         mPrintOp("RCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
             desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
+        uint64_t actualMemUsed = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
+        uint64_t accountedMemUsed = wCacheMemUsed + rCacheMemUsed;
+        uint64_t otherMemUsed = actualMemUsed > accountedMemUsed ? actualMemUsed - accountedMemUsed : 0;
+        mPrintOp("ACTUAL(MB): mem used %lu wcache %lu rcache %lu other %lu \n",
+            actualMemUsed / NO_1048576, wCacheMemUsed / NO_1048576, rCacheMemUsed / NO_1048576,
+            otherMemUsed / NO_1048576);
     } else if (cmdType == "pt") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
