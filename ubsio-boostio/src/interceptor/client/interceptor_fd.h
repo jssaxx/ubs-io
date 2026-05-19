@@ -135,18 +135,13 @@ inline const RemoteReadPrefetchConfig &GetRemoteReadPrefetchConfig()
 
 class OpenFile {
 public:
-    OpenFile(int fd, uint64_t inode, int flags = 0) : mFd(fd), mInode(inode), mFlags(flags) {}
+    OpenFile(int fd, uint64_t inode) : mFd(fd), mInode(inode) {}
 
     virtual ~OpenFile() {}
 
     inline uint64_t GetInode() const
     {
         return mInode;
-    }
-
-    bool IsAppend() const
-    {
-        return (mFlags & O_APPEND) != 0;
     }
 
     bool IsActive() const
@@ -430,7 +425,6 @@ public:
 private:
     int mFd;
     uint64_t mInode;
-    int mFlags;
     std::atomic<bool> mActive{true};
     std::mutex mOffsetMtx;
     off64_t mOffset = 0;

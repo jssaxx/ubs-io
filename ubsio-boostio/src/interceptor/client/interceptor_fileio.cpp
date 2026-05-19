@@ -1614,21 +1614,6 @@ ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
         CLOG_DEBUG("Fallback write to native, fd:" << fd << ", nbytes:" << nbytes << ".");
         return CONTEXT.GetOperations()->write(fd, buf, nbytes);
     }
-    if (file->IsAppend()) {
-        if (UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
-            errno = EIO;
-            return -1;
-        }
-        DropReadCaches(file);
-        ssize_t ret = CONTEXT.GetOperations()->write(fd, buf, nbytes);
-        if (ret >= 0) {
-            off64_t cur = CONTEXT.GetOperations()->lseek64(fd, 0, SEEK_CUR);
-            if (cur >= 0) {
-                file->SetOffset(cur);
-            }
-        }
-        return ret;
-    }
 
     off_t offset = file->ReserveOffset(nbytes);
 

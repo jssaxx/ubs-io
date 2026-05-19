@@ -583,9 +583,12 @@ int32_t ProxyOperations::OpenInner(const char *api, const char *path, int fd, in
         }
         std::shared_ptr<OpenFile> op = nullptr;
         try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, flags);
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
         } catch (const std::bad_alloc&) {
             return BIO_ERR;
+        }
+        if ((flags & O_APPEND) != 0) {
+            op->SetOffset(statBuf.st_size);
         }
         CONTEXT.files.Add(fd, std::move(op));
         LogOpenInterceptSuccess(api, restoredPath, fd, statBuf.st_ino, statBuf.st_size);
@@ -613,9 +616,12 @@ int32_t ProxyOperations::OpenInner(const char *api, int dirFd, const char *path,
         }
         std::shared_ptr<OpenFile> op = nullptr;
         try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, flags);
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
         } catch (const std::bad_alloc&) {
             return BIO_ERR;
+        }
+        if ((flags & O_APPEND) != 0) {
+            op->SetOffset(statBuf.st_size);
         }
         CONTEXT.files.Add(fd, std::move(op));
         LogOpenInterceptSuccess(api, restoredPath, fd, statBuf.st_ino, statBuf.st_size);
