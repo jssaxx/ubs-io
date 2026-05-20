@@ -1095,12 +1095,30 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                 return ret;
             }
             LOG_ERROR("BatchGet trace key:" << keyInfo.key << ", trans mem:" << tranceMem);
-            ret = mSliceOp.Copy(from, reinterpret_cast<char *>(tranceMem), from->GetLength());
-            if (UNLIKELY(ret != BIO_OK)) {
-                LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
-                BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
-                return ret;
+            if (from->GetFlowType() == FLOW_DISK) {
+                char *diskMem = reinterpret_cast<char*>(malloc(from->GetLength()));
+                ret = mSliceOp.Copy(from, diskMem, from->GetLength());
+                if (UNLIKELY(ret != BIO_OK)) {
+                    LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
+                    BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+                    return ret;
+                }
+                ret = memcpy_s(reinterpret_cast<void*>(tranceMem), from->GetLength(), diskMem, from->GetLength());
+                free(diskMem);
+                if (UNLIKELY(ret != BIO_OK)) {
+                    LOG_ERROR("Sys mem copy to trance mem copy fail, key:" << keyInfo.key << ", ret:" << ret);
+                    BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+                    return ret;
+                }
+            } else {
+                ret = mSliceOp.Copy(from, reinterpret_cast<char*>(tranceMem), from->GetLength());
+                if (UNLIKELY(ret != BIO_OK)) {
+                    LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
+                    BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+                    return ret;
+                }
             }
+
             TransParam transReq;
             transReq.remoteUniqueId = std::string(req->uuid);
             std::vector<void*> localAddrs;
