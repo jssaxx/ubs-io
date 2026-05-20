@@ -1094,6 +1094,7 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                 LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
                 return ret;
             }
+            LOG_ERROR("BatchGet trace key:" << keyInfo.key << ", trans mem:" << tranceMem);
             ret = mSliceOp.Copy(from, reinterpret_cast<char *>(tranceMem), from->GetLength());
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
