@@ -1096,7 +1096,7 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             }
             ret = mSliceOp.Copy(from, reinterpret_cast<char *>(tranceMem), from->GetLength());
             if (UNLIKELY(ret != BIO_OK)) {
-                LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+                LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
                 BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
                 return ret;
             }

@@ -160,8 +160,8 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
             rc = pwrite(fd, buff + (len - remain), remain, offset + (len - remain));
         }
         if (UNLIKELY(rc <= 0)) {
-            BDM_LOGWARN(0, "%s failed (%s), fd %d, rc %d, len %d, off %lu, remain %lu.", isRead ? "Read" : "Write",
-                strerror(errno), fd, rc, len, offset, remain);
+            BDM_LOGWARN(0, "%s failed (%s), fd %d, rc %d, len %d, off %lu, remain %lu, buf %lu", isRead ? "Read" : "Write",
+                        strerror(errno), fd, rc, len, offset, remain, (uintptr_t)(buff + (len - remain)));
             break;
         }
         remain -= (uint64_t)rc;
