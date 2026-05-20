@@ -495,9 +495,7 @@ BResult MmsKvServer::HandleBasic(ServiceContext &ctx)
     rsp.traceSwitch = config->GetBasicConfig().traceSwitch;
     rsp.enableCrc = config->GetBasicConfig().crcSwitch;
     rsp.maxMsgBuffSize = config->GetNetConfig().msgMaxBuffSize;
-    rsp.minBlockSize = config->GetMemConfig().minBlockSize;
-    rsp.maxBlockSize = config->GetMemConfig().maxBlockSize;
-    rsp.minBlockSizeRate = static_cast<uint8_t>(config->GetMemConfig().blockRate.first);
+    rsp.valueBlockSize = config->GetMemConfig().valueBlockSize;
 
     int32_t fds[MMAP_AREA_BUTT];
     mMemMgr->GetAreaMemDesc(MMAP_AREA_IOCTX, fds[MMAP_AREA_IOCTX]);

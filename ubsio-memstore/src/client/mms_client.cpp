@@ -309,7 +309,7 @@ BResult MmsClient::ClientBasicInit(void)
     mLogLevel = rsp.logLevel;
     mEnableCrc = rsp.enableCrc;
     mMaxMsgBuffSize = rsp.maxMsgBuffSize;
-    mBlockInfo = {rsp.minBlockSize, rsp.maxBlockSize, rsp.minBlockSizeRate};
+    mBlockInfo = {rsp.valueBlockSize};
     UpdateCrcSwitch(rsp.enableCrc);
     tracemark::TraceMark::Init();
     tracemark::TraceMark::SetEnable(rsp.traceSwitch);
@@ -338,10 +338,7 @@ BResult MmsClient::InitMemMgr()
         cfg.totalMemSize =
             mgrOptions.numaSize[index] - META_SHM_IOCTX_SIZE - mgrOptions.areaSize[MMAP_AREA_BUCKET][index];
         cfg.indexNodeSize = INDEX_VALUE_SIZE + sizeof(BlockHeader);
-        cfg.minBlockSize = mBlockInfo.minBlockSize + sizeof(BlockHeader) + sizeof(DataHeader);
-        cfg.maxBlockSize = mBlockInfo.maxBlockSize + sizeof(BlockHeader) + sizeof(DataHeader);
-        cfg.minBlockMemRatio = static_cast<double>(mBlockInfo.minBlockSizeRate) / NO_10;
-        cfg.maxBlockMemRatio = static_cast<double>(NO_10 - mBlockInfo.minBlockSizeRate) / NO_10;
+        cfg.valueBlockSize = mBlockInfo.valueBlockSize + sizeof(BlockHeader) + sizeof(DataHeader);
         cfg.Calculate();
         mgrOptions.areaSize[MMAP_AREA_INDEX][index] = cfg.indexMemSize;
         mgrOptions.areaSize[MMAP_AREA_VALUE][index] = cfg.valueMemSize;

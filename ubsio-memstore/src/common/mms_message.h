@@ -88,9 +88,7 @@ typedef struct {
     uint32_t netTimeOut;
     int32_t logLevel;
     uint32_t maxMsgBuffSize;
-    uint16_t minBlockSize;
-    uint16_t maxBlockSize;
-    uint8_t minBlockSizeRate;
+    uint32_t valueBlockSize;
     bool traceSwitch;
     bool enableCrc;
 } BasicResponse;
@@ -214,4 +212,3 @@ BResult DeCodeRangeDeleteRequest(const char *&start, const char *&end, uint64_t 
 }
 }
 #endif // MMS_MESSAGE_H
-

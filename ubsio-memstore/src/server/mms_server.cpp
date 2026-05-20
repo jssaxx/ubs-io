@@ -194,10 +194,7 @@ BResult MmsServer::InitMemMgr()
         ValueIndexMemCfg cfg{};
         cfg.totalMemSize = options.numaSize[index] - META_SHM_IOCTX_SIZE - options.areaSize[MMAP_AREA_BUCKET][index];
         cfg.indexNodeSize = INDEX_VALUE_SIZE + sizeof(BlockHeader);
-        cfg.minBlockSize = memConfig.minBlockSize + sizeof(BlockHeader) + sizeof(DataHeader);
-        cfg.maxBlockSize = memConfig.maxBlockSize + sizeof(BlockHeader) + sizeof(DataHeader);
-        cfg.minBlockMemRatio = static_cast<double>(memConfig.blockRate.first) / NO_10;
-        cfg.maxBlockMemRatio = static_cast<double>(memConfig.blockRate.second) / NO_10;
+        cfg.valueBlockSize = memConfig.valueBlockSize + sizeof(BlockHeader) + sizeof(DataHeader);
         cfg.Calculate();
         options.areaSize[MMAP_AREA_INDEX][index] = cfg.indexMemSize;
         options.areaSize[MMAP_AREA_VALUE][index] = cfg.valueMemSize;
@@ -263,11 +260,10 @@ BResult MmsServer::InitValueMemAllocator()
         return ret;
     }
 
-    allocOptions.blockNum = NO_2;
-    allocOptions.blockRate[NO_0] = static_cast<uint32_t>(memConfig.blockRate.first);
-    allocOptions.blockRate[NO_1] = static_cast<uint32_t>(memConfig.blockRate.second);
-    allocOptions.blockSize[NO_0] = memConfig.minBlockSize + sizeof(DataHeader);
-    allocOptions.blockSize[NO_1] = memConfig.maxBlockSize + sizeof(DataHeader);
+    allocOptions.allocMode = MemAllocOptions::ALLOC_MODE_BUDDY;
+    allocOptions.blockNum = NO_1;
+    allocOptions.blockRate[NO_0] = NO_10;
+    allocOptions.blockSize[NO_0] = memConfig.valueBlockSize + sizeof(DataHeader);
 
     mMemAllocator = MmsMemAllocator::Instance(MMAP_AREA_VALUE);
     if (UNLIKELY(mMemAllocator == nullptr)) {
@@ -516,8 +512,7 @@ BResult MmsServer::MmsCacheInit()
     auto ret = mMemMgr->GetAreaMemDesc(MMAP_AREA_BUCKET, addr, size);
     ChkTrue(ret == MMS_OK, ret, "Mem mgr get k/v mem failed, result:" << ret << ".");
 
-    ret = mCache->Init(addr, size, Log, true,
-                       {mConfig->GetMemConfig().minBlockSize, mConfig->GetMemConfig().maxBlockSize});
+    ret = mCache->Init(addr, size, Log, true, {mConfig->GetMemConfig().valueBlockSize, 0});
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Failed to init cache instance, ret:" << ret << ".");
         return ret;

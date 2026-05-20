@@ -28,9 +28,7 @@ void MmsConfig::LoadDefaultConf()
     /* load mem config */
     AddStrConf(MEM_NUMA_ID, VStrNotNull::Create(MEM_NUMA_ID.first));
     AddStrConf(MEM_NUMA_SIZE, VStrNotNull::Create(MEM_NUMA_SIZE.first));
-    AddIntConf(MEM_MIN_BLOCK_SIZE, VIntRange::Create(MEM_MIN_BLOCK_SIZE.first, NO_1, NO_64));
-    AddIntConf(MEM_MAX_BLOCK_SIZE, VIntRange::Create(MEM_MAX_BLOCK_SIZE.first, NO_1, NO_64));
-    AddStrConf(MEM_MIN_MAX_BLOCK_RATE, VStrNotNull::Create(MEM_MIN_MAX_BLOCK_RATE.first));
+    AddIntConf(MEM_VALUE_BLOCK_SIZE, VIntRange::Create(MEM_VALUE_BLOCK_SIZE.first, NO_1, NO_64));
 
     /* load net config for rpc */
     AddStrConf(NET_RPC_PROTOCOL, VStrEnum::Create(NET_RPC_PROTOCOL.first, "tcp||rdma"));
@@ -105,36 +103,9 @@ BResult MmsConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     return ret;
 }
 
-BResult MmsConfig::AutoConfigBlock(const ConfigurationPtr &conf)
+BResult MmsConfig::AutoConfigValueBlock(const ConfigurationPtr &conf)
 {
-    mMemConfig.minBlockSize = conf->GetInt(MEM_MIN_BLOCK_SIZE.first) * KB_UNIT;
-    mMemConfig.maxBlockSize = conf->GetInt(MEM_MAX_BLOCK_SIZE.first) * KB_UNIT;
-    if (mMemConfig.minBlockSize >= mMemConfig.maxBlockSize) {
-        LOG_ERROR("Invalid block size, min block:" << mMemConfig.minBlockSize << ", max block:"
-                                                   << mMemConfig.maxBlockSize << ".");
-        return MMS_INVALID_PARAM;
-    }
-
-    std::string rateStr = conf->GetStr(MEM_MIN_MAX_BLOCK_RATE.first);
-    std::vector<std::string> rateVec{};
-    StrUtil::Split(rateStr, ":", rateVec);
-    if (rateVec.size() != NO_2) {
-        LOG_ERROR("Invalid block rate:" << rateStr << ".");
-        return MMS_INVALID_PARAM;
-    }
-
-    if (UNLIKELY(!StrUtil::StrToLong(rateVec[NO_0], mMemConfig.blockRate.first) ||
-                 !StrUtil::StrToLong(rateVec[NO_1], mMemConfig.blockRate.second))) {
-        LOG_ERROR("Invalid block rate:" << rateStr << ".");
-        return MMS_INVALID_PARAM;
-    }
-
-    if (UNLIKELY((mMemConfig.blockRate.first < 0) || (mMemConfig.blockRate.second < 0) ||
-                 (mMemConfig.blockRate.first + mMemConfig.blockRate.second != NO_10))) {
-        LOG_ERROR("Invalid block rate:" << rateStr << ".");
-        return MMS_INVALID_PARAM;
-    }
-
+    mMemConfig.valueBlockSize = conf->GetInt(MEM_VALUE_BLOCK_SIZE.first) * KB_UNIT;
     return MMS_OK;
 }
 
@@ -176,7 +147,7 @@ BResult MmsConfig::AutoConfigMem(const ConfigurationPtr &conf)
         return ret;
     }
 
-    if (UNLIKELY(AutoConfigBlock(conf) != MMS_OK)) {
+    if (UNLIKELY(AutoConfigValueBlock(conf) != MMS_OK)) {
         return MMS_INVALID_PARAM;
     }
 

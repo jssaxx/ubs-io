@@ -57,9 +57,7 @@ CONFIG_RULES = {
     "mms.deployment.mode": r"^(separate|converge)$",
     "mms.mem.numa.id": r"^.+$",
     "mms.mem.numa.size": r"^.+$",
-    "mms.mem.min_block_size": r"^(6[0-4]|[1-5][0-9]|[1-9])$",
-    "mms.mem.max_block_size": r"^(6[0-4]|[1-5][0-9]|[1-9])$",
-    "mms.mem.min_max_block_rate": r"^(10|[0-9]):(10|[0-9])$",
+    "mms.mem.value.unit.size": r"^(6[0-4]|[1-5][0-9]|[1-9])$",
     "mms.net.rpc.ip_mask": r"^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}/(3[0-2]|[12]?\d)$",
     "mms.net.rpc.listen_port": r"^(720[1-9]|72[1-9]\d|7[3-7]\d{2}|7800)$",
     "mms.net.multicast.listen_port": r"^(720[1-9]|72[1-9]\d|7[3-7]\d{2}|7800)$",
@@ -95,4 +93,3 @@ g_config = configparser.ConfigParser()
 DEFAULT_INSTALL_PATH = "/opt"
 DEFAULT_DEPLOY_USER = ""
 DEFAULT_DEPLOY_GROUP = ""
-

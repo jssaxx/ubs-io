@@ -55,9 +55,7 @@ const auto NET_TLS_OPENSSL_LIB_PATH = std::make_pair("mms.net.tls.openssl.lib.pa
 
 const auto MEM_NUMA_ID = std::make_pair("mms.mem.numa.id", "0,1");
 const auto MEM_NUMA_SIZE = std::make_pair("mms.mem.numa.size", "32,32");
-const auto MEM_MIN_BLOCK_SIZE = std::make_pair("mms.mem.min_block_size", 2);
-const auto MEM_MAX_BLOCK_SIZE = std::make_pair("mms.mem.max_block_size", 10);
-const auto MEM_MIN_MAX_BLOCK_RATE = std::make_pair("mms.mem.min_max_block_rate", "8:2");
+const auto MEM_VALUE_BLOCK_SIZE = std::make_pair("mms.mem.value.unit.size", 2);
 
 const auto CM_NODE_NUM = std::make_pair("mms.cm.node.num", 3);
 const auto CM_NODE_ID = std::make_pair("mms.cm.node.id", NO_MAX_VALUE16);
@@ -117,9 +115,7 @@ public:
         uint16_t numaNum;
         uint16_t numaId[MAX_NUMAS_NUM];
         uint64_t numaSize[MAX_NUMAS_NUM];
-        uint16_t minBlockSize;
-        uint16_t maxBlockSize;
-        std::pair<long, long> blockRate; // min:max
+        uint32_t valueBlockSize;
     };
 
     struct BasicConfig {
@@ -167,7 +163,7 @@ private:
 
     BResult AutoConfAfterLoadFromFile(const ConfigurationPtr &conf);
 
-    BResult AutoConfigBlock(const ConfigurationPtr &conf);
+    BResult AutoConfigValueBlock(const ConfigurationPtr &conf);
 
     BResult AutoConfigMem(const ConfigurationPtr &conf);
 

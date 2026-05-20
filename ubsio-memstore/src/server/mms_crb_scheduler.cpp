@@ -21,8 +21,9 @@ namespace ock {
 namespace mms {
 
 constexpr uint8_t MAX_CRB_REQUEST_RETRY_COUNT = 5;
-constexpr uint32_t CRB_RECOVER_MESSAGE_BUFF_LEN = 128 * 1024;
+
 constexpr uint64_t CRB_PT_RECOVER_FINISH_FLAG = 1;
+constexpr uint32_t CRB_RECOVER_MESSAGE_BUFF_LEN = 128 * 1024;
 static thread_local uint16_t g_groupIndex = NumaGroupIndex::Instance()->GetGroupIndex();
 
 static bool IsCrbRetryable(BResult ret)
@@ -542,8 +543,8 @@ BResult CrbScheduler::EncodeKeyValueToBuff(char *msgBuff, uint32_t &buffOffset, 
     buffOffset += (keyLen + NO_1);
 
     // copy value
-    uint64_t readLen =
-        Cache::Instance()->GetDataFromBlockList(indexValue, msgBuff + buffOffset, 0, indexValue->totalDataLen);
+    uint64_t readLen = Cache::Instance()->GetDataFromBlock(indexValue, msgBuff + buffOffset, 0,
+                                                           indexValue->totalDataLen);
     if (UNLIKELY(readLen == 0)) {
         LOG_ERROR("Get data failed.");
         return MMS_INNER_ERR;

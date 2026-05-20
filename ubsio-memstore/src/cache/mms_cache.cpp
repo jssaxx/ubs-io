@@ -18,7 +18,6 @@
 namespace ock {
 namespace mms {
 
-static constexpr double BLOCK_WASTE_THRESHOLD = 0.2;
 static constexpr uint64_t INVALID_BLOCK_OFFSET = UINT64_MAX;
 constexpr uint16_t DATA_ALIVE = 0;
 constexpr uint16_t DATA_DELETED = 1;
@@ -29,9 +28,6 @@ BResult Cache::Init(uint64_t bucketMemAddr, uint64_t bucketMemSize, CacheLogFunc
     CacheLog::Instance()->SetLogFuncFunc(func);
 
     mBaseAddr = bucketMemAddr;
-    mBaseSize = bucketMemSize;
-    mMinBlockSize = blockSize.first;
-    mMaxBlockSize = blockSize.second;
 
     mMemMgr = MmsMemMgr::Instance();
 
@@ -51,8 +47,8 @@ BResult Cache::Init(uint64_t bucketMemAddr, uint64_t bucketMemSize, CacheLogFunc
         bucketNode->head.valid = FLAG_INVALID;
     }
 
-    CACHE_LOG_INFO("Init cache success, bucketCount:" << bucketCount << ", min block size:" << mMinBlockSize
-                                                      << ", max block size:" << mMaxBlockSize << ".");
+    CACHE_LOG_INFO("Init cache success, bucketCount:" << bucketCount << ", value base block size:" << blockSize.first
+                                                      << ".");
     return MMS_OK;
 }
 
@@ -60,106 +56,70 @@ void Cache::Exit()
 {
 }
 
-void FreeBlocks(std::vector<uint64_t> allocBlocks, MmsMemAllocatorPtr allocator)
+void FreeValueBlock(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocatorPtr valueAllocator)
 {
-    for (auto &addr : allocBlocks) {
-        allocator->MmsFree(addr);
+    if (indexValue->blockOffset == INVALID_BLOCK_OFFSET) {
+        return;
     }
-}
 
-void FreeValueBlocks(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocatorPtr valueAllocator)
-{
-    uint64_t curBlockAddr;
-    uint64_t curBlockOffset = indexValue->firstBlockOffset;
-    uint64_t nextBlockOffset;
-    while (curBlockOffset != INVALID_BLOCK_OFFSET) {
-        memMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
-        auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
-        nextBlockOffset = header->nextBlockOffset;
-        valueAllocator->MmsFree(curBlockAddr);
-        curBlockOffset = nextBlockOffset;
-    }
+    uint64_t blockAddr;
+    memMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, blockAddr);
+    MMS_TRACE_START(CACHE_FREE_BLOCK);
+    valueAllocator->MmsFree(blockAddr);
+    MMS_TRACE_END(CACHE_FREE_BLOCK, MMS_OK);
 }
 
 BResult Cache::AllocDataBlock(uint64_t remainLen, uint16_t &numaId, uint64_t &curBlockAddr, uint64_t &curBuffSize)
 {
-    uint64_t curBestDataSize = GetBestBlockSize(remainLen, BLOCK_WASTE_THRESHOLD);  // 仅表示数据部分长度
-    uint64_t realBlockSize = curBestDataSize + DATA_HEADER_SIZE;
-    BResult ret = mValueAllocator->MmsAlloc(realBlockSize, numaId, curBlockAddr);
-    if (LIKELY(ret == MMS_OK)) {
-        curBuffSize = curBestDataSize;
-        return MMS_OK;
-    }
-
-    uint64_t standbyBlockSize = (curBestDataSize == mMinBlockSize ? mMaxBlockSize : mMinBlockSize) + DATA_HEADER_SIZE;
-    ret = mValueAllocator->MmsAlloc(standbyBlockSize, numaId, curBlockAddr);
+    MMS_TRACE_START(CACHE_ALLOC_BLOCK);
+    BResult ret = mValueAllocator->MmsAlloc(remainLen + DATA_HEADER_SIZE, numaId, curBlockAddr);
+    MMS_TRACE_END(CACHE_ALLOC_BLOCK, ret);
     if (UNLIKELY(ret != MMS_OK)) {
-        CACHE_LOG_ERROR("Alloc value block failed, size:" << standbyBlockSize << ", ret:" << ret << ".");
+        CACHE_LOG_ERROR("Alloc value block failed, size:" << remainLen + DATA_HEADER_SIZE << ", ret:" << ret << ".");
         return MMS_ALLOC_FAIL;
     }
 
-    curBuffSize = standbyBlockSize - DATA_HEADER_SIZE;
+    uint64_t blockSize = mValueAllocator->GetBlockSize(curBlockAddr);
+    if (UNLIKELY(blockSize <= DATA_HEADER_SIZE)) {
+        mValueAllocator->MmsFree(curBlockAddr);
+        CACHE_LOG_ERROR("Invalid value block size:" << blockSize << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    curBuffSize = blockSize - DATA_HEADER_SIZE;
     return MMS_OK;
 }
 
-BResult Cache::PutDataIntoBlockList(IndexValue *indexValue, const char *data, uint64_t dataLen)
+BResult Cache::PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen)
 {
     if (indexValue == nullptr || data == nullptr || dataLen == 0) {
         CACHE_LOG_ERROR("Invalid para.");
         return MMS_INVALID_PARAM;
     }
 
-    uint64_t lastBlockAddr = 0;
-    uint64_t remainLen = dataLen;
     uint64_t curBlockAddr;
     uint64_t curBuffSize;
-    uint64_t curBlockOffset;
-    uint64_t dataOffset = 0;
     uint16_t numaId;
-    std::vector<uint64_t> allocBlocks{};
-    BResult ret;
-
-    while (remainLen > 0) {
-        ret = AllocDataBlock(remainLen, numaId, curBlockAddr, curBuffSize);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CACHE_LOG_ERROR("Alloc value block failed, all memory blocks are exhausted, ret: " << ret << ".");
-            FreeBlocks(allocBlocks, mValueAllocator);
-            return MMS_ALLOC_FAIL;
-        }
-        allocBlocks.push_back(curBlockAddr);
-
-        // 填入数据
-        auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
-        header->blockSize = curBuffSize;
-        header->nextBlockOffset = INVALID_BLOCK_OFFSET;
-        char *dstPtr = header->data;
-        uint64_t bytesToCopy = std::min(remainLen, curBuffSize);
-        ret = memcpy_s(dstPtr, curBuffSize, data + dataOffset, bytesToCopy);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
-            FreeBlocks(allocBlocks, mValueAllocator);
-            return MMS_INNER_ERR;
-        }
-
-        mMemMgr->Trans2Offset(MMAP_AREA_VALUE, curBlockAddr, curBlockOffset);
-        if (lastBlockAddr == 0) {
-            // 如果是第一个块
-            indexValue->firstBlockOffset = curBlockOffset;
-        } else {
-            auto lastBlockHeader = reinterpret_cast<DataHeader *>(lastBlockAddr);
-            lastBlockHeader->nextBlockOffset = curBlockOffset;
-        }
-
-        lastBlockAddr = curBlockAddr;
-        dataOffset += bytesToCopy;
-        remainLen -= bytesToCopy;
-        indexValue->totalDataLen += bytesToCopy;
+    BResult ret = AllocDataBlock(dataLen, numaId, curBlockAddr, curBuffSize);
+    if (UNLIKELY(ret != MMS_OK)) {
+        return ret;
     }
 
+    auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
+    header->blockSize = curBuffSize;
+    ret = memcpy_s(header->data, curBuffSize, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        mValueAllocator->MmsFree(curBlockAddr);
+        return MMS_INNER_ERR;
+    }
+
+    mMemMgr->Trans2Offset(MMAP_AREA_VALUE, curBlockAddr, indexValue->blockOffset);
+    indexValue->totalDataLen += dataLen;
     return MMS_OK;
 }
 
-uint64_t Cache::GetDataFromBlockList(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen)
+uint64_t Cache::GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen)
 {
     if (UNLIKELY(indexValue == nullptr || data == nullptr || dataLen == 0 || (offset >= indexValue->totalDataLen))) {
         CACHE_LOG_ERROR("Invalid para.");
@@ -167,83 +127,19 @@ uint64_t Cache::GetDataFromBlockList(IndexValue *indexValue, char *data, uint64_
     }
 
     uint64_t currentBlockAddr;
-    uint64_t currentBlockOffset = indexValue->firstBlockOffset;
-    uint64_t currentOffsetSeek = offset;
-    DataHeader *header = nullptr;
-
-    while (currentBlockOffset != INVALID_BLOCK_OFFSET) {
-        mMemMgr->Trans2Addr(MMAP_AREA_VALUE, currentBlockOffset, currentBlockAddr);
-        header = reinterpret_cast<DataHeader *>(currentBlockAddr);
-        if (currentOffsetSeek < header->blockSize) {
-            break;
-        }
-
-        currentOffsetSeek -= header->blockSize;
-        currentBlockOffset = header->nextBlockOffset;
-    }
-
-    if (currentBlockOffset == INVALID_BLOCK_OFFSET) {
-        CACHE_LOG_ERROR("Block list error, out of range.");
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, currentBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(currentBlockAddr);
+    uint64_t realLen = std::min(indexValue->totalDataLen - offset, dataLen);
+    if (UNLIKELY(offset > header->blockSize || realLen > header->blockSize - offset)) {
+        CACHE_LOG_ERROR("Block data out of range.");
         return 0;
     }
-
-    char *destPtr = data;
-    uint64_t totalBytesRemain = indexValue->totalDataLen - offset;
-    uint64_t remainingLen = std::min(dataLen, totalBytesRemain);
-    uint64_t totalRead = 0;
-    uint64_t offsetInsideBlock = currentOffsetSeek;
-    uint64_t destCapacity = dataLen;
-
-    while (remainingLen > 0 && currentBlockOffset != INVALID_BLOCK_OFFSET) {
-        mMemMgr->Trans2Addr(MMAP_AREA_VALUE, currentBlockOffset, currentBlockAddr);
-        header = reinterpret_cast<DataHeader *>(currentBlockAddr);
-        char *srcPtr = header->data;
-        uint64_t availableInBlock = header->blockSize - offsetInsideBlock;
-        uint64_t bytesToCopy = std::min(remainingLen, availableInBlock);
-
-        int ret = memcpy_s(destPtr, destCapacity, srcPtr + offsetInsideBlock, bytesToCopy);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
-            return 0;
-        }
-
-        destPtr += bytesToCopy;
-        destCapacity -= bytesToCopy;
-        remainingLen -= bytesToCopy;
-        totalRead += bytesToCopy;
-
-        offsetInsideBlock = 0;
-        currentBlockOffset = header->nextBlockOffset;
+    int ret = memcpy_s(data, dataLen, header->data + offset, realLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        return 0;
     }
-
-    return totalRead;
-}
-
-uint64_t Cache::GetBestBlockSize(uint64_t valueLen, double wasteThreshold)
-{
-    if (wasteThreshold <= 0 || wasteThreshold > NO_1) {
-        return mMinBlockSize;
-    }
-
-    if (valueLen <= mMinBlockSize) {
-        return mMinBlockSize;
-    }
-
-    if (valueLen >= mMaxBlockSize) {
-        return mMaxBlockSize;
-    }
-
-    double factor = 1.0;
-    uint64_t wasteThresholdSize = static_cast<uint64_t>(static_cast<double>(mMaxBlockSize) * (factor - wasteThreshold));
-    if (wasteThresholdSize <= mMinBlockSize) {
-        return mMinBlockSize;
-    }
-
-    if (valueLen >= wasteThresholdSize) {
-        return mMaxBlockSize;
-    }
-
-    return mMinBlockSize;
+    return realLen;
 }
 
 IndexNode *FindExistingNode(BucketNode *bucketNode, const char *key, uint32_t hashCode)
@@ -274,7 +170,7 @@ BResult Cache::HandlePutExistingNode(IndexNode *existingNode, const char *key, c
         return MMS_ALLOC_FAIL;
     }
 
-    uint64_t realLen = GetDataFromBlockList(currentValue, cacheValue, 0, length);
+    uint64_t realLen = GetDataFromBlock(currentValue, cacheValue, 0, length);
     if (realLen == 0 || realLen != length) {
         CACHE_LOG_ERROR("Get data from cache failed, key:" << key << ".");
         delete[] cacheValue;
@@ -317,7 +213,7 @@ BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t
     indexValue->version = version;
     indexValue->ptId = ptId;
     indexValue->isDelete = DATA_ALIVE;
-    indexValue->firstBlockOffset = INVALID_BLOCK_OFFSET;
+    indexValue->blockOffset = INVALID_BLOCK_OFFSET;
     indexValue->bucketNode = bucketNode;
 
     ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, keyStr.size());
@@ -327,7 +223,7 @@ BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t
         return MMS_ERR;
     }
     // 拷贝数据到cache
-    ret = PutDataIntoBlockList(indexValue, value, length);
+    ret = PutDataIntoBlock(indexValue, value, length);
     if (UNLIKELY(ret != MMS_OK)) {
         CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
         mIndexMemAllocator->MmsFree(indexValueAddr);
@@ -339,7 +235,7 @@ BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t
     if (existingNode != nullptr) {
         ret = HandlePutExistingNode(existingNode, key, value, length);
         CacheWriteUnLock(&bucketNode->status);
-        FreeValueBlocks(indexValue, mMemMgr, mValueAllocator);
+        FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
         mIndexMemAllocator->MmsFree(indexValueAddr);
         return ret;
     }
@@ -381,7 +277,7 @@ BResult Cache::Get(const char *key, uint64_t offset, uint64_t length, char *valu
         }
 
         uint64_t readLen = std::min(indexValue->totalDataLen - offset, length);
-        uint64_t realLen = GetDataFromBlockList(indexValue, value, offset, readLen);
+        uint64_t realLen = GetDataFromBlock(indexValue, value, offset, readLen);
         if (UNLIKELY(realLen == 0)) {
             CacheReadUnLock(&bucketNode->status);
             CACHE_LOG_ERROR("Get data failed.");
@@ -400,61 +296,72 @@ BResult Cache::Get(const char *key, uint64_t offset, uint64_t length, char *valu
     return MMS_NOT_EXISTS;
 }
 
-BResult Cache::HandleUpdateData(IndexValue *indexValue, uint64_t blockOffset, uint64_t currentOffsetSeek,
-                                DataHeader *preHeader, UpdateInfo &updateInfo)
+BResult Cache::ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen)
 {
-    std::vector<uint64_t> allocBlocks{};
-    uint64_t remainLen = updateInfo.length;
-    uint64_t curBuffSize;
-    uint16_t numaId;
-    uint64_t offsetInsideBlock = currentOffsetSeek;
-    DataHeader *header = preHeader;
-    uint64_t dataOffset = 0;
-    uint64_t curBlockAddr;
-    uint64_t curBlockOffset = blockOffset;
-    BResult ret;
-
-    while (remainLen > 0) {
-        if (curBlockOffset == INVALID_BLOCK_OFFSET) {  // 从数据最末尾接着写,先申请一个块接上去
-            ret = AllocDataBlock(remainLen, numaId, curBlockAddr, curBuffSize);
-            if (UNLIKELY(ret != MMS_OK)) {
-                CACHE_LOG_ERROR("Alloc value block failed, all memory blocks are exhausted, ret: " << ret << ".");
-                FreeBlocks(allocBlocks, mValueAllocator);
-                return MMS_ALLOC_FAIL;
-            }
-
-            auto curHeader = reinterpret_cast<DataHeader *>(curBlockAddr);
-            curHeader->nextBlockOffset = INVALID_BLOCK_OFFSET;
-            curHeader->blockSize = curBuffSize;
-            allocBlocks.push_back(curBlockAddr);
-            mMemMgr->Trans2Offset(MMAP_AREA_VALUE, curBlockAddr, curBlockOffset);
-            header->nextBlockOffset = curBlockOffset;
-        }
-
-        mMemMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
-        header = reinterpret_cast<DataHeader *>(curBlockAddr);
-        uint64_t availableInBlock = header->blockSize - offsetInsideBlock;
-        uint64_t bytesToCopy = std::min(remainLen, availableInBlock);
-        char *dest = header->data + offsetInsideBlock;
-
-        ret = memcpy_s(dest, header->blockSize - offsetInsideBlock, updateInfo.data + dataOffset, bytesToCopy);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
-            FreeBlocks(allocBlocks, mValueAllocator);
-            return MMS_INNER_ERR;
-        }
-
-        remainLen -= bytesToCopy;
-        dataOffset += bytesToCopy;
-        offsetInsideBlock = 0;
-        curBlockOffset = header->nextBlockOffset;
+    if (UNLIKELY(offset != 0)) {
+        CACHE_LOG_ERROR("Cannot update empty data with nonzero offset, offset:" << offset << ".");
+        return MMS_INNER_ERR;
     }
 
-    indexValue->totalDataLen = std::max(indexValue->totalDataLen, updateInfo.offset + updateInfo.length);
+    // 复活墓碑数据
+    BResult ret = PutDataIntoBlock(indexValue, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key <<  ".");
+        return ret;
+    }
+    mLsmArtTree.Insert(indexValue->key, indexValue);
     return MMS_OK;
 }
 
-BResult Cache::UpdateDataInBlockList(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen)
+BResult Cache::UpdateDataInCurrentBlock(IndexValue *indexValue, DataHeader *header, const char *data, uint64_t offset,
+                                        uint64_t dataLen)
+{
+    BResult ret = memcpy_s(header->data + offset, header->blockSize - offset, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        return MMS_INNER_ERR;
+    }
+    indexValue->totalDataLen = std::max(indexValue->totalDataLen, offset + dataLen);
+    return MMS_OK;
+}
+
+BResult Cache::ExpandAndUpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                                        uint64_t curBlockAddr)
+{
+    auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
+    uint64_t newDataLen = std::max(indexValue->totalDataLen, offset + dataLen);
+    uint64_t newBlockAddr;
+    uint64_t newBuffSize;
+    uint16_t numaId;
+    BResult ret = AllocDataBlock(newDataLen, numaId, newBlockAddr, newBuffSize);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Alloc value block failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    auto newHeader = reinterpret_cast<DataHeader *>(newBlockAddr);
+    newHeader->blockSize = newBuffSize;
+    ret = memcpy_s(newHeader->data, newBuffSize, header->data, indexValue->totalDataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        mValueAllocator->MmsFree(newBlockAddr);
+        return MMS_INNER_ERR;
+    }
+
+    ret = memcpy_s(newHeader->data + offset, newBuffSize - offset, data, dataLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
+        mValueAllocator->MmsFree(newBlockAddr);
+        return MMS_INNER_ERR;
+    }
+
+    mMemMgr->Trans2Offset(MMAP_AREA_VALUE, newBlockAddr, indexValue->blockOffset);
+    indexValue->totalDataLen = newDataLen;
+    mValueAllocator->MmsFree(curBlockAddr);
+    return MMS_OK;
+}
+
+BResult Cache::UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen)
 {
     if (UNLIKELY(indexValue == nullptr || data == nullptr)) {
         CACHE_LOG_ERROR("Invalid para.");
@@ -466,46 +373,25 @@ BResult Cache::UpdateDataInBlockList(IndexValue *indexValue, const char *data, u
         return MMS_INNER_ERR;
     }
 
-    uint64_t curBlockAddr;
-    uint64_t curBlockOffset = indexValue->firstBlockOffset;
+    uint64_t curBlockOffset = indexValue->blockOffset;
     if (UNLIKELY(curBlockOffset == INVALID_BLOCK_OFFSET)) {
-        if (UNLIKELY(offset != 0)) {
-            CACHE_LOG_ERROR("Cannot update empty data with nonzero offset, offset:" << offset << ".");
-            return MMS_INNER_ERR;
-        }
-
-        // 复活墓碑数据
-        BResult ret = PutDataIntoBlockList(indexValue, data, dataLen);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key <<  ".");
-            return ret;
-        }
-        mLsmArtTree.Insert(indexValue->key, indexValue);
+        return ReviveDataBlock(indexValue, data, offset, dataLen);
     }
 
-    uint64_t currentOffsetSeek = offset;
-    DataHeader *header = nullptr;
-
-    // 先偏移到offset位置
-    while (curBlockOffset != INVALID_BLOCK_OFFSET) {
-        mMemMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
-        header = reinterpret_cast<DataHeader *>(curBlockAddr);
-        if (currentOffsetSeek < header->blockSize) {
-            break;
-        }
-
-        currentOffsetSeek -= header->blockSize;
-        curBlockOffset = header->nextBlockOffset;
+    if (UNLIKELY(dataLen > UINT64_MAX - offset)) {
+        CACHE_LOG_ERROR("Invalid update range, offset:" << offset << ", length:" << dataLen << ".");
+        return MMS_INVALID_PARAM;
     }
 
-    UpdateInfo para = {data, offset, dataLen};
-    BResult ret = HandleUpdateData(indexValue, curBlockOffset, currentOffsetSeek, header, para);
-    if (UNLIKELY(ret != MMS_OK)) {
-        CACHE_LOG_ERROR("Update in block list failed, ret:" << ret << ".");
-        return ret;
+    uint64_t curBlockAddr;
+    uint64_t newDataLen = std::max(indexValue->totalDataLen, offset + dataLen);
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
+    if (LIKELY(newDataLen <= header->blockSize)) {
+        return UpdateDataInCurrentBlock(indexValue, header, data, offset, dataLen);
     }
 
-    return MMS_OK;
+    return ExpandAndUpdateDataBlock(indexValue, data, offset, dataLen, curBlockAddr);
 }
 
 BResult Cache::Update(const char *key, const char *value, uint64_t offset, uint64_t length, uint32_t version)
@@ -524,10 +410,10 @@ BResult Cache::Update(const char *key, const char *value, uint64_t offset, uint6
             continue;
         }
 
-        BResult ret = UpdateDataInBlockList(indexValue, value, offset, length);
+        BResult ret = UpdateDataBlock(indexValue, value, offset, length);
         if (UNLIKELY(ret != MMS_OK)) {
             CacheWriteUnLock(&bucketNode->status);
-            CACHE_LOG_ERROR("Update data in block list failed, key:" << key << ", ret:" << ret << ".");
+            CACHE_LOG_ERROR("Update data block failed, key:" << key << ", ret:" << ret << ".");
             return MMS_ERR;
         }
 
@@ -560,7 +446,7 @@ BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32
     indexValue->totalDataLen = 0;
     indexValue->version = version;
     indexValue->isDelete = DATA_DELETED;
-    indexValue->firstBlockOffset = INVALID_BLOCK_OFFSET;
+    indexValue->blockOffset = INVALID_BLOCK_OFFSET;
     indexValue->bucketNode = bucketNode;
 
     ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, strlen(key));
@@ -603,18 +489,7 @@ BResult Cache::Delete(const char *key, uint32_t version)
             return MMS_OK;
         }
 
-        // 释放掉所有block
-        uint64_t curBlockAddr;
-        uint64_t curBlockOffset = indexValue->firstBlockOffset;
-        uint64_t nextBlockOffset;
-        while (curBlockOffset != INVALID_BLOCK_OFFSET) {
-            mMemMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
-            auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
-            nextBlockOffset = header->nextBlockOffset;
-            mValueAllocator->MmsFree(curBlockAddr);
-            curBlockOffset = nextBlockOffset;
-        }
-
+        FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
         uint64_t indexValueAddr = node->indexValueAddr;
         *node = indexValue->next;
 
@@ -659,7 +534,7 @@ BResult Cache::HandleReplacePut(IndexNode &curNode, const std::string &key, cons
     mMemMgr->Trans2Offset(MMAP_AREA_INDEX, indexValueAddr, indexNumaOffset);
     IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexValueAddr);
     indexValue->totalDataLen = 0;
-    indexValue->firstBlockOffset = INVALID_BLOCK_OFFSET;
+    indexValue->blockOffset = INVALID_BLOCK_OFFSET;
 
     ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key.c_str(), key.size());
     if (UNLIKELY(ret != 0)) {
@@ -668,7 +543,7 @@ BResult Cache::HandleReplacePut(IndexNode &curNode, const std::string &key, cons
         return MMS_ERR;
     }
     // 拷贝数据到cache
-    ret = PutDataIntoBlockList(indexValue, value, length);
+    ret = PutDataIntoBlock(indexValue, value, length);
     if (UNLIKELY(ret != MMS_OK)) {
         CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
         mIndexMemAllocator->MmsFree(indexValueAddr);
@@ -701,10 +576,10 @@ BResult Cache::Replace(const ReplacePara &para)
             return MMS_OK;
         }
 
-        ret = UpdateDataInBlockList(indexValue, para.value, para.offset, para.length);
+        ret = UpdateDataBlock(indexValue, para.value, para.offset, para.length);
         if (UNLIKELY(ret != MMS_OK)) {
             CacheWriteUnLock(&bucketNode->status);
-            CACHE_LOG_ERROR("Update data in block list failed, key:" << para.key << ", ret:" << ret << ".");
+            CACHE_LOG_ERROR("Update data block failed, key:" << para.key << ", ret:" << ret << ".");
             return MMS_ERR;
         }
 
@@ -759,17 +634,7 @@ void Cache::ClearDeletedData()
                 continue;
             }
 
-            // 释放掉所有block
-            uint64_t curBlockAddr;
-            uint64_t curBlockOffset = indexValue->firstBlockOffset;
-            uint64_t nextBlockOffset;
-            while (curBlockOffset != INVALID_BLOCK_OFFSET) {
-                mMemMgr->Trans2Addr(MMAP_AREA_VALUE, curBlockOffset, curBlockAddr);
-                auto header = reinterpret_cast<DataHeader *>(curBlockAddr);
-                nextBlockOffset = header->nextBlockOffset;
-                mValueAllocator->MmsFree(curBlockAddr);
-                curBlockOffset = nextBlockOffset;
-            }
+            FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
 
             uint64_t indexValueAddr = node->indexValueAddr;
             *node = indexValue->next;
@@ -827,7 +692,7 @@ static int ArtSearchCallBack(void *data, const unsigned char *key, uint32_t keyL
         return MMS_INNER_ERR;
     }
 
-    uint64_t readLen = insCtx->GetDataFromBlockList(indexValue, valueBuff, 0, indexValue->totalDataLen);
+    uint64_t readLen = insCtx->GetDataFromBlock(indexValue, valueBuff, 0, indexValue->totalDataLen);
     if (UNLIKELY(readLen == 0)) {
         CacheReadUnLock(&bucketNode->status);
         freeMemFuc();
