@@ -1361,12 +1361,9 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
             plan.req->keysInfo[plan.index].memCount = param.col;
             plan.req->keysInfo[plan.index].hbmMemPosition = reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].hbmMemAddr) - reinterpret_cast<uintptr_t>(plan.req);
             plan.req->keysInfo[plan.index].memSizePosition = reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].memSize) - reinterpret_cast<uintptr_t>(plan.req);
-            CLIENT_LOG_INFO("Batch get open trans key:" << plan.req->keysInfo[plan.index].key << ", hbmMemAddr addr:" << plan.req->keysInfo[plan.index].hbmMemAddr <<
-                ", memsize addr:" << plan.req->keysInfo[plan.index].memSize);
             for (uint32_t j = 0; j < param.col; j++) {
                 plan.req->keysInfo[plan.index].hbmMemAddr[j] = param.memAddr[i][j];
                 plan.req->keysInfo[plan.index].memSize[j] = param.memSize[i][j];
-                CLIENT_LOG_INFO("index:" << j << ", hbmMemAddr:" << plan.req->keysInfo[plan.index].hbmMemAddr[j] << ", memSize:" << plan.req->keysInfo[plan.index].memSize[j]);
             }
         } else {
             ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
@@ -1393,9 +1390,9 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         plan.index++;
     }
 
-    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND);
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND_HBM_REMOTE);
     ret = SendBatchGetRemoteHbmRequest(planSend);
-    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND_HBM_REMOTE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
     }
@@ -1443,9 +1440,9 @@ BResult MirrorClient::BatchGetLocalImpl(MirrorBatchGetLocalHbm &param)
     req->pid = getpid();
     req->isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
 
-    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND);
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_SEND_HBM_LOCAL);
     ret = SendBatchGetLocalHbmRequest(req,  reqLen);
-    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND_HBM_LOCAL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
         for (uint32_t j = 0; j < param.count; j++) {
@@ -2626,10 +2623,8 @@ BResult MirrorClient::SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, 
 
     auto it = planSend.begin();
     for (auto plan : planSend) {
-        BIO_TRACE_START(SDK_TRACE_BATCH_GET_REMOTE);
         net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(plan.first), BIO_OP_SDK_BATCH_GET_REMTOE_HBM,
                                                      static_cast<void *>(plan.second.req), plan.second.reqLen, callback);
-        BIO_TRACE_END(SDK_TRACE_BATCH_GET_REMOTE, BIO_OK);
     }
 
 
@@ -2640,10 +2635,7 @@ BResult MirrorClient::SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, 
 
 BResult MirrorClient::SendBatchGetLocalHbmRequest(BatchGetLocalHbmRequest *req, uint32_t reqLen)
 {
-    BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL);
-    auto ret = agent::BioClientAgent::Instance()->BatchGetLocalHbm(req, reqLen);
-    BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL, ret);
-    return ret;
+    return agent::BioClientAgent::Instance()->BatchGetLocalHbm(req, reqLen);
 }
 
 BResult MirrorClient::GetShmDataCallBack(GetResponse *rsp, uint64_t &realLen, const GetRequest &req, char *value)

@@ -1094,7 +1094,6 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                 LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
                 return ret;
             }
-            LOG_ERROR("BatchGet trace key:" << keyInfo.key << ", trans mem:" << tranceMem);
             if (from->GetFlowType() == FLOW_DISK) {
                 char *diskMem = reinterpret_cast<char*>(malloc(from->GetLength()));
                 ret = mSliceOp.Copy(from, diskMem, from->GetLength());
@@ -1103,7 +1102,9 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                     BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
                     return ret;
                 }
+                BIO_TRACE_START(MIRROR_TRACE_GET_TRANS_COPY_DISK_DATA);
                 ret = memcpy_s(reinterpret_cast<void*>(tranceMem), from->GetLength(), diskMem, from->GetLength());
+                BIO_TRACE_END(MIRROR_TRACE_GET_TRANS_COPY_DISK_DATA, ret);
                 free(diskMem);
                 if (UNLIKELY(ret != BIO_OK)) {
                     LOG_ERROR("Sys mem copy to trance mem copy fail, key:" << keyInfo.key << ", ret:" << ret);
@@ -1158,9 +1159,9 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
     };
 
     uint64_t realLen = 0;
-    BIO_TRACE_START(MIRROR_TRACE_GET);
+    BIO_TRACE_START(MIRROR_TRACE_GET_HBM_REMOTE);
     BResult ret = Cache::Instance().Get(keyInfo.key, 0, sliceP, writer, realLen);
-    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
+    BIO_TRACE_END(MIRROR_TRACE_GET_HBM_REMOTE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << keyInfo.key << ".");
     }
@@ -1193,9 +1194,9 @@ BResult MirrorServer::BatchSingleGetLocalHbm(GetKeyLocalHbmInfo &keyInfo, BatchG
     };
 
     uint64_t realLen = 0;
-    BIO_TRACE_START(MIRROR_TRACE_GET);
+    BIO_TRACE_START(MIRROR_TRACE_GET_HBM_LOCAL);
     BResult ret = Cache::Instance().Get(keyInfo.key, 0, sliceP, writer, realLen);
-    BIO_TRACE_END(MIRROR_TRACE_GET, ret);
+    BIO_TRACE_END(MIRROR_TRACE_GET_HBM_LOCAL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << keyInfo.key << ".");
     }
@@ -2043,13 +2044,13 @@ int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGet
     std::vector<uint64_t> realLengths(req->count);
     std::vector<int32_t> results(req->count);
 
-    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_HBM_LOCAL);
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
-            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_LOCAL);
+            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_HBM_LOCAL);
             results[index] = BatchSingleGetLocalHbm(req->keysInfo[index], req);
-            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_LOCAL, results[index]);
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_HBM_LOCAL, results[index]);
             if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
                 sem_post(&sem);
@@ -2064,7 +2065,7 @@ int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGet
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_HBM_LOCAL, BIO_OK);
 
     BatchGetLocalHbmResponse rsp;
     rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
@@ -2084,13 +2085,13 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
     std::vector<uint64_t> realLengths(req->count);
     std::vector<int32_t> results(req->count);
 
-    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_HBM_REMOTE);
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
-            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET);
+            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_HBM_REMOTE);
             results[index] = BatchSingleGetRemoteHbm(req->keysInfo[index], req);
-            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, results[index]);
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_HBM_REMOTE, results[index]);
             if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
                 // 最后一个任务唤醒主线程.
                 sem_post(&sem);
@@ -2105,7 +2106,7 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_HBM_REMOTE, BIO_OK);
 
     BatchGetRemoteHbmResponse rsp;
     rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();

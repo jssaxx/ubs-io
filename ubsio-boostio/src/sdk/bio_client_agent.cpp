@@ -801,11 +801,11 @@ BResult BioClientAgent::BatchGetLocalHbm(BatchGetLocalHbmRequest *req,  uint32_t
         return BIO_INNER_ERR;
     } else {
         BatchGetLocalHbmResponse rsp;
-        BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
+        BIO_TRACE_START(SDK_TRACE_BATCH_GET_HBM_LOCAL_SEND);
         auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchGetLocalHbmRequest,
             BatchGetLocalHbmResponse>(INVALID_NID,
                                       BIO_OP_SDK_BATCH_GET_LOCAL_HBM, reinterpret_cast<void*>(req), reqLen, rsp);
-        BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, ret);
+        BIO_TRACE_END(SDK_TRACE_BATCH_GET_HBM_LOCAL_SEND, ret);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Send sync batch get request failed, ret:" << ret << ".");
             return ret;

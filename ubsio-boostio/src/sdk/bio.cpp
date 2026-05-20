@@ -333,12 +333,12 @@ CResult Bio::BatchGetLocal(const char **keys, const uint32_t count, uint64_t *le
         }
     }
 
-    BIO_TRACE_START(SDK_TRACE_BATCH_GET);
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_HBM_LOCAL);
     MirrorClient::MirrorBatchGetLocalHbm param{ { mTenantId, mAffinity, mStrategy },
                                         keys, count, lengths, locations,
                                         valueAddrs, results };
     BResult ret = gClient->BatchGetLocal(param);
-    BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_HBM_LOCAL, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
     } else {
@@ -359,11 +359,11 @@ CResult Bio::BatchGetRemote(const char **keys, const uint32_t count,
         return RET_CACHE_EPERM;
     }
 
-    BIO_TRACE_START(SDK_TRACE_BATCH_GET);
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_HBM_REMOTE);
     MirrorClient::MirrorBatchGetRemoteHbm param{ { mTenantId, mAffinity, mStrategy },
                                                 keys, count, locations, memAddr, memSize, row, col, valueAddrs, results };
     BResult ret = gClient->BatchGetRemote(param);
-    BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_HBM_REMOTE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
     } else {
