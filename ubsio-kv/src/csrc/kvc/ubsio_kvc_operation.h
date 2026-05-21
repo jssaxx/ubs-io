@@ -68,7 +68,16 @@ int32_t KvBatchGetLocalData(const std::vector<std::string> &keys, void **bufs,
                             std::vector<int32_t> &results,
                             uint32_t flags);
 
+int32_t KvBatchGetLocalData(const char **keys, uint32_t keysCount, void **bufs,
+                            std::vector<size_t> &lengths,
+                            std::vector<int32_t> &results,
+                            uint32_t flags);
+
 int32_t KvBatchGetRemoteData(const std::vector<std::string> &keys, uintptr_t **npuAddrs,
+                             std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
+                             std::vector<int32_t> &results, uint32_t flags);
+
+int32_t KvBatchGetRemoteData(const char **keys, uint32_t keysCount, uintptr_t **npuAddrs,
                              std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
                              std::vector<int32_t> &results, uint32_t flags);
 

@@ -37,14 +37,14 @@ public:
 
 private:
     struct H2DParams {
-        H2DParams() = delete;
-        H2DParams(std::vector<std::vector<uintptr_t>>& npuAddrVec,
-                  std::vector<std::vector<size_t>>& lengthVec,
-                  std::vector<void *>& hostAddrVec)
-                  : npuAddrs(npuAddrVec), lengths(lengthVec), hostAddrs(hostAddrVec) {}
-        std::vector<std::vector<uintptr_t>>& npuAddrs;
-        std::vector<std::vector<size_t>>& lengths;
-        std::vector<void *>& hostAddrs;
+        H2DParams() = default;
+        H2DParams(std::vector<std::vector<uintptr_t>>&& npuAddrVec,
+                  std::vector<std::vector<size_t>>&& lengthVec,
+                  std::vector<void *>&& hostAddrVec)
+                  : npuAddrs(std::move(npuAddrVec)), lengths(std::move(lengthVec)), hostAddrs(std::move(hostAddrVec)) {}
+        std::vector<std::vector<uintptr_t>> npuAddrs;
+        std::vector<std::vector<size_t>> lengths;
+        std::vector<void *> hostAddrs;
     };
 
     struct ReadParams {
@@ -60,6 +60,18 @@ private:
         std::vector<std::vector<size_t>> lengths;
         std::vector<uint32_t> oriIndex;
     };
+    // 单批次读取结果，用于并发读取后串行H2D拷贝
+    struct BatchReadResult {
+        std::vector<int32_t> batchResult;
+        std::vector<void *> dramAddrsVector;
+        H2DParams h2dParams;
+        std::vector<uint32_t> batchOriIndex;
+        KvcError readRet{UBSIO_KVC_ERR};
+        bool needH2D{false};       // 是否需要H2D拷贝
+        bool rh2dSuccess{false};   // remote rh2d路径直接成功
+        BatchReadResult() : h2dParams() {}
+    };
+
     KvcInstance() = default;
 
     ~KvcInstance()
@@ -69,8 +81,10 @@ private:
         }
     }
     KvcError ReadLocal(ReadParams &params, int *results);
-    
     KvcError ReadRemote(ReadParams &params, int *results);
+
+    KvcError ReadLocalBatch(ReadParams &params, int *results);
+    KvcError ReadRemoteBatch(ReadParams &params, int *results);
 
     KvcError CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
                          const std::vector<uint32_t> &origIndex, int *results);
