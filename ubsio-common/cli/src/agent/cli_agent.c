@@ -150,9 +150,17 @@ static void flush_print_buffer(AgentCmdContext *ctx)
     if (ctx == NULL || ctx->print_len == 0) {
         return;
     }
-    if (agent_send(CLI_FRAME_DATA, ctx->client_id, ctx->print_buf, (uint32_t)ctx->print_len) != RETURN_OK) {
-        ctx->print_len = 0;
-        return;
+
+    char *p = ctx->print_buf;
+    size_t left = ctx->print_len;
+    while (left > 0) {
+        uint32_t chunk = left > CLI_MAX_PAYLOAD ? CLI_MAX_PAYLOAD : (uint32_t)left;
+        if (agent_send(CLI_FRAME_DATA, ctx->client_id, p, chunk) != RETURN_OK) {
+            ctx->print_len = 0;
+            return;
+        }
+        p += chunk;
+        left -= chunk;
     }
     ctx->print_len = 0;
 }
