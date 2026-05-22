@@ -326,11 +326,7 @@ private:
 
     inline void BatchGetHbmRecycleResouces(uint32_t index, MirrorBatchGetRemoteHbm &param)
     {
-        if (mEnableTrance) {
-            for (uint32_t j = 0; j < index; j++) {
-                // todo 清理req;
-            }
-        } else {
+        if (!mEnableTrance) {
             for (uint32_t j = 0; j < index; j++) {
                 mDataMsgMemPool->ReleaseOne(param.valueAddrs[j]);  // rollback.
             }

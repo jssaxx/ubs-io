@@ -1399,6 +1399,11 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND_HBM_REMOTE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
+        if (!mEnableTrance) {
+            for (uint32_t j = 0; j < param.count; j++) {
+                mDataMsgMemPool->ReleaseOne(param.valueAddrs[j]);  // rollback.
+            }
+        }
     }
 
     // todo 清理req;
@@ -1427,7 +1432,7 @@ BResult MirrorClient::BatchGetLocalImpl(MirrorBatchGetLocalHbm &param)
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
             for (uint32_t j = 0; j < i; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valuesAddr[i]);  // rollback.
+                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
             }
             free(req);
             return BIO_ALLOC_FAIL;
@@ -2608,8 +2613,12 @@ BResult MirrorClient::SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, 
             cbCtx->result = result;
         } else if (resp != nullptr) {
             auto rsp = static_cast<BatchGetRemoteHbmResponse *>(resp);
-            for (uint32_t i = 0; i < rsp->count; i++) {
-                *(planSend[rsp->nodeId].req->keysInfo[i].result) = rsp->results[i];
+            if (rsp->count > KEY_MAX_COUNT) {
+                cbCtx->result = BIO_INVALID_PARAM;
+            } else {
+                for (uint32_t i = 0; i < rsp->count; i++) {
+                    *(planSend[rsp->nodeId].req->keysInfo[i].result) = rsp->results[i];
+                }
             }
         } else {
             cbCtx->result = BIO_INVALID_PARAM;
