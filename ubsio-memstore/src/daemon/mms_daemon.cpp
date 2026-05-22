@@ -14,10 +14,33 @@
 #include <sys/resource.h>
 
 #include "mms_server.h"
+#include "mms_c.h"
 
 using namespace ock::mms;
 
 static std::atomic<bool> gDaemonRunning = { false };
+
+static auto g_server_ins = MmsServer::Instance();
+
+std::string OpTypeToString(OperateType opType) {
+    switch (opType) {
+        case OperateType::OP_PUT:
+            return "OP_PUT";
+        case OperateType::OP_UPDATE:
+            return "OP_UPDATE";
+        case OperateType::OP_DELETE:
+            return "OP_DELETE";
+        case OperateType::OP_REPLACE:
+            return "OP_REPLACE";
+        default:
+            return "OP_UNKNOWN";
+    }
+}
+
+static void NotifyCallbackFun(const char *key, OperateType opType)
+{
+    LOG_INFO("Data changed, key:" << key << " opType:" << OpTypeToString(opType) << ".");
+}
 
 static void HandleSigterm(int signum)
 {
@@ -46,12 +69,18 @@ static void ServiceStateFunc(bool serviceable)
 
 int main(int argc, char *argv[])
 {
-    auto mmsServer = MmsServer::Instance();
-    auto ret = mmsServer->Start(ServiceStateFunc);
+    auto ret = g_server_ins->Start(ServiceStateFunc);
     if (ret != MMS_OK) {
         std::cout << "mms daemon start failed:" << ret << "." << std::endl;
         return -1;
     }
+
+    auto callbackRet = MmsRegisterCallback(NotifyCallbackFun);
+    if (callbackRet != RET_MMS_OK) {
+        std::cout << "mms register notify callback failed:" << callbackRet << "." << std::endl;
+        return -1;
+    }
+
     struct sigaction termSa {};
     termSa.sa_handler = &HandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
@@ -61,5 +90,6 @@ int main(int argc, char *argv[])
     while (gDaemonRunning) {
         sleep(5U);
     }
+    (void)MmsRegisterCallback(nullptr);
     return 0;
 }

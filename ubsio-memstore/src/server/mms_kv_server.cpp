@@ -18,6 +18,7 @@
 #include "mms_server.h"
 #include "mms_trace.h"
 #include "mms_kv_server.h"
+#include "mms_notify.h"
 
 namespace ock {
 namespace mms {
@@ -57,6 +58,9 @@ BResult MmsKvServer::Initialize()
     mMemMgr = MmsServer::Instance()->GetMemMgr();
     mMemAllocator = MmsServer::Instance()->GetMemAllocator();
     mCache = MmsServer::Instance()->GetCache();
+    mNotifyDispatcher = &MmsNotifyDispatcher::Instance();
+    mDataChangeCallbackSwitch = MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch;
+
     allocFunc = [this](uint64_t size, uint16_t &numaId, uintptr_t &blockAddr) {
         return mMemAllocator->MmsAlloc(size, numaId, blockAddr);
     };
@@ -735,6 +739,11 @@ BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen)
             result = ret;
             break;
         }
+        if (UNLIKELY(mDataChangeCallbackSwitch) && LIKELY(ret == MMS_OK)) {
+            MMS_TRACE_START(SERVER_TRACE_NOTIFY_DATA_CHANGE);
+            mNotifyDispatcher->Notify(itemListPut[index].key, OP_PUT);
+            MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
+        }
     }
     return result;
 }
@@ -1358,6 +1367,11 @@ BResult MmsKvServer::DeleteLocal(void *ioBuff, uint32_t ioLen)
                       req->head.ptId);
             result = ret;
             break;
+        }
+        if (UNLIKELY(mDataChangeCallbackSwitch) && LIKELY(ret == MMS_OK)) {
+            MMS_TRACE_START(SERVER_TRACE_NOTIFY_DATA_CHANGE);
+            mNotifyDispatcher->Notify(itemListDelete[index].key, OP_DELETE);
+            MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
         }
     }
     return result;

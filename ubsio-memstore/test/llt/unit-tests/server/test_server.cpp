@@ -11,6 +11,12 @@
  */
 
 #include "test_server.h"
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
 #include "mms_log.h"
 #include "mms_conv.h"
 #include "mms_types.h"
@@ -28,6 +34,39 @@ std::map<uint16_t, CmPtInfo> fakePts;
 std::unordered_map<std::string, std::string> fakeKvMap;
 MmsNodeId g_MasterId = 0;
 bool needSleep = false;
+
+namespace {
+std::mutex gNotifyMutex;
+std::condition_variable gNotifyCv;
+std::vector<std::pair<std::string, OperateType>> gNotifyEvents;
+
+void ClearNotifyEvents()
+{
+    std::lock_guard<std::mutex> lock(gNotifyMutex);
+    gNotifyEvents.clear();
+}
+
+void NotifyTestCallback(const char *key, OperateType opType)
+{
+    std::lock_guard<std::mutex> lock(gNotifyMutex);
+    gNotifyEvents.emplace_back(key, opType);
+    gNotifyCv.notify_all();
+}
+
+bool WaitForNotifyCount(size_t count, std::chrono::milliseconds timeout = std::chrono::milliseconds(5000))
+{
+    std::unique_lock<std::mutex> lock(gNotifyMutex);
+    return gNotifyCv.wait_for(lock, timeout, [count] {
+        return gNotifyEvents.size() >= count;
+    });
+}
+
+std::vector<std::pair<std::string, OperateType>> GetNotifyEvents()
+{
+    std::lock_guard<std::mutex> lock(gNotifyMutex);
+    return gNotifyEvents;
+}
+}
 
 void TestServer::SetUp()
 {
@@ -215,6 +254,57 @@ TEST_F(TestServer, test_mms_delete)
     ret = MmsConv::Get(userId, &getItem, itemNum);
     EXPECT_EQ(ret, MMS_NOT_EXISTS);
     delete[] getValue;
+}
+
+TEST_F(TestServer, test_mms_notify_put_and_delete)
+{
+    uint64_t userId = 100;
+    const char *key1 = "notify_key_001";
+    const char *key2 = "notify_key_002";
+    const char *missKey = "notify_key_missing";
+    const char *value1 = "notify_value_001";
+    const char *value2 = "notify_value_002";
+    PutItems putItems[] = {
+        {const_cast<char *>(key1), const_cast<char *>(value1), strlen(value1)},
+        {const_cast<char *>(key2), const_cast<char *>(value2), strlen(value2)},
+    };
+
+    ClearNotifyEvents();
+    EXPECT_EQ(MmsConv::RegisterCallback(NotifyTestCallback), RET_MMS_OK);
+
+    auto ret = MmsConv::Put(userId, putItems, NO_2);
+    EXPECT_EQ(ret, RET_MMS_OK);
+    EXPECT_TRUE(WaitForNotifyCount(NO_2));
+    auto events = GetNotifyEvents();
+    EXPECT_GE(events.size(), static_cast<size_t>(NO_2));
+    if (events.size() >= NO_2) {
+        EXPECT_EQ(events[0], std::make_pair(std::string(key1), OP_PUT));
+        EXPECT_EQ(events[1], std::make_pair(std::string(key2), OP_PUT));
+    }
+
+    ret = MmsConv::Put(userId, putItems, NO_1);
+    EXPECT_EQ(ret, RET_MMS_OK);
+    EXPECT_FALSE(WaitForNotifyCount(NO_3, std::chrono::milliseconds(200)));
+
+    DeleteItems deleteItems[] = {
+        {const_cast<char *>(key1)},
+        {const_cast<char *>(missKey)},
+    };
+    ret = MmsConv::Delete(userId, deleteItems, NO_2);
+    EXPECT_EQ(ret, RET_MMS_OK);
+    EXPECT_TRUE(WaitForNotifyCount(NO_3));
+    events = GetNotifyEvents();
+    EXPECT_GE(events.size(), static_cast<size_t>(NO_3));
+    if (events.size() >= NO_3) {
+        EXPECT_EQ(events[2], std::make_pair(std::string(key1), OP_DELETE));
+    }
+
+    EXPECT_EQ(MmsConv::RegisterCallback(nullptr), RET_MMS_OK);
+    ClearNotifyEvents();
+    DeleteItems deleteItem = {const_cast<char *>(key2)};
+    ret = MmsConv::Delete(userId, &deleteItem, NO_1);
+    EXPECT_EQ(ret, RET_MMS_OK);
+    EXPECT_FALSE(WaitForNotifyCount(NO_1, std::chrono::milliseconds(200)));
 }
 
 TEST_F(TestServer, test_mms_replace)

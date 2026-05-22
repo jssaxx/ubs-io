@@ -36,6 +36,7 @@ enum SdkTracerType {
 enum ServerTracerType {
     SERVER_TRACE_START = SDK_TRACE_END,
     SERVER_TRACE_PUT_LOCAL,
+    SERVER_TRACE_NOTIFY_DATA_CHANGE,
     SERVER_TRACE_END,
 };
 

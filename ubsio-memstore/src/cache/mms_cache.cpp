@@ -64,16 +64,12 @@ void FreeValueBlock(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocator
 
     uint64_t blockAddr;
     memMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, blockAddr);
-    MMS_TRACE_START(CACHE_FREE_BLOCK);
     valueAllocator->MmsFree(blockAddr);
-    MMS_TRACE_END(CACHE_FREE_BLOCK, MMS_OK);
 }
 
 BResult Cache::AllocDataBlock(uint64_t remainLen, uint16_t &numaId, uint64_t &curBlockAddr, uint64_t &curBuffSize)
 {
-    MMS_TRACE_START(CACHE_ALLOC_BLOCK);
     BResult ret = mValueAllocator->MmsAlloc(remainLen + DATA_HEADER_SIZE, numaId, curBlockAddr);
-    MMS_TRACE_END(CACHE_ALLOC_BLOCK, ret);
     if (UNLIKELY(ret != MMS_OK)) {
         CACHE_LOG_ERROR("Alloc value block failed, size:" << remainLen + DATA_HEADER_SIZE << ", ret:" << ret << ".");
         return MMS_ALLOC_FAIL;

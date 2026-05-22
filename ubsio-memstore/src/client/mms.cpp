@@ -71,6 +71,12 @@ CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
     return ToCResult(gClient->Initialize(options, service));
 }
 
+CResult Mms::RegisterCallback(NotifyCallback callback)
+{
+    (void)callback;
+    return RET_MMS_PROTECTED;
+}
+
 void Mms::Exit()
 {
     gClient->Exit();
@@ -223,6 +229,11 @@ CResult Mms::StartCatchUpTask()
 CResult MmsInitialize(MmsOptions &options, ServiceCallback service)
 {
     return ock::mms::Mms::Initialize(options, service);
+}
+
+CResult MmsRegisterCallback(NotifyCallback callback)
+{
+    return ock::mms::Mms::RegisterCallback(callback);
 }
 
 void MmsExit()

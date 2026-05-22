@@ -16,6 +16,7 @@
 #include "mms_server.h"
 #include "mms_log.h"
 #include "mms_conv.h"
+#include "mms_notify.h"
 
 namespace ock {
 namespace mms {
@@ -71,8 +72,26 @@ CResult MmsConv::Initialize(const MmsOptions &options, ServiceCallback service)
     return ToCResult(ret);
 }
 
+CResult MmsConv::RegisterCallback(NotifyCallback callback)
+{
+    if (isSeparateMode) {
+        return RET_MMS_OK;
+    }
+
+    if (callback == nullptr) {
+        return RET_MMS_EPERM;
+    }
+
+    if (!MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch) {
+        return RET_MMS_OK;
+    }
+
+    return MmsNotifyDispatcher::Instance().RegisterCallback(callback);
+}
+
 void MmsConv::Exit()
 {
+    MmsNotifyDispatcher::Instance().Stop();
     auto mmsServer = MmsServer::Instance();
     mmsServer->Exit();
 }
@@ -255,6 +274,11 @@ CResult MmsInitialize(MmsOptions &options, ServiceCallback service)
     return ock::mms::MmsConv::Initialize(options, service);
 }
 
+CResult MmsRegisterCallback(NotifyCallback callback)
+{
+    return ock::mms::MmsConv::RegisterCallback(callback);
+}
+
 void MmsExit()
 {
     ock::mms::MmsConv::Exit();
@@ -309,4 +333,3 @@ CResult MmsStartCatchUpTask()
 {
     return ock::mms::MmsConv::StartCatchUpTask();
 }
-

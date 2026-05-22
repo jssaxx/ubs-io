@@ -33,6 +33,7 @@ namespace mms {
 using IoHandle = std::function<BResult(uint64_t userId, void *ioBuff, uint32_t ioLen)>;
 
 class MmsKvServer;
+class MmsNotifyDispatcher;
 using MmsKvServerPtr = Ref<MmsKvServer>;
 class MmsKvServer {
 public:
@@ -150,6 +151,8 @@ private:
     MmsMemAllocatorPtr mMemAllocator = nullptr;
     CachePtr mCache = nullptr;
     CmPtr mCm = nullptr;
+    MmsNotifyDispatcher *mNotifyDispatcher = nullptr;
+    bool mDataChangeCallbackSwitch = false;
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
 

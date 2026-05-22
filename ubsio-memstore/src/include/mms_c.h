@@ -91,6 +91,16 @@ typedef struct {
 
 typedef void (*ServiceCallback)(bool serviceable);
 
+typedef enum {
+    OP_PUT = 0,
+    OP_UPDATE = 1,
+    OP_DELETE = 2,
+    OP_REPLACE = 3,
+    OP_BUTT
+} OperateType;
+
+typedef void (*NotifyCallback)(const char *key, OperateType opType);
+
 /**
  * @brief: Initialize mms service
  *
@@ -99,6 +109,14 @@ typedef void (*ServiceCallback)(bool serviceable);
  * @return: return RET_MMS_OK mean success, others, return non-zero value
  */
 CResult MmsInitialize(MmsOptions &options, ServiceCallback service);
+
+/**
+ * @brief: Register data change notification callback
+ *
+ * @param[in]: callback: callback for changed key and operation type, nullptr means unregister
+ * @return: return RET_MMS_OK mean success, others, return non-zero value
+ */
+CResult MmsRegisterCallback(NotifyCallback callback);
 
 /**
  * @brief: Exit mms service

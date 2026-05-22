@@ -32,6 +32,14 @@ public:
     static CResult Initialize(const MmsOptions &options, ServiceCallback service);
 
     /**
+     * @brief: Register data change notification callback
+     *
+     * @param[in]: callback: callback for changed key and operation type, nullptr means unregister
+     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     */
+    static CResult RegisterCallback(NotifyCallback callback);
+
+    /**
      * @brief: Exit mms service
      *
      * @return: void

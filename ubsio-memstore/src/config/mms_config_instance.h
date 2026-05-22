@@ -24,6 +24,7 @@ const auto TRACE_SWITCH = std::make_pair("mms.trace.switch", "false");
 const auto CRC_SWITCH = std::make_pair("mms.crc.switch", "false");
 const auto SEQUENCE_SWITCH = std::make_pair("mms.sequence.switch", "false");
 const auto MULTICAST_SWITCH = std::make_pair("mms.multicast.switch", "true");
+const auto DATA_CHANGE_CALLBACK_SWITCH = std::make_pair("mms.data.change.callback.switch", "false");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
 
 const auto NET_RPC_IP_MASK = std::make_pair("mms.net.rpc.ip_mask", "127.0.0.1/24");
@@ -124,6 +125,7 @@ public:
         bool crcSwitch = false;
         bool sequenceSwitch = false;
         bool multicastSwitch = false;
+        bool dataChangeCallbackSwitch = false;
         bool isSeparateMode = true;
     };
 
