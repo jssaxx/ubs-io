@@ -1109,6 +1109,10 @@ BResult MirrorClient::BatchGetRemote(MirrorBatchGetRemoteHbm &param)
         }
         isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
+
+    if (ret == BIO_OK && !mEnableTrance) {
+        return BIO_DATA_IN_DRAM;
+    }
     return ret;
 }
 

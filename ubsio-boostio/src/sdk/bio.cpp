@@ -51,6 +51,8 @@ inline static CResult ToCResult(const BResult ret)
             return RET_CACHE_DISK_FAULT;
         case BIO_UFS_IOERR:
             return RET_CACHE_UFS_FAULT;
+        case RET_DATA_IN_DRAM:
+            return RET_CACHE_IN_DRAM;
         default:
             return RET_CACHE_NEED_RETRY;
     }
@@ -369,6 +371,7 @@ CResult Bio::BatchGetRemote(const char **keys, const uint32_t count,
     } else {
         CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
     }
+
     return ToCResult(ret);
 }
 
