@@ -30,30 +30,30 @@ namespace bio {
 constexpr uint32_t TRANS_EXCUTE_POOL_SIZE = 4;
 constexpr uint32_t TRANS_EXCUTE_POOL_QUEUE_SIZE = 1024;
 constexpr uint16_t INVALID_RPC_PORT = 0;
-constexpr uint32_t MAX_TRANS_SEGMENT_SIZE = 1024 * 1024 *1024; // 1G
-constexpr uint64_t MAX_TRANS_MEM_SIZE = 40ULL * 1024 * 1024 *1024; // 40G
+constexpr uint32_t MAX_TRANS_SEGMENT_SIZE = 1024 * 1024 * 1024; // 1G
+constexpr uint64_t MAX_TRANS_MEM_SIZE = 40ULL * 1024 * 1024 * 1024; // 40G
 
 void* DlMfApi::mfHandle;
 std::mutex DlMfApi::gMutex;
 bool DlMfApi::gLoaded;
 const char *DlMfApi::gMfLibName = "libmf_smem.so";
 
-mfSmemTransConfigInitFunc DlMfApi::mfSmemTransConfigInit = nullptr;
-mfSmemTransInitFunc DlMfApi::mfSmemTransInit = nullptr;
-mfSmemTransUnInitFunc DlMfApi::mfSmemTransUnInit = nullptr;
-mfSmemTransCreateFunc DlMfApi::mfSmemTransCreate = nullptr;
-mfSmemTransDestroyFunc DlMfApi::mfSmemTransDestroy = nullptr;
-mfSmemTransMallocFunc DlMfApi::mfSmemTransMalloc = nullptr;
-mfSmemTransFreeFunc DlMfApi::mfSmemTransFree = nullptr;
-mfSmemTransRegisterMemFunc DlMfApi::mfSmemTransRegisterMem = nullptr;
-mfSmemTransBatchRegisterMemFunc DlMfApi::mfSmemTransBatchRegisterMem = nullptr;
-mfSmemTransDeRegisterMemFunc DlMfApi::mfSmemTransDeRegisterMem = nullptr;
-mfSmemTransWriteFunc DlMfApi::mfSmemTransWrite = nullptr;
-mfSmemTransBatchWriteFunc DlMfApi::mfSmemTransBatchWrite = nullptr;
-mfSmemTransReadFunc DlMfApi::mfSmemTransRead = nullptr;
-mfSmemTransBatchReadFunc DlMfApi::mfSmemTransBatchRead = nullptr;
-mfSemSetExternLoggerFunc DlMfApi::mfSemSetExternLogger = nullptr;
-mfSemSetLogLevelFunc DlMfApi::mfSemSetLogLevel = nullptr;
+MfSmemTransConfigInitFunc DlMfApi::mfSmemTransConfigInit = nullptr;
+MfSmemTransInitFunc DlMfApi::mfSmemTransInit = nullptr;
+MfSmemTransUnInitFunc DlMfApi::mfSmemTransUnInit = nullptr;
+MfSmemTransCreateFunc DlMfApi::mfSmemTransCreate = nullptr;
+MfSmemTransDestroyFunc DlMfApi::mfSmemTransDestroy = nullptr;
+MfSmemTransMallocFunc DlMfApi::mfSmemTransMalloc = nullptr;
+MfSmemTransFreeFunc DlMfApi::mfSmemTransFree = nullptr;
+MfSmemTransRegisterMemFunc DlMfApi::mfSmemTransRegisterMem = nullptr;
+MfSmemTransBatchRegisterMemFunc DlMfApi::mfSmemTransBatchRegisterMem = nullptr;
+MfSmemTransDeRegisterMemFunc DlMfApi::mfSmemTransDeRegisterMem = nullptr;
+MfSmemTransWriteFunc DlMfApi::mfSmemTransWrite = nullptr;
+MfSmemTransBatchWriteFunc DlMfApi::mfSmemTransBatchWrite = nullptr;
+MfSmemTransReadFunc DlMfApi::mfSmemTransRead = nullptr;
+MfSmemTransBatchReadFunc DlMfApi::mfSmemTransBatchRead = nullptr;
+MfSemSetExternLoggerFunc DlMfApi::mfSemSetExternLogger = nullptr;
+MfSemSetLogLevelFunc DlMfApi::mfSemSetLogLevel = nullptr;
 
 int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
 {
@@ -71,22 +71,23 @@ int32_t DlMfApi::LoadLibrary(const std::string &libDirPath)
     }
 
     /* load sym */
-    DL_LOAD_SYM(mfSmemTransConfigInit, mfSmemTransConfigInitFunc, mfHandle, "smem_trans_config_init");
-    DL_LOAD_SYM(mfSmemTransInit, mfSmemTransInitFunc, mfHandle, "smem_trans_init");
-    DL_LOAD_SYM(mfSmemTransUnInit, mfSmemTransUnInitFunc, mfHandle, "smem_trans_uninit");
-    DL_LOAD_SYM(mfSmemTransCreate, mfSmemTransCreateFunc, mfHandle, "smem_trans_create");
-    DL_LOAD_SYM(mfSmemTransDestroy, mfSmemTransDestroyFunc, mfHandle, "smem_trans_destroy");
-    DL_LOAD_SYM(mfSmemTransMalloc, mfSmemTransMallocFunc, mfHandle, "smem_trans_malloc");
-    DL_LOAD_SYM(mfSmemTransFree, mfSmemTransFreeFunc, mfHandle, "smem_trans_free");
-    DL_LOAD_SYM(mfSmemTransRegisterMem, mfSmemTransRegisterMemFunc, mfHandle, "smem_trans_register_mem");
-    DL_LOAD_SYM(mfSmemTransBatchRegisterMem, mfSmemTransBatchRegisterMemFunc, mfHandle, "smem_trans_batch_register_mem");
-    DL_LOAD_SYM(mfSmemTransDeRegisterMem, mfSmemTransDeRegisterMemFunc, mfHandle, "smem_trans_deregister_mem");
-    DL_LOAD_SYM(mfSmemTransWrite, mfSmemTransWriteFunc, mfHandle, "smem_trans_write");
-    DL_LOAD_SYM(mfSmemTransBatchWrite, mfSmemTransBatchWriteFunc, mfHandle, "smem_trans_batch_write");
-    DL_LOAD_SYM(mfSmemTransRead, mfSmemTransReadFunc, mfHandle, "smem_trans_read");
-    DL_LOAD_SYM(mfSmemTransBatchRead, mfSmemTransBatchReadFunc, mfHandle, "smem_trans_batch_read");
-    DL_LOAD_SYM(mfSemSetExternLogger, mfSemSetExternLoggerFunc, mfHandle, "smem_set_extern_logger");
-    DL_LOAD_SYM(mfSemSetLogLevel, mfSemSetLogLevelFunc, mfHandle, "smem_set_log_level");
+    DL_LOAD_SYM(mfSmemTransConfigInit, MfSmemTransConfigInitFunc, mfHandle, "smem_trans_config_init");
+    DL_LOAD_SYM(mfSmemTransInit, MfSmemTransInitFunc, mfHandle, "smem_trans_init");
+    DL_LOAD_SYM(mfSmemTransUnInit, MfSmemTransUnInitFunc, mfHandle, "smem_trans_uninit");
+    DL_LOAD_SYM(mfSmemTransCreate, MfSmemTransCreateFunc, mfHandle, "smem_trans_create");
+    DL_LOAD_SYM(mfSmemTransDestroy, MfSmemTransDestroyFunc, mfHandle, "smem_trans_destroy");
+    DL_LOAD_SYM(mfSmemTransMalloc, MfSmemTransMallocFunc, mfHandle, "smem_trans_malloc");
+    DL_LOAD_SYM(mfSmemTransFree, MfSmemTransFreeFunc, mfHandle, "smem_trans_free");
+    DL_LOAD_SYM(mfSmemTransRegisterMem, MfSmemTransRegisterMemFunc, mfHandle, "smem_trans_register_mem");
+    DL_LOAD_SYM(mfSmemTransBatchRegisterMem, MfSmemTransBatchRegisterMemFunc,
+                mfHandle, "smem_trans_batch_register_mem");
+    DL_LOAD_SYM(mfSmemTransDeRegisterMem, MfSmemTransDeRegisterMemFunc, mfHandle, "smem_trans_deregister_mem");
+    DL_LOAD_SYM(mfSmemTransWrite, MfSmemTransWriteFunc, mfHandle, "smem_trans_write");
+    DL_LOAD_SYM(mfSmemTransBatchWrite, MfSmemTransBatchWriteFunc, mfHandle, "smem_trans_batch_write");
+    DL_LOAD_SYM(mfSmemTransRead, MfSmemTransReadFunc, mfHandle, "smem_trans_read");
+    DL_LOAD_SYM(mfSmemTransBatchRead, MfSmemTransBatchReadFunc, mfHandle, "smem_trans_batch_read");
+    DL_LOAD_SYM(mfSemSetExternLogger, MfSemSetExternLoggerFunc, mfHandle, "smem_set_extern_logger");
+    DL_LOAD_SYM(mfSemSetLogLevel, MfSemSetLogLevelFunc, mfHandle, "smem_set_log_level");
     
     gLoaded = true;
     return BIO_OK;
@@ -124,10 +125,10 @@ void DlMfApi::CleanupLibrary()
 
 BResult MfTransEngine::Initialize(const NetOptions &opt)
 {
-    NET_LOG_INFO("Start iniitalize MfTransEngine, transDeviceId: " << opt.transDeviceId << ", deviceTransType: "
-        << opt.deviceTransType << ", ipMask: " << opt.ipMask << ", transStoreUrl: " << opt.transStoreUrl
-        << ", transMemSize: " << opt.transMemSize << ", transSegmentSize: " << opt.transSegmentSize << ", isSender: "
-        << opt.isSender);
+    NET_LOG_INFO("Start iniitalize MfTransEngine, transDeviceId: " << opt.transDeviceId << ", deviceTransType: " <<
+        opt.deviceTransType << ", ipMask: " << opt.ipMask << ", transStoreUrl: " << opt.transStoreUrl <<
+        ", transMemSize: " << opt.transMemSize << ", transSegmentSize: " << opt.transSegmentSize <<
+        ", isSender: " << opt.isSender);
     if (opt.transDeviceId < 0) {
         NET_LOG_WARN("transDeviceId is: " << opt.transDeviceId << ", will not use device transfer");
         return BIO_OK;
@@ -139,7 +140,7 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
     smem_trans_config_t config;
     ret = DlMfApi::MfSmemTransConfigInit(&config);
     if (ret != BIO_OK) {
-        NET_LOG_ERROR( "Failed to init mf trans config, ret: " << ret);
+        NET_LOG_ERROR("Failed to init mf trans config, ret: " << ret);
         return ret;
     }
     // store server独立部署，融合部署需要选取一个节点将 startConfigServer 设计为true
@@ -164,8 +165,8 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
         return BIO_ERR;
     }
     
-    const std::chrono::seconds WAIT_TIME(10);
-    std::this_thread::sleep_for(WAIT_TIME); // 等待初始化完成
+    const std::chrono::seconds waitTime(10);
+    std::this_thread::sleep_for(waitTime); // 等待初始化完成
     ret = InitMsgBlockPool(opt);
     if (ret != BIO_OK) {
         return ret;
@@ -185,6 +186,7 @@ void MfTransEngine::Destroy()
     }
     if (socFd != -1) {
         close(socFd);
+        socFd = -1;
     }
 }
 
@@ -271,7 +273,8 @@ BResult MfTransEngine::Read(TransParam& param)
         NET_LOG_ERROR("Failed to read from mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_INFO("Read success, local addr: " << param.localAddrs[0] << ", remote addr: " << param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
+    NET_LOG_INFO("Read success, local addr: " << param.localAddrs[0] << ", remote addr: " <<
+                 param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
     return BIO_OK;
 }
 
@@ -288,15 +291,15 @@ BResult MfTransEngine::BatchRead(TransParam& param)
         return BIO_ERR;
     }
 
-    BResult ret = DlMfApi::MfSmemTransBatchRead(mTransHandler, param.localAddrs.data(),
-                                                param.remoteUniqueId.c_str(), const_cast<const void**>(param.remoteAddrs.data()),
+    BResult ret = DlMfApi::MfSmemTransBatchRead(mTransHandler, param.localAddrs.data(), param.remoteUniqueId.c_str(),
+                                                const_cast<const void**>(param.remoteAddrs.data()),
                                                 param.dataSizes.data(), param.localAddrs.size(),
                                                 SMEMB_COPY_GH2H, 0);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to batch read from mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_INFO( "BatchRead success, size: " << param.localAddrs.size() << ", localAddrs: " << param.localAddrs[0]);
+    NET_LOG_INFO("BatchRead success, size: " << param.localAddrs.size() << ", localAddrs: " << param.localAddrs[0]);
     return BIO_OK;
 }
 
@@ -317,7 +320,8 @@ BResult MfTransEngine::Write(TransParam& param)
         NET_LOG_ERROR("Failed to write to mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_INFO("Write success, local addr: " << param.localAddrs[0] << ", remote addr: " << param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
+    NET_LOG_INFO("Write success, local addr: " << param.localAddrs[0] << ", remote addr: " <<
+                 param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
     return BIO_OK;
 }
 
@@ -398,8 +402,8 @@ BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
 {
     if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.transSegmentSize > MAX_TRANS_SEGMENT_SIZE ||
         opt.transMemSize < opt.transSegmentSize) {
-        NET_LOG_ERROR("transMemSize or transSegmentSize is too large, transMemSize: " << opt.transMemSize
-                      << ", transSegmentSize: " << opt.transSegmentSize);
+        NET_LOG_ERROR("transMemSize or transSegmentSize is too large, transMemSize: " <<
+                      opt.transMemSize << ", transSegmentSize: " << opt.transSegmentSize);
         return BIO_ERR;
     }
     mTransMemSize = opt.transMemSize;
@@ -414,7 +418,7 @@ BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
         return ret;
     }
     ret = mMsgBlookPool->Start(reinterpret_cast<uintptr_t>(mTransMemBase), mTransSegmentSize,
-                         mTransMemSize / mTransSegmentSize);
+                               mTransMemSize / mTransSegmentSize);
     if (ret != BIO_OK) {
         NET_LOG_ERROR("Failed to start msg block pool, ret: " << ret);
         (void)FreeMem(mTransMemBase);
@@ -517,30 +521,30 @@ BResult MfTransEngine::BindTcpPortV6(int32_t &sockfd, int32_t port)
 uint16_t MfTransEngine::FindAvailableTcpPort(int32_t &sockfd)
 {
     static std::random_device rd;
-    const int32_t min_port = 15000;
-    const int32_t max_port = 25000;
-    const int32_t max_attempts = 1000;
-    const int32_t offset_bit = 32;
+    const int32_t minPort = 15000;
+    const int32_t maxPort = 25000;
+    const int32_t maxAttempts = 1000;
+    const int32_t offsetBit = 32;
     uint64_t seed = 1;
-    seed |= static_cast<uint64_t>(getpid()) << offset_bit;
+    seed |= static_cast<uint64_t>(getpid()) << offsetBit;
     seed |= static_cast<uint64_t>(std::chrono::system_clock::now().time_since_epoch().count()) & 0xFFFFFFFFULL;
     static std::mt19937_64 gen(seed);
-    std::uniform_int_distribution<> dis(min_port, max_port);
+    std::uniform_int_distribution<> dis(minPort, maxPort);
 
-    bool supports_ipv6 = false;
-    int32_t sockfd_check = socket(AF_INET6, SOCK_STREAM, 0);
-    if (sockfd_check != -1) {
-        supports_ipv6 = true;
-        close(sockfd_check);
+    bool supportsIpv6 = false;
+    int32_t sockfdCheck = socket(AF_INET6, SOCK_STREAM, 0);
+    if (sockfdCheck != -1) {
+        supportsIpv6 = true;
+        close(sockfdCheck);
     }
 
-    for (int32_t attempt = 0; attempt < max_attempts; ++attempt) {
+    for (int32_t attempt = 0; attempt < maxAttempts; ++attempt) {
         int32_t port = dis(gen);
         auto ret = BindTcpPortV4(sockfd, port);
         if (ret == 0) {
             return port;
         }
-        if (supports_ipv6) {
+        if (supportsIpv6) {
             ret = BindTcpPortV6(sockfd, port);
             if (ret == 0) {
                 return port;

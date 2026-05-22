@@ -197,8 +197,6 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
     // 等待所有批次读取完成
     sem_wait(&sem);
     sem_destroy(&sem);
-
-    
     KvcError finalRet = UBSIO_KVC_OK;
     for (uint32_t b = 0; b < batchCount; ++b) {
         auto &br = batchResults[b];
@@ -264,7 +262,6 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
             auto ret = static_cast<KvcError>(KvBatchGetRemoteData(
                 batchKeys.data(), batchSize, npuAddrs.data(), batchLengths,
                 reinterpret_cast<uintptr_t *>(br.dramAddrsVector.data()), br.batchResult, 0));
-
             if (ret == UBSIO_KVC_OK) {
                 // rh2d: 数据已直接写入NPU
                 br.rh2dSuccess = true;

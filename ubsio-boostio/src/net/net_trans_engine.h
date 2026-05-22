@@ -96,25 +96,27 @@ typedef struct {
     std::vector<size_t> dataSizes;
 } TransParam;
 
-using mfSmemTransConfigInitFunc = int32_t (*)(smem_trans_config_t *);
-using mfSmemTransInitFunc = int32_t (*)(smem_trans_config_t *);
-using mfSmemTransUnInitFunc = void (*)(uint32_t);
-using mfSmemTransCreateFunc = smem_trans_t (*)(const char *, const char *, const smem_trans_config_t *);
-using mfSmemTransDestroyFunc = void (*)(smem_trans_t, uint32_t);
-using mfSmemTransMallocFunc = void* (*)(smem_trans_t, size_t);
-using mfSmemTransFreeFunc = int32_t (*)(smem_trans_t, void *);
-using mfSmemTransRegisterMemFunc = int32_t (*)(smem_trans_t, void *, size_t, uint32_t);
-using mfSmemTransBatchRegisterMemFunc = int32_t (*)(smem_trans_t, void **, size_t *, uint32_t, uint32_t);
-using mfSmemTransDeRegisterMemFunc = int32_t (*)(smem_trans_t, void *);
-using mfSmemTransWriteFunc = int32_t (*)(smem_trans_t, const void *, const char *, void *, size_t, smem_bm_copy_type, uint32_t);
-using mfSmemTransBatchWriteFunc = int32_t (*)(smem_trans_t, const void **, const char *,
+using MfSmemTransConfigInitFunc = int32_t (*)(smem_trans_config_t *);
+using MfSmemTransInitFunc = int32_t (*)(smem_trans_config_t *);
+using MfSmemTransUnInitFunc = void (*)(uint32_t);
+using MfSmemTransCreateFunc = smem_trans_t (*)(const char *, const char *, const smem_trans_config_t *);
+using MfSmemTransDestroyFunc = void (*)(smem_trans_t, uint32_t);
+using MfSmemTransMallocFunc = void* (*)(smem_trans_t, size_t);
+using MfSmemTransFreeFunc = int32_t (*)(smem_trans_t, void *);
+using MfSmemTransRegisterMemFunc = int32_t (*)(smem_trans_t, void *, size_t, uint32_t);
+using MfSmemTransBatchRegisterMemFunc = int32_t (*)(smem_trans_t, void **, size_t *, uint32_t, uint32_t);
+using MfSmemTransDeRegisterMemFunc = int32_t (*)(smem_trans_t, void *);
+using MfSmemTransWriteFunc = int32_t (*)(smem_trans_t, const void *, const char *, void *,
+                                         size_t, smem_bm_copy_type, uint32_t);
+using MfSmemTransBatchWriteFunc = int32_t (*)(smem_trans_t, const void **, const char *,
                                               void **, size_t *, uint32_t, smem_bm_copy_type, uint32_t);
-using mfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, const void *, size_t, smem_bm_copy_type, uint32_t);
-using mfSmemTransBatchReadFunc = int32_t (*)(smem_trans_t, void **, const char *,
+using MfSmemTransReadFunc = int32_t (*)(smem_trans_t, void *, const char *, const void *,
+                                        size_t, smem_bm_copy_type, uint32_t);
+using MfSmemTransBatchReadFunc = int32_t (*)(smem_trans_t, void **, const char *,
                                              const void **, size_t *, uint32_t, smem_bm_copy_type, uint32_t);
-using mfSemTransGetRpcPortFunc = int32_t (*)(const char *, int32_t *);
-using mfSemSetExternLoggerFunc = int32_t (*)(void (*)(int32_t, const char *));
-using mfSemSetLogLevelFunc = int32_t (*)(int32_t);
+using MfSemTransGetRpcPortFunc = int32_t (*)(const char *, int32_t *);
+using MfSemSetExternLoggerFunc = int32_t (*)(void (*)(int32_t, const char *));
+using MfSemSetLogLevelFunc = int32_t (*)(int32_t);
 
 class DlMfApi {
 public:
@@ -144,7 +146,6 @@ public:
         }
         mfSmemTransUnInit(flags);
         return BIO_OK;
-
     }
 
     static inline smem_trans_t MfSmemTransCreate(const char *storeUrl, const char *uniqueId,
@@ -217,17 +218,19 @@ public:
 
     static inline BResult MfSmemTransBatchWrite(smem_trans_t handle, const void *localAddrs[],
                                                 const char *remoteUniqueId, void *remoteAddrs[],
-                                                size_t dataSizes[], uint32_t batchSize, smem_bm_copy_type opcode, uint32_t flags)
+                                                size_t dataSizes[], uint32_t batchSize,
+                                                smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransBatchWrite == nullptr) {
             return BIO_UNDER_API_UNLOAD;
         }
-        return mfSmemTransBatchWrite(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, opcode, flags);
-
+        return mfSmemTransBatchWrite(handle, localAddrs, remoteUniqueId, remoteAddrs,
+                                     dataSizes, batchSize, opcode, flags);
     }
 
     static inline BResult MfSmemTransRead(smem_trans_t handle, void *localAddr, const char *remoteUniqueId,
-                                          const void *remoteAddr, size_t dataSize, smem_bm_copy_type opcode, uint32_t flags)
+                                          const void *remoteAddr, size_t dataSize,
+                                          smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransRead == nullptr) {
             return BIO_UNDER_API_UNLOAD;
@@ -237,12 +240,14 @@ public:
 
     static inline BResult MfSmemTransBatchRead(smem_trans_t handle, void *localAddrs[],
                                                const char *remoteUniqueId, const void *remoteAddrs[],
-                                               size_t dataSizes[], uint32_t batchSize, smem_bm_copy_type opcode, uint32_t flags)
+                                               size_t dataSizes[], uint32_t batchSize,
+                                               smem_bm_copy_type opcode, uint32_t flags)
     {
         if (mfSmemTransBatchRead == nullptr) {
             return BIO_UNDER_API_UNLOAD;
         }
-        return mfSmemTransBatchRead(handle, localAddrs, remoteUniqueId, remoteAddrs, dataSizes, batchSize, opcode, flags);
+        return mfSmemTransBatchRead(handle, localAddrs, remoteUniqueId, remoteAddrs,
+                                    dataSizes, batchSize, opcode, flags);
     }
 
     static inline BResult MfSmemSetExternLogger(void (*logger)(int32_t, const char *))
@@ -261,158 +266,30 @@ public:
         return mfSemSetLogLevel(level);
     }
 
-
 private:
     static void* mfHandle;
     static std::mutex gMutex;
     static bool gLoaded;
     static const char *gMfLibName;
 
-    static mfSmemTransConfigInitFunc mfSmemTransConfigInit;
-    static mfSmemTransInitFunc mfSmemTransInit;
-    static mfSmemTransUnInitFunc mfSmemTransUnInit;
-    static mfSmemTransCreateFunc mfSmemTransCreate;
-    static mfSmemTransDestroyFunc mfSmemTransDestroy;
-    static mfSmemTransMallocFunc mfSmemTransMalloc;
-    static mfSmemTransFreeFunc mfSmemTransFree;
-    static mfSmemTransRegisterMemFunc mfSmemTransRegisterMem;
-    static mfSmemTransBatchRegisterMemFunc mfSmemTransBatchRegisterMem;
-    static mfSmemTransDeRegisterMemFunc mfSmemTransDeRegisterMem;
-    static mfSmemTransWriteFunc mfSmemTransWrite;
-    static mfSmemTransBatchWriteFunc mfSmemTransBatchWrite;
-    static mfSmemTransReadFunc mfSmemTransRead;
-    static mfSmemTransBatchReadFunc mfSmemTransBatchRead;
-    static mfSemSetExternLoggerFunc mfSemSetExternLogger;
-    static mfSemSetLogLevelFunc mfSemSetLogLevel;
+    static MfSmemTransConfigInitFunc mfSmemTransConfigInit;
+    static MfSmemTransInitFunc mfSmemTransInit;
+    static MfSmemTransUnInitFunc mfSmemTransUnInit;
+    static MfSmemTransCreateFunc mfSmemTransCreate;
+    static MfSmemTransDestroyFunc mfSmemTransDestroy;
+    static MfSmemTransMallocFunc mfSmemTransMalloc;
+    static MfSmemTransFreeFunc mfSmemTransFree;
+    static MfSmemTransRegisterMemFunc mfSmemTransRegisterMem;
+    static MfSmemTransBatchRegisterMemFunc mfSmemTransBatchRegisterMem;
+    static MfSmemTransDeRegisterMemFunc mfSmemTransDeRegisterMem;
+    static MfSmemTransWriteFunc mfSmemTransWrite;
+    static MfSmemTransBatchWriteFunc mfSmemTransBatchWrite;
+    static MfSmemTransReadFunc mfSmemTransRead;
+    static MfSmemTransBatchReadFunc mfSmemTransBatchRead;
+    static MfSemSetExternLoggerFunc mfSemSetExternLogger;
+    static MfSemSetLogLevelFunc mfSemSetLogLevel;
 };
-/*
-class TransMemoryManager {
-public:
-    TransMemoryManager() = default;
-    ~TransMemoryManager() {
-        if (mAllBlocks) {
-            delete[] mAllBlocks;
-        }
-    }
 
-    TransMemoryManager(const TransMemoryManager&) = delete;
-    TransMemoryManager& operator=(const TransMemoryManager&) = delete;
-    BResult Start(uintptr_t address, uint64_t blockSize, uint64_t count)
-    {
-        if (blockSize == 0 || count == 0) {
-            NET_LOG_ERROR("Invalid blockSize or count");
-            return BIO_ERR;
-        }
-
-        mBlockSize = blockSize;
-        mTotalBlocks = count;
-        baseAddr = address;
-        mAllBlocks = new TransMemBlock[mTotalBlocks];
-        if (!mAllBlocks) {
-            NET_LOG_ERROR("Failed to allocate mAllBlocks");
-            return BIO_ERR;
-        }
-        for (size_t i = 0; i < mTotalBlocks; ++i) {
-            mAllBlocks[i].memAddr = baseAddr + i * mBlockSize;
-            mAllBlocks[i].next = (i == mTotalBlocks - 1) ? nullptr : &mAllBlocks[i + 1];
-        }
-        mFreeHead = mAllBlocks;
-        mFreeBlockCount = mTotalBlocks;
-
-        NET_LOG_INFO("TransMemoryManager started successfully" << ", mTotalBlocks: " << mTotalBlocks);
-        return BIO_OK;
-    }
-
-    BResult Allocate(size_t blockNum, std::vector<uintptr_t>& outBlocks) {
-        outBlocks.clear();
-        std::lock_guard<std::mutex> lock(mMutex);
-        if (blockNum == 0 || mFreeBlockCount.load() < blockNum) {
-            return BIO_ERR;
-        }
-        TransMemBlock* start = mFreeHead;
-        TransMemBlock* end = start;
-        for (size_t i = 0; i < blockNum - 1; ++i) {
-            end = end->next;
-            if (!end) {
-                return BIO_ERR;
-            }
-        }
-        mFreeHead = end->next;
-        TransMemBlock* curr = start;
-        while (curr != end->next) {
-            outBlocks.push_back(curr->memAddr);
-            curr = curr->next;
-        }
-
-        mFreeBlockCount -= blockNum;
-        return BIO_OK;
-    }
-
-    void Free(const std::vector<uintptr_t>& blocks) {
-        if (blocks.empty()) {
-            return;
-        }
-
-        std::lock_guard<std::mutex> lock(mMutex);
-
-        TransMemBlock* first = nullptr;
-        TransMemBlock* last = nullptr;
-        const size_t freeNum = blocks.size();
-
-        for (uintptr_t addr : blocks) {
-            size_t index = (addr - baseAddr) / mBlockSize;
-            if (index >= mTotalBlocks || ((addr - baseAddr) % mBlockSize) != 0) {
-                NET_LOG_ERROR("Free invalid address: " << addr);
-                continue;
-            }
-            TransMemBlock* node = &mAllBlocks[index];
-
-            if (!first) first = node;
-            if (last) last->next = node;
-            last = node;
-        }
-
-        // insert list head
-        last->next = mFreeHead;
-        mFreeHead = first;
-
-        mFreeBlockCount += freeNum;
-    }
-
-    BResult AllocateSingle(uintptr_t& outBlock) {
-        std::vector<uintptr_t> temp;
-        Allocate(1, temp);
-        if (!temp.empty()) {
-            outBlock = temp[0];
-            return BIO_OK;
-        }
-        outBlock = 0;
-        return BIO_ERR;
-    }
-
-    
-    void FreeSingle(uintptr_t block) {
-        std::vector<uintptr_t> temp = {block};
-        Free(temp);
-    }
-
-    size_t GetFreeBlockCount() const {
-        return mFreeBlockCount.load();
-    }
-private:
-    struct TransMemBlock {
-        uintptr_t memAddr = nullptr
-        TransMemBlock* next = nullptr;
-    };
-    uintptr_t baseAddr;
-    size_t mBlockSize;
-    size_t mTotalBlocks;
-    TransMemBlock* mFreeHead = nullptr;
-    TransMemBlock* mAllBlocks = nullptr;
-    std::mutex mMutex;         
-    std::atomic<size_t> mFreeBlockCount = 0;
-};
-*/
 class NetTransEngine {
 public:
     virtual BResult Initialize(const NetOptions &opt) = 0;
@@ -485,7 +362,6 @@ public:
 
     BResult FreeBlocks(std::vector<uintptr_t> &addresses);
 
-
 private:
     BResult PreInit(const NetOptions &opt);
 
@@ -499,7 +375,6 @@ private:
 
 private:
     void* mTransHandler = nullptr;
-    //NetExecutorPoolPtr mExecutorPool = nullptr;
     std::string mLocalUniqueId = ""; // ip:port_pid
     std::string mStoreUrl = ""; // meta store url, format: tcp://ip:port
     NetBlockPoolPtr mMsgBlookPool = nullptr;
@@ -507,7 +382,6 @@ private:
     int32_t socFd = -1;
     uint64_t mTransMemSize;
     uint32_t mTransSegmentSize;
-
 };
 
 using MfTransEnginePtr = Ref<MfTransEngine>;
@@ -515,4 +389,4 @@ using MfTransEnginePtr = Ref<MfTransEngine>;
 } 
 
 
-#endif //BIO_NET_TRANS_ENGINE_H
+#endif // BIO_NET_TRANS_ENGINE_H
