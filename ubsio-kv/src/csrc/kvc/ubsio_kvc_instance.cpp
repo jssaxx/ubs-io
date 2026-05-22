@@ -146,7 +146,7 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
 
         m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
                                   &keysVector, &npuAddrsVector, &lengthsVector, &oriIndex,
-                                  &sem, &completedCount]()->void {
+                                  &sem, &completedCount, &batchCount]()->void {
             auto &br = batchResults[b];
             br.batchResult.assign(batchSize, UBSIO_KVC_ERR);
             br.dramAddrsVector.resize(batchSize);
@@ -188,7 +188,7 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
     sem_wait(&sem);
     sem_destroy(&sem);
 
-    // 串行H2D拷贝（ACL stream全局单例，不能并发）
+    
     KvcError finalRet = UBSIO_KVC_OK;
     for (uint32_t b = 0; b < batchCount; ++b) {
         auto &br = batchResults[b];
@@ -235,7 +235,7 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
 
         m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
                                   &keysVector, &npuAddrsVector, &lengthsVector, &oriIndex,
-                                  results, &sem, &completedCount]()->void {
+                                  results, &sem, &completedCount, &batchCount]()->void {
             auto &br = batchResults[b];
             br.batchResult.assign(batchSize, UBSIO_KVC_ERR);
             br.dramAddrsVector.resize(batchSize);

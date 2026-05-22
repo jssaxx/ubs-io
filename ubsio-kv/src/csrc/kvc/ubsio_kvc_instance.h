@@ -66,7 +66,7 @@ private:
         std::vector<void *> dramAddrsVector;
         H2DParams h2dParams;
         std::vector<uint32_t> batchOriIndex;
-        KvcError readRet{UBSIO_KVC_ERR};
+        KvcError readRet{UBSIO_KVC_OK};
         bool needH2D{false};       // 是否需要H2D拷贝
         bool rh2dSuccess{false};   // remote rh2d路径直接成功
         BatchReadResult() : h2dParams() {}
