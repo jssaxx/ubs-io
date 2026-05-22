@@ -546,7 +546,7 @@ BResult MirrorServer::ReaderRemoteTrans(const SlicePtr &from, const SlicePtr &to
 
     ret = mSliceOp.Copy(reinterpret_cast<char *>(tranceMem), to);
     BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
-    if (UNLIKELY( ret != BIO_OK)) {
+    if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
     }
     return ret;
@@ -786,7 +786,9 @@ BResult MirrorServer::BatchSingleWriterRemoteHbm(bool isAlloc, std::vector<NetMr
             break;
         }
         NetRequest rReq = BioServer::Instance()->GetNetEngine()->InitNetRequest(lMrVec[idx].address,
-                                                                                rMrVec[0].address + off, lMrVec[idx].key, rMrVec[0].key, lMrVec[idx].size);
+                                                                                rMrVec[0].address + off,
+                                                                                lMrVec[idx].key, rMrVec[0].key,
+                                                                                lMrVec[idx].size);
         uint32_t dstPid = req->isConvDeploy ? 0 : static_cast<uint32_t>(req->pid); // 融合部署场景目的端PID填充0
         ret = BioServer::Instance()->GetNetEngine()->SyncWrite(req->srcNid, dstPid, rReq);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -1020,8 +1022,9 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
     return ret;
 }
 
-BResult MirrorServer::WriterParseMrInfoHbm(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
-                                        std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc)
+BResult MirrorServer::WriterParseMrInfoHbm(const SlicePtr &from, const SlicePtr &to,
+                                           std::vector<NetMrInfo> &rMrVec, std::vector<NetMrInfo> &lMrVec,
+                                           uint32_t rKey, bool &isAlloc)
 {
     // 1. parse remote mr info
     uint64_t totalLen = 0;
@@ -1085,7 +1088,6 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                                         << " ptVersion:" << BioServer::Instance()->GetPtEntry(keyInfo.ptId).version <<
                                         ", ptId:" << keyInfo.ptId);
     auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-
         if (req->enableTrance) {
             NetMrInfo bioMr;
             uintptr_t tranceMem;
@@ -1096,7 +1098,8 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             }
             ret = mSliceOp.Copy(from, reinterpret_cast<char*>(tranceMem), from->GetLength());
             if (UNLIKELY(ret != BIO_OK)) {
-                LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
+                LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem <<
+                    ", key:" << keyInfo.key << ".");
                 BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
                 return ret;
             }
@@ -1525,7 +1528,8 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
         return BIO_ERR;
     }
 
-    ret = strcpy_s(rsp.deviceTransType, sizeof(rsp.deviceTransType), mBioConfig->GetNetConfig().deviceTransType.c_str());
+    ret = strcpy_s(rsp.deviceTransType, sizeof(rsp.deviceTransType),
+                   mBioConfig->GetNetConfig().deviceTransType.c_str());
     if (ret != 0) {
         return BIO_ERR;
     }
@@ -2054,7 +2058,8 @@ int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGet
     for (uint32_t i = 0; i < req->count; i++) {
         rsp.results[i] = results[i];
     }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetLocalHbmResponse));
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
+                                                 sizeof(BatchGetLocalHbmResponse));
     return BIO_OK;
 }
 
@@ -2095,7 +2100,8 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
     for (uint32_t i = 0; i < req->count; i++) {
         rsp.results[i] = results[i];
     }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetRemoteHbmResponse));
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
+                                                 sizeof(BatchGetRemoteHbmResponse));
     return BIO_OK;
 }
 

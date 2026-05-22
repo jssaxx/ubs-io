@@ -126,7 +126,6 @@ public:
     CResult BatchGetLocal(const char **keys, const uint32_t count, uint64_t *lengths,
                                ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
 
-
     CResult BatchGetRemote(const char **keys, const uint32_t count,
                                 ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
                                 uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);

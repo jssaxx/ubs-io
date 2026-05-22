@@ -1309,7 +1309,8 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         nodes[i] = ptEntry.masterNodeId;
         if (planSend.find(nodes[i]) == planSend.end()) {
             planSend.emplace(std::pair<uint16_t, BatchGetPlanHbm>(nodes[i],
-                                                               {1, 0, 0, nullptr}));
+                                                                  {1, 0,
+                                                                   0, nullptr}));
         } else {
             planSend.find(nodes[i])->second.count++;
         }
@@ -1319,7 +1320,8 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
     for (uint16_t i = 0; i < planSend.size(); i++) {
         size_t reqLen = 0;
         if (mEnableTrance) {
-            reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * (sizeof(GetKeyRemoteHbmInfo) + param.col * (sizeof(uintptr_t) + sizeof(size_t)));
+            reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * (sizeof(GetKeyRemoteHbmInfo) +
+                    param.col * (sizeof(uintptr_t) + sizeof(size_t)));
         } else {
             reqLen = sizeof(BatchGetRemoteHbmRequest) + it->second.count * sizeof(GetKeyRemoteHbmInfo);
         }
@@ -1360,11 +1362,19 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         BResult ret = BIO_OK;
         auto& plan = planSend[nodes[i]];
         if (mEnableTrance) {
-            plan.req->keysInfo[plan.index].hbmMemAddr = reinterpret_cast<uintptr_t*>(plan.enableMem + plan.index * (param.col * (sizeof(uintptr_t) + sizeof(size_t))));
-            plan.req->keysInfo[plan.index].memSize = reinterpret_cast<size_t*>(reinterpret_cast<char*>(plan.req->keysInfo[plan.index].hbmMemAddr) + param.col * sizeof(uintptr_t));
+            plan.req->keysInfo[plan.index].hbmMemAddr =
+                    reinterpret_cast<uintptr_t*>(plan.enableMem + plan.index * (param.col * (sizeof(uintptr_t) +
+                    sizeof(size_t))));
+            plan.req->keysInfo[plan.index].memSize =
+                    reinterpret_cast<size_t*>(reinterpret_cast<char*>(plan.req->keysInfo[plan.index].hbmMemAddr) +
+                    param.col * sizeof(uintptr_t));
             plan.req->keysInfo[plan.index].memCount = param.col;
-            plan.req->keysInfo[plan.index].hbmMemPosition = reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].hbmMemAddr) - reinterpret_cast<uintptr_t>(plan.req);
-            plan.req->keysInfo[plan.index].memSizePosition = reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].memSize) - reinterpret_cast<uintptr_t>(plan.req);
+            plan.req->keysInfo[plan.index].hbmMemPosition =
+                    reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].hbmMemAddr) -
+                    reinterpret_cast<uintptr_t>(plan.req);
+            plan.req->keysInfo[plan.index].memSizePosition =
+                    reinterpret_cast<uintptr_t>(plan.req->keysInfo[plan.index].memSize) -
+                    reinterpret_cast<uintptr_t>(plan.req);
             for (uint32_t j = 0; j < param.col; j++) {
                 plan.req->keysInfo[plan.index].hbmMemAddr[j] = param.memAddr[i][j];
                 plan.req->keysInfo[plan.index].memSize[j] = param.memSize[i][j];
@@ -2197,7 +2207,8 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
-                ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" << mDataMsgMemBlockSize);
+                ", flowOffset:" << param.flowOffset << ", length:" << param.length <<
+                ", blockSize:" << mDataMsgMemBlockSize);
             mDataMsgMemPool->ReleaseOne(address);
             return BIO_ALLOC_FAIL;
         }
@@ -2205,7 +2216,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         transData.enableTrans = false;
         transData.localTransAddr = 0;
         transData.transDataLen = 0;
-    } else{
+    } else {
         auto ret = net::BioClientNet::Instance()->GetTransNetEngine()->AllocOneBlock(transMem);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc memory failed, ret:" << ret << ", key:" << param.key << ".");
@@ -2215,7 +2226,8 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
         ret = memcpy_s(reinterpret_cast<char *>(transMem), mDataMsgMemBlockSize, param.value, param.length);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
-                ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" << mDataMsgMemBlockSize);
+                ", flowOffset:" << param.flowOffset << ", length:" << param.length <<
+                ", blockSize:" << mDataMsgMemBlockSize);
             net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(transMem);
             return BIO_ALLOC_FAIL;
         }
@@ -2631,10 +2643,11 @@ BResult MirrorClient::SendBatchGetRemoteHbmRequest(std::unordered_map<uint16_t, 
 
     auto it = planSend.begin();
     for (auto plan : planSend) {
-        net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(plan.first), BIO_OP_SDK_BATCH_GET_REMTOE_HBM,
-                                                     static_cast<void *>(plan.second.req), plan.second.reqLen, callback);
+        net::BioClientNet::Instance()->SendAsyncBuff(static_cast<BioNodeId>(plan.first),
+                                                     BIO_OP_SDK_BATCH_GET_REMTOE_HBM,
+                                                     static_cast<void *>(plan.second.req),
+                                                     plan.second.reqLen, callback);
     }
-
 
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);

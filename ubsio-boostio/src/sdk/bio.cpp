@@ -301,7 +301,8 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" <<
+                lengths[i] << ", index:" << i);
             return RET_CACHE_EPERM;
         }
     }
@@ -330,7 +331,8 @@ CResult Bio::BatchGetLocal(const char **keys, const uint32_t count, uint64_t *le
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" <<
+                lengths[i] << ", index:" << i);
             return RET_CACHE_EPERM;
         }
     }
@@ -363,7 +365,8 @@ CResult Bio::BatchGetRemote(const char **keys, const uint32_t count,
 
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_HBM_REMOTE);
     MirrorClient::MirrorBatchGetRemoteHbm param{ { mTenantId, mAffinity, mStrategy },
-                                                keys, count, locations, memAddr, memSize, row, col, valueAddrs, results };
+                                                keys, count, locations, memAddr, memSize, row, col,
+                                                valueAddrs, results };
     BResult ret = gClient->BatchGetRemote(param);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_HBM_REMOTE, ret);
     if (UNLIKELY(ret != BIO_OK)) {

@@ -438,8 +438,9 @@ struct BatchGetPlanHbm {
     char *enableMem;
     BatchGetRemoteHbmRequest *req;
     BatchGetPlanHbm() : count(0), index(0), reqLen(0), req(nullptr) {}
-    BatchGetPlanHbm(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam, BatchGetRemoteHbmRequest *reqParam) :
-            count(countParam), index(indexParam), reqLen(reqLenParam), req(reqParam) {}
+    BatchGetPlanHbm(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam,
+                    BatchGetRemoteHbmRequest *reqParam) : count(countParam), index(indexParam),
+                    reqLen(reqLenParam), req(reqParam) {}
 };
 
 typedef struct {

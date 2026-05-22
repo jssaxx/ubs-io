@@ -559,7 +559,8 @@ CResult BioRegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count);
  * @param position        [out] Array of positions of the keys(0:local, 1:remote)
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations, uint8_t *position);
+CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations,
+                             uint8_t *position);
 
 /**
  * @brief: Batch Get locaL value
