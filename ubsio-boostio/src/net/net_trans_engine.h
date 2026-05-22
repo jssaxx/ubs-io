@@ -504,6 +504,7 @@ private:
     std::string mStoreUrl = ""; // meta store url, format: tcp://ip:port
     NetBlockPoolPtr mMsgBlookPool = nullptr;
     void *mTransMemBase = nullptr;
+    int32_t socFd = -1;
     uint64_t mTransMemSize;
     uint32_t mTransSegmentSize;
 

@@ -183,6 +183,9 @@ void MfTransEngine::Destroy()
         DlMfApi::MfSmemTransDestroy(mTransHandler, 0);
         mTransHandler = nullptr;
     }
+    if (socFd ! = -1) {
+        close(socFd);
+    }
 }
 
 BResult MfTransEngine::MallocMem(size_t size, void*& address)
@@ -383,17 +386,18 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
         NET_LOG_ERROR("Failed to get rpc port , port: " << port);
         return BIO_ERR;
     }
-    //pid_t currentPid = getpid();
-    //std::string portWithPid = std::to_string(port) + "_" + std::to_string(currentPid);
+
     mLocalUniqueId = ip + ":" + std::to_string(port);
     mStoreUrl = opt.transStoreUrl;
     NET_LOG_INFO("PreInit success, mLocalUniqueId: " << mLocalUniqueId << ", mStoreUrl: " << mStoreUrl);
+    socFd = socketFd;
     return BIO_OK;
 }
 
 BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
 {
-    if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.transSegmentSize > MAX_TRANS_SEGMENT_SIZE) {
+    if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.transSegmentSize > MAX_TRANS_SEGMENT_SIZE ||
+        opt.transMemSize < opt.transSegmentSize) {
         NET_LOG_ERROR("transMemSize or transSegmentSize is too large, transMemSize: " << opt.transMemSize
                       << ", transSegmentSize: " << opt.transSegmentSize);
         return BIO_ERR;
