@@ -88,12 +88,16 @@ KvcError KvcInstance::CopyDataH2D(H2DParams &params, std::vector<int32_t> &batch
 
     // 释放dram地址
     std::vector<void *> addrsToFree = std::move(params.hostAddrs);
-    m_readExecutor->Execute([addrsToFree = std::move(addrsToFree)]()->void {
+    bool submitOk = m_readExecutor->Execute([addrsToFree = std::move(addrsToFree)]()->void {
         auto ret = KvcBatchFreeGetAddress(const_cast<void **>(addrsToFree.data()), addrsToFree.size());
         if (UNLIKELY(ret != UBSIO_KVC_OK)) {
             LOG_ERROR("Kvc batch free dram failed, ret:" << ret);
         }
     });
+    if (UNLIKELY(!submitOk)) {
+        LOG_ERROR("Submit free dram task to executor failed");
+        return UBSIO_KVC_ERR;
+    }
     return (aclRet == 0) ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 
@@ -144,7 +148,7 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
         uint32_t end = std::min(start + MAX_READ_BATCH_SIZE, keysCount);
         uint32_t batchSize = end - start;
 
-        m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
+        bool submitOk = m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
                                   &keysVector, &npuAddrsVector, &lengthsVector, &oriIndex,
                                   &sem, &completedCount, &batchCount]()->void {
             auto &br = batchResults[b];
@@ -182,6 +186,12 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
                 sem_post(&sem);
             }
         });
+        if (UNLIKELY(!submitOk)) {
+            LOG_ERROR("Submit local batch read task to executor failed, batch[" << start << "," << end << "]");
+            if (completedCount.fetch_add(1) + 1 == batchCount) {
+                sem_post(&sem);
+            }
+        }
     }
 
     // 等待所有批次读取完成
@@ -233,7 +243,7 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
         uint32_t end = std::min(start + MAX_READ_BATCH_SIZE, keysCount);
         uint32_t batchSize = end - start;
 
-        m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
+        bool submitOk = m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
                                   &keysVector, &npuAddrsVector, &lengthsVector, &oriIndex,
                                   results, &sem, &completedCount, &batchCount]()->void {
             auto &br = batchResults[b];
@@ -282,6 +292,12 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
                 sem_post(&sem);
             }
         });
+        if (UNLIKELY(!submitOk)) {
+            LOG_ERROR("Submit remote batch read task to executor failed, batch[" << start << "," << end << "]");
+            if (completedCount.fetch_add(1) + 1 == batchCount) {
+                sem_post(&sem);
+            }
+        }
     }
 
     // 等待所有批次完成
@@ -336,15 +352,19 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     sem_t sem;
     sem_init(&sem, 0, 0);
     KvcError remoteRet = UBSIO_KVC_OK;
-    // read remote //增加远端判断
+    // read remote
     if (!remoteParams.keys.empty()) {
-        m_readExecutor->Execute([this, &remoteParams, results, &sem, &remoteRet]()->void {
+        bool submitOk = m_readExecutor->Execute([this, &remoteParams, results, &sem, &remoteRet]()->void {
             remoteRet = ReadRemote(remoteParams, results);
             if (UNLIKELY(remoteRet != UBSIO_KVC_OK)) {
                 LOG_ERROR("Kvc batch get reomte data failed, ret:" << remoteRet);
             }
             sem_post(&sem);
         });
+        if (UNLIKELY(!submitOk)) {
+            LOG_ERROR("Submit remote read task to executor failed");
+            sem_post(&sem);
+        }
     } else {
         sem_post(&sem);
     }
