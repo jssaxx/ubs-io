@@ -183,7 +183,7 @@ void MfTransEngine::Destroy()
         DlMfApi::MfSmemTransDestroy(mTransHandler, 0);
         mTransHandler = nullptr;
     }
-    if (socFd ! = -1) {
+    if (socFd != -1) {
         close(socFd);
     }
 }
