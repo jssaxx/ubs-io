@@ -41,7 +41,8 @@ using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocatio
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                                const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMemFunc = CResult (*)(uint64_t *addrs, uint64_t *size, uint32_t count);
-using BioBatchGetPositionsFunc = CResult (*)(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations, uint8_t *position);
+using BioBatchGetPositionsFunc = CResult (*)(uint64_t tenantId, const char **keys, uint32_t count,
+                                             ObjLocation *locations, uint8_t *position);
 using BioBatchGetLocalFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
                                          ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
 using BioBatchGetRemoteFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count,

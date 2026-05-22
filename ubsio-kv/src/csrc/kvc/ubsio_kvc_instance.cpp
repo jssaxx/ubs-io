@@ -52,7 +52,7 @@ KvcError KvcInstance::Initialize(int32_t device)
 }
 
 KvcError KvcInstance::CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
-                         const std::vector<uint32_t> &origIndex, int *results)
+                                  const std::vector<uint32_t> &origIndex, int *results)
 {
     void* stream = KvcStreamManager::GetAclStream();
     if (UNLIKELY(stream == nullptr)) {

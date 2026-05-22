@@ -40,8 +40,10 @@ private:
         H2DParams() = default;
         H2DParams(std::vector<std::vector<uintptr_t>>&& npuAddrVec,
                   std::vector<std::vector<size_t>>&& lengthVec,
-                  std::vector<void *>&& hostAddrVec)
-                  : npuAddrs(std::move(npuAddrVec)), lengths(std::move(lengthVec)), hostAddrs(std::move(hostAddrVec)) {}
+                  std::vector<void *>&& hostAddrVec) :
+                      npuAddrs(std::move(npuAddrVec)), 
+                      lengths(std::move(lengthVec)),
+                      hostAddrs(std::move(hostAddrVec)) {}
         std::vector<std::vector<uintptr_t>> npuAddrs;
         std::vector<std::vector<size_t>> lengths;
         std::vector<void *> hostAddrs;
@@ -49,7 +51,8 @@ private:
 
     struct ReadParams {
         ReadParams() = delete;
-        ReadParams(uint32_t count) {
+        ReadParams(uint32_t count)
+        {
             keys.reserve(count);
             npuAddrs.reserve(count);
             lengths.reserve(count);
