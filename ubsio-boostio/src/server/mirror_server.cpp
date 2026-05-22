@@ -541,7 +541,7 @@ BResult MirrorServer::ReaderRemoteTrans(const SlicePtr &from, const SlicePtr &to
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Read from remote trans failed, ret:" << ret << ", length:" << dataSize << ".");
         BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
-        return RET_CACHE_IN_DRAM;
+        return ret;
     }
 
     ret = mSliceOp.Copy(reinterpret_cast<char *>(tranceMem), to);
@@ -1094,12 +1094,31 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
                 LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
                 return ret;
             }
+//            if (from->GetFlowType() == FLOW_DISK) {
+//                char *diskMem = reinterpret_cast<char*>(malloc(from->GetLength()));
+//                ret = mSliceOp.Copy(from, diskMem, from->GetLength());
+//                if (UNLIKELY(ret != BIO_OK)) {
+//                    LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
+//                    BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+//                    return ret;
+//                }
+//                BIO_TRACE_START(MIRROR_TRACE_GET_TRANS_COPY_DISK_DATA);
+//                ret = memcpy_s(reinterpret_cast<void*>(tranceMem), from->GetLength(), diskMem, from->GetLength());
+//                BIO_TRACE_END(MIRROR_TRACE_GET_TRANS_COPY_DISK_DATA, ret);
+//                free(diskMem);
+//                if (UNLIKELY(ret != BIO_OK)) {
+//                    LOG_ERROR("Sys mem copy to trance mem copy fail, key:" << keyInfo.key << ", ret:" << ret);
+//                    BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
+//                    return ret;
+//                }
+//            } else {
             ret = mSliceOp.Copy(from, reinterpret_cast<char*>(tranceMem), from->GetLength());
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem << ", key:" << keyInfo.key << ".");
                 BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
                 return ret;
             }
+//            }
 
             TransParam transReq;
             transReq.remoteUniqueId = std::string(req->uuid);
@@ -1124,7 +1143,6 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
             BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_BATCH_WRITE, ret);
             if (ret != BIO_OK) {
                 LOG_ERROR("Trans net write fail, ret:" << ret << ".");
-                return RET_CACHE_IN_DRAM;
             }
             BioServer::Instance()->GetTransEngine()->FreeOneBlock(tranceMem);
             return ret;
