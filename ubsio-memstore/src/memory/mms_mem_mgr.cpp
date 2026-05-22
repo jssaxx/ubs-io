@@ -32,11 +32,9 @@ void ValueIndexMemCfg::Calculate()
     uint64_t pageSize = GetDevicePageSize();
     uint64_t usableTotalMem = totalMemSize - (totalMemSize % pageSize);
 
-    double density =
-        (minBlockMemRatio / static_cast<double>(minBlockSize)) + (maxBlockMemRatio / static_cast<double>(maxBlockSize));
-
-    double indexToValueRatio = density * static_cast<double>(indexNodeSize);
     constexpr double factor = 1.0;
+    double density = factor / static_cast<double>(valueBlockSize);
+    double indexToValueRatio = density * static_cast<double>(indexNodeSize);
     double totalValueMemIdeal = static_cast<double>(usableTotalMem) / (factor + indexToValueRatio);
 
     uint64_t alignedValueMem = static_cast<uint64_t>(totalValueMemIdeal);
@@ -250,4 +248,3 @@ BResult MmsMemMgr::CreateShmMmapAddress(int32_t shmFd, uint16_t numaId[], uint64
 }
 }
 }
-

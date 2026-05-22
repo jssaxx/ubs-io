@@ -59,20 +59,13 @@ struct IndexValue {
     uint16_t isDelete; // 墓碑标记
     uint32_t version;
     uint64_t totalDataLen;
-    uint64_t firstBlockOffset;
+    uint64_t blockOffset;
     BucketNode *bucketNode;
 };
 
 struct DataHeader {
-    uint64_t nextBlockOffset;
     uint64_t blockSize; // block里的数据部分长度，不包含DataHeader的长度
     char data[0];
-};
-
-struct UpdateInfo {
-    const char *data;
-    uint64_t offset;
-    uint64_t length;
 };
 
 struct ReplacePara {
@@ -140,7 +133,7 @@ public:
     BResult Replace(const ReplacePara &para);
 
     // 返回实际读取到的字节数
-    uint64_t GetDataFromBlockList(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
+    uint64_t GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
     void ClearDeletedData();
 
     BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
@@ -157,15 +150,17 @@ private:
 
     BResult AllocDataBlock(uint64_t remainLen, uint16_t &numaId, uint64_t &curBlockAddr, uint64_t &curBuffSize);
 
-    BResult PutDataIntoBlockList(IndexValue *indexValue, const char *data, uint64_t dataLen);
+    BResult PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen);
 
-    BResult HandleUpdateData(IndexValue *indexValue, uint64_t blockOffset, uint64_t currentOffsetSeek,
-                             DataHeader *preHeader, UpdateInfo &updateInfo);
+    BResult ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
 
-    BResult UpdateDataInBlockList(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
+    BResult UpdateDataInCurrentBlock(IndexValue *indexValue, DataHeader *header, const char *data, uint64_t offset,
+                                     uint64_t dataLen);
 
-    // 根据value大小匹配最佳的数据块大小，wasteThreshold:允许浪费的空间比例来满足最大匹配
-    uint64_t GetBestBlockSize(uint64_t valueLen, double wasteThreshold);
+    BResult ExpandAndUpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                                     uint64_t curBlockAddr);
+
+    BResult UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
 
 private:
     MmsMemMgrPtr mMemMgr = nullptr;
@@ -173,10 +168,6 @@ private:
     MmsMemAllocatorPtr mValueAllocator = nullptr;
 
     uint64_t mBaseAddr = 0;
-    uint64_t mBaseSize = 0;
-    uint64_t mMinBlockSize = 0; // 仅表示实际能存数据的大小，不含任何头部信息
-    uint64_t mMaxBlockSize = 0;
-
     std::atomic<bool> mIsRecovering{false};
 
     LsmArtTree mLsmArtTree;

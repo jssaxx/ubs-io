@@ -66,10 +66,17 @@ struct MemMgrOptions {
 };
 
 struct MemAllocOptions {
+    enum AllocMode : uint16_t {
+        ALLOC_MODE_FIXED = 0,
+        ALLOC_MODE_BUDDY = 1,
+    };
+
     uint16_t numaNum;
     uint16_t numaId[MAX_NUMAS_NUM];
     uint64_t numaSize[MAX_NUMAS_NUM];
     uint64_t numaAddress[MAX_NUMAS_NUM];
+
+    AllocMode allocMode = ALLOC_MODE_FIXED;
 
     uint32_t blockNum;
     uint32_t blockRate[MAX_BLOCK_NUM];
@@ -82,4 +89,3 @@ struct MemAllocOptions {
 }
 
 #endif // MMS_MEM_COMM_H
-

@@ -27,9 +27,7 @@ namespace ock {
 namespace mms {
 
 struct DataBlockInfo {
-    uint16_t minBlockSize;
-    uint16_t maxBlockSize;
-    uint8_t minBlockSizeRate;
+    uint32_t valueBlockSize;
 };
 
 class MmsClient;

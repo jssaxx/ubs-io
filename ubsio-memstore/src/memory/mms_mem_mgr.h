@@ -29,17 +29,13 @@ struct ValueIndexMemCfg {
     // 输入
     uint64_t totalMemSize;
     uint64_t indexNodeSize;
-    uint64_t minBlockSize;
-    uint64_t maxBlockSize;
-
-    double minBlockMemRatio;
-    double maxBlockMemRatio;
+    uint64_t valueBlockSize;
 
     // 输出
     uint64_t indexMemSize;
     uint64_t valueMemSize;
 
-    // 通过不同粒度的block大小和比例算出分配给index和value的总内存大小，使index block数量近似等于所有粒度的value block的数量之和
+    // 根据value buddy最小粒度算出index和value的总内存大小，使index block数量近似等于value基础block数量
     void Calculate();
 };
 
@@ -126,4 +122,3 @@ private:
 }
 }
 #endif
-
