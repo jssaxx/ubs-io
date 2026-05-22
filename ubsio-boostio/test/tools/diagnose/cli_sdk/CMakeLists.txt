@@ -1,7 +1,7 @@
 aux_source_directory(. SDK_DIAGNOSE_SRCS)
 add_library(sdk_diagnose_shared SHARED ${SDK_DIAGNOSE_SRCS})
 set_target_properties(sdk_diagnose_shared PROPERTIES
-        OUTPUT_NAME sdk_diagnose
+        OUTPUT_NAME biosdk_diagnose
         SKIP_BUILD_RPATH TRUE
         INSTALL_RPATH ""
         BUILD_WITH_INSTALL_RPATH TRUE

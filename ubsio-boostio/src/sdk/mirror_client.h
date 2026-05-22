@@ -77,7 +77,7 @@ public:
         ObjLocation location;
     };
 
-    static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 1024;
+    static constexpr uint32_t DEFAULT_MAX_FLOW_SIZE = 8192;
 
     BResult Initialize(UpdateView updateView, const ClientConfig &config);
     BResult Start();
@@ -323,7 +323,7 @@ private:
     inline BResult Insert(uint16_t ptId)
     {
         mLock.LockWrite();
-        if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
+        if (UNLIKELY(mFlowMap.size() >= DEFAULT_MAX_FLOW_SIZE)) {
             mLock.UnLock();
             return BIO_ERR;
         }
@@ -345,10 +345,6 @@ private:
     inline BResult Update(uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
     {
         mLock.LockWrite();
-        if (UNLIKELY(mFlowMap.size() > DEFAULT_MAX_FLOW_SIZE)) {
-            mLock.UnLock();
-            return BIO_ERR;
-        }
         auto it = mFlowMap.find(ptId);
         if (it != mFlowMap.end()) {
             FlowInstancePtr instance = it->second;

@@ -21,6 +21,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CXX_COMMON_FLAGS} -O0 -ggdb3 -g -lrt")
 set(CMAKE_CXX_FLAGS_RELEASE "${CXX_COMMON_FLAGS} -O3 -D_FORTIFY_SOURCE=2 -g -DNDEBUG=1 -lrt")
 
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
+set(UBSIO_COMMON_DIR ${PROJECT_SOURCE_DIR}/../ubsio-common)
+set(UBSIO_COMMON_CLI_DIR ${UBSIO_COMMON_DIR}/cli)
 set(3RDPARTY_SRC_DIR  ${PROJECT_SOURCE_DIR}/3rdparty)
 set(OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/dist)
 set(BUILD_PATH ${PROJECT_BINARY_DIR}/)
@@ -74,7 +76,9 @@ include_directories(
         ${SRC_DIR}/security/expiration_check
         ${SRC_DIR}/security/openssl_tools
         ${3RDPARTY_SRC_DIR}/zookeeper
+        ${UBSIO_COMMON_CLI_DIR}/include
         ${3RDPARTY_SRC_DIR}/hadoop
+        ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include
@@ -90,6 +94,10 @@ endif()
 
 if(${CMAKE_BUILD_TYPE} STREQUAL "release")
     add_compile_definitions(OPEN_RELEASE)
+endif()
+
+if ("${OPEN_CLI}" STREQUAL "ON")
+    add_compile_definitions(USE_CLI_TOOLS)
 endif()
 
 if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
@@ -113,6 +121,9 @@ if ("${OPEN_TP}" STREQUAL "ON")
 endif()
 
 add_subdirectory(3rdparty)
+if ("${OPEN_CLI}" STREQUAL "ON")
+    add_subdirectory(${UBSIO_COMMON_CLI_DIR} ${PROJECT_BINARY_DIR}/ubsio-common/cli)
+endif()
 add_subdirectory(src)
 add_subdirectory(configs)
 add_subdirectory(test)

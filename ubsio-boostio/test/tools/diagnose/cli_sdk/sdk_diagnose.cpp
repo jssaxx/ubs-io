@@ -13,6 +13,7 @@
 #include <chrono>
 #include <iostream>
 #include <csignal>
+#include <dlfcn.h>
 #include <sys/resource.h>
 #include <regex>
 #include <semaphore.h>
@@ -64,12 +65,13 @@ int32_t diagnose::BioSdkCommand::LoadSymbols()
         return BIO_INNER_ERR;
     }
 
-    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "CLI_RegCmd"));
-    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "CLI_UnRegCmd"));
-    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "CLI_PrintBuf"));
+    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "cli_register_command"));
+    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "cli_unregister_command"));
+    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "cli_print_buffer"));
     if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
         CLIENT_LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
+        mHandler = nullptr;
         return BIO_INNER_ERR;
     }
 
@@ -88,11 +90,11 @@ int diagnose::BioSdkCommand::Initialize() noexcept
         return ret;
     }
 
-    CLI_CMD_S command;
-    strncpy(command.szCommand, "sdk", CLI_MAX_COMMAND_LEN);
-    strncpy(command.szDescription, "sdk commands.", CLI_MAX_CMD_DESC_LEN);
-    command.fnCmdDo = BioSdkDebugProcess;
-    command.fnPrintCmdHelp = BioSdkDebugHelp;
+    CliCommand command;
+    strncpy(command.command, "sdk", CLI_MAX_COMMAND_LEN);
+    strncpy(command.description, "sdk commands.", CLI_MAX_CMD_DESC_LEN);
+    command.handler = BioSdkDebugProcess;
+    command.help_handler = BioSdkDebugHelp;
     auto result = mRegOp(&command);
     if (result == 0) {
         mInited = true;
@@ -102,12 +104,12 @@ int diagnose::BioSdkCommand::Initialize() noexcept
 
 void diagnose::BioSdkCommand::Destroy() noexcept
 {
-    if (mInited && mUnRegOp) {
+    if (mInited && mUnRegOp != nullptr) {
         mUnRegOp((char *)"sdk");
         mInited = false;
     }
 
-    if (mHandler) {
+    if (mHandler != nullptr) {
         dlclose(mHandler);
         mHandler = nullptr;
     }

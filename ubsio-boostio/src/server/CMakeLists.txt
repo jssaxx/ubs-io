@@ -4,7 +4,7 @@ install(TARGETS bio_server DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OW
 
 target_link_libraries(bio_server
         -Wl,--start-group
-        pthread dl aio expire_checker rados
+        pthread dl aio expire_checker
         hcom_lib
         boundscheck_lib
         htracer bio_common bio_bdm bio_flow bio_cache bio_net bio_conf bio_cluster bio_underfs
