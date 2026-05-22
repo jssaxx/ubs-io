@@ -268,7 +268,7 @@ BResult MfTransEngine::Read(TransParam& param)
         NET_LOG_ERROR("Failed to read from mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_WARN("Read success, local addr: " << param.localAddrs[0] << ", remote addr: " << param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
+    NET_LOG_INFO("Read success, local addr: " << param.localAddrs[0] << ", remote addr: " << param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
     return BIO_OK;
 }
 
@@ -293,7 +293,7 @@ BResult MfTransEngine::BatchRead(TransParam& param)
         NET_LOG_ERROR("Failed to batch read from mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_WARN( "BatchRead success, size: " << param.localAddrs.size() << ", localAddrs: " << param.localAddrs[0]);
+    NET_LOG_INFO( "BatchRead success, size: " << param.localAddrs.size() << ", localAddrs: " << param.localAddrs[0]);
     return BIO_OK;
 }
 
@@ -314,7 +314,7 @@ BResult MfTransEngine::Write(TransParam& param)
         NET_LOG_ERROR("Failed to write to mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_WARN("Write success, local addr: " << param.localAddrs[0] << ", remote addr: " << param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
+    NET_LOG_INFO("Write success, local addr: " << param.localAddrs[0] << ", remote addr: " << param.remoteAddrs[0] << ", size: " << param.dataSizes[0]);
     return BIO_OK;
 }
 
@@ -338,7 +338,7 @@ BResult MfTransEngine::BatchWrite(TransParam& param)
         NET_LOG_ERROR("Failed to batch write to mf trans, ret: " << ret);
         return ret;
     }
-    NET_LOG_WARN("BatchWrite success, size: " << param.localAddrs.size() << ", localAddrs: " << param.localAddrs[0]);
+    NET_LOG_INFO("BatchWrite success, size: " << param.localAddrs.size() << ", localAddrs: " << param.localAddrs[0]);
     return BIO_OK;
 }
 

@@ -259,6 +259,9 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
                 // rh2d: 数据已直接写入NPU
                 br.rh2dSuccess = true;
                 for (uint32_t i = 0; i < batchSize; ++i) {
+                    if (br.batchResult[i] != UBSIO_KVC_OK) {
+                        LOG_ERROR("Get remote failed, index:" << i << ", ret:" << br.batchResult[i]);
+                    }
                     results[oriIndex[start + i]] = br.batchResult[i];
                 }
             } else if (ret == static_cast<KvcError>(CResult::RET_CACHE_IN_DRAM)) {

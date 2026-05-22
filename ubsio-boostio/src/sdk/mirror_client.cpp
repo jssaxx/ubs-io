@@ -2182,16 +2182,13 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     uintptr_t address = 0;
     uintptr_t transMem = 0;
     TransData transData;
-    CLIENT_LOG_ERROR("PrepareFromClient start");
     if (ptEntry.copys[0].nodeId == mLocalNid.VNodeId() || !mEnableTrance) {
         BResult ret = mDataMsgMemPool->AllocOne(address);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
             return BIO_ALLOC_FAIL;
         }
-        CLIENT_LOG_ERROR("put local start copy data to trans mem, src:" << std::hex << std::showbase << (uintptr_t)(param.value) 
-                 << ", dst:" << transMem 
-                 << ", len:" << std::dec << param.length);
+        
         ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
@@ -2199,7 +2196,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             mDataMsgMemPool->ReleaseOne(address);
             return BIO_ALLOC_FAIL;
         }
-        CLIENT_LOG_ERROR("put local end copy data to trans mem, src");
+        
         transData.enableTrans = false;
         transData.localTransAddr = 0;
         transData.transDataLen = 0;
@@ -2209,9 +2206,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             CLIENT_LOG_ERROR("Alloc memory failed, ret:" << ret << ", key:" << param.key << ".");
             return BIO_ALLOC_FAIL;
         }
-        CLIENT_LOG_ERROR("put remote start copy data to trans mem, src:" << std::hex << std::showbase << (uintptr_t)(param.value) 
-                 << ", dst:" << transMem 
-                 << ", len:" << std::dec << param.length);
+        
         ret = memcpy_s(reinterpret_cast<char *>(transMem), mDataMsgMemBlockSize, param.value, param.length);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
@@ -2219,7 +2214,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(transMem);
             return BIO_ALLOC_FAIL;
         }
-        CLIENT_LOG_ERROR("put local end copy data to trans mem, src");
+        
         transData.enableTrans = true;
         transData.localTransAddr = transMem;
         transData.transDataLen = param.length;
