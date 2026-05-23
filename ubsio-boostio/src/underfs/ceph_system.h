@@ -14,7 +14,7 @@
 #define BOOSTIO_CEPHSYSTEM_H
 
 #include "file_system.h"
-#include "rados/librados.h"
+#include "dl_rados_api.h"
 
 namespace ock {
 namespace bio {
@@ -39,8 +39,8 @@ private:
     void LoadCephConfig();
 
 private:
-    rados_t mConn;
-    rados_ioctx_t mIoCtx;
+    rados_t mConn = nullptr;
+    rados_ioctx_t mIoCtx = nullptr;
 
     std::string mCfgPath;
     std::string mCluster;

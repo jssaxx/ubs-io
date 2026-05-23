@@ -35,13 +35,20 @@ using namespace ock::htracer;
 static bool DiskPathInvalid()
 {
     std::string filename = "./bio.conf";
+    std::string key = "bio.disk.path";
     std::string target = "/dev/sdxx:/dev/sdyy";
     std::ifstream file(filename);
     std::string line;
     while (getline(file, line)) {
+        if (line.find(key) == std::string::npos) {
+            continue;
+        }
+        size_t splitPos = line.find('=');
         if (line.find(target) != std::string::npos) {
             return true;
         }
+        return splitPos != std::string::npos &&
+            line.find_first_not_of(" \t\r\n", splitPos + 1) == std::string::npos;
     }
     return false;
 }
@@ -56,11 +63,17 @@ int main(int argc, char *argv[])
     (void)system("rm -rf ceph");
     (void)system("rm -rf conf");
     (void)system("cp ../configs/* ./");
+    (void)system("sed -i 's/bio.cm.copy_num =.*/bio.cm.copy_num = 2/g' ./bio.conf");
+    (void)system("sed -i 's/bio.trace.enable =.*/bio.trace.enable = true/g' ./bio.conf");
+    (void)system("sed -i 's/bio.cache.qos.enable =.*/bio.cache.qos.enable = true/g' ./bio.conf");
+    (void)system("sed -i 's/bio.wcache.evict_water_level =.*/bio.wcache.evict_water_level = 0/g' ./bio.conf");
+    (void)system("sed -i 's/bio.cache.mem_read_write_ratio =.*/bio.cache.mem_read_write_ratio = 5:5/g' ./bio.conf");
+    (void)system("sed -i 's/bio.underfs.file_system_type =.*/bio.underfs.file_system_type = ceph/g' ./bio.conf");
     (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' ./bio.conf");
     (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' ./bio.conf");
     if (DiskPathInvalid()) {
         TestDisk::Stub();
-        (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' ./bio.conf");
+        (void)system("sed -i 's/bio.disk.path =.*/bio.disk.path = test1:test2/g' ./bio.conf");
         (void)system("touch test1");
         (void)system("touch test2");
     }

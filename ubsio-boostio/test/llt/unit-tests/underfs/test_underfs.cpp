@@ -13,10 +13,10 @@
 #include "test_underfs.h"
 #include <mockcpp/mockcpp.hpp>
 #include "gtest/gtest.h"
-#include "rados/librados.h"
 #include "bio_err.h"
 #include "bio_types.h"
 #include "tracepoint.h"
+#include "dl_rados_api.h"
 #include "hdfs_system.h"
 #include "ceph_system.h"
 #include "bio_log.h"
@@ -79,22 +79,69 @@ static int RadosStatStub(rados_ioctx_t io, const char *o, uint64_t *psize, time_
     return BIO_OK;
 }
 
+static int64_t RadosPoolLookupStub(rados_t cluster, const char *poolName)
+{
+    return BIO_OK;
+}
+
+static int RadosConfReadFileStub(rados_t cluster, const char *path)
+{
+    return BIO_OK;
+}
+
+static int RadosConnectStub(rados_t cluster)
+{
+    return BIO_OK;
+}
+
+static int RadosPoolCreateStub(rados_t cluster, const char *poolName)
+{
+    return BIO_OK;
+}
+
+static int RadosWriteStub(rados_ioctx_t io, const char *o, const char *buf, size_t len, uint64_t off)
+{
+    return BIO_OK;
+}
+
+static int RadosReadStub(rados_ioctx_t io, const char *o, char *buf, size_t len, uint64_t off)
+{
+    return BIO_OK;
+}
+
+static int RadosRemoveStub(rados_ioctx_t io, const char *o)
+{
+    return BIO_OK;
+}
+
+static int RadosNobjectsListOpenStub(rados_ioctx_t io, rados_list_ctx_t *ctx)
+{
+    *ctx = static_cast<rados_list_ctx_t>(&g_ptrStub);
+    return BIO_OK;
+}
+
+static int RadosNobjectsListNextStub(rados_list_ctx_t ctx, const char **entry, const char **key, const char **ns)
+{
+    return -ENOENT;
+}
+
 void TestUnderFs::Stub()
 {
-    MOCKER(rados_create2).stubs().will(invoke(RadosCreateStub));
-    MOCKER(rados_conf_read_file).stubs().will(returnValue(0));
-    MOCKER(rados_connect).stubs().will(returnValue(0));
-    MOCKER(rados_shutdown).stubs().will(invoke(RadosShutdownStub));
-    MOCKER(rados_pool_lookup).stubs().will(returnValue(0));
-    MOCKER(rados_ioctx_create).stubs().will(invoke(IoctxCreateStub));
-    MOCKER(rados_ioctx_destroy).stubs().will(invoke(IoctxCdestroyStub));
-    MOCKER(rados_read).stubs().will(returnValue(0));
-    MOCKER(rados_write).stubs().will(returnValue(0));
-    MOCKER(rados_stat).stubs().will(invoke(RadosStatStub));
-    MOCKER(rados_remove).stubs().will(returnValue(0));
-    MOCKER(rados_nobjects_list_next).stubs().will(returnValue(-ENOENT));
-    MOCKER(rados_nobjects_list_open).stubs().will(returnValue(0));
-    MOCKER(rados_nobjects_list_close).stubs().will(invoke(RadosListCloseStub));
+    DlRadosApi::radosCreate2 = RadosCreateStub;
+    DlRadosApi::radosConfReadFile = RadosConfReadFileStub;
+    DlRadosApi::radosConnect = RadosConnectStub;
+    DlRadosApi::radosShutdown = RadosShutdownStub;
+    DlRadosApi::radosPoolLookup = RadosPoolLookupStub;
+    DlRadosApi::radosPoolCreate = RadosPoolCreateStub;
+    DlRadosApi::radosIoctxCreate = IoctxCreateStub;
+    DlRadosApi::radosIoctxDestroy = IoctxCdestroyStub;
+    DlRadosApi::radosRead = RadosReadStub;
+    DlRadosApi::radosWrite = RadosWriteStub;
+    DlRadosApi::radosStat = RadosStatStub;
+    DlRadosApi::radosRemove = RadosRemoveStub;
+    DlRadosApi::radosNobjectsListNext = RadosNobjectsListNextStub;
+    DlRadosApi::radosNobjectsListOpen = RadosNobjectsListOpenStub;
+    DlRadosApi::radosNobjectsListClose = RadosListCloseStub;
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_creat_fail)

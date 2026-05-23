@@ -139,6 +139,10 @@ $BUILD_CMD || {
 	  exit 1
 }
 cd ${PROJ_DIR}/dist
+if compgen -G "3rdparty/zookeeper/lib/libzookeeper_mt.so*" > /dev/null; then
+    \cp -d 3rdparty/zookeeper/lib/libzookeeper_mt.so* bio/lib/.
+fi
+
 if [[ "$PROMETHEUS_FLAG" == "ON" ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
@@ -149,8 +153,11 @@ if [[ "$BUILD_TYPE" == "release" && "$CLI_FLAG" == "ON" ]]; then
     mkdir -p test_tools/lib
     mkdir -p test_tools/conf
     mv bio/bin/bio_console test_tools/bin/.
-    mv bio/lib/libsdk_diagnose.so test_tools/lib/.
-    mv bio/lib/libserver_diagnose.so test_tools/lib/.
+    mv bio/bin/cli_client test_tools/bin/.
+    mv bio/bin/cli_server test_tools/bin/.
+    mv bio/lib/libbiosdk_diagnose.so test_tools/lib/.
+    mv bio/lib/libbioserver_diagnose.so test_tools/lib/.
+    \cp -d bio/lib/libcli_agent.so* test_tools/lib/.
     \cp ../configs/bio_sdk_test.conf test_tools/conf/.
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi
@@ -164,5 +171,4 @@ fi
 rm -rf boostio
 mv bio boostio
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
-
 

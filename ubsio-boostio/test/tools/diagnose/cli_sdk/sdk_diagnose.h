@@ -13,7 +13,7 @@
 #ifndef BOOSTIO_SDK_DIAGNOSE_H
 #define BOOSTIO_SDK_DIAGNOSE_H
 
-#include "cli_define.h"
+#include "cli.h"
 
 namespace ock {
 namespace bio {

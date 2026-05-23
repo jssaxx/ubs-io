@@ -284,13 +284,24 @@ BResult MirrorClient::DestroyFlow(uint16_t ptId, uint64_t flowId)
 
 BResult MirrorClient::LoadAffinityFlow()
 {
+#ifdef DEBUG_UT
     std::vector<uint16_t> ptVec = ListLocalAffinityPt();
+#else
+    std::vector<uint16_t> ptVec;
+    mLock.LockRead();
+    ptVec.reserve(mPtView.size());
+    for (auto &item : mPtView) {
+        ptVec.emplace_back(item.first);
+    }
+    mLock.UnLock();
+#endif
+
     for (uint16_t &ptId : ptVec) {
         BResult ret = CreateFlow(ptId);
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Create affinity flow instance failed, ret:" << ret << ", ptId:" << ptId << ".");
+            CLIENT_LOG_ERROR("Create flow instance failed, ret:" << ret << ", ptId:" << ptId << ".");
         } else {
-            CLIENT_LOG_INFO("Load affinity flow success, ptId:" << ptId << ".");
+            CLIENT_LOG_INFO("Load flow success, ptId:" << ptId << ".");
         }
     }
     return BIO_OK;

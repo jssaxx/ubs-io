@@ -587,9 +587,9 @@ BResult BioServer::BioServerDiagnoseInit()
         return BIO_INNER_ERR;
     }
 
-    auto ptr = LoadFunction("CLI_AgentInit", handler);
+    auto ptr = LoadFunction("cli_agent_init", handler);
     if (ptr == nullptr) {
-        LOG_ERROR("Failed to load function CLI_AgentInit.");
+        LOG_ERROR("Failed to load function cli_agent_init.");
         dlclose(handler);
         return BIO_ERR;
     }
@@ -610,7 +610,6 @@ BResult BioServer::BioServerDiagnoseInit()
     if (ret != BIO_OK) {
         LOG_ERROR("inner init bio server diagnose fail.");
     }
-    dlclose(handler);
     return ret;
 }
 
@@ -620,16 +619,8 @@ BResult BioServer::BioServerDiagnoseInitInner()
 #ifdef DEBUG_UT
     return BIO_OK;
 #endif
-    std::string soFileName = "/usr/lib64/boostio/test_tools/libserver_diagnose.so";
-    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
-        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-        return BIO_NOT_EXISTS;
-    }
-
-    auto handler = dlopen(canonicalPath, RTLD_NOW);
-    free(canonicalPath);
-    canonicalPath = nullptr;
+    const char* soFileName = "libbioserver_diagnose.so";
+    auto handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_ERR;

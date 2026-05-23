@@ -27,46 +27,51 @@ BResult CephSystem::Init()
     }
 
     LoadCephConfig();
+    if (DlRadosApi::LoadRadosApiDl() != 0) {
+        LOG_ERROR("Failed to load rados api.");
+        return BIO_UFS_IOERR;
+    }
+
     int ret = BIO_UFS_IOERR;
     BIO_TP_START(UNDERFS_CEPH_CREAT_FAIL, &ret, -1);
-    ret = rados_create2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
+    ret = DlRadosApi::radosCreate2(&mConn, mCluster.c_str(), mUser.c_str(), 0);
     BIO_TP_END;
     if (ret < 0 || mConn == nullptr) {
         LOG_ERROR("Failed to create, ret:" << ret);
         return BIO_UFS_IOERR;
     }
-    ret = rados_conf_read_file(mConn, mCfgPath.c_str());
+    ret = DlRadosApi::radosConfReadFile(mConn, mCfgPath.c_str());
     BIO_TP_START(UNDERFS_CEPH_READ_FILE_FAIL, &ret, -1);
     BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to read config, ret:" << ret);
-        rados_shutdown(mConn);
+        DlRadosApi::radosShutdown(mConn);
         return BIO_UFS_IOERR;
     }
 
-    ret = rados_connect(mConn);
+    ret = DlRadosApi::radosConnect(mConn);
     BIO_TP_START(UNDERFS_CEPH_CONNECT_FAIL, &ret, -1);
     BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to connect, ret:" << ret);
-        rados_shutdown(mConn);
+        DlRadosApi::radosShutdown(mConn);
         return BIO_UFS_IOERR;
     }
 
-    if (rados_pool_lookup(mConn, mPool.c_str()) < 0) {
-        if (rados_pool_create(mConn, mPool.c_str()) < 0) {
+    if (DlRadosApi::radosPoolLookup(mConn, mPool.c_str()) < 0) {
+        if (DlRadosApi::radosPoolCreate(mConn, mPool.c_str()) < 0) {
             LOG_ERROR("Failed to create pool, ret:" << ret);
-            rados_shutdown(mConn);
+            DlRadosApi::radosShutdown(mConn);
             return BIO_UFS_IOERR;
         }
     }
 
-    ret = rados_ioctx_create(mConn, mPool.c_str(), &mIoCtx);
+    ret = DlRadosApi::radosIoctxCreate(mConn, mPool.c_str(), &mIoCtx);
     BIO_TP_START(UNDERFS_CEPH_IOCTX_CREAT_FAIL, &ret, -1);
     BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to create ioctx, ret:" << ret);
-        rados_shutdown(mConn);
+        DlRadosApi::radosShutdown(mConn);
         return BIO_UFS_IOERR;
     }
 
@@ -79,9 +84,13 @@ BResult CephSystem::Init()
 void CephSystem::Stop()
 {
     if (mIoCtx) {
-        rados_ioctx_destroy(mIoCtx);
+        DlRadosApi::radosIoctxDestroy(mIoCtx);
+        mIoCtx = nullptr;
     }
-    rados_shutdown(mConn);
+    if (mConn) {
+        DlRadosApi::radosShutdown(mConn);
+        mConn = nullptr;
+    }
     mInited = false;
 }
 
@@ -93,7 +102,7 @@ BResult CephSystem::Put(const char *key, const char *value, const size_t len)
 
     BIO_TRACE_START(UFS_TRACE_PUT);
     BIO_TP_START(SERVER_UNDERFS_PUT, &ret, -1);
-    ret = rados_write(mIoCtx, key, value, len, 0);
+    ret = DlRadosApi::radosWrite(mIoCtx, key, value, len, 0);
     BIO_TP_END;
     BIO_TRACE_END(UFS_TRACE_PUT, ret);
     if (ret < 0) {
@@ -111,7 +120,7 @@ BResult CephSystem::Get(const char *key, char *value, const size_t len, const ui
 
     BIO_TRACE_START(UFS_TRACE_GET);
     BIO_TP_START(SERVER_UNDERFS_GET, &ret, -1);
-    ret = rados_read(mIoCtx, key, value, len, off);
+    ret = DlRadosApi::radosRead(mIoCtx, key, value, len, off);
     BIO_TP_END;
     BIO_TP_START(UNDERFS_CEPH_GET_FAIL, &ret, (-ENOENT));
     BIO_TP_END;
@@ -136,7 +145,7 @@ BResult CephSystem::Delete(const char *key)
 
     BIO_TRACE_START(UFS_TRACE_DEL);
     BIO_TP_START(SERVER_UNDERFS_DELETE, &ret, -1);
-    ret = rados_remove(mIoCtx, key);
+    ret = DlRadosApi::radosRemove(mIoCtx, key);
     BIO_TP_END;
     BIO_TP_START(UNDERFS_CEPH_DELETE_NOT_EXIST, &ret, (-ENOENT));
     BIO_TP_END;
@@ -160,7 +169,7 @@ BResult CephSystem::Stat(const char *key, ObjStat &stat)
 
     BIO_TRACE_START(UFS_TRACE_STAT);
     BIO_TP_START(SERVER_UNDERFS_STAT, &ret, -1);
-    ret = rados_stat(mIoCtx, key, &stat.size, &stat.time);
+    ret = DlRadosApi::radosStat(mIoCtx, key, &stat.size, &stat.time);
     BIO_TP_END;
     BIO_TP_START(UNDERFS_CEPH_STAT_NOT_EXIST, &ret, (-ENOENT));
     BIO_TP_END;
@@ -190,7 +199,7 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
 
     rados_list_ctx_t listCtx;
     BIO_TP_START(SERVER_UNDERFS_LIST, &ret, -1);
-    ret = rados_nobjects_list_open(mIoCtx, &listCtx);
+    ret = DlRadosApi::radosNobjectsListOpen(mIoCtx, &listCtx);
     BIO_TP_END;
     if (ret < 0) {
         LOG_ERROR("Failed to list open, ret:" << ret);
@@ -200,7 +209,7 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
     BIO_TRACE_START(UFS_TRACE_LIST);
     char *entry = nullptr;
     size_t prefixLength = strlen(prefix);
-    while (rados_nobjects_list_next(listCtx, const_cast<const char **>(&entry), nullptr, nullptr) == 0) {
+    while (DlRadosApi::radosNobjectsListNext(listCtx, const_cast<const char **>(&entry), nullptr, nullptr) == 0) {
         if (memcmp(entry, prefix, prefixLength) == 0) {
             ObjStat objectStat;
             ret = this->Stat(entry, objectStat);
@@ -211,7 +220,7 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
             objStat.insert({ entry, objectStat });
         }
     }
-    rados_nobjects_list_close(listCtx);
+    DlRadosApi::radosNobjectsListClose(listCtx);
     BIO_TRACE_END(UFS_TRACE_LIST, ret);
     return BIO_OK;
 }
