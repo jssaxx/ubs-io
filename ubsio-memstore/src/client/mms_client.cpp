@@ -18,6 +18,8 @@
 #include "mms_message.h"
 #include "mms_client.h"
 
+#include <string>
+
 #ifdef USE_CLI_TOOLS
 #include <dlfcn.h>
 #endif
@@ -104,6 +106,13 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
 
 void MmsClient::Exit(void)
 {
+    mNotifyCallback.store(nullptr, std::memory_order_release);
+    mNotifyChannel = nullptr;
+    mNotifyPid = 0;
+    if (mNotifyCallbackService != nullptr) {
+        mNotifyCallbackService->Stop();
+        mNotifyCallbackService = nullptr;
+    }
 }
 
 BResult MmsClient::ClientGlobVarInit(void)
@@ -222,6 +231,13 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
         return ret;
     }
 
+    ret = mNetEngine->RegisterNewRequestHandler(MMS_OP_NOTIFY_DATA_CHANGE,
+        std::bind(&MmsClient::HandleNotifyDataChange, this, std::placeholders::_1));
+    if (ret != MMS_OK) {
+        CLIENT_LOG_ERROR("Register notify data change handler failed, ret:" << ret << ".");
+        return ret;
+    }
+
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         std::thread t([this, nodeId]() {
             bool ret = mStartService->Execute([this]() { BuildThreadTask(); });
@@ -266,6 +282,117 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
 void MmsClient::ClientNetExit(void)
 {
     mNetEngine->Stop();
+}
+
+BResult MmsClient::StartNotifyCallbackService()
+{
+    std::lock_guard<std::mutex> lock(mNotifyCallbackServiceLock);
+    if (mNotifyCallbackService != nullptr) {
+        return MMS_OK;
+    }
+
+    mNotifyCallbackService = ExecutorService::Create(NO_1, NO_1024);
+    if (mNotifyCallbackService == nullptr) {
+        CLIENT_LOG_ERROR("Failed to create notify callback executor.");
+        return MMS_ALLOC_FAIL;
+    }
+    mNotifyCallbackService->SetThreadName("client-data-notify");
+    if (!mNotifyCallbackService->Start()) {
+        CLIENT_LOG_ERROR("Failed to start notify callback executor.");
+        mNotifyCallbackService = nullptr;
+        return MMS_INNER_ERR;
+    }
+    return MMS_OK;
+}
+
+BResult MmsClient::StartNotifyChannel()
+{
+    if (mNotifyChannel != nullptr) {
+        return MMS_OK;
+    }
+
+    mNotifyPid = static_cast<uint32_t>(getpid()) | NOTIFY_PID_FLAG;
+    ConnectInfo info(INVALID_NID, mNotifyPid, INVALID_NID, false);
+    auto ret = mNetEngine->ConnectToPeer(CONNECT_IPC, info, 0, mNotifyChannel);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Connect notify channel failed, ret:" << ret << ".");
+        mNotifyChannel = nullptr;
+        mNotifyPid = 0;
+        return ret;
+    }
+    return MMS_OK;
+}
+
+BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback)
+{
+    if (UNLIKELY(!mStarted || mNetEngine == nullptr)) {
+        CLIENT_LOG_ERROR("Mms client is not started.");
+        return MMS_NOT_READY;
+    }
+
+    if (callback != nullptr) {
+        auto ret = StartNotifyCallbackService();
+        if (ret != MMS_OK) {
+            return ret;
+        }
+        ret = StartNotifyChannel();
+        if (ret != MMS_OK) {
+            return ret;
+        }
+        mNotifyCallback.store(callback, std::memory_order_release);
+    } else {
+        mNotifyCallback.store(nullptr, std::memory_order_release);
+    }
+
+    NotifySubscribeReq req = {{0, MMS_OP_C_NOTIFY_SUBSCRIBE, 0, 0, 0}, callback != nullptr, mNotifyPid};
+    BResult rsp = MMS_OK;
+    auto ret = mNetEngine->SyncCall<NotifySubscribeReq, BResult>(INVALID_NID, 0, MMS_OP_C_NOTIFY_SUBSCRIBE, req, rsp);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Notify subscribe request failed, ret:" << ret << ".");
+        if (callback != nullptr) {
+            mNotifyCallback.store(nullptr, std::memory_order_release);
+        }
+        return ret;
+    }
+    return MMS_OK;
+}
+
+BResult MmsClient::HandleNotifyDataChange(ServiceContext &ctx)
+{
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(NotifyDataChangeReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        CLIENT_LOG_ERROR("Receive notify message len:" << ctx.MessageDataLen() << " or message data invalid.");
+        return MMS_OK;
+    }
+
+    auto *req = static_cast<NotifyDataChangeReq *>(ctx.MessageData());
+    if (UNLIKELY(req->keyLen == 0 || req->keyLen >= MAX_KEY_SIZE || req->opType >= OP_BUTT)) {
+        CLIENT_LOG_ERROR("Invalid notify data, keyLen:" << req->keyLen << ", opType:" << req->opType << ".");
+        return MMS_OK;
+    }
+
+    if (mNotifyCallback.load(std::memory_order_acquire) == nullptr) {
+        return MMS_OK;
+    }
+
+    if (UNLIKELY(mNotifyCallbackService == nullptr)) {
+        CLIENT_LOG_ERROR("Notify callback executor is not ready.");
+        return MMS_OK;
+    }
+
+    std::string key(req->key, req->keyLen);
+    auto opType = static_cast<OperateType>(req->opType);
+    auto ret = mNotifyCallbackService->Execute([this, key, opType]() {
+        auto callback = mNotifyCallback.load(std::memory_order_acquire);
+        if (callback != nullptr) {
+            callback(key.c_str(), opType);
+        }
+    });
+    if (UNLIKELY(!ret)) {
+        CLIENT_LOG_ERROR("Put notify callback task to queue failed.");
+        return MMS_OK;
+    }
+
+    return MMS_OK;
 }
 
 BResult MmsClient::ClientBasicInit(void)
@@ -438,6 +565,8 @@ void MmsClient::ClientKvExit(void)
 
 BResult MmsClient::ResetResource()
 {
+    mNotifyChannel = nullptr;
+    mNotifyPid = 0;
     for (uint16_t &numaId: mNumaId) {
         numaId = -1;
     }
@@ -521,6 +650,13 @@ BResult MmsClient::BuildThreadTask(void)
     } while (ret != MMS_OK);
 
     mStarted = true;
+    auto callback = mNotifyCallback.load(std::memory_order_acquire);
+    if (callback != nullptr) {
+        ret = RegisterNotifyCallback(callback);
+        if (ret != MMS_OK) {
+            CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << ret << ".");
+        }
+    }
 
     return MMS_OK;
 }
@@ -624,8 +760,8 @@ void MmsClient::BackCheckStateTask()
 using ClientDiagnose = int (*)();
 BResult MmsClient::ClientDiagnoseInit(void)
 {
-    uint32_t procPid = 600U;
-    std::string diagName = "mms_c";
+    uint32_t procPid = static_cast<uint32_t>(getpid());
+    std::string diagName = "mms_c_" + std::to_string(procPid);
     BResult ret = cli_agent_init(procPid, const_cast<char *>(diagName.c_str()));
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");

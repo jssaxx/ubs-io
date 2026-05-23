@@ -13,7 +13,10 @@
 #ifndef MMS_KV_SERVER_H
 #define MMS_KV_SERVER_H
 
+#include <mutex>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 #include "mms_c.h"
 #include "mms_ref.h"
 #include "mms_err.h"
@@ -65,6 +68,7 @@ public:
 
     void NotifyServiceable(bool serviceable);
     void NotifyPtMigrate(uint16_t ptId);
+    void RemoveNotifyClient(uint32_t pid);
 
     static thread_local std::vector<PutItems> itemListPut;
     static thread_local std::vector<UpdateItems> itemListUpdate;
@@ -76,6 +80,7 @@ private:
     void RegisterOpcode();
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
+    BResult HandleNotifySubscribe(ServiceContext &ctx);
 
     BResult HandlePut(ServiceContext &ctx);
     BResult HandlePutDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
@@ -139,6 +144,8 @@ private:
     BResult HandleRangeDelete(ServiceContext &ctx);
     BResult HandleSearch(ServiceContext &ctx, MmsOpCode opCode);
     BResult ReplySearchResult(ServiceContext &ctx, ValueInfo *valueInfoItems, uint64_t itemNum);
+    void AddNotifyClient(uint32_t pid);
+    void NotifyRemoteClients(const char *key, OperateType opType);
 
 private:
     bool mStarted = false;
@@ -153,6 +160,9 @@ private:
     CmPtr mCm = nullptr;
     MmsNotifyDispatcher *mNotifyDispatcher = nullptr;
     bool mDataChangeCallbackSwitch = false;
+    bool mRemoteNotifyEnable = false;
+    std::mutex mNotifyClientLock;
+    std::unordered_set<uint32_t> mNotifyClients;
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
 

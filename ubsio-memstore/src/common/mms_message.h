@@ -52,6 +52,8 @@ enum MmsOpCode : uint16_t {
     MMS_OP_S_GET_SEQNO_DATA,
     MMS_OP_S_DELETE_BY_RANGE,
     MMS_OP_S_MULTI_DELETE_BY_RANGE,
+    MMS_OP_C_NOTIFY_SUBSCRIBE,
+    MMS_OP_NOTIFY_DATA_CHANGE,
     MMS_OP_BUTT
 };
 
@@ -74,6 +76,19 @@ typedef struct {
 typedef struct {
     ReqHead head;
 } BasicRequest;
+
+typedef struct {
+    ReqHead head;
+    bool enable;
+    uint32_t notifyPid;
+} NotifySubscribeReq;
+
+typedef struct {
+    ReqHead head;
+    uint16_t keyLen;
+    uint16_t opType;
+    char key[MAX_KEY_SIZE];
+} NotifyDataChangeReq;
 
 typedef struct {
     uint64_t ptVersion;

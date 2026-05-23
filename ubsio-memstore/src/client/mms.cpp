@@ -73,8 +73,11 @@ CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
 
 CResult Mms::RegisterCallback(NotifyCallback callback)
 {
-    (void)callback;
-    return RET_MMS_PROTECTED;
+    if (UNLIKELY(gClient == nullptr)) {
+        CLIENT_LOG_ERROR("Get client instance failed.");
+        return RET_MMS_ERROR;
+    }
+    return ToCResult(gClient->RegisterNotifyCallback(callback));
 }
 
 void Mms::Exit()

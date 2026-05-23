@@ -13,6 +13,8 @@
 #ifndef MMS_CLIENT_H
 #define MMS_CLIENT_H
 
+#include <mutex>
+
 #include "net_engine.h"
 #include "net_common.h"
 #include "mms_execution.h"
@@ -121,6 +123,7 @@ public:
     }
 
     BResult MmsStartCatchUpTask(void);
+    BResult RegisterNotifyCallback(NotifyCallback callback);
 
 private:
     void BackCheckStateTask();
@@ -147,6 +150,9 @@ private:
     BResult BuildServices(void);
 
     BResult CheckServiceState(std::atomic<bool> &serviceable);
+    BResult HandleNotifyDataChange(ServiceContext &ctx);
+    BResult StartNotifyCallbackService();
+    BResult StartNotifyChannel();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -174,6 +180,11 @@ private:
 
     std::atomic<bool> mServiceable {false};
     ServiceCallback mServiceCallback = nullptr;
+    std::atomic<NotifyCallback> mNotifyCallback {nullptr};
+    ExecutorServicePtr mNotifyCallbackService {nullptr};
+    std::mutex mNotifyCallbackServiceLock;
+    ChannelPtr mNotifyChannel = nullptr;
+    uint32_t mNotifyPid = 0;
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};

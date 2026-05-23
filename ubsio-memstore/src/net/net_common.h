@@ -57,6 +57,7 @@ enum ConnectMode {
 };
 
 constexpr uint32_t INVALID_NID = 1024;
+constexpr uint32_t NOTIFY_PID_FLAG = 0x40000000U;
 
 union NetNode {
     struct {
@@ -246,4 +247,3 @@ using NetEnginePtr = Ref<NetEngine>;
 }
 
 #endif // NET_COMMON_H
-

@@ -430,6 +430,10 @@ BResult MmsServer::MmsUnicastNet()
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (pid == 0) {
             NetReConnect(nodeId);
+            return;
+        }
+        if (mKvServer != nullptr) {
+            mKvServer->RemoveNotifyClient(pid);
         }
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);

@@ -15,6 +15,8 @@
 
 #include <atomic>
 #include <cstddef>
+#include <deque>
+#include <functional>
 #include <mutex>
 #include <memory>
 #include <thread>
@@ -32,9 +34,12 @@ struct NotifyEvent {
 
 class MmsNotifyDispatcher {
 public:
+    using RemoteNotifyHandler = std::function<void(const char *, OperateType)>;
+
     static MmsNotifyDispatcher &Instance();
 
     CResult RegisterCallback(NotifyCallback callback);
+    CResult RegisterRemoteNotifyHandler(RemoteNotifyHandler handler);
     void Notify(const char *key, OperateType opType);
     void Stop();
 
@@ -46,6 +51,7 @@ private:
     MmsNotifyDispatcher &operator=(const MmsNotifyDispatcher &) = delete;
 
     bool StartWorkerLocked();
+    void StopWorkerIfIdleLocked();
     void StopWorker();
     void ResetQueue();
     enum class EnqueueResult {
@@ -55,7 +61,11 @@ private:
     };
 
     EnqueueResult TryEnqueue(const char *key, size_t keyLen, OperateType opType);
+    EnqueueResult EnqueueOverflow(const char *key, size_t keyLen, OperateType opType);
     bool TryDequeue(NotifyEvent &event);
+    bool TryDequeueOverflow(NotifyEvent &event);
+    void HandleEvent(const NotifyEvent &event);
+    void NotifyLocalCallback(const NotifyEvent &event);
     void WorkerLoop();
 
 private:
@@ -68,11 +78,16 @@ private:
     };
 
     NotifyCallback mCallback = nullptr;
+    RemoteNotifyHandler mRemoteNotifyHandler = nullptr;
     std::atomic<size_t> mEnqueuePos{0};
     std::atomic<size_t> mDequeuePos{0};
+    std::atomic<uint64_t> mQueueFullCount{0};
     std::atomic<bool> mRunning{false};
     std::atomic<bool> mStop{false};
+    std::atomic<bool> mOverflowActive{false};
     std::mutex mLifecycleMutex;
+    std::mutex mOverflowMutex;
+    std::deque<NotifyEvent> mOverflowQueue;
     std::unique_ptr<NotifyCell[]> mQueue;
     std::thread mWorker;
 };

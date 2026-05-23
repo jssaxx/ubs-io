@@ -19,6 +19,7 @@
 #include "mms_trace.h"
 #include "mms_kv_server.h"
 #include "mms_notify.h"
+#include "securec.h"
 
 namespace ock {
 namespace mms {
@@ -60,6 +61,16 @@ BResult MmsKvServer::Initialize()
     mCache = MmsServer::Instance()->GetCache();
     mNotifyDispatcher = &MmsNotifyDispatcher::Instance();
     mDataChangeCallbackSwitch = MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch;
+    bool isSeparate = MmsServer::Instance()->GetConfig()->GetBasicConfig().isSeparateMode;
+    if (mDataChangeCallbackSwitch && isSeparate) {
+        auto notifyRet = mNotifyDispatcher->RegisterRemoteNotifyHandler(
+            [this](const char *key, OperateType opType) { NotifyRemoteClients(key, opType); });
+        if (notifyRet != RET_MMS_OK) {
+            LOG_ERROR("Register remote notify handler failed, ret:" << notifyRet << ".");
+            return MMS_ERR;
+        }
+        mRemoteNotifyEnable = true;
+    }
 
     allocFunc = [this](uint64_t size, uint16_t &numaId, uintptr_t &blockAddr) {
         return mMemAllocator->MmsAlloc(size, numaId, blockAddr);
@@ -146,6 +157,9 @@ void MmsKvServer::RegisterOpcode()
 
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_DELETE_BY_RANGE,
         std::bind(&MmsKvServer::HandleRangeDelete, this, std::placeholders::_1));
+
+    mNetEngine->RegisterNewRequestHandler(MMS_OP_C_NOTIFY_SUBSCRIBE,
+        std::bind(&MmsKvServer::HandleNotifySubscribe, this, std::placeholders::_1));
 }
 
 void MmsKvServer::FreeBlocks(std::vector<IOCtxItem> &ctxItems)
@@ -525,6 +539,99 @@ BResult MmsKvServer::HandleServiceable(ServiceContext &ctx)
     mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(ServiceResponse));
 
     return MMS_OK;
+}
+
+BResult MmsKvServer::HandleNotifySubscribe(ServiceContext &ctx)
+{
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(NotifySubscribeReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
+        LOG_ERROR("Receive notify subscribe len:" << ctx.MessageDataLen() << " or message data invalid.");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    auto *req = static_cast<NotifySubscribeReq *>(ctx.MessageData());
+    NetChannelUpCtx upCtx(ctx.Channel()->GetUpCtx());
+    uint32_t pid = upCtx.procId;
+    bool invalidNotifyPid = ((req->notifyPid & NOTIFY_PID_FLAG) == 0) ||
+        ((req->notifyPid & ~NOTIFY_PID_FLAG) != pid);
+    if (UNLIKELY(req->enable && invalidNotifyPid)) {
+        LOG_ERROR("Notify subscribe from invalid notify pid.");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    if (!mDataChangeCallbackSwitch) {
+        LOG_WARN("Data change callback switch is off, pid:" << pid << ".");
+        mNetEngine->Reply(ctx, MMS_OK, nullptr, 0);
+        return MMS_OK;
+    }
+    if (UNLIKELY(!mRemoteNotifyEnable)) {
+        LOG_ERROR("Remote notify is not enabled.");
+        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        return MMS_OK;
+    }
+
+    if (req->enable) {
+        AddNotifyClient(req->notifyPid);
+    } else {
+        RemoveNotifyClient(req->notifyPid);
+    }
+    LOG_INFO("Notify subscribe success, enable:" << req->enable << ", pid:" << pid << ", notifyPid:" <<
+        req->notifyPid << ".");
+    mNetEngine->Reply(ctx, MMS_OK, nullptr, 0);
+    return MMS_OK;
+}
+
+void MmsKvServer::AddNotifyClient(uint32_t pid)
+{
+    std::lock_guard<std::mutex> lock(mNotifyClientLock);
+    LOG_INFO("Add notify client, pid:" << pid << ".");
+    mNotifyClients.insert(pid);
+}
+
+void MmsKvServer::RemoveNotifyClient(uint32_t pid)
+{
+    std::lock_guard<std::mutex> lock(mNotifyClientLock);
+    LOG_INFO("Remove notify client, pid:" << pid << ".");
+    mNotifyClients.erase(pid);
+}
+
+void MmsKvServer::NotifyRemoteClients(const char *key, OperateType opType)
+{
+    if (key == nullptr) {
+        return;
+    }
+
+    std::vector<uint32_t> clients;
+    {
+        std::lock_guard<std::mutex> lock(mNotifyClientLock);
+        clients.assign(mNotifyClients.begin(), mNotifyClients.end());
+    }
+    if (clients.empty()) {
+        return;
+    }
+
+    NotifyDataChangeReq req{};
+    req.head = {0, MMS_OP_NOTIFY_DATA_CHANGE, 0, 0, 0};
+    req.keyLen = static_cast<uint16_t>(strnlen(key, MAX_KEY_SIZE));
+    req.opType = static_cast<uint16_t>(opType);
+    if (UNLIKELY(req.keyLen == 0 || req.keyLen >= MAX_KEY_SIZE)) {
+        LOG_ERROR("Invalid notify key.");
+        return;
+    }
+    auto copyRet = memcpy_s(req.key, MAX_KEY_SIZE, key, req.keyLen + 1);
+    if (UNLIKELY(copyRet != EOK)) {
+        LOG_ERROR("Copy notify key failed, key:" << key << ".");
+        return;
+    }
+
+    for (auto pid : clients) {
+        auto ret = mNetEngine->AsyncSendWithoutResponse<NotifyDataChangeReq>(INVALID_NID, pid, 0,
+            MMS_OP_NOTIFY_DATA_CHANGE, req);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Send notify to client failed, pid:" << pid << ", key:" << key << ", ret:" << ret << ".");
+        }
+    }
 }
 
 BResult MmsKvServer::HandlePut(ServiceContext &ctx)

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <utility>
 
 #include "mms_def.h"
 #include "mms_log.h"
@@ -38,11 +39,16 @@ CResult MmsNotifyDispatcher::RegisterCallback(NotifyCallback callback)
 {
     std::lock_guard<std::mutex> lifecycleLock(mLifecycleMutex);
     if (callback == nullptr) {
-        StopWorker();
+        mCallback = nullptr;
+        StopWorkerIfIdleLocked();
         return RET_MMS_OK;
     }
 
     if (mRunning.load(std::memory_order_acquire)) {
+        if (mCallback == nullptr) {
+            mCallback = callback;
+            return RET_MMS_OK;
+        }
         return (mCallback == callback) ? RET_MMS_OK : RET_MMS_EPERM;
     }
 
@@ -54,10 +60,29 @@ CResult MmsNotifyDispatcher::RegisterCallback(NotifyCallback callback)
     return RET_MMS_OK;
 }
 
+CResult MmsNotifyDispatcher::RegisterRemoteNotifyHandler(RemoteNotifyHandler handler)
+{
+    std::lock_guard<std::mutex> lifecycleLock(mLifecycleMutex);
+    mRemoteNotifyHandler = std::move(handler);
+    if (mRemoteNotifyHandler == nullptr) {
+        StopWorkerIfIdleLocked();
+        return RET_MMS_OK;
+    }
+
+    if (mRunning.load(std::memory_order_acquire)) {
+        return RET_MMS_OK;
+    }
+    if (!StartWorkerLocked()) {
+        mRemoteNotifyHandler = nullptr;
+        return RET_MMS_ERROR;
+    }
+    return RET_MMS_OK;
+}
+
 void MmsNotifyDispatcher::Notify(const char *key, OperateType opType)
 {
-    if (UNLIKELY(key == nullptr || !mRunning.load(std::memory_order_acquire) || mStop.load(std::memory_order_acquire) ||
-                 mCallback == nullptr)) {
+    if (UNLIKELY(key == nullptr || !mRunning.load(std::memory_order_acquire) ||
+                 mStop.load(std::memory_order_acquire))) {
         return;
     }
 
@@ -67,21 +92,32 @@ void MmsNotifyDispatcher::Notify(const char *key, OperateType opType)
         return;
     }
 
+    if (UNLIKELY(mOverflowActive.load(std::memory_order_acquire))) {
+        auto enqueueRet = EnqueueOverflow(key, keyLen, opType);
+        if (UNLIKELY(enqueueRet != EnqueueResult::SUCCESS)) {
+            LOG_ERROR("Notify overflow enqueue failed, key:" << key << ".");
+        }
+        return;
+    }
+
     while (true) {
         auto enqueueRet = TryEnqueue(key, keyLen, opType);
         if (LIKELY(enqueueRet == EnqueueResult::SUCCESS)) {
+            return;
+        }
+        if (UNLIKELY(enqueueRet == EnqueueResult::FULL)) {
+            uint64_t fullCount = mQueueFullCount.fetch_add(NO_1, std::memory_order_relaxed) + NO_1;
+            LOG_ERROR("Server notify queue full, count:" << fullCount << ", key:" << key << ".");
+            enqueueRet = EnqueueOverflow(key, keyLen, opType);
+            if (UNLIKELY(enqueueRet != EnqueueResult::SUCCESS)) {
+                LOG_ERROR("Notify overflow enqueue failed, key:" << key << ".");
+            }
             return;
         }
         if (UNLIKELY(enqueueRet == EnqueueResult::ERROR)) {
             LOG_ERROR("Notify enqueue failed, key:" << key << ".");
             return;
         }
-        if (UNLIKELY(!mRunning.load(std::memory_order_acquire) || mStop.load(std::memory_order_acquire) ||
-                     mCallback == nullptr)) {
-            LOG_ERROR("Notify enqueue aborted, key:" << key << ".");
-            return;
-        }
-        CPU_RELAX();
     }
 }
 
@@ -110,6 +146,14 @@ bool MmsNotifyDispatcher::StartWorkerLocked()
     return false;
 }
 
+void MmsNotifyDispatcher::StopWorkerIfIdleLocked()
+{
+    if (mCallback != nullptr || mRemoteNotifyHandler != nullptr) {
+        return;
+    }
+    StopWorker();
+}
+
 void MmsNotifyDispatcher::StopWorker()
 {
     std::thread worker;
@@ -135,6 +179,11 @@ void MmsNotifyDispatcher::ResetQueue()
     if (mQueue == nullptr) {
         return;
     }
+    {
+        std::lock_guard<std::mutex> lock(mOverflowMutex);
+        mOverflowQueue.clear();
+    }
+    mOverflowActive.store(false, std::memory_order_release);
     for (uint32_t index = 0; index < QUEUE_CAPACITY; ++index) {
         mQueue[index].sequence.store(index, std::memory_order_relaxed);
     }
@@ -172,6 +221,30 @@ MmsNotifyDispatcher::EnqueueResult MmsNotifyDispatcher::TryEnqueue(const char *k
     return EnqueueResult::SUCCESS;
 }
 
+MmsNotifyDispatcher::EnqueueResult MmsNotifyDispatcher::EnqueueOverflow(const char *key, size_t keyLen,
+                                                                        OperateType opType)
+{
+    NotifyEvent event{};
+    auto ret = memcpy_s(event.key, MAX_KEY_SIZE, key, keyLen + NO_1);
+    if (UNLIKELY(ret != EOK)) {
+        return EnqueueResult::ERROR;
+    }
+    event.opType = opType;
+
+    try {
+        std::lock_guard<std::mutex> lock(mOverflowMutex);
+        mOverflowActive.store(true, std::memory_order_release);
+        mOverflowQueue.emplace_back(event);
+    } catch (const std::exception &ex) {
+        LOG_ERROR("Notify overflow enqueue failed, error:" << ex.what() << ".");
+        return EnqueueResult::ERROR;
+    } catch (...) {
+        LOG_ERROR("Notify overflow enqueue failed.");
+        return EnqueueResult::ERROR;
+    }
+    return EnqueueResult::SUCCESS;
+}
+
 bool MmsNotifyDispatcher::TryDequeue(NotifyEvent &event)
 {
     size_t pos = mDequeuePos.load(std::memory_order_relaxed);
@@ -188,6 +261,49 @@ bool MmsNotifyDispatcher::TryDequeue(NotifyEvent &event)
     return true;
 }
 
+bool MmsNotifyDispatcher::TryDequeueOverflow(NotifyEvent &event)
+{
+    std::lock_guard<std::mutex> lock(mOverflowMutex);
+    if (mOverflowQueue.empty()) {
+        return false;
+    }
+
+    event = mOverflowQueue.front();
+    mOverflowQueue.pop_front();
+    if (mOverflowQueue.empty()) {
+        mOverflowActive.store(false, std::memory_order_release);
+    }
+    return true;
+}
+
+void MmsNotifyDispatcher::NotifyLocalCallback(const NotifyEvent &event)
+{
+    auto callback = mCallback;
+    if (callback == nullptr) {
+        return;
+    }
+
+    try {
+        callback(event.key, event.opType);
+    } catch (const std::exception &ex) {
+        LOG_ERROR("Notify callback failed, error:" << ex.what() << ".");
+    } catch (...) {
+        LOG_ERROR("Notify callback failed.");
+    }
+}
+
+void MmsNotifyDispatcher::HandleEvent(const NotifyEvent &event)
+{
+    if (UNLIKELY(event.key[0] == '\0')) {
+        return;
+    }
+
+    NotifyLocalCallback(event);
+    if (mRemoteNotifyHandler != nullptr) {
+        mRemoteNotifyHandler(event.key, event.opType);
+    }
+}
+
 void MmsNotifyDispatcher::WorkerLoop()
 {
     while (true) {
@@ -195,20 +311,11 @@ void MmsNotifyDispatcher::WorkerLoop()
         bool hasEvent = false;
         while (TryDequeue(event)) {
             hasEvent = true;
-            if (UNLIKELY(event.key[0] == '\0')) {
-                continue;
-            }
-            auto callback = mCallback;
-            if (callback == nullptr) {
-                continue;
-            }
-            try {
-                callback(event.key, event.opType);
-            } catch (const std::exception &ex) {
-                LOG_ERROR("Notify callback failed, error:" << ex.what() << ".");
-            } catch (...) {
-                LOG_ERROR("Notify callback failed.");
-            }
+            HandleEvent(event);
+        }
+        while (TryDequeueOverflow(event)) {
+            hasEvent = true;
+            HandleEvent(event);
         }
         if (UNLIKELY(!hasEvent)) {
             if (mStop.load(std::memory_order_acquire)) {

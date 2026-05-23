@@ -35,7 +35,7 @@ public:
      * @brief: Register data change notification callback
      *
      * @param[in]: callback: callback for changed key and operation type, nullptr means unregister
-     * @return: return RET_MMS_PROTECTED in separate client mode
+     * @return: return RET_MMS_OK mean success, others, return non-zero value
      */
     static CResult RegisterCallback(NotifyCallback callback);
 

@@ -324,9 +324,8 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
         StrUtil::StrToUint16(groupsVec[0], options.workerGroupThreadCount);
         StrUtil::StrToUint32Pair(groupsCpuSetVec[0], options.workerGroupCpuIdsRange);
     } else {
-        options.workerGroupThreadCount = 0;
-        std::pair<uint32_t, uint32_t> workerGroupCpuIdsRangeOther = {UINT32_MAX, UINT32_MAX};
-        options.workerGroupCpuIdsRange = workerGroupCpuIdsRangeOther;
+        options.workerGroupThreadCount = NO_1;
+        options.workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
     }
 
     mIpcService = UBSHcomService::Create(opt.protocol, name, options);

@@ -13,8 +13,10 @@
 #define NET_ENGINE_H
 
 #include <cstdint>
-#include <arpa/inet.h>
+#include <memory>
+#include <new>
 #include <unordered_map>
+#include <arpa/inet.h>
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
 #include "mms_monotonic.h"
@@ -157,6 +159,26 @@ public:
     }
 
     template <typename TReq, typename TResp>
+    BResult SyncCall(const MmsNodeId &targetNodeId, uint32_t pid, uint32_t groupIndex, uint16_t opCode, TReq &req,
+                     TResp &resp)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, pid, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", pid:" << pid <<
+                ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return SyncCall(opCode, req, resp, ch);
+    }
+
+    template <typename TReq, typename TResp>
     BResult SyncCall(const MmsNodeId &targetNodeId, uint32_t groupIndex, uint16_t opCode, TReq &req, TResp **resp,
                      uint64_t &respLen)
     {
@@ -212,6 +234,46 @@ public:
         }
 
         return AsyncCallWithoutResponse(opCode, req, ch);
+    }
+
+    template <typename TReq>
+    BResult SendWithoutResponse(const MmsNodeId &targetNodeId, uint32_t pid, uint32_t groupIndex, uint16_t opCode,
+                                TReq &req)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, pid, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", pid:" << pid <<
+                ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return SendWithoutResponse(opCode, req, ch);
+    }
+
+    template <typename TReq>
+    BResult AsyncSendWithoutResponse(const MmsNodeId &targetNodeId, uint32_t pid, uint32_t groupIndex, uint16_t opCode,
+                                     TReq &req)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, pid, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", pid:" << pid <<
+                ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return AsyncSendWithoutResponse(opCode, req, ch);
     }
 
     template <typename TReq>
@@ -574,6 +636,49 @@ private:
         return MMS_OK;
     }
 
+    template <typename TReq> BResult SendWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+
+        auto result = ch->Send(reqMsg, nullptr);
+        if (UNLIKELY(result != MMS_OK)) {
+            NET_LOG_ERROR("Failed to send peer msg with op " << opCode << ", result " << UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+        return MMS_OK;
+    }
+
+    template <typename TReq> BResult AsyncSendWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        auto *rawReq = new (std::nothrow) TReq(req);
+        if (UNLIKELY(rawReq == nullptr)) {
+            NET_LOG_ERROR("Alloc async send request failed.");
+            return MMS_ALLOC_FAIL;
+        }
+        std::shared_ptr<TReq> reqCopy(rawReq);
+        UBSHcomRequest reqMsg(static_cast<void *>(reqCopy.get()), sizeof(TReq), opCode);
+
+        auto *netCallback = UBSHcomNewCallback([reqCopy](UBSHcomServiceContext &context) {
+            if (UNLIKELY(context.Result() != SER_OK)) {
+                NET_LOG_ERROR("Async send done failed, result " << UBSHcomNetErrStr(context.Result()) << ".");
+            }
+        }, std::placeholders::_1);
+        if (UNLIKELY(netCallback == nullptr)) {
+            NET_LOG_ERROR("Alloc async send callback failed.");
+            return MMS_ALLOC_FAIL;
+        }
+
+        auto result = ch->Send(reqMsg, netCallback);
+        if (UNLIKELY(result != MMS_OK)) {
+            NET_LOG_ERROR("Failed to async send peer msg with op " << opCode << ", result " <<
+                UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+        return MMS_OK;
+    }
+
     inline void AsyncCallDone(int32_t result, uint64_t ts)
     {
     }
@@ -661,4 +766,3 @@ private:
 }
 }
 #endif // NET_ENGINE_H
-
