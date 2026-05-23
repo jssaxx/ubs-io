@@ -32,6 +32,7 @@ void* ock::bio::diagnose::BioServerCommand::mHandler = nullptr;
 CliRegCmdFuncPtr ock::bio::diagnose::BioServerCommand::mRegOp = nullptr;
 CliUnRegCmdFuncPtr ock::bio::diagnose::BioServerCommand::mUnRegOp = nullptr;
 CliPrintBufFuncPtr ock::bio::diagnose::BioServerCommand::mPrintOp = nullptr;
+CliSendBufFuncPtr ock::bio::diagnose::BioServerCommand::mSendOp = nullptr;
 
 int32_t diagnose::BioServerCommand::LoadSymbols()
 {
@@ -45,7 +46,8 @@ int32_t diagnose::BioServerCommand::LoadSymbols()
     mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "cli_register_command"));
     mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "cli_unregister_command"));
     mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "cli_print_buffer"));
-    if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
+    mSendOp = reinterpret_cast<CliSendBufFuncPtr>(dlsym(mHandler, "cli_send_buffer"));
+    if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr || mSendOp == nullptr) {
         LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
         mHandler = nullptr;
@@ -53,6 +55,14 @@ int32_t diagnose::BioServerCommand::LoadSymbols()
     }
 
     return BIO_OK;
+}
+
+void diagnose::BioServerCommand::PrintLongText(const std::string &text)
+{
+    if (text.empty()) {
+        return;
+    }
+    mSendOp(text.c_str(), static_cast<uint32_t>(text.size()));
 }
 
 int diagnose::BioServerCommand::Initialize() noexcept
@@ -180,10 +190,12 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         }
         uint64_t curPtTimes;
         std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&curPtTimes);
-        mPrintOp("Pt view:\n");
+        std::string output = "Pt view:\n";
         for (auto &ptEntry : ptView) {
-            mPrintOp("%s\n", ptEntry.second.ToString().c_str());
+            output += ptEntry.second.ToString();
+            output += "\n";
         }
+        PrintLongText(output);
     } else if (cmdType == "node") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
@@ -191,13 +203,16 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         }
         uint64_t curNodeTimes;
         std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&curNodeTimes);
-        mPrintOp("Node view:\n");
+        std::string output = "Node view:\n";
         for (auto &nodeEntry : nodeView) {
-            mPrintOp("%s\n", nodeEntry.second.ToString().c_str());
+            output += nodeEntry.second.ToString();
+            output += "\n";
         }
-        mPrintOp("Local Node:");
+        output += "Local Node:";
         CmNodeId localNode = BioServer::Instance()->GetLocalNid();
-        mPrintOp("%s\n", localNode.ToString().c_str());
+        output += localNode.ToString();
+        output += "\n";
+        PrintLongText(output);
     } else if (cmdType == "olc") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
@@ -227,7 +242,7 @@ void diagnose::BioServerCommand::HandleServerTrace(const std::vector<std::string
     std::string viewType(cType);
     if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
-        mPrintOp(info.c_str());
+        PrintLongText(info);
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         mPrintOp("clearing statistics server records succeeded.\n");

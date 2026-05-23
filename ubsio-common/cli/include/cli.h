@@ -50,6 +50,7 @@ typedef struct {
 typedef int32_t (*CliRegCmdFuncPtr)(CliCommand *);
 typedef void (*CliUnRegCmdFuncPtr)(char *);
 typedef void (*CliPrintBufFuncPtr)(const char *, ...);
+typedef void (*CliSendBufFuncPtr)(const char *, uint32_t);
 
 typedef struct {
     char *option_arg;
