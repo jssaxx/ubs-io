@@ -135,7 +135,9 @@ inline const RemoteReadPrefetchConfig &GetRemoteReadPrefetchConfig()
 
 class OpenFile {
 public:
-    OpenFile(int fd, uint64_t inode) : mFd(fd), mInode(inode) {}
+    OpenFile(int fd, uint64_t inode, uint64_t fileSize = UINT64_MAX)
+        : mFd(fd), mInode(inode), mRemoteReadEofOffset(fileSize), mKnownFileSize(fileSize)
+    {}
 
     virtual ~OpenFile() {}
 
@@ -236,7 +238,7 @@ public:
             prefetch.offset = 0;
         }
         mRemoteReadLastEnd.store(UINT64_MAX, std::memory_order_release);
-        mRemoteReadEofOffset.store(UINT64_MAX, std::memory_order_release);
+        mRemoteReadEofOffset.store(mKnownFileSize.load(std::memory_order_acquire), std::memory_order_release);
     }
 
     void EvictRemoteReadWindowsBefore(uint64_t fileOffset,
@@ -337,6 +339,23 @@ public:
         uint64_t current = mRemoteReadEofOffset.load(std::memory_order_relaxed);
         while (eofOffset < current &&
             !mRemoteReadEofOffset.compare_exchange_weak(current, eofOffset, std::memory_order_release,
+                std::memory_order_relaxed)) {
+        }
+    }
+
+    void ExpandKnownFileSize(uint64_t fileSize)
+    {
+        uint64_t knownSize = mKnownFileSize.load(std::memory_order_relaxed);
+        uint64_t eofOffset = mRemoteReadEofOffset.load(std::memory_order_relaxed);
+        if (fileSize <= knownSize && fileSize <= eofOffset) {
+            return;
+        }
+        while (fileSize > knownSize &&
+            !mKnownFileSize.compare_exchange_weak(knownSize, fileSize, std::memory_order_release,
+                std::memory_order_relaxed)) {
+        }
+        while (fileSize > eofOffset &&
+            !mRemoteReadEofOffset.compare_exchange_weak(eofOffset, fileSize, std::memory_order_release,
                 std::memory_order_relaxed)) {
         }
     }
@@ -445,7 +464,8 @@ private:
     std::array<RemoteReadPrefetch, REMOTE_READ_MAX_PREFETCH_INFLIGHT> mRemoteReadPrefetches{};
     uint64_t mRemoteReadWindowGeneration = 0;
     std::atomic<uint64_t> mRemoteReadLastEnd{UINT64_MAX};
-    std::atomic<uint64_t> mRemoteReadEofOffset{UINT64_MAX};
+    std::atomic<uint64_t> mRemoteReadEofOffset;
+    std::atomic<uint64_t> mKnownFileSize;
 };
 
 class OpenFileMap {
