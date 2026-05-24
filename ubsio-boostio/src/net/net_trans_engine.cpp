@@ -362,20 +362,23 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
         NET_LOG_ERROR("Failed to load mf dynamic library");
         return BIO_ERR;
     }
-    auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
-    int32_t logLevel = Logger::gInstance->GetLogLevel();
-    NET_LOG_WARN("Set mf log level to: " << logLevel);
-    auto ret = DlMfApi::MfSmemSetLogLevel(logLevel);
-    if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to set mf log level, ret: " << ret);
-        return BIO_ERR;
+    if (opt.isSender) {
+        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
+        int32_t logLevel = Logger::gInstance->GetLogLevel();
+        NET_LOG_WARN("Set mf log level to: " << logLevel);
+        auto ret = DlMfApi::MfSmemSetLogLevel(logLevel);
+        if (ret != BIO_OK) {
+            NET_LOG_ERROR("Failed to set mf log level, ret: " << ret);
+            return BIO_ERR;
+        }
+        ret = DlMfApi::MfSmemSetExternLogger(logFunc);
+        if (ret != BIO_OK) {
+            NET_LOG_ERROR("Failed to set mf extern logger, ret: " << ret);
+            return BIO_ERR;
+        }
+        NET_LOG_WARN("Set mf log success");
     }
-    ret = DlMfApi::MfSmemSetExternLogger(logFunc);
-    if (ret != BIO_OK) {
-        NET_LOG_ERROR("Failed to set mf extern logger, ret: " << ret);
-        return BIO_ERR;
-    }
-    NET_LOG_WARN("Set mf log success");
+    
     size_t slashPos = opt.ipMask.find('/');
     std::string ip;
     if (slashPos != std::string::npos) {
