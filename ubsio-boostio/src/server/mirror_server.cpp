@@ -1091,12 +1091,13 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
         if (req->enableTrance) {
             NetMrInfo bioMr;
             uintptr_t tranceMem;
-            const uint32_t maxRetryTime = 100;
+            const uint32_t maxRetryTime = 300;
             uint32_t retryTime = 0;
+            BResult ret;
             while(retryTime < maxRetryTime) {
                 retryTime++;
-                BResult ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
-                if (ret != BIO_OK && retryTime > maxRetryTime) {
+                ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
+                if (ret != BIO_OK && retryTime >= maxRetryTime) {
                     LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
                     return ret;
                 }
