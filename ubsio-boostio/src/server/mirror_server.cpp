@@ -1091,11 +1091,25 @@ BResult MirrorServer::BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, Batc
         if (req->enableTrance) {
             NetMrInfo bioMr;
             uintptr_t tranceMem;
-            BResult ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
-            if (UNLIKELY(ret != BIO_OK)) {
-                LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
-                return ret;
+            const uint32_t maxRetryTime = 100;
+            uint32_t retryTime = 0;
+            while(retryTime < maxRetryTime) {
+                retryTime++;
+                BResult ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
+                if (ret != BIO_OK && retryTime > maxRetryTime) {
+                    LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
+                    return ret;
+                }
+                if (ret != BIO_OK && retryTime % 10 == 0) {
+                    LOG_WARN("Alloc trans memory failed, ret:" << ret << ", retry times:" << retryTime);
+                }
+                if (ret == BIO_OK) {
+                    break;
+                }
+
+                usleep(1000); // 1ms
             }
+           
             ret = mSliceOp.Copy(from, reinterpret_cast<char*>(tranceMem), from->GetLength());
             if (UNLIKELY(ret != BIO_OK)) {
                 LOG_ERROR("Slice copy failed, ret:" << ret << ", trance mem:" << tranceMem <<
