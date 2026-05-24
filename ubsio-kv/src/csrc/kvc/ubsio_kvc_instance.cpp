@@ -18,13 +18,16 @@
 #include "dl_acl_api.h"
 #include "ubsio_nds_manager.h"
 #include "ubsio_kvc_instance.h"
+#include "ubsio_kvc_str_util.h"
 
 namespace ock {
 namespace ubsio {
 
 using namespace ock::ubsio::nds;
-constexpr int KVC_INSTANCE_THREAD_NUM = 8;
-constexpr uint32_t MAX_READ_BATCH_SIZE = 128;
+constexpr int KVC_INSTANCE_THREAD_NUM = 16;
+constexpr uint32_t DEFAULT_MAX_READ_BATCH_SIZE = 50;
+constexpr uint32_t MIN_READ_BATCH_SIZE = 1;
+constexpr uint32_t MAX_READ_BATCH_SIZE_LIMIT = 1024;
 
 KvcInstance &KvcInstance::Instance()
 {
@@ -47,6 +50,20 @@ KvcError KvcInstance::Initialize(int32_t device)
         return UBSIO_KVC_ERR;
     }
 
+    m_maxReadBatchSize = DEFAULT_MAX_READ_BATCH_SIZE;
+    char *batchSizeEnv = std::getenv("UBSIO_KVC_MAX_READ_BATCH_SIZE");
+    if (batchSizeEnv != nullptr) {
+        long batchSize = 0;
+        if (StrUtil::StrToLong(batchSizeEnv, batchSize) &&
+            batchSize >= MIN_READ_BATCH_SIZE && batchSize <= MAX_READ_BATCH_SIZE_LIMIT) {
+            m_maxReadBatchSize = static_cast<uint32_t>(batchSize);
+        } else {
+            LOG_WARN("Invalid UBSIO_KVC_MAX_READ_BATCH_SIZE=" << batchSizeEnv
+                << ", valid range is [" << MIN_READ_BATCH_SIZE
+                << ", " << MAX_READ_BATCH_SIZE_LIMIT << "], using default " << DEFAULT_MAX_READ_BATCH_SIZE);
+        }
+    }
+    LOG_INFO("m_maxReadBatchSize is " << m_maxReadBatchSize);
     m_deviceId = device;
     return UBSIO_KVC_OK;
 }
@@ -135,7 +152,7 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
     auto &oriIndex = params.oriIndex;
     uint32_t keysCount = keysVector.size();
 
-    uint32_t batchCount = (keysCount + MAX_READ_BATCH_SIZE - 1) / MAX_READ_BATCH_SIZE;
+    uint32_t batchCount = (keysCount + m_maxReadBatchSize - 1) / m_maxReadBatchSize;
     std::vector<BatchReadResult> batchResults(batchCount);
 
     sem_t sem;
@@ -144,8 +161,8 @@ KvcError KvcInstance::ReadLocalBatch(ReadParams &params, int *results)
 
     // 并发读取DRAM
     for (uint32_t b = 0; b < batchCount; ++b) {
-        uint32_t start = b * MAX_READ_BATCH_SIZE;
-        uint32_t end = std::min(start + MAX_READ_BATCH_SIZE, keysCount);
+        uint32_t start = b * m_maxReadBatchSize;
+        uint32_t end = std::min(start + m_maxReadBatchSize, keysCount);
         uint32_t batchSize = end - start;
 
         bool submitOk = m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,
@@ -228,7 +245,7 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
     auto &oriIndex = params.oriIndex;
     uint32_t keysCount = keysVector.size();
 
-    uint32_t batchCount = (keysCount + MAX_READ_BATCH_SIZE - 1) / MAX_READ_BATCH_SIZE;
+    uint32_t batchCount = (keysCount + m_maxReadBatchSize - 1) / m_maxReadBatchSize;
     std::vector<BatchReadResult> batchResults(batchCount);
 
     sem_t sem;
@@ -237,8 +254,8 @@ KvcError KvcInstance::ReadRemoteBatch(ReadParams &params, int *results)
 
     // 并发读取
     for (uint32_t b = 0; b < batchCount; ++b) {
-        uint32_t start = b * MAX_READ_BATCH_SIZE;
-        uint32_t end = std::min(start + MAX_READ_BATCH_SIZE, keysCount);
+        uint32_t start = b * m_maxReadBatchSize;
+        uint32_t end = std::min(start + m_maxReadBatchSize, keysCount);
         uint32_t batchSize = end - start;
 
         bool submitOk = m_readExecutor->Execute([this, &batchResults, b, start, end, batchSize,

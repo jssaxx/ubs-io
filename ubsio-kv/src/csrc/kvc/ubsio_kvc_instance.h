@@ -95,6 +95,7 @@ private:
 private:
     ExecutorServicePtr m_readExecutor{ nullptr };
     int32_t m_deviceId{ -1 };
+    uint32_t m_maxReadBatchSize{ 128 };
 };
 
 } // namespace ubsio
