@@ -1,0 +1,2 @@
+mooncake基线：https://github.com/kvcache-ai/Mooncake/commit/218f2ffdcf2ec10bca28c44af7ce994b18288cca
+切换到main分支的218f2ffdcf2ec10bca28c44af7ce994b18288cca后，应用mooncake-kv-backend.patch，再编译mooncake
