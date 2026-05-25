@@ -23,6 +23,7 @@ public:
     static int Initialize() noexcept;
     static void Destroy() noexcept;
     static int32_t LoadSymbols();
+    static void PrintLongText(const std::string &text);
 
     static void BioSdkDebugProcess(int argc, char *argv[]) noexcept;
     static void BioSdkDebugHelp(char *command, int detail) noexcept;
@@ -55,6 +56,7 @@ private:
     static CliRegCmdFuncPtr mRegOp;
     static CliUnRegCmdFuncPtr mUnRegOp;
     static CliPrintBufFuncPtr mPrintOp;
+    static CliSendBufFuncPtr mSendOp;
 };
 }
 }

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <climits>
@@ -67,6 +68,14 @@ void LogLseekInterceptSuccess(const char *api, int fd, uint64_t inode, off64_t o
 void LogForkInterceptSuccess(pid_t ret)
 {
     CLOG_DEBUG("Interceptor process success, api:fork, ret:" << ret << ".");
+}
+
+uint64_t GetRegularFileSizeForPrefetch(const struct stat &statBuf)
+{
+    if (!S_ISREG(statBuf.st_mode) || statBuf.st_size < 0) {
+        return UINT64_MAX;
+    }
+    return static_cast<uint64_t>(statBuf.st_size);
 }
 
 void ReleaseRemoteReadWindow(const RemoteReadWindowCache &cache)
@@ -583,7 +592,7 @@ int32_t ProxyOperations::OpenInner(const char *api, const char *path, int fd, in
         }
         std::shared_ptr<OpenFile> op = nullptr;
         try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, GetRegularFileSizeForPrefetch(statBuf));
         } catch (const std::bad_alloc&) {
             return BIO_ERR;
         }
@@ -616,7 +625,7 @@ int32_t ProxyOperations::OpenInner(const char *api, int dirFd, const char *path,
         }
         std::shared_ptr<OpenFile> op = nullptr;
         try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, GetRegularFileSizeForPrefetch(statBuf));
         } catch (const std::bad_alloc&) {
             return BIO_ERR;
         }
@@ -649,7 +658,7 @@ int32_t ProxyOperations::CreateInner(const char *api, const char *path, int fd)
         }
         std::shared_ptr<OpenFile> op = nullptr;
         try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
+            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, GetRegularFileSizeForPrefetch(statBuf));
         } catch (const std::bad_alloc&) {
             return BIO_ERR;
         }

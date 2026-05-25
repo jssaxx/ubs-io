@@ -55,6 +55,7 @@ void* ock::bio::diagnose::BioSdkCommand::mHandler = nullptr;
 CliRegCmdFuncPtr ock::bio::diagnose::BioSdkCommand::mRegOp = nullptr;
 CliUnRegCmdFuncPtr ock::bio::diagnose::BioSdkCommand::mUnRegOp = nullptr;
 CliPrintBufFuncPtr ock::bio::diagnose::BioSdkCommand::mPrintOp = nullptr;
+CliSendBufFuncPtr ock::bio::diagnose::BioSdkCommand::mSendOp = nullptr;
 
 int32_t diagnose::BioSdkCommand::LoadSymbols()
 {
@@ -68,7 +69,8 @@ int32_t diagnose::BioSdkCommand::LoadSymbols()
     mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "cli_register_command"));
     mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "cli_unregister_command"));
     mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "cli_print_buffer"));
-    if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
+    mSendOp = reinterpret_cast<CliSendBufFuncPtr>(dlsym(mHandler, "cli_send_buffer"));
+    if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr || mSendOp == nullptr) {
         CLIENT_LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
         mHandler = nullptr;
@@ -76,6 +78,14 @@ int32_t diagnose::BioSdkCommand::LoadSymbols()
     }
 
     return BIO_OK;
+}
+
+void diagnose::BioSdkCommand::PrintLongText(const std::string &text)
+{
+    if (text.empty()) {
+        return;
+    }
+    mSendOp(text.c_str(), static_cast<uint32_t>(text.size()));
 }
 
 int diagnose::BioSdkCommand::Initialize() noexcept
@@ -496,16 +506,21 @@ void diagnose::BioSdkCommand::HandleShow(const std::vector<std::string> &cmds)
         std::string type(cType);
         if (type == "all") {
             std::map<uint16_t, CmPtInfo> ptView = BioClient::Instance()->GetMirror()->GetPtView();
-            mPrintOp("Pt view:\n");
+            std::string output = "Pt view:\n";
             for (auto &ptEntry : ptView) {
-                mPrintOp("%s\n", ptEntry.second.ToString().c_str());
+                output += ptEntry.second.ToString();
+                output += "\n";
             }
+            PrintLongText(output);
         } else if (type == "affinity") {
             std::vector<uint16_t> ptList = BioClient::Instance()->GetMirror()->ListLocalAffinityPt();
-            mPrintOp("Local affinity pt list:\n");
+            std::string output = "Local affinity pt list:\n";
             for (auto &entry : ptList) {
-                mPrintOp(" %u\n", entry);
+                output += " ";
+                output += std::to_string(entry);
+                output += "\n";
             }
+            PrintLongText(output);
         }
     } else if (viewType == "node") {
         if (cmds.size() != 2) {
@@ -513,13 +528,16 @@ void diagnose::BioSdkCommand::HandleShow(const std::vector<std::string> &cmds)
             return;
         }
         std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioClient::Instance()->GetMirror()->GetNodeView();
-        mPrintOp("Node view:\n");
+        std::string output = "Node view:\n";
         for (auto &nodeEntry : nodeView) {
-            mPrintOp("%s\n", nodeEntry.second.ToString().c_str());
+            output += nodeEntry.second.ToString();
+            output += "\n";
         }
-        mPrintOp("Local Node:");
+        output += "Local Node:";
         CmNodeId localNode = BioClient::Instance()->GetMirror()->GetLocalNodeInfo();
-        mPrintOp("%s\n", localNode.ToString().c_str());
+        output += localNode.ToString();
+        output += "\n";
+        PrintLongText(output);
     } else if (viewType == "flow") {
         if (cmds.size() != 3) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
@@ -687,7 +705,7 @@ void diagnose::BioSdkCommand::HandleSdkTrace(const std::vector<std::string> &cmd
     std::string viewType(cType);
     if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
-        mPrintOp(info.c_str());
+        PrintLongText(info);
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         mPrintOp("clearing statistics sdk records succeeded.\n");

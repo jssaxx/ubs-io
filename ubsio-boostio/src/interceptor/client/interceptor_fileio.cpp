@@ -40,7 +40,6 @@ using namespace ock::bio;
 namespace {
 constexpr ssize_t AGGREGATE_WRITE_FALLBACK = -2;
 constexpr ssize_t DIRECT_WRITE_FALLBACK = -2;
-constexpr uint64_t REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES = 128 * 1024;
 constexpr uint64_t REMOTE_READ_LARGE_IO_PREFETCH_BYTES = 1024 * 1024;
 constexpr uint64_t REMOTE_READ_PREFETCH_WAIT_NS = 50 * 1000 * 1000;
 constexpr uint32_t REMOTE_READ_PREFETCH_WAIT_SPIN = 8;
@@ -331,6 +330,19 @@ static bool InvalidateReadIndexForNativeWrite(uint64_t inode, off_t offset, uint
 
     uint64_t writeOffset = static_cast<uint64_t>(offset);
     return InvalidateReadIndexOnNode(INVALID_NID, inode, writeOffset, length, true);
+}
+
+static void NoteWriteFileSize(const std::shared_ptr<OpenFile> &file, off_t offset, ssize_t length)
+{
+    if (file == nullptr || offset < 0 || length <= 0) {
+        return;
+    }
+    uint64_t writeOffset = static_cast<uint64_t>(offset);
+    uint64_t writeLength = static_cast<uint64_t>(length);
+    if (writeOffset > UINT64_MAX - writeLength) {
+        return;
+    }
+    file->ExpandKnownFileSize(writeOffset + writeLength);
 }
 
 static void DropReadCaches(const std::shared_ptr<OpenFile> &file)
@@ -794,8 +806,22 @@ static void StartRemoteReadWindowPrefetch(const std::shared_ptr<OpenFile> &file,
     }).detach();
 }
 
+static void PrefetchRemoteReadWindowsFromBase(const std::shared_ptr<OpenFile> &file, int fd, uint64_t windowOffset)
+{
+    const auto &config = GetRemoteReadPrefetchConfig();
+    size_t depth = config.depth;
+    uint64_t nextOffset = windowOffset;
+    for (size_t idx = 0; idx < depth; ++idx) {
+        if (nextOffset > UINT64_MAX - INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
+            return;
+        }
+        nextOffset += INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+        StartRemoteReadWindowPrefetch(file, fd, nextOffset, windowOffset);
+    }
+}
+
 static void MaybePrefetchNextRemoteReadWindow(const std::shared_ptr<OpenFile> &file, int fd, uint64_t offset,
-    size_t count, bool remoteWindowLoaded = false)
+    size_t count)
 {
     if (count == 0) {
         return;
@@ -807,25 +833,7 @@ static void MaybePrefetchNextRemoteReadWindow(const std::shared_ptr<OpenFile> &f
     }
 
     uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
-    uint64_t readEnd = offset + static_cast<uint64_t>(count);
-    if (readEnd < offset) {
-        return;
-    }
-
-    if (!remoteWindowLoaded && readEnd - windowOffset < REMOTE_READ_SEQ_PREFETCH_TRIGGER_BYTES) {
-        return;
-    }
-
-    const auto &config = GetRemoteReadPrefetchConfig();
-    size_t depth = config.depth;
-    uint64_t nextOffset = windowOffset;
-    for (size_t idx = 0; idx < depth; ++idx) {
-        if (nextOffset > UINT64_MAX - INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
-            return;
-        }
-        nextOffset += INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
-        StartRemoteReadWindowPrefetch(file, fd, nextOffset, windowOffset);
-    }
+    PrefetchRemoteReadWindowsFromBase(file, fd, windowOffset);
 }
 
 static void MaybePrefetchRemoteReadAtStart(const std::shared_ptr<OpenFile> &file, int fd, uint64_t offset,
@@ -843,15 +851,7 @@ static void MaybePrefetchRemoteReadAtStart(const std::shared_ptr<OpenFile> &file
     }
 
     uint64_t windowOffset = InterceptorReadIndexBlockOffset(offset);
-    size_t depth = config.depth;
-    uint64_t nextOffset = windowOffset;
-    for (size_t idx = 0; idx < depth; ++idx) {
-        if (nextOffset > UINT64_MAX - INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
-            return;
-        }
-        nextOffset += INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
-        StartRemoteReadWindowPrefetch(file, fd, nextOffset, windowOffset);
-    }
+    PrefetchRemoteReadWindowsFromBase(file, fd, windowOffset);
 }
 
 ssize_t ProxyOperations::PreadInner(const char *api, const std::shared_ptr<OpenFile> &file, int fd, void *buf,
@@ -939,8 +939,7 @@ ssize_t ProxyOperations::PreadShmInner(const std::shared_ptr<OpenFile> &file, in
         if (cacheRemoteWindow) {
             StoreRemoteReadWindowCache(file, resp);
             ReleaseRemoteReadWindowsBefore(file, static_cast<uint64_t>(offset));
-            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count,
-                resp.windowDataLen >= INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE);
+            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count);
         }
 
         LogReadPathSuccess("hook", fd, file->GetInode(), offset, count, retLen);
@@ -969,8 +968,7 @@ ssize_t ProxyOperations::PreadShmInner(const std::shared_ptr<OpenFile> &file, in
         StoreRemoteReadWindowCache(file, resp);
         if (offset >= 0) {
             ReleaseRemoteReadWindowsBefore(file, static_cast<uint64_t>(offset));
-            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count,
-                resp.windowDataLen >= INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE);
+            MaybePrefetchNextRemoteReadWindow(file, fd, static_cast<uint64_t>(offset), count);
         }
     }
 
@@ -1039,6 +1037,7 @@ ssize_t ProxyOperations::PwriteInner(const char *api, const std::shared_ptr<Open
     if (count <= MAX_INTERCEPTOR_IO_SIZE) {
         bool intercepted = false;
         ssize_t ret = PwriteShmInner(file, fd, buf, count, offset, &intercepted);
+        NoteWriteFileSize(file, offset, ret);
         if (ret >= 0 && intercepted) {
             LogWriteInterceptSuccess(api, fd, file->GetInode(), offset, count);
         }
@@ -1056,6 +1055,7 @@ ssize_t ProxyOperations::PwriteInner(const char *api, const std::shared_ptr<Open
         errno = EIO;
         return -1;
     }
+    NoteWriteFileSize(file, offset, ret);
     return ret;
 }
 
