@@ -32,6 +32,7 @@ constexpr uint32_t TRANS_EXCUTE_POOL_QUEUE_SIZE = 1024;
 constexpr uint16_t INVALID_RPC_PORT = 0;
 constexpr uint32_t MAX_TRANS_SEGMENT_SIZE = 1024 * 1024 * 1024; // 1G
 constexpr uint64_t MAX_TRANS_MEM_SIZE = 40ULL * 1024 * 1024 * 1024; // 40G
+constexpr uint32_t BYTE_TO_GBYTE = 1024 * 1024 * 1024;
 
 void* DlMfApi::mfHandle;
 std::mutex DlMfApi::gMutex;
@@ -127,7 +128,7 @@ BResult MfTransEngine::Initialize(const NetOptions &opt)
 {
     NET_LOG_INFO("Start iniitalize MfTransEngine, transDeviceId: " << opt.transDeviceId << ", deviceTransType: " <<
         opt.deviceTransType << ", ipMask: " << opt.ipMask << ", transStoreUrl: " << opt.transStoreUrl <<
-        ", transMemSize: " << opt.transMemSize << ", transSegmentSize: " << opt.transSegmentSize <<
+        ", transMemSize: " << opt.transMemSize << "GB, transSegmentSize: " << opt.transSegmentSize <<
         ", isSender: " << opt.isSender);
     if (opt.transDeviceId < 0) {
         NET_LOG_WARN("transDeviceId is: " << opt.transDeviceId << ", will not use device transfer");
@@ -403,13 +404,13 @@ BResult MfTransEngine::PreInit(const NetOptions &opt)
 
 BResult MfTransEngine::InitMsgBlockPool(const NetOptions &opt)
 {
-    if (opt.transMemSize > MAX_TRANS_MEM_SIZE || opt.transSegmentSize > MAX_TRANS_SEGMENT_SIZE ||
-        opt.transMemSize < opt.transSegmentSize) {
+    if (opt.transMemSize * BYTE_TO_GBYTE > MAX_TRANS_MEM_SIZE || opt.transSegmentSize > MAX_TRANS_SEGMENT_SIZE ||
+        opt.transMemSize * BYTE_TO_GBYTE < opt.transSegmentSize) {
         NET_LOG_ERROR("transMemSize or transSegmentSize is too large, transMemSize: " <<
-                      opt.transMemSize << ", transSegmentSize: " << opt.transSegmentSize);
+                      opt.transMemSize << "GB, transSegmentSize: " << opt.transSegmentSize);
         return BIO_ERR;
     }
-    mTransMemSize = opt.transMemSize;
+    mTransMemSize = opt.transMemSize * BYTE_TO_GBYTE;
     mTransSegmentSize = opt.transSegmentSize;
     mMsgBlookPool = MakeRef<NetBlockPool>();
     if (mMsgBlookPool == nullptr) {

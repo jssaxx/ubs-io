@@ -230,7 +230,7 @@ BResult BioClientNet::ShmInit()
                 rsp.transMemSize);
         }
     } else {
-        CLIENT_LOG_WARN("Not set UBSIO_TRANS_MEM_SIZE,use default value: " <<
+        CLIENT_LOG_WARN("Not set UBSIO_TRANS_MEM_SIZE, use default value: " <<
                 transMemSize << " GB");
     }
     mNetSegmentSize = rsp.netSegmentSize;

@@ -520,7 +520,25 @@ BResult MirrorServer::ReaderRemoteTrans(const SlicePtr &from, const SlicePtr &to
     }
 
     uintptr_t tranceMem;
-    auto ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
+    const uint32_t maxRetryTime = 300;
+    uint32_t retryTime = 0;
+    BResult ret;
+    while(retryTime < maxRetryTime) {
+        retryTime++;
+        ret = BioServer::Instance()->GetTransEngine()->AllocOneBlock(tranceMem);
+        if (ret != BIO_OK && retryTime >= maxRetryTime) {
+            LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << from->GetLength() << ".");
+            return ret;
+        }
+        if (ret != BIO_OK && retryTime % 10 == 0) {
+            LOG_WARN("Alloc trans memory failed, ret:" << ret << ", retry times:" << retryTime);
+        }
+        if (ret == BIO_OK) {
+            break;
+        }
+
+        usleep(1000); // 1ms
+    }
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Alloc trans memory failed, ret:" << ret << ", length:" << req.transDataLen << ".");
         return ret;
