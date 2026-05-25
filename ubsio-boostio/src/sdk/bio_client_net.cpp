@@ -23,6 +23,7 @@
 #include "bio_client_log.h"
 #include "bio_client_agent.h"
 #include "bio_client_net.h"
+#include "bio_str_util.h"
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -216,7 +217,22 @@ BResult BioClientNet::ShmInit()
     mIsDevicetrans = rsp.isDevicetrans;
     mDeviceTransType = rsp.deviceTransType;
     mTransStoreUrl = rsp.transStoreUrl;
-    mTransMemSize = rsp.transMemSize;
+    const uint32_t transMemSize = 1; // GB
+    mTransMemSize = transMemSize;
+    char *transMemSizeEnv = std::getenv("UBSIO_TRANS_MEM_SIZE");
+    if (transMemSizeEnv != nullptr) {
+        long envVal = 0;
+        if (StrUtil::StrToLong(transMemSizeEnv, envVal) && envVal > 0) {
+            mTransMemSize = static_cast<uint64_t>(envVal);
+            CLIENT_LOG_INFO("Override mTransMemSize from env UBSIO_TRANS_MEM_SIZE=" << mTransMemSize << "GB");
+        } else {
+            CLIENT_LOG_WARN("Invalid UBSIO_TRANS_MEM_SIZE=" << transMemSizeEnv << ", must be positive, using server value " <<
+                rsp.transMemSize);
+        }
+    } else {
+        CLIENT_LOG_WARN("Not set UBSIO_TRANS_MEM_SIZE,use default value: " <<
+                transMemSize << " GB");
+    }
     mNetSegmentSize = rsp.netSegmentSize;
     mMemSegmentSize = rsp.memSegmentSize;
     mEnableHtrace = rsp.enableHtrace;
