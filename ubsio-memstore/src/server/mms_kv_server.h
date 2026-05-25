@@ -13,8 +13,8 @@
 #ifndef MMS_KV_SERVER_H
 #define MMS_KV_SERVER_H
 
+#include <atomic>
 #include <mutex>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "mms_c.h"
@@ -33,10 +33,11 @@
 namespace ock {
 namespace mms {
 
-using IoHandle = std::function<BResult(uint64_t userId, void *ioBuff, uint32_t ioLen)>;
+using IoHandle = std::function<BResult(void *ioBuff, uint32_t ioLen)>;
 
 class MmsKvServer;
 class MmsNotifyDispatcher;
+struct NotifyEvent;
 using MmsKvServerPtr = Ref<MmsKvServer>;
 class MmsKvServer {
 public:
@@ -52,14 +53,14 @@ public:
     }
 
     void FreeBlocks(std::vector<IOCtxItem> &ctxItems);
-    BResult SendSingleReq(uint64_t userId, const IoHandle &handle, IOCtxItem &item);
-    BResult HandleSendReqs(std::vector<IOCtxItem> &ctxItems, uint64_t userId, const IoHandle &handle);
-    BResult PutLocal(void *ioBuff, uint32_t ioLen);
-    BResult Put(uint64_t userId, PutItems *itemList, uint32_t itemNum);
-    BResult Get(uint64_t userId, GetItems *itemList, uint32_t itemNum);
-    BResult Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
-    BResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
-    BResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
+    BResult SendSingleReq(const IoHandle &handle, IOCtxItem &item);
+    BResult HandleSendReqs(std::vector<IOCtxItem> &ctxItems, const IoHandle &handle, bool freeBlocks = true);
+    BResult PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange = false);
+    BResult Put(PutItems *itemList, uint32_t itemNum);
+    BResult Get(GetItems *itemList, uint32_t itemNum);
+    BResult Update(UpdateItems *itemList, uint32_t itemNum);
+    BResult Delete(DeleteItems *itemList, uint32_t itemNum);
+    BResult Replace(ReplaceItems *itemList, uint32_t itemNum);
 
     BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
     BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
@@ -70,9 +71,9 @@ public:
     void NotifyPtMigrate(uint16_t ptId);
     void RemoveNotifyClient(uint32_t pid);
 
-    static thread_local std::vector<PutItems> itemListPut;
-    static thread_local std::vector<UpdateItems> itemListUpdate;
-    static thread_local std::vector<DeleteItems> itemListDelete;
+    static thread_local std::vector<DecodePutItem> itemListPut;
+    static thread_local std::vector<DecodeUpdateItem> itemListUpdate;
+    static thread_local std::vector<DecodeDeleteItem> itemListDelete;
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -83,8 +84,8 @@ private:
     BResult HandleNotifySubscribe(ServiceContext &ctx);
 
     BResult HandlePut(ServiceContext &ctx);
-    BResult HandlePutDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandlePutMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandlePutDefImpl(void *ioBuff, uint32_t ioLen);
+    BResult HandlePutMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandlePutRemote(ServiceContext &ctx);
     BResult HandlePutRemoteMulti(ServiceContext &ctx);
 
@@ -92,8 +93,8 @@ private:
     void PutRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
 
     BResult HandleUpdate(ServiceContext &ctx);
-    BResult HandleUpdateDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleUpdateMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandleUpdateDefImpl(void *ioBuff, uint32_t ioLen);
+    BResult HandleUpdateMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleUpdateRemote(ServiceContext &ctx);
     BResult HandleUpdateRemoteMulti(ServiceContext &ctx);
 
@@ -101,24 +102,24 @@ private:
     BResult UpdateLocal(void *ioBuff, uint32_t ioLen);
 
     BResult HandleDelete(ServiceContext &ctx);
-    BResult HandleDeleteDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleDeleteMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandleDeleteDefImpl(void *ioBuff, uint32_t ioLen);
+    BResult HandleDeleteMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleDeleteRemote(ServiceContext &ctx);
     BResult HandleDeleteRemoteMulti(ServiceContext &ctx);
 
     void DeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
-    BResult DeleteLocal(void *ioBuff, uint32_t ioLen);
+    BResult DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange = false);
 
-    BResult HandleRangeDeleteDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandleRangeDeleteDefImpl(void *ioBuff, uint32_t ioLen);
+    BResult HandleRangeDeleteMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleRangeDeleteRemote(ServiceContext &ctx);
     BResult HandleRangeDeleteRemoteMulti(ServiceContext &ctx);
     void RangeDeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult RangeDeleteLocal(void *ioBuff, uint32_t ioLen);
 
     BResult HandleReplace(ServiceContext &ctx);
-    BResult HandleReplaceDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleReplaceMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
+    BResult HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen);
+    BResult HandleReplaceMultiImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceRemote(ServiceContext &ctx);
     BResult HandleReplaceRemoteMulti(ServiceContext &ctx);
     void ReplaceRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
@@ -144,8 +145,8 @@ private:
     BResult HandleRangeDelete(ServiceContext &ctx);
     BResult HandleSearch(ServiceContext &ctx, MmsOpCode opCode);
     BResult ReplySearchResult(ServiceContext &ctx, ValueInfo *valueInfoItems, uint64_t itemNum);
-    void AddNotifyClient(uint32_t pid);
-    void NotifyRemoteClients(const char *key, OperateType opType);
+    void AddNotifyClient(uint32_t pid, uint32_t groupIndex);
+    void NotifyRemoteClientBatch(const NotifyEvent *events, uint16_t eventNum);
 
 private:
     bool mStarted = false;
@@ -160,9 +161,10 @@ private:
     CmPtr mCm = nullptr;
     MmsNotifyDispatcher *mNotifyDispatcher = nullptr;
     bool mDataChangeCallbackSwitch = false;
+    bool mArtQuerySwitch = false;
     bool mRemoteNotifyEnable = false;
-    std::mutex mNotifyClientLock;
-    std::unordered_set<uint32_t> mNotifyClients;
+    std::atomic<uint32_t> mNotifyClientPid{0};
+    std::atomic<uint32_t> mNotifyClientGroupIndex{0};
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
 

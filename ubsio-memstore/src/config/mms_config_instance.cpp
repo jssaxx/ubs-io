@@ -18,19 +18,27 @@ namespace ock {
 namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
+
 void MmsConfig::LoadDefaultConf()
 {
-    /* don't allow empty */
-    AddStrConf(NET_RPC_IP_MASK, VIpv4MaskValidator::Create(NET_RPC_IP_MASK.first, false));
-    AddIntConf(NET_RPC_PORT, VIntRange::Create(NET_RPC_PORT.first, NO_7201, NO_7800));
-    AddIntConf(NET_MULTICAST_PORT, VIntRange::Create(NET_MULTICAST_PORT.first, NO_7201, NO_7800));
+    LoadDefaultNetConf();
 
     /* load mem config */
     AddStrConf(MEM_NUMA_ID, VStrNotNull::Create(MEM_NUMA_ID.first));
     AddStrConf(MEM_NUMA_SIZE, VStrNotNull::Create(MEM_NUMA_SIZE.first));
     AddIntConf(MEM_VALUE_BLOCK_SIZE, VIntRange::Create(MEM_VALUE_BLOCK_SIZE.first, NO_1, NO_64));
 
-    /* load net config for rpc */
+    LoadDefaultSecurityConf();
+    LoadDefaultBasicConf();
+    LoadDefaultClusterConf();
+}
+
+void MmsConfig::LoadDefaultNetConf()
+{
+    AddStrConf(NET_RPC_IP_MASK, VIpv4MaskValidator::Create(NET_RPC_IP_MASK.first, false));
+    AddIntConf(NET_RPC_PORT, VIntRange::Create(NET_RPC_PORT.first, NO_7201, NO_7800));
+    AddIntConf(NET_MULTICAST_PORT, VIntRange::Create(NET_MULTICAST_PORT.first, NO_7201, NO_7800));
+
     AddStrConf(NET_RPC_PROTOCOL, VStrEnum::Create(NET_RPC_PROTOCOL.first, "tcp||rdma"));
     AddStrConf(NET_MULTICAST_PROTOCOL, VStrEnum::Create(NET_MULTICAST_PROTOCOL.first, "tcp||rdma"));
     AddIntConf(NET_RPC_CONNECT_COUNT, VIntRange::Create(NET_RPC_CONNECT_COUNT.first, NO_1, NO_16));
@@ -41,6 +49,20 @@ void MmsConfig::LoadDefaultConf()
     AddStrConf(NET_SUBSCRIBER_WORKER_CPUSET, VStrNotNull::Create(NET_SUBSCRIBER_WORKER_CPUSET.first));
     AddIntConf(NET_MESSAGE_MAX_BUFF_SIZE, VIntRange::Create(NET_MESSAGE_MAX_BUFF_SIZE.first, NO_1, NO_4096));
 
+    AddStrConf(NET_IPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_BUSY_POLL_MODE.first));
+    AddStrConf(NET_IPC_WORKER_GROUPS, VStrNotNull::Create(NET_IPC_WORKER_GROUPS.first));
+    AddStrConf(NET_IPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_IPC_WORKER_GROUPS_CPUSET.first));
+    AddStrConf(NET_NOTIFY_WORKER_GROUPS, VStrNotNull::Create(NET_NOTIFY_WORKER_GROUPS.first));
+    AddStrConf(NET_NOTIFY_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_NOTIFY_WORKER_GROUPS_CPUSET.first));
+
+    AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
+        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
+    AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
+        VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
+}
+
+void MmsConfig::LoadDefaultSecurityConf()
+{
     AddStrConf(NET_TLS_ENABLE, VStrBoolRange::Create(NET_TLS_ENABLE.first));
     AddStrConf(NET_TLS_CERTIFICATION_PATH);
     AddStrConf(NET_TLS_CA_CERT_PATH);
@@ -49,40 +71,22 @@ void MmsConfig::LoadDefaultConf()
     AddStrConf(NET_TLS_PRIVATE_KEY_PASSWORD_PATH);
     AddStrConf(NET_TLS_DECRYPTER_LIB_PATH);
     AddStrConf(NET_TLS_OPENSSL_LIB_PATH);
+}
 
-    /* load net config for ipc */
-    AddStrConf(NET_IPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_BUSY_POLL_MODE.first));
-    AddStrConf(NET_IPC_WORKER_GROUPS, VStrNotNull::Create(NET_IPC_WORKER_GROUPS.first));
-    AddStrConf(NET_IPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_IPC_WORKER_GROUPS_CPUSET.first));
-
-    /* load net config for message shedule */
-    AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
-    AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
-
-    /* load log info */
+void MmsConfig::LoadDefaultBasicConf()
+{
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
-
-    /* htrace switch */
     AddStrConf(TRACE_SWITCH, VStrBoolRange::Create(TRACE_SWITCH.first));
-
-    /* crc switch */
     AddStrConf(CRC_SWITCH, VStrBoolRange::Create(CRC_SWITCH.first));
-
-    /* sequence switch */
     AddStrConf(SEQUENCE_SWITCH, VStrBoolRange::Create(SEQUENCE_SWITCH.first));
-
-    /* multicast switch */
     AddStrConf(MULTICAST_SWITCH, VStrBoolRange::Create(MULTICAST_SWITCH.first));
-
-    /* data change callback switch */
     AddStrConf(DATA_CHANGE_CALLBACK_SWITCH, VStrBoolRange::Create(DATA_CHANGE_CALLBACK_SWITCH.first));
-
-    /* deployment mode */
+    AddStrConf(ART_QUERY_SWITCH, VStrBoolRange::Create(ART_QUERY_SWITCH.first));
     AddStrConf(DEPLOYMENT_MODE, VStrEnum::Create(DEPLOYMENT_MODE.first, "separate||converge"));
+}
 
-    /* load cluster manager config */
+void MmsConfig::LoadDefaultClusterConf()
+{
     AddIntConf(CM_NODE_NUM, VIntRange::Create(CM_NODE_NUM.first, MIN_NODES_NUM, MAX_NODES_NUM));
     AddIntConf(CM_NODE_ID, VIntRange::Create(CM_NODE_ID.first, NO_0, NO_MAX_VALUE16));
     AddIntConf(CM_NODE_REGISTER_TIMEOUT, VIntRange::Create(CM_NODE_REGISTER_TIMEOUT.first, NO_10, NO_60));
@@ -236,20 +240,87 @@ BResult MmsConfig::AutoConfigNetTls(const ConfigurationPtr &conf)
     return MMS_OK;
 }
 
-BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
+BResult MmsConfig::AutoConfigNetAddress(const ConfigurationPtr &conf)
 {
-    /* auto config cm port and ip mask */
     mNetConfig.dataIpMask = conf->GetStr(NET_RPC_IP_MASK.first);
     mNetConfig.dataPort = conf->GetInt(NET_RPC_PORT.first);
     mNetConfig.multicastPort = conf->GetInt(NET_MULTICAST_PORT.first);
 
-    /* fetch ip from ip mask, example:x.x.x.x/24 to x.x.x.x */
     std::vector<std::string> goodIps;
     if (!IpUtil::FilterIpByMask(mNetConfig.dataIpMask, goodIps) || goodIps.empty()) {
         LOG_ERROR("Failed to find ip with ip mask " << mNetConfig.dataIpMask);
         return MMS_ERR;
     }
     mNetConfig.dataIp = std::move(goodIps[0]);
+    return MMS_OK;
+}
+
+BResult MmsConfig::AutoConfigRpcGroup(const ConfigurationPtr &conf)
+{
+    mNetConfig.rpcConnCount = conf->GetInt(NET_RPC_CONNECT_COUNT.first);
+    mNetConfig.isRpcBusyPolling = conf->GetStr(NET_RPC_BUSY_POLL_MODE.first) == "true";
+    mNetConfig.rpcWorkerGroups = conf->GetStr(NET_RPC_WORKER_GROUPS.first);
+    mNetConfig.rpcWorkerGroupsCpuSet = conf->GetStr(NET_RPC_WORKER_GROUPS_CPUSET.first);
+
+    std::vector<std::string> groupsVec;
+    StrUtil::Split(mNetConfig.rpcWorkerGroups, ",", groupsVec);
+    mNetConfig.rpcWorkerGroupsNum = static_cast<uint16_t>(groupsVec.size());
+    if (mNetConfig.rpcWorkerGroupsNum <= MAX_GROUPS_NUM) {
+        return MMS_OK;
+    }
+
+    LOG_ERROR("Invalid configuration with rpc groups num items: " << mNetConfig.rpcWorkerGroupsNum);
+    return MMS_ERR;
+}
+
+BResult MmsConfig::AutoConfigIpcGroup(const ConfigurationPtr &conf)
+{
+    mNetConfig.isIpcBusyPolling = conf->GetStr(NET_IPC_BUSY_POLL_MODE.first) == "true";
+    mNetConfig.ipcWorkerGroups = conf->GetStr(NET_IPC_WORKER_GROUPS.first);
+    mNetConfig.ipcWorkerGroupsCpuSet = conf->GetStr(NET_IPC_WORKER_GROUPS_CPUSET.first);
+
+    std::vector<std::string> groupsVec;
+    StrUtil::Split(mNetConfig.ipcWorkerGroups, ",", groupsVec);
+    mNetConfig.ipcWorkerGroupsNum = static_cast<uint16_t>(groupsVec.size());
+    if (mNetConfig.ipcWorkerGroupsNum <= MAX_GROUPS_NUM) {
+        return MMS_OK;
+    }
+
+    LOG_ERROR("Invalid configuration with ipc groups num items: " << mNetConfig.ipcWorkerGroupsNum);
+    return MMS_ERR;
+}
+
+BResult MmsConfig::AutoConfigNotifyGroup(const ConfigurationPtr &conf)
+{
+    mNetConfig.notifyWorkerGroups = conf->GetStr(NET_NOTIFY_WORKER_GROUPS.first);
+    mNetConfig.notifyWorkerGroupsCpuSet = conf->GetStr(NET_NOTIFY_WORKER_GROUPS_CPUSET.first);
+
+    std::vector<std::string> groupsVec;
+    StrUtil::Split(mNetConfig.notifyWorkerGroups, ",", groupsVec);
+    mNetConfig.notifyWorkerGroupsNum = static_cast<uint16_t>(groupsVec.size());
+    mNetConfig.notifyGroupIndex = mNetConfig.ipcWorkerGroupsNum;
+    if (mNetConfig.notifyWorkerGroupsNum != 0 &&
+        mNetConfig.ipcWorkerGroupsNum + mNetConfig.notifyWorkerGroupsNum <= MAX_GROUPS_NUM) {
+        return MMS_OK;
+    }
+
+    LOG_ERROR("Invalid configuration with notify groups num items:" << mNetConfig.notifyWorkerGroupsNum << ".");
+    return MMS_ERR;
+}
+
+BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
+{
+    auto ret = AutoConfigNetAddress(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+
+    ret = AutoConfigRpcGroup(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+
+    ret = AutoConfigIpcGroup(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+
+    ret = AutoConfigNotifyGroup(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
 
     mNetConfig.multicastProtocol = conf->GetStr(NET_MULTICAST_PROTOCOL.first);
     std::string protocol = conf->GetStr(NET_RPC_PROTOCOL.first);
@@ -260,28 +331,6 @@ BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
     }
 
     mNetConfig.msgMaxBuffSize = static_cast<uint32_t>(conf->GetInt(NET_MESSAGE_MAX_BUFF_SIZE.first)) * KB_UNIT;
-    mNetConfig.rpcConnCount = conf->GetInt(NET_RPC_CONNECT_COUNT.first);
-    mNetConfig.isRpcBusyPolling = conf->GetStr(NET_RPC_BUSY_POLL_MODE.first) == "true";
-    mNetConfig.rpcWorkerGroups = conf->GetStr(NET_RPC_WORKER_GROUPS.first);
-    mNetConfig.rpcWorkerGroupsCpuSet = conf->GetStr(NET_RPC_WORKER_GROUPS_CPUSET.first);
-    std::vector<std::string> groupsVec;
-    StrUtil::Split(mNetConfig.rpcWorkerGroups, ",", groupsVec);
-    mNetConfig.rpcWorkerGroupsNum = static_cast<uint16_t>(groupsVec.size());
-    if (mNetConfig.rpcWorkerGroupsNum > MAX_GROUPS_NUM) {
-        LOG_ERROR("Invalid configuration with rpc groups num items: " << mNetConfig.rpcWorkerGroupsNum);
-        return MMS_ERR;
-    }
-    groupsVec.clear();
-    mNetConfig.isIpcBusyPolling = conf->GetStr(NET_IPC_BUSY_POLL_MODE.first) == "true";
-    mNetConfig.ipcWorkerGroups = conf->GetStr(NET_IPC_WORKER_GROUPS.first);
-    mNetConfig.ipcWorkerGroupsCpuSet = conf->GetStr(NET_IPC_WORKER_GROUPS_CPUSET.first);
-    StrUtil::Split(mNetConfig.ipcWorkerGroups, ",", groupsVec);
-    mNetConfig.ipcWorkerGroupsNum = static_cast<uint16_t>(groupsVec.size());
-    if (mNetConfig.ipcWorkerGroupsNum > MAX_GROUPS_NUM) {
-        LOG_ERROR("Invalid configuration with ipc groups num items: " << mNetConfig.ipcWorkerGroupsNum);
-        return MMS_ERR;
-    }
-
     mNetConfig.handleRequestThreadNum = conf->GetInt(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first);
     mNetConfig.handleRequestQueueSize = conf->GetInt(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first);
 
@@ -328,6 +377,7 @@ BResult MmsConfig::AutoConfigBasic(const ConfigurationPtr &conf)
     mBasicConfig.sequenceSwitch = conf->GetStr(SEQUENCE_SWITCH.first) == "true";
     mBasicConfig.multicastSwitch = conf->GetStr(MULTICAST_SWITCH.first) == "true";
     mBasicConfig.dataChangeCallbackSwitch = conf->GetStr(DATA_CHANGE_CALLBACK_SWITCH.first) == "true";
+    mBasicConfig.artQuerySwitch = conf->GetStr(ART_QUERY_SWITCH.first) == "true";
 
     auto deployment = conf->GetStr(DEPLOYMENT_MODE.first);
     if (deployment == "separate") {

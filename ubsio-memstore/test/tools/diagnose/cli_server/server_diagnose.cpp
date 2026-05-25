@@ -21,6 +21,7 @@
 #include <sstream>
 #include <mutex>
 #include <ctime>
+#include <atomic>
 #include "tracer.h"
 #include "cli.h"
 #include "mms_config_instance.h"
@@ -116,6 +117,7 @@ private:
 #define LOG_FILE(msg) LogStream() << msg
 
 static bool mInited = false;
+static std::atomic<bool> gNotifySwitch{false};
 int diagnose::MmsServerCommand::Initialize() noexcept
 {
     if (mInited) {
@@ -142,6 +144,70 @@ void diagnose::MmsServerCommand::Destroy() noexcept
 
 static uint32_t mUpdateLength = 0;
 static bool mIsReady = false;
+static constexpr uint16_t NOTIFY_SWITCH_OFF = 0;
+static constexpr uint16_t NOTIFY_SWITCH_ON = 1;
+
+static uint16_t GetNotifyFlag()
+{
+    return gNotifySwitch.load(std::memory_order_relaxed) ? NOTIFY_SWITCH_ON : NOTIFY_SWITCH_OFF;
+}
+
+static uint16_t GetKeyLen(const char *key)
+{
+    return static_cast<uint16_t>(strlen(key));
+}
+
+static PutItems MakePutItem(const char *key, const char *value, uint32_t valueLen, char **valueAddr, int32_t *result)
+{
+    return {key, value, valueLen, GetKeyLen(key), GetNotifyFlag(), valueAddr, result};
+}
+
+static GetItems MakeGetItem(const char *key, uint32_t offset, uint32_t length, char **value, uint32_t *realLength,
+                            int32_t *result)
+{
+    return {key, GetKeyLen(key), offset, length, value, realLength, result};
+}
+
+static UpdateItems MakeUpdateItem(const char *key, const char *value, uint32_t offset, uint32_t valueLen,
+                                  int32_t *result)
+{
+    return {key, value, GetKeyLen(key), valueLen, offset, result};
+}
+
+static DeleteItems MakeDeleteItem(const char *key, int32_t *result)
+{
+    return {key, GetKeyLen(key), GetNotifyFlag(), result};
+}
+
+static void RefreshKeyLen(PutItems *itemList, uint32_t itemNum)
+{
+    for (uint32_t i = 0; i < itemNum; i++) {
+        itemList[i].keyLen = GetKeyLen(itemList[i].key);
+    }
+}
+
+static void RefreshKeyLen(GetItems *itemList, uint32_t itemNum)
+{
+    for (uint32_t i = 0; i < itemNum; i++) {
+        itemList[i].keyLen = GetKeyLen(itemList[i].key);
+    }
+}
+
+static void RefreshKeyLen(UpdateItems *itemList, uint32_t itemNum)
+{
+    for (uint32_t i = 0; i < itemNum; i++) {
+        itemList[i].keyLen = GetKeyLen(itemList[i].key);
+    }
+}
+
+static void RefreshKeyLen(DeleteItems *itemList, uint32_t itemNum)
+{
+    for (uint32_t i = 0; i < itemNum; i++) {
+        itemList[i].keyLen = GetKeyLen(itemList[i].key);
+    }
+}
+
+static constexpr uint32_t DIAG_KEY_BUFFER_LEN = 128;
 
 struct PerfTestParam {
     bool done;
@@ -155,6 +221,15 @@ struct PerfTestParam {
     uint32_t count;
     uint16_t readWriteRate;
 };
+
+static void FillPerfKey(const PerfTestParam *param, const char *key, int32_t keyIndex)
+{
+    int ret = snprintf(const_cast<char *>(key), DIAG_KEY_BUFFER_LEN, "key_%lu_%u_%u_%d", param->usrId, param->id,
+                       param->cpu, keyIndex);
+    if (ret < 0) {
+        cli_print_buffer("Format key failed.\n");
+    }
+}
 
 typedef void *(*perfTestRunner)(void *param);
 
@@ -194,9 +269,11 @@ static void HandlePut(std::vector<std::string> cmds)
         return;
     }
 
-    PutItems item = { const_cast<char *>(key), value, length };
+    char *valueAddr = nullptr;
+    int32_t result = RET_MMS_OK;
+    PutItems item = MakePutItem(key, value, length, &valueAddr, &result);
 
-    auto ret = MmsPut(userId, &item, NO_1);
+    auto ret = MmsPut(&item, NO_1);
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to put a value, result:%d.\n", ret);
     } else {
@@ -230,11 +307,13 @@ static void HandleGet(std::vector<std::string> cmds)
         return;
     }
     char *value = new char[length];
-    uint64_t realLen = length;
+    char *valuePtr = value;
+    uint32_t realLen = length;
+    int32_t result = RET_MMS_OK;
 
-    GetItems item = { const_cast<char *>(key), offset, length, value, &realLen };
+    GetItems item = MakeGetItem(key, offset, length, &valuePtr, &realLen, &result);
 
-    auto ret = MmsGet(userId, &item, NO_1);
+    auto ret = MmsGet(&item, NO_1);
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to get a value, result:%d.\n", ret);
     } else {
@@ -269,9 +348,10 @@ static void HandleUpdate(std::vector<std::string> cmds)
         return;
     }
 
-    UpdateItems item = { const_cast<char *>(key), value, offset, length };
+    int32_t result = RET_MMS_OK;
+    UpdateItems item = MakeUpdateItem(key, value, offset, length, &result);
 
-    auto ret = MmsUpdate(userId, &item, NO_1);
+    auto ret = MmsUpdate(&item, NO_1);
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to update a value, result:%d.\n", ret);
     } else {
@@ -302,9 +382,10 @@ static void HandleReplace(std::vector<std::string> cmds)
         return;
     }
 
-    UpdateItems item = { const_cast<char *>(key), value, offset, length };
+    int32_t result = RET_MMS_OK;
+    ReplaceItems item = MakeUpdateItem(key, value, offset, length, &result);
 
-    auto ret = MmsReplace(userId, &item, NO_1);
+    auto ret = MmsReplace(&item, NO_1);
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to replace a value, result:%d.\n", ret);
     } else {
@@ -319,9 +400,10 @@ static void HandleDelete(std::vector<std::string> cmds)
     uint64_t userId = std::stoull(cmds[1]);
     auto key = cmds[2].c_str();
 
-    DeleteItems item = { const_cast<char *>(key) };
+    int32_t result = RET_MMS_OK;
+    DeleteItems item = MakeDeleteItem(key, &result);
 
-    auto ret = MmsDelete(userId, &item, NO_1);
+    auto ret = MmsDelete(&item, NO_1);
     if (ret != RET_MMS_OK) {
         cli_print_buffer("Failed to delete, key%s, result:%d.\n", key, ret);
     } else {
@@ -379,6 +461,23 @@ static void HandleSet(std::vector<std::string> cmds)
     cli_print_buffer("reset update length: %u.\n", mUpdateLength);
 }
 
+static void HandleNotify(std::vector<std::string> cmds)
+{
+    std::string op = cmds[1];
+    if (op == "open") {
+        gNotifySwitch.store(true, std::memory_order_relaxed);
+        cli_print_buffer("Open data change notify succeeded.\n");
+        return;
+    }
+    if (op == "close") {
+        gNotifySwitch.store(false, std::memory_order_relaxed);
+        cli_print_buffer("Close data change notify succeeded.\n");
+        return;
+    }
+
+    cli_print_buffer("Invalid notify operate type:%s.\n", op.c_str());
+}
+
 static void *PerfTestPutImpl(void *param)
 {
     while (!mIsReady) {
@@ -391,20 +490,26 @@ static void *PerfTestPutImpl(void *param)
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
     PutItems *itemList = new PutItems[getParam->batchNum];
+    char **valueAddrs = new char *[getParam->batchNum]();
+    int32_t *results = new int32_t[getParam->batchNum]();
+    uint16_t isNotify = GetNotifyFlag();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         itemList[i].value = new char[length];
-        FillRandomData(itemList[i].value, length);
-        itemList[i].length = length;
+        FillRandomData(const_cast<char *>(itemList[i].value), length);
+        itemList[i].valueLen = length;
+        itemList[i].isNotify = isNotify;
+        itemList[i].valueAddr = &valueAddrs[i];
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             keyIndex++;
         }
-        auto ret = MmsPut(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsPut(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -416,6 +521,8 @@ static void *PerfTestPutImpl(void *param)
         delete[] itemList[i].value;
     }
     delete[] itemList;
+    delete[] valueAddrs;
+    delete[] results;
     getParam->done = true;
     sem_post(&getParam->sem);
     return nullptr;
@@ -432,24 +539,28 @@ static void *PerfTestGetImpl(void *param)
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
-    uint64_t realLength;
     GetItems *itemList = new GetItems[getParam->batchNum];
+    char **values = new char *[getParam->batchNum]();
+    uint32_t *realLengths = new uint32_t[getParam->batchNum]();
+    int32_t *results = new int32_t[getParam->batchNum]();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         itemList[i].offset = 0;
         itemList[i].length = length;
-        itemList[i].value = new char[length];
-        memset(itemList[i].value, 88, length);
-        itemList[i].realLength = &realLength;
+        values[i] = new char[length];
+        memset(values[i], 88, length);
+        itemList[i].value = &values[i];
+        itemList[i].realLength = &realLengths[i];
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             keyIndex++;
         }
-        auto ret = MmsGet(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsGet(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -458,9 +569,12 @@ static void *PerfTestGetImpl(void *param)
 
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
         delete[] itemList[i].key;
-        delete[] itemList[i].value;
+        delete[] values[i];
     }
     delete[] itemList;
+    delete[] values;
+    delete[] realLengths;
+    delete[] results;
     getParam->done = true;
     sem_post(&getParam->sem);
     return nullptr;
@@ -478,21 +592,23 @@ static void *PerfTestUpdateImpl(void *param)
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
     UpdateItems *itemList = new UpdateItems[getParam->batchNum];
+    int32_t *results = new int32_t[getParam->batchNum]();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         itemList[i].value = new char[length];
-        FillRandomData(itemList[i].value, length);
+        FillRandomData(const_cast<char *>(itemList[i].value), length);
         itemList[i].offset = 0;
-        itemList[i].length = length;
+        itemList[i].valueLen = length;
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             keyIndex++;
         }
-        auto ret = MmsUpdate(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsUpdate(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -504,6 +620,7 @@ static void *PerfTestUpdateImpl(void *param)
         delete[] itemList[i].value;
     }
     delete[] itemList;
+    delete[] results;
     getParam->done = true;
     sem_post(&getParam->sem);
     return nullptr;
@@ -520,22 +637,24 @@ static void *PerfTestReplaceImpl(void *param)
 
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
-    UpdateItems *itemList = new UpdateItems[getParam->batchNum];
+    ReplaceItems *itemList = new ReplaceItems[getParam->batchNum];
+    int32_t *results = new int32_t[getParam->batchNum]();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         itemList[i].value = new char[length];
-        FillRandomData(itemList[i].value, length);
+        FillRandomData(const_cast<char *>(itemList[i].value), length);
         itemList[i].offset = 0;
-        itemList[i].length = length;
+        itemList[i].valueLen = length;
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             keyIndex++;
         }
-        auto ret = MmsReplace(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsReplace(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -547,6 +666,7 @@ static void *PerfTestReplaceImpl(void *param)
         delete[] itemList[i].value;
     }
     delete[] itemList;
+    delete[] results;
     getParam->done = true;
     sem_post(&getParam->sem);
     return nullptr;
@@ -562,17 +682,21 @@ static void *PerfTestDeleteImpl(void *param)
     std::atomic<int32_t> keyIndex(0);
 
     DeleteItems *itemList = new DeleteItems[getParam->batchNum];
+    int32_t *results = new int32_t[getParam->batchNum]();
+    uint16_t isNotify = GetNotifyFlag();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
+        itemList[i].isNotify = isNotify;
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             keyIndex++;
         }
-        auto ret = MmsDelete(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsDelete(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -583,6 +707,7 @@ static void *PerfTestDeleteImpl(void *param)
         delete[] itemList[i].key;
     }
     delete[] itemList;
+    delete[] results;
     getParam->done = true;
     sem_post(&getParam->sem);
     return nullptr;
@@ -600,31 +725,41 @@ static void *PerfTestMixesImpl(void *param)
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
     PutItems *putList = new PutItems[getParam->batchNum];
+    char **putValueAddrs = new char *[getParam->batchNum]();
+    int32_t *putResults = new int32_t[getParam->batchNum]();
+    uint16_t isNotify = GetNotifyFlag();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        putList[i].key = new char[128];
+        putList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         putList[i].value = new char[length];
-        memset(putList[i].value, 66, length);
-        putList[i].length = length;
+        memset(const_cast<char *>(putList[i].value), 66, length);
+        putList[i].valueLen = length;
+        putList[i].isNotify = isNotify;
+        putList[i].valueAddr = &putValueAddrs[i];
+        putList[i].result = &putResults[i];
     }
 
-    uint64_t realLength;
     GetItems *getList = new GetItems[getParam->batchNum];
+    char **getValues = new char *[getParam->batchNum]();
+    uint32_t *realLengths = new uint32_t[getParam->batchNum]();
+    int32_t *getResults = new int32_t[getParam->batchNum]();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        getList[i].key = new char[128];
+        getList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         getList[i].offset = 0;
         getList[i].length = length;
-        getList[i].value = new char[length];
-        memset(getList[i].value, 88, length);
-        getList[i].realLength = &realLength;
+        getValues[i] = new char[length];
+        memset(getValues[i], 88, length);
+        getList[i].value = &getValues[i];
+        getList[i].realLength = &realLengths[i];
+        getList[i].result = &getResults[i];
     }
 
     for (uint32_t idx = 0; idx < 10; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(putList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, putList[i].key, keyIndex.load());
             keyIndex++;
         }
-        auto ret = MmsPut(getParam->usrId, putList, getParam->batchNum);
+        RefreshKeyLen(putList, getParam->batchNum);
+        auto ret = MmsPut(putList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -636,21 +771,21 @@ static void *PerfTestMixesImpl(void *param)
         int32_t randnum = rand();
         if (randnum % 10 >= readRate) {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-                sprintf(putList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                        keyIndex.load());
+            FillPerfKey(getParam, putList[i].key, keyIndex.load());
                 keyIndex++;
             }
-            auto ret = MmsPut(getParam->usrId, putList, getParam->batchNum);
+            RefreshKeyLen(putList, getParam->batchNum);
+            auto ret = MmsPut(putList, getParam->batchNum);
             if (ret != RET_MMS_OK) {
                 getParam->result = ret;
                 break;
             }
         } else {
             for (uint32_t i = 0; i < getParam->batchNum; i++) {
-                sprintf(getList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                        randnum % keyIndex.load());
+            FillPerfKey(getParam, getList[i].key, randnum % keyIndex.load());
             }
-            auto ret = MmsGet(getParam->usrId, getList, getParam->batchNum);
+            RefreshKeyLen(getList, getParam->batchNum);
+            auto ret = MmsGet(getList, getParam->batchNum);
             if (ret != RET_MMS_OK) {
                 getParam->result = ret;
                 break;
@@ -661,8 +796,16 @@ static void *PerfTestMixesImpl(void *param)
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
         delete[] putList[i].key;
         delete[] putList[i].value;
+        delete[] getList[i].key;
+        delete[] getValues[i];
     }
     delete[] putList;
+    delete[] putValueAddrs;
+    delete[] putResults;
+    delete[] getList;
+    delete[] getValues;
+    delete[] realLengths;
+    delete[] getResults;
     getParam->done = true;
     sem_post(&getParam->sem);
     return nullptr;
@@ -749,19 +892,20 @@ static void *PerfTestPutCheckData(void *param)
     getParam->result = 0;
 
     ReplaceItems *itemList = new ReplaceItems[getParam->batchNum];
+    int32_t *results = new int32_t[getParam->batchNum]();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         itemList[i].value = new char[length];
         itemList[i].offset = 0;
-        itemList[i].length = length;
+        itemList[i].valueLen = length;
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             std::string keyStr(itemList[i].key);
-            FillRandomData(itemList[i].value, length);
+            FillRandomData(const_cast<char *>(itemList[i].value), length);
             std::string filePath = "./perf_input/" + keyStr;
             int ret = WriteToFile(filePath.c_str(), itemList[i].value, length);
             if (ret != 0) {
@@ -770,11 +914,12 @@ static void *PerfTestPutCheckData(void *param)
             }
 
             pthread_mutex_lock(checkPara->mutex);
-            dataCrc[keyStr] = MmsCrcUtil::Crc32(itemList[i].value, itemList[i].length);
+            dataCrc[keyStr] = MmsCrcUtil::Crc32(itemList[i].value, itemList[i].valueLen);
             pthread_mutex_unlock(checkPara->mutex);
             keyIndex++;
         }
-        auto ret = MmsReplace(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsReplace(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -786,6 +931,7 @@ static void *PerfTestPutCheckData(void *param)
         delete[] itemList[i].value;
     }
     delete[] itemList;
+    delete[] results;
     getParam->done = true;
     return nullptr;
 }
@@ -806,25 +952,29 @@ static void *PerfTestGetCheckData(void *param)
     getParam->result = 0;
     uint32_t length = (mUpdateLength != 0) ? mUpdateLength : getParam->length;
 
-    uint64_t realLength;
     GetItems *itemList = new GetItems[getParam->batchNum];
+    char **values = new char *[getParam->batchNum]();
+    uint32_t *realLengths = new uint32_t[getParam->batchNum]();
+    int32_t *results = new int32_t[getParam->batchNum]();
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
-        itemList[i].key = new char[128];
+        itemList[i].key = new char[DIAG_KEY_BUFFER_LEN];
         itemList[i].offset = 0;
         itemList[i].length = length;
-        itemList[i].value = new char[length];
-        memset(itemList[i].value, 88, length);
-        itemList[i].realLength = &realLength;
+        values[i] = new char[length];
+        memset(values[i], 88, length);
+        itemList[i].value = &values[i];
+        itemList[i].realLength = &realLengths[i];
+        itemList[i].result = &results[i];
     }
 
     for (uint32_t idx = 0; idx < getParam->count; idx++) {
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
-            sprintf(itemList[i].key, "key_%lu_%u_%u_%d", getParam->usrId, getParam->id, getParam->cpu,
-                    keyIndex.load());
+            FillPerfKey(getParam, itemList[i].key, keyIndex.load());
             keyIndex++;
         }
 
-        auto ret = MmsGet(getParam->usrId, itemList, getParam->batchNum);
+        RefreshKeyLen(itemList, getParam->batchNum);
+        auto ret = MmsGet(itemList, getParam->batchNum);
         if (ret != RET_MMS_OK) {
             getParam->result = ret;
             break;
@@ -833,23 +983,26 @@ static void *PerfTestGetCheckData(void *param)
         for (uint32_t i = 0; i < getParam->batchNum; i++) {
             std::string keyStr(itemList[i].key);
             std::string filePath = "./perf_output/" + keyStr;
-            int ret = WriteToFile(filePath.c_str(), itemList[i].value, *itemList[i].realLength);
+            int ret = WriteToFile(filePath.c_str(), *itemList[i].value, *itemList[i].realLength);
             if (ret != 0) {
                 getParam->result = ret;
                 break;
             }
 
             pthread_mutex_lock(checkPara->mutex);
-            dataCrc[keyStr] = MmsCrcUtil::Crc32(itemList[i].value, *itemList[i].realLength);
+            dataCrc[keyStr] = MmsCrcUtil::Crc32(*itemList[i].value, *itemList[i].realLength);
             pthread_mutex_unlock(checkPara->mutex);
         }
     }
 
     for (uint32_t i = 0; i < getParam->batchNum; i++) {
         delete[] itemList[i].key;
-        delete[] itemList[i].value;
+        delete[] values[i];
     }
     delete[] itemList;
+    delete[] values;
+    delete[] realLengths;
+    delete[] results;
     getParam->done = true;
     return nullptr;
 }
@@ -1311,6 +1464,7 @@ static void MmsServerDebugHelp(char *command, int detail) noexcept
     cli_print_buffer("\trange search: mms range delete/search [start] [end]\n");
     cli_print_buffer("\tcatchup: mms catchup\n");
     cli_print_buffer("\ttrace: mms trace [open/close/show/clear]\n");
+    cli_print_buffer("\tnotify: mms notify [open/close]\n");
     cli_print_buffer("\tperf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
                  "[userId] [numaNum] [cpuNum] [cpuStart] [readRate]\n");
     cli_print_buffer("\tperf: mms perfcheck [lwrite/rwrite] [filePath] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] [userId] "
@@ -1426,6 +1580,12 @@ static void MmsServerDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandleSet(cmds);
+    } else if (cmdType == "notify") {
+        if (cmds.size() != 2) {
+            cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleNotify(cmds);
     } else if (cmdType == "exit") {
         return;
     } else {

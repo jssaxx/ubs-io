@@ -112,4 +112,3 @@ constexpr uint32_t SEQ_QUEUE_LEN_T = SEQ_QUEUE_LEN * NO_2;
 
 
 #endif // MMSCORE_MMS_TYPES_H
-

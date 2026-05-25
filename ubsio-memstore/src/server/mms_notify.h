@@ -14,14 +14,16 @@
 #define MMS_NOTIFY_H
 
 #include <atomic>
+#include <array>
 #include <cstddef>
-#include <deque>
+#include <cstdint>
 #include <functional>
 #include <mutex>
-#include <memory>
+#include <semaphore.h>
 #include <thread>
 
 #include "mms_c.h"
+#include "mms_lock.h"
 #include "mms_types.h"
 
 namespace ock {
@@ -29,18 +31,19 @@ namespace mms {
 
 struct NotifyEvent {
     char key[MAX_KEY_SIZE];
+    uint16_t keyLen;
     OperateType opType;
 };
 
 class MmsNotifyDispatcher {
 public:
-    using RemoteNotifyHandler = std::function<void(const char *, OperateType)>;
+    using RemoteNotifyHandler = std::function<void(const NotifyEvent *, uint16_t)>;
 
     static MmsNotifyDispatcher &Instance();
 
     CResult RegisterCallback(NotifyCallback callback);
     CResult RegisterRemoteNotifyHandler(RemoteNotifyHandler handler);
-    void Notify(const char *key, OperateType opType);
+    void Notify(const char *key, uint16_t keyLen, OperateType opType);
     void Stop();
 
 private:
@@ -53,42 +56,30 @@ private:
     bool StartWorkerLocked();
     void StopWorkerIfIdleLocked();
     void StopWorker();
-    void ResetQueue();
-    enum class EnqueueResult {
-        SUCCESS,
-        FULL,
-        ERROR,
-    };
-
-    EnqueueResult TryEnqueue(const char *key, size_t keyLen, OperateType opType);
-    EnqueueResult EnqueueOverflow(const char *key, size_t keyLen, OperateType opType);
-    bool TryDequeue(NotifyEvent &event);
-    bool TryDequeueOverflow(NotifyEvent &event);
-    void HandleEvent(const NotifyEvent &event);
+    bool WaitEvent(NotifyEvent &event);
+    bool PushEvent(const NotifyEvent &event);
+    bool PopEvent(NotifyEvent &event);
+    void HandleEventBatch(NotifyEvent *events, uint16_t eventNum);
     void NotifyLocalCallback(const NotifyEvent &event);
     void WorkerLoop();
 
 private:
-    static constexpr uint32_t QUEUE_CAPACITY = 8192; // 队列容量，必须是2的幂
-    static constexpr uint32_t QUEUE_MASK = QUEUE_CAPACITY - 1;
-
-    struct NotifyCell {
-        std::atomic<size_t> sequence{0};
-        NotifyEvent event{};
-    };
+    static constexpr uint32_t QUEUE_CAPACITY = NO_10240;
 
     NotifyCallback mCallback = nullptr;
     RemoteNotifyHandler mRemoteNotifyHandler = nullptr;
-    std::atomic<size_t> mEnqueuePos{0};
-    std::atomic<size_t> mDequeuePos{0};
     std::atomic<uint64_t> mQueueFullCount{0};
     std::atomic<bool> mRunning{false};
     std::atomic<bool> mStop{false};
-    std::atomic<bool> mOverflowActive{false};
+    bool mQueueInited = false;
     std::mutex mLifecycleMutex;
-    std::mutex mOverflowMutex;
-    std::deque<NotifyEvent> mOverflowQueue;
-    std::unique_ptr<NotifyCell[]> mQueue;
+    SpinLock mQueueLock;
+    sem_t mFreeSlots{};
+    sem_t mUsedSlots{};
+    std::array<NotifyEvent, QUEUE_CAPACITY> mQueue{};
+    uint32_t mHead = 0;
+    uint32_t mTail = 0;
+    uint32_t mCount = 0;
     std::thread mWorker;
 };
 

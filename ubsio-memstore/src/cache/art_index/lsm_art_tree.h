@@ -34,11 +34,56 @@ static constexpr uint16_t ELASTIC_CAPACITY = 2048;  // 防止vector触发扩容
 static constexpr uint8_t BUFF_SIZE_FACTOR = 2;
 
 struct KVPair {
-    std::string key;
+    const unsigned char *key;
+    uint32_t keyLen;
     void *value;
     bool isDelete;
+    std::string ownedKey;
 
-    KVPair(std::string &&key, void *val, bool isDelete) : key(std::move(key)), value(val), isDelete(isDelete) {}
+    KVPair(const unsigned char *key, uint32_t keyLen, void *val)
+        : key(nullptr), keyLen(keyLen), value(val), isDelete(false),
+          ownedKey(reinterpret_cast<const char *>(key), keyLen)
+    {
+        this->key = reinterpret_cast<const unsigned char *>(ownedKey.data());
+    }
+
+    KVPair(const unsigned char *key, uint32_t keyLen)
+        : key(nullptr), keyLen(keyLen), value(nullptr), isDelete(true),
+          ownedKey(reinterpret_cast<const char *>(key), keyLen)
+    {
+        this->key = reinterpret_cast<const unsigned char *>(ownedKey.data());
+    }
+
+    KVPair(KVPair &&other) noexcept
+        : key(other.key), keyLen(other.keyLen), value(other.value), isDelete(other.isDelete),
+          ownedKey(std::move(other.ownedKey))
+    {
+        if (!ownedKey.empty()) {
+            key = reinterpret_cast<const unsigned char *>(ownedKey.data());
+        }
+    }
+
+    KVPair &operator=(KVPair &&other) noexcept
+    {
+        key = other.key;
+        keyLen = other.keyLen;
+        value = other.value;
+        isDelete = other.isDelete;
+        ownedKey = std::move(other.ownedKey);
+        if (!ownedKey.empty()) {
+            key = reinterpret_cast<const unsigned char *>(ownedKey.data());
+        }
+        return *this;
+    }
+
+    KVPair(const KVPair &) = delete;
+    KVPair &operator=(const KVPair &) = delete;
+};
+
+struct KeyValueRef {
+    std::string ownedKey;
+    uint32_t keyLen;
+    void *value;
 };
 
 struct MergeContext {
@@ -76,10 +121,14 @@ public:
         return instance;
     }
 
-    inline void Insert(std::string &&key, void *value)
+    inline void Insert(const unsigned char *key, uint32_t keyLen, void *value)
     {
+        if (key == nullptr || keyLen == 0 || value == nullptr) {
+            return;
+        }
+
         mActiveLock.Lock();
-        mActiveBuffer.emplace_back(std::move(key), value, false);
+        mActiveBuffer.emplace_back(key, keyLen, value);
         bool needsFlush = (mActiveBuffer.size() >= FLUSH_WATERMARK);
         mActiveLock.UnLock();
 
@@ -88,10 +137,19 @@ public:
         }
     }
 
-    inline void Delete(std::string &&key)
+    inline void Delete(const unsigned char *key, uint32_t keyLen)
     {
+        if (key == nullptr || keyLen == 0) {
+            return;
+        }
+
         mActiveLock.Lock();
-        mActiveBuffer.emplace_back(std::move(key), nullptr, true);
+        auto isSameKey = [key, keyLen](const KVPair &kv) {
+            return CompareKey(kv.key, kv.keyLen, key, keyLen) == 0;
+        };
+        mActiveBuffer.erase(std::remove_if(mActiveBuffer.begin(), mActiveBuffer.end(), isSameKey),
+                            mActiveBuffer.end());
+        mActiveBuffer.emplace_back(key, keyLen);
         bool needsFlush = (mActiveBuffer.size() >= FLUSH_WATERMARK);
         mActiveLock.UnLock();
 
@@ -106,42 +164,76 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    static bool StartsWith(const std::string &str, const std::string &prefix)
+    static int CompareKey(const unsigned char *left, uint32_t leftLen, const unsigned char *right, uint32_t rightLen)
     {
-        return str.size() >= prefix.size() && 0 == str.compare(0, prefix.size(), prefix);
+        uint32_t minLen = std::min(leftLen, rightLen);
+        int cmp = memcmp(left, right, minLen);
+        if (cmp != 0) {
+            return cmp;
+        }
+        if (leftLen == rightLen) {
+            return 0;
+        }
+        return (leftLen < rightLen) ? -1 : 1;
+    }
+
+    static bool StartsWith(const unsigned char *key, uint32_t keyLen, const unsigned char *prefix, uint32_t prefixLen)
+    {
+        return keyLen >= prefixLen && memcmp(key, prefix, prefixLen) == 0;
     }
 
     void BackgroundWorkerLoop();
 
     void TriggerBackgroundFlush()
     {
-        bool expected = false;
-        if (mIsFlushing.compare_exchange_strong(expected, true, std::memory_order_acquire)) {
-            mActiveLock.Lock();
-            mFlushBuffer = std::move(mActiveBuffer);
-            mActiveBuffer.reserve(ELASTIC_CAPACITY);
-            mActiveLock.UnLock();
-
+        mActiveLock.Lock();
+        bool needsNotify = PrepareFlushLocked();
+        mActiveLock.UnLock();
+        if (needsNotify) {
             mCv.notify_one();
         }
     }
 
     static int MergeCallback(void *data, const unsigned char *key, uint32_t keyLen, void *val);
 
+    bool PrepareFlushLocked()
+    {
+        if (mIsFlushing.load(std::memory_order_acquire) || mActiveBuffer.empty()) {
+            return false;
+        }
+        mFlushBuffer = std::move(mActiveBuffer);
+        mActiveBuffer.reserve(ELASTIC_CAPACITY);
+        mIsFlushing.store(true, std::memory_order_release);
+        return true;
+    }
+
+    bool PrepareNextFlushLocked()
+    {
+        if (mActiveBuffer.size() < FLUSH_WATERMARK) {
+            mIsFlushing.store(false, std::memory_order_release);
+            return false;
+        }
+        mFlushBuffer = std::move(mActiveBuffer);
+        mActiveBuffer.reserve(ELASTIC_CAPACITY);
+        return true;
+    }
+
     template <typename FilterFunc>
-    void CollectBufferData(MergeContext &ctx, std::vector<KVPair> &pendingInserts, FilterFunc &&filter)
+    void CollectBufferData(MergeContext &ctx, std::vector<KeyValueRef> &pendingInserts, FilterFunc &&filter)
     {
         std::vector<const KVPair *> rawPtrs;
         rawPtrs.reserve(ELASTIC_CAPACITY * BUFF_SIZE_FACTOR);
 
         mActiveLock.Lock();
         for (const auto &kv : mFlushBuffer) {
-            if (filter(kv.key))
+            if (filter(kv.key, kv.keyLen)) {
                 rawPtrs.emplace_back(&kv);
+            }
         }
         for (const auto &kv : mActiveBuffer) {
-            if (filter(kv.key))
+            if (filter(kv.key, kv.keyLen)) {
                 rawPtrs.emplace_back(&kv);
+            }
         }
 
         if (rawPtrs.empty()) {
@@ -150,16 +242,20 @@ private:
         }
 
         std::stable_sort(rawPtrs.begin(), rawPtrs.end(),
-                         [](const KVPair *a, const KVPair *b) { return a->key < b->key; });
+                         [](const KVPair *a, const KVPair *b) {
+                             return CompareKey(a->key, a->keyLen, b->key, b->keyLen) < 0;
+                         });
 
         for (size_t i = 0; i < rawPtrs.size(); ++i) {
-            if (i + NO_1 < rawPtrs.size() && rawPtrs[i]->key == rawPtrs[i+NO_1]->key) {
+            if (i + NO_1 < rawPtrs.size() &&
+                CompareKey(rawPtrs[i]->key, rawPtrs[i]->keyLen, rawPtrs[i + NO_1]->key,
+                           rawPtrs[i + NO_1]->keyLen) == 0) {
                 continue;
             }
 
-            ctx.excludedKeys.emplace_back(rawPtrs[i]->key);
+            ctx.excludedKeys.emplace_back(reinterpret_cast<const char *>(rawPtrs[i]->key), rawPtrs[i]->keyLen);
             if (!rawPtrs[i]->isDelete) {
-                pendingInserts.emplace_back(*rawPtrs[i]);
+                pendingInserts.push_back({rawPtrs[i]->ownedKey, rawPtrs[i]->keyLen, rawPtrs[i]->value});
             }
         }
         mActiveLock.UnLock();
@@ -185,4 +281,3 @@ private:
 }
 }
 #endif  // MMSCORE_LSM_ART_TREE_H
-

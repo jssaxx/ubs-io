@@ -238,6 +238,11 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:
+    std::string GetServerLogPath() const;
+    BResult InitServerBase();
+    BResult StartPtMigrateExecutor();
+    BResult StartMmsServices();
+    BResult InitServerExpireChecker();
     BResult MmsConfigInit();
     BResult MmsLoggerInit(std::string pathName);
     void MmsLoggerExit();
@@ -249,6 +254,10 @@ protected:
     void MmsMemExit();
     BResult MmsMulticastNetInit();
     void FillNetOptions(NetOptions &netOptions);
+    void FillIpcNetOptions(NetOptions &netOptions);
+    BResult InitUnicastNetEngine();
+    BResult RegisterServerChannelBrokenHandler();
+    BResult InitNetNumaGroup(uint16_t groupNum);
     BResult MmsUnicastNet();
     BResult MmsNetInit();
     void MmsNetExit();

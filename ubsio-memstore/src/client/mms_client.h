@@ -45,28 +45,31 @@ public:
     BResult Initialize(const MmsOptions &options, ServiceCallback service);
     void Exit();
 
-    BResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum)
+    BResult MmsPut(PutItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsPut(userId, itemList, itemNum);
+        return mKvClient->MmsPut(itemList, itemNum);
     }
 
-    BResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum)
+    BResult MmsGet(GetItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsGet(userId, itemList, itemNum);
+        return mKvClient->MmsGet(itemList, itemNum);
     }
 
     BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
+            return MMS_NOT_READY;
+        }
+        if (!mArtQuerySwitch) {
             return MMS_NOT_READY;
         }
         return mKvClient->GetValuesByPrefix(prefix, valueInfoItems, itemNum);
@@ -78,6 +81,9 @@ public:
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
+        if (!mArtQuerySwitch) {
+            return MMS_NOT_READY;
+        }
         return mKvClient->GetValuesByRange(start, end, valueInfoItems, itemNum);
     }
 
@@ -87,39 +93,45 @@ public:
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
+        if (!mArtQuerySwitch) {
+            return MMS_NOT_READY;
+        }
         return mKvClient->BatchDeleteByRange(start, end);
     }
 
     void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
     {
+        if (!mArtQuerySwitch) {
+            return;
+        }
         mKvClient->FreeResources(valueInfoItems, itemNum);
     }
 
-    BResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
+    BResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsUpdate(userId, itemList, itemNum);
+        return mKvClient->MmsUpdate(itemList, itemNum);
     }
 
-    BResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum)
+    BResult MmsDelete(DeleteItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsDelete(userId, itemList, itemNum);
+        return mKvClient->MmsDelete(itemList, itemNum);
     }
 
-    BResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum)
+    BResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsReplace(userId, itemList, itemNum);
+        return mKvClient->MmsReplace(itemList, itemNum);
     }
 
     BResult MmsStartCatchUpTask(void);
@@ -145,12 +157,27 @@ private:
     BResult ClientDiagnoseInit(void);
     void ClientDiagnoseExit(void);
 #endif
+    BResult InitClientBase(const MmsOptions &options);
+    BResult InitClientDataPath(void);
     BResult BuildThreadTask(void);
     BResult ResetResource();
     BResult BuildServices(void);
 
     BResult CheckServiceState(std::atomic<bool> &serviceable);
+    BResult InitExpireChecker(const MmsOptions &options);
+    BResult RegisterNotifyHandler();
+    BResult RegisterClientChannelBrokenHandler();
+    BResult StartClientServiceExecutor();
+    BResult ConnectLocalServer();
+    void HandleClientChannelBroken(uint32_t pid);
+    void HandleNotifyChannelBroken();
+    void MarkClientOffline();
+    BResult WaitAndResetResource();
+    BResult ReconnectLocalServer(uint32_t interval);
+    BResult RebuildServices(uint32_t interval);
+    void ReregisterNotifyCallback();
     BResult HandleNotifyDataChange(ServiceContext &ctx);
+    BResult HandleSingleNotifyDataChange(const NotifyDataChangeItem &item);
     BResult StartNotifyCallbackService();
     BResult StartNotifyChannel();
 
@@ -175,6 +202,8 @@ private:
     uint32_t mIoTimeOut;
     int32_t mLogLevel;
     bool mEnableCrc;
+    bool mArtQuerySwitch = false;
+    bool mDataChangeCallbackSwitch = false;
     uint32_t mMaxMsgBuffSize;
     DataBlockInfo mBlockInfo{};
 
@@ -185,6 +214,7 @@ private:
     std::mutex mNotifyCallbackServiceLock;
     ChannelPtr mNotifyChannel = nullptr;
     uint32_t mNotifyPid = 0;
+    uint16_t mNotifyGroupIndex = 0;
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};

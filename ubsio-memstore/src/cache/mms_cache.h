@@ -55,6 +55,7 @@ struct BucketNode {
 struct IndexValue {
     IndexNode next;
     char key[MAX_KEY_SIZE];
+    uint16_t keyLen;
     MmsPtId ptId;
     uint16_t isDelete; // 墓碑标记
     uint32_t version;
@@ -70,11 +71,56 @@ struct DataHeader {
 
 struct ReplacePara {
     const char *key;
+    uint16_t keyLen;
     const char *value;
     uint64_t offset;
     uint64_t length;
     uint32_t version;
     MmsPtId ptId;
+};
+
+struct PutPara {
+    const char *key;
+    uint16_t keyLen;
+    const char *value;
+    uint64_t length;
+    uint32_t version;
+    MmsPtId ptId;
+    char **valueAddr;
+};
+
+struct GetPara {
+    const char *key;
+    uint16_t keyLen;
+    uint64_t offset;
+    uint64_t length;
+    char **value;
+    uint64_t *realLength;
+};
+
+struct UpdatePara {
+    const char *key;
+    uint16_t keyLen;
+    const char *value;
+    uint64_t offset;
+    uint64_t length;
+    uint32_t version;
+};
+
+struct IndexValueCtx {
+    uint64_t addr;
+    uint64_t numaOffset;
+    uint16_t numaId;
+    IndexValue *value;
+};
+
+struct ExistingPutPara {
+    IndexNode *existingNode;
+    const char *key;
+    uint16_t keyLen;
+    const char *value;
+    uint64_t length;
+    char **valueAddr;
 };
 
 constexpr uint32_t INDEX_NODE_SIZE = sizeof(IndexNode);
@@ -122,18 +168,21 @@ public:
         mIsRecovering.store(isRecovering, std::memory_order_release);
     }
 
-    BResult HandlePutExistingNode(IndexNode *existingNode, const char *key, const char *value, uint64_t length);
-    BResult HandleReplacePut(IndexNode &curNode, const std::string &key, const char *value, uint64_t length);
-    BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key);
+    BResult HandlePutExistingNode(const ExistingPutPara &para);
+    BResult HandleReplacePut(IndexNode &curNode, const char *key, uint16_t keyLen, const char *value, uint64_t length);
+    BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key,
+                            uint16_t keyLen);
 
-    BResult Put(const char *key, const char *value, uint64_t length, uint32_t version, MmsPtId ptId);
-    BResult Get(const char *key, uint64_t offset, uint64_t length, char *value, uint64_t *realLength);
-    BResult Update(const char *key, const char *value, uint64_t offset, uint64_t length, uint32_t version);
-    BResult Delete(const char *key, uint32_t version);
+    BResult Put(const PutPara &para);
+    BResult Get(const GetPara &para);
+    BResult Update(const UpdatePara &para);
+    BResult Delete(const char *key, uint16_t keyLen, uint32_t version);
     BResult Replace(const ReplacePara &para);
+    void SetArtSwitch(bool artSwitch);
 
     // 返回实际读取到的字节数
     uint64_t GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
+    uint64_t GetDataAddrFromBlock(IndexValue *indexValue, char **data, uint64_t offset, uint64_t dataLen);
     void ClearDeletedData();
 
     BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
@@ -152,6 +201,14 @@ private:
 
     BResult PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen);
 
+    BResult CreatePutIndexValue(const PutPara &para, BucketNode *bucketNode, IndexValueCtx &ctx);
+
+    void FreeIndexValue(const IndexValueCtx &ctx);
+
+    void FillPutValueAddr(IndexValue *indexValue, char **valueAddr);
+
+    void InsertPutIndexValue(BucketNode *bucketNode, uint32_t hashCode, const IndexValueCtx &ctx);
+
     BResult ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
 
     BResult UpdateDataInCurrentBlock(IndexValue *indexValue, DataHeader *header, const char *data, uint64_t offset,
@@ -161,6 +218,15 @@ private:
                                      uint64_t curBlockAddr);
 
     BResult UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
+
+    BResult HandleDeleteExistingNode(BucketNode *bucketNode, IndexNode *node, uint32_t version);
+
+    BResult HandleDeleteMissingNode(BucketNode *bucketNode, uint32_t hashCode, const char *key, uint16_t keyLen,
+                                    uint32_t version);
+
+    BResult ReplaceExistingNode(IndexNode *existingNode, const ReplacePara &para);
+
+    BResult InsertReplaceNode(BucketNode *bucketNode, uint32_t hashCode, const ReplacePara &para);
 
 private:
     MmsMemMgrPtr mMemMgr = nullptr;
@@ -172,6 +238,7 @@ private:
 
     LsmArtTree mLsmArtTree;
     ReadWriteLock mArtValueLock;
+    bool mArtSwitch = true;
 
     DEFINE_REF_COUNT_VARIABLE;
 };

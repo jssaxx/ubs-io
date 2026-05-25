@@ -14,7 +14,6 @@
 
 namespace ock {
 namespace mms {
-#include "lsm_art_tree.h"
 
 int LsmArtTree::SearchPrefix(const unsigned char *prefix, int prefixLen, art_callback cb, void *data)
 {
@@ -22,12 +21,12 @@ int LsmArtTree::SearchPrefix(const unsigned char *prefix, int prefixLen, art_cal
     ctx.userCb = cb;
     ctx.userData = data;
 
-    std::vector<KVPair> pendingInserts;
-    std::string prefixStr(reinterpret_cast<const char *>(prefix), prefixLen);
-
-    CollectBufferData(ctx, pendingInserts, [&prefixStr](const std::string &k) { return StartsWith(k, prefixStr); });
+    std::vector<KeyValueRef> pendingInserts;
+    CollectBufferData(ctx, pendingInserts, [prefix, prefixLen](const unsigned char *key, uint32_t keyLen) {
+        return StartsWith(key, keyLen, prefix, static_cast<uint32_t>(prefixLen));
+    });
     for (const auto &kv : pendingInserts) {
-        int res = cb(data, reinterpret_cast<const unsigned char *>(kv.key.data()), kv.key.size(), kv.value);
+        int res = cb(data, reinterpret_cast<const unsigned char *>(kv.ownedKey.data()), kv.keyLen, kv.value);
         if (res != 0) {
             return res;
         }
@@ -47,13 +46,13 @@ int LsmArtTree::SearchRange(const art_range_bound &startBound, const art_range_b
     ctx.userCb = cb;
     ctx.userData = data;
 
-    std::vector<KVPair> pendingInserts;
-    std::string sKey(reinterpret_cast<const char *>(startBound.key), startBound.len);
-    std::string eKey(reinterpret_cast<const char *>(endBound.key), endBound.len);
-
-    CollectBufferData(ctx, pendingInserts, [&sKey, &eKey](const std::string &k) { return k >= sKey && k <= eKey; });
+    std::vector<KeyValueRef> pendingInserts;
+    CollectBufferData(ctx, pendingInserts, [&startBound, &endBound](const unsigned char *key, uint32_t keyLen) {
+        return CompareKey(key, keyLen, startBound.key, static_cast<uint32_t>(startBound.len)) >= 0 &&
+               CompareKey(key, keyLen, endBound.key, static_cast<uint32_t>(endBound.len)) <= 0;
+    });
     for (const auto &kv : pendingInserts) {
-        int res = cb(data, reinterpret_cast<const unsigned char *>(kv.key.data()), kv.key.size(), kv.value);
+        int res = cb(data, reinterpret_cast<const unsigned char *>(kv.ownedKey.data()), kv.keyLen, kv.value);
         if (res != 0) {
             return res;
         }
@@ -78,23 +77,24 @@ void LsmArtTree::BackgroundWorkerLoop()
             break;
         }
 
-        if (mIsFlushing.load(std::memory_order_acquire)) {
+        while (mIsFlushing.load(std::memory_order_acquire)) {
             mArtLock.Lock();
             for (const auto &kv : mFlushBuffer) {
                 if (kv.isDelete) {
-                    art_delete(&mArtTree, reinterpret_cast<const unsigned char *>(kv.key.data()), kv.key.size());
+                    art_delete(&mArtTree, kv.key, kv.keyLen);
                 } else {
-                    art_insert(&mArtTree, reinterpret_cast<const unsigned char *>(kv.key.data()), kv.key.size(),
-                               kv.value);
+                    art_insert(&mArtTree, kv.key, kv.keyLen, kv.value);
                 }
             }
             mArtLock.UnLock();
 
             mActiveLock.Lock();
             mFlushBuffer.clear();
+            bool hasNextFlush = PrepareNextFlushLocked();
             mActiveLock.UnLock();
-
-            mIsFlushing.store(false, std::memory_order_release);
+            if (!hasNextFlush) {
+                break;
+            }
         }
     }
 }

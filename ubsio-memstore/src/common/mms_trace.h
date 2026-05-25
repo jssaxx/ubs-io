@@ -42,6 +42,7 @@ enum ServerTracerType {
 
 enum NetTracerType {
     NET_TRACE_START = SERVER_TRACE_END,
+    NET_TRACE_SYNC_CALL,
     NET_TRACE_IPC_HDL,
     NET_TRACE_SEND_REQ,
     NET_HCOM_MULTICAST_SEND,

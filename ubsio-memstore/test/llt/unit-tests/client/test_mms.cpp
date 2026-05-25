@@ -43,30 +43,58 @@ void TestMms::TearDown()
     return;
 }
 static MmsKvServerPtr gServer = MmsKvServer::Instance();
+static int32_t gItemResults[16] = {0};
+static char *gValueAddrs[16] = {nullptr};
+
+static PutItems MakePut(const char *key, const char *value, uint32_t valueLen, uint32_t index = 0)
+{
+    return {key, value, valueLen, static_cast<uint16_t>(strlen(key)), 0, &gValueAddrs[index], &gItemResults[index]};
+}
+
+static GetItems MakeGet(const char *key, uint32_t offset, uint32_t length, char **value, uint32_t *realLength,
+                        uint32_t index = 0)
+{
+    return {key, static_cast<uint16_t>(strlen(key)), offset, length, value, realLength, &gItemResults[index]};
+}
+
+static UpdateItems MakeUpdate(const char *key, const char *value, uint32_t offset, uint32_t valueLen,
+                              uint32_t index = 0)
+{
+    return {key, value, static_cast<uint16_t>(strlen(key)), valueLen, offset, &gItemResults[index]};
+}
+
+static DeleteItems MakeDelete(const char *key, uint32_t index = 0)
+{
+    return {key, static_cast<uint16_t>(strlen(key)), 0, &gItemResults[index]};
+}
+
+static ReplaceItems MakeReplace(const char *key, const char *value, uint32_t offset, uint32_t valueLen,
+                                uint32_t index = 0)
+{
+    return {key, value, static_cast<uint16_t>(strlen(key)), valueLen, offset, &gItemResults[index]};
+}
 
 TEST_F(TestMms, test_mms_put)
 {
     LOG_INFO("test_mms_put");
-    uint64_t userId = 1;
     PutItems items[2];
     uint32_t length = 7;
-    PutItems item1 = {"aaa", "value1", length};
-    PutItems item2 = {"bbb", "value2", length};
+    PutItems item1 = MakePut("aaa", "value1", length, 0);
+    PutItems item2 = MakePut("bbb", "value2", length, 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
-    auto ret = MmsPut(userId, items, itemNum);
+    auto ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_put_invalid_batch)
 {
     LOG_INFO("test_mms_put_invalid_batch");
-    uint64_t userId = 1;
     uint32_t itemNum = 0;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsPut(userId, nullptr, itemNum);
+    auto ret = MmsPut(nullptr, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
@@ -74,45 +102,43 @@ TEST_F(TestMms, test_mms_put_invalid_parameter)
 {
     LOG_INFO("test_mms_put_invalid_parameter");
     gServer->NotifyServiceable(true);
-    uint64_t userId = 1;
     PutItems items[1];
 
     // invalid key
     uint32_t length = 7;
-    items[0] = {"", "value1", length};
+    items[0] = MakePut("", "value1", length, 0);
     uint32_t itemNum = 1;
-    auto ret = MmsPut(userId, items, itemNum);
+    auto ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid value
-    items[0] = {"key1", nullptr, length};
-    ret = MmsPut(userId, items, itemNum);
+    items[0] = MakePut("key1", nullptr, length, 0);
+    ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid length
     length = 0;
-    items[0] = {"key1", "value1", length};
-    ret = MmsPut(userId, items, itemNum);
+    items[0] = MakePut("key1", "value1", length, 0);
+    ret = MmsPut(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
 TEST_F(TestMms, test_mms_get)
 {
     LOG_INFO("test_mms_get");
-    uint64_t userId = 1;
     GetItems items[2];
     uint32_t length = 7;
     char *value1 = reinterpret_cast<char *>(malloc(length));
     char *value2 = reinterpret_cast<char *>(malloc(length));
-    uint64_t realLen1 = 0;
-    uint64_t realLen2 = 0;
+    uint32_t realLen1 = 0;
+    uint32_t realLen2 = 0;
     uint32_t offset = 0;
-    GetItems item1 = {"aaa", offset, length, value1, &realLen1};
-    GetItems item2 = {"bbb", offset, length, value2, &realLen2};
+    GetItems item1 = MakeGet("aaa", offset, length, &value1, &realLen1, 0);
+    GetItems item2 = MakeGet("bbb", offset, length, &value2, &realLen2, 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
-    auto ret = MmsGet(userId, items, itemNum);
+    auto ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
     free(value1);
     free(value2);
@@ -121,11 +147,10 @@ TEST_F(TestMms, test_mms_get)
 TEST_F(TestMms, test_mms_get_invalid_batch)
 {
     LOG_INFO("test_mms_get_invalid_batch");
-    uint64_t userId = 1;
     uint32_t itemNum = 0;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsPut(userId, nullptr, itemNum);
+    auto ret = MmsPut(nullptr, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
@@ -133,60 +158,57 @@ TEST_F(TestMms, test_mms_get_invalid_parameter)
 {
     LOG_INFO("test_mms_get_invalid_parameter");
     gServer->NotifyServiceable(true);
-    uint64_t userId = 1;
     GetItems items[1];
 
     // invalid key
     uint32_t length = 7;
     char *value1 = reinterpret_cast<char *>(malloc(length));
-    uint64_t realLen1 = 0;
+    uint32_t realLen1 = 0;
     uint32_t offset = 0;
-    items[0] = {"", offset, length, value1, &realLen1};
+    items[0] = MakeGet("", offset, length, &value1, &realLen1);
     uint32_t itemNum = 1;
-    auto ret = MmsGet(userId, items, itemNum);
+    auto ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid value
     realLen1 = 0;
     offset = 0;
     length = 7;
-    items[0] = {"aaa", offset, length, nullptr, &realLen1};
-    ret = MmsGet(userId, items, itemNum);
+    items[0] = MakeGet("aaa", offset, length, nullptr, &realLen1);
+    ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid length
     realLen1 = 0;
     offset = 0;
     length = 0;
-    items[0] = {"aaa", offset, length, value1, &realLen1};
-    ret = MmsGet(userId, items, itemNum);
+    items[0] = MakeGet("aaa", offset, length, &value1, &realLen1);
+    ret = MmsGet(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
 TEST_F(TestMms, test_mms_update)
 {
     LOG_INFO("test_mms_update");
-    uint64_t userId = 1;
     UpdateItems items[2];
     uint32_t offset = 0;
     uint32_t length = 7;
-    UpdateItems item1 = {"aaa", "value1", offset, length};
-    UpdateItems item2 = {"bbb", "value2", offset, length};
+    UpdateItems item1 = MakeUpdate("aaa", "value1", offset, length, 0);
+    UpdateItems item2 = MakeUpdate("bbb", "value2", offset, length, 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
-    auto ret = MmsUpdate(userId, items, itemNum);
+    auto ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_update_invalid_batch)
 {
     LOG_INFO("test_mms_update_invalid_batch");
-    uint64_t userId = 1;
     uint32_t itemNum = 0;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsUpdate(userId, nullptr, itemNum);
+    auto ret = MmsUpdate(nullptr, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
@@ -194,51 +216,48 @@ TEST_F(TestMms, test_mms_update_invalid_parameter)
 {
     LOG_INFO("test_mms_update_invalid_parameter");
     gServer->NotifyServiceable(true);
-    uint64_t userId = 1;
     UpdateItems items[1];
 
     // invalid key
     uint32_t length = 7;
     uint32_t offset = 0;
-    items[0] = {"", "value1", offset, length};
+    items[0] = MakeUpdate("", "value1", offset, length);
     uint32_t itemNum = 1;
-    auto ret = MmsUpdate(userId, items, itemNum);
+    auto ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid value
-    items[0] = {"key1", nullptr, offset, length};
-    ret = MmsUpdate(userId, items, itemNum);
+    items[0] = MakeUpdate("key1", nullptr, offset, length);
+    ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid length
     length = 0;
-    items[0] = {"key1", "value1", offset, length};
-    ret = MmsUpdate(userId, items, itemNum);
+    items[0] = MakeUpdate("key1", "value1", offset, length);
+    ret = MmsUpdate(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
 TEST_F(TestMms, test_mms_delete)
 {
     LOG_INFO("test_mms_delete");
-    uint64_t userId = 1;
     DeleteItems items[2];
-    DeleteItems item1 = {"aaa"};
-    DeleteItems item2 = {"bbb"};
+    DeleteItems item1 = MakeDelete("aaa", 0);
+    DeleteItems item2 = MakeDelete("bbb", 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
-    auto ret = MmsDelete(userId, items, itemNum);
+    auto ret = MmsDelete(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_delete_invalid_batch)
 {
     LOG_INFO("test_mms_delete_invalid_batch");
-    uint64_t userId = 1;
     uint32_t itemNum = 0;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsDelete(userId, nullptr, itemNum);
+    auto ret = MmsDelete(nullptr, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
@@ -246,41 +265,38 @@ TEST_F(TestMms, test_mms_delete_invalid_parameter)
 {
     LOG_INFO("test_mms_delete_invalid_parameter");
     gServer->NotifyServiceable(true);
-    uint64_t userId = 1;
     DeleteItems items[1];
 
     // invalid key
-    items[0] = {""};
+    items[0] = MakeDelete("");
     uint32_t itemNum = 1;
-    auto ret = MmsDelete(userId, items, itemNum);
+    auto ret = MmsDelete(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
 TEST_F(TestMms, test_mms_replace_unavailable)
 {
     LOG_INFO("test_mms_replace_unavailable");
-    uint64_t userId = 1;
     ReplaceItems items[2];
     uint32_t length = 7;
     uint32_t offset = 0;
-    ReplaceItems item1 = {"aaa", "value1", offset, length};
-    ReplaceItems item2 = {"bbb", "value2", offset, length};
+    ReplaceItems item1 = MakeReplace("aaa", "value1", offset, length, 0);
+    ReplaceItems item2 = MakeReplace("bbb", "value2", offset, length, 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
     gServer->NotifyServiceable(false);
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_replace_invalid_batch)
 {
     LOG_INFO("test_mms_replace_invalid_batch");
-    uint64_t userId = 1;
     uint32_t itemNum = 0;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsReplace(userId, nullptr, itemNum);
+    auto ret = MmsReplace(nullptr, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
@@ -288,110 +304,103 @@ TEST_F(TestMms, test_mms_replace_invalid_parameter)
 {
     LOG_INFO("test_mms_replace_invalid_parameter");
     gServer->NotifyServiceable(true);
-    uint64_t userId = 1;
     ReplaceItems items[1];
 
     // invalid key
     uint32_t length = 7;
     uint32_t offset = 0;
-    items[0] = {"", "value1", offset, length};
+    items[0] = MakeReplace("", "value1", offset, length);
     uint32_t itemNum = 1;
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid value
-    items[0] = {"key1", nullptr, offset, length};
-    ret = MmsReplace(userId, items, itemNum);
+    items[0] = MakeReplace("key1", nullptr, offset, length);
+    ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 
     // invalid length
     offset = 1;
     length = 0;
-    items[0] = {"key1", "value1", offset, length};
-    ret = MmsReplace(userId, items, itemNum);
+    items[0] = MakeReplace("key1", "value1", offset, length);
+    ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_EPERM);
 }
 
 TEST_F(TestMms, test_mms_replace_with_single_key)
 {
     LOG_INFO("test_mms_replace_with_single_key");
-    uint64_t userId = 1;
     ReplaceItems items[1];
     uint32_t length = 7;
     uint32_t offset = 0;
-    items[0] = {"aaa", "value1", offset, length};
+    items[0] = MakeReplace("aaa", "value1", offset, length);
     uint32_t itemNum = 1;
 
     gServer->NotifyServiceable(true);
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_replace_with_multi_key)
 {
     LOG_INFO("test_mms_replace_with_multi_key");
-    uint64_t userId = 1;
     ReplaceItems items[2];
     uint32_t length = 7;
     uint32_t offset = 0;
-    ReplaceItems item1 = {"aaa", "value1", offset, length};
-    ReplaceItems item2 = {"aaa", "value2", offset, length};
+    ReplaceItems item1 = MakeReplace("aaa", "value1", offset, length, 0);
+    ReplaceItems item2 = MakeReplace("aaa", "value2", offset, length, 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_replace_old_key)
 {
     LOG_INFO("test_mms_replace_old_key");
-    uint64_t userId = 1;
     ReplaceItems items[2];
     uint32_t length = 7;
     uint32_t offset = 0;
-    ReplaceItems item1 = {"aaa", "value1", offset, length};
-    ReplaceItems item2 = {"aaa", "value2", offset, length};
+    ReplaceItems item1 = MakeReplace("aaa", "value1", offset, length, 0);
+    ReplaceItems item2 = MakeReplace("aaa", "value2", offset, length, 1);
     items[0] = item1;
     items[1] = item2;
     uint32_t itemNum = 2;
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_replace_mixed)
 {
     LOG_INFO("test_mms_replace_mixed");
-    uint64_t userId = 1;
     ReplaceItems items[3];
     uint32_t length = 7;
     uint32_t offset = 0;
-    ReplaceItems item1 = {"aaa", "value1", offset, length};
-    ReplaceItems item2 = {"aaa", "value2", offset, length};
-    ReplaceItems item3 = {"bbb", "value3", offset, length};
+    ReplaceItems item1 = MakeReplace("aaa", "value1", offset, length, 0);
+    ReplaceItems item2 = MakeReplace("aaa", "value2", offset, length, 1);
+    ReplaceItems item3 = MakeReplace("bbb", "value3", offset, length, 2);
     items[0] = item1;
     items[1] = item2;
     items[2] = item3;
     uint32_t itemNum = 3;
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
 
 TEST_F(TestMms, test_mms_replace_repeat_key)
 {
     LOG_INFO("test_mms_replace_repeat_key");
-    uint64_t userId = 1;
     ReplaceItems items[3];
     uint32_t length = 7;
     uint32_t offset = 0;
-    ReplaceItems item1 = {"aaa", "value1", offset, length};
-    ReplaceItems item3 = {"bbb", "value3", offset, length};
-    ReplaceItems item2 = {"aaa", "value1", offset, length};
+    ReplaceItems item1 = MakeReplace("aaa", "value1", offset, length, 0);
+    ReplaceItems item3 = MakeReplace("bbb", "value3", offset, length, 2);
+    ReplaceItems item2 = MakeReplace("aaa", "value1", offset, length, 1);
     items[0] = item1;
     items[1] = item2;
     items[2] = item3;
     uint32_t itemNum = 3;
-    auto ret = MmsReplace(userId, items, itemNum);
+    auto ret = MmsReplace(items, itemNum);
     EXPECT_EQ(ret, RET_MMS_UNAVAILABLE);
 }
-

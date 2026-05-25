@@ -12,6 +12,7 @@
 
 #include "mms_notify.h"
 
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -19,6 +20,7 @@
 
 #include "mms_def.h"
 #include "mms_log.h"
+#include "mms_message.h"
 #include "securec.h"
 
 namespace ock {
@@ -79,45 +81,26 @@ CResult MmsNotifyDispatcher::RegisterRemoteNotifyHandler(RemoteNotifyHandler han
     return RET_MMS_OK;
 }
 
-void MmsNotifyDispatcher::Notify(const char *key, OperateType opType)
+void MmsNotifyDispatcher::Notify(const char *key, uint16_t keyLen, OperateType opType)
 {
-    if (UNLIKELY(key == nullptr || !mRunning.load(std::memory_order_acquire) ||
-                 mStop.load(std::memory_order_acquire))) {
+    if (UNLIKELY(key == nullptr || keyLen == 0 || keyLen >= MAX_KEY_SIZE ||
+        !mRunning.load(std::memory_order_acquire))) {
         return;
     }
 
-    size_t keyLen = strnlen(key, MAX_KEY_SIZE);
-    if (UNLIKELY(keyLen == MAX_KEY_SIZE)) {
-        LOG_ERROR("Copy notify key failed, key:" << key << ".");
+    NotifyEvent event{};
+    auto ret = memcpy_s(event.key, MAX_KEY_SIZE, key, keyLen);
+    if (UNLIKELY(ret != EOK)) {
+        LOG_ERROR("Copy notify key failed, key:" << key << ", ret:" << ret << ".");
         return;
     }
+    event.key[keyLen] = '\0';
+    event.keyLen = keyLen;
+    event.opType = opType;
 
-    if (UNLIKELY(mOverflowActive.load(std::memory_order_acquire))) {
-        auto enqueueRet = EnqueueOverflow(key, keyLen, opType);
-        if (UNLIKELY(enqueueRet != EnqueueResult::SUCCESS)) {
-            LOG_ERROR("Notify overflow enqueue failed, key:" << key << ".");
-        }
-        return;
-    }
-
-    while (true) {
-        auto enqueueRet = TryEnqueue(key, keyLen, opType);
-        if (LIKELY(enqueueRet == EnqueueResult::SUCCESS)) {
-            return;
-        }
-        if (UNLIKELY(enqueueRet == EnqueueResult::FULL)) {
-            uint64_t fullCount = mQueueFullCount.fetch_add(NO_1, std::memory_order_relaxed) + NO_1;
-            LOG_ERROR("Server notify queue full, count:" << fullCount << ", key:" << key << ".");
-            enqueueRet = EnqueueOverflow(key, keyLen, opType);
-            if (UNLIKELY(enqueueRet != EnqueueResult::SUCCESS)) {
-                LOG_ERROR("Notify overflow enqueue failed, key:" << key << ".");
-            }
-            return;
-        }
-        if (UNLIKELY(enqueueRet == EnqueueResult::ERROR)) {
-            LOG_ERROR("Notify enqueue failed, key:" << key << ".");
-            return;
-        }
+    bool pushed = PushEvent(event);
+    if (UNLIKELY(!pushed && !mStop.load(std::memory_order_acquire))) {
+        LOG_ERROR("Push notify event failed, key:" << event.key << ".");
     }
 }
 
@@ -130,11 +113,23 @@ void MmsNotifyDispatcher::Stop()
 bool MmsNotifyDispatcher::StartWorkerLocked()
 {
     try {
-        if (mQueue == nullptr) {
-            mQueue.reset(new NotifyCell[QUEUE_CAPACITY]);
+        if (sem_init(&mFreeSlots, 0, QUEUE_CAPACITY) != 0) {
+            LOG_ERROR("Init notify free sem failed, errno:" << errno << ".");
+            return false;
         }
-        ResetQueue();
+        if (sem_init(&mUsedSlots, 0, 0) != 0) {
+            LOG_ERROR("Init notify used sem failed, errno:" << errno << ".");
+            auto destroyRet = sem_destroy(&mFreeSlots);
+            if (destroyRet != 0) {
+                LOG_ERROR("Destroy notify free sem failed, errno:" << errno << ".");
+            }
+            return false;
+        }
+        mQueueInited = true;
         mStop.store(false, std::memory_order_release);
+        mHead = 0;
+        mTail = 0;
+        mCount = 0;
         mWorker = std::thread(&MmsNotifyDispatcher::WorkerLoop, this);
         mRunning.store(true, std::memory_order_release);
         return true;
@@ -142,6 +137,17 @@ bool MmsNotifyDispatcher::StartWorkerLocked()
         LOG_ERROR("Start notify worker failed, error:" << ex.what() << ".");
     } catch (...) {
         LOG_ERROR("Start notify worker failed.");
+    }
+    if (mQueueInited) {
+        auto destroyFreeRet = sem_destroy(&mFreeSlots);
+        if (destroyFreeRet != 0) {
+            LOG_ERROR("Destroy notify free sem failed, errno:" << errno << ".");
+        }
+        auto destroyUsedRet = sem_destroy(&mUsedSlots);
+        if (destroyUsedRet != 0) {
+            LOG_ERROR("Destroy notify used sem failed, errno:" << errno << ".");
+        }
+        mQueueInited = false;
     }
     return false;
 }
@@ -161,118 +167,109 @@ void MmsNotifyDispatcher::StopWorker()
         return;
     }
 
-    mRunning.store(false, std::memory_order_release);
     mStop.store(true, std::memory_order_release);
+    for (uint32_t index = 0; index < QUEUE_CAPACITY; ++index) {
+        auto postRet = sem_post(&mFreeSlots);
+        if (UNLIKELY(postRet != 0)) {
+            LOG_ERROR("Post notify free sem failed, errno:" << errno << ".");
+        }
+    }
+    auto postRet = sem_post(&mUsedSlots);
+    if (UNLIKELY(postRet != 0)) {
+        LOG_ERROR("Post notify used sem failed, errno:" << errno << ".");
+    }
     worker = std::move(mWorker);
-
     if (worker.joinable()) {
         worker.join();
     }
 
-    mStop.store(false, std::memory_order_release);
-}
-
-void MmsNotifyDispatcher::ResetQueue()
-{
-    mEnqueuePos.store(0, std::memory_order_relaxed);
-    mDequeuePos.store(0, std::memory_order_relaxed);
-    if (mQueue == nullptr) {
-        return;
-    }
-    {
-        std::lock_guard<std::mutex> lock(mOverflowMutex);
-        mOverflowQueue.clear();
-    }
-    mOverflowActive.store(false, std::memory_order_release);
-    for (uint32_t index = 0; index < QUEUE_CAPACITY; ++index) {
-        mQueue[index].sequence.store(index, std::memory_order_relaxed);
-    }
-}
-
-MmsNotifyDispatcher::EnqueueResult MmsNotifyDispatcher::TryEnqueue(const char *key, size_t keyLen, OperateType opType)
-{
-    size_t pos = mEnqueuePos.load(std::memory_order_relaxed);
-    NotifyCell *cell = nullptr;
-    while (true) {
-        cell = &mQueue[pos & QUEUE_MASK];
-        size_t seq = cell->sequence.load(std::memory_order_acquire);
-        intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(pos);
-        if (diff == 0) {
-            if (mEnqueuePos.compare_exchange_weak(pos, pos + NO_1, std::memory_order_relaxed)) {
-                break;
-            }
-            continue;
+    if (mQueueInited) {
+        auto destroyFreeRet = sem_destroy(&mFreeSlots);
+        if (destroyFreeRet != 0) {
+            LOG_ERROR("Destroy notify free sem failed, errno:" << errno << ".");
         }
-        if (diff < 0) {
-            return EnqueueResult::FULL;
+        auto destroyUsedRet = sem_destroy(&mUsedSlots);
+        if (destroyUsedRet != 0) {
+            LOG_ERROR("Destroy notify used sem failed, errno:" << errno << ".");
         }
-        pos = mEnqueuePos.load(std::memory_order_relaxed);
+        mQueueInited = false;
     }
-
-    auto ret = memcpy_s(cell->event.key, MAX_KEY_SIZE, key, keyLen + NO_1);
-    if (UNLIKELY(ret != EOK)) {
-        cell->event.key[0] = '\0';
-        cell->event.opType = opType;
-        cell->sequence.store(pos + NO_1, std::memory_order_release);
-        return EnqueueResult::ERROR;
-    }
-    cell->event.opType = opType;
-    cell->sequence.store(pos + NO_1, std::memory_order_release);
-    return EnqueueResult::SUCCESS;
+    mRunning.store(false, std::memory_order_release);
 }
 
-MmsNotifyDispatcher::EnqueueResult MmsNotifyDispatcher::EnqueueOverflow(const char *key, size_t keyLen,
-                                                                        OperateType opType)
+bool MmsNotifyDispatcher::WaitEvent(NotifyEvent &event)
 {
-    NotifyEvent event{};
-    auto ret = memcpy_s(event.key, MAX_KEY_SIZE, key, keyLen + NO_1);
-    if (UNLIKELY(ret != EOK)) {
-        return EnqueueResult::ERROR;
+    while (sem_wait(&mUsedSlots) != 0) {
+        if (errno != EINTR) {
+            LOG_ERROR("Wait notify used sem failed, errno:" << errno << ".");
+            return false;
+        }
     }
-    event.opType = opType;
 
-    try {
-        std::lock_guard<std::mutex> lock(mOverflowMutex);
-        mOverflowActive.store(true, std::memory_order_release);
-        mOverflowQueue.emplace_back(event);
-    } catch (const std::exception &ex) {
-        LOG_ERROR("Notify overflow enqueue failed, error:" << ex.what() << ".");
-        return EnqueueResult::ERROR;
-    } catch (...) {
-        LOG_ERROR("Notify overflow enqueue failed.");
-        return EnqueueResult::ERROR;
-    }
-    return EnqueueResult::SUCCESS;
-}
-
-bool MmsNotifyDispatcher::TryDequeue(NotifyEvent &event)
-{
-    size_t pos = mDequeuePos.load(std::memory_order_relaxed);
-    NotifyCell *cell = &mQueue[pos & QUEUE_MASK];
-    size_t seq = cell->sequence.load(std::memory_order_acquire);
-    intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(pos + NO_1);
-    if (diff != 0) {
+    if (UNLIKELY(!PopEvent(event))) {
+        if (mStop.load(std::memory_order_acquire)) {
+            return false;
+        }
+        LOG_ERROR("Pop notify event failed.");
         return false;
     }
-
-    mDequeuePos.store(pos + NO_1, std::memory_order_relaxed);
-    event = cell->event;
-    cell->sequence.store(pos + QUEUE_CAPACITY, std::memory_order_release);
+    auto postRet = sem_post(&mFreeSlots);
+    if (UNLIKELY(postRet != 0)) {
+        LOG_ERROR("Post notify free sem failed, errno:" << errno << ".");
+    }
     return true;
 }
 
-bool MmsNotifyDispatcher::TryDequeueOverflow(NotifyEvent &event)
+bool MmsNotifyDispatcher::PushEvent(const NotifyEvent &event)
 {
-    std::lock_guard<std::mutex> lock(mOverflowMutex);
-    if (mOverflowQueue.empty()) {
+    if (UNLIKELY(sem_trywait(&mFreeSlots) != 0)) {
+        if (errno != EAGAIN) {
+            LOG_ERROR("Try wait notify free sem failed, errno:" << errno << ".");
+            return false;
+        }
+        uint64_t fullCount = mQueueFullCount.fetch_add(NO_1, std::memory_order_relaxed) + NO_1;
+        LOG_ERROR("Server notify queue full, count:" << fullCount << ", key:" << event.key << ".");
+        while (sem_wait(&mFreeSlots) != 0) {
+            if (errno != EINTR) {
+                LOG_ERROR("Wait notify free sem failed, errno:" << errno << ".");
+                return false;
+            }
+        }
+    }
+
+    if (UNLIKELY(mStop.load(std::memory_order_acquire))) {
+        auto postRet = sem_post(&mFreeSlots);
+        if (postRet != 0) {
+            LOG_ERROR("Post notify free sem failed, errno:" << errno << ".");
+        }
         return false;
     }
 
-    event = mOverflowQueue.front();
-    mOverflowQueue.pop_front();
-    if (mOverflowQueue.empty()) {
-        mOverflowActive.store(false, std::memory_order_release);
+    mQueueLock.Lock();
+    mQueue[mTail] = event;
+    mTail = (mTail + NO_1) % QUEUE_CAPACITY;
+    ++mCount;
+    mQueueLock.UnLock();
+
+    auto postRet = sem_post(&mUsedSlots);
+    if (UNLIKELY(postRet != 0)) {
+        LOG_ERROR("Post notify used sem failed, errno:" << errno << ".");
+        return false;
     }
+    return true;
+}
+
+bool MmsNotifyDispatcher::PopEvent(NotifyEvent &event)
+{
+    mQueueLock.Lock();
+    if (mCount == 0) {
+        mQueueLock.UnLock();
+        return false;
+    }
+    event = mQueue[mHead];
+    mHead = (mHead + NO_1) % QUEUE_CAPACITY;
+    --mCount;
+    mQueueLock.UnLock();
     return true;
 }
 
@@ -292,37 +289,43 @@ void MmsNotifyDispatcher::NotifyLocalCallback(const NotifyEvent &event)
     }
 }
 
-void MmsNotifyDispatcher::HandleEvent(const NotifyEvent &event)
+void MmsNotifyDispatcher::HandleEventBatch(NotifyEvent *events, uint16_t eventNum)
 {
-    if (UNLIKELY(event.key[0] == '\0')) {
+    if (eventNum == 0) {
         return;
     }
 
-    NotifyLocalCallback(event);
+    for (uint16_t index = 0; index < eventNum; ++index) {
+        NotifyLocalCallback(events[index]);
+    }
     if (mRemoteNotifyHandler != nullptr) {
-        mRemoteNotifyHandler(event.key, event.opType);
+        mRemoteNotifyHandler(events, eventNum);
     }
 }
 
 void MmsNotifyDispatcher::WorkerLoop()
 {
+    NotifyEvent events[NOTIFY_DATA_CHANGE_BATCH_NUM];
     while (true) {
-        NotifyEvent event{};
-        bool hasEvent = false;
-        while (TryDequeue(event)) {
-            hasEvent = true;
-            HandleEvent(event);
+        if (!WaitEvent(events[0])) {
+            break;
         }
-        while (TryDequeueOverflow(event)) {
-            hasEvent = true;
-            HandleEvent(event);
-        }
-        if (UNLIKELY(!hasEvent)) {
-            if (mStop.load(std::memory_order_acquire)) {
+        uint16_t eventNum = NO_1;
+        while (eventNum < NOTIFY_DATA_CHANGE_BATCH_NUM && sem_trywait(&mUsedSlots) == 0) {
+            if (UNLIKELY(!PopEvent(events[eventNum]))) {
+                auto postUsedRet = sem_post(&mUsedSlots);
+                if (UNLIKELY(postUsedRet != 0)) {
+                    LOG_ERROR("Post notify used sem failed, errno:" << errno << ".");
+                }
                 break;
             }
-            CPU_RELAX();
+            auto postRet = sem_post(&mFreeSlots);
+            if (UNLIKELY(postRet != 0)) {
+                LOG_ERROR("Post notify free sem failed, errno:" << errno << ".");
+            }
+            ++eventNum;
         }
+        HandleEventBatch(events, eventNum);
     }
 }
 

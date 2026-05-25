@@ -37,6 +37,83 @@ static void HcomLog(int level, const char *msg)
     NET_BASE_LOG(level, msg);
 }
 
+static BResult SplitWorkerGroupConfig(const std::string &groups, const std::string &cpuSets,
+                                      WorkerGroupConfig &config, const std::string &type)
+{
+    StrUtil::Split(groups, ",", config.groups);
+    StrUtil::Split(cpuSets, ",", config.cpuSets);
+    if (config.groups.size() == config.cpuSets.size()) {
+        return MMS_OK;
+    }
+
+    NET_LOG_ERROR("Worker group size not equal group cpu set size, type:" << type <<
+        ", group size:" << config.groups.size() << ", group cpu set size:" << config.cpuSets.size() << ".");
+    return MMS_INVALID_PARAM;
+}
+
+static void FillClientIpcWorkerOptions(UBSHcomServiceOptions &options)
+{
+    options.workerGroupThreadCount = NO_1;
+    options.workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
+}
+
+static BResult FillServerIpcWorkerOptions(const WorkerGroupConfig &config, UBSHcomServiceOptions &options)
+{
+    if (UNLIKELY(config.groups.empty())) {
+        NET_LOG_ERROR("Ipc worker group config is empty.");
+        return MMS_INVALID_PARAM;
+    }
+    if (UNLIKELY(!StrUtil::StrToUint16(config.groups[0], options.workerGroupThreadCount) ||
+        !StrUtil::StrToUint32Pair(config.cpuSets[0], options.workerGroupCpuIdsRange))) {
+        NET_LOG_ERROR("Invalid ipc worker group config.");
+        return MMS_INVALID_PARAM;
+    }
+    return MMS_OK;
+}
+
+static BResult AddWorkerGroup(UBSHcomService *service, uint32_t groupIndex, const std::string &group,
+                              const std::string &cpuSet)
+{
+    uint16_t workerGroupThreadCount = 0;
+    std::pair<uint32_t, uint32_t> workerGroupCpuIdsRange;
+    if (UNLIKELY(!StrUtil::StrToUint16(group, workerGroupThreadCount) ||
+        !StrUtil::StrToUint32Pair(cpuSet, workerGroupCpuIdsRange))) {
+        NET_LOG_ERROR("Invalid ipc worker group config, groupIndex:" << groupIndex << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    service->AddWorkerGroup(groupIndex, workerGroupThreadCount, workerGroupCpuIdsRange);
+    return MMS_OK;
+}
+
+static BResult AddWorkerGroups(UBSHcomService *service, const WorkerGroupConfig &config, uint32_t startIndex)
+{
+    for (size_t index = 0; index < config.groups.size(); ++index) {
+        auto ret = AddWorkerGroup(service, startIndex + static_cast<uint32_t>(index), config.groups[index],
+                                  config.cpuSets[index]);
+        if (ret != MMS_OK) {
+            return ret;
+        }
+    }
+    return MMS_OK;
+}
+
+static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGroupConfig &ipcConfig,
+                                       const WorkerGroupConfig &notifyConfig)
+{
+    WorkerGroupConfig extraIpcConfig;
+    if (ipcConfig.groups.size() > NO_1) {
+        extraIpcConfig.groups.assign(ipcConfig.groups.begin() + NO_1, ipcConfig.groups.end());
+        extraIpcConfig.cpuSets.assign(ipcConfig.cpuSets.begin() + NO_1, ipcConfig.cpuSets.end());
+    }
+
+    auto ret = AddWorkerGroups(service, extraIpcConfig, NO_1);
+    if (ret != MMS_OK) {
+        return ret;
+    }
+    return AddWorkerGroups(service, notifyConfig, static_cast<uint32_t>(ipcConfig.groups.size()));
+}
+
 BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
     NetMemList &memList)
 {
@@ -292,28 +369,9 @@ BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
     return MMS_OK;
 }
 
-BResult NetEngine::StartIpcService(const NetOptions &opt)
+BResult NetEngine::CreateIpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &ipcConfig)
 {
-    int result = MMS_ERR;
-    if (mIpcService != nullptr) {
-        NET_LOG_INFO("Net ipc service has already created.");
-        return MMS_OK;
-    }
-
-    mIpcOptions = opt;
-    bool isOobSvr = opt.role != NET_CLIENT;
     std::string name = isOobSvr ? IPC_SERVICE_NAME_SERVER : IPC_SERVICE_NAME_CLIENT;
-
-    std::vector<std::string> groupsVec;
-    StrUtil::Split(opt.workerGroups, ",", groupsVec);
-    std::vector<std::string> groupsCpuSetVec;
-    StrUtil::Split(opt.workerGroupsCpuSet, ",", groupsCpuSetVec);
-    if (groupsVec.size() != groupsCpuSetVec.size()) {
-        NET_LOG_ERROR("Worker group size not equal group cpu set size. Worker group size: " << groupsVec.size() <<
-            ", group cpu set size: " << groupsCpuSetVec.size() << ".");
-        return MMS_INVALID_PARAM;
-    }
-
     UBSHcomServiceOptions options;
     options.workerGroupMode = opt.isBusyPolling ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
                               UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
@@ -321,48 +379,103 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     options.workerGroupId = 0;
     options.workerThreadPriority = 0;
     if (isOobSvr) {
-        StrUtil::StrToUint16(groupsVec[0], options.workerGroupThreadCount);
-        StrUtil::StrToUint32Pair(groupsCpuSetVec[0], options.workerGroupCpuIdsRange);
+        auto ret = FillServerIpcWorkerOptions(ipcConfig, options);
+        ChkTrue(ret == MMS_OK, ret, "Fill server ipc worker options failed, ret:" << ret << ".");
     } else {
-        options.workerGroupThreadCount = NO_1;
-        options.workerGroupCpuIdsRange = {UINT32_MAX, UINT32_MAX};
+        FillClientIpcWorkerOptions(options);
     }
 
     mIpcService = UBSHcomService::Create(opt.protocol, name, options);
-    if (mIpcService == nullptr) {
-        NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
-        return MMS_ERR;
+    if (mIpcService != nullptr) {
+        return MMS_OK;
     }
 
-    if (opt.tlsEnable) {
-        result = PrepareTlsDecrypter(opt);
-        if (result != MMS_OK) {
-            NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
-            return result;
-        }
+    NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
+    return MMS_ERR;
+}
+
+BResult NetEngine::PrepareIpcTls(const NetOptions &opt)
+{
+    if (!opt.tlsEnable) {
+        return MMS_OK;
     }
 
-    if (isOobSvr && options.workerGroupThreadCount != 0) {
-        for (size_t i = 1; i < groupsVec.size(); i++) {
-            StrUtil::StrToUint16(groupsVec[i], options.workerGroupThreadCount);
-            StrUtil::StrToUint32Pair(groupsCpuSetVec[i], options.workerGroupCpuIdsRange);
-            mIpcService->AddWorkerGroup(i, options.workerGroupThreadCount, options.workerGroupCpuIdsRange);
-        }
+    auto result = PrepareTlsDecrypter(opt);
+    if (result != MMS_OK) {
+        NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
+    }
+    return result;
+}
+
+BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig,
+                                      const WorkerGroupConfig &notifyConfig)
+{
+    if (!isOobSvr) {
+        return MMS_OK;
     }
 
-    result = AssignIpcServiceOptions(opt, isOobSvr);
+    uint16_t mainGroupThreadCount = 0;
+    if (UNLIKELY(ipcConfig.groups.empty() ||
+        !StrUtil::StrToUint16(ipcConfig.groups[0], mainGroupThreadCount))) {
+        NET_LOG_ERROR("Invalid ipc main worker group config.");
+        return MMS_INVALID_PARAM;
+    }
+    if (mainGroupThreadCount == 0) {
+        return MMS_OK;
+    }
+
+    auto ret = AddExtraIpcWorkerGroups(mIpcService, ipcConfig, notifyConfig);
+    if (ret != MMS_OK) {
+        NET_LOG_ERROR("Add extra ipc worker groups failed, ret:" << ret << ".");
+    }
+    return ret;
+}
+
+BResult NetEngine::StartCreatedIpcService(const NetOptions &opt, bool isOobSvr)
+{
+    auto result = AssignIpcServiceOptions(opt, isOobSvr);
     if (result != MMS_OK) {
         NET_LOG_ERROR("Failed to assign ipc service options, result:" << UBSHcomNetErrStr(result) << ".");
         return result;
     }
 
     result = mIpcService->Start();
-    if (result != MMS_OK) {
-        NET_LOG_ERROR("Failed to start ipc service, result:" << UBSHcomNetErrStr(result) << ".");
-        return MMS_ERR;
+    if (result == MMS_OK) {
+        NET_LOG_INFO("Mms server Start ipc service success, protocol:" << opt.protocol << ".");
+        return MMS_OK;
     }
-    NET_LOG_INFO("Mms server Start ipc service success, protocol:" << opt.protocol << ".");
-    return MMS_OK;
+
+    NET_LOG_ERROR("Failed to start ipc service, result:" << UBSHcomNetErrStr(result) << ".");
+    return MMS_ERR;
+}
+
+BResult NetEngine::StartIpcService(const NetOptions &opt)
+{
+    if (mIpcService != nullptr) {
+        NET_LOG_INFO("Net ipc service has already created.");
+        return MMS_OK;
+    }
+
+    mIpcOptions = opt;
+    bool isOobSvr = opt.role != NET_CLIENT;
+
+    WorkerGroupConfig ipcConfig;
+    auto ret = SplitWorkerGroupConfig(opt.workerGroups, opt.workerGroupsCpuSet, ipcConfig, "ipc");
+    ChkTrue(ret == MMS_OK, ret, "Split ipc worker group config failed, ret:" << ret << ".");
+    WorkerGroupConfig notifyConfig;
+    if (opt.notifyWorkerGroupsEnable) {
+        ret = SplitWorkerGroupConfig(opt.notifyWorkerGroups, opt.notifyWorkerGroupsCpuSet, notifyConfig, "notify");
+        ChkTrue(ret == MMS_OK, ret, "Split notify worker group config failed, ret:" << ret << ".");
+    }
+
+    ret = CreateIpcService(opt, isOobSvr, ipcConfig);
+    ChkTrue(ret == MMS_OK, ret, "Create ipc service failed, ret:" << ret << ".");
+    ret = PrepareIpcTls(opt);
+    ChkTrue(ret == MMS_OK, ret, "Prepare ipc tls failed, ret:" << ret << ".");
+    ret = AddIpcWorkerGroups(isOobSvr, ipcConfig, notifyConfig);
+    ChkTrue(ret == MMS_OK, ret, "Add ipc worker groups failed, ret:" << ret << ".");
+
+    return StartCreatedIpcService(opt, isOobSvr);
 }
 
 BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
@@ -414,56 +527,48 @@ BResult NetEngine::AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr)
     return MMS_OK;
 }
 
-BResult NetEngine::StartRpcService(const NetOptions &opt)
+BResult NetEngine::CreateRpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &rpcConfig)
 {
-    int result = MMS_ERR;
-    if (mRpcService != nullptr) {
-        NET_LOG_INFO("Net rpc service has already created.");
-        return MMS_OK;
-    }
-
-    mRpcOptions = opt;
-    bool isOobSvr = opt.role != NET_CLIENT;
-    std::string name = isOobSvr ? RPC_SERVICE_NAME_SERVER : RPC_SERVICE_NAME_CLIENT;
-    std::vector<std::string> groupsVec;
-    StrUtil::Split(opt.workerGroups, ",", groupsVec);
-    std::vector<std::string> groupsCpuSetVec;
-    StrUtil::Split(opt.workerGroupsCpuSet, ",", groupsCpuSetVec);
-    if (groupsVec.size() != groupsCpuSetVec.size()) {
-        NET_LOG_ERROR("Worker group size not equal group cpu set size. Worker group size: " << groupsVec.size() <<
-            ", group cpu set size: " << groupsCpuSetVec.size() << ".");
+    if (UNLIKELY(rpcConfig.groups.empty())) {
+        NET_LOG_ERROR("Rpc worker group config is empty.");
         return MMS_INVALID_PARAM;
     }
 
+    std::string name = isOobSvr ? RPC_SERVICE_NAME_SERVER : RPC_SERVICE_NAME_CLIENT;
     UBSHcomServiceOptions options;
     options.workerGroupMode = opt.isBusyPolling ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
                               UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     options.maxSendRecvDataSize = isOobSvr ? (NO_256 * NO_1024) : (NO_16 * NO_1024);
     options.workerGroupId = 0;
     options.workerThreadPriority = 0;
-    StrUtil::StrToUint16(groupsVec[0], options.workerGroupThreadCount);
-    StrUtil::StrToUint32Pair(groupsCpuSetVec[0], options.workerGroupCpuIdsRange);
+    if (UNLIKELY(!StrUtil::StrToUint16(rpcConfig.groups[0], options.workerGroupThreadCount) ||
+        !StrUtil::StrToUint32Pair(rpcConfig.cpuSets[0], options.workerGroupCpuIdsRange))) {
+        NET_LOG_ERROR("Invalid rpc worker group config.");
+        return MMS_INVALID_PARAM;
+    }
+
     mRpcService = UBSHcomService::Create(opt.protocol, name, options);
-    if (mRpcService == nullptr) {
-        NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
-        return MMS_ERR;
+    if (mRpcService != nullptr) {
+        return MMS_OK;
     }
 
-    if (opt.tlsEnable) {
-        result = PrepareTlsDecrypter(opt);
-        if (result != MMS_OK) {
-            NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
-            return result;
-        }
-    }
+    NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
+    return MMS_ERR;
+}
 
-    for (size_t i = 1; i < groupsVec.size(); i++) {
-        StrUtil::StrToUint16(groupsVec[i], options.workerGroupThreadCount);
-        StrUtil::StrToUint32Pair(groupsCpuSetVec[i], options.workerGroupCpuIdsRange);
-        mRpcService->AddWorkerGroup(i, options.workerGroupThreadCount, options.workerGroupCpuIdsRange);
+BResult NetEngine::AddRpcWorkerGroups(const WorkerGroupConfig &rpcConfig)
+{
+    WorkerGroupConfig extraRpcConfig;
+    if (rpcConfig.groups.size() > NO_1) {
+        extraRpcConfig.groups.assign(rpcConfig.groups.begin() + NO_1, rpcConfig.groups.end());
+        extraRpcConfig.cpuSets.assign(rpcConfig.cpuSets.begin() + NO_1, rpcConfig.cpuSets.end());
     }
+    return AddWorkerGroups(mRpcService, extraRpcConfig, NO_1);
+}
 
-    result = AssignRpcServiceOptions(opt, isOobSvr);
+BResult NetEngine::StartCreatedRpcService(const NetOptions &opt, bool isOobSvr)
+{
+    auto result = AssignRpcServiceOptions(opt, isOobSvr);
     if (result != MMS_OK) {
         NET_LOG_ERROR("Failed to assign rpc service options, result:" << UBSHcomNetErrStr(result) << ".");
         return MMS_ERR;
@@ -476,13 +581,41 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
 
     result = InitMemoryRegister();
-    if (result != MMS_OK) {
-        NET_LOG_ERROR("Failed to init mr allocator, result:" << UBSHcomNetErrStr(result) << ".");
-        return MMS_ERR;
+    if (result == MMS_OK) {
+        NET_LOG_INFO("Mms server start rpc service success, protocol:" << opt.protocol << ".");
+        return MMS_OK;
+    }
+    NET_LOG_ERROR("Failed to init mr allocator, result:" << UBSHcomNetErrStr(result) << ".");
+    return MMS_ERR;
+}
+
+BResult NetEngine::StartRpcService(const NetOptions &opt)
+{
+    if (mRpcService != nullptr) {
+        NET_LOG_INFO("Net rpc service has already created.");
+        return MMS_OK;
     }
 
-    NET_LOG_INFO("Mms server start rpc service success, protocol:" << opt.protocol << ".");
-    return MMS_OK;
+    mRpcOptions = opt;
+    bool isOobSvr = opt.role != NET_CLIENT;
+    WorkerGroupConfig rpcConfig;
+    auto ret = SplitWorkerGroupConfig(opt.workerGroups, opt.workerGroupsCpuSet, rpcConfig, "rpc");
+    ChkTrue(ret == MMS_OK, ret, "Split rpc worker group config failed, ret:" << ret << ".");
+
+    ret = CreateRpcService(opt, isOobSvr, rpcConfig);
+    ChkTrue(ret == MMS_OK, ret, "Create rpc service failed, ret:" << ret << ".");
+
+    if (opt.tlsEnable) {
+        auto result = PrepareTlsDecrypter(opt);
+        if (result != MMS_OK) {
+            NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
+            return result;
+        }
+    }
+
+    ret = AddRpcWorkerGroups(rpcConfig);
+    ChkTrue(ret == MMS_OK, ret, "Add rpc worker groups failed, ret:" << ret << ".");
+    return StartCreatedRpcService(opt, isOobSvr);
 }
 
 int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newChannel, const std::string &payload)

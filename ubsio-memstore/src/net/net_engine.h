@@ -16,6 +16,7 @@
 #include <memory>
 #include <new>
 #include <unordered_map>
+#include <vector>
 #include <arpa/inet.h>
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
@@ -33,6 +34,11 @@ constexpr size_t KEYPASS_MAX_LEN = 10000;
 
 using PrivateKeyCallback =
     std::function<bool(const std::string &, std::string &, void *&, int &, ock::hcom::UBSHcomTLSEraseKeypass &)>;
+
+struct WorkerGroupConfig {
+    std::vector<std::string> groups;
+    std::vector<std::string> cpuSets;
+};
 
 class NetEngine;
 using NetEnginePtr = Ref<NetEngine>;
@@ -528,8 +534,16 @@ public:
 
 private:
     BResult AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr);
+    BResult CreateIpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &ipcConfig);
+    BResult PrepareIpcTls(const NetOptions &opt);
+    BResult AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig,
+                               const WorkerGroupConfig &notifyConfig);
+    BResult StartCreatedIpcService(const NetOptions &opt, bool isOobSvr);
     BResult StartIpcService(const NetOptions &opt);
     BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr);
+    BResult CreateRpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &rpcConfig);
+    BResult AddRpcWorkerGroups(const WorkerGroupConfig &rpcConfig);
+    BResult StartCreatedRpcService(const NetOptions &opt, bool isOobSvr);
     BResult StartRpcService(const NetOptions &opt);
     PrivateKeyCallback CreatePrivateKeyCallback(const NetOptions &options);
     void SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt);
