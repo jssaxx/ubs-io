@@ -26,12 +26,12 @@ typedef int (*ZooGetFn)(zhandle_t *zh, const char *path, int watch, char *buffer
 typedef int (*ZooSetFn)(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version);
 typedef int (*ZooExistsFn)(zhandle_t *zh, const char *path, int watch, struct Stat *stat);
 typedef int (*ZooGetChildrenFn)(zhandle_t *zh, const char *path, int watch, struct String_vector *strings);
-typedef int (*ZooWgetFn)(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
-                         char *buffer, int *bufferLen, struct Stat *stat);
+typedef int (*ZooWgetFn)(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer,
+                         int *bufferLen, struct Stat *stat);
 typedef int (*ZooWgetChildrenFn)(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
                                  struct String_vector *strings);
-typedef zhandle_t* (*ZookeeperInitFn)(const char *host, watcher_fn fn, int recv_timeout,
-                                      const clientid_t *clientid, void *context, int flags);
+typedef zhandle_t *(*ZookeeperInitFn)(const char *host, watcher_fn fn, int recv_timeout, const clientid_t *clientid,
+                                      void *context, int flags);
 typedef int (*ZookeeperCloseFn)(zhandle_t *zh);
 typedef int (*ZooStateFn)(zhandle_t *zh);
 typedef int (*ZooRecvTimeoutFn)(zhandle_t *zh);

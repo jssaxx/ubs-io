@@ -12,11 +12,11 @@
 
 #include "interceptor_path.h"
 
-#include <cstring>
-#include <sstream>
-#include <list>
-#include <climits>
 #include <unistd.h>
+#include <climits>
+#include <cstring>
+#include <list>
+#include <sstream>
 
 namespace ock {
 namespace bio {
@@ -55,5 +55,5 @@ std::string GetCWD()
     }
     return cwd;
 }
-}
-}
+} // namespace bio
+} // namespace ock

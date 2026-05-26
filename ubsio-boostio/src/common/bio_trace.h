@@ -19,7 +19,7 @@ namespace ock {
 namespace bio {
 constexpr uint32_t SERVICE_ID = 0;
 
-enum SdkTracerType {
+enum SdkTracerType{
     SDK_TRACE_START = htracer::GetTraceId(SERVICE_ID, 0U),
     SDK_TRACE_INIT_LOAD_VIEW,
     SDK_TRACE_CREATE_CACHE,
@@ -79,7 +79,7 @@ enum SdkTracerType {
     SDK_TRACE_END,
 };
 
-enum MirrorTracerType {
+enum MirrorTracerType{
     MIRROR_TRACE_START = SDK_TRACE_END,
     MIRROR_TRACE_PUT_RECEIVE_LOCAL,
     MIRROR_TRACE_PUT_RECEIVE_REMOTE,
@@ -129,7 +129,7 @@ enum MirrorTracerType {
     MIRROR_TRACE_END,
 };
 
-enum WcacheTracerType {
+enum WcacheTracerType{
     WCACHE_TRACE_START = MIRROR_TRACE_END,
     WCACHE_TRACE_ALLOC_ID,
     WCACHE_TRACE_CREATE_OBJ,
@@ -168,7 +168,7 @@ enum WcacheTracerType {
     WCACHE_TRACE_END,
 };
 
-enum RcacheTracerType {
+enum RcacheTracerType{
     RCACHE_TRACE_START = WCACHE_TRACE_END,
     RCACHE_TRACE_CREATE_OBJ,
     RCACHE_TRACE_DESTROY_OBJ,
@@ -191,7 +191,7 @@ enum RcacheTracerType {
     RCACHE_TRACE_END,
 };
 
-enum FlowTracerType {
+enum FlowTracerType{
     FLOW_TRACE_START = RCACHE_TRACE_END,
     FLOW_TRACE_CREATE_OBJ,
     FLOW_TRACE_DESTROY_OBJ,
@@ -206,7 +206,7 @@ enum FlowTracerType {
     FLOW_TRACE_END,
 };
 
-enum BdmTracerType {
+enum BdmTracerType{
     BDM_TRACE_START = FLOW_TRACE_END,
     BDM_TRACE_SEG_ALLOC,
     BDM_TRACE_SEG_FREE,
@@ -217,14 +217,14 @@ enum BdmTracerType {
     BDM_TRACE_END,
 };
 
-enum MemTracerType {
+enum MemTracerType{
     MEM_TRACE_START = BDM_TRACE_END,
     MEM_TRACE_SEG_ALLOC,
     MEM_TRACE_SEG_FREE,
     MEM_TRACE_END,
 };
 
-enum UfsTracerType {
+enum UfsTracerType{
     UFS_TRACE_START = MEM_TRACE_END,
     EXTERNAL_TRACE_GET,
     UFS_TRACE_PUT,
@@ -235,7 +235,7 @@ enum UfsTracerType {
     UFS_TRACE_END,
 };
 
-enum NetTracerType {
+enum NetTracerType{
     NET_TRACE_START = UFS_TRACE_END,
     NET_TRACE_IPC_HDL,
     NET_TRACE_SHEDULE,
@@ -255,7 +255,7 @@ enum NetTracerType {
     NET_TRACE_END,
 };
 
-enum CmTracerType {
+enum CmTracerType{
     CM_TRACE_START = NET_TRACE_END,
     CM_TRACE_NOTIFY_NODEVIEW,
     CM_TRACE_NOTIFY_PTVIEW,
@@ -266,6 +266,6 @@ enum CmTracerType {
 #define BIO_TRACE_END(TP_ID, RET_CODE) TRACE_DELAY_END(TP_ID, RET_CODE)
 #define BIO_TRACE_ASYNC_BEGIN(TP_ID) TRACE_ASYNC_DELAY_BEGIN(TP_ID)
 #define BIO_TRACE_ASYNC_END(TP_ID, RET_CODE, START_TIME) TRACE_ASYNC_DELAY_END(TP_ID, RET_CODE, START_TIME)
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BIO_TRACE_H

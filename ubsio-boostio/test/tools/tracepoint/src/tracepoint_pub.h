@@ -19,88 +19,80 @@ extern "C" {
 #endif
 #endif /* __cplusplus */
 
-#define BIO_MAX_TRACEP_NUM   1024
+#define BIO_MAX_TRACEP_NUM 1024
 
-#define BIO_STR_TO_KEY_BASE_NUM   31
+#define BIO_STR_TO_KEY_BASE_NUM 31
 
 #define BIO_MAX_TP_HASH_SHIFT 11
 
 #define BIO_MAX_TP_HASH_SIZE (1 << BIO_MAX_TP_HASH_SHIFT)
 
-#define BIO_TP_LOGID    (0)
+#define BIO_TP_LOGID (0)
 
 #define PID_DEBUG 100
 #define PID_OSP_NULL 0
 #define BIO_GOLDEN_RATIO_PRIME 0x9e37fffffffc0001ULL
-#define BIO_MAX_HT_BITS     64
+#define BIO_MAX_HT_BITS 64
 
-#define BIO_TP_RETURN_CALLBACK_NULL         2
+#define BIO_TP_RETURN_CALLBACK_NULL 2
 
-#define BIO_TP_RETURN_NOT_FOUND                3
+#define BIO_TP_RETURN_NOT_FOUND 3
 
 #if defined(__KERNEL__) || defined(__KAPI__)
-#define BIO_TP_CONFIG_FILE         "/OSM/conf/tracepoint.ini"
-#define BIO_TP_CONFIG_TMP_FILE     "/OSM/conf/tracepoint_tmp.ini"
+#define BIO_TP_CONFIG_FILE "/OSM/conf/tracepoint.ini"
+#define BIO_TP_CONFIG_TMP_FILE "/OSM/conf/tracepoint_tmp.ini"
 #else
-#define BIO_TP_CONFIG_FILE         "./conf/tracepoint.ini"
-#define BIO_TP_CONFIG_TMP_FILE     "./conf/tracepoint_tmp.ini"
+#define BIO_TP_CONFIG_FILE "./conf/tracepoint.ini"
+#define BIO_TP_CONFIG_TMP_FILE "./conf/tracepoint_tmp.ini"
 #endif /*__KERNEL__*/
 
-#define BIO_TP_MAX_CFG_LINE   256
+#define BIO_TP_MAX_CFG_LINE 256
 
-#define BIO_TP_MAX_INIT_ACTIVE_NUM           512
+#define BIO_TP_MAX_INIT_ACTIVE_NUM 512
 
-typedef enum TagBioTpInitActiveE
-{
-	BIO_TP_INIT_ACTIVE_NAME = 0,
-	BIO_TP_INIT_ACTIVE_TYPE = 1,
-	BIO_TP_INIT_ACTIVE_ALIVE = 2,
-	BIO_TP_INIT_ACTIVE_PARAM = 3,
-	BIO_TP_INIT_ACTIVE_BUTT = 4
+typedef enum TagBioTpInitActiveE{
+    BIO_TP_INIT_ACTIVE_NAME = 0,
+    BIO_TP_INIT_ACTIVE_TYPE = 1,
+    BIO_TP_INIT_ACTIVE_ALIVE = 2,
+    BIO_TP_INIT_ACTIVE_PARAM = 3,
+    BIO_TP_INIT_ACTIVE_BUTT = 4
 } BioTpInitActiveE;
 
-typedef struct tagBIO_TP_INIT_ACTIVE_S
-{
+typedef struct tagBIO_TP_INIT_ACTIVE_S {
     int32_t type;
     uint32_t timeAlive;
     uint64_t name;
     char param[BIO_TRACEP_PARAM_SIZE];
 } BioTpInitActive;
 
-typedef struct TagBioTpHashS
-{
+typedef struct TagBioTpHashS {
     struct ListHead stConflictList;
     uint64_t ullKey2;
     uint32_t uiKey1;
     BioTracepointNews stTP;
 } BioTpHashS;
 
-typedef struct TagBioHashItemS
-{
+typedef struct TagBioHashItemS {
     struct ListHead stConflictList;
     uint64_t ullKey2;
     uint32_t uiKey1;
 } BioHashItemS;
 
-typedef struct TagBioHashListS
-{
-    struct ListHead  stBucketList;
+typedef struct TagBioHashListS {
+    struct ListHead stBucketList;
 } BioHashListS;
 
-typedef struct TagBioHashTableS
-{
-    BioHashListS  *pstHashElem;
+typedef struct TagBioHashTableS {
+    BioHashListS *pstHashElem;
     uint32_t uiTableSize;
     uint32_t uiBits;
 } BioHtS;
 
-typedef struct TagKeyS
-{
-    union
-    {
+typedef struct TagKeyS {
+    union {
         uint64_t ull64bits;
         uint32_t ui32bits[2];
-    }unKey64;
+    } unKey64;
 } KeyS;
 
 void BioWalkTracePoint(TpInt32 (*pfn)(BioTracepoints *, void *), void *pParam);

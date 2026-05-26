@@ -10,24 +10,24 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "test_cm.h"
 #include <mockcpp/mockcpp.hpp>
-#include "gtest/gtest.h"
 #include "bio_types.h"
-#include "cm.h"
-#include "securec.h"
-#include "zookeeper.h"
-#include "cm_zkadapter.h"
-#include "cm_config.h"
-#include "common/cm_inner.h"
 #include "client/cm_client_init.h"
 #include "client/cm_client_local.h"
+#include "cm.h"
+#include "cm_config.h"
+#include "cm_zk_api_dl.h"
+#include "cm_zkadapter.h"
+#include "common/cm_inner.h"
+#include "gtest/gtest.h"
+#include "securec.h"
+#include "server/cm_server_init.h"
+#include "server/cm_server_monitor.h"
+#include "server/cm_server_view.h"
 #include "server/pt/cm_pt_calc_fixed_state.h"
 #include "server/pt/cm_pt_store.h"
-#include "server/cm_server_init.h"
-#include "server/cm_server_view.h"
-#include "server/cm_server_monitor.h"
-#include "cm_zk_api_dl.h"
-#include "test_cm.h"
+#include "zookeeper.h"
 
 using namespace ock::bio;
 bool TestCm::gSetup = false;
@@ -46,7 +46,7 @@ void TestCm::TearDown()
     return;
 }
 
-static LocalNodeQueryOpHandle gLocalQuery = { nullptr, nullptr, nullptr };
+static LocalNodeQueryOpHandle gLocalQuery = {nullptr, nullptr, nullptr};
 
 static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQueryOpHandle *handle)
 {
@@ -56,7 +56,7 @@ static int32_t CM_RegLocalNodeQueryOpHandle_Stub(uint16_t poolId, LocalNodeQuery
     return CM_OK;
 }
 
-static NodeListChangeOpHandle gNodeChange = { nullptr, nullptr };
+static NodeListChangeOpHandle gNodeChange = {nullptr, nullptr};
 
 static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListChangeOpHandle *handle)
 {
@@ -65,7 +65,7 @@ static int32_t CM_RegNodeListChangeNotifyHandle_Stub(uint16_t poolId, NodeListCh
     return CM_OK;
 }
 
-static PtViewChangeOpHandle gPtChange = { nullptr, nullptr };
+static PtViewChangeOpHandle gPtChange = {nullptr, nullptr};
 
 static int32_t CM_RegPtViewChangeOpHandle_Stub(uint16_t poolId, PtViewChangeOpHandle *handle)
 {
@@ -156,8 +156,8 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
 
 static void ZooSetDebugLevelMock(ZooLogLevel level) {}
 
-static zhandle_t *ZookeeperInitMock(const char *host, watcher_fn fn, int recv_timeout,
-    const clientid_t *clientid, void *context, int flags)
+static zhandle_t *ZookeeperInitMock(const char *host, watcher_fn fn, int recv_timeout, const clientid_t *clientid,
+                                    void *context, int flags)
 {
     return (zhandle_t *)"zHandle";
 }
@@ -173,7 +173,7 @@ static int ZooRecvTimeoutMock(zhandle_t *zh)
 }
 
 static int ZooCreateMock(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
-    int mode, char *pathBuffer, int pathBufferLen)
+                         int mode, char *pathBuffer, int pathBufferLen)
 {
     strncpy_s(pathBuffer, pathBufferLen - 1, "/cm/meta/nodeid_generator/0", pathBufferLen - 1);
     return ZOK;
@@ -231,10 +231,10 @@ static int ZooSetMock(zhandle_t *zh, const char *path, const char *buffer, int b
 }
 
 static int ZooWgetMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer,
-    int *bufferLen, struct Stat *stat)
+                       int *bufferLen, struct Stat *stat)
 {
     char *result = nullptr;
-    char zkPath[CM_ZNODE_PATH_LEN] = { 0 };
+    char zkPath[CM_ZNODE_PATH_LEN] = {0};
     int ret = strcpy_s(zkPath, CM_ZNODE_PATH_LEN, path);
     if (ret != 0) {
         return ZOK;
@@ -285,7 +285,7 @@ static int ZooDeleteMock(zhandle_t *zh, const char *path, int version)
 
 static std::vector<std::string> gZkGetChildrenFirst;
 static int ZooWgetChildrenMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
-    struct String_vector *strings)
+                               struct String_vector *strings)
 {
     auto it = std::find(gZkGetChildrenFirst.begin(), gZkGetChildrenFirst.end(), path);
     if (it != gZkGetChildrenFirst.end()) {
@@ -346,5 +346,5 @@ void TestCm::Stub()
     ZooDelete = ZooDeleteMock;
     ZooWgetChildren = ZooWgetChildrenMock;
     ZookeeperClose = ZookeeperCloseMock;
-    DeallocateStringVector =  ZooDeallocateStringVectorMock;
+    DeallocateStringVector = ZooDeallocateStringVectorMock;
 }

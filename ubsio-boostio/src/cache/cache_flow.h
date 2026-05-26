@@ -57,7 +57,7 @@ public:
         uint32_t innerTypeP = innerType & CACHE_FLOW_ID_PREFIX_INNER_TYPE_MASK;
 
         return (ptIdP << CACHE_FLOW_ID_PREFIX_PT_ID_SHIFT) | (ptvP << CACHE_FLOW_ID_PREFIX_PT_SN_SHIFT) |
-            (typeP << CACHE_FLOW_ID_PREFIX_TYPE_SHIFT) | (innerTypeP);
+               (typeP << CACHE_FLOW_ID_PREFIX_TYPE_SHIFT) | (innerTypeP);
     }
 
     inline static uint16_t GetPtId(uint64_t flowId)
@@ -67,7 +67,7 @@ public:
     inline static uint64_t GetType(uint64_t flowId)
     {
         return (flowId >> (CACHE_FLOW_ID_PREFIX_SHIFT + CACHE_FLOW_ID_PREFIX_TYPE_SHIFT)) &
-            CACHE_FLOW_ID_PREFIX_TYPE_MASK;
+               CACHE_FLOW_ID_PREFIX_TYPE_MASK;
     }
     inline static uint64_t GetInnerType(uint64_t flowId)
     {
@@ -81,7 +81,7 @@ public:
         return (outPrefix | innerFlowId);
     }
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_CACHE_FLOW_H

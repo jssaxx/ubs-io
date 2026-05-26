@@ -13,10 +13,10 @@
 #ifndef CACHE_OVERLOAD_CTRL_H
 #define CACHE_OVERLOAD_CTRL_H
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <thread>
-#include <atomic>
 
 #include "bio_err.h"
 #include "bio_execution.h"
@@ -27,7 +27,7 @@ constexpr uint32_t MAX_OVERLOAD_STAT_CYCLE_NUM = 64;
 constexpr uint32_t CACHE_OLC_PERCENT_BASE = 100;
 constexpr uint32_t PERCENT_100 = 100;
 
-enum BwStatType {
+enum BwStatType{
     BW_STAT_FRONT_WRITE = 0,
     BW_STAT_EVICT_TO_DISK,
     BW_STAT_BUTT
@@ -57,15 +57,15 @@ struct QuotaHolder {
     uint64_t clientId;
 };
 
-struct  QuotaHolderHash {
-    size_t operator()(const QuotaHolder& holder) const
+struct QuotaHolderHash {
+    size_t operator()(const QuotaHolder &holder) const
     {
         return std::hash<uint64_t>()(static_cast<uint64_t>(holder.nodeId)) ^ std::hash<uint64_t>()(holder.clientId);
     }
 };
 
 struct QuotaHolderEqual {
-    bool operator()(const QuotaHolder& holder1, const QuotaHolder& holder2) const
+    bool operator()(const QuotaHolder &holder1, const QuotaHolder &holder2) const
     {
         return (holder1.nodeId == holder2.nodeId) && (holder1.clientId == holder2.clientId);
     }
@@ -73,9 +73,9 @@ struct QuotaHolderEqual {
 
 class CacheOverloadCtrl {
 public:
-    const uint32_t DEFAULT_ADJUST_QUOTA_CYCLE = 1000UL; // 1s
+    const uint32_t DEFAULT_ADJUST_QUOTA_CYCLE = 1000UL;                         // 1s
     const uint64_t MAX_PRELOAD_QUOTA_SIZE = NO_1 * NO_1024 * NO_1024 * NO_1024; // 1GB
-    const uint64_t MIN_PRELOAD_QUOTA_SIZE = NO_128 * NO_1024 * NO_1024; // 128MB
+    const uint64_t MIN_PRELOAD_QUOTA_SIZE = NO_128 * NO_1024 * NO_1024;         // 128MB
 
     CacheOverloadCtrl() = default;
 
@@ -100,7 +100,7 @@ public:
         return mWriteQuota;
     }
 
-    inline std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual>* GetHolders()
+    inline std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> *GetHolders()
     {
         return &mHolders;
     }
@@ -109,8 +109,9 @@ public:
     {
         WriteLocker<ReadWriteLock> lock(&mLock);
         if (mWriteQuota < allocSize) {
-            LOG_WARN("Cache write quota not enough, remain quota:" << mWriteQuota << ", alloc quota:" << allocSize <<
-                ", holder:" << holder.nodeId << "-" << holder.clientId << ".");
+            LOG_WARN("Cache write quota not enough, remain quota:" << mWriteQuota << ", alloc quota:" << allocSize
+                                                                   << ", holder:" << holder.nodeId << "-"
+                                                                   << holder.clientId << ".");
             return BIO_QUOTA_NOT_ENOUGH;
         }
 
@@ -135,9 +136,10 @@ public:
         }
         // 计算下次申请的期望预期配额资源大小.
         expectAllocSize = GetAdjustWriteQuota(allocSize);
-        LOG_DEBUG("Alloc quota success, alloc quota: " << allocSize << ", holder: " << holder.nodeId << "-" <<
-            holder.clientId << ", remain quota:" << mWriteQuota << ", hold quota:" << iter->second <<
-            ", expect alloc quota:" << expectAllocSize << ".");
+        LOG_DEBUG("Alloc quota success, alloc quota: " << allocSize << ", holder: " << holder.nodeId << "-"
+                                                       << holder.clientId << ", remain quota:" << mWriteQuota
+                                                       << ", hold quota:" << iter->second
+                                                       << ", expect alloc quota:" << expectAllocSize << ".");
         return BIO_OK;
     }
 
@@ -150,8 +152,9 @@ public:
             return;
         }
         iter->second = (iter->second > size) ? iter->second - size : 0;
-        LOG_DEBUG("Release quota success, holder: " << holder.nodeId << "-" << holder.clientId << ", size:" << size <<
-            ", hold quota:" << iter->second << ", proc:" << proc << ", key:" << key << ".");
+        LOG_DEBUG("Release quota success, holder: " << holder.nodeId << "-" << holder.clientId << ", size:" << size
+                                                    << ", hold quota:" << iter->second << ", proc:" << proc
+                                                    << ", key:" << key << ".");
     }
 
     void FreeQuota(uint64_t size, uint32_t proc)
@@ -179,12 +182,12 @@ public:
         if (UINT64_MAX - mWriteQuota >= recycleQuota) {
             mWriteQuota += recycleQuota;
         }
-        LOG_INFO("Recycle quota success, holder: " << holder.nodeId << "-" << holder.clientId << ", recycle quota:" <<
-            recycleQuota << ".");
+        LOG_INFO("Recycle quota success, holder: " << holder.nodeId << "-" << holder.clientId
+                                                   << ", recycle quota:" << recycleQuota << ".");
     }
 
     void Show(uint64_t &vmVec, uint64_t &totalQuota, uint64_t &remainQuota,
-        std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> &holders);
+              std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> &holders);
 
     uint64_t LowWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
     uint64_t MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t evict2DiskBw, uint32_t &proc);
@@ -222,6 +225,6 @@ private:
     uint64_t mAdjustCycleTime = 0;
     uint32_t mAdjustCycle;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // CACHE_OVERLOAD_CTRL_H

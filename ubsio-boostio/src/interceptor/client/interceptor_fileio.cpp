@@ -50,24 +50,24 @@ ssize_t ProxyOperations::PreadInner(int fd, void *buf, size_t count, off_t offse
 
     InterceptorPreadOut *resp = nullptr;
     uint64_t rspLen = 0;
-    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
+    auto ret = InterceptorClientNetService::Instance().SendSync<InterceptorPreadIn, InterceptorPreadOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_READ, request, &resp, rspLen);
     if (UNLIKELY(ret != 0 || resp == nullptr)) {
-        CLOG_ERROR("Send read failed inode:" << request.inode << ", offset:" << request.offset << ", length:" <<
-            request.nbytes << ".");
+        CLOG_ERROR("Send read failed inode:" << request.inode << ", offset:" << request.offset
+                                             << ", length:" << request.nbytes << ".");
         return -1;
     }
 
     const uint64_t headerSize = sizeof(InterceptorPreadOut);
     if (resp->dataLen == 0 || rspLen < headerSize || rspLen - headerSize < resp->dataLen) {
-        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " << sizeof(InterceptorPreadOut) <<
-            " and dataLen: " << resp->dataLen << ".");
+        CLOG_ERROR("rspLen: " << rspLen << " less than the InterceptorPreadOut: " << sizeof(InterceptorPreadOut)
+                              << " and dataLen: " << resp->dataLen << ".");
         free(resp);
         resp = nullptr;
         return -1;
     }
-    CLOG_DEBUG("Read inode:" << request.inode << ", offset:" << request.offset << ", length:" << request.nbytes <<
-        "rsp len:" << resp->dataLen << ".");
+    CLOG_DEBUG("Read inode:" << request.inode << ", offset:" << request.offset << ", length:" << request.nbytes
+                             << "rsp len:" << resp->dataLen << ".");
 
     ret = memcpy_s(buf, count, resp->data, resp->dataLen);
     if (UNLIKELY(ret != 0)) {
@@ -237,11 +237,11 @@ ssize_t ProxyOperations::PwriteSmallInner(int fd, const void *buf, size_t count,
     }
 
     InterceptorPwriteOut resp;
-    ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
+    ret = InterceptorClientNetService::Instance().SendSyncBuff<InterceptorPwriteOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_WRITE, request, reqLen, resp);
     if (UNLIKELY(ret != 0 || resp.dataLen == 0 || resp.dataLen != count)) {
-        CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", req->offset" << request->offset << ", count" <<
-            count << ", rsp len:" << resp.dataLen << ".");
+        CLOG_DEBUG("Write fd:" << fd << ", offset:" << offset << ", req->offset" << request->offset << ", count"
+                               << count << ", rsp len:" << resp.dataLen << ".");
         delete[] tmpPtr;
         tmpPtr = nullptr;
         return -1;
@@ -277,9 +277,11 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
         CLOG_ERROR("Send large write io request failed:" << ret << ".");
         return -1;
     }
-    CLOG_DEBUG("Alloc write large space:" << count << ", location0:" << resp.address.loc.location[0] <<
-        ", location1:" << resp.address.loc.location[1] << ", address0 size:" << resp.address.address[0].size <<
-        ", address1 size:" << resp.address.address[1].size << ", address num:" << resp.address.addressNum << ".");
+    CLOG_DEBUG("Alloc write large space:" << count << ", location0:" << resp.address.loc.location[0]
+                                          << ", location1:" << resp.address.loc.location[1]
+                                          << ", address0 size:" << resp.address.address[0].size
+                                          << ", address1 size:" << resp.address.address[1].size
+                                          << ", address num:" << resp.address.addressNum << ".");
 
     uint64_t totalLen = 0;
     for (uint32_t i = 0; i < resp.address.addressNum; i++) {
@@ -309,8 +311,8 @@ ssize_t ProxyOperations::PwriteLargeInner(int fd, const void *buf, size_t count,
     writeReq.nbytes = count;
     writeReq.address = resp.address;
     InterceptorPwriteOut writeResp;
-    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(INVALID_NID,
-        BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
+    ret = InterceptorClientNetService::Instance().SendSync<InterceptorLargePwriteIn, InterceptorPwriteOut>(
+        INVALID_NID, BIO_OP_INTERCEPTOR_LARGE_WRITE, writeReq, writeResp);
     if (UNLIKELY(ret != 0 || writeResp.dataLen == 0)) {
         return -1;
     }

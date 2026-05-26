@@ -13,9 +13,9 @@
 #ifndef CM_THREADPOOL_H
 #define CM_THREADPOOL_H
 
-#include <stdint.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +27,7 @@ typedef void *(*THREAD_CALL_BACK)(void *arg);
 #define THREAD_POOL_MAX_THREADS 2048
 #define THREAD_POOL_MAX_QUEUE_SIZE 32768
 
-enum {
+enum{
     THREAD_POOL_RUNNING,
     THREAD_POOL_EXIT_DELAY,      // 延迟退出，等待队列任务处理完
     THREAD_POOL_EXIT_IMMEDIATELY // 立即退出

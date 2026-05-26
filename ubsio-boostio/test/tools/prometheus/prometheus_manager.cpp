@@ -98,20 +98,20 @@ void PrometheusManager::UpdateCacheHit()
     }
 
     uint16_t nodeId = UINT16_MAX;
-    double rCacheHitMemRatio = desc.wCacheTotalCount != 0 ?
-                               (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
-    double rCacheHitDiskRatio = desc.wCacheTotalCount != 0 ?
-                                (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
-    double rCacheHitRatio = desc.wCacheTotalCount != 0 ?
-                            (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount : 0;
-    double wCacheHitMemRatio = desc.wCacheHitMemCount != 0 ?
-                               (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
-    double wCacheHitDiskRatio = desc.wCacheHitDiskCount != 0 ?
-                                (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
-    double wCacheHitRatio = desc.wCacheTotalCount != 0 ?
-                            (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount : 0;
-    double backendHitRatio = desc.wCacheTotalCount != 0 ?
-                             (double)desc.backendHitCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitMemRatio =
+        desc.wCacheTotalCount != 0 ? (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitDiskRatio =
+        desc.wCacheTotalCount != 0 ? (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitRatio = desc.wCacheTotalCount != 0 ? (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount :
+                                                         0;
+    double wCacheHitMemRatio =
+        desc.wCacheHitMemCount != 0 ? (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitDiskRatio =
+        desc.wCacheHitDiskCount != 0 ? (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitRatio = desc.wCacheTotalCount != 0 ? (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount :
+                                                         0;
+    double backendHitRatio = desc.wCacheTotalCount != 0 ? (double)desc.backendHitCount / (double)desc.wCacheTotalCount :
+                                                          0;
     double totalCacheHitRatio = rCacheHitRatio + wCacheHitRatio;
 
     UpdateCacheHitRatio(mTotalCacheHitRatios, mTotalCacheHitRatioFamily, nodeId, totalCacheHitRatio);
@@ -125,20 +125,27 @@ void PrometheusManager::UpdateCacheHit()
 
     for (int i = 0; i < nodeNum; i++) {
         nodeId = nodeDesc[i].nodeId;
-        double nodeRCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ?
-                                       (double)nodeDesc[i].rCacheHitMemCount / (double)nodeDesc[i].wCacheTotalCount : 0;
-        double nodeRCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitDiskCount
-                                        / (double)nodeDesc[i].wCacheTotalCount : 0;
-        double nodeRCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitCount
-                                    / (double)nodeDesc[i].wCacheTotalCount : 0;
-        double nodeWCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitMemCount
-                                       / (double)nodeDesc[i].wCacheTotalCount : 0;
-        double nodeWCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitDiskCount
-                                        / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeRCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitMemCount /
+                                                                               (double)nodeDesc[i].wCacheTotalCount :
+                                                                           0;
+        double nodeRCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitDiskCount /
+                                                                                (double)nodeDesc[i].wCacheTotalCount :
+                                                                            0;
+        double nodeRCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                        (double)nodeDesc[i].rCacheHitCount / (double)nodeDesc[i].wCacheTotalCount :
+                                        0;
+        double nodeWCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitMemCount /
+                                                                               (double)nodeDesc[i].wCacheTotalCount :
+                                                                           0;
+        double nodeWCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitDiskCount /
+                                                                                (double)nodeDesc[i].wCacheTotalCount :
+                                                                            0;
         double nodeWCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
-                                    (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+                                        (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount :
+                                        0;
         double nodeBackendHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
-                                     (double)nodeDesc[i].backendHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+                                         (double)nodeDesc[i].backendHitCount / (double)nodeDesc[i].wCacheTotalCount :
+                                         0;
         double nodeTotalCacheHitRatio = nodeRCacheHitRatio + nodeWCacheHitRatio;
 
         UpdateCacheHitRatio(mTotalCacheHitRatios, mTotalCacheHitRatioFamily, nodeId, nodeTotalCacheHitRatio);
@@ -189,10 +196,10 @@ void PrometheusManager::UpdateCacheResource()
 
         double wCacheDiskWaterLever = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
         UpdateCacheMetric(mWCacheDiskWaterLevels, mWCacheDiskWaterLevelFamily, nodeId, wCacheDiskWaterLever);
-        UpdateCacheMetric(mWCacheDiskCapacities, mWCacheDiskCapacityFamily,
-                          nodeId, nodeDesc[i].wCacheDiskCapacity, true);
-        UpdateCacheMetric(mWCacheDiskUsedSizes, mWCacheDiskUsedSizeFamily,
-                          nodeId, nodeDesc[i].wCacheDiskUsedSize, true);
+        UpdateCacheMetric(mWCacheDiskCapacities, mWCacheDiskCapacityFamily, nodeId, nodeDesc[i].wCacheDiskCapacity,
+                          true);
+        UpdateCacheMetric(mWCacheDiskUsedSizes, mWCacheDiskUsedSizeFamily, nodeId, nodeDesc[i].wCacheDiskUsedSize,
+                          true);
 
         double rCacheMemWaterLever = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
         UpdateCacheMetric(mRCacheMemWaterLevels, mRCacheMemWaterLevelFamily, nodeId, rCacheMemWaterLever);
@@ -202,10 +209,10 @@ void PrometheusManager::UpdateCacheResource()
 
         double rCacheDiskWaterLever = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
         UpdateCacheMetric(mRCacheDiskWaterLevels, mRCacheDiskWaterLevelFamily, nodeId, rCacheDiskWaterLever);
-        UpdateCacheMetric(mRCacheDiskCapacities, mRCacheDiskCapacityFamily,
-                          nodeId, nodeDesc[i].rCacheDiskCapacity, true);
-        UpdateCacheMetric(mRCacheDiskUsedSizes, mRCacheDiskUsedSizeFamily,
-                          nodeId, nodeDesc[i].rCacheDiskUsedSize, true);
+        UpdateCacheMetric(mRCacheDiskCapacities, mRCacheDiskCapacityFamily, nodeId, nodeDesc[i].rCacheDiskCapacity,
+                          true);
+        UpdateCacheMetric(mRCacheDiskUsedSizes, mRCacheDiskUsedSizeFamily, nodeId, nodeDesc[i].rCacheDiskUsedSize,
+                          true);
     }
 
     BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
@@ -247,8 +254,9 @@ void PrometheusManager::UpdateTraceData()
             auto iopsData = (static_cast<double>(beginData) / ock::htracer::iopsDiff);
             auto minData = traceData.metrics.min;
             auto maxData = traceData.metrics.max;
-            auto avgData = (goodEndData == 0 ? 0 : static_cast<double>(traceData.metrics.total)
-                                                   / static_cast<double>(goodEndData));
+            auto avgData = (goodEndData == 0 ?
+                                0 :
+                                static_cast<double>(traceData.metrics.total) / static_cast<double>(goodEndData));
             auto total = traceData.metrics.total;
 
             UpdateTraceMetrics(mBegins, mBeginFamily, nodeId, traceName, beginData);
@@ -286,8 +294,7 @@ void PrometheusManager::GetAllNodeTracePoints(std::map<uint16_t, TraceDatabase> 
     GetRemoteTracePoints(remoteIds, nodesTracePoints);
 }
 
-void PrometheusManager::GetTracePointsLocal(uint16_t nodeId,
-                                            std::map<uint16_t, TraceDatabase> &nodesTracePoints)
+void PrometheusManager::GetTracePointsLocal(uint16_t nodeId, std::map<uint16_t, TraceDatabase> &nodesTracePoints)
 {
     if (UNLIKELY(nodeId == UINT16_MAX)) {
         return;
@@ -295,7 +302,7 @@ void PrometheusManager::GetTracePointsLocal(uint16_t nodeId,
 
     GetTracePointsRequest req;
     req.nodeId = nodeId;
-    req.comm = { MESSAGE_MAGIC, 0, 0, gBioClient->GetMirror()->GetLocalNodeInfo().VNodeId(), getpid() };
+    req.comm = {MESSAGE_MAGIC, 0, 0, gBioClient->GetMirror()->GetLocalNodeInfo().VNodeId(), getpid()};
 
     BResult ret = agent::BioClientAgent::Instance()->GetTracePointsLocal(req, nodesTracePoints);
     if (ret != BIO_OK) {
@@ -307,7 +314,7 @@ void PrometheusManager::GetRemoteTracePoints(std::vector<uint16_t> nodeIds,
                                              std::map<uint16_t, TraceDatabase> &nodesTracePoints)
 {
     GetTracePointsRequest req;
-    req.comm = { MESSAGE_MAGIC, 0, 0, gBioClient->GetMirror()->GetLocalNodeInfo().VNodeId(), getpid() };
+    req.comm = {MESSAGE_MAGIC, 0, 0, gBioClient->GetMirror()->GetLocalNodeInfo().VNodeId(), getpid()};
 
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
@@ -317,7 +324,7 @@ void PrometheusManager::GetRemoteTracePoints(std::vector<uint16_t> nodeIds,
         for (auto nodeId : nodeIds) {
             GetTracePointsResponse rsp;
             ret = net::BioClientNet::Instance()->SendSync<GetTracePointsRequest, GetTracePointsResponse>(
-                    static_cast<BioNodeId>(nodeId), BIO_OP_SDK_GET_TRACE_POINTS, req, rsp);
+                static_cast<BioNodeId>(nodeId), BIO_OP_SDK_GET_TRACE_POINTS, req, rsp);
             if (ret != BIO_OK) {
                 CLIENT_LOG_ERROR("Get remote trace points failed, ret: " << ret << ", nodeId: " << nodeId);
                 break;
@@ -357,5 +364,5 @@ bool PrometheusManager::FailHandler(const BResult result, uint64_t startTime, ui
     sleep(sleepTime);
     return isRetry;
 }
-}
-}
+} // namespace bio
+} // namespace ock

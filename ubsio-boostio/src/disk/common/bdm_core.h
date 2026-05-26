@@ -39,7 +39,7 @@ typedef struct {
     uint64_t maxChunkSize;
 } BdmCreatePara;
 
-typedef enum {
+typedef enum{
     BDM_CODE_OK = 0,
     BDM_CODE_ERR = -1,
     BDM_CODE_ERR_IO = 5,
@@ -53,7 +53,7 @@ typedef enum {
     BDM_CODE_SCAN_OFF = -103,
 } BdmRetCode;
 
-typedef enum {
+typedef enum{
     BDM_DISK_STATE_NORMAL = 0,
     BDM_DISK_STATE_FAULT = 1,
     BDM_DISK_STATE_BUTT
@@ -103,7 +103,7 @@ int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCa
 int32_t BdmResetScanPool(uint32_t bdmId);
 
 int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
-    uint64_t *bucketOffset);
+                              uint64_t *bucketOffset);
 
 int32_t BdmInit(void);
 

@@ -10,29 +10,29 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <unistd.h>
-#include <cstdlib>
-#include <iostream>
-#include <algorithm>
-#include <cerrno>
-#include <cstdio>
-#include <functional>
-#include <mutex>
-#include <climits>
-#include <sys/types.h>
+#include "proxy_operations.h"
+#include <fcntl.h>
+#include <linux/fs.h>
+#include <stdarg.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <algorithm>
+#include <cerrno>
+#include <climits>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <stdarg.h>
-#include <linux/fs.h>
-#include "bio_err.h"
+#include <functional>
+#include <iostream>
+#include <mutex>
 #include "bio_def.h"
-#include "interceptor_path.h"
+#include "bio_err.h"
 #include "interceptor_context.h"
 #include "interceptor_log.h"
-#include "proxy_operations.h"
+#include "interceptor_path.h"
 
 using namespace ock::bio;
 
@@ -58,7 +58,7 @@ struct InterceptorProxyOperations *ProxyOperations::GetOperations() noexcept
 {
     static volatile bool initialized = false;
     static std::mutex mutex;
-    static struct InterceptorProxyOperations operations = { nullptr };
+    static struct InterceptorProxyOperations operations = {nullptr};
 
     std::unique_lock<std::mutex> lock(mutex);
     if (!initialized) {
@@ -306,7 +306,7 @@ int32_t ProxyOperations::OpenInner(const char *path, int fd)
         std::shared_ptr<OpenFile> op = nullptr;
         try {
             op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
-        } catch (const std::bad_alloc& e) {
+        } catch (const std::bad_alloc &e) {
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
@@ -334,7 +334,7 @@ int32_t ProxyOperations::OpenInner(int dirFd, const char *path, int fd)
         std::shared_ptr<OpenFile> op = nullptr;
         try {
             op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
-        } catch (const std::bad_alloc& e) {
+        } catch (const std::bad_alloc &e) {
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));
@@ -362,7 +362,7 @@ int32_t ProxyOperations::CreateInner(const char *path, int fd)
         std::shared_ptr<OpenFile> op = nullptr;
         try {
             op = std::make_shared<OpenFile>(fd, statBuf.st_ino);
-        } catch (const std::bad_alloc& e) {
+        } catch (const std::bad_alloc &e) {
             return BIO_ERR;
         }
         CONTEXT.files.Add(fd, std::move(op));

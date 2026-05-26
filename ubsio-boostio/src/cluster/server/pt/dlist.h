@@ -27,10 +27,7 @@ struct DListHead {
 
 typedef struct DListHead DList;
 
-#define D_LIST_HEAD_INIT(name) \
-    {                          \
-        &(name), &(name)       \
-    }
+#define D_LIST_HEAD_INIT(name) {&(name), &(name)}
 
 #define D_LIST_HEAD(name) DList name = D_LIST_HEAD_INIT(name)
 

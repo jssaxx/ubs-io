@@ -12,34 +12,35 @@
 
 #ifndef BOOSTIO_DISK_STATISTIC_H
 #define BOOSTIO_DISK_STATISTIC_H
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 
 namespace ock {
 namespace bio {
-    class DiskStatistic {
-    public:
-        static DiskStatistic &Instance()
-        {
-            static DiskStatistic instance;
-            return instance;
-        }
+class DiskStatistic {
+public:
+    static DiskStatistic &Instance()
+    {
+        static DiskStatistic instance;
+        return instance;
+    }
 
-        inline void IncHitCount()
-        {
-            hitCount.fetch_add(1ULL);
-        }
+    inline void IncHitCount()
+    {
+        hitCount.fetch_add(1ULL);
+    }
 
-        uint64_t GetHitCount()
-        {
-            return hitCount.load();
-        }
+    uint64_t GetHitCount()
+    {
+        return hitCount.load();
+    }
 
-    private:
-        DiskStatistic() : hitCount(0) {}
-    private:
-        std::atomic<uint64_t> hitCount;
-    };
-}
-}
+private:
+    DiskStatistic() : hitCount(0) {}
+
+private:
+    std::atomic<uint64_t> hitCount;
+};
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_DISK_STATISTIC_H

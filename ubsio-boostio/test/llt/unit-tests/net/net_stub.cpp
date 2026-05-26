@@ -10,17 +10,17 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <atomic>
-#include "securec.h"
-#include "bio_log.h"
-#include "bio_err.h"
 #include "net_stub.h"
+#include <atomic>
+#include "bio_err.h"
+#include "bio_log.h"
+#include "securec.h"
 
 namespace ock {
 namespace bio {
 using namespace ock::hcom;
 
-std::atomic<uint64_t> NetStub::connectCount{ 0UL };
+std::atomic<uint64_t> NetStub::connectCount{0UL};
 
 int32_t NetStub::Connect(const std::string &serverUrl, UBSHcomChannelPtr &ch, const UBSHcomConnectOptions &opt)
 {
@@ -82,5 +82,5 @@ int32_t NetStub::Reply(int32_t retCode, void *resp, uint32_t respSize)
     LOG_INFO("Reply stub.");
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

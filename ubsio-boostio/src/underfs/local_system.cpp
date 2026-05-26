@@ -11,18 +11,17 @@
  */
 
 #include "local_system.h"
-#include <iostream>
-#include <fstream>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include "bio_trace.h"
-#include "bio_tracepoint_helper.h"
-#include "bio_str_util.h"
+#include <fstream>
+#include <iostream>
 #include "bio_err.h"
 #include "bio_log.h"
+#include "bio_str_util.h"
+#include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
 #include "bio_types.h"
-
 
 namespace ock {
 namespace bio {
@@ -79,7 +78,9 @@ BResult LocalSystem::Put(const char *key, const char *value, const size_t len)
             prefix += list[i];
             prefix += "/";
             auto ret = mkdir(prefix.c_str(), S_IRWXU | S_IRGRP | S_IXGRP);
-            if (ret != BIO_OK) { return BIO_ERR; }
+            if (ret != BIO_OK) {
+                return BIO_ERR;
+            }
         }
     }
 
@@ -222,12 +223,12 @@ BResult LocalSystem::List(const char *prefix, std::unordered_map<std::string, Ob
                 LOG_ERROR("Fail to stat file " << (keyPath + ptr->d_name) << ", errorno " << errno << ".");
                 continue;
             }
-            ObjStat statInfo = { static_cast<uint32_t>(fileStat.st_size), fileStat.st_ctime };
-            objStat.insert({ ptr->d_name, statInfo });
+            ObjStat statInfo = {static_cast<uint32_t>(fileStat.st_size), fileStat.st_ctime};
+            objStat.insert({ptr->d_name, statInfo});
         }
     }
     closedir(dir);
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

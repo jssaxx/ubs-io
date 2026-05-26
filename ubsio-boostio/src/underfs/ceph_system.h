@@ -20,7 +20,6 @@ namespace ock {
 namespace bio {
 class CephSystem : public FileSystem {
 public:
-
     BResult Init() override;
 
     void Stop() override;
@@ -47,8 +46,7 @@ private:
     std::string mUser;
     std::string mPool;
 };
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_CEPHSYSTEM_H

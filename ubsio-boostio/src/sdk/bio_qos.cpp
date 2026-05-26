@@ -67,8 +67,9 @@ void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allo
     }
     uint64_t oriQuota = iter->second;
     iter->second += allocQuota;
-    CLIENT_LOG_DEBUG("Update quota resource, nodeSet:" << nodeSet << ", alloc quota size:" << allocQuota <<
-        ", held quota form " << oriQuota << " to " << iter->second << ".");
+    CLIENT_LOG_DEBUG("Update quota resource, nodeSet:" << nodeSet << ", alloc quota size:" << allocQuota
+                                                       << ", held quota form " << oriQuota << " to " << iter->second
+                                                       << ".");
 
     // 2. 重置状态
     auto iter1 = mTaskRunFlag.find(nodeSet);
@@ -93,15 +94,16 @@ void BioQuota::UpdateQuotaRes(CmPtInfo *ptEntry, uint16_t nodeSet, uint64_t allo
                 BIO_TRACE_END(SDK_TRACE_QOS_WAKE_BUSY, BIO_OK);
             } else if (LIKELY(iter->second >= entry->size)) {
                 iter->second -= entry->size;
-                CLIENT_LOG_DEBUG("Put go on, nodeSet:" << nodeSet << ", key:" << entry->key << ", size:" <<
-                    entry->size << ", remain quota:" << iter->second << ".");
+                CLIENT_LOG_DEBUG("Put go on, nodeSet:" << nodeSet << ", key:" << entry->key << ", size:" << entry->size
+                                                       << ", remain quota:" << iter->second << ".");
                 BIO_TRACE_START(SDK_TRACE_QOS_WAKE_OK);
                 iter2->second.Pop();
                 entry->Wake(BIO_OK);
                 BIO_TRACE_END(SDK_TRACE_QOS_WAKE_OK, BIO_OK);
             } else {
-                CLIENT_LOG_DEBUG("IO wake execute preload task, nodeSet:" << nodeSet << ", key:" << entry->key <<
-                    ", size:" << entry->size << ", remain quota:" << iter->second << ".");
+                CLIENT_LOG_DEBUG("IO wake execute preload task, nodeSet:" << nodeSet << ", key:" << entry->key
+                                                                          << ", size:" << entry->size
+                                                                          << ", remain quota:" << iter->second << ".");
                 ExecutePreloadTask(ptEntry, nodeSet); // 写资源配额不满则继续启动预取任务.
                 break;
             }
@@ -120,17 +122,19 @@ void BioQuota::RollbackAllocQuotaReq(CmPtInfo *ptEntry, std::vector<uint16_t> no
     BResult ret = BIO_INNER_ERR;
     uint16_t localNid = BioClient::Instance()->GetMirror()->GetLocalNodeInfo().VNodeId();
     for (uint32_t idx = 0; idx < nodeVec.size(); idx++) {
-        FreeQuotaRequest req = { { MESSAGE_MAGIC, ptEntry->ptId, ptEntry->version, localNid, getpid() },
-            mLocalNodeId, mClientId, quotaVec[idx] };
+        FreeQuotaRequest req = {{MESSAGE_MAGIC, ptEntry->ptId, ptEntry->version, localNid, getpid()},
+                                mLocalNodeId,
+                                mClientId,
+                                quotaVec[idx]};
         if (nodeVec[idx] == localNid) {
             ret = agent::BioClientAgent::Instance()->FreeQuota(req);
         } else {
             ret = SendFreeQuotaRemote(nodeVec[idx], req);
         }
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Send free quota resource failed, ret:" << ret << ", dstNid:" << nodeVec[idx]  << ".");
+            CLIENT_LOG_ERROR("Send free quota resource failed, ret:" << ret << ", dstNid:" << nodeVec[idx] << ".");
         } else {
-            CLIENT_LOG_DEBUG("Free quota resource success, dstNid:" << nodeVec[idx]  << ", quota:" << quotaVec[idx]);
+            CLIENT_LOG_DEBUG("Free quota resource success, dstNid:" << nodeVec[idx] << ", quota:" << quotaVec[idx]);
         }
     }
 }
@@ -138,8 +142,8 @@ void BioQuota::RollbackAllocQuotaReq(CmPtInfo *ptEntry, std::vector<uint16_t> no
 BResult BioQuota::SendFreeQuotaRemote(uint16_t nodeId, FreeQuotaRequest &req)
 {
     BResult hdlRet = BIO_INNER_ERR;
-    auto ret = net::BioClientNet::Instance()->SendSync<FreeQuotaRequest, BResult>(nodeId,
-        BIO_OP_SDK_FREE_QUOTA, req, hdlRet);
+    auto ret =
+        net::BioClientNet::Instance()->SendSync<FreeQuotaRequest, BResult>(nodeId, BIO_OP_SDK_FREE_QUOTA, req, hdlRet);
     if (ret == BIO_OK && hdlRet != BIO_OK) {
         ret = hdlRet;
     }
@@ -148,9 +152,9 @@ BResult BioQuota::SendFreeQuotaRemote(uint16_t nodeId, FreeQuotaRequest &req)
 
 BResult BioQuota::SendAllocQuotaRemote(uint16_t dstNid, AllocQuotaRequest &req, uint64_t &expectPreloadSize)
 {
-    AllocQuotaResponse rsp = { 0 };
-    auto ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(dstNid,
-        BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
+    AllocQuotaResponse rsp = {0};
+    auto ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(
+        dstNid, BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
     expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);
     return ret;
 }
@@ -164,8 +168,8 @@ void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
     std::vector<uint64_t> successQuotaVec;
 
     uint64_t preloadSize = mPreloadSize;
-    AllocQuotaRequest req = { { MESSAGE_MAGIC, ptEntry->ptId, ptEntry->version, localNid, getpid() },
-        mLocalNodeId, mClientId, preloadSize };
+    AllocQuotaRequest req = {
+        {MESSAGE_MAGIC, ptEntry->ptId, ptEntry->version, localNid, getpid()}, mLocalNodeId, mClientId, preloadSize};
     BIO_TRACE_START(SDK_TRACE_QOS_PRELOAD);
     for (auto &item : ptEntry->copys) {
         uint16_t dstNid = item.nodeId;
@@ -184,8 +188,8 @@ void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
     BIO_TRACE_END(SDK_TRACE_QOS_PRELOAD, ret);
 
     mPreloadSize = (ret == BIO_OK) ? expectPreloadSize : QUOTA_MIN_PRELOAD_SIZE;
-    CLIENT_LOG_DEBUG("Dynamic adjust preload size, ret:" << ret << ", preload quota form " << preloadSize << " to" <<
-        mPreloadSize << ".");
+    CLIENT_LOG_DEBUG("Dynamic adjust preload size, ret:" << ret << ", preload quota form " << preloadSize << " to"
+                                                         << mPreloadSize << ".");
     if (UNLIKELY(ret != BIO_OK)) {
         RollbackAllocQuotaReq(ptEntry, successNodeVec, successQuotaVec);
         WakeForce(nodeSet, false);
@@ -199,8 +203,8 @@ BResult BioQuota::Initialize(uint32_t scene)
     // 1. 获取流控的配置信息
     auto ret = agent::BioClientAgent::Instance()->GetLocalQuotaInfo(scene, mEnable, mPreloadSize);
     if (ret != BIO_OK) {
-        CLIENT_LOG_ERROR("Get local qos info failed, ret:" << ret << ", nodeId:" << mLocalNodeId << ", clientId" <<
-            mClientId << ".");
+        CLIENT_LOG_ERROR("Get local qos info failed, ret:" << ret << ", nodeId:" << mLocalNodeId << ", clientId"
+                                                           << mClientId << ".");
         return ret;
     }
 
@@ -218,8 +222,8 @@ BResult BioQuota::Initialize(uint32_t scene)
         }
     }
 
-    CLIENT_LOG_INFO("Initialize bio quota success, enable:" << mEnable << ", preload size:" << mPreloadSize <<
-        ", nid:" << mLocalNodeId << ", cid:" << mClientId << ".");
+    CLIENT_LOG_INFO("Initialize bio quota success, enable:" << mEnable << ", preload size:" << mPreloadSize << ", nid:"
+                                                            << mLocalNodeId << ", cid:" << mClientId << ".");
     return BIO_OK;
 }
 

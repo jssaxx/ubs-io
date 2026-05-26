@@ -13,18 +13,16 @@
 #ifndef BIO_CLIENT_LOG_H
 #define BIO_CLIENT_LOG_H
 
-#include <cstdio>
-#include <cstdint>
-#include <iostream>
-#include <sstream>
 #include <sys/time.h>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <thread>
+#include "bio_file_util.h"
 #include "bio_log.h"
 #include "bio_tracepoint_helper.h"
-#include "bio_file_util.h"
 
 namespace ock {
 namespace bio {
@@ -32,7 +30,7 @@ using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
 
 class BioClientLog {
 public:
-    enum class Level {
+    enum class Level{
         LOG_LEVEL_TRACE = 0,
         LOG_LEVEL_DEBUG = 1,
         LOG_LEVEL_INFO = 2,
@@ -82,7 +80,9 @@ public:
                 return -1;
             }
         }
-        auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
+        auto logFunc = [](int level, const char *message) {
+            Logger::gInstance->Log(level, message);
+        };
         func = logFunc;
         return 0;
     }
@@ -153,6 +153,6 @@ private:
 #define CLIENT_LOG_INFO(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_INFO), args)
 #define CLIENT_LOG_WARN(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_WARN), args)
 #define CLIENT_LOG_ERROR(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_ERROR), args)
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

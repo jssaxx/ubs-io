@@ -13,11 +13,11 @@
 #ifndef BDM_COMMON_H
 #define BDM_COMMON_H
 
-#include <string.h>
-#include <stdbool.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,7 +64,7 @@ extern "C" {
 #endif
 
 #ifndef ROUND_UP
-#define ROUND_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
+#define ROUND_UP(x, align) (((x) + (align)-1) & ~((align)-1))
 #endif
 
 #ifndef ROUND_DOWN
@@ -119,7 +119,7 @@ extern "C" {
 #define BDM_SPIN_INIT pthread_spin_init
 #define BDM_SPIN_LOCK pthread_spin_lock
 #define BDM_SPIN_UNLOCK pthread_spin_unlock
-#define BDM_SPIN_DESTROY  pthread_spin_destroy
+#define BDM_SPIN_DESTROY pthread_spin_destroy
 
 #define BDM_RWLOCK_T pthread_rwlock_t
 #define BDM_RWLOCK_INIT pthread_rwlock_init
@@ -130,7 +130,7 @@ extern "C" {
 
 #define BDM_LOG_BUF_LEN 512UL
 
-typedef enum {
+typedef enum{
     BDM_LOG_TRACE = 0,
     BDM_LOG_DEBUG,
     BDM_LOG_INFO,
@@ -143,7 +143,6 @@ typedef enum {
 #ifndef BDM_LOG_FILENAME
 #define BDM_LOG_FILENAME (strrchr(__FILE__, '/') ? (strrchr(__FILE__, '/') + 1) : __FILE__)
 #endif
-
 
 void BdmLogFunc(int logLevel, const char *funcName, int line, const char *fileName, const char *format, ...);
 

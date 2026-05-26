@@ -23,7 +23,7 @@ extern "C" {
 #define CM_NET_STATE(state) (((state) == NET_STATE_NORMAL) ? "norm" : "fault")
 #define CM_DISK_STATE(state) (((state) == DISK_STATE_NORMAL) ? "norm" : "fault")
 
-typedef enum {
+typedef enum{
     CM_SERVER_MASTER,
     CM_SERVER_SLAVE
 } CmServerRole;
@@ -34,7 +34,7 @@ typedef struct {
     uint16_t nodeList[];
 } CmNodeIdList;
 
-typedef enum {
+typedef enum{
     CM_EVENT_NET = 0,
     CM_EVENT_DISK = 1,
     CM_EVENT_PT_FINISH = 2,

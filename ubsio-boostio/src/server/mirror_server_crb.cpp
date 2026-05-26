@@ -13,10 +13,10 @@
 #include "mirror_server_crb.h"
 
 #include <utility>
-#include "mirror_server.h"
+#include "bio_def.h"
 #include "bio_monotonic.h"
 #include "bio_trace.h"
-#include "bio_def.h"
+#include "mirror_server.h"
 
 namespace ock {
 namespace bio {
@@ -311,13 +311,13 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
         LOG_WARN("Send sync data req fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
     }
-    LOG_INFO("Sync data succeed:" << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+    LOG_INFO("Sync data succeed, ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     ret = JobExpiredClear(ptInfo);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
-    LOG_INFO("Expired clear succeed:" << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+    LOG_INFO("Expired clear succeed, ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     return BIO_OK;
 }
@@ -336,8 +336,8 @@ BResult MirrorServerCrb::SendSyncDataReq(CmPtInfo &ptInfo)
             ret = BIO_INNER_RETRY;
         }
         if (UNLIKELY(ret != BIO_OK && ret != BIO_INNER_RETRY)) {
-            LOG_ERROR("Send sync sync data failed:" << ret << ", ptId:" << ptInfo.ptId << ", version:" <<
-                ptInfo.version);
+            LOG_ERROR("Send sync sync data failed:" << ret << ", ptId:" << ptInfo.ptId
+                                                    << ", version:" << ptInfo.version);
             return ret;
         }
         if (ret == BIO_INNER_RETRY) {
@@ -352,5 +352,5 @@ BResult MirrorServerCrb::SendSyncDataReq(CmPtInfo &ptInfo)
 
     return ret;
 }
-}
-}
+} // namespace bio
+} // namespace ock

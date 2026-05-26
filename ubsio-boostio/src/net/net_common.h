@@ -13,17 +13,17 @@
 #ifndef NET_COMMON_H
 #define NET_COMMON_H
 
-#include <map>
 #include <functional>
+#include <map>
 #include <utility>
 
+#include "bio_def.h"
+#include "bio_err.h"
+#include "bio_ref.h"
+#include "bio_str_util.h"
+#include "bio_types.h"
 #include "hcom/hcom_service.h"
 #include "hcom/hcom_service_context.h"
-#include "bio_err.h"
-#include "bio_types.h"
-#include "bio_ref.h"
-#include "bio_def.h"
-#include "bio_str_util.h"
 #include "net_log.h"
 
 namespace ock {
@@ -50,7 +50,7 @@ struct Callback {
     Callback(CbFunc func, void *ctx) : cb(std::move(func)), cbCtx(ctx) {}
 };
 
-enum class ConnectMode {
+enum class ConnectMode{
     CONNECT_IPC = 0,
     CONNECT_RPC = 1,
 };
@@ -68,7 +68,7 @@ union NetNode {
     NetNode(uint32_t inNid, uint32_t inPid) : nid(inNid), pid(inPid) {}
     explicit NetNode(uint64_t p) : whole(p) {}
     NetNode(const NetNode &inNid) : nid(inNid.nid), pid(inNid.pid) {}
-    NetNode &operator = (const NetNode &inNid)
+    NetNode &operator=(const NetNode &inNid)
     {
         whole = inNid.whole;
         return *this;
@@ -85,16 +85,27 @@ struct ConnectInfo {
 
     ConnectInfo() = default;
     ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : srcId(srcId, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times), isSelfPoll(false)
-    {}
+        : srcId(srcId, srcPid),
+          peerId(nid, 0),
+          ip(std::move(ip)),
+          port(port),
+          retryTimes(times),
+          isSelfPoll(false)
+    {
+    }
     ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid)
-        : srcId(srcId, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3), isSelfPoll(false)
-    {}
+        : srcId(srcId, srcPid),
+          peerId(nid, 0),
+          port(0),
+          retryTimes(NO_3),
+          isSelfPoll(false)
+    {
+    }
 };
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
 
-enum class Role {
+enum class Role{
     NET_CLIENT = 0,
     NET_SERVER = 1,
     NET_BUTT = 2,
@@ -112,13 +123,13 @@ struct NetOptions {
     Role role = Role::NET_BUTT;                          /* net service role */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
-    bool enableTls = false;                              /* tls switch */
-    std::string certificationPath;                       /* certification path */
-    std::string caCerPath;                               /* caCer path */
-    std::string caCrlPath;                               /* caCrl path */
-    std::string privateKeyPath;                          /* private key path */
-    std::string privateKeyPassword;                      /* private key password */
-    std::string decrypterLibPath;                        /* decrypter lib path */
+    bool enableTls = false;         /* tls switch */
+    std::string certificationPath;  /* certification path */
+    std::string caCerPath;          /* caCer path */
+    std::string caCrlPath;          /* caCrl path */
+    std::string privateKeyPath;     /* private key path */
+    std::string privateKeyPassword; /* private key password */
+    std::string decrypterLibPath;   /* decrypter lib path */
 
     NetOptions() = default;
     ~NetOptions() = default;
@@ -132,8 +143,8 @@ struct NetOptions {
     }
 
     void FillNetTlsConfigs(bool enable, const std::string &certPath, const std::string &tlsCaCerPath,
-        const std::string &tlsCaCrlPath, const std::string &priKeyPath, const std::string &priKeyPw,
-        const std::string &decLibPath)
+                           const std::string &tlsCaCrlPath, const std::string &priKeyPath, const std::string &priKeyPw,
+                           const std::string &decLibPath)
     {
         enableTls = enable;
         certificationPath = certPath;
@@ -223,7 +234,7 @@ struct NetMrInfo {
 
 class NetEngine;
 using NetEnginePtr = Ref<NetEngine>;
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // NET_COMMON_H

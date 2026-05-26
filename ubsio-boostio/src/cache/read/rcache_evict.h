@@ -88,7 +88,7 @@ struct RCacheEvictWorkerParam {
     uint32_t index;
     RCacheEvictPtr rCacheEvict;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_RCACHE_EVICT_H

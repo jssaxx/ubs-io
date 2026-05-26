@@ -10,21 +10,21 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <mockcpp/mockcpp.hpp>
+#include "test_disk.h"
 #include <semaphore.h>
-#include "securec.h"
-#include "tracepoint.h"
-#include "bio_mock.h"
-#include "bio_file_util.h"
-#include "bio_types.h"
+#include <mockcpp/mockcpp.hpp>
+#include "bdm_allocator.h"
 #include "bdm_core.h"
 #include "bdm_disk.h"
-#include "bio_err.h"
-#include "bio_log.h"
 #include "bdm_threadpool.h"
+#include "bio_err.h"
+#include "bio_file_util.h"
+#include "bio_log.h"
+#include "bio_mock.h"
+#include "bio_types.h"
 #include "ngx_rbtree.h"
-#include "bdm_allocator.h"
-#include "test_disk.h"
+#include "securec.h"
+#include "tracepoint.h"
 
 using namespace ock::bio;
 
@@ -47,7 +47,7 @@ void TestDisk::TearDown()
 
 void TestDisk::Stub()
 {
-    MOCKER_CPP(&FileUtil::GetDiskCapacity, int64_t(*)(std::string & diskPath)).stubs().will(returnValue(1073741824));
+    MOCKER_CPP(&FileUtil::GetDiskCapacity, int64_t(*)(std::string &diskPath)).stubs().will(returnValue(1073741824));
 }
 
 struct AsyncTaskCtx {
@@ -304,7 +304,7 @@ TEST_F(TestDisk, test_disk_alloc_case_return_fail)
     uint64_t bucketOffset = 0UL;
     uint64_t len = 0UL;
     uint64_t chunkId = 11UL;
-    auto ret = BdmAlloc(bdmId, bucketId, bucketOffset, BDM_MAX_CHUNK_LENGTH+1, &chunkId);
+    auto ret = BdmAlloc(bdmId, bucketId, bucketOffset, BDM_MAX_CHUNK_LENGTH + 1, &chunkId);
     EXPECT_EQ(ret, BDM_CODE_INVALID_PARAM);
 
     ret = BdmAlloc(bdmId, bucketId, bucketOffset, len, nullptr);
@@ -377,7 +377,7 @@ TEST_F(TestDisk, test_disk_thread_destroy)
     EXPECT_EQ(ret, BDM_CODE_ERR);
 
     int someData = 1;
-    void* ctx = &someData;
+    void *ctx = &someData;
     BDM_BATCH_CTX_S batchCtx;
     batchCtx.batchHandle = nullptr;
     batchCtx.batchCtx = ctx;

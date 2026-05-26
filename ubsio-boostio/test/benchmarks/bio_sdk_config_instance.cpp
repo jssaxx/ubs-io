@@ -11,8 +11,8 @@
  */
 
 #include "bio_sdk_config_instance.h"
-#include "bio_log.h"
 #include "bio_ip_util.h"
+#include "bio_log.h"
 
 namespace ock {
 namespace bio {
@@ -103,5 +103,5 @@ BResult BioSdkConfig::Initialize(const std::string &homePath)
     mInited = true;
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

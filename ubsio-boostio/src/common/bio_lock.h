@@ -13,9 +13,9 @@
 #ifndef BOOSTIO_BIO_LOCK_H
 #define BOOSTIO_BIO_LOCK_H
 
-#include <mutex>
-#include <atomic>
 #include <pthread.h>
+#include <atomic>
+#include <mutex>
 
 namespace ock {
 namespace bio {
@@ -25,9 +25,9 @@ public:
     ~Lock() = default;
 
     Lock(const Lock &) = delete;
-    Lock &operator = (const Lock &) = delete;
+    Lock &operator=(const Lock &) = delete;
     Lock(Lock &&) = delete;
-    Lock &operator = (Lock &&) = delete;
+    Lock &operator=(Lock &&) = delete;
 
     inline void DoLock()
     {
@@ -49,9 +49,9 @@ public:
     ~RecursiveLock() = default;
 
     RecursiveLock(const RecursiveLock &) = delete;
-    RecursiveLock &operator = (const RecursiveLock &) = delete;
+    RecursiveLock &operator=(const RecursiveLock &) = delete;
     RecursiveLock(RecursiveLock &&) = delete;
-    RecursiveLock &operator = (RecursiveLock &&) = delete;
+    RecursiveLock &operator=(RecursiveLock &&) = delete;
 
     inline void DoLock()
     {
@@ -78,9 +78,9 @@ public:
     }
 
     ReadWriteLock(const ReadWriteLock &) = delete;
-    ReadWriteLock &operator = (const ReadWriteLock &) = delete;
+    ReadWriteLock &operator=(const ReadWriteLock &) = delete;
     ReadWriteLock(ReadWriteLock &&) = delete;
-    ReadWriteLock &operator = (ReadWriteLock &&) = delete;
+    ReadWriteLock &operator=(ReadWriteLock &&) = delete;
 
     inline void LockRead()
     {
@@ -107,9 +107,9 @@ public:
     ~SpinLock() = default;
 
     SpinLock(const SpinLock &) = delete;
-    SpinLock &operator = (const SpinLock &) = delete;
+    SpinLock &operator=(const SpinLock &) = delete;
     SpinLock(SpinLock &&) = delete;
-    SpinLock &operator = (SpinLock &&) = delete;
+    SpinLock &operator=(SpinLock &&) = delete;
 
     inline void TryLock()
     {
@@ -118,8 +118,7 @@ public:
 
     inline void Lock()
     {
-        while (mFlag.test_and_set(std::memory_order_acquire)) {
-        }
+        while (mFlag.test_and_set(std::memory_order_acquire)) {}
     }
 
     inline void UnLock()
@@ -131,7 +130,8 @@ private:
     std::atomic_flag mFlag = ATOMIC_FLAG_INIT;
 };
 
-template <class T> class Locker {
+template <class T>
+class Locker {
 public:
     explicit Locker(T *lock) : mLock(lock)
     {
@@ -148,15 +148,16 @@ public:
     }
 
     Locker(const Locker &) = delete;
-    Locker &operator = (const Locker &) = delete;
+    Locker &operator=(const Locker &) = delete;
     Locker(Locker &&) = delete;
-    Locker &operator = (Locker &&) = delete;
+    Locker &operator=(Locker &&) = delete;
 
 private:
     T *mLock;
 };
 
-template <class T> class ReadLocker {
+template <class T>
+class ReadLocker {
 public:
     explicit ReadLocker(T *lock) : mLock(lock)
     {
@@ -173,15 +174,16 @@ public:
     }
 
     ReadLocker(const ReadLocker &) = delete;
-    ReadLocker &operator = (const ReadLocker &) = delete;
+    ReadLocker &operator=(const ReadLocker &) = delete;
     ReadLocker(ReadLocker &&) noexcept = delete;
-    ReadLocker &operator = (ReadLocker &&) noexcept = delete;
+    ReadLocker &operator=(ReadLocker &&) noexcept = delete;
 
 private:
     T *mLock;
 };
 
-template <class T> class WriteLocker {
+template <class T>
+class WriteLocker {
 public:
     explicit WriteLocker(T *lock) : mLock(lock)
     {
@@ -198,16 +200,16 @@ public:
     }
 
     WriteLocker(const WriteLocker &) = delete;
-    WriteLocker &operator = (const WriteLocker &) = delete;
+    WriteLocker &operator=(const WriteLocker &) = delete;
     WriteLocker(WriteLocker &&) noexcept = delete;
-    WriteLocker &operator = (WriteLocker &&) noexcept = delete;
+    WriteLocker &operator=(WriteLocker &&) noexcept = delete;
 
 private:
     T *mLock;
 };
 #define GUARD(lLock, alias) Locker<Lock> __l##alias(lLock)
 #define RECURSIVE_GUARD(mylock) Locker<RecursiveLock> __locker##mylock(mylock)
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif

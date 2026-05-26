@@ -69,10 +69,10 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    std::atomic<uint64_t> mNextFlowId{ 0 };
+    std::atomic<uint64_t> mNextFlowId{0};
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_FLOW_ID_ALLOCATOR_H

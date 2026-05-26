@@ -44,8 +44,7 @@ static void *CmClientNodeEventHandle(void *arg)
     return NULL;
 }
 
-static int32_t CmClientNodeEventReport(uint16_t poolId, uint16_t nodeId,
-                                       uint16_t eventType)
+static int32_t CmClientNodeEventReport(uint16_t poolId, uint16_t nodeId, uint16_t eventType)
 {
     CmNodeEvent *nodeEvent = (CmNodeEvent *)malloc(sizeof(CmNodeEvent));
     if (nodeEvent == NULL) {
@@ -83,8 +82,8 @@ static void *CmClientPtEventHandle(void *arg)
     return NULL;
 }
 
-static int32_t CmClientPtEventReport(uint16_t poolId, uint16_t nodeId, uint16_t eventType,
-                                     uint16_t ptNum, PtFinish *eventList)
+static int32_t CmClientPtEventReport(uint16_t poolId, uint16_t nodeId, uint16_t eventType, uint16_t ptNum,
+                                     PtFinish *eventList)
 {
     CmPtEvent *ptEvent = (CmPtEvent *)malloc(sizeof(CmPtEvent) + sizeof(CmPtFinish) * ptNum);
     if (ptEvent == NULL) {
@@ -185,7 +184,7 @@ static int32_t ProcessDiskList(DiskList *diskList, DiskState state, uint16_t dis
 
     if (isNewDisk) {
         diskList->list[diskList->num].diskId = diskId;
-        diskList->list[diskList->num].state  = state;
+        diskList->list[diskList->num].state = state;
         diskList->num++;
         return TRUE;
     } else {
@@ -206,8 +205,7 @@ static int32_t ProcessDiskList(DiskList *diskList, DiskState state, uint16_t dis
     }
 }
 
-int32_t CM_UpdateNodeInfo(uint16_t poolId, DiskState state, uint16_t diskId,
-                          bool isNewDisk)
+int32_t CM_UpdateNodeInfo(uint16_t poolId, DiskState state, uint16_t diskId, bool isNewDisk)
 {
     NodeInfo nodeInfo;
     int32_t ret = CmClientEventCheck(poolId, CM_EVENT_ADD_DISK);

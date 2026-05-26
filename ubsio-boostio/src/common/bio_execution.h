@@ -13,11 +13,11 @@
 #ifndef BOOSTIO_BIO_EXECUTION_SERVICE_H
 #define BOOSTIO_BIO_EXECUTION_SERVICE_H
 
+#include <unistd.h>
 #include <atomic>
 #include <functional>
 #include <mutex>
 #include <thread>
-#include <unistd.h>
 #include <vector>
 #include "bio_def.h"
 #include "bio_log.h"
@@ -27,7 +27,7 @@
 
 namespace ock {
 namespace bio {
-enum RunnableType {
+enum RunnableType{
     NORMAL = 0,
     STOP = 1,
 };
@@ -37,9 +37,9 @@ enum RunnableType {
  */
 class Runnable {
 public:
-    Runnable() : mTask{ nullptr } {}
+    Runnable() : mTask{nullptr} {}
 
-    explicit Runnable(const std::function<void()> &task) : mTask{ task } {}
+    explicit Runnable(const std::function<void()> &task) : mTask{task} {}
     virtual ~Runnable() = default;
 
     virtual void Run()
@@ -63,7 +63,7 @@ private:
 
 private:
     RunnableType mType = RunnableType::NORMAL;
-    std::function<void()> mTask{ nullptr };
+    std::function<void()> mTask{nullptr};
 
     DEFINE_REF_COUNT_VARIABLE
 
@@ -184,7 +184,8 @@ private:
           mStarted(false),
           mStopped(false),
           mStartedThreadNum(0)
-    {}
+    {
+    }
 
     void RunInThread(int16_t cpuId);
     void DoRunnable(bool &flag);
@@ -324,6 +325,6 @@ inline void ExecutorService::RunInThread(int16_t cpuId)
     }
     LOG_INFO("Thread for executor service <" << threadName << "> cpuId " << cpuId << "> exiting");
 }
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_BIO_EXECUTION_SERVICE_H

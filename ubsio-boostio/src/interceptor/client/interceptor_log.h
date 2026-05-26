@@ -13,11 +13,9 @@
 #ifndef INTERCEPTOR_LOG_H
 #define INTERCEPTOR_LOG_H
 
-#include <cstdio>
-#include <cstdint>
-#include <iostream>
-#include <sstream>
 #include <sys/time.h>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -28,7 +26,7 @@ typedef void (*LogFunc)(int32_t level, const char *logBuf);
 
 class InterceptorLog {
 public:
-    enum class Level {
+    enum class Level{
         LOG_LEVEL_DEBUG = 0,
         LOG_LEVEL_INFO = 1,
         LOG_LEVEL_WARN = 2,
@@ -80,20 +78,20 @@ private:
 #ifndef INTERCEPTOR_LOG_FILENAME
 #define INTERCEPTOR_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
-#define INTERCEPTOR_LOG(level, args)                                                                                \
-    do {                                                                                                            \
-        if ((level) >= InterceptorLog::Instance()->GetMinLogLevel()) {                                              \
-            std::ostringstream oss;                                                                                 \
-            oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] " << \
-                args;                                                                                               \
-            InterceptorLog::Instance()->Log(level, oss);                                                            \
-        }                                                                                                           \
+#define INTERCEPTOR_LOG(level, args)                                                                             \
+    do {                                                                                                         \
+        if ((level) >= InterceptorLog::Instance()->GetMinLogLevel()) {                                           \
+            std::ostringstream oss;                                                                              \
+            oss << "[INTERCEPTOR " << __FUNCTION__ << ":" << INTERCEPTOR_LOG_FILENAME << ":" << __LINE__ << "] " \
+                << args;                                                                                         \
+            InterceptorLog::Instance()->Log(level, oss);                                                         \
+        }                                                                                                        \
     } while (0)
 
 #define CLOG_DEBUG(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_DEBUG), args)
 #define CLOG_INFO(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_INFO), args)
 #define CLOG_WARN(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_WARN), args)
 #define CLOG_ERROR(args) INTERCEPTOR_LOG(static_cast<int>(InterceptorLog::Level::LOG_LEVEL_ERROR), args)
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

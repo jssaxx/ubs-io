@@ -13,11 +13,11 @@
 #ifndef BOOSTIO_INTERCEPTOR_SERVER_H
 #define BOOSTIO_INTERCEPTOR_SERVER_H
 
-#include <utility>
 #include <cstdint>
+#include <utility>
 
-#include "bio_err.h"
 #include "bio_client_net.h"
+#include "bio_err.h"
 
 namespace ock {
 namespace bio {
@@ -44,6 +44,6 @@ public:
 private:
     BResult RegisterOpcode();
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_INTERCEPTOR_SERVER_H

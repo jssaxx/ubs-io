@@ -15,11 +15,11 @@
 
 #include <functional>
 #include <memory>
-#include "file_system.h"
+#include "bio_ref.h"
 #include "ceph_system.h"
+#include "file_system.h"
 #include "hdfs_system.h"
 #include "local_system.h"
-#include "bio_ref.h"
 
 namespace ock {
 namespace bio {
@@ -45,15 +45,21 @@ private:
     static const std::unordered_map<std::string, FileSystemCreator> &GetFileSystemMap()
     {
         static const std::unordered_map<std::string, FileSystemCreator> fileSystemMap = {
-            {CEPH_SYSTEM, []() { return std::make_shared<CephSystem>(); }},
-            {HDFS_SYSTEM, []() { return std::make_shared<HdfsSystem>(); }},
-            {LOCAL_SYSTEM, []() { return std::make_shared<LocalSystem>(); }}
-        };
+            {CEPH_SYSTEM,
+             []() {
+                 return std::make_shared<CephSystem>();
+             }},
+            {HDFS_SYSTEM,
+             []() {
+                 return std::make_shared<HdfsSystem>();
+             }},
+            {LOCAL_SYSTEM, []() {
+                 return std::make_shared<LocalSystem>();
+             }}};
         return fileSystemMap;
     }
 };
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_FILESYSTEMFACTORY_H

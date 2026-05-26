@@ -13,11 +13,11 @@
 #ifndef BIO_CONFIGURATION_H
 #define BIO_CONFIGURATION_H
 
-#include <map>
-#include <string>
 #include <iostream>
-#include <sstream>
+#include <map>
 #include <mutex>
+#include <sstream>
+#include <string>
 
 #include "bio_config_kv_reader.h"
 #include "bio_config_validator.h"
@@ -29,11 +29,11 @@ class Configuration;
 
 using ConfigurationPtr = Ref<Configuration>;
 
-constexpr const char* CONFIG_PATH = "/etc/boostio/bio.conf";
-constexpr const char* CONFIG_PATH_BAK = "/etc/boostio/bio.conf.bak";
-constexpr const char* CONFIG_PATH_BAK_INIT = "/etc/boostio/bio.conf.bak.init";
+constexpr const char *CONFIG_PATH = "/etc/boostio/bio.conf";
+constexpr const char *CONFIG_PATH_BAK = "/etc/boostio/bio.conf.bak";
+constexpr const char *CONFIG_PATH_BAK_INIT = "/etc/boostio/bio.conf.bak.init";
 
-enum class ConfValueType {
+enum class ConfValueType{
     VINT = 0,
     VFLOAT = 1,
     VSTRING = 2,
@@ -69,7 +69,8 @@ public:
         return true;
     }
 
-    template <class T> static bool ReadConf(const std::string &path, bool stopIfInvalid = true)
+    template <class T>
+    static bool ReadConf(const std::string &path, bool stopIfInvalid = true)
     {
         KVReader kv;
         bool ret = ReadConf(path, kv);
@@ -91,8 +92,8 @@ public:
             std::string value;
             kv.GetI(i, key, value);
             if (!conf->SetWithTypeAutoConvert(key, value) && stopIfInvalid) {
-                std::cout << "Failed to set a key/value pair for key<" << key << "> value<" << value << ">" <<
-                    std::endl;
+                std::cout << "Failed to set a key/value pair for key<" << key << "> value<" << value << ">"
+                          << std::endl;
                 return false;
             }
         }
@@ -100,7 +101,8 @@ public:
         return true;
     }
 
-    template <class T> static ConfigurationPtr GetInstance()
+    template <class T>
+    static ConfigurationPtr GetInstance()
     {
         static ConfigurationPtr gInstance = nullptr;
         static std::mutex gLock;
@@ -142,12 +144,12 @@ public:
 
     void AddIntConf(const std::pair<std::string, int> &, const ValidatorPtr &validator = nullptr, ValidatorTag tag = 0);
     void AddFloatConf(const std::pair<std::string, float> &, const ValidatorPtr &validator = nullptr,
-        ValidatorTag tag = 0);
+                      ValidatorTag tag = 0);
     void AddStrConf(const std::pair<std::string, std::string> &, const ValidatorPtr &validator = nullptr,
-        ValidatorTag tag = 0);
+                    ValidatorTag tag = 0);
     void AddBoolConf(const std::pair<std::string, bool> &pair);
     void AddLongConf(const std::pair<std::string, long> &, const ValidatorPtr &validator = nullptr,
-        ValidatorTag tag = 0);
+                     ValidatorTag tag = 0);
 
     void AddValidator(const std::string &key, const ValidatorPtr &validator, ValidatorTag tag);
 
@@ -210,8 +212,8 @@ inline bool Configuration::SetWithTypeAutoConvert(const std::string &key, const 
             mIntItems[key] = static_cast<int32_t>(tmp);
         } else if (valueType == ConfValueType::VFLOAT) {
             if (!StrUtil::StrToFloat(value, mFloatItems[key])) {
-                std::cout << "<" << key << ">, it was empty or in wrong type, it should be a float number." <<
-                    std::endl;
+                std::cout << "<" << key << ">, it was empty or in wrong type, it should be a float number."
+                          << std::endl;
                 return false;
             }
         } else if (valueType == ConfValueType::VSTRING) {
@@ -334,7 +336,7 @@ inline void Configuration::AddValidator(const std::string &key, const ValidatorP
 }
 
 inline void Configuration::AddIntConf(const std::pair<std::string, int> &pair, const ValidatorPtr &validator,
-    ValidatorTag tag)
+                                      ValidatorTag tag)
 {
     mIntItems[pair.first] = pair.second;
     mValueTypes[pair.first] = ConfValueType::VINT;
@@ -342,7 +344,7 @@ inline void Configuration::AddIntConf(const std::pair<std::string, int> &pair, c
 }
 
 inline void Configuration::AddFloatConf(const std::pair<std::string, float> &pair, const ValidatorPtr &validator,
-    ValidatorTag tag)
+                                        ValidatorTag tag)
 {
     mFloatItems[pair.first] = pair.second;
     mValueTypes[pair.first] = ConfValueType::VFLOAT;
@@ -350,7 +352,7 @@ inline void Configuration::AddFloatConf(const std::pair<std::string, float> &pai
 }
 
 inline void Configuration::AddStrConf(const std::pair<std::string, std::string> &pair, const ValidatorPtr &validator,
-    ValidatorTag tag)
+                                      ValidatorTag tag)
 {
     // check nullptr
     mStrItems[pair.first] = pair.second;
@@ -365,7 +367,7 @@ inline void Configuration::AddBoolConf(const std::pair<std::string, bool> &pair)
 }
 
 inline void Configuration::AddLongConf(const std::pair<std::string, long> &pair, const ValidatorPtr &validator,
-    ValidatorTag tag)
+                                       ValidatorTag tag)
 {
     mLongItems[pair.first] = pair.second;
     mValueTypes[pair.first] = ConfValueType::VLONG;
@@ -373,7 +375,7 @@ inline void Configuration::AddLongConf(const std::pair<std::string, long> &pair,
 }
 
 inline void Configuration::ValidateOneType(const std::string &key, const ValidatorPtr &validator,
-    const ConfValueType &vType, std::vector<std::string> &errors)
+                                           const ConfValueType &vType, std::vector<std::string> &errors)
 {
     // find the configured value according to the type
     if (vType == ConfValueType::VSTRING) {
@@ -498,7 +500,7 @@ inline void Configuration::Dump(KVReader &reader)
         reader.SetItem(item.first, std::to_string(item.second));
     }
 }
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BIO_CONFIGURATION_H

@@ -40,11 +40,11 @@ public:
     static void LongValueErrnoCallback(BioTracepointParam *user, long *value, long set, int err) noexcept;
     static void BoolValueCallback(BioTracepointParam *user, bool *value, bool set) noexcept;
     static void NoProcessCallback(BioTracepointParam *user) noexcept;
-    static void PointerValueCallback(BioTracepointParam *user, void** value, void* set) noexcept;
-    static void PointerValueResetCallback(BioTracepointParam *user, void** value) noexcept;
+    static void PointerValueCallback(BioTracepointParam *user, void **value, void *set) noexcept;
+    static void PointerValueResetCallback(BioTracepointParam *user, void **value) noexcept;
 };
-}
-}
-}
+} // namespace tp
+} // namespace bio
+} // namespace ock
 
 #endif // BIO_TP_COMMON_H

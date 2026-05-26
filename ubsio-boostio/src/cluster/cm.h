@@ -13,17 +13,17 @@
 #ifndef BOOSTIO_BIO_CM_H
 #define BOOSTIO_BIO_CM_H
 
-#include <string>
-#include <vector>
-#include <map>
 #include <atomic>
 #include <functional>
+#include <map>
 #include <sstream>
+#include <string>
+#include <vector>
 
-#include "bio_log.h"
-#include "bio_ref.h"
 #include "bio_err.h"
 #include "bio_lock.h"
+#include "bio_log.h"
+#include "bio_ref.h"
 #include "bio_types.h"
 
 #include "cm_c.h"
@@ -31,7 +31,7 @@
 
 namespace ock {
 namespace bio {
-enum CmRole : uint16_t {
+enum CmRole : uint16_t{
     ROLE_CMM = 1,
     ROLE_DATA = 2,
     ROLE_TOGETHER = 3,
@@ -55,13 +55,13 @@ struct CmOptions {
     CmGroups groups;
 };
 
-enum CmStatus : uint16_t {
+enum CmStatus : uint16_t{
     CM_INIT = 0,
     CM_NORMAL = 1,
     CM_UPDATING = 2,
 };
 
-enum CmNodeStatus : uint16_t {
+enum CmNodeStatus : uint16_t{
     CM_NODE_NORMAL = 0,
     CM_NODE_FAULT = 1,
 };
@@ -111,30 +111,35 @@ union CmNodeId {
 };
 
 struct CmNodeIdCmp {
-    bool operator () (const CmNodeId &first, const CmNodeId &second) const
+    bool operator()(const CmNodeId &first, const CmNodeId &second) const
     {
         return first.whole < second.whole;
     }
 };
 
 struct CmNodeInfo {
-    CmNodeId id{ 0 };
+    CmNodeId id{0};
     std::string ip;
-    uint16_t port{ 0 };
-    CmNodeStatus status{ CM_NODE_NORMAL };
+    uint16_t port{0};
+    CmNodeStatus status{CM_NODE_NORMAL};
     std::vector<CmDiskInfo> disks;
 
     CmNodeInfo() = default;
 
     CmNodeInfo(CmNodeId id, std::string ip, uint16_t port, CmNodeStatus stat, std::vector<CmDiskInfo> ds)
-        : id(id), ip(std::move(ip)), port(port), status(stat), disks(std::move(ds))
-    {}
+        : id(id),
+          ip(std::move(ip)),
+          port(port),
+          status(stat),
+          disks(std::move(ds))
+    {
+    }
 
     std::string ToString() const
     {
         std::ostringstream oss;
-        oss << "node " << id.ToString() << ", ip " << ip.c_str() << ", port " << port << ", status " << status <<
-            ", disknum " << disks.size();
+        oss << "node " << id.ToString() << ", ip " << ip.c_str() << ", port " << port << ", status " << status
+            << ", disknum " << disks.size();
         for (uint32_t idx = 0; idx < disks.size(); idx++) {
             oss << ", disk " << disks[idx].diskId << ", status " << disks[idx].diskStatus;
         }
@@ -142,7 +147,7 @@ struct CmNodeInfo {
     }
 };
 
-enum CmCopyState : uint16_t {
+enum CmCopyState : uint16_t{
     CM_COPY_INIT = 0,
     CM_COPY_RUNNING = 1,
     CM_COPY_DOWN = 2,
@@ -157,7 +162,7 @@ struct CmPtCopy {
     CmCopyState state;
 };
 
-enum CmPtState : uint16_t {
+enum CmPtState : uint16_t{
     CM_PT_INIT = 0,
     CM_PT_NORMAL = 1,
     CM_PT_DEGRADE_LOSS1 = 2,
@@ -185,7 +190,8 @@ struct CmPtInfo {
           masterNodeId(mNid),
           masterDiskId(mDid),
           copys(std::move(cpy))
-    {}
+    {
+    }
 
     void Clone(const CmPtInfo &ptInfo)
     {
@@ -204,8 +210,8 @@ struct CmPtInfo {
     std::string ToString() const
     {
         std::ostringstream oss;
-        oss << "ptid " << ptId << ", version " << version << ", state " << state << ", master " << masterNodeId <<
-            ", copynum " << copys.size();
+        oss << "ptid " << ptId << ", version " << version << ", state " << state << ", master " << masterNodeId
+            << ", copynum " << copys.size();
         for (uint32_t idx = 0; idx < copys.size(); idx++) {
             oss << ", node " << copys[idx].nodeId << ", disk " << copys[idx].diskId << ", state " << copys[idx].state;
         }
@@ -402,27 +408,27 @@ public:
     CmNodeHandler mNodeHandler;
     CmPtHandler mPtHandler;
 
-    bool mIsUpgrade{ false };
+    bool mIsUpgrade{false};
 
-    CmNodeId mNodeId{ NO_MAX_VALUE32 };
+    CmNodeId mNodeId{NO_MAX_VALUE32};
 
-    std::atomic<CmStatus> mStatus = { CM_INIT };
+    std::atomic<CmStatus> mStatus = {CM_INIT};
 
-    uint64_t mNodeVersion{ 0 };
+    uint64_t mNodeVersion{0};
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> mNodeInfos;
 
-    uint64_t mPtVersion{ 0 };
+    uint64_t mPtVersion{0};
     std::map<uint16_t, CmPtInfo> mPtInfos;
-    std::atomic<uint16_t> mPtInfoIdx = { 0 };
+    std::atomic<uint16_t> mPtInfoIdx = {0};
 
     std::vector<uint16_t> mLocals;
-    std::atomic<uint16_t> mLocalIdx = { 0 };
+    std::atomic<uint16_t> mLocalIdx = {0};
 
     ReadWriteLock mLock;
-    bool mStarted{ false };
-    bool mInited{ false };
+    bool mStarted{false};
+    bool mInited{false};
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_BIO_CM_H

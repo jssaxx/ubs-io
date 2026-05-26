@@ -10,13 +10,13 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "ceph_system.h"
 #include <cstring>
 #include "bio_config_instance.h"
 #include "bio_log.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
 #include "underfs_config.h"
-#include "ceph_system.h"
 
 namespace ock {
 namespace bio {
@@ -70,8 +70,7 @@ BResult CephSystem::Init()
         return BIO_UFS_IOERR;
     }
 
-    LOG_INFO("UnderFS initialize succeed, cluster:" << mCluster << ", user:" << mUser <<
-        ", pool:" << mPool << ".");
+    LOG_INFO("UnderFS initialize succeed, cluster:" << mCluster << ", user:" << mUser << ", pool:" << mPool << ".");
     mInited = true;
     return BIO_OK;
 }
@@ -208,7 +207,7 @@ BResult CephSystem::List(const char *prefix, std::unordered_map<std::string, Cep
                 LOG_ERROR("Fail to stat object " << entry << ", ret: " << ret << ".");
                 continue;
             }
-            objStat.insert({ entry, objectStat });
+            objStat.insert({entry, objectStat});
         }
     }
     rados_nobjects_list_close(listCtx);
@@ -228,5 +227,5 @@ void CephSystem::LoadCephConfig()
     mUser = config.cephConfig.user;
     mPool = config.cephConfig.pools.at(0);
 }
-}
-}
+} // namespace bio
+} // namespace ock

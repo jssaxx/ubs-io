@@ -18,7 +18,7 @@
 
 namespace ock {
 namespace htracer {
-enum HResult {
+enum HResult{
     RET_OK = 0,
     RET_ERR = -1,
     RET_INVALID_PARAM = -2,
@@ -65,6 +65,6 @@ constexpr int32_t GetTraceId(uint32_t serviceId, uint32_t innerId)
 {
     return ((serviceId << SERVICE_SHIFT) | (innerId & 0xFFFF));
 }
-}
-}
+} // namespace htracer
+} // namespace ock
 #endif // HTRACER_H

@@ -14,8 +14,8 @@
 #define BOOSTIO_CACHE_DEF_H
 
 #include <cstdint>
-#include <functional>
 #include <ctime>
+#include <functional>
 #include "bio.h"
 #include "slice.h"
 
@@ -31,13 +31,13 @@ using CheckServiceState = std::function<bool()>;
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
 using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
 
-enum CacheType : uint16_t {
+enum CacheType : uint16_t{
     WRITE_CACHE = 0,
     READ_CACHE = 1,
     CACHE_BUTT
 };
 
-enum RealIoStrategy : uint32_t {
+enum RealIoStrategy : uint32_t{
     WRITE_DEFAULT = 0,
     WRITE_MEM_BACK = 1,
     WRITE_DISK_BACK = 2,
@@ -58,16 +58,27 @@ struct CacheAttr {
     WriteStrategy strategy;
 
     CacheAttr(uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : ioStrategy(WRITE_DEFAULT), mTenantId(id), affinity(aff), strategy(str)
-    {}
+        : ioStrategy(WRITE_DEFAULT),
+          mTenantId(id),
+          affinity(aff),
+          strategy(str)
+    {
+    }
     CacheAttr(RealIoStrategy iostr, uint64_t id, AffinityStrategy aff, WriteStrategy str)
-        : ioStrategy(iostr), mTenantId(id), affinity(aff), strategy(str)
-    {}
+        : ioStrategy(iostr),
+          mTenantId(id),
+          affinity(aff),
+          strategy(str)
+    {
+    }
     CacheAttr(CacheAttr &other)
-        : ioStrategy(other.ioStrategy), mTenantId(other.mTenantId), affinity(other.affinity),
-        strategy(other.strategy)
-    {}
-    inline CacheAttr &operator = (const CacheAttr &other)
+        : ioStrategy(other.ioStrategy),
+          mTenantId(other.mTenantId),
+          affinity(other.affinity),
+          strategy(other.strategy)
+    {
+    }
+    inline CacheAttr &operator=(const CacheAttr &other)
     {
         ioStrategy = other.ioStrategy;
         mTenantId = other.mTenantId;
@@ -81,7 +92,7 @@ struct CacheObjStat {
     uint64_t size; // value size
     time_t time;   // modify time;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_CACHE_DEF_H

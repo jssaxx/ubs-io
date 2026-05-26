@@ -10,16 +10,16 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <iostream>
+#include "bio_client_agent.h"
 #include <dlfcn.h>
-#include "bio_functions.h"
+#include <iostream>
 #include "bio_client_log.h"
-#include "message_op.h"
-#include "bio_trace.h"
-#include "bio_tracepoint_helper.h"
 #include "bio_client_net.h"
 #include "bio_crc_util.h"
-#include "bio_client_agent.h"
+#include "bio_functions.h"
+#include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
+#include "message_op.h"
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -100,20 +100,19 @@ BResult BioClientAgent::InitOperation()
     if ((getCliFlag = reinterpret_cast<GetBioServerCliFlagFuncPtr>(LoadFunction("GetCliFlag"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((getPrometheusToggle = reinterpret_cast<GetBioServerPromethuesToggleFuncPtr>
-        (LoadFunction("GetPrometheusToggle"))) == nullptr) {
+    if ((getPrometheusToggle =
+             reinterpret_cast<GetBioServerPromethuesToggleFuncPtr>(LoadFunction("GetPrometheusToggle"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((getListenAddress = reinterpret_cast<GetBioServerListenAddressFuncPtr>
-        (LoadFunction("GetPrometheusListenAddress"))) == nullptr) {
+    if ((getListenAddress = reinterpret_cast<GetBioServerListenAddressFuncPtr>(
+             LoadFunction("GetPrometheusListenAddress"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((getTimeOut = reinterpret_cast<GetBioServertimeOutFuncPtr>
-    (LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
+    if ((getTimeOut = reinterpret_cast<GetBioServertimeOutFuncPtr>(LoadFunction("GetNegoWorkIoTimeOut"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((getScrapeIntervalSec = reinterpret_cast<GetBioServerScrapeIntervalSecFuncPtr>
-    (LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
+    if ((getScrapeIntervalSec = reinterpret_cast<GetBioServerScrapeIntervalSecFuncPtr>(
+             LoadFunction("GetPrometheusScrapeIntervalSec"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getNetEngineOp = reinterpret_cast<GetBioServerNetEngineFuncPtr>(LoadFunction("GetBioServerNet"))) == nullptr) {
@@ -173,12 +172,12 @@ BResult BioClientAgent::InitOperation()
     if ((cacheHitOp = reinterpret_cast<GetCacheHitLocalFuncPtr>(LoadFunction("GetCacheHitLocal"))) == nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((cacheResourceOp = reinterpret_cast<CalcCacheResourceLocalFuncPtr>
-        (LoadFunction("CalcCacheResourceLocal"))) == nullptr) {
+    if ((cacheResourceOp = reinterpret_cast<CalcCacheResourceLocalFuncPtr>(LoadFunction("CalcCacheResourceLocal"))) ==
+        nullptr) {
         return BIO_INNER_ERR;
     }
-    if ((getTracePointsOp = reinterpret_cast<GetTracePointsLocalFuncPtr>
-        (LoadFunction("GetTracePointsLocal"))) == nullptr) {
+    if ((getTracePointsOp = reinterpret_cast<GetTracePointsLocalFuncPtr>(LoadFunction("GetTracePointsLocal"))) ==
+        nullptr) {
         return BIO_INNER_ERR;
     }
 
@@ -200,10 +199,10 @@ void *BioClientAgent::LoadFunction(const char *name)
 
 BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid)
 {
-    GetLocalNidRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    GetLocalNidRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}};
     GetLocalNidResponse rsp;
-    auto ret = net::BioClientNet::Instance()->SendSync<GetLocalNidRequest, GetLocalNidResponse>(INVALID_NID,
-        BIO_OP_SDK_GET_NODE_INFO, req, rsp);
+    auto ret = net::BioClientNet::Instance()->SendSync<GetLocalNidRequest, GetLocalNidResponse>(
+        INVALID_NID, BIO_OP_SDK_GET_NODE_INFO, req, rsp);
     if (ret != BIO_OK) {
         return ret;
     }
@@ -212,15 +211,15 @@ BResult BioClientAgent::SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId
         return BIO_INNER_ERR;
     }
     protocol = rsp.protocol;
-    localNid = { rsp.groupId, rsp.nodeId };
+    localNid = {rsp.groupId, rsp.nodeId};
     return BIO_OK;
 }
 
 BResult BioClientAgent::SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp)
 {
-    FileLocationQueryReq req = { masterPtId, slavePtId };
-    return net::BioClientNet::Instance()->SendSync<FileLocationQueryReq, FileLocationQueryRsp>(INVALID_NID,
-        BIO_OP_SDK_GET_NODE_INFO_BY_PT, req, rsp);
+    FileLocationQueryReq req = {masterPtId, slavePtId};
+    return net::BioClientNet::Instance()->SendSync<FileLocationQueryReq, FileLocationQueryRsp>(
+        INVALID_NID, BIO_OP_SDK_GET_NODE_INFO_BY_PT, req, rsp);
 }
 
 bool BioClientAgent::GetConfigCrcFlag()
@@ -259,7 +258,7 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
     if (mMode == CONVERGENCE) {
         GetLocalNidResponse getLocalNidRsp{};
         ret = getLocalNidOp(&getLocalNidRsp);
-        localNid = { getLocalNidRsp.groupId, getLocalNidRsp.nodeId };
+        localNid = {getLocalNidRsp.groupId, getLocalNidRsp.nodeId};
         mLocalNid = localNid;
         protocol = getLocalNidRsp.protocol;
     } else {
@@ -272,14 +271,14 @@ BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
 BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t &preloadSize)
 {
     BResult ret = BIO_OK;
-    QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    QueryQuotaRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}};
     QueryQuotaResponse rsp;
     BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, 0);
     if (mMode == CONVERGENCE) {
         ret = getQuotaInfoOp(&req, &rsp);
     } else {
-        ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
-            BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
+        ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(
+            INVALID_NID, BIO_OP_SDK_GET_QUOTA_INFO, req, rsp);
     }
     if (ret == BIO_OK) {
         if (rsp.preloadSize > NO_128 * IO_SIZE_1M) { // quota初始预取大小最大不超过128MB.
@@ -296,12 +295,12 @@ BResult BioClientAgent::GetLocalQuotaInfo(uint32_t scene, bool &enable, uint64_t
 BResult BioClientAgent::AllocQuota(AllocQuotaRequest &req, uint64_t &expectPreloadSize)
 {
     BResult ret = BIO_INNER_ERR;
-    AllocQuotaResponse rsp = { 0 };
+    AllocQuotaResponse rsp = {0};
     if (mMode == CONVERGENCE) {
         ret = allocQuotaOp(&req, &rsp);
     } else {
-        ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(INVALID_NID,
-            BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
+        ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(
+            INVALID_NID, BIO_OP_SDK_ALLOC_QUOTA, req, rsp);
     }
     expectPreloadSize = std::min<uint64_t>(expectPreloadSize, rsp.exceptQuota);
     if (expectPreloadSize > NO_1024 * IO_SIZE_1M) {
@@ -318,7 +317,7 @@ BResult BioClientAgent::FreeQuota(FreeQuotaRequest &req)
     } else {
         BResult hdlRet = BIO_INNER_ERR;
         ret = net::BioClientNet::Instance()->SendSync<FreeQuotaRequest, BResult>(INVALID_NID, BIO_OP_SDK_FREE_QUOTA,
-            req, hdlRet);
+                                                                                 req, hdlRet);
         if (ret == BIO_OK && hdlRet != BIO_OK) {
             ret = hdlRet;
         }
@@ -327,7 +326,7 @@ BResult BioClientAgent::FreeQuota(FreeQuotaRequest &req)
 }
 
 BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
-    std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
+                                           std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeView)
 {
     BResult ret = BIO_OK;
     int32_t flag = 0;
@@ -336,13 +335,13 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
     uint32_t retryCnt = 0;
 
     do {
-        QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
+        QueryNodeViewRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}, progressBar};
         QueryNodeViewResponse rsp;
         if (mMode == CONVERGENCE) {
             ret = getNodeViewOp(&req, &rsp);
         } else {
-            ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(INVALID_NID,
-                BIO_OP_SDK_GET_NODE_VIEW, req, rsp);
+            ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(
+                INVALID_NID, BIO_OP_SDK_GET_NODE_VIEW, req, rsp);
         }
         if (ret != BIO_OK) {
             nodeView.clear();
@@ -364,12 +363,13 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
             std::vector<CmDiskInfo> disks;
             for (uint32_t j = 0; j < rsp.desc[i].num; j++) {
                 disks.push_back(
-                    { rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus) });
+                    {rsp.desc[i].diskDesc[j].diskId, static_cast<CmDiskStatus>(rsp.desc[i].diskDesc[j].diskStatus)});
             }
             rsp.desc[i].ip[IP_MAX_SIZE - 1] = '\0';
-            nodeView.insert(std::make_pair(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId),
-                CmNodeInfo(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId), rsp.desc[i].ip, rsp.desc[i].port,
-                static_cast<CmNodeStatus>(rsp.desc[i].status), disks)));
+            nodeView.insert(
+                std::make_pair(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId),
+                               CmNodeInfo(CmNodeId(rsp.desc[i].groupId, rsp.desc[i].nodeId), rsp.desc[i].ip,
+                                          rsp.desc[i].port, static_cast<CmNodeStatus>(rsp.desc[i].status), disks)));
         }
         flag = rsp.flag;
         progressBar += rsp.num;
@@ -390,13 +390,13 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
     static uint32_t maxRetryCnt = NO_1024;
     uint32_t retryCnt = 0;
     do {
-        QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
+        QueryPtViewRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}, progressBar};
         QueryPtViewResponse rsp;
         if (mMode == CONVERGENCE) {
             ret = getPtViewOp(&req, &rsp);
         } else {
-            ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(INVALID_NID,
-                BIO_OP_SDK_QUERY_PT_VIEW, req, rsp);
+            ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(
+                INVALID_NID, BIO_OP_SDK_QUERY_PT_VIEW, req, rsp);
         }
         if (ret != BIO_OK) {
             ptView.clear();
@@ -413,11 +413,13 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
         for (uint32_t i = 0; i < rsp.num; i++) {
             std::vector<CmPtCopy> copys;
             for (uint32_t j = 0; j < rsp.copyNum; j++) {
-                copys.push_back({ rsp.desc[i].copys[j].nodeId, rsp.desc[i].copys[j].diskId,
-                    static_cast<CmCopyState>(rsp.desc[i].copys[j].state) });
+                copys.push_back({rsp.desc[i].copys[j].nodeId, rsp.desc[i].copys[j].diskId,
+                                 static_cast<CmCopyState>(rsp.desc[i].copys[j].state)});
             }
-            ptView.insert(std::make_pair(rsp.desc[i].ptId, CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId,
-                static_cast<CmPtState>(rsp.desc[i].state), rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
+            ptView.insert(std::make_pair(
+                rsp.desc[i].ptId,
+                CmPtInfo(rsp.desc[i].version, rsp.desc[i].ptId, static_cast<CmPtState>(rsp.desc[i].state),
+                         rsp.desc[i].masterNodeId, rsp.desc[i].masterDiskId, copys)));
         }
         flag = rsp.flag;
         progressBar += rsp.num;
@@ -431,33 +433,33 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
 }
 
 BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId,
-    bool &isDegrade)
+                                                   bool &isDegrade)
 {
     BResult ret = BIO_OK;
     CreateFlowRequest req;
     if (opType == 0) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, 0, false };
+        req = {{MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid()}, opType, 0, false};
     } else if (opType == 1) {
-        req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, opType, flowId, isDegrade };
+        req = {{MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid()}, opType, flowId, isDegrade};
     }
     CreateFlowResponse rsp;
     static uint32_t createFlowTimeout = NO_60;
     uint64_t startTime = Monotonic::TimeSec();
     do {
-        ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(INVALID_NID,
-            BIO_OP_SDK_CREATE_FLOW, req, rsp);
+        ret = net::BioClientNet::Instance()->SendSync<CreateFlowRequest, CreateFlowResponse>(
+            INVALID_NID, BIO_OP_SDK_CREATE_FLOW, req, rsp);
         uint64_t retryTime = Monotonic::TimeSec() - startTime;
         if (UNLIKELY(ret == BIO_NOT_READY && retryTime < createFlowTimeout)) {
-            CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:" << ret << ", nodeId:" <<
-                mLocalNid.VNodeId() << ", ptId:" << ptId << ".");
+            CLIENT_LOG_WARN("Remote cache service not ready, need retry, ret:"
+                            << ret << ", nodeId:" << mLocalNid.VNodeId() << ", ptId:" << ptId << ".");
             sleep(NO_3);
         } else {
             break;
         }
     } while (ret == BIO_NOT_READY);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << mLocalNid.VNodeId() <<
-            ", ptId:" << ptId << ".");
+        CLIENT_LOG_ERROR("Send sync create flow request failed, ret:" << ret << ", nodeId:" << mLocalNid.VNodeId()
+                                                                      << ", ptId:" << ptId << ".");
         return ret;
     }
 
@@ -472,13 +474,13 @@ BResult BioClientAgent::SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t p
 
 BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
 {
-    DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowId };
+    DestroyFlowRequest req = {{MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid()}, flowId};
     DestroyFlowResponse rsp;
-    BResult ret = net::BioClientNet::Instance()->SendSync<DestroyFlowRequest, DestroyFlowResponse>(INVALID_NID,
-        BIO_OP_SDK_DESTROY_FLOW, req, rsp);
+    BResult ret = net::BioClientNet::Instance()->SendSync<DestroyFlowRequest, DestroyFlowResponse>(
+        INVALID_NID, BIO_OP_SDK_DESTROY_FLOW, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send sync destroy flow request failed:" << ret << ", nodeId:" << mLocalNid.VNodeId() <<
-            ", ptId:" << ptId << ", flowId:" << flowId << ".");
+        CLIENT_LOG_ERROR("Send sync destroy flow request failed:" << ret << ", nodeId:" << mLocalNid.VNodeId()
+                                                                  << ", ptId:" << ptId << ", flowId:" << flowId << ".");
         return ret;
     }
 
@@ -489,20 +491,20 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, FlowInf
 {
     if (mMode == CONVERGENCE) {
         if (flowInfo.opType == 0) {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      flowInfo.opType,
-                                      0,
-                                      false };
+            CreateFlowRequest req = {{MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId},
+                                     flowInfo.opType,
+                                     0,
+                                     false};
             CreateFlowResponse rsp;
             auto ret = createFlowMasterOp(&req, &rsp);
             flowInfo.flowId = rsp.flowId;
             flowInfo.isDegrade = rsp.isDegrade;
             return ret;
         } else {
-            CreateFlowRequest req = { { MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
-                                      flowInfo.opType,
-                                      flowInfo.flowId,
-                                      flowInfo.isDegrade };
+            CreateFlowRequest req = {{MESSAGE_MAGIC, flowInfo.ptId, ptEntry.version, mLocalNid.VNodeId(), procId},
+                                     flowInfo.opType,
+                                     flowInfo.flowId,
+                                     flowInfo.isDegrade};
             return createFlowSlaveOp(&req);
         }
     } else {
@@ -513,7 +515,7 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, FlowInf
 BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
 {
     if (mMode == CONVERGENCE) {
-        DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowId };
+        DestroyFlowRequest req = {{MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid()}, flowId};
         return destroyFlowOp(&req);
     } else {
         return SendDestroyFlowRequestLocal(ptEntry, ptId, flowId);
@@ -534,16 +536,13 @@ bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
 }
 
 BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
-    uint64_t length, GetSliceResponse **rsp)
+                                                 uint64_t length, GetSliceResponse **rsp)
 {
-    GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                            flowId,
-                            offset,
-                            index,
-                            length };
+    GetSliceRequest req = {
+        {MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid()}, flowId, offset, index, length};
     uint64_t rspLen = 0;
-    auto ret = net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(INVALID_NID,
-        BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
+    auto ret = net::BioClientNet::Instance()->SendSync<GetSliceRequest, GetSliceResponse>(
+        INVALID_NID, BIO_OP_SDK_GET_SLICE, req, rsp, rspLen);
     if (ret != BIO_OK) {
         return ret;
     } else {
@@ -563,14 +562,14 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
 }
 
 BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
-    uint64_t length, GetSliceResponse **rsp)
+                                        uint64_t length, GetSliceResponse **rsp)
 {
     if (mMode == CONVERGENCE) {
-        GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
-                                flowId,
-                                offset,
-                                index,
-                                length };
+        GetSliceRequest req = {{MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid()},
+                               flowId,
+                               offset,
+                               index,
+                               length};
         return getSliceOp(&req, rsp);
     } else {
         return SendPrepareResourceLocal(ptEntry, flowId, offset, index, length, rsp);
@@ -580,7 +579,7 @@ BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint
 void BioClientAgent::SendPutRequestLocal(PutRequest *req, Callback &callback)
 {
     net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_PUT, static_cast<void *>(req),
-        sizeof(PutRequest) + req->sliceLen, callback);
+                                                 sizeof(PutRequest) + req->sliceLen, callback);
 }
 
 void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
@@ -603,8 +602,9 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
     GetResponse rsp;
     auto ret = net::BioClientNet::Instance()->SendSync<GetRequest, GetResponse>(INVALID_NID, BIO_OP_SDK_GET, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" <<
-            req.offset << ", length:" << req.length << ", dstNid:" << mLocalNid.VNodeId() << ".");
+        CLIENT_LOG_ERROR("Send sync get request failed, ret:" << ret << ", key:" << req.key << ", offset:" << req.offset
+                                                              << ", length:" << req.length
+                                                              << ", dstNid:" << mLocalNid.VNodeId() << ".");
     } else {
         if (rsp.num > SLICE_ADDR_SIZE) {
             return BIO_INVALID_PARAM;
@@ -627,8 +627,8 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
             ret =
                 memcpy_s(static_cast<void *>(value + off), cpyLength, reinterpret_cast<void *>(addr), rsp.addrLen[idx]);
             if (UNLIKELY(ret != 0)) {
-                CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx << ", len:" <<
-                    rsp.addrLen[idx] << ".");
+                CLIENT_LOG_ERROR("Memory copy data to user failed, ret:" << ret << ", idx:" << idx
+                                                                         << ", len:" << rsp.addrLen[idx] << ".");
                 break;
             }
             off += rsp.addrLen[idx];
@@ -636,7 +636,7 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         }
 
         if (rsp.isAlloc) {
-            FreeMemRequest freeReq = { req.comm, rsp.num, 0, { 0 } };
+            FreeMemRequest freeReq = {req.comm, rsp.num, 0, {0}};
             for (uint32_t idx = 0; idx < rsp.num; idx++) {
                 freeReq.addr[idx] = rsp.addrOffset[idx];
             }
@@ -649,8 +649,8 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, char *value, uint64
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
-                CLIENT_LOG_ERROR("Client get failed to verify the CRC, << key:" << req.key << ", origin crc:" <<
-                    rsp.dataCrc << ", current crc:" << currentCrc);
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, << key:"
+                                 << req.key << ", origin crc:" << rsp.dataCrc << ", current crc:" << currentCrc);
                 ret = BIO_CRC_ERR;
             }
         }
@@ -678,8 +678,8 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
         if (req.enableCrc && ret == BIO_OK) {
             uint32_t currentCrc = BioCrcUtil::Crc32(value, rsp.realLen);
             if (rsp.dataCrc != currentCrc) {
-                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:" << req.key << ", origin crc:" <<
-                    rsp.dataCrc << ", current crc:" << currentCrc << ".");
+                CLIENT_LOG_ERROR("Client get failed to verify the CRC, key:"
+                                 << req.key << ", origin crc:" << rsp.dataCrc << ", current crc:" << currentCrc << ".");
                 ret = BIO_CRC_ERR;
             }
         }
@@ -716,8 +716,8 @@ BResult BioClientAgent::AddDisk(AddDiskRequest &req, AddDiskResponse &rsp)
 
 BResult BioClientAgent::SendAddDiskRequest(AddDiskRequest &req, AddDiskResponse &rsp)
 {
-    return net::BioClientNet::Instance()->SendSync<AddDiskRequest, AddDiskResponse>(INVALID_NID,
-                                                                                    BIO_OP_SDK_ADD_DISK, req, rsp);
+    return net::BioClientNet::Instance()->SendSync<AddDiskRequest, AddDiskResponse>(INVALID_NID, BIO_OP_SDK_ADD_DISK,
+                                                                                    req, rsp);
 }
 
 BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
@@ -741,7 +741,7 @@ BResult BioClientAgent::CallServerListIntf(ListRequest &req, std::unordered_map<
             CopyKey(stat.key, statBuff[i].key, KEY_MAX_SIZE);
             stat.size = statBuff[i].size;
             stat.time = statBuff[i].time;
-            objs.insert({ stat.key, stat });
+            objs.insert({stat.key, stat});
         }
     }
     delete[] rsp;
@@ -782,10 +782,10 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
             CopyKey(stat.key, statInfo[i].key, KEY_MAX_SIZE);
             stat.size = statInfo[i].size;
             stat.time = statInfo[i].time;
-            objs.insert({ stat.key, stat });
+            objs.insert({stat.key, stat});
         }
 
-        FreeMemRequest freeReq = { req.comm, 1, 1, { 0 } };
+        FreeMemRequest freeReq = {req.comm, 1, 1, {0}};
         freeReq.addr[0] = rsp.addrOffset;
         ret = net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID, BIO_OP_SDK_FREE_MEM, freeReq);
         if (ret != BIO_OK) {
@@ -821,7 +821,7 @@ BResult BioClientAgent::SendNotifyUpdateRequestLocal(NotifyUpdateRequest &req)
 
 BResult BioClientAgent::NotifyUpdate(bool &flag)
 {
-    NotifyUpdateRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() }, flag };
+    NotifyUpdateRequest req = {{MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid()}, flag};
     if (mMode == CONVERGENCE) {
         return notifyUpdateOp(&req);
     } else {
@@ -831,14 +831,14 @@ BResult BioClientAgent::NotifyUpdate(bool &flag)
 
 BResult BioClientAgent::SendCheckUpdateReadyRequestLocal(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp)
 {
-    return net::BioClientNet::Instance()->SendSync<CheckUpdateReadyRequest, CheckUpdateReadyResponse>(INVALID_NID,
-        BIO_OP_SDK_CHECK_UPDATE_READY, req, rsp);
+    return net::BioClientNet::Instance()->SendSync<CheckUpdateReadyRequest, CheckUpdateReadyResponse>(
+        INVALID_NID, BIO_OP_SDK_CHECK_UPDATE_READY, req, rsp);
 }
 
 BResult BioClientAgent::CheckUpdateReady()
 {
     BResult ret = BIO_INNER_ERR;
-    CheckUpdateReadyRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() } };
+    CheckUpdateReadyRequest req = {{MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid()}};
     CheckUpdateReadyResponse rsp;
     if (mMode == CONVERGENCE) {
         ret = checkUpdateReadyOp(&req, &rsp);
@@ -909,9 +909,8 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
 
 BResult BioClientAgent::SendCacheHitRequestLocal(CacheHitRequest &req, CacheHitResponse &rsp)
 {
-    BResult ret = net::BioClientNet::Instance()->SendSync<CacheHitRequest, CacheHitResponse>(INVALID_NID,
-                                                                                             BIO_OP_SDK_GET_CACHE_HIT,
-                                                                                             req, rsp);
+    BResult ret = net::BioClientNet::Instance()->SendSync<CacheHitRequest, CacheHitResponse>(
+        INVALID_NID, BIO_OP_SDK_GET_CACHE_HIT, req, rsp);
     return ret;
 }
 
@@ -943,8 +942,8 @@ BResult BioClientAgent::GetCacheHitLocal(CacheHitRequest &req, std::unordered_ma
 
 BResult BioClientAgent::SendCacheResourceRequestLocal(CacheResourceRequest &req, CacheResourceResponse &rsp)
 {
-    BResult ret = net::BioClientNet::Instance()->SendSync<CacheResourceRequest, CacheResourceResponse>(INVALID_NID,
-        BIO_OP_SDK_QUERY_CACHE_RESOURCE, req, rsp);
+    BResult ret = net::BioClientNet::Instance()->SendSync<CacheResourceRequest, CacheResourceResponse>(
+        INVALID_NID, BIO_OP_SDK_QUERY_CACHE_RESOURCE, req, rsp);
     return ret;
 }
 

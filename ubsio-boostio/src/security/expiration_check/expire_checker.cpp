@@ -71,13 +71,13 @@ BResult ExpireChecker::CertExpiredCheck(const std::string &path, const std::stri
     return BIO_OK;
 }
 
-BResult ExpireChecker::ValidateCertificateTime(X509* x509, const std::string &type)
+BResult ExpireChecker::ValidateCertificateTime(X509 *x509, const std::string &type)
 {
-    ASN1_TIME* notBefore = OpenSslApiWrapper::X509GetNotBefore(x509);
-    ASN1_TIME* notAfter = OpenSslApiWrapper::X509GetNotAfter(x509);
+    ASN1_TIME *notBefore = OpenSslApiWrapper::X509GetNotBefore(x509);
+    ASN1_TIME *notAfter = OpenSslApiWrapper::X509GetNotAfter(x509);
     time_t now;
     time(&now);
-    struct tm tm{};
+    struct tm tm {};
     time_t notBeforeTime = OpenSslApiWrapper::Asn1Time2Tm(notBefore, &tm) ? mktime(&tm) : -1;
     time_t notAfterTime = OpenSslApiWrapper::Asn1Time2Tm(notAfter, &tm) ? mktime(&tm) : -1;
     if (notBeforeTime == -1 || notAfterTime == -1) {
@@ -120,9 +120,7 @@ void ExpireChecker::TimingManagement()
             HandleCertExpiredCheck();
 
             std::unique_lock<std::mutex> lock(mutex);
-            cv.wait_for(lock, std::chrono::seconds(ONE_DAY), [this] {
-                return stopFlag.load();
-            });
+            cv.wait_for(lock, std::chrono::seconds(ONE_DAY), [this] { return stopFlag.load(); });
         }
     });
 }
@@ -143,7 +141,7 @@ BResult ExpireChecker::ExpireCheckerInit(const std::string &caCertPath, const st
         LOG_ERROR("Failed to load openssl lib. ret: " << ret << ".");
         return ret;
     }
-    
+
     mCaPath = caCertPath;
     mCertPath = workCertPath;
     TimingManagement();

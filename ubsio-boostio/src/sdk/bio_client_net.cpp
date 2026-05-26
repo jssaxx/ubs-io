@@ -10,19 +10,19 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <utility>
+#include "bio_client_net.h"
+#include <linux/version.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <cerrno>
 #include <thread>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sys/syscall.h>
-#include <linux/version.h>
+#include <utility>
+#include "bio_client_agent.h"
+#include "bio_client_log.h"
 #include "message.h"
 #include "message_op.h"
-#include "bio_client_log.h"
-#include "bio_client_agent.h"
-#include "bio_client_net.h"
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -59,7 +59,7 @@ BResult BioClientNet::StartPre(WorkerMode mode, const NetOptions netConf)
 }
 
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView,
-    uint16_t protocol, const NetOptions netConf)
+                                uint16_t protocol, const NetOptions netConf)
 {
     if (mMode == CONVERGENCE) {
         return BIO_OK;
@@ -95,7 +95,7 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
             continue;
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
-            node.second.port, NO_1);
+                         node.second.port, NO_1);
         CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port);
         BIO_TP_START(SDK_BIO_NET_START_CONNECT_FAIL, &ret, BIO_INNER_ERR);
         ret = mNetEngine->SyncConnect(info);
@@ -160,8 +160,8 @@ BResult BioClientNet::ShmInitInner()
     auto offset = static_cast<off_t>(mShmOffset);
     auto address = mmap(nullptr, mShmLength, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
     if (address == MAP_FAILED) {
-        NET_LOG_ERROR("Mmap bio_shm size " << mShmLength << " offset " << offset << " failed, error:" <<
-            strerror(errno));
+        NET_LOG_ERROR("Mmap bio_shm size " << mShmLength << " offset " << offset
+                                           << " failed, error:" << strerror(errno));
         close(mShmFd);
         mShmFd = -1;
         return BIO_ERR;
@@ -173,7 +173,7 @@ BResult BioClientNet::ShmInitInner()
 BResult BioClientNet::ShmInit()
 {
     uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 默认最大可配置共享内存大小为300G
-    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid() } };
+    ShmInitRequest req = {{MESSAGE_MAGIC, 0, 0, INVALID_NID, getpid()}};
     ShmInitResponse rsp;
     BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
     if (ret != BIO_OK) {
@@ -181,9 +181,10 @@ BResult BioClientNet::ShmInit()
         return ret;
     }
     if (!CheckShmInitResp(rsp)) {
-        CLIENT_LOG_ERROR("Invalid responses param, alignSize:" << rsp.alignSize << ", ioTimeOut:"
-            << rsp.ioTimeOut << ", netTimeOut: " << rsp.ioTimeOut << ", netTimeOut:" << rsp.netTimeOut << ", logLevel:"
-            << rsp.logLevel << ", scene:" << rsp.scene << ".");
+        CLIENT_LOG_ERROR("Invalid responses param, alignSize:" << rsp.alignSize << ", ioTimeOut:" << rsp.ioTimeOut
+                                                               << ", netTimeOut: " << rsp.ioTimeOut << ", netTimeOut:"
+                                                               << rsp.netTimeOut << ", logLevel:" << rsp.logLevel
+                                                               << ", scene:" << rsp.scene << ".");
         return BIO_INNER_ERR;
     }
 
@@ -203,11 +204,12 @@ BResult BioClientNet::ShmInit()
     rsp.listenAddress[MAX_LISTEN_ADDRESS_LENGTH - 1] = '\0';
     mPrometheusListenAddress = rsp.listenAddress;
     mPrometheusScrapeIntervalSec = rsp.scrapeIntervalSec;
-    CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize << ", io timeout:" <<
-        mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut << ", loglevel:" << mLogLevel << ".");
+    CLIENT_LOG_INFO("Bio client, scene:" << mWorkScene << ", io alignSize:" << mWorkIoAlignSize
+                                         << ", io timeout:" << mWorkIoTimeOut << ", net timeout:" << mWorkNetTimeOut
+                                         << ", loglevel:" << mLogLevel << ".");
 
     mNetEngine->UpdateTimeOut(static_cast<int16_t>(mWorkNetTimeOut)); // 更新消息请求发送超时参数.
-    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID); // 更新链路超时参数.
+    ret = mNetEngine->UpdateChannelTimeOut(INVALID_NID);              // 更新链路超时参数.
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Update channel timeout failed, ret:" << ret << ".");
         return ret;
@@ -251,7 +253,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
     NetOptions netOptions;
     netOptions.FillNetBaseConfigs(NO_4, NO_4, Role::NET_CLIENT, ServiceProtocol::SHM);
     netOptions.FillNetTlsConfigs(netConf.enableTls, netConf.certificationPath, netConf.caCerPath, netConf.caCrlPath,
-        netConf.privateKeyPath, netConf.privateKeyPassword, netConf.decrypterLibPath);
+                                 netConf.privateKeyPath, netConf.privateKeyPassword, netConf.decrypterLibPath);
     ret = mNetEngine->Start(netOptions);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Start ipc service failed, result:" << ret << ".");
@@ -274,7 +276,7 @@ BResult BioClientNet::StartIpcService(const NetOptions netConf)
 }
 
 BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
-    const NetOptions netConf)
+                                      const NetOptions netConf)
 {
     const uint64_t defaultMemorySize = (128UL * 1024UL * 1024UL); // 128M
     NetOptions netOptions;
@@ -287,12 +289,12 @@ BResult BioClientNet::StartRpcService(std::string ipMask, uint16_t port, Service
     netOptions.connCount = workerNum;
     netOptions.handlerCount = workerNum;
     netOptions.enableTls = netConf.enableTls;
-    netOptions.certificationPath = netConf.certificationPath;    /* certification path */
-    netOptions.caCerPath = netConf.caCerPath;                    /* caCer path */
-    netOptions.caCrlPath = netConf.caCrlPath;                    /* caCrl path */
-    netOptions.privateKeyPath = netConf.privateKeyPath;          /* private key path */
-    netOptions.privateKeyPassword = netConf.privateKeyPassword;  /* private key password */
-    netOptions.decrypterLibPath = netConf.decrypterLibPath;      /* decrypter lib path */
+    netOptions.certificationPath = netConf.certificationPath;   /* certification path */
+    netOptions.caCerPath = netConf.caCerPath;                   /* caCer path */
+    netOptions.caCrlPath = netConf.caCrlPath;                   /* caCrl path */
+    netOptions.privateKeyPath = netConf.privateKeyPath;         /* private key path */
+    netOptions.privateKeyPassword = netConf.privateKeyPassword; /* private key password */
+    netOptions.decrypterLibPath = netConf.decrypterLibPath;     /* decrypter lib path */
     return mNetEngine->Start(netOptions);
 }
 
@@ -366,9 +368,9 @@ BResult BioClientNet::Rebuild(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, 
             continue;
         }
         ConnectInfo info(localNid, static_cast<uint32_t>(getpid()), node.second.id.VNodeId(), node.second.ip,
-            node.second.port, NO_1);
-        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port <<
-            ".");
+                         node.second.port, NO_1);
+        CLIENT_LOG_INFO("Connect to remote node:" << info.peerId.nid << ", ip:" << info.ip << ", port:" << info.port
+                                                  << ".");
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             if (ret != BIO_OK) {
                 RecoverRpc(info.peerId.nid);
@@ -411,7 +413,6 @@ void BioClientNet::RecoverRpc(uint32_t peerId)
     return;
 }
 
-
 bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
 {
     size_t underFsTypeLen = strnlen(rsp.underFsType, KEY_MAX_SIZE);
@@ -422,8 +423,9 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
     size_t cfgPathLen = strnlen(rsp.cephConfig.cfgPath, KEY_MAX_SIZE);
     size_t poolLen = strnlen(rsp.cephConfig.pool, KEY_MAX_SIZE);
 
-    return ((underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE) && (nameNodeLen != 0 && nameNodeLen < KEY_MAX_SIZE)
-            && (workingPathLen != 0 && workingPathLen < KEY_MAX_SIZE) && (userLen != 0 && userLen < KEY_MAX_SIZE) &&
+    return ((underFsTypeLen != 0 && underFsTypeLen < KEY_MAX_SIZE) &&
+            (nameNodeLen != 0 && nameNodeLen < KEY_MAX_SIZE) &&
+            (workingPathLen != 0 && workingPathLen < KEY_MAX_SIZE) && (userLen != 0 && userLen < KEY_MAX_SIZE) &&
             (clusterLen != 0 && clusterLen < KEY_MAX_SIZE) && (cfgPathLen != 0 && cfgPathLen < KEY_MAX_SIZE) &&
             (poolLen != 0 && poolLen < KEY_MAX_SIZE) &&
             ((strcmp(rsp.underFsType, "hdfs") == 0) || (strcmp(rsp.underFsType, "ceph") == 0)));
@@ -431,12 +433,12 @@ bool BioClientNet::CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp)
 
 BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
 {
-    GetUnderFsConfigRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    GetUnderFsConfigRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}};
     GetUnderFsConfigResponse rsp;
 
     BIO_TP_START(SDK_CLIENT_GET_UNDERFS_CONFIG_PASS_SYNC_CALL, 0);
-    BResult ret = mNetEngine->SyncCall<GetUnderFsConfigRequest, GetUnderFsConfigResponse>(INVALID_NID,
-        BIO_OP_SDK_GET_UFS_CONFIG, req, rsp);
+    BResult ret = mNetEngine->SyncCall<GetUnderFsConfigRequest, GetUnderFsConfigResponse>(
+        INVALID_NID, BIO_OP_SDK_GET_UFS_CONFIG, req, rsp);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Send get underfs configs request failed, ret:" << ret << ".");
         return ret;
@@ -454,7 +456,7 @@ BResult BioClientNet::GetUnderFsConfig(BioConfig::UnderFsConfig &config)
     config.cephConfig.user = rsp.cephConfig.user;
     config.cephConfig.cluster = rsp.cephConfig.cluster;
     config.cephConfig.cfgPath = rsp.cephConfig.cfgPath;
-    config.cephConfig.pools.insert({ 0, rsp.cephConfig.pool });
+    config.cephConfig.pools.insert({0, rsp.cephConfig.pool});
     return BIO_OK;
 }
 

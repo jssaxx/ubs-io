@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "bio_server.h"
 #include <dlfcn.h>
 #include <unistd.h>
 #include <utility>
@@ -26,7 +27,6 @@
 #include "flow_manager.h"
 #include "htracer.h"
 #include "interceptor_server.h"
-#include "bio_server.h"
 
 namespace ock {
 namespace bio {
@@ -44,23 +44,21 @@ BioServer::BioServer() noexcept
 {
     std::vector<ModuleDesc> modules = {
 #ifdef USE_DEBUG_TP_TOOLS
-        { "Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr },
+        {"Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr},
 #endif
-        { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
-        { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
-            std::bind(&BioServer::BioTraceExit, this) },
-        { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
-            std::bind(&BioServer::BioUnderFsExit, this) },
-        { "Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this) },
-        { "Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this) },
-        { "Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
-            std::bind(&BioServer::BioFlowExit, this) },
-        { "Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
-            std::bind(&BioServer::BioCacheExit, this) },
-        { "MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
-            std::bind(&BioServer::BioMirrorServerExit, this) },
-        { "CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr,
-            std::bind(&BioServer::BioCmExit, this) },
+        {"Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr},
+        {"Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
+         std::bind(&BioServer::BioTraceExit, this)},
+        {"UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
+         std::bind(&BioServer::BioUnderFsExit, this)},
+        {"Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this)},
+        {"Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this)},
+        {"Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, std::bind(&BioServer::BioFlowExit, this)},
+        {"Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
+         std::bind(&BioServer::BioCacheExit, this)},
+        {"MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
+         std::bind(&BioServer::BioMirrorServerExit, this)},
+        {"CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this)},
     };
     mService = MakeRef<BioServiceProc>(modules);
 }
@@ -109,7 +107,8 @@ BResult BioServer::Start()
             return BIO_ALLOC_FAIL;
         }
         ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
-            mConfig->GetNetConfig().tlsServerCertPath, mConfig->GetNetConfig().opensslLibDir);
+                                               mConfig->GetNetConfig().tlsServerCertPath,
+                                               mConfig->GetNetConfig().opensslLibDir);
         if (ret != BIO_OK) {
             return ret;
         }
@@ -299,8 +298,12 @@ BResult BioServer::StartRpcService(const NetOptions &opt)
     ChkTrue(ret == BIO_OK, BIO_ERR, "Start rpc engine failed, result:" << ret << ".");
 
     MemAllocator memAllocator;
-    memAllocator.alloc = [this](uint64_t size, uint64_t *addr) { return this->MemAlloc(size, addr); };
-    memAllocator.free = [this](uint64_t addr) { this->MemFree(addr); };
+    memAllocator.alloc = [this](uint64_t size, uint64_t *addr) {
+        return this->MemAlloc(size, addr);
+    };
+    memAllocator.free = [this](uint64_t addr) {
+        this->MemFree(addr);
+    };
     FlowManager::RegisterMemAllocator(memAllocator);
     return BIO_OK;
 }
@@ -335,12 +338,12 @@ BResult BioServer::BioNetInit()
     netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
     netOptions.connCount = netConfig.rpcDataWorkersCnt;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
-    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
-    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
-    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                   /* caCrl path */
-    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;          /* private key path */
-    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath;  /* private key password */
-    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
+    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;     /* certification path */
+    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                 /* caCert path */
+    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                  /* caCrl path */
+    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;         /* private key path */
+    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath; /* private key password */
+    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;       /* decrypter lib path */
     ret = StartRpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
@@ -350,12 +353,12 @@ BResult BioServer::BioNetInit()
     netOptions.handlerCount = netConfig.ipcDataWorkersCnt;
     netOptions.connCount = netConfig.ipcDataWorkersCnt;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
-    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
-    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
-    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                   /* caCrl path */
-    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;          /* private key path */
-    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath;  /* private key password */
-    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
+    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;     /* certification path */
+    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                 /* caCert path */
+    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                  /* caCrl path */
+    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;         /* private key path */
+    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath; /* private key password */
+    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;       /* decrypter lib path */
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
     mNetEngineInited = true;
@@ -507,7 +510,7 @@ BResult BioServer::BioCacheInit()
             ReConnect(nodeId);
         }
         nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
-        QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
+        QuotaHolder holder = {nodeId, static_cast<uint64_t>(pid)};
         CacheOverloadCtrl::Instance().RecycleQuota(holder);
     };
     ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
@@ -562,7 +565,7 @@ BResult BioServer::BioServerDiagnoseInit()
         return BIO_OK;
     }
 #endif
-    const char* soFileName = "libcli_agent.so";
+    const char *soFileName = "libcli_agent.so";
     void *handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
@@ -656,8 +659,8 @@ void BioServer::Connection()
         if (it->second.status != CM_NODE_NORMAL) {
             continue;
         }
-        LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" <<
-            it->second.port << ".");
+        LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip
+                                    << ", port:" << it->second.port << ".");
         ConnectInfo info(mLocalNid.VNodeId(), 0, it->second.id.VNodeId(), it->second.ip, it->second.port, NO_1);
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             if (ret != BIO_OK) {
@@ -727,8 +730,8 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
 
 bool BioServer::CheckNeedCrb(const std::map<uint16_t, CmPtInfo> &ptInfos)
 {
-    for (const auto &ptInfo: ptInfos) {
-        for (const auto &copy: ptInfo.second.copys) {
+    for (const auto &ptInfo : ptInfos) {
+        for (const auto &copy : ptInfo.second.copys) {
             if (copy.state == CM_COPY_RECOVERY) {
                 return true;
             }
@@ -762,8 +765,8 @@ BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
     LOG_INFO("Cur pt times:" << mCurPtTimes);
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock
 
 using namespace ock::bio;
 
@@ -859,21 +862,21 @@ int32_t GetPtView(QueryPtViewRequest *req, QueryPtViewResponse *rsp)
 
 int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp)
 {
-    BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(req->comm.pid, req->comm.ptId,
-        req->comm.ptv, rsp->flowId, rsp->isDegrade);
+    BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(
+        req->comm.pid, req->comm.ptId, req->comm.ptv, rsp->flowId, rsp->isDegrade);
     return static_cast<int32_t>(ret);
 }
 
 int32_t CreateFlowSlave(CreateFlowRequest *req)
 {
-    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CreateFlowSlave(req->comm.pid, req->comm.ptId,
-        req->comm.ptv, req->flowId, req->isDegrade));
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CreateFlowSlave(
+        req->comm.pid, req->comm.ptId, req->comm.ptv, req->flowId, req->isDegrade));
 }
 
 int32_t DestroyFlow(DestroyFlowRequest *req)
 {
-    return BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId,
-                                                                 req->comm.ptv, req->flowId);
+    return BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId, req->comm.ptv,
+                                                                 req->flowId);
 }
 
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
@@ -885,7 +888,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     }
     WCacheSlicePtr sliceP = nullptr;
     BResult ret = BioServer::Instance()->GetMirrorServer()->GetSlice(req->flowId, req->flowOffset, req->flowIndex,
-        req->length, sliceP);
+                                                                     req->length, sliceP);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get slice failed:" << ret << ".");
         return static_cast<int32_t>(ret);
@@ -961,8 +964,8 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     BResult ret = BIO_OK;
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
-        MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
-        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
+        MrInfo mrInfo = {req->mrAddress, static_cast<uint32_t>(req->mrSize)};
+        std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
         BIO_TP_START(PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         BIO_TP_END;

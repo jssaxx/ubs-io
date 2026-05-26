@@ -10,11 +10,11 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "bio_log.h"
 #include <iostream>
 #include "bio_tracepoint_helper.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/stdout_sinks.h"
-#include "bio_log.h"
 
 namespace ock {
 namespace bio {
@@ -28,7 +28,7 @@ const int STDERR_TYPE = 2;
 
 constexpr int MIN_LOG_LEVEL_MAX = 5;
 constexpr int SIZE_MB_SHIFT = 20;
-constexpr auto ROTATION_FILE_SIZE_MAX_MB = 100UL;                                   // 100MB
+constexpr auto ROTATION_FILE_SIZE_MAX_MB = 100UL; // 100MB
 constexpr mode_t UMASK_MODE = 0277;
 constexpr auto ROTATION_FILE_SIZE_MAX = ROTATION_FILE_SIZE_MAX_MB << SIZE_MB_SHIFT; // 100MB
 constexpr auto ROTATION_FILE_SIZE_MIN_MB = 2;                                       // 2MB
@@ -139,11 +139,13 @@ int32_t Logger::Init()
                 chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
             };
             mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path,
-                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount, false, handlers);
+                                                    mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT,
+                                                    mOptions.rotationFileCount, false, handlers);
             mSpdLogger->set_pattern("%v");
             mSpdLogger->info("", "");
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
-            mSpdLogger->info("Log started at [{}] level",
+            mSpdLogger->info(
+                "Log started at [{}] level",
                 spdlog::level::to_string_view(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel)).data());
             mSpdLogger->info("Log default format: yyyy-mm-dd hh:mm:ss.uuuuuu threadid loglevel msg");
             mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
@@ -192,5 +194,5 @@ void Logger::ResetLogLevel(int32_t logLevel)
         mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
     }
 }
-}
-}
+} // namespace bio
+} // namespace ock

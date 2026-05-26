@@ -13,21 +13,21 @@
 #ifndef BOOSTIO_RCACHE_H
 #define BOOSTIO_RCACHE_H
 
-#include <unordered_map>
-#include <list>
 #include <cstdint>
-#include "bio_log.h"
+#include <list>
+#include <unordered_map>
+#include "bio_double_list.h"
 #include "bio_err.h"
 #include "bio_lock.h"
+#include "bio_log.h"
 #include "bio_ref.h"
-#include "bio_double_list.h"
-#include "flow_id_allocator.h"
+#include "cache_def.h"
+#include "cache_slice.h"
+#include "cache_slice_operator.h"
 #include "flow.h"
+#include "flow_id_allocator.h"
 #include "rcache_chunk.h"
 #include "rcache_flow.h"
-#include "cache_slice_operator.h"
-#include "cache_slice.h"
-#include "cache_def.h"
 #include "rcache_statistic.h"
 
 namespace ock {
@@ -52,7 +52,7 @@ public:
     BResult Put(const Key &key, const WCacheSlicePtr &slice);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-        uint64_t &realLen);
+                uint64_t &realLen);
 
     BResult Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
@@ -164,21 +164,21 @@ private:
     BResult AllocChunk(const Key key, const RCacheValue value, RCacheChunkPtr &chunk);
 
     BResult GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr,
-        uint64_t offset, uint64_t len, uint64_t &realLen);
+                                uint64_t offset, uint64_t len, uint64_t &realLen);
 
     BResult GetSliceFromChunk(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr);
 
     BResult CreateRCacheFlow(RCacheTierType tier, std::vector<uint64_t> flowIds);
 
 private:
-    std::atomic<bool> mMemEvict{ false };
-    std::atomic<bool> mDiskEvict{ false };
+    std::atomic<bool> mMemEvict{false};
+    std::atomic<bool> mDiskEvict{false};
 
     std::atomic<uint64_t> cacheData[READ_CACHE_TIER_BUTT];
     std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
 
-    bool mIsNormal{ true };
-    bool mCrcEnable{ true };
+    bool mIsNormal{true};
+    bool mCrcEnable{true};
     uint64_t mFlowId;
     uint16_t mPtId;
     uint64_t mPtv;
@@ -200,7 +200,7 @@ private:
 };
 
 using RCachePtr = Ref<RCache>;
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_RCACHE_H

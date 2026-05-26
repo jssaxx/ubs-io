@@ -13,8 +13,8 @@
 #ifndef BIO_OPENSSL_API_WRAPPER_H
 #define BIO_OPENSSL_API_WRAPPER_H
 
-#include "bio_log.h"
 #include "bio_err.h"
+#include "bio_log.h"
 #include "bio_openssl_api_dl.h"
 
 namespace ock {

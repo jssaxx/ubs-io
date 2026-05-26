@@ -10,14 +10,14 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "bio_client.h"
 #include <dlfcn.h>
+#include "bio_client_agent.h"
 #include "bio_client_log.h"
 #include "bio_client_net.h"
-#include "bio_client_agent.h"
-#include "interceptor_server.h"
 #include "bio_tracepoint_helper.h"
 #include "expire_checker.h"
-#include "bio_client.h"
+#include "interceptor_server.h"
 
 using namespace ock::bio;
 
@@ -110,7 +110,7 @@ BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
     mNetEngine->RegCheckNodeOnline(checkHandle);
 
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
-        mMirror->GetNetProtocol(), netConf);
+                                 mMirror->GetNetProtocol(), netConf);
 }
 
 void BioClient::BioClientNetExit()
@@ -165,11 +165,13 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 
     // 初始化Mirror client
     mIsUpdating = false;
-    UpdateView updateView = [this]() { BioClientUpdateView(); };
+    UpdateView updateView = [this]() {
+        BioClientUpdateView();
+    };
     bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
-        mNetEngine->GetCrcFlag();
+                                             mNetEngine->GetCrcFlag();
     auto ret = mMirror->Initialize(updateView, mNetEngine->GetNegoWorkScene(), mNetEngine->GetNegoWorkIoAlignSize(),
-        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
+                                   mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
     }
@@ -201,7 +203,7 @@ BResult BioClient::BioClientStartWork()
 BResult BioClient::BioClientStartPrometheus()
 {
     bool enablePrometheus = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigPrometheusToggle() :
-        mNetEngine->GetPrometheusToggle();
+                                                     mNetEngine->GetPrometheusToggle();
     if (!enablePrometheus) {
         return BIO_OK;
     }
@@ -214,9 +216,10 @@ BResult BioClient::BioClientStartPrometheus()
         listenAddress = mNetEngine->GetPrometheusListenAddress();
     }
     uint32_t timeOut = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
-                       mNetEngine->GetNegoWorkIoTimeOut();
-    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->
-            GetPrometheusScrapeIntervalSec() : mNetEngine->GetPrometheusScrapeIntervalSec();
+                                                mNetEngine->GetNegoWorkIoTimeOut();
+    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ?
+                                     agent::BioClientAgent::Instance()->GetPrometheusScrapeIntervalSec() :
+                                     mNetEngine->GetPrometheusScrapeIntervalSec();
     auto prometheusManager = PrometheusManager::Instance(listenAddress, timeOut, scrapeIntervalSec);
     auto ret = prometheusManager->Start();
     if (ret != BIO_OK) {
@@ -240,9 +243,10 @@ void BioClient::BioClientExitPrometheus()
         listenAddress = mNetEngine->GetPrometheusListenAddress();
     }
     uint32_t timeOut = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
-        mNetEngine->GetNegoWorkIoTimeOut();
-    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->
-        GetPrometheusScrapeIntervalSec() : mNetEngine->GetPrometheusScrapeIntervalSec();
+                                                mNetEngine->GetNegoWorkIoTimeOut();
+    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ?
+                                     agent::BioClientAgent::Instance()->GetPrometheusScrapeIntervalSec() :
+                                     mNetEngine->GetPrometheusScrapeIntervalSec();
     auto prometheusManager = PrometheusManager::Instance(listenAddress, timeOut, scrapeIntervalSec);
     prometheusManager->Stop();
 #endif
@@ -292,14 +296,14 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 {
 #ifdef OPEN_RELEASE
     bool enableCli = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCliFlag() :
-        mNetEngine->GetCliFlag();
+                                             mNetEngine->GetCliFlag();
     if (!enableCli) {
         return BIO_OK;
     }
 #endif
     BResult ret = BIO_OK;
     if (mode == SEPARATES) {
-        const char* soFileName = "libcli_agent.so";
+        const char *soFileName = "libcli_agent.so";
         void *handler = dlopen(soFileName, RTLD_NOW);
         if (handler == nullptr) {
             CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
@@ -335,7 +339,7 @@ BResult BioClient::BioClientTracePointInit(WorkerMode mode)
 #ifdef USE_DEBUG_TP_TOOLS
     BResult ret = BIO_OK;
     if (mode == SEPARATES) {
-        ret =  tp::TracePointManager::Initialize();
+        ret = tp::TracePointManager::Initialize();
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to Initialize tracepoint, ret:" << ret << ".");
             return BIO_INNER_ERR;
@@ -374,11 +378,11 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     // 4. 初始化Net第一步, 分离部署场景: 1)创建IPC服务; 2)与本地sever建立连接; 3)创建shm pool; 4)获取配置项.
     NetOptions netConf;
     netConf.FillNetTlsConfigs(optConf.enable, optConf.certificationPath, optConf.caCerPath, optConf.caCrlPath,
-        optConf.privateKeyPath, optConf.privateKeyPassword, optConf.decrypterLibPath);
+                              optConf.privateKeyPath, optConf.privateKeyPassword, optConf.decrypterLibPath);
     if (optConf.enable) {
-        bool checkCaPath = FileUtil::CanonicalPath(netConf.certificationPath)
-                           && FileUtil::CanonicalPath(netConf.caCerPath)
-                           && FileUtil::CanonicalPath(netConf.privateKeyPath);
+        bool checkCaPath = FileUtil::CanonicalPath(netConf.certificationPath) &&
+                           FileUtil::CanonicalPath(netConf.caCerPath) &&
+                           FileUtil::CanonicalPath(netConf.privateKeyPath);
         if (!checkCaPath) {
             CLIENT_LOG_ERROR("Check ca path failed.");
             return BIO_ERR;
@@ -445,8 +449,8 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
             LOG_INFO("expire checker alloc fail.");
             return BIO_ALLOC_FAIL;
         }
-        auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath,
-            optConf.opensslLibDir);
+        auto ret =
+            expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath, optConf.opensslLibDir);
         if (ret != BIO_OK) {
             return ret;
         }

@@ -10,6 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <gtest/gtest.h>
+#include <mockcpp/mockcpp.hpp>
 #include "bdm_core.h"
 #include "bio_server.h"
 #include "bio_server_c.h"
@@ -26,8 +28,6 @@
 #include "test_wcache.h"
 #include "ut_common.h"
 #include "wcache_manager.h"
-#include <gtest/gtest.h>
-#include <mockcpp/mockcpp.hpp>
 
 using namespace ock::bio;
 using namespace ock::htracer;
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     }
     (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' ./bio.conf");
     (void)system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
-        "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./bio.conf");
+                 "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./bio.conf");
     (void)system("sed -i 's#bio.net.tls.enable.switch = true"
                  "#bio.net.tls.enable.switch = false#g' ./bio.conf");
     (void)system("touch ceph.conf");

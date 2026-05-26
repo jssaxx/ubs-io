@@ -10,12 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bio_log.h"
-#include "bio_crc_util.h"
-#include "bio_tracepoint_helper.h"
-#include "bdm_core.h"
-#include "securec.h"
 #include "slice.h"
+#include "bdm_core.h"
+#include "bio_crc_util.h"
+#include "bio_log.h"
+#include "bio_tracepoint_helper.h"
+#include "securec.h"
 
 namespace ock {
 namespace bio {
@@ -71,8 +71,8 @@ SlicePtr Slice::Split(uint64_t offset, uint64_t length)
             uint64_t splitLen = rangeEnd - splitStart;
             if (splitLen >= length - (splitStart - offset)) {
                 newAddrs.emplace_back(addr.chunkId, addr.chunkOffset + splitOffset, length - (splitStart - offset));
-                LOG_DEBUG("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" <<
-                    length - (splitStart - offset));
+                LOG_DEBUG("Split, offset:" << addr.chunkOffset + splitOffset
+                                           << ", len:" << length - (splitStart - offset));
                 break;
             } else {
                 LOG_DEBUG("Split, offset:" << addr.chunkOffset + splitOffset << ", len:" << splitLen);
@@ -141,19 +141,19 @@ BResult Slice::Deserialize(char *data, uint64_t length)
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "datacrc memory copy failed.");
     pos += sizeof(mdataCrc);
     ChkTrue(length >= pos + sizeof(mFlowType), BIO_INVALID_PARAM,
-        "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mFlowType));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowType):" << pos + sizeof(mFlowType));
     ret = memcpy_s(&mFlowType, sizeof(mFlowType), data + pos, sizeof(mFlowType));
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "flow data memory copy failed.");
     pos += sizeof(mFlowType);
     ChkTrue(length >= pos + sizeof(mLength), BIO_INVALID_PARAM,
-        "Failed to deserialize data, length:" << length << "  pos + sizeof(mLength):" << pos + sizeof(mLength));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mLength):" << pos + sizeof(mLength));
     ret = memcpy_s(&mLength, sizeof(mLength), data + pos, sizeof(mLength));
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "length memory copy failed.");
     pos += sizeof(mLength);
     size_t vsize = 0;
     BIO_TP_START(DESERIALIZE_SET_VSIZE, &vsize, NO_3);
     ChkTrue(length >= pos + sizeof(vsize), BIO_INVALID_PARAM,
-        "Failed to deserialize data, length:" << length << "  pos + sizeof(vsize):" << pos + sizeof(vsize));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(vsize):" << pos + sizeof(vsize));
     ret = memcpy_s(&vsize, sizeof(vsize), data + pos, sizeof(vsize));
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "vsize memory copy failed.");
     pos += sizeof(vsize);
@@ -162,7 +162,8 @@ BResult Slice::Deserialize(char *data, uint64_t length)
     for (size_t i = 0; i < vsize; i++) {
         FlowAddr flowAddr;
         ChkTrue(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM,
-            "Failed to deserialize data, length:" << length << " pos + sizeof(FlowAddr):" << pos + sizeof(FlowAddr));
+                "Failed to deserialize data, length:" << length
+                                                      << " pos + sizeof(FlowAddr):" << pos + sizeof(FlowAddr));
         ret = memcpy_s(&flowAddr, sizeof(FlowAddr), data + pos, sizeof(FlowAddr));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "flow addr memory copy failed.");
         mAddrs.push_back(flowAddr);
@@ -192,7 +193,7 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
     if (mFlowType == FLOW_MEMORY) {
         for (auto fromAddr : mAddrs) {
             auto ret = memcpy_s(reinterpret_cast<void *>(value + offset), cpyLength,
-                reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
+                                reinterpret_cast<void *>(fromAddr.chunkId + fromAddr.chunkOffset), fromAddr.chunkLen);
             if (ret != BIO_OK) {
                 LOG_ERROR("Failed to copy data, length:" << fromAddr.chunkLen);
                 free(value);
@@ -205,10 +206,11 @@ BResult Slice::CalculateDataCrc(uint32_t &valueCrc, uint64_t dataOffset, uint64_
     } else {
         for (auto fromAddr : mAddrs) {
             auto ret = BdmRead(fromAddr.chunkId, fromAddr.chunkOffset, reinterpret_cast<void *>(value + offset),
-                fromAddr.chunkLen);
+                               fromAddr.chunkLen);
             if (ret != BIO_OK) {
-                LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset) <<
-                    " to memory by length:" << fromAddr.chunkLen << ".");
+                LOG_ERROR("Failed to copy data from disk chunkId:" << (fromAddr.chunkId + fromAddr.chunkOffset)
+                                                                   << " to memory by length:" << fromAddr.chunkLen
+                                                                   << ".");
                 free(value);
                 value = nullptr;
                 return BIO_DISK_IOERR;
@@ -228,8 +230,8 @@ BResult Slice::VerifyDataCrc(uint32_t originCrc, uint64_t dataOffset, uint64_t d
     uint32_t currentCrc = 0;
     auto ret = CalculateDataCrc(currentCrc, dataOffset, dataLength);
     if (ret != BIO_OK || originCrc != currentCrc) {
-        LOG_ERROR("slice verify the CRC fail, ret:" << ret << " origin crc:" <<
-            originCrc << ", current crc:" << currentCrc);
+        LOG_ERROR("slice verify the CRC fail, ret:" << ret << " origin crc:" << originCrc
+                                                    << ", current crc:" << currentCrc);
         return ret != BIO_OK ? ret : BIO_CRC_ERR;
     }
     if (slice != nullptr) {
@@ -237,5 +239,5 @@ BResult Slice::VerifyDataCrc(uint32_t originCrc, uint64_t dataOffset, uint64_t d
     }
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

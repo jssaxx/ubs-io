@@ -137,7 +137,7 @@ BResult InterceptorClientNetService::ShmInitInner()
 BResult InterceptorClientNetService::ShmInit()
 {
     uint64_t defaultMaxShmSize = (300UL * 1024UL * 1024UL * 1024UL); // 300G
-    ShmInitRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
+    ShmInitRequest req = {{MESSAGE_MAGIC, 0, 0, 0, getpid()}};
     ShmInitResponse rsp;
     BResult ret = mNetEngine->SyncCall<ShmInitRequest, ShmInitResponse>(INVALID_NID, BIO_OP_SDK_SHM_INIT, req, rsp);
     if (UNLIKELY(ret != BIO_OK)) {
@@ -162,7 +162,7 @@ BResult InterceptorClientNetService::ShmInit()
     }
 
     mNetEngine->SetShmInfo(mShmFd, mShmAddr, mShmOffset, mShmLength);
-    CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength <<
-        "success.");
+    CLOG_DEBUG("Interceptor init share memory success, offset:" << mShmOffset << ", length:" << mShmLength
+                                                                << "success.");
     return BIO_OK;
 }

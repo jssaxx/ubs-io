@@ -30,7 +30,7 @@ struct WFlowSliceMeta {
     uint64_t hasEvict;
 };
 
-enum WCacheTierType {
+enum WCacheTierType{
     WCACHE_MEMORY,
     WCACHE_DISK,
     MAX_WCACHE_TIER,
@@ -48,7 +48,7 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    uint64_t mPreTruncateSliceIndex = { 0 };
+    uint64_t mPreTruncateSliceIndex = {0};
 
     std::mutex mEvictedSliceListLock;
     std::set<WCacheSlicePtr, WCacheSliceCmp> mEvictedSlices;
@@ -58,11 +58,10 @@ using WFlowTruncateCursorPtr = Ref<WFlowTruncateCursor>;
 
 class WCacheTier {
 public:
-
     BResult Init(WCacheTierType cacheTier, uint64_t flowId, uint16_t diskId);
 
     BResult Write(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader,
-        WCacheSliceRefPtr &destSliceRef);
+                  WCacheSliceRefPtr &destSliceRef);
 
     void AddEvictQueue(WCacheSliceRefPtr sliceRef);
 
@@ -134,7 +133,7 @@ private:
     BResult ToFlowType(WCacheTierType tier, FlowType &flowType);
     static BResult GetSlice(const FlowPtr &flow, const SliceKey &sliceKey, WCacheSlicePtr &slice);
     static BResult GetSlice(const FlowPtr &flow, uint64_t offset, uint64_t index, uint64_t length,
-        WCacheSlicePtr &slice);
+                            WCacheSlicePtr &slice);
 
 private:
     uint8_t INVALID_REF_NUM = NO_U8_255;
@@ -154,12 +153,12 @@ private:
 
     ReadWriteLock mNegotiateIndexMapLock;
     std::map<uint64_t, std::array<uint8_t, ARRAY_SIZE_IN_NEGOTIATE_MAP>> mNegotiateIndexMap;
-    uint64_t mCurNegotiateIndex = { 0 };
+    uint64_t mCurNegotiateIndex = {0};
 
     DEFINE_REF_COUNT_VARIABLE;
 };
 using WCacheTierPtr = Ref<WCacheTier>;
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_WCACHE_TIER_H

@@ -10,24 +10,24 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <iostream>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
-#include <climits>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <cerrno>
-#include <sys/syscall.h>
 #include <linux/version.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <cerrno>
+#include <climits>
+#include <iostream>
 
-#include "securec.h"
 #include "bio_file_util.h"
 #include "bio_ip_util.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
-#include "net_log.h"
 #include "net_executor_pool.h"
+#include "net_log.h"
+#include "securec.h"
 #include "net_engine.h"
 
 namespace ock {
@@ -191,7 +191,7 @@ BResult NetEngine::CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::strin
     if (ret < 0) {
         NET_LOG_ERROR("truncate file " << name << " with size " << size << " failed, error:" << strerror(errno));
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
-    shm_unlink(name.c_str());
+        shm_unlink(name.c_str());
 #endif
         close(fd);
         return BIO_INNER_ERR;
@@ -220,11 +220,11 @@ BResult NetEngine::InitCommMemAllocator()
     if (result != BIO_OK) {
         NET_LOG_ERROR("Failed to start block pool " << mOptions.memorySize << ".");
     } else {
-        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:" <<
-            mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
+        NET_LOG_INFO("Succeed to start comm memory pool success, size:" << mOptions.memorySize << ", key:"
+                                                                        << mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
     }
-    LOG_INFO("Register common memory success, size:" << mOptions.memorySize << ", Key:"
-        << mLocalMr.GetHcomMrs()[0]->GetLKey());
+    LOG_INFO("Register common memory success, size:" << mOptions.memorySize
+                                                     << ", Key:" << mLocalMr.GetHcomMrs()[0]->GetLKey());
     return result;
 }
 
@@ -247,8 +247,8 @@ BResult NetEngine::InitShmMemAllocator()
     address = mmap(nullptr, mOptions.memorySize, PROT_READ | PROT_WRITE, MAP_SHARED, mShmFd, offset);
     BIO_TP_END;
     if (address == MAP_FAILED) {
-        NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memorySize << " offset " << offset << " failed, error:" <<
-            strerror(errno));
+        NET_LOG_ERROR("Mmap bio_shm size " << mOptions.memorySize << " offset " << offset
+                                           << " failed, error:" << strerror(errno));
         close(mShmFd);
         mShmFd = -1;
         return BIO_ERR;
@@ -276,8 +276,9 @@ BResult NetEngine::InitShmMemAllocator()
         close(mShmFd);
         mShmFd = -1;
     } else {
-        NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize << ", shmOffset:" <<
-            mShareOffset << ", key:" << mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
+        NET_LOG_INFO("Succeed to start share memory pool success, size:" << mOptions.memorySize
+                                                                         << ", shmOffset:" << mShareOffset << ", key:"
+                                                                         << mLocalMr.GetHcomMrs()[0]->GetLKey() << ".");
     }
     return result;
 }
@@ -327,7 +328,7 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
     tlsOpt.cfCb = tlsCertificationCallback;
 
     auto tlsCaCallback = ([&options](const std::string &name, std::string &capath, std::string &crlPath,
-        UBSHcomPeerCertVerifyType &verifyPeerCert, UBSHcomTLSCertVerifyCallback &cb) {
+                                     UBSHcomPeerCertVerifyType &verifyPeerCert, UBSHcomTLSCertVerifyCallback &cb) {
         capath = options.caCerPath;
         if (!options.caCrlPath.empty()) {
             crlPath = options.caCrlPath;
@@ -335,73 +336,74 @@ void NetEngine::SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHc
         }
         NET_LOG_INFO("Get CA cert success.");
         verifyPeerCert = UBSHcomPeerCertVerifyType::VERIFY_BY_DEFAULT;
-        cb = [](void *, const char *) { return 0; };
+        cb = [](void *, const char *) {
+            return 0;
+        };
         return true;
     });
     tlsOpt.caCb = tlsCaCallback;
 
-    auto tlsPrivateKeyCallback = (
-            [this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
-                             UBSHcomTLSEraseKeypass &erase) {
-                if (options.privateKeyPassword.empty()) {
-                    pwd = nullptr;
-                    len = 0;
-                    path = options.privateKeyPath;
-                    LOG_WARN("private key password is empty, use unencrypted key path.");
-                    return true;
-                }
+    auto tlsPrivateKeyCallback = ([this, &options](const std::string &name, std::string &path, void *&pwd, int &len,
+                                                   UBSHcomTLSEraseKeypass &erase) {
+        if (options.privateKeyPassword.empty()) {
+            pwd = nullptr;
+            len = 0;
+            path = options.privateKeyPath;
+            LOG_WARN("private key password is empty, use unencrypted key path.");
+            return true;
+        }
 
-                std::vector<char> encryptedKeyPass(KEYPASS_MAX_LEN, 0);
-                std::ifstream fileStream(options.privateKeyPassword);
-                if (!fileStream.is_open()) {
-                    LOG_ERROR("Failed to open keyPassFile: " << options.privateKeyPassword);
-                    return false;
-                }
+        std::vector<char> encryptedKeyPass(KEYPASS_MAX_LEN, 0);
+        std::ifstream fileStream(options.privateKeyPassword);
+        if (!fileStream.is_open()) {
+            LOG_ERROR("Failed to open keyPassFile: " << options.privateKeyPassword);
+            return false;
+        }
 
-                if (!fileStream.getline(encryptedKeyPass.data(), KEYPASS_MAX_LEN)) {
-                    LOG_ERROR("Failed to read keyPassFile");
-                    return false;
-                }
+        if (!fileStream.getline(encryptedKeyPass.data(), KEYPASS_MAX_LEN)) {
+            LOG_ERROR("Failed to read keyPassFile");
+            return false;
+        }
 
-                size_t actualLen = strlen(encryptedKeyPass.data());
-                std::vector<char> plainTextBuffer(KEYPASS_MAX_LEN, 0);
-                size_t plainTextLen = KEYPASS_MAX_LEN;
-                auto ret = mDecryptHandler(encryptedKeyPass.data(), actualLen, plainTextBuffer.data(), &plainTextLen);
-                if (ret != 0) {
-                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                    LOG_ERROR("Decrypt failed with error: " << ret);
-                    return false;
-                }
+        size_t actualLen = strlen(encryptedKeyPass.data());
+        std::vector<char> plainTextBuffer(KEYPASS_MAX_LEN, 0);
+        size_t plainTextLen = KEYPASS_MAX_LEN;
+        auto ret = mDecryptHandler(encryptedKeyPass.data(), actualLen, plainTextBuffer.data(), &plainTextLen);
+        if (ret != 0) {
+            std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+            LOG_ERROR("Decrypt failed with error: " << ret);
+            return false;
+        }
 
-                path = options.privateKeyPath;
-                pwd = malloc(plainTextLen);
-                len = static_cast<int>(plainTextLen);
-                if (!pwd) {
-                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                    LOG_ERROR("Memory allocation failed.");
-                    return false;
-                }
+        path = options.privateKeyPath;
+        pwd = malloc(plainTextLen);
+        len = static_cast<int>(plainTextLen);
+        if (!pwd) {
+            std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+            LOG_ERROR("Memory allocation failed.");
+            return false;
+        }
 
-                ret = memcpy_s(pwd, plainTextLen, plainTextBuffer.data(), plainTextLen);
-                if (ret != 0) {
-                    std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                    free(pwd);
-                    pwd = nullptr;
-                    LOG_ERROR("Memory copy failed.");
-                    return false;
-                }
+        ret = memcpy_s(pwd, plainTextLen, plainTextBuffer.data(), plainTextLen);
+        if (ret != 0) {
+            std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+            free(pwd);
+            pwd = nullptr;
+            LOG_ERROR("Memory copy failed.");
+            return false;
+        }
 
-                erase = [](void *pass, int len) {
-                    if (pass && len > 0) {
-                        (void)memset_s(pass, len, 0, len);
-                        free(pass);
-                        pass = nullptr;
-                    }
-                };
+        erase = [](void *pass, int len) {
+            if (pass && len > 0) {
+                (void)memset_s(pass, len, 0, len);
+                free(pass);
+                pass = nullptr;
+            }
+        };
 
-                std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
-                return true;
-            });
+        std::fill(plainTextBuffer.begin(), plainTextBuffer.end(), 0);
+        return true;
+    });
     tlsOpt.pkCb = tlsPrivateKeyCallback;
 }
 
@@ -424,7 +426,7 @@ BResult NetEngine::AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr)
     if (isOobSvr) {
         const std::string listenerUrl = "uds://" + UDS_NAME;
         auto ret = mIpcService->Bind(listenerUrl, std::bind(&NetEngine::NewChannel, this, std::placeholders::_1,
-            std::placeholders::_2, std::placeholders::_3));
+                                                            std::placeholders::_2, std::placeholders::_3));
         if (UNLIKELY(ret != BIO_OK)) {
             NET_LOG_ERROR("Net tls callback has created.");
             return ret;
@@ -474,7 +476,7 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     options.workerGroupThreadCount = opt.handlerCount;
     options.workerThreadPriority = 0;
     options.workerGroupMode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
+                                               UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     mIpcService = UBSHcomService::Create(opt.protocol, IPC_SERVICE_NAME, options);
     if (mIpcService == nullptr) {
         NET_LOG_ERROR("Failed to create ipc service instance, protocol:" << opt.protocol << ".");
@@ -577,7 +579,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     options.workerGroupThreadCount = opt.handlerCount;
     options.workerThreadPriority = 0;
     options.workerGroupMode = opt.isBusyLoop ? UBSHcomNetDriverWorkingMode::NET_BUSY_POLLING :
-                              UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
+                                               UBSHcomNetDriverWorkingMode::NET_EVENT_POLLING;
     mRpcService = UBSHcomService::Create(opt.protocol, RPC_SERVICE_NAME, options);
     if (mRpcService == nullptr) {
         NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
@@ -634,9 +636,9 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     newChannel->SetChannelTimeOut(mTimeout, mTimeout);
 #endif
     if (netPayload.srcNodeId.pid == 0) {
-        NET_LOG_INFO("Receive new channel, not needed add, channel: " << newChannel->GetId() << ", peer connected nid: "
-            << netPayload.srcNodeId.nid << " pid: " << netPayload.srcNodeId.pid << ", ip: " << ipPort << ", payload " <<
-            payload << ".");
+        NET_LOG_INFO("Receive new channel, not needed add, channel: "
+                     << newChannel->GetId() << ", peer connected nid: " << netPayload.srcNodeId.nid
+                     << " pid: " << netPayload.srcNodeId.pid << ", ip: " << ipPort << ", payload " << payload << ".");
         return BIO_OK;
     }
 
@@ -645,8 +647,9 @@ int32_t NetEngine::NewChannel(const std::string &ipPort, const ChannelPtr &newCh
     } else {
         mDataChannelMgr->AddChannel(netPayload.srcNodeId, const_cast<ChannelPtr &>(newChannel), 1);
     }
-    NET_LOG_INFO("Receive new channel " << newChannel->GetId() << ", nodeId:" << netPayload.srcNodeId.nid << ", pid:" <<
-        netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload " << payload << ".");
+    NET_LOG_INFO("Receive new channel " << newChannel->GetId() << ", nodeId:" << netPayload.srcNodeId.nid
+                                        << ", pid:" << netPayload.srcNodeId.pid << ", ip:" << ipPort << ", payload "
+                                        << payload << ".");
     return BIO_OK;
 }
 
@@ -659,8 +662,8 @@ void NetEngine::ChannelBroken(const ChannelPtr &ch)
 
     NetChannelUpCtx ctx(ch->GetUpCtx());
     NetNode dstNid(static_cast<uint32_t>(ctx.peerId), ctx.procId);
-    NET_LOG_WARN("Receive broken channel: " << ch->GetId() << ", nodeId: " << dstNid.nid << ", pid: " << dstNid.pid <<
-        ", panel: " << ctx.IsCtrlPanel() << ".");
+    NET_LOG_WARN("Receive broken channel: " << ch->GetId() << ", nodeId: " << dstNid.nid << ", pid: " << dstNid.pid
+                                            << ", panel: " << ctx.IsCtrlPanel() << ".");
 
     NetChannelMgrPtr mgr = ctx.IsCtrlPanel() ? mCtrlChannelMgr : mDataChannelMgr;
     if (mgr != nullptr) {
@@ -684,8 +687,8 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
     }
     auto &handler = mHandlers[ctx.OpCode()];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() <<
-            " as no handler registered");
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode()
+                                                                           << " as no handler registered");
         return BIO_ERR;
     }
     BIO_TRACE_START(NET_TRACE_SHEDULE);
@@ -772,14 +775,15 @@ BResult NetEngine::ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtr
 #endif
         }
         if (result == 0) {
-            NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid " <<
-                info.peerId.nid << ", payload " << options.payload << ".");
+            NET_LOG_INFO("Connect to peer success, ip " << info.ip << ", port " << info.port << ", dstNid "
+                                                        << info.peerId.nid << ", payload " << options.payload << ".");
             break;
         }
     }
     if (result != 0) {
-        NET_LOG_ERROR("Connect to peer failed, ret:" << UBSHcomNetErrStr(result) << ", ip " << info.ip << ", port " <<
-            info.port << ", nid " << info.peerId.nid << ", pid " << info.peerId.pid << ".");
+        NET_LOG_ERROR("Connect to peer failed, ret:" << UBSHcomNetErrStr(result) << ", ip " << info.ip << ", port "
+                                                     << info.port << ", nid " << info.peerId.nid << ", pid "
+                                                     << info.peerId.pid << ".");
         return result;
     }
 
@@ -809,5 +813,5 @@ BResult NetEngine::PrepareTlsDecrypter(const NetOptions &config)
     return BIO_OK;
 }
 
-}
-}
+} // namespace bio
+} // namespace ock

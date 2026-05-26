@@ -44,7 +44,8 @@ struct ModuleDesc {
           start(std::move(startFunc)),
           shutdown(std::move(shutdownFunc)),
           exit(std::move(exitFunc))
-    {}
+    {
+    }
 };
 
 class BioServiceProc {
@@ -360,7 +361,7 @@ public:
         return mCm->GetNodeInfo(nid, nodeInfo);
     }
 
-    inline void* LoadFunction(const char *name, void *handler)
+    inline void *LoadFunction(const char *name, void *handler)
     {
         void *ptr = nullptr;
         ptr = dlsym(handler, name);
@@ -432,6 +433,6 @@ private:
     bool mMirrorInited = false;
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BIO_SERVER_H

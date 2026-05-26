@@ -12,15 +12,15 @@
 
 #include "test_underfs.h"
 #include <mockcpp/mockcpp.hpp>
-#include "gtest/gtest.h"
-#include "rados/librados.h"
 #include "bio_err.h"
-#include "bio_types.h"
-#include "tracepoint.h"
-#include "hdfs_system.h"
-#include "ceph_system.h"
 #include "bio_log.h"
+#include "bio_types.h"
+#include "ceph_system.h"
 #include "file_system_factory.h"
+#include "gtest/gtest.h"
+#include "hdfs_system.h"
+#include "rados/librados.h"
+#include "tracepoint.h"
 
 using namespace ock::bio;
 
@@ -47,7 +47,7 @@ std::shared_ptr<FileSystem> g_hdfsInstancePtr = FileSystemFactory::CreateFileSys
 std::shared_ptr<FileSystem> g_cephInstancePtr = FileSystemFactory::CreateFileSystem(CEPH_SYSTEM);
 
 static int g_ptrStub;
-static int RadosCreateStub(rados_t *pcluster, const char * const clusterName, const char * const name, uint64_t flags)
+static int RadosCreateStub(rados_t *pcluster, const char *const clusterName, const char *const name, uint64_t flags)
 {
     *pcluster = static_cast<rados_t>(&g_ptrStub);
     return BIO_OK;

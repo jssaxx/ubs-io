@@ -10,21 +10,20 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <functional>
-#include <fstream>
-#include <utility>
-#include <unistd.h>
-#include <fcntl.h>
+#include "htracer_service.h"
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <utility>
+#include "bio_tracepoint_helper.h"
 #include "htracer.h"
+#include "htracer_manager.h"
 #include "htracer_monotonic.h"
 #include "htracer_utils.h"
-#include "htracer_manager.h"
-#include "bio_tracepoint_helper.h"
-#include "htracer_service.h"
-
 
 namespace ock {
 namespace htracer {
@@ -267,5 +266,5 @@ void HTracerService::ClearTraceInfo()
         }
     }
 }
-}
-}
+} // namespace htracer
+} // namespace ock
