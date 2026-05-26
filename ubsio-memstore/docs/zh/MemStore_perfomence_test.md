@@ -49,7 +49,7 @@
     Attach AppId<600> success
     ```
 
-## 测试指令<a name="ZH-CN_TOPIC_0000002603860753"></a>
+## 测试指令
 
 ```cmd
 put value: mms put [userId] [key] [filePath] [length]
@@ -70,7 +70,7 @@ set: mms set [length(b)]
 >
 >- cpuStart要与已绑定核心区分。如当配置"mms.net.rpc.worker.groups.cpuset": "0-0,1-1,2-2,3-3,4-4,5-5,6-6,7-7"， cpuStart参数不能选用0-7。
 
-## 测试不同并发数<a name="ZH-CN_TOPIC_0000002573021690"></a>
+## 测试不同并发数
 
 - 测试场景1：2KB I/O请求，8个并发操作，单次操作总I/O大小100MB，用户ID为0，NUMA节点个数为1，从32个CPU中的第20个开始执行。
 
@@ -96,7 +96,7 @@ set: mms set [length(b)]
     root:/cli> mms trace clear
     ```
 
-## 测试批量操作<a name="ZH-CN_TOPIC_0000002603740809"></a>
+## 测试批量操作
 
 测试场景：2KB I/O请求，单个并发操作，8批量操作，总I/O大小100MB，用户ID为0，NUMA节点个数为1，从32个CPU中的第20个开始执行。
 
@@ -110,7 +110,7 @@ root:/cli> mms trace show
 root:/cli> mms trace clear
 ```
 
-## 测试UPDATE不同size的数据<a name="ZH-CN_TOPIC_0000002573181328"></a>
+## 测试UPDATE不同size的数据
 
 测试场景：1B I/O请求，单个并发操作，8批量操作，总I/O大小100MB，用户ID为0，NUMA节点个数为1，从32个CPU中的第20个开始执行。
 
@@ -128,7 +128,7 @@ root:/cli> mms trace clear
 >[!NOTICE] 说明
 >mms perf put 2 1 8 100 0 1 32 20命令执行后，2KB IO会被mms set永久覆盖为1B。
 
-## 测试7:3读写混合<a name="ZH-CN_TOPIC_0000002573021688"></a>
+## 测试7:3读写混合
 
 测试场景：2KB I/O请求，8个并发操作，单次操作总I/O大小100MB，用户ID为0，NUMA节点个数为1，从32个CPU中的第20个开始执行。
 
