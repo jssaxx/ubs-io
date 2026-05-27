@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <cstring>
 #include <vector>
+#include <memory>
 #include "bio_c.h"
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_err.h"
@@ -169,16 +170,17 @@ int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::ve
 {
     sem_t sem;
     sem_init(&sem, 0, 0);
-    auto keySize = std::make_shared<std::atomic<uint32_t>>(key.size());
-    for (auto i = 0; i < key.size(); i++) {
+    auto batchSize = key.size();
+    auto keySize = std::make_shared<std::atomic<uint32_t>>(batchSize);
+    for (auto i = 0; i < batchSize; i++) {
         auto index = i;
         auto keyCopy = key[i];
         auto valueCopy = value[i];
         auto lengthCopy = lengths[i];
-        std::function<void()> func = [this, index, keyCopy, valueCopy, lengthCopy, &results, keySize, &sem]() {
+        std::function<void()> func = [this, index, keyCopy, valueCopy, lengthCopy, &results, keySize, &sem, batchSize]() {
             auto ret = KvPutData(keyCopy, valueCopy, lengthCopy);
             if (ret != UBSIO_KVC_OK) {
-                LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
+                LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << batchSize << " i:" << index);
             }
             results[index] = ret;
             if (keySize->fetch_sub(1) == 1) {
