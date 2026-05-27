@@ -37,7 +37,8 @@ typedef void *(*BDM_THREAD_HANDLE)(void *arg);
 #define BDM_THREAD_MAX_THREADS 256
 #define BDM_THREAD_MAX_QUEUE_SIZE 32768
 
-enum{
+enum
+{
     BDM_THREAD_RUNNING,
     BDM_THREAD_EXIT_DELAY,      // 延迟退出，等待队列任务处理完
     BDM_THREAD_EXIT_IMMEDIATELY // 立即退出

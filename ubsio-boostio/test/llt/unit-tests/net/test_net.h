@@ -14,6 +14,7 @@
 #define TEST_NET_H
 
 #include "gtest/gtest.h"
+#include "net_common.h"
 
 namespace ock {
 namespace bio {

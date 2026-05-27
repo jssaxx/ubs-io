@@ -39,7 +39,8 @@ constexpr uint16_t BIO_IO_DELAY_TIME = 1;
 using UpdateView = std::function<void(void)>;
 using FlowInfo = ock::bio::agent::BioClientAgent::FlowInfo;
 
-enum WorkerScene : uint32_t{
+enum WorkerScene : uint32_t
+{
     SCENE_NONE = 0,
     SCENE_BIGDATA = 1
 };

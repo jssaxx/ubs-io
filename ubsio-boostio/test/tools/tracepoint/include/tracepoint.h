@@ -38,7 +38,8 @@ extern "C" {
 #define MAX_DESC_LEN 256
 #endif
 
-typedef enum TracepointType{
+typedef enum TracepointType
+{
     BIO_TP_TYPE_CALLBACK = 0,
     BIO_TP_TYPE_RESET,
     BIO_TP_TYPE_PAUSE,

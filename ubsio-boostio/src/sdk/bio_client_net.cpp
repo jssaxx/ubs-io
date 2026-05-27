@@ -132,7 +132,8 @@ BResult BioClientNet::CorrectFd()
 
 BResult BioClientNet::CheckShmFd()
 {
-    struct stat buffer {};
+    struct stat buffer {
+    };
     auto ret = fstat(mShmFd, &buffer);
     if (ret < 0) {
         CLIENT_LOG_ERROR("Read file failed, ret:" << strerror(errno) << ".");

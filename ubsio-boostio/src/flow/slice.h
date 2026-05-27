@@ -108,7 +108,8 @@ private:
     std::vector<FlowAddr> mAddrs;
 };
 
-enum SliceState : uint8_t{
+enum SliceState : uint8_t
+{
     SLICE_VALID = 1,
     SLICE_INVALID = 2,
 };

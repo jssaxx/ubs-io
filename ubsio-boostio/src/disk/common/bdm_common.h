@@ -130,7 +130,8 @@ extern "C" {
 
 #define BDM_LOG_BUF_LEN 512UL
 
-typedef enum{
+typedef enum
+{
     BDM_LOG_TRACE = 0,
     BDM_LOG_DEBUG,
     BDM_LOG_INFO,

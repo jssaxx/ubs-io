@@ -27,7 +27,8 @@ constexpr uint32_t MAX_OVERLOAD_STAT_CYCLE_NUM = 64;
 constexpr uint32_t CACHE_OLC_PERCENT_BASE = 100;
 constexpr uint32_t PERCENT_100 = 100;
 
-enum BwStatType{
+enum BwStatType
+{
     BW_STAT_FRONT_WRITE = 0,
     BW_STAT_EVICT_TO_DISK,
     BW_STAT_BUTT

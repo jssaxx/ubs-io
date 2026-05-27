@@ -77,7 +77,8 @@ BResult ExpireChecker::ValidateCertificateTime(X509 *x509, const std::string &ty
     ASN1_TIME *notAfter = OpenSslApiWrapper::X509GetNotAfter(x509);
     time_t now;
     time(&now);
-    struct tm tm {};
+    struct tm tm {
+    };
     time_t notBeforeTime = OpenSslApiWrapper::Asn1Time2Tm(notBefore, &tm) ? mktime(&tm) : -1;
     time_t notAfterTime = OpenSslApiWrapper::Asn1Time2Tm(notAfter, &tm) ? mktime(&tm) : -1;
     if (notBeforeTime == -1 || notAfterTime == -1) {

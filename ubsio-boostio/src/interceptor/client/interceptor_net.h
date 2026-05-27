@@ -13,10 +13,10 @@
 #ifndef BOOSTIO_INTERCEPTOR_NET_H
 #define BOOSTIO_INTERCEPTOR_NET_H
 
-#include "net_engine.h"
+#include "bio_err.h"
 #include "bio_ref.h"
 #include "net_common.h"
-#include "bio_err.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace bio {

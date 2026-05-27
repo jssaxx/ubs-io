@@ -18,7 +18,8 @@
 
 namespace ock {
 namespace htracer {
-enum HResult{
+enum HResult
+{
     RET_OK = 0,
     RET_ERR = -1,
     RET_INVALID_PARAM = -2,

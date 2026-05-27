@@ -106,7 +106,8 @@ void HTracerService::OverrideWrite(std::stringstream &ss)
 void HTracerService::WriteTraceInfo(std::stringstream &ss)
 {
     size_t filesize = 0;
-    struct stat statbuf {};
+    struct stat statbuf {
+    };
     int ret = stat(dumpFilePath.c_str(), &statbuf);
     if (ret != 0) {
         if (errno != ENOENT) {

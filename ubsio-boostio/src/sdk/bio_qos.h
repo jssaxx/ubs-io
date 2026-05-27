@@ -13,23 +13,34 @@
 #ifndef BIO_QOS_H
 #define BIO_QOS_H
 
+#include <semaphore.h>
+#include <algorithm>
 #include <atomic>
 #include <list>
+#include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <semaphore.h>
-#include "bio_ref.h"
-#include "bio_err.h"
-#include "bio_def.h"
-#include "bio_lock.h"
+#include "bio_c.h"
 #include "bio_client_log.h"
+#include "bio_def.h"
+#include "bio_err.h"
+#include "bio_execution.h"
+#include "bio_lock.h"
+#include "bio_monotonic.h"
+#include "bio_ref.h"
+#include "bio_trace.h"
+#include "bio_types.h"
+#include "cm.h"
+#include "message.h"
 
 namespace ock {
 namespace bio {
 constexpr uint8_t QOS_CONCURRENCY = 0x01;
 constexpr uint8_t QOS_QUOTA = 0x10;
 
-enum QuotaType{
+enum QuotaType
+{
     QUOTA_WRITE = 0,
     QUOTA_READ = 1,
     QUOTA_BUTT

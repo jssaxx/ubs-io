@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "message_op.h"
-#include "bio_client_agent.h"
-#include "bio_client.h"
 #include "bio_qos.h"
+#include "bio_client.h"
+#include "bio_client_agent.h"
+#include "message_op.h"
 
 using namespace ock::bio;
 

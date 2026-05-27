@@ -19,7 +19,8 @@
 extern "C" {
 #endif
 
-typedef enum{
+typedef enum
+{
     PT_NUM_LIMIT_FIXED = 0,
     PT_NUM_LIMIT_UNFIXED = 1,
     PT_NUM_LIMIT_BUTT

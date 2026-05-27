@@ -26,7 +26,8 @@ typedef void (*LogFunc)(int32_t level, const char *logBuf);
 
 class InterceptorLog {
 public:
-    enum class Level{
+    enum class Level
+    {
         LOG_LEVEL_DEBUG = 0,
         LOG_LEVEL_INFO = 1,
         LOG_LEVEL_WARN = 2,
@@ -56,7 +57,8 @@ public:
         if (func != nullptr) {
             func(level, oss.str().c_str());
         } else {
-            struct timeval tv {};
+            struct timeval tv {
+            };
             char strTime[24];
             gettimeofday(&tv, nullptr);
             strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));

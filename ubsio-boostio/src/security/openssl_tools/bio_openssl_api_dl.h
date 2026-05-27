@@ -13,6 +13,7 @@
 #ifndef BIO_OPENSSL_API_DL_H
 #define BIO_OPENSSL_API_DL_H
 
+#include <cstdint>
 #include <string>
 
 namespace ock {

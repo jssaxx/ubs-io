@@ -41,11 +41,17 @@ struct ListHead {
 
 typedef struct ListHead ListHeadT;
 
-#define DPAX_LIST_HEAD_INIT(name) {&(name), &(name)}
+#define DPAX_LIST_HEAD_INIT(name) \
+    {                             \
+        &(name), &(name)          \
+    }
 
 #define DPAX_LIST_HEAD(name) struct ListHead name = DPAX_LIST_HEAD_INIT(name)
 
-#define LIST_HEAD_INIT(name) {&(name), &(name)}
+#define LIST_HEAD_INIT(name) \
+    {                        \
+        &(name), &(name)     \
+    }
 
 #define LIST_HEAD(name) struct ListHead name = LIST_HEAD_INIT(name)
 

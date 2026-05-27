@@ -15,7 +15,8 @@
 
 #include <cstdint>
 
-enum BioOpCode : uint16_t{
+enum BioOpCode : uint16_t
+{
     BIO_OP_SDK_SHM_INIT = 0,
     BIO_OP_SDK_GET_NODE_INFO,
     BIO_OP_SDK_GET_NODE_INFO_BY_PT,

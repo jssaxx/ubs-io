@@ -18,7 +18,8 @@
 namespace ock {
 namespace bio {
 using BResult = int32_t;
-enum Error : int32_t{
+enum Error : int32_t
+{
     BIO_OK = 0,
     BIO_ERR = 1,
     BIO_INNER_ERR = 2,

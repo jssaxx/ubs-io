@@ -25,7 +25,8 @@
 
 #define MONITOR_INTERAL_TIME (5000)
 
-typedef enum{
+typedef enum
+{
     RECORD_STATE_NORMAL = 0,
     RECORD_STATE_FAULT = 1,
 } RecordState;

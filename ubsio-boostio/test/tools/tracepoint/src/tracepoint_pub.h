@@ -50,7 +50,8 @@ extern "C" {
 
 #define BIO_TP_MAX_INIT_ACTIVE_NUM 512
 
-typedef enum TagBioTpInitActiveE{
+typedef enum TagBioTpInitActiveE
+{
     BIO_TP_INIT_ACTIVE_NAME = 0,
     BIO_TP_INIT_ACTIVE_TYPE = 1,
     BIO_TP_INIT_ACTIVE_ALIVE = 2,

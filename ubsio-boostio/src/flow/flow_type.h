@@ -17,19 +17,22 @@
 
 namespace ock {
 namespace bio {
-enum FlowType : uint16_t{
+enum FlowType : uint16_t
+{
     FLOW_MEMORY = 0,
     FLOW_DISK = 1,
     FLOW_BUTT
 };
 
-enum FlowRole : uint16_t{
+enum FlowRole : uint16_t
+{
     FLOW_META = 0,
     FLOW_DATA = 1,
     FLOW_ROLE_BUTT
 };
 
-enum FlowCache : uint16_t{
+enum FlowCache : uint16_t
+{
     FLOW_WCACHE = 0,
     FLOW_RCACHE = 1,
     FLOW_CACHE

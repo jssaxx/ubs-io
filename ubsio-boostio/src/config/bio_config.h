@@ -33,7 +33,8 @@ constexpr const char *CONFIG_PATH = "/etc/boostio/bio.conf";
 constexpr const char *CONFIG_PATH_BAK = "/etc/boostio/bio.conf.bak";
 constexpr const char *CONFIG_PATH_BAK_INIT = "/etc/boostio/bio.conf.bak.init";
 
-enum class ConfValueType{
+enum class ConfValueType
+{
     VINT = 0,
     VFLOAT = 1,
     VSTRING = 2,

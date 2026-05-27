@@ -21,13 +21,15 @@
 
 namespace ock {
 namespace bio {
-enum RCacheTierType{
+enum RCacheTierType
+{
     READ_CACHE_TIER_MEM = 0,
     READ_CACHE_TIER_DISK = 1,
     READ_CACHE_TIER_BUTT
 };
 
-enum MqType{
+enum MqType
+{
     MQ_COLD = 0,
     MQ_WARM = 1,
     MQ_HOT = 2,
@@ -35,7 +37,8 @@ enum MqType{
     MQ_TYPE_BUTT
 };
 
-enum RCacheTrunkListType{
+enum RCacheTrunkListType
+{
     RCACHE_TRUNK_LIST_TYPE_TRUNCATE = 0,
     RCACHE_TRUNK_LIST_TYPE_EVICT = 1,
     RCACHE_TRUNK_LIST_TYPE_BUTT

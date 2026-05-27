@@ -39,7 +39,8 @@ typedef struct {
     uint64_t maxChunkSize;
 } BdmCreatePara;
 
-typedef enum{
+typedef enum
+{
     BDM_CODE_OK = 0,
     BDM_CODE_ERR = -1,
     BDM_CODE_ERR_IO = 5,
@@ -53,7 +54,8 @@ typedef enum{
     BDM_CODE_SCAN_OFF = -103,
 } BdmRetCode;
 
-typedef enum{
+typedef enum
+{
     BDM_DISK_STATE_NORMAL = 0,
     BDM_DISK_STATE_FAULT = 1,
     BDM_DISK_STATE_BUTT

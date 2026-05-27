@@ -836,7 +836,8 @@ void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
 
     time_t rawtime;
     struct tm *timeinfo = nullptr;
-    struct tm timebuf {};
+    struct tm timebuf {
+    };
     rawtime = time(nullptr);
     timeinfo = localtime_r(&rawtime, &timebuf);
     mPrintOp("Perf Test Result: @ %s\n", asctime(timeinfo));

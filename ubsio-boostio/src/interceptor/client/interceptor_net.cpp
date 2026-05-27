@@ -10,21 +10,21 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <utility>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <cerrno>
-#include <sys/syscall.h>
 #include <linux/version.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <cerrno>
+#include <utility>
 
 #include <new>
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "interceptor_log.h"
-#include "message_op.h"
-#include "message.h"
 #include "interceptor_net.h"
+#include "message.h"
+#include "message_op.h"
 
 using namespace ock::bio;
 
@@ -102,7 +102,8 @@ BResult InterceptorClientNetService::CorrectFd()
 
 BResult InterceptorClientNetService::CheckShmFd()
 {
-    struct stat buffer {};
+    struct stat buffer {
+    };
     auto ret = fstat(mShmFd, &buffer);
     if (UNLIKELY(ret < 0)) {
         CLOG_ERROR("Read file failed, ret:" << ret << ".");

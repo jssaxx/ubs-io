@@ -69,7 +69,8 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    struct sigaction termSa {};
+    struct sigaction termSa {
+    };
     termSa.sa_handler = &ConsoleHandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 

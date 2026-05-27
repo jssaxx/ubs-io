@@ -13,6 +13,11 @@
 #ifndef BOOSTIO_BUFVEC_H
 #define BOOSTIO_BUFVEC_H
 
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <cstddef>
+#include <cstdint>
+
 namespace ock {
 namespace bio {
 struct BufVec {

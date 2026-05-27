@@ -46,7 +46,8 @@ constexpr int ROTATION_FILE_COUNT_MAX = 50;
 
 void Logger::LogToStdErr(const std::ostringstream &oss)
 {
-    struct timeval tv {};
+    struct timeval tv {
+    };
     char strTime[24];
 
     gettimeofday(&tv, nullptr);

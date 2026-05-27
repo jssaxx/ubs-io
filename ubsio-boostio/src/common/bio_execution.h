@@ -27,7 +27,8 @@
 
 namespace ock {
 namespace bio {
-enum RunnableType{
+enum RunnableType
+{
     NORMAL = 0,
     STOP = 1,
 };

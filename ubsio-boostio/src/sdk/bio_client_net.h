@@ -13,14 +13,14 @@
 #ifndef BIO_CLIENT_NET_H
 #define BIO_CLIENT_NET_H
 
-#include "cm.h"
-#include "net_engine.h"
-#include "net_common.h"
-#include "bio_ref.h"
-#include "bio_tracepoint_helper.h"
 #include "bio.h"
 #include "bio_config_instance.h"
+#include "bio_ref.h"
+#include "bio_tracepoint_helper.h"
+#include "cm.h"
 #include "message.h"
+#include "net_common.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace bio {

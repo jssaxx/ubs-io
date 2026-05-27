@@ -31,13 +31,15 @@ using CheckServiceState = std::function<bool()>;
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
 using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
 
-enum CacheType : uint16_t{
+enum CacheType : uint16_t
+{
     WRITE_CACHE = 0,
     READ_CACHE = 1,
     CACHE_BUTT
 };
 
-enum RealIoStrategy : uint32_t{
+enum RealIoStrategy : uint32_t
+{
     WRITE_DEFAULT = 0,
     WRITE_MEM_BACK = 1,
     WRITE_DISK_BACK = 2,

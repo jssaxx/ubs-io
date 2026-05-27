@@ -15,6 +15,8 @@
 #include "native_operations_loader.h"
 #include "proxy_operations_loader.h"
 
+#include <cstdint>
+
 namespace ock {
 namespace interceptor {
 static inline bool CheckPointer(const void *ptr)

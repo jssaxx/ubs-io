@@ -20,7 +20,8 @@
 extern "C" {
 #endif
 
-typedef enum{
+typedef enum
+{
     CM_OK = 0,
     CM_ERR = -1,
     CM_PARAM_INVALID = -1100,
@@ -51,13 +52,15 @@ typedef enum{
 #define NODE_ID_INVALID (0xFFFF)
 #define DISK_ID_INVALID (0xFFFF)
 
-typedef enum{
+typedef enum
+{
     CONFIG_ROLE_CMM = 1,
     CONFIG_ROLE_DATA = 2,
     CONFIG_ROLE_TOGETHER = 3,
 } ConfigRole;
 
-typedef enum{
+typedef enum
+{
     PT_STATE_INIT = 0,          // init
     PT_STATE_NORMAL = 1,        // OK
     PT_STATE_DEGRADE_LOSS1 = 2, // degrade 1
@@ -67,7 +70,8 @@ typedef enum{
     PT_STATE_BUTT
 } PtState;
 
-typedef enum{
+typedef enum
+{
     PT_COPY_STATE_INIT = 0,
     PT_COPY_STATE_RUNNING = 1,
     PT_COPY_STATE_DOWN = 2,
@@ -76,7 +80,8 @@ typedef enum{
     PT_COPY_STATE_BUTT
 } PtCopyState;
 
-typedef enum{
+typedef enum
+{
     PT_NONE = 0,
     PT_REP_SINGLE = 1,
     PT_REP_DOUBLE = 2,
@@ -118,26 +123,30 @@ typedef struct {
     uint16_t resv[3L];
 } PtFinish;
 
-typedef enum{
+typedef enum
+{
     NODE_STATUS_OK = 0,
     NODE_STATUS_UNOK = 1,
 } NodeStatus;
 
-typedef enum{
+typedef enum
+{
     NODE_STATE_INVALID = 0,
     NODE_STATE_UP = 1,
     NODE_STATE_DOWN = 2,
     NODE_STATE_BUTT
 } NodeState;
 
-typedef enum{
+typedef enum
+{
     NODE_CLUSTER_STATE_INVALID = 0,
     NODE_CLUSTER_STATE_OUT = 1,
     NODE_CLUSTER_STATE_IN = 2,
     NODE_CLUSTER_STATE_BUTT
 } NodeClusterState;
 
-typedef enum{
+typedef enum
+{
     NET_STATE_NORMAL = 0,
     NET_STATE_FAULT = 1,
     NET_STATE_BUTT
@@ -149,20 +158,23 @@ typedef struct {
     uint16_t state; // 见 NetState
 } NetInfo;
 
-typedef enum{
+typedef enum
+{
     DISK_TYPE_DRAM = 0,
     DISK_TYPE_SCM = 1,
     DISK_TYPE_SSD = 2,
     DISK_TYPE_BUTT
 } DiskType;
 
-typedef enum{
+typedef enum
+{
     DISK_STATE_NORMAL = 0,
     DISK_STATE_FAULT = 1,
     DISK_STATE_BUTT
 } DiskState;
 
-typedef enum{
+typedef enum
+{
     DISK_CLUSTER_STATE_INVALID = 0,
     DISK_CLUSTER_STATE_OUT = 1,
     DISK_CLUSTER_STATE_IN = 2,

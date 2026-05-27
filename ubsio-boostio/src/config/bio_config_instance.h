@@ -108,8 +108,8 @@ public:
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
         bool enableTls = true;
-        std::string tlsCaCertPath = "/path/CA/cacert.pem";             /* CA根证书 */
-        std::string tlsCaCrlPath = "";                                 /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
+        std::string tlsCaCertPath = "/path/CA/cacert.pem"; /* CA根证书 */
+        std::string tlsCaCrlPath = ""; /* 吊销列表文件，可选，如果无吊销证书可以不设置 */
         std::string tlsServerCertPath = "/path/server/servercert.pem"; /* server工作证书 */
         std::string tlsServerKeyPath = "/path/server/serverkey.pem";   /* server公钥 */
         std::string tlsServerKeyPassPath = "";                         /* server端私钥密文文件 */

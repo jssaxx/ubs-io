@@ -50,7 +50,8 @@ struct Callback {
     Callback(CbFunc func, void *ctx) : cb(std::move(func)), cbCtx(ctx) {}
 };
 
-enum class ConnectMode{
+enum class ConnectMode
+{
     CONNECT_IPC = 0,
     CONNECT_RPC = 1,
 };
@@ -105,7 +106,8 @@ struct ConnectInfo {
 
 using AsyncConnHandler = std::function<void(uintptr_t userCtx, int32_t ret, ConnectInfo &info)>;
 
-enum class Role{
+enum class Role
+{
     NET_CLIENT = 0,
     NET_SERVER = 1,
     NET_BUTT = 2,

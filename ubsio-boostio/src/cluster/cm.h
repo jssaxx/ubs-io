@@ -31,7 +31,8 @@
 
 namespace ock {
 namespace bio {
-enum CmRole : uint16_t{
+enum CmRole : uint16_t
+{
     ROLE_CMM = 1,
     ROLE_DATA = 2,
     ROLE_TOGETHER = 3,
@@ -55,13 +56,15 @@ struct CmOptions {
     CmGroups groups;
 };
 
-enum CmStatus : uint16_t{
+enum CmStatus : uint16_t
+{
     CM_INIT = 0,
     CM_NORMAL = 1,
     CM_UPDATING = 2,
 };
 
-enum CmNodeStatus : uint16_t{
+enum CmNodeStatus : uint16_t
+{
     CM_NODE_NORMAL = 0,
     CM_NODE_FAULT = 1,
 };
@@ -147,7 +150,8 @@ struct CmNodeInfo {
     }
 };
 
-enum CmCopyState : uint16_t{
+enum CmCopyState : uint16_t
+{
     CM_COPY_INIT = 0,
     CM_COPY_RUNNING = 1,
     CM_COPY_DOWN = 2,
@@ -162,7 +166,8 @@ struct CmPtCopy {
     CmCopyState state;
 };
 
-enum CmPtState : uint16_t{
+enum CmPtState : uint16_t
+{
     CM_PT_INIT = 0,
     CM_PT_NORMAL = 1,
     CM_PT_DEGRADE_LOSS1 = 2,

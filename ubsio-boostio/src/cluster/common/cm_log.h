@@ -134,7 +134,8 @@ extern "C" {
 #define CM_LOG_FILENAME (strrchr(__FILE__, '/') ? (strrchr(__FILE__, '/') + 1) : __FILE__)
 #endif
 
-typedef enum CmLogLevel{
+typedef enum CmLogLevel
+{
     CM_LOG_TRACE = 0,
     CM_LOG_DEBUG,
     CM_LOG_INFO,

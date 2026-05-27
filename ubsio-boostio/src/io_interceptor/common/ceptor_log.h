@@ -16,7 +16,8 @@
 namespace ock {
 namespace interceptor {
 using Logger = int (*)(const char *, ...);
-enum class LogLevel{
+enum class LogLevel
+{
     LOG_NULL = -1,
     LOG_CRIT = 0,
     LOG_ERROR = 1,

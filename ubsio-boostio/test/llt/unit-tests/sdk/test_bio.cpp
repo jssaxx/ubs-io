@@ -10,25 +10,25 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "test_bio.h"
+#include <semaphore.h>
 #include <map>
 #include <mockcpp/mockcpp.hpp>
-#include <semaphore.h>
-#include "gtest/gtest.h"
 #include "bio_c.h"
 #include "bio_client.h"
-#include "bio_client_net.h"
-#include "bio_mock.h"
-#include "message.h"
-#include "bio_functions.h"
-#include "cm.h"
-#include "flow_instance.h"
-#include "server/pt/cm_pt_calc_fixed_state.h"
-#include "cm_comm.h"
-#include "server/pt/cm_pt_calc_fixed.h"
-#include "server/interceptor_server.h"
-#include "tracepoint.h"
-#include "test_bio.h"
 #include "bio_client_agent.h"
+#include "bio_client_net.h"
+#include "bio_functions.h"
+#include "bio_mock.h"
+#include "cm.h"
+#include "cm_comm.h"
+#include "flow_instance.h"
+#include "gtest/gtest.h"
+#include "message.h"
+#include "server/interceptor_server.h"
+#include "server/pt/cm_pt_calc_fixed.h"
+#include "server/pt/cm_pt_calc_fixed_state.h"
+#include "tracepoint.h"
 
 using namespace ock::bio;
 

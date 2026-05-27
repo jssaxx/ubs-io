@@ -30,7 +30,8 @@ struct WFlowSliceMeta {
     uint64_t hasEvict;
 };
 
-enum WCacheTierType{
+enum WCacheTierType
+{
     WCACHE_MEMORY,
     WCACHE_DISK,
     MAX_WCACHE_TIER,
