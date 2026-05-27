@@ -169,17 +169,19 @@ int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::ve
 {
     sem_t sem;
     sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
+    auto keySize = std::make_shared<std::atomic<uint32_t>>(key.size());
     for (auto i = 0; i < key.size(); i++) {
         auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = KvPutData(key[index], value[index], lengths[index]);
+        auto keyCopy = key[i];
+        auto valueCopy = value[i];
+        auto lengthCopy = lengths[i];
+        std::function<void()> func = [this, index, keyCopy, valueCopy, lengthCopy, &results, keySize, &sem]() {
+            auto ret = KvPutData(keyCopy, valueCopy, lengthCopy);
             if (ret != UBSIO_KVC_OK) {
                 LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
             }
             results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
+            if (keySize->fetch_sub(1) == 1) {
                 sem_post(&sem);
             }
         };
