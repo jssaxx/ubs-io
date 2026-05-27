@@ -56,7 +56,8 @@ int32_t KvOperation::KvPutData(const std::string &key, void *value, size_t len)
         LOG_ERROR("Calc location failed, status:" << status);
         return UBSIO_KVC_ERR;
     }
-    return DlBioSdkApi::Put(tenantId, key.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, location);
+    std::string keyCopy = key;
+    return DlBioSdkApi::Put(tenantId, keyCopy.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, location);
 }
 
 int32_t KvOperation::KvGetData(const std::string &key, void *value, size_t len)
@@ -168,6 +169,7 @@ int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *
 int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::vector<void*> &value,
     std::vector<size_t> &lengths, std::vector<int> &results)
 {
+    LOG_WARN("wxt BatchKvPutData");
     sem_t sem;
     sem_init(&sem, 0, 0);
     auto batchSize = key.size();
