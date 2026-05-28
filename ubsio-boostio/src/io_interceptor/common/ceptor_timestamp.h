@@ -13,14 +13,13 @@
 #ifndef CEPTOR_TIMESTAMP_H
 #define CEPTOR_TIMESTAMP_H
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
-#include <algorithm>
 
 namespace ock {
 namespace interceptor {
 class TimeStamp {
-
 public:
     TimeStamp();
 
@@ -80,7 +79,7 @@ private:
 
     static const int microSecondPerSecond = 1e6;
 };
-}
-}
+} // namespace interceptor
+} // namespace ock
 
 #endif // CEPTOR_TIMESTAMP_H

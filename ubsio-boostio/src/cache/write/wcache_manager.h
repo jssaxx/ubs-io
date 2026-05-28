@@ -18,10 +18,10 @@
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "cache_def.h"
+#include "rcache_manager.h"
 #include "slice.h"
 #include "wcache.h"
 #include "wcache_index.h"
-#include "rcache_manager.h"
 #include "wcache_statistic.h"
 
 namespace ock {
@@ -56,8 +56,8 @@ public:
 
     BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
-    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv,
-        uint16_t diskId, bool isDegrade, bool isRecover = false);
+    BResult CreateWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade,
+                         bool isRecover = false);
 
     BResult DestroyWCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv);
 
@@ -72,10 +72,10 @@ public:
     void SetDegradeState(const WCacheSlicePtr &slice, bool flag);
 
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr,
-        bool isDegrade);
+                bool isDegrade);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-        uint64_t &realLen);
+                uint64_t &realLen);
 
     BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 
@@ -110,7 +110,7 @@ public:
 private:
     WCachePtr GetWCache(uint64_t flowId);
     BResult Read(uint64_t offset, const WCacheSlicePtr &srcSlice, const RCacheSlicePtr &destSlice,
-        const SliceWriter &sliceWriter, uint64_t &realLen);
+                 const SliceWriter &sliceWriter, uint64_t &realLen);
     BResult FlushImpl(uint16_t ptId, uint64_t ptv);
     BResult ExpiredClearImpl(uint16_t ptId, uint64_t ptv);
     BResult HandleCacheBrokenHdl(uint64_t procId, uint64_t flowId);
@@ -123,7 +123,7 @@ private:
     void ScanOldCache(uint16_t ptId, uint64_t ptv, std::list<WCachePtr> &list);
     BResult ClearOldCache(uint16_t ptId, uint64_t ptv);
 
-    void ScanProcCache(uint64_t  procId, std::list<WCachePtr> &list);
+    void ScanProcCache(uint64_t procId, std::list<WCachePtr> &list);
     BResult ClearProcCache(uint32_t procId);
 
     void RetryEvictThread();
@@ -138,27 +138,26 @@ private:
 
     bool mRunning = true;
     bool mEnableCrc = false;
-    uint32_t mNegotiateDelay { NO_100 * NO_1000 };
-    ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
-    ExecutorServicePtr mGcEvictService{ nullptr };
-    ExecutorServicePtr mRetryEvictService{ nullptr };
-    ExecutorServicePtr mDestroyEvictService{ nullptr };
-    ExecutorServicePtr mMemoryEvictTransService{ nullptr };
-    ExecutorServicePtr mMemoryEvictConsultService{ nullptr };
+    uint32_t mNegotiateDelay{NO_100 * NO_1000};
+    ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{nullptr, nullptr};
+    ExecutorServicePtr mGcEvictService{nullptr};
+    ExecutorServicePtr mRetryEvictService{nullptr};
+    ExecutorServicePtr mDestroyEvictService{nullptr};
+    ExecutorServicePtr mMemoryEvictTransService{nullptr};
+    ExecutorServicePtr mMemoryEvictConsultService{nullptr};
 
     bool mNegotiateFlag = true;
-    ExecutorServicePtr mEvictNegotiateService{ nullptr };
+    ExecutorServicePtr mEvictNegotiateService{nullptr};
 
-    GetLocDiskStatus mGetLocDiskStatus{ nullptr };
-    GetGlobEvictOffset mEvictOffset{ nullptr };
-    CheckLocRole mLocRole{ nullptr };
+    GetLocDiskStatus mGetLocDiskStatus{nullptr};
+    GetGlobEvictOffset mEvictOffset{nullptr};
+    CheckLocRole mLocRole{nullptr};
 
     WCacheIndexPtr mCacheIndex;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_WCACHE_MANAGER_H

@@ -10,22 +10,26 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "rcache.h"
 #include <cstdint>
-#include "flow_manager.h"
 #include "bio_config_instance.h"
+#include "bio_crc_util.h"
+#include "bio_trace.h"
 #include "cache_flow.h"
 #include "cache_slice.h"
+#include "flow_manager.h"
 #include "underfs.h"
-#include "bio_trace.h"
-#include "bio_crc_util.h"
-#include "rcache.h"
 
 using namespace ock::bio;
 
 static constexpr uint32_t RCACHE_FLOW_PREFIX_START = RCACHE_FLOW_MEM_META_PREFIX;
 
 RCache::RCache(uint16_t ptId, uint64_t ptv, uint16_t diskId, uint32_t workIndex)
-    : mFlowId(0), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mWorkIndex(workIndex)
+    : mFlowId(0),
+      mPtId(ptId),
+      mPtv(ptv),
+      mDiskId(diskId),
+      mWorkIndex(workIndex)
 {
     for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
         flow[tier] = nullptr;
@@ -268,12 +272,12 @@ BResult RCache::AllocChunk(const Key key, const RCacheValue value, RCacheChunkPt
 }
 
 BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr,
-    uint64_t offset, uint64_t len, uint64_t &realLen)
+                                    uint64_t offset, uint64_t len, uint64_t &realLen)
 {
     RCacheValue value = chunk->GetValue();
     if (UNLIKELY(offset >= value.length)) {
-        LOG_ERROR("Read exceed, flow offset:" << value.flowOffset << ", length:" << value.length << ", input offset:" <<
-            offset << ", input length:" << len << ".");
+        LOG_ERROR("Read exceed, flow offset:" << value.flowOffset << ", length:" << value.length
+                                              << ", input offset:" << offset << ", input length:" << len << ".");
         return BIO_READ_EXCEED;
     }
 
@@ -284,8 +288,8 @@ BResult RCache::GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &c
     }
     BResult ret = flow[tier]->GetDataFlow()->GetAddrByOffset(value.flowOffset + offset, realLen, flowAdd);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get addr failed, ret:" << ret << ", key: " << chunk->GetKey() << ", tier:" << tier <<
-            ", flowOffset:" << value.flowOffset << ", length:" << value.length << ".");
+        LOG_ERROR("Get addr failed, ret:" << ret << ", key: " << chunk->GetKey() << ", tier:" << tier
+                                          << ", flowOffset:" << value.flowOffset << ", length:" << value.length << ".");
         return ret;
     }
 
@@ -307,8 +311,8 @@ BResult RCache::GetSliceFromChunk(RCacheTierType tier, const RCacheChunkPtr &chu
 
     BResult ret = flow[tier]->GetDataFlow()->GetAddrByOffset(value.flowOffset, value.length, flowAdd);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get key " << chunk->GetKey() << " tier " << tier << " offset " << value.flowOffset << " len " <<
-            value.length << " failed.");
+        LOG_ERROR("Get key " << chunk->GetKey() << " tier " << tier << " offset " << value.flowOffset << " len "
+                             << value.length << " failed.");
         return ret;
     }
 
@@ -349,14 +353,14 @@ BResult RCache::AllocResources(uint64_t length, WCacheSlicePtr &slice)
     ret = flow[READ_CACHE_TIER_MEM]->AllocOffset(length, offset, indexInFlow);
     BIO_TP_END;
     if (ret != BIO_OK) {
-        LOG_ERROR("Get tier:" << READ_CACHE_TIER_MEM << ", offset:" << offset << ", len:" << length <<
-            ", flow address failed.");
+        LOG_ERROR("Get tier:" << READ_CACHE_TIER_MEM << ", offset:" << offset << ", len:" << length
+                              << ", flow address failed.");
         return ret;
     }
     ret = flow[READ_CACHE_TIER_MEM]->GetDataFlow()->GetAddrByOffset(offset, length, flowAdd);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Get tier:" << READ_CACHE_TIER_MEM << ", offset:" << offset << ", len:" << length <<
-            ", flow address failed.");
+        LOG_ERROR("Get tier:" << READ_CACHE_TIER_MEM << ", offset:" << offset << ", len:" << length
+                              << ", flow address failed.");
         return ret;
     }
 
@@ -387,9 +391,10 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
     chunk->SetTierType(READ_CACHE_TIER_MEM);
     chunk->SetDataCrc(slice->GetDataCrc());
 
-    LOG_DEBUG("Read cache Put, key:" << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
-        chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset << ", indexofflow:" <<
-        chunk->GetValue().indexInFlow << ", flowId:" << mFlowId << ", crc:" << chunk->GetDataCrc());
+    LOG_DEBUG("Read cache Put, key:" << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:"
+                                     << chunk->GetValue().length << ", flowoffset:" << chunk->GetValue().flowOffset
+                                     << ", indexofflow:" << chunk->GetValue().indexInFlow << ", flowId:" << mFlowId
+                                     << ", crc:" << chunk->GetDataCrc());
 
     BIO_TRACE_START(RCACHE_TRACE_PUT_INSERT_INDEX);
     ret = InsertToIndex(chunk->GetKey(), chunk);
@@ -413,7 +418,7 @@ BResult RCache::Put(const Key &key, const WCacheSlicePtr &slice)
 }
 
 BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-    uint64_t &realLen)
+                    uint64_t &realLen)
 {
     uint32_t bucket = GetHashBucketByKey(key);
     WCacheSlicePtr newSlicePtr = nullptr;
@@ -440,9 +445,10 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
     auto tier = chunk->GetTierType();
     auto ret = GetSliceFromChunkIO(tier, chunk, newSlicePtr, offset, slice->GetLength(), realLen);
     if (UNLIKELY(ret != BIO_OK || newSlicePtr == nullptr)) {
-        LOG_ERROR("Read cache alloc slice failed, ret:" << ret << ", key:" << key << ", type:" << tier << ", length:" <<
-            chunk->GetValue().length << ", flow offset:" << chunk->GetValue().flowOffset << ", indexofflow:" <<
-            chunk->GetValue().indexInFlow << ".");
+        LOG_ERROR("Read cache alloc slice failed, ret:" << ret << ", key:" << key << ", type:" << tier
+                                                        << ", length:" << chunk->GetValue().length
+                                                        << ", flow offset:" << chunk->GetValue().flowOffset
+                                                        << ", indexofflow:" << chunk->GetValue().indexInFlow << ".");
         chunk->lock.unlock();
         return ret;
     }
@@ -452,8 +458,8 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
         WCacheSlicePtr completeSlice = nullptr;
         ret = GetSliceFromChunk(chunk->GetTierType(), chunk, completeSlice);
         if (UNLIKELY(ret != BIO_OK || completeSlice == nullptr)) {
-            LOG_ERROR("Server rcache get verify the Crc fail, read cache alloc slice failed, ret:" <<
-                ret << ", key:" << key << ".");
+            LOG_ERROR("Server rcache get verify the Crc fail, read cache alloc slice failed, ret:" << ret << ", key:"
+                                                                                                   << key << ".");
             return BIO_ALLOC_FAIL;
         }
         ret = completeSlice->VerifyDataCrc(chunk->GetDataCrc(), 0, completeSlice->GetLength(), nullptr);
@@ -463,7 +469,7 @@ BResult RCache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice
         }
         ret = newSlicePtr->CalculateDataCrc(readCrc, 0, realLen);
         if (ret != BIO_OK) {
-            LOG_ERROR("Server rcache get verify the CRC fail, key:"<< chunk->GetKey() <<", ret: " << ret);
+            LOG_ERROR("Server rcache get verify the CRC fail, key:" << chunk->GetKey() << ", ret: " << ret);
             return ret;
         }
         slice->SetDataCrc(readCrc);
@@ -525,8 +531,8 @@ BResult RCache::Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &re
 
     ret = UnderFs::Instance()->Get(key, value, realLen, offset);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Read data from under fs failed, ret:" << ret << ", key " << key << ", offset:" << offset <<
-            ", length:" << realLen << ".");
+        LOG_ERROR("Read data from under fs failed, ret:" << ret << ", key " << key << ", offset:" << offset
+                                                         << ", length:" << realLen << ".");
         delete[] value;
         return ret;
     }
@@ -687,8 +693,8 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
         BIO_TP_END;
         if (chunk->GetValue().flowOffset != truncateOffset) {
             truncateLock[READ_CACHE_TIER_MEM].UnLock();
-            LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk " <<
-                chunk->ToString());
+            LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk "
+                                                                 << chunk->ToString());
             break;
         }
 
@@ -763,8 +769,8 @@ BResult RCache::EvictMemDataImpl(const uint64_t needEvictData, uint64_t &haveEvi
     uint64_t truncateOffset = flow[READ_CACHE_TIER_MEM]->GetDataTruncOffset();
     auto ret = flow[READ_CACHE_TIER_MEM]->GetDataFlow()->TruncateOffset(truncateOffset);
     if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Truncate read cache key " << chunk->GetKey() << " mem data flow to " << truncateOffset <<
-            " failed." << ret);
+        LOG_ERROR("Truncate read cache key " << chunk->GetKey() << " mem data flow to " << truncateOffset << " failed."
+                                             << ret);
         return BIO_ALLOC_FAIL;
     }
 
@@ -790,8 +796,8 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         uint64_t truncateOffset = flow[READ_CACHE_TIER_DISK]->GetDataTruncOffset();
         if (chunk->GetValue().flowOffset != truncateOffset) {
             truncateLock[READ_CACHE_TIER_DISK].UnLock();
-            LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk " <<
-                chunk->ToString());
+            LOG_WARN("RCache evict stuck, need truncate offset:" << truncateOffset << ", the chunk "
+                                                                 << chunk->ToString());
             break;
         }
 
@@ -813,9 +819,9 @@ BResult RCache::EvictDiskDataImpl(const uint64_t needEvictData, uint64_t &haveEv
         DelFromEvictList(chunk->GetTierType(), chunk.Get()->GetMqType(), chunk);
         flow[READ_CACHE_TIER_DISK]->UpdateDataTruncOffset(chunk->GetValue().flowOffset, chunk->GetValue().length);
         haveEvictData += chunk->GetValue().length;
-        LOG_DEBUG("Delete chunk, key: " << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:" <<
-            chunk->GetValue().length << ", flowOffset:" << chunk->GetValue().flowOffset << ", indexInFlow:" <<
-            chunk->GetValue().indexInFlow);
+        LOG_DEBUG("Delete chunk, key: " << chunk->GetKey() << ", type:" << chunk->GetTierType() << ", length:"
+                                        << chunk->GetValue().length << ", flowOffset:" << chunk->GetValue().flowOffset
+                                        << ", indexInFlow:" << chunk->GetValue().indexInFlow);
         chunk->lock.unlock();
 
         delete[] chunk->GetKey();

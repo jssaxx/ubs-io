@@ -13,6 +13,11 @@
 #ifndef BOOSTIO_BUFVEC_H
 #define BOOSTIO_BUFVEC_H
 
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <cstddef>
+#include <cstdint>
+
 namespace ock {
 namespace bio {
 struct BufVec {
@@ -36,7 +41,8 @@ struct BufVec {
 
     static size_t ComputeSize(const iovec *vec, int cnt) noexcept;
 
-    template <class OS> friend OS &operator << (OS &os, const BufVec &bv) noexcept
+    template <class OS>
+    friend OS &operator<<(OS &os, const BufVec &bv) noexcept
     {
         os << bv.count << ":(";
         for (auto i = 0; i < bv.count; i++) {
@@ -46,6 +52,6 @@ struct BufVec {
         return os;
     }
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_BUFVEC_H

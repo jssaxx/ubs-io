@@ -16,10 +16,10 @@
 #include <map>
 #include <mutex>
 
-#include "bio_ref.h"
 #include "bio_err.h"
-#include "bio_trace.h"
 #include "bio_log.h"
+#include "bio_ref.h"
+#include "bio_trace.h"
 #include "bio_types.h"
 
 #include "cache_overload_ctrl.h"
@@ -29,12 +29,12 @@
 namespace ock {
 namespace bio {
 struct MemAllocator {
-    std::function<BResult(uint64_t, uint64_t *)> alloc{ nullptr };
-    std::function<void(uint64_t)> free{ nullptr };
+    std::function<BResult(uint64_t, uint64_t *)> alloc{nullptr};
+    std::function<void(uint64_t)> free{nullptr};
 };
 struct DiskAllocator {
-    std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *)> alloc{ nullptr };
-    std::function<void(uint32_t, uint64_t, uint64_t)> free{ nullptr };
+    std::function<BResult(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *)> alloc{nullptr};
+    std::function<void(uint32_t, uint64_t, uint64_t)> free{nullptr};
 };
 using GetCacheType = std::function<FlowCache(uint64_t flowId)>;
 
@@ -85,16 +85,16 @@ public:
     static uint64_t GetCacheUsedSize(FlowCache cacheType, FlowType type, uint32_t mediaId)
     {
         ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE), NO_MAX_VALUE64,
-            "Check Failed, cacheType:" << cacheType << " type:" << type);
+                "Check Failed, cacheType:" << cacheType << " type:" << type);
         return mUsedSize[cacheType][type][mediaId];
     }
 
     static BResult MediaAlloc(FlowType type, uint32_t mediaId, uint64_t flowId, uint64_t flowOffset, uint64_t len,
-        uint64_t *chunkId)
+                              uint64_t *chunkId)
     {
         FlowCache cacheType = mGetCacheType(flowId);
         ChkTrue((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE), BIO_ERR,
-            "Check Failed, cacheType:" << cacheType << " type:" << type);
+                "Check Failed, cacheType:" << cacheType << " type:" << type);
         if (type == FLOW_MEMORY) {
             BIO_TRACE_START(MEM_TRACE_SEG_ALLOC);
             auto ret = mMemAllocator.alloc(len, chunkId);
@@ -115,7 +115,7 @@ public:
     }
 
     static void MediaFree(FlowRole role, FlowType type, uint32_t mediaId, uint64_t len, uint64_t chunkId,
-        uint64_t flowId)
+                          uint64_t flowId)
     {
         FlowCache cacheType = mGetCacheType(flowId);
         ChkTrueExNot((cacheType != FLOW_CACHE && type != FLOW_BUTT && mediaId < DEVICE_SIZE));
@@ -160,7 +160,7 @@ private:
     std::map<uint64_t, FlowPtr> mDiskObjManager;
 
     std::mutex mMutex;
-    FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{ nullptr, nullptr };
+    FlowTaskPoolPtr mTaskPool[FLOW_BUTT]{nullptr, nullptr};
 
     static std::atomic<uint64_t> mUsedSize[FLOW_CACHE][FLOW_BUTT][DEVICE_SIZE];
 
@@ -168,9 +168,9 @@ private:
     static DiskAllocator mDiskAllocator;
     static GetCacheType mGetCacheType;
 
-    bool mInited{ false };
+    bool mInited{false};
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

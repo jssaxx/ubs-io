@@ -14,12 +14,12 @@
 #define BIO_H
 
 #include <functional>
-#include <string>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include "bio_cache_statistics.h"
 #include "bio_c.h"
+#include "bio_cache_statistics.h"
 
 namespace ock {
 namespace bio {
@@ -67,7 +67,7 @@ public:
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
      */
     CResult Get(const char *key, uint64_t offset, uint64_t length, const ObjLocation &location, char *value,
-        uint64_t &realLength);
+                uint64_t &realLength);
 
     /**
      * @brief: Delete key
@@ -124,7 +124,7 @@ public:
      */
     CResult NotifyUpdatePrepare();
 
-     /**
+    /**
      * @brief: Notify prepare for update
      *
      * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
@@ -151,7 +151,9 @@ public:
     CResult Put(const char *key, CacheSpaceDesc &spaceInfo);
 
     Bio(uint64_t id, AffinityStrategy affinity, WriteStrategy strategy)
-        : mTenantId(id), mAffinity(affinity), mStrategy(strategy){};
+        : mTenantId(id),
+          mAffinity(affinity),
+          mStrategy(strategy){};
 
     ~Bio() = default;
 
@@ -225,6 +227,6 @@ public:
      */
     static void DestroyCache(uint64_t tenantId);
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

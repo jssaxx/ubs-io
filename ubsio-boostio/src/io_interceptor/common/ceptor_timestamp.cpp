@@ -10,19 +10,17 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "ceptor_timestamp.h"
 #include <sys/time.h>
 #include <cinttypes>
 #include <ctime>
 #include "securec.h"
-#include "ceptor_timestamp.h"
 
 namespace ock {
 namespace interceptor {
-TimeStamp::TimeStamp() : microSecondsSinceEpoch(0)
-{}
+TimeStamp::TimeStamp() : microSecondsSinceEpoch(0) {}
 
-TimeStamp::TimeStamp(int64_t microSeconds) : microSecondsSinceEpoch(microSeconds)
-{}
+TimeStamp::TimeStamp(int64_t microSeconds) : microSecondsSinceEpoch(microSeconds) {}
 
 std::string TimeStamp::ToString() const
 {
@@ -46,8 +44,8 @@ std::string TimeStamp::ToFormattedString() const
     gmtime_r(&seconds, &tmTime);
 
     int32_t ret = snprintf_s(buf, sizeof(buf), sizeof(buf) - 1, "%4d%02d%02d %02d:%02d:%2d.%6d",
-        static_cast<int>(tmTime.tm_year + 1900u), tmTime.tm_mon + 1, tmTime.tm_mday, tmTime.tm_hour, tmTime.tm_min,
-        tmTime.tm_sec, microSeconds);
+                             static_cast<int>(tmTime.tm_year + 1900u), tmTime.tm_mon + 1, tmTime.tm_mday,
+                             tmTime.tm_hour, tmTime.tm_min, tmTime.tm_sec, microSeconds);
     if (ret < 0) {
         printf("snprintf_s failed.");
         return "";
@@ -66,5 +64,5 @@ TimeStamp TimeStamp::Now()
     }
     return TimeStamp(seconds * microSecondPerSecond + tv.tv_usec);
 }
-}
-}
+} // namespace interceptor
+} // namespace ock

@@ -141,7 +141,8 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(MIRROR_SERVER_HDL_GET_FAIL, "mirror server handle get err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(MIRROR_SERVER_HDL_DELETE_FAIL, "mirror server handle delete err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(MIRROR_SERVER_ADD_DISK_FAIL, "mirror server handle add disk err", tp::CommonTp::IntValueCallback);
-    BIO_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, "no process wcache judge master", CommonTp::NoProcessCallback);
+    BIO_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, "no process wcache judge master",
+               CommonTp::NoProcessCallback);
     BIO_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_SEND, "no process wcache send negotiate", CommonTp::NoProcessCallback);
     BIO_TP_REG(WCACHE_NEGOTIATE_FLAG_CLEAR, "wcache negotiate flag clear", CommonTp::BoolValueCallback);
     BIO_TP_REG(NEGOTIATE_MASTER_FLAG, "wcache negotiate master flag true", CommonTp::BoolValueCallback);
@@ -149,7 +150,7 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT, "no process wcache evict ", CommonTp::NoProcessCallback);
     BIO_TP_REG(QUOTA_HOLDER_SIZE_MAX, "quota max holder size ", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(NO_PROCESS_GET_LOCAL_QUOTA, "no process get local quota ", CommonTp::NoProcessCallback);
-    BIO_TP_REG(LARGE_NODE_LIST, "large node list",  tp::CommonTp::IntValueCallback);
+    BIO_TP_REG(LARGE_NODE_LIST, "large node list", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_SEAL_ERR, "flow seal err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_SEAL_OK, "flow seal ok", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_DESTROY_OBJECT_ERR, "flow destroy object err", tp::CommonTp::IntValueCallback);

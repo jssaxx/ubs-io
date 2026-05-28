@@ -13,23 +13,34 @@
 #ifndef BIO_QOS_H
 #define BIO_QOS_H
 
+#include <semaphore.h>
+#include <algorithm>
 #include <atomic>
 #include <list>
+#include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <semaphore.h>
-#include "bio_ref.h"
-#include "bio_err.h"
-#include "bio_def.h"
-#include "bio_lock.h"
+#include "bio_c.h"
 #include "bio_client_log.h"
+#include "bio_def.h"
+#include "bio_err.h"
+#include "bio_execution.h"
+#include "bio_lock.h"
+#include "bio_monotonic.h"
+#include "bio_ref.h"
+#include "bio_trace.h"
+#include "bio_types.h"
+#include "cm.h"
+#include "message.h"
 
 namespace ock {
 namespace bio {
 constexpr uint8_t QOS_CONCURRENCY = 0x01;
 constexpr uint8_t QOS_QUOTA = 0x10;
 
-enum QuotaType {
+enum QuotaType
+{
     QUOTA_WRITE = 0,
     QUOTA_READ = 1,
     QUOTA_BUTT
@@ -37,10 +48,11 @@ enum QuotaType {
 
 struct QosApplyParam {
     uint64_t startTime;
-    const char* key;
+    const char *key;
     uint64_t size;
-    QosApplyParam(uint64_t time, const char *keyName, uint64_t dataSize) : startTime(time),
-        key(keyName), size(dataSize) {}
+    QosApplyParam(uint64_t time, const char *keyName, uint64_t dataSize) : startTime(time), key(keyName), size(dataSize)
+    {
+    }
     QosApplyParam(uint64_t time, const char *keyName) : startTime(time), key(keyName), size(0) {}
 };
 
@@ -57,8 +69,11 @@ struct IoWaitEntry {
         sem_init(&sem, 0, 0);
     }
 
-    IoWaitEntry(std::string k, uint64_t allocSize, uint64_t originTime) : key(k), result(BIO_OK),
-        size(allocSize), time(originTime)
+    IoWaitEntry(std::string k, uint64_t allocSize, uint64_t originTime)
+        : key(k),
+          result(BIO_OK),
+          size(allocSize),
+          time(originTime)
     {
         sem_init(&sem, 0, 0);
     }
@@ -148,12 +163,12 @@ public:
         return mEnable;
     }
 
-    inline std::unordered_map<uint16_t, IoHangQueue>* GetIoQueueMap()
+    inline std::unordered_map<uint16_t, IoHangQueue> *GetIoQueueMap()
     {
         return &mIoQueueMap;
     }
 
-    inline std::unordered_map<uint16_t, bool>* GetTaskRunFlag()
+    inline std::unordered_map<uint16_t, bool> *GetTaskRunFlag()
     {
         return &mTaskRunFlag;
     }
@@ -205,8 +220,8 @@ public:
             auto iter = mQuotaMgr.find(nodeSet);
             if (LIKELY(iter != mQuotaMgr.end() && iter->second >= size)) {
                 iter->second -= size;
-                CLIENT_LOG_DEBUG("Alloc quota success, nodeSet:" << nodeSet << ", key:" << key << ", size:" << size <<
-                    ", remain quota:" << iter->second << ".");
+                CLIENT_LOG_DEBUG("Alloc quota success, nodeSet:" << nodeSet << ", key:" << key << ", size:" << size
+                                                                 << ", remain quota:" << iter->second << ".");
                 return BIO_OK;
             }
 
@@ -266,9 +281,9 @@ private:
     uint64_t mClientId = 0;
     uint64_t mPreloadSize = 0;
     ReadWriteLock mLock;
-    std::unordered_map<uint16_t, uint64_t> mQuotaMgr; // <nodeSet, quota>
+    std::unordered_map<uint16_t, uint64_t> mQuotaMgr;      // <nodeSet, quota>
     std::unordered_map<uint16_t, IoHangQueue> mIoQueueMap; // <nodeSet, ioHangQue>
-    std::unordered_map<uint16_t, bool> mTaskRunFlag; // <nodeSet, state>
+    std::unordered_map<uint16_t, bool> mTaskRunFlag;       // <nodeSet, state>
     ExecutorServicePtr mQuotaAllocExecutor;
 
     DEFINE_REF_COUNT_VARIABLE;
@@ -292,12 +307,12 @@ public:
         mOriConcur[QUOTA_READ] = (scene == 1) ? NO_32 : defaultReadConcur;
         mCurConcur[QUOTA_WRITE] = 0UL;
         mCurConcur[QUOTA_READ] = 0UL;
-        CLIENT_LOG_INFO("Initialize concur success, writeConcur:" << mOriConcur[QUOTA_WRITE] <<", readConcur:" <<
-            mOriConcur[QUOTA_READ] << ".");
+        CLIENT_LOG_INFO("Initialize concur success, writeConcur:" << mOriConcur[QUOTA_WRITE]
+                                                                  << ", readConcur:" << mOriConcur[QUOTA_READ] << ".");
         return BIO_OK;
     }
 
-     inline BResult ApplyConcur(QuotaType type, const char *key)
+    inline BResult ApplyConcur(QuotaType type, const char *key)
     {
         IoWaitEntry entry(key, 0);
         {
@@ -332,8 +347,8 @@ public:
 
 private:
     ReadWriteLock mLock[QUOTA_BUTT];
-    uint64_t mOriConcur[QUOTA_BUTT] = { 0, 0 };
-    uint64_t mCurConcur[QUOTA_BUTT] = { 0, 0 };
+    uint64_t mOriConcur[QUOTA_BUTT] = {0, 0};
+    uint64_t mCurConcur[QUOTA_BUTT] = {0, 0};
     IoHangQueue mIoQueue[QUOTA_BUTT];
     DEFINE_REF_COUNT_VARIABLE;
 };
@@ -366,8 +381,8 @@ public:
 
         BResult ret = BIO_OK;
         if (UNLIKELY((Monotonic::TimeSec() - applyParam.startTime) >= NO_45 && applyParam.size != 0)) {
-            CLIENT_LOG_WARN("QOS apply timeout, key:" << applyParam.key << ", time:" <<
-                Monotonic::TimeSec() - applyParam.startTime);
+            CLIENT_LOG_WARN("QOS apply timeout, key:" << applyParam.key
+                                                      << ", time:" << Monotonic::TimeSec() - applyParam.startTime);
             return BIO_QUOTA_TIMEOUT;
         }
         bool isAllocConcur = false;
@@ -410,6 +425,6 @@ private:
     BioConcurrencyPtr mConcur = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BIO_QOS_H

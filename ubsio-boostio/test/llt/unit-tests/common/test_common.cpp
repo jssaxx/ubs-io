@@ -11,11 +11,11 @@
  */
 
 #include "test_common.h"
-#include "bio_str_util.h"
-#include "bio_functions.h"
-#include "message.h"
 #include "bio_file_util.h"
+#include "bio_functions.h"
 #include "bio_log.h"
+#include "bio_str_util.h"
+#include "message.h"
 
 using namespace ock::bio;
 

@@ -13,10 +13,10 @@
 #ifndef BOOSTIO_INTERCEPTOR_NET_H
 #define BOOSTIO_INTERCEPTOR_NET_H
 
-#include "net_engine.h"
-#include "net_common.h"
-#include "bio_ref.h"
 #include "bio_err.h"
+#include "bio_ref.h"
+#include "net_common.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace bio {
@@ -82,13 +82,13 @@ public:
 
 private:
     uint32_t mPid = 0;
-    std::atomic<bool> mReady = { false };
+    std::atomic<bool> mReady = {false};
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint8_t *mShmAddr = nullptr;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_INTERCEPTOR_NET_H

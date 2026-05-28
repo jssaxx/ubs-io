@@ -10,11 +10,11 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "bdm_common.h"
 #include <cstdarg>
 #include <cstdio>
-#include "securec.h"
 #include "bio_log.h"
-#include "bdm_common.h"
+#include "securec.h"
 
 #ifdef __cplusplus
 extern "C" {

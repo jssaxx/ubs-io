@@ -10,14 +10,14 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <csignal>
 #include <sys/resource.h>
+#include <csignal>
 
 #include "bio_server.h"
 
 using namespace ock::bio;
 
-static std::atomic<bool> gDaemonRunning = { false };
+static std::atomic<bool> gDaemonRunning = {false};
 
 static void HandleSigterm(int signum)
 {
@@ -27,10 +27,7 @@ static void HandleSigterm(int signum)
         return;
     }
 
-    struct rlimit coreLimiter = {
-        .rlim_cur = 0,
-        .rlim_max = 0
-    };
+    struct rlimit coreLimiter = {.rlim_cur = 0, .rlim_max = 0};
     int result = setrlimit(RLIMIT_CORE, &coreLimiter);
     if (UNLIKELY(result != 0)) {
         std::cout << "Failed to disable core dump, errno " << errno << std::endl;
@@ -51,7 +48,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    struct sigaction termSa {};
+    struct sigaction termSa {
+    };
     termSa.sa_handler = &HandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 

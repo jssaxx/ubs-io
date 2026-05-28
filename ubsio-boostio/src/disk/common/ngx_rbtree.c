@@ -5,8 +5,8 @@
  * which is licensed under 2-clause BSD-like license
  * please see https://github.com/nginx/nginx/blob/master/LICENSE for details.
  */
-#include <stdio.h>
 #include "ngx_rbtree.h"
+#include <stdio.h>
 
 /*
  * The red-black tree code is based on the algorithm described in

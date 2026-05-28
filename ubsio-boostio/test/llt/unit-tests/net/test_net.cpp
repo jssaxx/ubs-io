@@ -10,15 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "test_net.h"
 #include <mockcpp/mockcpp.hpp>
+#include "bio_client_log.h"
+#include "bio_client_net.h"
 #include "bio_mock.h"
-#include "net_engine.h"
 #include "bio_server.h"
+#include "net_engine.h"
 #include "net_stub.h"
 #include "tracepoint.h"
-#include "bio_client_net.h"
-#include "bio_client_log.h"
-#include "test_net.h"
 
 using namespace ock::bio;
 

@@ -13,10 +13,10 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
+#include <semaphore.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <semaphore.h>
 #include "bio_c.h"
 #include "bio_config_instance.h"
 

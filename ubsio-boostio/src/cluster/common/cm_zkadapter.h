@@ -60,7 +60,7 @@ int32_t CmClientZkSubPtListChange(uint16_t poolId, PtChangeNotifyFp notifyFp);
 int32_t CmClientZkRecordDataInfo(uint16_t poolId, const char *key, void *value, uint32_t valLen);
 
 int32_t CmClientZkSubDataInfoChange(uint16_t poolId, const char *key, void *value, uint32_t valLen,
-    DataInfoChangeOpHandle *handle);
+                                    DataInfoChangeOpHandle *handle);
 
 uint16_t CmClientZkGetNodeIdByPath(const char *path, const char *pre);
 
@@ -159,7 +159,7 @@ int32_t CheckNodeDataFromZk(NodeInfoList *nodeInfoList);
 #define CM_ZK_RADIX_10 10UL
 
 int CmZkCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl, int mode,
-    char *pathBuffer, int pathBufferLen);
+               char *pathBuffer, int pathBufferLen);
 
 int CmZkDelete(zhandle_t *zh, const char *path, int version);
 
@@ -170,10 +170,10 @@ int CmZkExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat);
 int CmZkSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version);
 
 int CmZkWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
-    struct Stat *stat);
+             struct Stat *stat);
 
 int CmZkWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
-    struct String_vector *strings);
+                     struct String_vector *strings);
 #endif
 #if DESC("zk initial")
 int CmClientZkInit(void);

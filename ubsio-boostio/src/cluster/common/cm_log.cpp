@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "cm_log.h"
 #include <cstdarg>
 #include <cstdio>
 #include "bio_log.h"
-#include "cm_log.h"
 
 #ifdef __cplusplus
 extern "C" {

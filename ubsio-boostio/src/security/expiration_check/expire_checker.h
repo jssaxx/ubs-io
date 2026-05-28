@@ -13,15 +13,15 @@
 #ifndef OCK_BIO_EXPIRE_CHECKER_H
 #define OCK_BIO_EXPIRE_CHECKER_H
 
-#include <string>
-#include <thread>
-#include <mutex>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
 #include "bio_err.h"
-#include "bio_ref.h"
 #include "bio_openssl_api_wrapper.h"
+#include "bio_ref.h"
 
 namespace ock {
 namespace bio {
@@ -48,11 +48,12 @@ public:
                               const std::string &opensslDir);
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 private:
     void StopThread();
     BResult HandleCertExpiredCheck();
     BResult CertExpiredCheck(const std::string &path, const std::string &type);
-    BResult ValidateCertificateTime(X509* x509, const std::string &type);
+    BResult ValidateCertificateTime(X509 *x509, const std::string &type);
 
 private:
     std::string mCaPath;

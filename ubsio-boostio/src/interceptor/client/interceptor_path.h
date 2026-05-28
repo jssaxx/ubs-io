@@ -22,6 +22,6 @@ std::string AddPrefix(const std::string &prefix, const char *rawPath);
 std::string GetPathNoPrefix(const std::string &path, const std::string &prefix);
 
 std::string GetCWD();
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_INTERCEPTOR_PATH_H

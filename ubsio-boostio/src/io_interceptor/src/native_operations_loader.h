@@ -25,7 +25,7 @@ namespace interceptor {
 using NativeOperations = struct InterceptorNativeOperations;
 class NativeOperationsLoader {
 public:
-    static NativeOperationsLoader& GetInstance()
+    static NativeOperationsLoader &GetInstance()
     {
         static NativeOperationsLoader loader;
         return loader;
@@ -33,19 +33,19 @@ public:
 
     NativeOperationsLoader() = default;
 
-    NativeOperationsLoader(const NativeOperationsLoader&) = delete;
+    NativeOperationsLoader(const NativeOperationsLoader &) = delete;
 
-    NativeOperationsLoader& operator =(const NativeOperationsLoader&) = delete;
+    NativeOperationsLoader &operator=(const NativeOperationsLoader &) = delete;
 
     ~NativeOperationsLoader() = default;
 
     bool Initialize();
 
-    static NativeOperations& GetProxy();
+    static NativeOperations &GetProxy();
 
 private:
-    template<typename T>
-    void LoadProxy(const std::string& syscall, T& handle);
+    template <typename T>
+    void LoadProxy(const std::string &syscall, T &handle);
 
     void LoadControlProxy();
 
@@ -62,7 +62,7 @@ private:
 };
 
 bool InitNativeHook();
-}
-}
+} // namespace interceptor
+} // namespace ock
 
 #endif // NATIVE_OPERATIONS_LOADER_H

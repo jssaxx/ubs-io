@@ -11,9 +11,9 @@
  */
 
 #include "bio_tracepoint.h"
+#include "bio_cache_tp.h"
 #include "bio_sdk_tp.h"
 #include "bio_server_tp.h"
-#include "bio_cache_tp.h"
 
 using namespace ock::bio;
 #ifdef __aarch64__

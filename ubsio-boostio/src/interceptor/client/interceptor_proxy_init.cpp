@@ -17,7 +17,7 @@
 
 using namespace ock::bio;
 
-static std::atomic<bool> g_initialized{ false };
+static std::atomic<bool> g_initialized{false};
 
 int InitializeProxyContext()
 {

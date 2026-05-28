@@ -44,7 +44,7 @@ private:
 private:
     BioConfig::UnderFsConfig mConfig;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_UNDERFS_CONFIG_H

@@ -78,7 +78,7 @@ private:
     FlowPtr mDataFlow = nullptr;
     FlowInstancePtr mDataFlowInstance = nullptr;
     uint64_t mDataTruncOffset = 0;
-    std::atomic<uint64_t> mindexInFlow{ 0 };
+    std::atomic<uint64_t> mindexInFlow{0};
 
     ReadWriteLock mLock;
 
@@ -86,7 +86,7 @@ private:
 };
 
 using RCacheFlowPtr = Ref<RCacheFlow>;
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_RCACHE_FLOW_H

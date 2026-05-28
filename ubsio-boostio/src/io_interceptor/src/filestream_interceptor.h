@@ -17,29 +17,29 @@
 
 namespace ock {
 namespace interceptor {
-    FILE* HookFopen(const char* file, const char* mode);
+FILE *HookFopen(const char *file, const char *mode);
 
-    FILE* HookFopen64(const char* file, const char* mode);
+FILE *HookFopen64(const char *file, const char *mode);
 
-    int HookFclose(FILE* stream);
+int HookFclose(FILE *stream);
 
-    size_t HookFread(void* ptr, size_t size, size_t count, FILE* stream);
+size_t HookFread(void *ptr, size_t size, size_t count, FILE *stream);
 
-    size_t HookFwrite(const void* ptr, size_t size, size_t nitems, FILE* stream);
+size_t HookFwrite(const void *ptr, size_t size, size_t nitems, FILE *stream);
 
-    int HookFgetc(FILE* stream);
+int HookFgetc(FILE *stream);
 
-    char* HookFgets(char* s, int n, FILE* stream);
+char *HookFgets(char *s, int n, FILE *stream);
 
-    int HookFputs(const char* s, FILE* stream);
+int HookFputs(const char *s, FILE *stream);
 
-    long int HookFtell(FILE* stream);
+long int HookFtell(FILE *stream);
 
-    int HookFflush(FILE* stream);
+int HookFflush(FILE *stream);
 
-    void HookRewind(FILE* stream);
+void HookRewind(FILE *stream);
 
-    int HookFseek(FILE* stream, long offset, int whence);
-}
-}
+int HookFseek(FILE *stream, long offset, int whence);
+} // namespace interceptor
+} // namespace ock
 #endif // FILESTREAM_INTERCEPTOR_H

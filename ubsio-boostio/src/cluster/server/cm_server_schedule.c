@@ -18,7 +18,7 @@
 #define CM_SERVER_THREAD_NUM (1)
 #define CM_SERVER_QUEUE_SIZE (1024)
 
-static CM_THREAD_POOL_S *g_scheduleThread[CM_SERVER_THREADPOOL_NUM] = { NULL };
+static CM_THREAD_POOL_S *g_scheduleThread[CM_SERVER_THREADPOOL_NUM] = {NULL};
 
 void CmServerSchedueAdd(uint16_t poolId, THREAD_CALL_BACK handle, void *ctx)
 {

@@ -16,10 +16,10 @@
 namespace ock {
 namespace interceptor {
 namespace env {
-std::string GetEnv(const std::string& key, const std::string& defaultVal);
+std::string GetEnv(const std::string &key, const std::string &defaultVal);
 
 std::string GetCWD();
-}
-}
-}
+} // namespace env
+} // namespace interceptor
+} // namespace ock
 #endif // ENV_H

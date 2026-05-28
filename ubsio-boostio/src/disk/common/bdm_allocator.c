@@ -14,8 +14,8 @@
 #include "bdm_common.h"
 #include "bdm_core.h"
 
-#include "ngx_rbtree.h"
 #include "dlist.h"
+#include "ngx_rbtree.h"
 
 #define BDM_FREE_LIST_NUM (1024UL)
 
@@ -218,7 +218,6 @@ static void BdmAllocatorInsertNext(BdmChunkIndex *chunk, BdmChunkIndex *prev, In
     }
     context->result = BDM_CODE_OK;
 }
-
 
 static int BdmAllocatorInsertCallback(ngx_rbtree_node_t *current, ngx_rbtree_node_t *node,
                                       ngx_rbtree_node_t *treeSentinel, void *context)
@@ -426,8 +425,8 @@ int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64
     int32_t ret = BdmAllocatorRemove(realize, bucketId, bucketOffset, chunkId, chunkSize);
     if (ret != BDM_CODE_OK) {
         BDM_RWLOCK_UNLOCK(&realize->lock);
-        BDM_LOGWARN(0, "Alloc chunk failed, chunk size(%llu), used cap(%llu), total cap(%llu).",
-                    chunkSize, realize->usedSize, realize->totalSize);
+        BDM_LOGWARN(0, "Alloc chunk failed, chunk size(%llu), used cap(%llu), total cap(%llu).", chunkSize,
+                    realize->usedSize, realize->totalSize);
         return ret;
     }
     realize->usedSize += chunkSize;
@@ -625,7 +624,7 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
     }
     uint64_t chunkNum = para->totalSize / para->minChunkSize;
     BdmAllocatorRealize *realize =
-            (BdmAllocatorRealize *)malloc(sizeof(BdmAllocatorRealize) + sizeof(BdmChunkIndex) * chunkNum);
+        (BdmAllocatorRealize *)malloc(sizeof(BdmAllocatorRealize) + sizeof(BdmChunkIndex) * chunkNum);
     if (realize == NULL) {
         BDM_LOGERROR(0, "Malloc failed, chunk num(%llu).", chunkNum);
         return 0L;

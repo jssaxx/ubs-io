@@ -22,17 +22,15 @@
 
 typedef void (*FN_CLI_CMD_PROC)(int32_t v_iArgc, char *v_szArgv[]);
 typedef void (*FN_CLI_CMD_HELP_PROC)(char *v_szCommand, int32_t iShowDetail);
-typedef struct
-{
+typedef struct {
     char szCommand[CLI_MAX_COMMAND_LEN];
     char szDescription[CLI_MAX_CMD_DESC_LEN];
     FN_CLI_CMD_PROC fnCmdDo;
     FN_CLI_CMD_HELP_PROC fnPrintCmdHelp;
 } CLI_CMD_S;
 
-using CliRegCmdFuncPtr = int32_t (*)(CLI_CMD_S*);
-using CliUnRegCmdFuncPtr = void (*)(char*);
-using CliPrintBufFuncPtr = void (*)(const char*, ...);
+using CliRegCmdFuncPtr = int32_t (*)(CLI_CMD_S *);
+using CliUnRegCmdFuncPtr = void (*)(char *);
+using CliPrintBufFuncPtr = void (*)(const char *, ...);
 
 #endif
-

@@ -11,8 +11,8 @@
  */
 
 #include "cm.h"
-#include "securec.h"
 #include "bio_trace.h"
+#include "securec.h"
 
 namespace ock {
 namespace bio {
@@ -305,20 +305,11 @@ int32_t Cm::NotifyPtListChange(PtEntryList *ptList, void *ctx)
     cm->mStatus = CM_NORMAL;
 
     static CmPtState ptState[PT_STATE_BUTT] = {
-        CM_PT_INIT,
-        CM_PT_NORMAL,
-        CM_PT_DEGRADE_LOSS1,
-        CM_PT_DEGRADE_LOSS2,
-        CM_PT_FAULT,
-        CM_PT_BYPASS,
+        CM_PT_INIT, CM_PT_NORMAL, CM_PT_DEGRADE_LOSS1, CM_PT_DEGRADE_LOSS2, CM_PT_FAULT, CM_PT_BYPASS,
     };
 
     static CmCopyState copyState[PT_COPY_STATE_BUTT] = {
-        CM_COPY_INIT,
-        CM_COPY_RUNNING,
-        CM_COPY_DOWN,
-        CM_COPY_OUT,
-        CM_COPY_RECOVERY,
+        CM_COPY_INIT, CM_COPY_RUNNING, CM_COPY_DOWN, CM_COPY_OUT, CM_COPY_RECOVERY,
     };
 
     for (uint16_t index = 0; index < ptList->ptNum; index++) {
@@ -366,8 +357,8 @@ void Cm::ScanPtListAffinity()
     }
     return;
 }
-}
-}
+} // namespace bio
+} // namespace ock
 
 /* ******************************** CM api implementation in C language ********************* */
 using namespace ock::bio;

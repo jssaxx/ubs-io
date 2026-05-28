@@ -11,9 +11,9 @@
  */
 
 #include "bio_config_instance.h"
-#include "bio_log.h"
-#include "bio_ip_util.h"
 #include "bio_file_util.h"
+#include "bio_ip_util.h"
+#include "bio_log.h"
 
 namespace ock {
 namespace bio {
@@ -34,9 +34,9 @@ void BioConfig::LoadDefaultConf()
     /* load net config for cm */
     /* don't allow empty */
     AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
+               VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
+               VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
 
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
@@ -141,9 +141,9 @@ BResult BioConfig::AutoConfigNet(const ConfigurationPtr &conf)
     mNetConfig.decrypterLibPath = conf->GetStr(NET_TLS_SERVER_DECRYPTER_PATH.first);
     mNetConfig.opensslLibDir = conf->GetStr(NET_TLS_SERVER_SSL_LIB_DIR.first);
     if (mNetConfig.enableTls) {
-        bool checkCaPath = FileUtil::CanonicalPath(mNetConfig.tlsCaCertPath)
-                           && FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath)
-                           && FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath);
+        bool checkCaPath = FileUtil::CanonicalPath(mNetConfig.tlsCaCertPath) &&
+                           FileUtil::CanonicalPath(mNetConfig.tlsServerCertPath) &&
+                           FileUtil::CanonicalPath(mNetConfig.tlsServerKeyPath);
         if (!checkCaPath) {
             LOG_ERROR("Invalid ca path.");
             return BIO_ERR;
@@ -578,5 +578,5 @@ std::string BioConfig::ModifyConfigDiskReadWriteRatio(const std::string &ratios)
     LOG_INFO("config changed:mDaemonConfig.diskReadWriteRatio(GB), " << ori << " => " << ratios);
     return ori;
 }
-}
-}
+} // namespace bio
+} // namespace ock

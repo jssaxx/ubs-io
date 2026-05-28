@@ -26,7 +26,7 @@ typedef struct {
     BdmElem list[BDM_MAX_NUM];
 } BdmObjMgr;
 
-static BdmObjMgr g_bdmObj = { 0 };
+static BdmObjMgr g_bdmObj = {0};
 
 typedef struct {
     BdmCreateFunc create;
@@ -34,7 +34,7 @@ typedef struct {
     BdmResetFunc reset;
 } BdmOpsEx;
 
-static BdmOpsEx g_bdmOpsEx = { 0 };
+static BdmOpsEx g_bdmOpsEx = {0};
 
 void BdmRegOpsWithCreate(BdmCreateFunc create)
 {

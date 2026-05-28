@@ -18,7 +18,8 @@
 
 namespace ock {
 namespace bio {
-template <typename T> class BioDoubleList {
+template <typename T>
+class BioDoubleList {
 public:
     void Initialize(uint8_t lane)
     {
@@ -138,7 +139,7 @@ private:
     T head = nullptr;
     T tail = nullptr;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_DOUBLE_LIST_H

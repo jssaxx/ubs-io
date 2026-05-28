@@ -16,19 +16,19 @@
 #include <semaphore.h>
 #include <atomic>
 #include <unordered_map>
-#include "cm.h"
-#include "bio_ref.h"
-#include "bio_lock.h"
-#include "message.h"
 #include "bio.h"
-#include "flow_instance.h"
-#include "flow.h"
-#include "slice.h"
+#include "bio_client_agent.h"
+#include "bio_lock.h"
+#include "bio_qos.h"
+#include "bio_ref.h"
 #include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
-#include "bio_qos.h"
-#include "bio_client_agent.h"
+#include "cm.h"
+#include "flow.h"
+#include "flow_instance.h"
+#include "message.h"
+#include "slice.h"
 
 namespace ock {
 namespace bio {
@@ -39,7 +39,8 @@ constexpr uint16_t BIO_IO_DELAY_TIME = 1;
 using UpdateView = std::function<void(void)>;
 using FlowInfo = ock::bio::agent::BioClientAgent::FlowInfo;
 
-enum WorkerScene : uint32_t {
+enum WorkerScene : uint32_t
+{
     SCENE_NONE = 0,
     SCENE_BIGDATA = 1
 };
@@ -218,14 +219,12 @@ private:
 
     BResult SendCacheResourceRequest(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc);
 
-    void GetCacheHitLocal(CacheHitRequest &req, uint16_t localId,
-                          std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
+    void GetCacheHitLocal(CacheHitRequest &req, uint16_t localId, std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
 
     void GetCacheHitRemote(CacheHitRequest &req, std::vector<uint16_t> &remoteId,
                            std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc);
 
-    void CalcCacheResourceLocal(CacheResourceRequest &req, uint16_t localId,
-                                std::vector<CacheResourcesDesc> &nodeDesc);
+    void CalcCacheResourceLocal(CacheResourceRequest &req, uint16_t localId, std::vector<CacheResourcesDesc> &nodeDesc);
 
     void CalcCacheResourceRemote(CacheResourceRequest &req, std::vector<uint16_t> &remoteId,
                                  std::vector<CacheResourcesDesc> &nodeDesc);
@@ -240,7 +239,7 @@ private:
     uint32_t CalcPtQuota(CmPtInfo &ptEntry);
 
     BResult AllocPutOffset(uint16_t ptId, uint64_t ptv, uint64_t len, uint64_t &flowId, uint64_t &offset,
-        uint64_t &index);
+                           uint64_t &index);
     BResult SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
     BResult SendDestroyFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
     BResult CreateFlowImpl(uint16_t nodeId, CmPtInfo &ptEntry, FlowInfo &flowInfo);
@@ -249,9 +248,9 @@ private:
     BResult DestroyFlow(uint16_t ptId, uint64_t flowId);
 
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
-        uint64_t flowIndex, GetSliceResponse *rsp);
+                         uint64_t flowIndex, GetSliceResponse *rsp);
     void ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut &param, uint64_t flowId, uint64_t flowOffset,
-        uint64_t flowIndex, NetMrInfo &mr);
+                         uint64_t flowIndex, NetMrInfo &mr);
     BResult DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc *addr, uint64_t *offset, uint32_t addrNum);
     bool IsExistLocalCopy(CmPtInfo &ptEntry);
     BResult PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req);
@@ -353,15 +352,15 @@ private:
     uint64_t mCurNodeTimes;
     uint64_t mCurPtTimes;
     uint16_t mNetProtocol;
-    UpdateView mUpdateView { nullptr };
+    UpdateView mUpdateView{nullptr};
     WorkerScene mScene = SCENE_NONE;
     uint32_t mAlignSize = NO_1;
     uint32_t mTimeOut = NO_60;
-    bool mEnableCrc { false };
+    bool mEnableCrc{false};
     BioQosPtr mBioQos = nullptr;
     DEFINE_REF_COUNT_VARIABLE
 };
 using MirrorClientPtr = Ref<MirrorClient>;
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

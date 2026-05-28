@@ -12,16 +12,16 @@
 
 #include "ceptor_env.h"
 
+#include <unistd.h>
 #include <climits>
 #include <cstdlib>
-#include <unistd.h>
 
 namespace ock {
 namespace interceptor {
 namespace env {
-std::string GetEnv(const std::string& key, const std::string& defaultVal)
+std::string GetEnv(const std::string &key, const std::string &defaultVal)
 {
-    const char* val = getenv(key.c_str());
+    const char *val = getenv(key.c_str());
     if (val == nullptr) {
         return defaultVal;
     }
@@ -37,6 +37,6 @@ std::string GetCWD()
     return cwd;
 }
 
-}
-}
-}
+} // namespace env
+} // namespace interceptor
+} // namespace ock

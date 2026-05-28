@@ -13,14 +13,15 @@
 #ifndef CM_C_H
 #define CM_C_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "bdm_core.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum {
+typedef enum
+{
     CM_DISK_NORMAL = 0,
     CM_DISK_FAULT = 1,
 } CmDiskStatus;

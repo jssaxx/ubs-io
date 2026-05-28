@@ -10,18 +10,18 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <functional>
-#include <fstream>
-#include <utility>
-#include <unistd.h>
-#include <fcntl.h>
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 #include "bio_log.h"
-#include "bio_types.h"
 #include "bio_monotonic.h"
+#include "bio_types.h"
 #include "cache.h"
 #include "cache_overload_ctrl.h"
 
@@ -34,7 +34,7 @@ uint64_t CacheOverloadCtrl::LowWaterLevelQuota(uint64_t frontWriteBw, uint64_t e
         uint64_t adjust = mAdjustWQuota.load() + ROUND_DOWN(GetAvailableQuota() / NO_100 * NO_2, NO_4096);
         mAdjustWQuota.store(std::min<uint64_t>(adjust, MAX_PRELOAD_QUOTA_SIZE));
     } else if (evict2DiskBw != 0 &&
-        frontWriteBw <= (UINT64_MAX / evict2DiskBw < NO_4 ? UINT64_MAX : evict2DiskBw * NO_4)) {
+               frontWriteBw <= (UINT64_MAX / evict2DiskBw < NO_4 ? UINT64_MAX : evict2DiskBw * NO_4)) {
         proc = NO_2;
         uint64_t adjust = mAdjustWQuota.load() + ROUND_DOWN(GetAvailableQuota() / NO_100, NO_4096);
         mAdjustWQuota.store(std::min<uint64_t>(adjust, MAX_PRELOAD_QUOTA_SIZE));
@@ -53,7 +53,7 @@ uint64_t CacheOverloadCtrl::MidWaterLevelQuota(uint64_t frontWriteBw, uint64_t e
         uint64_t adjust = mAdjustWQuota.load() + ROUND_DOWN(GetAvailableQuota() / NO_100, NO_4096);
         mAdjustWQuota.store(std::min<uint64_t>(adjust, MAX_PRELOAD_QUOTA_SIZE));
     } else if (evict2DiskBw != 0 &&
-        frontWriteBw <= (UINT64_MAX / evict2DiskBw < NO_4 ? UINT64_MAX : evict2DiskBw * NO_4)) {
+               frontWriteBw <= (UINT64_MAX / evict2DiskBw < NO_4 ? UINT64_MAX : evict2DiskBw * NO_4)) {
         proc = NO_2;
         uint64_t adjust = mAdjustWQuota.load() - ROUND_DOWN(mAdjustWQuota.load() / NO_100 * NO_2, NO_4096);
         mAdjustWQuota.store(std::max<uint64_t>(adjust, MIN_PRELOAD_QUOTA_SIZE));
@@ -89,8 +89,9 @@ uint64_t CacheOverloadCtrl::CalculateWriteQuota(uint64_t frontWriteBw, uint64_t 
     } else {
         adjustWQuota = HighWaterLevelQuota(frontWriteBw, evict2DiskBw, proc);
     }
-    LOG_DEBUG("Calculate real write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw <<
-        ", waterLevel:" << vm << ", adjustWQuota:" << adjustWQuota << ", proc:" << proc << ".");
+    LOG_DEBUG("Calculate real write quota, frontWriteBw:" << frontWriteBw << ", evict2DiskBw:" << evict2DiskBw
+                                                          << ", waterLevel:" << vm << ", adjustWQuota:" << adjustWQuota
+                                                          << ", proc:" << proc << ".");
     return adjustWQuota;
 }
 
@@ -130,7 +131,7 @@ void CacheOverloadCtrl::AddBandwidth(BwStatType type, uint64_t count)
 }
 
 void CacheOverloadCtrl::Show(uint64_t &vmVec, uint64_t &totalQuota, uint64_t &remainQuota,
-    std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> &holders)
+                             std::unordered_map<QuotaHolder, uint64_t, QuotaHolderHash, QuotaHolderEqual> &holders)
 {
     vmVec = GetWmStatDirectValue();
     totalQuota = mLimitWriteQuota;
@@ -140,14 +141,20 @@ void CacheOverloadCtrl::Show(uint64_t &vmVec, uint64_t &totalQuota, uint64_t &re
 
 uint64_t CacheOverloadCtrl::GetWmStatDirectValue()
 {
-    CacheResDescription desc = { 0 };
+    CacheResDescription desc = {0};
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    auto mVm = std::min<uint64_t>(PERCENT_100, desc.memCapacity == 0 ? 0 :
-        ((UINT64_MAX / CACHE_OLC_PERCENT_BASE < desc.memUsedSize) ? UINT64_MAX :
-        desc.memUsedSize * CACHE_OLC_PERCENT_BASE) / desc.memCapacity);
-    auto dVm = std::min<uint64_t>(PERCENT_100, desc.diskCapacity == 0 ? 0 :
-        ((UINT64_MAX / CACHE_OLC_PERCENT_BASE < desc.diskUsedSize) ? UINT64_MAX :
-        desc.diskUsedSize * CACHE_OLC_PERCENT_BASE) / desc.diskCapacity);
+    auto mVm = std::min<uint64_t>(PERCENT_100, desc.memCapacity == 0 ?
+                                                   0 :
+                                                   ((UINT64_MAX / CACHE_OLC_PERCENT_BASE < desc.memUsedSize) ?
+                                                        UINT64_MAX :
+                                                        desc.memUsedSize * CACHE_OLC_PERCENT_BASE) /
+                                                       desc.memCapacity);
+    auto dVm = std::min<uint64_t>(PERCENT_100, desc.diskCapacity == 0 ?
+                                                   0 :
+                                                   ((UINT64_MAX / CACHE_OLC_PERCENT_BASE < desc.diskUsedSize) ?
+                                                        UINT64_MAX :
+                                                        desc.diskUsedSize * CACHE_OLC_PERCENT_BASE) /
+                                                       desc.diskCapacity);
     uint64_t retWm = std::max<uint64_t>(mVm, dVm);
     return retWm;
 }
@@ -170,7 +177,7 @@ uint64_t CacheOverloadCtrl::GetBwStatAverageValue(BwStatObj &obj)
 
 void CacheOverloadCtrl::UpdateBwStatValue(BwStatObj &obj, BwStatType type)
 {
-    const std::string bwTypeStr[BW_STAT_BUTT] = { "write", "evict" };
+    const std::string bwTypeStr[BW_STAT_BUTT] = {"write", "evict"};
     uint64_t curTime = Monotonic::TimeMs();
     if (curTime >= (obj.calcBwCycleTime + obj.calcBwCycle)) {
         obj.calcBwCycleTime = curTime;
@@ -242,9 +249,10 @@ void CacheOverloadCtrl::InitOverloadGlbInfo()
 
 void CacheOverloadCtrl::InitQuotaManager()
 {
-    CacheResDescription desc = { 0 };
+    CacheResDescription desc = {0};
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
-    mLimitWriteQuota = static_cast<uint64_t>(desc.memCapacity / NO_100 * NO_80); // 预留空间用于meta flow的存放缓存索引元数据.
+    mLimitWriteQuota =
+        static_cast<uint64_t>(desc.memCapacity / NO_100 * NO_80); // 预留空间用于meta flow的存放缓存索引元数据.
     mWriteQuota = mLimitWriteQuota;
     mAdjustWQuota.store(NO_128 * NO_1024 * NO_1024);
     LOG_INFO("Initialize write cache quota pool success, write quota:" << mWriteQuota << ".");
@@ -277,5 +285,5 @@ BResult CacheOverloadCtrl::Initialize()
     }
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

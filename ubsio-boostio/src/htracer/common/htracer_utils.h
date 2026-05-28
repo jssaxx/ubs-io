@@ -13,14 +13,14 @@
 #ifndef HTRACE_UTILS_H
 #define HTRACE_UTILS_H
 
-#include <vector>
-#include <cstring>
-#include <memory>
-#include <algorithm>
-#include <iomanip>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <algorithm>
+#include <cstring>
+#include <iomanip>
+#include <memory>
 #include <sstream>
+#include <vector>
 
 namespace ock {
 namespace htracer {
@@ -46,9 +46,9 @@ public:
             return "";
         }
         std::stringstream ss;
-        ss << std::setfill('0') << std::setw(widthTwo) << std::right << tmInfo->tm_hour << ":" << std::setfill('0') <<
-            std::setw(widthTwo) << std::right << tmInfo->tm_min << ":" << std::setfill('0') << std::setw(widthTwo) <<
-            std::right << tmInfo->tm_sec;
+        ss << std::setfill('0') << std::setw(widthTwo) << std::right << tmInfo->tm_hour << ":" << std::setfill('0')
+           << std::setw(widthTwo) << std::right << tmInfo->tm_min << ":" << std::setfill('0') << std::setw(widthTwo)
+           << std::right << tmInfo->tm_sec;
         return ss.str();
     }
 
@@ -72,22 +72,21 @@ public:
     }
 
     static std::string FormatString(std::string &name, uint64_t begin, uint64_t goodEnd, uint64_t badEnd, uint64_t min,
-        uint64_t max, uint64_t total)
+                                    uint64_t max, uint64_t total)
     {
         std::string str;
         std::ostringstream os(str);
         os.flags(std::ios::fixed);
         os.precision(numberPrecision);
-        os << std::left << std::setw(nameWidth) << name << "\t" << std::left << std::setw(digitWidth) << begin <<
-            "\t" << std::left << std::setw(digitWidth) << goodEnd << "\t" << std::left << std::setw(digitWidth) <<
-            badEnd << "\t" << std::left << std::setw(digitWidth) <<
-            ((begin > goodEnd + badEnd) ? (begin - goodEnd - badEnd) : 0) << "\t" << std::left <<
-            std::setw(digitWidth) << (static_cast<double>(begin) / iopsDiff) << "\t" << std::left <<
-            std::setw(digitWidth) << (min == UINT64_MAX ? 0 : ((double)min / unitStep)) << "\t" << std::left <<
-            std::setw(digitWidth) << static_cast<double>(max) / unitStep << "\t" << std::left <<
-            std::setw(digitWidth) <<
-            (goodEnd == 0 ? 0 : static_cast<double>(total) / static_cast<double>(goodEnd) / unitStep) << "\t" <<
-            std::left << std::setw(digitWidth) << static_cast<double>(total) / unitStep;
+        os << std::left << std::setw(nameWidth) << name << "\t" << std::left << std::setw(digitWidth) << begin << "\t"
+           << std::left << std::setw(digitWidth) << goodEnd << "\t" << std::left << std::setw(digitWidth) << badEnd
+           << "\t" << std::left << std::setw(digitWidth)
+           << ((begin > goodEnd + badEnd) ? (begin - goodEnd - badEnd) : 0) << "\t" << std::left
+           << std::setw(digitWidth) << (static_cast<double>(begin) / iopsDiff) << "\t" << std::left
+           << std::setw(digitWidth) << (min == UINT64_MAX ? 0 : ((double)min / unitStep)) << "\t" << std::left
+           << std::setw(digitWidth) << static_cast<double>(max) / unitStep << "\t" << std::left << std::setw(digitWidth)
+           << (goodEnd == 0 ? 0 : static_cast<double>(total) / static_cast<double>(goodEnd) / unitStep) << "\t"
+           << std::left << std::setw(digitWidth) << static_cast<double>(total) / unitStep;
         return os.str();
     }
 
@@ -129,6 +128,6 @@ public:
         return ss.str();
     }
 };
-}
-}
+} // namespace htracer
+} // namespace ock
 #endif // HTRACE_UTILS_H

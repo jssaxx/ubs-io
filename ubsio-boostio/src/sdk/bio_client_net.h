@@ -13,14 +13,14 @@
 #ifndef BIO_CLIENT_NET_H
 #define BIO_CLIENT_NET_H
 
-#include "cm.h"
-#include "net_engine.h"
-#include "net_common.h"
-#include "bio_ref.h"
-#include "bio_tracepoint_helper.h"
 #include "bio.h"
 #include "bio_config_instance.h"
+#include "bio_ref.h"
+#include "bio_tracepoint_helper.h"
+#include "cm.h"
 #include "message.h"
+#include "net_common.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace bio {
@@ -40,7 +40,7 @@ public:
     BResult StartPre(WorkerMode mode, const NetOptions netConf);
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView, uint16_t protocol,
-        const NetOptions netConf);
+                      const NetOptions netConf);
     BResult GetUnderFsConfig(BioConfig::UnderFsConfig &config);
     void Exit();
     BResult ShmInit();
@@ -154,13 +154,13 @@ public:
         mNetEngine->AsyncCall(target, opcode, req, cb);
     }
 
-    template <typename TReq> BResult SendAsync(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
+    template <typename TReq>
+    BResult SendAsync(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
     {
         return mNetEngine->AsyncCallWithoutResponse(targetNodeId, opCode, req);
     }
 
-    inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen,
-        Callback &cb)
+    inline void SendAsyncBuff(const BioNodeId target, uint16_t opcode, void *req, uint32_t reqLen, Callback &cb)
     {
         mNetEngine->AsyncCallBuff(target, opcode, req, reqLen, cb);
     }
@@ -188,7 +188,7 @@ private:
     BResult ShmInitInner();
     BResult StartIpcService(const NetOptions netConf);
     BResult StartRpcService(std::string ipMask, uint16_t port, ServiceProtocol protocol, uint16_t workerNum,
-        const NetOptions netConf);
+                            const NetOptions netConf);
     BResult RecoverIpcService();
     BResult SetChannelBrokenHandler();
     void RecoverIpc();
@@ -202,8 +202,8 @@ private:
     uint32_t mWorkIoTimeOut = 60;
     uint32_t mWorkNetTimeOut = 16;
     int32_t mLogLevel = 1;
-    bool mEnableCrc = { false };
-    bool mEnableCli = { false };
+    bool mEnableCrc = {false};
+    bool mEnableCli = {false};
     NetEnginePtr mNetEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
@@ -213,12 +213,12 @@ private:
     uint8_t *mShmAddr = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
     uint16_t mLocalNid;
-    bool mEnablePrometheus = { false };
+    bool mEnablePrometheus = {false};
     std::string mPrometheusListenAddress = "127.0.0.1:7204";
     uint32_t mPrometheusScrapeIntervalSec = 15;
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
-}
+} // namespace net
+} // namespace bio
+} // namespace ock
 #endif

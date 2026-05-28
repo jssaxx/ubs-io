@@ -36,8 +36,7 @@ public:
 private:
     std::string mEmulationCephPath;
 };
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_LOCALSYSTEM_H

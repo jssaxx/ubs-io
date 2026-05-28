@@ -13,9 +13,9 @@
 #ifndef BOOSTIO_BIO_TLS_UTIL_H
 #define BOOSTIO_BIO_TLS_UTIL_H
 
+#include <dlfcn.h>
 #include <algorithm>
 #include <cstdint>
-#include <dlfcn.h>
 
 namespace ock {
 namespace bio {

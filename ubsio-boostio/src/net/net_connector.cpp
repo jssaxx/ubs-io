@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "net_connector.h"
 #include "bio_execution.h"
 #include "bio_ref.h"
 #include "net_engine.h"
-#include "net_connector.h"
 
 namespace ock {
 namespace bio {
@@ -41,28 +41,28 @@ BResult ConnectTask::DoConnect()
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, true, ctrlChanel);
         BIO_TP_END;
         if (ret != BIO_OK) {
-            NET_LOG_ERROR("Failed to connect ctrl plane to peer, dstNid:" << mConnectInfo.peerId.nid <<
-                ", pid:" << mConnectInfo.peerId.pid << ".");
+            NET_LOG_ERROR("Failed to connect ctrl plane to peer, dstNid:" << mConnectInfo.peerId.nid << ", pid:"
+                                                                          << mConnectInfo.peerId.pid << ".");
             return BIO_ERR;
         }
         mEngine->GetCtrlChannelMgr()->AddChannel(mConnectInfo.peerId, ctrlChanel, 0);
     } else {
-        NET_LOG_INFO("Exist connect ctrl plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
-            mConnectInfo.peerId.pid << ".");
+        NET_LOG_INFO("Exist connect ctrl plane by target node id " << mConnectInfo.peerId.nid
+                                                                   << ", pid:" << mConnectInfo.peerId.pid << ".");
     }
 
     ChannelPtr dataChanel = nullptr;
     if ((ret = mEngine->GetDataChannelMgr()->GetChannel(mConnectInfo.peerId, dataChanel)) == BIO_NOT_EXISTS) {
         ret = mEngine->ConnectToPeer(mode, mConnectInfo, false, dataChanel);
         if (ret != BIO_OK) {
-            NET_LOG_ERROR("Failed to connect data plane to peer, dstNid:" << mConnectInfo.peerId.nid <<
-                ", pid:" << mConnectInfo.peerId.pid << ".");
+            NET_LOG_ERROR("Failed to connect data plane to peer, dstNid:" << mConnectInfo.peerId.nid << ", pid:"
+                                                                          << mConnectInfo.peerId.pid << ".");
             return BIO_ERR;
         }
         mEngine->GetDataChannelMgr()->AddChannel(mConnectInfo.peerId, dataChanel, 1);
     } else if (ret != BIO_OK) {
-        NET_LOG_INFO("Exist connect data plane by target node id " << mConnectInfo.peerId.nid << ", pid:" <<
-            mConnectInfo.peerId.pid << ".");
+        NET_LOG_INFO("Exist connect data plane by target node id " << mConnectInfo.peerId.nid
+                                                                   << ", pid:" << mConnectInfo.peerId.pid << ".");
     }
 
     return BIO_OK;
@@ -175,5 +175,5 @@ BResult NetConnector::SyncConnect(ConnectInfo &info)
 
     return task->Wait();
 }
-}
-}
+} // namespace bio
+} // namespace ock

@@ -28,8 +28,8 @@ private:
     static int RegisterAllPoints() noexcept;
     static void RemoveAllPoints() noexcept;
 };
-}
-}
-}
+} // namespace tp
+} // namespace bio
+} // namespace ock
 
 #endif // BIO_TRACEPOINT_H

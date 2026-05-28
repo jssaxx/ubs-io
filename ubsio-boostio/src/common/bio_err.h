@@ -18,7 +18,8 @@
 namespace ock {
 namespace bio {
 using BResult = int32_t;
-enum Error : int32_t {
+enum Error : int32_t
+{
     BIO_OK = 0,
     BIO_ERR = 1,
     BIO_INNER_ERR = 2,
@@ -45,7 +46,7 @@ enum Error : int32_t {
 
     BIO_MAX,
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_ERR_H

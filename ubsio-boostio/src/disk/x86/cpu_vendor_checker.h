@@ -15,8 +15,8 @@
 
 #include <stdint.h>
 #include <string.h>
-#include "securec.h"
 #include "bdm_core.h"
+#include "securec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +26,7 @@ extern "C" {
 #define VENDOR_REGS_COUNT 3
 #define UNSUPPORTED_VENDOR_ID "HygonGenuine"
 
-int32_t GetCpuVendorId(char* vendorId, size_t vendorLen)
+int32_t GetCpuVendorId(char *vendorId, size_t vendorLen)
 {
     if (vendorId == NULL || vendorLen == 0) {
         BDM_LOGERROR(0, "Invalid parameter: vendorId or vendorIdLen");
@@ -70,4 +70,4 @@ int32_t CheckCpuVendor(void)
 #ifdef __cplusplus
 }
 #endif
-#endif  // CPU_VENDOR_CHECKER_H
+#endif // CPU_VENDOR_CHECKER_H

@@ -17,19 +17,22 @@
 
 namespace ock {
 namespace bio {
-enum FlowType : uint16_t {
+enum FlowType : uint16_t
+{
     FLOW_MEMORY = 0,
     FLOW_DISK = 1,
     FLOW_BUTT
 };
 
-enum FlowRole : uint16_t {
+enum FlowRole : uint16_t
+{
     FLOW_META = 0,
     FLOW_DATA = 1,
     FLOW_ROLE_BUTT
 };
 
-enum FlowCache : uint16_t {
+enum FlowCache : uint16_t
+{
     FLOW_WCACHE = 0,
     FLOW_RCACHE = 1,
     FLOW_CACHE
@@ -48,15 +51,18 @@ struct FlowAddr {
     FlowAddr() = default;
     explicit FlowAddr(MrInfo &mrInfo) : chunkId(mrInfo.address), chunkOffset(0), chunkLen(mrInfo.size) {}
     FlowAddr(uint64_t inChunkId, uint32_t inChunkOffset, uint32_t inChunkLen)
-        : chunkId(inChunkId), chunkOffset(inChunkOffset), chunkLen(inChunkLen)
-    {}
+        : chunkId(inChunkId),
+          chunkOffset(inChunkOffset),
+          chunkLen(inChunkLen)
+    {
+    }
     void ToMrInfo(MrInfo &mrInfo) const
     {
         mrInfo.address = chunkId + chunkOffset;
         mrInfo.size = chunkLen;
     }
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_FLOW_TYPE_H
