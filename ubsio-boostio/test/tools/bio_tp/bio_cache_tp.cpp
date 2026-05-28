@@ -14,7 +14,7 @@
 
 using namespace ock::bio;
 using namespace ock::bio::tp;
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(DEBUG_UT)
 static uint32_t MY_PID = 102;
 
 void tp::CacheTp::Register() noexcept

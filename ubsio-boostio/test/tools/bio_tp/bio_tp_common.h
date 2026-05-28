@@ -15,7 +15,7 @@
 
 #include <utility>
 
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(DEBUG_UT)
 #include "tracepoint.h"
 #else
 #define BIO_TRACEP_PARAM_SIZE 32UL

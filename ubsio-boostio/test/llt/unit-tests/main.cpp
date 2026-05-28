@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
     TestUnderFs::Stub();
     (void)system("rm -rf test1");
     (void)system("rm -rf test2");
+    (void)system("rm -f bio.log");
     (void)system("rm -rf ceph");
     (void)system("rm -rf conf");
     (void)system("cp ../configs/* ./");
@@ -84,7 +85,7 @@ int main(int argc, char *argv[])
 
     (void)system("rm -rf conf");
     (void)system("rm -rf ceph.conf");
-    sleep(NO_60);
+    sleep(NO_1);
 
     BioExit();
     std::cout << "Exit boostio tester success." << std::endl;
