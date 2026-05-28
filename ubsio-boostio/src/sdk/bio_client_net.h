@@ -13,6 +13,7 @@
 #ifndef BIO_CLIENT_NET_H
 #define BIO_CLIENT_NET_H
 
+#include <functional>
 #include "cm.h"
 #include "net_engine.h"
 #include "net_common.h"
@@ -25,6 +26,7 @@
 namespace ock {
 namespace bio {
 using CheckNodeOnline = std::function<bool(uint16_t nodeId, std::string &ip, uint16_t &port)>;
+using IpcRecoveredHandler = std::function<BResult()>;
 namespace net {
 class BioClientNet;
 using BioClientNetPtr = Ref<BioClientNet>;
@@ -59,6 +61,11 @@ public:
     inline uint32_t GetNegoWorkScene() const
     {
         return mWorkScene;
+    }
+
+    void RegIpcRecoveredHandler(const IpcRecoveredHandler &handler)
+    {
+        mIpcRecoveredHandler = handler;
     }
 
     inline uint32_t GetNegoWorkIoAlignSize() const
@@ -261,6 +268,7 @@ private:
     uint64_t mShmKey = 0;
     uint8_t *mShmAddr = nullptr;
     CheckNodeOnline mCheckOnLine = nullptr;
+    IpcRecoveredHandler mIpcRecoveredHandler = nullptr;
     uint16_t mLocalNid;
     bool mEnablePrometheus = { false };
     std::string mPrometheusListenAddress = "127.0.0.1:7204";

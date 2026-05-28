@@ -883,6 +883,11 @@ BResult WCacheManager::SendProcBrokenSyncRequest(WCachePtr flow, CmPtInfo ptEntr
     }
     ProcBrokenCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, slaveNode.size());
+    if (slaveNode.empty()) {
+        sem_destroy(&cbCtx.sem);
+        needDestroy = false;
+        return BIO_OK;
+    }
     auto cbFunc = [&slaveResult](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto cbCtx = static_cast<ProcBrokenCallbackCtx *>(ctx);
         if (UNLIKELY(result != BIO_OK)) {

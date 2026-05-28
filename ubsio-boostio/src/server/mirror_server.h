@@ -212,11 +212,19 @@ public:
     bool CheckFreeMemReq(FreeMemRequest *req);
     bool CheckGetSliceReq(GetSliceRequest *req);
 
-    inline uint64_t TransDataMsgMemAddr(pid_t holder, uint64_t offset)
+    inline uint64_t TransDataMsgMemAddr(pid_t holder, uint64_t offset, uint64_t length)
     {
         std::lock_guard<std::mutex> lock(mDataMsgMemLock);
         auto iter = mDataMsgMemMgr.find(holder);
         if (iter == mDataMsgMemMgr.end()) {
+            LOG_ERROR("Data message memory pool not found, holder:" << holder << ", offset:" << offset <<
+                                                                    ", length:" << length << ".");
+            return 0;
+        }
+        if (UNLIKELY(length == 0 || offset > iter->second.length || length > iter->second.length - offset)) {
+            LOG_ERROR("Data message memory address invalid, holder:" << holder << ", offset:" << offset <<
+                                                                     ", length:" << length << ", pool length:" <<
+                                                                     iter->second.length << ".");
             return 0;
         }
         return reinterpret_cast<uint64_t>(reinterpret_cast<uintptr_t>(iter->second.address + offset));

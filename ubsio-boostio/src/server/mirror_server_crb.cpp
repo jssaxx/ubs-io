@@ -109,7 +109,7 @@ void MirrorServerCrb::RunTaskThread(CmPtTaskPtr ptTask)
 void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
 {
     ptTask->jobNum = 0;
-
+    sem_init(&ptTask->jobSem, 0, 0);
     for (auto &elem : ptTask->ptList) {
         LOG_INFO("Job pre: ptId:" << elem.ptId << ", version:" << elem.version);
         auto ret = mJobService->Execute([this, ptTask, elem]() { RunJobThread(ptTask, elem); });
@@ -158,6 +158,13 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
     LOG_INFO("Job begin: ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     if (!JobPreCheck(ptInfo)) {
+        ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+        return;
+    }
+
+    if (ptInfo.copys.size() == NO_1) {
+        JobAddFinishList(ptTask, ptInfo);
+        UpdatePt(ptInfo);
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
         return;
     }
@@ -226,8 +233,21 @@ void MirrorServerCrb::JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo)
 
 bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo)
 {
-    if (ptInfo.state == CM_PT_INIT || ptInfo.state == CM_PT_FAULT || ptInfo.state == CM_PT_BUTT) {
+    if (ptInfo.state == CM_PT_INIT || ptInfo.state == CM_PT_BUTT) {
         return false;
+    }
+
+    if (ptInfo.state == CM_PT_FAULT) {
+        bool hasRecoveryCopy = false;
+        for (const auto &copy : ptInfo.copys) {
+            if (copy.state == CM_COPY_RECOVERY) {
+                hasRecoveryCopy = true;
+                break;
+            }
+        }
+        if (!hasRecoveryCopy) {
+            return false;
+        }
     }
 
     CmPtInfo cache;

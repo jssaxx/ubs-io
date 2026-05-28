@@ -351,6 +351,13 @@ BResult BioClientNet::RecoverIpcService()
     ret = ShmInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Get shm info fail, result:" << ret << ".");
+        return ret;
+    }
+    if (mIpcRecoveredHandler != nullptr) {
+        ret = mIpcRecoveredHandler();
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Recover data message memory pool failed, result:" << ret << ".");
+        }
     }
     return ret;
 }

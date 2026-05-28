@@ -218,7 +218,7 @@ struct CmPtFinish {
     uint16_t ptId;
 
 public:
-    CmPtFinish(uint16_t vversion, uint16_t pptId) : version(vversion), ptId(pptId) {}
+    CmPtFinish(uint64_t vversion, uint16_t pptId) : version(vversion), ptId(pptId) {}
 };
 
 using CmNodeHandler = std::function<BResult(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)>;

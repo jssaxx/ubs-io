@@ -148,6 +148,10 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
         mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
+        return ret;
+    }
+    if (mode == SEPARATES) {
+        mNetEngine->RegIpcRecoveredHandler([this]() { return mMirror->RecoverDataMessageMem(); });
     }
     return ret;
 }

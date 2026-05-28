@@ -55,6 +55,12 @@ void ViewPtUpdateCopyState(PtEntry *ptEntry, uint16_t copyIndex, uint16_t minCop
         }
     }
 
+    if (ptEntry->copyNum <= minCopyNum) {
+        ptEntry->copyList[copyIndex].state = PT_COPY_STATE_RUNNING;
+        ptEntry->copyList[copyIndex].keepAlive = TRUE;
+        return;
+    }
+
     if (normNum >= minCopyNum) {
         ptEntry->copyList[copyIndex].state = PT_COPY_STATE_RECOVERY;
         return;
@@ -318,6 +324,25 @@ int32_t ViewPtSatisfiedCopyNum(PtEntry *ptEntry, uint16_t minCopyNum)
     return TRUE;
 }
 
+int32_t ViewPtSatisfiedCopyNumAfterFinish(PtEntry *ptEntry, uint16_t finishCopyIndex, uint16_t minCopyNum)
+{
+    uint16_t index;
+
+    uint16_t normNum = 0;
+    for (index = 0; index < ptEntry->copyNum; index++) {
+        if (ptEntry->copyList[index].state == PT_COPY_STATE_RUNNING ||
+            (index == finishCopyIndex && ptEntry->copyList[index].state == PT_COPY_STATE_RECOVERY)) {
+            normNum++;
+        }
+    }
+
+    if (normNum < minCopyNum) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 uint16_t *GenMasterList(PtEntryList *ptEntryList, uint16_t nodeNum)
 {
     size_t len = sizeof(uint16_t) * nodeNum;
@@ -359,14 +384,15 @@ void ViewPtEntryListUpdateNodeFinish(uint16_t nodeId, CmPtFinish *ptList, uint16
         if (ptEntry->birthVersion != ptList[index].birthVersion) {
             continue;
         }
-        if (ViewPtSatisfiedCopyNum(ptEntry, ptEntryList->minCopyNum) == FALSE) {
-            CM_LOGWARN("Invalid, poolId(%u) ptId(%u), not satisfy min copynum.", ptEntryList->poolId,
-                ptList[index].ptId);
-            continue;
-        }
+
         for (copyIndex = 0; copyIndex < ptEntry->copyNum; copyIndex++) {
             if (ptEntry->copyList[copyIndex].nodeId == nodeId &&
                 ptEntry->copyList[copyIndex].state == PT_COPY_STATE_RECOVERY) {
+                if (ViewPtSatisfiedCopyNumAfterFinish(ptEntry, copyIndex, ptEntryList->minCopyNum) == FALSE) {
+                    CM_LOGWARN("Invalid, poolId(%u) ptId(%u), not satisfy min copynum.", ptEntryList->poolId,
+                               ptList[index].ptId);
+                    break;
+                }
                 *ptChange = TRUE;
                 ptEntry->copyList[copyIndex].state = PT_COPY_STATE_RUNNING;
                 ViewPtUpdateCopyKeepAlive(ptEntry, ptEntryList->minCopyNum);

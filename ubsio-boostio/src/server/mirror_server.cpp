@@ -871,7 +871,13 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.length, addrVec);
     } else {
-        auto localAddr = TransDataMsgMemAddr(req->pid, keyInfo.addressOffset);
+        auto localAddr = TransDataMsgMemAddr(req->pid, keyInfo.addressOffset, keyInfo.size);
+        if (UNLIKELY(localAddr == 0)) {
+            LOG_ERROR("Get data message memory address failed, pid:" << req->pid <<
+                                                                     ", offset:" << keyInfo.addressOffset <<
+                                                                     ", size:" << keyInfo.size << ".");
+            return BIO_NOT_READY;
+        }
         mrInfo = { localAddr, static_cast<uint32_t>(keyInfo.size) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.length, addrVec);
@@ -1578,7 +1584,7 @@ uintptr_t MirrorServer::ParseRealAddress(PutRequest *req)
 {
     uintptr_t retAddr = req->mrAddress;
     if (req->comm.srcNid == BioServer::Instance()->GetLocalNid().VNodeId() && req->affinity == GLOBAL_BALANCE) {
-        retAddr = TransDataMsgMemAddr(req->comm.pid, req->mrOffset);
+        retAddr = TransDataMsgMemAddr(req->comm.pid, req->mrOffset, req->mrSize);
     }
     return retAddr;
 }
@@ -1588,6 +1594,13 @@ int32_t MirrorServer::MirrorServerPut(ServiceContext &ctx, PutRequest *req)
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) { // case 1：slice资源来自于SDK端, 使用req中的MR信息
         auto realAddr = ParseRealAddress(req);
+        if (UNLIKELY(realAddr == 0)) {
+            LOG_ERROR("Put data message memory address invalid, pid:" << req->comm.pid <<
+                                                                      ", offset:" << req->mrOffset <<
+                                                                      ", size:" << req->mrSize << ".");
+            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_NOT_READY, nullptr, 0);
+            return BIO_OK;
+        }
         MrInfo mrInfo = { realAddr, static_cast<uint32_t>(req->mrSize) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         BIO_TP_START(PUT_SLICE_ZERO_ALLOC_FAIL, &sliceP, nullptr);
@@ -2100,7 +2113,7 @@ int32_t MirrorServer::MirrorServerCreateDataMsgMemPool(ServiceContext &ctx, Crea
     // 1. 创建共享内存.
     uint64_t sdkPoolSize = BioConfig::Instance()->GetDaemonConfig().sdkPoolSize;
     int32_t shmFd = 0;
-    std::string shmName = "bio_data_msg_mem_pool";
+    std::string shmName = "bio_data_msg_mem_pool" + std::to_string(req->comm.pid);
     auto ret = BioServer::Instance()->GetNetEngine()->CreateShmFdWithName(shmFd, sdkPoolSize, shmName);
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to create shm fd, size:" << sdkPoolSize << ", name:" << shmName << ".");
@@ -2130,6 +2143,14 @@ int32_t MirrorServer::MirrorServerCreateDataMsgMemPool(ServiceContext &ctx, Crea
 
     // 2. 将内存池信息加入管理MAP中.
     std::lock_guard<std::mutex> lock(mDataMsgMemLock);
+    auto iter = mDataMsgMemMgr.find(req->comm.pid);
+    if (iter != mDataMsgMemMgr.end()) {
+        LOG_WARN("Replace old data message memory pool, holder:" << req->comm.pid << ".");
+        auto &item = iter->second;
+        BioServer::Instance()->GetNetEngine()->DestroyShmFdWithPid(item.memFd, item.address, req->comm.pid,
+                                                                   item.length);
+        mDataMsgMemMgr.erase(iter);
+    }
     mDataMsgMemMgr.emplace(req->comm.pid, DataMsgMemItem(shmFd, offset, sdkPoolSize, static_cast<uint8_t *>(address)));
     LOG_INFO("Succeed to create data message memory pool, size:" << sdkPoolSize << ", holder:" << req->comm.pid << ".");
 

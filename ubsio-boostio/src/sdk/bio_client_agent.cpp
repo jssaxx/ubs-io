@@ -539,7 +539,7 @@ bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
 BResult BioClientAgent::CreateDataMessageMemPool(pid_t procId, uint64_t &memPoolSize, int32_t &memFd, uint64_t &offset,
                                                  uint64_t &blockSize)
 {
-    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() }};
+    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), procId }};
     CreateDataMsgMemPoolResponse rsp;
     auto ret = net::BioClientNet::Instance()->SendSync<CreateDataMsgMemPoolRequest, CreateDataMsgMemPoolResponse>(
         INVALID_NID, BIO_OP_SDK_CREATE_DATA_MSG_MEM_POOL, req, rsp);
