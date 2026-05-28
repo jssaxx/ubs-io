@@ -129,26 +129,6 @@ public:
     CResult BatchGetRemote(const char **keys, const uint32_t count,
                                 ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
                                 uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
-    /**
-     * @brief: Batch Get value
-     *
-     * @param[in]: tenantId: tenant id
-     * @param[in]: keys: multiple keys
-     * @param[in]: offset: offsets of multiple keys
-     * @param[in]: length : lengths of the get values, the same shape of valueAddrs
-     * @param[in]: location : location info
-     * @param[out]: valueAddrs : hbm address of the values corresponding to multiple keys
-        valueAddrs {
-            {key1_npu_buflayer_0, key1_npu_buflayer_1, ..., {key1_npu_buflayer_N}},
-            {key2_npu_buflayer_0, key2_npu_buflayer_1},..., {key2_npu_buflayer_N}},
-            ...,
-            {keyM_npu_buflayer_0, keyM_npu_buflayer_1},..., {keyM_npu_buflayer_N}}
-        }
-     * @param[out]: results : result of getting multiple keys
-     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
-     */
-    CResult BatchGetWithHbm(const char **keys, const uint32_t count, uint64_t *offsets, ObjLocation *locations,
-                            uint64_t **lengths, uintptr_t **valueAddrs, uint64_t **realLengths, int32_t *results);
 
     /**
      * @brief: release the address returned by batchget.
