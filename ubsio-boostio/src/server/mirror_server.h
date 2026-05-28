@@ -27,7 +27,7 @@
 namespace ock {
 namespace bio {
 constexpr uint16_t SERVER_BATCH_GET_THREAD_NUM = 128;
-constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = 8192;
+constexpr uint32_t SERVER_BATCH_GET_QUEUE_SIZE = 65536;
 
 struct MemFreeHolder {
     uint32_t nodeId;

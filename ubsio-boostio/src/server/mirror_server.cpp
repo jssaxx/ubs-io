@@ -2021,6 +2021,7 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
     std::vector<int32_t> results(req->count);
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
+    bool hasErr = false;
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
@@ -2035,13 +2036,17 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
-            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
-            return BIO_OK;
+            results[index] = BIO_INNER_ERR;
+            hasErr = true;
+            if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
+                sem_post(&sem);
+            }
+            continue;
         }
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, hasErr ? BIO_INNER_ERR : BIO_OK);
 
     BatchGetResponse rsp;
     rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
@@ -2050,7 +2055,8 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
         rsp.results[i] = results[i];
         rsp.realLengths[i] = realLengths[i];
     }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetResponse));
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, hasErr ? BIO_INNER_RETRY : BIO_OK,
+                                                 static_cast<void *>(&rsp), sizeof(BatchGetResponse));
     return BIO_OK;
 }
 
@@ -2063,6 +2069,7 @@ int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGet
     std::vector<int32_t> results(req->count);
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_HBM_LOCAL);
+    bool hasErr = false;
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
@@ -2077,13 +2084,17 @@ int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGet
 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
-            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
-            return BIO_OK;
+            results[index] = BIO_INNER_ERR;
+            hasErr = true;
+            if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
+                sem_post(&sem);
+            }
+            continue;
         }
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_HBM_LOCAL, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_HBM_LOCAL, hasErr ? BIO_INNER_ERR : BIO_OK);
 
     BatchGetLocalHbmResponse rsp;
     rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
@@ -2091,7 +2102,7 @@ int32_t MirrorServer::MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGet
     for (uint32_t i = 0; i < req->count; i++) {
         rsp.results[i] = results[i];
     }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, hasErr ? BIO_INNER_RETRY : BIO_OK, static_cast<void *>(&rsp),
                                                  sizeof(BatchGetLocalHbmResponse));
     return BIO_OK;
 }
@@ -2105,6 +2116,7 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
     std::vector<int32_t> results(req->count);
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_HBM_REMOTE);
+    bool hasErr = false;
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
@@ -2119,13 +2131,17 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
-            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
-            return BIO_OK;
+            results[index] = BIO_INNER_ERR;
+            hasErr = true;
+            if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
+                sem_post(&sem);
+            }
+            continue;
         }
     }
     sem_wait(&sem);
     sem_destroy(&sem);
-    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_HBM_REMOTE, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_HBM_REMOTE, hasErr ? BIO_INNER_ERR : BIO_OK);
 
     BatchGetRemoteHbmResponse rsp;
     rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
@@ -2133,7 +2149,7 @@ int32_t MirrorServer::MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGe
     for (uint32_t i = 0; i < req->count; i++) {
         rsp.results[i] = results[i];
     }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp),
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, hasErr ? BIO_INNER_RETRY : BIO_OK, static_cast<void *>(&rsp),
                                                  sizeof(BatchGetRemoteHbmResponse));
     return BIO_OK;
 }
