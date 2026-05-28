@@ -1004,6 +1004,8 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
     nodeInfo.diskList.list[0].state = DISK_STATE_NORMAL;
     nodeInfo.diskList.list[1].state = DISK_STATE_NORMAL;
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_UP, &nodeInfo, ptList, pgChange.get());
+    EXPECT_EQ(ptList->ptEntryList[0].copyList[0].state, PT_COPY_STATE_RUNNING);
+    EXPECT_EQ(ptList->ptEntryList[0].state, PT_STATE_NORMAL);
     free(ptList);
 }
 

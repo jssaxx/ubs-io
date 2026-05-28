@@ -140,6 +140,7 @@ public:
 
     BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc);
     BResult Start();
+    BResult RecoverDataMessageMem();
 
     void FreeIoStrategy();
 
@@ -337,6 +338,7 @@ private:
     BResult CreateDataMessageMemLocal();
     BResult CreateDataMessageMemRemote();
     BResult CreateDataMessageMem();
+    void DestroyDataMessageMem();
 
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     void InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota);
@@ -480,6 +482,8 @@ private:
     bool mEnableCrc { false };
     BioQosPtr mBioQos = nullptr;
     uint8_t *mDataMsgMemAddr = nullptr;
+    uint64_t mDataMsgMemSize = 0;
+    int32_t mDataMsgMemFd = -1;
     uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
     MemoryRegion mDataMsgMemMr;
     NetBlockPoolPtr mDataMsgMemPool = nullptr;

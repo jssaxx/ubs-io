@@ -15,6 +15,7 @@
 #include <vector>
 #include <dlfcn.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #include "bio_tracepoint_helper.h"
 #include "bio_client_log.h"
 #include "bio_trace.h"
@@ -238,6 +239,8 @@ BResult MirrorClient::CreateDataMessageMemRemote()
     }
     memset_s(address, dataMemSize, 0, dataMemSize);
     mDataMsgMemAddr = static_cast<uint8_t *>(address);
+    mDataMsgMemSize = dataMemSize;
+    mDataMsgMemFd = realFd;
     mDataMsgMemBlockSize = blockSize;
     // 2. 注册RDMA内存.
     ret = net::BioClientNet::Instance()->RegisterMemoryRegion(mDataMsgMemAddr, dataMemSize, mDataMsgMemMr);
@@ -248,6 +251,9 @@ BResult MirrorClient::CreateDataMessageMemRemote()
         }
         close(realFd);
         realFd = -1;
+        mDataMsgMemAddr = nullptr;
+        mDataMsgMemSize = 0;
+        mDataMsgMemFd = -1;
         return ret;
     }
 
@@ -255,16 +261,31 @@ BResult MirrorClient::CreateDataMessageMemRemote()
     mDataMsgMemPool = MakeRef<NetBlockPool>();
     if (mDataMsgMemPool == nullptr) {
         CLIENT_LOG_ERROR("Make block pool ptr failed.");
+        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
+        if (munmap(address, dataMemSize) == -1) {
+            NET_LOG_ERROR("munmap address failed.");
+        }
         close(realFd);
         realFd = -1;
+        mDataMsgMemAddr = nullptr;
+        mDataMsgMemSize = 0;
+        mDataMsgMemFd = -1;
         return BIO_ALLOC_FAIL;
     }
     ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr),
                                  mDataMsgMemBlockSize, dataMemSize / mDataMsgMemBlockSize);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to start block pool " << dataMemSize << ".");
+        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
+        if (munmap(address, dataMemSize) == -1) {
+            NET_LOG_ERROR("munmap address failed.");
+        }
         close(realFd);
         realFd = -1;
+        mDataMsgMemAddr = nullptr;
+        mDataMsgMemSize = 0;
+        mDataMsgMemFd = -1;
+        mDataMsgMemPool = nullptr;
     }  else {
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize <<
             ", blockSize:" << mDataMsgMemBlockSize);
@@ -282,16 +303,28 @@ BResult MirrorClient::CreateDataMessageMemLocal()
         return ret;
     }
     mDataMsgMemAddr = reinterpret_cast<uint8_t *>(mDataMsgMemMr.GetAddress());
-
+    mDataMsgMemSize = dataMemSize;
+    mDataMsgMemFd = -1;
+    mDataMsgMemBlockSize = NO_4194304;
     // 2. 创建memory block分配器.
     mDataMsgMemPool = MakeRef<NetBlockPool>();
     if (mDataMsgMemPool == nullptr) {
         CLIENT_LOG_ERROR("Make block pool ptr failed.");
+        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
+        mDataMsgMemAddr = nullptr;
+        mDataMsgMemSize = 0;
+        mDataMsgMemBlockSize = NO_4096 * NO_1024;
         return BIO_ALLOC_FAIL;
     }
-    ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr), NO_4194304, dataMemSize / NO_4194304);
+    ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr),
+                                 mDataMsgMemBlockSize, dataMemSize / mDataMsgMemBlockSize);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to start block pool " << dataMemSize << ".");
+        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
+        mDataMsgMemAddr = nullptr;
+        mDataMsgMemSize = 0;
+        mDataMsgMemBlockSize = NO_4096 * NO_1024;
+        mDataMsgMemPool = nullptr;
     }  else {
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize << ".");
     }
@@ -300,11 +333,44 @@ BResult MirrorClient::CreateDataMessageMemLocal()
 
 BResult MirrorClient::CreateDataMessageMem()
 {
+    DestroyDataMessageMem();
     if (mMode == CONVERGENCE) {
         return CreateDataMessageMemLocal();
     } else {
         return CreateDataMessageMemRemote();
     }
+}
+
+void MirrorClient::DestroyDataMessageMem()
+{
+    if (mDataMsgMemPool != nullptr) {
+        mDataMsgMemPool->Stop();
+        mDataMsgMemPool = nullptr;
+    }
+    if (mDataMsgMemAddr != nullptr) {
+        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
+        if (mMode == SEPARATES && mDataMsgMemSize != 0) {
+            if (munmap(mDataMsgMemAddr, mDataMsgMemSize) == -1) {
+                NET_LOG_ERROR("munmap data message memory failed.");
+            }
+        }
+        mDataMsgMemAddr = nullptr;
+    }
+    if (mDataMsgMemFd >= 0) {
+        close(mDataMsgMemFd);
+        mDataMsgMemFd = -1;
+    }
+    mDataMsgMemSize = 0;
+    mDataMsgMemBlockSize = NO_4096 * NO_1024;
+}
+
+BResult MirrorClient::RecoverDataMessageMem()
+{
+    if (mMode == CONVERGENCE) {
+        return BIO_OK;
+    }
+    CLIENT_LOG_INFO("Recover mirror client data message memory pool.");
+    return CreateDataMessageMem();
 }
 
 BResult MirrorClient::InitializeBioQos()
@@ -393,6 +459,7 @@ BResult MirrorClient::LoadOriginViewImpl()
 
 void MirrorClient::FreeIoStrategy()
 {
+    DestroyDataMessageMem();
     for (auto &ioStrategy : mIoStrategy) {
         delete ioStrategy.second;
     }
