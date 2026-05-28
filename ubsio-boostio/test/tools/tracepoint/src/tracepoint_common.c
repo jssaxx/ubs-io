@@ -12,25 +12,37 @@
 
 #include "tracepoint_common.h"
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 
-#define NS_PER_SEC 1E9
+#define NS_PER_SEC 1000000000ULL
 
+#if defined(__aarch64__)
 static inline unsigned long Rdtsc(void)
 {
     unsigned long cntvct = 0;
     asm volatile("mrs %0, cntvct_el0" : "=r"(cntvct));
     return cntvct;
 }
+#endif
 
 TpUint64 DpaxTimeGetnanosec(void)
 {
+#if defined(__aarch64__)
     TpUint64 clkFreq;
     TpUint64 nsPerCycle;
 
     asm volatile("mrs %0, cntfrq_el0" : "=r"(clkFreq)::"memory");
-    nsPerCycle = (uint64_t)NS_PER_SEC / clkFreq;
+    nsPerCycle = (TpUint64)NS_PER_SEC / clkFreq;
     return (TpUint64)(Rdtsc() * nsPerCycle);
+#else
+    struct timespec ts = {0};
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
+    return (TpUint64)ts.tv_sec * (TpUint64)NS_PER_SEC + (TpUint64)ts.tv_nsec;
+#endif
 }
 
 TpUint64 DpaxTimeGetmillisec(void)

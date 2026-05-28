@@ -104,7 +104,7 @@ if (${DEBUG_UT} MATCHES "ON")
     add_compile_options(-fno-inline)
 endif()
 
-if ("${OPEN_TP}" STREQUAL "ON")
+if ("${OPEN_TP}" STREQUAL "ON" OR "${DEBUG_UT}" STREQUAL "ON")
     add_compile_definitions(USE_DEBUG_TP_TOOLS)
     include_directories(
             ${PROJECT_SOURCE_DIR}/test/tools/bio_tp/

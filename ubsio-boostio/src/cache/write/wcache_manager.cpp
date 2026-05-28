@@ -180,9 +180,12 @@ void WCacheManager::Exit()
         }
         mWCacheManager.clear();
     }
+    mEvictNegotiateService->Stop();
     mEvictService[WCACHE_MEMORY]->Stop();
     mEvictService[WCACHE_DISK]->Stop();
+    mGcEvictService->Stop();
     mRetryEvictService->Stop();
+    mDestroyEvictService->Stop();
 }
 
 BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId)
@@ -1052,7 +1055,7 @@ void WCacheManager::DestroyEvictThread()
         std::swap(mDestroyManager, destroyManager);
     }
 
-    while (!destroyManager.empty()) {
+    while (!destroyManager.empty() && mRunning) {
         uint64_t curTime = Monotonic::TimeSec();
         for (auto it = destroyManager.begin(); it != destroyManager.end();) {
             if (it->second <= curTime) {

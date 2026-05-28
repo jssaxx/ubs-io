@@ -176,8 +176,7 @@ TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
     slices[0] = 0;
     slices[NO_1] = NO_1;
     slices[NO_2] = NO_2;
-    std::vector<bool> reslut;
-    reslut.push_back(false);
+    std::vector<bool> reslut(NO_3, false);
     BioHvsActiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
     gWCacheManager->MasterEvictNegotiate(g_flowId, slices, reslut, NO_3);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
@@ -506,7 +505,7 @@ TEST_F(TestWCache, test_rcache_get_flow_offset_err_case_return_fail)
     uint64_t realLen = 0;
     std::vector<FlowAddr> addrVec;
     RCacheSlicePtr slicePtr = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
-    sleep(NO_5);
+    sleep(NO_1);
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Get(key, 0, slicePtr, wWriter, realLen);
@@ -673,7 +672,7 @@ TEST_F(TestWCache, test_wcache_destroy_flowid_err_return_ok)
     BioHvsActiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
-    sleep(NO_5);
+    sleep(NO_1);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
     BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL");
     BioHvsDeactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
@@ -691,7 +690,7 @@ TEST_F(TestWCache, test_wcache_destroy_flush_return_ok)
     BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
-    sleep(NO_5);
+    sleep(NO_1);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
@@ -710,7 +709,7 @@ TEST_F(TestWCache, test_wcache_destroy_expire_return_ok)
     BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
-    sleep(NO_5);
+    sleep(NO_1);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
