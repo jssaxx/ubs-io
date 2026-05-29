@@ -25,13 +25,13 @@ else ()
     message(STATUS "HCOM not found in system. Building from source...")
     set(USE_SYSTEM_HCOM OFF)
 endif ()
-
+set(USE_SYSTEM_HCOM OFF)
 if (NOT USE_SYSTEM_HCOM)
     include(FetchContent)
     FetchContent_Declare(
             ubs_comm
             GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
-            GIT_TAG tag_BeiMing-I26.0.RC1.B013
+            GIT_TAG br_kvcache_20260630
     )
     FetchContent_GetProperties(ubs_comm)
     if(NOT ubs_comm_POPULATED)
