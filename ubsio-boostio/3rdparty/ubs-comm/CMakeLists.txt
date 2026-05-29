@@ -25,7 +25,7 @@ else ()
     message(STATUS "HCOM not found in system. Building from source...")
     set(USE_SYSTEM_HCOM OFF)
 endif ()
-set(USE_SYSTEM_HCOM OFF)
+
 if (NOT USE_SYSTEM_HCOM)
     include(FetchContent)
     FetchContent_Declare(
