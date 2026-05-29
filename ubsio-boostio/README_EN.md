@@ -63,5 +63,5 @@ This code repository contributes to the openEuler open source project. It strict
 
 ## License
 
-The UBS-IO product is licensed under Mulan Permissive Software License ([http://license.coscl.org.cn/MulanPSL2)](http://license.coscl.org.cn/MulanPSL2%EF%BC%89). For details, see the **LICENSE** file in the root directory.
+The UBS-IO product is licensed under Mulan Permissive Software License [http://license.coscl.org.cn/MulanPSL2](http://license.coscl.org.cn/MulanPSL2). For details, see the **LICENSE** file in the root directory.
 The documents in the **doc** directory of UBS-IO are licensed under Attribution-ShareAlike 4.0 International. For details, see the **LICENSE** file in the **doc** directory.
