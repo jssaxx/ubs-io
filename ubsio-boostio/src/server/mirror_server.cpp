@@ -1191,7 +1191,7 @@ BResult MirrorServer::BatchSingleGetLocalHbm(GetKeyLocalHbmInfo &keyInfo, BatchG
     MrInfo mrInfo;
     uint16_t localNid = Cm::Instance()->GetCmLocalNodeId().VNodeId();
     RCacheSlicePtr sliceP = nullptr;
-    auto localAddr = TransDataMsgMemAddr(req->pid, keyInfo.addressOffset);
+    auto localAddr = TransDataMsgMemAddr(req->pid, keyInfo.addressOffset, keyInfo.size);
     mrInfo = { localAddr, static_cast<uint32_t>(keyInfo.size) };
     std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.length, addrVec);
