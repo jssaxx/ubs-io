@@ -922,6 +922,7 @@ TEST_F(TestBioServer, test_bio_server_reader)
     WCacheSlicePtr from = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     WCacheSlicePtr to = MakeRef<WCacheSlice>(1, 1, 1, NO_128, addr);
     PutRequest req;
+    req.enableTrans = false;
     req.memFromServer = false;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
@@ -942,6 +943,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal_server_false)
     PutRequest req;
     req.memFromServer = true;
     req.comm.srcNid = NO_10;
+    req.enableTrans = false;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
     EXPECT_EQ(ret, BIO_INNER_ERR);
@@ -961,6 +963,7 @@ TEST_F(TestBioServer, test_bio_server_reader_not_equal_to_err)
     PutRequest req;
     req.memFromServer = false;
     req.comm.srcNid = NO_10;
+    req.enableTrans = false;
     ServiceContext netCtx;
     auto ret = mirror->ReaderRemote(from.Get(), to.Get(), req, netCtx);
     EXPECT_EQ(ret, BIO_INNER_ERR);

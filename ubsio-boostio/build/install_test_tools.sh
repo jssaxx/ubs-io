@@ -36,7 +36,8 @@ cd googletest
 git checkout -b release-1.12.1 release-1.12.1
 mkdir build && cd build
 cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-    -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=${GTEST_INSTALL_PATH} -DINSTALL_GTEST=ON ..
+    -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0 \
+    -DCMAKE_INSTALL_PREFIX=${GTEST_INSTALL_PATH} -DINSTALL_GTEST=ON ..
 make -j8
 make install
 echo "${BOOSTIO_LOG_TAG} googletest install to ${GTEST_INSTALL_PATH} success."

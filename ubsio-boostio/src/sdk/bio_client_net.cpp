@@ -139,7 +139,9 @@ void BioClientNet::Exit()
     if (mMode == SEPARATES) {
         StopInner();
     }
-    mTransEngine->Destroy();
+    if (mTransEngine != nullptr) {
+        mTransEngine->Destroy();
+    }
 }
 
 BResult BioClientNet::CorrectFd()

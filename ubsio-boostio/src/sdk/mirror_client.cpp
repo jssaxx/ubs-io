@@ -2052,6 +2052,8 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->mrSize = 0;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
     req->sliceLen = rsp->sliceLen;
+    req->enableTrans = false;
+    req->localTransAddr = 0;
     mBioQos->GetKey(req->quotaNid, req->quotaCid);
     if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
         req->ioStrategy = mIoStrategy[ptEntry.ptId]->strategy;
