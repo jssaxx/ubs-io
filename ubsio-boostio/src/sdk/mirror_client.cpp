@@ -288,6 +288,9 @@ BResult MirrorClient::CreateDataMessageMemRemote()
         mDataMsgMemFd = -1;
         mDataMsgMemPool = nullptr;
     }  else {
+        mDataPoolFlagLock.LockWrite();
+        mReleaseDataPoolFlag = false;
+        mDataPoolFlagLock.UnLock();
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize <<
             ", blockSize:" << mDataMsgMemBlockSize);
     }
@@ -327,6 +330,9 @@ BResult MirrorClient::CreateDataMessageMemLocal()
         mDataMsgMemBlockSize = NO_4096 * NO_1024;
         mDataMsgMemPool = nullptr;
     }  else {
+        mDataPoolFlagLock.LockWrite();
+        mReleaseDataPoolFlag = false;
+        mDataPoolFlagLock.UnLock();
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize << ".");
     }
     return ret;
@@ -344,6 +350,7 @@ BResult MirrorClient::CreateDataMessageMem()
 
 void MirrorClient::DestroyDataMessageMem()
 {
+    mDataPoolFlagLock.LockWrite();
     if (mDataMsgMemPool != nullptr) {
         mDataMsgMemPool->Stop();
         mDataMsgMemPool = nullptr;
@@ -363,6 +370,8 @@ void MirrorClient::DestroyDataMessageMem()
     }
     mDataMsgMemSize = 0;
     mDataMsgMemBlockSize = NO_4096 * NO_1024;
+    mReleaseDataPoolFlag = true;
+    mDataPoolFlagLock.UnLock();
 }
 
 BResult MirrorClient::RecoverDataMessageMem()
@@ -859,7 +868,6 @@ bool MirrorClient::FailHandler(const BResult result, uint64_t startTime, uint64_
     switch (result) {
         case BIO_ALLOC_FAIL:
         case BIO_INNER_RETRY:
-        case BIO_NET_RETRY:
         case BIO_CHECK_PT_FAIL:
         case BIO_DISK_IOERR:
             isRetry = true;
@@ -1118,9 +1126,17 @@ BResult MirrorClient::BatchGetRemote(MirrorBatchGetRemoteHbm &param)
 
 void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 {
+    if (mDataMsgMemPool == nullptr) {
+        return;
+    }
+    mDataPoolFlagLock.LockRead();
+    if (mReleaseDataPoolFlag == true) {
+        return;
+    }
     for (uint32_t i = 0; i < count; i++) {
         mDataMsgMemPool->ReleaseOne(valueAddrs[i]);
     }
+    mDataPoolFlagLock.UnLock();
 }
 
 BResult MirrorClient::AsyncGet(MirrorGet &param, AsyncOpParam &opParam)

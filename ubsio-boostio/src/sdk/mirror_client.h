@@ -531,6 +531,8 @@ private:
     uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
     MemoryRegion mDataMsgMemMr;
     NetBlockPoolPtr mDataMsgMemPool = nullptr;
+    bool mReleaseDataPoolFlag = false;
+    ReadWriteLock mDataPoolFlagLock;
     ExecutorServicePtr mBatchGetExecutor{ nullptr };
     ExecutorServicePtr mBatchExistExecutor{ nullptr };
     DEFINE_REF_COUNT_VARIABLE
