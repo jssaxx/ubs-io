@@ -22,6 +22,7 @@
 #include "bio.h"
 #include "bio_config_instance.h"
 #include "message.h"
+#include "net_trans_engine.h"
 
 namespace ock {
 namespace bio {
@@ -43,7 +44,7 @@ public:
 
     // Establish an RPC connection with the other bio server
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView, uint16_t protocol,
-        const NetOptions netConf);
+        NetOptions &netConf);
 
     BResult GetUnderFsConfig(BioConfig::UnderFsConfig &config);
 
@@ -121,6 +122,11 @@ public:
     inline NetEnginePtr GetNetEngine() const
     {
         return mNetEngine;
+    }
+
+    inline MfTransEnginePtr GetTransNetEngine() const
+    {
+        return mTransEngine;
     }
 
     inline uint32_t GetDataPage() const
@@ -234,6 +240,8 @@ public:
 
     bool CheckGetUnderFsConfigResp(GetUnderFsConfigResponse &rsp);
 
+    BResult RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes);
+
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
@@ -260,9 +268,15 @@ private:
     bool mEnableCrc = { false };
     bool mEnableCli = { false };
     NetEnginePtr mNetEngine = nullptr;
+    MfTransEnginePtr mTransEngine = nullptr;
     int32_t mShmFd = -1;
     int32_t mServerPid = 0;
     uint32_t mNetSegmentSize = 256;
+    bool mIsDevicetrans = false;
+    std::string mDeviceTransType = "NULL";
+    std::string mTransStoreUrl;
+    uint32_t mMemSegmentSize = 4096 * 1024;
+    uint64_t mTransMemSize = 0;
     uint64_t mShmOffset = 0;
     uint64_t mShmLength = 0;
     uint64_t mShmKey = 0;

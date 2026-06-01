@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
     (void)system("touch ceph.conf");
 
     std::cout << "Start boostio tester begin..." << std::endl;
-    auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr);
+    auto ret = BioInitialize(WorkerMode::CONVERGENCE, nullptr, -1);
     if (ret != RET_CACHE_OK) {
         std::cout << "boostio initialize failed, result:" << ret << "." << std::endl;
         return -1;

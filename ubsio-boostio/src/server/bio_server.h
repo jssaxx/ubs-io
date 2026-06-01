@@ -23,6 +23,7 @@
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
 #include "net_engine.h"
+#include "net_trans_engine.h"
 
 namespace ock {
 namespace bio {
@@ -192,6 +193,11 @@ public:
     inline NetEnginePtr GetNetEngine()
     {
         return mNetEngine;
+    }
+
+    inline MfTransEnginePtr GetTransEngine()
+    {
+        return mTransEngine;
     }
 
     inline MirrorServerPtr GetMirrorServer()
@@ -415,6 +421,7 @@ private:
     BioServiceProcPtr mService = nullptr;
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
+    MfTransEnginePtr mTransEngine = nullptr;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
     MirrorServerCrbPtr mMirrorCrb = nullptr;

@@ -92,6 +92,7 @@ execute_process(
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DBUILD_TESTING=OFF
         -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/_deps/mockcpp-install
+        -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0
         RESULT_VARIABLE res
 )
 

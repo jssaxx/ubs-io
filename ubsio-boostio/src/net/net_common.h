@@ -111,6 +111,14 @@ struct NetOptions {
     bool isCreateMemPool = false;                        /* create net memory pool */
     uint64_t memorySize = 128 * 1024;                    /* local cached memory size */
     Role role = Role::NET_BUTT;                          /* net service role */
+    // Net trans configs
+    bool isDevicetrans = false;                          /* net trans service switch */
+    bool isSender = false;                               /* net trans service role */
+    int32_t transDeviceId = 0;                          /* net trans device id */
+    std::string deviceTransType = "NULL";                /* net trans type: device_sdma */
+    std::string transStoreUrl = "tcp://127.0.0.1:9798";  /* net trans store url */
+    uint64_t transMemSize = 1;                           /* net trans memory size：GB */
+    uint32_t transSegmentSize = 1024 * 1024;             /* net trans segment size */
     ServiceProtocol protocol = ServiceProtocol::UNKNOWN; /* net protocol */
     // Net TLS configs
     bool enableTls = false;                              /* tls switch */

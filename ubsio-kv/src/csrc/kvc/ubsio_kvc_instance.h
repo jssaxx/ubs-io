@@ -21,12 +21,13 @@ namespace ubsio {
 
 class KvcInstance {
 public:
-    static KvcInstance &Instance() noexcept;
-    KvcError Initialize(int32_t device) noexcept;
+    static KvcInstance &Instance();
+    KvcError Initialize(int32_t device);
     KvcError Read(const std::vector<std::string> &keyVector,
                   std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                   const std::vector<std::vector<size_t>> &lengthsVector,
-                  int *results) noexcept;
+                  int *results);
+    int32_t inline GetDeviceId() const { return m_deviceId; }
 
 public:
     KvcInstance(const KvcInstance&) = delete;
@@ -35,6 +36,45 @@ public:
     KvcInstance& operator=(KvcInstance&&) = delete;
 
 private:
+    struct H2DParams {
+        H2DParams() = default;
+        H2DParams(std::vector<std::vector<uintptr_t>>&& npuAddrVec,
+                  std::vector<std::vector<size_t>>&& lengthVec,
+                  std::vector<void *>&& hostAddrVec) :
+                      npuAddrs(std::move(npuAddrVec)), 
+                      lengths(std::move(lengthVec)),
+                      hostAddrs(std::move(hostAddrVec)) {}
+        std::vector<std::vector<uintptr_t>> npuAddrs;
+        std::vector<std::vector<size_t>> lengths;
+        std::vector<void *> hostAddrs;
+    };
+
+    struct ReadParams {
+        ReadParams() = delete;
+        ReadParams(uint32_t count)
+        {
+            keys.reserve(count);
+            npuAddrs.reserve(count);
+            lengths.reserve(count);
+            oriIndex.reserve(count);
+        }
+        std::vector<std::string> keys;
+        std::vector<std::vector<uintptr_t>> npuAddrs;
+        std::vector<std::vector<size_t>> lengths;
+        std::vector<uint32_t> oriIndex;
+    };
+    // 单批次读取结果，用于并发读取后串行H2D拷贝
+    struct BatchReadResult {
+        std::vector<int32_t> batchResult;
+        std::vector<void *> dramAddrsVector;
+        H2DParams h2dParams;
+        std::vector<uint32_t> batchOriIndex;
+        KvcError readRet{UBSIO_KVC_OK};
+        bool needH2D{false};       // 是否需要H2D拷贝
+        bool rh2dSuccess{false};   // remote rh2d路径直接成功
+        BatchReadResult() : h2dParams() {}
+    };
+
     KvcInstance() = default;
 
     ~KvcInstance()
@@ -43,10 +83,19 @@ private:
             m_readExecutor = nullptr;
         }
     }
+    KvcError ReadLocal(ReadParams &params, int *results);
+    KvcError ReadRemote(ReadParams &params, int *results);
+
+    KvcError ReadLocalBatch(ReadParams &params, int *results);
+    KvcError ReadRemoteBatch(ReadParams &params, int *results);
+
+    KvcError CopyDataH2D(H2DParams &params, std::vector<int32_t> &batchResult,
+                         const std::vector<uint32_t> &origIndex, int *results);
 
 private:
     ExecutorServicePtr m_readExecutor{ nullptr };
     int32_t m_deviceId{ -1 };
+    uint32_t m_maxReadBatchSize{ 128 };
 };
 
 } // namespace ubsio

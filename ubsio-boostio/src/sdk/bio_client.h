@@ -44,7 +44,7 @@ public:
         return instance;
     }
 
-    BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf);
+    BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId);
 
     void Exit();
 
@@ -67,6 +67,28 @@ public:
         }
         location.location[0] = (static_cast<uint64_t>(ptId) & 0x000000000000FFFF);
         location.location[1] = 0ULL;
+        return BIO_OK;
+    }
+
+    BResult BatchGetPositions(ObjLocation *locations, uint32_t count, uint8_t *position)
+    {
+        uint16_t ptId = UINT16_MAX;
+        CmPtInfo ptEntry{};
+        for (uint32_t idx = 0; idx < count; idx++) {
+            position[idx] = 1;
+            uint16_t ptId = static_cast<uint16_t>(locations[idx].location[0]);
+            auto ret = mMirror->GetPtEntry(ptId, ptEntry);
+            if (UNLIKELY(ret != BIO_OK)) {
+                CLIENT_LOG_ERROR("Get pt entry failed, invalid pt id:" << ptId << ".");
+                return BIO_ERR;
+            }
+            for (auto &cpy : ptEntry.copys) {
+                if (cpy.nodeId == mMirror->GetLocalNodeInfo().VNodeId()) {
+                    position[idx] = 0;
+                    break;
+                }
+            }
+        }
         return BIO_OK;
     }
 
@@ -109,6 +131,16 @@ public:
     {
         return mMirror->DispathBatchGet(attr, keys, count, offsets, lengths, locations,
                                         valueAddrs, realLengths, results);
+    }
+
+    inline BResult BatchGetLocal(MirrorClient::MirrorBatchGetLocalHbm &param)
+    {
+        return mMirror->BatchGetLocal(param);
+    }
+
+    inline BResult BatchGetRemote(MirrorClient::MirrorBatchGetRemoteHbm &param)
+    {
+        return mMirror->BatchGetRemote(param);
     }
 
     inline void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
@@ -249,9 +281,9 @@ public:
     BResult BioClientAgentInit(WorkerMode mode);
     void BioClientAgentExit();
     BResult BioClientNetPreInit(WorkerMode mode, NetOptions &netConf);
-    BResult BioClientNetPostInit(const NetOptions netConf);
+    BResult BioClientNetPostInit(NetOptions &netConf);
     void BioClientNetExit();
-    BResult BioClientMirrorInit(WorkerMode mode);
+    BResult BioClientMirrorInit(WorkerMode mode, bool enableTrans);
     void BioClientMirrorExit();
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
@@ -260,7 +292,7 @@ public:
     void BioClientUpdateHandle();
     void BioClientUpdateView();
     BResult AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam);
-
+    BResult RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count);
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:
@@ -283,6 +315,7 @@ private:
     net::BioClientNetPtr mNetEngine = nullptr;
     std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
+    int32_t mDeivceId = -1;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

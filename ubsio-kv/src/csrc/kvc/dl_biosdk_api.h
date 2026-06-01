@@ -26,7 +26,7 @@ namespace ock {
 namespace ubsio {
 
 using BioExitFunc = void (*)(void);
-using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf);
+using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf, int32_t devId);
 using BioCreateCacheFunc = CResult (*)(CacheDescriptor desc);
 using BioCalLocationFunc = CResult (*)(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
@@ -40,6 +40,15 @@ using BioBatchFreeFunc = CResult (*)(uint64_t tenantId, uintptr_t *valueAddrs, c
 using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location);
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                                const uint32_t count, KeyAddrInfo *infos);
+using BioRegisterMemFunc = CResult (*)(uint64_t *addrs, uint64_t *size, uint32_t count);
+using BioBatchGetPositionsFunc = CResult (*)(uint64_t tenantId, const char **keys, uint32_t count,
+                                             ObjLocation *locations, uint8_t *position);
+using BioBatchGetLocalFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                                         ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
+using BioBatchGetRemoteFunc = CResult (*)(uint64_t tenantId, const char **keys, const uint32_t count,
+                                          ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                                          uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
+
 
 class DlBioSdkApi {
 public:
@@ -47,9 +56,9 @@ public:
     static int32_t LoadLibrary();
     static void CleanupLibrary();
 
-    static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
+    static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf, int32_t devId)
     {
-        return static_cast<CResult>(pBioInitialize(mode, optConf));
+        return static_cast<CResult>(pBioInitialize(mode, optConf, devId));
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -105,12 +114,37 @@ public:
         pBioExit();
     }
 
-    static int32_t KvBioInit(void);
+    static int32_t KvBioInit(int32_t devId);
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
     {
         return static_cast<CResult>(pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos));
+    }
+
+    static CResult RegisterMem(uint64_t *addrs, uint64_t *size, uint32_t count)
+    {
+        return static_cast<CResult>(pBioRegisterMem(addrs, size, count));
+    }
+
+    static CResult BatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count,
+                                     ObjLocation *locations, uint8_t *position)
+    {
+        return static_cast<CResult>(pBioBatchGetPositions(tenantId, keys, count, locations, position));
+    }
+
+    static CResult BatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                                 ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results)
+    {
+        return static_cast<CResult>(pBioBatchGetLocal(tenantId, keys, count, lengths, locations, valueAddrs, results));
+    }
+
+    static CResult BatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,
+                                 ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                                 uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results)
+    {
+        return static_cast<CResult>(pBioBatchGetRemote(tenantId, keys, count, locations, memAddr, memSize,
+                                    row, col, valueAddrs, results));
     }
 
 private:
@@ -131,6 +165,10 @@ private:
     static BioBatchFreeFunc pBioBatchGetFree;
     static BioDeleteFunc pBioDelete;
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
+    static BioRegisterMemFunc pBioRegisterMem;
+    static BioBatchGetPositionsFunc pBioBatchGetPositions;
+    static BioBatchGetLocalFunc pBioBatchGetLocal;
+    static BioBatchGetRemoteFunc pBioBatchGetRemote;
 };
 
 }  // namespace ubsio

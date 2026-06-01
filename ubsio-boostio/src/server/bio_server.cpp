@@ -314,9 +314,10 @@ BResult BioServer::BioNetInit()
     if (mNetEngineInited) {
         return BIO_OK;
     }
+
     mNetEngine = MakeRef<NetEngine>();
     ChkTrue(mNetEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
-
+    
     int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
     auto ret =
@@ -358,6 +359,19 @@ BResult BioServer::BioNetInit()
     netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
+    netOptions.isDevicetrans = netConfig.isDevicetrans;
+    if (netOptions.isDevicetrans) {
+        netOptions.isSender = netConfig.isSender;
+        netOptions.transDeviceId = netConfig.transDeviceId;
+        netOptions.deviceTransType = netConfig.deviceTransType;
+        netOptions.transStoreUrl = netConfig.transStoreUrl;
+        netOptions.transMemSize = netConfig.transMemSize;
+        netOptions.transSegmentSize = netConfig.memSegmentSize;
+        mTransEngine = MakeRef<MfTransEngine>();
+        ChkTrue(mTransEngine != nullptr, BIO_ALLOC_FAIL, "Make net engine failed.");
+        ret = mTransEngine->Initialize(netOptions);
+        ChkTrue(ret == BIO_OK, ret, "Trans engine initialize failed, result:" << ret << ".");
+    }
     mNetEngineInited = true;
     return BIO_OK;
 }

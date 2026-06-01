@@ -62,6 +62,16 @@ public:
     CResult CalculateLocation(uint64_t objectId, ObjLocation &location);
 
     /**
+    * @brief: Calculate object location info
+    *
+    * @param[in]: locations: multiple key locations
+    * @param[in]: count: keys: batch get key count
+    * @param[out]: position: query result, 0-local, 1-remote
+    * @return: void
+    */
+    CResult BatchGetPositions(ObjLocation *locations, uint32_t count, uint8_t *position);
+
+    /**
      * @brief: Put value
      *
      * @param[in]: key: object key
@@ -102,6 +112,23 @@ public:
     CResult BatchGet(const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
                      ObjLocation *locations, uintptr_t *valueAddrs,
                      uint64_t *realLengths, int32_t *results);
+
+    /**
+     * @brief: Batch Get locaL value
+     *
+     * @param[in]: keys: multiple keys
+     * @param[in]: length : lengths of the get values
+     * @param[in]: location : location info
+     * @param[out]: valueAddrs : address of the values corresponding to multiple keys, need free
+     * @param[out]: results : result of getting multiple keys
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    CResult BatchGetLocal(const char **keys, const uint32_t count, uint64_t *lengths,
+                               ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
+
+    CResult BatchGetRemote(const char **keys, const uint32_t count,
+                                ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                                uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
 
     /**
      * @brief: release the address returned by batchget.
@@ -259,7 +286,7 @@ public:
      * @param[in]: option: log and security options
      * @return: return initialize result
      */
-    static CResult Initialize(WorkerMode mode, const ClientOptionsConfig &optConf);
+    static CResult Initialize(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId);
 
     /**
      * @brief: Exit bio service

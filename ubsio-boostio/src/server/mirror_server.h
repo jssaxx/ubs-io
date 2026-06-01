@@ -27,7 +27,7 @@
 namespace ock {
 namespace bio {
 constexpr uint16_t SERVER_BATCH_GET_THREAD_NUM = 128;
-constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = 8192;
+constexpr uint32_t SERVER_BATCH_GET_QUEUE_SIZE = 65536;
 
 struct MemFreeHolder {
     uint32_t nodeId;
@@ -103,6 +103,8 @@ public:
     BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req);
+    BResult BatchSingleGetLocalHbm(GetKeyLocalHbmInfo &keyInfo, BatchGetLocalHbmRequest *req);
+    BResult BatchSingleGetRemoteHbm(GetKeyRemoteHbmInfo &keyInfo, BatchGetRemoteHbmRequest *req);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);
@@ -130,13 +132,19 @@ public:
     void ReplyListResultRemote(ServiceContext &ctx, ListRequest *req, std::unordered_map<std::string, ObjStat> &objs);
 
     BResult ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx);
-    BResult WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
-        std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
+    BResult ReaderRemoteTrans(const SlicePtr &from, const SlicePtr &to, PutRequest &req);
+    BResult WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to,
+                              std::vector<NetMrInfo> &rMrVec, std::vector<NetMrInfo> &lMrVec,
+                              uint32_t rKey, bool &isAlloc);
+    BResult WriterParseMrInfoHbm(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
+                                               std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
     BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp, GetRequest &req);
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
         ServiceContext &netCtx, GetRequest &req);
     BResult BatchSingleWriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
                                     std::vector<NetMrInfo> &rMrVec, BatchGetRequest *req);
+    BResult BatchSingleWriterRemoteHbm(bool isAlloc, std::vector<NetMrInfo> &lMrVec,
+                                                     std::vector<NetMrInfo> &rMrVec, BatchGetRemoteHbmRequest *req);
     TraceDatabase GetTraceData();
 
     int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
@@ -151,6 +159,8 @@ public:
     int32_t MirrorServerBatchParseKeyAddr(ServiceContext &ctx, BatchParseKeyAddrRequest *req);
     int32_t MirrorServerGet(ServiceContext &ctx, GetRequest *req);
     int32_t MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req);
+    int32_t MirrorServerBatchGetLocalHbm(ServiceContext &ctx, BatchGetLocalHbmRequest *req);
+    int32_t MirrorServerBatchGetRemoteHbm(ServiceContext &ctx, BatchGetRemoteHbmRequest *req);
     int32_t MirrorServerDelete(ServiceContext &ctx, DeleteRequest *req);
     int32_t MirrorServerAddDisk(ServiceContext &ctx, AddDiskRequest *req);
     int32_t MirrorServerStat(ServiceContext &ctx, StatRequest *req);
@@ -185,6 +195,8 @@ public:
     int32_t HandleBatchParseKeyAddr(ServiceContext &ctx);
     int32_t HandleGet(ServiceContext &ctx);
     int32_t HandleBatchGet(ServiceContext &ctx);
+    int32_t HandleBatchGetLocalHbm(ServiceContext &ctx);
+    int32_t HandleBatchGetRemoteHbm(ServiceContext &ctx);
     int32_t HandleDelete(ServiceContext &ctx);
     int32_t HandleAddDisk(ServiceContext &ctx);
     int32_t HandleStat(ServiceContext &ctx);

@@ -43,7 +43,7 @@ int32_t KvcOperationInit(int32_t devId)
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::KvBioInit();
+    ret = DlBioSdkApi::KvBioInit(devId);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
         return UBSIO_KVC_ERR;
@@ -63,6 +63,11 @@ int32_t KvcOperationInit(int32_t devId)
 void KvcExit(void)
 {
     DlBioSdkApi::Exit();
+}
+
+int32_t KvcRegisterKvCache(std::vector<uint64_t> &kvCacheAddrs, std::vector<uint64_t> &kvCacheSizes)
+{
+    return g_kvOperation->KvcRegisterKvCache(kvCacheAddrs, kvCacheSizes);
 }
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags)
@@ -129,6 +134,42 @@ int32_t KvcBatchGetLengthKey(const std::vector<std::string> &key,
 int32_t KvcBatchFreeGetAddress(void **bufs, uint32_t keys_count)
 {
     return DlBioSdkApi::BatchGetFree(tenantId, reinterpret_cast<uintptr_t*>(bufs), keys_count);
+}
+
+int32_t KvcGetPositions(const std::vector<std::string> &keys, std::vector<uint8_t> &positions)
+{
+    return g_kvOperation->KvcGetPositions(keys, positions);
+}
+
+int32_t KvBatchGetLocalData(const std::vector<std::string> &keys,
+                            void **bufs,
+                            std::vector<size_t> &lengths,
+                            std::vector<int32_t> &results,
+                            uint32_t flags)
+{
+    return g_kvOperation->KvBatchGetLocalData(keys, bufs, lengths, results);
+}
+
+int32_t KvBatchGetLocalData(const char **keys, uint32_t keysCount, void **bufs,
+                            std::vector<size_t> &lengths,
+                            std::vector<int32_t> &results,
+                            uint32_t flags)
+{
+    return g_kvOperation->KvBatchGetLocalData(keys, keysCount, bufs, lengths, results);
+}
+
+int32_t KvBatchGetRemoteData(const std::vector<std::string> &keys, uintptr_t **npuAddrs,
+                             std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
+                             std::vector<int32_t> &results, uint32_t flags)
+{
+    return g_kvOperation->KvBatchGetRemoteData(keys, npuAddrs, lengths, dramAddrs, results);
+}
+
+int32_t KvBatchGetRemoteData(const char **keys, uint32_t keysCount, uintptr_t **npuAddrs,
+                             std::vector<std::vector<size_t>> &lengths, uintptr_t *dramAddrs,
+                             std::vector<int32_t> &results, uint32_t flags)
+{
+    return g_kvOperation->KvBatchGetRemoteData(keys, keysCount, npuAddrs, lengths, dramAddrs, results);
 }
 
 } // namespace ubsio

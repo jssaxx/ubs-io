@@ -80,13 +80,13 @@ BResult BioClient::BioClientNetPreInit(WorkerMode mode, NetOptions &netConf)
     return BIO_OK;
 }
 
-BResult BioClient::BioClientNetPostInit(const NetOptions netConf)
+BResult BioClient::BioClientNetPostInit(NetOptions &netConf)
 {
     CheckNodeOnline checkHandle = [this](uint16_t nodeId, std::string &ip, uint16_t &port) -> bool {
         return mMirror->CheckIsOnline(nodeId, ip, port);
     };
     mNetEngine->RegCheckNodeOnline(checkHandle);
-
+    netConf.transDeviceId = mDeivceId;
     return mNetEngine->StartPost(mMirror->GetLocalNodeInfo().VNodeId(), mMirror->GetNodeView(),
         mMirror->GetNetProtocol(), netConf);
 }
@@ -132,7 +132,7 @@ void BioClient::BioClientUpdateView()
     return;
 }
 
-BResult BioClient::BioClientMirrorInit(WorkerMode mode)
+BResult BioClient::BioClientMirrorInit(WorkerMode mode, bool enableTrans)
 {
     mMirror = MakeRef<MirrorClient>(mode);
     if (mMirror == nullptr) {
@@ -145,7 +145,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
         mNetEngine->GetCrcFlag();
     auto ret = mMirror->Initialize(updateView, mNetEngine->GetNegoWorkScene(), mNetEngine->GetNegoWorkIoAlignSize(),
-        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
+        mNetEngine->GetNegoWorkIoTimeOut(), enableCrc, enableTrans);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to initialize mirror client, ret:" << ret << ".");
         return ret;
@@ -153,6 +153,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
     if (mode == SEPARATES) {
         mNetEngine->RegIpcRecoveredHandler([this]() { return mMirror->RecoverDataMessageMem(); });
     }
+
     return ret;
 }
 
@@ -394,13 +395,14 @@ BResult BioClient::FillNetOptions(const ClientOptionsConfig &optConf, NetOptions
     return BIO_OK;
 }
 
-BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
+BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId)
 {
     std::lock_guard<std::mutex> lock(mStartLock);
     if (mStarted) {
         return BIO_OK;
     }
     mMode = mode;
+    mDeivceId = devId;
     uint64_t startTime = Monotonic::TimeSec();
 
     // 1. 初始化client端Logger.
@@ -428,7 +430,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
 
     // 5. 初始化Mirror client.
-    if (BioClientMirrorInit(mode) != BIO_OK) {
+    if (BioClientMirrorInit(mode, netConf.isDevicetrans) != BIO_OK) {
         return BIO_ERR;
     }
 
@@ -490,5 +492,18 @@ void BioClient::Exit()
 BResult BioClient::AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam)
 {
     return mMirror->AsyncGet(param, opParam);
+}
+
+BResult BioClient::RegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
+{
+    std::vector<void*> addrsVec;
+    std::vector<size_t> sizesVec;
+    addrsVec.reserve(count);
+    sizesVec.reserve(count);
+    for (uint32_t i = 0; i < count; i++) {
+        addrsVec.emplace_back(reinterpret_cast<void*>(addresses[i]));
+        sizesVec.emplace_back(sizes[i]);
+    }
+    return net::BioClientNet::Instance()->RegisterMem(addrsVec, sizesVec);
 }
 

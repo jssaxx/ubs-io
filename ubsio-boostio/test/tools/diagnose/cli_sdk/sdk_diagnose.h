@@ -46,6 +46,7 @@ public:
     static void HandleSdkTrace(const std::vector<std::string> &cmds);
     static void* PerfTestPutImpl(void *param);
     static void* PerfTestGetImpl(void *param);
+    static void HandleBatchGetLocal(const std::vector<std::string> &cmds);
     static void HandleBatchGet(const std::vector<std::string> &cmds);
     static void HandlePerf(const std::vector<std::string> &cmds);
 

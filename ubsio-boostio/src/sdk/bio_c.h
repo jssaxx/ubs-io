@@ -39,6 +39,7 @@ typedef enum {
     RET_CACHE_EXISTS = 15,       // cache already exists
     RET_CACHE_DISK_FAULT = 16,   // cache disk fault
     RET_CACHE_UFS_FAULT = 17,    // cache ufs fault
+    RET_CACHE_IN_DRAM = 18,      // data in dram, need h2d
     RET_CACHE_BUTT
 } CResult;
 
@@ -78,6 +79,7 @@ typedef enum {
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 typedef void (*BioGetCallbackFunc)(void *context, int32_t result, uint32_t realLen);
 typedef void (*BioAsyncPutCallback)(void *context, int32_t result);
+
 
 typedef struct {
     char key[MAX_KEY_SIZE];
@@ -169,7 +171,7 @@ typedef struct {
  * @param[in]: option: log options and security options
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
+CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf, int32_t devId);
 
 /**
  * @brief: Exit boostio service
@@ -539,6 +541,59 @@ CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc);
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioAddDisk(const char *diskPath);
+
+/**
+ * @brief:Register Mem to bio
+ * @param addresses         [in] Array of kv cache addresses to be registered
+ * @param sizes            [in] Array of kv cache sizes to be registered
+ * @param count           [in] Number of kv caches to be registered
+ */
+CResult BioRegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count);
+
+/**
+ * @brief:Query whether the target belongs to a remote or local location.
+ * @param tenantId        [in] tenant id
+ * @param keys            [in] Array of keys to be queried
+ * @param count           [in] NUmber of keys to be queried
+ * @param locations       [in] Array of locations to be queried
+ * @param position        [out] Array of positions of the keys(0:local, 1:remote)
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations,
+                             uint8_t *position);
+
+/**
+ * @brief: Batch Get locaL value
+ * @param tenantId:        [in]: tenant id
+ * @param keys             [in]: multiple keys
+ * @param length           [in]: lengths of the get values
+ * @param location         [in]: location : location info
+ * @param valueAddrs       [out]: address of the values corresponding to multiple keys, need free
+ * @param results          [out]: result of getting multiple keys
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                         ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results);
+
+/**
+ * @brief: Batch Get locaL value
+ *
+ * @param tenantId          [in]: tenant id
+ * @param keys              [in]: multiple keys
+ * @param location          [in]: location info
+ * @param memAddr           [in]: kv cache address:[[k1_l1, k1_l2, k1_l3], [k2_l1, k2_l2, k2_l3], ...]
+ * @param memSize           [in]: length of kv cache address, same shape of kv cache address
+ * @param row               [in]: the row of kv cache address
+ * @param col               [in]: the column of kv cache address
+ * @param valueAddrs        [out]: used when return value is RET_CACHE_IN_DRAM,
+ * valueAddrs : address of the values corresponding to multiple keys, need free
+ * @param results           [out]: result of getting multiple keys
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioBatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,
+                          ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                          uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results);
+
 
 #ifdef __cplusplus
 }

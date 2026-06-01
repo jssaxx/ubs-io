@@ -30,6 +30,12 @@ const auto NET_DATA_PORT = std::make_pair("bio.net.data.listen_port", 7201);
 const auto NET_SEGMENT_SIZE = std::make_pair("bio.net.data.segment_size", 256);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("bio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("bio.net.request.executor.queue.size", 1024);
+const auto NET_TRANS_SERVICE_SWITCH = std::make_pair("net.trans.service.switch", "false");
+const auto NET_TRANS_SERVICE_ROLE = std::make_pair("net.trans.service.role", "false");
+const auto NET_TRANS_DEVICE_ID = std::make_pair("net.trans.device.id", 0);
+const auto NET_TRANS_TYPE = std::make_pair("net.trans.type", "device_sdma");
+const auto NET_TRANS_STORE_URL = std::make_pair("net.trans.store.url", "tcp://127.0.0.1:9798");
+const auto NET_TRANS_MEMORY_SIZE = std::make_pair("net.trans.memory.size", 256);
 const auto NET_TLS_ENABLE_SWITCH = std::make_pair("bio.net.tls.enable.switch", "true");
 const auto NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path", "/path/CA/cacert.pem");
 const auto NET_TLS_CA_CRL_PATH = std::make_pair("bio.net.tls.ca.crl.path", "");
@@ -103,6 +109,7 @@ public:
         std::string dataIpMask = "127.0.0.1/24";
         std::string dataIp = "127.0.0.1";
         uint32_t netSegmentSize = 64;
+        uint32_t memSegmentSize = 4096 * 1024;
         uint16_t dataPort = 7300;
         uint16_t protocol = 1;
         bool isRpcBusyLoop = false;
@@ -111,6 +118,13 @@ public:
         uint16_t ipcDataWorkersCnt = 4;
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
+        // Net trans configs
+        bool isDevicetrans = false;                          /* net trans service switch */
+        bool isSender = false;                               /* net trans service role */
+        int32_t transDeviceId = 0;                          /* net trans device id */
+        std::string deviceTransType = "NULL";                /* net trans type: device_sdma */
+        std::string transStoreUrl = "tcp://127.0.0.1:9798";  /* net trans store url */
+        uint64_t transMemSize = 1024 * 1024 * 1024;;                        /* net trans memory size */
         bool enableTls = true;
         std::string tlsCaCertPath = "/path/CA/cacert.pem";                  /* CA根证书 */
         std::string tlsCaCrlPath = "";                                      /* 吊销列表文件，可选，如果无吊销证书可以不设置 */

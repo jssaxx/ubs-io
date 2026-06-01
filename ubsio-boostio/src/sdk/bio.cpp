@@ -51,6 +51,8 @@ inline static CResult ToCResult(const BResult ret)
             return RET_CACHE_DISK_FAULT;
         case BIO_UFS_IOERR:
             return RET_CACHE_UFS_FAULT;
+        case BIO_DATA_IN_DRAM:
+            return RET_CACHE_IN_DRAM;
         default:
             return RET_CACHE_NEED_RETRY;
     }
@@ -140,6 +142,14 @@ CResult Bio::CalculateLocation(uint64_t objectId, ObjLocation &location)
         return RET_CACHE_NOT_READY;
     }
     return ToCResult(gClient->CalculateLocation(objectId, mAffinity, location));
+}
+
+CResult Bio::BatchGetPositions(ObjLocation *locations, uint32_t count, uint8_t *position)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    return ToCResult(gClient->BatchGetPositions(locations, count, position));
 }
 
 CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjLocation &location)
@@ -291,7 +301,8 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
-            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" << lengths[i] << ", index:" << i);
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" <<
+                lengths[i] << ", index:" << i);
             return RET_CACHE_EPERM;
         }
     }
@@ -307,6 +318,66 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     }
     return ToCResult(ret);
 }
+
+CResult Bio::BatchGetLocal(const char **keys, const uint32_t count, uint64_t *lengths,
+                           ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(keys == nullptr || lengths == nullptr ||
+                 locations == nullptr || valueAddrs == nullptr || results == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+        if (UNLIKELY(!KeyValid(keys[i]) || lengths[i] == 0)) {
+            CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, length:" <<
+                lengths[i] << ", index:" << i);
+            return RET_CACHE_EPERM;
+        }
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_HBM_LOCAL);
+    MirrorClient::MirrorBatchGetLocalHbm param{ { mTenantId, mAffinity, mStrategy },
+                                        keys, count, lengths, locations,
+                                        valueAddrs, results };
+    BResult ret = gClient->BatchGetLocal(param);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_HBM_LOCAL, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
+    }
+    return ToCResult(ret);
+}
+
+CResult Bio::BatchGetRemote(const char **keys, const uint32_t count,
+                            ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                            uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    if (UNLIKELY(keys == nullptr || memAddr == nullptr ||
+                 locations == nullptr || valueAddrs == nullptr || results == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+
+    BIO_TRACE_START(SDK_TRACE_BATCH_GET_HBM_REMOTE);
+    MirrorClient::MirrorBatchGetRemoteHbm param{ { mTenantId, mAffinity, mStrategy },
+                                                keys, count, locations, memAddr, memSize, row, col,
+                                                valueAddrs, results };
+    BResult ret = gClient->BatchGetRemote(param);
+    BIO_TRACE_END(SDK_TRACE_BATCH_GET_HBM_REMOTE, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
+    }
+
+    return ToCResult(ret);
+}
+
 
 void Bio::BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
 {
@@ -614,14 +685,14 @@ CResult BioService::BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDe
     return ToCResult(ret);
 }
 
-CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf)
+CResult BioService::Initialize(WorkerMode mode, const ClientOptionsConfig &optConf, int32_t devId)
 {
     auto bioClient = BioClient::Instance();
     if (UNLIKELY(bioClient == nullptr)) {
         CLIENT_LOG_ERROR("Make bio client instance failed.");
         return RET_CACHE_ERROR;
     }
-    return ToCResult(bioClient->Start(mode, optConf));
+    return ToCResult(bioClient->Start(mode, optConf, devId));
 }
 
 void BioService::Exit()
@@ -669,18 +740,18 @@ static bool CheckClientConfig(const ClientOptionsConfig &optConf)
     return true;
 }
 
-CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
+CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf, int32_t devId)
 {
     if (optConf == nullptr) {
         ClientOptionsConfig config{};
         config.enable = false;
-        return BioService::Initialize(mode, config);
+        return BioService::Initialize(mode, config, devId);
     }
 
     if (!CheckClientConfig(*optConf)) {
         return RET_CACHE_EPERM;
     }
-    return BioService::Initialize(mode, *optConf);
+    return BioService::Initialize(mode, *optConf, devId);
 }
 
 void BioExit(void)
@@ -1000,6 +1071,37 @@ CResult BioBatchGet(uint64_t tenantId, const char **keys, const uint32_t count, 
     return bioInstance->BatchGet(keys, count, offsets, lengths, locations, valueAddrs, realLengths, results);
 }
 
+CResult BioBatchGetLocal(uint64_t tenantId, const char **keys, const uint32_t count, uint64_t *lengths,
+                         ObjLocation *locations, uintptr_t *valueAddrs, int32_t *results)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGetLocal(keys, count, lengths, locations, valueAddrs, results);
+}
+
+CResult BioBatchGetRemote(uint64_t tenantId, const char **keys, const uint32_t count,
+                          ObjLocation *locations, uintptr_t **memAddr, size_t **memSize,
+                          uint32_t row, uint32_t col, uintptr_t *valueAddrs, int32_t *results)
+{
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGetRemote(keys, count, locations, memAddr, memSize, row, col, valueAddrs, results);
+}
+
 CResult BioBatchGetFree(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count)
 {
     std::shared_ptr<Bio> bioInstance = nullptr;
@@ -1308,4 +1410,48 @@ CResult BioAddDisk(const char *diskPath)
 
     CLIENT_LOG_INFO("Add disk sucess! disk path: " << diskPath << ".");
     return RET_CACHE_OK;
+}
+
+CResult BioRegisterMem(uint64_t *addresses, uint64_t *sizes, uint32_t count)
+{
+    if (UNLIKELY(addresses == nullptr || sizes == nullptr || count == 0)) {
+        CLIENT_LOG_ERROR("Invalid input parameter, address: " << addresses << ", size: "
+                         << sizes << ", count: " << count);
+        return RET_CACHE_EPERM;
+    }
+
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    std::vector<void *> addrsVec(count);
+    std::vector<size_t> sizesVec(count);
+    for (uint32_t i = 0; i < count; i++) {
+        addrsVec[i] = reinterpret_cast<void *>(addresses[i]);
+        sizesVec[i] = sizes[i];
+    }
+    auto ret = gClient->GetNetEngine()->RegisterMem(addrsVec, sizesVec);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to register mem, ret:" << ret << ".");
+        return ToCResult(ret);
+    }
+    CLIENT_LOG_INFO("Register mem sucess!");
+    return RET_CACHE_OK;
+}
+
+CResult BioBatchGetPositions(uint64_t tenantId, const char **keys, uint32_t count, ObjLocation *locations,
+                             uint8_t *position)
+{
+    if (UNLIKELY(locations == nullptr || position == nullptr || count == 0)) {
+        return RET_CACHE_EPERM;
+    }
+    std::shared_ptr<Bio> bioInstance = nullptr;
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        auto iter = gBioCacheMap.find(tenantId);
+        if (UNLIKELY(iter == gBioCacheMap.end())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+        bioInstance = iter->second;
+    }
+    return bioInstance->BatchGetPositions(locations, count, position);
 }

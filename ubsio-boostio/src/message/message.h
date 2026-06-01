@@ -36,6 +36,15 @@ const uint32_t SLICE_ADDR_MAX_SIZE = 16;
 const uint32_t SLICE_ADDR_SIZE = 4;
 const uint32_t MAX_LISTEN_ADDRESS_LENGTH = 32;
 const uint32_t FILE_PATH_MAX_LEN = 256;
+const uint32_t MAX_UUID_SIZE = 64;
+const uint32_t MAX_KV_HBM_SIZE = 256;
+
+enum DataTransType : uint8_t {
+    HOST_RDMA_TRANS_TYPE = 0,   // 远端client通过rdma访问本地server的内存
+    HOST_SHM_TRANS_TYPE = 1,    // 本地client通过shared memory访问本地server的内存
+    DEVICE_SDMA_TRANS_TYPE = 2, // client通过sdma访问本地server的内存
+    TRANS_TYPE_BUTT
+};
 
 typedef struct {
     uint16_t magic;
@@ -61,6 +70,11 @@ typedef struct {
     uint32_t ioTimeOut;
     uint32_t netTimeOut;
     uint32_t netSegmentSize;
+    uint32_t memSegmentSize;
+    bool isDevicetrans;                          /* net trans service switch */
+    char deviceTransType[128];                /* net trans type: device_sdma */
+    char transStoreUrl[128];  /* net trans store url */
+    uint64_t transMemSize;
     int32_t logLevel;
     bool enableCrc;
     bool enableCli;
@@ -247,7 +261,9 @@ typedef struct {
     uint64_t tenantId;
     uint8_t affinity;
     uint8_t strategy;
+    uint8_t msgType;
     char key[KEY_MAX_SIZE];
+    char uuid[MAX_UUID_SIZE];   // trans uuid
     uint64_t length;
     uint64_t flowId;
     uint64_t flowOffset;
@@ -263,8 +279,17 @@ typedef struct {
     uint64_t quotaNid;
     uint64_t quotaCid;
     uint32_t dataCrc;
+    bool enableTrans;
+    uintptr_t localTransAddr;
+    uint64_t transDataLen;
     char sliceBuf[0];
 } PutRequest;
+
+typedef struct {
+    bool enableTrans = false;
+    uintptr_t localTransAddr = 0;
+    uint64_t transDataLen = 0;
+} TransData;
 
 typedef struct {
     uint32_t ioStrategy;
@@ -364,6 +389,71 @@ typedef struct {
     uint32_t count;
     uint16_t nodeId;
 } BatchGetResponse;
+
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uint64_t length;
+    uintptr_t addressOffset;
+    uint32_t size;
+    uint16_t ptId;
+    int32_t *result;
+} GetKeyLocalHbmInfo;
+
+typedef struct {
+    char key[KEY_MAX_SIZE];
+    uintptr_t address;
+    uint64_t mrKey;
+    uint32_t size;
+    uint16_t ptId;
+    int32_t *result;
+    uint32_t memCount;
+    uint32_t hbmMemPosition;
+    uint32_t memSizePosition;
+    uintptr_t *hbmMemAddr;
+    size_t *memSize;
+} GetKeyRemoteHbmInfo;
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    uint16_t srcNid;
+    bool isConvDeploy;
+    bool enableTrance = false;
+    char uuid[MAX_UUID_SIZE];
+    GetKeyRemoteHbmInfo keysInfo[0];
+} BatchGetRemoteHbmRequest;
+
+typedef struct {
+    uint32_t count;
+    pid_t pid;
+    uint16_t srcNid;
+    bool isConvDeploy;
+    GetKeyLocalHbmInfo keysInfo[0];
+} BatchGetLocalHbmRequest;
+
+struct BatchGetPlanHbm {
+    uint32_t count;
+    uint32_t index;
+    uint32_t reqLen;
+    char *enableMem;
+    BatchGetRemoteHbmRequest *req;
+    BatchGetPlanHbm() : count(0), index(0), reqLen(0), req(nullptr) {}
+    BatchGetPlanHbm(uint32_t countParam, uint32_t indexParam, uint32_t reqLenParam,
+                    BatchGetRemoteHbmRequest *reqParam) : count(countParam), index(indexParam),
+                    reqLen(reqLenParam), req(reqParam) {}
+};
+
+typedef struct {
+    int32_t results[KEY_MAX_COUNT];
+    uint16_t nodeId;
+    uint32_t count;
+} BatchGetLocalHbmResponse;
+
+typedef struct {
+    int32_t results[KEY_MAX_COUNT];
+    uint16_t nodeId;
+    uint32_t count;
+} BatchGetRemoteHbmResponse;
 
 /* Stat */
 typedef struct {

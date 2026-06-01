@@ -23,6 +23,7 @@
 #include "bio_client_log.h"
 #include "bio_client_agent.h"
 #include "bio_client_net.h"
+#include "bio_str_util.h"
 
 using namespace ock::bio;
 using namespace ock::bio::agent;
@@ -56,20 +57,27 @@ BResult BioClientNet::StartPre(WorkerMode mode, NetOptions &netConf)
         ret = StartIpcService(netConf);
         if (ret == BIO_OK) {
             netConf.netSegmentSize = mNetSegmentSize;
+            netConf.isDevicetrans = mIsDevicetrans;
+            netConf.deviceTransType = mDeviceTransType;
+            netConf.transMemSize = mTransMemSize;
+            netConf.transStoreUrl = mTransStoreUrl;
+            netConf.transSegmentSize = mMemSegmentSize;
+            if (netConf.isDevicetrans) {
+                CLIENT_LOG_INFO("Get server device trance type:" << netConf.deviceTransType <<
+                ", trans store url:" << netConf.transStoreUrl << ", trans mem size:" << netConf.transMemSize);
+            }
         }
     }
     return ret;
 }
 
 BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView,
-    uint16_t protocol, const NetOptions netConf)
+    uint16_t protocol, NetOptions &netConf)
 {
     if (mMode == CONVERGENCE) {
         return BIO_OK;
     }
-    mLocalNid = localNid;
-    mNetEngine->SetLocalNodeId(localNid);
-
+    //初始化trans engine
     std::string ipMask;
     uint16_t port = UINT16_MAX;
     for (auto &node : nodeView) {
@@ -83,7 +91,22 @@ BResult BioClientNet::StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo
         CLIENT_LOG_ERROR("Not found local node info.");
         return BIO_OK;
     }
-
+    netConf.ipMask = ipMask + "/24";
+    if (netConf.isDevicetrans) {
+        mTransEngine = MakeRef<MfTransEngine>();
+        if (mTransEngine == nullptr) {
+            CLIENT_LOG_ERROR("Failed to create trans instance.");
+            return BIO_ALLOC_FAIL;
+        }
+        auto ret = mTransEngine->Initialize(netConf);
+        if (ret != BIO_OK) {
+            CLIENT_LOG_ERROR("Failed to init trans engine, ret:" << ret << ".");
+            return ret;
+        }
+        CLIENT_LOG_INFO("Start trans engine success.");
+    }
+    mLocalNid = localNid;
+    mNetEngine->SetLocalNodeId(localNid);
     auto ret = StartRpcService((ipMask + "/24"), port, static_cast<ServiceProtocol>(protocol), NO_4, netConf);
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Bio client start rpc service failed, result:" << ret << ".");
@@ -115,6 +138,9 @@ void BioClientNet::Exit()
 {
     if (mMode == SEPARATES) {
         StopInner();
+    }
+    if (mTransEngine != nullptr) {
+        mTransEngine->Destroy();
     }
 }
 
@@ -190,7 +216,27 @@ BResult BioClientNet::ShmInit()
         return BIO_INNER_ERR;
     }
 
+    mIsDevicetrans = rsp.isDevicetrans;
+    mDeviceTransType = rsp.deviceTransType;
+    mTransStoreUrl = rsp.transStoreUrl;
+    const uint32_t transMemSize = 1; // GB
+    mTransMemSize = transMemSize;
+    char *transMemSizeEnv = std::getenv("UBSIO_TRANS_MEM_SIZE");
+    if (transMemSizeEnv != nullptr) {
+        long envVal = 0;
+        if (StrUtil::StrToLong(transMemSizeEnv, envVal) && envVal > 0) {
+            mTransMemSize = static_cast<uint64_t>(envVal);
+            CLIENT_LOG_INFO("Override mTransMemSize from env UBSIO_TRANS_MEM_SIZE=" << mTransMemSize << "GB");
+        } else {
+            CLIENT_LOG_WARN("Invalid UBSIO_TRANS_MEM_SIZE=" << transMemSizeEnv << ", must be positive, using server value " <<
+                rsp.transMemSize);
+        }
+    } else {
+        CLIENT_LOG_WARN("Not set UBSIO_TRANS_MEM_SIZE, use default value: " <<
+                transMemSize << " GB");
+    }
     mNetSegmentSize = rsp.netSegmentSize;
+    mMemSegmentSize = rsp.memSegmentSize;
     mEnableHtrace = rsp.enableHtrace;
     mShmFd = rsp.memFd;
     mServerPid = rsp.serverPid;
@@ -481,4 +527,13 @@ bool BioClientNet::CheckShmInitResp(ShmInitResponse rsp)
     bool validLogLevel = rsp.logLevel <= NO_4;
     bool validScene = rsp.scene <= NO_1;
     return validAlignSize && validIoTimeOut && validNetTimeOut && validLogLevel && validScene;
+}
+
+BResult BioClientNet::RegisterMem(std::vector<void*>& addresses, std::vector<size_t>& sizes)
+{
+    if (mTransEngine == nullptr) {
+        CLIENT_LOG_ERROR("trans engine is null");
+        return BIO_ERR;
+    }
+    return mTransEngine->BatchRegisterMem(addresses, sizes);
 }

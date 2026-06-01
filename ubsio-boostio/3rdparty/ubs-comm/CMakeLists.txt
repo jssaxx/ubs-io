@@ -31,7 +31,7 @@ if (NOT USE_SYSTEM_HCOM)
     FetchContent_Declare(
             ubs_comm
             GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
-            GIT_TAG tag_BeiMing-I26.0.RC1.B013
+            GIT_TAG br_kvcache_20260630
     )
     FetchContent_GetProperties(ubs_comm)
     if(NOT ubs_comm_POPULATED)

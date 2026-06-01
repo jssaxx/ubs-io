@@ -101,8 +101,8 @@ int main(int argc, char **argv)
             return BIO_ERR;
         }
     }
-
-    auto ret = BioService::Initialize(mode, *optConf);
+    int32_t devId = 0;
+    auto ret = BioService::Initialize(mode, *optConf, devId);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;
         delete optConf;

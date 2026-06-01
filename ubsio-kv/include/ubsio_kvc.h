@@ -35,6 +35,14 @@ int32_t UbsioKvCacheInit(int32_t devId);
  void UbsioKvCacheExit(void);
 
 /**
+ * @brief Register KV Cache to UBS-IO
+ * @param addrs           [in] Array of kv cache addresses to be registered
+ * @param sizes           [in] Array of kv cache sizes to be registered
+ * @param count           [in] Number of kv caches to be registered
+*/
+int32_t UbsioKvCacheRegister(uint64_t *addrs, uint64_t *sizes, uint32_t count);
+
+/**
  * @brief Put data of object with key into UBS-IO KV Cache
  * This data operation default supports async
  *

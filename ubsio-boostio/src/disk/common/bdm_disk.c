@@ -160,8 +160,9 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
             rc = pwrite(fd, buff + (len - remain), remain, offset + (len - remain));
         }
         if (UNLIKELY(rc <= 0)) {
-            BDM_LOGWARN(0, "%s failed (%s), fd %d, rc %d, len %d, off %lu, remain %lu.", isRead ? "Read" : "Write",
-                strerror(errno), fd, rc, len, offset, remain);
+            BDM_LOGWARN(0, "%s failed (%s), fd %d, rc %d, len %d, off %lu, remain %lu, buf %lu",
+                        isRead ? "Read" : "Write", strerror(errno), fd, rc, len, offset, remain,
+                        (uintptr_t)(buff + (len - remain)));
             break;
         }
         remain -= (uint64_t)rc;
@@ -678,7 +679,7 @@ int32_t BdmDiskOpenDisk(BdmCreatePara *para, BdmDiskItem *item)
     }
 
     for (uint32_t index = 0; index < BDM_AYSNC_IO_FD_NUM; index++) {
-        item->asyncfd[index] = open(item->name, O_RDWR | __O_DIRECT);
+        item->asyncfd[index] = open(item->name, O_RDWR);
         if (UNLIKELY(item->asyncfd[index] < 0)) {
             BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
             BdmDiskCloseDisk(item);
@@ -996,7 +997,7 @@ int32_t BdmReopenDisk(BdmDiskItem *item)
     }
 
     for (index = 0; index < BDM_AYSNC_IO_FD_NUM; index++) {
-        item->asyncfd[index] = open(item->name, O_RDWR | __O_DIRECT);
+        item->asyncfd[index] = open(item->name, O_RDWR);
         if (UNLIKELY(item->asyncfd[index] < 0)) {
             BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
             BdmDiskCloseDisk(item);
