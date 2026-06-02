@@ -14,7 +14,6 @@
 #define MMS_C_H
 
 #include <stdint.h>
-#include <time.h>
 #include <limits.h>
 
 #ifdef __cplusplus
@@ -28,7 +27,7 @@ typedef enum {
     RET_MMS_EPERM = 3,         // input parameter is incorrect
     RET_MMS_BUSY = 4,          // cache busy, need outer retry
     RET_MMS_NEED_RETRY = 5,    // need retry
-    RET_MMS_NOT_READY = 6,     // retry is not required
+    RET_MMS_NOT_READY = 6,     // cache service is not ready
     RET_MMS_NOT_FOUND = 7,     // not found this key
     RET_MMS_CONFLICT = 8,      // key conflict
     RET_MMS_MISS = 9,          // cache miss
@@ -48,7 +47,7 @@ typedef struct {
     uint8_t tlsEnable;                     // Tls switch
     char certificationPath[PATH_MAX];      // certification path
     char caCerPath[PATH_MAX];              // caCer path
-    char caCrlPath[PATH_MAX];              // caCer path
+    char caCrlPath[PATH_MAX];              // CA CRL path
     char privateKeyPath[PATH_MAX];         // private key path
     char privateKeyPasswordPath[PATH_MAX]; // private key password
     char decrypterLibPath[PATH_MAX];       // decrypter lib path
@@ -56,31 +55,43 @@ typedef struct {
 } MmsOptions;
 
 typedef struct {
-    char *key;
-    char *value;
-    uint64_t length;
-    uint64_t version;
+    const char *key;
+    const char *value;
+    uint32_t valueLen;
+    uint16_t keyLen;
+    uint16_t isNotify; // Whether to notify data changes. 0: false; non-zero: true.
+
+    char **valueAddr; // Output: memory address where the data is written.
+    int32_t *result;  // Output: execution result of this key/value item.
 } PutItems;
 
 typedef struct {
-    char *key;
-    uint64_t offset;
-    uint64_t length;
-    char *value;
-    uint64_t *realLength;
+    const char *key;
+    uint16_t keyLen;
+    uint32_t offset;
+    uint32_t length;
+
+    char **value; // Output: if *value is null, returns the internal value address; otherwise copies data into *value.
+    uint32_t *realLength; // Output: real length of the returned value.
+    int32_t *result;
 } GetItems;
 
 typedef struct {
-    char *key;
-    char *value;
-    uint64_t offset;
-    uint64_t length;
-    uint64_t version;
+    const char *key;
+    const char *value;
+    uint16_t keyLen;
+    uint32_t valueLen;
+    uint32_t offset;
+
+    int32_t *result;
 } UpdateItems, ReplaceItems;
 
 typedef struct {
-    char *key;
-    uint64_t version;
+    const char *key;
+    uint16_t keyLen;
+    uint16_t isNotify;
+
+    int32_t *result;
 } DeleteItems;
 
 typedef struct {
@@ -89,115 +100,143 @@ typedef struct {
     uint64_t length;
 } ValueInfo;
 
-typedef void (*ServiceCallback)(bool serviceable);
+typedef enum {
+    OP_PUT = 0,
+    OP_DELETE = 1,
+    OP_BUTT
+} OperateType;
+
+typedef void (*NotifyCallback)(const char *key, OperateType opType);
+typedef void (*ServiceCallback)(uint8_t serviceable); // 0: false; non-zero: true.
 
 /**
- * @brief: Initialize mms service
+ * @brief: Initialize the MMS service.
  *
- * @param[in]: option: log options
- * @param[in]: service: service status check callback
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * @param[in]: options: MMS options.
+ * @param[in]: service: Service status callback.
+ * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
  */
-CResult MmsInitialize(MmsOptions &options, ServiceCallback service);
+CResult MmsInitialize(const MmsOptions *options, ServiceCallback service);
 
 /**
- * @brief: Exit mms service
+ * @brief: Register the data change notification callback.
  *
- * @return: void
+ * @param[in]: callback: Data change notification callback.
+ * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
+ */
+CResult MmsRegisterNotifyCallback(NotifyCallback callback);
+
+/**
+ * @brief: Exit the MMS service.
+ *
+ * @return: void.
  */
 void MmsExit(void);
 
 /**
- * @brief: Put value
+ * @brief: Put key/value items.
  *
- * @param[in]: userId: user id
- * @param[in]: itemList: key/value desc list
- * @param[in]: itemNum: batch num
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * For each item, PutItems::valueAddr is used to return the memory address where the data is written, and
+ * PutItems::result is used to return the per-item execution result.
+ *
+ * @param[in/out]: itemList: Key/value descriptor list.
+ * @param[in]: itemNum: Number of items in itemList.
+ * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
  */
-CResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum);
+CResult MmsPut(PutItems *itemList, uint32_t itemNum);
 
 /**
- * @brief: Get value
+ * @brief: Get key/value items.
  *
- * @param[in]: userId: user id
- * @param[in/out]: itemList: key/value desc list
- * @param[in]: itemNum: batch num
- * @return: return RET_MMS_OK mean success, others, return non-zero value, item's realLength == 0: key not found
+ * If GetItems::value points to a null pointer, the returned data address is managed internally and must not be freed
+ * by the caller. The caller must ensure that the key is not modified while reading data through that address.
+ *
+ * For each item, GetItems::realLength is used to return the real value length, and GetItems::result is used to return
+ * the per-item execution result.
+ *
+ * @param[in/out]: itemList: Key/value descriptor list.
+ * @param[in]: itemNum: Number of items in itemList.
+ * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code. If an item's realLength is
+ *          0, the key was not found.
  */
-CResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum);
+CResult MmsGet(GetItems *itemList, uint32_t itemNum);
 
 /**
-  * @brief: Get values by prefix
-  *
-  * @param[in]: prefix: prefix of key
-  * @param[in/out]: valueInfoItems: matched value infos
-  * @param[in/out]: itemNum: matched value count
-  * @return: return RET_MMS_OK mean success, others, return non-zero value
-  */
+ * @brief: Get key/value items by key prefix.
+ *
+ * @param[in]: prefix: Key prefix.
+ * @param[out]: valueInfoItems: Matched value info list.
+ * @param[out]: itemNum: Number of matched items.
+ * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
+ */
 CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
 
 /**
- * @brief: Get values by key range
+ * @brief: Get key/value items by key range.
  *
- * @param[in]: start: start key of the range query
- * @param[in]: end: end key of the range query
- * @param[in/out]: valueInfoItems: matched value infos
- * @param[in/out]: itemNum: matched value count
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * @param[in]: start: Start key of the range query.
+ * @param[in]: end: End key of the range query.
+ * @param[out]: valueInfoItems: Matched value info list.
+ * @param[out]: itemNum: Number of matched items.
+ * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
  */
 CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
 
 /**
- * @brief: Delete values by key range
+ * @brief: Delete key/value items by key range.
  *
- * @param[in]: start: start key of the range delete
- * @param[in]: end: end key of the range delete
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * @param[in]: start: Start key of the range delete.
+ * @param[in]: end: End key of the range delete.
+ * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
  */
 CResult MmsBatchDeleteByRange(const char *start, const char *end);
 
 /**
- * @brief: release resources for prefix queries or range queries
+ * @brief: Release resources returned by prefix queries or range queries.
  *
- * @param[in]: valueInfoItems: values
- * @param[in]: itemNum: value count
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * @param[in/out]: valueInfoItems: Value info list returned by prefix queries or range queries.
+ * @param[in]: itemNum: Number of value info items.
+ * @return: void.
  */
 void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
 
 /**
+ * @brief: Update key/value items.
  *
- * @param[in]: userId: user id
- * @param[in]: itemList: key/value desc list
- * @param[in]: itemNum: batch num
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * For each item, UpdateItems::result is used to return the per-item execution result.
+ *
+ * @param[in/out]: itemList: Key/value descriptor list.
+ * @param[in]: itemNum: Number of items in itemList.
+ * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
  */
-CResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
+CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum);
 
 /**
- * @brief: Delete object
+ * @brief: Delete key/value items.
  *
- * @param[in]: userId: user id
- * @param[in]: itemList: key/value desc list
- * @param[in]: itemNum: batch num
- * @return: return RET_MMS_OK mean ok, others, return non-zero value
+ * For each item, DeleteItems::result is used to return the per-item execution result.
+ *
+ * @param[in/out]: itemList: Key descriptor list.
+ * @param[in]: itemNum: Number of items in itemList.
+ * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
  */
-CResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
+CResult MmsDelete(DeleteItems *itemList, uint32_t itemNum);
 
 /**
+ * @brief: Replace key/value items.
  *
- * @param[in]: userId: user id
- * @param[in]: itemList: key/value desc list
- * @param[in]: itemNum: batch num
- * @return: return RET_MMS_OK mean success, others, return non-zero value
+ * For each item, ReplaceItems::result is used to return the per-item execution result.
+ *
+ * @param[in/out]: itemList: Key/value descriptor list.
+ * @param[in]: itemNum: Number of items in itemList.
+ * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
  */
-CResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
+CResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum);
 
 /**
- * @brief: start catch up task to recover
+ * @brief: Start a catch-up task for recovery.
  *
- * @return: return RET_MMS_OK mean ok, others, return non-zero value
+ * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
  */
 CResult MmsStartCatchUpTask(void);
 

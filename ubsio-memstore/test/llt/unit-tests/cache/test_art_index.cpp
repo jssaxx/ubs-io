@@ -209,10 +209,13 @@ TEST(TestArtIndex, test_lsm_art_tree_search_prefix_and_range)
     int beta = 2;
     int gamma = 3;
 
-    tree.Insert(std::string("alpha-1"), &alpha);
-    tree.Insert(std::string("alpha-2"), &beta);
-    tree.Insert(std::string("beta-1"), &gamma);
-    tree.Delete(std::string("alpha-2"));
+    const unsigned char alpha1[] = "alpha-1";
+    const unsigned char alpha2[] = "alpha-2";
+    const unsigned char beta1[] = "beta-1";
+    tree.Insert(alpha1, sizeof(alpha1) - 1, &alpha);
+    tree.Insert(alpha2, sizeof(alpha2) - 1, &beta);
+    tree.Insert(beta1, sizeof(beta1) - 1, &gamma);
+    tree.Delete(alpha2, sizeof(alpha2) - 1);
 
     std::vector<std::string> keys;
     const unsigned char prefix[] = "alpha";
@@ -233,15 +236,18 @@ TEST(TestArtIndex, test_lsm_art_tree_background_flush)
 {
     LsmArtTree tree;
     std::vector<int> values(FLUSH_WATERMARK + 4);
+    std::vector<std::string> keys;
+    keys.reserve(values.size());
     for (size_t i = 0; i < values.size(); ++i) {
         values[i] = static_cast<int>(i);
-        tree.Insert(std::string("flush-key-") + std::to_string(i), &values[i]);
+        keys.emplace_back(std::string("flush-key-") + std::to_string(i));
+        tree.Insert(reinterpret_cast<const unsigned char *>(keys.back().data()), keys.back().size(), &values[i]);
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    std::vector<std::string> keys;
+    std::vector<std::string> matchedKeys;
     const unsigned char prefix[] = "flush-key-";
-    EXPECT_EQ(tree.SearchPrefix(prefix, 10, CollectArtKey, &keys), 0);
-    EXPECT_GE(keys.size(), values.size());
+    EXPECT_EQ(tree.SearchPrefix(prefix, 10, CollectArtKey, &matchedKeys), 0);
+    EXPECT_GE(matchedKeys.size(), values.size());
 }

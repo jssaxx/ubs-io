@@ -24,113 +24,133 @@ namespace mms {
 class Mms {
 public:
     /**
-     * @brief: Initialize mms service
+     * @brief: Initialize the MMS service.
      *
-     * @param[in]: option: log options
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * @param[in]: options: MMS options.
+     * @param[in]: service: Service status callback.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
     static CResult Initialize(const MmsOptions &options, ServiceCallback service);
 
     /**
-     * @brief: Exit mms service
+     * @brief: Register the data change notification callback.
      *
-     * @return: void
+     * @param[in]: callback: Data change notification callback.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
+     */
+    static CResult RegisterCallback(NotifyCallback callback);
+
+    /**
+     * @brief: Exit the MMS service.
+     *
+     * @return: void.
      */
     static void Exit();
 
     /**
-     * @brief: Put value
+     * @brief: Put key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * For each item, PutItems::valueAddr is used to return the memory address where the data is written, and
+     * PutItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Put(uint64_t userId, PutItems *itemList, uint32_t itemNum);
+    static CResult Put(PutItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Get value
+     * @brief: Get key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in/out]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * If GetItems::value points to a null pointer, the returned data address is managed internally and must not be
+     * freed by the caller. The caller must ensure that the key is not modified while reading data through that address.
+     *
+     * For each item, GetItems::realLength is used to return the real value length, and GetItems::result is used to
+     * return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code. If an item's realLength
+     *          is 0, the key was not found.
      */
-    static CResult Get(uint64_t userId, GetItems *itemList, uint32_t itemNum);
+    static CResult Get(GetItems *itemList, uint32_t itemNum);
 
     /**
-      * @brief: Get values by prefix
-      *
-      * @param[in]: prefix: prefix of key
-      * @param[in/out]: valueInfoItems: Matched value infos
-      * @param[in/out]: itemNum: Matched value item count
-      * @return: return RET_MMS_OK mean success, others, return non-zero value
-      */
+     * @brief: Get key/value items by key prefix.
+     *
+     * @param[in]: prefix: Key prefix.
+     * @param[out]: valueInfoItems: Matched value info list.
+     * @param[out]: itemNum: Number of matched items.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
+     */
     static CResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
 
     /**
-     * @brief: Get values by key range
+     * @brief: Get key/value items by key range.
      *
-     * @param[in]: start: start key of the range query
-     * @param[in]: end: end key of the range query
-     * @param[in/out]: valueInfoItems: matched value infos
-     * @param[in/out]: itemNum: matched value count
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * @param[in]: start: Start key of the range query.
+     * @param[in]: end: End key of the range query.
+     * @param[out]: valueInfoItems: Matched value info list.
+     * @param[out]: itemNum: Number of matched items.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
     static CResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
 
     /**
-     * @brief: Delete values by key range
+     * @brief: Delete key/value items by key range.
      *
-     * @param[in]: start: start key of the range delete
-     * @param[in]: end: end key of the range delete
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * @param[in]: start: Start key of the range delete.
+     * @param[in]: end: End key of the range delete.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
     static CResult BatchDeleteByRange(const char *start, const char *end);
 
     /**
-     * @brief: release resources for prefix queries or range queries
+     * @brief: Release resources returned by prefix queries or range queries.
      *
-     * @param[in]: valueInfoItems: values
-     * @param[in]: itemNum: value count
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * @param[in/out]: valueInfoItems: Value info list returned by prefix queries or range queries.
+     * @param[in]: itemNum: Number of value info items.
+     * @return: void.
      */
     static void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
 
     /**
-     * @brief: Get value
+     * @brief: Update key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * For each item, UpdateItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
+    static CResult Update(UpdateItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Delete object
+     * @brief: Delete key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
+     * For each item, DeleteItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
+    static CResult Delete(DeleteItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Replace object
+     * @brief: Replace key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
+     * For each item, ReplaceItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
+    static CResult Replace(ReplaceItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: start catch up task to recover
+     * @brief: Start a catch-up task for recovery.
      *
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
     static CResult StartCatchUpTask();
 };

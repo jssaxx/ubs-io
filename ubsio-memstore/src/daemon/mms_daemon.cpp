@@ -14,10 +14,30 @@
 #include <sys/resource.h>
 
 #include "mms_server.h"
+#include "mms_c.h"
 
 using namespace ock::mms;
 
 static std::atomic<bool> gDaemonRunning = { false };
+
+static auto g_server_ins = MmsServer::Instance();
+
+std::string OpTypeToString(OperateType opType)
+{
+    switch (opType) {
+        case OperateType::OP_PUT:
+            return "OP_PUT";
+        case OperateType::OP_DELETE:
+            return "OP_DELETE";
+        default:
+            return "OP_UNKNOWN";
+    }
+}
+
+static void NotifyCallbackFun(const char *key, OperateType opType)
+{
+    LOG_INFO("Data changed, key:" << key << " opType:" << OpTypeToString(opType) << ".");
+}
 
 static void HandleSigterm(int signum)
 {
@@ -38,20 +58,26 @@ static void HandleSigterm(int signum)
     gDaemonRunning = false;
 }
 
-static void ServiceStateFunc(bool serviceable)
+static void ServiceStateFunc(uint8_t serviceable)
 {
-    std::string isNormal = serviceable ? "normal" : "fault";
+    std::string isNormal = (serviceable != 0) ? "normal" : "fault";
     std::cout << "mms service state is: " << isNormal.c_str() << "." << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
-    auto mmsServer = MmsServer::Instance();
-    auto ret = mmsServer->Start(ServiceStateFunc);
+    auto ret = g_server_ins->Start(ServiceStateFunc);
     if (ret != MMS_OK) {
         std::cout << "mms daemon start failed:" << ret << "." << std::endl;
         return -1;
     }
+
+    auto callbackRet = MmsRegisterNotifyCallback(NotifyCallbackFun);
+    if (callbackRet != RET_MMS_OK) {
+        std::cout << "mms register notify callback failed:" << callbackRet << "." << std::endl;
+        return -1;
+    }
+
     struct sigaction termSa {};
     termSa.sa_handler = &HandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
@@ -61,5 +87,6 @@ int main(int argc, char *argv[])
     while (gDaemonRunning) {
         sleep(5U);
     }
+    (void)MmsRegisterNotifyCallback(nullptr);
     return 0;
 }

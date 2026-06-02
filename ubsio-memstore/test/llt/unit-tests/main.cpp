@@ -59,9 +59,9 @@ static void StubSingleNodeUtEnv()
     MOCKER_CPP(&NetEngine::Start).stubs().will(returnValue(static_cast<BResult>(MMS_OK)));
 }
 
-static void ServiceStateFunc(bool serviceable)
+static void ServiceStateFunc(uint8_t serviceable)
 {
-    std::string isNormal = serviceable ? "normal" : "fault";
+    std::string isNormal = (serviceable != 0) ? "normal" : "fault";
     std::cout << "mms service state is: " << isNormal.c_str() << std::endl;
 }
 

@@ -21,6 +21,8 @@ namespace mms {
 static constexpr uint64_t INVALID_BLOCK_OFFSET = UINT64_MAX;
 constexpr uint16_t DATA_ALIVE = 0;
 constexpr uint16_t DATA_DELETED = 1;
+constexpr uint32_t FNV_OFFSET_BASIS = 2166136261U;
+constexpr uint32_t FNV_PRIME = 16777619U;
 
 BResult Cache::Init(uint64_t bucketMemAddr, uint64_t bucketMemSize, CacheLogFunc func, bool server,
                     std::pair<uint64_t, uint64_t> blockSize)
@@ -56,6 +58,11 @@ void Cache::Exit()
 {
 }
 
+void Cache::SetArtSwitch(bool artSwitch)
+{
+    mArtSwitch = artSwitch;
+}
+
 void FreeValueBlock(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocatorPtr valueAllocator)
 {
     if (indexValue->blockOffset == INVALID_BLOCK_OFFSET) {
@@ -64,16 +71,38 @@ void FreeValueBlock(IndexValue *indexValue, MmsMemMgrPtr memMgr, MmsMemAllocator
 
     uint64_t blockAddr;
     memMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, blockAddr);
-    MMS_TRACE_START(CACHE_FREE_BLOCK);
     valueAllocator->MmsFree(blockAddr);
-    MMS_TRACE_END(CACHE_FREE_BLOCK, MMS_OK);
+}
+
+static uint32_t HashKey(const char *key, uint16_t keyLen)
+{
+    uint32_t hashCode = FNV_OFFSET_BASIS;
+    for (uint16_t index = 0; index < keyLen; index++) {
+        hashCode ^= static_cast<uint8_t>(key[index]);
+        hashCode *= FNV_PRIME;
+    }
+    return hashCode;
+}
+
+static bool IsSameKey(const IndexValue *indexValue, const char *key, uint16_t keyLen)
+{
+    return indexValue->keyLen == keyLen && memcmp(indexValue->key, key, keyLen) == 0;
+}
+
+static BResult CopyIndexKey(IndexValue *indexValue, const char *key, uint16_t keyLen)
+{
+    BResult ret = memcpy_s(indexValue->key, MAX_KEY_SIZE, key, keyLen);
+    if (UNLIKELY(ret != EOK)) {
+        return MMS_ERR;
+    }
+    indexValue->key[keyLen] = '\0';
+    indexValue->keyLen = keyLen;
+    return MMS_OK;
 }
 
 BResult Cache::AllocDataBlock(uint64_t remainLen, uint16_t &numaId, uint64_t &curBlockAddr, uint64_t &curBuffSize)
 {
-    MMS_TRACE_START(CACHE_ALLOC_BLOCK);
     BResult ret = mValueAllocator->MmsAlloc(remainLen + DATA_HEADER_SIZE, numaId, curBlockAddr);
-    MMS_TRACE_END(CACHE_ALLOC_BLOCK, ret);
     if (UNLIKELY(ret != MMS_OK)) {
         CACHE_LOG_ERROR("Alloc value block failed, size:" << remainLen + DATA_HEADER_SIZE << ", ret:" << ret << ".");
         return MMS_ALLOC_FAIL;
@@ -92,7 +121,7 @@ BResult Cache::AllocDataBlock(uint64_t remainLen, uint16_t &numaId, uint64_t &cu
 
 BResult Cache::PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen)
 {
-    if (indexValue == nullptr || data == nullptr || dataLen == 0) {
+    if (UNLIKELY(indexValue == nullptr || data == nullptr || dataLen == 0)) {
         CACHE_LOG_ERROR("Invalid para.");
         return MMS_INVALID_PARAM;
     }
@@ -142,12 +171,32 @@ uint64_t Cache::GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t of
     return realLen;
 }
 
-IndexNode *FindExistingNode(BucketNode *bucketNode, const char *key, uint32_t hashCode)
+uint64_t Cache::GetDataAddrFromBlock(IndexValue *indexValue, char **data, uint64_t offset, uint64_t dataLen)
+{
+    if (UNLIKELY(indexValue == nullptr || data == nullptr || dataLen == 0 || (offset >= indexValue->totalDataLen))) {
+        CACHE_LOG_ERROR("Invalid para.");
+        return 0;
+    }
+
+    uint64_t currentBlockAddr;
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, currentBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(currentBlockAddr);
+    uint64_t realLen = std::min(indexValue->totalDataLen - offset, dataLen);
+    if (UNLIKELY(offset > header->blockSize || realLen > header->blockSize - offset)) {
+        CACHE_LOG_ERROR("Block data out of range.");
+        return 0;
+    }
+
+    *data = header->data + offset;
+    return realLen;
+}
+
+static IndexNode *FindExistingNode(BucketNode *bucketNode, const char *key, uint16_t keyLen, uint32_t hashCode)
 {
     IndexNode *node = &bucketNode->head;
     while (node->valid == FLAG_VALID) {
         IndexValue *currentValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
-        if (node->hashCode == hashCode && strcmp(currentValue->key, key) == 0) {
+        if (node->hashCode == hashCode && IsSameKey(currentValue, key, keyLen)) {
             return node;
         }
         node = &currentValue->next;
@@ -156,104 +205,140 @@ IndexNode *FindExistingNode(BucketNode *bucketNode, const char *key, uint32_t ha
     return nullptr;
 }
 
-BResult Cache::HandlePutExistingNode(IndexNode *existingNode, const char *key, const char *value, uint64_t length)
+BResult Cache::HandlePutExistingNode(const ExistingPutPara &para)
 {
-    IndexValue *currentValue = reinterpret_cast<IndexValue *>(existingNode->indexValueAddr);
-    if (currentValue->totalDataLen != length) {
-        CACHE_LOG_ERROR("Conflict put, key:" << key << ".");
+    IndexValue *currentValue = reinterpret_cast<IndexValue *>(para.existingNode->indexValueAddr);
+    if (currentValue->totalDataLen != para.length) {
+        CACHE_LOG_ERROR("Conflict put, key:" << std::string(para.key, para.keyLen) << ".");
         return MMS_INNER_ERR;
     }
 
-    char *cacheValue = new (std::nothrow) char[length];
+    char *cacheValue = new (std::nothrow) char[para.length];
     if (UNLIKELY(cacheValue == nullptr)) {
         CACHE_LOG_ERROR("Memory alloc failed.");
         return MMS_ALLOC_FAIL;
     }
 
-    uint64_t realLen = GetDataFromBlock(currentValue, cacheValue, 0, length);
-    if (realLen == 0 || realLen != length) {
-        CACHE_LOG_ERROR("Get data from cache failed, key:" << key << ".");
+    uint64_t realLen = GetDataFromBlock(currentValue, cacheValue, 0, para.length);
+    if (realLen == 0 || realLen != para.length) {
+        CACHE_LOG_ERROR("Get data from cache failed, key:" << std::string(para.key, para.keyLen) << ".");
         delete[] cacheValue;
         return MMS_INNER_ERR;
     }
 
-    if (memcmp(cacheValue, value, length) == 0) {
-        CACHE_LOG_INFO("Repeat put, key:" << key << ".");
+    if (memcmp(cacheValue, para.value, para.length) == 0) {
+        if (para.valueAddr != nullptr) {
+            uint64_t realLen = GetDataAddrFromBlock(currentValue, para.valueAddr, 0, para.length);
+            if (UNLIKELY(realLen != para.length)) {
+                CACHE_LOG_ERROR("Get data address from cache failed, key:" << std::string(para.key, para.keyLen)
+                                                                           << ".");
+                delete[] cacheValue;
+                return MMS_INNER_ERR;
+            }
+        }
+        CACHE_LOG_INFO("Repeat put, key:" << std::string(para.key, para.keyLen) << ".");
         delete[] cacheValue;
         return MMS_PUT_REPEAT;
     }
 
-    CACHE_LOG_ERROR("Conflict put, key:" << key << ".");
+    CACHE_LOG_ERROR("Conflict put, key:" << std::string(para.key, para.keyLen) << ".");
     delete[] cacheValue;
     return MMS_INNER_ERR;
 }
 
-BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t version, MmsPtId ptId)
+BResult Cache::CreatePutIndexValue(const PutPara &para, BucketNode *bucketNode, IndexValueCtx &ctx)
 {
-    std::string keyStr = std::string(key);
-    uint32_t hashCode = static_cast<uint32_t>(std::hash<std::string>{}(keyStr));
-    uint32_t bucketIndex = hashCode % GetBucketCount();
-    uint64_t bucketAddr = GetBucketAddr(bucketIndex);
-    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
-
-    BResult ret;
-    uint64_t indexValueAddr;
-    uint16_t numaId;
-    // 申请indexValue内存
-    ret = mIndexMemAllocator->MmsAlloc(INDEX_VALUE_SIZE, numaId, indexValueAddr);
+    BResult ret = mIndexMemAllocator->MmsAlloc(INDEX_VALUE_SIZE, ctx.numaId, ctx.addr);
     if (UNLIKELY(ret != MMS_OK)) {
         CACHE_LOG_ERROR("Alloc indexValue block failed, ret:" << ret << ".");
         return MMS_ALLOC_FAIL;
     }
 
-    uint64_t indexNumaOffset;
-    mMemMgr->Trans2Offset(MMAP_AREA_INDEX, indexValueAddr, indexNumaOffset);
-    IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexValueAddr);
-    indexValue->totalDataLen = 0;
-    indexValue->version = version;
-    indexValue->ptId = ptId;
-    indexValue->isDelete = DATA_ALIVE;
-    indexValue->blockOffset = INVALID_BLOCK_OFFSET;
-    indexValue->bucketNode = bucketNode;
+    mMemMgr->Trans2Offset(MMAP_AREA_INDEX, ctx.addr, ctx.numaOffset);
+    ctx.value = reinterpret_cast<IndexValue *>(ctx.addr);
+    ctx.value->totalDataLen = 0;
+    ctx.value->version = para.version;
+    ctx.value->ptId = para.ptId;
+    ctx.value->isDelete = DATA_ALIVE;
+    ctx.value->blockOffset = INVALID_BLOCK_OFFSET;
+    ctx.value->bucketNode = bucketNode;
 
-    ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, keyStr.size());
-    if (UNLIKELY(ret != 0)) {
-        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << "key:" << key << ".");
-        mIndexMemAllocator->MmsFree(indexValueAddr);
-        return MMS_ERR;
+    ret = CopyIndexKey(ctx.value, para.key, para.keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << ", key:" << std::string(para.key, para.keyLen) << ".");
+        mIndexMemAllocator->MmsFree(ctx.addr);
+        return ret;
     }
-    // 拷贝数据到cache
-    ret = PutDataIntoBlock(indexValue, value, length);
+
+    ret = PutDataIntoBlock(ctx.value, para.value, para.length);
     if (UNLIKELY(ret != MMS_OK)) {
         CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
-        mIndexMemAllocator->MmsFree(indexValueAddr);
+        mIndexMemAllocator->MmsFree(ctx.addr);
+        return ret;
+    }
+
+    return MMS_OK;
+}
+
+void Cache::FreeIndexValue(const IndexValueCtx &ctx)
+{
+    FreeValueBlock(ctx.value, mMemMgr, mValueAllocator);
+    mIndexMemAllocator->MmsFree(ctx.addr);
+}
+
+void Cache::FillPutValueAddr(IndexValue *indexValue, char **valueAddr)
+{
+    if (UNLIKELY(valueAddr == nullptr)) {
+        return;
+    }
+
+    uint64_t curValueBlockAddr;
+    mMemMgr->Trans2Addr(MMAP_AREA_VALUE, indexValue->blockOffset, curValueBlockAddr);
+    auto header = reinterpret_cast<DataHeader *>(curValueBlockAddr);
+    *valueAddr = header->data;
+}
+
+void Cache::InsertPutIndexValue(BucketNode *bucketNode, uint32_t hashCode, const IndexValueCtx &ctx)
+{
+    ctx.value->next = bucketNode->head;
+    bucketNode->head = {hashCode, FLAG_VALID, ctx.numaId, ctx.numaOffset, ctx.addr};
+    if (mArtSwitch) {
+        mLsmArtTree.Insert(reinterpret_cast<const unsigned char *>(ctx.value->key), ctx.value->keyLen, ctx.value);
+    }
+}
+
+BResult Cache::Put(const PutPara &para)
+{
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    uint32_t bucketIndex = hashCode % GetBucketCount();
+    uint64_t bucketAddr = GetBucketAddr(bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+    IndexValueCtx ctx = {};
+    BResult ret = CreatePutIndexValue(para, bucketNode, ctx);
+    if (UNLIKELY(ret != MMS_OK)) {
         return ret;
     }
 
     CacheWriteLock(&bucketNode->status);
-    IndexNode *existingNode = FindExistingNode(bucketNode, key, hashCode);
+    IndexNode *existingNode = FindExistingNode(bucketNode, para.key, para.keyLen, hashCode);
     if (existingNode != nullptr) {
-        ret = HandlePutExistingNode(existingNode, key, value, length);
+        ret = HandlePutExistingNode({existingNode, para.key, para.keyLen, para.value, para.length, para.valueAddr});
         CacheWriteUnLock(&bucketNode->status);
-        FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
-        mIndexMemAllocator->MmsFree(indexValueAddr);
+        FreeIndexValue(ctx);
         return ret;
     }
 
-    indexValue->next = bucketNode->head;
-    bucketNode->head = {hashCode, FLAG_VALID, numaId, indexNumaOffset, indexValueAddr};
-
-    // insert art tree
-    mLsmArtTree.Insert(std::move(keyStr), indexValue);
+    FillPutValueAddr(ctx.value, para.valueAddr);
+    InsertPutIndexValue(bucketNode, hashCode, ctx);
     CacheWriteUnLock(&bucketNode->status);
-    CACHE_LOG_DEBUG("Put success, key:" << key << ", length:" << length << ", ptId:" << ptId << ", version:" << version
-                                        << ".");
+    CACHE_LOG_DEBUG("Put success, key:" << std::string(para.key, para.keyLen) << ", length:" << para.length
+                                        << ", ptId:" << para.ptId << ", version:" << para.version << ".");
     return MMS_OK;
 }
 
-BResult Cache::Get(const char *key, uint64_t offset, uint64_t length, char *value, uint64_t *realLength)
+BResult Cache::Get(const GetPara &para)
 {
-    uint32_t hashCode = static_cast<uint32_t>(std::hash<std::string>{}(key));
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
     uint32_t bucketIndex = hashCode % GetBucketCount();
     uint64_t bucketAddr = GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
@@ -264,35 +349,41 @@ BResult Cache::Get(const char *key, uint64_t offset, uint64_t length, char *valu
         uint64_t indexAddr;
         mMemMgr->Trans2Addr(MMAP_AREA_INDEX, node->numaOffset, indexAddr);
         IndexValue *indexValue = reinterpret_cast<IndexValue *>(indexAddr);
-        if (node->hashCode != hashCode || strcmp(indexValue->key, key) != 0) {
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, para.key, para.keyLen)) {
             node = &indexValue->next;
             continue;
         }
 
-        if (indexValue->totalDataLen <= offset) {
-            CACHE_LOG_ERROR("Out of bounds, key:" << key << ", offset:" << offset
+        if (indexValue->totalDataLen <= para.offset) {
+            CACHE_LOG_ERROR("Out of bounds, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
                                                   << ", total len:" << indexValue->totalDataLen << ".");
             CacheReadUnLock(&bucketNode->status);
             return MMS_ERR;
         }
 
-        uint64_t readLen = std::min(indexValue->totalDataLen - offset, length);
-        uint64_t realLen = GetDataFromBlock(indexValue, value, offset, readLen);
+        uint64_t readLen = std::min(indexValue->totalDataLen - para.offset, para.length);
+        uint64_t realLen;
+        if (*para.value == nullptr) {
+            realLen = GetDataAddrFromBlock(indexValue, para.value, para.offset, readLen);
+        } else {
+            realLen = GetDataFromBlock(indexValue, *para.value, para.offset, readLen);
+        }
         if (UNLIKELY(realLen == 0)) {
             CacheReadUnLock(&bucketNode->status);
             CACHE_LOG_ERROR("Get data failed.");
             return MMS_INNER_ERR;
         }
 
-        *realLength = realLen;
+        *para.realLength = realLen;
         CacheReadUnLock(&bucketNode->status);
-        CACHE_LOG_DEBUG("Get success, key:" << key << ", offset:" << offset << ", real length:" << realLen << ".");
+        CACHE_LOG_DEBUG("Get success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
+                                            << ", real length:" << realLen << ".");
         return MMS_OK;
     }
 
     CacheReadUnLock(&bucketNode->status);
-    *realLength = 0;  // 上层通过realLength == 0判断为该key没找到
-    CACHE_LOG_WARN("Not found, key:" << key << ".");
+    *para.realLength = 0;
+    CACHE_LOG_WARN("Not found, key:" << std::string(para.key, para.keyLen) << ".");
     return MMS_NOT_EXISTS;
 }
 
@@ -309,7 +400,9 @@ BResult Cache::ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_
         CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key <<  ".");
         return ret;
     }
-    mLsmArtTree.Insert(indexValue->key, indexValue);
+    if (mArtSwitch) {
+        mLsmArtTree.Insert(reinterpret_cast<const unsigned char *>(indexValue->key), indexValue->keyLen, indexValue);
+    }
     return MMS_OK;
 }
 
@@ -394,9 +487,9 @@ BResult Cache::UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_
     return ExpandAndUpdateDataBlock(indexValue, data, offset, dataLen, curBlockAddr);
 }
 
-BResult Cache::Update(const char *key, const char *value, uint64_t offset, uint64_t length, uint32_t version)
+BResult Cache::Update(const UpdatePara &para)
 {
-    uint32_t hashCode = static_cast<uint32_t>(std::hash<std::string>{}(key));
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
     uint32_t bucketIndex = hashCode % GetBucketCount();
     uint64_t bucketAddr = GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
@@ -405,22 +498,24 @@ BResult Cache::Update(const char *key, const char *value, uint64_t offset, uint6
     IndexNode *node = &bucketNode->head;
     while (node->valid == FLAG_VALID) {
         IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
-        if (node->hashCode != hashCode || strcmp(indexValue->key, key) != 0) {
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, para.key, para.keyLen)) {
             node = &indexValue->next;
             continue;
         }
 
-        BResult ret = UpdateDataBlock(indexValue, value, offset, length);
+        BResult ret = UpdateDataBlock(indexValue, para.value, para.offset, para.length);
         if (UNLIKELY(ret != MMS_OK)) {
             CacheWriteUnLock(&bucketNode->status);
-            CACHE_LOG_ERROR("Update data block failed, key:" << key << ", ret:" << ret << ".");
+            CACHE_LOG_ERROR("Update data block failed, key:" << std::string(para.key, para.keyLen) << ", ret:" << ret
+                                                             << ".");
             return MMS_ERR;
         }
 
-        CACHE_LOG_DEBUG("Update success, key:" << key << ", offset:" << offset << ", length:" << length
+        CACHE_LOG_DEBUG("Update success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
+                                               << ", length:" << para.length
                                                << ", new length:" << indexValue->totalDataLen << ", old version:"
-                                               << indexValue->version << ", new version:" << version << ".");
-        indexValue->version = version;
+                                               << indexValue->version << ", new version:" << para.version << ".");
+        indexValue->version = para.version;
         CacheWriteUnLock(&bucketNode->status);
         return MMS_OK;
     }
@@ -429,7 +524,46 @@ BResult Cache::Update(const char *key, const char *value, uint64_t offset, uint6
     return MMS_NOT_EXISTS;
 }
 
-BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key)
+BResult Cache::HandleDeleteExistingNode(BucketNode *bucketNode, IndexNode *node, uint32_t version)
+{
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+    if (mIsRecovering.load(std::memory_order_acquire)) {
+        indexValue->isDelete = DATA_DELETED;
+        indexValue->version = version;
+        CacheWriteUnLock(&bucketNode->status);
+        return MMS_OK;
+    }
+
+    FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
+    uint64_t indexValueAddr = node->indexValueAddr;
+    *node = indexValue->next;
+    CacheWriteUnLock(&bucketNode->status);
+    mIndexMemAllocator->MmsFree(indexValueAddr);
+    return MMS_OK;
+}
+
+BResult Cache::HandleDeleteMissingNode(BucketNode *bucketNode, uint32_t hashCode, const char *key, uint16_t keyLen,
+                                       uint32_t version)
+{
+    if (!mIsRecovering.load(std::memory_order_acquire)) {
+        CacheWriteUnLock(&bucketNode->status);
+        CACHE_LOG_DEBUG("Key not found, skipping deletion, key:" << std::string(key, keyLen) << ".");
+        return MMS_KEY_NOT_EXISTS;
+    }
+
+    BResult ret = InsertTombEntry(bucketNode, hashCode, version, key, keyLen);
+    CacheWriteUnLock(&bucketNode->status);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Insert a tomb entry failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
+        return ret;
+    }
+
+    CACHE_LOG_DEBUG("Key not found, insert tomb entry success, key:" << std::string(key, keyLen) << ".");
+    return MMS_KEY_NOT_EXISTS;
+}
+
+BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key,
+                               uint16_t keyLen)
 {
     uint64_t indexValueAddr;
     uint16_t numaId;
@@ -449,11 +583,11 @@ BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32
     indexValue->blockOffset = INVALID_BLOCK_OFFSET;
     indexValue->bucketNode = bucketNode;
 
-    ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, strlen(key));
-    if (UNLIKELY(ret != 0)) {
-        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << "key:" << key << ".");
+    ret = CopyIndexKey(indexValue, key, keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
         mIndexMemAllocator->MmsFree(indexValueAddr);
-        return MMS_ERR;
+        return ret;
     }
 
     indexValue->next = bucketNode->head;
@@ -462,63 +596,50 @@ BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32
     return MMS_OK;
 }
 
-BResult Cache::Delete(const char *key, uint32_t version)
+BResult Cache::Delete(const char *key, uint16_t keyLen, uint32_t version)
 {
-    std::string keyStr = std::string(key);
-    uint32_t hashCode = static_cast<uint32_t>(std::hash<std::string>{}(keyStr));
+    uint32_t hashCode = HashKey(key, keyLen);
     uint32_t bucketIndex = hashCode % GetBucketCount();
     uint64_t bucketAddr = GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
 
-    mArtValueLock.LockWrite();
+    if (mArtSwitch) {
+        mArtValueLock.LockWrite();
+    }
     CacheWriteLock(&bucketNode->status);
     IndexNode *node = &bucketNode->head;
     while (node->valid == FLAG_VALID) {
         IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
-        if (node->hashCode != hashCode || strcmp(indexValue->key, key) != 0) {
+        if (node->hashCode != hashCode || !IsSameKey(indexValue, key, keyLen)) {
             node = &indexValue->next;
             continue;
         }
 
-        if (mIsRecovering.load(std::memory_order_acquire)) {
-            indexValue->isDelete = DATA_DELETED;
-            indexValue->version = version;
-            CacheWriteUnLock(&bucketNode->status);
-            mLsmArtTree.Delete(std::move(keyStr));
-            mArtValueLock.UnLock();
-            return MMS_OK;
+        BResult ret = HandleDeleteExistingNode(bucketNode, node, version);
+        if (UNLIKELY(ret != MMS_OK)) {
+            if (mArtSwitch) {
+                mArtValueLock.UnLock();
+            }
+            CACHE_LOG_ERROR("Delete existing node failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
+            return ret;
         }
-
-        FreeValueBlock(indexValue, mMemMgr, mValueAllocator);
-        uint64_t indexValueAddr = node->indexValueAddr;
-        *node = indexValue->next;
-
-        CacheWriteUnLock(&bucketNode->status);
-        mIndexMemAllocator->MmsFree(indexValueAddr);
-        mLsmArtTree.Delete(std::move(keyStr));
-        mArtValueLock.UnLock();
-        CACHE_LOG_DEBUG("delete success, key:" << key << ".");
+        if (mArtSwitch) {
+            mLsmArtTree.Delete(reinterpret_cast<const unsigned char *>(key), keyLen);
+            mArtValueLock.UnLock();
+        }
+        CACHE_LOG_DEBUG("Delete success, key:" << std::string(key, keyLen) << ".");
         return MMS_OK;
     }
 
-    if (mIsRecovering.load(std::memory_order_acquire)) {
-        // recover期间收到delete请求插入一条空的数据标记为delete，防止旧数据被写入
-        BResult ret = InsertTombEntry(bucketNode, hashCode, version, key);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CacheWriteUnLock(&bucketNode->status);
-            mArtValueLock.UnLock();
-            CACHE_LOG_ERROR("Insert a tomb entry failed, ret:" << ret << ", key:" << key << ".");
-            return ret;
-        }
+    BResult ret = HandleDeleteMissingNode(bucketNode, hashCode, key, keyLen, version);
+    if (mArtSwitch) {
+        mArtValueLock.UnLock();
     }
-
-    CacheWriteUnLock(&bucketNode->status);
-    mArtValueLock.UnLock();
-    CACHE_LOG_DEBUG("Key not found, skipping deletion, key:" << key << ".");
-    return MMS_KEY_NOT_EXISTS;
+    return ret;
 }
 
-BResult Cache::HandleReplacePut(IndexNode &curNode, const std::string &key, const char *value, uint64_t length)
+BResult Cache::HandleReplacePut(IndexNode &curNode, const char *key, uint16_t keyLen, const char *value,
+                                uint64_t length)
 {
     BResult ret;
     uint64_t indexValueAddr;
@@ -536,11 +657,11 @@ BResult Cache::HandleReplacePut(IndexNode &curNode, const std::string &key, cons
     indexValue->totalDataLen = 0;
     indexValue->blockOffset = INVALID_BLOCK_OFFSET;
 
-    ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key.c_str(), key.size());
-    if (UNLIKELY(ret != 0)) {
-        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << "key:" << key << ".");
+    ret = CopyIndexKey(indexValue, key, keyLen);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Copy key failed, ret:" << ret << ", key:" << std::string(key, keyLen) << ".");
         mIndexMemAllocator->MmsFree(indexValueAddr);
-        return MMS_ERR;
+        return ret;
     }
     // 拷贝数据到cache
     ret = PutDataIntoBlock(indexValue, value, length);
@@ -556,49 +677,39 @@ BResult Cache::HandleReplacePut(IndexNode &curNode, const std::string &key, cons
     return MMS_OK;
 }
 
-BResult Cache::Replace(const ReplacePara &para)
+BResult Cache::ReplaceExistingNode(IndexNode *existingNode, const ReplacePara &para)
 {
-    std::string keyStr = std::string(para.key);
-    uint32_t hashCode = static_cast<uint32_t>(std::hash<std::string>{}(keyStr));
-    uint32_t bucketIndex = hashCode % GetBucketCount();
-    uint64_t bucketAddr = GetBucketAddr(bucketIndex);
-    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
-
-    BResult ret;
-    CacheWriteLock(&bucketNode->status);
-    IndexNode *existingNode = FindExistingNode(bucketNode, para.key, hashCode);
-    if (existingNode != nullptr) {  // 该key已经存在, 更新数据
-        IndexValue *indexValue = reinterpret_cast<IndexValue *>(existingNode->indexValueAddr);
-        if (para.version < indexValue->version) {
-            CACHE_LOG_DEBUG("Data version is lower, key:" << para.key << ", new version:" << para.version
-                                                          << ", old version:" << indexValue->version << ".");
-            CacheWriteUnLock(&bucketNode->status);
-            return MMS_OK;
-        }
-
-        ret = UpdateDataBlock(indexValue, para.value, para.offset, para.length);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CacheWriteUnLock(&bucketNode->status);
-            CACHE_LOG_ERROR("Update data block failed, key:" << para.key << ", ret:" << ret << ".");
-            return MMS_ERR;
-        }
-
-        CACHE_LOG_DEBUG("Update success, key:" << para.key << ", offset:" << para.offset << ", length:" << para.length
-                                               << ", new length:" << indexValue->totalDataLen << ", old version:"
-                                               << indexValue->version << ", new version:" << para.version << ".");
-        indexValue->version = para.version;
-        indexValue->isDelete = DATA_ALIVE;
-        CacheWriteUnLock(&bucketNode->status);
-        return ret;
+    IndexValue *indexValue = reinterpret_cast<IndexValue *>(existingNode->indexValueAddr);
+    if (para.version < indexValue->version) {
+        CACHE_LOG_DEBUG("Data version is lower, key:" << std::string(para.key, para.keyLen)
+                                                      << ", new version:" << para.version
+                                                      << ", old version:" << indexValue->version << ".");
+        return MMS_OK;
     }
 
-    // key不存在，put数据
+    BResult ret = UpdateDataBlock(indexValue, para.value, para.offset, para.length);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CACHE_LOG_ERROR("Update data block failed, key:" << std::string(para.key, para.keyLen) << ", ret:" << ret
+                                                         << ".");
+        return MMS_ERR;
+    }
+
+    CACHE_LOG_DEBUG("Update success, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
+                                           << ", length:" << para.length
+                                           << ", new length:" << indexValue->totalDataLen << ", old version:"
+                                           << indexValue->version << ", new version:" << para.version << ".");
+    indexValue->version = para.version;
+    indexValue->isDelete = DATA_ALIVE;
+    return MMS_OK;
+}
+
+BResult Cache::InsertReplaceNode(BucketNode *bucketNode, uint32_t hashCode, const ReplacePara &para)
+{
     IndexNode curNode;
     curNode.hashCode = hashCode;
     curNode.valid = FLAG_VALID;
-    ret = HandleReplacePut(curNode, keyStr, para.value, para.length);
+    BResult ret = HandleReplacePut(curNode, para.key, para.keyLen, para.value, para.length);
     if (UNLIKELY(ret != MMS_OK)) {
-        CacheWriteUnLock(&bucketNode->status);
         CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ".");
         return ret;
     }
@@ -611,11 +722,27 @@ BResult Cache::Replace(const ReplacePara &para)
     bucketNode->head = curNode;
     indexValue->bucketNode = bucketNode;
 
-    mLsmArtTree.Insert(std::move(keyStr), indexValue);
-    CacheWriteUnLock(&bucketNode->status);
-    CACHE_LOG_DEBUG("Put success, key:" << para.key << ", length:" << para.length << ", ptId:" << para.ptId
-                                        << ", version:" << para.version << ".");
+    if (mArtSwitch) {
+        mLsmArtTree.Insert(reinterpret_cast<const unsigned char *>(indexValue->key), indexValue->keyLen, indexValue);
+    }
+    CACHE_LOG_DEBUG("Put success, key:" << std::string(para.key, para.keyLen) << ", length:" << para.length
+                                        << ", ptId:" << para.ptId << ", version:" << para.version << ".");
     return MMS_OK;
+}
+
+BResult Cache::Replace(const ReplacePara &para)
+{
+    uint32_t hashCode = HashKey(para.key, para.keyLen);
+    uint32_t bucketIndex = hashCode % GetBucketCount();
+    uint64_t bucketAddr = GetBucketAddr(bucketIndex);
+    BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
+
+    CacheWriteLock(&bucketNode->status);
+    IndexNode *existingNode = FindExistingNode(bucketNode, para.key, para.keyLen, hashCode);
+    BResult ret = existingNode == nullptr ? InsertReplaceNode(bucketNode, hashCode, para)
+                                          : ReplaceExistingNode(existingNode, para);
+    CacheWriteUnLock(&bucketNode->status);
+    return ret;
 }
 
 void Cache::ClearDeletedData()
@@ -705,6 +832,13 @@ static int ArtSearchCallBack(void *data, const unsigned char *key, uint32_t keyL
 
 BResult Cache::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
 {
+    if (!mArtSwitch) {
+        *valueInfoItems = nullptr;
+        *itemNum = 0;
+        CACHE_LOG_WARN("Art query switch is off.");
+        return MMS_NOT_READY;
+    }
+
     std::vector<ValueInfo> keyValueVec;
     CallBackCtx ctx = {&keyValueVec, this};
     auto freeKVMemFunc = [&keyValueVec]() {
@@ -751,6 +885,13 @@ BResult Cache::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems,
 
 BResult Cache::GetValuesByRange(const char *keyStart, const char *keyEnd, ValueInfo **valueInfoItems, uint64_t *itemNum)
 {
+    if (!mArtSwitch) {
+        *valueInfoItems = nullptr;
+        *itemNum = 0;
+        CACHE_LOG_WARN("Art query switch is off.");
+        return MMS_NOT_READY;
+    }
+
     std::vector<ValueInfo> keyValueVec;
     CallBackCtx ctx = {&keyValueVec, this};
     auto freeKVMemFunc = [&keyValueVec]() {
@@ -801,6 +942,11 @@ BResult Cache::GetValuesByRange(const char *keyStart, const char *keyEnd, ValueI
 
 BResult Cache::GetKeysByRange(const char *keyStart, const char *keyEnd, std::vector<std::string> &matchedKeys)
 {
+    if (!mArtSwitch) {
+        CACHE_LOG_WARN("Art query switch is off.");
+        return MMS_NOT_READY;
+    }
+
     auto callback = [](void *data, const unsigned char *key, uint32_t keyLen, void *val) -> int {
         auto *keys = static_cast<std::vector<std::string> *>(data);
         keys->emplace_back(reinterpret_cast<const char *>(key), keyLen);

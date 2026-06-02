@@ -48,11 +48,12 @@ public:
 
     BResult SendSingleReq(IoCtrlRequest &req);
 
-    BResult HandleSendReqs(uint16_t numaId, uint64_t userId, MmsOpCode opCode, std::vector<IOCtxItem> &ctxItems);
+    BResult HandleSendReqs(uint16_t numaId, MmsOpCode opCode, std::vector<IOCtxItem> &ctxItems,
+                           bool freeBlocks = true);
 
-    BResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum);
+    BResult MmsPut(PutItems *itemList, uint32_t itemNum);
 
-    BResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum);
+    BResult MmsGet(GetItems *itemList, uint32_t itemNum);
 
     BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
 
@@ -62,11 +63,11 @@ public:
 
     void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
 
-    BResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
+    BResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum);
 
-    BResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
+    BResult MmsDelete(DeleteItems *itemList, uint32_t itemNum);
 
-    BResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
+    BResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 

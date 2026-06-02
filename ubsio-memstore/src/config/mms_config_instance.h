@@ -24,6 +24,8 @@ const auto TRACE_SWITCH = std::make_pair("mms.trace.switch", "false");
 const auto CRC_SWITCH = std::make_pair("mms.crc.switch", "false");
 const auto SEQUENCE_SWITCH = std::make_pair("mms.sequence.switch", "false");
 const auto MULTICAST_SWITCH = std::make_pair("mms.multicast.switch", "true");
+const auto DATA_CHANGE_CALLBACK_SWITCH = std::make_pair("mms.data.change.callback.switch", "false");
+const auto ART_QUERY_SWITCH = std::make_pair("mms.art.query.switch", "false");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
 
 const auto NET_RPC_IP_MASK = std::make_pair("mms.net.rpc.ip_mask", "127.0.0.1/24");
@@ -38,6 +40,8 @@ const auto NET_RPC_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.rpc.worker.gro
 const auto NET_IPC_BUSY_POLL_MODE = std::make_pair("mms.net.ipc.busy_polling_mode", "false");
 const auto NET_IPC_WORKER_GROUPS = std::make_pair("mms.net.ipc.worker.groups", "4,4");
 const auto NET_IPC_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.worker.groups.cpuset", "2-5,6-9");
+const auto NET_NOTIFY_WORKER_GROUPS = std::make_pair("mms.net.ipc.notify.groups", "1");
+const auto NET_NOTIFY_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.notify.groups.cpuset", "15-15");
 const auto NET_PUBLISHER_WORKER_CPUSET = std::make_pair("mms.net.publisher.worker.cpuset", "10-17");
 const auto NET_SUBSCRIBER_WORKER_CPUSET = std::make_pair("mms.net.subscriber.worker.cpuset", "18-18");
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("mms.net.request.executor.thread.num", 8);
@@ -85,6 +89,10 @@ public:
         std::string ipcWorkerGroups;
         std::string ipcWorkerGroupsCpuSet;
         uint16_t ipcWorkerGroupsNum;
+        std::string notifyWorkerGroups;
+        std::string notifyWorkerGroupsCpuSet;
+        uint16_t notifyWorkerGroupsNum;
+        uint16_t notifyGroupIndex = 0;
 
         std::pair<long, long> publisherWorkerCpuSet;
         std::pair<long, long> subscriberWorkerCpuSet;
@@ -124,6 +132,8 @@ public:
         bool crcSwitch = false;
         bool sequenceSwitch = false;
         bool multicastSwitch = false;
+        bool dataChangeCallbackSwitch = false;
+        bool artQuerySwitch = true;
         bool isSeparateMode = true;
     };
 
@@ -159,6 +169,14 @@ public:
     }
 
 private:
+    void LoadDefaultNetConf();
+
+    void LoadDefaultSecurityConf();
+
+    void LoadDefaultBasicConf();
+
+    void LoadDefaultClusterConf();
+
     void DumpToLog();
 
     BResult AutoConfAfterLoadFromFile(const ConfigurationPtr &conf);
@@ -170,6 +188,14 @@ private:
     BResult AutoConfigNetMulticast(const ConfigurationPtr &conf);
 
     BResult AutoConfigNetTls(const ConfigurationPtr &conf);
+
+    BResult AutoConfigNetAddress(const ConfigurationPtr &conf);
+
+    BResult AutoConfigRpcGroup(const ConfigurationPtr &conf);
+
+    BResult AutoConfigIpcGroup(const ConfigurationPtr &conf);
+
+    BResult AutoConfigNotifyGroup(const ConfigurationPtr &conf);
 
     BResult AutoConfigNet(const ConfigurationPtr &conf);
 

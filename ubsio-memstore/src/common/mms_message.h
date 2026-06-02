@@ -52,6 +52,8 @@ enum MmsOpCode : uint16_t {
     MMS_OP_S_GET_SEQNO_DATA,
     MMS_OP_S_DELETE_BY_RANGE,
     MMS_OP_S_MULTI_DELETE_BY_RANGE,
+    MMS_OP_C_NOTIFY_SUBSCRIBE,
+    MMS_OP_NOTIFY_DATA_CHANGE,
     MMS_OP_BUTT
 };
 
@@ -76,6 +78,35 @@ typedef struct {
 } BasicRequest;
 
 typedef struct {
+    ReqHead head;
+    bool enable;
+    uint16_t notifyGroupIndex;
+    uint32_t notifyPid;
+} NotifySubscribeReq;
+
+typedef struct {
+    ReqHead head;
+    uint16_t keyLen;
+    uint16_t opType;
+    char key[MAX_KEY_SIZE];
+} NotifyDataChangeReq;
+
+typedef struct {
+    uint16_t keyLen;
+    uint16_t opType;
+    char key[MAX_KEY_SIZE];
+} NotifyDataChangeItem;
+
+static constexpr uint16_t NOTIFY_DATA_CHANGE_BATCH_NUM = 64;
+
+typedef struct {
+    ReqHead head;
+    uint16_t itemNum;
+    uint16_t reserved;
+    NotifyDataChangeItem items[NOTIFY_DATA_CHANGE_BATCH_NUM];
+} NotifyDataChangeBatchReq;
+
+typedef struct {
     uint64_t ptVersion;
 } UpdatePtVRsp;
 
@@ -91,11 +122,14 @@ typedef struct {
     uint32_t valueBlockSize;
     bool traceSwitch;
     bool enableCrc;
+    bool artQuerySwitch;
+    bool dataChangeCallbackSwitch;
+    uint16_t notifyGroupIndex;
+    uint16_t reserved;
 } BasicResponse;
 
 typedef struct {
     ReqHead head;
-    uint64_t userId;
     uint64_t ioNumaId : 16;
     uint64_t ioNumaOffset : 48;
     uint64_t ioLength;
@@ -106,6 +140,9 @@ typedef struct {
     uint64_t valueLen : 24;
     uint64_t offset : 24;
     uint64_t version;
+    int32_t result;
+    uint32_t reserved;
+    uint64_t valueAddr;
 } IoLocDesc;
 
 typedef struct {
@@ -190,21 +227,58 @@ struct IOCtxItem {
     IOCtxItem(uint64_t buff, uint64_t reqLen) : buff(buff), reqLen(reqLen){};
 };
 
+struct DecodePutItem {
+    const char *key;
+    const char *value;
+    uint32_t valueLen;
+    uint16_t keyLen;
+    uint16_t isNotify;
+    uint64_t version;
+    int32_t *result;
+    uint64_t *valueAddr;
+};
+
+struct DecodeUpdateItem {
+    const char *key;
+    const char *value;
+    uint32_t valueLen;
+    uint32_t offset;
+    uint16_t keyLen;
+    uint64_t version;
+    int32_t *result;
+};
+
+struct DecodeDeleteItem {
+    const char *key;
+    uint16_t keyLen;
+    uint16_t isNotify;
+    uint64_t version;
+    int32_t *result;
+};
+
 BResult EncodePutRequest(PutItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                          const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodePutRequest(std::vector<PutItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
+BResult DeCodePutRequest(std::vector<DecodePutItem> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
 
 BResult EncodeUpdateRequest(UpdateItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                             const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodeUpdateRequest(std::vector<UpdateItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
+BResult DeCodeUpdateRequest(std::vector<DecodeUpdateItem> &itemList, uint32_t &itemNum, uint64_t buff,
+                            uint64_t realLen);
 
 BResult EncodeDeleteRequest(DeleteItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                             const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodeDeleteRequest(std::vector<DeleteItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
+BResult DeCodeDeleteRequest(std::vector<DecodeDeleteItem> &itemList, uint32_t &itemNum, uint64_t buff,
+                            uint64_t realLen);
 
 BResult EncodeReplaceRequest(ReplaceItems *itemList, uint32_t itemNum, std::vector<IOCtxItem> &ctxItems,
                              const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodeReplaceRequest(std::vector<ReplaceItems> &itemList, uint32_t &itemNum, uint64_t buff, uint64_t realLen);
+BResult DeCodeReplaceRequest(std::vector<DecodeUpdateItem> &itemList, uint32_t &itemNum, uint64_t buff,
+                             uint64_t realLen);
+
+uint32_t FillPutItemResults(PutItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
+uint32_t FillUpdateItemResults(UpdateItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
+uint32_t FillDeleteItemResults(DeleteItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
+uint32_t FillReplaceItemResults(ReplaceItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
 
 BResult EncodeRangeDeleteRequest(const char *start, const char *end, std::vector<IOCtxItem> &ctxItems,
                                  const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);

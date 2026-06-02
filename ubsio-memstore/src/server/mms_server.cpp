@@ -64,21 +64,52 @@ BResult MmsServer::Start(ServiceCallback service)
     }
 
     mServiceCallback = service;
+    auto ret = InitServerBase();
+    if (ret != MMS_OK) {
+        return ret;
+    }
+    ret = StartPtMigrateExecutor();
+    if (ret != MMS_OK) {
+        return ret;
+    }
+    ret = StartMmsServices();
+    if (ret != MMS_OK) {
+        return ret;
+    }
+    ret = InitServerExpireChecker();
+    if (ret != MMS_OK) {
+        return ret;
+    }
 
-    // 1. Initialize infrastructure
+    LOG_INFO("Mms server start success, MY PID:" << getpid() << ".");
+    return MMS_OK;
+}
+
+std::string MmsServer::GetServerLogPath() const
+{
     std::string logPath{};
 #ifdef DEBUG_UT
     logPath = "./mms_server.log";
 #else
     logPath = "/var/log/mms/mms_server.log";
 #endif
+    return logPath;
+}
+
+BResult MmsServer::InitServerBase()
+{
+    auto logPath = GetServerLogPath();
     if (MmsLoggerInit(logPath) != MMS_OK || MmsConfigInit() != MMS_OK) {
         return MMS_INNER_ERR;
     }
 
     auto &basicConfig = mConfig->GetBasicConfig();
     MMS_LOG_RESET_LEVEL(basicConfig.logLevel);
+    return MMS_OK;
+}
 
+BResult MmsServer::StartPtMigrateExecutor()
+{
     mTaskService = ExecutorService::Create(NO_1, NO_1024);
     if (UNLIKELY(mTaskService == nullptr)) {
         LOG_ERROR("Failed to start executor for pt migrate task.");
@@ -87,34 +118,36 @@ BResult MmsServer::Start(ServiceCallback service)
     mTaskService->SetThreadName("pt-migrate");
     bool taskRet = mTaskService->Start();
     ChkTrue(taskRet, MMS_ERR, "Start pt migrate task failed, ret:" << taskRet << ".");
+    return MMS_OK;
+}
 
-    // 2. Initialize mms service
+BResult MmsServer::StartMmsServices()
+{
     ChkTrue(mService != nullptr, MMS_ERR, "Mms service not created.");
     BResult ret = mService->Process();
     if (ret != MMS_OK) {
         return ret;
     }
 
-    // 3. wait start finish
     while (!mStarted) {
         sleep(5U);
     }
+    return MMS_OK;
+}
 
-    if (mConfig->GetNetConfig().tlsEnable) {
-        auto expireChecker = ExpireChecker::Instance();
-        if (expireChecker == nullptr) {
-            LOG_INFO("expire checker alloc fail.");
-            return MMS_ALLOC_FAIL;
-        }
-        ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().caCerPath,
-            mConfig->GetNetConfig().certificationPath, mConfig->GetNetConfig().opensslLibDir);
-        if (ret != MMS_OK) {
-            return ret;
-        }
+BResult MmsServer::InitServerExpireChecker()
+{
+    if (!mConfig->GetNetConfig().tlsEnable) {
+        return MMS_OK;
     }
 
-    LOG_INFO("Mms server start success, MY PID:" << getpid() << ".");
-    return MMS_OK;
+    auto expireChecker = ExpireChecker::Instance();
+    if (expireChecker == nullptr) {
+        LOG_INFO("Expire checker alloc fail.");
+        return MMS_ALLOC_FAIL;
+    }
+    return expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().caCerPath,
+        mConfig->GetNetConfig().certificationPath, mConfig->GetNetConfig().opensslLibDir);
 }
 
 void MmsServer::Exit()
@@ -411,11 +444,26 @@ void MmsServer::FillNetOptions(NetOptions &netOptions)
     netOptions.opensslLibDir = netConfig.opensslLibDir;
 }
 
-BResult MmsServer::MmsUnicastNet()
+void MmsServer::FillIpcNetOptions(NetOptions &netOptions)
 {
-    mNetEngine = MakeRef<NetEngine>();
-    ChkTrue(mNetEngine != nullptr, MMS_ALLOC_FAIL, "Make net engine failed.");
+    auto &netConfig = mConfig->GetNetConfig();
+    netOptions.protocol = ServiceProtocol::SHM;
+    netOptions.isBusyPolling = netConfig.isIpcBusyPolling;
+    netOptions.workerGroups = netConfig.ipcWorkerGroups;
+    netOptions.workerGroupsCpuSet = netConfig.ipcWorkerGroupsCpuSet;
+    netOptions.workerGroupsNum = netConfig.ipcWorkerGroupsNum;
+    if (mConfig->GetBasicConfig().dataChangeCallbackSwitch) {
+        netOptions.notifyWorkerGroups = netConfig.notifyWorkerGroups;
+        netOptions.notifyWorkerGroupsCpuSet = netConfig.notifyWorkerGroupsCpuSet;
+        netOptions.notifyWorkerGroupsNum = netConfig.notifyWorkerGroupsNum;
+        netOptions.notifyWorkerGroupsEnable = true;
+        netOptions.workerGroupsNum = netConfig.ipcWorkerGroupsNum + netConfig.notifyWorkerGroupsNum;
+    }
+    netOptions.role = NET_SERVER;
+}
 
+BResult MmsServer::InitUnicastNetEngine()
+{
     int16_t timeoutSec = mConfig->GetCmConfig().registeredTimeoutSec; // 同zk心跳超时
     auto &netConfig = mConfig->GetNetConfig();
     NetMemList memList;
@@ -426,40 +474,62 @@ BResult MmsServer::MmsUnicastNet()
     ChkTrue(ret == MMS_OK, ret, "Net engine initialize failed, result:" << ret << ".");
 
     mNetEngine->ResetLogLevel(mConfig->GetBasicConfig().logLevel);
+    return MMS_OK;
+}
 
+BResult MmsServer::RegisterServerChannelBrokenHandler()
+{
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (pid == 0) {
             NetReConnect(nodeId);
+            return;
+        }
+        if (mKvServer != nullptr) {
+            mKvServer->RemoveNotifyClient(pid);
         }
     };
-    ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    auto ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != MMS_OK) {
         LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
         return ret;
     }
+    return MMS_OK;
+}
+
+BResult MmsServer::InitNetNumaGroup(uint16_t groupNum)
+{
+    uint16_t numaId[MAX_NUMAS_NUM];
+    uint16_t numaNum;
+    auto ret = MmsMemMgr::Instance()->GetNumaMemDesc(numaId, numaNum);
+    ChkTrue(ret == MMS_OK, ret, "Mem mgr get k/v mem failed, result:" << ret << ".");
+    NumaGroupIndex::Instance()->SetNumaInfo(numaId, numaNum);
+    NumaGroupIndex::Instance()->SetGroupInfo(groupNum);
+    return MMS_OK;
+}
+
+BResult MmsServer::MmsUnicastNet()
+{
+    mNetEngine = MakeRef<NetEngine>();
+    ChkTrue(mNetEngine != nullptr, MMS_ALLOC_FAIL, "Make net engine failed.");
+
+    auto ret = InitUnicastNetEngine();
+    ChkTrue(ret == MMS_OK, ret, "Init unicast net engine failed, ret:" << ret << ".");
+    ret = RegisterServerChannelBrokenHandler();
+    ChkTrue(ret == MMS_OK, ret, "Register server channel broken handler failed, ret:" << ret << ".");
 
     NetOptions netOptions;
     FillNetOptions(netOptions);
     ret = mNetEngine->Start(netOptions);
     ChkTrue(ret == MMS_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
-    uint16_t numaId[MAX_NUMAS_NUM];
-    uint16_t numaNum;
-    ret = MmsMemMgr::Instance()->GetNumaMemDesc(numaId, numaNum);
-    ChkTrue(ret == MMS_OK, ret, "Mem mgr get k/v mem failed, result:" << ret << ".");
-    NumaGroupIndex::Instance()->SetNumaInfo(numaId, numaNum);
-    NumaGroupIndex::Instance()->SetGroupInfo(netOptions.workerGroupsNum);
+    ret = InitNetNumaGroup(netOptions.workerGroupsNum);
+    ChkTrue(ret == MMS_OK, ret, "Init net numa group failed, ret:" << ret << ".");
     if (!mConfig->GetBasicConfig().isSeparateMode) {
         LOG_INFO("Converge mode, no needed to init ipc services.");
         return MMS_OK;
     }
 
-    netOptions.protocol = ServiceProtocol::SHM;
-    netOptions.isBusyPolling = netConfig.isIpcBusyPolling;
-    netOptions.workerGroups = netConfig.ipcWorkerGroups;
-    netOptions.workerGroupsCpuSet = netConfig.ipcWorkerGroupsCpuSet;
-    netOptions.workerGroupsNum = netConfig.ipcWorkerGroupsNum;
-    netOptions.role = NET_SERVER;
+    FillIpcNetOptions(netOptions);
     ret = mNetEngine->Start(netOptions);
     ChkTrue(ret == MMS_OK, ret, "Startipc service failed, result:" << ret << ".");
 
@@ -518,6 +588,7 @@ BResult MmsServer::MmsCacheInit()
         return ret;
     }
 
+    mCache->SetArtSwitch(mConfig->GetBasicConfig().artQuerySwitch);
     mCache->ResetLogLevel(mConfig->GetBasicConfig().logLevel);
     return MMS_OK;
 }
@@ -768,7 +839,7 @@ void MmsServer::NetConnect(const std::map<uint16_t, CmNodeInfo> &nodeInfos)
         }
         LOG_INFO("Connect to node:" << it->second.id << ", ip:" << it->second.ip << ", port:" <<
             it->second.port << ".");
-        ConnectInfo info(localNid, 0, it->second.id, it->second.ip, it->second.port, NO_1);
+        ConnectInfo info({localNid, 0, it->second.id, it->second.ip, it->second.port, NO_1});
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             if (ret != MMS_OK) {
                 sleep(NO_1);
@@ -796,7 +867,7 @@ void MmsServer::NetReConnect(uint32_t peerId)
     }
 
     LOG_INFO("ReConnect to remote node:" << peerId << ", ip:" << ip << ", port:" << port << ".");
-    ConnectInfo info(localNid, 0, peerId, ip, port, NO_1);
+    ConnectInfo info({localNid, 0, peerId, ip, port, NO_1});
     auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
         if (ret != MMS_OK) {
             sleep(NO_1);

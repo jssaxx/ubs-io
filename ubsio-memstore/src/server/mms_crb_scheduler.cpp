@@ -573,7 +573,7 @@ BResult CrbScheduler::ProcessBucket(uint32_t bucketIndex, uint32_t &curItemNum, 
             continue;
         }
 
-        uint16_t keyLen = strlen(indexValue->key);
+        uint16_t keyLen = indexValue->keyLen;
         uint64_t needLen = IO_DESCRIPTION_LEN + keyLen + NO_1 + indexValue->totalDataLen;
         if (UNLIKELY(needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - IO_DATA_REQUEST_LEN))) {
             CacheReadUnLock(&bucketNode->status);
