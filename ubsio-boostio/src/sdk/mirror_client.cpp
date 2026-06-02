@@ -288,9 +288,12 @@ BResult MirrorClient::CreateDataMessageMemRemote()
         mDataMsgMemFd = -1;
         mDataMsgMemPool = nullptr;
     }  else {
-        mDataPoolFlagLock.LockWrite();
         mReleaseDataPoolFlag = false;
-        mDataPoolFlagLock.UnLock();
+        ret = PublishDataPoolContextNoLock();
+        if (UNLIKELY(ret != BIO_OK)) {
+            DestroyDataMessageMemNoLock();
+            return ret;
+        }
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize <<
             ", blockSize:" << mDataMsgMemBlockSize);
     }
@@ -330,9 +333,12 @@ BResult MirrorClient::CreateDataMessageMemLocal()
         mDataMsgMemBlockSize = NO_4096 * NO_1024;
         mDataMsgMemPool = nullptr;
     }  else {
-        mDataPoolFlagLock.LockWrite();
         mReleaseDataPoolFlag = false;
-        mDataPoolFlagLock.UnLock();
+        ret = PublishDataPoolContextNoLock();
+        if (UNLIKELY(ret != BIO_OK)) {
+            DestroyDataMessageMemNoLock();
+            return ret;
+        }
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize << ".");
     }
     return ret;
@@ -340,7 +346,8 @@ BResult MirrorClient::CreateDataMessageMemLocal()
 
 BResult MirrorClient::CreateDataMessageMem()
 {
-    DestroyDataMessageMem();
+    WriteLocker<ReadWriteLock> lock(&mDataPoolFlagLock);
+    DestroyDataMessageMemNoLock();
     if (mMode == CONVERGENCE) {
         return CreateDataMessageMemLocal();
     } else {
@@ -350,28 +357,165 @@ BResult MirrorClient::CreateDataMessageMem()
 
 void MirrorClient::DestroyDataMessageMem()
 {
-    mDataPoolFlagLock.LockWrite();
-    if (mDataMsgMemPool != nullptr) {
-        mDataMsgMemPool->Stop();
-        mDataMsgMemPool = nullptr;
-    }
-    if (mDataMsgMemAddr != nullptr) {
-        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
-        if (mMode == SEPARATES && mDataMsgMemSize != 0) {
-            if (munmap(mDataMsgMemAddr, mDataMsgMemSize) == -1) {
-                NET_LOG_ERROR("munmap data message memory failed.");
-            }
+    WriteLocker<ReadWriteLock> lock(&mDataPoolFlagLock);
+    DestroyDataMessageMemNoLock();
+}
+
+void MirrorClient::DestroyDataMessageMemNoLock()
+{
+    auto ctx = mCurrentDataPool;
+    if (ctx == nullptr && (mDataMsgMemPool != nullptr || mDataMsgMemAddr != nullptr)) {
+        ctx = std::shared_ptr<DataPoolContext>(new (std::nothrow) DataPoolContext());
+        if (ctx != nullptr) {
+            ctx->pool = mDataMsgMemPool;
+            ctx->addr = mDataMsgMemAddr;
+            ctx->size = mDataMsgMemSize;
+            ctx->fd = mDataMsgMemFd;
+            ctx->blockSize = mDataMsgMemBlockSize;
+            ctx->mr = mDataMsgMemMr;
         }
-        mDataMsgMemAddr = nullptr;
     }
-    if (mDataMsgMemFd >= 0) {
-        close(mDataMsgMemFd);
-        mDataMsgMemFd = -1;
+
+    mCurrentDataPool = nullptr;
+    mDataMsgMemPool = nullptr;
+    mDataMsgMemAddr = nullptr;
+    mDataMsgMemFd = -1;
+    if (ctx != nullptr) {
+        RetireDataPoolContextNoLock(ctx);
     }
     mDataMsgMemSize = 0;
     mDataMsgMemBlockSize = NO_4096 * NO_1024;
     mReleaseDataPoolFlag = true;
+}
+
+BResult MirrorClient::PublishDataPoolContextNoLock()
+{
+    auto ctx = std::shared_ptr<DataPoolContext>(new (std::nothrow) DataPoolContext());
+    if (UNLIKELY(ctx == nullptr)) {
+        CLIENT_LOG_ERROR("Alloc data pool context failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    ctx->pool = mDataMsgMemPool;
+    ctx->addr = mDataMsgMemAddr;
+    ctx->size = mDataMsgMemSize;
+    ctx->fd = mDataMsgMemFd;
+    ctx->blockSize = mDataMsgMemBlockSize;
+    ctx->mr = mDataMsgMemMr;
+    mCurrentDataPool = ctx;
+    return BIO_OK;
+}
+
+void MirrorClient::DestroyDataPoolContextNoLock(const std::shared_ptr<DataPoolContext> &ctx)
+{
+    if (ctx == nullptr) {
+        return;
+    }
+    if (ctx->pool != nullptr) {
+        ctx->pool->Stop();
+        ctx->pool = nullptr;
+    }
+    if (ctx->addr != nullptr) {
+        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(ctx->mr);
+        if (mMode == SEPARATES && ctx->size != 0) {
+            if (munmap(ctx->addr, ctx->size) == -1) {
+                NET_LOG_ERROR("munmap data message memory failed.");
+            }
+        }
+        ctx->addr = nullptr;
+    }
+    if (ctx->fd >= 0) {
+        close(ctx->fd);
+        ctx->fd = -1;
+    }
+}
+
+void MirrorClient::RetireDataPoolContextNoLock(const std::shared_ptr<DataPoolContext> &ctx)
+{
+    if (ctx == nullptr) {
+        return;
+    }
+    ctx->retired = true;
+    {
+        Locker<Lock> lock(&mDataPoolOwnerLock);
+        if (ctx->outstanding != 0) {
+            mRetiredDataPools.emplace_back(ctx);
+            return;
+        }
+    }
+    DestroyDataPoolContextNoLock(ctx);
+}
+
+BResult MirrorClient::BeginDataPoolUse()
+{
+    mDataPoolFlagLock.LockRead();
+    if (UNLIKELY(mReleaseDataPoolFlag || mDataMsgMemPool == nullptr || mDataMsgMemAddr == nullptr ||
+        mDataMsgMemMr.GetHcomMrs().empty())) {
+        mDataPoolFlagLock.UnLock();
+        CLIENT_LOG_ERROR("Data message memory pool not ready.");
+        return BIO_ALLOC_FAIL;
+    }
+    return BIO_OK;
+}
+
+void MirrorClient::EndDataPoolUse()
+{
     mDataPoolFlagLock.UnLock();
+}
+
+BResult MirrorClient::AllocDataPoolBlock(uintptr_t &address)
+{
+    BResult ret = mDataMsgMemPool->AllocOne(address);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+    {
+        Locker<Lock> lock(&mDataPoolOwnerLock);
+        if (UNLIKELY(mCurrentDataPool == nullptr || mCurrentDataPool->retired)) {
+            mDataMsgMemPool->ReleaseOne(address);
+            return BIO_ALLOC_FAIL;
+        }
+        mDataPoolOwners[address] = mCurrentDataPool;
+        mCurrentDataPool->outstanding++;
+    }
+    return BIO_OK;
+}
+
+void MirrorClient::ReleaseDataPoolBlock(uintptr_t address)
+{
+    if (address == 0) {
+        return;
+    }
+    std::shared_ptr<DataPoolContext> ctx = nullptr;
+    bool needDestroy = false;
+    {
+        Locker<Lock> lock(&mDataPoolOwnerLock);
+        auto it = mDataPoolOwners.find(address);
+        if (it == mDataPoolOwners.end()) {
+            CLIENT_LOG_WARN("Data pool block owner not found, address:" << address << ".");
+            return;
+        }
+        ctx = it->second;
+        mDataPoolOwners.erase(it);
+        if (ctx != nullptr && ctx->outstanding > 0) {
+            ctx->outstanding--;
+            needDestroy = ctx->retired && ctx->outstanding == 0;
+            if (needDestroy) {
+                for (auto iter = mRetiredDataPools.begin(); iter != mRetiredDataPools.end(); iter++) {
+                    if (*iter == ctx) {
+                        mRetiredDataPools.erase(iter);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (ctx != nullptr && ctx->pool != nullptr) {
+        ctx->pool->ReleaseOne(address);
+    }
+    if (needDestroy) {
+        DestroyDataPoolContextNoLock(ctx);
+    }
 }
 
 BResult MirrorClient::RecoverDataMessageMem()
@@ -1011,7 +1155,7 @@ inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum,
         if (taskResults[i].result == BIO_OK) {
             uint32_t basic = i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
             for (uint32_t j = 0; j < taskResults[i].count; j++) {
-                mDataMsgMemPool->ReleaseOne(valueAddrs[basic + j]);
+                ReleaseDataPoolBlock(valueAddrs[basic + j]);
             }
         }
     }
@@ -1126,17 +1270,9 @@ BResult MirrorClient::BatchGetRemote(MirrorBatchGetRemoteHbm &param)
 
 void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 {
-    if (mDataMsgMemPool == nullptr) {
-        return;
-    }
-    mDataPoolFlagLock.LockRead();
-    if (mReleaseDataPoolFlag == true) {
-        return;
-    }
     for (uint32_t i = 0; i < count; i++) {
-        mDataMsgMemPool->ReleaseOne(valueAddrs[i]);
+        ReleaseDataPoolBlock(valueAddrs[i]);
     }
-    mDataPoolFlagLock.UnLock();
 }
 
 BResult MirrorClient::AsyncGet(MirrorGet &param, AsyncOpParam &opParam)
@@ -1213,6 +1349,10 @@ BResult MirrorClient::BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param)
 
 BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 {
+    DataPoolGuard dataPoolGuard(*this);
+    if (UNLIKELY(dataPoolGuard.Result() != BIO_OK)) {
+        return dataPoolGuard.Result();
+    }
     BResult ret = BIO_OK;
     std::vector<uint32_t> nodes(param.count);
     std::unordered_map<uint16_t, BatchGetPlan> planSend;
@@ -1263,11 +1403,11 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
     for (uint32_t i = 0; i < param.count; i++) {
         param.results[i] = BIO_OK;
         uintptr_t address = 0;
-        BResult ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+        BResult ret = AllocDataPoolBlock(address);   // 从client shmem pool申请内存资源.
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
             for (uint32_t j = 0; j < i; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
+                ReleaseDataPoolBlock(param.valuesAddr[j]);  // rollback.
             }
             auto callbackIt = planSend.begin();
             for (uint16_t i = 0; i < planSend.size(); i++) {
@@ -1298,6 +1438,9 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
+        for (uint32_t i = 0; i < param.count; i++) {
+            ReleaseDataPoolBlock(param.valuesAddr[i]);
+        }
     }
 
     // todo 清理req;
@@ -1311,6 +1454,10 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 
 BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
 {
+    DataPoolGuard dataPoolGuard(*this);
+    if (UNLIKELY(dataPoolGuard.Result() != BIO_OK)) {
+        return dataPoolGuard.Result();
+    }
     BResult ret = BIO_OK;
     std::vector<uint32_t> nodes(param.count);
     std::unordered_map<uint16_t, BatchGetPlanHbm> planSend;
@@ -1396,7 +1543,7 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
                 plan.req->keysInfo[plan.index].memSize[j] = param.memSize[i][j];
             }
         } else {
-            ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+            ret = AllocDataPoolBlock(address);   // 从client shmem pool申请内存资源.
             if (UNLIKELY(ret != BIO_OK)) {
                 CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
                 BatchGetHbmRecycleResouces(i, param);
@@ -1427,7 +1574,7 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
         if (!mEnableTrance) {
             for (uint32_t j = 0; j < param.count; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valueAddrs[j]);  // rollback.
+                ReleaseDataPoolBlock(param.valueAddrs[j]);  // rollback.
             }
         }
     }
@@ -1443,6 +1590,10 @@ BResult MirrorClient::BatchGetRemoteImpl(MirrorBatchGetRemoteHbm &param)
 
 BResult MirrorClient::BatchGetLocalImpl(MirrorBatchGetLocalHbm &param)
 {
+    DataPoolGuard dataPoolGuard(*this);
+    if (UNLIKELY(dataPoolGuard.Result() != BIO_OK)) {
+        return dataPoolGuard.Result();
+    }
     size_t reqLen = sizeof(BatchGetLocalHbmRequest) + param.count * sizeof(GetKeyLocalHbmInfo);
     BatchGetLocalHbmRequest *req = reinterpret_cast<BatchGetLocalHbmRequest*>(malloc(reqLen));
     if (UNLIKELY(req == nullptr)) {
@@ -1454,11 +1605,11 @@ BResult MirrorClient::BatchGetLocalImpl(MirrorBatchGetLocalHbm &param)
     for (uint32_t i = 0; i < param.count; i++) {
         param.results[i] = BIO_OK;
         uintptr_t address = 0;
-        ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+        ret = AllocDataPoolBlock(address);   // 从client shmem pool申请内存资源.
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
             for (uint32_t j = 0; j < i; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
+                ReleaseDataPoolBlock(param.valuesAddr[j]);  // rollback.
             }
             free(req);
             return BIO_ALLOC_FAIL;
@@ -1481,7 +1632,7 @@ BResult MirrorClient::BatchGetLocalImpl(MirrorBatchGetLocalHbm &param)
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
         for (uint32_t j = 0; j < param.count; j++) {
-            mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
+            ReleaseDataPoolBlock(param.valuesAddr[j]);  // rollback.
         }
     }
     free(req);
@@ -2216,7 +2367,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     uintptr_t transMem = 0;
     TransData transData;
     if (ptEntry.copys[0].nodeId == mLocalNid.VNodeId() || !mEnableTrance) {
-        BResult ret = mDataMsgMemPool->AllocOne(address);
+        BResult ret = AllocDataPoolBlock(address);
         if (UNLIKELY(ret != BIO_OK)) {
             CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
             return BIO_ALLOC_FAIL;
@@ -2227,7 +2378,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
             CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
                 ", flowOffset:" << param.flowOffset << ", length:" << param.length <<
                 ", blockSize:" << mDataMsgMemBlockSize);
-            mDataMsgMemPool->ReleaseOne(address);
+            ReleaseDataPoolBlock(address);
             return BIO_ALLOC_FAIL;
         }
         
@@ -2262,7 +2413,7 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     if (tmp == nullptr) {
         CLIENT_LOG_ERROR("Alloc memory failed.");
         if (address) {
-            mDataMsgMemPool->ReleaseOne(address);
+            ReleaseDataPoolBlock(address);
         }
         if (transMem) {
             net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(transMem);
@@ -2370,7 +2521,7 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_destroy(&cbCtx.sem);
 
     if (req->mrAddress) {
-        mDataMsgMemPool->ReleaseOne(req->mrAddress);
+        ReleaseDataPoolBlock(req->mrAddress);
     }
     if (req->enableTrans || req->localTransAddr != 0) {
         net::BioClientNet::Instance()->GetTransNetEngine()->FreeOneBlock(req->localTransAddr);
@@ -2389,7 +2540,9 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
     AsyncPutCbCtx *cbCtx = new (std::nothrow) AsyncPutCbCtx;
     if (UNLIKELY(cbCtx == nullptr)) {
         CLIENT_LOG_ERROR("Alloc callback failed.");
-        net::BioClientNet::Instance()->Free(req->mrAddress);
+        if (req->mrAddress != 0) {
+            ReleaseDataPoolBlock(req->mrAddress);
+        }
         delete[] static_cast<uint8_t *>(static_cast<void *>(req));
         return BIO_ALLOC_FAIL;
     }
@@ -2397,6 +2550,11 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
     auto *ioStrategy = new (std::nothrow) std::atomic<uint32_t>(0);
     if (ioStrategy == nullptr) {
         CLIENT_LOG_ERROR("Alloc strategy failed.");
+        if (req->mrAddress != 0) {
+            ReleaseDataPoolBlock(req->mrAddress);
+        }
+        delete[] static_cast<uint8_t *>(static_cast<void *>(req));
+        delete cbCtx;
         return BIO_ALLOC_FAIL;
     }
 
@@ -2417,7 +2575,9 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             asyncPutCallback(context, cbCtx->result);
-            mDataMsgMemPool->ReleaseOne(req->mrAddress);
+            if (req->mrAddress != 0) {
+                ReleaseDataPoolBlock(req->mrAddress);
+            }
             if (cbCtx->result == BIO_OK) {
                 mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
                 mIoStrategy[ptEntry.ptId]->strategy.store((*ioStrategy).load());
@@ -2449,6 +2609,10 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
 
 BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 {
+    DataPoolGuard dataPoolGuard(*this);
+    if (UNLIKELY(dataPoolGuard.Result() != BIO_OK)) {
+        return dataPoolGuard.Result();
+    }
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
     BResult ret = BIO_OK;
@@ -2471,13 +2635,18 @@ BResult MirrorClient::SendPutRequest(CmPtInfo &ptEntry, MirrorPut &param)
 BResult MirrorClient::SendAsyncPutRequest(CmPtInfo &ptEntry, MirrorPut &param, BioAsyncPutCallback callback,
     void* context)
 {
+    BResult ret = BeginDataPoolUse();
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
     BIO_TRACE_START(SDK_TRACE_PUT_PREPARE);
     PutRequest *req = nullptr;
-    BResult ret = Prepare(ptEntry, param, req);
+    ret = Prepare(ptEntry, param, req);
     BIO_TRACE_END(SDK_TRACE_PUT_PREPARE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Prepare async put resource failed, ret:" << ret << ", key:" << param.key << ", length:" <<
             param.length << ", flowId:" << param.flowId << ", flowOffset:" << param.flowOffset << ".");
+        EndDataPoolUse();
         return ret;
     }
     req->dataCrc = mEnableCrc ? BioCrcUtil::Crc32(param.value, param.length) : 0;
@@ -2485,13 +2654,18 @@ BResult MirrorClient::SendAsyncPutRequest(CmPtInfo &ptEntry, MirrorPut &param, B
     BIO_TRACE_START(SDK_TRACE_PUT_SEND);
     ret = SendAsyncPutRequestImpl(ptEntry, param, req, callback, context);
     BIO_TRACE_END(SDK_TRACE_PUT_SEND, ret);
+    EndDataPoolUse();
     return ret;
 }
 
 BResult MirrorClient::GetServerRemote(GetRequest &req, uint16_t dstNid, char *value, uint64_t &realLen)
 {
+    DataPoolGuard dataPoolGuard(*this);
+    if (UNLIKELY(dataPoolGuard.Result() != BIO_OK)) {
+        return dataPoolGuard.Result();
+    }
     uintptr_t address = 0;
-    BResult ret = mDataMsgMemPool->AllocOne(address);
+    BResult ret = AllocDataPoolBlock(address);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc data message mem failed, ret:" << ret << ", length:" << req.length << ", page size:" <<
             net::BioClientNet::Instance()->GetDataPage() << ".");
@@ -2510,12 +2684,14 @@ BResult MirrorClient::GetServerRemote(GetRequest &req, uint16_t dstNid, char *va
             req.offset << ", length:" << req.length << ", dstNid:" << dstNid << ".");
     } else {
         if (rsp.num > SLICE_ADDR_SIZE) {
+            ReleaseDataPoolBlock(address);
             return BIO_INVALID_PARAM;
         }
         realLen = rsp.realLen;
         if (realLen > req.length) {
             CLIENT_LOG_ERROR("Read length greater than value size, realLen:" << realLen <<
                 ", size:" << mDataMsgMemBlockSize);
+            ReleaseDataPoolBlock(address);
             return BIO_INNER_ERR;
         }
 
@@ -2533,7 +2709,7 @@ BResult MirrorClient::GetServerRemote(GetRequest &req, uint16_t dstNid, char *va
             }
         }
     }
-    mDataMsgMemPool->ReleaseOne(address);
+    ReleaseDataPoolBlock(address);
     return ret;
 }
 
@@ -2932,9 +3108,13 @@ BResult MirrorClient::SendCheckUpdateReadyRequest()
 
 BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
+    DataPoolGuard dataPoolGuard(*this);
+    if (UNLIKELY(dataPoolGuard.Result() != BIO_OK)) {
+        return dataPoolGuard.Result();
+    }
     uint64_t maxSize = sizeof(ObjStat) * 1000U;
     uintptr_t address = 0;
-    BResult ret = mDataMsgMemPool->AllocOne(address);
+    BResult ret = AllocDataPoolBlock(address);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc rdma memory failed.");
         return BIO_ALLOC_FAIL;
@@ -2949,10 +3129,11 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
         BIO_OP_SDK_LIST, req, rsp);
     BIO_TP_END;
     if (ret != BIO_OK) {
-        mDataMsgMemPool->ReleaseOne(address);
+        ReleaseDataPoolBlock(address);
         return ret;
     }
     if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0)) {
+        ReleaseDataPoolBlock(address);
         return BIO_INNER_RETRY;
     }
 
@@ -2973,7 +3154,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
             objs.insert({ stat.key, stat });
         }
     }
-    mDataMsgMemPool->ReleaseOne(address);
+    ReleaseDataPoolBlock(address);
     return BIO_OK;
 }
 
