@@ -1,417 +1,578 @@
-# API参考
+# API 参考
 
 ## 介绍
 
-本文主要介绍UBS MemStore对外提供的接口。
+本文介绍 UBS MemStore 对外提供的 C API。接口定义以 `src/include/mms_c.h` 为准。
 
-- 编程语言
+UBS MemStore 主体使用 C/C++ 开发，对外提供 C 语言接口。调用方应先调用 `MmsInitialize` 初始化服务，再调用读写、查询、通知注册等接口，退出时调用 `MmsExit`。
 
-    UBS MemStore主体使用C/C++语言开发，对外提供C API。
+## 基本约定
 
-- 功能架构
+- 批量接口中，每个 item 都有独立的 `result` 字段，用于返回单条 key 的执行结果。
+- 批量接口整体返回值规则：全部成功返回 `RET_MMS_OK`；任意 item 失败时返回最后一个失败 item 的错误码。
+- key 统一使用 `const char *key + uint16_t keyLen` 表示，`keyLen` 不包含字符串结束符 `'\0'`。
+- `PutItems::isNotify` 和 `DeleteItems::isNotify` 用于控制单条 key 是否触发数据变更通知。全局通知开关关闭或 `isNotify` 为 0 时，不触发通知。
+- 前缀查询、范围查询和范围删除受 `mms.art.query.switch` 控制。开关关闭时，相关接口返回不可用错误。
+- 查询接口返回的资源必须使用 `MmsFreeResources` 释放。
 
-    UBS MemStore通过组播分发技术实现全副本、低时延的端到端读写能力，。
+## 错误码
 
-- API参考
+|错误码|取值|说明|
+|--|--:|--|
+|`RET_MMS_OK`|0|成功。|
+|`RET_MMS_PROTECTED`|1|写保护。|
+|`RET_MMS_ERROR`|2|未知错误。|
+|`RET_MMS_EPERM`|3|入参错误。|
+|`RET_MMS_BUSY`|4|服务忙，需要外部重试。|
+|`RET_MMS_NEED_RETRY`|5|需要重试。|
+|`RET_MMS_NOT_READY`|6|服务未就绪。|
+|`RET_MMS_NOT_FOUND`|7|key 不存在。|
+|`RET_MMS_CONFLICT`|8|key 冲突。|
+|`RET_MMS_MISS`|9|缓存未命中。|
+|`RET_MMS_NO_SPACE`|10|容量不足。|
+|`RET_MMS_UNAVAILABLE`|11|服务不可用。|
+|`RET_MMS_EXCEED_QUOTA`|12|超过配额限制。|
+|`RET_MMS_PT_FAULT`|13|分区故障。|
+|`RET_MMS_READ_EXCEED`|14|读取范围超过限制。|
+|`RET_MMS_EXISTS`|15|资源已存在。|
 
-    介绍应用开发过程中最常用和基础的API，建议使用UBS MemStore的开发者对这些API都有所了解。
+## 公共类型
 
-- 错误码
+### MmsOptions
 
-    介绍UBS MemStore的错误码名称、取值及部分常见错误码的处理方法。
+MMS 初始化配置。
 
-## CResult MmsInitialize
+```c
+typedef struct {
+    uint16_t netConnectCnt;
+    uint16_t netGroupNum;
+    uint8_t netIsBusyPolling;
+    uint8_t tlsEnable;
+    char certificationPath[PATH_MAX];
+    char caCerPath[PATH_MAX];
+    char caCrlPath[PATH_MAX];
+    char privateKeyPath[PATH_MAX];
+    char privateKeyPasswordPath[PATH_MAX];
+    char decrypterLibPath[PATH_MAX];
+    char opensslLibDir[PATH_MAX];
+} MmsOptions;
+```
 
-**函数定义**
+|字段| 说明                                                                |
+|--|-------------------------------------------------------------------|
+|`netConnectCnt`| 每个 channel 的网络连接数。                                                |
+|`netGroupNum`| IPC worker group 数量，需要与mms.conf中mms.net.ipc.worker.groups配置的组数一致。 |
+|`netIsBusyPolling`| 网络 polling 模式。0 表示 event polling；非 0 表示 busy polling。             |
+|`tlsEnable`| TLS 开关。0 表示关闭；非 0 表示开启。                                           |
+|`certificationPath`| 证书路径。                                                             |
+|`caCerPath`| CA 证书路径。                                                          |
+|`caCrlPath`| CA CRL 文件路径。                                                      |
+|`privateKeyPath`| 私钥路径。                                                             |
+|`privateKeyPasswordPath`| 私钥口令密文文件路径。                                                       |
+|`decrypterLibPath`| 证书解密函数动态库路径。                                                      |
+|`opensslLibDir`| OpenSSL 动态库目录。                                                    |
 
-MMS初始化接口
+### PutItems
 
-**实现方法**
+写入 item 描述。
 
-CResult MmsInitialize\(MmsOptions &options, ServicesCallback services\)
+```c
+typedef struct {
+    const char *key;
+    const char *value;
+    uint32_t valueLen;
+    uint16_t keyLen;
+    uint16_t isNotify;
+    char **valueAddr;
+    int32_t *result;
+} PutItems;
+```
 
-**参数说明**
-
-**表 1**  参数说明
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|options|MmsOptions|入参|SDK端通信配置参数|
-|services|ServicesCallbacktypedef void (*ServiceCallback)(bool serviceable)|入参|可服务订阅回调函数|
-
-**表 2**  详细参数说明
-
-|类型|结构体字段|说明|
+|字段|方向|说明|
 |--|--|--|
-|MmsOptions|netConnectCnt|每个通信channel的ep数|
-|netGroupNum|通信worker分组数量，分离部署时为配置项ipc.worker.groups的组数，融合部署自动计算|
-|netIsBusyPolling|busy polling 或者 event polling工作模式|
-|tlsEnable|安全开关。0：表示关闭。非0：表示打开。|
-|certificationPath|Client证书路径，安全使能时要求路径有效。|
-|caCerPath|CA证书路径，安全使能时要求路径有效。|
-|caCrlPath|吊销证书列表文件路径，可选。|
-|privateKeyPath|Client证书私钥路径，安全使能时要求路径有效。|
-|privateKeyPasswordPath|Client证书私钥口令密文的文件路径，安全使能时要求路径有效。|
-|decrypterLibPath|Client证书解密函数so文件路径，安全使能时要求路径有效。|
-|opensslLibDir|Client端openssl, crypto的so目录路径，可选，为空时使用默认版本，安全使能时要求路径有效。|
+|`key`|输入|key 首地址。|
+|`value`|输入|value 首地址。|
+|`valueLen`|输入|value 长度。|
+|`keyLen`|输入|key 长度，不包含 `'\0'`。|
+|`isNotify`|输入|是否触发数据变更通知。0 表示不通知；非 0 表示通知。|
+|`valueAddr`|输出|写入成功后返回底层存储数据的内存首地址。|
+|`result`|输出|单条 item 的执行结果。|
 
-**返回值**
+### GetItems
 
-|返回值|描述|
+读取 item 描述。
+
+```c
+typedef struct {
+    const char *key;
+    uint16_t keyLen;
+    uint32_t offset;
+    uint32_t length;
+    char **value;
+    uint32_t *realLength;
+    int32_t *result;
+} GetItems;
+```
+
+|字段|方向|说明|
+|--|--|--|
+|`key`|输入|key 首地址。|
+|`keyLen`|输入|key 长度，不包含 `'\0'`。|
+|`offset`|输入|读取起始偏移。|
+|`length`|输入|期望读取长度。|
+|`value`|输入/输出|若 `*value == NULL`，返回底层存储数据的内存首地址；否则将数据拷贝到 `*value` 指向的内存。|
+|`realLength`|输出|实际返回的数据长度。|
+|`result`|输出|单条 item 的执行结果。|
+
+### UpdateItems / ReplaceItems
+
+更新和替换 item 描述。`ReplaceItems` 与 `UpdateItems` 使用相同结构。
+
+```c
+typedef struct {
+    const char *key;
+    const char *value;
+    uint16_t keyLen;
+    uint32_t valueLen;
+    uint32_t offset;
+    int32_t *result;
+} UpdateItems, ReplaceItems;
+```
+
+|字段|方向|说明|
+|--|--|--|
+|`key`|输入|key 首地址。|
+|`value`|输入|待写入的数据首地址。|
+|`keyLen`|输入|key 长度，不包含 `'\0'`。|
+|`valueLen`|输入|待写入的数据长度。|
+|`offset`|输入|写入起始偏移。|
+|`result`|输出|单条 item 的执行结果。|
+
+### DeleteItems
+
+删除 item 描述。
+
+```c
+typedef struct {
+    const char *key;
+    uint16_t keyLen;
+    uint16_t isNotify;
+    int32_t *result;
+} DeleteItems;
+```
+
+|字段|方向|说明|
+|--|--|--|
+|`key`|输入|key 首地址。|
+|`keyLen`|输入|key 长度，不包含 `'\0'`。|
+|`isNotify`|输入|是否触发数据变更通知。0 表示不通知；非 0 表示通知。|
+|`result`|输出|单条 item 的执行结果。|
+
+### ValueInfo
+
+前缀查询和范围查询返回的 key/value 描述。
+
+```c
+typedef struct {
+    char *key;
+    char *value;
+    uint64_t length;
+} ValueInfo;
+```
+
+|字段|说明|
 |--|--|
-|RET_MMS_OK|初始化成功。|
+|`key`|匹配到的 key。|
+|`value`|匹配到的 value。|
+|`length`|value 长度。|
+
+### 数据变更通知类型
+
+```c
+typedef enum {
+    OP_PUT = 0,
+    OP_DELETE = 1,
+    OP_BUTT
+} OperateType;
+
+typedef void (*NotifyCallback)(const char *key, OperateType opType);
+```
+
+当前通知类型包括：
+
+|类型|说明|
+|--|--|
+|`OP_PUT`|写入通知。|
+|`OP_DELETE`|删除通知。|
+
+### 服务状态回调
+
+```c
+typedef void (*ServiceCallback)(uint8_t serviceable);
+```
+
+`serviceable` 为 0 表示不可服务，非 0 表示可服务。
+
+## MmsInitialize
+
+### 功能
+
+初始化 MMS 服务。
+
+### 函数原型
+
+```c
+CResult MmsInitialize(const MmsOptions *options, ServiceCallback service);
+```
+
+### 参数
+
+|参数|方向|说明|
+|--|--|--|
+|`options`|输入|初始化配置。|
+|`service`|输入|服务状态回调函数。|
+
+### 返回值
+
+|返回值|说明|
+|--|--|
+|`RET_MMS_OK`|初始化成功。|
 |其它|初始化失败。|
 
-## CResult MmsRegisterCallback
+## MmsRegisterNotifyCallback
 
-**函数定义**
+### 功能
 
-MMS注册数据变更通知函数
+注册数据变更通知回调函数。
 
-**实现方法**
+### 函数原型
 
-CResult MmsRegisterCallback\(NotifyCallback callback\)
+```c
+CResult MmsRegisterNotifyCallback(NotifyCallback callback);
+```
 
-**参数说明**
+### 参数
 
-**表 1**  参数说明
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|callback|NotifyCallback|入参|数据变更通知回调函数|
-
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-| NotifyCallback|typedef void (\*NotifyCallback)(const char \*key, OperateType opType) | 数据变更通知回调函数|
-|OperateType|typedef enum {OP_PUT = 0,OP_UPDATE = 1,OP_DELETE = 2,OP_REPLACE = 3,OP_BUTT} OperateType|数据变更类型|
+|`callback`|输入|数据变更通知回调函数。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|注册成功。|
+|`RET_MMS_OK`|注册成功。|
 |其它|注册失败。|
 
-## void MmsExit
+## MmsExit
 
-**函数定义**
+### 功能
 
-MMS退出函数
+退出 MMS 服务。
 
-**实现方法**
+### 函数原型
 
-void MmsExit\(void\)
+```c
+void MmsExit(void);
+```
 
-**参数说明**
+### 参数
 
-无参数
+无。
 
-**返回值**
+### 返回值
 
-无返回值
+无。
 
-## CResult MmsPut
+## MmsPut
 
-**函数定义**
+### 功能
 
-MMS写接口
+批量写入 key/value。
 
-**实现方法**
+### 函数原型
 
-CResult MmsPut\(uint64\_t userId, PutItems \*itemList, uint32\_t num\)
+```c
+CResult MmsPut(PutItems *itemList, uint32_t itemNum);
+```
 
-**参数说明**
+### 参数
 
-**表 1**  参数说明
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|userId|uint64_t|入参|用户业务ID|
-|itemList|PutItems *|入参|KEY/VALUE描述信息|
-|num|uint32_t|入参|本次批量写入KEY/VALUE的个数|
-
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-|PutItems|typedef struct {char \*key;char \*value;uint64_t length;} PutItems|KEY/VALUE描述信息结构体限制：单组key长度(包含'\0')+value长度不能超过mms.net.message.max_buff_size - 48B|
+|`itemList`|输入/输出|写入 item 数组。|
+|`itemNum`|输入|item 数量。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|写入成功。|
-|其它|写入失败。|
+|`RET_MMS_OK`|全部 item 写入成功。|
+|其它|至少一个 item 写入失败，返回最后一个失败 item 的错误码。|
 
-## CResult MmsGet
+### 注意事项
 
-**函数定义**
+- 每个 item 的 `result` 返回该 key 的执行结果。
+- 每个 item 的 `valueAddr` 返回实际写入后的内存地址。
+- `isNotify` 仅表示该 item 是否请求通知；最终是否通知还受全局通知开关控制。
 
-MMS读接口
+## MmsGet
 
-**实现方法**
+### 功能
 
-CResult MmsGet\(uint64\_t userId, GetItems \*itemList, uint32\_t itemNum\);
+批量读取 key/value。
 
-**参数说明**
+### 函数原型
 
-**表 1**  参数说明
+```c
+CResult MmsGet(GetItems *itemList, uint32_t itemNum);
+```
 
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|userId|uint64_t|入参|用户业务ID|
-|itemList|GetItems *|出参、出参|KEY/VALUE描述信息|
-|itemNum|uint32_t|入参|本次批量读取KEY/VALUE的个数|
+### 参数
 
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-|GetItems|typedef struct {char \*key;uint64_t offset; // 偏移量uint64_t length; // 本次需要读取的数据长度char \*value;uint64_t \*realLength; //本次读取到的实际数据长度} GetItems|KEY/VALUE描述信息结构体，用于存储本次读取到的数据信息|
+|`itemList`|输入/输出|读取 item 数组。|
+|`itemNum`|输入|item 数量。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|读取成功。|
-|其它|读取失败。|
+|`RET_MMS_OK`|全部 item 读取成功。|
+|其它|至少一个 item 读取失败，返回最后一个失败 item 的错误码。|
 
-## CResult MmsUpdate
+### 注意事项
 
-**函数定义**
+- 若 `GetItems::value` 指向的指针为 `NULL`，接口返回底层存储数据的内存首地址，不执行 value 拷贝。
+- 若 `GetItems::value` 指向的指针非 `NULL`，接口将读取到的数据拷贝到调用方提供的内存中。
+- 免拷贝返回的内存由 MMS 管理，调用方不得释放。
 
-MMS更新接口
+## MmsUpdate
 
-**实现方法**
+### 功能
 
-CResult MmsUpdate\(uint64\_t userId, UpdateItems \*itemList, uint32\_t itemNum\)
+批量更新已存在 key 的部分 value。
 
-**参数说明**
+### 函数原型
 
-**表 1**  参数说明
+```c
+CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum);
+```
 
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|userId|uint64_t|入参|用户业务ID|
-|itemList|UpdateItems *|入参|KEY/VALUE描述信息|
-|itemNum|uint32_t|入参|本次批量更新KEY/VALUE的个数|
+### 参数
 
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-|UpdateItems|typedef struct {char \*key;char \*value;uint64_t offset;uint64_t length;} UpdateItems|KEY/VALUE描述信息结构体限制：单组key长度(包含'\0')+value长度不能超过mms.net.message.max_buff_size - 48B|
+|`itemList`|输入/输出|更新 item 数组。|
+|`itemNum`|输入|item 数量。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|更新成功。|
-|其它|更新失败。|
+|`RET_MMS_OK`|全部 item 更新成功。|
+|其它|至少一个 item 更新失败，返回最后一个失败 item 的错误码。|
 
-## CResult MmsReplace
+## MmsDelete
 
-**函数定义**
+### 功能
 
-MMS Replace接口，有则更新，无则写入
+批量删除 key。
 
-**实现方法**
+### 函数原型
 
-CResult MmsReplace\(uint64\_t userId, ReplaceItems \*itemList, uint32\_t itemNum\)
+```c
+CResult MmsDelete(DeleteItems *itemList, uint32_t itemNum);
+```
 
-**参数说明**
+### 参数
 
-**表 1**  参数说明
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|userId|uint64_t|入参|用户业务ID|
-|itemList|ReplaceItems *|入参|KEY/VALUE描述信息|
-|itemNum|uint32_t|入参|本次批量Replace的KEY/VALUE的个数|
-
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-|ReplaceItems|typedef struct {char \*key;char \*value;uint64_t offset;uint64_t length;} ReplaceItems|KEY/VALUE描述信息结构体限制：单组key长度(包含'\0')+value长度不能超过mms.net.message.max_buff_size - 48B|
+|`itemList`|输入/输出|删除 item 数组。|
+|`itemNum`|输入|item 数量。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|Replace成功。|
-|其它|Replace失败。|
+|`RET_MMS_OK`|全部 item 删除成功。|
+|其它|至少一个 item 删除失败，返回最后一个失败 item 的错误码。|
 
-## CResult MmsDelete
+### 注意事项
 
-**函数定义**
+`isNotify` 仅表示该 item 是否请求通知；最终是否通知还受全局通知开关控制。
 
-MMS删除接口
+## MmsReplace
 
-**实现方法**
+### 功能
 
-CResult MmsDelete\(uint64\_t userId, DeleteItems \*itemList, uint32\_t itemNum\)
+批量替换 key/value。key 已存在时更新，key 不存在时写入。
 
-**参数说明**
+### 函数原型
 
-**表 1**  参数说明
+```c
+CResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum);
+```
 
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|userId|uint64_t|入参|用户业务ID|
-|itemList|DeleteItems *|入参|KEY/VALUE描述信息|
-|itemNum|uint32_t|入参|本次批量删除KEY/VALUE的个数|
+### 参数
 
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-|DeleteItems|typedef struct {char *key;} DeleteItems|KEY描述信息结构体|
+|`itemList`|输入/输出|替换 item 数组。|
+|`itemNum`|输入|item 数量。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|删除成功。|
+|`RET_MMS_OK`|全部 item 替换成功。|
+|其它|至少一个 item 替换失败，返回最后一个失败 item 的错误码。|
+
+## MmsGetValuesByPrefix
+
+### 功能
+
+按 key 前缀查询匹配到的 key/value。
+
+> [!TIP]
+> 前缀查询会一次性返回所有匹配数据。如果匹配数据量过大，可能导致内存压力过高。调用方应确保查询结果规模可控。
+
+### 函数原型
+
+```c
+CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
+```
+
+### 参数
+
+|参数|方向|说明|
+|--|--|--|
+|`prefix`|输入|key 前缀。|
+|`valueInfoItems`|输出|匹配结果数组。|
+|`itemNum`|输出|匹配结果数量。|
+
+### 返回值
+
+|返回值|说明|
+|--|--|
+|`RET_MMS_OK`|查询成功。|
+|其它|查询失败。|
+
+### 注意事项
+
+- 该接口受 `mms.art.query.switch` 控制。
+- 成功返回且 `*valueInfoItems != NULL` 时，调用方必须调用 `MmsFreeResources` 释放资源。
+
+## MmsGetValuesByRange
+
+### 功能
+
+按 key 范围查询匹配到的 key/value，范围包含 `start` 和 `end`。
+
+> [!TIP]
+> 范围查询会一次性返回所有匹配数据。如果匹配数据量过大，可能导致内存压力过高。调用方应确保查询结果规模可控。
+
+### 函数原型
+
+```c
+CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
+```
+
+### 参数
+
+|参数|方向|说明|
+|--|--|--|
+|`start`|输入|范围起始 key，包含该 key。|
+|`end`|输入|范围结束 key，包含该 key，要求 `start <= end`。|
+|`valueInfoItems`|输出|匹配结果数组。|
+|`itemNum`|输出|匹配结果数量。|
+
+### 返回值
+
+|返回值|说明|
+|--|--|
+|`RET_MMS_OK`|查询成功。|
+|其它|查询失败。|
+
+### 注意事项
+
+- 该接口受 `mms.art.query.switch` 控制。
+- 成功返回且 `*valueInfoItems != NULL` 时，调用方必须调用 `MmsFreeResources` 释放资源。
+
+## MmsBatchDeleteByRange
+
+### 功能
+
+按 key 范围删除匹配到的 key/value，范围包含 `start` 和 `end`。
+
+### 函数原型
+
+```c
+CResult MmsBatchDeleteByRange(const char *start, const char *end);
+```
+
+### 参数
+
+|参数|方向|说明|
+|--|--|--|
+|`start`|输入|范围起始 key，包含该 key。|
+|`end`|输入|范围结束 key，包含该 key，要求 `start <= end`。|
+
+### 返回值
+
+|返回值|说明|
+|--|--|
+|`RET_MMS_OK`|删除成功。|
 |其它|删除失败。|
 
-## CResult MmsStartCatchUpTask
+### 注意事项
 
-**函数定义**
+该接口受 `mms.art.query.switch` 控制。
 
-MMS数据同步恢复接口
+## MmsFreeResources
 
-**实现方法**
+### 功能
 
-CResult MmsStartCatchUpTask\(void\)
+释放 `MmsGetValuesByPrefix` 或 `MmsGetValuesByRange` 返回的资源。
 
-**参数说明**
+### 函数原型
 
-无参数
+```c
+void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
+```
 
-**返回值**
+### 参数
 
-|返回值|描述|
-|--|--|
-|RET_MMS_OK|操作成功。|
-|其它|操作失败。|
-
-## CResult MmsGetValuesByPrefix
-
->[!TIP] 须知
->前缀查询会把所有匹配到的数据全部返回给上层，如果匹配到的数据量过大，可能会把设备上的物理内存耗尽，从而导致oom，上层应用应该保证查询的数据量在可接受的内存范围内。
-
-**函数定义**
-
-MMS前缀查询接口，返回与指定前缀匹配的所有的key及其value。
-
-**实现方法**
-
-CResult MmsGetValuesByPrefix\(const char \*prefix, ValueInfo \*\*valueInfoItems, uint64\_t \*itemNum\);
-
-**参数说明**
-
-**表 1**  参数说明
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|prefix|const char *|入参|要匹配key的前缀。|
-|valueInfoItems|ValueInfo **|出参|用于填充匹配到的key、value数据。|
-|itemNum|uint64_t *|出参|匹配到的key、value个数。|
-
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
+|参数|方向|说明|
 |--|--|--|
-|GetItems|typedef struct {char \*key;char \*value;uint64_t length;} ValueInfo;|KEY/VALUE描述信息结构体，用于存储本次读取到的数据信息。|
+|`valueInfoItems`|输入/输出|查询接口返回的结果数组。释放后会置空。|
+|`itemNum`|输入|结果数组元素数量。|
 
-**返回值**
+### 返回值
 
-|返回值|描述|
+无。
+
+## MmsStartCatchUpTask
+
+### 功能
+
+启动恢复追平任务。
+
+### 函数原型
+
+```c
+CResult MmsStartCatchUpTask(void);
+```
+
+### 参数
+
+无。
+
+### 返回值
+
+|返回值|说明|
 |--|--|
-|RET_MMS_OK|读取成功。|
-|其它|读取失败。|
-
-## CResult MmsGetValuesByRange
-
->[!TIP] 须知
->范围查询会把所有匹配到的数据全部返回给上层，如果匹配到的数据量过大，可能会把设备上的物理内存耗尽，从而导致oom，上层应用应该保证查询的数据量在可接受的内存范围内。
-
-**函数定义**
-
-MMS范围查询接口，返回与指定区间范围匹配的所有的key及其value。
-
-**实现方法**
-
-CResult MmsGetValuesByRange\(const char \*start, const char \*end, ValueInfo \*\*valueInfoItems, uint64\_t \*itemNum\);
-
-**参数说明**
-
-**表 1**  参数说明
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|start|const char *|入参|要匹配key的范围的开始(包含start)|
-|end|const char *|入参|要匹配key的范围的结束(包含end)，start <= end|
-|valueInfoItems|ValueInfo **|出参|用于填充匹配到的key、value数据|
-|itemNum|uint64_t *|出参|匹配到的key、value个数|
-
-**表 2**  详细参数说明
-
-|类型|类型定义|说明|
-|--|--|--|
-|GetItems|typedef struct {char \*key;char \*value;uint64_t length;} ValueInfo;|KEY/VALUE描述信息结构体，用于存储本次读取到的数据信息|
-
-**返回值**
-
-|返回值|描述|
-|--|--|
-|RET_MMS_OK|读取成功。|
-|其它|读取失败。|
-
-## CResult MmsBatchDeleteByRange
-
-**函数定义**
-
-MMS范围删除接口，删除所有与指定范围匹配的所有的key及其value。
-
-**实现方法**
-
-CResult MmsBatchDeleteByRange\(const char \*start, const char \*end\);
-
-**参数说明**
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|start|const char *|入参|要匹配key的范围的开始(包含start)。|
-|end|const char *|入参|要匹配key的范围的结束(包含end), start <= end。|
-
-**返回值**
-
-|返回值|描述|
-|--|--|
-|RET_MMS_OK|删除成功。|
-|其它|删除失败。|
-
-## void MmsFreeResources
-
-**函数定义**
-
-MMS内存释放函数，用于释放前缀查询、范围查询的内存。
-
-**实现方法**
-
-void MmsFreeResources\(ValueInfo \*\*valueInfoItems, uint64\_t itemNum\);
-
-**参数说明**
-
-|参数名|数据类型|参数类型|描述|
-|--|--|--|--|
-|valueInfoItems|ValueInfo **|入参|前缀查询、范围查询结果的内存指针|
-|itemNum|uint64_t|入参|前缀查询、范围查询结果的个数|
-
-**返回值**
-
-无返回值
+|`RET_MMS_OK`|启动成功。|
+|其它|启动失败。|
