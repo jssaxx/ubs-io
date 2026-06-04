@@ -26,7 +26,7 @@
     mms console start success.
     ```
 
-    > [!NOTICE] mms\_console文件只需要在分离部署场景执行，在融合场景不需要执行。
+    > 注意：mms\_console文件只需要在分离部署场景执行，在融合场景不需要执行。
 
 3. 启动cli\_server
 
@@ -47,7 +47,7 @@
      600      1    mms_c
     ```
 
-   > [!NOTICE] 600是client的编号，分离部署起mms_console后才有，800是server的编号。
+   > 注意：600是client的编号，分离部署起mms_console后才有，800是server的编号。
 
 5. 绑定client端进程
 
@@ -56,7 +56,7 @@
     Attach AppId<600> success
     ```
 
-   > [!NOTICE] 分离部署就attach 600，融合部署attach 800。
+   > 注意：分离部署就attach 600，融合部署attach 800。
 
 ## 测试指令
 
@@ -104,7 +104,7 @@ exit
     exit console
 ```
 
-> [!NOTICE]
+> 注意：
 >
 > 所有指令都要在运行cli\_client后的命令行中执行。
 >
@@ -183,7 +183,7 @@ root:/cli> mms trace show
 root:/cli> mms trace clear
 ```
 
-> [!NOTICE] mms perf put 1 1 8 100 0 1 32 20命令执行后，1KB IO会被mms set永久覆盖为1B。
+> 注意：mms perf put 1 1 8 100 0 1 32 20命令执行后，1KB IO会被mms set永久覆盖为1B。
 
 ## 测试7:3读写混合
 
@@ -197,4 +197,4 @@ root:/cli> mms trace show
 root:/cli> mms trace clear
 ```
 
-> [!NOTICE] perf mixes默认读写比列是7:3, 可以通过更改命令最后一个参数readRate来实现不同的比例，比如填8，那么读写比例就是8:2。
+> 注意：perf mixes默认读写比列是7:3, 可以通过更改命令最后一个参数readRate来实现不同的比例，比如填8，那么读写比例就是8:2。
