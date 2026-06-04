@@ -1399,7 +1399,6 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         it++;
     }
 
-
     for (uint32_t i = 0; i < param.count; i++) {
         param.results[i] = BIO_OK;
         uintptr_t address = 0;
