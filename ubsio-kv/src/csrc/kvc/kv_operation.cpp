@@ -181,10 +181,12 @@ int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::ve
             auto keyCopy = key[i];
             auto valueCopy = value[i];
             auto lengthCopy = lengths[i];
-            std::function<void()> func = [this, index, keyCopy, valueCopy, lengthCopy, &results, keySize, &sem, totalSize]() {
+            std::function<void()> func = [this, index, keyCopy, valueCopy, lengthCopy,
+                &results, keySize, &sem, totalSize]() {
                 auto ret = KvPutData(keyCopy, valueCopy, lengthCopy);
                 if (ret != UBSIO_KVC_OK) {
-                    LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << totalSize << " i:" << index);
+                    LOG_ERROR("Batch put data failed, ret: " << ret
+                        << " batch num: " << totalSize << " i:" << index);
                 }
                 results[index] = ret;
                 if (keySize->fetch_sub(1) == 1) {
@@ -217,10 +219,12 @@ int32_t KvOperation::BatchKvDeleteKey(const std::vector<std::string> &key, std::
         for (uint32_t i = start; i < end; i++) {
             auto index = i;
             auto keyCopy = key[i];
-            std::function<void()> func = [this, index, keyCopy, &results, keySize, &sem, totalSize]() {
+            std::function<void()> func = [this, index, keyCopy, &results,
+                keySize, &sem, totalSize]() {
                 auto ret = KvDeleteKey(keyCopy);
                 if (ret != UBSIO_KVC_OK) {
-                    LOG_ERROR("Batch delete key failed, ret: " << ret << " batch num: " << totalSize << " i:" << index);
+                    LOG_ERROR("Batch delete key failed, ret: " << ret
+                        << " batch num: " << totalSize << " i:" << index);
                 }
                 results[index] = ret;
                 if (keySize->fetch_sub(1) == 1) {
@@ -254,10 +258,12 @@ int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std:
         for (uint32_t i = start; i < end; i++) {
             auto index = i;
             auto keyCopy = key[i];
-            std::function<void()> func = [this, index, keyCopy, &lengths, &results, keySize, &sem, totalSize]() {
+            std::function<void()> func = [this, index, keyCopy, &lengths, &results,
+                keySize, &sem, totalSize]() {
                 auto ret = KvGetLengthKey(keyCopy, lengths[index]);
                 if (ret != UBSIO_KVC_OK) {
-                    LOG_ERROR("Batch get length failed, ret: " << ret << " batch num: " << totalSize << " i:" << index);
+                    LOG_ERROR("Batch get length failed, ret: " << ret
+                        << " batch num: " << totalSize << " i:" << index);
                 }
                 results[index] = ret;
                 if (keySize->fetch_sub(1) == 1) {
