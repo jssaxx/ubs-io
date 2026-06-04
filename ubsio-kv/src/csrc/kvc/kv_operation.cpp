@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <cstring>
 #include <vector>
+#include <memory>
 #include "bio_c.h"
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_err.h"
@@ -25,6 +26,7 @@ namespace ubsio {
 
 KvOperation *KvOperation::gInstance = nullptr;
 std::mutex KvOperation::gLock;
+constexpr uint32_t BATCH_LIMIT = 1000;
 
 int32_t KvOperation::Initialize(const std::string &path)
 {
@@ -167,95 +169,118 @@ int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *
 int32_t KvOperation::BatchKvPutData(const std::vector<std::string> &key, std::vector<void*> &value,
     std::vector<size_t> &lengths, std::vector<int> &results)
 {
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
-    for (auto i = 0; i < key.size(); i++) {
-        auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = KvPutData(key[index], value[index], lengths[index]);
-            if (ret != UBSIO_KVC_OK) {
-                LOG_ERROR("Batch put data failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
-            }
-            results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
-                sem_post(&sem);
-            }
-        };
+    auto totalSize = key.size();
+    for (uint32_t start = 0; start < totalSize; start += BATCH_LIMIT) {
+        sem_t sem;
+        sem_init(&sem, 0, 0);
+        uint32_t end = std::min(start + BATCH_LIMIT, (uint32_t)totalSize);
+        uint32_t batchSize = end - start;
+        auto keySize = std::make_shared<std::atomic<uint32_t>>(batchSize);
+        for (uint32_t i = start; i < end; i++) {
+            auto index = i;
+            auto keyCopy = key[i];
+            auto valueCopy = value[i];
+            auto lengthCopy = lengths[i];
+            std::function<void()> func = [this, index, keyCopy, valueCopy, lengthCopy,
+                &results, keySize, &sem, totalSize]() {
+                auto ret = KvPutData(keyCopy, valueCopy, lengthCopy);
+                if (ret != UBSIO_KVC_OK) {
+                    LOG_ERROR("Batch put data failed, ret: " << ret
+                        << " batch num: " << totalSize << " i:" << index);
+                }
+                results[index] = ret;
+                if (keySize->fetch_sub(1) == 1) {
+                    sem_post(&sem);
+                }
+            };
 
-        auto result = mKvExecutor->Execute(func);
-        if (!result) {
-            LOG_ERROR("Execute batch put data, batch num: " << key.size() << " i:" << i);
-            sem_destroy(&sem);
-            return UBSIO_KVC_ERR;
+            auto result = mKvExecutor->Execute(func);
+            if (!result) {
+                LOG_ERROR("Execute batch put data, batch num: " << totalSize << " i:" << i);
+                sem_destroy(&sem);
+                return UBSIO_KVC_ERR;
+            }
         }
+        sem_wait(&sem);
+        sem_destroy(&sem);
     }
-    sem_wait(&sem);
-    sem_destroy(&sem);
     return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::BatchKvDeleteKey(const std::vector<std::string> &key, std::vector<int> &results)
 {
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
-    for (auto i = 0; i < key.size(); i++) {
-        auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = KvDeleteKey(key[index]);
-            if (ret != UBSIO_KVC_OK) {
-                LOG_ERROR("Batch delete key failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
-            }
-            results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
-                sem_post(&sem);
-            }
-        };
+    auto totalSize = key.size();
+    for (uint32_t start = 0; start < totalSize; start += BATCH_LIMIT) {
+        sem_t sem;
+        sem_init(&sem, 0, 0);
+        uint32_t end = std::min(start + BATCH_LIMIT, (uint32_t)totalSize);
+        uint32_t batchSize = end - start;
+        auto keySize = std::make_shared<std::atomic<uint32_t>>(batchSize);
+        for (uint32_t i = start; i < end; i++) {
+            auto index = i;
+            auto keyCopy = key[i];
+            std::function<void()> func = [this, index, keyCopy, &results,
+                keySize, &sem, totalSize]() {
+                auto ret = KvDeleteKey(keyCopy);
+                if (ret != UBSIO_KVC_OK) {
+                    LOG_ERROR("Batch delete key failed, ret: " << ret
+                        << " batch num: " << totalSize << " i:" << index);
+                }
+                results[index] = ret;
+                if (keySize->fetch_sub(1) == 1) {
+                    sem_post(&sem);
+                }
+            };
 
-        auto result = mKvExecutor->Execute(func);
-        if (!result) {
-            LOG_ERROR("Execute batch delete key, batch num: " << key.size() << " i:" << i);
-            sem_destroy(&sem);
-            return UBSIO_KVC_ERR;
+            auto result = mKvExecutor->Execute(func);
+            if (!result) {
+                LOG_ERROR("Execute batch delete key, batch num: " << totalSize << " i:" << i);
+                sem_destroy(&sem);
+                return UBSIO_KVC_ERR;
+            }
         }
+        sem_wait(&sem);
+        sem_destroy(&sem);
     }
-    sem_wait(&sem);
-    sem_destroy(&sem);
     return UBSIO_KVC_OK;
 }
 
 int32_t KvOperation::BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths,
                                        std::vector<int> &results)
 {
-    sem_t sem;
-    sem_init(&sem, 0, 0);
-    std::atomic<uint32_t> keySize(key.size());
-    for (auto i = 0; i < key.size(); i++) {
-        auto index = i;
-        std::function<void()> func = [&, index]() {
-            auto ret = KvGetLengthKey(key[index], lengths[index]);
-            if (ret != UBSIO_KVC_OK) {
-                LOG_ERROR("Batch get length failed, ret: " << ret << " batch num: " << key.size() << " i:" << index);
-            }
-            results[index] = ret;
-            if (keySize.fetch_sub(1) == 1) {
-                // 最后一个任务唤醒主线程
-                sem_post(&sem);
-            }
-        };
+    auto totalSize = key.size();
+    for (uint32_t start = 0; start < totalSize; start += BATCH_LIMIT) {
+        sem_t sem;
+        sem_init(&sem, 0, 0);
+        uint32_t end = std::min(start + BATCH_LIMIT, (uint32_t)totalSize);
+        uint32_t batchSize = end - start;
+        auto keySize = std::make_shared<std::atomic<uint32_t>>(batchSize);
+        for (uint32_t i = start; i < end; i++) {
+            auto index = i;
+            auto keyCopy = key[i];
+            std::function<void()> func = [this, index, keyCopy, &lengths, &results,
+                keySize, &sem, totalSize]() {
+                auto ret = KvGetLengthKey(keyCopy, lengths[index]);
+                if (ret != UBSIO_KVC_OK) {
+                    LOG_ERROR("Batch get length failed, ret: " << ret
+                        << " batch num: " << totalSize << " i:" << index);
+                }
+                results[index] = ret;
+                if (keySize->fetch_sub(1) == 1) {
+                    sem_post(&sem);
+                }
+            };
 
-        auto result = mKvExecutor->Execute(func);
-        if (!result) {
-            LOG_ERROR("Execute batch get length, batch num: " << key.size() << " i:" << i);
-            sem_destroy(&sem);
-            return UBSIO_KVC_ERR;
+            auto result = mKvExecutor->Execute(func);
+            if (!result) {
+                LOG_ERROR("Execute batch get length, batch num: " << totalSize << " i:" << i);
+                sem_destroy(&sem);
+                return UBSIO_KVC_ERR;
+            }
         }
+        sem_wait(&sem);
+        sem_destroy(&sem);
     }
-    sem_wait(&sem);
-    sem_destroy(&sem);
     return UBSIO_KVC_OK;
 }
 }; // namespace ubsio
