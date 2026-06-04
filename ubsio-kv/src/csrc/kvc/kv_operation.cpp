@@ -57,8 +57,7 @@ int32_t KvOperation::KvPutData(const std::string &key, void *value, size_t len)
         LOG_ERROR("Calc location failed, status:" << status);
         return UBSIO_KVC_ERR;
     }
-    std::string keyCopy = key;
-    return DlBioSdkApi::Put(tenantId, keyCopy.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, location);
+    return DlBioSdkApi::Put(tenantId, key.c_str(), reinterpret_cast<char*>(value), (uint64_t)len, location);
 }
 
 int32_t KvOperation::KvGetData(const std::string &key, void *value, size_t len)
