@@ -84,6 +84,38 @@ std::vector<std::pair<int, std::shared_ptr<OpenFile>>> OpenFileMap::Snapshot()
     return snapshot;
 }
 
+uint64_t OpenFileMap::LoadKnownFileSize(uint64_t inode, uint64_t fallback)
+{
+    filesMtx.LockRead();
+    auto iter = knownFileSizes.find(inode);
+    if (iter == knownFileSizes.end()) {
+        filesMtx.UnLock();
+        return fallback;
+    }
+    uint64_t knownSize = std::max(fallback, iter->second);
+    filesMtx.UnLock();
+    return knownSize;
+}
+
+void OpenFileMap::SetKnownFileSize(uint64_t inode, uint64_t fileSize)
+{
+    filesMtx.LockWrite();
+    knownFileSizes[inode] = fileSize;
+    filesMtx.UnLock();
+}
+
+void OpenFileMap::UpdateKnownFileSize(uint64_t inode, uint64_t fileSize)
+{
+    filesMtx.LockWrite();
+    auto iter = knownFileSizes.find(inode);
+    if (iter == knownFileSizes.end()) {
+        knownFileSizes.emplace(inode, fileSize);
+    } else if (fileSize > iter->second) {
+        iter->second = fileSize;
+    }
+    filesMtx.UnLock();
+}
+
 void OpenFileMap::Erase(int fd)
 {
     filesMtx.LockWrite();

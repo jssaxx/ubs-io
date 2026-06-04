@@ -80,7 +80,7 @@ struct RemoteReadWindowCache {
     }
 };
 
-constexpr size_t REMOTE_READ_PREFETCH_DEPTH_DEFAULT = 2;
+constexpr size_t REMOTE_READ_PREFETCH_DEPTH_DEFAULT = 0;
 constexpr size_t REMOTE_READ_PREFETCH_LIMIT_MAX = 8;
 constexpr size_t REMOTE_READ_WINDOW_CACHE_SLOTS = REMOTE_READ_PREFETCH_LIMIT_MAX + 1;
 constexpr size_t REMOTE_READ_MAX_PREFETCH_INFLIGHT = REMOTE_READ_PREFETCH_LIMIT_MAX;
@@ -135,8 +135,8 @@ inline const RemoteReadPrefetchConfig &GetRemoteReadPrefetchConfig()
 
 class OpenFile {
 public:
-    OpenFile(int fd, uint64_t inode, uint64_t fileSize = UINT64_MAX)
-        : mFd(fd), mInode(inode), mRemoteReadEofOffset(fileSize), mKnownFileSize(fileSize)
+    OpenFile(int fd, uint64_t inode, uint64_t fileSize = UINT64_MAX, bool append = false)
+        : mFd(fd), mInode(inode), mAppend(append), mRemoteReadEofOffset(fileSize), mKnownFileSize(fileSize)
     {}
 
     virtual ~OpenFile() {}
@@ -164,6 +164,17 @@ public:
         return offset;
     }
 
+    off64_t ReserveAppendOffset(off64_t endOffset, size_t count)
+    {
+        std::lock_guard<std::mutex> lock(mOffsetMtx);
+        if (endOffset > mOffset) {
+            mOffset = endOffset;
+        }
+        off64_t offset = mOffset;
+        mOffset += static_cast<off64_t>(count);
+        return offset;
+    }
+
     void CompleteReservedOffset(size_t reserved, ssize_t actual)
     {
         if (static_cast<size_t>(actual) == reserved) {
@@ -178,6 +189,11 @@ public:
         std::lock_guard<std::mutex> lock(mOffsetMtx);
         mOffset = offset;
         return mOffset;
+    }
+
+    bool IsAppend() const
+    {
+        return mAppend;
     }
 
     off64_t CalcSeekOffset(off64_t offset, int whence)
@@ -360,6 +376,21 @@ public:
         }
     }
 
+    void MarkWriteDirty()
+    {
+        mWriteDirty.store(true, std::memory_order_release);
+    }
+
+    bool HasWriteDirty() const
+    {
+        return mWriteDirty.load(std::memory_order_acquire);
+    }
+
+    void ClearWriteDirty()
+    {
+        mWriteDirty.store(false, std::memory_order_release);
+    }
+
     bool LoadLocalReadIndexCache(uint64_t offset, size_t count, InterceptorReadIndexCache &cache)
     {
         std::lock_guard<std::mutex> lock(mLocalReadIndexMtx);
@@ -444,6 +475,7 @@ public:
 private:
     int mFd;
     uint64_t mInode;
+    bool mAppend = false;
     std::atomic<bool> mActive{true};
     std::mutex mOffsetMtx;
     off64_t mOffset = 0;
@@ -466,6 +498,7 @@ private:
     std::atomic<uint64_t> mRemoteReadLastEnd{UINT64_MAX};
     std::atomic<uint64_t> mRemoteReadEofOffset;
     std::atomic<uint64_t> mKnownFileSize;
+    std::atomic<bool> mWriteDirty{false};
 };
 
 class OpenFileMap {
@@ -488,11 +521,18 @@ public:
 
     std::vector<std::pair<int, std::shared_ptr<OpenFile>>> Snapshot();
 
+    uint64_t LoadKnownFileSize(uint64_t inode, uint64_t fallback);
+
+    void SetKnownFileSize(uint64_t inode, uint64_t fileSize);
+
+    void UpdateKnownFileSize(uint64_t inode, uint64_t fileSize);
+
     void Erase(int fd);
 
 private:
     ReadWriteLock filesMtx;
     std::unordered_map<int, std::shared_ptr<OpenFile>> files;
+    std::unordered_map<uint64_t, uint64_t> knownFileSizes;
 };
 }
 }

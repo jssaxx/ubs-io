@@ -983,6 +983,12 @@ BResult InterceptorServer::RegisterOpcode()
         CLIENT_LOG_ERROR("Register interceptor read buffer release message handle failed, ret:" << ret << ".");
         return ret;
     }
+    ret = netEngine->RegisterNewRequestHandler(BIO_OP_INTERCEPTOR_FLUSH_INODE,
+        std::bind(&InterceptorServer::HandleInterceptorFlushInode, this, std::placeholders::_1));
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Register interceptor flush inode message handle failed, ret:" << ret << ".");
+        return ret;
+    }
     return ret;
 }
 
@@ -1471,6 +1477,30 @@ BResult InterceptorServer::HandleInterceptorReadBufferRelease(ServiceContext &ct
     }
     BioClientNet::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
     BIO_TRACE_END(INTERCEPTOR_READ_BUFFER_RELEASE, ret);
+    return BIO_OK;
+}
+
+BResult InterceptorServer::HandleInterceptorFlushInode(ServiceContext &ctx)
+{
+    InterceptorFlushInodeOut resp{};
+    if (UNLIKELY(ctx.MessageDataLen() != sizeof(InterceptorFlushInodeIn)) ||
+        UNLIKELY(ctx.MessageData() == nullptr)) {
+        CLIENT_LOG_ERROR("Invalid interceptor flush inode request, msgLen:" << ctx.MessageDataLen() <<
+            ", expectLen:" << sizeof(InterceptorFlushInodeIn) << ", hasData:" <<
+            (ctx.MessageData() == nullptr ? "false" : "true") << ".");
+        resp.ret = RET_CACHE_EPERM;
+        BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp), sizeof(resp));
+        return BIO_OK;
+    }
+
+    auto *req = static_cast<InterceptorFlushInodeIn *>(ctx.MessageData());
+    resp.ret = BioFlushHook(req->inode);
+    if (UNLIKELY(resp.ret != RET_CACHE_OK)) {
+        CLIENT_LOG_ERROR("Flush inode hook failed, inode:" << req->inode << ", ret:" << resp.ret << ".");
+    } else {
+        CLIENT_LOG_DEBUG("Flush inode hook success, inode:" << req->inode << ".");
+    }
+    BioClientNet::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&resp), sizeof(resp));
     return BIO_OK;
 }
 

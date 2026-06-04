@@ -47,6 +47,7 @@ public:
     BResult HandleInterceptorBioShmInit(ServiceContext &ctx);
     BResult HandleInterceptorReadIndexInvalidate(ServiceContext &ctx);
     BResult HandleInterceptorReadBufferRelease(ServiceContext &ctx);
+    BResult HandleInterceptorFlushInode(ServiceContext &ctx);
 
     bool CheckInterceptorReadReq(InterceptorPreadIn *req);
 

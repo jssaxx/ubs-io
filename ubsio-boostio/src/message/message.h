@@ -487,6 +487,14 @@ typedef struct {
     uint64_t length;
 } InterceptorReadBufferReleaseIn;
 
+typedef struct {
+    uint64_t inode;
+} InterceptorFlushInodeIn;
+
+typedef struct {
+    int32_t ret;
+} InterceptorFlushInodeOut;
+
 constexpr uint32_t INTERCEPTOR_PREAD_FLAG_BIO_FALLBACK = 1U << 3U;
 constexpr uint32_t INTERCEPTOR_PREAD_FLAG_PREFETCH = 1U << 4U;
 constexpr uint32_t INTERCEPTOR_PREAD_DATA_BIO_SHM = 0;

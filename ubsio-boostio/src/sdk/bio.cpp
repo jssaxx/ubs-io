@@ -1250,6 +1250,7 @@ ReadAddrHook g_readAddrHook = nullptr;
 ReadToSpaceHook g_readToSpaceHook = nullptr;
 WriteHook g_writeHook = nullptr;
 WriteCopyFreeHook g_writeCopyFreeHook = nullptr;
+FlushHook g_flushHook = nullptr;
 
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen)
 {
@@ -1296,6 +1297,15 @@ int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheS
     return g_writeCopyFreeHook(inode, offset, count, space);
 }
 
+int BioFlushHook(uint64_t inode)
+{
+    if (g_flushHook == nullptr) {
+        CLIENT_LOG_ERROR("g_flushHook is nullptr.");
+        return RET_CACHE_ERROR;
+    }
+    return g_flushHook(inode);
+}
+
 void BioRegisterInterceptorRead(ReadHook rh)
 {
     g_readHook = rh;
@@ -1319,6 +1329,11 @@ void BioRegisterInterceptorWrite(WriteHook wh)
 void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh)
 {
     g_writeCopyFreeHook = wh;
+}
+
+void BioRegisterInterceptorFlush(FlushHook fh)
+{
+    g_flushHook = fh;
 }
 
 CResult BioConvertLocation(ObjLocation location, ObjLocationDetail *detailLoc)
