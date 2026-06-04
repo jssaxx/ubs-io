@@ -25,8 +25,8 @@ rpm -e ubs-io-memstore
 
     ```cmd
     cd /usr/local
-    wget http://archive.apache.org/dist/zookeeper/zookeeper-3.7.0/zookeeper-3.7.0.tar.gz
-    tar -zxvf zookeeper-3.7.0.tar.gz
+    wget http://archive.apache.org/dist/zookeeper/zookeeper-3.9.5/zookeeper-3.9.5.tar.gz
+    tar -zxvf zookeeper-3.9.5.tar.gz
     ```
 
 3. 添加 ZooKeeper 到环境变量。
