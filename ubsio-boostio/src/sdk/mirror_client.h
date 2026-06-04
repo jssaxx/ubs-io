@@ -15,6 +15,7 @@
 
 #include <semaphore.h>
 #include <atomic>
+#include <memory>
 #include <unordered_map>
 #include "cm.h"
 #include "bio_ref.h"
@@ -329,7 +330,7 @@ private:
     {
         if (!mEnableTrance) {
             for (uint32_t j = 0; j < index; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valueAddrs[j]);  // rollback.
+                ReleaseDataPoolBlock(param.valueAddrs[j]);  // rollback.
             }
         }
     }
@@ -380,6 +381,51 @@ private:
     BResult CreateDataMessageMemRemote();
     BResult CreateDataMessageMem();
     void DestroyDataMessageMem();
+    void DestroyDataMessageMemNoLock();
+
+    struct DataPoolContext {
+        NetBlockPoolPtr pool = nullptr;
+        uint8_t *addr = nullptr;
+        uint64_t size = 0;
+        int32_t fd = -1;
+        uint64_t blockSize = NO_4096 * NO_1024;
+        MemoryRegion mr;
+        uint32_t outstanding = 0;
+        bool retired = false;
+    };
+
+    BResult PublishDataPoolContextNoLock();
+    void RetireDataPoolContextNoLock(const std::shared_ptr<DataPoolContext> &ctx);
+    void DestroyDataPoolContextNoLock(const std::shared_ptr<DataPoolContext> &ctx);
+    BResult BeginDataPoolUse();
+    void EndDataPoolUse();
+    BResult AllocDataPoolBlock(uintptr_t &address);
+    void ReleaseDataPoolBlock(uintptr_t address);
+
+    class DataPoolGuard {
+    public:
+        explicit DataPoolGuard(MirrorClient &client) : mClient(client), mResult(client.BeginDataPoolUse()) {}
+        ~DataPoolGuard()
+        {
+            if (mResult == BIO_OK) {
+                mClient.EndDataPoolUse();
+            }
+        }
+
+        DataPoolGuard(const DataPoolGuard &) = delete;
+        DataPoolGuard &operator = (const DataPoolGuard &) = delete;
+        DataPoolGuard(DataPoolGuard &&) = delete;
+        DataPoolGuard &operator = (DataPoolGuard &&) = delete;
+
+        BResult Result() const
+        {
+            return mResult;
+        }
+
+    private:
+        MirrorClient &mClient;
+        BResult mResult;
+    };
 
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     void InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota);
@@ -531,6 +577,12 @@ private:
     uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
     MemoryRegion mDataMsgMemMr;
     NetBlockPoolPtr mDataMsgMemPool = nullptr;
+    bool mReleaseDataPoolFlag = false;
+    ReadWriteLock mDataPoolFlagLock;
+    Lock mDataPoolOwnerLock;
+    std::shared_ptr<DataPoolContext> mCurrentDataPool = nullptr;
+    std::vector<std::shared_ptr<DataPoolContext>> mRetiredDataPools;
+    std::unordered_map<uintptr_t, std::shared_ptr<DataPoolContext>> mDataPoolOwners;
     ExecutorServicePtr mBatchGetExecutor{ nullptr };
     ExecutorServicePtr mBatchExistExecutor{ nullptr };
     DEFINE_REF_COUNT_VARIABLE
