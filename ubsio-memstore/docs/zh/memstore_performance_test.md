@@ -11,6 +11,7 @@
 按顺序运行文件mmsd、mms\_console、cli\_server、cli\_client。
 
 1. 所有节点启动mms server
+
     ```cmd
     [root@**** bin]# mmsd &
     ```
@@ -25,7 +26,7 @@
     mms console start success.
     ```
 
-    >[!NOTICE] mms\_console文件只需要在分离部署场景执行，在融合场景不需要执行。
+    > [!NOTICE] mms\_console文件只需要在分离部署场景执行，在融合场景不需要执行。
 
 3. 启动cli\_server
 
@@ -45,7 +46,8 @@
      800      1    mms_s
      600      1    mms_c
     ```
-   >[!NOTICE] 600是client的编号，分离部署起mms_console后才有，800是server的编号。
+
+   > [!NOTICE] 600是client的编号，分离部署起mms_console后才有，800是server的编号。
 
 5. 绑定client端进程
 
@@ -54,7 +56,7 @@
     Attach AppId<600> success
     ```
 
-   >[!NOTICE] 分离部署就attach 600，融合部署attach 800。
+   > [!NOTICE] 分离部署就attach 600，融合部署attach 800。
 
 ## 测试指令
 
@@ -102,19 +104,29 @@ exit
     exit console
 ```
 
->[!NOTICE]
->- 所有指令都要在运行cli\_client后的命令行中执行。
+> [!NOTICE]
 >
->- cpuStart要与已绑定核心区分。如当配置"mms.net.rpc.worker.groups.cpuset": "0-0,1-1,2-2,3-3,4-4,5-5,6-6,7-7"， cpuStart参数不能选用0-7。  
->- [ioDepth] [numaNum] [cpuNum] [cpuStart]这四个参数要搭配起来使用，ioDepth: io是多少并发，numaNum: 本次测试的io在多少个numa节点上进行，这里的个数要和mms.conf里的mms.mem.numa.id的个数对应，cpuNum: 机器上每个numa节点上有几个cpu，可以使用lscpu查看， cpuStart:cpu起始编号。举例: mms perf put 1 8 1 1024 0 2 40 12, 这里: ioDepth = 8、numaNum = 2、cpuNum = 40、cpuStart = 12， 实际绑定 CPU 顺序是：
->  线程0 -> 12;
-   线程1 -> 52;
-   线程2 -> 13;
-   线程3 -> 53;
-   线程4 -> 14;
-   线程5 -> 54;
-   线程6 -> 15;
-   线程7 -> 55。
+> 所有指令都要在运行cli\_client后的命令行中执行。
+>
+> cpuStart要与已绑定核心区分。如当配置"mms.net.rpc.worker.groups.cpuset":
+> "0-0,1-1,2-2,3-3,4-4,5-5,6-6,7-7"，cpuStart参数不能选用0-7。
+>
+> [ioDepth] [numaNum] [cpuNum] [cpuStart]这四个参数要搭配起来使用，ioDepth: io是多少并发，numaNum:
+> 本次测试的io在多少个numa节点上进行，这里的个数要和mms.conf里的mms.mem.numa.id的个数对应，cpuNum:
+> 机器上每个numa节点上有几个cpu，可以使用lscpu查看，cpuStart:cpu起始编号。举例:
+> mms perf put 1 8 1 1024 0 2 40 12，这里: ioDepth = 8、numaNum = 2、cpuNum = 40、cpuStart = 12，
+> 实际绑定 CPU 顺序是：
+>
+> ```text
+> 线程0 -> 12;
+> 线程1 -> 52;
+> 线程2 -> 13;
+> 线程3 -> 53;
+> 线程4 -> 14;
+> 线程5 -> 54;
+> 线程6 -> 15;
+> 线程7 -> 55。
+> ```
 
 ## 测试不同并发数
 
@@ -171,7 +183,7 @@ root:/cli> mms trace show
 root:/cli> mms trace clear
 ```
 
->[!NOTICE] mms perf put 1 1 8 100 0 1 32 20命令执行后，1KB IO会被mms set永久覆盖为1B。
+> [!NOTICE] mms perf put 1 1 8 100 0 1 32 20命令执行后，1KB IO会被mms set永久覆盖为1B。
 
 ## 测试7:3读写混合
 
@@ -184,4 +196,5 @@ root:/cli> mms perf delete 1 8 1 100 0 1 32 20
 root:/cli> mms trace show
 root:/cli> mms trace clear
 ```
->[!NOTICE] perf mixes默认读写比列是7:3, 可以通过更改命令最后一个参数readRate来实现不同的比例，比如填8，那么读写比例就是8:2。
+
+> [!NOTICE] perf mixes默认读写比列是7:3, 可以通过更改命令最后一个参数readRate来实现不同的比例，比如填8，那么读写比例就是8:2。
