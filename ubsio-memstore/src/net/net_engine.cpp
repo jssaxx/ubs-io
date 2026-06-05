@@ -424,6 +424,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
 
     mRpcOptions = opt;
+    mUseHlcRpc = opt.protocol == ServiceProtocol::TCP;
     bool isOobSvr = opt.role != NET_CLIENT;
     std::string name = isOobSvr ? RPC_SERVICE_NAME_SERVER : RPC_SERVICE_NAME_CLIENT;
     std::vector<std::string> groupsVec;
@@ -448,6 +449,10 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     if (mRpcService == nullptr) {
         NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
         return MMS_ERR;
+    }
+
+    if (opt.protocol == ServiceProtocol::TCP) {
+        mRpcService->SetTcpEpollMode(true);
     }
 
     if (opt.tlsEnable) {

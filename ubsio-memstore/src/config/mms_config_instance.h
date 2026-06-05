@@ -25,6 +25,7 @@ const auto CRC_SWITCH = std::make_pair("mms.crc.switch", "false");
 const auto SEQUENCE_SWITCH = std::make_pair("mms.sequence.switch", "false");
 const auto MULTICAST_SWITCH = std::make_pair("mms.multicast.switch", "true");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
+const auto CRB_SEND_CPU_START = std::make_pair("mms.crb.send.cpu.start", 68);
 
 const auto NET_RPC_IP_MASK = std::make_pair("mms.net.rpc.ip_mask", "127.0.0.1/24");
 const auto NET_RPC_PORT = std::make_pair("mms.net.rpc.listen_port", 7201);
@@ -125,6 +126,7 @@ public:
         bool sequenceSwitch = false;
         bool multicastSwitch = false;
         bool isSeparateMode = true;
+        int16_t crbSendCpuStart = 68;
     };
 
 public:

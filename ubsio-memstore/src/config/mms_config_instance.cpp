@@ -9,6 +9,8 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  */
+#include <limits>
+
 #include "mms_config_instance.h"
 #include "mms_log.h"
 #include "mms_ip_util.h"
@@ -18,6 +20,8 @@ namespace ock {
 namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
+constexpr int32_t MIN_CRB_SEND_CPU_START = -1;
+constexpr int32_t MAX_CRB_SEND_CPU_START = std::numeric_limits<int16_t>::max();
 void MmsConfig::LoadDefaultConf()
 {
     /* don't allow empty */
@@ -78,6 +82,10 @@ void MmsConfig::LoadDefaultConf()
 
     /* deployment mode */
     AddStrConf(DEPLOYMENT_MODE, VStrEnum::Create(DEPLOYMENT_MODE.first, "separate||converge"));
+
+    /* crb scheduler */
+    AddIntConf(CRB_SEND_CPU_START,
+               VIntRange::Create(CRB_SEND_CPU_START.first, MIN_CRB_SEND_CPU_START, MAX_CRB_SEND_CPU_START));
 
     /* load cluster manager config */
     AddIntConf(CM_NODE_NUM, VIntRange::Create(CM_NODE_NUM.first, MIN_NODES_NUM, MAX_NODES_NUM));
@@ -324,6 +332,7 @@ BResult MmsConfig::AutoConfigBasic(const ConfigurationPtr &conf)
     mBasicConfig.crcSwitch = conf->GetStr(CRC_SWITCH.first) == "true";
     mBasicConfig.sequenceSwitch = conf->GetStr(SEQUENCE_SWITCH.first) == "true";
     mBasicConfig.multicastSwitch = conf->GetStr(MULTICAST_SWITCH.first) == "true";
+    mBasicConfig.crbSendCpuStart = static_cast<int16_t>(conf->GetInt(CRB_SEND_CPU_START.first));
 
     auto deployment = conf->GetStr(DEPLOYMENT_MODE.first);
     if (deployment == "separate") {
