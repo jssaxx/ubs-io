@@ -23,7 +23,7 @@ namespace ubsio {
 
 void KvcExit();
 
-int32_t KvcOperationInit(int32_t devId);
+int32_t KvcOperationInit(int32_t devId, uint64_t ssdSize);
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags);
 

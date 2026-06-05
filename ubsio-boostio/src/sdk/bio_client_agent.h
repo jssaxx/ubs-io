@@ -13,6 +13,7 @@
 #ifndef BIO_CLIENT_AGENT_H
 #define BIO_CLIENT_AGENT_H
 
+#include <mutex>
 #include "cm.h"
 #include "net_engine.h"
 #include "message.h"
@@ -27,6 +28,12 @@ namespace bio {
 namespace agent {
 class BioClientAgent;
 using BioClientAgentPtr = Ref<BioClientAgent>;
+// Direct-call facade used by the SDK.
+//
+// In SEPARATES mode this class still sends local-server requests through
+// BioClientNet. In CONVERGENCE and STANDALONE mode it loads libbio_server.so,
+// binds exported C functions, and calls them in-process. This keeps MirrorClient
+// independent from dlopen details and from the IPC/RPC transport choice.
 class BioClientAgent {
 public:
     struct FlowInfo {
@@ -39,7 +46,9 @@ public:
 
 public:
     using BioServerStartFuncPtr = int32_t (*)();
+    using SetStandaloneDeviceInfoFuncPtr = int32_t (*)(uint32_t);
     using BioServerExitFuncPtr = void (*)();
+    using GetRuntimeConfigFuncPtr = int32_t (*)(StandaloneRuntimeConfigResponse *);
     using GetBioServerCrcFlagFuncPtr = bool (*)();
     using GetBioServerCliFlagFuncPtr = bool (*)();
     using GetBioServerPromethuesToggleFuncPtr = bool (*)();
@@ -61,6 +70,8 @@ public:
     using GetSliceFuncPtr = int32_t (*)(GetSliceRequest *, GetSliceResponse **);
     using PutFuncPtr = int32_t (*)(PutRequest *, PutResponse *);
     using GetFuncPtr = int32_t (*)(GetRequest *, GetResponse *);
+    using BatchGetFuncPtr = int32_t (*)(BatchGetRequest *, BatchGetResponse *);
+    using BatchExistFuncPtr = int32_t (*)(BatchExistRequest *, BatchExistResponse *);
     using DeleteFuncPtr = int32_t (*)(DeleteRequest *);
     using AddDiskFuncPtr = int32_t (*)(AddDiskRequest *, AddDiskResponse *);
     using StatFuncPtr = int32_t (*)(StatRequest *, StatResponse *);
@@ -81,6 +92,8 @@ public:
 
     BResult Initialize(WorkerMode mode);
     void Exit();
+
+    BResult SetStandaloneDevice(uint32_t deviceId);
 
     NetEnginePtr GetNetService()
     {
@@ -104,6 +117,11 @@ public:
 
     BResult GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid);
 
+    // Read server runtime config without an IPC ShmInit request.
+    // Used by STANDALONE so BioClientNet can expose config getters while no
+    // NetEngine, shm fd, or RPC channel exists.
+    BResult GetRuntimeConfig(StandaloneRuntimeConfigResponse &rsp);
+
     BResult GetLocalQuotaInfo(bool &enable, uint64_t &preloadSize);
 
     BResult AllocQuota(AllocQuotaRequest &req, uint64_t &expectPreloadSize);
@@ -125,8 +143,12 @@ public:
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
         GetSliceResponse **rsp);
 
+    // Put to the local server. Direct modes call the exported Put function and
+    // invoke callback synchronously. SEPARATES mode sends an IPC request.
     void PutLocal(PutRequest *req, Callback &callback);
 
+    // Get from the local server. Direct modes pass the user buffer address to
+    // the exported Get function; server writes data to that address directly.
     BResult GetLocal(GetRequest &req, char *value, uint64_t &realLen);
 
     BResult BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos);
@@ -175,6 +197,9 @@ private:
     BResult InitUpgradeOperation();
     BResult InitOperation();
     void *LoadFunction(const char *name);
+    // Direct mode means client and server share one process address space.
+    // CONVERGENCE still has NetEngine, STANDALONE does not.
+    bool IsDirectMode() const;
 
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
 
@@ -212,6 +237,11 @@ private:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
+    struct StandaloneDeviceInfo {
+        bool configured{ false };
+        uint32_t deviceId{ 0 };
+    };
+
     WorkerMode mMode = CONVERGENCE;
     CmNodeId mLocalNid;
     uint32_t localPid;
@@ -219,7 +249,10 @@ private:
 
     void *handler = nullptr;
     BioServerStartFuncPtr startOp = nullptr;
+    BioServerStartFuncPtr standaloneStartOp = nullptr;
+    SetStandaloneDeviceInfoFuncPtr setStandaloneDeviceInfoOp = nullptr;
     BioServerExitFuncPtr exitOp = nullptr;
+    GetRuntimeConfigFuncPtr getRuntimeConfigOp = nullptr;
     GetBioServerCrcFlagFuncPtr getCrcFlag = nullptr;
     GetBioServerCliFlagFuncPtr getCliFlag = nullptr;
     GetBioServerPromethuesToggleFuncPtr getPrometheusToggle = nullptr;
@@ -241,6 +274,8 @@ private:
     GetSliceFuncPtr getSliceOp = nullptr;
     PutFuncPtr putOp = nullptr;
     GetFuncPtr getOp = nullptr;
+    BatchGetFuncPtr batchGetOp = nullptr;
+    BatchExistFuncPtr batchExistOp = nullptr;
     DeleteFuncPtr deleteOp = nullptr;
     AddDiskFuncPtr addDiskOp = nullptr;
     StatFuncPtr statOp = nullptr;
@@ -249,6 +284,8 @@ private:
     GetCacheHitLocalFuncPtr cacheHitOp = nullptr;
     CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
     GetTracePointsLocalFuncPtr getTracePointsOp = nullptr;
+    std::mutex mStandaloneDeviceLock;
+    StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
 }
 }

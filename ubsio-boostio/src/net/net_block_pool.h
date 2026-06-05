@@ -13,9 +13,13 @@
 #ifndef NET_BLOCK_POOL_H
 #define NET_BLOCK_POOL_H
 
+#include <atomic>
+#include <cstdint>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
+#include "bio_lock.h"
 #include "net_common.h"
 
 namespace ock {

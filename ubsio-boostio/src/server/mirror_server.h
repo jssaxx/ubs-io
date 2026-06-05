@@ -100,6 +100,8 @@ public:
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy);
     BResult GetConvergence(GetRequest &req, GetResponse &rsp);
+    BResult BatchGetConvergence(BatchGetRequest &req, BatchGetResponse &rsp);
+    BResult BatchExistConvergence(BatchExistRequest &req, BatchExistResponse &rsp);
     BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
     BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req);

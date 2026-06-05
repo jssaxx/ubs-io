@@ -18,8 +18,10 @@
 #include <string>
 #include <cstring>
 #include <dirent.h>
+#include <limits.h>
 #include <string>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <vector>
@@ -75,6 +77,8 @@ public:
     static bool CanonicalPath(std::string &path);
 
     static int64_t GetDiskCapacity(std::string &diskPath);
+
+    static bool GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey);
 
     static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
                                    const std::string& newConfig);
@@ -239,6 +243,44 @@ inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
     }
     close(fd);
     return off;
+}
+
+inline bool FileUtil::GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey)
+{
+    std::string realDiskPath = diskPath;
+    if (!CanonicalPath(realDiskPath)) {
+        return false;
+    }
+
+    struct stat statBuf {};
+    if (stat(realDiskPath.c_str(), &statBuf) != 0) {
+        return false;
+    }
+
+    if (!S_ISBLK(statBuf.st_mode)) {
+        diskKey = realDiskPath;
+        return true;
+    }
+
+    std::string sysDevPath = "/sys/dev/block/" + std::to_string(major(statBuf.st_rdev)) + ":" +
+        std::to_string(minor(statBuf.st_rdev));
+    char realSysDevPath[PATH_MAX] = {};
+    if (realpath(sysDevPath.c_str(), realSysDevPath) == nullptr) {
+        diskKey = sysDevPath;
+        return true;
+    }
+
+    std::string diskSysPath = realSysDevPath;
+    while (Exist(diskSysPath + "/partition")) {
+        auto pos = diskSysPath.find_last_of('/');
+        if (pos == std::string::npos) {
+            break;
+        }
+        diskSysPath = diskSysPath.substr(0, pos);
+    }
+
+    diskKey = diskSysPath;
+    return true;
 }
 
 inline bool FileUtil::WriteFile(const std::string& filename, const std::vector<std::string>& lines)

@@ -27,6 +27,10 @@ extern "C" {
 #define BDM_ALIGN_SIZE (2097152UL)
 #define BDM_RESTORE_META_SIZE (2097152UL)
 #define BDM_INVALID_ID (1024UL)
+/* Low 16 bits store standalone mode and device id. High 16 bits are reserved. */
+#define BDM_DISK_HEAD_STANDALONE_MAGIC (0x0000BD00U)
+#define BDM_DISK_HEAD_MODE_MASK (0x0000FF00U)
+#define BDM_DISK_HEAD_DEVICE_ID_MASK (0x000000FFU)
 
 typedef struct {
     char name[BDM_NAME_LEN];
@@ -52,6 +56,7 @@ typedef enum {
     BDM_CODE_INVALID_CHUNK_ID = -105,
     BDM_CODE_INVALID_BDM_ID = -104,
     BDM_CODE_SCAN_OFF = -103,
+    BDM_CODE_METADATA_MISMATCH = -102,
 } BdmRetCode;
 
 typedef enum {
@@ -71,7 +76,7 @@ typedef struct {
 } BdmIoCtx;
 
 #define DISK_PATH_LEN (256UL)
-#define DISK_DEV_NUM (4UL)
+#define DISK_DEV_NUM (16UL)
 
 typedef struct {
     char path[DISK_PATH_LEN];
@@ -109,6 +114,8 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
     uint64_t *bucketOffset);
 
 int32_t BdmInit(void);
+
+void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId);
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 
