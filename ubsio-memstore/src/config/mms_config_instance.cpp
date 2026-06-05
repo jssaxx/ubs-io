@@ -9,6 +9,8 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  */
+#include <limits>
+
 #include "mms_config_instance.h"
 #include "mms_log.h"
 #include "mms_ip_util.h"
@@ -18,7 +20,8 @@ namespace ock {
 namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
-
+constexpr int32_t MIN_CRB_SEND_CPU_START = -1;
+constexpr int32_t MAX_CRB_SEND_CPU_START = std::numeric_limits<int16_t>::max();
 void MmsConfig::LoadDefaultConf()
 {
     LoadDefaultNetConf();
@@ -83,6 +86,8 @@ void MmsConfig::LoadDefaultBasicConf()
     AddStrConf(DATA_CHANGE_CALLBACK_SWITCH, VStrBoolRange::Create(DATA_CHANGE_CALLBACK_SWITCH.first));
     AddStrConf(ART_QUERY_SWITCH, VStrBoolRange::Create(ART_QUERY_SWITCH.first));
     AddStrConf(DEPLOYMENT_MODE, VStrEnum::Create(DEPLOYMENT_MODE.first, "separate||converge"));
+    AddIntConf(CRB_SEND_CPU_START,
+               VIntRange::Create(CRB_SEND_CPU_START.first, MIN_CRB_SEND_CPU_START, MAX_CRB_SEND_CPU_START));
 }
 
 void MmsConfig::LoadDefaultClusterConf()
@@ -378,6 +383,7 @@ BResult MmsConfig::AutoConfigBasic(const ConfigurationPtr &conf)
     mBasicConfig.multicastSwitch = conf->GetStr(MULTICAST_SWITCH.first) == "true";
     mBasicConfig.dataChangeCallbackSwitch = conf->GetStr(DATA_CHANGE_CALLBACK_SWITCH.first) == "true";
     mBasicConfig.artQuerySwitch = conf->GetStr(ART_QUERY_SWITCH.first) == "true";
+    mBasicConfig.crbSendCpuStart = static_cast<int16_t>(conf->GetInt(CRB_SEND_CPU_START.first));
 
     auto deployment = conf->GetStr(DEPLOYMENT_MODE.first);
     if (deployment == "separate") {
