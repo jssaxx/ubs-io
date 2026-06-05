@@ -46,6 +46,57 @@ TEST(TestStandaloneMemoryPool, test_alloc_exhaust_and_reuse)
     pool->Stop();
 }
 
+TEST(TestStandaloneMemoryPool, test_alloc_rejects_invalid_state_and_size)
+{
+    StandaloneMemoryPoolPtr pool = MakeRef<StandaloneMemoryPool>();
+    ASSERT_NE(pool, nullptr);
+
+    uint64_t address = 0;
+    EXPECT_EQ(pool->Alloc(NO_1024, &address), BIO_NOT_READY);
+    EXPECT_EQ(address, 0);
+    EXPECT_EQ(pool->Alloc(NO_1024, nullptr), BIO_INVALID_PARAM);
+    EXPECT_EQ(pool->Start(0, IO_SIZE_4K), BIO_INVALID_PARAM);
+
+    ASSERT_EQ(pool->Start(IO_SIZE_4K, IO_SIZE_4K), BIO_OK);
+    EXPECT_EQ(pool->Alloc(IO_SIZE_4K + 1, &address), BIO_ALLOC_FAIL);
+    EXPECT_EQ(address, 0);
+    pool->Stop();
+}
+
+TEST(TestStandaloneMemoryPool, test_zero_pool_starts_but_cannot_allocate)
+{
+    StandaloneMemoryPoolPtr pool = MakeRef<StandaloneMemoryPool>();
+    ASSERT_NE(pool, nullptr);
+    ASSERT_EQ(pool->Start(IO_SIZE_4K, 0), BIO_OK);
+    EXPECT_EQ(pool->GetPoolSize(), 0);
+    EXPECT_EQ(pool->GetUsedSize(), 0);
+
+    uint64_t address = 0;
+    EXPECT_NE(pool->Alloc(NO_1024, &address), BIO_OK);
+    EXPECT_EQ(address, 0);
+    EXPECT_EQ(pool->GetUsedSize(), 0);
+    pool->Stop();
+}
+
+TEST(TestStandaloneMemoryPool, test_invalid_free_address_does_not_change_used_size)
+{
+    StandaloneMemoryPoolPtr pool = MakeRef<StandaloneMemoryPool>();
+    ASSERT_NE(pool, nullptr);
+    ASSERT_EQ(pool->Start(IO_SIZE_4K, IO_SIZE_4K), BIO_OK);
+
+    uint64_t address = 0;
+    ASSERT_EQ(pool->Alloc(NO_1024, &address), BIO_OK);
+    ASSERT_NE(address, 0);
+    EXPECT_EQ(pool->GetUsedSize(), IO_SIZE_4K);
+
+    pool->Free(address + 1);
+    EXPECT_EQ(pool->GetUsedSize(), IO_SIZE_4K);
+
+    pool->Free(address);
+    EXPECT_EQ(pool->GetUsedSize(), 0);
+    pool->Stop();
+}
+
 TEST(TestStandaloneMemoryPool, test_alloc_free_concurrent)
 {
     constexpr uint32_t threadCount = 8;

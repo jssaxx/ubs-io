@@ -12,6 +12,14 @@
 
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <unistd.h>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -26,6 +34,22 @@ using namespace ock::bio::agent;
 
 namespace {
 constexpr char TEST_GET_VALUE[] = "standalone-async-get";
+
+int32_t RuntimeConfigOpStub(StandaloneRuntimeConfigResponse *rsp)
+{
+    if (rsp == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    rsp->serverPid = getpid();
+    rsp->alignSize = NO_4096;
+    rsp->ioTimeOut = NO_60;
+    rsp->netTimeOut = NO_16;
+    rsp->logLevel = 1;
+    rsp->scene = 0;
+    rsp->sdkPoolSize = IO_SIZE_4K;
+    rsp->dataMsgBlockSize = IO_SIZE_4K;
+    return BIO_OK;
+}
 
 int32_t StandaloneAsyncGetOpStub(GetRequest *req, GetResponse *rsp)
 {
@@ -47,19 +71,26 @@ int32_t StandaloneAsyncGetOpStub(GetRequest *req, GetResponse *rsp)
 
 struct AgentStateGuard {
     explicit AgentStateGuard(BioClientAgentPtr agentParam) : agent(agentParam), mode(agentParam->mMode),
-        getOp(agentParam->getOp)
+        handler(agentParam->handler), getRuntimeConfigOp(agentParam->getRuntimeConfigOp), getOp(agentParam->getOp),
+        standaloneDeviceInfo(agentParam->mStandaloneDeviceInfo)
     {
     }
 
     ~AgentStateGuard()
     {
         agent->mMode = mode;
+        agent->handler = handler;
+        agent->getRuntimeConfigOp = getRuntimeConfigOp;
         agent->getOp = getOp;
+        agent->mStandaloneDeviceInfo = standaloneDeviceInfo;
     }
 
     BioClientAgentPtr agent;
     WorkerMode mode;
+    void *handler;
+    BioClientAgent::GetRuntimeConfigFuncPtr getRuntimeConfigOp;
     BioClientAgent::GetFuncPtr getOp;
+    BioClientAgent::StandaloneDeviceInfo standaloneDeviceInfo;
 };
 
 struct AsyncGetCallbackState {
@@ -68,6 +99,55 @@ struct AsyncGetCallbackState {
     uint64_t realLen{0};
     uint32_t respLen{0};
 };
+}
+
+TEST(BioClientAgentTest, standalone_device_must_be_set_before_initialize)
+{
+    auto agent = BioClientAgent::Instance();
+    AgentStateGuard guard(agent);
+    agent->handler = nullptr;
+    agent->mStandaloneDeviceInfo = {};
+
+    agent->SetStandaloneDevice(3);
+    EXPECT_TRUE(agent->mStandaloneDeviceInfo.configured);
+    EXPECT_EQ(agent->mStandaloneDeviceInfo.deviceId, 3);
+
+    agent->handler = reinterpret_cast<void *>(0x1);
+    agent->SetStandaloneDevice(4);
+    EXPECT_EQ(agent->mStandaloneDeviceInfo.deviceId, 3);
+}
+
+TEST(BioClientAgentTest, standalone_runtime_config_requires_direct_mode_and_loaded_op)
+{
+    auto agent = BioClientAgent::Instance();
+    AgentStateGuard guard(agent);
+    StandaloneRuntimeConfigResponse rsp = {};
+
+    agent->mMode = SEPARATES;
+    agent->getRuntimeConfigOp = RuntimeConfigOpStub;
+    EXPECT_EQ(agent->GetRuntimeConfig(rsp), BIO_NOT_READY);
+
+    agent->mMode = STANDALONE;
+    agent->getRuntimeConfigOp = nullptr;
+    EXPECT_EQ(agent->GetRuntimeConfig(rsp), BIO_NOT_READY);
+}
+
+TEST(BioClientAgentTest, standalone_runtime_config_uses_loaded_direct_op)
+{
+    auto agent = BioClientAgent::Instance();
+    AgentStateGuard guard(agent);
+    StandaloneRuntimeConfigResponse rsp = {};
+
+    agent->mMode = STANDALONE;
+    agent->getRuntimeConfigOp = RuntimeConfigOpStub;
+
+    EXPECT_EQ(agent->GetRuntimeConfig(rsp), BIO_OK);
+    EXPECT_EQ(rsp.serverPid, getpid());
+    EXPECT_EQ(rsp.alignSize, NO_4096);
+    EXPECT_EQ(rsp.ioTimeOut, NO_60);
+    EXPECT_EQ(rsp.netTimeOut, NO_16);
+    EXPECT_EQ(rsp.sdkPoolSize, IO_SIZE_4K);
+    EXPECT_EQ(rsp.dataMsgBlockSize, IO_SIZE_4K);
 }
 
 TEST(BioClientAgentTest, standalone_async_get_local_uses_direct_get)
