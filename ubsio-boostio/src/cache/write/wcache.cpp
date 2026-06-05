@@ -213,9 +213,8 @@ void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
     }
 
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    auto netEngine = BioServer::Instance()->GetNetEngine();
     uint64_t memConfig = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
-    uint64_t memUsed = netEngine->GetUsedBlockSize();
+    uint64_t memUsed = BioServer::Instance()->GetMemUsedSize();
     uint64_t memWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     uint64_t memRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
 

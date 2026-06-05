@@ -234,7 +234,7 @@ BResult BioQuota::Initialize()
 
 BResult BioQos::Initialize(uint32_t nodeId, WorkerMode mode, uint32_t scene)
 {
-    uint64_t pid = (mode == CONVERGENCE) ? 0 : static_cast<uint64_t>(getpid());
+    uint64_t pid = (mode == CONVERGENCE || mode == STANDALONE) ? 0 : static_cast<uint64_t>(getpid());
     mQuota = BioQuota::Instance(nodeId, pid);
     if (UNLIKELY(mQuota == nullptr)) {
         CLIENT_LOG_ERROR("Bio quota instance failed, nodeId:" << nodeId << ", pid:" << pid << ".");

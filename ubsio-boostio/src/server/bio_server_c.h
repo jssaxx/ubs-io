@@ -28,7 +28,7 @@ int32_t BioServerInit();
 int32_t BioServerStandaloneInit();
 
 // Set local standalone device information before BioServerStandaloneInit.
-int32_t SetStandaloneDeviceInfo(uint32_t deviceId);
+void SetStandaloneDeviceInfo(uint32_t deviceId);
 
 void BioServerExit(void);
 

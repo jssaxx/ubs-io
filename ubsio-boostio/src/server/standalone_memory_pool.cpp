@@ -15,12 +15,25 @@
 #include <cerrno>
 #include <cstring>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #include "bio_def.h"
 #include "bio_log.h"
 
 namespace ock {
 namespace bio {
+namespace {
+void TouchMemoryPages(void *address, uint64_t size)
+{
+    long sysPageSize = sysconf(_SC_PAGESIZE);
+    uint64_t pageSize = sysPageSize > 0 ? static_cast<uint64_t>(sysPageSize) : NO_4096;
+    volatile char *pages = reinterpret_cast<volatile char *>(address);
+    for (uint64_t offset = 0; offset < size; offset += pageSize) {
+        pages[offset] = 0;
+    }
+}
+}
+
 StandaloneMemoryPool::~StandaloneMemoryPool()
 {
     Stop();
@@ -57,6 +70,7 @@ BResult StandaloneMemoryPool::Start(uint64_t blockSize, uint64_t poolSize)
     }
 
     mBaseAddress = reinterpret_cast<uint64_t>(address);
+    TouchMemoryPages(address, mPoolSize);
     auto ret = mBlockPool.Start(static_cast<uintptr_t>(mBaseAddress), mBlockSize, mBlockCount);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Start standalone memory block pool failed, result:" << ret << ".");

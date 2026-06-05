@@ -46,7 +46,7 @@ public:
 
 public:
     using BioServerStartFuncPtr = int32_t (*)();
-    using SetStandaloneDeviceInfoFuncPtr = int32_t (*)(uint32_t);
+    using SetStandaloneDeviceInfoFuncPtr = void (*)(uint32_t);
     using BioServerExitFuncPtr = void (*)();
     using GetRuntimeConfigFuncPtr = int32_t (*)(StandaloneRuntimeConfigResponse *);
     using GetBioServerCrcFlagFuncPtr = bool (*)();
@@ -93,7 +93,7 @@ public:
     BResult Initialize(WorkerMode mode);
     void Exit();
 
-    BResult SetStandaloneDevice(uint32_t deviceId);
+    void SetStandaloneDevice(uint32_t deviceId);
 
     NetEnginePtr GetNetService()
     {
@@ -197,6 +197,9 @@ private:
     BResult InitUpgradeOperation();
     BResult InitOperation();
     void *LoadFunction(const char *name);
+    void UnloadServerLibrary();
+    void ResetLoadedOperations();
+    void ResetStandaloneDeviceInfo();
     // Direct mode means client and server share one process address space.
     // CONVERGENCE still has NetEngine, STANDALONE does not.
     bool IsDirectMode() const;

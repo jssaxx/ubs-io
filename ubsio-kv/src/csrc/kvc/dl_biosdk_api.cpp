@@ -30,6 +30,7 @@ const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
 
 BioExitFunc DlBioSdkApi::pBioExit = nullptr;
 BioInitFunc DlBioSdkApi::pBioInitialize = nullptr;
+BioSetStandaloneDeviceFunc DlBioSdkApi::pBioSetStandaloneDevice = nullptr;
 BioCreateCacheFunc DlBioSdkApi::pBioCreateCache = nullptr;
 BioCalLocationFunc DlBioSdkApi::pBioCalcLocation = nullptr;
 BioGetFunc DlBioSdkApi::pBioGet = nullptr;
@@ -58,6 +59,7 @@ int32_t DlBioSdkApi::LoadLibrary()
     /* load sym */
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
+    DL_LOAD_SYM(pBioSetStandaloneDevice, BioSetStandaloneDeviceFunc, bioSdkHandle, "BioSetStandaloneDevice");
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
@@ -82,6 +84,7 @@ void DlBioSdkApi::CleanupLibrary()
 
     pBioExit = nullptr;
     pBioInitialize = nullptr;
+    pBioSetStandaloneDevice = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
@@ -100,16 +103,24 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::KvBioInit()
+int32_t DlBioSdkApi::KvBioInit(int32_t devId, uint64_t ssdSize)
 {
+    (void)ssdSize;
     LOG_INFO("Start boostio begin...");
-    ClientOptionsConfig optConf;
+    if (devId < 0) {
+        LOG_ERROR("Invalid standalone device id:" << devId << ".");
+        return -1;
+    }
+
+    SetStandaloneDevice(static_cast<uint32_t>(devId));
+
+    ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
     optConf.enable = false;
     std::string logDir = "/var/log/boostio";
     std::snprintf(optConf.logFilePath, sizeof(optConf.logFilePath), "%s", logDir.c_str());
 
-    auto ret = Initialize(WorkerMode::SEPARATES, &optConf);
+    auto ret = Initialize(WorkerMode::STANDALONE, &optConf);
     if (ret != 0) {
         LOG_ERROR("boostio initialize failed, ret: " << ret);
         return -1;
@@ -118,7 +129,7 @@ int32_t DlBioSdkApi::KvBioInit()
 
     LOG_INFO("boostio createcache...");
     uint64_t tenantId = 1;
-    AffinityStrategy affinity = GLOBAL_BALANCE;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
     ret = CreateCache({ tenantId, affinity, strategy });
     if (ret == RET_CACHE_EXISTS) {

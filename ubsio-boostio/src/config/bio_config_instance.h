@@ -228,7 +228,7 @@ public:
         return mUnderFsConfig;
     }
 
-    BResult SetStandaloneDeviceInfo(uint32_t deviceId);
+    void SetStandaloneDeviceInfo(uint32_t deviceId);
 
     BResult SelectStandaloneDiskByDeviceInfo();
 
@@ -274,11 +274,11 @@ private:
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
 
-    BResult SelectStandaloneDiskLegacy(uint32_t diskNum);
+    BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
 
-    BResult SelectStandaloneDisksByDeviceCount(uint32_t diskNum);
+    BResult SelectStandaloneDisksByDeviceCount(uint16_t diskNum);
 
-    BResult ApplyStandaloneDiskSelection(const std::vector<uint32_t> &diskIndexes, uint32_t configuredDiskNum,
+    BResult ApplyStandaloneDiskSelection(const std::vector<uint32_t> &diskIndexes, uint16_t configuredDiskNum,
         const std::string &selectionLog);
 
 private:
@@ -293,7 +293,6 @@ private:
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
     bool mInited{ false };
-    bool mStandaloneDiskSelected{ false };
     uint32_t mStandaloneDiskIndex{ 0 };
     StandaloneDeviceInfo mStandaloneDeviceInfo;
 };

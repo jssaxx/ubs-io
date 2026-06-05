@@ -283,7 +283,7 @@ public:
     inline bool GetServiceState()
     {
         if (mCm == nullptr) {
-            return mStandaloneServiceState.load();
+            return false; // Standalone mode is never in upgrade state.
         }
         return mCm->GetServiceState();
     }
@@ -294,12 +294,10 @@ public:
     }
 
     // Report service update state.
-    // Cluster mode reports to CM. Standalone mode has no CM, so the state is
-    // held locally and consumed by Cache's CheckServiceState callback.
+    // Cluster mode reports to CM; standalone does not support upgrade.
     inline BResult ReportServiceState(bool isUpgrade)
     {
         if (mCm == nullptr) {
-            mStandaloneServiceState.store(isUpgrade);
             return BIO_OK;
         }
         return mCm->ReportServiceState(isUpgrade);
@@ -515,7 +513,6 @@ private:
     bool mCacheInited = false;
     bool mMirrorInited = false;
     bool mStandaloneMode = false;
-    std::atomic<bool> mStandaloneServiceState{false};
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

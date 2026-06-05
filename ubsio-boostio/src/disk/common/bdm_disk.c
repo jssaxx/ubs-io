@@ -34,7 +34,6 @@
 #define BDM_PAGE_SIZE getpagesize()
 
 #define BDM_DISK_MAGIC (0xFFDDCBAABCDDFF)
-
 #define BDM_IOCTX_EVENTS_NUM (128UL)
 #define BDM_IO_RETRY_NUM (3UL)
 
@@ -132,6 +131,8 @@ static BdmDiskMgr g_bdmDisk = { 0 };
 static uint64_t g_bdmIndex = 0;
 
 static BdmThreadPool g_bdmThreadPool;
+
+static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item);
 
 uint32_t BdmGetNormalDiskNum(void)
 {
@@ -571,12 +572,12 @@ static void BdmCompleteIOHandler(const struct io_event *ioEvent, BdmThreadPool *
     io_callback_t bdmIOCallback = (io_callback_t)ioEvent->data;
     BdmIoContext *bdmIo = (BdmIoContext *)ioEvent->obj;
 
-    if (bdmIOCallback == (io_callback_t)0) {
+    if (UNLIKELY(bdmIOCallback == (io_callback_t)0)) {
         BDM_LOGERROR(0, "Unexpected IO request with chunkId %lu", bdmIo->chunkId);
         return;
     }
 
-    if ((long)(ioEvent->res) <= 0 || ioEvent->res2 != 0) {
+    if (UNLIKELY((long)(ioEvent->res) <= 0 || ioEvent->res2 != 0)) {
         if (bdmIo->retryNum < BDM_IO_RETRY_NUM) {
             BDM_LOGERROR(0, "retry: chunkId %ld, res %ld res2 %ld", bdmIo->chunkId, ioEvent->res, ioEvent->res2);
             bdmIo->retryNum++;
@@ -613,7 +614,7 @@ void *BdmDiskEventsThread(void *argsP)
     BDM_LOGINFO(0, "bdm disk events thread start.");
     BdmThreadBindCPUs("bdm_events", bdmPool->cpus[threadIdx]);
     while (true) {
-        if (epoll_wait(epfd, epeventP, fdNum, -1) != 1) {
+        if (UNLIKELY(epoll_wait(epfd, epeventP, fdNum, -1) != 1)) {
             BDM_LOGERROR(0, "disk event epoll_wait, error(%s).", strerror(errno));
         }
 
@@ -688,7 +689,22 @@ int32_t BdmDiskOpenDisk(BdmCreatePara *para, BdmDiskItem *item)
     return BDM_CODE_OK;
 }
 
-bool BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item)
+static bool BdmDiskHeadHasStandaloneInfo(uint32_t pad)
+{
+    return (pad & BDM_DISK_HEAD_MODE_MASK) == BDM_DISK_HEAD_STANDALONE_MAGIC;
+}
+
+static const char *BdmDiskHeadMode(uint32_t pad)
+{
+    return BdmDiskHeadHasStandaloneInfo(pad) ? "standalone" : "cluster";
+}
+
+static uint32_t BdmDiskHeadDeviceId(uint32_t pad)
+{
+    return pad & BDM_DISK_HEAD_DEVICE_ID_MASK;
+}
+
+static bool BdmDiskCheckFixedItem(const BdmDiskHead *head, const BdmDiskItem *item)
 {
     return (head->magic == BDM_DISK_MAGIC && head->bdmId == item->bdmId && head->minChunkSize == item->minChunkSize &&
         head->maxChunkSize == item->maxChunkSize && head->totalSize == item->totalSize &&
@@ -697,10 +713,32 @@ bool BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item)
         head->headSize == item->headSize);
 }
 
+static int32_t BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item)
+{
+    if (UNLIKELY(!BdmDiskCheckFixedItem(head, item))) {
+        return BDM_CODE_ERR;
+    }
+    if (head->pad == item->pad) {
+        return BDM_CODE_OK;
+    }
+    if (UNLIKELY(!BdmDiskHeadHasStandaloneInfo(head->pad) && !BdmDiskHeadHasStandaloneInfo(item->pad))) {
+        BDM_LOGWARN(0, "Disk metadata without standalone startup info, device(%s), bdmId(%u), currentDeviceId(%u).",
+            item->name, item->bdmId, BdmDiskHeadDeviceId(item->pad));
+        return BDM_CODE_OK;
+    }
+
+    BDM_LOGERROR(0,
+        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedDeviceId(%u), currentMode(%s), "
+        "currentDeviceId(%u).",
+        item->name, item->bdmId, BdmDiskHeadMode(head->pad), BdmDiskHeadDeviceId(head->pad),
+        BdmDiskHeadMode(item->pad), BdmDiskHeadDeviceId(item->pad));
+    return BDM_CODE_METADATA_MISMATCH;
+}
+
 int32_t BdmDiskPreCheckFileLen(int32_t fd, uint64_t length)
 {
     off_t offset = lseek(fd, 0, SEEK_END);
-    if (offset < (off_t)length) {
+    if (UNLIKELY(offset < (off_t)length)) {
         return BDM_CODE_ERR;
     } else {
         return BDM_CODE_OK;
@@ -732,8 +770,14 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
     item->metaLength = metaSize;
     item->dataOffset = ROUND_UP(item->headSize + metaSize, BDM_ALIGN_SIZE);
     item->dataLength = dataSize;
-    if (!BdmDiskCheckItem(&head, item)) {
-        return BDM_CODE_ERR;
+    ret = BdmDiskCheckItem(&head, item);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
+    ret = BdmDiskFillDiskHead(&head, item);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
     }
 
     rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char *)&head, item->headSize, item->offset, FALSE);
@@ -772,6 +816,7 @@ static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item)
 {
     head->magic = BDM_DISK_MAGIC;
     head->bdmId = item->bdmId;
+    head->pad = item->pad;
     head->minChunkSize = item->minChunkSize;
     head->maxChunkSize = item->maxChunkSize;
     head->totalSize = item->totalSize;
@@ -812,8 +857,8 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
         return BDM_CODE_ERR;
     }
 
-    if (memset_s(restoreBuff, BDM_RESTORE_META_SIZE, 0, BDM_RESTORE_META_SIZE) != BDM_CODE_OK ||
-        memcpy_s(restoreBuff, BDM_RESTORE_META_SIZE, &head, sizeof(BdmDiskHead)) != BDM_CODE_OK) {
+    if (UNLIKELY(memset_s(restoreBuff, BDM_RESTORE_META_SIZE, 0, BDM_RESTORE_META_SIZE) != BDM_CODE_OK ||
+        memcpy_s(restoreBuff, BDM_RESTORE_META_SIZE, &head, sizeof(BdmDiskHead)) != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Memcpy restore buff failed, name(%s).", item->name);
         free(restoreBuff);
         restoreBuff = NULL;
@@ -874,13 +919,16 @@ int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
     if (ret == BDM_CODE_OK) {
         return ret;
     }
+    if (UNLIKELY(ret == BDM_CODE_METADATA_MISMATCH)) {
+        return ret;
+    }
     return BdmDiskNewAllocator(item);
 }
 
 void BdmDiskDestroyAllocator(BdmDiskItem *item)
 {
     int32_t ret = BdmAllocatorDestroy(item->allocator);
-    if (ret != BDM_CODE_OK) {
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "destroy allocator failed.");
     }
 }
@@ -907,6 +955,7 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
 static void BdmDiskFillItem(BdmDiskItem *item, BdmCreatePara *para, uint32_t bdmId)
 {
     item->bdmId = bdmId;
+    item->pad = para->pad;
     item->minChunkSize = para->minChunkSize;
     item->maxChunkSize = para->maxChunkSize;
 }
@@ -1038,24 +1087,24 @@ int32_t BdmDiskReset(BdmObj *obj)
 static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
 {
     bdmPool->efd[index] = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    if (bdmPool->efd[index] < 0) {
+    if (UNLIKELY(bdmPool->efd[index] < 0)) {
         BDM_LOGERROR(0, "Eventfd failed, errno(%s).", strerror(errno));
         return BDM_CODE_ERR;
     }
     int32_t ret = memset_s(&(bdmPool->ioctx[index]), sizeof(io_context_t), 0, sizeof(io_context_t));
-    if (ret != 0) {
+    if (UNLIKELY(ret != 0)) {
         BDM_LOGERROR(0, "Memset ioctx failed, ret(%d).", ret);
         close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     ret = io_setup(BDM_IOCTX_EVENTS_NUM, &(bdmPool->ioctx[index]));
-    if (ret != 0) {
+    if (UNLIKELY(ret != 0)) {
         BDM_LOGERROR(0, "Io setup failed, errno(%s).", strerror(errno));
         close(bdmPool->efd[index]);
         return BDM_CODE_ERR;
     }
     bdmPool->epfd[index] = epoll_create(1);
-    if (bdmPool->epfd[index] < 0) {
+    if (UNLIKELY(bdmPool->epfd[index] < 0)) {
         BDM_LOGERROR(0, "Epoll create failed, errno(%s).", strerror(errno));
         io_destroy(bdmPool->ioctx[index]);
         close(bdmPool->efd[index]);
@@ -1064,7 +1113,7 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
     bdmPool->epevent[index].events = EPOLLIN | EPOLLET;
     bdmPool->epevent[index].data.ptr = NULL;
     ret = epoll_ctl(bdmPool->epfd[index], EPOLL_CTL_ADD, bdmPool->efd[index], &(bdmPool->epevent[index]));
-    if (ret != 0) {
+    if (UNLIKELY(ret != 0)) {
         BDM_LOGERROR(0, "Epoll ctl failed, errno(%s).", strerror(errno));
         io_destroy(bdmPool->ioctx[index]);
         close(bdmPool->epfd[index]);

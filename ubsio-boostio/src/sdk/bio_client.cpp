@@ -21,6 +21,13 @@
 
 using namespace ock::bio;
 
+namespace {
+bool IsDirectMode(WorkerMode mode)
+{
+    return mode == CONVERGENCE || mode == STANDALONE;
+}
+}
+
 BResult BioClient::BioClientLoggerInit(WorkerMode mode, LogType logType, std::string logFilePath)
 {
     auto logMode = static_cast<int32_t>(mode);
@@ -142,7 +149,7 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 
     mIsUpdating = false;
     UpdateView updateView = [this]() { BioClientUpdateView(); };
-    bool enableCrc = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
+    bool enableCrc = IsDirectMode(mode) ? agent::BioClientAgent::Instance()->GetConfigCrcFlag() :
         mNetEngine->GetCrcFlag();
     auto ret = mMirror->Initialize(updateView, mNetEngine->GetNegoWorkScene(), mNetEngine->GetNegoWorkIoAlignSize(),
         mNetEngine->GetNegoWorkIoTimeOut(), enableCrc);
@@ -163,6 +170,7 @@ void BioClient::BioClientMirrorExit()
 
 BResult BioClient::BioInterceptorServerInit(WorkerMode mode)
 {
+    // InterceptorServer registers handlers on the client NetEngine; STANDALONE has no client NetEngine.
     return (mode == CONVERGENCE) ? InterceptorServer::GetInstance().Initialize() : BIO_OK;
 }
 
@@ -173,7 +181,7 @@ BResult BioClient::BioClientStartWork()
 
 BResult BioClient::BioClientStartPrometheus()
 {
-    bool enablePrometheus = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigPrometheusToggle() :
+    bool enablePrometheus = IsDirectMode(mMode) ? agent::BioClientAgent::Instance()->GetConfigPrometheusToggle() :
         mNetEngine->GetPrometheusToggle();
     if (!enablePrometheus) {
         return BIO_OK;
@@ -181,14 +189,14 @@ BResult BioClient::BioClientStartPrometheus()
 #ifndef DEBUG_UT
 #ifdef USE_PROMETHEUS
     std::string listenAddress;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode(mMode)) {
         listenAddress = agent::BioClientAgent::Instance()->GetPrometheusListenAddress();
     } else {
         listenAddress = mNetEngine->GetPrometheusListenAddress();
     }
-    uint32_t timeOut = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
+    uint32_t timeOut = IsDirectMode(mMode) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
                        mNetEngine->GetNegoWorkIoTimeOut();
-    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->
+    uint32_t scrapeIntervalSec = IsDirectMode(mMode) ? agent::BioClientAgent::Instance()->
             GetPrometheusScrapeIntervalSec() : mNetEngine->GetPrometheusScrapeIntervalSec();
     auto prometheusManager = PrometheusManager::Instance(listenAddress, timeOut, scrapeIntervalSec);
     auto ret = prometheusManager->Start();
@@ -207,14 +215,14 @@ void BioClient::BioClientExitPrometheus()
 #ifndef DEBUG_UT
 #ifdef USE_PROMETHEUS
     std::string listenAddress;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode(mMode)) {
         listenAddress = agent::BioClientAgent::Instance()->GetPrometheusListenAddress();
     } else {
         listenAddress = mNetEngine->GetPrometheusListenAddress();
     }
-    uint32_t timeOut = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
+    uint32_t timeOut = IsDirectMode(mMode) ? agent::BioClientAgent::Instance()->GetNegoWorkIoTimeOut() :
         mNetEngine->GetNegoWorkIoTimeOut();
-    uint32_t scrapeIntervalSec = (mMode == CONVERGENCE) ? agent::BioClientAgent::Instance()->
+    uint32_t scrapeIntervalSec = IsDirectMode(mMode) ? agent::BioClientAgent::Instance()->
         GetPrometheusScrapeIntervalSec() : mNetEngine->GetPrometheusScrapeIntervalSec();
     auto prometheusManager = PrometheusManager::Instance(listenAddress, timeOut, scrapeIntervalSec);
     prometheusManager->Stop();
@@ -266,7 +274,7 @@ BResult BioClient::BioDiagnoseSdkInit()
 BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
 {
 #ifdef OPEN_RELEASE
-    bool enableCli = (mode == CONVERGENCE) ? agent::BioClientAgent::Instance()->GetConfigCliFlag() :
+    bool enableCli = IsDirectMode(mode) ? agent::BioClientAgent::Instance()->GetConfigCliFlag() :
         mNetEngine->GetCliFlag();
     if (!enableCli) {
         return BIO_OK;
@@ -490,10 +498,12 @@ void BioClient::Exit()
     BioClientTraceExit();
     if (mCliHandle != nullptr) {
         dlclose(mCliHandle);
+        mCliHandle = nullptr;
     }
 
     if (mClientDiagnoseHandle != nullptr) {
         dlclose(mClientDiagnoseHandle);
+        mClientDiagnoseHandle = nullptr;
     }
     mStarted = false;
 }
@@ -502,4 +512,3 @@ BResult BioClient::AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opPara
 {
     return mMirror->AsyncGet(param, opParam);
 }
-

@@ -27,7 +27,7 @@ namespace ubsio {
 
 using BioExitFunc = void (*)(void);
 using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf);
-using BioSetStandaloneDeviceFunc = CResult (*)(uint32_t deviceId);
+using BioSetStandaloneDeviceFunc = void (*)(uint32_t deviceId);
 using BioCreateCacheFunc = CResult (*)(CacheDescriptor desc);
 using BioCalLocationFunc = CResult (*)(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
@@ -53,9 +53,9 @@ public:
         return static_cast<CResult>(pBioInitialize(mode, optConf));
     }
 
-    static CResult SetStandaloneDevice(uint32_t deviceId)
+    static void SetStandaloneDevice(uint32_t deviceId)
     {
-        return static_cast<CResult>(pBioSetStandaloneDevice(deviceId));
+        pBioSetStandaloneDevice(deviceId);
     }
 
     static CResult CreateCache(CacheDescriptor desc)

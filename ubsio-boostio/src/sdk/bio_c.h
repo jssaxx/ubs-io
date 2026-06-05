@@ -176,9 +176,8 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
  * @brief: Set standalone local device mapping before BioInitialize(STANDALONE, ...)
  *
  * @param[in]: deviceId: local standalone device/process id of the current process
- * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
-CResult BioSetStandaloneDevice(uint32_t deviceId);
+void BioSetStandaloneDevice(uint32_t deviceId);
 
 /**
  * @brief: Exit boostio service
