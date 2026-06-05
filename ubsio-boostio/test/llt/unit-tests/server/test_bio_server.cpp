@@ -11,6 +11,7 @@
  */
 
 #include <mockcpp/mockcpp.hpp>
+#include <algorithm>
 #include "gtest/gtest.h"
 #include "message.h"
 #include "bio_server.h"
@@ -23,6 +24,23 @@
 #include "cache_overload_ctrl.h"
 
 using namespace ock::bio;
+
+namespace {
+class TestableBioServer : public BioServer {
+public:
+    using BioServer::BuildClusterModules;
+    using BioServer::BuildStandaloneModules;
+};
+
+std::vector<std::string> GetModuleNames(const std::vector<ModuleDesc> &modules)
+{
+    std::vector<std::string> names;
+    for (const auto &module : modules) {
+        names.emplace_back(module.name);
+    }
+    return names;
+}
+}
 
 bool TestBioServer::gSetup = false;
 
@@ -38,6 +56,34 @@ void TestBioServer::SetUp()
 void TestBioServer::TearDown()
 {
     return;
+}
+
+TEST_F(TestBioServer, test_build_cluster_modules)
+{
+    TestableBioServer server;
+    auto names = GetModuleNames(server.BuildClusterModules());
+    std::vector<std::string> expected = {
+#ifdef USE_DEBUG_TP_TOOLS
+        "Tracepoint",
+#endif
+        "Diagnose", "Tracer", "UnderFs", "Bdm", "Net", "Flow", "Cache", "MirrorServer", "CM"
+    };
+    EXPECT_EQ(names, expected);
+}
+
+TEST_F(TestBioServer, test_build_standalone_modules)
+{
+    TestableBioServer server;
+    auto names = GetModuleNames(server.BuildStandaloneModules());
+    std::vector<std::string> expected = {
+#ifdef USE_DEBUG_TP_TOOLS
+        "Tracepoint",
+#endif
+        "Diagnose", "Tracer", "UnderFs", "Bdm", "StandaloneMem", "Flow", "StandaloneView", "Cache", "MirrorServer"
+    };
+    EXPECT_EQ(names, expected);
+    EXPECT_EQ(std::find(names.begin(), names.end(), "Net"), names.end());
+    EXPECT_EQ(std::find(names.begin(), names.end(), "CM"), names.end());
 }
 
 TEST_F(TestBioServer, test_bio_server_check_all)

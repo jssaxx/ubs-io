@@ -10,17 +10,22 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <atomic>
 #include <chrono>
-#include <iostream>
 #include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+#include <memory>
 #include <sys/resource.h>
-#include <regex>
 #include <semaphore.h>
+#include <vector>
 #include "htracer.h"
 #include "bio_client.h"
 #include "bio_lock.h"
 #include "bio_crc_util.h"
 #include "sdk_diagnose.h"
+#include "securec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,10 +44,19 @@ using namespace ock::bio;
 typedef void *(*perfTestRunner)(void *param);
 uint64_t gTenantId = UINT64_MAX;
 
-const std::regex& GetPattern()
+namespace {
+bool IsUnsignedInteger(const std::string &value)
 {
-    static const std::regex pattern("[0-9]+"); // 首次调用时初始化
-    return pattern;
+    if (value.empty()) {
+        return false;
+    }
+    for (char ch : value) {
+        if (ch < '0' || ch > '9') {
+            return false;
+        }
+    }
+    return true;
+}
 }
 
 struct PerfTestParam {
@@ -55,6 +69,14 @@ struct PerfTestParam {
 };
 static std::unordered_map<std::string, ObjLocation> gLocation;
 static ReadWriteLock gLocationLock;
+static std::atomic<uint64_t> gBatchGetRunId{ 0 };
+
+static void FillBatchGetValue(char *value, uint32_t length, uint64_t runId, uint32_t index)
+{
+    for (uint32_t offset = 0; offset < length; ++offset) {
+        value[offset] = static_cast<char>((runId + index + offset) & 0xff);
+    }
+}
 
 bool ock::bio::diagnose::BioSdkCommand::mInited = false;
 void* ock::bio::diagnose::BioSdkCommand::mHandler = nullptr;
@@ -139,7 +161,7 @@ void diagnose::BioSdkCommand::HandleListCache()
 void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
 {
     for (int i = 1; i <= 3; i++) {
-        if (!std::regex_match(cmds[i], GetPattern())) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -168,7 +190,7 @@ void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleOpen(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], GetPattern())) {
+    if (!IsUnsignedInteger(cmds[1])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -191,7 +213,7 @@ void diagnose::BioSdkCommand::HandleOpen(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleDestroy(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], GetPattern())) {
+    if (!IsUnsignedInteger(cmds[1])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -213,7 +235,7 @@ void diagnose::BioSdkCommand::HandleDestroy(const std::vector<std::string> &cmds
 void diagnose::BioSdkCommand::HandlePut(const std::vector<std::string> &cmds)
 {
     for (int i = 3; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], GetPattern())) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -264,7 +286,7 @@ void diagnose::BioSdkCommand::HandlePut(const std::vector<std::string> &cmds)
 void diagnose::BioSdkCommand::HandleGet(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], GetPattern())) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -372,13 +394,13 @@ void diagnose::BioSdkCommand::HandleCheckUpdateReady(const std::vector<std::stri
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to check update, result:%d.\n", ret);
     } else {
-        mPrintOp("Check update ready success, result:%d.\n");
+        mPrintOp("Check update ready success, result:%d.\n", ret);
     }
 }
 
 void diagnose::BioSdkCommand::HandleStat(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[NO_2], GetPattern())) {
+    if (!IsUnsignedInteger(cmds[NO_2])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -402,6 +424,33 @@ void diagnose::BioSdkCommand::HandleStat(const std::vector<std::string> &cmds)
     }
 }
 
+void diagnose::BioSdkCommand::HandleExist(const std::vector<std::string> &cmds)
+{
+    if (!IsUnsignedInteger(cmds[NO_2])) {
+        mPrintOp("Invalid input.\n");
+        return;
+    }
+    uint64_t location = 0;
+    auto key = cmds[1].c_str();
+    try {
+        location = std::stoull(cmds[NO_2]);
+    } catch (std::exception e) {
+        mPrintOp("Invalid input.\n");
+        return;
+    }
+    const char *keys[1] = { key };
+    ObjLocation locationInfo{ location, 0 };
+    ObjLocation locations[1] = { locationInfo };
+    bool existFlags[1] = { false };
+    auto ret = BioBatchExist(gTenantId, keys, locations, 1, existFlags);
+    if (ret != RET_CACHE_OK) {
+        mPrintOp("Failed to exist key, result:%d.\n", ret);
+    } else {
+        mPrintOp("Exist key success, key:%s, location:%lu, exist:%s.\n", key, locations[0].location[0],
+            existFlags[0] ? "true" : "false");
+    }
+}
+
 typedef struct {
     sem_t sem;
     CResult result;
@@ -417,7 +466,7 @@ static void TestCallback(void *context, int32_t result)
 void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], GetPattern())) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -456,7 +505,7 @@ void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleDelete(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[2], GetPattern())) {
+    if (!IsUnsignedInteger(cmds[2])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -484,7 +533,7 @@ void diagnose::BioSdkCommand::HandleAddDisk(const std::vector<std::string> &cmds
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to add a disk, result:%d.\n", ret);
     } else {
-        mPrintOp("Add disk success, diskPath:%s, tenantId:%u\n", diskPath);
+        mPrintOp("Add disk success, diskPath:%s, tenantId:%llu\n", diskPath, gTenantId);
     }
 }
 
@@ -662,7 +711,7 @@ void diagnose::BioSdkCommand::HandleSdkTrace(const std::vector<std::string> &cmd
     std::string viewType(cType);
     if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
-        mPrintOp(info.c_str());
+        mPrintOp("%s", info.c_str());
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         mPrintOp("clearing statistics sdk records succeeded.\n");
@@ -746,73 +795,77 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
 {
     uint32_t bs = (std::stoul(cmds[1]) * 1024);
     uint32_t batchNum = std::stoul(cmds[2]);
-    char key[256];
+    uint64_t runId = gBatchGetRunId.fetch_add(1, std::memory_order_relaxed);
+    char key[MAX_KEY_SIZE];
     std::vector<std::string> prepareKeys;
-    std::vector<std::shared_ptr<ObjLocation>> prepareLocations;
+    std::vector<ObjLocation> prepareLocations;
+    std::vector<std::unique_ptr<char[]>> values;
+    prepareKeys.reserve(batchNum);
+    prepareLocations.reserve(batchNum);
+    values.reserve(batchNum);
     uint32_t keyIndex = 0;
-    char **values = reinterpret_cast<char**>(malloc(sizeof(char*) * batchNum));
     for (uint32_t idx = 0; idx < batchNum; idx++) {
-        sprintf(key, "file_%u_%d", getpid(), keyIndex);
+        int retKey = snprintf_s(key, sizeof(key), sizeof(key) - 1, "file_%u_%llu_%u", getpid(),
+            static_cast<unsigned long long>(runId), keyIndex);
+        if (retKey <= 0 || static_cast<size_t>(retKey) >= sizeof(key)) {
+            mPrintOp("Generate key failed, index:%u.\n", keyIndex);
+            return;
+        }
 
-        std::shared_ptr<ObjLocation> location = std::make_shared<ObjLocation>();
-        auto ret = BioCalcLocation(gTenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), location.get());
+        ObjLocation location{};
+        auto ret = BioCalcLocation(gTenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
         if (ret != RET_CACHE_OK) {
             mPrintOp("Calculate location failed, result:%d.\n", ret);
             return;
         }
-        char *value = new char[bs];
-        ret = BioPut(gTenantId, key, value, bs, *location);
+        std::unique_ptr<char[]> value(new (std::nothrow) char[bs]);
+        if (value == nullptr) {
+            mPrintOp("Malloc fail.");
+            return;
+        }
+        FillBatchGetValue(value.get(), bs, runId, idx);
+        ret = BioPut(gTenantId, key, value.get(), bs, location);
         if (ret != RET_CACHE_OK) {
             mPrintOp("Put key(%s) fail, result:%d\n", key, ret);
             return;
         }
-        values[idx] = value;
         keyIndex++;
         prepareKeys.emplace_back(key);
         prepareLocations.emplace_back(location);
+        values.emplace_back(std::move(value));
     }
-    char **keys = reinterpret_cast<char**>(malloc(sizeof(char*) * batchNum));
-    uint64_t *offsets = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
-    uint64_t *lengths = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
-    ObjLocation *locations = reinterpret_cast<ObjLocation*>(malloc(sizeof(ObjLocation) * batchNum));
-    uintptr_t *valueAddrs = reinterpret_cast<uintptr_t*>(malloc(sizeof(uintptr_t) * batchNum));
-    uint64_t *realLengths = reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * batchNum));
-    int32_t *results = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t) * batchNum));
-    bool* existFlags = reinterpret_cast<bool*>(malloc(sizeof(bool) * batchNum));
-    KeyAddrInfo *infos = reinterpret_cast<KeyAddrInfo*>(malloc(sizeof(KeyAddrInfo) * batchNum));
-    if (keys == nullptr || offsets == nullptr || lengths == nullptr || locations == nullptr ||
-        valueAddrs == nullptr || realLengths == nullptr || results == nullptr || existFlags == nullptr) {
+
+    std::vector<const char *> keys(batchNum, nullptr);
+    std::vector<uint64_t> offsets(batchNum, 0);
+    std::vector<uint64_t> lengths(batchNum, bs);
+    std::vector<ObjLocation> locations(batchNum);
+    std::vector<uintptr_t> valueAddrs(batchNum, 0);
+    std::vector<uint64_t> realLengths(batchNum, 0);
+    std::vector<int32_t> results(batchNum, 0);
+    std::unique_ptr<bool[]> existFlags(new (std::nothrow) bool[batchNum]());
+    if (existFlags == nullptr) {
         mPrintOp("Malloc fail.");
         return;
     }
-
     for (uint32_t i = 0; i < batchNum; i++) {
-        keys[i] = reinterpret_cast<char*>(malloc(sizeof(char) * 256));
-        memcpy(reinterpret_cast<void*>(keys[i]), prepareKeys[i].c_str(), prepareKeys[i].size());
-        reinterpret_cast<char*>(keys[i])[prepareKeys[i].size()] = '\0';
-//        keys[i] = const_cast<char*>(prepareKeys[i].c_str());
-        offsets[i] = 0;
-        lengths[i] = bs;
-        locations[i] = *(prepareLocations[i]);
-        valueAddrs[i] = 0;
-        results[i] = 0;
-        realLengths[i] = 0;
+        keys[i] = prepareKeys[i].c_str();
+        locations[i] = prepareLocations[i];
     }
 
-    auto result = BioBatchExist(gTenantId, const_cast<const char **>(keys), locations, batchNum, existFlags);
+    auto result = BioBatchExist(gTenantId, keys.data(), locations.data(), batchNum, existFlags.get());
     if (result != 0) {
         mPrintOp("Bio batch exist fail, ret:%d.\n", result);
         return;
     }
     for (uint32_t i = 0; i < batchNum; i++) {
-        if (!existFlags[i]) {
+        if (!existFlags.get()[i]) {
             mPrintOp("Bio batch exit, key:%s is not exist.\n", keys[i]);
             return;
         }
     }
-    sleep(5);
 
-    result = BioBatchGet(gTenantId, const_cast<const char **>(keys), batchNum, offsets, lengths, locations, valueAddrs, realLengths, results);
+    result = BioBatchGet(gTenantId, keys.data(), batchNum, offsets.data(), lengths.data(), locations.data(),
+                         valueAddrs.data(), realLengths.data(), results.data());
 
     if (result != 0) {
         mPrintOp("Bio batch get fail, ret:%d.\n", result);
@@ -820,15 +873,18 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
     }
     for (uint32_t i = 0; i < batchNum; i++) {
         if (results[i] != 0) {
-            mPrintOp("Bio batch get fail, key:%s, ret:%d.\n", keys[i], result);
+            mPrintOp("Bio batch get fail, key:%s, ret:%d.\n", keys[i], results[i]);
+            (void)BioBatchGetFree(gTenantId, valueAddrs.data(), batchNum);
             return;
         }
-        if (BioCrcUtil::Crc32(reinterpret_cast<void*>(values[i]), bs) != BioCrcUtil::Crc32(reinterpret_cast<void*>(valueAddrs[i]), bs)) {
+        if (BioCrcUtil::Crc32(reinterpret_cast<void*>(values[i].get()), bs) !=
+            BioCrcUtil::Crc32(reinterpret_cast<void*>(valueAddrs[i]), bs)) {
             mPrintOp("Bio batch get fail, key:%s, crc check fail.\n", keys[i]);
+            (void)BioBatchGetFree(gTenantId, valueAddrs.data(), batchNum);
             return;
         }
     }
-    if (BioBatchGetFree(gTenantId, valueAddrs, batchNum) != 0) {
+    if (BioBatchGetFree(gTenantId, valueAddrs.data(), batchNum) != 0) {
         mPrintOp("Bio batch get free shm fail.\n");
     }
     mPrintOp("Bio batch get success!\n");
@@ -837,7 +893,7 @@ void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmd
 void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], GetPattern())) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("invalid input.\n");
             return;
         }
@@ -958,6 +1014,7 @@ void diagnose::BioSdkCommand::BioSdkDebugHelp(char *command, int detail) noexcep
     mPrintOp("\tput value: sdk put [key] [filePath] [length] [sliceId]\n");
     mPrintOp("\tget value: sdk get [key] [offset] [length] [location] [filePath]\n");
     mPrintOp("\tstate object: sdk stat [key] [location]\n");
+    mPrintOp("\texist object: sdk exist [key] [location]\n");
     mPrintOp("\tlist all object: sdk listall [prefix]\n");
     mPrintOp("\tload object: sdk load [key] [offset] [length] [location]\n");
     mPrintOp("\tdelete object: sdk delete [key] [location]\n");
@@ -1038,6 +1095,16 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
             return;
         }
         HandleStat(cmds);
+    } else if (cmdType == "exist") {
+        if (gTenantId == UINT64_MAX) {
+            mPrintOp("Create and open a cache first!\n");
+            return;
+        }
+        if (cmds.size() != 3) {
+            mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        HandleExist(cmds);
     }  else if (cmdType == "listall") {
         if (gTenantId == UINT64_MAX) {
             mPrintOp("Create and open a cache first!\n");

@@ -102,6 +102,19 @@ int main(int argc, char **argv)
         }
     }
 
+    if (mode == STANDALONE) {
+        const char* val = getenv("RankNum");
+        if (val == nullptr) {
+            return BIO_ERR;
+        }
+        long rankNum;
+        bool flag = StrUtil::StrToLong(val, rankNum);
+        if (!flag) {
+            return BIO_ERR;
+        }
+        BioSetStandaloneDevice(rankNum);
+    }
+
     auto ret = BioService::Initialize(mode, *optConf);
     if (ret != RET_CACHE_OK) {
         std::cout << "Initialize bio service failed, ret " << ret << std::endl;
