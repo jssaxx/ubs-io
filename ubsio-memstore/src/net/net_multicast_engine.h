@@ -150,6 +150,9 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
+    void DestroyPublisherService();
+    void DestroySubscriberService();
+
     int16_t mTimeout = -1;
     NetEnginePtr mNetEngine = nullptr;
     bool mStarted = false;

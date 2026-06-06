@@ -74,8 +74,26 @@ void MmsSequence::Exit()
         mSlidingBuff = nullptr;
     }
     if (mNegoBuff != nullptr) {
+        FreeNegoData();
         delete[] mNegoBuff;
         mNegoBuff = nullptr;
+    }
+}
+
+void MmsSequence::FreeNegoData()
+{
+    uint32_t queueNum = mLev1Cap * mLev2Cap;
+    for (uint32_t queueIdx = 0; queueIdx < queueNum; queueIdx++) {
+        NegoQueue &queue = mNegoBuff[queueIdx];
+        for (uint32_t valueIdx = 0; valueIdx < SEQ_QUEUE_LEN; valueIdx++) {
+            SeqValue &value = queue.valueList[valueIdx];
+            if (!value.valid || value.data == nullptr) {
+                continue;
+            }
+            free(value.data);
+            value.data = nullptr;
+            value.valid = false;
+        }
     }
 }
 
@@ -263,4 +281,3 @@ BResult MmsSequence::GetSeqNoData2Slv(uint32_t lev1Id, uint32_t lev2Id, uint64_t
 }
 }
 }
-

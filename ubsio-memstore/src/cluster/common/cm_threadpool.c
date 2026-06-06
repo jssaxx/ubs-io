@@ -70,6 +70,10 @@ int ParamCheck(uint16_t *thread_num, uint16_t *queue_size)
 void FreeRes(CM_THREAD_POOL_S *pool)
 {
     if (pool != NULL) {
+        pthread_mutex_destroy(&(pool->mutex_pool));
+        pthread_mutex_destroy(&(pool->mutex_queue));
+        pthread_cond_destroy(&(pool->notify));
+        sem_destroy(&(pool->sem_queue_full));
         if (pool->tid != NULL) {
             free(pool->tid);
             pool->tid = NULL;
@@ -201,6 +205,7 @@ int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags)
     pthread_mutex_destroy(&(pool->mutex_pool));
     pthread_mutex_destroy(&(pool->mutex_queue));
     pthread_cond_destroy(&(pool->notify));
+    sem_destroy(&(pool->sem_queue_full));
 
     free(pool->tid);
     pool->tid = NULL;
@@ -211,4 +216,3 @@ int32_t CmThreadPoolDestroy(CM_THREAD_POOL_S *pool, int32_t flags)
 
     return 0;
 }
-

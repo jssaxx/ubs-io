@@ -149,6 +149,9 @@ public:
 private:
     void RollbackInit(const std::vector<ModuleDesc>::const_iterator &end) noexcept
     {
+        if (end == mModules.cbegin()) {
+            return;
+        }
         auto next = end;
         auto pos = end;
         for (--pos; next != mModules.cbegin(); --next, --pos) {
@@ -160,6 +163,9 @@ private:
 
     void RollbackStart(const std::vector<ModuleDesc>::const_iterator &end) noexcept
     {
+        if (end == mModules.cbegin()) {
+            return;
+        }
         auto next = end;
         auto pos = end;
         for (--pos; next != mModules.cbegin(); --next, --pos) {
@@ -262,6 +268,7 @@ protected:
     void MmsCrbSchedulerExit();
 #ifdef USE_CLI_TOOLS
     BResult MmsServerDiagnoseInit();
+    void MmsServerDiagnoseExit();
 #endif
     BResult HandleNodeEvent(const std::map<uint16_t, CmNodeInfo> &nodeInfos);
     BResult HandlePtMigrateEvent(uint16_t ptId);
@@ -272,6 +279,7 @@ protected:
     void NetConnect(const std::map<uint16_t, CmNodeInfo> &nodeInfos);
     void NetReConnect(uint32_t peerId);
     void NotifyServiceable(bool serviceable);
+    void DestroyTaskService();
 
 private:
     bool mStarted = false;
@@ -296,6 +304,9 @@ private:
     ExecutorServicePtr mTaskService{ nullptr };
 
     CrbSchedulerPtr mCrbSchedulerPtr = nullptr;
+#ifdef USE_CLI_TOOLS
+    void *mServerDiagnoseHandler = nullptr;
+#endif
 
     DEFINE_REF_COUNT_VARIABLE;
 };
