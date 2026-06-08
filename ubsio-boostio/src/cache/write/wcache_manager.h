@@ -99,6 +99,8 @@ public:
 
     BResult HandleProcBroken(uint64_t procId);
 
+    bool HasProcCache(uint64_t procId);
+
     BResult HandleProcBrokenHdl(uint64_t procId);
 
     BResult ClearClientCache(uint64_t procId, uint32_t &clearedCount);

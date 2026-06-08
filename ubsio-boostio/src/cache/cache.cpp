@@ -591,6 +591,11 @@ BResult Cache::HandleProcBroken(uint32_t procId)
     return mWCacheManager->HandleProcBroken(procId);
 }
 
+bool Cache::HasProcCache(uint32_t procId)
+{
+    return mWCacheManager->HasProcCache(procId);
+}
+
 BResult Cache::Flush(uint16_t ptId, uint64_t ptv)
 {
     BIO_TRACE_START(WCACHE_TRACE_FLUSH);

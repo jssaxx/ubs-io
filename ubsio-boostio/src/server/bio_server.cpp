@@ -521,7 +521,9 @@ BResult BioServer::BioCacheInit()
 
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (pid != 0) {
-            Cache::Instance().HandleProcBroken(pid);
+            if (Cache::Instance().HasProcCache(pid)) {
+                Cache::Instance().HandleProcBroken(pid);
+            }
         } else {
             ReConnect(nodeId);
         }
