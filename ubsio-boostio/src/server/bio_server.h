@@ -412,6 +412,7 @@ protected:
     void BioFlowExit();
     BResult BioServerDiagnoseInit();
     BResult BioServerDiagnoseInitInner();
+    void BioServerDiagnoseExit();
 #ifdef USE_DEBUG_TP_TOOLS
     BResult BioServerTracePointInit();
 #endif
@@ -428,6 +429,8 @@ private:
     bool mStarted = false;
     std::mutex mStartLock;
     BioServiceProcPtr mService = nullptr;
+    void *mCliAgentHandler = nullptr;
+    void *mServerDiagnoseHandler = nullptr;
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
     CmPtr mCm = nullptr;

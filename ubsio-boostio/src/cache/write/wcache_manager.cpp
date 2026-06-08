@@ -842,6 +842,17 @@ BResult WCacheManager::HandleProcBroken(uint64_t procId)
     return (isSucceed) ? BIO_OK : BIO_ERR;
 }
 
+bool WCacheManager::HasProcCache(uint64_t procId)
+{
+    ReadLocker<ReadWriteLock> lock(&mWCacheManagerLock);
+    for (const auto &flowIt : mWCacheManager) {
+        if (procId == flowIt.second->GetProcId()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 BResult WCacheManager::HandleProcBrokenHdl(uint64_t procId)
 {
     BResult ret = BIO_INNER_ERR;

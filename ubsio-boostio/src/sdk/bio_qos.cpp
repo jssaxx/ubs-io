@@ -22,7 +22,15 @@ void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
     if (!isLock) {
         mLock.LockWrite();
     }
-    mTaskRunFlag.find(nodeSet)->second = false;
+    auto taskIter = mTaskRunFlag.find(nodeSet);
+    if (UNLIKELY(taskIter == mTaskRunFlag.end())) {
+        CLIENT_LOG_WARN("Wake force ignored because nodeSet task flag not found, nodeSet:" << nodeSet << ".");
+        if (!isLock) {
+            mLock.UnLock();
+        }
+        return;
+    }
+    taskIter->second = false;
 
     auto iter = mIoQueueMap.find(nodeSet);
     if (UNLIKELY(iter == mIoQueueMap.end())) {

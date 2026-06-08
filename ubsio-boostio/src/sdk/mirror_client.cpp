@@ -373,20 +373,29 @@ BResult MirrorClient::LoadOriginViewImpl()
     }
 
     auto tempPtView = mPtView;
+    std::map<uint16_t, IoStrategy *> newIoStrategy;
     for (auto &item : tempPtView) {
         IoStrategy *ioStrategy = new (std::nothrow) IoStrategy();
         if (UNLIKELY(ioStrategy == nullptr)) {
             CLIENT_LOG_ERROR("Alloc io strategy failed.");
+            for (auto &strategy : newIoStrategy) {
+                delete strategy.second;
+            }
             return BIO_ALLOC_FAIL;
         }
         ioStrategy->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
         ioStrategy->strategy = 0;
-        mIoStrategy[item.first] = ioStrategy;
+        newIoStrategy[item.first] = ioStrategy;
     }
 
     if (mNodeView.empty() || mPtView.empty()) {
+        for (auto &strategy : newIoStrategy) {
+            delete strategy.second;
+        }
         return BIO_INNER_RETRY;
     }
+    FreeIoStrategy();
+    mIoStrategy.swap(newIoStrategy);
     CLIENT_LOG_INFO("Load origin view success, localNid:" << mLocalNid.VNodeId() << ", protocol:" << mNetProtocol);
     return BIO_OK;
 }
@@ -1384,6 +1393,7 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
             if (LIKELY(ret == BIO_OK)) {
                 break;
             }
+            ReleaseSpaceDescriptorQuota(ptEntry, param.length);
         }
         isRetry = FailHandler(ret, startTime, mTimeOut);
     } while (isRetry);
@@ -2015,6 +2025,7 @@ BResult MirrorClient::ListRemote(uint16_t nid, ListRequest &req, std::unordered_
         return ret;
     }
     if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0)) {
+        net::BioClientNet::Instance()->Free(mr.address);
         return BIO_INNER_RETRY;
     }
 
@@ -2096,6 +2107,7 @@ BResult MirrorClient::LoadMaster(LoadRequest &req, uint16_t masterNid, const Bio
         }
         if (resp == nullptr) {
             callback(context, BIO_ERR);
+            return;
         }
         BResult hdlRet = *(static_cast<BResult *>(resp));
         callback(context, hdlRet);

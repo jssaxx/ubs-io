@@ -67,6 +67,7 @@ extern "C" {
 #endif
 
 extern int SdkDiagnoseInit();
+extern int SdkDiagnoseDestroy();
 
 #ifdef __cplusplus
 }

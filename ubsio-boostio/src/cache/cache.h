@@ -86,6 +86,8 @@ public:
 
     BResult HandleProcBroken(uint32_t procId);
 
+    bool HasProcCache(uint32_t procId);
+
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
     BResult Flush(uint16_t ptId, uint64_t ptv);

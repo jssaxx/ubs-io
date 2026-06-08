@@ -535,3 +535,9 @@ int ServerDiagnoseInit()
 {
     return ock::bio::diagnose::BioServerCommand::Initialize();
 }
+
+int ServerDiagnoseDestroy()
+{
+    ock::bio::diagnose::BioServerCommand::Destroy();
+    return 0;
+}
