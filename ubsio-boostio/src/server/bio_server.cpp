@@ -45,7 +45,8 @@ BioServer::BioServer() noexcept
 #ifdef USE_DEBUG_TP_TOOLS
         { "Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr },
 #endif
-        { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr },
+        { "Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr,
+            std::bind(&BioServer::BioServerDiagnoseExit, this) },
         { "Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
             std::bind(&BioServer::BioTraceExit, this) },
         { "UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
@@ -568,6 +569,8 @@ void BioServer::BioFlowExit()
 }
 
 using CLIAgentInitFunc = int (*)(uint32_t, char *);
+using CLIAgentDestroyFunc = int (*)(uint32_t);
+using ServerDiagnoseDestroy = int (*)();
 BResult BioServer::BioServerDiagnoseInit()
 {
 #ifdef DEBUG_UT
@@ -605,10 +608,12 @@ BResult BioServer::BioServerDiagnoseInit()
         dlclose(handler);
         return BIO_INNER_ERR;
     }
+    mCliAgentHandler = handler;
 
     ret = this->BioServerDiagnoseInitInner();
     if (ret != BIO_OK) {
         LOG_ERROR("inner init bio server diagnose fail.");
+        BioServerDiagnoseExit();
     }
     return ret;
 }
@@ -637,8 +642,30 @@ BResult BioServer::BioServerDiagnoseInitInner()
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
         dlclose(handler);
+        return ret;
     }
-    return ret;
+    mServerDiagnoseHandler = handler;
+    return BIO_OK;
+}
+
+void BioServer::BioServerDiagnoseExit()
+{
+    if (mServerDiagnoseHandler != nullptr) {
+        auto destroy = reinterpret_cast<ServerDiagnoseDestroy>(dlsym(mServerDiagnoseHandler, "ServerDiagnoseDestroy"));
+        if (destroy != nullptr) {
+            static_cast<void>(destroy());
+        }
+        dlclose(mServerDiagnoseHandler);
+        mServerDiagnoseHandler = nullptr;
+    }
+    if (mCliAgentHandler != nullptr) {
+        auto destroy = reinterpret_cast<CLIAgentDestroyFunc>(dlsym(mCliAgentHandler, "cli_agent_destroy"));
+        if (destroy != nullptr) {
+            static_cast<void>(destroy(456U));
+        }
+        dlclose(mCliAgentHandler);
+        mCliAgentHandler = nullptr;
+    }
 }
 
 #ifdef USE_DEBUG_TP_TOOLS

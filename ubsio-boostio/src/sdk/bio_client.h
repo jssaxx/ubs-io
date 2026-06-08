@@ -301,6 +301,7 @@ public:
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
+    void BioClientDiagnoseExit();
     BResult BioClientTracePointInit(WorkerMode mode);
 
 private:
@@ -311,6 +312,8 @@ private:
     ReadWriteLock mLock;
     MirrorClientPtr mMirror = nullptr;
     net::BioClientNetPtr mNetEngine = nullptr;
+    void *mCliAgentHandler = nullptr;
+    void *mSdkDiagnoseHandler = nullptr;
     std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;

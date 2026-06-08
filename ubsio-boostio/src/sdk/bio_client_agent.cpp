@@ -825,6 +825,12 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
         return ret;
     }
     if (UNLIKELY(rsp.num > 1000U || rsp.buffLen != 0)) {
+        if (rsp.num != 0) {
+            FreeMemRequest freeReq = { req.comm, 1, 1, { 0 } };
+            freeReq.addr[0] = rsp.addrOffset;
+            static_cast<void>(net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID,
+                BIO_OP_SDK_FREE_MEM, freeReq));
+        }
         return BIO_INNER_RETRY;
     }
 
@@ -832,6 +838,10 @@ BResult BioClientAgent::SendListRequestLocal(ListRequest &req, std::unordered_ma
         uint8_t *addr = net::BioClientNet::Instance()->GetShmAddress(rsp.addrOffset, (rsp.num * sizeof(ObjStat)));
         if (addr == nullptr) {
             CLIENT_LOG_ERROR("Send list request get shm addr failed.");
+            FreeMemRequest freeReq = { req.comm, 1, 1, { 0 } };
+            freeReq.addr[0] = rsp.addrOffset;
+            static_cast<void>(net::BioClientNet::Instance()->SendAsync<FreeMemRequest>(INVALID_NID,
+                BIO_OP_SDK_FREE_MEM, freeReq));
             return BIO_INNER_ERR;
         }
         auto statInfo = static_cast<ObjStat *>(static_cast<void *>(addr));

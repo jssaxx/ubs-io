@@ -135,7 +135,7 @@ void BioConfig::LoadDefaultConf()
     /* load log info */
     AddStrConf(LOG_LEVEL, VStrEnum::Create(LOG_LEVEL.first, "error||warn||info||debug||trace"));
     AddIntConf(SEGMENT_SIZE_MB, VIntRange::Create(SEGMENT_SIZE_MB.first, NO_1, NO_16));
-    AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_U64_0, NO_512));
+    AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_U64_0, NO_2048));
     AddStrConf(DISK_CONF_PATH);
 
     AddIntConf(BIO_WCACHE_NEGOTIATE_DELAY, VIntRange::Create(BIO_WCACHE_NEGOTIATE_DELAY.first, NO_50, NO_1000));

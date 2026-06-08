@@ -56,6 +56,7 @@ extern "C" {
 #endif
 
 extern int ServerDiagnoseInit();
+extern int ServerDiagnoseDestroy();
 
 #ifdef __cplusplus
 }

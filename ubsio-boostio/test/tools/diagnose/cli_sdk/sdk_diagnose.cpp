@@ -31,6 +31,12 @@ int SdkDiagnoseInit()
     return ock::bio::diagnose::BioSdkCommand::Initialize();
 }
 
+int SdkDiagnoseDestroy()
+{
+    ock::bio::diagnose::BioSdkCommand::Destroy();
+    return 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -270,6 +270,8 @@ void BioClient::BioClientExitPrometheus()
 
 using SdkDiagnose = int (*)();
 using CLIAgentInitFunc = int (*)(uint32_t, char *);
+using CLIAgentDestroyFunc = int (*)(uint32_t);
+using SdkDiagnoseDestroy = int (*)();
 BResult BioClient::BioDiagnoseSdkInit()
 {
 #ifdef DEBUG_UT
@@ -294,8 +296,10 @@ BResult BioClient::BioDiagnoseSdkInit()
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
         dlclose(handler);
+        return ret;
     }
-    return ret;
+    mSdkDiagnoseHandler = handler;
+    return BIO_OK;
 }
 
 BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
@@ -331,13 +335,35 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
             dlclose(handler);
             return BIO_INNER_ERR;
         }
+        mCliAgentHandler = handler;
     }
 
     ret = this->BioDiagnoseSdkInit();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
+        BioClientDiagnoseExit();
     }
     return ret;
+}
+
+void BioClient::BioClientDiagnoseExit()
+{
+    if (mSdkDiagnoseHandler != nullptr) {
+        auto destroy = reinterpret_cast<SdkDiagnoseDestroy>(dlsym(mSdkDiagnoseHandler, "SdkDiagnoseDestroy"));
+        if (destroy != nullptr) {
+            static_cast<void>(destroy());
+        }
+        dlclose(mSdkDiagnoseHandler);
+        mSdkDiagnoseHandler = nullptr;
+    }
+    if (mCliAgentHandler != nullptr) {
+        auto destroy = reinterpret_cast<CLIAgentDestroyFunc>(dlsym(mCliAgentHandler, "cli_agent_destroy"));
+        if (destroy != nullptr) {
+            static_cast<void>(destroy(static_cast<uint32_t>(getpid())));
+        }
+        dlclose(mCliAgentHandler);
+        mCliAgentHandler = nullptr;
+    }
 }
 
 BResult BioClient::BioClientTracePointInit(WorkerMode mode)
@@ -363,20 +389,54 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
     }
     mMode = mode;
     uint64_t startTime = Monotonic::TimeSec();
+    bool loggerStarted = false;
+    bool agentStarted = false;
+    bool netStarted = false;
+    bool mirrorStarted = false;
+    bool diagnoseStarted = false;
+#ifdef USE_PROMETHEUS
+    bool prometheusStarted = false;
+#endif
+    auto rollback = [&]() {
+#ifdef USE_PROMETHEUS
+        if (prometheusStarted) {
+            BioClientExitPrometheus();
+        }
+#endif
+        if (diagnoseStarted) {
+            BioClientDiagnoseExit();
+        }
+        if (mirrorStarted) {
+            BioClientMirrorExit();
+        }
+        if (netStarted) {
+            BioClientNetExit();
+        }
+        if (agentStarted) {
+            BioClientAgentExit();
+        }
+        if (loggerStarted) {
+            BioClientLoggerExit(mode);
+        }
+    };
 
     // 1. 初始化client端Logger.
     if (BioClientLoggerInit(mode, optConf.logType, optConf.logFilePath) != BIO_OK) {
         return BIO_ERR;
     }
+    loggerStarted = true;
 
     // 2. 初始化client端Agent, 融合部署场景会初始化bio server.
     if (BioClientAgentInit(mode) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
+    agentStarted = true;
 
     // 3. 初始化client端的TP功能, 仅debug生效.
 #ifdef USE_DEBUG_TP_TOOLS
     if (this->BioClientTracePointInit(mode) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
 #endif
@@ -391,12 +451,14 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
                            && FileUtil::CanonicalPath(netConf.privateKeyPath);
         if (!checkCaPath) {
             CLIENT_LOG_ERROR("Check ca path failed.");
+            rollback();
             return BIO_ERR;
         }
 
         if (!netConf.caCrlPath.empty()) {
             if (!FileUtil::CanonicalPath(netConf.caCrlPath)) {
                 LOG_ERROR("Invalid crl path.");
+                rollback();
                 return BIO_ERR;
             }
         }
@@ -404,6 +466,7 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         if (!netConf.privateKeyPassword.empty()) {
             if (!FileUtil::CanonicalPath(netConf.privateKeyPassword)) {
                 LOG_ERROR("Invalid crl path.");
+                rollback();
                 return BIO_ERR;
             }
         }
@@ -411,61 +474,76 @@ BResult BioClient::Start(WorkerMode mode, const ClientOptionsConfig &optConf)
         if (!netConf.decrypterLibPath.empty()) {
             if (!FileUtil::CanonicalPath(netConf.decrypterLibPath)) {
                 LOG_ERROR("Invalid crl path.");
+                rollback();
                 return BIO_ERR;
             }
         }
     }
 
     if (BioClientNetPreInit(mode, netConf) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
+    netStarted = true;
 
     // 5. 初始化Mirror client.
     if (BioClientMirrorInit(mode) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
+    mirrorStarted = true;
 
     // 6. 初始化Net第二步, 分离部署场景: 1)创建RPC服务; 2)与远端所有server建立连接.
     if (BioClientNetPostInit(netConf) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
 
     // 7. 初始化interceptor server.
     if (BioInterceptorServerInit(mode) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
 
     // 8. 初始化sdk端underfs
     if (BioClientUnderfsInit(mode) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
 
     // 9. bio client开工, mirror client开工去创建亲和的Flow实例.
     if (BioClientStartWork() != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
 
     if (BioClientDiagnoseInit(mode) != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
+    diagnoseStarted = true;
 
     if (mode == SEPARATES && optConf.enable != 0) {
         auto expireChecker = ExpireChecker::Instance();
         if (expireChecker == nullptr) {
             LOG_INFO("expire checker alloc fail.");
+            rollback();
             return BIO_ALLOC_FAIL;
         }
         auto ret = expireChecker->ExpireCheckerInit(netConf.caCerPath, netConf.certificationPath,
             optConf.opensslLibDir);
         if (ret != BIO_OK) {
+            rollback();
             return ret;
         }
     }
 
 #ifdef USE_PROMETHEUS
     if (BioClientStartPrometheus() != BIO_OK) {
+        rollback();
         return BIO_ERR;
     }
+    prometheusStarted = true;
 #endif
 
     mStarted = true;
@@ -479,6 +557,7 @@ void BioClient::Exit()
     if (!mStarted) {
         return;
     }
+    BioClientDiagnoseExit();
     BioClientAgentExit();
     BioClientNetExit();
     BioClientMirrorExit();
