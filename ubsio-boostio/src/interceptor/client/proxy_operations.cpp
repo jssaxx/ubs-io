@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <vector>
 #include <climits>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -59,6 +60,33 @@ void LogFdInterceptSuccess(const char *api, int fd, uint64_t inode, int ret)
         ", ret:" << ret << ".");
 }
 
+bool FlushInodeMeta(uint64_t inode)
+{
+    InterceptorFlushInodeIn req{};
+    InterceptorFlushInodeOut resp{};
+    req.inode = inode;
+    int32_t sendRet = InterceptorClientNetService::Instance().SendSync<InterceptorFlushInodeIn,
+        InterceptorFlushInodeOut>(INVALID_NID, BIO_OP_INTERCEPTOR_FLUSH_INODE, req, resp);
+    if (UNLIKELY(sendRet != BIO_OK || resp.ret != RET_CACHE_OK)) {
+        CLOG_ERROR("Flush inode meta failed, inode:" << inode << ", sendRet:" << sendRet <<
+            ", hookRet:" << resp.ret << ".");
+        return false;
+    }
+    return true;
+}
+
+bool FlushDirtyInodeMeta(const std::shared_ptr<OpenFile> &file)
+{
+    if (file == nullptr || !file->HasWriteDirty()) {
+        return true;
+    }
+    if (!FlushInodeMeta(file->GetInode())) {
+        return false;
+    }
+    file->ClearWriteDirty();
+    return true;
+}
+
 void LogLseekInterceptSuccess(const char *api, int fd, uint64_t inode, off64_t offset, int whence, off64_t ret)
 {
     CLOG_DEBUG("Interceptor lseek success, api:" << api << ", fd:" << fd << ", inode:" << inode <<
@@ -76,6 +104,58 @@ uint64_t GetRegularFileSizeForPrefetch(const struct stat &statBuf)
         return UINT64_MAX;
     }
     return static_cast<uint64_t>(statBuf.st_size);
+}
+
+std::string NormalizeLexicalPath(const std::string &path)
+{
+    if (path.empty()) {
+        return path;
+    }
+
+    bool absolute = path[0] == '/';
+    std::vector<std::string> parts;
+    size_t pos = 0;
+    while (pos < path.size()) {
+        while (pos < path.size() && path[pos] == '/') {
+            ++pos;
+        }
+        size_t start = pos;
+        while (pos < path.size() && path[pos] != '/') {
+            ++pos;
+        }
+        if (start == pos) {
+            continue;
+        }
+
+        std::string part = path.substr(start, pos - start);
+        if (part == ".") {
+            continue;
+        }
+        if (part == "..") {
+            if (!parts.empty() && parts.back() != "..") {
+                parts.pop_back();
+            } else if (!absolute) {
+                parts.emplace_back(std::move(part));
+            }
+            continue;
+        }
+        parts.emplace_back(std::move(part));
+    }
+
+    std::string normalized;
+    if (absolute) {
+        normalized = "/";
+    }
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (!normalized.empty() && normalized.back() != '/') {
+            normalized.push_back('/');
+        }
+        normalized.append(parts[i]);
+    }
+    if (normalized.empty()) {
+        return absolute ? "/" : ".";
+    }
+    return normalized;
 }
 
 void ReleaseRemoteReadWindow(const RemoteReadWindowCache &cache)
@@ -419,6 +499,9 @@ int ProxyOperations::Close(int fd)
     }
 
     bool flushOk = FlushPendingWriteWindow(file, fd);
+    if (LIKELY(flushOk)) {
+        flushOk = FlushDirtyInodeMeta(file);
+    }
     if (UNLIKELY(!flushOk)) {
         errno = EIO;
     }
@@ -442,7 +525,7 @@ int ProxyOperations::Fsync(int fd)
     if (file == nullptr) {
         return CONTEXT.GetOperations()->fsync(fd);
     }
-    if (UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
+    if (UNLIKELY(!FlushPendingWriteWindow(file, fd) || !FlushDirtyInodeMeta(file))) {
         errno = EIO;
         return -1;
     }
@@ -460,8 +543,8 @@ void ProxyOperations::FlushAllPendingWriteWindows()
         if (item.second == nullptr || !item.second->IsActive()) {
             continue;
         }
-        if (UNLIKELY(!FlushPendingWriteWindow(item.second, item.first))) {
-            CLOG_ERROR("Flush pending write window failed, fd:" << item.first <<
+        if (UNLIKELY(!FlushPendingWriteWindow(item.second, item.first) || !FlushDirtyInodeMeta(item.second))) {
+            CLOG_ERROR("Flush pending write window and meta failed, fd:" << item.first <<
                 ", inode:" << item.second->GetInode() << ".");
         }
     }
@@ -473,7 +556,7 @@ int ProxyOperations::Fdatasync(int fd)
     if (file == nullptr) {
         return CONTEXT.GetOperations()->fdatasync(fd);
     }
-    if (UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
+    if (UNLIKELY(!FlushPendingWriteWindow(file, fd) || !FlushDirtyInodeMeta(file))) {
         errno = EIO;
         return -1;
     }
@@ -487,6 +570,7 @@ int ProxyOperations::Fdatasync(int fd)
 void ProxyOperations::Sync(void)
 {
     auto files = CONTEXT.files.Snapshot();
+    std::vector<uint64_t> flushedInodes;
     for (auto &item : files) {
         if (item.second == nullptr || !item.second->IsActive()) {
             continue;
@@ -494,7 +578,21 @@ void ProxyOperations::Sync(void)
         if (UNLIKELY(!FlushPendingWriteWindow(item.second, item.first))) {
             CLOG_ERROR("Flush pending write window before sync failed, fd:" << item.first <<
                 ", inode:" << item.second->GetInode() << ".");
+            continue;
         }
+        if (!item.second->HasWriteDirty()) {
+            continue;
+        }
+        uint64_t inode = item.second->GetInode();
+        if (std::find(flushedInodes.begin(), flushedInodes.end(), inode) != flushedInodes.end()) {
+            item.second->ClearWriteDirty();
+            continue;
+        }
+        if (UNLIKELY(!FlushDirtyInodeMeta(item.second))) {
+            CLOG_ERROR("Flush inode meta before sync failed, inode:" << inode << ".");
+            continue;
+        }
+        flushedInodes.push_back(inode);
     }
     CONTEXT.GetOperations()->sync();
     CLOG_DEBUG("Interceptor fd success, api:sync, fd:-1, inode:0, ret:0.");
@@ -504,7 +602,7 @@ int ProxyOperations::SyncFs(int fd)
 {
     auto file = CONTEXT.files.At(fd);
     uint64_t inode = file == nullptr ? 0 : file->GetInode();
-    if (file != nullptr && UNLIKELY(!FlushPendingWriteWindow(file, fd))) {
+    if (file != nullptr && UNLIKELY(!FlushPendingWriteWindow(file, fd) || !FlushDirtyInodeMeta(file))) {
         errno = EIO;
         return -1;
     }
@@ -580,32 +678,7 @@ int32_t ProxyOperations::OpenInner(const char *api, const char *path, int fd, in
     CLOG_DEBUG("Open file::" << path << ", fd:" << fd << ".");
     std::string restoredPath;
     auto ret = FullPath(path, restoredPath);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
-    }
-
-    if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
-        struct stat statBuf;
-        ret = stat(restoredPath.c_str(), &statBuf);
-        if (UNLIKELY(ret != 0)) {
-            return BIO_ERR;
-        }
-        std::shared_ptr<OpenFile> op = nullptr;
-        try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, GetRegularFileSizeForPrefetch(statBuf));
-        } catch (const std::bad_alloc&) {
-            return BIO_ERR;
-        }
-        if ((flags & O_APPEND) != 0) {
-            op->SetOffset(statBuf.st_size);
-        }
-        CONTEXT.files.Add(fd, std::move(op));
-        LogOpenInterceptSuccess(api, restoredPath, fd, statBuf.st_ino, statBuf.st_size);
-    } else {
-        CLOG_DEBUG("Fallback open to native, path:" << restoredPath << ", fd:" << fd << ".");
-    }
-
-    return BIO_OK;
+    return AttachOpenFileIfNeeded(api, fd, flags, restoredPath, ret);
 }
 
 int32_t ProxyOperations::OpenInner(const char *api, int dirFd, const char *path, int fd, int flags)
@@ -613,32 +686,7 @@ int32_t ProxyOperations::OpenInner(const char *api, int dirFd, const char *path,
     CLOG_DEBUG("Open dir fd:" << dirFd << ", file:" << path << ", fd:" << fd << ".");
     std::string restoredPath;
     auto ret = FullPath(dirFd, path, restoredPath);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
-    }
-
-    if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
-        struct stat statBuf;
-        ret = stat(restoredPath.c_str(), &statBuf);
-        if (UNLIKELY(ret != 0)) {
-            return BIO_ERR;
-        }
-        std::shared_ptr<OpenFile> op = nullptr;
-        try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, GetRegularFileSizeForPrefetch(statBuf));
-        } catch (const std::bad_alloc&) {
-            return BIO_ERR;
-        }
-        if ((flags & O_APPEND) != 0) {
-            op->SetOffset(statBuf.st_size);
-        }
-        CONTEXT.files.Add(fd, std::move(op));
-        LogOpenInterceptSuccess(api, restoredPath, fd, statBuf.st_ino, statBuf.st_size);
-    } else {
-        CLOG_DEBUG("Fallback openat to native, path:" << restoredPath << ", fd:" << fd << ".");
-    }
-
-    return BIO_OK;
+    return AttachOpenFileIfNeeded(api, fd, flags, restoredPath, ret);
 }
 
 int32_t ProxyOperations::CreateInner(const char *api, const char *path, int fd)
@@ -646,27 +694,58 @@ int32_t ProxyOperations::CreateInner(const char *api, const char *path, int fd)
     CLOG_DEBUG("Create file:" << path << ", fd:" << fd << ".");
     std::string restoredPath;
     auto ret = FullPath(path, restoredPath);
-    if (UNLIKELY(ret != BIO_OK)) {
-        return ret;
+    return AttachOpenFileIfNeeded(api, fd, O_TRUNC, restoredPath, ret);
+}
+
+int32_t ProxyOperations::AttachOpenFileIfNeeded(const char *api, int fd, int flags, const std::string &path,
+    int32_t pathRet)
+{
+    CONTEXT.files.Erase(fd);
+
+    if (UNLIKELY(pathRet != BIO_OK)) {
+        CLOG_DEBUG("Fallback " << api << " to native, fd:" << fd << ".");
+        return BIO_OK;
     }
 
-    if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) == 0) {
-        struct stat statBuf;
-        ret = stat(restoredPath.c_str(), &statBuf);
-        if (UNLIKELY(ret != 0)) {
-            return BIO_ERR;
-        }
-        std::shared_ptr<OpenFile> op = nullptr;
-        try {
-            op = std::make_shared<OpenFile>(fd, statBuf.st_ino, GetRegularFileSizeForPrefetch(statBuf));
-        } catch (const std::bad_alloc&) {
-            return BIO_ERR;
-        }
-        CONTEXT.files.Add(fd, std::move(op));
-        LogOpenInterceptSuccess(api, restoredPath, fd, statBuf.st_ino, statBuf.st_size);
-    } else {
-        CLOG_DEBUG("Fallback create to native, path:" << restoredPath << ", fd:" << fd << ".");
+    std::string restoredPath = NormalizeLexicalPath(path);
+    if (CheckSelfPath(CONTEXT.mountPoint, restoredPath) != 0) {
+        CLOG_DEBUG("Fallback " << api << " to native, path:" << restoredPath << ", fd:" << fd << ".");
+        return BIO_OK;
     }
+
+    struct stat statBuf;
+    if (UNLIKELY(fstat(fd, &statBuf) != 0)) {
+        CLOG_DEBUG("Fallback " << api << " to native, path:" << restoredPath << ", fd:" << fd << ".");
+        return BIO_OK;
+    }
+
+    if (!S_ISREG(statBuf.st_mode)) {
+        CLOG_DEBUG("Fallback " << api << " to native, path:" << restoredPath << ", fd:" << fd << ".");
+        return BIO_OK;
+    }
+
+    uint64_t statSize = GetRegularFileSizeForPrefetch(statBuf);
+    uint64_t knownFileSize = statSize;
+    if ((flags & O_TRUNC) != 0) {
+        CONTEXT.files.SetKnownFileSize(statBuf.st_ino, statSize);
+    } else {
+        knownFileSize = CONTEXT.files.LoadKnownFileSize(statBuf.st_ino, statSize);
+    }
+
+    bool append = (flags & O_APPEND) != 0;
+    std::shared_ptr<OpenFile> op = nullptr;
+    try {
+        op = std::make_shared<OpenFile>(fd, statBuf.st_ino, knownFileSize, append);
+    } catch (const std::bad_alloc&) {
+        return BIO_ERR;
+    }
+    if (append) {
+        op->SetOffset(static_cast<off64_t>(knownFileSize));
+    }
+    if (UNLIKELY(!CONTEXT.files.Add(fd, std::move(op)))) {
+        return BIO_ERR;
+    }
+    LogOpenInterceptSuccess(api, restoredPath, fd, statBuf.st_ino, statBuf.st_size);
 
     return BIO_OK;
 }

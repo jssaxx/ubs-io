@@ -389,10 +389,38 @@ CResult BioCheckUpgradeReady(uint64_t tenantId);
  */
 CResult BioAllocCacheSpace(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
 
+/**
+ * @brief: Alloc cache space descriptor for interceptor direct-space write
+ *
+ * This interface reserves writable BIO cache space and returns only the
+ * descriptor. The caller copies data through interceptor shared memory and
+ * later commits, aborts, or shrinks the descriptor.
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: objectId: object id for generate location
+ * @param[in]: length : alloc space length
+ * @param[out]: space: cache space descriptor
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 CResult BioAllocCacheSpaceDescriptor(uint64_t tenantId, uint64_t objectId, uint64_t length, CacheSpaceDesc *space);
 
+/**
+ * @brief: Abort a prepared cache space descriptor
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in]: space: cache space descriptor to abort
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 CResult BioAbortCacheSpaceDescriptor(uint64_t tenantId, CacheSpaceDesc *space);
 
+/**
+ * @brief: Shrink a prepared cache space descriptor to its used length
+ *
+ * @param[in]: tenantId: tenant id
+ * @param[in,out]: space: cache space descriptor to shrink
+ * @param[in]: usedLength: bytes actually written into the descriptor
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 CResult BioShrinkCacheSpaceDescriptor(uint64_t tenantId, CacheSpaceDesc *space, uint64_t usedLength);
 
 /**
@@ -410,6 +438,7 @@ typedef int (*ReadAddrHook)(uint64_t, uint64_t, uint64_t, CacheReadAddrDesc *);
 typedef int (*ReadToSpaceHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *, int *);
 typedef int (*WriteHook)(uint64_t, char *, uint64_t, uint64_t, uint64_t);
 typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *);
+typedef int (*FlushHook)(uint64_t);
 
 /**
  * @brief: Interceptor read hook
@@ -423,8 +452,31 @@ typedef int (*WriteCopyFreeHook)(uint64_t, uint64_t, uint64_t, CacheSpaceDesc *)
  */
 int BioReadHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, int *readLen);
 
+/**
+ * @brief: Interceptor read hook into prepared BIO cache space
+ *
+ * @param[in]: inode: inode number
+ * @param[in]: count : data count
+ * @param[in]: offset : read data offset
+ * @param[in]: space : target cache space descriptor
+ * @param[out]: readLen : real read length
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 int BioReadToSpaceHook(uint64_t inode, uint64_t count, uint64_t offset, CacheSpaceDesc *space, int *readLen);
 
+/**
+ * @brief: Interceptor read address hook
+ *
+ * This hook returns BIO shm address description for inode+offset+count.
+ * It does not copy file data. If address lookup is not supported, caller can
+ * fallback to BioReadHook with another writable buffer.
+ *
+ * @param[in]: inode: inode number
+ * @param[in]: count : data count
+ * @param[in]: offset : read data offset
+ * @param[out]: desc : BIO shm address description
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
 int BioReadAddrHook(uint64_t inode, uint64_t count, uint64_t offset, CacheReadAddrDesc *desc);
 
 /**
@@ -451,6 +503,14 @@ int BioWriteHook(uint64_t inode, char *buff, uint64_t count, uint64_t offset, ui
 int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheSpaceDesc *space);
 
 /**
+ * @brief: Flush pending file metadata for interceptor direct-space writes
+ *
+ * @param[in]: inode: inode number
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+int BioFlushHook(uint64_t inode);
+
+/**
  * @brief: Register interceptor read interface
  *
  * @param[in]: rh: read hook
@@ -458,8 +518,20 @@ int BioWriteCopyFreeHook(uint64_t inode, uint64_t offset, uint64_t count, CacheS
  */
 void BioRegisterInterceptorRead(ReadHook rh);
 
+/**
+ * @brief: Register interceptor read-to-space interface
+ *
+ * @param[in]: rh: read-to-space hook
+ * @return: void
+ */
 void BioRegisterInterceptorReadToSpace(ReadToSpaceHook rh);
 
+/**
+ * @brief: Register interceptor read address interface
+ *
+ * @param[in]: rh: read address hook
+ * @return: void
+ */
 void BioRegisterInterceptorReadAddr(ReadAddrHook rh);
 
 /**
@@ -477,6 +549,14 @@ void BioRegisterInterceptorWrite(WriteHook wh);
  * @return: void
  */
 void BioRegisterInterceptorWriteCopyFree(WriteCopyFreeHook wh);
+
+/**
+ * @brief: Register interceptor flush interface
+ *
+ * @param[in]: fh: flush hook
+ * @return: void
+ */
+void BioRegisterInterceptorFlush(FlushHook fh);
 
 /**
  * @brief: Convert location information

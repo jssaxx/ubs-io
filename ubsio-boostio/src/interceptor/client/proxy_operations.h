@@ -70,6 +70,8 @@ private:
     static int32_t OpenInner(const char *api, const char *path, int fd, int flags);
     static int32_t OpenInner(const char *api, int dirFd, const char *path, int fd, int flags);
     static int32_t CreateInner(const char *api, const char *path, int fd);
+    static int32_t AttachOpenFileIfNeeded(const char *api, int fd, int flags, const std::string &path,
+        int32_t pathRet);
     static ssize_t PreadInner(const char *api, const std::shared_ptr<OpenFile> &file, int fd, void *buf,
         size_t count, off_t offset);
     static ssize_t PreadShmInner(const std::shared_ptr<OpenFile> &file, int fd, void *buf, size_t count,

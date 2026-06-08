@@ -30,7 +30,7 @@ Contains header files and development resources for ubs-io-boostio.
 %build
 pushd ubsio-boostio
 dos2unix build.sh
-bash -x build.sh -t release --cli
+bash -x build.sh -t release --cli --zk
 popd
 
 %install

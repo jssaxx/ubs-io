@@ -342,7 +342,10 @@ static void NoteWriteFileSize(const std::shared_ptr<OpenFile> &file, off_t offse
     if (writeOffset > UINT64_MAX - writeLength) {
         return;
     }
-    file->ExpandKnownFileSize(writeOffset + writeLength);
+    uint64_t fileSize = writeOffset + writeLength;
+    file->ExpandKnownFileSize(fileSize);
+    file->MarkWriteDirty();
+    CONTEXT.files.UpdateKnownFileSize(file->GetInode(), fileSize);
 }
 
 static void DropReadCaches(const std::shared_ptr<OpenFile> &file)
@@ -677,6 +680,14 @@ static uint64_t BytesUntilReadIndexWindowEnd(uint64_t offset, uint64_t left)
     return std::min<uint64_t>(left, windowLeft);
 }
 
+static uint64_t BytesUntilInterceptorIoWindowEnd(uint64_t offset, uint64_t left)
+{
+    uint64_t windowOffset = WriteAggregateWindowBase(offset);
+    uint64_t inWindow = offset - windowOffset;
+    uint64_t windowLeft = MAX_INTERCEPTOR_IO_SIZE - inWindow;
+    return std::min<uint64_t>(left, windowLeft);
+}
+
 static bool IsSingleReadIndexWindow(const InterceptorReadIndexCache &cache)
 {
     if (cache.dataLen == 0) {
@@ -867,17 +878,34 @@ ssize_t ProxyOperations::PreadInner(const char *api, const std::shared_ptr<OpenF
         return -1;
     }
 
-    if (count > MAX_INTERCEPTOR_IO_SIZE) {
-        CLOG_DEBUG("Fallback " << api << " to native for oversize request, fd:" << fd << ", inode:" <<
-            file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ".");
-        return CONTEXT.GetOperations()->pread(fd, buf, count, offset);
+    if (offset < 0) {
+        errno = EINVAL;
+        return -1;
     }
 
-    ssize_t ret = PreadShmInner(file, fd, buf, count, offset);
-    if (ret >= 0) {
+    auto *dst = static_cast<uint8_t *>(buf);
+    uint64_t readOffset = static_cast<uint64_t>(offset);
+    size_t readTotal = 0;
+    while (readTotal < count) {
+        uint64_t left = static_cast<uint64_t>(count - readTotal);
+        size_t chunk = static_cast<size_t>(BytesUntilInterceptorIoWindowEnd(readOffset, left));
+        ssize_t ret = PreadShmInner(file, fd, dst + readTotal, chunk, static_cast<off_t>(readOffset));
+        if (ret < 0) {
+            return readTotal > 0 ? static_cast<ssize_t>(readTotal) : -1;
+        }
+        if (ret == 0) {
+            break;
+        }
+        readTotal += static_cast<size_t>(ret);
+        readOffset += static_cast<uint64_t>(ret);
+        if (static_cast<size_t>(ret) < chunk) {
+            break;
+        }
+    }
+    if (readTotal > 0 || count == 0) {
         LogReadInterceptSuccess(api, fd, file->GetInode(), offset, count);
     }
-    return ret;
+    return static_cast<ssize_t>(readTotal);
 }
 
 ssize_t ProxyOperations::PreadShmInner(const std::shared_ptr<OpenFile> &file, int fd, void *buf, size_t count,
@@ -1033,6 +1061,10 @@ ssize_t ProxyOperations::PwriteInner(const char *api, const std::shared_ptr<Open
         errno = EIO;
         return -1;
     }
+    if (offset < 0) {
+        errno = EINVAL;
+        return -1;
+    }
     DropReadCaches(file);
     if (count <= MAX_INTERCEPTOR_IO_SIZE) {
         bool intercepted = false;
@@ -1043,20 +1075,34 @@ ssize_t ProxyOperations::PwriteInner(const char *api, const std::shared_ptr<Open
         }
         return ret;
     }
-    CLOG_DEBUG("Fallback " << api << " to native for oversize request, fd:" << fd << ", inode:" <<
-        file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ".");
-    if (UNLIKELY(!InvalidateReadIndexForNativeWrite(file->GetInode(), offset, count))) {
-        errno = EIO;
-        return -1;
+
+    auto *src = static_cast<const uint8_t *>(buf);
+    uint64_t writeOffset = static_cast<uint64_t>(offset);
+    size_t writtenTotal = 0;
+    while (writtenTotal < count) {
+        uint64_t left = static_cast<uint64_t>(count - writtenTotal);
+        size_t chunk = static_cast<size_t>(BytesUntilInterceptorIoWindowEnd(writeOffset, left));
+        ssize_t ret = PwriteDirectSpaceInner(file, fd, src + writtenTotal, chunk, static_cast<off_t>(writeOffset));
+        if (ret >= 0) {
+            LogWritePathSuccess("direct_large", fd, file->GetInode(), static_cast<off_t>(writeOffset), chunk, ret);
+        }
+        if (ret < 0) {
+            return writtenTotal > 0 ? static_cast<ssize_t>(writtenTotal) : -1;
+        }
+        if (ret == 0) {
+            break;
+        }
+        NoteWriteFileSize(file, static_cast<off_t>(writeOffset), ret);
+        writtenTotal += static_cast<size_t>(ret);
+        writeOffset += static_cast<uint64_t>(ret);
+        if (static_cast<size_t>(ret) < chunk) {
+            break;
+        }
     }
-    ssize_t ret = CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
-    if (ret > 0 && UNLIKELY(!InvalidateReadIndexForNativeWrite(file->GetInode(), offset,
-        static_cast<uint64_t>(ret)))) {
-        errno = EIO;
-        return -1;
+    if (writtenTotal > 0) {
+        LogWriteInterceptSuccess(api, fd, file->GetInode(), offset, count);
     }
-    NoteWriteFileSize(file, offset, ret);
-    return ret;
+    return static_cast<ssize_t>(writtenTotal);
 }
 
 static bool PrepareDirectSpaceWrite(const std::shared_ptr<OpenFile> &file, int fd, uint64_t nbytes, off_t offset,
@@ -1163,14 +1209,6 @@ static void AbortPreparedDirectSpaceWrite(int fd, uint64_t inode, int64_t offset
     const InterceptorPwritePrepareSpaceOut &prepareResp)
 {
     AbortPreparedDirectSpaceWrite(fd, inode, offset, prepareResp.segNum, prepareResp.segs);
-}
-
-static ssize_t PwriteNativeFallback(const std::shared_ptr<OpenFile> &file, int fd, const void *buf, size_t count,
-    off_t offset)
-{
-    CLOG_DEBUG("Fallback write to native pwrite64, fd:" << fd << ", inode:" << file->GetInode() <<
-        ", offset:" << offset << ", nbytes:" << count << ".");
-    return CONTEXT.GetOperations()->pwrite64(fd, buf, count, offset);
 }
 
 ssize_t ProxyOperations::PwriteDirectSpaceInner(const std::shared_ptr<OpenFile> &file, int fd, const void *buf,
@@ -1522,51 +1560,63 @@ ssize_t ProxyOperations::PwriteAggregatedDirectSpaceInner(const std::shared_ptr<
 
     auto &window = file->DirectSpaceWriteWindow();
     uint64_t writeOffset = static_cast<uint64_t>(offset);
-    uint64_t baseOffset = WriteAggregateWindowBase(writeOffset);
-    if (window.active) {
-        uint64_t expected = window.baseOffset + window.dataLen;
-        if (writeOffset != expected || baseOffset != window.baseOffset ||
-            count > INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE - window.dataLen) {
+    const auto *src = static_cast<const uint8_t *>(buf);
+    size_t accepted = 0;
+
+    while (accepted < count) {
+        uint64_t baseOffset = WriteAggregateWindowBase(writeOffset);
+        if (window.active) {
+            uint64_t expected = window.baseOffset + window.dataLen;
+            if (writeOffset != expected || baseOffset != window.baseOffset) {
+                if (UNLIKELY(!CommitDirectSpaceWriteWindowLocked(file, fd, window))) {
+                    ClearNextDirectSpaceWritePrepareLocked(file, fd);
+                    return accepted > 0 ? static_cast<ssize_t>(accepted) : -1;
+                }
+                ClearNextDirectSpaceWritePrepareLocked(file, fd);
+                return accepted > 0 ? static_cast<ssize_t>(accepted) : AGGREGATE_WRITE_FALLBACK;
+            }
+        } else {
+            if (!IsWriteAggregateWindowStart(writeOffset)) {
+                ClearNextDirectSpaceWritePrepareLocked(file, fd);
+                return accepted > 0 ? static_cast<ssize_t>(accepted) : AGGREGATE_WRITE_FALLBACK;
+            }
+            if (!ConsumeNextDirectSpaceWritePrepareLocked(file, fd, baseOffset, window) &&
+                !PrepareDirectSpaceWriteWindow(file, fd, baseOffset, window)) {
+                return accepted > 0 ? static_cast<ssize_t>(accepted) : AGGREGATE_WRITE_FALLBACK;
+            }
+        }
+
+        size_t remain = count - accepted;
+        uint64_t windowRemain = INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE - window.dataLen;
+        size_t piece = static_cast<size_t>(std::min<uint64_t>(windowRemain, static_cast<uint64_t>(remain)));
+        uint32_t failedAddrIdx = UINT32_MAX;
+        uint64_t failedAddrOffset = 0;
+        uint64_t failedLen = 0;
+        if (UNLIKELY(!CopyToDirectSpaceSegment(window.segs[0], window.dataLen, src + accepted, piece,
+            failedAddrIdx, failedAddrOffset, failedLen))) {
+            CLOG_DEBUG("Copy direct-space write window failed, fd:" << fd << ", inode:" <<
+                file->GetInode() << ", baseOffset:" << window.baseOffset << ", dataLen:" << window.dataLen <<
+                ", count:" << piece << ", addrIdx:" << failedAddrIdx << ", addrOffset:" << failedAddrOffset <<
+                ", len:" << failedLen << ".");
+            AbortPreparedDirectSpaceWrite(fd, file->GetInode(), static_cast<int64_t>(window.baseOffset),
+                window.segNum, window.segs);
+            window.Reset();
+            ClearNextDirectSpaceWritePrepareLocked(file, fd);
+            return accepted > 0 ? static_cast<ssize_t>(accepted) : -1;
+        }
+
+        window.dataLen += static_cast<uint64_t>(piece);
+        writeOffset += static_cast<uint64_t>(piece);
+        bool windowFull = window.dataLen == INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE;
+        if (windowFull) {
             if (UNLIKELY(!CommitDirectSpaceWriteWindowLocked(file, fd, window))) {
                 ClearNextDirectSpaceWritePrepareLocked(file, fd);
-                return -1;
+                return accepted > 0 ? static_cast<ssize_t>(accepted) : -1;
             }
-            ClearNextDirectSpaceWritePrepareLocked(file, fd);
-            return AGGREGATE_WRITE_FALLBACK;
+        } else {
+            MaybeStartNextDirectSpaceWritePrepareLocked(file, fd, window);
         }
-    } else {
-        if (!IsWriteAggregateWindowStart(writeOffset)) {
-            ClearNextDirectSpaceWritePrepareLocked(file, fd);
-            return AGGREGATE_WRITE_FALLBACK;
-        }
-        if (!ConsumeNextDirectSpaceWritePrepareLocked(file, fd, baseOffset, window) &&
-            !PrepareDirectSpaceWriteWindow(file, fd, baseOffset, window)) {
-            return AGGREGATE_WRITE_FALLBACK;
-        }
-    }
-
-    uint32_t failedAddrIdx = UINT32_MAX;
-    uint64_t failedAddrOffset = 0;
-    uint64_t failedLen = 0;
-    if (UNLIKELY(!CopyToDirectSpaceSegment(window.segs[0], window.dataLen, buf, count,
-        failedAddrIdx, failedAddrOffset, failedLen))) {
-        CLOG_DEBUG("Copy direct-space write window failed, fd:" << fd << ", inode:" <<
-            file->GetInode() << ", baseOffset:" << window.baseOffset << ", dataLen:" << window.dataLen <<
-            ", count:" << count << ", addrIdx:" << failedAddrIdx << ", addrOffset:" << failedAddrOffset <<
-            ", len:" << failedLen << ".");
-        AbortPreparedDirectSpaceWrite(fd, file->GetInode(), static_cast<int64_t>(window.baseOffset), window.segNum,
-            window.segs);
-        window.Reset();
-        return -1;
-    }
-    window.dataLen += static_cast<uint64_t>(count);
-    if (window.dataLen == INTERCEPTOR_DIRECT_SPACE_WINDOW_SIZE) {
-        if (UNLIKELY(!CommitDirectSpaceWriteWindowLocked(file, fd, window))) {
-            ClearNextDirectSpaceWritePrepareLocked(file, fd);
-            return -1;
-        }
-    } else {
-        MaybeStartNextDirectSpaceWritePrepareLocked(file, fd, window);
+        accepted += piece;
     }
     return static_cast<ssize_t>(count);
 }
@@ -1597,8 +1647,9 @@ ssize_t ProxyOperations::PwriteShmInner(const std::shared_ptr<OpenFile> &file, i
         return ret;
     }
     if (ret == DIRECT_WRITE_FALLBACK) {
-        ret = PwriteNativeFallback(file, fd, buf, count, offset);
-        return ret;
+        CLOG_ERROR("Direct-space write is not supported for intercepted fd, fd:" << fd << ", inode:" <<
+            file->GetInode() << ", offset:" << offset << ", nbytes:" << count << ".");
+        return -1;
     }
 
     CLOG_ERROR("Direct-space write failed without fallback, fd:" << fd << ", inode:" <<
@@ -1615,7 +1666,16 @@ ssize_t ProxyOperations::Write(int fd, const void *buf, size_t nbytes)
         return CONTEXT.GetOperations()->write(fd, buf, nbytes);
     }
 
-    off_t offset = file->ReserveOffset(nbytes);
+    off_t offset;
+    if (file->IsAppend()) {
+        auto endOffset = CONTEXT.GetOperations()->lseek64(fd, 0, SEEK_END);
+        if (UNLIKELY(endOffset < 0)) {
+            return -1;
+        }
+        offset = file->ReserveAppendOffset(endOffset, nbytes);
+    } else {
+        offset = file->ReserveOffset(nbytes);
+    }
 
     auto ret = PwriteInner("write", file, fd, buf, nbytes, offset);
     if (UNLIKELY(ret < 0)) {
