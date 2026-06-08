@@ -256,8 +256,8 @@ BResult BioClient::BioDiagnoseSdkInit()
     BResult ret = sdkInitFunc();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
-        dlclose(handler);
     }
+    dlclose(handler);
     return ret;
 }
 
@@ -294,6 +294,7 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
             dlclose(handler);
             return BIO_INNER_ERR;
         }
+        dlclose(handler);
     }
 
     ret = BioDiagnoseSdkInit();

@@ -22,6 +22,11 @@ void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
     if (!isLock) {
         mLock.LockWrite();
     }
+    if (mTaskRunFlag.find(nodeSet) == mTaskRunFlag.end()) {
+        if (!isLock) {
+            mLock.UnLock();
+        }
+    }
     mTaskRunFlag.find(nodeSet)->second = false;
 
     auto iter = mIoQueueMap.find(nodeSet);
@@ -157,6 +162,9 @@ BResult BioQuota::SendAllocQuotaRemote(uint16_t dstNid, AllocQuotaRequest &req, 
 
 void BioQuota::AsyncPreloadQuota(CmPtInfo *ptEntry, uint16_t nodeSet)
 {
+    if (ptEntry == nullptr) {
+        return;
+    }
     BResult ret = BIO_INNER_ERR;
     uint16_t localNid = BioClient::Instance()->GetMirror()->GetLocalNodeInfo().VNodeId();
     uint64_t expectPreloadSize = NO_1024 * IO_SIZE_1M;

@@ -288,6 +288,7 @@ BResult BioServer::BioDiskReset(uint16_t diskId)
 
 void BioServer::BioBdmExit()
 {
+
     return;
 }
 
@@ -633,8 +634,9 @@ BResult BioServer::BioServerDiagnoseInitInner()
     ret = serverInitFunc();
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
-        dlclose(handler);
     }
+
+    dlclose(handler);
     return ret;
 }
 

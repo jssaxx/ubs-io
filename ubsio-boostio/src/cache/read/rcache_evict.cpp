@@ -134,6 +134,8 @@ BResult RCacheEvict::Initialize()
             } else {
                 LOG_ERROR("Create thread for read cache evict failed");
                 delete para;
+                RecycleThreadResources(tier);
+                workStatus.store(false);
                 return BIO_ALLOC_FAIL;
             }
         }

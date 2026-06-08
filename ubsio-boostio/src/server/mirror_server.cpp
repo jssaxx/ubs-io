@@ -390,6 +390,9 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
 {
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
     uint32_t index = 0;
+    if (nodeView.size() > DISK_MAX_SIZE) {
+        return;
+    }
     for (auto &nodeEntry : nodeView) {
         if (index == CLUSTER_NODE_SIZE) {
             break;
@@ -1696,7 +1699,10 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
     sem_init(&sem, 0, 0);
     std::vector<uint64_t> realLengths(req->count);
     std::vector<int32_t> results(req->count);
-
+    if (req->count > KEY_MAX_COUNT) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+        return BIO_OK;
+    }
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
@@ -1713,11 +1719,14 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
             BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+            sem_destroy(&sem);
             return BIO_OK;
         }
     }
-    sem_wait(&sem);
-    sem_destroy(&sem);
+    if (req->count > 0) {
+        sem_wait(&sem);
+        sem_destroy(&sem);
+    }
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
 
     BatchGetResponse rsp;
@@ -1770,6 +1779,12 @@ int32_t MirrorServer::HandleBatchParseKeyAddr(ServiceContext &ctx)
     }
 
     auto req = static_cast<BatchParseKeyAddrRequest *>(ctx.MessageData());
+
+    if (UNLIKELY(sizeof(BatchParseKeyAddrRequest) + sizeof(BatchKeyInfo) * req->count >  ctx.MessageDataLen())) {
+        LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " is invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerBatchParseKeyAddr(ctx, req);
 }
 
