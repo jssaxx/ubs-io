@@ -67,13 +67,14 @@ BResult CrbScheduler::Init()
         return MMS_ALLOC_FAIL;
     }
 
-    mExeService = ExecutorService::Create(NO_8, NO_2048);
+    mExeService = ExecutorService::Create(NO_4, NO_128);
     if (UNLIKELY(mExeService == nullptr)) {
         LOG_ERROR("Failed to create crb executor.");
         return MMS_ALLOC_FAIL;
     }
 
-    mExeService->SetThreadName("CrbExecutor");
+    mExeService->SetThreadName("mms_crb_scheduler");
+    mExeService->SetCpuSetStartIndex(MmsServer::Instance()->GetConfig()->GetBasicConfig().crbSendCpuStart);
     if (UNLIKELY(!(mExeService->Start()))) {
         LOG_ERROR("Failed to start execution service for crb executor.");
         mExeService->Stop();
@@ -354,14 +355,23 @@ BResult CrbScheduler::HandleNotifyStartRecover(ServiceContext &ctx)
 
 BResult CrbScheduler::CrbBatchSend(char *buff, uint32_t buffLen, uint16_t dstNode)
 {
-    CrbHandle handle = [this, buffLen](void *buff, uint16_t dstNode) -> BResult {
-        BResult result = MMS_OK;
-        BResult ret = mNetEngine->SyncCall(dstNode, g_groupIndex, MMS_OP_S_CRB_RECEIVE_DATA, buff, buffLen, result);
-        if (UNLIKELY(ret != MMS_OK)) {
-            return ret;
+    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
+        auto *cbCtx = (KvCbCtx *)ctx;
+        if (UNLIKELY(result != MMS_OK)) {
+            int32_t expected = MMS_OK;
+            cbCtx->result.compare_exchange_strong(expected, result, std::memory_order_relaxed);
         }
+        cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
+    };
 
-        return result;
+    CrbHandle handle = [this, buffLen, cbFunc](void *buff, uint16_t dstNode) -> BResult {
+        KvCbCtx cbCtx(NO_1, MMS_OK);
+        Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+        mNetEngine->AsyncCallBuff(dstNode, g_groupIndex, MMS_OP_S_CRB_RECEIVE_DATA, buff, buffLen, callback);
+        while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
+            CPU_RELAX();
+        }
+        return cbCtx.result.load(std::memory_order_relaxed);
     };
 
     MMS_TRACE_START(CRB_BATCH_SEND_BUFF);
