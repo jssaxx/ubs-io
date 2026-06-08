@@ -548,12 +548,16 @@ BResult NetEngine::CreateRpcService(const NetOptions &opt, bool isOobSvr, const 
     }
 
     mRpcService = UBSHcomService::Create(opt.protocol, name, options);
-    if (mRpcService != nullptr) {
-        return MMS_OK;
+    if (mRpcService == nullptr) {
+        NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
+        return MMS_ERR;
     }
 
-    NET_LOG_ERROR("Failed to create rpc service instance, protocol:" << opt.protocol << ".");
-    return MMS_ERR;
+    if (opt.protocol == ServiceProtocol::TCP) {
+        mRpcService->SetTcpEpollMode(true);
+    }
+
+    return MMS_OK;
 }
 
 BResult NetEngine::AddRpcWorkerGroups(const WorkerGroupConfig &rpcConfig)
@@ -597,6 +601,7 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
 
     mRpcOptions = opt;
+    mUseHlcRpc = opt.protocol == ServiceProtocol::TCP;
     bool isOobSvr = opt.role != NET_CLIENT;
     WorkerGroupConfig rpcConfig;
     auto ret = SplitWorkerGroupConfig(opt.workerGroups, opt.workerGroupsCpuSet, rpcConfig, "rpc");

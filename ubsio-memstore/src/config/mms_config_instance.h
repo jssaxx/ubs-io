@@ -27,6 +27,7 @@ const auto MULTICAST_SWITCH = std::make_pair("mms.multicast.switch", "true");
 const auto DATA_CHANGE_CALLBACK_SWITCH = std::make_pair("mms.data.change.callback.switch", "false");
 const auto ART_QUERY_SWITCH = std::make_pair("mms.art.query.switch", "false");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
+const auto CRB_SEND_CPU_START = std::make_pair("mms.crb.send.cpu.start", 68);
 
 const auto NET_RPC_IP_MASK = std::make_pair("mms.net.rpc.ip_mask", "127.0.0.1/24");
 const auto NET_RPC_PORT = std::make_pair("mms.net.rpc.listen_port", 7201);
@@ -135,6 +136,7 @@ public:
         bool dataChangeCallbackSwitch = false;
         bool artQuerySwitch = true;
         bool isSeparateMode = true;
+        int16_t crbSendCpuStart = 68;
     };
 
 public:
