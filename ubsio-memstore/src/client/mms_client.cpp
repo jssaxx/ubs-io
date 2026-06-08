@@ -104,6 +104,10 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
 
 void MmsClient::Exit(void)
 {
+    DestroyStartService();
+#ifdef USE_CLI_TOOLS
+    ClientDiagnoseExit();
+#endif
 }
 
 BResult MmsClient::ClientGlobVarInit(void)
@@ -248,6 +252,7 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
     auto result = mStartService->Start();
     if (!result) {
         CLIENT_LOG_ERROR("Failed to start executor service.");
+        DestroyStartService();
         return MMS_ALLOC_FAIL;
     }
 
@@ -255,6 +260,7 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
     ret = mNetEngine->SyncConnect(info);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Connect to local failed, ret:" << ret << ".");
+        DestroyStartService();
         return ret;
     }
 
@@ -265,7 +271,18 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
 
 void MmsClient::ClientNetExit(void)
 {
+    DestroyStartService();
     mNetEngine->Stop();
+}
+
+void MmsClient::DestroyStartService(void)
+{
+    if (mStartService == nullptr) {
+        return;
+    }
+
+    mStartService->Stop();
+    mStartService = nullptr;
 }
 
 BResult MmsClient::ClientBasicInit(void)
@@ -638,12 +655,37 @@ BResult MmsClient::ClientDiagnoseInit(void)
         return MMS_INNER_ERR;
     }
     ClientDiagnose clientInitFunc = reinterpret_cast<ClientDiagnose>(dlsym(handler, "ClientDiagnoseInit"));
+    if (clientInitFunc == nullptr) {
+        CLIENT_LOG_ERROR("Failed to find ClientDiagnoseInit, error:" << dlerror() << ".");
+        if (dlclose(handler) != MMS_OK) {
+            CLIENT_LOG_ERROR("Failed to close client diagnose library, error:" << dlerror() << ".");
+        }
+        return MMS_INNER_ERR;
+    }
+
     ret = clientInitFunc();
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize client diagnose, ret:" << ret << ".");
+        if (dlclose(handler) != MMS_OK) {
+            CLIENT_LOG_ERROR("Failed to close client diagnose library, error:" << dlerror() << ".");
+        }
         return ret;
     }
+    mClientDiagnoseHandler = handler;
     return MMS_OK;
+}
+
+void MmsClient::ClientDiagnoseExit(void)
+{
+    if (mClientDiagnoseHandler == nullptr) {
+        return;
+    }
+
+    cli_unregister_command(const_cast<char *>("mms"));
+    if (dlclose(mClientDiagnoseHandler) != MMS_OK) {
+        CLIENT_LOG_ERROR("Failed to close client diagnose library, error:" << dlerror() << ".");
+    }
+    mClientDiagnoseHandler = nullptr;
 }
 #endif
 }

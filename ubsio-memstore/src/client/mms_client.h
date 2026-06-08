@@ -147,6 +147,7 @@ private:
     BResult BuildServices(void);
 
     BResult CheckServiceState(std::atomic<bool> &serviceable);
+    void DestroyStartService(void);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -177,6 +178,9 @@ private:
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};
+#ifdef USE_CLI_TOOLS
+    void *mClientDiagnoseHandler = nullptr;
+#endif
 
     DEFINE_REF_COUNT_VARIABLE;
 };

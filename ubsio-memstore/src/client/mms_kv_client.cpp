@@ -11,6 +11,7 @@
  */
 
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 #include <sched.h>
@@ -26,6 +27,93 @@
 
 namespace ock {
 namespace mms {
+
+struct SearchValueInfoCtx {
+    char *memAddr;
+    uint64_t totalSize;
+    uint64_t memOffset;
+    PrefixSearchDes *des;
+    ValueInfo *valueInfoItems;
+};
+
+static bool AddOverflow(uint64_t left, uint64_t right, uint64_t &result)
+{
+    if (left > std::numeric_limits<uint64_t>::max() - right) {
+        return true;
+    }
+    result = left + right;
+    return false;
+}
+
+static bool MulOverflow(uint64_t left, uint64_t right, uint64_t &result)
+{
+    if (right != 0 && left > std::numeric_limits<uint64_t>::max() / right) {
+        return true;
+    }
+    result = left * right;
+    return false;
+}
+
+static BResult CalcValueDescEndOffset(uint64_t itemNum, uint64_t totalSize, uint64_t &memOffset)
+{
+    uint64_t valueDescSize = 0;
+    if (UNLIKELY(MulOverflow(itemNum, static_cast<uint64_t>(sizeof(ValueDesInfo)), valueDescSize) ||
+                 AddOverflow(static_cast<uint64_t>(sizeof(PrefixSearchDes)), valueDescSize, memOffset) ||
+                 memOffset > totalSize)) {
+        return MMS_INVALID_PARAM;
+    }
+    return MMS_OK;
+}
+
+static BResult ValidateValueInfoCount(uint64_t itemNum)
+{
+    uint64_t maxItemNum = static_cast<uint64_t>(std::numeric_limits<size_t>::max() / sizeof(ValueInfo));
+    return itemNum <= maxItemNum ? MMS_OK : MMS_INVALID_PARAM;
+}
+
+static BResult AdvanceSearchResultOffset(uint64_t totalSize, uint64_t dataLen, uint64_t &memOffset)
+{
+    if (UNLIKELY(dataLen > totalSize || memOffset > totalSize - dataLen)) {
+        return MMS_INVALID_PARAM;
+    }
+    memOffset += dataLen;
+    return MMS_OK;
+}
+
+static void UnmapSearchResult(void *dataPtr, uint64_t totalSize)
+{
+    if (UNLIKELY(munmap(dataPtr, totalSize) != MMS_OK)) {
+        CLIENT_LOG_ERROR("Memory unmap failed, error:" << strerror(errno) << ".");
+    }
+}
+
+static void ClearValueInfoItems(ValueInfo **valueInfoItems, uint64_t *itemNum)
+{
+    delete[] *valueInfoItems;
+    *valueInfoItems = nullptr;
+    *itemNum = 0;
+}
+
+static BResult FillOneValueInfoItem(SearchValueInfoCtx &ctx, uint64_t idx)
+{
+    ValueInfo &item = ctx.valueInfoItems[idx];
+    ValueDesInfo &des = ctx.des->values[idx];
+    item.key = ctx.memAddr + ctx.memOffset;
+    BResult ret = AdvanceSearchResultOffset(ctx.totalSize, des.keyLen, ctx.memOffset);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Search result key length invalid, itemIndex:" << idx << ".");
+        return ret;
+    }
+
+    item.value = ctx.memAddr + ctx.memOffset;
+    item.length = des.valueLen;
+    ret = AdvanceSearchResultOffset(ctx.totalSize, des.valueLen, ctx.memOffset);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Search result value length invalid, itemIndex:" << idx << ".");
+        return ret;
+    }
+    return MMS_OK;
+}
 
 BResult MmsKvClient::Initialize(const KvClientPara &para)
 {
@@ -309,20 +397,42 @@ BResult MmsKvClient::FillValueInfoItems(void *dataPtr, PrefixSearchRsp &rsp, Val
 {
     char *memAddr = static_cast<char *>(dataPtr);
     PrefixSearchDes *des = reinterpret_cast<PrefixSearchDes *>(memAddr);
+    if (UNLIKELY(rsp.totalSize < sizeof(PrefixSearchDes) || des->totalSize != rsp.totalSize ||
+                 ValidateValueInfoCount(des->itemNum) != MMS_OK)) {
+        CLIENT_LOG_ERROR("Search result header invalid, totalSize:" << rsp.totalSize << ".");
+        UnmapSearchResult(dataPtr, rsp.totalSize);
+        return MMS_INVALID_PARAM;
+    }
+
     *itemNum = des->itemNum;
+    if (des->itemNum == 0) {
+        UnmapSearchResult(dataPtr, rsp.totalSize);
+        return MMS_OK;
+    }
+
+    uint64_t memOffset = 0;
+    BResult ret = CalcValueDescEndOffset(des->itemNum, rsp.totalSize, memOffset);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Search result offset invalid, itemNum:" << des->itemNum <<
+                         ", totalSize:" << rsp.totalSize << ".");
+        UnmapSearchResult(dataPtr, rsp.totalSize);
+        return ret;
+    }
+
     *valueInfoItems = new (std::nothrow) ValueInfo[des->itemNum];
     if (UNLIKELY(*valueInfoItems == nullptr)) {
-        munmap(dataPtr, rsp.totalSize);
+        UnmapSearchResult(dataPtr, rsp.totalSize);
         return MMS_ALLOC_FAIL;
     }
 
-    uint64_t memOffset = sizeof(PrefixSearchDes) + des->itemNum * sizeof(ValueDesInfo);
+    SearchValueInfoCtx ctx = {memAddr, rsp.totalSize, memOffset, des, *valueInfoItems};
     for (uint64_t idx = 0; idx < des->itemNum; idx++) {
-        (*valueInfoItems)[idx].key = memAddr + memOffset;
-        memOffset += des->values[idx].keyLen;
-        (*valueInfoItems)[idx].value = memAddr + memOffset;
-        (*valueInfoItems)[idx].length = des->values[idx].valueLen;
-        memOffset += des->values[idx].valueLen;
+        ret = FillOneValueInfoItem(ctx, idx);
+        if (UNLIKELY(ret != MMS_OK)) {
+            ClearValueInfoItems(valueInfoItems, itemNum);
+            UnmapSearchResult(dataPtr, rsp.totalSize);
+            return ret;
+        }
     }
     return MMS_OK;
 }
@@ -534,4 +644,3 @@ BResult MmsKvClient::FailHandle(BResult lastRet, MmsOpCode opCode, IoCtrlRequest
 }
 }
 }
-

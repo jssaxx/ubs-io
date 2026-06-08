@@ -247,14 +247,12 @@ BResult MmsKvServer::Put(uint64_t userId, PutItems *itemList, uint32_t itemNum)
 
 BResult MmsKvServer::Get(uint64_t userId, GetItems *itemList, uint32_t itemNum)
 {
-    uint16_t index;
-
     if (UNLIKELY(!mServiceable.load(std::memory_order_acquire))) {
         LOG_WARN("Service is not available.");
         return MMS_NOT_READY;
     }
 
-    for (index = 0; index < itemNum; index++) {
+    for (uint32_t index = 0; index < itemNum; index++) {
         auto ret = mCache->Get(itemList[index].key, itemList[index].offset, itemList[index].length,
             itemList[index].value, itemList[index].realLength);
         if (LIKELY(ret == MMS_OK)) {

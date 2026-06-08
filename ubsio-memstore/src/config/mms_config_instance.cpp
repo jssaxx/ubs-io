@@ -20,6 +20,7 @@ namespace ock {
 namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
+constexpr long MAX_MEM_NUMA_SIZE_GB = 4096;
 constexpr int32_t MIN_CRB_SEND_CPU_START = -1;
 constexpr int32_t MAX_CRB_SEND_CPU_START = std::numeric_limits<int16_t>::max();
 void MmsConfig::LoadDefaultConf()
@@ -143,6 +144,10 @@ BResult MmsConfig::AutoConfigMem(const ConfigurationPtr &conf)
 
     for (index = 0; index < numaSizesVec.size(); index++) {
         if (UNLIKELY(!StrUtil::StrToLong(numaSizesVec[index], value))) {
+            return MMS_INVALID_PARAM;
+        }
+        if (UNLIKELY(value < static_cast<long>(NO_0) || value > MAX_MEM_NUMA_SIZE_GB)) {
+            LOG_ERROR("Invalid numa size:" << value << ", max size:" << MAX_MEM_NUMA_SIZE_GB << "GB.");
             return MMS_INVALID_PARAM;
         }
         mMemConfig.numaSize[index] = static_cast<uint64_t>(value) * IO_SIZE_1G; // GB换算成字节

@@ -92,6 +92,7 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
         auto result = PrepareTlsDecrypter(opt.decrypterLibPath);
         if (result != MMS_OK) {
             NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
+            DestroyPublisherService();
             return result;
         }
         SetDriverTlsCallback(mPublisherService, opt);
@@ -178,6 +179,32 @@ void NetMulticastEngine::SubscriberBrokenCallBack(const ock::hcom::UBSHcomNetEnd
     }
 }
 
+void NetMulticastEngine::DestroyPublisherService()
+{
+    if (mPublisherService != nullptr) {
+        mPublisherService->Stop();
+        mPublisherService = nullptr;
+    }
+
+    auto ret = ock::hcom::PublisherService::Destroy(mPublisherServiceName);
+    if (ret != ock::hcom::SER_OK) {
+        NET_LOG_WARN("Destroy publisher service failed, service does not exist or service empty.");
+    }
+}
+
+void NetMulticastEngine::DestroySubscriberService()
+{
+    if (mSubscriberService != nullptr) {
+        mSubscriberService->Stop();
+        mSubscriberService = nullptr;
+    }
+
+    auto ret = ock::hcom::SubscriberService::Destroy(mSubscriberServiceName);
+    if (ret != ock::hcom::SER_OK) {
+        NET_LOG_WARN("Destroy subscriber service failed, service does not exist or service empty.");
+    }
+}
+
 BResult NetMulticastEngine::CreateSubscriberService(const std::string &ipMask)
 {
     auto &opt = MmsConfig::Instance()->GetNetConfig();
@@ -211,6 +238,7 @@ BResult NetMulticastEngine::CreateSubscriberService(const std::string &ipMask)
         auto result = PrepareTlsDecrypter(opt.decrypterLibPath);
         if (result != MMS_OK) {
             NET_LOG_ERROR("Failed to prepare tls decrypter, result:" << result << ".");
+            DestroySubscriberService();
             return result;
         }
         SetDriverTlsCallback(mSubscriberService, opt);
@@ -253,6 +281,7 @@ BResult NetMulticastEngine::InitSubscriberService(const std::string &ipMask)
     ret = StartSubscriberService();
     if (UNLIKELY(ret != MMS_OK)) {
         NET_LOG_ERROR("Start subscriber service failed, ret:" << ret << ".");
+        DestroySubscriberService();
         return ret;
     }
 
@@ -421,25 +450,8 @@ void NetMulticastEngine::Stop()
         mConnector = nullptr;
     }
 
-    if (mPublisherService != nullptr) {
-        mPublisherService->Stop();
-        mPublisherService = nullptr;
-    }
-
-    auto ret = ock::hcom::PublisherService::Destroy(mPublisherServiceName);
-    if (ret != ock::hcom::SER_OK) {
-        NET_LOG_WARN("Destroy publisher service failed, service does not exist or service empty.");
-    }
-
-    if (mSubscriberService != nullptr) {
-        mSubscriberService->Stop();
-        mSubscriberService = nullptr;
-    }
-
-    ret = ock::hcom::SubscriberService::Destroy(mSubscriberServiceName);
-    if (ret != ock::hcom::SER_OK) {
-        NET_LOG_WARN("Destroy subscriber service failed, service does not exist or service empty.");
-    }
+    DestroyPublisherService();
+    DestroySubscriberService();
 
     NET_LOG_INFO("Stop multicast net done.");
 }
@@ -758,4 +770,3 @@ void NetMulticastEngine::SetDriverTlsCallback(ock::hcom::PublisherService *drive
 }
 }
 }
-

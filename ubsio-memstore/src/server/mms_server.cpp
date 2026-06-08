@@ -37,7 +37,8 @@ MmsServer::MmsServer() noexcept
 {
     std::vector<ModuleDesc> modules = {
 #ifdef USE_CLI_TOOLS
-        { "Diagnose", std::bind(&MmsServer::MmsServerDiagnoseInit, this), nullptr, nullptr, nullptr },
+        { "Diagnose", std::bind(&MmsServer::MmsServerDiagnoseInit, this), nullptr, nullptr,
+            std::bind(&MmsServer::MmsServerDiagnoseExit, this) },
 #endif
         { "Mem", std::bind(&MmsServer::MmsMemInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsMemExit, this) },
         { "Net", std::bind(&MmsServer::MmsNetInit, this), nullptr, nullptr, std::bind(&MmsServer::MmsNetExit, this) },
@@ -86,12 +87,21 @@ BResult MmsServer::Start(ServiceCallback service)
     }
     mTaskService->SetThreadName("pt-migrate");
     bool taskRet = mTaskService->Start();
-    ChkTrue(taskRet, MMS_ERR, "Start pt migrate task failed, ret:" << taskRet << ".");
+    if (!taskRet) {
+        LOG_ERROR("Start pt migrate task failed, ret:" << taskRet << ".");
+        DestroyTaskService();
+        return MMS_ERR;
+    }
 
     // 2. Initialize mms service
-    ChkTrue(mService != nullptr, MMS_ERR, "Mms service not created.");
+    if (mService == nullptr) {
+        LOG_ERROR("Mms service not created.");
+        DestroyTaskService();
+        return MMS_ERR;
+    }
     BResult ret = mService->Process();
     if (ret != MMS_OK) {
+        DestroyTaskService();
         return ret;
     }
 
@@ -103,18 +113,30 @@ BResult MmsServer::Start(ServiceCallback service)
     if (mConfig->GetNetConfig().tlsEnable) {
         auto expireChecker = ExpireChecker::Instance();
         if (expireChecker == nullptr) {
-            LOG_INFO("expire checker alloc fail.");
+            LOG_INFO("Expire checker alloc fail.");
+            DestroyTaskService();
             return MMS_ALLOC_FAIL;
         }
         ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().caCerPath,
             mConfig->GetNetConfig().certificationPath, mConfig->GetNetConfig().opensslLibDir);
         if (ret != MMS_OK) {
+            DestroyTaskService();
             return ret;
         }
     }
 
     LOG_INFO("Mms server start success, MY PID:" << getpid() << ".");
     return MMS_OK;
+}
+
+void MmsServer::DestroyTaskService()
+{
+    if (mTaskService == nullptr) {
+        return;
+    }
+
+    mTaskService->Stop();
+    mTaskService = nullptr;
 }
 
 void MmsServer::Exit()
@@ -636,11 +658,37 @@ BResult MmsServer::MmsServerDiagnoseInit()
     }
 
     ServerDiagnose serverInitFunc = reinterpret_cast<ServerDiagnose>(dlsym(handler, "ServerDiagnoseInit"));
+    if (serverInitFunc == nullptr) {
+        LOG_ERROR("Failed to find ServerDiagnoseInit, error:" << dlerror() << ".");
+        if (dlclose(handler) != MMS_OK) {
+            LOG_ERROR("Failed to close server diagnose library, error:" << dlerror() << ".");
+        }
+        return MMS_ERR;
+    }
+
     ret = serverInitFunc();
     if (ret != MMS_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
+        if (dlclose(handler) != MMS_OK) {
+            LOG_ERROR("Failed to close server diagnose library, error:" << dlerror() << ".");
+        }
+        return MMS_OK;
     }
+    mServerDiagnoseHandler = handler;
     return MMS_OK;
+}
+
+void MmsServer::MmsServerDiagnoseExit()
+{
+    if (mServerDiagnoseHandler == nullptr) {
+        return;
+    }
+
+    cli_unregister_command(const_cast<char *>("mms"));
+    if (dlclose(mServerDiagnoseHandler) != MMS_OK) {
+        LOG_ERROR("Failed to close server diagnose library, error:" << dlerror() << ".");
+    }
+    mServerDiagnoseHandler = nullptr;
 }
 #endif
 BResult MmsServer::HandleNodeEvent(const std::map<uint16_t, CmNodeInfo> &nodeInfos)
