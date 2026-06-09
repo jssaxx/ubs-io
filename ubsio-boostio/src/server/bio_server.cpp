@@ -633,9 +633,9 @@ BResult BioServer::BioServerDiagnoseInitInner()
     ret = serverInitFunc();
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
+        ret = serverInitFunc();
     }
 
-    dlclose(handler);
     return ret;
 }
 
