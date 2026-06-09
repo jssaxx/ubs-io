@@ -60,6 +60,15 @@ inline static bool KeyValid(const char *key, uint16_t keyLen)
     return true;
 }
 
+inline static bool GetItemValid(const GetItems &item)
+{
+    if (UNLIKELY(!KeyValid(item.key, item.keyLen) || item.value == nullptr || item.realLength == nullptr ||
+                 item.result == nullptr)) {
+        return false;
+    }
+    return *item.value == nullptr || item.length != 0;
+}
+
 inline static bool KeyValid(const char *key)
 {
     return key != nullptr && strlen(key) != 0 && strlen(key) < MAX_KEY_SIZE;
@@ -141,9 +150,7 @@ CResult MmsConv::Get(GetItems *itemList, uint32_t itemNum)
     }
 
     for (uint32_t i = 0; i < itemNum; i++) {
-        if (UNLIKELY(!KeyValid(itemList[i].key, itemList[i].keyLen) || itemList[i].length == 0 ||
-                     itemList[i].value == nullptr || itemList[i].realLength == nullptr ||
-                     itemList[i].result == nullptr)) {
+        if (UNLIKELY(!GetItemValid(itemList[i]))) {
             return RET_MMS_EPERM;
         }
         *itemList[i].result = static_cast<int32_t>(MMS_OK);

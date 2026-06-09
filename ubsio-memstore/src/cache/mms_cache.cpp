@@ -354,18 +354,18 @@ BResult Cache::Get(const GetPara &para)
             continue;
         }
 
-        if (indexValue->totalDataLen <= para.offset) {
-            CACHE_LOG_ERROR("Out of bounds, key:" << std::string(para.key, para.keyLen) << ", offset:" << para.offset
-                                                  << ", total len:" << indexValue->totalDataLen << ".");
-            CacheReadUnLock(&bucketNode->status);
-            return MMS_ERR;
-        }
-
-        uint64_t readLen = std::min(indexValue->totalDataLen - para.offset, para.length);
         uint64_t realLen;
         if (*para.value == nullptr) {
-            realLen = GetDataAddrFromBlock(indexValue, para.value, para.offset, readLen);
+            realLen = GetDataAddrFromBlock(indexValue, para.value, 0, indexValue->totalDataLen);
         } else {
+            if (indexValue->totalDataLen <= para.offset) {
+                CACHE_LOG_ERROR("Out of bounds, key:" << std::string(para.key, para.keyLen) << ", offset:"
+                                                      << para.offset << ", total len:" << indexValue->totalDataLen
+                                                      << ".");
+                CacheReadUnLock(&bucketNode->status);
+                return MMS_ERR;
+            }
+            uint64_t readLen = std::min(indexValue->totalDataLen - para.offset, para.length);
             realLen = GetDataFromBlock(indexValue, *para.value, para.offset, readLen);
         }
         if (UNLIKELY(realLen == 0)) {
