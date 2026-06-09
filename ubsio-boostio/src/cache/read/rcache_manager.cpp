@@ -89,7 +89,7 @@ bool RCacheManager::IsResourceEnough(uint16_t ptId)
         return false;
     }
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    if (config.diskCaps.size() < cachePtr->GetDiskId()) {
+    if (config.diskCaps.size() <= cachePtr->GetDiskId()) {
         return false;
     }
     auto diskCap = static_cast<uint64_t>(config.diskCaps[cachePtr->GetDiskId()]);

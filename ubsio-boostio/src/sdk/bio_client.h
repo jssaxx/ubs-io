@@ -315,6 +315,8 @@ private:
     net::BioClientNetPtr mNetEngine = nullptr;
     std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
+    void *mClientDiagnoseHandle = nullptr;
+    void *mCliHandle = nullptr;
     int32_t mDeivceId = -1;
     DEFINE_REF_COUNT_VARIABLE;
 };
