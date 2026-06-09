@@ -281,10 +281,6 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     std::vector<std::string> ratios;
     mDaemonConfig.memReadWriteRatio = conf->GetStr(MEM_READ_WRITE_RATIO.first);
     StrUtil::Split(mDaemonConfig.memReadWriteRatio, ":", ratios);
-    if (mDaemonConfig.memReadWriteRatio.size() < NO_2) {
-        LOG_ERROR("Failed to set mem ratio:" << mDaemonConfig.memReadWriteRatio << ".");
-        return BIO_ERR;
-    }
     StrUtil::StrToLong(ratios[0], mDaemonConfig.memReadRatio);
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.memWriteRatio);
 
@@ -356,9 +352,6 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     StrUtil::Split(conf->GetStr(UNDERFS_CEPH_POOL.first), ",", idWithPoolNames);
     for (const auto &idWithPoolName : idWithPoolNames) {
         std::vector<std::string> idAndPoolName;
-        if (idAndPoolName.size() < NO_2) {
-            return BIO_ERR;
-        }
         StrUtil::Split(idWithPoolName, ":", idAndPoolName);
         long poolId = 0;
         if (StrUtil::StrToLong(idAndPoolName[0], poolId)) {
