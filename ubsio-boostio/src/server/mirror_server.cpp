@@ -1779,7 +1779,6 @@ int32_t MirrorServer::HandleBatchParseKeyAddr(ServiceContext &ctx)
     }
 
     auto req = static_cast<BatchParseKeyAddrRequest *>(ctx.MessageData());
-
     if (UNLIKELY(sizeof(BatchParseKeyAddrRequest) + sizeof(BatchKeyInfo) * req->count >  ctx.MessageDataLen())) {
         LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " is invalid.");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);

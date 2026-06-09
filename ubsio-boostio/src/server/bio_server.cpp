@@ -288,7 +288,6 @@ BResult BioServer::BioDiskReset(uint16_t diskId)
 
 void BioServer::BioBdmExit()
 {
-
     return;
 }
 
