@@ -58,6 +58,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(BIO_TRACE_ENABLE, VStrBoolRange::Create(BIO_TRACE_ENABLE.first));
     AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
+    AddIntConf(WCACHE_DISK_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_DISK_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
@@ -290,7 +291,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
         return BIO_ERR;
     }
     mDaemonConfig.wcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
-    mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
+    mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_DISK_EVICT_WATER_LEVEL.first));
     mDaemonConfig.rcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.rcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     std::vector<std::string> ratios;
@@ -579,14 +580,14 @@ uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
 {
     uint64_t ori;
     if (tier == 0) {
-        ori = mDaemonConfig.rcacheMemEvictLevel;
-        mDaemonConfig.rcacheMemEvictLevel = level;
+        ori = mDaemonConfig.wcacheMemEvictLevel;
+        mDaemonConfig.wcacheMemEvictLevel = level;
     } else {
-        ori = mDaemonConfig.rcacheDiskEvictLevel;
-        mDaemonConfig.rcacheDiskEvictLevel = level;
+        ori = mDaemonConfig.wcacheDiskEvictLevel;
+        mDaemonConfig.wcacheDiskEvictLevel = level;
     }
 
-    LOG_INFO("config changed tier:" << tier << ", rcacheMemEvictLevel, " << ori << " => " << level);
+    LOG_INFO("config changed tier:" << tier << ", wcacheMemEvictLevel, " << ori << " => " << level);
     return ori;
 }
 

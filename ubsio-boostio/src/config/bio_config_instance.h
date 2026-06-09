@@ -69,6 +69,8 @@ const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("bio.sdkmem.size_in_mb", 51
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.evict_water_level", 0);
 
+const auto WCACHE_DISK_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.disk_evict_water_level", 100);
+
 const auto RCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.rcache.evict_water_level", 90);
 
 const auto MEM_READ_WRITE_RATIO = std::make_pair("bio.cache.mem_read_write_ratio", "5:5");
@@ -153,7 +155,7 @@ public:
         uint64_t memCap = 53687091200; // 50GB
         uint64_t sdkPoolSize = 1024 * 1024 * 1;
         uint64_t wcacheMemEvictLevel = 0;
-        uint64_t wcacheDiskEvictLevel = 0;
+        uint64_t wcacheDiskEvictLevel = 100;
         uint64_t rcacheMemEvictLevel = 90;
         uint64_t rcacheDiskEvictLevel = 90;
         std::string memReadWriteRatio = "5:5";
