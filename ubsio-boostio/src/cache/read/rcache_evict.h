@@ -34,6 +34,19 @@ public:
 
     void Destroy();
 
+    inline void RecycleThreadResources(int32_t type)
+    {
+        for (uint32_t i = 0; i < type; i++) {
+            for (uint32_t j = 0; j < READ_CACHE_EVICT_SERVICE_NUM; j++) {
+                if (works[i][j] != nullptr) {
+                    works[i][j]->join();
+                    delete(works[i][j]);
+                    works[i][j] = nullptr;
+                }
+            }
+        }
+    }
+
     inline bool GetWorkStatus() noexcept
     {
         return workStatus.load();

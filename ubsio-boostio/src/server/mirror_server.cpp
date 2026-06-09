@@ -394,6 +394,9 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
 {
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
     uint32_t index = 0;
+    if (nodeView.size() > CLUSTER_NODE_SIZE) {
+        return;
+    }
     for (auto &nodeEntry : nodeView) {
         if (index == CLUSTER_NODE_SIZE) {
             break;
@@ -2014,6 +2017,10 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 
 int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req)
 {
+    if (req->count > KEY_MAX_COUNT) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+        return BIO_OK;
+    }
     volatile uint32_t keyNum = req->count;
     sem_t sem;
     sem_init(&sem, 0, 0);
@@ -2044,7 +2051,9 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
             continue;
         }
     }
-    sem_wait(&sem);
+    if (req->count > 0) {
+        sem_wait(&sem);
+    }
     sem_destroy(&sem);
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, hasErr ? BIO_INNER_ERR : BIO_OK);
 
@@ -2193,6 +2202,11 @@ int32_t MirrorServer::HandleBatchParseKeyAddr(ServiceContext &ctx)
     }
 
     auto req = static_cast<BatchParseKeyAddrRequest *>(ctx.MessageData());
+    if (UNLIKELY(sizeof(BatchParseKeyAddrRequest) + sizeof(BatchKeyInfo) * req->count >  ctx.MessageDataLen())) {
+        LOG_ERROR("Receive get message len:" << ctx.MessageDataLen() << " is invalid.");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerBatchParseKeyAddr(ctx, req);
 }
 

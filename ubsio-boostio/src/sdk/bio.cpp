@@ -249,6 +249,11 @@ CResult Bio::BatchGetKeyDiskAddr(const char **keys, ObjLocation *locations, cons
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
+
+    if (keys == nullptr || locations == nullptr || infos == nullptr) {
+        return RET_CACHE_EPERM;
+    }
+
     for (uint32_t i = 0; i < count; i++) {
         if (UNLIKELY(!KeyValid(keys[i]))) {
             CLIENT_LOG_ERROR("Invalid get parameter, key or value pointers is nullptr.");

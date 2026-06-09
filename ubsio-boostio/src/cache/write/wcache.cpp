@@ -732,6 +732,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     ret = mSliceOperator.Copy((char *)sliceMeta.get(), metaSlice.Get());
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+        DecreaseRef();
     } else {
         sliceRef->SetSlice(nullptr, callback);
     }
