@@ -788,7 +788,9 @@ BResult MmsKvServer::HandlePut(ServiceContext &ctx)
     mMemMgr->Trans2Addr(MMAP_AREA_IOCTX, req->ioNumaOffset, ioBuff);
 
     if (mMulticast) {
+        MMS_TRACE_START(SERVER_TRACE_MULTICAST_PUT);
         ret = HandlePutMultiImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
+        MMS_TRACE_END(SERVER_TRACE_MULTICAST_PUT, ret);
     } else {
         ret = HandlePutDefImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
     }
@@ -917,7 +919,9 @@ BResult MmsKvServer::HandlePutRemoteMulti(ServiceContext &ctx)
         return MMS_OK;
     }
 
+    MMS_TRACE_START(SERVER_TRACE_PUT_LOCAL);
     auto ret = PutLocal(ctx.MessageData(), ctx.MessageDataLen(), true);
+    MMS_TRACE_END(SERVER_TRACE_PUT_LOCAL, ret);
     mMulticastEngine->Reply(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
@@ -961,7 +965,9 @@ BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChang
             PutPara para = {itemListPut[index].key, itemListPut[index].keyLen, itemListPut[index].value,
                             itemListPut[index].valueLen, static_cast<uint32_t>(itemListPut[index].version),
                             req->head.ptId, &valueAddr};
+            MMS_TRACE_START(CACHE_TRACE_PUT);
             ret = mCache->Put(para);
+            MMS_TRACE_END(CACHE_TRACE_PUT, ret);
         } else {
             ret = mCache->Replace({itemListPut[index].key, itemListPut[index].keyLen, itemListPut[index].value, 0,
                                    itemListPut[index].valueLen,
@@ -1238,8 +1244,10 @@ BResult MmsKvServer::HandleDelete(ServiceContext &ctx)
     mMemMgr->Trans2Addr(MMAP_AREA_IOCTX, req->ioNumaOffset, ioBuff);
 
     if (mMulticast) {
+        MMS_TRACE_START(SERVER_TRACE_MULTICAST_DELETE);
         ret = HandleDeleteMultiImpl(reinterpret_cast<void *>(ioBuff),
                                     static_cast<uint32_t>(req->ioLength));
+        MMS_TRACE_END(SERVER_TRACE_MULTICAST_DELETE, ret);
     } else {
         ret = HandleDeleteDefImpl(reinterpret_cast<void *>(ioBuff), static_cast<uint32_t>(req->ioLength));
     }
@@ -1608,7 +1616,9 @@ BResult MmsKvServer::DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataCh
 
     BResult result = MMS_OK;
     for (index = 0; index < itemNum; index++) {
+        MMS_TRACE_START(CACHE_TRACE_DELETE);
         ret = mCache->Delete(itemListDelete[index].key, itemListDelete[index].keyLen, itemListDelete[index].version);
+        MMS_TRACE_END(CACHE_TRACE_DELETE, ret);
         *itemListDelete[index].result = ret;
         if (ret != MMS_OK && ret != MMS_KEY_NOT_EXISTS) {
             LOG_ERROR("Delete cache fail, ret:" << ret << ", key:" << itemListDelete[index].key << ", ptId:" <<

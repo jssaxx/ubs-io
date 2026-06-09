@@ -53,7 +53,9 @@ static void FinishRequestBlock(EncodeBufferState &state, std::vector<IOCtxItem> 
 
 static BResult AllocRequestBlock(const AllocFunc &allocFunc, uint32_t ioCtxBuffLen, EncodeBufferState &state)
 {
+    MMS_TRACE_START(NET_TRACE_ALLOC_MSG_BUFF);
     auto ret = allocFunc(ioCtxBuffLen, state.numaId, state.buff);
+    MMS_TRACE_END(NET_TRACE_ALLOC_MSG_BUFF, ret);
     if (UNLIKELY(ret != MMS_OK)) {
         return MMS_ALLOC_FAIL;
     }
