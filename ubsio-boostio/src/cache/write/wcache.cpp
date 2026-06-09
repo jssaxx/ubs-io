@@ -622,11 +622,9 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
         BIO_TRACE_START(WCACHE_TRACE_ED_EVICTSLICE);
         auto ret = memCache->Evict(oldSlice);
-        if (mUfsEnable) {
-            auto &diskCache = mCacheTiers[WCACHE_DISK];
-            diskCache->AddEvictQueue(sliceRef);
-            StartEvictTask(WCACHE_DISK);
-        }
+        auto &diskCache = mCacheTiers[WCACHE_DISK];
+        diskCache->AddEvictQueue(sliceRef);
+        StartEvictTask(WCACHE_DISK);
         BIO_TRACE_END(WCACHE_TRACE_ED_EVICTSLICE, BIO_OK);
         DecreaseRef();
         ChkTrueExNot(ret == BIO_OK);
@@ -695,7 +693,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     ChkTrue(sliceMeta->length == dataSlice->GetLength(), BIO_INNER_ERR, "Check data slice length failed.");
 
     // 3. 根据Slice的状态决定是否执行数据淘汰.
-    if (sliceRef->GetState() == SLICE_VALID) {
+    if (sliceRef->GetState() == SLICE_VALID && mUfsEnable) {
         auto &key = sliceMeta->key;
         bool isFromRCache = true;
         WCacheSlicePtr rcWriteSlice = nullptr;
