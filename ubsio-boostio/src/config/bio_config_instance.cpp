@@ -579,11 +579,11 @@ uint64_t BioConfig::ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level)
 {
     uint64_t ori;
     if (tier == 0) {
-        ori = mDaemonConfig.rcacheMemEvictLevel;
-        mDaemonConfig.rcacheMemEvictLevel = level;
+        ori = mDaemonConfig.wcacheMemEvictLevel;
+        mDaemonConfig.wcacheMemEvictLevel = level;
     } else {
-        ori = mDaemonConfig.rcacheDiskEvictLevel;
-        mDaemonConfig.rcacheDiskEvictLevel = level;
+        ori = mDaemonConfig.wcacheDiskEvictLevel;
+        mDaemonConfig.wcacheDiskEvictLevel = level;
     }
 
     LOG_INFO("config changed tier:" << tier << ", rcacheMemEvictLevel, " << ori << " => " << level);
