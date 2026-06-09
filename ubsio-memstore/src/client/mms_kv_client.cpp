@@ -257,9 +257,10 @@ BResult MmsKvClient::MmsGet(GetItems *itemList, uint32_t itemNum)
             continue;
         }
 
-        CLIENT_LOG_ERROR(
-            "Get cache failed, ret:" << ret << ", key:" << std::string(itemList[index].key, itemList[index].keyLen) <<
-            ".");
+        if (ret != MMS_NOT_EXISTS) {
+            CLIENT_LOG_ERROR("Get cache failed, ret:" << ret << ", key:" << std::string(itemList[index].key,
+                                                                                        itemList[index].keyLen) << ".");
+        }
         result = ret;
     }
 

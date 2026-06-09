@@ -383,7 +383,6 @@ BResult Cache::Get(const GetPara &para)
 
     CacheReadUnLock(&bucketNode->status);
     *para.realLength = 0;
-    CACHE_LOG_WARN("Not found, key:" << std::string(para.key, para.keyLen) << ".");
     return MMS_NOT_EXISTS;
 }
 
