@@ -26,6 +26,7 @@ void BioQuota::WakeForce(uint16_t nodeSet, bool isLock)
         if (!isLock) {
             mLock.UnLock();
         }
+        return;
     }
     mTaskRunFlag.find(nodeSet)->second = false;
 

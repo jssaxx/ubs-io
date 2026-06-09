@@ -1062,8 +1062,8 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
     }
     if (index > 0) {
         sem_wait(&sem);
-        sem_destroy(&sem);
     }
+    sem_destroy(&sem);
     if (ret != BIO_OK) {
         // TODO 资源回收
         DispathBatchGetRecycleResource(parallelNum, taskResults, valueAddrs);
@@ -2358,8 +2358,8 @@ BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetP
     }
     if (quota > 0) {
         sem_wait(&cbCtx.sem);
-        sem_destroy(&cbCtx.sem);
     }
+    sem_destroy(&cbCtx.sem);
     return cbCtx.result;
 }
 

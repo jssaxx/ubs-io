@@ -390,7 +390,7 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
 {
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&rsp.curNodeTimes);
     uint32_t index = 0;
-    if (nodeView.size() > DISK_MAX_SIZE) {
+    if (nodeView.size() > CLUSTER_NODE_SIZE) {
         return;
     }
     for (auto &nodeEntry : nodeView) {
@@ -1694,15 +1694,15 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 
 int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req)
 {
+    if (req->count > KEY_MAX_COUNT) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+        return BIO_OK;
+    }
     volatile uint32_t keyNum = req->count;
     sem_t sem;
     sem_init(&sem, 0, 0);
     std::vector<uint64_t> realLengths(req->count);
     std::vector<int32_t> results(req->count);
-    if (req->count > KEY_MAX_COUNT) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
-        return BIO_OK;
-    }
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
@@ -1725,8 +1725,8 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
     }
     if (req->count > 0) {
         sem_wait(&sem);
-        sem_destroy(&sem);
     }
+    sem_destroy(&sem);
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
 
     BatchGetResponse rsp;
