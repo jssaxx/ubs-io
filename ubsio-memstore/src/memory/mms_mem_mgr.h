@@ -116,6 +116,7 @@ private:
     MmapMode mAreaMode[MMAP_AREA_BUTT];
 
     bool mIsCreated = false;
+    bool mNeedPrefault = false;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
