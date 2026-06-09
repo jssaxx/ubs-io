@@ -139,7 +139,7 @@ public:
         uint64_t memCap = 53687091200; // 50GB
         uint64_t sdkPoolSize = 1024 * 1024 * 1;
         uint64_t wcacheMemEvictLevel = 0;
-        uint64_t wcacheDiskEvictLevel = 0;
+        uint64_t wcacheDiskEvictLevel = 100;
         uint64_t rcacheMemEvictLevel = 90;
         uint64_t rcacheDiskEvictLevel = 90;
         std::string memReadWriteRatio = "5:5";
