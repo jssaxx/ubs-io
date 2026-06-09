@@ -256,6 +256,9 @@ BResult BioClient::BioDiagnoseSdkInit()
     BResult ret = sdkInitFunc();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to Initialize sdk diagnose, ret:" << ret << ".");
+        dlclose(handler);
+    } else {
+        mClientDiagnoseHandle = handler;
     }
     return ret;
 }
@@ -292,6 +295,8 @@ BResult BioClient::BioClientDiagnoseInit(WorkerMode mode)
             CLIENT_LOG_ERROR("Failed to Initialize cli, ret:" << ret << ".");
             dlclose(handler);
             return BIO_INNER_ERR;
+        } else {
+            mCliHandle = handler;
         }
     }
 
@@ -483,6 +488,13 @@ void BioClient::Exit()
 #endif
     BioClientLoggerExit(mMode);
     BioClientTraceExit();
+    if (mCliHandle != nullptr) {
+        dlclose(mCliHandle);
+    }
+
+    if (mClientDiagnoseHandle != nullptr) {
+        dlclose(mClientDiagnoseHandle);
+    }
     mStarted = false;
 }
 

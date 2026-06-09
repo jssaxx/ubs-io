@@ -126,8 +126,13 @@ void BioServer::Exit()
     if (mService != nullptr) {
         mService->Exit();
     }
+
     LOG_INFO("Boostio server exit success.");
     BioLoggerExit();
+
+    if (mServerDiagnoseHandle != nullptr) {
+        dlclose(mServerDiagnoseHandle);
+    }
     mStarted = false;
 }
 
@@ -634,6 +639,9 @@ BResult BioServer::BioServerDiagnoseInitInner()
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
         ret = serverInitFunc();
+        dlclose(handler);
+    } else {
+        mServerDiagnoseHandle = handler;
     }
 
     return ret;
