@@ -426,7 +426,7 @@ private:
     std::mutex mPtViewMutex;
     uint64_t mCurNodeTimes = 0;
     uint64_t mCurPtTimes = 0;
-
+    void *mServerDiagnoseHandle = nullptr;
     bool mNetEngineInited = false;
     bool mCacheInited = false;
     bool mMirrorInited = false;

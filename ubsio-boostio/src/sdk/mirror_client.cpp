@@ -1060,7 +1060,9 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
         }
         index += keyNum;
     }
-    sem_wait(&sem);
+    if (index > 0) {
+        sem_wait(&sem);
+    }
     sem_destroy(&sem);
     if (ret != BIO_OK) {
         // TODO 资源回收
@@ -1161,7 +1163,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 {
     BResult ret = BIO_OK;
     std::vector<uint32_t> nodes;
-    nodes.reserve(param.count);
+    nodes.resize(param.count);
     std::unordered_map<uint16_t, BatchGetPlan> planSend;
     for (uint32_t i = 0; i < param.count; i++) {
         uint16_t ptId =  ParseLocation(param.locations[i]);
@@ -2096,7 +2098,10 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
     sem_wait(&cbCtx.sem);
     sem_destroy(&cbCtx.sem);
 
-    mDataMsgMemPool->ReleaseOne(req->mrAddress);
+    if (!req->memFromServer) {
+        mDataMsgMemPool->ReleaseOne(req->mrAddress);
+    }
+
     if (cbCtx.result == BIO_OK) {
         mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
         mIoStrategy[ptEntry.ptId]->strategy = ioStrategy.load();
@@ -2118,6 +2123,7 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
     InitAsyncPutCbCtx(*cbCtx, quota);
     auto *ioStrategy = new (std::nothrow) std::atomic<uint32_t>(0);
     if (ioStrategy == nullptr) {
+        delete cbCtx;
         CLIENT_LOG_ERROR("Alloc strategy failed.");
         return BIO_ALLOC_FAIL;
     }
@@ -2232,12 +2238,14 @@ BResult MirrorClient::GetServerRemote(GetRequest &req, uint16_t dstNid, char *va
             req.offset << ", length:" << req.length << ", dstNid:" << dstNid << ".");
     } else {
         if (rsp.num > SLICE_ADDR_SIZE) {
+            mDataMsgMemPool->ReleaseOne(address);
             return BIO_INVALID_PARAM;
         }
         realLen = rsp.realLen;
         if (realLen > req.length) {
             CLIENT_LOG_ERROR("Read length greater than value size, realLen:" << realLen <<
                 ", size:" << mDataMsgMemBlockSize);
+            mDataMsgMemPool->ReleaseOne(address);
             return BIO_INNER_ERR;
         }
 
@@ -2348,8 +2356,9 @@ BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetP
                                                          planSend[mLocalNid.VNodeId()].reqLen, callback);
         BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL, BIO_OK);
     }
-
-    sem_wait(&cbCtx.sem);
+    if (quota > 0) {
+        sem_wait(&cbCtx.sem);
+    }
     sem_destroy(&cbCtx.sem);
     return cbCtx.result;
 }
@@ -2547,8 +2556,10 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
         DeleteRemote(req, ptEntry, idx, callback);
     }
 
-    sem_wait(&cbCtx.sem);
-    sem_destroy(&cbCtx.sem);
+    if (quota > 0) {
+        sem_wait(&cbCtx.sem);
+        sem_destroy(&cbCtx.sem);
+    }
     return cbCtx.result;
 }
 

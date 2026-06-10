@@ -50,6 +50,7 @@ BResult MirrorServerCrb::Init()
     mJobService = ExecutorService::Create(CRB_JOB_THREAD_NUM, CRB_JOB_QUEUE_SIZE);
     if (UNLIKELY(mJobService == nullptr)) {
         LOG_ERROR("Failed to start executor service for crb job");
+        mTaskService->Stop();
         return BIO_ERR;
     }
 
@@ -121,7 +122,6 @@ void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
         }
     }
 
-    sem_init(&ptTask->jobSem, 0, 0);
     if (ptTask->jobNum != ptTask->ptList.size()) {
         sem_wait(&ptTask->jobSem);
     }
