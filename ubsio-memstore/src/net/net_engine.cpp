@@ -550,26 +550,41 @@ int32_t NetEngine::RequestReceived(ServiceContext &ctx)
         NET_LOG_ERROR("Net request executor not ready.");
         return MMS_NOT_READY;
     }
-    if (UNLIKELY(ctx.OpCode() >= MAX_NEW_REQ_HANDLER)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode());
+    if (UNLIKELY(ctx.MessageData() == nullptr || ctx.MessageDataLen() < sizeof(ReqHead))) {
+        NET_LOG_ERROR("Net engine received an invalid message.");
         return MMS_ERR;
     }
-    auto &handler = mHandlers[ctx.OpCode()];
+
+    auto head = static_cast<ReqHead *>(ctx.MessageData());
+    if (UNLIKELY(head->opcode >= MAX_NEW_REQ_HANDLER)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
+        return MMS_ERR;
+    }
+
+    auto &handler = mHandlers[head->opcode];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << ctx.OpCode() <<
-            " as no handler registered");
+        NET_LOG_ERROR("Net engine received a message with unregistered opCode " << head->opcode << ".");
         return MMS_ERR;
     }
-    auto ret = mRequestExecutor->AddTask(handler, ctx);
-    return ret;
+    return mRequestExecutor->AddTask(handler, ctx);
 }
 
 int32_t NetEngine::RequestInnerReceived(ServiceContext &ctx)
 {
-    ReqHead *head = (ReqHead *)ctx.MessageData();
+    if (UNLIKELY(ctx.MessageData() == nullptr || ctx.MessageDataLen() < sizeof(ReqHead))) {
+        NET_LOG_ERROR("Net engine received an invalid message.");
+        return MMS_ERR;
+    }
+
+    auto head = static_cast<ReqHead *>(ctx.MessageData());
+    if (UNLIKELY(head->opcode >= MAX_NEW_REQ_HANDLER)) {
+        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
+        return MMS_ERR;
+    }
+
     auto &handler = mHandlers[head->opcode];
     if (UNLIKELY(handler == nullptr)) {
-        NET_LOG_ERROR("Net engine received a message with invalid opCode " << head->opcode << ".");
+        NET_LOG_ERROR("Net engine received a message with unregistered opCode " << head->opcode << ".");
         return MMS_ERR;
     }
 
