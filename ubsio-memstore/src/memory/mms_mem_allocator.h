@@ -85,6 +85,7 @@ public:
     BResult MmsFree(uintptr_t blockAddr);
 
     BResult ReturnBuddyBlockToPool(uintptr_t blockAddr);
+    BResult ReturnBatchBuddyBlocksToPool(const uintptr_t blockAddrs[], uint64_t count);
 
     inline bool IsBuddyMode() const
     {
@@ -131,7 +132,8 @@ private:
     BResult InitFixedMemPools();
     BResult GetBuddyAllocOrder(uint64_t size, uint16_t &order) const;
     BResult BuddyAllocFromPool(uint16_t preferNumaId, uint16_t order, uint16_t &allocNumaId, uintptr_t &blockAddr);
-    BResult ReturnBatchBuddyBlocksToPool(const uintptr_t blockAddrs[], uint64_t count);
+    BResult BuddyAllocBatchFromPool(uint16_t preferNumaId, uint16_t order, uintptr_t blockAddrs[],
+                                    uint64_t requestCount, uint64_t &actualCount);
     BResult BuddyAllocFromThreadCacheMiss(uint16_t order, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyAllocDirect(uint16_t order, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyAlloc(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr);
@@ -272,7 +274,9 @@ class BuddyNumaMemoryPool {
 public:
     BResult Start(uint16_t numaId, uint64_t address, uint64_t size, uint64_t baseBlockSize);
     BResult Alloc(uint16_t order, uintptr_t &blockAddr);
+    BResult AllocBatch(uint16_t order, uintptr_t blockAddrs[], uint64_t requestCount, uint64_t &actualCount);
     BResult Free(uintptr_t blockAddr);
+    BResult FreeBatch(uint16_t order, const uintptr_t blockAddrs[], uint64_t count);
 
 private:
     inline uint64_t ChunkAddr(uint64_t unitIndex) const
@@ -298,6 +302,11 @@ private:
     void AddFreeChunk(uint64_t chunkAddr, uint16_t order);
     BuddyBlockNode *PopFreeChunk(uint16_t order);
     bool RemoveFreeChunk(uint64_t unitIndex, uint16_t order);
+    void AddFreeChunkUnlocked(uint64_t chunkAddr, uint16_t order);
+    BuddyBlockNode *PopFreeChunkUnlocked(uint16_t order);
+    bool RemoveFreeChunkUnlocked(uint64_t unitIndex, uint16_t order);
+    BResult AllocUnlocked(uint16_t order, uintptr_t &blockAddr);
+    BResult FreeUnlocked(uintptr_t blockAddr);
 
 private:
     uint16_t mNumaId = 0;
@@ -317,7 +326,12 @@ public:
 
     BResult AllocFromPool(uint16_t numaId, uint16_t order, uintptr_t &blockAddr);
     BResult AllocFromOtherPool(uint16_t numaId, uint16_t order, uint16_t &allocNumaId, uintptr_t &blockAddr);
+    BResult AllocBatchFromPool(uint16_t numaId, uint16_t order, uintptr_t blockAddrs[], uint64_t requestCount,
+                               uint64_t &actualCount);
+    BResult AllocBatchFromOtherPool(uint16_t numaId, uint16_t order, uintptr_t blockAddrs[], uint64_t requestCount,
+                                    uint64_t &actualCount);
     BResult FreeToPool(uint16_t numaId, uintptr_t blockAddr);
+    BResult FreeBatchToPool(uint16_t numaId, uint16_t order, const uintptr_t blockAddrs[], uint64_t count);
 
     inline BResult Reset()
     {
