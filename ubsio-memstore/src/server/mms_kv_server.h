@@ -75,6 +75,7 @@ private:
     void RegisterOpcode();
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
+    bool IsIoCtxRequestValid(const IoCtrlRequest &req, uint64_t minLength) const;
 
     BResult HandlePut(ServiceContext &ctx);
     BResult HandlePutDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
@@ -152,6 +153,7 @@ private:
     CmPtr mCm = nullptr;
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
+    uint64_t mIoCtxMemSize = 0;
 
     static uint32_t mMaxPutItemNum;
     static uint32_t mMaxUpdateItemNum;
