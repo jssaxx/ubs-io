@@ -37,26 +37,27 @@ MmsNotifyDispatcher::~MmsNotifyDispatcher()
     Stop();
 }
 
-CResult MmsNotifyDispatcher::RegisterCallback(NotifyCallback callback)
+CResult MmsNotifyDispatcher::RegisterCallback(NotifyCallback callback, void *lpUserData)
 {
     std::lock_guard<std::mutex> lifecycleLock(mLifecycleMutex);
     if (callback == nullptr) {
-        mCallback = nullptr;
+        mCallback.store(nullptr, std::memory_order_release);
+        mUserData.store(nullptr, std::memory_order_release);
         StopWorkerIfIdleLocked();
         return RET_MMS_OK;
     }
 
     if (mRunning.load(std::memory_order_acquire)) {
-        if (mCallback == nullptr) {
-            mCallback = callback;
-            return RET_MMS_OK;
-        }
-        return (mCallback == callback) ? RET_MMS_OK : RET_MMS_EPERM;
+        mUserData.store(lpUserData, std::memory_order_release);
+        mCallback.store(callback, std::memory_order_release);
+        return RET_MMS_OK;
     }
 
-    mCallback = callback;
+    mUserData.store(lpUserData, std::memory_order_release);
+    mCallback.store(callback, std::memory_order_release);
     if (!StartWorkerLocked()) {
-        mCallback = nullptr;
+        mCallback.store(nullptr, std::memory_order_release);
+        mUserData.store(nullptr, std::memory_order_release);
         return RET_MMS_ERROR;
     }
     return RET_MMS_OK;
@@ -154,7 +155,7 @@ bool MmsNotifyDispatcher::StartWorkerLocked()
 
 void MmsNotifyDispatcher::StopWorkerIfIdleLocked()
 {
-    if (mCallback != nullptr || mRemoteNotifyHandler != nullptr) {
+    if (mCallback.load(std::memory_order_acquire) != nullptr || mRemoteNotifyHandler != nullptr) {
         return;
     }
     StopWorker();
@@ -275,13 +276,14 @@ bool MmsNotifyDispatcher::PopEvent(NotifyEvent &event)
 
 void MmsNotifyDispatcher::NotifyLocalCallback(const NotifyEvent &event)
 {
-    auto callback = mCallback;
+    void *lpUserData = mUserData.load(std::memory_order_acquire);
+    auto callback = mCallback.load(std::memory_order_acquire);
     if (callback == nullptr) {
         return;
     }
 
     try {
-        callback(event.key, event.opType);
+        callback(event.key, event.keyLen, event.opType, lpUserData);
     } catch (const std::exception &ex) {
         LOG_ERROR("Notify callback failed, error:" << ex.what() << ".");
     } catch (...) {

@@ -135,7 +135,7 @@ public:
     }
 
     BResult MmsStartCatchUpTask(void);
-    BResult RegisterNotifyCallback(NotifyCallback callback);
+    BResult RegisterNotifyCallback(NotifyCallback callback, void *lpUserData);
 
 private:
     void BackCheckStateTask();
@@ -210,6 +210,7 @@ private:
     std::atomic<bool> mServiceable {false};
     ServiceCallback mServiceCallback = nullptr;
     std::atomic<NotifyCallback> mNotifyCallback {nullptr};
+    std::atomic<void *> mNotifyUserData {nullptr};
     ExecutorServicePtr mNotifyCallbackService {nullptr};
     std::mutex mNotifyCallbackServiceLock;
     ChannelPtr mNotifyChannel = nullptr;

@@ -41,7 +41,7 @@ public:
 
     static MmsNotifyDispatcher &Instance();
 
-    CResult RegisterCallback(NotifyCallback callback);
+    CResult RegisterCallback(NotifyCallback callback, void *lpUserData);
     CResult RegisterRemoteNotifyHandler(RemoteNotifyHandler handler);
     void Notify(const char *key, uint16_t keyLen, OperateType opType);
     void Stop();
@@ -66,7 +66,8 @@ private:
 private:
     static constexpr uint32_t QUEUE_CAPACITY = NO_10240;
 
-    NotifyCallback mCallback = nullptr;
+    std::atomic<NotifyCallback> mCallback{nullptr};
+    std::atomic<void *> mUserData{nullptr};
     RemoteNotifyHandler mRemoteNotifyHandler = nullptr;
     std::atomic<uint64_t> mQueueFullCount{0};
     std::atomic<bool> mRunning{false};

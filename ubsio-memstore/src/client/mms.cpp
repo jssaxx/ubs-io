@@ -85,13 +85,13 @@ CResult Mms::Initialize(const MmsOptions &options, ServiceCallback service)
     return ToCResult(gClient->Initialize(options, service));
 }
 
-CResult Mms::RegisterCallback(NotifyCallback callback)
+CResult Mms::RegisterCallback(NotifyCallback callback, void *lpUserData)
 {
     if (UNLIKELY(gClient == nullptr)) {
         CLIENT_LOG_ERROR("Get client instance failed.");
         return RET_MMS_ERROR;
     }
-    return ToCResult(gClient->RegisterNotifyCallback(callback));
+    return ToCResult(gClient->RegisterNotifyCallback(callback, lpUserData));
 }
 
 void Mms::Exit()
@@ -274,9 +274,9 @@ CResult MmsInitialize(const MmsOptions *options, ServiceCallback service)
     return ock::mms::Mms::Initialize(*options, service);
 }
 
-CResult MmsRegisterNotifyCallback(NotifyCallback callback)
+CResult MmsRegisterNotifyCallback(NotifyCallback callback, void *lpUserData)
 {
-    return ock::mms::Mms::RegisterCallback(callback);
+    return ock::mms::Mms::RegisterCallback(callback, lpUserData);
 }
 
 void MmsExit()

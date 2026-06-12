@@ -106,7 +106,7 @@ typedef enum {
     OP_BUTT
 } OperateType;
 
-typedef void (*NotifyCallback)(const char *key, OperateType opType);
+typedef void (*NotifyCallback)(const char *key, uint32_t keyLen, OperateType opType, void *lpUserData);
 typedef void (*ServiceCallback)(uint8_t serviceable); // 0: false; non-zero: true.
 
 /**
@@ -122,9 +122,10 @@ CResult MmsInitialize(const MmsOptions *options, ServiceCallback service);
  * @brief: Register the data change notification callback.
  *
  * @param[in]: callback: Data change notification callback.
+ * @param[in]: lpUserData: User data passed to the notification callback.
  * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
  */
-CResult MmsRegisterNotifyCallback(NotifyCallback callback);
+CResult MmsRegisterNotifyCallback(NotifyCallback callback, void *lpUserData);
 
 /**
  * @brief: Exit the MMS service.

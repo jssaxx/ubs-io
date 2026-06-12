@@ -34,9 +34,11 @@ std::string OpTypeToString(OperateType opType)
     }
 }
 
-static void NotifyCallbackFun(const char *key, OperateType opType)
+static void NotifyCallbackFun(const char *key, uint32_t keyLen, OperateType opType, void *lpUserData)
 {
-    LOG_INFO("Data changed, key:" << key << " opType:" << OpTypeToString(opType) << ".");
+    (void)lpUserData;
+    std::string notifyKey(key, keyLen);
+    LOG_INFO("Data changed, key:" << notifyKey << " opType:" << OpTypeToString(opType) << ".");
 }
 
 static void HandleSigterm(int signum)
@@ -72,7 +74,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    auto callbackRet = MmsRegisterNotifyCallback(NotifyCallbackFun);
+    auto callbackRet = MmsRegisterNotifyCallback(NotifyCallbackFun, nullptr);
     if (callbackRet != RET_MMS_OK) {
         std::cout << "mms register notify callback failed:" << callbackRet << "." << std::endl;
         return -1;
@@ -87,6 +89,6 @@ int main(int argc, char *argv[])
     while (gDaemonRunning) {
         sleep(5U);
     }
-    (void)MmsRegisterNotifyCallback(nullptr);
+    (void)MmsRegisterNotifyCallback(nullptr, nullptr);
     return 0;
 }

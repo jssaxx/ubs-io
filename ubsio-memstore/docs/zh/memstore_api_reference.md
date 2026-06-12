@@ -195,7 +195,7 @@ typedef enum {
     OP_BUTT
 } OperateType;
 
-typedef void (*NotifyCallback)(const char *key, OperateType opType);
+typedef void (*NotifyCallback)(const char *key, uint32_t keyLen, OperateType opType, void *lpUserData);
 ```
 
 当前通知类型包括：
@@ -248,7 +248,7 @@ CResult MmsInitialize(const MmsOptions *options, ServiceCallback service);
 ### 函数原型
 
 ```c
-CResult MmsRegisterNotifyCallback(NotifyCallback callback);
+CResult MmsRegisterNotifyCallback(NotifyCallback callback, void *lpUserData);
 ```
 
 ### 参数
@@ -256,6 +256,7 @@ CResult MmsRegisterNotifyCallback(NotifyCallback callback);
 |参数|方向|说明|
 |--|--|--|
 |`callback`|输入|数据变更通知回调函数。|
+|`lpUserData`|输入|用户上下文指针，触发通知时通过回调函数原样返回。|
 
 ### 返回值
 

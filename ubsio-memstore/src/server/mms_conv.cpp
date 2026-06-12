@@ -86,21 +86,17 @@ CResult MmsConv::Initialize(const MmsOptions &options, ServiceCallback service)
     return ToCResult(ret);
 }
 
-CResult MmsConv::RegisterCallback(NotifyCallback callback)
+CResult MmsConv::RegisterCallback(NotifyCallback callback, void *lpUserData)
 {
     if (isSeparateMode) {
         return RET_MMS_OK;
     }
 
-    if (callback == nullptr) {
-        return RET_MMS_EPERM;
-    }
-
-    if (!MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch) {
+    if (callback != nullptr && !MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch) {
         return RET_MMS_OK;
     }
 
-    return MmsNotifyDispatcher::Instance().RegisterCallback(callback);
+    return MmsNotifyDispatcher::Instance().RegisterCallback(callback, lpUserData);
 }
 
 void MmsConv::Exit()
@@ -330,9 +326,9 @@ CResult MmsInitialize(const MmsOptions *options, ServiceCallback service)
     return ock::mms::MmsConv::Initialize(*options, service);
 }
 
-CResult MmsRegisterNotifyCallback(NotifyCallback callback)
+CResult MmsRegisterNotifyCallback(NotifyCallback callback, void *lpUserData)
 {
-    return ock::mms::MmsConv::RegisterCallback(callback);
+    return ock::mms::MmsConv::RegisterCallback(callback, lpUserData);
 }
 
 void MmsExit()

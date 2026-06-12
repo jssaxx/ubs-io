@@ -47,10 +47,11 @@ void ClearNotifyEvents()
     gNotifyEvents.clear();
 }
 
-void NotifyTestCallback(const char *key, OperateType opType)
+void NotifyTestCallback(const char *key, uint32_t keyLen, OperateType opType, void *lpUserData)
 {
+    (void)lpUserData;
     std::lock_guard<std::mutex> lock(gNotifyMutex);
-    gNotifyEvents.emplace_back(key, opType);
+    gNotifyEvents.emplace_back(std::string(key, keyLen), opType);
     gNotifyCv.notify_all();
 }
 
@@ -327,7 +328,7 @@ TEST_F(TestServer, test_mms_notify_put_and_delete)
     };
 
     ClearNotifyEvents();
-    EXPECT_EQ(MmsConv::RegisterCallback(NotifyTestCallback), RET_MMS_OK);
+    EXPECT_EQ(MmsConv::RegisterCallback(NotifyTestCallback, nullptr), RET_MMS_OK);
 
     auto ret = MmsConv::Put(putItems, NO_2);
     EXPECT_EQ(ret, RET_MMS_OK);
@@ -349,7 +350,7 @@ TEST_F(TestServer, test_mms_notify_put_and_delete)
     events = GetNotifyEvents();
     EXPECT_TRUE(events.empty());
 
-    EXPECT_EQ(MmsConv::RegisterCallback(nullptr), RET_MMS_EPERM);
+    EXPECT_EQ(MmsConv::RegisterCallback(nullptr, nullptr), RET_MMS_OK);
     ClearNotifyEvents();
     DeleteItems deleteItem = MakeDelete(key2);
     ret = MmsConv::Delete(&deleteItem, NO_1);

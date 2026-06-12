@@ -36,9 +36,10 @@ public:
      * @brief: Register the data change notification callback.
      *
      * @param[in]: callback: Data change notification callback.
+     * @param[in]: lpUserData: User data passed to the notification callback.
      * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
-    static CResult RegisterCallback(NotifyCallback callback);
+    static CResult RegisterCallback(NotifyCallback callback, void *lpUserData);
 
     /**
      * @brief: Exit the MMS service.

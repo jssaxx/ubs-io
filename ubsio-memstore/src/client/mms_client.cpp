@@ -126,6 +126,7 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
 void MmsClient::Exit(void)
 {
     mNotifyCallback.store(nullptr, std::memory_order_release);
+    mNotifyUserData.store(nullptr, std::memory_order_release);
     mNotifyChannel = nullptr;
     mNotifyPid = 0;
     if (mNotifyCallbackService != nullptr) {
@@ -238,8 +239,9 @@ void MmsClient::HandleNotifyChannelBroken()
     if (callback == nullptr) {
         return;
     }
-    bool ret = mStartService->Execute([this, callback]() {
-        auto registerRet = RegisterNotifyCallback(callback);
+    void *lpUserData = mNotifyUserData.load(std::memory_order_acquire);
+    bool ret = mStartService->Execute([this, callback, lpUserData]() {
+        auto registerRet = RegisterNotifyCallback(callback, lpUserData);
         if (registerRet != MMS_OK) {
             CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << registerRet << ".");
         }
@@ -365,7 +367,7 @@ BResult MmsClient::StartNotifyCallbackService()
         return MMS_OK;
     }
 
-    mNotifyCallbackService = ExecutorService::Create(NO_1, NO_8192);
+    mNotifyCallbackService = ExecutorService::Create(NO_2, NO_10240);
     if (mNotifyCallbackService == nullptr) {
         CLIENT_LOG_ERROR("Failed to create notify callback executor.");
         return MMS_ALLOC_FAIL;
@@ -404,7 +406,7 @@ BResult MmsClient::StartNotifyChannel()
     return MMS_OK;
 }
 
-BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback)
+BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback, void *lpUserData)
 {
     if (UNLIKELY(!mStarted || mNetEngine == nullptr)) {
         CLIENT_LOG_ERROR("Mms client is not started.");
@@ -425,9 +427,11 @@ BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback)
         if (ret != MMS_OK) {
             return ret;
         }
+        mNotifyUserData.store(lpUserData, std::memory_order_release);
         mNotifyCallback.store(callback, std::memory_order_release);
     } else {
         mNotifyCallback.store(nullptr, std::memory_order_release);
+        mNotifyUserData.store(nullptr, std::memory_order_release);
     }
 
     NotifySubscribeReq req = {{0, MMS_OP_C_NOTIFY_SUBSCRIBE, 0, 0, 0}, callback != nullptr, mNotifyGroupIndex,
@@ -439,6 +443,7 @@ BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback)
         CLIENT_LOG_ERROR("Notify subscribe request failed, ret:" << ret << ".");
         if (callback != nullptr) {
             mNotifyCallback.store(nullptr, std::memory_order_release);
+            mNotifyUserData.store(nullptr, std::memory_order_release);
         }
         return ret;
     }
@@ -503,11 +508,13 @@ BResult MmsClient::HandleSingleNotifyDataChange(const NotifyDataChangeItem &item
     }
 
     std::string key(item.key, item.keyLen);
+    uint32_t keyLen = item.keyLen;
     auto opType = static_cast<OperateType>(item.opType);
-    auto ret = mNotifyCallbackService->Execute([this, key, opType]() {
+    auto ret = mNotifyCallbackService->Execute([this, key, keyLen, opType]() {
+        void *lpUserData = mNotifyUserData.load(std::memory_order_acquire);
         auto callback = mNotifyCallback.load(std::memory_order_acquire);
         if (callback != nullptr) {
-            callback(key.c_str(), opType);
+            callback(key.data(), keyLen, opType, lpUserData);
         }
     });
     if (UNLIKELY(!ret)) {
@@ -796,7 +803,8 @@ void MmsClient::ReregisterNotifyCallback()
         return;
     }
 
-    auto ret = RegisterNotifyCallback(callback);
+    void *lpUserData = mNotifyUserData.load(std::memory_order_acquire);
+    auto ret = RegisterNotifyCallback(callback, lpUserData);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << ret << ".");
     }
