@@ -13,8 +13,10 @@
 #ifndef BIO_SERVER_H
 #define BIO_SERVER_H
 
+#include <atomic>
 #include <mutex>
 #include <utility>
+#include <vector>
 #include "bio_config_instance.h"
 #include "bio_err.h"
 #include "bio_ref.h"
@@ -23,6 +25,7 @@
 #include "mirror_server.h"
 #include "mirror_server_crb.h"
 #include "net_engine.h"
+#include "standalone_memory_pool.h"
 
 namespace ock {
 namespace bio {
@@ -180,7 +183,10 @@ class BioServer {
 public:
     BioServer() noexcept;
 
+    // Start the original cluster deployment runtime.
     BResult Start();
+    // Start embedded single-node IO with a dedicated standalone module chain.
+    BResult StartStandalone();
     void Exit();
 
     static BioServerPtr &Instance()
@@ -276,7 +282,25 @@ public:
 
     inline bool GetServiceState()
     {
+        if (mCm == nullptr) {
+            return false; // Standalone mode is never in upgrade state.
+        }
         return mCm->GetServiceState();
+    }
+
+    inline bool IsStandaloneMode() const
+    {
+        return mStandaloneMode;
+    }
+
+    // Report service update state.
+    // Cluster mode reports to CM; standalone does not support upgrade.
+    inline BResult ReportServiceState(bool isUpgrade)
+    {
+        if (mCm == nullptr) {
+            return BIO_OK;
+        }
+        return mCm->ReportServiceState(isUpgrade);
     }
 
     inline std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> GetNodeView(uint64_t *curNodeTimes)
@@ -320,6 +344,9 @@ public:
 
     inline uint64_t GetLocalMrKey()
     {
+        if (mNetEngine == nullptr) {
+            return 0;
+        }
         uint64_t key = 0;
         mNetEngine->GetLocalMrKey(key);
         return key;
@@ -327,29 +354,66 @@ public:
 
     inline BResult MemAlloc(uint64_t size, NetMrInfo &mr)
     {
-        if (size > mNetEngine->GetDataPage()) {
-            return BIO_ALLOC_FAIL;
+        if (mNetEngine != nullptr) {
+            if (size > mNetEngine->GetDataPage()) {
+                return BIO_ALLOC_FAIL;
+            }
+            auto ret = mNetEngine->AllocLocalMrSingle(mr.address, mr.key);
+            mr.size = size;
+            return ret;
         }
-        auto ret = mNetEngine->AllocLocalMrSingle(mr.address, mr.key);
+        if (mStandaloneMemPool == nullptr) {
+            return BIO_NOT_READY;
+        }
+        uint64_t address = 0;
+        auto ret = mStandaloneMemPool->Alloc(size, &address);
+        mr.address = static_cast<uintptr_t>(address);
+        mr.key = 0;
         mr.size = size;
         return ret;
     }
 
     inline BResult MemAlloc(uint64_t size, uint64_t *addr)
     {
-        uintptr_t address;
-        uint64_t outKey;
-        auto ret = mNetEngine->AllocLocalMrSingle(address, outKey);
-        if (UNLIKELY(ret != BIO_OK)) {
-            return ret;
+        if (UNLIKELY(addr == nullptr)) {
+            return BIO_INVALID_PARAM;
         }
-        *addr = address;
-        return BIO_OK;
+        if (mNetEngine != nullptr) {
+            uintptr_t address;
+            uint64_t outKey;
+            auto ret = mNetEngine->AllocLocalMrSingle(address, outKey);
+            if (UNLIKELY(ret != BIO_OK)) {
+                return ret;
+            }
+            *addr = address;
+            return BIO_OK;
+        }
+        if (mStandaloneMemPool == nullptr) {
+            return BIO_NOT_READY;
+        }
+        return mStandaloneMemPool->Alloc(size, addr);
     }
 
     inline void MemFree(uint64_t addr)
     {
-        mNetEngine->FreeLocalMrSingle(addr);
+        if (mNetEngine != nullptr) {
+            mNetEngine->FreeLocalMrSingle(addr);
+            return;
+        }
+        if (mStandaloneMemPool != nullptr) {
+            mStandaloneMemPool->Free(addr);
+        }
+    }
+
+    inline uint64_t GetMemUsedSize()
+    {
+        if (mNetEngine != nullptr) {
+            return mNetEngine->GetUsedBlockSize();
+        }
+        if (mStandaloneMemPool != nullptr) {
+            return mStandaloneMemPool->GetUsedSize();
+        }
+        return 0;
     }
 
     inline BResult GetNodeInfo(CmNodeId nid, CmNodeInfo &nodeInfo)
@@ -376,6 +440,10 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 protected:
+    std::vector<ModuleDesc> BuildClusterModules();
+    // Standalone deliberately omits Net and CM, then inserts StandaloneView
+    // before Cache so cache callbacks can query a complete local PT view.
+    std::vector<ModuleDesc> BuildStandaloneModules();
     BResult BioConfigInit();
     BResult BioLoggerInit(std::string pathName);
     void BioLoggerExit();
@@ -387,8 +455,12 @@ protected:
     void BioBdmExit();
     BResult BioNetInit();
     void BioNetExit();
+    BResult BioStandaloneMemInit();
+    void BioStandaloneMemExit();
     BResult BioCmInit();
     void BioCmExit();
+    // Build and install the local one-node NodeView/PtView used without CM.
+    BResult BioStandaloneViewInit();
     BResult BioMirrorServerInit();
     void BioMirrorServerExit();
     BResult BioCacheInit();
@@ -403,8 +475,17 @@ protected:
     void Connection();
     BResult HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos);
     bool CheckNeedCrb(const std::map<uint16_t, CmPtInfo> &ptInfos);
+    // Standalone replacements for CM callbacks registered by Cache.
+    BResult GetLocalDiskIdFromView(uint16_t ptId, uint16_t &diskId);
+    void GetLocalDiskStatusFromView(uint16_t ptId, uint16_t diskId, bool &isNormal);
+    BResult CheckPtDegradeFromView(uint16_t ptId, bool &isDegrade);
+    BResult CheckLocalRoleFromView(uint16_t ptId, bool &isMaster);
 
 private:
+    BResult InitializeRuntime();
+    BResult ProcessService(std::vector<ModuleDesc> modules);
+    void WaitStartReady();
+    BResult StartExpireChecker();
     BResult StartRpcService(const NetOptions &opt);
     BResult StartIpcService(const NetOptions &opt);
     void ReConnect(uint32_t peerId);
@@ -415,6 +496,7 @@ private:
     BioServiceProcPtr mService = nullptr;
     BioConfigPtr mConfig = nullptr;
     NetEnginePtr mNetEngine = nullptr;
+    StandaloneMemoryPoolPtr mStandaloneMemPool = nullptr;
     CmPtr mCm = nullptr;
     MirrorServerPtr mMirror = nullptr;
     MirrorServerCrbPtr mMirrorCrb = nullptr;
@@ -430,6 +512,7 @@ private:
     bool mNetEngineInited = false;
     bool mCacheInited = false;
     bool mMirrorInited = false;
+    bool mStandaloneMode = false;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

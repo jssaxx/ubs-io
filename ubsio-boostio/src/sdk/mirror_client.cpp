@@ -10,8 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <cerrno>
 #include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <dlfcn.h>
 #include <sys/mman.h>
@@ -30,6 +34,65 @@
 
 using namespace ock::bio;
 
+namespace {
+bool IsDirectMode(WorkerMode mode)
+{
+    return mode == CONVERGENCE || mode == STANDALONE;
+}
+
+struct BatchGetResultAddr {
+    int32_t *result;
+    uint64_t *realLength;
+};
+
+struct BatchGetCallbackContext {
+    explicit BatchGetCallbackContext(uint32_t quotaParam) : quota(quotaParam), result(BIO_OK), closed(false)
+    {
+        sem_init(&sem, 0, 0);
+    }
+
+    ~BatchGetCallbackContext()
+    {
+        sem_destroy(&sem);
+    }
+
+    sem_t sem;
+    std::mutex mutex;
+    uint32_t quota;
+    BResult result;
+    bool closed;
+    std::unordered_map<uint16_t, std::vector<BatchGetResultAddr>> resultAddrs;
+};
+
+struct BatchExistCallbackContext {
+    explicit BatchExistCallbackContext(uint32_t quotaParam) : quota(quotaParam), result(BIO_OK), closed(false)
+    {
+        sem_init(&sem, 0, 0);
+    }
+
+    ~BatchExistCallbackContext()
+    {
+        sem_destroy(&sem);
+    }
+
+    sem_t sem;
+    std::mutex mutex;
+    uint32_t quota;
+    BResult result;
+    bool closed;
+};
+
+int WaitSemaphore(sem_t &sem)
+{
+    int ret = 0;
+    do {
+        ret = sem_wait(&sem);
+    } while (ret != 0 && errno == EINTR);
+    return ret == 0 ? 0 : errno;
+}
+
+}
+
 static const uint32_t IO_EXTRATEGE_TIME = 3; // IO策略3s过期
 
 constexpr uint16_t SDK_DISPATH_BATCH_GET_THREAD_NUM = 128;
@@ -37,6 +100,8 @@ constexpr uint16_t SDK_DISPATH_BATCH_GET_QUEUE_SIZE = 8192;
 constexpr uint16_t SDK_DISPATH_BATCH_EXIST_THREAD_NUM = 128;
 constexpr uint16_t SDK_DISPATH_BATCH_EXIST_QUEUE_SIZE = 8192;
 constexpr uint16_t SDK_DISPATH_BATCH_COUNT_MAX_NUM = 128;
+constexpr uint64_t DEFAULT_DATA_MESSAGE_MEM_SIZE = 1024UL * 1024UL * 1024UL * 5UL;
+constexpr uint64_t DEFAULT_DATA_MESSAGE_BLOCK_SIZE = NO_4096 * NO_1024;
 
 BResult MirrorClient::SendCreateFlowRequestRemote(uint16_t nodeId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     FlowInfo &flowInfo)
@@ -209,7 +274,7 @@ BResult MirrorClient::LoadAffinityFlow()
 BResult MirrorClient::CreateDataMessageMemRemote()
 {
     // 1. 从本端Server申请一个内存池.
-    uint64_t dataMemSize = (1024UL * 1024UL * 1024UL * 5UL);
+    uint64_t dataMemSize = DEFAULT_DATA_MESSAGE_MEM_SIZE;
     int32_t memFd = 0;
     uint64_t offset = 0;
     uint64_t blockSize = 0;
@@ -305,7 +370,7 @@ BResult MirrorClient::CreateDataMessageMemLocal()
     mDataMsgMemAddr = reinterpret_cast<uint8_t *>(mDataMsgMemMr.GetAddress());
     mDataMsgMemSize = dataMemSize;
     mDataMsgMemFd = -1;
-    mDataMsgMemBlockSize = NO_4194304;
+    mDataMsgMemBlockSize = DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
     // 2. 创建memory block分配器.
     mDataMsgMemPool = MakeRef<NetBlockPool>();
     if (mDataMsgMemPool == nullptr) {
@@ -313,7 +378,7 @@ BResult MirrorClient::CreateDataMessageMemLocal()
         net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
         mDataMsgMemAddr = nullptr;
         mDataMsgMemSize = 0;
-        mDataMsgMemBlockSize = NO_4096 * NO_1024;
+        mDataMsgMemBlockSize = DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
         return BIO_ALLOC_FAIL;
     }
     ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr),
@@ -323,7 +388,7 @@ BResult MirrorClient::CreateDataMessageMemLocal()
         net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
         mDataMsgMemAddr = nullptr;
         mDataMsgMemSize = 0;
-        mDataMsgMemBlockSize = NO_4096 * NO_1024;
+        mDataMsgMemBlockSize = DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
         mDataMsgMemPool = nullptr;
     }  else {
         CLIENT_LOG_INFO("Create data message memory pool success, size:" << dataMemSize << ".");
@@ -331,10 +396,79 @@ BResult MirrorClient::CreateDataMessageMemLocal()
     return ret;
 }
 
+BResult MirrorClient::CreateDataMessageMemStandalone()
+{
+    StandaloneRuntimeConfigResponse runtimeConfig{};
+    auto ret = agent::BioClientAgent::Instance()->GetRuntimeConfig(runtimeConfig);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Get standalone runtime config failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    uint64_t blockSize = runtimeConfig.dataMsgBlockSize != 0 ? runtimeConfig.dataMsgBlockSize :
+        DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
+    if (UNLIKELY(blockSize < sizeof(uintptr_t))) {
+        CLIENT_LOG_ERROR("Invalid standalone data message block size:" << blockSize << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    uint64_t dataMemSize = (runtimeConfig.dataMsgBlockSize != 0) ? runtimeConfig.sdkPoolSize :
+        DEFAULT_DATA_MESSAGE_MEM_SIZE;
+    dataMemSize = (dataMemSize / blockSize) * blockSize;
+
+    mDataMsgMemPool = MakeRef<NetBlockPool>();
+    if (mDataMsgMemPool == nullptr) {
+        CLIENT_LOG_ERROR("Make standalone data message block pool failed.");
+        return BIO_ALLOC_FAIL;
+    }
+
+    mDataMsgMemBlockSize = blockSize;
+    mDataMsgMemFd = -1;
+    if (dataMemSize == 0) {
+        ret = mDataMsgMemPool->Start(0, mDataMsgMemBlockSize, 0);
+        if (ret == BIO_OK) {
+            CLIENT_LOG_WARN("Standalone data message memory pool size is 0.");
+        }
+        return ret;
+    }
+
+    void *address = mmap(nullptr, dataMemSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (address == MAP_FAILED) {
+        CLIENT_LOG_ERROR("Mmap standalone data message memory failed, size:" << dataMemSize << ", errno:" << errno <<
+            ", reason:" << strerror(errno) << ".");
+        mDataMsgMemPool = nullptr;
+        mDataMsgMemBlockSize = DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
+        return BIO_ALLOC_FAIL;
+    }
+
+    mDataMsgMemAddr = static_cast<uint8_t *>(address);
+    mDataMsgMemSize = dataMemSize;
+    ret = mDataMsgMemPool->Start(reinterpret_cast<uintptr_t>(mDataMsgMemAddr),
+                                 mDataMsgMemBlockSize, dataMemSize / mDataMsgMemBlockSize);
+    if (ret != BIO_OK) {
+        CLIENT_LOG_ERROR("Failed to start standalone data message block pool, size:" << dataMemSize <<
+            ", blockSize:" << mDataMsgMemBlockSize << ".");
+        if (munmap(address, dataMemSize) == -1) {
+            NET_LOG_ERROR("munmap standalone data message memory failed.");
+        }
+        mDataMsgMemAddr = nullptr;
+        mDataMsgMemSize = 0;
+        mDataMsgMemBlockSize = DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
+        mDataMsgMemPool = nullptr;
+        return ret;
+    }
+
+    CLIENT_LOG_INFO("Create standalone data message memory pool success, size:" << dataMemSize <<
+        ", blockSize:" << mDataMsgMemBlockSize << ".");
+    return BIO_OK;
+}
+
 BResult MirrorClient::CreateDataMessageMem()
 {
     DestroyDataMessageMem();
-    if (mMode == CONVERGENCE) {
+    if (mMode == STANDALONE) {
+        return CreateDataMessageMemStandalone();
+    } else if (mMode == CONVERGENCE) {
         return CreateDataMessageMemLocal();
     } else {
         return CreateDataMessageMemRemote();
@@ -348,10 +482,16 @@ void MirrorClient::DestroyDataMessageMem()
         mDataMsgMemPool = nullptr;
     }
     if (mDataMsgMemAddr != nullptr) {
-        net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
-        if (mMode == SEPARATES && mDataMsgMemSize != 0) {
+        if (mMode == STANDALONE && mDataMsgMemSize != 0) {
             if (munmap(mDataMsgMemAddr, mDataMsgMemSize) == -1) {
                 NET_LOG_ERROR("munmap data message memory failed.");
+            }
+        } else {
+            net::BioClientNet::Instance()->GetNetEngine()->DestroyMemoryRegion(mDataMsgMemMr);
+            if (mMode == SEPARATES && mDataMsgMemSize != 0) {
+                if (munmap(mDataMsgMemAddr, mDataMsgMemSize) == -1) {
+                    NET_LOG_ERROR("munmap data message memory failed.");
+                }
             }
         }
         mDataMsgMemAddr = nullptr;
@@ -361,7 +501,7 @@ void MirrorClient::DestroyDataMessageMem()
         mDataMsgMemFd = -1;
     }
     mDataMsgMemSize = 0;
-    mDataMsgMemBlockSize = NO_4096 * NO_1024;
+    mDataMsgMemBlockSize = DEFAULT_DATA_MESSAGE_BLOCK_SIZE;
 }
 
 BResult MirrorClient::RecoverDataMessageMem()
@@ -631,7 +771,7 @@ BResult MirrorClient::Initialize(UpdateView updateView, uint32_t scene, uint32_t
 BResult MirrorClient::Start()
 {
     // 1. 创建数据消息内存池.
-    auto ret = CreateDataMessageMem();
+    BResult ret = CreateDataMessageMem();
     if (ret != BIO_OK) {
         CLIENT_LOG_ERROR("Failed to create mirror client data message memory, ret:" << ret << ".");
         return ret;
@@ -779,6 +919,9 @@ BResult MirrorClient::PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, C
     }
     req->memFromServer = true;
     req->mrAddress = 0ULL;
+    req->mrOffset = 0ULL;
+    req->mrSize = 0ULL;
+    req->isAlloc = false;
     auto ret = memcpy_s(req->sliceBuf, spaceInfo.descriptorSize, spaceInfo.descriptorInfo, spaceInfo.descriptorSize);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Memory copy failed, ret:" << ret << ".");
@@ -994,14 +1137,58 @@ BResult MirrorClient::BatchGet(CacheAttr attr, const char **keys, const uint32_t
     return ret;
 }
 
+BResult MirrorClient::AllocDataMessageBuffer(uint64_t length, uintptr_t &address)
+{
+    address = 0;
+    if (UNLIKELY(mDataMsgMemPool == nullptr)) {
+        CLIENT_LOG_ERROR("Data message memory pool not ready.");
+        return BIO_NOT_READY;
+    }
+    if (UNLIKELY(length == 0 || length > mDataMsgMemBlockSize)) {
+        CLIENT_LOG_ERROR("Invalid data message alloc length:" << length << ", blockSize:" << mDataMsgMemBlockSize <<
+            ".");
+        return BIO_ALLOC_FAIL;
+    }
+    return mDataMsgMemPool->AllocOne(address);
+}
+
+void MirrorClient::FreeDataMessageBuffer(uintptr_t &address)
+{
+    if (address == 0) {
+        return;
+    }
+    if (UNLIKELY(mDataMsgMemPool == nullptr)) {
+        CLIENT_LOG_ERROR("Data message memory pool not ready.");
+        return;
+    }
+    mDataMsgMemPool->ReleaseOne(address);
+    address = 0;
+}
+
+void MirrorClient::FillBatchGetBufferInfo(GetKeyInfo &keyInfo, uintptr_t address, uint64_t length)
+{
+    keyInfo.address = address;
+    keyInfo.addressOffset = 0;
+    keyInfo.mrKey = 0;
+    keyInfo.size = static_cast<uint32_t>(length);
+    if (mMode != STANDALONE) {
+        keyInfo.mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+        keyInfo.addressOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
+    }
+}
+
 inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum,
                                                          DispathBatchGetResult *taskResults, uintptr_t *valueAddrs)
 {
     for (uint32_t i = 0; i < parallelNum; i++) {
         if (taskResults[i].result == BIO_OK) {
-            uint32_t basic = i * SDK_DISPATH_BATCH_COUNT_MAX_NUM;
+            uint32_t basic = taskResults[i].index;
             for (uint32_t j = 0; j < taskResults[i].count; j++) {
-                mDataMsgMemPool->ReleaseOne(valueAddrs[basic + j]);
+                if (valueAddrs[basic + j] == 0) {
+                    continue;
+                }
+                FreeDataMessageBuffer(valueAddrs[basic + j]);
+                valueAddrs[basic + j] = 0;
             }
         }
     }
@@ -1012,16 +1199,29 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
                                       uint64_t *realLengths, int32_t *results)
 {
     BResult ret = BIO_OK;
+    if (UNLIKELY(mMode == CONVERGENCE)) {
+        CLIENT_LOG_ERROR("Batch get does not support converged deployment.");
+        return BIO_INVALID_PARAM;
+    }
+    if (UNLIKELY(count == 0)) {
+        CLIENT_LOG_ERROR("Invalid dispatch batch get count: 0.");
+        return BIO_INVALID_PARAM;
+    }
+
     uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
     volatile uint32_t taskNum = parallelNum;
     sem_t sem;
-    sem_init(&sem, 0, 0);
+    if (sem_init(&sem, 0, 0) != 0) {
+        CLIENT_LOG_ERROR("Init dispatch batch get semaphore failed, errno:" << errno << ".");
+        return BIO_INNER_ERR;
+    }
     uint32_t index = 0;
     uint32_t keyNum = 0;
     uint32_t resultIndex = 0;
     DispathBatchGetResult *taskResults =
             reinterpret_cast<DispathBatchGetResult *>(malloc(sizeof(DispathBatchGetResult) * parallelNum));
     if (taskResults == nullptr) {
+        sem_destroy(&sem);
         LOG_ERROR("Dispath batch get malloc mem fail.");
         return BIO_ALLOC_FAIL;
     }
@@ -1041,6 +1241,9 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
         uint64_t *realLengthsParam = realLengths + index;
         int32_t *resultsParam = results + index;
         resultIndex = i;
+        taskResults[resultIndex].result = BIO_INNER_ERR;
+        taskResults[resultIndex].index = index;
+        taskResults[resultIndex].count = keyNum;
         std::function<void()> func = [ &, resultIndex,
                                        keysParam, countParam, offsetsParam, lengthsParam,
                                        locationsParam, valuesAddrParam, realLengthsParam, resultsParam]() {
@@ -1055,35 +1258,47 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
         };
 
         if (!mBatchGetExecutor->Execute(func)) {
-            LOG_ERROR("Execute disapth batch get failed, batch num: " << param.count << " i:" << i);
+            LOG_ERROR("Execute dispatch batch get failed, batch num: " << countParam << " i:" << i);
+            taskResults[resultIndex].result = BIO_INNER_ERR;
             ret = BIO_INNER_ERR;
+            if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
+                sem_post(&sem);
+            }
         }
         index += keyNum;
     }
-    if (index > 0) {
-        sem_wait(&sem);
+    int waitRet = WaitSemaphore(sem);
+    if (waitRet != 0) {
+        LOG_ERROR("Wait dispatch batch get semaphore failed, errno:" << waitRet << ".");
+        ret = BIO_INNER_ERR;
     }
     sem_destroy(&sem);
     if (ret != BIO_OK) {
-        // TODO 资源回收
         DispathBatchGetRecycleResource(parallelNum, taskResults, valueAddrs);
+        free(taskResults);
         return ret;
     } else {
         for (uint32_t i = 0; i < parallelNum; i++) {
             if (taskResults[i].result != BIO_OK) {
-                // TODO 资源回收
                 DispathBatchGetRecycleResource(parallelNum, taskResults, valueAddrs);
-                return taskResults[i].result;
+                ret = taskResults[i].result;
+                free(taskResults);
+                return ret;
             }
         }
     }
+    free(taskResults);
     return BIO_OK;
 }
 
 void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 {
     for (uint32_t i = 0; i < count; i++) {
-        mDataMsgMemPool->ReleaseOne(valueAddrs[i]);
+        if (valueAddrs[i] == 0) {
+            continue;
+        }
+        FreeDataMessageBuffer(valueAddrs[i]);
+        valueAddrs[i] = 0;
     }
 }
 
@@ -1124,7 +1339,7 @@ BResult MirrorClient::GetImpl(MirrorGet &param, uint64_t &realLen)
     req.ptId = ptId;
     req.offset = param.offset;
     req.length = param.length;
-    req.isConvDeploy = (mMode == WorkerMode::CONVERGENCE);
+    req.isConvDeploy = IsDirectMode(mMode);
     req.enableCrc = mEnableCrc;
     BIO_TRACE_START(SDK_TRACE_GET_SEND);
     ret = SendGetRequest(ptEntry, req, param.value, realLen);
@@ -1162,9 +1377,30 @@ BResult MirrorClient::BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param)
 BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 {
     BResult ret = BIO_OK;
-    std::vector<uint32_t> nodes;
-    nodes.resize(param.count);
+    if (UNLIKELY(param.count == 0 || param.count > KEY_MAX_COUNT)) {
+        CLIENT_LOG_ERROR("Invalid batch get count:" << param.count << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    std::vector<uint32_t> nodes(param.count);
     std::unordered_map<uint16_t, BatchGetPlan> planSend;
+    auto releaseRequests = [&planSend]() {
+        for (auto &plan : planSend) {
+            if (plan.second.req != nullptr) {
+                free(plan.second.req);
+                plan.second.req = nullptr;
+            }
+        }
+    };
+    auto releaseValues = [this, &param](uint32_t count) {
+        for (uint32_t i = 0; i < count; i++) {
+            if (param.valuesAddr[i] == 0) {
+                continue;
+            }
+            FreeDataMessageBuffer(param.valuesAddr[i]);
+            param.valuesAddr[i] = 0;
+        }
+    };
     for (uint32_t i = 0; i < param.count; i++) {
         uint16_t ptId =  ParseLocation(param.locations[i]);
         CmPtInfo ptEntry;
@@ -1190,14 +1426,7 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         it->second.req = reinterpret_cast<BatchGetRequest*>(malloc(reqLen));
         if (UNLIKELY(it->second.req == nullptr)) {
             CLIENT_LOG_ERROR("Alloc batch get request memory failed.");
-            // todo 异常回退资源；
-            auto callbackIt = planSend.begin();
-            for (uint16_t j = 0; j < i; j++) {
-                if (callbackIt->second.req != nullptr) {
-                    free(callbackIt->second.req);
-                }
-                callbackIt++;
-            }
+            releaseRequests();
             return BIO_ALLOC_FAIL;
         }
         it->second.reqLen = reqLen;
@@ -1208,35 +1437,23 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         it++;
     }
 
-
     for (uint32_t i = 0; i < param.count; i++) {
         param.results[i] = BIO_OK;
         uintptr_t address = 0;
-        BResult ret = mDataMsgMemPool->AllocOne(address);   // 从client shmem pool申请内存资源.
+        ret = AllocDataMessageBuffer(param.lengths[i], address);
         if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ".");
-            for (uint32_t j = 0; j < i; j++) {
-                mDataMsgMemPool->ReleaseOne(param.valuesAddr[j]);  // rollback.
-            }
-            auto callbackIt = planSend.begin();
-            for (uint16_t i = 0; i < planSend.size(); i++) {
-                if (callbackIt->second.req != nullptr) {
-                    free(callbackIt->second.req);
-                }
-                callbackIt++;
-            }
+            CLIENT_LOG_ERROR("Alloc batch get data message memory failed, ret:" << ret << ".");
+            releaseValues(i);
+            releaseRequests();
             return BIO_ALLOC_FAIL;
         }
         param.valuesAddr[i] = address;
         auto& plan = planSend[nodes[i]];
-        plan.req->keysInfo[plan.index].address = address;
-        plan.req->keysInfo[plan.index].mrKey = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();;
-        plan.req->keysInfo[plan.index].addressOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
+        FillBatchGetBufferInfo(plan.req->keysInfo[plan.index], address, param.lengths[i]);
         CopyKey(plan.req->keysInfo[plan.index].key, param.keys[i], KEY_MAX_SIZE);
         plan.req->keysInfo[plan.index].offset = param.offsets[i];
         plan.req->keysInfo[plan.index].length = param.lengths[i];
         plan.req->keysInfo[plan.index].ptId = param.locations[i].location[0];
-        plan.req->keysInfo[plan.index].size = mDataMsgMemBlockSize; // 4M
         plan.req->keysInfo[plan.index].result = &(param.results[i]);
         plan.req->keysInfo[plan.index].realLength = &(param.realLengths[i]);
         plan.index++;
@@ -1247,14 +1464,10 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send get request failed, ret:" << ret << ".");
+        releaseValues(param.count);
     }
 
-    // todo 清理req;
-    for (auto plan : planSend) {
-        if (plan.second.req != nullptr) {
-            free(plan.second.req);
-        }
-    }
+    releaseRequests();
     return ret;
 }
 
@@ -1424,18 +1637,27 @@ BResult MirrorClient::StatObjectImpl(const char *key, const ObjLocation &locatio
 BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
 {
     BResult ret = BIO_OK;
+    if (UNLIKELY(mMode == CONVERGENCE)) {
+        CLIENT_LOG_ERROR("Batch exist does not support converged deployment.");
+        return BIO_INVALID_PARAM;
+    }
+
+    if (UNLIKELY(count == 0)) {
+        CLIENT_LOG_ERROR("Invalid dispatch batch exist count: 0.");
+        return BIO_INVALID_PARAM;
+    }
+
     uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
     volatile uint32_t taskNum = parallelNum;
     sem_t sem;
-    sem_init(&sem, 0, 0);
+    if (sem_init(&sem, 0, 0) != 0) {
+        CLIENT_LOG_ERROR("Init dispatch batch exist semaphore failed, errno:" << errno << ".");
+        return BIO_INNER_ERR;
+    }
     uint32_t index = 0;
     uint32_t keyNum = 0;
     uint32_t resultIndex = 0;
-    BResult *taskResults = reinterpret_cast<BResult*>(malloc(sizeof(BResult) * parallelNum));
-    if (taskResults == nullptr) {
-        LOG_ERROR("Dispath batch exist malloc mem fail.");
-        return BIO_ALLOC_FAIL;
-    }
+    std::vector<BResult> taskResults(parallelNum, BIO_INNER_ERR);
     for (uint32_t i = 0; i < parallelNum; i++) {
         if (i < parallelNum - 1) {
             keyNum = SDK_DISPATH_BATCH_COUNT_MAX_NUM;
@@ -1457,18 +1679,26 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
 
         if (!mBatchExistExecutor->Execute(func)) {
             LOG_ERROR("Execute disapth batch get failed, batch num: " << count << " i:" << i);
+            taskResults[resultIndex] = BIO_INNER_ERR;
             ret = BIO_INNER_ERR;
+            if (__sync_sub_and_fetch(&taskNum, 1) == 0) {
+                sem_post(&sem);
+            }
         }
         index += keyNum;
     }
-    sem_wait(&sem);
+    int waitRet = WaitSemaphore(sem);
     sem_destroy(&sem);
+    if (UNLIKELY(waitRet != 0)) {
+        LOG_ERROR("Wait dispatch batch exist semaphore failed, errno:" << waitRet << ".");
+        return BIO_INNER_ERR;
+    }
     if (ret != BIO_OK) {
         return ret;
     } else {
         for (uint32_t i = 0; i < parallelNum; i++) {
-            if (taskResults[resultIndex] != BIO_OK) {
-                return taskResults[resultIndex];
+            if (taskResults[i] != BIO_OK) {
+                return taskResults[i];
             }
         }
     }
@@ -1477,6 +1707,11 @@ BResult MirrorClient::DispathBatchExist(const char *key[], ObjLocation location[
 
 BResult MirrorClient::BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
 {
+    if (UNLIKELY(mMode == CONVERGENCE)) {
+        CLIENT_LOG_ERROR("Batch exist does not support converged deployment.");
+        return BIO_INVALID_PARAM;
+    }
+
     bool isRetry = false;
     uint64_t startTime = Monotonic::TimeSec();
     BResult ret = BIO_OK;
@@ -1495,26 +1730,46 @@ BResult MirrorClient::SendBatchExistRequest(std::unordered_map<uint16_t, BatchEx
                                             std::vector<BatchExistSendKeyInfo> &keysInfo)
 {
     uint16_t quota = planSend.size();
-    ClientCallbackCtx cbCtx;
-    InitCallbackCtx(cbCtx, quota);
-    auto cbFunc = [&planSend, &keysInfo](void *ctx, void *resp,
+    if (UNLIKELY(quota == 0)) {
+        CLIENT_LOG_ERROR("Send batch exist request with empty plan.");
+        return BIO_INVALID_PARAM;
+    }
+
+    auto cbCtx = std::make_shared<BatchExistCallbackContext>(quota);
+    auto cbFunc = [cbCtx, &keysInfo](void *, void *resp,
             uint32_t len, int32_t result) {
-        auto *cbCtx = (ClientCallbackCtx *)ctx;
-        if (UNLIKELY(result != BIO_OK)) {
-            cbCtx->result = result;
-        } else if (resp != nullptr) {
-            auto rsp = static_cast<BatchExistResponse *>(resp);
-            for (uint16_t i = 0; i < rsp->count; i++) {
-                keysInfo[rsp->index[i]].result &= rsp->result[i];
+        bool needPost = false;
+        {
+            std::lock_guard<std::mutex> lock(cbCtx->mutex);
+            if (!cbCtx->closed) {
+                if (UNLIKELY(result != BIO_OK)) {
+                    cbCtx->result = result;
+                } else if (UNLIKELY(resp == nullptr || len < sizeof(BatchExistResponse))) {
+                    cbCtx->result = BIO_INVALID_PARAM;
+                } else {
+                    auto rsp = static_cast<BatchExistResponse *>(resp);
+                    if (UNLIKELY(rsp->count > KEY_MAX_COUNT)) {
+                        cbCtx->result = BIO_INVALID_PARAM;
+                    } else {
+                        for (uint16_t i = 0; i < rsp->count; i++) {
+                            if (UNLIKELY(rsp->index[i] >= keysInfo.size())) {
+                                cbCtx->result = BIO_INVALID_PARAM;
+                                break;
+                            }
+                            keysInfo[rsp->index[i]].result &= rsp->result[i];
+                        }
+                    }
+                }
             }
-        } else {
-            cbCtx->result = BIO_INVALID_PARAM;
+            if (cbCtx->quota > 0 && --cbCtx->quota == 0) {
+                needPost = true;
+            }
         }
-        if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
+        if (needPost) {
             sem_post(&cbCtx->sem);
         }
     };
-    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    Callback callback(cbFunc, nullptr);
 
     bool sendLocal = false;
     for (auto plan : planSend) {
@@ -1533,14 +1788,26 @@ BResult MirrorClient::SendBatchExistRequest(std::unordered_map<uint16_t, BatchEx
         BIO_TRACE_END(SDK_TRACE_BATCH_EXIST_LOCAL, BIO_OK);
     }
 
-    sem_wait(&cbCtx.sem);
-    sem_destroy(&cbCtx.sem);
-    return cbCtx.result;
+    // If network callbacks are lost, this wait may block indefinitely.
+    int waitRet = WaitSemaphore(cbCtx->sem);
+    std::lock_guard<std::mutex> lock(cbCtx->mutex);
+    if (UNLIKELY(waitRet != 0 && cbCtx->quota != 0)) {
+        CLIENT_LOG_ERROR("Wait batch exist callback failed, errno:" << waitRet << ", quota:" << cbCtx->quota << ".");
+        cbCtx->closed = true;
+        cbCtx->result = BIO_NET_RETRY;
+        return BIO_NET_RETRY;
+    }
+    return cbCtx->result;
 }
 
 BResult MirrorClient::BatchExistImpl(const char *key[], ObjLocation location[], uint32_t count, bool *result)
 {
     BResult ret = BIO_OK;
+    if (UNLIKELY(count == 0 || count > KEY_MAX_COUNT)) {
+        CLIENT_LOG_ERROR("Invalid batch exist count:" << count << ".");
+        return BIO_INVALID_PARAM;
+    }
+
     std::unordered_map<uint16_t, BatchExistPlan> planSend;
     planSend.clear();
     std::vector<BatchExistSendKeyInfo> keysInfo;
@@ -1727,7 +1994,7 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
     }
     spaceInfo.addressNum = rsp->addrNum;
     for (uint32_t idx = 0; idx < spaceInfo.addressNum; idx++) {
-        if (mMode == CONVERGENCE) {
+        if (IsDirectMode(mMode)) {
             spaceInfo.address[idx].address = rsp->addr[idx].chunkId + rsp->addr[idx].chunkOffset;
         } else {
             uint8_t *realAddr = net::BioClientNet::Instance()->GetShmAddress(rsp->addrOffset[idx],
@@ -1835,8 +2102,10 @@ void MirrorClient::ConstructPutReq(PutRequest *req, CmPtInfo &ptEntry, MirrorPut
     req->flowOffset = flowOffset;
     req->flowIndex = flowIndex;
     req->mrAddress = 0;
+    req->mrOffset = 0;
     req->mrSize = 0;
     req->mrKey = net::BioClientNet::Instance()->GetLocalMrKey();
+    req->isAlloc = false;
     req->sliceLen = rsp->sliceLen;
     mBioQos->GetKey(req->quotaNid, req->quotaCid);
     if (mIoStrategy[ptEntry.ptId]->expired > Monotonic::TimeSec()) {
@@ -1890,7 +2159,9 @@ BResult MirrorClient::DataCopy(const char *from, uint32_t fromLen, SliceAddrDesc
     uint64_t off = 0;
     for (uint32_t i = 0; i < addrNum; i++) {
         uint8_t *realAddr = nullptr;
-        if (mMode == WorkerMode::CONVERGENCE) {
+        if (IsDirectMode(mMode)) {
+            // Same-process mode returns real cache slice addresses from the
+            // server. No shm offset translation or net MR lookup is required.
             realAddr = reinterpret_cast<uint8_t *>(addr[i].chunkId + addr[i].chunkOffset);
         } else {
             realAddr = net::BioClientNet::Instance()->GetShmAddress(offset[i], addr[i].chunkLen);
@@ -1974,19 +2245,24 @@ BResult MirrorClient::PrepareFromServer(CmPtInfo &ptEntry, MirrorPut &param, Put
 BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *&req)
 {
     uintptr_t address = 0;
-    BResult ret = mDataMsgMemPool->AllocOne(address);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
-        return BIO_ALLOC_FAIL;
-    }
+    bool isAlloc = false;
+    if (mMode != STANDALONE) {
+        BResult ret = mDataMsgMemPool->AllocOne(address);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Alloc rdma memory failed, ret:" << ret << ", length:" << param.length << ".");
+            return BIO_ALLOC_FAIL;
+        }
 
-    ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
-    if (UNLIKELY(ret != BIO_OK)) {
-        CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
-            ", flowOffset:" << param.flowOffset << ", length:" << param.length << ", blockSize:" <<
-            mDataMsgMemBlockSize);
-        mDataMsgMemPool->ReleaseOne(address);
-        return BIO_ALLOC_FAIL;
+        ret = memcpy_s(reinterpret_cast<char *>(address), mDataMsgMemBlockSize, param.value, param.length);
+        if (UNLIKELY(ret != BIO_OK)) {
+            CLIENT_LOG_ERROR("Copy data failed, ret:" << ret << ", key:" << param.key << ", flowId:" << param.flowId <<
+                                                      ", flowOffset:" << param.flowOffset << ", length:" << param.length
+                                                      << ", blockSize:" <<
+                                                      mDataMsgMemBlockSize);
+            mDataMsgMemPool->ReleaseOne(address);
+            return BIO_ALLOC_FAIL;
+        }
+        isAlloc = true;
     }
 
     uint8_t* tmp = nullptr;
@@ -1995,14 +2271,27 @@ BResult MirrorClient::PrepareFromClient(CmPtInfo &ptEntry, MirrorPut &param, Put
     BIO_TP_END;
     if (tmp == nullptr) {
         CLIENT_LOG_ERROR("Alloc memory failed.");
-        mDataMsgMemPool->ReleaseOne(address);
+        if (isAlloc) {
+            mDataMsgMemPool->ReleaseOne(address);
+        }
         return BIO_ALLOC_FAIL;
     }
-    NetMrInfo mr(address, mDataMsgMemBlockSize, mDataMsgMemMr.GetHcomMrs()[0]->GetLKey());
     req = static_cast<PutRequest *>(static_cast<void *>(tmp));
+    NetMrInfo mr;
+    req->isAlloc = isAlloc;
+    if (isAlloc) {
+        req->isAlloc = isAlloc;
+        mr.address = address;
+        mr.size = mDataMsgMemBlockSize;
+        mr.key = mDataMsgMemMr.GetHcomMrs()[0]->GetLKey();
+    } else {
+        mr.address = reinterpret_cast<uintptr_t>(param.value);
+        mr.size = param.length;
+        mr.key = 0;
+    }
     ConstructPutReq(req, ptEntry, param, param.flowId, param.flowOffset, param.flowIndex, mr);
     req->memFromServer = false;
-    req->mrOffset = reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr;
+    req->mrOffset = isAlloc ? (reinterpret_cast<uint8_t *>(address) - mDataMsgMemAddr) : 0;
     return BIO_OK;
 }
 
@@ -2054,6 +2343,13 @@ void MirrorClient::InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota)
 BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, PutRequest *req)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
+    if (UNLIKELY(quota == 0)) {
+        CLIENT_LOG_ERROR("Send put request without available copy.");
+        if (req->isAlloc) {
+            mDataMsgMemPool->ReleaseOne(req->mrAddress);
+        }
+        return BIO_CHECK_PT_FAIL;
+    }
     ClientCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, quota);
     std::atomic<uint32_t> ioStrategy(0);
@@ -2095,13 +2391,15 @@ BResult MirrorClient::SendPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &param, Pu
 
     PutRemote(req, ptEntry, remoteIdx, callback);
     PutLocal(req, localIdx, callback);
-    sem_wait(&cbCtx.sem);
+    int waitRet = WaitSemaphore(cbCtx.sem);
+    if (UNLIKELY(waitRet != 0)) {
+        LOG_ERROR("Wait put callback failed, errno:" << waitRet << ".");
+        cbCtx.result = BIO_NET_RETRY;
+    }
     sem_destroy(&cbCtx.sem);
-
-    if (!req->memFromServer) {
+    if (req->isAlloc) {
         mDataMsgMemPool->ReleaseOne(req->mrAddress);
     }
-
     if (cbCtx.result == BIO_OK) {
         mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
         mIoStrategy[ptEntry.ptId]->strategy = ioStrategy.load();
@@ -2113,18 +2411,31 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
     BioAsyncPutCallback asyncPutCallback, void* context)
 {
     uint32_t quota = CalcPtQuota(ptEntry);
+    auto releasePutBuffer = [this, req]() {
+        if (req->isAlloc) {
+            mDataMsgMemPool->ReleaseOne(req->mrAddress);
+        }
+    };
+    if (UNLIKELY(quota == 0)) {
+        CLIENT_LOG_ERROR("Send async put request without available copy.");
+        releasePutBuffer();
+        delete[] static_cast<uint8_t *>(static_cast<void *>(req));
+        return BIO_CHECK_PT_FAIL;
+    }
     AsyncPutCbCtx *cbCtx = new (std::nothrow) AsyncPutCbCtx;
     if (UNLIKELY(cbCtx == nullptr)) {
         CLIENT_LOG_ERROR("Alloc callback failed.");
-        net::BioClientNet::Instance()->Free(req->mrAddress);
+        releasePutBuffer();
         delete[] static_cast<uint8_t *>(static_cast<void *>(req));
         return BIO_ALLOC_FAIL;
     }
     InitAsyncPutCbCtx(*cbCtx, quota);
     auto *ioStrategy = new (std::nothrow) std::atomic<uint32_t>(0);
     if (ioStrategy == nullptr) {
-        delete cbCtx;
         CLIENT_LOG_ERROR("Alloc strategy failed.");
+        releasePutBuffer();
+        delete[] static_cast<uint8_t *>(static_cast<void *>(req));
+        delete cbCtx;
         return BIO_ALLOC_FAIL;
     }
 
@@ -2145,7 +2456,9 @@ BResult MirrorClient::SendAsyncPutRequestImpl(CmPtInfo &ptEntry, MirrorPut &para
         }
         if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
             asyncPutCallback(context, cbCtx->result);
-            mDataMsgMemPool->ReleaseOne(req->mrAddress);
+            if (req->isAlloc) {
+                this->mDataMsgMemPool->ReleaseOne(req->mrAddress);
+            }
             if (cbCtx->result == BIO_OK) {
                 mIoStrategy[ptEntry.ptId]->expired = Monotonic::TimeSec() + IO_EXTRATEGE_TIME;
                 mIoStrategy[ptEntry.ptId]->strategy.store((*ioStrategy).load());
@@ -2316,29 +2629,53 @@ void MirrorClient::BatchGetRemote(uint16_t nodeId, uint32_t reqLen, BatchGetRequ
 
 BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetPlan> &planSend)
 {
-    uint16_t quota = planSend.size();
-    ClientCallbackCtx cbCtx;
-    InitCallbackCtx(cbCtx, quota);
-    auto cbFunc = [&planSend](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (ClientCallbackCtx *)ctx;
-        if (UNLIKELY(result != BIO_OK)) {
-            cbCtx->result = result;
-        } else if (resp != nullptr) {
-            auto rsp = static_cast<BatchGetResponse *>(resp);
-            for (uint32_t i = 0; i < rsp->count; i++) {
-                *(planSend[rsp->nodeId].req->keysInfo[i].result) = rsp->results[i];
-                *(planSend[rsp->nodeId].req->keysInfo[i].realLength) = rsp->realLengths[i];
-            }
-        } else {
-            cbCtx->result = BIO_INVALID_PARAM;
+    uint32_t quota = planSend.size();
+    if (UNLIKELY(quota == 0)) {
+        CLIENT_LOG_ERROR("Send batch get request with empty plan.");
+        return BIO_INVALID_PARAM;
+    }
+
+    auto cbCtx = std::make_shared<BatchGetCallbackContext>(quota);
+    for (auto &plan : planSend) {
+        auto &resultAddrs = cbCtx->resultAddrs[plan.first];
+        resultAddrs.reserve(plan.second.count);
+        for (uint32_t i = 0; i < plan.second.count; i++) {
+            resultAddrs.push_back({plan.second.req->keysInfo[i].result, plan.second.req->keysInfo[i].realLength});
         }
-        if (__sync_sub_and_fetch(&cbCtx->quota, 1) == 0) {
+    }
+
+    auto cbFunc = [cbCtx](void *, void *resp, uint32_t len, int32_t result) {
+        bool needPost = false;
+        {
+            std::lock_guard<std::mutex> lock(cbCtx->mutex);
+            if (!cbCtx->closed) {
+                if (UNLIKELY(result != BIO_OK)) {
+                    cbCtx->result = result;
+                } else if (resp != nullptr && len >= sizeof(BatchGetResponse)) {
+                    auto rsp = static_cast<BatchGetResponse *>(resp);
+                    auto it = cbCtx->resultAddrs.find(rsp->nodeId);
+                    if (UNLIKELY(it == cbCtx->resultAddrs.end() || rsp->count != it->second.size())) {
+                        cbCtx->result = BIO_INVALID_PARAM;
+                    } else {
+                        for (uint32_t i = 0; i < rsp->count; i++) {
+                            *(it->second[i].result) = rsp->results[i];
+                            *(it->second[i].realLength) = rsp->realLengths[i];
+                        }
+                    }
+                } else {
+                    cbCtx->result = BIO_INVALID_PARAM;
+                }
+            }
+            if (cbCtx->quota > 0 && --cbCtx->quota == 0) {
+                needPost = true;
+            }
+        }
+        if (needPost) {
             sem_post(&cbCtx->sem);
         }
     };
-    Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+    Callback callback(cbFunc, nullptr);
 
-    auto it = planSend.begin();
     bool sendLocal = false;
     for (auto plan : planSend) {
         if (plan.first == mLocalNid.VNodeId()) {
@@ -2356,11 +2693,16 @@ BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetP
                                                          planSend[mLocalNid.VNodeId()].reqLen, callback);
         BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL, BIO_OK);
     }
-    if (quota > 0) {
-        sem_wait(&cbCtx.sem);
+
+    int waitRet = WaitSemaphore(cbCtx->sem);
+    std::lock_guard<std::mutex> lock(cbCtx->mutex);
+    if (UNLIKELY(waitRet != 0 && cbCtx->quota != 0)) {
+        CLIENT_LOG_ERROR("Wait batch get callback failed, errno:" << waitRet << ", quota:" << cbCtx->quota << ".");
+        cbCtx->closed = true;
+        cbCtx->result = BIO_NET_RETRY;
+        return BIO_NET_RETRY;
     }
-    sem_destroy(&cbCtx.sem);
-    return cbCtx.result;
+    return cbCtx->result;
 }
 
 BResult MirrorClient::GetShmDataCallBack(GetResponse *rsp, uint64_t &realLen, const GetRequest &req, char *value)
@@ -2556,10 +2898,17 @@ BResult MirrorClient::SendDeleteRequest(CmPtInfo &ptEntry, DeleteRequest &req)
         DeleteRemote(req, ptEntry, idx, callback);
     }
 
-    if (quota > 0) {
-        sem_wait(&cbCtx.sem);
+    if (UNLIKELY(quota == 0)) {
+        LOG_ERROR("Send delete request without available copy.");
         sem_destroy(&cbCtx.sem);
+        return BIO_CHECK_PT_FAIL;
     }
+    int waitRet = WaitSemaphore(cbCtx.sem);
+    if (UNLIKELY(waitRet != 0)) {
+        LOG_ERROR("Wait delete callback failed, errno:" << waitRet << ".");
+        cbCtx.result = BIO_NET_RETRY;
+    }
+    sem_destroy(&cbCtx.sem);
     return cbCtx.result;
 }
 

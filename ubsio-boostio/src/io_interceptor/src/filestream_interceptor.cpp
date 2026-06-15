@@ -10,6 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <cstdint>
+
 #include "filestream_interceptor.h"
 
 #include "native_operations_loader.h"

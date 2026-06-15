@@ -337,8 +337,12 @@ private:
 
     BResult CreateDataMessageMemLocal();
     BResult CreateDataMessageMemRemote();
+    BResult CreateDataMessageMemStandalone();
     BResult CreateDataMessageMem();
     void DestroyDataMessageMem();
+    BResult AllocDataMessageBuffer(uint64_t length, uintptr_t &address);
+    void FreeDataMessageBuffer(uintptr_t &address);
+    void FillBatchGetBufferInfo(GetKeyInfo &keyInfo, uintptr_t address, uint64_t length);
 
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     void InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota);

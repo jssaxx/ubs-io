@@ -25,7 +25,7 @@ namespace ubsio {
 static uint64_t tenantId = 1;
 static KvOperation *g_kvOperation = KvOperation::Instance();
 
-int32_t KvcOperationInit(int32_t devId)
+int32_t KvcOperationInit(int32_t devId, uint64_t ssdSize)
 {
     // 1. init acl stream
     if (devId >= 0) {
@@ -43,7 +43,7 @@ int32_t KvcOperationInit(int32_t devId)
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::KvBioInit();
+    ret = DlBioSdkApi::KvBioInit(devId, ssdSize);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
         return UBSIO_KVC_ERR;

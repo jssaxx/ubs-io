@@ -11,6 +11,7 @@
  */
 
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include "htracer.h"
@@ -25,7 +26,21 @@
 #include "server_diagnose.h"
 
 using namespace ock::bio;
-std::regex serverPattern("[0-9]+");
+
+namespace {
+bool IsUnsignedInteger(const std::string &value)
+{
+    if (value.empty()) {
+        return false;
+    }
+    for (char ch : value) {
+        if (ch < '0' || ch > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+}
 
 bool ock::bio::diagnose::BioServerCommand::mInited = false;
 void* ock::bio::diagnose::BioServerCommand::mHandler = nullptr;
@@ -229,7 +244,7 @@ void diagnose::BioServerCommand::HandleServerTrace(const std::vector<std::string
     std::string viewType(cType);
     if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
-        mPrintOp(info.c_str());
+        mPrintOp("%s", info.c_str());
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         mPrintOp("clearing statistics server records succeeded.\n");
@@ -273,7 +288,7 @@ bool CanConvertToUint64(const std::string &str, uint64_t &val)
 
 void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[3], serverPattern)) {
+    if (!IsUnsignedInteger(cmds[3])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -293,7 +308,7 @@ void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> 
     uint64_t curPtTimes;
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&curPtTimes);
     if (ptId >= ptView.size()) {
-        mPrintOp("Failed to put value to rCache, PtId exceed%d.\n");
+        mPrintOp("Failed to put value to rCache, PtId exceed%llu.\n", ptId);
         return;
     }
 
@@ -340,7 +355,7 @@ void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> 
 void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], serverPattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -369,6 +384,11 @@ void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> 
 
     MrInfo mrInfo;
     char *ptr = (char *)malloc(length);
+    if (ptr == nullptr) {
+        mPrintOp("Malloc fail.\n");
+        fclose(fp);
+        return;
+    }
     mrInfo.address = reinterpret_cast<uint64_t>(ptr);
     mrInfo.size = length;
     FlowAddr flowAddr(mrInfo);
@@ -393,13 +413,13 @@ void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> 
         }
     }
 
-    delete[] ptr;
+    free(ptr);
     fclose(fp);
 }
 
 void diagnose::BioServerCommand::HandleRCacheDelete(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], serverPattern)) {
+    if (!IsUnsignedInteger(cmds[1])) {
         mPrintOp("Invalid input.\n");
         return;
     }

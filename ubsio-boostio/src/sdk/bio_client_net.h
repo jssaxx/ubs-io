@@ -30,6 +30,12 @@ using IpcRecoveredHandler = std::function<BResult()>;
 namespace net {
 class BioClientNet;
 using BioClientNetPtr = Ref<BioClientNet>;
+// Transport facade for SDK side network state.
+//
+// SEPARATES mode owns an IPC NetEngine plus optional RPC connections.
+// CONVERGENCE mode reuses the server NetEngine. STANDALONE mode owns no
+// NetEngine at all; it only stores runtime config copied from server so SDK
+// components can keep using the existing config getter interface.
 class BioClientNet {
 public:
     static BioClientNetPtr &Instance()
@@ -38,10 +44,13 @@ public:
         return instance;
     }
 
-    // Establish an IPC connection with the local bio server
+    // Pre-start transport.
+    // SEPARATES creates IPC and negotiates shm. STANDALONE only copies runtime
+    // config from BioClientAgent::GetRuntimeConfig and returns.
     BResult StartPre(WorkerMode mode, NetOptions &netConf);
 
-    // Establish an RPC connection with the other bio server
+    // Post-start transport.
+    // SEPARATES starts RPC and connects remote servers. Direct modes skip it.
     BResult StartPost(uint16_t localNid, std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView, uint16_t protocol,
         const NetOptions netConf);
 
@@ -52,6 +61,7 @@ public:
     BResult ShmInit();
 
     bool CheckShmInitResp(ShmInitResponse rsp);
+    bool CheckRuntimeConfigResp(StandaloneRuntimeConfigResponse rsp);
 
     void RegCheckNodeOnline(CheckNodeOnline checkOnLine)
     {
@@ -86,6 +96,11 @@ public:
     inline int32_t GetNegoLogLevel() const
     {
         return mLogLevel;
+    }
+
+    inline int32_t GetSegmentSize() const
+    {
+        return mNetSegmentSize;
     }
 
     inline std::string GetPrometheusListenAddress() const
@@ -224,6 +239,8 @@ public:
         uint64_t key = 0;
         if (mMode == CONVERGENCE) {
             mNetEngine->GetLocalMrKey(key);
+        } else if (mMode == STANDALONE) {
+            key = 0;
         } else {
             key = mShmKey;
         }
@@ -237,6 +254,8 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS
 
 private:
+    // Copy standalone config fields from server without taking ownership of any shm fd.
+    void ApplyStandaloneRuntimeConfig(const StandaloneRuntimeConfigResponse &rsp);
     BResult CheckShmFd();
     BResult CorrectFd();
     BResult ShmInitInner();

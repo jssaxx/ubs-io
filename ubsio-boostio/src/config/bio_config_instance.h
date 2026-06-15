@@ -59,6 +59,7 @@ const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
+const auto STANDALONE_DEVICE_COUNT = std::make_pair("bio.standalone.device_count", 0);
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("bio.sdkmem.size_in_mb", 5120);
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.evict_water_level", 0);
@@ -152,6 +153,7 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
+        uint32_t standaloneDeviceCount = 0;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
         uint32_t workIoTimeOut = 60;
@@ -226,6 +228,15 @@ public:
         return mUnderFsConfig;
     }
 
+    void SetStandaloneDeviceInfo(uint32_t deviceId);
+
+    BResult SelectStandaloneDiskByDeviceInfo();
+
+    uint32_t GetStandaloneDeviceId() const noexcept
+    {
+        return mStandaloneDeviceInfo.deviceId;
+    }
+
     uint64_t ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level);
 
     std::string ModifyConfigMemReadWriteRatio(const std::string &ratios);
@@ -263,13 +274,27 @@ private:
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
 
+    BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
+
+    BResult SelectStandaloneDisksByDeviceCount(uint16_t diskNum);
+
+    BResult ApplyStandaloneDiskSelection(const std::vector<uint32_t> &diskIndexes, uint16_t configuredDiskNum,
+        const std::string &selectionLog);
+
 private:
+    struct StandaloneDeviceInfo {
+        bool configured{ false };
+        uint32_t deviceId{ 0 };
+    };
+
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
     bool mInited{ false };
+    uint32_t mStandaloneDiskIndex{ 0 };
+    StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
 }
 }

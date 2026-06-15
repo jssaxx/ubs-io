@@ -15,6 +15,7 @@
 #include "securec.h"
 #include "message.h"
 #include "bio_functions.h"
+#include "bio_client_agent.h"
 #include "bio_client_log.h"
 #include "bio_trace.h"
 #include "bio_client.h"
@@ -450,8 +451,14 @@ CResult Bio::BatchExist(const char *key[], ObjLocation location[], uint32_t coun
     if (UNLIKELY(!gClient->Ready())) {
         return RET_CACHE_NOT_READY;
     }
-    if (UNLIKELY(key == nullptr || result == nullptr || location == nullptr)) {
+    if (UNLIKELY(key == nullptr || result == nullptr || location == nullptr || count == 0)) {
         return RET_CACHE_EPERM;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+        if (UNLIKELY(!KeyValid(key[i]))) {
+            CLIENT_LOG_ERROR("Invalid batch exist parameter, key is invalid, index:" << i << ".");
+            return RET_CACHE_EPERM;
+        }
     }
 
     BIO_TRACE_START(SDK_TRACE_BATCH_EXIST);
@@ -686,6 +693,15 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf)
         return RET_CACHE_EPERM;
     }
     return BioService::Initialize(mode, *optConf);
+}
+
+void BioSetStandaloneDevice(uint32_t deviceId)
+{
+    auto agentPtr = ock::bio::agent::BioClientAgent::Instance();
+    if (agentPtr == nullptr) {
+        return;
+    }
+    agentPtr->SetStandaloneDevice(deviceId);
 }
 
 void BioExit(void)

@@ -118,6 +118,8 @@ BResult RCacheEvict::Initialize()
             BIO_TP_END;
             if (para == nullptr) {
                 LOG_ERROR("Alloc read cache para memory failed");
+                workStatus.store(false);
+                RecycleThreadResources();
                 return BIO_ALLOC_FAIL;
             }
 
@@ -135,7 +137,7 @@ BResult RCacheEvict::Initialize()
                 LOG_ERROR("Create thread for read cache evict failed");
                 delete para;
                 workStatus.store(false);
-                RecycleThreadResources(tier);
+                RecycleThreadResources();
                 return BIO_ALLOC_FAIL;
             }
         }

@@ -10,14 +10,15 @@ from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGet
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
 
-def initialize(device_id=-1) -> int:
+def initialize(device_id=0, ssd_size=0) -> int:
     """
     Initialize client of UBS-IO KV Cache
     :param device_id: device_id
+    :param ssd_size: reserved, currently ignored
     :return: 0 for success
             -1 for failed
     """
-    return KvInit(device_id)
+    return KvInit(device_id, ssd_size)
 
 
 def exit():

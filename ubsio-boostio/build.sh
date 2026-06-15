@@ -7,12 +7,13 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
     echo " 2 ./build.sh -t debug // 默认添加cli和tp功能"
     echo " 3 ./build.sh -t debug [--ut] // 限制仅DT构建脚本使用"
+    echo " 4 ./build.sh -t debug --san=asan // Build BoostIO and test tools with ASan+UBSan"
     echo
     exit 1;
 }
@@ -24,6 +25,7 @@ BUILD_UT=OFF
 TP_FLAG=OFF
 CLI_FLAG=OFF
 PROMETHEUS_FLAG=OFF
+SANITIZER_FLAG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -61,6 +63,13 @@ while true; do
         --pms )
             PROMETHEUS_FLAG=ON
             shift ;;
+        --san=asan | --san=asan-ubsan | --asan | --asan-ubsan )
+            SANITIZER_FLAG=ON
+            shift ;;
+        --san )
+            [[ "$2" != "asan" && "$2" != "asan-ubsan" ]] && echo "Invalid sanitizer $2" && usage
+            SANITIZER_FLAG=ON
+            shift 2 ;;
 		    -h | -help )
             usage
             exit 0
@@ -124,6 +133,12 @@ else
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
+if [[ "$SANITIZER_FLAG" == 'ON' ]]; then
+    CMAKE_FLAGS+="-DBOOSTIO_ENABLE_ASAN_UBSAN=ON "
+else
+    CMAKE_FLAGS+="-DBOOSTIO_ENABLE_ASAN_UBSAN=OFF "
+fi
+
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 16" # CI环境核数会波动, 默认只用16
@@ -146,7 +161,11 @@ fi
 if [[ "$CLI_FLAG" == "ON" && "$BUILD_UT" != "ON" ]]; then
     cd ${PROJ_DIR}/../ubsio-common/cli
     dos2unix build.sh
-    sh build.sh
+    CLI_BUILD_FLAGS=""
+    if [[ "$SANITIZER_FLAG" == "ON" ]]; then
+        CLI_BUILD_FLAGS+="--san=asan"
+    fi
+    bash build.sh ${CLI_BUILD_FLAGS}
     cd ${PROJ_DIR}/dist
     mkdir -p test_tools
     mkdir -p test_tools/bin
@@ -171,7 +190,7 @@ if [[ "$arch" == "aarch64" ]]; then
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
     cd ${PROJ_DIR}/../ubsio-kv/
     dos2unix build.sh
-    sh build.sh
+    bash build.sh
     cd ${PROJ_DIR}/dist
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.
@@ -179,5 +198,4 @@ if [[ "$arch" == "aarch64" ]]; then
 fi
 
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
-
 

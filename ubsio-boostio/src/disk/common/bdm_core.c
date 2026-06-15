@@ -32,6 +32,21 @@
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;
 uint32_t g_bdmDiskCount = 0UL;
+static uint32_t g_bdmDiskHeadPad = 0UL;
+
+static uint32_t BdmBuildDiskHeadPad(uint32_t isStandalone, uint32_t deviceId)
+{
+    if (isStandalone == 0) {
+        return 0;
+    }
+    return BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
+}
+
+void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId)
+{
+    g_bdmDiskHeadPad = BdmBuildDiskHeadPad(isStandalone, deviceId);
+    BDM_LOGINFO(0, "Set bdm disk startup info, standalone(%u), deviceId(%u).", isStandalone, deviceId);
+}
 
 int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint64_t len, uint64_t *chunkId)
 {
@@ -385,7 +400,7 @@ static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, 
     para.offset = 0;
     para.length = capacity;
     para.bdmId = diskId;
-    para.pad = 0;
+    para.pad = g_bdmDiskHeadPad;
     para.minChunkSize = chunkSize;
     para.maxChunkSize = chunkSize;
     uint32_t bdmId;
@@ -420,6 +435,11 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
     }
     if (UNLIKELY(diskList == NULL)) {
         return BDM_CODE_ERR;
+    }
+    if (UNLIKELY(diskList->num > DISK_DEV_NUM)) {
+        BDM_LOGERROR(0, "Disk device num input failed, diskNum(%u), limit(%u).", diskList->num,
+            (uint32_t)DISK_DEV_NUM);
+        return BDM_CODE_INVALID_PARAM;
     }
     if (chunkSize < BDM_MIN_CHUNK_LENGTH || chunkSize > BDM_MAX_CHUNK_LENGTH) { // chunkSize必须满足[1M, 16M].
         BDM_LOGERROR(0, "Disk device param input failed.");

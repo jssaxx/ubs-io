@@ -25,9 +25,10 @@ extern "C" {
  * @brief Initialize UBS-IO KV Cache
  *
  * @param devId            [in] device id
+ * @param ssdSize          [in] reserved, currently ignored
  * @return 0 if successful
  */
-int32_t UbsioKvCacheInit(int32_t devId);
+int32_t UbsioKvCacheInit(int32_t devId, uint64_t ssdSize);
 
  /** 
   * @brief Exit UBS-IO KV Cache 

@@ -237,7 +237,7 @@ BResult CacheSliceOperator::CopyFromDiskToMemory(const SlicePtr &from, const Sli
         BIO_TRACE_END(BDM_TRACE_READ_SYNC, ret);
         ChkTrue(ret == BIO_OK, ret,
             "Failed to copy data from disk chunkId:" << fromIt->chunkId + fromIt->chunkOffset + fromOffset <<
-            " to memory by length:" << len << ".");
+            " to memory by length:" << len << ", addr:" << toIt->chunkId + toIt->chunkOffset + toOffset);
         fromOffset += len;
         if (fromOffset == fromIt->chunkLen) {
             fromOffset = 0;

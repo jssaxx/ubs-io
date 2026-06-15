@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <cerrno>
 #include "bio_log.h"
 #include "bio_config_instance.h"
 #include "bio_client.h"
@@ -25,6 +26,26 @@
 
 using namespace ock::bio;
 using namespace ock::hcom;
+
+static uint16_t GetLocalVNodeId()
+{
+    auto bioServer = BioServer::Instance();
+    if (bioServer->IsStandaloneMode()) {
+        return bioServer->GetLocalNid().VNodeId();
+    }
+    return Cm::Instance()->GetCmLocalNodeId().VNodeId();
+}
+
+namespace {
+int WaitSemaphore(sem_t &sem)
+{
+    int ret = 0;
+    do {
+        ret = sem_wait(&sem);
+    } while (ret != 0 && errno == EINTR);
+    return ret == 0 ? 0 : errno;
+}
+}
 
 bool MirrorServer::CheckMagic(RequestComm &reqComm)
 {
@@ -343,11 +364,12 @@ BResult MirrorServer::AllocCacheQuota(AllocQuotaRequest &req, AllocQuotaResponse
         return BIO_INNER_RETRY;
     }
     auto rpcEngine = bioServer->GetNetEngine();
-    if (rpcEngine == nullptr) {
+    if (rpcEngine == nullptr && !bioServer->IsStandaloneMode()) {
         LOG_ERROR("Net engine get fail");
         return BIO_INNER_RETRY;
     }
-    if (req.nid != bioServer->GetLocalNid().VNodeId() && !rpcEngine->IsChannelExist(req.nid, req.cid)) {
+    if (!bioServer->IsStandaloneMode() &&
+        req.nid != bioServer->GetLocalNid().VNodeId() && !rpcEngine->IsChannelExist(req.nid, req.cid)) {
         LOG_ERROR("Invalid nodeId " << req.nid << " or cid " << req.cid << ", need retry.");
         return BIO_INVALID_PARAM;
     }
@@ -867,9 +889,9 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
 BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req)
 {
     MrInfo mrInfo;
-    uint16_t localNid = Cm::Instance()->GetCmLocalNodeId().VNodeId();
+    uint16_t localNid = GetLocalVNodeId();
     RCacheSlicePtr sliceP = nullptr;
-    if (req->srcNid != localNid) {
+    if (req->srcNid != localNid || BioServer::Instance()->IsStandaloneMode()) {
         mrInfo = { keyInfo.address, static_cast<uint32_t>(keyInfo.size) };
         std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         sliceP = MakeRef<RCacheSlice>(keyInfo.ptId, keyInfo.length, addrVec);
@@ -956,9 +978,14 @@ BResult MirrorServer::AddDisk(AddDiskRequest &req)
 
 BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
 {
+    if (BioServer::Instance()->IsStandaloneMode()) {
+        LOG_ERROR("Standalone mode does not support adding disk dynamically.");
+        return BIO_INVALID_PARAM;
+    }
+
     std::lock_guard<std::mutex> lock(mDiskViewMutex);
     if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
-        LOG_ERROR("The number of available disks must not exceed 4.");
+        LOG_ERROR("The number of available disks must not exceed " << DISK_DEV_NUM << ".");
         return BIO_ERR;
     }
     uint32_t diskId = DISK_ID_INVALID;
@@ -1022,7 +1049,7 @@ BResult MirrorServer::AddNewDiskImpl(std::string &diskPath)
     BResult ret = BIO_OK;
     uint32_t diskCount = BdmGetDiskCount();
     if (UNLIKELY(diskCount >= DISK_MAX_SIZE)) {
-        LOG_ERROR("The number of total disks must not exceed 8.");
+        LOG_ERROR("The number of total disks must not exceed " << DISK_MAX_SIZE << ".");
         return BIO_ERR;
     }
 
@@ -1107,7 +1134,7 @@ BResult MirrorServer::Stat(StatRequest &req, ObjStat &objInfo)
 
 BResult MirrorServer::BatchExist(BatchExistRequest *req, BatchExistResponse &rsp)
 {
-    if (req->count > KEY_MAX_COUNT) {
+    if (req->count == 0 || req->count > KEY_MAX_COUNT) {
         return BIO_INVALID_PARAM;
     }
     BIO_TRACE_START(MIRROR_TRACE_BATCH_EXIST);
@@ -1117,6 +1144,22 @@ BResult MirrorServer::BatchExist(BatchExistRequest *req, BatchExistResponse &rsp
         rsp.index[idx] = req->keys[idx].index;
     }
     rsp.count = req->count;
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_EXIST, BIO_OK);
+    return BIO_OK;
+}
+
+BResult MirrorServer::BatchExistConvergence(BatchExistRequest &req, BatchExistResponse &rsp)
+{
+    if (req.count == 0 || req.count > KEY_MAX_COUNT) {
+        return BIO_INVALID_PARAM;
+    }
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_EXIST);
+    for (uint32_t idx = 0; idx < req.count; idx++) {
+        std::string key(req.keys[idx].key);
+        rsp.result[idx] = Cache::Instance().Exist(req.keys[idx].ptVec, const_cast<char *>(key.c_str()));
+        rsp.index[idx] = req.keys[idx].index;
+    }
+    rsp.count = req.count;
     BIO_TRACE_END(MIRROR_TRACE_BATCH_EXIST, BIO_OK);
     return BIO_OK;
 }
@@ -1135,11 +1178,17 @@ BResult MirrorServer::Load(LoadRequest &req)
 
 BResult MirrorServer::NotifyUpdate(NotifyUpdateRequest &req)
 {
-    return BioServer::Instance()->GetCm()->ReportServiceState(req.flag);
+    return BioServer::Instance()->ReportServiceState(req.flag);
 }
 
 BResult MirrorServer::CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp)
 {
+    if (BioServer::Instance()->IsStandaloneMode()) {
+        auto chkRet = Cache::Instance().ServiceUngradeFlush();
+        rsp.flag = (chkRet == BIO_OK);
+        return BIO_OK;
+    }
+
     auto rpcEngine = BioServer::Instance()->GetNetEngine();
     uint64_t curNodeTimes = 0;
     std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> nodeView = BioServer::Instance()->GetNodeView(&curNodeTimes);
@@ -1210,7 +1259,9 @@ BResult MirrorServer::Initialize()
     if (mStarted) {
         return BIO_OK;
     }
-    RegisterOpcode();
+    if (BioServer::Instance()->GetNetEngine() != nullptr) {
+        RegisterOpcode();
+    }
     mBioConfig = BioConfig::Instance();
     if (mBioConfig == nullptr) {
         LOG_ERROR("Mirror server init bio config failed");
@@ -1240,7 +1291,7 @@ int32_t MirrorServer::MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *r
         return BIO_OK;
     }
 
-    ShmInitResponse rsp;
+    ShmInitResponse rsp{};
     auto config = mBioConfig->GetDaemonConfig();
     rsp.netSegmentSize = mBioConfig->GetNetConfig().netSegmentSize;
     rsp.serverPid = getpid();
@@ -1694,15 +1745,29 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 
 int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req)
 {
-    if (req->count > KEY_MAX_COUNT) {
-        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
+    if (UNLIKELY(req->count == 0 || req->count > KEY_MAX_COUNT)) {
+        LOG_ERROR("Invalid batch get count:" << req->count << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
     }
-    volatile uint32_t keyNum = req->count;
+    size_t reqLen = sizeof(BatchGetRequest) + req->count * sizeof(GetKeyInfo);
+    if (UNLIKELY(ctx.MessageDataLen() < reqLen)) {
+        LOG_ERROR("Invalid batch get message len:" << ctx.MessageDataLen() << ", expect:" << reqLen << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+
     sem_t sem;
-    sem_init(&sem, 0, 0);
+    if (sem_init(&sem, 0, 0) != 0) {
+        LOG_ERROR("Init batch get semaphore failed, errno:" << errno << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_ERR, nullptr, 0);
+        return BIO_OK;
+    }
     std::vector<uint64_t> realLengths(req->count);
     std::vector<int32_t> results(req->count);
+    uint32_t submittedNum = 0;
+    BResult ret = BIO_OK;
+
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
@@ -1710,24 +1775,30 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
             BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET);
             results[index] = BatchSingleGet(req->keysInfo[index], realLengths[index], req);
             BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, results[index]);
-            if (__sync_sub_and_fetch(&keyNum, 1) == 0) {
-                // 最后一个任务唤醒主线程.
-                sem_post(&sem);
-            }
+            sem_post(&sem);
         };
 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
-            BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INNER_RETRY, nullptr, 0);
-            sem_destroy(&sem);
-            return BIO_OK;
+            ret = BIO_INNER_RETRY;
+            break;
+        }
+        submittedNum++;
+    }
+    for (uint32_t i = 0; i < submittedNum; i++) {
+        int waitRet = WaitSemaphore(sem);
+        if (UNLIKELY(waitRet != 0)) {
+            LOG_ERROR("Wait batch get task failed, errno:" << waitRet << ".");
+            ret = BIO_INNER_ERR;
+            break;
         }
     }
-    if (req->count > 0) {
-        sem_wait(&sem);
-    }
     sem_destroy(&sem);
-    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, BIO_OK);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
+        return BIO_OK;
+    }
 
     BatchGetResponse rsp;
     rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
@@ -1737,6 +1808,63 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
         rsp.realLengths[i] = realLengths[i];
     }
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetResponse));
+    return BIO_OK;
+}
+
+BResult MirrorServer::BatchGetConvergence(BatchGetRequest &req, BatchGetResponse &rsp)
+{
+    if (UNLIKELY(req.count == 0 || req.count > KEY_MAX_COUNT)) {
+        LOG_ERROR("Invalid convergence batch get count:" << req.count << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    sem_t sem;
+    if (sem_init(&sem, 0, 0) != 0) {
+        LOG_ERROR("Init convergence batch get semaphore failed, errno:" << errno << ".");
+        return BIO_INNER_ERR;
+    }
+    std::vector<uint64_t> realLengths(req.count);
+    std::vector<int32_t> results(req.count);
+    uint32_t submittedNum = 0;
+    BResult ret = BIO_OK;
+
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_CONVERGENCE);
+    for (uint32_t i = 0; i < req.count; i++) {
+        uint32_t index = i;
+        std::function<void()> func = [&, index]() {
+            BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE);
+            results[index] = BatchSingleGet(req.keysInfo[index], realLengths[index], &req);
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE, results[index]);
+            sem_post(&sem);
+        };
+
+        if (!mBatchGetExecutor->Execute(func)) {
+            LOG_ERROR("Execute batch get data from shm failed, batch num: " << req.count << " i:" << i);
+            ret = BIO_INNER_RETRY;
+            break;
+        }
+        submittedNum++;
+    }
+    for (uint32_t i = 0; i < submittedNum; i++) {
+        int waitRet = WaitSemaphore(sem);
+        if (UNLIKELY(waitRet != 0)) {
+            LOG_ERROR("Wait convergence batch get task failed, errno:" << waitRet << ".");
+            ret = BIO_INNER_ERR;
+            break;
+        }
+    }
+    sem_destroy(&sem);
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_CONVERGENCE, ret);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    rsp.nodeId = GetLocalVNodeId();
+    rsp.count = req.count;
+    for (uint32_t i = 0; i < req.count; i++) {
+        rsp.results[i] = results[i];
+        rsp.realLengths[i] = realLengths[i];
+    }
     return BIO_OK;
 }
 
@@ -1942,6 +2070,17 @@ int32_t MirrorServer::HandleBatchExist(ServiceContext &ctx)
     }
 
     auto req = static_cast<BatchExistRequest *>(ctx.MessageData());
+    if (UNLIKELY(req->count == 0 || req->count > KEY_MAX_COUNT)) {
+        LOG_ERROR("Invalid batch exist count:" << req->count << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
+    size_t reqLen = sizeof(BatchExistRequest) + req->count * sizeof(BatchExistKeyInfo);
+    if (UNLIKELY(ctx.MessageDataLen() < reqLen)) {
+        LOG_ERROR("Invalid batch exist message len:" << ctx.MessageDataLen() << ", expect:" << reqLen << ".");
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
+        return BIO_OK;
+    }
     return MirrorServerBtachExist(ctx, req);
 }
 
@@ -2837,4 +2976,3 @@ int32_t MirrorServer::MirrorServerGetCacheHit(ServiceContext &ctx)
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheHitResponse));
     return BIO_OK;
 }
-

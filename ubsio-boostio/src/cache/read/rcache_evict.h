@@ -34,14 +34,14 @@ public:
 
     void Destroy();
 
-    inline void RecycleThreadResources(int32_t type)
+    inline void RecycleThreadResources()
     {
-        for (uint32_t i = 0; i < type; i++) {
-            for (uint32_t j = 0; j < READ_CACHE_EVICT_SERVICE_NUM; j++) {
-                if (works[i][j] != nullptr) {
-                    works[i][j]->join();
-                    delete(works[i][j]);
-                    works[i][j] = nullptr;
+        for (auto &work : works) {
+            for (auto &th : work) {
+                if (th != nullptr) {
+                    th->join();
+                    delete th;
+                    th = nullptr;
                 }
             }
         }

@@ -34,6 +34,7 @@ public:
     static void HandleGet(const std::vector<std::string> &cmds);
     static void HandleList(const std::vector<std::string> &cmds);
     static void HandleStat(const std::vector<std::string> &cmds);
+    static void HandleExist(const std::vector<std::string> &cmds);
     static void HandleLoad(const std::vector<std::string> &cmds);
     static void HandleDelete(const std::vector<std::string> &cmds);
     static void HandleAddDisk(const std::vector<std::string> &cmds);
