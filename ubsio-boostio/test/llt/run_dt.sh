@@ -74,6 +74,10 @@ lcov --remove ${TOTAL_INFO} \
      "*/security/expiration_check/expire_checker.cpp" \
      "*/dist/*" \
      "*/net/*" \
+     "*/sdk/*" \
+     "*/server/*" \
+     "*/underfs/*" \
+     "*/cache/write/*" \
      "*/cmake-build-*" \
      --output-file ${FINAL_INFO} \
      ${LCOV_RC_OPTS} \
