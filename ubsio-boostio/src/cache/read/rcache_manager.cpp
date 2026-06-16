@@ -89,12 +89,16 @@ bool RCacheManager::IsResourceEnough(uint16_t ptId)
         return false;
     }
     auto config = BioConfig::Instance()->GetDaemonConfig();
+    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
+    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
+    if (!config.hasDiskCache) {
+        return rcacheMemUsed < rcacheMemCap;
+    }
+
     if (config.diskCaps.size() <= cachePtr->GetDiskId()) {
         return false;
     }
     auto diskCap = static_cast<uint64_t>(config.diskCaps[cachePtr->GetDiskId()]);
-    uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
-    uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
     uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
     uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, cachePtr->GetDiskId());
     if (rcacheMemUsed < rcacheMemCap && rcacheDiskUsed < rcacheDiskCap) {

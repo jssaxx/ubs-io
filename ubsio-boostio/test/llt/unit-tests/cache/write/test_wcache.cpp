@@ -52,6 +52,32 @@ static constexpr uint16_t G_PT_V = 1;
 static uint64_t g_flowId = 0;
 static FlowInstance *g_flowInst = nullptr;
 
+namespace {
+class DaemonConfigGuard {
+public:
+    DaemonConfigGuard()
+    {
+        auto &config = const_cast<BioConfig::DaemonConfig &>(BioConfig::Instance()->GetDaemonConfig());
+        mConfig = &config;
+        mOrigin = config;
+    }
+
+    ~DaemonConfigGuard()
+    {
+        *mConfig = mOrigin;
+    }
+
+    BioConfig::DaemonConfig &Get()
+    {
+        return *mConfig;
+    }
+
+private:
+    BioConfig::DaemonConfig *mConfig{ nullptr };
+    BioConfig::DaemonConfig mOrigin;
+};
+}
+
 static auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
@@ -128,6 +154,50 @@ TEST_F(TestWCache, test_put_case_return_ok)
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_put_without_disk_cache_only_supports_write_back)
+{
+    LOG_INFO("test_put_without_disk_cache_only_supports_write_back");
+    DaemonConfigGuard configGuard;
+    auto &config = configGuard.Get();
+    config.hasDiskCache = false;
+    config.memCap = NO_MAX_VALUE64 / NO_10;
+    config.memReadRatio = NO_5;
+    config.memWriteRatio = NO_5;
+    config.wcacheMemEvictLevel = NO_100;
+    config.diskCaps.clear();
+
+    uint64_t flowId = 0;
+    auto ret = gWCacheManager->AllocateFlowId(G_PT_ID, G_PT_V, flowId);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(flowId, 0);
+    ret = gWCacheManager->CreateWCache(0, flowId, G_PT_ID, G_PT_V, 0, false);
+    EXPECT_EQ(ret, BIO_OK);
+
+    uint64_t flowIndex = 0;
+    SliceKey sliceKey(flowId, 0, FLOW_MEMORY, NO_1024, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(wSlice, nullptr);
+
+    Key key = "test_put_without_disk_cache_write_back";
+    CacheAttr writeBackAttr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ret = gWCacheManager->Put(key, wSlice, reader, writeBackAttr, false);
+    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(writeBackAttr.ioStrategy, WRITE_MEM_BACK);
+
+    SliceKey writeThroughSliceKey(flowId, NO_1024, FLOW_MEMORY, NO_1024, 1);
+    WCacheSlicePtr writeThroughSlice = nullptr;
+    ret = gWCacheManager->GetWCacheSlice(writeThroughSliceKey, writeThroughSlice);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(writeThroughSlice, nullptr);
+
+    Key writeThroughKey = "test_put_without_disk_cache_write_through";
+    CacheAttr writeThroughAttr = { 0, LOCAL_AFFINITY, WRITE_THROUGH };
+    ret = gWCacheManager->Put(writeThroughKey, writeThroughSlice, reader, writeThroughAttr, false);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)

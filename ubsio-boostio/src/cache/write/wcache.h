@@ -162,9 +162,11 @@ public:
 
 private:
     BResult EvictAllMemSliceToDisk();
+    BResult EvictAllMemSliceToDiscard();
     BResult EvictAllDiskSliceToUnderFs();
 
     BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false);
+    BResult EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef);
     BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false);
 
     BResult EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront);
@@ -187,7 +189,7 @@ private:
     BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearDisk();
 
-    void PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
+    BResult PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
@@ -208,6 +210,7 @@ private:
     std::atomic<bool> mIsNormal { true };
     bool mIsForced { false };
     bool mUfsEnable{ false };
+    bool mHasDiskCache{ true };
 
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;

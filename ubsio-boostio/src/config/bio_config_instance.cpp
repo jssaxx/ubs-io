@@ -158,6 +158,8 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(WCACHE_DISK_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_DISK_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
+    AddIntConf(WCACHE_PARTITION_COUNT, VIntRange::Create(WCACHE_PARTITION_COUNT.first, NO_1, NO_64));
+    AddIntConf(WCACHE_COMPACTION_THRESHOLD, VIntRange::Create(WCACHE_COMPACTION_THRESHOLD.first, NO_10, NO_90));
     AddStrConf(MEM_READ_WRITE_RATIO, VStrRatio::Create(MEM_READ_WRITE_RATIO.first));
     AddStrConf(DISK_READ_WRITE_RATIO, VStrRatio::Create(DISK_READ_WRITE_RATIO.first));
     AddStrConf(BIO_CLI_TOOLS_ENABLE, VStrBoolRange::Create(BIO_CLI_TOOLS_ENABLE.first));
@@ -376,6 +378,10 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.standaloneDeviceCount = static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_COUNT.first));
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
+    std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
+    StrUtil::StrTrim(diskMask);
+    mDaemonConfig.hasDiskCache = !diskMask.empty();
+
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {
         LOG_ERROR("Failed to set mem cap " << mDaemonConfig.memCap << ", over system free mem cap " << sysFreeMemCap);
@@ -383,6 +389,9 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     }
     mDaemonConfig.wcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.wcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(WCACHE_DISK_EVICT_WATER_LEVEL.first));
+    if (!mDaemonConfig.hasDiskCache && mDaemonConfig.wcacheMemEvictLevel == 0) {
+        mDaemonConfig.wcacheMemEvictLevel = NO_90;
+    }
     mDaemonConfig.rcacheMemEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     mDaemonConfig.rcacheDiskEvictLevel = static_cast<uint64_t>(conf->GetInt(RCACHE_EVICT_WATER_LEVEL.first));
     std::vector<std::string> ratios;
@@ -390,6 +399,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     StrUtil::Split(mDaemonConfig.memReadWriteRatio, ":", ratios);
     StrUtil::StrToLong(ratios[0], mDaemonConfig.memReadRatio);
     StrUtil::StrToLong(ratios[NO_1], mDaemonConfig.memWriteRatio);
+    mDaemonConfig.enableRCache = mDaemonConfig.memReadRatio > 0;
 
     ratios.clear();
     mDaemonConfig.diskReadWriteRatio = conf->GetStr(DISK_READ_WRITE_RATIO.first);
@@ -406,6 +416,14 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
 BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
 {
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
+    StrUtil::StrTrim(diskMask);
+    if (!mDaemonConfig.hasDiskCache) {
+        mDaemonConfig.diskList.clear();
+        mDaemonConfig.diskCaps.clear();
+        LOG_INFO("Disk cache is disabled, skip disk config.");
+        return BIO_OK;
+    }
+
     StrUtil::Split(diskMask, ":", mDaemonConfig.diskList);
     if (mDaemonConfig.diskList.size() > DISK_PATH_CONFIG_MAX_NUM) {
         LOG_ERROR("Failed to spilt disk path, number of paths cannot exceed " << DISK_PATH_CONFIG_MAX_NUM << ". " <<
@@ -562,6 +580,11 @@ void BioConfig::SetStandaloneDeviceInfo(uint32_t deviceId)
 
 BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
 {
+    if (!mDaemonConfig.hasDiskCache) {
+        LOG_INFO("Disk cache is disabled, skip standalone disk selection.");
+        return BIO_OK;
+    }
+
     uint16_t diskNum = static_cast<uint16_t>(mDaemonConfig.diskList.size());
     if (diskNum == 0 || !mStandaloneDeviceInfo.configured) {
         LOG_ERROR("Invalid standalone config, diskNum:" << diskNum <<
