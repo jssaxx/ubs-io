@@ -10,10 +10,10 @@ from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGet
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
 
-def initialize(device_id=0, ssd_size=0) -> int:
+def initialize(device_id=-1, ssd_size=0) -> int:
     """
     Initialize client of UBS-IO KV Cache
-    :param device_id: device_id
+    :param device_id: device_id, -1 skips ACL device binding and uses standalone device 0
     :param ssd_size: reserved, currently ignored
     :return: 0 for success
             -1 for failed

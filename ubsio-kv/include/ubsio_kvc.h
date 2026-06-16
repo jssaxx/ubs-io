@@ -24,7 +24,7 @@ extern "C" {
 /**
  * @brief Initialize UBS-IO KV Cache
  *
- * @param devId            [in] device id
+ * @param devId            [in] device id, -1 means no ACL device binding and uses standalone device 0
  * @param ssdSize          [in] reserved, currently ignored
  * @return 0 if successful
  */
