@@ -116,6 +116,7 @@ private:
 
 private:
     bool mUfsEnable = false;
+    bool mEnableRCache = true;
     WCacheManagerPtr mWCacheManager{ nullptr };
     RCacheManagerPtr mRCacheManager{ nullptr };
     GetLocDiskId mGetLocDiskId{ nullptr };

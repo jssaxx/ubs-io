@@ -983,6 +983,11 @@ BResult MirrorServer::AddDiskImpl(AddDiskRequest &req)
         return BIO_INVALID_PARAM;
     }
 
+    if (!mBioConfig->GetDaemonConfig().hasDiskCache) {
+        LOG_ERROR("Add disk is not supported when disk cache is disabled.");
+        return BIO_INVALID_PARAM;
+    }
+
     std::lock_guard<std::mutex> lock(mDiskViewMutex);
     if (BdmGetNormalDiskNum() >= DISK_DEV_NUM) {
         LOG_ERROR("The number of available disks must not exceed " << DISK_DEV_NUM << ".");

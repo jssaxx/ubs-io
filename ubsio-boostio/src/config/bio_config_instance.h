@@ -80,6 +80,9 @@ const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
 const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
 const auto BATCH_GET_THREAD_NUM = std::make_pair("bio.batchget.thread.num", 32);
 
+const auto WCACHE_PARTITION_COUNT = std::make_pair("bio.wcache.partition_count", 1);
+const auto WCACHE_COMPACTION_THRESHOLD = std::make_pair("bio.wcache.compaction_threshold", 30);
+
 const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("bio.underfs.file_system_type", "ceph");
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("bio.underfs.ceph.cluster", "ceph");
@@ -162,10 +165,14 @@ public:
         bool enableCrc = false;
         bool enableTrace = true;
         bool enableQos = true;
+        bool hasDiskCache = true;
+        bool enableRCache = true;
         bool enablePrometheus = false;
         bool enableCli = false;
         std::string listenAddress = "127.0.0.1:7204";
         uint32_t scrapeIntervalSec = 15;
+        uint32_t wcachePartitionCount = 1;
+        uint32_t wcacheCompactionThreshold = 30;
     };
 
     struct ClientConfig {

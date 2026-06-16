@@ -45,7 +45,9 @@ constexpr uint32_t MAX_NEGOTIATE_DELAY = 1000000;
 
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
-    mEnableCrc = BioConfig::Instance()->GetDaemonConfig().enableCrc;
+    auto daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+    mEnableCrc = daemonConfig.enableCrc;
+    mHasDiskCache = daemonConfig.hasDiskCache;
     mCacheIndex = MakeRef<WCacheIndex>();
     ChkTrue(mCacheIndex != nullptr, BIO_ALLOC_FAIL, "Make write cache index instance failed.");
 
@@ -53,7 +55,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
         return BIO_INNER_ERR;
     }
 
-    if (DiskEvictExecutorInit() != BIO_OK) {
+    if (mHasDiskCache && DiskEvictExecutorInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
 
@@ -156,7 +158,9 @@ void WCacheManager::Exit()
     }
 
     mEvictService[WCACHE_MEMORY]->Stop();
-    mEvictService[WCACHE_DISK]->Stop();
+    if (mEvictService[WCACHE_DISK] != nullptr) {
+        mEvictService[WCACHE_DISK]->Stop();
+    }
     mRetryEvictService->Stop();
 }
 

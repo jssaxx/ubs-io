@@ -152,6 +152,7 @@ private:
 
     bool mRunning = true;
     bool mEnableCrc = false;
+    bool mHasDiskCache = true;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER]{ nullptr, nullptr };
     ExecutorServicePtr mGcEvictService{ nullptr };

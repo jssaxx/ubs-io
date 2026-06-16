@@ -123,6 +123,30 @@ TEST(TestStandaloneView, build_creates_single_node_view_and_round_robin_pt_view)
     }
 }
 
+TEST(TestStandaloneView, build_without_disk_cache_uses_virtual_disk)
+{
+    CmNodeId localNid;
+    StandaloneView::NodeView nodeView;
+    StandaloneView::PtView ptView;
+    auto config = MakeViewConfig(0, 3);
+    config->mDaemonConfig.hasDiskCache = false;
+
+    ASSERT_EQ(StandaloneView::Build(config, localNid, nodeView, ptView), BIO_OK);
+
+    EXPECT_EQ(localNid.VNodeId(), 0);
+    ASSERT_EQ(nodeView.size(), 1);
+    auto nodeIter = nodeView.find(localNid);
+    ASSERT_NE(nodeIter, nodeView.end());
+    ASSERT_EQ(nodeIter->second.disks.size(), 1);
+    EXPECT_EQ(nodeIter->second.disks[0].diskId, 0);
+    EXPECT_EQ(nodeIter->second.disks[0].diskStatus, CM_DISK_NORMAL);
+
+    ASSERT_EQ(ptView.size(), 3);
+    for (uint16_t ptId = 0; ptId < 3; ptId++) {
+        ExpectPtOnDisk(ptView, ptId, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    }
+}
+
 TEST(TestStandaloneView, build_marks_pt_fault_when_target_disk_is_fault)
 {
     DiskStatusGuard guard({ 0, 1 });

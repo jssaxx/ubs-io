@@ -24,14 +24,17 @@ namespace ock {
 namespace bio {
 BResult Cache::Init()
 {
-    mRCacheManager = RCacheManager::Instance();
-    ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
-
     BResult ret = BIO_OK;
-    BIO_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
-    ret = mRCacheManager->Init();
-    BIO_TP_END;
-    ChkTrue(ret == BIO_OK, ret, "Initialize read cache manager failed, ret:" << ret << ".");
+    mEnableRCache = BioConfig::Instance()->GetDaemonConfig().enableRCache;
+    if (mEnableRCache) {
+        mRCacheManager = RCacheManager::Instance();
+        ChkTrueNot(mRCacheManager != nullptr, BIO_ALLOC_FAIL);
+
+        BIO_TP_START(RCACHE_MANAGER_INIT_FAIL, &ret, BIO_ERR);
+        ret = mRCacheManager->Init();
+        BIO_TP_END;
+        ChkTrue(ret == BIO_OK, ret, "Initialize read cache manager failed, ret:" << ret << ".");
+    }
 
     mWCacheManager = WCacheManager::Instance();
     ChkTrueNot(mWCacheManager != nullptr, BIO_ALLOC_FAIL);
@@ -47,6 +50,10 @@ BResult Cache::Init()
 
 BResult Cache::Recover()
 {
+    if (!BioConfig::Instance()->GetDaemonConfig().hasDiskCache) {
+        return BIO_OK;
+    }
+
     BResult ret = BIO_OK;
     std::map<uint64_t, FlowPtr> flowMaps;
     BIO_TP_START(CACHE_RECOVER_FM_GET_ALL_OBJECT_FAIL, &ret, BIO_NOT_READY);
@@ -72,6 +79,9 @@ BResult Cache::Recover()
             ChkTrue(ret == BIO_OK, ret, "Recover cache failed, ret:" << ret << ".");
         } else if (static_cast<uint16_t>(type) == READ_CACHE &&
             static_cast<uint32_t>(innerType) == RCACHE_FLOW_DISK_DATA_PREFIX) {
+            if (!mEnableRCache) {
+                continue;
+            }
             BIO_TP_START(CACHE_RECOVER_CACHE_FAIL, &ret, BIO_ERR);
             ret = mRCacheManager->RecoverCache(elem.second);
             BIO_TP_END;
@@ -85,7 +95,9 @@ BResult Cache::Recover()
 void Cache::Exit()
 {
     mWCacheManager->Exit();
-    mRCacheManager->Exit();
+    if (mRCacheManager != nullptr) {
+        mRCacheManager->Exit();
+    }
 }
 
 BResult Cache::CreateWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId, bool isDegrade)
@@ -130,6 +142,11 @@ BResult Cache::DestroyWCache(uint64_t procId, uint16_t ptId, uint64_t ptv, uint6
 
 BResult Cache::CreateRCache(uint16_t ptId, uint64_t ptv)
 {
+    if (!mEnableRCache) {
+        LOG_INFO("Read cache is disabled, skip create rcache, ptId:" << ptId << ".");
+        return BIO_OK;
+    }
+
     uint16_t diskId;
     BResult ret = mGetLocDiskId(ptId, diskId);
     if (ret != BIO_OK) {
@@ -147,6 +164,9 @@ BResult Cache::CreateRCache(uint16_t ptId, uint64_t ptv)
 
 BResult Cache::DestroyRCache(uint16_t ptId)
 {
+    if (!mEnableRCache) {
+        return BIO_OK;
+    }
     return mRCacheManager->DeleteRCache(ptId);
 }
 
@@ -265,6 +285,10 @@ inline BResult Cache::WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr f
 BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
     uint64_t &realLen)
 {
+    if (!mUfsEnable) {
+        return BIO_NOT_EXISTS;
+    }
+
     // 1. 获取key的信息, 计算value的总长度和此次读取长度.
 
     uint64_t totalLen = 0;
@@ -282,9 +306,9 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
     BIO_TP_END;
 
     // 2. 申请内存资源, 首先尝试从RCache中申请, 若失败则申请临时系统内存.
-    bool isFromRCache = true;
+    bool isFromRCache = mEnableRCache;
     WCacheSlicePtr wcSlicePtr = nullptr;
-    bool enoughResource = mRCacheManager->IsResourceEnough(slice->GetPtId());
+    bool enoughResource = mEnableRCache && mRCacheManager->IsResourceEnough(slice->GetPtId());
     BIO_TP_START(GET_UNDERFS_NOT_ENOUGHRESOURCE, &enoughResource, false);
     BIO_TP_END;
     void *memAddr = nullptr;
@@ -353,7 +377,7 @@ BResult Cache::GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr
         }
 
         // 5. 根据资源来历决定是否写入到RCache.
-        if (isFromRCache) {
+        if (mEnableRCache && isFromRCache) {
             if (crcFlag) {
                 ret = CalculateDataCrc(wcSlicePtr.Get(), wcSlicePtr.Get());
             }
@@ -403,22 +427,24 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     }
 
     // 2. 然后从RCache中读取数据, 对象不存在则执行步骤3.
-    BIO_TRACE_START(RCACHE_TRACE_GET);
-    BIO_TP_START(RCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
-    ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
-    BIO_TP_END;
-    BIO_TRACE_END(RCACHE_TRACE_GET, ret);
-    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
-            (slice == nullptr ? 0 : slice->GetLength()) << ".");
-        return ret;
-    }
+    if (mEnableRCache) {
+        BIO_TRACE_START(RCACHE_TRACE_GET);
+        BIO_TP_START(RCACHE_NOT_EXIST, &ret, BIO_NOT_EXISTS);
+        ret = mRCacheManager->Get(slice->GetPtId(), key, offset, slice.Get(), sliceWriter, realLen);
+        BIO_TP_END;
+        BIO_TRACE_END(RCACHE_TRACE_GET, ret);
+        if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+            LOG_ERROR("Read cache get failed, ret:" << ret << ", key:" << key << ", offset:" << offset <<
+                ", length:" << (slice == nullptr ? 0 : slice->GetLength()) << ".");
+            return ret;
+        }
 
-    RCacheStatistic::Instance().IncTotalCount();
-    if (ret == BIO_OK) {
-        LOG_DEBUG("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
-        RCacheStatistic::Instance().IncHitCount();
-        return BIO_OK;
+        RCacheStatistic::Instance().IncTotalCount();
+        if (ret == BIO_OK) {
+            LOG_DEBUG("Read cache hit, key:" << key << ", offset:" << offset << ", len:" << slice->GetLength() << ".");
+            RCacheStatistic::Instance().IncHitCount();
+            return BIO_OK;
+        }
     }
     if (!mUfsEnable) { // 未使能underfs则直接返回结果.
         return ret;
@@ -439,6 +465,9 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
 
 BResult Cache::Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)
 {
+    if (!mEnableRCache || !mUfsEnable) {
+        return BIO_NOT_EXISTS;
+    }
     return mRCacheManager->Load(ptId, key, 0, BIO_IO_MAX_LEN, realLen);
 }
 
@@ -521,14 +550,16 @@ BResult Cache::Delete(uint16_t ptId, const Key &key)
         return ret;
     }
 
-    BIO_TRACE_START(RCACHE_TRACE_DEL);
-    BIO_TP_START(CACHE_DELETE_RCACHE_MANAGER_ERR, &ret, BIO_ERR);
-    ret = mRCacheManager->Delete(ptId, key);
-    BIO_TP_END;
-    BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
-    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
-        LOG_ERROR("Read cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
-        return ret;
+    if (mEnableRCache) {
+        BIO_TRACE_START(RCACHE_TRACE_DEL);
+        BIO_TP_START(CACHE_DELETE_RCACHE_MANAGER_ERR, &ret, BIO_ERR);
+        ret = mRCacheManager->Delete(ptId, key);
+        BIO_TP_END;
+        BIO_TRACE_END(RCACHE_TRACE_DEL, ret);
+        if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+            LOG_ERROR("Read cache delete failed, ret:" << ret << ", key:" << key << ", ptId:" << ptId << ".");
+            return ret;
+        }
     }
 
     if (mUfsEnable) {  // 使能underfs才去从后端删除key.
@@ -609,12 +640,15 @@ BResult Cache::Flush(uint16_t ptId, uint64_t ptv)
 
 BResult Cache::ExpiredClear(uint16_t ptId, uint64_t ptv)
 {
-    BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
-    BResult ret = mRCacheManager->ExpiredClear(ptId, ptv);
-    BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Rcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
-        return ret;
+    BResult ret = BIO_OK;
+    if (mEnableRCache) {
+        BIO_TRACE_START(RCACHE_TRACE_CLEAR_EXPIRED);
+        ret = mRCacheManager->ExpiredClear(ptId, ptv);
+        BIO_TRACE_END(RCACHE_TRACE_CLEAR_EXPIRED, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Rcache expired clear fail:" << ret << ", ptId:" << ptId << ", version:" << ptv);
+            return ret;
+        }
     }
 
     BIO_TRACE_START(WCACHE_TRACE_CLEAR_EXPIRED);
@@ -636,6 +670,10 @@ void Cache::GetCacheResources(CacheResDescription &desc, CacheType type)
     if (type == WRITE_CACHE) {
         WCache::GetCacheResource(desc.memCapacity, desc.memUsedSize, desc.diskCapacity, desc.diskUsedSize);
     } else if (type == READ_CACHE) {
+        if (!mEnableRCache) {
+            desc = { 0, 0, 0, 0 };
+            return;
+        }
         RCache::GetCacheResource(desc.memCapacity, desc.memUsedSize, desc.diskCapacity, desc.diskUsedSize);
     }
 }

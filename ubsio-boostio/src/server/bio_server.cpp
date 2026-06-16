@@ -318,6 +318,15 @@ void BioServer::BioUnderFsExit()
 BResult BioServer::BioBdmInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        DiskAllocator diskAllocator;
+        diskAllocator.alloc = [](uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *) { return BIO_ERR; };
+        diskAllocator.free = [](uint32_t, uint64_t, uint64_t) { return; };
+        FlowManager::RegisterDiskAllocator(diskAllocator);
+        LOG_INFO("Disk cache is disabled, skip BDM initialization.");
+        return BIO_OK;
+    }
+
     auto ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
     BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
@@ -361,6 +370,11 @@ BResult BioServer::BioBdmInit()
 BResult BioServer::BioBdmUpdate(std::string diskPath)
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        LOG_ERROR("Add disk is not supported when disk cache is disabled.");
+        return BIO_INVALID_PARAM;
+    }
+
     auto diskCap = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPath));
 
     auto ret = BdmUpdate(const_cast<char *>(diskPath.c_str()), daemonConfig.segment, diskCap);
@@ -373,6 +387,11 @@ BResult BioServer::BioBdmUpdate(std::string diskPath)
 
 BResult BioServer::BioDiskReset(uint16_t diskId)
 {
+    if (!mConfig->GetDaemonConfig().hasDiskCache) {
+        LOG_ERROR("Reset disk is not supported when disk cache is disabled, diskId:" << diskId << ".");
+        return BIO_INVALID_PARAM;
+    }
+
     // 防重入
     if (BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL) {
         LOG_ERROR("Bdm is already in used, diskId: " << diskId << ".");
@@ -519,14 +538,20 @@ BResult BioServer::BioCmInit()
     nodeInfo.ip = mConfig->GetNetConfig().dataIp;
     nodeInfo.port = mConfig->GetNetConfig().dataPort;
     CmDiskInfo diskInfo;
-    for (uint32_t index = 0; index < daemonConfig.diskList.size(); index++) {
-        diskInfo.diskId = index;
-        if (BdmGetDiskStatus(index) == BDM_DISK_STATE_NORMAL) {
-            diskInfo.diskStatus = CM_DISK_NORMAL;
-        } else {
-            diskInfo.diskStatus = CM_DISK_FAULT;
-        }
+    if (!daemonConfig.hasDiskCache) {
+        diskInfo.diskId = 0;
+        diskInfo.diskStatus = CM_DISK_NORMAL;
         nodeInfo.disks.push_back(diskInfo);
+    } else {
+        for (uint32_t index = 0; index < daemonConfig.diskList.size(); index++) {
+            diskInfo.diskId = index;
+            if (BdmGetDiskStatus(index) == BDM_DISK_STATE_NORMAL) {
+                diskInfo.diskStatus = CM_DISK_NORMAL;
+            } else {
+                diskInfo.diskStatus = CM_DISK_FAULT;
+            }
+            nodeInfo.disks.push_back(diskInfo);
+        }
     }
     result = mCm->RegisterNode(nodeInfo);
     ChkTrue(result == BIO_OK, BIO_ERR, "Failed to register node, result: " << result << ".");

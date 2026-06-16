@@ -107,6 +107,16 @@ TEST(TestStandaloneConfig, legacy_device_count_zero_selects_disk_by_device_id)
     EXPECT_EQ(config->mStandaloneDiskIndex, 1);
 }
 
+TEST(TestStandaloneConfig, no_disk_cache_skips_standalone_disk_selection)
+{
+    auto config = MakeStandaloneConfig({}, {}, 0);
+    config->mDaemonConfig.hasDiskCache = false;
+
+    EXPECT_EQ(config->SelectStandaloneDiskByDeviceInfo(), BIO_OK);
+    EXPECT_TRUE(config->GetDaemonConfig().diskList.empty());
+    EXPECT_TRUE(config->GetDaemonConfig().diskCaps.empty());
+}
+
 TEST(TestStandaloneConfig, legacy_device_count_zero_rejects_out_of_range_device_id)
 {
     std::vector<std::string> disks = { "disk0", "disk1" };

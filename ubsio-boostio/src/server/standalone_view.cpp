@@ -40,12 +40,13 @@ BResult StandaloneView::Build(const BioConfigPtr &config, CmNodeId &localNid, No
     const auto &daemonConfig = config->GetDaemonConfig();
 
     const auto configDiskNum = static_cast<uint32_t>(daemonConfig.diskList.size());
-    if (configDiskNum == 0) {
+    const bool hasDiskCache = daemonConfig.hasDiskCache;
+    if (configDiskNum == 0 && hasDiskCache) {
         LOG_ERROR("Standalone mode requires at least one cache disk.");
         return BIO_INVALID_PARAM;
     }
 
-    uint32_t diskNum = std::min<uint32_t>(configDiskNum, static_cast<uint32_t>(DISK_DEV_NUM));
+    uint32_t diskNum = hasDiskCache ? std::min<uint32_t>(configDiskNum, static_cast<uint32_t>(DISK_DEV_NUM)) : 1;
     if (configDiskNum > DISK_DEV_NUM) {
         LOG_WARN("Standalone mode only uses first " << DISK_DEV_NUM << " disks, configured:" << configDiskNum << ".");
     }
@@ -54,7 +55,7 @@ BResult StandaloneView::Build(const BioConfigPtr &config, CmNodeId &localNid, No
     disks.reserve(diskNum);
     bool hasNormalDisk = false;
     for (uint16_t diskId = 0; diskId < diskNum; ++diskId) {
-        CmDiskStatus diskStatus = ToCmDiskStatus(diskId);
+        CmDiskStatus diskStatus = hasDiskCache ? ToCmDiskStatus(diskId) : CM_DISK_NORMAL;
         hasNormalDisk = hasNormalDisk || diskStatus == CM_DISK_NORMAL;
         disks.push_back({ diskId, diskStatus });
     }
