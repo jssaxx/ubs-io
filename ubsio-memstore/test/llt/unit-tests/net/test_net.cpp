@@ -99,12 +99,12 @@ TEST_F(TestNet, test_multicast_engine_basic_branches)
 
     EXPECT_FALSE(engine.RemoteSendCheck({}));
     EXPECT_FALSE(engine.IsSubscriberExist("10.10.10.1"));
-    engine.mSubScribers.emplace("10.10.10.1", ock::hcom::SubscriberPtr(nullptr));
+    engine.mSubScribers.emplace("10.10.10.1", std::vector<ock::hcom::SubscriberPtr>{ock::hcom::SubscriberPtr(nullptr)});
     EXPECT_TRUE(engine.IsSubscriberExist("10.10.10.1"));
 
     std::unordered_set<std::string> remoteIps = {"10.10.10.2"};
     EXPECT_FALSE(engine.RemoteSendCheck(remoteIps));
-    engine.mSubScribersRemote.emplace("10.10.10.2");
+    engine.mSubScribersRemote.emplace("10.10.10.2", 1);
     EXPECT_TRUE(engine.RemoteSendCheck(remoteIps));
     EXPECT_TRUE(engine.CheckConnectDone(NO_2));
 

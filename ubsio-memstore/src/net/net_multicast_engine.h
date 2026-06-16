@@ -165,11 +165,11 @@ private:
     std::string mSubscriberServiceName{};
 
     // mSubScribers用来记录本节点订阅了哪些节点的publisher
-    std::unordered_map<std::string, ock::hcom::SubscriberPtr> mSubScribers{};  // key:publisher's ip, value:Subscriber
+    std::unordered_map<std::string, std::vector<ock::hcom::SubscriberPtr>> mSubScribers{};
     ReadWriteLock mSubScribersLock;
 
     // mSubScribersRemote用来记录订阅了本节点publisher的所有subscriber
-    std::unordered_set<std::string> mSubScribersRemote{}; // ip
+    std::unordered_map<std::string, uint32_t> mSubScribersRemote{}; // ip -> physical subscriber count
     ReadWriteLock mSubScribersRemoteLock;
 
     MultiNetConnectorPtr mConnector = nullptr;

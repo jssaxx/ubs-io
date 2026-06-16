@@ -12,6 +12,7 @@
 
 #include <thread>
 #include <chrono>
+#include <algorithm>
 #include "mms_server.h"
 #include "mms_trace.h"
 #include "net_multicast_engine.h"
@@ -23,6 +24,32 @@ using namespace ock::hcom;
 static constexpr uint8_t HCOM_TLS_HEADER_COST = 128;
 constexpr uint16_t MULTICAST_CONNECT_TIME_OUT = 60; // 组播建链超时时间(s)
 constexpr uint16_t CONNECT_DONE_RETRY_INTERAL = 1;
+
+static uint16_t CountPublisherWorkerGroups(const std::vector<std::pair<uint32_t, uint32_t>> &cpuSets)
+{
+    uint32_t groupNum = NO_0;
+    for (const auto &cpuSet : cpuSets) {
+        groupNum += cpuSet.second - cpuSet.first + NO_1;
+    }
+    return static_cast<uint16_t>(groupNum);
+}
+
+static void AddPublisherWorkerGroups(ock::hcom::PublisherService *publisherService,
+                                     const std::vector<std::pair<uint32_t, uint32_t>> &cpuSets)
+{
+    bool skipFirstGroup = true;
+    uint16_t groupIdx = NO_0;
+    for (const auto &cpuSet : cpuSets) {
+        for (uint32_t cpuId = cpuSet.first; cpuId <= cpuSet.second; ++cpuId) {
+            if (skipFirstGroup) {
+                skipFirstGroup = false;
+                continue;
+            }
+            ++groupIdx;
+            publisherService->AddWorkerGroup(groupIdx, NO_1, std::make_pair(cpuId, cpuId), NO_0);
+        }
+    }
+}
 
 bool NetMulticastEngine::NewSubscriptionCallBack(ock::hcom::SubscriptionInfoPtr &info)
 {
@@ -37,7 +64,7 @@ bool NetMulticastEngine::NewSubscriptionCallBack(ock::hcom::SubscriptionInfoPtr 
     }
 
     mSubScribersRemoteLock.LockWrite();
-    mSubScribersRemote.emplace(info->GetIp());
+    mSubScribersRemote[info->GetIp()]++;
     mSubScribersRemoteLock.UnLock();
 
     NET_LOG_INFO("Add a subscriber success, id:" << info->GetId() << ", ip:" << info->GetIp()
@@ -50,10 +77,21 @@ void NetMulticastEngine::PublisherSubscriberEpBroken(const ock::hcom::UBSHcomNet
 {
     NET_LOG_WARN("publisher ep broken id " << ep->Id());
     auto info = mPublisher->GetSubscribeByEpId(ep->Id());
+    if (info.Get() == nullptr) {
+        NET_LOG_WARN("Subscription info is null, ep id:" << ep->Id() << ".");
+        return;
+    }
     mPublisher->DelSubscription(info);
 
     mSubScribersRemoteLock.LockWrite();
-    mSubScribersRemote.erase(info->GetIp());
+    auto it = mSubScribersRemote.find(info->GetIp());
+    if (it != mSubScribersRemote.end()) {
+        if (it->second <= NO_1) {
+            mSubScribersRemote.erase(it);
+        } else {
+            it->second--;
+        }
+    }
     mSubScribersRemoteLock.UnLock();
 }
 
@@ -61,8 +99,13 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
                                                    const std::string &ipMask)
 {
     auto &opt = MmsConfig::Instance()->GetNetConfig();
-    std::pair<long, long> cpuSet = opt.publisherWorkerCpuSet;
-    uint32_t cpuStart = static_cast<uint32_t>(cpuSet.first);
+    const auto &cpuSets = opt.publisherWorkerCpuSets;
+    if (cpuSets.empty()) {
+        NET_LOG_ERROR("Publisher worker cpu set is empty.");
+        return MMS_INVALID_PARAM;
+    }
+
+    uint32_t cpuStart = cpuSets.front().first;
     MulticastServiceOptions options;
     options.maxSendRecvDataSize = opt.msgMaxBuffSize + HCOM_TLS_HEADER_COST;
     options.enableTls = opt.tlsEnable;
@@ -73,14 +116,14 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
     options.qpSendQueueSize = NO_4096;
     options.qpPrePostSize = NO_2048;
     options.qpBatchRePostSize = NO_64;
-    options.maxSubscriberNum = MAX_NODES_NUM - 1;
+    options.maxSubscriberNum = (MAX_NODES_NUM - 1) * opt.subscriberConnectCount;
     if (opt.multicastProtocol == "rdma") {
         options.protocol = UBSHcomNetDriverProtocol::RDMA;
     } else {
         options.protocol = UBSHcomNetDriverProtocol::TCP;
     }
 
-    mPublisherWorkGroupNum= static_cast<uint16_t>(cpuSet.second - cpuSet.first + NO_1);
+    mPublisherWorkGroupNum = CountPublisherWorkerGroups(cpuSets);
     mPublisherServiceName = "Publisher";
     mPublisherService = ock::hcom::PublisherService::Create(mPublisherServiceName, options);
     if (mPublisherService == nullptr) {
@@ -97,10 +140,7 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
         SetDriverTlsCallback(mPublisherService, opt);
     }
 
-    for (int groupIdx = NO_1; groupIdx < mPublisherWorkGroupNum; ++groupIdx) {
-        // AddWorkerGroup(groupIdx, threadCount, cpuSet, priority)
-        mPublisherService->AddWorkerGroup(groupIdx, NO_1, std::make_pair(cpuStart + groupIdx, cpuStart + groupIdx), 0);
-    }
+    AddPublisherWorkerGroups(mPublisherService, cpuSets);
 
     std::string url = "tcp://" + oobIp + ":" + std::to_string(oobPort);
     mPublisherService->GetConfig().SetDeviceIpMask({ipMask});
@@ -170,7 +210,17 @@ void NetMulticastEngine::SubscriberBrokenCallBack(const ock::hcom::UBSHcomNetEnd
     std::string peerIp = GetIpFromIpPort(ep->PeerIpAndPort());
     {
         WriteLocker<ReadWriteLock> lock(&mSubScribersLock);
-        mSubScribers.erase(peerIp);
+        auto it = mSubScribers.find(peerIp);
+        if (it != mSubScribers.end()) {
+            auto &subscribers = it->second;
+            subscribers.erase(std::remove_if(subscribers.begin(), subscribers.end(),
+                [&ep](const ock::hcom::SubscriberPtr &subscriber) {
+                    return subscriber.Get() == nullptr || subscriber->GetEp()->Id() == ep->Id();
+                }), subscribers.end());
+            if (subscribers.empty()) {
+                mSubScribers.erase(it);
+            }
+        }
     }
 
     if (mHandlerBroken) {
@@ -193,7 +243,7 @@ BResult NetMulticastEngine::CreateSubscriberService(const std::string &ipMask)
     options.qpSendQueueSize = NO_4096;
     options.qpPrePostSize = NO_2048;
     options.qpBatchRePostSize = NO_2;
-    options.publisherWrkGroupNo = Cm::Instance()->GetLocalNid() % mPublisherWorkGroupNum;
+    options.publisherWrkGroupNo = static_cast<uint8_t>(Cm::Instance()->GetLocalNid() % mPublisherWorkGroupNum);
     if (opt.multicastProtocol == "rdma") {
         options.protocol = UBSHcomNetDriverProtocol::RDMA;
     } else {
@@ -277,11 +327,12 @@ BResult NetMulticastEngine::CreateSubscriber(uint16_t peerNodeId, const ::std::s
     }
 
     std::string url = "tcp://" + ip + ":" + std::to_string(port);
-    if (mSubScribers.find(ip) != mSubScribers.end()) {
-        NET_LOG_INFO("Subscriber to " << url << " is exist, skip."
-                                      << ".");
+    auto connectCount = MmsConfig::Instance()->GetNetConfig().subscriberConnectCount;
+    auto it = mSubScribers.find(ip);
+    if (it != mSubScribers.end() && it->second.size() >= connectCount) {
+        NET_LOG_INFO("Subscriber to " << url << " is exist, count:" << it->second.size() << ", skip.");
         return MMS_OK;
-    };
+    }
 
     ock::hcom::NetRef<ock::hcom::Subscriber> subscriber = nullptr;
     if ((mSubscriberService->CreateSubscriber(url, subscriber) != ock::hcom::SER_OK) || (subscriber == nullptr)) {
@@ -290,15 +341,19 @@ BResult NetMulticastEngine::CreateSubscriber(uint16_t peerNodeId, const ::std::s
     }
 
     subscriber->GetEp()->UpCtx(static_cast<uint64_t>(peerNodeId));  // 记录publisher的nodeId
-    mSubScribers.emplace(ip, subscriber);
-    NET_LOG_INFO("subscribed to node success, url:" << url << ", epId:" << subscriber->GetEp()->Id() << ".");
+    auto &subscribers = mSubScribers[ip];
+    subscribers.emplace_back(subscriber);
+    NET_LOG_INFO("Subscribed to node success, url:" << url << ", epId:" << subscriber->GetEp()->Id()
+                                                    << ", count:" << subscribers.size() << "/" << connectCount << ".");
     return MMS_OK;
 }
 
 bool NetMulticastEngine::IsSubscriberExist(const std::string &ip)
 {
     ReadLocker<ReadWriteLock> lock(&mSubScribersLock);
-    if (mSubScribers.find(ip) != mSubScribers.end()) {
+    auto it = mSubScribers.find(ip);
+    if (it != mSubScribers.end() &&
+        it->second.size() >= MmsConfig::Instance()->GetNetConfig().subscriberConnectCount) {
         return true;
     }
 
@@ -477,9 +532,14 @@ std::string NetMulticastEngine::GetMulticastInfoStr()
     oss << "[The publishers that this node has subscribed:]" << std::endl;
     ReadLocker<ReadWriteLock> lock(&mSubScribersLock);
     for (auto &item : mSubScribers) {
-        oss << "publisher " << count++ << ":"
-            << " ip:" << item.second->GetIp() << ", port:" << item.second->GetPort()
-            << ", epId:" << item.second->GetEp()->Id() << std::endl;
+        for (auto &subscriber : item.second) {
+            if (subscriber.Get() == nullptr) {
+                continue;
+            }
+            oss << "publisher " << count++ << ":"
+                << " ip:" << subscriber->GetIp() << ", port:" << subscriber->GetPort()
+                << ", epId:" << subscriber->GetEp()->Id() << std::endl;
+        }
     }
 
     return oss.str();

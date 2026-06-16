@@ -13,6 +13,9 @@
 #ifndef MMS_CONFIG_INSTANCE_H
 #define MMS_CONFIG_INSTANCE_H
 
+#include <utility>
+#include <vector>
+
 #include "mms_config.h"
 #include "mms_err.h"
 #include "mms_types.h"
@@ -44,6 +47,7 @@ const auto NET_NOTIFY_WORKER_GROUPS = std::make_pair("mms.net.ipc.notify.groups"
 const auto NET_NOTIFY_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.notify.groups.cpuset", "15-15");
 const auto NET_PUBLISHER_WORKER_CPUSET = std::make_pair("mms.net.publisher.worker.cpuset", "10-17");
 const auto NET_SUBSCRIBER_WORKER_CPUSET = std::make_pair("mms.net.subscriber.worker.cpuset", "18-18");
+const auto NET_SUBSCRIBER_CONNECT_COUNT = std::make_pair("mms.net.subscriber.connect.count", 1);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("mms.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("mms.net.request.executor.queue.size", 1024);
 const auto NET_MESSAGE_MAX_BUFF_SIZE = std::make_pair("mms.net.message.max_buff_size", 70);
@@ -94,8 +98,9 @@ public:
         uint16_t notifyWorkerGroupsNum;
         uint16_t notifyGroupIndex = 0;
 
-        std::pair<long, long> publisherWorkerCpuSet;
+        std::vector<std::pair<uint32_t, uint32_t>> publisherWorkerCpuSets;
         std::pair<long, long> subscriberWorkerCpuSet;
+        uint16_t subscriberConnectCount = 1;
 
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;

@@ -19,6 +19,52 @@ namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
 
+static BResult ParseCpuRange(const std::string &cpuRange, uint32_t maxCpuNo,
+                             std::pair<uint32_t, uint32_t> &range)
+{
+    if (!StrUtil::StrToUint32Pair(cpuRange, range)) {
+        LOG_ERROR("Invalid cpu range:" << cpuRange << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    if ((range.first > range.second) || (range.second >= maxCpuNo)) {
+        LOG_ERROR("Invalid cpu range:" << cpuRange << ", max cpu no:" << maxCpuNo << ".");
+        return MMS_INVALID_PARAM;
+    }
+    return MMS_OK;
+}
+
+static BResult ParseCpuRangeList(const std::string &configName, const std::string &configValue, uint32_t maxCpuNo,
+                                 std::vector<std::pair<uint32_t, uint32_t>> &ranges)
+{
+    std::vector<std::string> cpuRanges{};
+    StrUtil::Split(configValue, ",", cpuRanges);
+    uint32_t cpuCount = NO_0;
+    ranges.clear();
+    for (auto &item : cpuRanges) {
+        std::pair<uint32_t, uint32_t> range{};
+        auto ret = ParseCpuRange(item, maxCpuNo, range);
+        if (ret != MMS_OK) {
+            LOG_ERROR("Invalid cpu set, config name:" << configName << ", config value:" << configValue << ".");
+            return ret;
+        }
+
+        uint32_t rangeCpuCount = range.second - range.first + NO_1;
+        if ((rangeCpuCount > NO_256) || (cpuCount > NO_256 - rangeCpuCount)) {
+            LOG_ERROR("Too many cpu items, config name:" << configName << ", config value:" << configValue << ".");
+            return MMS_INVALID_PARAM;
+        }
+        cpuCount += rangeCpuCount;
+        ranges.emplace_back(range);
+    }
+
+    if (cpuCount == NO_0) {
+        LOG_ERROR("Empty cpu set, config name:" << configName << ", config value:" << configValue << ".");
+        return MMS_INVALID_PARAM;
+    }
+    return MMS_OK;
+}
+
 void MmsConfig::LoadDefaultConf()
 {
     LoadDefaultNetConf();
@@ -47,6 +93,7 @@ void MmsConfig::LoadDefaultNetConf()
     AddStrConf(NET_RPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_RPC_WORKER_GROUPS_CPUSET.first));
     AddStrConf(NET_PUBLISHER_WORKER_CPUSET, VStrNotNull::Create(NET_PUBLISHER_WORKER_CPUSET.first));
     AddStrConf(NET_SUBSCRIBER_WORKER_CPUSET, VStrNotNull::Create(NET_SUBSCRIBER_WORKER_CPUSET.first));
+    AddIntConf(NET_SUBSCRIBER_CONNECT_COUNT, VIntRange::Create(NET_SUBSCRIBER_CONNECT_COUNT.first, NO_1, NO_16));
     AddIntConf(NET_MESSAGE_MAX_BUFF_SIZE, VIntRange::Create(NET_MESSAGE_MAX_BUFF_SIZE.first, NO_1, NO_4096));
 
     AddStrConf(NET_IPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_BUSY_POLL_MODE.first));
@@ -163,27 +210,12 @@ BResult MmsConfig::AutoConfigMem(const ConfigurationPtr &conf)
 
 BResult MmsConfig::AutoConfigNetMulticast(const ConfigurationPtr &conf)
 {
+    uint32_t maxCpuNo = GetDeviceCpuNum();
     std::string publisherWorkerCpuStr = conf->GetStr(NET_PUBLISHER_WORKER_CPUSET.first);
-    std::vector<std::string> cpuSet{};
-    StrUtil::Split(publisherWorkerCpuStr, "-", cpuSet);
-    if (cpuSet.size() != NO_2) {
-        LOG_ERROR("Invalid publisher cpu set:" << publisherWorkerCpuStr << ".");
-        return MMS_INVALID_PARAM;
-    }
-
-    if (UNLIKELY(!StrUtil::StrToLong(cpuSet[NO_0], mNetConfig.publisherWorkerCpuSet.first) ||
-                 !StrUtil::StrToLong(cpuSet[NO_1], mNetConfig.publisherWorkerCpuSet.second))) {
-        LOG_ERROR("Invalid cpu range:" << publisherWorkerCpuStr << ".");
-        return MMS_INVALID_PARAM;
-    }
-
-    uint16_t maxCpuNo = GetDeviceCpuNum();
-    long cpuStart = mNetConfig.publisherWorkerCpuSet.first;
-    long cpuEnd = mNetConfig.publisherWorkerCpuSet.second;
-
-    if (UNLIKELY((cpuStart > cpuEnd) || (cpuStart < NO_0) || (cpuEnd < NO_0) || (cpuEnd >= maxCpuNo))) {
-        LOG_ERROR("Invalid cpu range:" << publisherWorkerCpuStr << ".");
-        return MMS_INVALID_PARAM;
+    auto ret = ParseCpuRangeList(NET_PUBLISHER_WORKER_CPUSET.first, publisherWorkerCpuStr, maxCpuNo,
+                                 mNetConfig.publisherWorkerCpuSets);
+    if (ret != MMS_OK) {
+        return ret;
     }
 
     std::string subscriberWorkerCpuStr = conf->GetStr(NET_SUBSCRIBER_WORKER_CPUSET.first);
@@ -200,15 +232,17 @@ BResult MmsConfig::AutoConfigNetMulticast(const ConfigurationPtr &conf)
         return MMS_INVALID_PARAM;
     }
 
-    long SubscriberCpuStart = mNetConfig.subscriberWorkerCpuSet.first;
-    long SubscriberCpuEnd = mNetConfig.subscriberWorkerCpuSet.second;
+    long subscriberCpuStart = mNetConfig.subscriberWorkerCpuSet.first;
+    long subscriberCpuEnd = mNetConfig.subscriberWorkerCpuSet.second;
+    long maxCpuNoLong = static_cast<long>(maxCpuNo);
 
-    if (UNLIKELY((SubscriberCpuStart > SubscriberCpuEnd) || (SubscriberCpuStart < NO_0) || (SubscriberCpuEnd < NO_0) ||
-                 (SubscriberCpuEnd >= maxCpuNo))) {
+    if (UNLIKELY((subscriberCpuStart > subscriberCpuEnd) || (subscriberCpuStart < NO_0) ||
+                 (subscriberCpuEnd < NO_0) || (subscriberCpuEnd >= maxCpuNoLong))) {
         LOG_ERROR("Invalid cpu range:" << subscriberWorkerCpuStr << ".");
         return MMS_INVALID_PARAM;
     }
 
+    mNetConfig.subscriberConnectCount = static_cast<uint16_t>(conf->GetInt(NET_SUBSCRIBER_CONNECT_COUNT.first));
     return MMS_OK;
 }
 

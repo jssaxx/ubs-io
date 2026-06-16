@@ -783,17 +783,20 @@ void MmsServer::CreateSubscribers(const std::map<uint16_t, CmNodeInfo> &nodeInfo
         }
         LOG_INFO("Subscribe to node:" << it->second.id << ", ip:" << it->second.ip << ", port:" << it->second.multiPort
                                       << ".");
-        SubscriptionInfo info(it->second.id, it->second.ip, it->second.multiPort, NO_1);
-        MulticastAsyncHandler handler = [this](int32_t ret, SubscriptionInfo &info) -> void {
+        auto connectCount = mConfig->GetNetConfig().subscriberConnectCount;
+        for (uint16_t i = 0; i < connectCount; ++i) {
+            SubscriptionInfo info(it->second.id, it->second.ip, it->second.multiPort, NO_1);
+            MulticastAsyncHandler handler = [this](int32_t ret, SubscriptionInfo &info) -> void {
+                if (ret != MMS_OK) {
+                    sleep(NO_1);
+                    ReCreateSubscriber(info.peerNodeId);
+                }
+            };
+            BResult ret = mMulticastEngine->AsyncConnect(info, handler);
             if (ret != MMS_OK) {
-                sleep(NO_1);
-                ReCreateSubscriber(info.peerNodeId);
+                LOG_ERROR("Subscribe to " << it->first << " failed, ret: " << ret << ".");
+                failCnt++;
             }
-        };
-        BResult ret = mMulticastEngine->AsyncConnect(info, handler);
-        if (ret != MMS_OK) {
-            LOG_ERROR("Subscribe to " << it->first << " failed, ret: " << ret << ".");
-            failCnt++;
         }
     }
 
@@ -810,18 +813,21 @@ void MmsServer::ReCreateSubscriber(uint16_t peerNodeId)
     }
 
     LOG_INFO("Resubscribe to node:" << peerNodeId << ", ip:" << ip << ", port:" << multiPort << ".");
-    SubscriptionInfo info(peerNodeId, ip, multiPort, NO_3);
-    MulticastAsyncHandler handler = [this](int32_t ret, SubscriptionInfo &info) -> void {
-        if (ret != MMS_OK) {
-            sleep(NO_1);
-            ReCreateSubscriber(info.peerNodeId);
-        }
-    };
+    auto connectCount = mConfig->GetNetConfig().subscriberConnectCount;
+    for (uint16_t i = 0; i < connectCount; ++i) {
+        SubscriptionInfo info(peerNodeId, ip, multiPort, NO_3);
+        MulticastAsyncHandler handler = [this](int32_t ret, SubscriptionInfo &info) -> void {
+            if (ret != MMS_OK) {
+                sleep(NO_1);
+                ReCreateSubscriber(info.peerNodeId);
+            }
+        };
 
-    BResult ret = mMulticastEngine->AsyncConnect(info, handler);
-    if (ret != MMS_OK) {
-        LOG_ERROR("Subscribe to node " << peerNodeId << " failed, ret: " << ret << ", ip:" << ip
-                                       << ", port:" << multiPort << ".");
+        BResult ret = mMulticastEngine->AsyncConnect(info, handler);
+        if (ret != MMS_OK) {
+            LOG_ERROR("Subscribe to node " << peerNodeId << " failed, ret: " << ret << ", ip:" << ip
+                                           << ", port:" << multiPort << ".");
+        }
     }
 }
 
