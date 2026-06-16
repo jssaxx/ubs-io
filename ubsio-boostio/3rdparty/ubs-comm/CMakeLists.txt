@@ -61,11 +61,11 @@ if (NOT USE_SYSTEM_HCOM)
     endif()
 
     set(HCOM_FINAL_INCLUDE_DIR "${INSTALL_DIR}/include")
-    set(HCOM_FINAL_LIBRARY "${INSTALL_DIR}/lib/libhcom.so")
+    set(HCOM_FINAL_LIBRARY "${INSTALL_DIR}/lib/libhcom_static.a")
 endif ()
 
 if(NOT TARGET hcom_lib)
-    add_library(hcom_lib SHARED IMPORTED GLOBAL)
+    add_library(hcom_lib STATIC IMPORTED GLOBAL)
 
     set_target_properties(hcom_lib PROPERTIES
             IMPORTED_LOCATION "${HCOM_FINAL_LIBRARY}"
