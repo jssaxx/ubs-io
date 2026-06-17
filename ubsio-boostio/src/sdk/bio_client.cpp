@@ -237,17 +237,8 @@ BResult BioClient::BioDiagnoseSdkInit()
 #ifdef DEBUG_UT
     return BIO_OK;
 #endif
-    std::string soFileName = "/usr/lib64/boostio/test_tools/libsdk_diagnose.so";
-    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
-        CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-        return BIO_NOT_EXISTS;
-    }
-
-    void *handler = dlopen(canonicalPath, RTLD_NOW);
-    free(canonicalPath);
-    canonicalPath = nullptr;
-
+    const char *soFileName = "libsdk_diagnose.so";
+    void *handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_INNER_ERR;
