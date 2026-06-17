@@ -311,7 +311,7 @@ int PyKvcNdsBatchRead(const std::vector<std::string> &keys,
 PYBIND11_MODULE(c2python_sdk, m)
 {
     m.doc() = "Python/C API for python sdk";
-    m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id"), py::arg("ssd_size"));
+    m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id") = -1, py::arg("ssd_size") = 0);
     m.def("KvExit", &PyKvcKvExit);
     m.def("KvPut", &PyKvcKvPutData, py::arg("key"), py::arg("value"));
     m.def("KvGet", &PyKvcKvGetData, py::arg("key"), py::arg("value"));

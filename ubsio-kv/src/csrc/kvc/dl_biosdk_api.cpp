@@ -20,6 +20,16 @@
 #include "ubsio_kvc_def.h"
 #include "dl_biosdk_api.h"
 
+namespace {
+constexpr int32_t KVC_NO_DEVICE_ID = -1;
+constexpr uint32_t DEFAULT_STANDALONE_DEVICE_ID = 0;
+
+uint32_t GetStandaloneDeviceId(int32_t devId)
+{
+    return devId == KVC_NO_DEVICE_ID ? DEFAULT_STANDALONE_DEVICE_ID : static_cast<uint32_t>(devId);
+}
+}
+
 namespace ock {
 namespace ubsio {
 
@@ -107,12 +117,16 @@ int32_t DlBioSdkApi::KvBioInit(int32_t devId, uint64_t ssdSize)
 {
     (void)ssdSize;
     LOG_INFO("Start boostio begin...");
-    if (devId < 0) {
-        LOG_ERROR("Invalid standalone device id:" << devId << ".");
+    if (devId < KVC_NO_DEVICE_ID) {
+        LOG_ERROR("Invalid device id:" << devId << ".");
         return -1;
     }
 
-    SetStandaloneDevice(static_cast<uint32_t>(devId));
+    auto standaloneDeviceId = GetStandaloneDeviceId(devId);
+    if (devId == KVC_NO_DEVICE_ID) {
+        LOG_INFO("Use default standalone device id:" << standaloneDeviceId << " for kv device id:" << devId << ".");
+    }
+    SetStandaloneDevice(standaloneDeviceId);
 
     ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
