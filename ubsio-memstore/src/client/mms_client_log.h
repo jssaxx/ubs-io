@@ -15,6 +15,7 @@
 
 #include <cstdio>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <sys/time.h>
@@ -154,4 +155,3 @@ private:
 }
 }
 #endif
-

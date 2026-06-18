@@ -15,6 +15,7 @@
 
 #include <atomic>
 #include <unordered_map>
+#include <unistd.h>
 #include "mms_ref.h"
 #include "mms_lock.h"
 #include "mms_err.h"

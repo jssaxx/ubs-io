@@ -1,5 +1,7 @@
 add_subdirectory(libboundscheck)
 add_subdirectory(ubs-comm)
-add_subdirectory(spdlog)
-add_subdirectory(zookeeper)
 add_subdirectory(libart)
+
+if ("${OPEN_ZK}" STREQUAL "ON")
+    add_subdirectory(zookeeper)
+endif()

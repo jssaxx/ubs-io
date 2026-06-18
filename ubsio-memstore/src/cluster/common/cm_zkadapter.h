@@ -13,7 +13,7 @@
 #ifndef CM_ZKADAPTER_H
 #define CM_ZKADAPTER_H
 
-#include "zookeeper/zookeeper.h"
+#include "cm_zk_api_dl.h"
 #include "cm_log.h"
 #include "cm_comm.h"
 
@@ -182,4 +182,3 @@ void CmClientZkFreeParaList(uint16_t poolId);
 #endif
 
 #endif
-

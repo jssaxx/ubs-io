@@ -10,10 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <cstdio>
+#include <ctime>
+#include <iomanip>
 #include <iostream>
+#include <new>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include "bio_tracepoint_helper.h"
-#include "spdlog/sinks/rotating_file_sink.h"
-#include "spdlog/sinks/stdout_sinks.h"
 #include "bio_log.h"
 
 namespace ock {
@@ -28,12 +33,11 @@ const int STDERR_TYPE = 2;
 
 constexpr int MIN_LOG_LEVEL_MAX = 5;
 constexpr int SIZE_MB_SHIFT = 20;
-constexpr auto ROTATION_FILE_SIZE_MAX_MB = 100UL;                                   // 100MB
-constexpr mode_t UMASK_MODE = 0277;
-constexpr auto ROTATION_FILE_SIZE_MAX = ROTATION_FILE_SIZE_MAX_MB << SIZE_MB_SHIFT; // 100MB
-constexpr auto ROTATION_FILE_SIZE_MIN_MB = 2;                                       // 2MB
-constexpr auto ROTATION_FILE_SIZE_MIN = ROTATION_FILE_SIZE_MIN_MB << SIZE_MB_SHIFT; // 2MB
+constexpr auto ROTATION_FILE_SIZE_MAX_MB = 100UL; // 100MB
+constexpr auto ROTATION_FILE_SIZE_MIN_MB = 2;     // 2MB
 constexpr int ROTATION_FILE_COUNT_MAX = 50;
+constexpr mode_t LOG_FILE_MODE = S_IRUSR | S_IWUSR | S_IRGRP;
+constexpr mode_t ROTATED_LOG_FILE_MODE = S_IRUSR | S_IRGRP;
 
 #define BIO_LOG_STD_ERR(msg)      \
     do {                          \
@@ -88,6 +92,88 @@ bool Logger::ValidateParams(const LoggerOptions &options)
     return true;
 }
 
+const char *Logger::LevelToString(int level)
+{
+    switch (level) {
+        case BIOLOG_LEVEL_TRACE:
+            return "trace";
+        case BIOLOG_LEVEL_DEBUG:
+            return "debug";
+        case BIOLOG_LEVEL_INFO:
+            return "info";
+        case BIOLOG_LEVEL_WARN:
+            return "warning";
+        case BIOLOG_LEVEL_ERROR:
+            return "error";
+        case BIOLOG_LEVEL_CRITICAL:
+            return "critical";
+        default:
+            return "unknown";
+    }
+}
+
+std::string Logger::FormatLogLine(int level, const std::string &message)
+{
+    struct timeval tv {};
+    struct tm timeInfo {};
+    char strTime[32] = {0};
+
+    gettimeofday(&tv, nullptr);
+    localtime_r(&tv.tv_sec, &timeInfo);
+    if (strftime(strTime, sizeof(strTime), "%Y-%m-%d %H:%M:%S", &timeInfo) == 0) {
+        strTime[0] = '\0';
+    }
+
+    std::ostringstream oss;
+    oss << strTime << "." << std::setw(6) << std::setfill('0') << tv.tv_usec << " " << syscall(SYS_gettid) << " "
+        << LevelToString(level) << " " << message;
+    return oss.str();
+}
+
+std::string Logger::GetRotatedFileName(uint32_t index) const
+{
+    return mOptions.path + "." + std::to_string(index);
+}
+
+bool Logger::NeedRotate() const
+{
+    struct stat st {};
+    if (stat(mOptions.path.c_str(), &st) != 0) {
+        return false;
+    }
+    return static_cast<uint64_t>(st.st_size) >= (static_cast<uint64_t>(mOptions.rotationFileSizeInMB) << SIZE_MB_SHIFT);
+}
+
+void Logger::RotateLogFile()
+{
+    if (mOptions.logType != FILE_TYPE || !NeedRotate()) {
+        return;
+    }
+
+    if (mLogFile.is_open()) {
+        mLogFile.close();
+        chmod(mOptions.path.c_str(), ROTATED_LOG_FILE_MODE);
+    }
+
+    std::remove(GetRotatedFileName(mOptions.rotationFileCount).c_str());
+    for (uint32_t index = mOptions.rotationFileCount; index > 1; --index) {
+        std::rename(GetRotatedFileName(index - 1).c_str(), GetRotatedFileName(index).c_str());
+    }
+    std::rename(mOptions.path.c_str(), GetRotatedFileName(1).c_str());
+    chmod(GetRotatedFileName(1).c_str(), ROTATED_LOG_FILE_MODE);
+}
+
+int32_t Logger::OpenLogFile()
+{
+    mLogFile.open(mOptions.path, std::ios::out | std::ios::app);
+    if (!mLogFile.is_open()) {
+        BIO_LOG_STD_ERR("Failed to open log file, path:" << mOptions.path);
+        return -1L;
+    }
+    chmod(mOptions.path.c_str(), LOG_FILE_MODE);
+    return 0;
+}
+
 Logger *Logger::Instance(const LoggerOptions &options)
 {
     std::lock_guard<std::mutex> guard(gMutex);
@@ -125,72 +211,57 @@ int32_t Logger::Init()
     if (gInited) {
         return 0;
     }
-    try {
-        if (mOptions.logType == STDOUT_TYPE) { // stdout
-            mSpdLogger = spdlog::stdout_logger_mt("console");
-            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
-        } else if (mOptions.logType == FILE_TYPE) { // file
-            const std::string logName = std::string("ns:0").append(";log:normal");
-            spdlog::file_event_handlers handlers;
-            handlers.after_close = [](const spdlog::filename_t &filename) {
-                chmod(filename.c_str(), S_IRUSR | S_IRGRP);
-            };
-            handlers.after_open = [](const spdlog::filename_t &filename, std::FILE *fstream) {
-                chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
-            };
-            mSpdLogger = spdlog::rotating_logger_mt(logName, mOptions.path,
-                mOptions.rotationFileSizeInMB << SIZE_MB_SHIFT, mOptions.rotationFileCount, false, handlers);
-            mSpdLogger->set_pattern("%v");
-            mSpdLogger->info("", "");
-            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %v");
-            mSpdLogger->info("Log started at [{}] level",
-                spdlog::level::to_string_view(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel)).data());
-            mSpdLogger->info("Log default format: yyyy-mm-dd hh:mm:ss.uuuuuu threadid loglevel msg");
-            mSpdLogger->set_pattern("%Y-%m-%d %H:%M:%S.%f %t %l %v");
-            spdlog::flush_every(std::chrono::seconds(1));
-        } else if (mOptions.logType == STDERR_TYPE) { // stderr
-            mSpdLogger = spdlog::stderr_logger_mt("console");
-            mSpdLogger->set_pattern("%C/%m/%d %H:%M:%S.%f %t %l %v");
-        }
-        mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
-        mSpdLogger->flush_on(spdlog::level::err);
-    } catch (const spdlog::spdlog_ex &ex) {
-        mSpdLogger = nullptr;
-        BIO_LOG_STD_ERR("Failed to create log.");
+    if (mOptions.logType == FILE_TYPE && OpenLogFile() != 0) {
         return -1L;
     }
+
+    Log(BIOLOG_LEVEL_INFO, "Log started at [" + std::string(LevelToString(mOptions.minLogLevel)) + "] level");
+    Log(BIOLOG_LEVEL_INFO, "Log default format: yyyy-mm-dd hh:mm:ss.uuuuuu threadid loglevel msg");
     gInited = true;
     return 0;
 }
 
 void Logger::Exit()
 {
-    if (mSpdLogger != nullptr) {
-        mSpdLogger->flush();
-        mSpdLogger = nullptr;
+    std::lock_guard<std::mutex> guard(mLogMutex);
+    if (mLogFile.is_open()) {
+        mLogFile.flush();
+        mLogFile.close();
+        chmod(mOptions.path.c_str(), ROTATED_LOG_FILE_MODE);
     }
+    gInited = false;
 }
 
 int32_t Logger::Log(int level, const std::string &message) const
 {
-    if (mSpdLogger == nullptr) {
-        return -2L;
-    }
-
     if (level < 0 || level > 5) { // 5
         return -3L;
     }
 
-    mSpdLogger->log(static_cast<spdlog::level::level_enum>(level), "{}", message);
+    const std::string line = FormatLogLine(level, message);
+    std::lock_guard<std::mutex> guard(mLogMutex);
+    if (mOptions.logType == STDOUT_TYPE) {
+        std::cout << line << std::endl;
+    } else if (mOptions.logType == STDERR_TYPE) {
+        std::cerr << line << std::endl;
+    } else if (mOptions.logType == FILE_TYPE) {
+        const_cast<Logger *>(this)->RotateLogFile();
+        if (!mLogFile.is_open() && const_cast<Logger *>(this)->OpenLogFile() != 0) {
+            return -2L;
+        }
+        mLogFile << line << std::endl;
+        if (level >= BIOLOG_LEVEL_ERROR) {
+            mLogFile.flush();
+        }
+    } else {
+        return -2L;
+    }
     return 0L;
 }
 
 void Logger::ResetLogLevel(int32_t logLevel)
 {
     mOptions.minLogLevel = logLevel;
-    if (mSpdLogger != nullptr) {
-        mSpdLogger->set_level(static_cast<spdlog::level::level_enum>(mOptions.minLogLevel));
-    }
 }
 }
 }

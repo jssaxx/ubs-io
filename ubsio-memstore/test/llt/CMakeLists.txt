@@ -33,8 +33,7 @@ include_directories(${SRC_DIR}/cache
         ${SRC_DIR}/net
         ${SRC_DIR}/server
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
-        ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
-        ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include/zookeeper
+        ${PROJECT_SOURCE_DIR}/../ubsio-boostio/3rdparty
         ${TEST_DIR}/cache
         ${TEST_DIR}/cluster
         ${TEST_DIR}/common
@@ -47,8 +46,6 @@ include_directories(${SRC_DIR}/cache
 
 link_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/
-        ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/lib64/
-        ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/lib/
 )
 
 add_subdirectory(unit-tests)

@@ -306,15 +306,15 @@ BResult MmsConfig::AutoConfigBasic(const ConfigurationPtr &conf)
 {
     auto logLevel = conf->GetStr(LOG_LEVEL.first);
     if (logLevel == "trace") {
-        mBasicConfig.logLevel = SPDLOG_LEVEL_TRACE;
+        mBasicConfig.logLevel = MMSLOG_LEVEL_TRACE;
     } else if (logLevel == "debug") {
-        mBasicConfig.logLevel = SPDLOG_LEVEL_DEBUG;
+        mBasicConfig.logLevel = MMSLOG_LEVEL_DEBUG;
     } else if (logLevel == "info") {
-        mBasicConfig.logLevel = SPDLOG_LEVEL_INFO;
+        mBasicConfig.logLevel = MMSLOG_LEVEL_INFO;
     } else if (logLevel == "warn") {
-        mBasicConfig.logLevel = SPDLOG_LEVEL_WARN;
+        mBasicConfig.logLevel = MMSLOG_LEVEL_WARN;
     } else if (logLevel == "error") {
-        mBasicConfig.logLevel = SPDLOG_LEVEL_ERROR;
+        mBasicConfig.logLevel = MMSLOG_LEVEL_ERROR;
     } else {
         LOG_ERROR("Failed to load daemon log level config, invalid level " << logLevel);
         return MMS_ERR;

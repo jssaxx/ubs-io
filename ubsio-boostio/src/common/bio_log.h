@@ -15,12 +15,12 @@
 
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <mutex>
 #include <sstream>
+#include <string>
 #include <sys/time.h>
 #include <utility>
-
-#include "spdlog/common.h"
-#include "spdlog/spdlog.h"
 
 namespace ock {
 namespace bio {
@@ -126,9 +126,16 @@ public:
 private:
     static bool ValidateParams(const LoggerOptions &options);
     static void LogToStdErr(const std::ostringstream &oss);
+    static const char *LevelToString(int level);
+    static std::string FormatLogLine(int level, const std::string &message);
+    int32_t OpenLogFile();
+    void RotateLogFile();
+    bool NeedRotate() const;
+    std::string GetRotatedFileName(uint32_t index) const;
 
 private:
-    std::shared_ptr<spdlog::logger> mSpdLogger; /* spd logger for normal log */
+    mutable std::mutex mLogMutex;
+    mutable std::ofstream mLogFile;
     LoggerOptions mOptions;
 
 private:

@@ -12,9 +12,8 @@ include_directories(${SRC_DIR}/common
         ${SRC_DIR}/server
         ${SRC_DIR}/stream
         ${SRC_DIR}/underfs
-		${SRC_DIR}/interceptor
+        ${SRC_DIR}/interceptor
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
-        ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/include/spdlog
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/include/
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/include/
         ${TEST_DIR}/mock
@@ -33,7 +32,6 @@ link_directories(
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/lib/
-        ${PROJECT_3RDPARTY_BIN_DIR}/spdlog/lib64/
 )
 
 add_subdirectory(unit-tests)

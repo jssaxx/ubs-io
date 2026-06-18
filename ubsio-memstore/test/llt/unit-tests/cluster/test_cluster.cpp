@@ -16,7 +16,7 @@
 #include "mms_types.h"
 #include "cm.h"
 #include "securec.h"
-#include "zookeeper.h"
+#include "zookeeper/zookeeper.h"
 #include "cm_zkadapter.h"
 #include "cm_config.h"
 #include "cm_threadpool.h"
@@ -157,30 +157,31 @@ static int32_t CM_Init_Stub(ConfigRole role, PoolInfo *pools, uint16_t num, cons
     return CM_OK;
 }
 
-static void ZooSetDebugLevel() {}
+static void ZooSetDebugLevelMock(ZooLogLevel level) {}
 
-static zhandle_t *ZookeeperInit()
+static zhandle_t *ZookeeperInitMock(const char *host, watcher_fn fn, int recvTimeout,
+    const clientid_t *clientid, void *context, int flags)
 {
     return (zhandle_t *)"zHandle";
 }
 
-static int ZooState()
+static int ZooStateMock(zhandle_t *zh)
 {
     return ZOO_CONNECTED_STATE;
 }
 
-static int ZooRecvTimeout()
+static int ZooRecvTimeoutMock(zhandle_t *zh)
 {
     return (int)NO_10;
 }
 
-static int ZooCreate(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
+static int ZooCreateMock(zhandle_t *zh, const char *path, const char *value, int valuelen, const struct ACL_vector *acl,
     int mode, char *pathBuffer, int pathBufferLen)
 {
     return ZOK;
 }
 
-static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
+static int ZooGetMock(zhandle_t *zh, const char *path, int watch, char *buffer, int *bufferLen, struct Stat *stat)
 {
     if (*bufferLen == (int)sizeof(uint16_t)) {
         if (strcmp(path, "/cm/meta/ip/127.0.0.1") == 0) {
@@ -221,17 +222,17 @@ static int ZooGet(zhandle_t *zh, const char *path, int watch, char *buffer, int 
     return ZOK;
 }
 
-static int ZooExists(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
+static int ZooExistsMock(zhandle_t *zh, const char *path, int watch, struct Stat *stat)
 {
     return ZNONODE;
 }
 
-static int ZooSet(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
+static int ZooSetMock(zhandle_t *zh, const char *path, const char *buffer, int buflen, int version)
 {
     return ZOK;
 }
 
-static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
+static int ZooWgetMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx, char *buffer, int *bufferLen,
     struct Stat *stat)
 {
     char *result = nullptr;
@@ -276,13 +277,13 @@ static int ZooWget(zhandle_t *zh, const char *path, watcher_fn watcher, void *wa
     return ZOK;
 }
 
-static int ZooDelete(zhandle_t *zh, const char *path, int version)
+static int ZooDeleteMock(zhandle_t *zh, const char *path, int version)
 {
     return ZOK;
 }
 
 static std::vector<std::string> gZkGetChildrenFirst;
-static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
+static int ZooWgetChildrenMock(zhandle_t *zh, const char *path, watcher_fn watcher, void *watcherCtx,
     struct String_vector *strings)
 {
     auto it = std::find(gZkGetChildrenFirst.begin(), gZkGetChildrenFirst.end(), path);
@@ -309,7 +310,7 @@ static int ZooWgetChildren(zhandle_t *zh, const char *path, watcher_fn watcher, 
     return ZOK;
 }
 
-static int ZooDeallocateStringVector(struct String_vector *strings)
+static void ZooDeallocateStringVectorMock(struct String_vector *strings)
 {
     if (strings != nullptr) {
         if (strings->data != nullptr) {
@@ -317,10 +318,9 @@ static int ZooDeallocateStringVector(struct String_vector *strings)
             strings->data = nullptr;
         }
     }
-    return ZOK;
 }
 
-static int ZookeeperClose(zhandle_t *zh)
+static int ZookeeperCloseMock(zhandle_t *zh)
 {
     return ZOK;
 }
@@ -333,20 +333,19 @@ void TestCluster::Stub()
     MOCKER(CM_GetNodeInfo).stubs().will(invoke(CM_GetNodeInfo_Stub));
     MOCKER(CM_Init).stubs().will(invoke(CM_Init_Stub));
 
-    MOCKER(zoo_set_debug_level).stubs().will(invoke(ZooSetDebugLevel));
-    MOCKER(zookeeper_init).stubs().will(invoke(ZookeeperInit));
-    MOCKER(zoo_state).stubs().will(invoke(ZooState));
-    MOCKER(zoo_recv_timeout).stubs().will(invoke(ZooRecvTimeout));
-    MOCKER(zoo_create).stubs().will(invoke(ZooCreate));
-    MOCKER(zoo_recv_timeout).stubs().will(invoke(ZooRecvTimeout));
-    MOCKER(zoo_get).stubs().will(invoke(ZooGet));
-    MOCKER(zoo_exists).stubs().will(invoke(ZooExists));
-    MOCKER(zoo_set).stubs().will(invoke(ZooSet));
-    MOCKER(zoo_wget).stubs().will(invoke(ZooWget));
-    MOCKER(zoo_delete).stubs().will(invoke(ZooDelete));
-    MOCKER(zoo_wget_children).stubs().will(invoke(ZooWgetChildren));
-    MOCKER(zookeeper_close).stubs().will(invoke(ZookeeperClose));
-    MOCKER(deallocate_String_vector).stubs().will(invoke(ZooDeallocateStringVector));
+    ZooSetDebugLevel = ZooSetDebugLevelMock;
+    ZookeeperInit = ZookeeperInitMock;
+    ZooState = ZooStateMock;
+    ZooRecvTimeout = ZooRecvTimeoutMock;
+    ZooCreate = ZooCreateMock;
+    ZooGet = ZooGetMock;
+    ZooExists = ZooExistsMock;
+    ZooSet = ZooSetMock;
+    ZooWget = ZooWgetMock;
+    ZooDelete = ZooDeleteMock;
+    ZooWgetChildren = ZooWgetChildrenMock;
+    ZookeeperClose = ZookeeperCloseMock;
+    DeallocateStringVector = ZooDeallocateStringVectorMock;
 }
 
 TEST_F(TestCluster, test_cm_inner_init)
