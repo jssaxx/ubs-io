@@ -394,7 +394,7 @@ BResult MmsClient::ClientBasicInit(void)
         return ret;
     }
 
-    if (rsp.serverPid <= 0 || rsp.logLevel > SPDLOG_LEVEL_ERROR || rsp.logLevel < SPDLOG_LEVEL_TRACE ||
+    if (rsp.serverPid <= 0 || rsp.logLevel > MMSLOG_LEVEL_ERROR || rsp.logLevel < MMSLOG_LEVEL_TRACE ||
         rsp.memNum > MAX_NUMAS_NUM || rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
         CLIENT_LOG_ERROR("Invalid response, server pid:" << rsp.serverPid << ", log level:" << rsp.logLevel <<
             ", numa num:" << rsp.memNum << ", net timeout:" << rsp.netTimeOut << ".");

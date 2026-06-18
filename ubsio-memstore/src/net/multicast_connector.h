@@ -13,6 +13,8 @@
 #ifndef MMSCORE_MULTICAST_CONNECTOR_H
 #define MMSCORE_MULTICAST_CONNECTOR_H
 
+#include <condition_variable>
+
 #include "net_common.h"
 #include "mms_execution.h"
 
@@ -107,4 +109,3 @@ using MultiNetConnectorPtr = Ref<MultiNetConnector>;
 }
 }
 #endif // MMSCORE_MULTICAST_CONNECTOR_H
-
