@@ -235,7 +235,7 @@ MMS 软件安装前需要将前置依赖的软件安装成功，建议参考各�
     |Network|mms.net.ipc.notify.groups.cpuset| 数据变更通知专用 IPC worker 绑核配置。                                   |54-54| 与 `mms.net.ipc.notify.groups` 一一对应，避免与主干 IO worker 绑到同一 CPU。 |
     |Network|mms.net.request.executor.thread.num| 网络请求处理线程数。                                                  |8| [8, 256]                                                     |
     |Network|mms.net.request.executor.queue.size| 网络请求处理队列大小。                                                 |1024| [1024, 65535]                                                |
-    |Network|mms.net.publisher.worker.cpuset| 组播发送 worker 绑核配置。                                           |10-17| `x-y` 表示绑定到 CPU x 到 y，建议 CPU 数量与集群节点数量匹配。                    |
+    |Network|mms.net.publisher.worker.cpuset| 组播 publisher worker 绑核配置。                                      |10-17| 建议配置 `节点数-1` 个逗号分段，每段对应一个 group，段内 CPU 对应多个 worker；单段范围会自动均分。 |
     |Network|mms.net.subscriber.worker.cpuset| 组播接收 worker 绑核配置。                                           |18-18| `x-y` 表示绑定到 CPU x 到 y，通常配置一个 CPU 即可。                         |
     |Network|mms.net.message.max_buff_size| 单次发送消息的最大 buffer 大小，单位 KB。                                  |70| [1, 4096]，建议不超过 256。                                         |
     |TLS|mms.net.tls.enable| TLS 开关。                                                     |true| true/false                                                   |

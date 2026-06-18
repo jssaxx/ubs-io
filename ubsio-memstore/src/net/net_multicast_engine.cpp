@@ -22,32 +22,54 @@ namespace mms {
 using namespace ock::hcom;
 
 static constexpr uint8_t HCOM_TLS_HEADER_COST = 128;
+static constexpr uint32_t MULTICAST_IO_CONTEXT_COUNT = 65536;
 constexpr uint16_t MULTICAST_CONNECT_TIME_OUT = 60; // 组播建链超时时间(s)
 constexpr uint16_t CONNECT_DONE_RETRY_INTERAL = 1;
 
-static uint16_t CountPublisherWorkerGroups(const std::vector<std::pair<uint32_t, uint32_t>> &cpuSets)
+static bool SplitPublisherWorkerGroup(const std::pair<uint32_t, uint32_t> &cpuSet, uint16_t groupNum,
+                                      std::vector<std::pair<uint32_t, uint32_t>> &workerGroups)
 {
-    uint32_t groupNum = NO_0;
-    for (const auto &cpuSet : cpuSets) {
-        groupNum += cpuSet.second - cpuSet.first + NO_1;
+    uint32_t cpuCount = cpuSet.second - cpuSet.first + NO_1;
+    if (cpuCount < groupNum) {
+        return false;
     }
-    return static_cast<uint16_t>(groupNum);
+    uint32_t cpuId = cpuSet.first;
+    uint32_t baseWorkerNum = cpuCount / groupNum;
+    uint32_t remainder = cpuCount % groupNum;
+    for (uint16_t groupIdx = NO_0; groupIdx < groupNum; ++groupIdx) {
+        uint32_t workerNum = baseWorkerNum + static_cast<uint32_t>(groupIdx < remainder);
+        workerGroups.emplace_back(cpuId, cpuId + workerNum - NO_1);
+        cpuId += workerNum;
+    }
+    return true;
+}
+
+static bool BuildPublisherWorkerGroups(const std::vector<std::pair<uint32_t, uint32_t>> &cpuSets,
+                                       uint16_t groupNum,
+                                       std::vector<std::pair<uint32_t, uint32_t>> &workerGroups)
+{
+    if (cpuSets.size() == static_cast<size_t>(groupNum)) {
+        workerGroups = cpuSets;
+        return true;
+    }
+    if (cpuSets.size() != static_cast<size_t>(NO_1) || groupNum == NO_0) {
+        return false;
+    }
+    return SplitPublisherWorkerGroup(cpuSets.front(), groupNum, workerGroups);
+}
+
+static uint16_t GetPublisherGroupIndex(uint16_t localNodeId, uint16_t peerNodeId)
+{
+    return localNodeId < peerNodeId ? localNodeId : static_cast<uint16_t>(localNodeId - NO_1);
 }
 
 static void AddPublisherWorkerGroups(ock::hcom::PublisherService *publisherService,
-                                     const std::vector<std::pair<uint32_t, uint32_t>> &cpuSets)
+                                     const std::vector<std::pair<uint32_t, uint32_t>> &workerGroups)
 {
-    bool skipFirstGroup = true;
-    uint16_t groupIdx = NO_0;
-    for (const auto &cpuSet : cpuSets) {
-        for (uint32_t cpuId = cpuSet.first; cpuId <= cpuSet.second; ++cpuId) {
-            if (skipFirstGroup) {
-                skipFirstGroup = false;
-                continue;
-            }
-            ++groupIdx;
-            publisherService->AddWorkerGroup(groupIdx, NO_1, std::make_pair(cpuId, cpuId), NO_0);
-        }
+    for (uint16_t groupIdx = NO_1; groupIdx < static_cast<uint16_t>(workerGroups.size()); ++groupIdx) {
+        const auto &cpuSet = workerGroups[groupIdx];
+        uint16_t workerNum = static_cast<uint16_t>(cpuSet.second - cpuSet.first + NO_1);
+        publisherService->AddWorkerGroup(groupIdx, workerNum, cpuSet, NO_0);
     }
 }
 
@@ -105,12 +127,23 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
         return MMS_INVALID_PARAM;
     }
 
-    uint32_t cpuStart = cpuSets.front().first;
+    uint16_t nodeNum = static_cast<uint16_t>(MmsConfig::Instance()->GetCmConfig().nodeNum);
+    uint16_t requiredGroupNum = static_cast<uint16_t>(nodeNum - NO_1);
+    std::vector<std::pair<uint32_t, uint32_t>> workerGroups;
+    if (UNLIKELY(!BuildPublisherWorkerGroups(cpuSets, requiredGroupNum, workerGroups))) {
+        NET_LOG_ERROR("Invalid publisher worker cpu set, range count:" << cpuSets.size()
+                                                                       << ", required group count:"
+                                                                       << requiredGroupNum << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    const auto &firstGroup = workerGroups.front();
     MulticastServiceOptions options;
     options.maxSendRecvDataSize = opt.msgMaxBuffSize + HCOM_TLS_HEADER_COST;
+    options.multicastIoContextCount = MULTICAST_IO_CONTEXT_COUNT;
     options.enableTls = opt.tlsEnable;
-    options.workerGroupCpuIdsRange = std::make_pair(cpuStart, cpuStart);
-    options.workerGroupThreadCount = NO_1;
+    options.workerGroupCpuIdsRange = firstGroup;
+    options.workerGroupThreadCount = static_cast<uint16_t>(firstGroup.second - firstGroup.first + NO_1);
     options.workerGroupMode = ock::hcom::NET_BUSY_POLLING;
     options.qpRecvQueueSize = NO_4096;
     options.qpSendQueueSize = NO_4096;
@@ -123,7 +156,7 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
         options.protocol = UBSHcomNetDriverProtocol::TCP;
     }
 
-    mPublisherWorkGroupNum = CountPublisherWorkerGroups(cpuSets);
+    mPublisherWorkGroupNum = static_cast<uint16_t>(workerGroups.size());
     mPublisherServiceName = "Publisher";
     mPublisherService = ock::hcom::PublisherService::Create(mPublisherServiceName, options);
     if (mPublisherService == nullptr) {
@@ -140,10 +173,11 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
         SetDriverTlsCallback(mPublisherService, opt);
     }
 
-    AddPublisherWorkerGroups(mPublisherService, cpuSets);
+    AddPublisherWorkerGroups(mPublisherService, workerGroups);
 
     std::string url = "tcp://" + oobIp + ":" + std::to_string(oobPort);
     mPublisherService->GetConfig().SetDeviceIpMask({ipMask});
+    mPublisherService->GetConfig().SetPeriodicThreadNum(NO_4);
     mPublisherService->Bind(url, std::bind(&NetMulticastEngine::NewSubscriptionCallBack, this, std::placeholders::_1));
     mPublisherService->RegisterBrokenHandler(
         std::bind(&NetMulticastEngine::PublisherSubscriberEpBroken, this, std::placeholders::_1));
@@ -328,6 +362,14 @@ BResult NetMulticastEngine::CreateSubscriber(uint16_t peerNodeId, const ::std::s
 
     std::string url = "tcp://" + ip + ":" + std::to_string(port);
     auto connectCount = MmsConfig::Instance()->GetNetConfig().subscriberConnectCount;
+    uint16_t localNodeId = Cm::Instance()->GetLocalNid();
+    uint16_t nodeNum = static_cast<uint16_t>(MmsConfig::Instance()->GetCmConfig().nodeNum);
+    if (UNLIKELY(localNodeId >= nodeNum || peerNodeId >= nodeNum || localNodeId == peerNodeId)) {
+        NET_LOG_ERROR("Invalid node for subscriber, local node:" << localNodeId << ", peer node:" << peerNodeId
+                                                                 << ", node count:" << nodeNum << ".");
+        return MMS_INVALID_PARAM;
+    }
+    uint16_t publisherGroupIdx = GetPublisherGroupIndex(localNodeId, peerNodeId);
     auto it = mSubScribers.find(ip);
     if (it != mSubScribers.end() && it->second.size() >= connectCount) {
         NET_LOG_INFO("Subscriber to " << url << " is exist, count:" << it->second.size() << ", skip.");
@@ -335,7 +377,8 @@ BResult NetMulticastEngine::CreateSubscriber(uint16_t peerNodeId, const ::std::s
     }
 
     ock::hcom::NetRef<ock::hcom::Subscriber> subscriber = nullptr;
-    if ((mSubscriberService->CreateSubscriber(url, subscriber) != ock::hcom::SER_OK) || (subscriber == nullptr)) {
+    if ((mSubscriberService->CreateSubscriber(url, publisherGroupIdx, subscriber) != ock::hcom::SER_OK) ||
+        (subscriber == nullptr)) {
         NET_LOG_ERROR("Subscription failed, url:" << url << ".");
         return MMS_NET_RETRY;
     }
@@ -344,7 +387,8 @@ BResult NetMulticastEngine::CreateSubscriber(uint16_t peerNodeId, const ::std::s
     auto &subscribers = mSubScribers[ip];
     subscribers.emplace_back(subscriber);
     NET_LOG_INFO("Subscribed to node success, url:" << url << ", epId:" << subscriber->GetEp()->Id()
-                                                    << ", count:" << subscribers.size() << "/" << connectCount << ".");
+                                                    << ", count:" << subscribers.size() << "/" << connectCount
+                                                    << ", publisherGroupIdx:" << publisherGroupIdx << ".");
     return MMS_OK;
 }
 
