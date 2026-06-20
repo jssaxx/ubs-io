@@ -62,6 +62,10 @@ public:
 
             if (options.logType == 1) { // file
                 auto logDir = logFilePath;
+                if (!FileUtil::MakeDirRecursive(logDir, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) {
+                    std::cout << "Failed to create log dir." << std::endl;
+                    return -1;
+                }
                 bool result = FileUtil::CanonicalPath(logDir);
                 if (!result) {
                     std::cout << "Failed to check log dir." << std::endl;

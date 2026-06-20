@@ -158,9 +158,9 @@ if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
 
+
 if [[ "$CLI_FLAG" == "ON" && "$BUILD_UT" != "ON" ]]; then
     cd ${PROJ_DIR}/../ubsio-common/cli
-    dos2unix build.sh
     CLI_BUILD_FLAGS=""
     if [[ "$SANITIZER_FLAG" == "ON" ]]; then
         CLI_BUILD_FLAGS+="--san=asan"
@@ -189,7 +189,6 @@ if [[ "$arch" == "aarch64" ]]; then
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/include
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
     cd ${PROJ_DIR}/../ubsio-kv/
-    dos2unix build.sh
     bash build.sh
     cd ${PROJ_DIR}/dist
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.

@@ -16,6 +16,7 @@
 #include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
+#include "bio_file_util.h"
 #include "bio_functions.h"
 #include "bio_log.h"
 #include "bio_monotonic.h"
@@ -106,6 +107,7 @@ BResult BioServer::InitializeRuntime()
 #ifdef DEBUG_UT
     path = "./";
 #endif
+    FileUtil::MakeDirRecursive(path, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     std::string logPath = path + "bio" + std::to_string(getpid()) + ".log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
@@ -242,7 +244,14 @@ BResult BioServer::BioConfigInit()
 #ifdef DEBUG_UT
     const std::string confPath = "./";
 #else
-    const std::string confPath = "/etc/boostio/";
+    std::string confPath = "/etc/boostio/";
+    const char *envConfDir = getenv("MMC_UBSIO_CONFIG_PATH");
+    if (envConfDir != nullptr && envConfDir[0] != '\0') {
+        confPath = envConfDir;
+        if (confPath.back() != '/') {
+            confPath += '/';
+        }
+    }
 #endif
     result = mConfig->Initialize(confPath);
     BIO_TP_END;
@@ -289,6 +298,7 @@ BResult BioServer::BioTraceInit()
 #else
     const std::string dumpDir = "/var/log/boostio/trace/";
 #endif
+    FileUtil::MakeDirRecursive(dumpDir, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");

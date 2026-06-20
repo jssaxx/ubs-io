@@ -1,10 +1,3 @@
-exec_program(dos2unix ${PROJECT_SOURCE_DIR}/configs ARGS *.conf RETURN_VALUE SUCCESS)
-if (SUCCESS EQUAL 1)
-    message(FATAL_ERROR "-- failed to dos2unix conf file")
-else()
-    message("-- dos2unix conf files done")
-endif (SUCCESS EQUAL 1)
-
 set(TARGET_INSTALL_CONF ${TARGET_INSTALL_DIR}/conf)
 if (CMAKE_BUILD_TYPE STREQUAL "debug")
     file(GLOB CONF_FILES *.conf)
