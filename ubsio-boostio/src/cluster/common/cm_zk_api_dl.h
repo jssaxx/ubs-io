@@ -13,7 +13,7 @@
 #ifndef CM_ZK_API_DL_H
 #define CM_ZK_API_DL_H
 
-#include "zookeeper.h"
+#include "zookeeper/zookeeper.h"
 
 #ifdef __cplusplus
 extern "C" {

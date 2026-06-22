@@ -50,16 +50,6 @@ message(STATUS "3rdparty src dir ${PROJECT_3RDPARTY_SRC_DIR}")
 message(STATUS "3rdparty bin dir ${PROJECT_3RDPARTY_BIN_DIR}")
 message(STATUS "target install dir ${TARGET_INSTALL_DIR}")
 
-if (NOT DEFINED OPEN_ZK)
-    set(OPEN_ZK OFF)
-endif()
-
-if ("${OPEN_ZK}" STREQUAL "ON")
-    set(PROJECT_ZOOKEEPER_INCLUDE_DIR ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include/zookeeper)
-else()
-    set(PROJECT_ZOOKEEPER_INCLUDE_DIR ${3RDPARTY_SRC_DIR}/zookeeper)
-endif()
-
 include_directories(
         ${SRC_DIR}/common
         ${SRC_DIR}/net
@@ -83,7 +73,6 @@ include_directories(
         ${SRC_DIR}/interceptor/server
         ${SRC_DIR}/security/expiration_check
         ${SRC_DIR}/security/openssl_tools
-        ${PROJECT_ZOOKEEPER_INCLUDE_DIR}
         ${3RDPARTY_SRC_DIR}/hadoop
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include

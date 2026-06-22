@@ -73,7 +73,7 @@ int ZookeeperApiLoad(void)
         return CM_OK;
     }
 
-    const char *zkLibName = "libzookeeper_mt.so";
+    const char *zkLibName = "libzookeeper_mt.so.2";
     gZkHandle = dlopen(zkLibName, RTLD_LAZY | RTLD_GLOBAL);
     if (gZkHandle == NULL) {
         CM_LOGERROR("Failed to dlopen %s: %s", zkLibName, dlerror());

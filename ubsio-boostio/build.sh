@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--zk]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
@@ -24,7 +24,6 @@ BUILD_UT=OFF
 TP_FLAG=OFF
 CLI_FLAG=OFF
 PROMETHEUS_FLAG=OFF
-ZK_FLAG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -61,9 +60,6 @@ while true; do
             shift ;;
         --pms )
             PROMETHEUS_FLAG=ON
-            shift ;;
-        --zk )
-            ZK_FLAG=ON
             shift ;;
 		    -h | -help )
             usage
@@ -128,12 +124,6 @@ else
     CMAKE_FLAGS+="-DOPEN_PROMETHEUS=OFF "
 fi
 
-if [[ "$ZK_FLAG" == 'ON' ]]; then
-    CMAKE_FLAGS+="-DOPEN_ZK=ON "
-else
-    CMAKE_FLAGS+="-DOPEN_ZK=OFF "
-fi
-
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 16" # CI环境核数会波动, 默认只用16
@@ -149,10 +139,6 @@ $BUILD_CMD || {
 	  exit 1
 }
 cd ${PROJ_DIR}/dist
-if [[ "$ZK_FLAG" == 'ON' ]] && compgen -G "3rdparty/zookeeper/lib/libzookeeper_mt.so*" > /dev/null; then
-    \cp -d 3rdparty/zookeeper/lib/libzookeeper_mt.so* bio/lib/.
-fi
-
 if [[ "$PROMETHEUS_FLAG" == 'ON' ]];then
 	  \cp 3rdparty/prometheus/lib64/*.so* bio/lib/.
 fi
@@ -172,4 +158,3 @@ fi
 rm -rf boostio
 mv bio boostio
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
-
