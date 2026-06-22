@@ -343,6 +343,12 @@ private:
     BResult AllocDataMessageBuffer(uint64_t length, uintptr_t &address);
     void FreeDataMessageBuffer(uintptr_t &address);
     void FillBatchGetBufferInfo(GetKeyInfo &keyInfo, uintptr_t address, uint64_t length);
+    inline bool IsDataMsgMemAddr(uintptr_t address) const
+    {
+        return mDataMsgMemAddr != nullptr && mDataMsgMemSize != 0 &&
+               address >= reinterpret_cast<uintptr_t>(mDataMsgMemAddr) &&
+               address < reinterpret_cast<uintptr_t>(mDataMsgMemAddr) + mDataMsgMemSize;
+    }
 
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     void InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota);
