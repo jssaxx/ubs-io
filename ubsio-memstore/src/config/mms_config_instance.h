@@ -28,6 +28,10 @@ const auto CRC_SWITCH = std::make_pair("mms.crc.switch", "false");
 const auto SEQUENCE_SWITCH = std::make_pair("mms.sequence.switch", "false");
 const auto MULTICAST_SWITCH = std::make_pair("mms.multicast.switch", "true");
 const auto DATA_CHANGE_CALLBACK_SWITCH = std::make_pair("mms.data.change.callback.switch", "false");
+const auto NOTIFY_SHM_QUEUE_DEPTH = std::make_pair("mms.notify.shm.queue.depth", 65536);
+const auto NOTIFY_SHM_WORKER_NUM = std::make_pair("mms.notify.shm.worker.num", 1);
+const auto NOTIFY_SHM_WORKER_CPUSET = std::make_pair("mms.notify.shm.worker.cpuset", "54-54");
+const auto NOTIFY_SHM_BUSY_POLLING = std::make_pair("mms.notify.shm.busy_polling", "true");
 const auto ART_QUERY_SWITCH = std::make_pair("mms.art.query.switch", "false");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
 
@@ -43,8 +47,6 @@ const auto NET_RPC_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.rpc.worker.gro
 const auto NET_IPC_BUSY_POLL_MODE = std::make_pair("mms.net.ipc.busy_polling_mode", "false");
 const auto NET_IPC_WORKER_GROUPS = std::make_pair("mms.net.ipc.worker.groups", "4,4");
 const auto NET_IPC_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.worker.groups.cpuset", "2-5,6-9");
-const auto NET_NOTIFY_WORKER_GROUPS = std::make_pair("mms.net.ipc.notify.groups", "1");
-const auto NET_NOTIFY_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.notify.groups.cpuset", "15-15");
 const auto NET_PUBLISHER_WORKER_CPUSET = std::make_pair("mms.net.publisher.worker.cpuset", "10-17");
 const auto NET_SUBSCRIBER_WORKER_CPUSET = std::make_pair("mms.net.subscriber.worker.cpuset", "18-18");
 const auto NET_SUBSCRIBER_CONNECT_COUNT = std::make_pair("mms.net.subscriber.connect.count", 1);
@@ -93,10 +95,6 @@ public:
         std::string ipcWorkerGroups;
         std::string ipcWorkerGroupsCpuSet;
         uint16_t ipcWorkerGroupsNum;
-        std::string notifyWorkerGroups;
-        std::string notifyWorkerGroupsCpuSet;
-        uint16_t notifyWorkerGroupsNum;
-        uint16_t notifyGroupIndex = 0;
 
         std::vector<std::pair<uint32_t, uint32_t>> publisherWorkerCpuSets;
         std::pair<long, long> subscriberWorkerCpuSet;
@@ -142,6 +140,13 @@ public:
         bool isSeparateMode = true;
     };
 
+    struct NotifyShmConfig {
+        uint32_t queueDepth = 65536;
+        uint16_t workerNum = 2;
+        std::vector<uint16_t> workerCpuIds;
+        bool busyPolling = true;
+    };
+
 public:
     static const MmsConfigPtr &Instance()
     {
@@ -173,6 +178,11 @@ public:
         return mBasicConfig;
     }
 
+    const NotifyShmConfig &GetNotifyShmConfig() const noexcept
+    {
+        return mNotifyShmConfig;
+    }
+
 private:
     void LoadDefaultNetConf();
 
@@ -200,13 +210,12 @@ private:
 
     BResult AutoConfigIpcGroup(const ConfigurationPtr &conf);
 
-    BResult AutoConfigNotifyGroup(const ConfigurationPtr &conf);
-
     BResult AutoConfigNet(const ConfigurationPtr &conf);
 
     BResult AutoConfigCm(const ConfigurationPtr &conf);
 
     BResult AutoConfigBasic(const ConfigurationPtr &conf);
+    BResult AutoConfigNotifyShm(const ConfigurationPtr &conf);
 
     BResult CheckNumaInfo(uint16_t numaNum, uint16_t numaId[]);
 
@@ -215,6 +224,7 @@ private:
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     BasicConfig mBasicConfig;
+    NotifyShmConfig mNotifyShmConfig;
     bool mInited{ false };
 };
 }

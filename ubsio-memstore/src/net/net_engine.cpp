@@ -98,8 +98,7 @@ static BResult AddWorkerGroups(UBSHcomService *service, const WorkerGroupConfig 
     return MMS_OK;
 }
 
-static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGroupConfig &ipcConfig,
-                                       const WorkerGroupConfig &notifyConfig)
+static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGroupConfig &ipcConfig)
 {
     WorkerGroupConfig extraIpcConfig;
     if (ipcConfig.groups.size() > NO_1) {
@@ -107,11 +106,7 @@ static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGrou
         extraIpcConfig.cpuSets.assign(ipcConfig.cpuSets.begin() + NO_1, ipcConfig.cpuSets.end());
     }
 
-    auto ret = AddWorkerGroups(service, extraIpcConfig, NO_1);
-    if (ret != MMS_OK) {
-        return ret;
-    }
-    return AddWorkerGroups(service, notifyConfig, static_cast<uint32_t>(ipcConfig.groups.size()));
+    return AddWorkerGroups(service, extraIpcConfig, NO_1);
 }
 
 BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
@@ -407,8 +402,7 @@ BResult NetEngine::PrepareIpcTls(const NetOptions &opt)
     return result;
 }
 
-BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig,
-                                      const WorkerGroupConfig &notifyConfig)
+BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig)
 {
     if (!isOobSvr) {
         return MMS_OK;
@@ -424,7 +418,7 @@ BResult NetEngine::AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ip
         return MMS_OK;
     }
 
-    auto ret = AddExtraIpcWorkerGroups(mIpcService, ipcConfig, notifyConfig);
+    auto ret = AddExtraIpcWorkerGroups(mIpcService, ipcConfig);
     if (ret != MMS_OK) {
         NET_LOG_ERROR("Add extra ipc worker groups failed, ret:" << ret << ".");
     }
@@ -462,17 +456,11 @@ BResult NetEngine::StartIpcService(const NetOptions &opt)
     WorkerGroupConfig ipcConfig;
     auto ret = SplitWorkerGroupConfig(opt.workerGroups, opt.workerGroupsCpuSet, ipcConfig, "ipc");
     ChkTrue(ret == MMS_OK, ret, "Split ipc worker group config failed, ret:" << ret << ".");
-    WorkerGroupConfig notifyConfig;
-    if (opt.notifyWorkerGroupsEnable) {
-        ret = SplitWorkerGroupConfig(opt.notifyWorkerGroups, opt.notifyWorkerGroupsCpuSet, notifyConfig, "notify");
-        ChkTrue(ret == MMS_OK, ret, "Split notify worker group config failed, ret:" << ret << ".");
-    }
-
     ret = CreateIpcService(opt, isOobSvr, ipcConfig);
     ChkTrue(ret == MMS_OK, ret, "Create ipc service failed, ret:" << ret << ".");
     ret = PrepareIpcTls(opt);
     ChkTrue(ret == MMS_OK, ret, "Prepare ipc tls failed, ret:" << ret << ".");
-    ret = AddIpcWorkerGroups(isOobSvr, ipcConfig, notifyConfig);
+    ret = AddIpcWorkerGroups(isOobSvr, ipcConfig);
     ChkTrue(ret == MMS_OK, ret, "Add ipc worker groups failed, ret:" << ret << ".");
 
     return StartCreatedIpcService(opt, isOobSvr);

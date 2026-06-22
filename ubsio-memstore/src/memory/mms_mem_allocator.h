@@ -37,6 +37,9 @@ constexpr uint64_t BUDDY_CACHE_REFILL_COUNT = 64; // 每次refill 64个
 constexpr uint64_t BUDDY_CACHE_DRAIN_COUNT = 32; // cache满了移出去32个
 constexpr uint16_t BUDDY_THREAD_CACHE_MAX_ORDER = 4; // 缓存order 0到4，只缓存小块
 constexpr uint16_t BUDDY_THREAD_CACHE_ORDER_NUM = BUDDY_THREAD_CACHE_MAX_ORDER + NO_1;
+constexpr uint16_t NUMA_POOL_SWITCH_THRESHOLD = 3;
+constexpr uint16_t NUMA_POOL_REPROBE_INTERVAL = 256;
+constexpr uint16_t INVALID_NUMA_POOL_ID = UINT16_MAX;
 
 // 块的头部，用于存储块的信息
 struct BlockHeader {
@@ -86,6 +89,7 @@ public:
 
     BResult ReturnBuddyBlockToPool(uintptr_t blockAddr);
     BResult ReturnBatchBuddyBlocksToPool(const uintptr_t blockAddrs[], uint64_t count);
+    BResult ReturnBatchBlocksToPool(uint64_t blockIndex, const std::vector<uintptr_t> &blockAddrs);
 
     inline bool IsBuddyMode() const
     {
@@ -398,6 +402,7 @@ public:
         mNumaId = GetCurCPUNumaNode();
         mMemAllocator = allocator;
         allocator->UpdateNumaId(mNumaId);
+        mHomeNumaId = mNumaId;
         allocator->PutThreadCacheMap(std::this_thread::get_id(), this);
     }
 
@@ -418,6 +423,10 @@ public:
     {
         return mNumaId;
     }
+
+    uint16_t GetAllocNumaId();
+
+    void RecordAllocNumaId(uint16_t preferNumaId, uint16_t allocNumaId);
 
     BResult GetOneBlockFromCache(uint64_t blockIndex, uintptr_t &blockAddr);
 
@@ -441,6 +450,10 @@ private:
     std::vector<uintptr_t> mMemCaches[MAX_BLOCK_NUM];
     std::vector<uintptr_t> mBuddyCaches[BUDDY_THREAD_CACHE_ORDER_NUM];
     uint16_t mNumaId;
+    uint16_t mHomeNumaId;
+    uint16_t mNumaFallbackCount = 0;
+    uint16_t mNumaFallbackId = INVALID_NUMA_POOL_ID;
+    uint16_t mNumaReprobeCount = 0;
 
     MmsMemAllocatorPtr mMemAllocator = nullptr;
 };

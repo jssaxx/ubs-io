@@ -13,6 +13,7 @@
 #ifndef MMS_CLIENT_H
 #define MMS_CLIENT_H
 
+#include <atomic>
 #include <mutex>
 
 #include "net_engine.h"
@@ -20,6 +21,7 @@
 #include "mms_execution.h"
 #include "mms_client_log.h"
 #include "mms_kv_client.h"
+#include "mms_notify_shm_client.h"
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include "client_diagnose.h"
@@ -165,21 +167,16 @@ private:
 
     BResult CheckServiceState(std::atomic<bool> &serviceable);
     BResult InitExpireChecker(const MmsOptions &options);
-    BResult RegisterNotifyHandler();
     BResult RegisterClientChannelBrokenHandler();
     BResult StartClientServiceExecutor();
     BResult ConnectLocalServer();
-    void HandleClientChannelBroken(uint32_t pid);
-    void HandleNotifyChannelBroken();
+    void HandleClientChannelBroken();
     void MarkClientOffline();
     BResult WaitAndResetResource();
     BResult ReconnectLocalServer(uint32_t interval);
     BResult RebuildServices(uint32_t interval);
-    void ReregisterNotifyCallback();
-    BResult HandleNotifyDataChange(ServiceContext &ctx);
-    BResult HandleSingleNotifyDataChange(const NotifyDataChangeItem &item);
-    BResult StartNotifyCallbackService();
-    BResult StartNotifyChannel();
+    BResult ReregisterNotifyCallback(uint32_t interval);
+    BResult StartNotifyConsumerLocked();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -211,11 +208,9 @@ private:
     ServiceCallback mServiceCallback = nullptr;
     std::atomic<NotifyCallback> mNotifyCallback {nullptr};
     std::atomic<void *> mNotifyUserData {nullptr};
-    ExecutorServicePtr mNotifyCallbackService {nullptr};
-    std::mutex mNotifyCallbackServiceLock;
-    ChannelPtr mNotifyChannel = nullptr;
-    uint32_t mNotifyPid = 0;
-    uint16_t mNotifyGroupIndex = 0;
+    std::mutex mNotifyMutex;
+    MmsNotifyShmConsumer mNotifyShmConsumer;
+    uint32_t mServerPid = 0;
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};

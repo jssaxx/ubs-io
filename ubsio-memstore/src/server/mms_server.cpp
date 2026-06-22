@@ -452,13 +452,6 @@ void MmsServer::FillIpcNetOptions(NetOptions &netOptions)
     netOptions.workerGroups = netConfig.ipcWorkerGroups;
     netOptions.workerGroupsCpuSet = netConfig.ipcWorkerGroupsCpuSet;
     netOptions.workerGroupsNum = netConfig.ipcWorkerGroupsNum;
-    if (mConfig->GetBasicConfig().dataChangeCallbackSwitch) {
-        netOptions.notifyWorkerGroups = netConfig.notifyWorkerGroups;
-        netOptions.notifyWorkerGroupsCpuSet = netConfig.notifyWorkerGroupsCpuSet;
-        netOptions.notifyWorkerGroupsNum = netConfig.notifyWorkerGroupsNum;
-        netOptions.notifyWorkerGroupsEnable = true;
-        netOptions.workerGroupsNum = netConfig.ipcWorkerGroupsNum + netConfig.notifyWorkerGroupsNum;
-    }
     netOptions.role = NET_SERVER;
 }
 
@@ -482,10 +475,6 @@ BResult MmsServer::RegisterServerChannelBrokenHandler()
     auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
         if (pid == 0) {
             NetReConnect(nodeId);
-            return;
-        }
-        if (mKvServer != nullptr) {
-            mKvServer->RemoveNotifyClient(pid);
         }
     };
     auto ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);

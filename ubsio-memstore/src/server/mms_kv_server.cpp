@@ -116,14 +116,13 @@ BResult MmsKvServer::Initialize()
     mArtQuerySwitch = MmsServer::Instance()->GetConfig()->GetBasicConfig().artQuerySwitch;
     mDataChangeCallbackSwitch = MmsServer::Instance()->GetConfig()->GetBasicConfig().dataChangeCallbackSwitch;
     bool isSeparate = MmsServer::Instance()->GetConfig()->GetBasicConfig().isSeparateMode;
+    mSeparateMode = isSeparate;
     if (mDataChangeCallbackSwitch && isSeparate) {
-        auto notifyRet = mNotifyDispatcher->RegisterRemoteNotifyHandler(
-            [this](const NotifyEvent *events, uint16_t eventNum) { NotifyRemoteClientBatch(events, eventNum); });
-        if (notifyRet != RET_MMS_OK) {
-            LOG_ERROR("Register remote notify handler failed, ret:" << notifyRet << ".");
-            return MMS_ERR;
+        auto notifyRet = mNotifyShmPublisher.Initialize(MmsServer::Instance()->GetConfig()->GetNotifyShmConfig());
+        if (notifyRet != MMS_OK) {
+            LOG_ERROR("Initialize notify shm publisher failed, ret:" << notifyRet << ".");
+            return notifyRet;
         }
-        mRemoteNotifyEnable = true;
     }
 
     allocFunc = [this](uint64_t size, uint16_t &numaId, uintptr_t &blockAddr) {
@@ -212,8 +211,6 @@ void MmsKvServer::RegisterOpcode()
     mNetEngine->RegisterNewRequestHandler(MMS_OP_C_DELETE_BY_RANGE,
         std::bind(&MmsKvServer::HandleRangeDelete, this, std::placeholders::_1));
 
-    mNetEngine->RegisterNewRequestHandler(MMS_OP_C_NOTIFY_SUBSCRIBE,
-        std::bind(&MmsKvServer::HandleNotifySubscribe, this, std::placeholders::_1));
 }
 
 void MmsKvServer::FreeBlocks(std::vector<IOCtxItem> &ctxItems)
@@ -643,7 +640,6 @@ BResult MmsKvServer::HandleBasic(ServiceContext &ctx)
     rsp.enableCrc = config->GetBasicConfig().crcSwitch;
     rsp.artQuerySwitch = config->GetBasicConfig().artQuerySwitch;
     rsp.dataChangeCallbackSwitch = config->GetBasicConfig().dataChangeCallbackSwitch;
-    rsp.notifyGroupIndex = config->GetNetConfig().notifyGroupIndex;
     rsp.maxMsgBuffSize = config->GetNetConfig().msgMaxBuffSize;
     rsp.valueBlockSize = config->GetMemConfig().valueBlockSize;
 
@@ -673,91 +669,26 @@ BResult MmsKvServer::HandleServiceable(ServiceContext &ctx)
     return MMS_OK;
 }
 
-BResult MmsKvServer::HandleNotifySubscribe(ServiceContext &ctx)
+void MmsKvServer::AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
+    const char *key, uint16_t keyLen, OperateType opType)
 {
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(NotifySubscribeReq)) || UNLIKELY(ctx.MessageData() == nullptr)) {
-        LOG_ERROR("Receive notify subscribe len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
-        return MMS_OK;
-    }
-
-    auto *req = static_cast<NotifySubscribeReq *>(ctx.MessageData());
-    NetChannelUpCtx upCtx(ctx.Channel()->GetUpCtx());
-    uint32_t pid = upCtx.procId;
-    bool invalidNotifyPid = ((req->notifyPid & NOTIFY_PID_FLAG) == 0) ||
-        ((req->notifyPid & ~NOTIFY_PID_FLAG) != pid);
-    bool invalidNotifyGroup = req->notifyGroupIndex >= mNetEngine->GetGroupNum(CONNECT_IPC);
-    if (UNLIKELY(req->enable && (invalidNotifyPid || invalidNotifyGroup))) {
-        LOG_ERROR("Notify subscribe from invalid notify pid or group, notifyPid:" << req->notifyPid <<
-            ", notifyGroupIndex:" << req->notifyGroupIndex << ".");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
-        return MMS_OK;
-    }
-
-    if (!mDataChangeCallbackSwitch) {
-        LOG_DEBUG("Data change callback switch is off, pid:" << pid << ".");
-        mNetEngine->Reply(ctx, MMS_OK, nullptr, 0);
-        return MMS_OK;
-    }
-    if (UNLIKELY(!mRemoteNotifyEnable)) {
-        LOG_ERROR("Remote notify is not enabled.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
-        return MMS_OK;
-    }
-
-    if (req->enable) {
-        AddNotifyClient(req->notifyPid, req->notifyGroupIndex);
-    } else {
-        RemoveNotifyClient(req->notifyPid);
-    }
-    LOG_INFO("Notify subscribe success, enable:" << req->enable << ", pid:" << pid << ", notifyPid:" <<
-        req->notifyPid << ", notifyGroupIndex:" << req->notifyGroupIndex << ".");
-    mNetEngine->Reply(ctx, MMS_OK, nullptr, 0);
-    return MMS_OK;
+    items[itemNum++] = {key, keyLen, static_cast<uint16_t>(opType)};
 }
 
-void MmsKvServer::AddNotifyClient(uint32_t pid, uint32_t groupIndex)
+void MmsKvServer::NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint32_t itemNum)
 {
-    LOG_INFO("Add notify client, pid:" << pid << ", groupIndex:" << groupIndex << ".");
-    mNotifyClientGroupIndex.store(groupIndex, std::memory_order_release);
-    mNotifyClientPid.store(pid, std::memory_order_release);
-}
-
-void MmsKvServer::RemoveNotifyClient(uint32_t pid)
-{
-    LOG_INFO("Remove notify client, pid:" << pid << ".");
-    if (mNotifyClientPid.load(std::memory_order_acquire) == pid) {
-        mNotifyClientPid.store(0, std::memory_order_release);
-        mNotifyClientGroupIndex.store(0, std::memory_order_release);
-    }
-}
-
-void MmsKvServer::NotifyRemoteClientBatch(const NotifyEvent *events, uint16_t eventNum)
-{
-    uint32_t pid = mNotifyClientPid.load(std::memory_order_acquire);
-    if (pid == 0 || events == nullptr || eventNum == 0) {
+    if (itemNum == 0) {
         return;
     }
-
-    NotifyDataChangeBatchReq req{};
-    req.head = {0, MMS_OP_NOTIFY_DATA_CHANGE, 0, 0, 0};
-    req.itemNum = eventNum;
-    for (uint16_t index = 0; index < eventNum; ++index) {
-        req.items[index].keyLen = events[index].keyLen;
-        req.items[index].opType = static_cast<uint16_t>(events[index].opType);
-        auto ret = memcpy_s(req.items[index].key, MAX_KEY_SIZE, events[index].key, events[index].keyLen + NO_1);
-        if (UNLIKELY(ret != EOK)) {
-            LOG_ERROR("Copy notify key failed, key:" << events[index].key << ".");
-            return;
+    if (mSeparateMode) {
+        if (UNLIKELY(!mNotifyShmPublisher.PublishBatch(items, itemNum))) {
+            LOG_ERROR("Publish notify shm item batch failed, itemNum:" << itemNum << ".");
         }
+        return;
     }
-
-    uint32_t groupIndex = mNotifyClientGroupIndex.load(std::memory_order_acquire);
-    auto ret = mNetEngine->AsyncSendWithoutResponse<NotifyDataChangeBatchReq>(INVALID_NID, pid, groupIndex,
-        MMS_OP_NOTIFY_DATA_CHANGE, req);
-    if (UNLIKELY(ret != MMS_OK)) {
-        LOG_ERROR("Send notify batch to client failed, pid:" << pid << ", itemNum:" << eventNum << ", ret:" << ret <<
-            ".");
+    for (uint32_t index = 0; index < itemNum; ++index) {
+        auto opType = static_cast<OperateType>(items[index].opType);
+        mNotifyDispatcher->Notify(items[index].key, items[index].keyLen, opType);
     }
 }
 
@@ -959,6 +890,9 @@ BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChang
     }
 
     BResult result = MMS_OK;
+    uint32_t notifyEventNum = 0;
+    bool notifyEnabled = notifyDataChange && mDataChangeCallbackSwitch &&
+        (!mSeparateMode || mNotifyShmPublisher.IsActive());
     for (index = 0; index < itemNum; index++) {
         char *valueAddr = nullptr;
         if (mServiceable.load(std::memory_order_acquire)) {
@@ -982,12 +916,15 @@ BResult MmsKvServer::PutLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChang
             result = ret;
             continue;
         }
-        if ((notifyDataChange && mDataChangeCallbackSwitch && itemListPut[index].isNotify != 0) &&
-            LIKELY(ret == MMS_OK)) {
-            MMS_TRACE_START(SERVER_TRACE_NOTIFY_DATA_CHANGE);
-            mNotifyDispatcher->Notify(itemListPut[index].key, itemListPut[index].keyLen, OP_PUT);
-            MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
+        if (notifyEnabled && itemListPut[index].isNotify != 0 && LIKELY(ret == MMS_OK)) {
+            AppendNotifyItem(notifyPutItems, notifyEventNum,
+                itemListPut[index].key, itemListPut[index].keyLen, OP_PUT);
         }
+    }
+    if (notifyEventNum != 0) {
+        MMS_TRACE_START(SERVER_TRACE_NOTIFY_DATA_CHANGE);
+        NotifyDataChangeBatch(notifyPutItems.data(), notifyEventNum);
+        MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
     }
     return result;
 }
@@ -1002,6 +939,14 @@ thread_local std::vector<DecodeUpdateItem> MmsKvServer::itemListUpdate = [] {
 
 thread_local std::vector<DecodeDeleteItem> MmsKvServer::itemListDelete = [] {
     return std::vector<DecodeDeleteItem>(mMaxDeleteItemNum);
+}();
+
+thread_local std::vector<NotifyShmPublishItem> MmsKvServer::notifyPutItems = [] {
+    return std::vector<NotifyShmPublishItem>(mMaxPutItemNum);
+}();
+
+thread_local std::vector<NotifyShmPublishItem> MmsKvServer::notifyDeleteItems = [] {
+    return std::vector<NotifyShmPublishItem>(mMaxDeleteItemNum);
 }();
 
 BResult MmsKvServer::HandleUpdate(ServiceContext &ctx)
@@ -1615,6 +1560,9 @@ BResult MmsKvServer::DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataCh
     }
 
     BResult result = MMS_OK;
+    uint32_t notifyEventNum = 0;
+    bool notifyEnabled = notifyDataChange && mDataChangeCallbackSwitch &&
+        (!mSeparateMode || mNotifyShmPublisher.IsActive());
     for (index = 0; index < itemNum; index++) {
         MMS_TRACE_START(CACHE_TRACE_DELETE);
         ret = mCache->Delete(itemListDelete[index].key, itemListDelete[index].keyLen, itemListDelete[index].version);
@@ -1626,12 +1574,15 @@ BResult MmsKvServer::DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataCh
             result = ret;
             continue;
         }
-        if ((notifyDataChange && mDataChangeCallbackSwitch && itemListDelete[index].isNotify != 0) &&
-            LIKELY(ret == MMS_OK)) {
-            MMS_TRACE_START(SERVER_TRACE_NOTIFY_DATA_CHANGE);
-            mNotifyDispatcher->Notify(itemListDelete[index].key, itemListDelete[index].keyLen, OP_DELETE);
-            MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
+        if (notifyEnabled && itemListDelete[index].isNotify != 0 && LIKELY(ret == MMS_OK)) {
+            AppendNotifyItem(notifyDeleteItems, notifyEventNum,
+                itemListDelete[index].key, itemListDelete[index].keyLen, OP_DELETE);
         }
+    }
+    if (notifyEventNum != 0) {
+        MMS_TRACE_START(SERVER_TRACE_NOTIFY_DATA_CHANGE);
+        NotifyDataChangeBatch(notifyDeleteItems.data(), notifyEventNum);
+        MMS_TRACE_END(SERVER_TRACE_NOTIFY_DATA_CHANGE, MMS_OK);
     }
     return result;
 }

@@ -229,7 +229,7 @@ bool MmsNotifyDispatcher::PushEvent(const NotifyEvent &event)
             return false;
         }
         uint64_t fullCount = mQueueFullCount.fetch_add(NO_1, std::memory_order_relaxed) + NO_1;
-        LOG_ERROR("Server notify queue full, count:" << fullCount << ", key:" << event.key << ".");
+        LOG_WARN("Server notify queue full, count:" << fullCount << ", key:" << event.key << ".");
         while (sem_wait(&mFreeSlots) != 0) {
             if (errno != EINTR) {
                 LOG_ERROR("Wait notify free sem failed, errno:" << errno << ".");
@@ -307,13 +307,13 @@ void MmsNotifyDispatcher::HandleEventBatch(NotifyEvent *events, uint16_t eventNu
 
 void MmsNotifyDispatcher::WorkerLoop()
 {
-    NotifyEvent events[NOTIFY_DATA_CHANGE_BATCH_NUM];
+    NotifyEvent events[BATCH_EVENT_NUM];
     while (true) {
         if (!WaitEvent(events[0])) {
             break;
         }
         uint16_t eventNum = NO_1;
-        while (eventNum < NOTIFY_DATA_CHANGE_BATCH_NUM && sem_trywait(&mUsedSlots) == 0) {
+        while (eventNum < BATCH_EVENT_NUM && sem_trywait(&mUsedSlots) == 0) {
             if (UNLIKELY(!PopEvent(events[eventNum]))) {
                 auto postUsedRet = sem_post(&mUsedSlots);
                 if (UNLIKELY(postUsedRet != 0)) {

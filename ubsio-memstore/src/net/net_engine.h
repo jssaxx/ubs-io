@@ -536,8 +536,7 @@ private:
     BResult AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr);
     BResult CreateIpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &ipcConfig);
     BResult PrepareIpcTls(const NetOptions &opt);
-    BResult AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig,
-                               const WorkerGroupConfig &notifyConfig);
+    BResult AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig);
     BResult StartCreatedIpcService(const NetOptions &opt, bool isOobSvr);
     BResult StartIpcService(const NetOptions &opt);
     BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr);

@@ -76,6 +76,12 @@ void MmsConfig::LoadDefaultConf()
 
     LoadDefaultSecurityConf();
     LoadDefaultBasicConf();
+    AddIntConf(NOTIFY_SHM_QUEUE_DEPTH,
+        VIntRange::Create(NOTIFY_SHM_QUEUE_DEPTH.first, NO_1024, NO_1048576));
+    AddIntConf(NOTIFY_SHM_WORKER_NUM,
+        VIntRange::Create(NOTIFY_SHM_WORKER_NUM.first, NO_1, NOTIFY_SHM_MAX_WORKERS));
+    AddStrConf(NOTIFY_SHM_WORKER_CPUSET, VStrNotNull::Create(NOTIFY_SHM_WORKER_CPUSET.first));
+    AddStrConf(NOTIFY_SHM_BUSY_POLLING, VStrBoolRange::Create(NOTIFY_SHM_BUSY_POLLING.first));
     LoadDefaultClusterConf();
 }
 
@@ -99,8 +105,6 @@ void MmsConfig::LoadDefaultNetConf()
     AddStrConf(NET_IPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_BUSY_POLL_MODE.first));
     AddStrConf(NET_IPC_WORKER_GROUPS, VStrNotNull::Create(NET_IPC_WORKER_GROUPS.first));
     AddStrConf(NET_IPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_IPC_WORKER_GROUPS_CPUSET.first));
-    AddStrConf(NET_NOTIFY_WORKER_GROUPS, VStrNotNull::Create(NET_NOTIFY_WORKER_GROUPS.first));
-    AddStrConf(NET_NOTIFY_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_NOTIFY_WORKER_GROUPS_CPUSET.first));
 
     AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
         VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
@@ -151,10 +155,44 @@ BResult MmsConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     ret = AutoConfigBasic(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
+    ret = AutoConfigNotifyShm(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+
     ret = AutoConfigCm(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
     return ret;
+}
+
+BResult MmsConfig::AutoConfigNotifyShm(const ConfigurationPtr &conf)
+{
+    uint32_t queueDepth = static_cast<uint32_t>(conf->GetInt(NOTIFY_SHM_QUEUE_DEPTH.first));
+    if (queueDepth < NO_1024 || (queueDepth & (queueDepth - NO_1)) != 0) {
+        LOG_ERROR("Notify shm queue depth must be power of two, depth:" << queueDepth << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    uint16_t workerNum = static_cast<uint16_t>(conf->GetInt(NOTIFY_SHM_WORKER_NUM.first));
+    if (workerNum == 0 || workerNum > NOTIFY_SHM_MAX_WORKERS || queueDepth / workerNum < NO_1024) {
+        LOG_ERROR("Invalid notify shm worker num:" << workerNum << ", queue depth:" << queueDepth << ".");
+        return MMS_INVALID_PARAM;
+    }
+    std::pair<uint32_t, uint32_t> cpuRange{};
+    auto ret = ParseCpuRange(conf->GetStr(NOTIFY_SHM_WORKER_CPUSET.first), GetDeviceCpuNum(), cpuRange);
+    if (ret != MMS_OK || cpuRange.second - cpuRange.first + NO_1 < workerNum) {
+        LOG_ERROR("Notify shm worker cpuset does not cover worker num:" << workerNum << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    mNotifyShmConfig.queueDepth = queueDepth;
+    mNotifyShmConfig.workerNum = workerNum;
+    mNotifyShmConfig.workerCpuIds.clear();
+    for (uint32_t cpuId = cpuRange.first; cpuId <= cpuRange.second && mNotifyShmConfig.workerCpuIds.size() < workerNum;
+        ++cpuId) {
+        mNotifyShmConfig.workerCpuIds.emplace_back(static_cast<uint16_t>(cpuId));
+    }
+    mNotifyShmConfig.busyPolling = conf->GetStr(NOTIFY_SHM_BUSY_POLLING.first) == "true";
+    return MMS_OK;
 }
 
 BResult MmsConfig::AutoConfigValueBlock(const ConfigurationPtr &conf)
@@ -324,24 +362,6 @@ BResult MmsConfig::AutoConfigIpcGroup(const ConfigurationPtr &conf)
     return MMS_ERR;
 }
 
-BResult MmsConfig::AutoConfigNotifyGroup(const ConfigurationPtr &conf)
-{
-    mNetConfig.notifyWorkerGroups = conf->GetStr(NET_NOTIFY_WORKER_GROUPS.first);
-    mNetConfig.notifyWorkerGroupsCpuSet = conf->GetStr(NET_NOTIFY_WORKER_GROUPS_CPUSET.first);
-
-    std::vector<std::string> groupsVec;
-    StrUtil::Split(mNetConfig.notifyWorkerGroups, ",", groupsVec);
-    mNetConfig.notifyWorkerGroupsNum = static_cast<uint16_t>(groupsVec.size());
-    mNetConfig.notifyGroupIndex = mNetConfig.ipcWorkerGroupsNum;
-    if (mNetConfig.notifyWorkerGroupsNum != 0 &&
-        mNetConfig.ipcWorkerGroupsNum + mNetConfig.notifyWorkerGroupsNum <= MAX_GROUPS_NUM) {
-        return MMS_OK;
-    }
-
-    LOG_ERROR("Invalid configuration with notify groups num items:" << mNetConfig.notifyWorkerGroupsNum << ".");
-    return MMS_ERR;
-}
-
 BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
 {
     auto ret = AutoConfigNetAddress(conf);
@@ -351,9 +371,6 @@ BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
     ChkTrueNot(ret == MMS_OK, ret);
 
     ret = AutoConfigIpcGroup(conf);
-    ChkTrueNot(ret == MMS_OK, ret);
-
-    ret = AutoConfigNotifyGroup(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
     mNetConfig.multicastProtocol = conf->GetStr(NET_MULTICAST_PROTOCOL.first);

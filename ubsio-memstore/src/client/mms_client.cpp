@@ -18,7 +18,11 @@
 #include "mms_message.h"
 #include "mms_client.h"
 
+#include <cerrno>
+#include <exception>
+#include <pthread.h>
 #include <string>
+#include <thread>
 
 #ifdef USE_CLI_TOOLS
 #include <dlfcn.h>
@@ -125,14 +129,10 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
 
 void MmsClient::Exit(void)
 {
+    std::lock_guard<std::mutex> lock(mNotifyMutex);
+    mNotifyShmConsumer.Stop();
     mNotifyCallback.store(nullptr, std::memory_order_release);
     mNotifyUserData.store(nullptr, std::memory_order_release);
-    mNotifyChannel = nullptr;
-    mNotifyPid = 0;
-    if (mNotifyCallbackService != nullptr) {
-        mNotifyCallbackService->Stop();
-        mNotifyCallbackService = nullptr;
-    }
 }
 
 BResult MmsClient::ClientGlobVarInit(void)
@@ -222,42 +222,8 @@ BResult FillNetOptions(const MmsOptions &options, NetOptions &netOptions)
     return MMS_OK;
 }
 
-BResult MmsClient::RegisterNotifyHandler()
+void MmsClient::HandleClientChannelBroken()
 {
-    auto ret = mNetEngine->RegisterNewRequestHandler(MMS_OP_NOTIFY_DATA_CHANGE,
-        std::bind(&MmsClient::HandleNotifyDataChange, this, std::placeholders::_1));
-    if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("Register notify data change handler failed, ret:" << ret << ".");
-    }
-    return ret;
-}
-
-void MmsClient::HandleNotifyChannelBroken()
-{
-    mNotifyChannel = nullptr;
-    auto callback = mNotifyCallback.load(std::memory_order_acquire);
-    if (callback == nullptr) {
-        return;
-    }
-    void *lpUserData = mNotifyUserData.load(std::memory_order_acquire);
-    bool ret = mStartService->Execute([this, callback, lpUserData]() {
-        auto registerRet = RegisterNotifyCallback(callback, lpUserData);
-        if (registerRet != MMS_OK) {
-            CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << registerRet << ".");
-        }
-    });
-    if (!ret) {
-        CLIENT_LOG_ERROR("Execute notify reconnect failed.");
-    }
-}
-
-void MmsClient::HandleClientChannelBroken(uint32_t pid)
-{
-    if (pid == NOTIFY_PID_FLAG) {
-        HandleNotifyChannelBroken();
-        return;
-    }
-
     std::thread thread([this]() {
         bool ret = mStartService->Execute([this]() { BuildThreadTask(); });
         if (!ret) {
@@ -269,8 +235,8 @@ void MmsClient::HandleClientChannelBroken(uint32_t pid)
 
 BResult MmsClient::RegisterClientChannelBrokenHandler()
 {
-    auto channelBroken = [this](uint32_t, uint32_t pid) -> void {
-        HandleClientChannelBroken(pid);
+    auto channelBroken = [this](uint32_t, uint32_t) -> void {
+        HandleClientChannelBroken();
     };
     auto ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
     if (ret != MMS_OK) {
@@ -337,11 +303,6 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
         return ret;
     }
 
-    ret = RegisterNotifyHandler();
-    if (ret != MMS_OK) {
-        return ret;
-    }
-
     ret = RegisterClientChannelBrokenHandler();
     if (ret != MMS_OK) {
         return ret;
@@ -360,169 +321,40 @@ void MmsClient::ClientNetExit(void)
     mNetEngine->Stop();
 }
 
-BResult MmsClient::StartNotifyCallbackService()
-{
-    std::lock_guard<std::mutex> lock(mNotifyCallbackServiceLock);
-    if (mNotifyCallbackService != nullptr) {
-        return MMS_OK;
-    }
-
-    mNotifyCallbackService = ExecutorService::Create(NO_2, NO_10240);
-    if (mNotifyCallbackService == nullptr) {
-        CLIENT_LOG_ERROR("Failed to create notify callback executor.");
-        return MMS_ALLOC_FAIL;
-    }
-    mNotifyCallbackService->SetThreadName("client-data-notify");
-    if (!mNotifyCallbackService->Start()) {
-        CLIENT_LOG_ERROR("Failed to start notify callback executor.");
-        mNotifyCallbackService = nullptr;
-        return MMS_INNER_ERR;
-    }
-    return MMS_OK;
-}
-
-BResult MmsClient::StartNotifyChannel()
-{
-    if (mNotifyChannel != nullptr) {
-        return MMS_OK;
-    }
-
-    mNotifyPid = static_cast<uint32_t>(getpid()) | NOTIFY_PID_FLAG;
-    ConnectInfo info(INVALID_NID, mNotifyPid, INVALID_NID, false);
-    auto ret = mNetEngine->ConnectToPeer(CONNECT_IPC, info, mNotifyGroupIndex, mNotifyChannel);
-    if (UNLIKELY(ret != MMS_OK)) {
-        CLIENT_LOG_ERROR("Connect notify channel failed, ret:" << ret << ".");
-        mNotifyChannel = nullptr;
-        mNotifyPid = 0;
-        mNotifyGroupIndex = 0;
-        return ret;
-    }
-    NetChannelUpCtx ctx;
-    ctx.peerId = INVALID_NID;
-    ctx.procId = NOTIFY_PID_FLAG;
-    ctx.groupIndex = mNotifyGroupIndex;
-    ctx.isAccepted = 0;
-    mNotifyChannel->SetUpCtx(ctx.whole);
-    return MMS_OK;
-}
-
 BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback, void *lpUserData)
 {
-    if (UNLIKELY(!mStarted || mNetEngine == nullptr)) {
+    std::lock_guard<std::mutex> lock(mNotifyMutex);
+    if (UNLIKELY(!mStarted || mServerPid == 0)) {
         CLIENT_LOG_ERROR("Mms client is not started.");
         return MMS_NOT_READY;
     }
-
     if (callback != nullptr && !mDataChangeCallbackSwitch) {
         CLIENT_LOG_DEBUG("Data change callback switch is off.");
         return MMS_OK;
     }
-
-    if (callback != nullptr) {
-        auto ret = StartNotifyCallbackService();
-        if (ret != MMS_OK) {
-            return ret;
-        }
-        ret = StartNotifyChannel();
-        if (ret != MMS_OK) {
-            return ret;
-        }
-        mNotifyUserData.store(lpUserData, std::memory_order_release);
-        mNotifyCallback.store(callback, std::memory_order_release);
-    } else {
+    if (callback == nullptr) {
         mNotifyCallback.store(nullptr, std::memory_order_release);
         mNotifyUserData.store(nullptr, std::memory_order_release);
+        mNotifyShmConsumer.Stop();
+        return MMS_OK;
     }
 
-    NotifySubscribeReq req = {{0, MMS_OP_C_NOTIFY_SUBSCRIBE, 0, 0, 0}, callback != nullptr, mNotifyGroupIndex,
-        mNotifyPid};
-    BResult rsp = MMS_OK;
-    auto ret = mNetEngine->SyncCall<NotifySubscribeReq, BResult>(INVALID_NID, g_groupIndex, MMS_OP_C_NOTIFY_SUBSCRIBE,
-                                                                 req, rsp);
+    mNotifyUserData.store(lpUserData, std::memory_order_release);
+    mNotifyCallback.store(callback, std::memory_order_release);
+    return StartNotifyConsumerLocked();
+}
+
+BResult MmsClient::StartNotifyConsumerLocked()
+{
+    if (mNotifyShmConsumer.IsRunning()) {
+        return MMS_OK;
+    }
+
+    auto ret = mNotifyShmConsumer.Start(mServerPid, mNotifyCallback, mNotifyUserData);
     if (UNLIKELY(ret != MMS_OK)) {
-        CLIENT_LOG_ERROR("Notify subscribe request failed, ret:" << ret << ".");
-        if (callback != nullptr) {
-            mNotifyCallback.store(nullptr, std::memory_order_release);
-            mNotifyUserData.store(nullptr, std::memory_order_release);
-        }
-        return ret;
+        CLIENT_LOG_ERROR("Start notify shm consumer failed, ret:" << ret << ".");
     }
-    return MMS_OK;
-}
-
-BResult MmsClient::HandleNotifyDataChange(ServiceContext &ctx)
-{
-    if (UNLIKELY(ctx.MessageData() == nullptr)) {
-        CLIENT_LOG_ERROR("Receive notify message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        return MMS_OK;
-    }
-
-    if (ctx.MessageDataLen() == sizeof(NotifyDataChangeReq)) {
-        auto *req = static_cast<NotifyDataChangeReq *>(ctx.MessageData());
-        if (UNLIKELY(req->keyLen == 0 || req->keyLen >= MAX_KEY_SIZE || req->opType >= OP_BUTT)) {
-            CLIENT_LOG_ERROR("Invalid notify data, keyLen:" << req->keyLen << ", opType:" << req->opType << ".");
-            return MMS_OK;
-        }
-        NotifyDataChangeItem item{req->keyLen, req->opType, {}};
-        auto ret = memcpy_s(item.key, MAX_KEY_SIZE, req->key, req->keyLen + NO_1);
-        if (UNLIKELY(ret != EOK)) {
-            CLIENT_LOG_ERROR("Copy notify key failed, ret:" << ret << ".");
-            return MMS_OK;
-        }
-        return HandleSingleNotifyDataChange(item);
-    }
-
-    if (UNLIKELY(ctx.MessageDataLen() != sizeof(NotifyDataChangeBatchReq))) {
-        CLIENT_LOG_ERROR("Receive notify message len:" << ctx.MessageDataLen() << " invalid.");
-        return MMS_OK;
-    }
-
-    auto *req = static_cast<NotifyDataChangeBatchReq *>(ctx.MessageData());
-    if (UNLIKELY(req->itemNum == 0 || req->itemNum > NOTIFY_DATA_CHANGE_BATCH_NUM)) {
-        CLIENT_LOG_ERROR("Invalid notify batch item num:" << req->itemNum << ".");
-        return MMS_OK;
-    }
-    for (uint16_t index = 0; index < req->itemNum; ++index) {
-        auto ret = HandleSingleNotifyDataChange(req->items[index]);
-        if (ret != MMS_OK) {
-            return ret;
-        }
-    }
-    return MMS_OK;
-}
-
-BResult MmsClient::HandleSingleNotifyDataChange(const NotifyDataChangeItem &item)
-{
-    if (UNLIKELY(item.keyLen == 0 || item.keyLen >= MAX_KEY_SIZE || item.opType >= OP_BUTT)) {
-        CLIENT_LOG_ERROR("Invalid notify data, keyLen:" << item.keyLen << ", opType:" << item.opType << ".");
-        return MMS_OK;
-    }
-
-    if (mNotifyCallback.load(std::memory_order_acquire) == nullptr) {
-        return MMS_OK;
-    }
-
-    if (UNLIKELY(mNotifyCallbackService == nullptr)) {
-        CLIENT_LOG_ERROR("Notify callback executor is not ready.");
-        return MMS_OK;
-    }
-
-    std::string key(item.key, item.keyLen);
-    uint32_t keyLen = item.keyLen;
-    auto opType = static_cast<OperateType>(item.opType);
-    auto ret = mNotifyCallbackService->Execute([this, key, keyLen, opType]() {
-        void *lpUserData = mNotifyUserData.load(std::memory_order_acquire);
-        auto callback = mNotifyCallback.load(std::memory_order_acquire);
-        if (callback != nullptr) {
-            callback(key.data(), keyLen, opType, lpUserData);
-        }
-    });
-    if (UNLIKELY(!ret)) {
-        CLIENT_LOG_ERROR("Put notify callback task to queue failed.");
-        return MMS_OK;
-    }
-
-    return MMS_OK;
+    return ret;
 }
 
 BResult MmsClient::ClientBasicInit(void)
@@ -542,10 +374,10 @@ BResult MmsClient::ClientBasicInit(void)
         return ret;
     }
 
-    if (rsp.logLevel > SPDLOG_LEVEL_ERROR || rsp.logLevel < SPDLOG_LEVEL_TRACE || rsp.memNum > MAX_NUMAS_NUM ||
-        rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
-        CLIENT_LOG_ERROR("Invalid response, log level:" << rsp.logLevel << ", numa num:" << rsp.memNum
-                                                        << ", net timeout:" << rsp.netTimeOut << ".");
+    if (rsp.serverPid <= 0 || rsp.logLevel > SPDLOG_LEVEL_ERROR || rsp.logLevel < SPDLOG_LEVEL_TRACE ||
+        rsp.memNum > MAX_NUMAS_NUM || rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
+        CLIENT_LOG_ERROR("Invalid response, server pid:" << rsp.serverPid << ", log level:" << rsp.logLevel <<
+            ", numa num:" << rsp.memNum << ", net timeout:" << rsp.netTimeOut << ".");
         return MMS_INVALID_PARAM;
     }
 
@@ -568,7 +400,7 @@ BResult MmsClient::ClientBasicInit(void)
     mEnableCrc = rsp.enableCrc;
     mArtQuerySwitch = rsp.artQuerySwitch;
     mDataChangeCallbackSwitch = rsp.dataChangeCallbackSwitch;
-    mNotifyGroupIndex = rsp.notifyGroupIndex;
+    mServerPid = static_cast<uint32_t>(rsp.serverPid);
     mMaxMsgBuffSize = rsp.maxMsgBuffSize;
     mBlockInfo = {rsp.valueBlockSize};
     UpdateCrcSwitch(rsp.enableCrc);
@@ -699,9 +531,11 @@ void MmsClient::ClientKvExit(void)
 
 BResult MmsClient::ResetResource()
 {
-    mNotifyChannel = nullptr;
-    mNotifyPid = 0;
-    mNotifyGroupIndex = 0;
+    {
+        std::lock_guard<std::mutex> lock(mNotifyMutex);
+        mNotifyShmConsumer.Stop();
+        mServerPid = 0;
+    }
     for (uint16_t &numaId: mNumaId) {
         numaId = -1;
     }
@@ -796,18 +630,26 @@ BResult MmsClient::RebuildServices(uint32_t interval)
     return MMS_OK;
 }
 
-void MmsClient::ReregisterNotifyCallback()
+BResult MmsClient::ReregisterNotifyCallback(uint32_t interval)
 {
-    auto callback = mNotifyCallback.load(std::memory_order_acquire);
-    if (callback == nullptr) {
-        return;
+    uint32_t retryCount = 0;
+    while (mServerOnline.load(std::memory_order_acquire)) {
+        BResult ret = MMS_OK;
+        {
+            std::lock_guard<std::mutex> lock(mNotifyMutex);
+            if (mNotifyCallback.load(std::memory_order_acquire) == nullptr) {
+                return MMS_OK;
+            }
+            ret = StartNotifyConsumerLocked();
+        }
+        if (ret == MMS_OK) {
+            return MMS_OK;
+        }
+        CLIENT_LOG_WARN("Re-register notify callback failed, ret:" << ret <<
+            ", retry count:" << retryCount++ << ".");
+        sleep(interval);
     }
-
-    void *lpUserData = mNotifyUserData.load(std::memory_order_acquire);
-    auto ret = RegisterNotifyCallback(callback, lpUserData);
-    if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << ret << ".");
-    }
+    return MMS_NET_RETRY;
 }
 
 BResult MmsClient::BuildThreadTask(void)
@@ -829,8 +671,11 @@ BResult MmsClient::BuildThreadTask(void)
     }
 
     mStarted = true;
-    ReregisterNotifyCallback();
-    return MMS_OK;
+    ret = ReregisterNotifyCallback(interval);
+    if (ret != MMS_OK) {
+        CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << ret << ".");
+    }
+    return ret;
 }
 
 BResult MmsClient::BuildServices(void)

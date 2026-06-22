@@ -27,6 +27,7 @@
 #include "net_multicast_engine.h"
 #include "mms_mem_mgr.h"
 #include "mms_mem_allocator.h"
+#include "mms_notify_shm_server.h"
 #include "mms_cache.h"
 #include "cm.h"
 
@@ -69,11 +70,12 @@ public:
 
     void NotifyServiceable(bool serviceable);
     void NotifyPtMigrate(uint16_t ptId);
-    void RemoveNotifyClient(uint32_t pid);
 
     static thread_local std::vector<DecodePutItem> itemListPut;
     static thread_local std::vector<DecodeUpdateItem> itemListUpdate;
     static thread_local std::vector<DecodeDeleteItem> itemListDelete;
+    static thread_local std::vector<NotifyShmPublishItem> notifyPutItems;
+    static thread_local std::vector<NotifyShmPublishItem> notifyDeleteItems;
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -81,7 +83,6 @@ private:
     void RegisterOpcode();
     BResult HandleBasic(ServiceContext &ctx);
     BResult HandleServiceable(ServiceContext &ctx);
-    BResult HandleNotifySubscribe(ServiceContext &ctx);
 
     BResult HandlePut(ServiceContext &ctx);
     BResult HandlePutDefImpl(void *ioBuff, uint32_t ioLen);
@@ -145,8 +146,9 @@ private:
     BResult HandleRangeDelete(ServiceContext &ctx);
     BResult HandleSearch(ServiceContext &ctx, MmsOpCode opCode);
     BResult ReplySearchResult(ServiceContext &ctx, ValueInfo *valueInfoItems, uint64_t itemNum);
-    void AddNotifyClient(uint32_t pid, uint32_t groupIndex);
-    void NotifyRemoteClientBatch(const NotifyEvent *events, uint16_t eventNum);
+    void AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
+        const char *key, uint16_t keyLen, OperateType opType);
+    void NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint32_t itemNum);
 
 private:
     bool mStarted = false;
@@ -162,9 +164,8 @@ private:
     MmsNotifyDispatcher *mNotifyDispatcher = nullptr;
     bool mDataChangeCallbackSwitch = false;
     bool mArtQuerySwitch = false;
-    bool mRemoteNotifyEnable = false;
-    std::atomic<uint32_t> mNotifyClientPid{0};
-    std::atomic<uint32_t> mNotifyClientGroupIndex{0};
+    bool mSeparateMode = false;
+    MmsNotifyShmPublisher mNotifyShmPublisher;
     uint32_t mIoTimeOut = NO_60;
     uint32_t mIoCtxBuffLen;
 

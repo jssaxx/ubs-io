@@ -65,6 +65,7 @@ private:
 
 private:
     static constexpr uint32_t QUEUE_CAPACITY = NO_10240;
+    static constexpr uint16_t BATCH_EVENT_NUM = NO_64;
 
     std::atomic<NotifyCallback> mCallback{nullptr};
     std::atomic<void *> mUserData{nullptr};

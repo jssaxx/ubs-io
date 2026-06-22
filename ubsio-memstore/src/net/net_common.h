@@ -57,8 +57,6 @@ enum ConnectMode {
 };
 
 constexpr uint32_t INVALID_NID = 1024;
-constexpr uint32_t NOTIFY_PID_FLAG = 0x40000000U;
-constexpr uint32_t NOTIFY_NET_GROUP_INDEX = 1;
 
 union NetNode {
     struct {
@@ -142,10 +140,6 @@ struct NetOptions {
     std::string workerGroups;                            /* worker groups */
     std::string workerGroupsCpuSet;                      /* worker groups cpuset */
     uint16_t workerGroupsNum;                            /* worker groups num */
-    std::string notifyWorkerGroups;                      /* notify worker groups */
-    std::string notifyWorkerGroupsCpuSet;                /* notify worker groups cpuset */
-    uint16_t notifyWorkerGroupsNum = 0;                  /* notify worker groups num */
-    bool notifyWorkerGroupsEnable = false;               /* notify worker groups switch */
     Role role = NET_BUTT;                                /* net service role */
 
     // tls config
