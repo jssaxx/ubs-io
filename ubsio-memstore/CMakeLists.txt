@@ -56,16 +56,6 @@ message(STATUS "3rdparty src dir ${PROJECT_3RDPARTY_SRC_DIR}")
 message(STATUS "3rdparty bin dir ${PROJECT_3RDPARTY_BIN_DIR}")
 message(STATUS "target install dir ${TARGET_INSTALL_DIR}")
 
-if (NOT DEFINED OPEN_ZK)
-    set(OPEN_ZK OFF)
-endif()
-
-if ("${OPEN_ZK}" STREQUAL "ON")
-    set(PROJECT_ZOOKEEPER_INCLUDE_DIR ${PROJECT_3RDPARTY_BIN_DIR}/zookeeper/include)
-else()
-    set(PROJECT_ZOOKEEPER_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/../ubsio-boostio/3rdparty)
-endif()
-
 include_directories(
         ${SRC_DIR}/cache
         ${SRC_DIR}/client
@@ -84,7 +74,6 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/libboundscheck/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
-        ${PROJECT_ZOOKEEPER_INCLUDE_DIR}
         ${PROJECT_3RDPARTY_BIN_DIR}/libart/src
         /usr/include/hcom
 )

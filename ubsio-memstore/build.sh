@@ -12,7 +12,7 @@
 #
 
 usage() {
-    echo "usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=diagnose] [--ut=UT] [--tp=tracepoint] [--zk]"
+    echo "usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--cli=diagnose] [--ut=UT] [--tp=tracepoint]"
     echo "build_type: [debug, release, clean]"
     echo "examples:"
     echo " 1 ./build.sh -t release [--cli] // 禁止添加tp功能，对外发布包禁止添加cli功能"
@@ -28,7 +28,6 @@ BUILD_DIR=${PROJ_DIR}/build
 BUILD_UT=OFF
 CLI_FLAG=OFF
 TP_FLAG=OFF
-ZK_FLAG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -60,9 +59,6 @@ while true; do
             shift ;;
         --tp )
             TP_FLAG=ON
-            shift ;;
-        --zk )
-            ZK_FLAG=ON
             shift ;;
 		    -h | -help )
             usage
@@ -112,12 +108,6 @@ else
 	  CMAKE_FLAGS+="-DDEBUG_UT=OFF "
 fi
 
-if [[ "$ZK_FLAG" == "ON" ]]; then
-    CMAKE_FLAGS+="-DOPEN_ZK=ON "
-else
-    CMAKE_FLAGS+="-DOPEN_ZK=OFF "
-fi
-
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2))
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
 BUILD_CMD="make install -j 16"
@@ -135,9 +125,6 @@ $BUILD_CMD || {
 cd ${PROJ_DIR}/output
 if compgen -G "3rdparty/ubs-comm/lib/libhcom.so*" > /dev/null; then
     \cp -d 3rdparty/ubs-comm/lib/libhcom.so* mms/lib/
-fi
-if [[ "$ZK_FLAG" == "ON" ]] && compgen -G "3rdparty/zookeeper/lib/libzookeeper_mt.so*" > /dev/null; then
-    \cp -d 3rdparty/zookeeper/lib/libzookeeper_mt.so* mms/lib/
 fi
 \cp ./3rdparty/libboundscheck/lib/libboundscheck.so mms/lib/
 \cp -r ../scripts mms/.
