@@ -50,8 +50,6 @@ static void *OpenZookeeperLibrary(void)
 {
     const char *zkLibNames[] = {
         "libzookeeper_mt.so.2",
-        "libzookeeper_mt.so.1",
-        "libzookeeper_mt.so.0",
         "libzookeeper_mt.so",
     };
     const char *lastErr = NULL;

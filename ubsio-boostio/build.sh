@@ -74,6 +74,13 @@ while true; do
     esac
 done
 
+has_system_zookeeper()
+{
+    [[ -f /usr/include/zookeeper/zookeeper.h ]] || return 1
+    ldconfig -p 2>/dev/null | grep -q 'libzookeeper_mt.so' && return 0
+    [[ -e /usr/lib64/libzookeeper_mt.so || -e /usr/lib/libzookeeper_mt.so ]]
+}
+
 if [[ "$BUILD_TYPE" == "clean" ]]; then
     cd $BUILD_DIR
     BUILD_CMD="make clean"
@@ -88,6 +95,11 @@ if [[ "$BUILD_TYPE" == "clean" ]]; then
     echo "clean boostio successful."
     rm -rf ${PROJ_DIR}/dist
     exit 0
+fi
+
+if [[ "$ZK_FLAG" != 'ON' ]] && ! has_system_zookeeper; then
+    echo "system zookeeper not found, build bundled zookeeper"
+    ZK_FLAG=ON
 fi
 
 if [[ "$BUILD_TYPE" == "release" ]]; then
