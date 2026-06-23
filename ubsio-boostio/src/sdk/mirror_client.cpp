@@ -1187,6 +1187,11 @@ inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum,
                 if (valueAddrs[basic + j] == 0) {
                     continue;
                 }
+                // In standalone mode, skip user-provided buffers (not from the data message pool).
+                if (mMode == STANDALONE && !IsDataMsgMemAddr(valueAddrs[basic + j])) {
+                    valueAddrs[basic + j] = 0;
+                    continue;
+                }
                 FreeDataMessageBuffer(valueAddrs[basic + j]);
                 valueAddrs[basic + j] = 0;
             }
@@ -1297,6 +1302,11 @@ void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
         if (valueAddrs[i] == 0) {
             continue;
         }
+        // In standalone mode, skip user-provided buffers (not from the data message pool).
+        if (mMode == STANDALONE && !IsDataMsgMemAddr(valueAddrs[i])) {
+            valueAddrs[i] = 0;
+            continue;
+        }
         FreeDataMessageBuffer(valueAddrs[i]);
         valueAddrs[i] = 0;
     }
@@ -1397,6 +1407,11 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
             if (param.valuesAddr[i] == 0) {
                 continue;
             }
+            // In standalone mode, skip user-provided buffers (not from the data message pool).
+            if (mMode == STANDALONE && !IsDataMsgMemAddr(param.valuesAddr[i])) {
+                param.valuesAddr[i] = 0;
+                continue;
+            }
             FreeDataMessageBuffer(param.valuesAddr[i]);
             param.valuesAddr[i] = 0;
         }
@@ -1440,14 +1455,28 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
     for (uint32_t i = 0; i < param.count; i++) {
         param.results[i] = BIO_OK;
         uintptr_t address = 0;
-        ret = AllocDataMessageBuffer(param.lengths[i], address);
-        if (UNLIKELY(ret != BIO_OK)) {
-            CLIENT_LOG_ERROR("Alloc batch get data message memory failed, ret:" << ret << ".");
-            releaseValues(i);
-            releaseRequests();
-            return BIO_ALLOC_FAIL;
+        if (mMode == STANDALONE) {
+            // In standalone mode, client and server share the same address
+            // space. The caller must provide a pre-allocated buffer via
+            // valueAddrs; data is written directly into it, avoiding an
+            // unnecessary pool allocation and memcpy.
+            address = param.valuesAddr[i];
+            if (UNLIKELY(address == 0)) {
+                CLIENT_LOG_ERROR("BatchGet in standalone mode requires pre-allocated buffer, index:" << i << ".");
+                releaseValues(i);
+                releaseRequests();
+                return BIO_INVALID_PARAM;
+            }
+        } else {
+            ret = AllocDataMessageBuffer(param.lengths[i], address);
+            if (UNLIKELY(ret != BIO_OK)) {
+                CLIENT_LOG_ERROR("Alloc batch get data message memory failed, ret:" << ret << ".");
+                releaseValues(i);
+                releaseRequests();
+                return BIO_ALLOC_FAIL;
+            }
+            param.valuesAddr[i] = address;
         }
-        param.valuesAddr[i] = address;
         auto& plan = planSend[nodes[i]];
         FillBatchGetBufferInfo(plan.req->keysInfo[plan.index], address, param.lengths[i]);
         CopyKey(plan.req->keysInfo[plan.index].key, param.keys[i], KEY_MAX_SIZE);
