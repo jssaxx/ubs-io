@@ -46,6 +46,29 @@ DeallocateStringVectorFn DeallocateStringVector = NULL;
 static void *gZkHandle = NULL;
 static bool gLoaded = false;
 
+static void *OpenZookeeperLibrary(void)
+{
+    const char *zkLibNames[] = {
+        "libzookeeper_mt.so.2",
+        "libzookeeper_mt.so.1",
+        "libzookeeper_mt.so.0",
+        "libzookeeper_mt.so",
+    };
+    const char *lastErr = NULL;
+
+    for (size_t i = 0; i < sizeof(zkLibNames) / sizeof(zkLibNames[0]); ++i) {
+        void *handle = dlopen(zkLibNames[i], RTLD_LAZY | RTLD_GLOBAL);
+        if (handle != NULL) {
+            CM_LOGINFO("Successfully dlopen %s", zkLibNames[i]);
+            return handle;
+        }
+        lastErr = dlerror();
+    }
+
+    CM_LOGERROR("Failed to dlopen zookeeper library: %s", lastErr == NULL ? "unknown error" : lastErr);
+    return NULL;
+}
+
 static int LoadZookeeperSymbols(void *zkHandle)
 {
     DLSYM(zkHandle, ZooCreateFn, ZooCreate, "zoo_create");
@@ -73,10 +96,8 @@ int ZookeeperApiLoad(void)
         return CM_OK;
     }
 
-    const char *zkLibName = "libzookeeper_mt.so.2";
-    gZkHandle = dlopen(zkLibName, RTLD_LAZY | RTLD_GLOBAL);
+    gZkHandle = OpenZookeeperLibrary();
     if (gZkHandle == NULL) {
-        CM_LOGERROR("Failed to dlopen %s: %s", zkLibName, dlerror());
         return CM_ERR;
     }
 
