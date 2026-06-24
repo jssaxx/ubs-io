@@ -11,7 +11,7 @@ find_path(LIBAIO_INCLUDE_DIR
 
 find_library(LIBAIO_LIBRARY
     NAMES libaio.so aio
-    PATHS /usr/lib64 /usr/lib
+    PATHS /usr/lib64 /usr/lib /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}
     NO_DEFAULT_PATH
 )
 
