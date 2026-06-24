@@ -24,6 +24,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CXX_COMMON_FLAGS} -O3 -D_FORTIFY_SOURCE=2 -g -DND
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
 set(BUILD_PATH ${PROJECT_BINARY_DIR}/)
+set(UBSIO_BOOSTIO_INSTALL_DIR "${PROJECT_SOURCE_DIR}/../ubsio-boostio/dist/boostio" CACHE PATH "ubsio-boostio install directory")
+
+if (NOT EXISTS "${UBSIO_BOOSTIO_INSTALL_DIR}/include/bio_c.h")
+    message(FATAL_ERROR "bio_c.h not found in ${UBSIO_BOOSTIO_INSTALL_DIR}/include. "
+                        "Build ubsio-boostio first or pass -DUBSIO_BOOSTIO_INSTALL_DIR=<boostio install dir>.")
+endif()
 
 if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     add_compile_options(-march=armv8-a+crc)

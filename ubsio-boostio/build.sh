@@ -7,13 +7,14 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
     echo " 2 ./build.sh -t debug // 默认添加cli和tp功能"
     echo " 3 ./build.sh -t debug [--ut] // 限制仅DT构建脚本使用"
     echo " 4 ./build.sh -t debug --san=asan // Build BoostIO and test tools with ASan+UBSan"
+    echo " 5 ./build.sh -t release --build_kv OFF // Skip UBSIO-KV packaging"
     echo
     exit 1;
 }
@@ -26,6 +27,7 @@ TP_FLAG=OFF
 CLI_FLAG=OFF
 PROMETHEUS_FLAG=OFF
 SANITIZER_FLAG=OFF
+BUILD_KV=ON
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -63,6 +65,12 @@ while true; do
         --pms )
             PROMETHEUS_FLAG=ON
             shift ;;
+        --build_kv )
+            kv_flag="$2"
+            kv_flag=${kv_flag^^}
+            [[ "$kv_flag" != "ON" && "$kv_flag" != "OFF" ]] && echo "Invalid build_kv flag $2" && usage
+            BUILD_KV=$kv_flag
+            shift 2 ;;
         --san=asan | --san=asan-ubsan | --asan | --asan-ubsan )
             SANITIZER_FLAG=ON
             shift ;;
@@ -183,13 +191,13 @@ fi
 
 rm -rf boostio
 mv bio boostio
-if [[ "$arch" == "aarch64" ]]; then
+if [[ "$BUILD_KV" == "ON" ]]; then
     mkdir -p ${PROJ_DIR}/dist/boostio/kv
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/lib
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/include
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
     cd ${PROJ_DIR}/../ubsio-kv/
-    bash build.sh
+    bash build.sh -t ${BUILD_TYPE}
     cd ${PROJ_DIR}/dist
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.
@@ -197,4 +205,3 @@ if [[ "$arch" == "aarch64" ]]; then
 fi
 
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
-

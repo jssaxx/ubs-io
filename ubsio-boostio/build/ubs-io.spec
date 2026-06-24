@@ -13,10 +13,10 @@ Source0:        ubs-io.tar.gz
 BuildArch:      aarch64
 
 BuildRequires:  gcc gcc-c++ make cmake maven hostname fuse-devel automake dos2unix
-BuildRequires:  libtool numactl-devel libcurl-devel
+BuildRequires:  librados-devel libtool numactl-devel libcurl-devel
 BuildRequires:  openssl-devel
 BuildRequires:  libboundscheck ubs-comm-devel
-Requires:       libboundscheck ubs-comm-lib openssl-libs
+Requires:       libboundscheck ubs-comm-lib openssl-libs librados2
 
 %description
 BoostIO is a high-performance cache acceleration library.
