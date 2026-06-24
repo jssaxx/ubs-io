@@ -61,7 +61,6 @@ RUNTIME_LIB_DIRS=(
     "${PROJECT_HOME}/output/mms/lib"
     "${PROJECT_HOME}/output/3rdparty/libboundscheck/lib"
     "${PROJECT_HOME}/output/3rdparty/ubs-comm/lib"
-    "${PROJECT_HOME}/output/3rdparty/zookeeper/lib"
 )
 export LD_LIBRARY_PATH="$(IFS=:; echo "${RUNTIME_LIB_DIRS[*]}"):${LD_LIBRARY_PATH:-}"
 ./mms_test --gtest_output=xml:report.xml "$@"

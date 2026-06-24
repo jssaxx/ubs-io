@@ -181,7 +181,7 @@ BResult MmsServer::MmsLoggerInit(std::string pathName)
 {
     LoggerOptions loggerOptions;
     loggerOptions.logType = LOG_TYPE_FILE;
-    loggerOptions.minLogLevel = SPDLOG_LEVEL_INFO;
+    loggerOptions.minLogLevel = MMSLOG_LEVEL_INFO;
     loggerOptions.path = std::move(pathName);
     Logger *logger = Logger::Instance(loggerOptions);
     if (logger == nullptr) {

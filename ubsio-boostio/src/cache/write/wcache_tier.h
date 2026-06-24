@@ -13,6 +13,8 @@
 #ifndef BOOSTIO_WCACHE_TIER_H
 #define BOOSTIO_WCACHE_TIER_H
 
+#include <array>
+
 #include "bio_err.h"
 #include "bio_lock.h"
 #include "cache_def.h"

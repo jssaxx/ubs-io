@@ -15,12 +15,12 @@
 
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <mutex>
 #include <sstream>
+#include <string>
 #include <sys/time.h>
 #include <utility>
-
-#include "spdlog/common.h"
-#include "spdlog/spdlog.h"
 
 namespace ock {
 namespace mms {
@@ -33,13 +33,13 @@ constexpr uint8_t LOG_TYPE_FILE = 2;
 #define MMS_LOG_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
 
-#define SPDLOG_LEVEL_TRACE 0
-#define SPDLOG_LEVEL_DEBUG 1
-#define SPDLOG_LEVEL_INFO 2
-#define SPDLOG_LEVEL_WARN 3
-#define SPDLOG_LEVEL_ERROR 4
-#define SPDLOG_LEVEL_CRITICAL 5
-#define SPDLOG_LEVEL_OFF 6
+#define MMSLOG_LEVEL_TRACE 0
+#define MMSLOG_LEVEL_DEBUG 1
+#define MMSLOG_LEVEL_INFO 2
+#define MMSLOG_LEVEL_WARN 3
+#define MMSLOG_LEVEL_ERROR 4
+#define MMSLOG_LEVEL_CRITICAL 5
+#define MMSLOG_LEVEL_OFF 6
 
 #define MMS_LOG_RESET_LEVEL(level)                         \
     do {                                                   \
@@ -64,12 +64,12 @@ constexpr uint8_t LOG_TYPE_FILE = 2;
     } while (0)
 #endif
 
-#define LOG_CRITICAL(msg) MMS_LOG_INTERNAL(SPDLOG_LEVEL_CRITICAL, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
-#define LOG_ERROR(msg) MMS_LOG_INTERNAL(SPDLOG_LEVEL_ERROR, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
-#define LOG_WARN(msg) MMS_LOG_INTERNAL(SPDLOG_LEVEL_WARN, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
-#define LOG_INFO(msg) MMS_LOG_INTERNAL(SPDLOG_LEVEL_INFO, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
-#define LOG_DEBUG(msg) MMS_LOG_INTERNAL(SPDLOG_LEVEL_DEBUG, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
-#define LOG_TRACE(msg) MMS_LOG_INTERNAL(SPDLOG_LEVEL_TRACE, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_CRITICAL(msg) MMS_LOG_INTERNAL(MMSLOG_LEVEL_CRITICAL, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_ERROR(msg) MMS_LOG_INTERNAL(MMSLOG_LEVEL_ERROR, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_WARN(msg) MMS_LOG_INTERNAL(MMSLOG_LEVEL_WARN, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_INFO(msg) MMS_LOG_INTERNAL(MMSLOG_LEVEL_INFO, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_DEBUG(msg) MMS_LOG_INTERNAL(MMSLOG_LEVEL_DEBUG, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
+#define LOG_TRACE(msg) MMS_LOG_INTERNAL(MMSLOG_LEVEL_TRACE, MMS_LOG_FILENAME, __LINE__, __FUNCTION__, msg)
 
 #define ChkTrueNot(ARGS, RET)                     \
     do {                                          \
@@ -135,9 +135,16 @@ public:
 private:
     static bool ValidateParams(const LoggerOptions &options);
     static void LogToStdErr(const std::ostringstream &oss);
+    static const char *LevelToString(int level);
+    static std::string FormatLogLine(int level, const std::string &message);
+    int32_t OpenLogFile();
+    void RotateLogFile();
+    bool NeedRotate() const;
+    std::string GetRotatedFileName(uint32_t index) const;
 
 private:
-    std::shared_ptr<spdlog::logger> mSpdLogger; /* spd logger for normal log */
+    mutable std::mutex mLogMutex;
+    mutable std::ofstream mLogFile;
     LoggerOptions mOptions;
 
 private:
