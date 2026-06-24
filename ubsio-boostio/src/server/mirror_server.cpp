@@ -588,7 +588,8 @@ BResult MirrorServer::Put(PutRequest &req, const WCacheSlicePtr &sliceP, Service
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Put to write cache failed, ret:" << ret << ", key:" << req.key << ".");
         return ret;
-    } else {
+    }
+    if (mBioConfig->GetDaemonConfig().enableQos) {
         QuotaHolder holder = { static_cast<uint32_t>(req.quotaNid), req.quotaCid };
         BIO_TRACE_START(MIRROR_TRACE_QOS_RELEASE);
         CacheOverloadCtrl::Instance().ReleaseQuota(req.key, holder, req.length, 0);

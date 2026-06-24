@@ -1052,7 +1052,9 @@ BResult MirrorClient::PutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &ptEntry
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send put request failed, ret:" << ret << ", ptId:" << ptId <<
             ", flowId:" << param.flowId << ", key:" << param.key << ".");
-        Delete(ptId, param.flowId); // Put请求失败则删除该Flow, 不允许在此Flow上继续写.
+        if (mMode != STANDALONE) {
+            Delete(ptId, param.flowId); // Put请求失败则删除该Flow, 不允许在此Flow上继续写.
+        }
         ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret;
     }
     return ret;
@@ -1075,7 +1077,9 @@ BResult MirrorClient::AsyncPutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &pt
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send async put request failed, ret:" << ret << ", ptId:" << ptId <<
             ", flowId:" << param.flowId << ", key:" << param.key << ".");
-        Delete(ptId, param.flowId); // Put请求失败则删除该Flow, 不允许在此Flow上继续写.
+        if (mMode != STANDALONE) {
+            Delete(ptId, param.flowId); // Put请求失败则删除该Flow, 不允许在此Flow上继续写.
+        }
         ret = (ret == BIO_NOT_EXISTS) ? BIO_INNER_RETRY : ret;
     }
     return ret;
@@ -1997,11 +2001,15 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Alloc put space failed, ret:" << ret << ", flowId:" << param.flowId << ", flowOffset:" <<
             param.flowOffset << ", length:" << param.length << ".");
-        Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
+        if (mMode != STANDALONE) {
+            Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
+        }
         return ret;
     }
     if (rsp == nullptr) {
-        Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
+        if (mMode != STANDALONE) {
+            Delete(ptId, param.flowId); // 申请失败删除该Flow, 不允许在该Flow上申请资源.
+        }
         return BIO_ERR;
     }
 
@@ -2011,14 +2019,18 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Failed to data copy, sliceLen:" << rsp->sliceLen << ".");
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
-        Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+        if (mMode != STANDALONE) {
+            Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+        }
         return BIO_INNER_ERR;
     }
     BIO_TP_START(SDK_MIRROR_CLIENT_ADDRNUM_INVALID, &rsp->addrNum, (SLICE_ADDR_MAX_SIZE + 1));
     BIO_TP_END;
     if (rsp->addrNum > CACHE_SPACE_ADDRESS_SIZE) {
         delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
-        Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+        if (mMode != STANDALONE) {
+            Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+        }
         return BIO_INNER_ERR;
     }
     spaceInfo.addressNum = rsp->addrNum;
@@ -2031,7 +2043,9 @@ BResult MirrorClient::AllocSpaceImpl(uint16_t ptId, CmPtInfo &ptEntry, MirrorPut
             if (realAddr == nullptr) {
                 CLIENT_LOG_ERROR("Invalid response addr offset or chunk len.");
                 delete[] static_cast<uint8_t *>(static_cast<void *>(rsp));
-                Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+                if (mMode != STANDALONE) {
+                    Delete(ptId, param.flowId); // 拷贝失败删除该Flow, 不允许在该Flow上申请资源.
+                }
                 return BIO_INNER_ERR;
             }
             spaceInfo.address[idx].address = reinterpret_cast<uintptr_t>(realAddr);
