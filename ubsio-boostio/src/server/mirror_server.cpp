@@ -939,6 +939,7 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
                 auto ret = mSliceOp.Copy(from, addr, totalLen);
                 if (ret != BIO_OK) {
                     LOG_ERROR("Copy data from server failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
+                    free(addr);
                     from->DecreaseRef();
                     return ret;
                 }
@@ -946,6 +947,7 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
                 if (ret != BIO_OK) {
                     LOG_ERROR("Copy data to dst failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
                 }
+                free(addr);
                 from->DecreaseRef();
                 return ret;
             }
