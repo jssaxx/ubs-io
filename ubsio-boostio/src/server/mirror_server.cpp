@@ -921,7 +921,37 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
 
     auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
         if (req->srcNid == localNid) {
-            return mSliceOp.Copy(from, to);
+            from->IncreaseRef();
+            if (BioServer::Instance()->IsStandaloneMode() && from->GetFlowType() == FLOW_DISK) {
+                uint64_t totalLen = 0;
+                for (auto addr : to->GetAddrs()) {
+                    MrInfo mr{};
+                    addr.ToMrInfo(mr);
+                    totalLen += mr.size;
+                }
+                char *addr = nullptr;
+                addr = reinterpret_cast<char*>(malloc(sizeof(char) * totalLen));
+                if (UNLIKELY(addr = nullptr)) {
+                    LOG_ERROR("Alloc memory failed, length:" << totalLen << ".");
+                    from->DecreaseRef();
+                    return BIO_ALLOC_FAIL;
+                }
+                auto ret = mSliceOp.Copy(from, addr, totalLen);
+                if (ret != BIO_OK) {
+                    LOG_ERROR("Copy data from server failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
+                    from->DecreaseRef();
+                    return ret;
+                }
+                ret = mSliceOp.Copy(addr, to);
+                if (ret != BIO_OK) {
+                    LOG_ERROR("Copy data to dst failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
+                }
+                from->DecreaseRef();
+                return ret;
+            }
+            auto ret = mSliceOp.Copy(from, to);
+            from->DecreaseRef();
+            return ret;
         } else {
             bool isAlloc = false;
             std::vector<NetMrInfo> rMrVec;
