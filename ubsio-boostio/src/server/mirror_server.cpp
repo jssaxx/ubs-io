@@ -931,7 +931,7 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
                 }
                 char *addr = nullptr;
                 addr = reinterpret_cast<char*>(malloc(sizeof(char) * totalLen));
-                if (UNLIKELY(addr = nullptr)) {
+                if (UNLIKELY(addr == nullptr)) {
                     LOG_ERROR("Alloc memory failed, length:" << totalLen << ".");
                     from->DecreaseRef();
                     return BIO_ALLOC_FAIL;
