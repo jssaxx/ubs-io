@@ -32,7 +32,7 @@ target_include_directories(c2python_sdk PRIVATE
     ${SRC_DIR}/csrc/nds
     ${SRC_DIR}/csrc/utils
     ${PROJECT_SOURCE_DIR}/include
-    ${UBSIO_BOOSTIO_INSTALL_DIR}/include
+    ${UBSIO_BOOSTIO_INCLUDE_DIR}
 )
 
 target_link_libraries(c2python_sdk PRIVATE

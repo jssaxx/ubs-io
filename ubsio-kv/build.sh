@@ -21,7 +21,7 @@ usage() {
 CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BOOSTIO_DIR="$(realpath "${PROJ_DIR}/../ubsio-boostio")"
-BOOSTIO_INSTALL_DIR="${BOOSTIO_DIR}/dist/boostio"
+BOOSTIO_INCLUDE_DIR="${BOOSTIO_DIR}/src/sdk"
 BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
 BUILD_BOOSTIO=OFF
@@ -93,14 +93,13 @@ if [[ "$BUILD_BOOSTIO" == "ON" ]]; then
     cd ${PROJ_DIR}
 fi
 
-if [[ ! -d "${BOOSTIO_INSTALL_DIR}/lib" || ! -f "${BOOSTIO_INSTALL_DIR}/include/bio_c.h" ]]; then
-    echo "ubsio-boostio install output not found at ${BOOSTIO_INSTALL_DIR}."
-    echo "Run ubsio-boostio/build.sh first or pass --build_boostio ON to build it."
+if [[ ! -f "${BOOSTIO_INCLUDE_DIR}/bio_c.h" ]]; then
+    echo "bio_c.h not found at ${BOOSTIO_INCLUDE_DIR}."
     exit 1
 fi
 
 CMAKE_FLAGS=""
-CMAKE_FLAGS+="-DUBSIO_BOOSTIO_INSTALL_DIR=${BOOSTIO_INSTALL_DIR} "
+CMAKE_FLAGS+="-DUBSIO_BOOSTIO_INCLUDE_DIR=${BOOSTIO_INCLUDE_DIR} "
 
 if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
