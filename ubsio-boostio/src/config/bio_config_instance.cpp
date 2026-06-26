@@ -488,15 +488,17 @@ BResult BioConfig::AutoConfigUnderFs(const ConfigurationPtr &conf)
     return BIO_OK;
 }
 
-void BioConfig::BakFileProcess(const std::string &homePath)
+void BioConfig::BakFileProcess(const std::string &configPath)
 {
+    auto dirEndPos = configPath.find_last_of('/');
+    std::string homePath = (dirEndPos == std::string::npos) ? "./" : configPath.substr(0, dirEndPos + 1);
     std::string initConfPath = homePath + CONF_INIT_BAK_SUFFIX;
     std::string bakConfPath = homePath + CONF_BAK_SUFFIX;
-    std::string configPath = homePath + CONF_SUFFIX;
+    std::string currentConfigPath = configPath;
 #ifdef DEBUG_UT
     initConfPath = "./" + CONF_INIT_BAK_SUFFIX;
     bakConfPath = "./" + CONF_BAK_SUFFIX;
-    configPath = "./" + CONF_SUFFIX;
+    currentConfigPath = "./" + CONF_SUFFIX;
 #endif
     // 1、查看是否存在.bak.init文件，存在则将其重命名为.bak文件,不存在不做处理
     if (FileUtil::Exist(initConfPath)) {
@@ -511,21 +513,21 @@ void BioConfig::BakFileProcess(const std::string &homePath)
     }
 
     // 3、存在则删除老conf文件（存在，不存在则忽略），并将.bak重命名问bio.conf
-    if (FileUtil::Exist(configPath)) {
-        if (std::remove(configPath.c_str()) != 0) {
+    if (FileUtil::Exist(currentConfigPath)) {
+        if (std::remove(currentConfigPath.c_str()) != 0) {
             LOG_ERROR("Remove configPath error.");
             return;
         }
     }
-    if (std::rename(bakConfPath.c_str(), configPath.c_str()) != 0) {
+    if (std::rename(bakConfPath.c_str(), currentConfigPath.c_str()) != 0) {
         LOG_ERROR("Replace bak path to conf path failed!");
     }
 }
 
-BResult BioConfig::Initialize(const std::string &homePath)
+BResult BioConfig::Initialize(const std::string &configPath)
 {
-    BakFileProcess(homePath);
-    std::string configurePath = homePath + CONF_SUFFIX;
+    BakFileProcess(configPath);
+    std::string configurePath = configPath;
     LOG_INFO("Start to read config file.");
 
     if (mInited) {

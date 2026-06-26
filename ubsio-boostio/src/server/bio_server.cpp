@@ -11,6 +11,7 @@
  */
 
 #include <dlfcn.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
 #include "bdm_core.h"
@@ -32,6 +33,20 @@
 
 namespace ock {
 namespace bio {
+namespace {
+constexpr const char* BIO_CONFIG_ENV = "UBSIO_BIO_CONFIG_PATH";
+
+bool IsAbsoluteRegularFile(const std::string &path)
+{
+    if (path.empty() || path.front() != '/') {
+        return false;
+    }
+
+    struct stat pathStat {};
+    return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
+}
+}
+
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
@@ -242,14 +257,15 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "./";
+    const std::string confPath = "./bio.conf";
 #else
-    std::string confPath = "/etc/boostio/";
-    const char *envConfDir = getenv("MMC_UBSIO_CONFIG_PATH");
-    if (envConfDir != nullptr && envConfDir[0] != '\0') {
-        confPath = envConfDir;
-        if (confPath.back() != '/') {
-            confPath += '/';
+    std::string confPath = CONFIG_PATH;
+    const char *envConfPath = getenv(BIO_CONFIG_ENV);
+    if (envConfPath != nullptr && envConfPath[0] != '\0') {
+        confPath = envConfPath;
+        if (!IsAbsoluteRegularFile(confPath)) {
+            LOG_ERROR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << confPath);
+            return BIO_ERR;
         }
     }
 #endif

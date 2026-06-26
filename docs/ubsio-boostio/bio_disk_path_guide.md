@@ -5,7 +5,7 @@
 推荐使用 `partition_disks.sh` 一键完成分区并输出配置。
 
 
-**[partition_disks.sh](https://gitcode.com/openeuler/ubs-io/blob/develop/ubsio-boostio/scripts/partition_disks.sh)脚本下载：**
+**[partition_disks.sh](https://gitcode.com/openeuler/ubs-io/blob/develop/scripts/ubsio-boostio/partition_disks.sh)脚本下载：**
 
 ```bash
 wget -O /path/to/partition_disks.sh https://raw.gitcode.com/openeuler/ubs-io/blobs/b81de180c6a15059a28155f17c8c96f502ef70cf/partition_disks.sh
@@ -39,7 +39,7 @@ sudo blkid /dev/nvme0n1               # 应无文件系统签名
 
 ### 2. 使用 partition_disks.sh 分区
 
-> **⚠️ 高危操作：** 选错磁盘将造成不可逆的数据丢失。请务必在执行前通过 `lsblk` 反复确认目标磁盘路径。
+> <span style="color:red"> ⚠️ 高危操作： 选错磁盘将造成不可逆的数据丢失。请务必在执行前通过 `lsblk` 反复确认目标磁盘路径。</span>
 
 脚本创建 GPT 分区表，均分磁盘并输出 `bio.disk.path`。默认 dry-run，加 `--yes` 才写入。
 
@@ -126,9 +126,9 @@ bio.disk.path = /dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
 
 ## 场景二：模拟盘部署（loop 设备方案）
 
-无可用裸盘时，用 `dd` + `losetup` 创建 loop 块设备模拟。
+无可用裸盘时，用 `dd` + `losetup` 创建 loop 块设备模拟，默认开启 direct_io 直通模式。
 
-> **⚠️ 高危操作：** 创建 loop 设备前，务必确认目标 `/dev/loopN` 未被占用，否则可能导致数据丢失。
+> <span style="color:red">**⚠️ 高危操作：** 创建 loop 设备前，务必确认目标 `/dev/loopN` 未被占用，否则可能导致数据丢失。</span>
 
 先查看哪些 loop 设备可用：
 
@@ -147,12 +147,20 @@ losetup -a
 # （若无输出则表示所有 loop 设备均空闲）
 ```
 
-确认空闲后，再执行以下操作（假设 /dev/loop0 空闲）：
+确认空闲后，再执行以下操作（假设 /dev/loop0 空闲，创建 1TB 镜像）：
 
 ```bash
-sudo dd if=/dev/zero of=/data/boostio_disk.img bs=1G count=10 status=progress
-sudo losetup /dev/loop0 /data/boostio_disk.img
+# 创建 1TB 镜像文件（count=1024，可根据需求调整）
+sudo dd if=/dev/zero of=/data/boostio_disk.img bs=1G count=1024 status=progress
 
+# 挂载 loop 设备，默认开启 direct_io 直通
+sudo losetup --direct-io=on /dev/loop0 /data/boostio_disk.img
+
+# 验证 direct_io 已开启
+losetup -l /dev/loop0 | grep -i direct
+# 期望输出包含：Direct I/O: on
+
+# 分区
 sudo bash /path/to/partition_disks.sh \
     --parts 4 --disk /dev/loop0 -c 4 --yes -f -w
 
@@ -166,12 +174,6 @@ sudo bash /path/to/partition_disks.sh \
 bio.disk.path = /dev/loop0p1:/dev/loop0p2:/dev/loop0p3:/dev/loop0p4
 ```
 
-### 配置开机自动挂载
-
-```bash
-# 修改 /etc/rc.local
-losetup /dev/loop0 /data/boostio_disk.img
-```
 ---
 
 ## 场景三：无盘部署

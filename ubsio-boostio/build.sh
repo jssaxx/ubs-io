@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--pkg]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
@@ -15,8 +15,67 @@ usage() {
     echo " 3 ./build.sh -t debug [--ut] // 限制仅DT构建脚本使用"
     echo " 4 ./build.sh -t debug --san=asan // Build BoostIO and test tools with ASan+UBSan"
     echo " 5 ./build.sh -t release --build_kv OFF // Skip UBSIO-KV packaging"
+    echo " 6 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
     echo
     exit 1;
+}
+
+copy_named_libs_from_dir() {
+    local src_dir=$1
+    local dst_dir=$2
+    shift 2
+    local lib_name
+
+    [[ -d "${src_dir}" ]] || return 0
+    for lib_name in "$@"; do
+        [[ -e "${src_dir}/${lib_name}" || -L "${src_dir}/${lib_name}" ]] || continue
+        cp -a "${src_dir}/${lib_name}" "${dst_dir}/"
+    done
+}
+
+package_libs() {
+    local pkg_lib_dir="${PROJ_DIR}/dist/lib"
+
+    echo "Packaging libraries to ${pkg_lib_dir}"
+    rm -rf "${pkg_lib_dir}"
+    mkdir -p "${pkg_lib_dir}"
+
+    copy_named_libs_from_dir "${PROJ_DIR}/dist/boostio/lib" "${pkg_lib_dir}" \
+        libbio_common.so \
+        libbio_interceptor_server.so \
+        libbio_sdk.a \
+        libbio_sdk.so \
+        libbio_sdk.so.1 \
+        libbio_sdk.so.1.0.0 \
+        libbio_security.so \
+        libbio_server.so \
+        libbio_tracepoint.so \
+        libbio_underfs.so \
+        libhtracer.so \
+        libock_interceptor.so \
+        libock_iofwd_proxy.so \
+        libtracepoint.so
+
+    if [[ "$BUILD_KV" == "ON" ]]; then
+        copy_named_libs_from_dir "${PROJ_DIR}/../ubsio-kv/dist/lib" "${pkg_lib_dir}" \
+            libubsio_kvc.so \
+            libubsio_kvc.so.1 \
+            libubsio_kvc.so.1.0.0
+    fi
+
+    copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/libboundscheck/lib" "${pkg_lib_dir}" \
+        libboundscheck.so
+    copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/libaio/lib" "${pkg_lib_dir}" \
+        libaio.so \
+        libaio.so.1 \
+        libaio.so.1.0.2
+
+    if [[ "$BUILD_TYPE" == "debug" ]]; then
+        copy_named_libs_from_dir "${PROJ_DIR}/dist/test_tools/lib" "${pkg_lib_dir}" \
+            libcli_agent.so \
+            libsdk_diagnose.so \
+            libserver_diagnose.so
+    fi
 }
 
 CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
@@ -28,6 +87,7 @@ CLI_FLAG=OFF
 PROMETHEUS_FLAG=OFF
 SANITIZER_FLAG=OFF
 BUILD_KV=ON
+BUILD_PKG=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -71,6 +131,10 @@ while true; do
             [[ "$kv_flag" != "ON" && "$kv_flag" != "OFF" ]] && echo "Invalid build_kv flag $2" && usage
             BUILD_KV=$kv_flag
             shift 2 ;;
+        --pkg )
+            BUILD_PKG=ON
+            shift
+            ;;
         --san=asan | --san=asan-ubsan | --asan | --asan-ubsan )
             SANITIZER_FLAG=ON
             shift ;;
@@ -202,6 +266,10 @@ if [[ "$BUILD_KV" == "ON" ]]; then
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/pkg/* ${PROJ_DIR}/dist/boostio/kv/pkg/.
+fi
+
+if [[ "$BUILD_PKG" == "ON" ]]; then
+    package_libs
 fi
 
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio
