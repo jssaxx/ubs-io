@@ -13,7 +13,7 @@ Source0:        ubs-io.tar.gz
 BuildArch:      aarch64
 
 BuildRequires:  gcc gcc-c++ make cmake maven hostname fuse-devel automake dos2unix
-BuildRequires:  librados-devel libaio-devel libtool numactl-devel libcurl-devel
+BuildRequires:  librados-devel libtool numactl-devel libcurl-devel
 BuildRequires:  openssl-devel
 BuildRequires:  libboundscheck ubs-comm-devel
 Requires:       libboundscheck ubs-comm-lib openssl-libs librados2

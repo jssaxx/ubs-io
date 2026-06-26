@@ -204,9 +204,9 @@ public:
         return instance;
     }
 
-    void BakFileProcess(const std::string &homePath);
+    void BakFileProcess(const std::string &configPath);
 
-    BResult Initialize(const std::string &homePath);
+    BResult Initialize(const std::string &configPath);
 
     void LoadDefaultConf() override;
 

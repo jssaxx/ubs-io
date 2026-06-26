@@ -11,11 +11,13 @@
  */
 
 #include <dlfcn.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
 #include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
+#include "bio_file_util.h"
 #include "bio_functions.h"
 #include "bio_log.h"
 #include "bio_monotonic.h"
@@ -31,6 +33,21 @@
 
 namespace ock {
 namespace bio {
+namespace {
+constexpr const char* BIO_CONFIG_ENV = "UBSIO_BIO_CONFIG_PATH";
+constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
+
+bool IsAbsoluteRegularFile(const std::string &path)
+{
+    if (path.empty() || path.front() != '/') {
+        return false;
+    }
+
+    struct stat pathStat {};
+    return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
+}
+}
+
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
@@ -106,6 +123,7 @@ BResult BioServer::InitializeRuntime()
 #ifdef DEBUG_UT
     path = "./";
 #endif
+    FileUtil::MakeDirRecursive(path, LOG_DIR_MODE);
     std::string logPath = path + "bio" + std::to_string(getpid()) + ".log";
     if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
         return BIO_INNER_ERR;
@@ -240,9 +258,17 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "./";
+    const std::string confPath = "./bio.conf";
 #else
-    const std::string confPath = "/etc/boostio/";
+    std::string confPath = CONFIG_PATH;
+    const char *envConfPath = getenv(BIO_CONFIG_ENV);
+    if (envConfPath != nullptr && envConfPath[0] != '\0') {
+        confPath = envConfPath;
+        if (!IsAbsoluteRegularFile(confPath)) {
+            LOG_ERROR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << confPath);
+            return BIO_ERR;
+        }
+    }
 #endif
     result = mConfig->Initialize(confPath);
     BIO_TP_END;
@@ -289,6 +315,7 @@ BResult BioServer::BioTraceInit()
 #else
     const std::string dumpDir = "/var/log/boostio/trace/";
 #endif
+    FileUtil::MakeDirRecursive(dumpDir, LOG_DIR_MODE);
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");

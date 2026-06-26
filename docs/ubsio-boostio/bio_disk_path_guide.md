@@ -1,11 +1,11 @@
 # bio.disk.path 配置指南
 
-`bio.disk.path` 是 UBSIO 的磁盘配置项，用于指定三级池化缓存层使用的块设备或分区，多个路径以冒号（`:`）分隔，最多 **16** 条。
+`bio.disk.path` 是 UBSIO 的磁盘配置项，用于指定三级池化缓存层使用的块设备或分区，多个路径以冒号（`:`）分隔，最多 **64** 条。
 
 推荐使用 `partition_disks.sh` 一键完成分区并输出配置。
 
 
-**[partition_disks.sh](https://gitcode.com/openeuler/ubs-io/blob/develop/ubsio-boostio/scripts/partition_disks.sh)脚本下载：**
+**[partition_disks.sh](https://gitcode.com/openeuler/ubs-io/blob/develop/scripts/ubsio-boostio/partition_disks.sh)脚本下载：**
 
 ```bash
 wget -O /path/to/partition_disks.sh https://raw.gitcode.com/openeuler/ubs-io/blobs/b81de180c6a15059a28155f17c8c96f502ef70cf/partition_disks.sh
@@ -39,7 +39,7 @@ sudo blkid /dev/nvme0n1               # 应无文件系统签名
 
 ### 2. 使用 partition_disks.sh 分区
 
-> **⚠️ 高危操作：** 选错磁盘将造成不可逆的数据丢失。请务必在执行前通过 `lsblk` 反复确认目标磁盘路径。
+> <span style="color:red"> ⚠️ 高危操作： 选错磁盘将造成不可逆的数据丢失。请务必在执行前通过 `lsblk` 反复确认目标磁盘路径。</span>
 
 脚本创建 GPT 分区表，均分磁盘并输出 `bio.disk.path`。默认 dry-run，加 `--yes` 才写入。
 
@@ -126,52 +126,39 @@ bio.disk.path = /dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
 
 ## 场景二：模拟盘部署（loop 设备方案）
 
-无可用裸盘时，用 `dd` + `losetup` 创建 loop 块设备模拟。
+无可用裸盘时，用 `dd` + `losetup --find --show` 创建 loop 块设备模拟，由系统自动选择空闲 loop 设备，默认开启 direct_io 直通模式。
 
-> **⚠️ 高危操作：** 创建 loop 设备前，务必确认目标 `/dev/loopN` 未被占用，否则可能导致数据丢失。
+> <span style="color:red">**⚠️ 高危操作：** 创建 loop 设备前，建议先确认当前 loop 设备占用情况；不要手动复用已被占用的 `/dev/loopN`，否则可能导致数据丢失。</span>
 
-先查看哪些 loop 设备可用：
-
-```bash
-# 1. 查看系统有哪些 loop 设备
-ls /dev/loop*
-
-# 输出示例：
-# /dev/loop0  /dev/loop1  /dev/loop2  ...  /dev/loop7
-
-# 2. 查看已占用的 loop 设备
-losetup -a
-
-# 输出示例：
-# /dev/loop1: [2049]:123456 (/data/other.img)   # <-- 已被占用
-# （若无输出则表示所有 loop 设备均空闲）
-```
-
-确认空闲后，再执行以下操作（假设 /dev/loop0 空闲）：
+创建 1TB 镜像，并自动分配空闲 loop 设备：
 
 ```bash
-sudo dd if=/dev/zero of=/data/boostio_disk.img bs=1G count=10 status=progress
-sudo losetup /dev/loop0 /data/boostio_disk.img
+# 创建 1TB 镜像文件（count=1024，可根据需求调整）
+sudo dd if=/dev/zero of=/data/boostio_disk.img bs=1G count=1024 status=progress
 
+# 挂载 loop 设备，默认开启 direct_io 直通；命令会输出实际分配的设备路径
+LOOP_DEV=$(sudo losetup --find --show --direct-io=on /data/boostio_disk.img)
+echo "${LOOP_DEV}"
+# 示例输出：/dev/loop2
+
+# 验证 direct_io 已开启
+losetup -l "${LOOP_DEV}" | grep -i direct
+# 期望输出包含：Direct I/O: on
+
+# 分区
 sudo bash /path/to/partition_disks.sh \
-    --parts 4 --disk /dev/loop0 -c 4 --yes -f -w
+    --parts 4 --disk "${LOOP_DEV}" -c 4 --yes -f -w
 
 # 输出：
-# bio.disk.path = /dev/loop0p1:/dev/loop0p2:/dev/loop0p3:/dev/loop0p4
+# bio.disk.path = /dev/loop2p1:/dev/loop2p2:/dev/loop2p3:/dev/loop2p4
 ```
 
-**`vim /etc/boostio/bio.conf`，增加或修改下述配置：**
+**`vim /etc/boostio/bio.conf`，将脚本输出的实际分区路径增加或修改到下述配置：**
 
 ```
-bio.disk.path = /dev/loop0p1:/dev/loop0p2:/dev/loop0p3:/dev/loop0p4
+bio.disk.path = /dev/loop2p1:/dev/loop2p2:/dev/loop2p3:/dev/loop2p4
 ```
 
-### 配置开机自动挂载
-
-```bash
-# 修改 /etc/rc.local
-losetup /dev/loop0 /data/boostio_disk.img
-```
 ---
 
 ## 场景三：无盘部署
@@ -195,8 +182,8 @@ bio.disk.path =
 # 1. 查看当前 loop 设备及其关联文件
 losetup -a
 
-# 2. 卸载 loop 设备（假设要卸载的是 /dev/loop0）
-sudo losetup -d /dev/loop0
+# 2. 卸载 loop 设备（替换为上面 losetup --find --show 输出的设备）
+sudo losetup -d /dev/loop2
 
 # 3. 删除镜像文件（可选）
 sudo rm -f /data/boostio_disk.img
@@ -210,7 +197,7 @@ sudo rm -f /data/boostio_disk.img
 |------|------|
 | 磁盘独占 | UBSIO / BoostIO 独占配置的磁盘/分区，不可与其他服务共享 |
 | 物理盘隔离 | 同一物理盘的分区不会分配给同一 deviceId（算法自动打散） |
-| 路径上限 | `bio.disk.path` 最多 16 条路径 |
+| 路径上限 | `bio.disk.path` 最多 64 条路径 |
 | 动态加盘 | standalone 模式不支持运行时加盘 |
 | 复用磁盘 | 不同 deviceId 会写入 BDM disk head，不匹配将拒绝恢复 |
 | 权限 | 进程需对块设备有读写权限，建议 root 运行 |

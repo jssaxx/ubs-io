@@ -135,11 +135,16 @@ inline bool FileUtil::MakeDirRecursive(const std::string &path, uint32_t mode)
         return false;
     }
 
-    if (Exist(path)) {
+    std::string dirPath = path;
+    while (dirPath.size() > 1 && dirPath.back() == '/') {
+        dirPath.pop_back();
+    }
+
+    if (Exist(dirPath)) {
         return true;
     }
 
-    char *chPath = const_cast<char *>(path.c_str());
+    char *chPath = const_cast<char *>(dirPath.c_str());
     char *p = strchr(chPath + 1, '/');
     for (; p != nullptr; (p = strchr(p + 1, '/'))) {
         *p = '\0';
@@ -152,7 +157,7 @@ inline bool FileUtil::MakeDirRecursive(const std::string &path, uint32_t mode)
         *p = '/';
     }
 
-    return ::mkdir(chPath, mode) == 0;
+    return ::mkdir(chPath, mode) == 0 || errno == EEXIST;
 }
 
 inline bool FileUtil::Remove(const std::string &path, bool canonicalPath)

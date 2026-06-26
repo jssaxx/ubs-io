@@ -26,20 +26,13 @@ message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
 find_package(pybind11 REQUIRED)
 pybind11_add_module(c2python_sdk c2python.cpp)
 
-set(UBSIO_BOOSTIO_DIR ${PROJECT_SOURCE_DIR}/../ubsio-boostio)
-
 target_include_directories(c2python_sdk PRIVATE
     ${Python3_INCLUDE_DIRS}
     ${SRC_DIR}/csrc/kvc
     ${SRC_DIR}/csrc/nds
     ${SRC_DIR}/csrc/utils
     ${PROJECT_SOURCE_DIR}/include
-    ${UBSIO_BOOSTIO_DIR}/src/sdk
-    ${UBSIO_BOOSTIO_DIR}/src/common
-)
-
-target_link_directories(c2python_sdk PRIVATE
-    ${UBSIO_BOOSTIO_DIR}/build
+    ${UBSIO_BOOSTIO_INCLUDE_DIR}
 )
 
 target_link_libraries(c2python_sdk PRIVATE
