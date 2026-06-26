@@ -27,15 +27,19 @@ else ()
 endif ()
 
 if (NOT USE_SYSTEM_HCOM)
-    include(FetchContent)
-    FetchContent_Declare(
-            ubs_comm
-            GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
-            GIT_TAG tag_BeiMing-I26.0.RC1.B013
-    )
-    FetchContent_GetProperties(ubs_comm)
-    if(NOT ubs_comm_POPULATED)
-        FetchContent_Populate(ubs_comm)
+    set(ubs_comm_SOURCE_DIR ${SOURCE_DIR})
+    if(NOT EXISTS "${SOURCE_DIR}/CMakeLists.txt")
+        include(FetchContent)
+        FetchContent_Declare(
+                ubs_comm
+                GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
+                GIT_TAG tag_BeiMing-I26.0.RC1.B013
+                SOURCE_DIR ${SOURCE_DIR}
+        )
+        FetchContent_GetProperties(ubs_comm)
+        if(NOT ubs_comm_POPULATED)
+            FetchContent_Populate(ubs_comm)
+        endif()
     endif()
 
     if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm)")

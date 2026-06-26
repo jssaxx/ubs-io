@@ -1,5 +1,6 @@
 # --- Path setup ---
 set(LIBAIO_INSTALL_DIR "${PROJECT_3RDPARTY_BIN_DIR}/libaio")
+set(LIBAIO_SRC_DIR "${PROJECT_3RDPARTY_SRC_DIR}/libaio/libaio")
 message(STATUS "LIBAIO_INSTALL_DIR: ${LIBAIO_INSTALL_DIR}")
 
 # --- Try system-installed libaio first ---
@@ -37,15 +38,16 @@ else()
 
     include(FetchContent)
 
-    # Fetch libaio 0.3.113 source from deepin-community GitHub mirror
-    set(LIBAIO_SRC_DIR "${PROJECT_3RDPARTY_SRC_DIR}/libaio/libaio")
-    FetchContent_Declare(
-        libaio_src
-        GIT_REPOSITORY https://github.com/deepin-community/libaio.git
-        GIT_TAG        0.3.113-8deepin2
-        SOURCE_DIR     ${LIBAIO_SRC_DIR}
-    )
-    FetchContent_MakeAvailable(libaio_src)
+    if(NOT EXISTS "${LIBAIO_SRC_DIR}/src/libaio.h")
+        # Fetch libaio 0.3.113 source from deepin-community GitHub mirror
+        FetchContent_Declare(
+            libaio_src
+            GIT_REPOSITORY https://github.com/deepin-community/libaio.git
+            GIT_TAG        0.3.113-8deepin2
+            SOURCE_DIR     ${LIBAIO_SRC_DIR}
+        )
+        FetchContent_MakeAvailable(libaio_src)
+    endif()
 
     # Build libaio using its native Makefile (handles arch-specific syscall headers
     # and links with --version-script=libaio.map for proper symbol versioning)

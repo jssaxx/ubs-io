@@ -25,7 +25,6 @@
 #include <prometheus/registry.h>
 #include <prometheus/gauge.h>
 
-#include "bio_tracepoint.h"
 #include "bio_client_log.h"
 #include "bio_ref.h"
 #include "bio_err.h"
