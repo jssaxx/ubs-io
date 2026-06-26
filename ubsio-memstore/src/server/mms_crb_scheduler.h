@@ -97,6 +97,8 @@ public:
     BResult HandleRecoverData(CrbStartRequest *req);
     void BackGroundRecoverTask(uint16_t nodeId, uint16_t ptId);
     BResult EncodeKeyValueToBuff(char *msgBuff, uint32_t &buffOffset, uint16_t keyLen, IndexValue *indexValue);
+    BResult ProcessIndexValue(IndexValue *indexValue, uint32_t &curItemNum, uint16_t dstNodeId, char *msgBuff,
+                              uint32_t &buffOffset);
     BResult ProcessBucket(uint32_t bucketIndex, uint32_t &curItemNum, uint16_t dstNodeId, char *msgBuff,
                           uint32_t &buffOffset);
     BResult CrbBatchSend(char *buff, uint32_t buffLen, uint16_t dstNode);
@@ -131,4 +133,3 @@ private:
 }  // namespace ock
 
 #endif  // MMS_CRB_SCHEDULER_H
-

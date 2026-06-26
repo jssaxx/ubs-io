@@ -556,63 +556,74 @@ BResult CrbScheduler::EncodeKeyValueToBuff(char *msgBuff, uint32_t &buffOffset, 
     return MMS_OK;
 }
 
+BResult CrbScheduler::ProcessIndexValue(IndexValue *indexValue, uint32_t &curItemNum, uint16_t dstNodeId,
+                                        char *msgBuff, uint32_t &buffOffset)
+{
+    IoDataRequest *req = reinterpret_cast<IoDataRequest *>(msgBuff);
+    uint16_t keyLen = indexValue->keyLen;
+    uint64_t needLen = IO_DESCRIPTION_LEN + keyLen + NO_1 + indexValue->totalDataLen;
+    if (UNLIKELY(needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - IO_DATA_REQUEST_LEN))) {
+        LOG_ERROR("Ioctx buff is too small, need len:" << needLen << ", buff len:" << CRB_RECOVER_MESSAGE_BUFF_LEN
+                                                       << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    if (needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - buffOffset)) {  // 装满了
+        req->num = curItemNum;
+        req->head.ptv = 0;
+        if (mCrcSwitch) {
+            static uint32_t skip =
+                sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
+            req->crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(msgBuff + skip), buffOffset - skip);
+        }
+
+        BResult ret = CrbBatchSend(msgBuff, buffOffset, dstNodeId);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Crb Batch send failed, ret:" << ret << ".");
+            return ret;
+        }
+
+        curItemNum = 0;
+        buffOffset = IO_DATA_REQUEST_LEN;
+    }
+
+    MMS_TRACE_START(CRB_COPY_VALUE_TO_BUFF);
+    BResult ret = EncodeKeyValueToBuff(msgBuff, buffOffset, keyLen, indexValue);
+    MMS_TRACE_END(CRB_COPY_VALUE_TO_BUFF, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Encode key value to buff failed, ret:" << ret << ", key:" << indexValue->key << ".");
+        return ret;
+    }
+
+    curItemNum++;
+    return MMS_OK;
+}
+
 BResult CrbScheduler::ProcessBucket(uint32_t bucketIndex, uint32_t &curItemNum, uint16_t dstNodeId, char *msgBuff,
                                     uint32_t &buffOffset)
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(msgBuff);
     uint64_t bucketAddr = mCache->GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
-    BResult ret = MMS_OK;
 
     CacheReadLock(&bucketNode->status);
-    IndexNode *node = &bucketNode->head;
-    while (node->valid == FLAG_VALID) {
-        IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
-        if (indexValue->ptId != req->head.ptId) {
-            node = &indexValue->next;
-            continue;
-        }
-
-        uint16_t keyLen = indexValue->keyLen;
-        uint64_t needLen = IO_DESCRIPTION_LEN + keyLen + NO_1 + indexValue->totalDataLen;
-        if (UNLIKELY(needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - IO_DATA_REQUEST_LEN))) {
-            CacheReadUnLock(&bucketNode->status);
-            LOG_ERROR("Ioctx buff is too small, need len:" << needLen << ", buff len:" << CRB_RECOVER_MESSAGE_BUFF_LEN
-                                                           << ".");
-            return MMS_INVALID_PARAM;
-        }
-
-        if (needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - buffOffset)) {  // 装满了
-            req->num = curItemNum;
-            req->head.ptv = 0;
-            if (mCrcSwitch) {
-                static uint32_t skip =
-                    sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
-                req->crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(msgBuff + skip), buffOffset - skip);
+    for (uint32_t slotIndex = 0; slotIndex < BUCKET_INLINE_SLOT_NUM; slotIndex++) {
+        IndexNode *node = &bucketNode->slots[slotIndex];
+        while (node->valid == FLAG_VALID) {
+            IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+            if (indexValue->ptId != req->head.ptId) {
+                node = &indexValue->next;
+                continue;
             }
 
-            ret = CrbBatchSend(msgBuff, buffOffset, dstNodeId);
+            BResult ret = ProcessIndexValue(indexValue, curItemNum, dstNodeId, msgBuff, buffOffset);
             if (UNLIKELY(ret != MMS_OK)) {
                 CacheReadUnLock(&bucketNode->status);
-                LOG_ERROR("Crb Batch send failed, ret: " << ret << ".");
                 return ret;
             }
 
-            curItemNum = 0;
-            buffOffset = IO_DATA_REQUEST_LEN;
+            node = &indexValue->next;
         }
-
-        MMS_TRACE_START(CRB_COPY_VALUE_TO_BUFF);
-        ret = EncodeKeyValueToBuff(msgBuff, buffOffset, keyLen, indexValue);
-        MMS_TRACE_END(CRB_COPY_VALUE_TO_BUFF, ret);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CacheReadUnLock(&bucketNode->status);
-            LOG_ERROR("Encode key value to buff failed, ret:" << ret << ", key:" << indexValue->key << ".");
-            return ret;
-        }
-
-        curItemNum++;
-        node = &indexValue->next;
     }
 
     CacheReadUnLock(&bucketNode->status);
