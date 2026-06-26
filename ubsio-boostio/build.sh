@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--pkg]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--pkg [pkg_dir]]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
@@ -16,6 +16,7 @@ usage() {
     echo " 4 ./build.sh -t debug --san=asan // Build BoostIO and test tools with ASan+UBSan"
     echo " 5 ./build.sh -t release --build_kv OFF // Skip UBSIO-KV packaging"
     echo " 6 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
+    echo " 7 ./build.sh -t release --pkg /tmp/boostio-lib // Copy built libraries to specified directory"
     echo
     exit 1;
 }
@@ -29,15 +30,27 @@ copy_named_libs_from_dir() {
     [[ -d "${src_dir}" ]] || return 0
     for lib_name in "$@"; do
         [[ -e "${src_dir}/${lib_name}" || -L "${src_dir}/${lib_name}" ]] || continue
-        cp -a "${src_dir}/${lib_name}" "${dst_dir}/"
+        \cp -a "${src_dir}/${lib_name}" "${dst_dir}/"
     done
 }
 
+validate_pkg_lib_dir() {
+    local pkg_lib_dir="$1"
+
+    if [[ ! -d "${pkg_lib_dir}" ]]; then
+        echo "Invalid pkg dir ${pkg_lib_dir}: directory does not exist."
+        exit 1
+    fi
+}
+
 package_libs() {
-    local pkg_lib_dir="${PROJ_DIR}/dist/lib"
+    local pkg_lib_dir="$1"
+    local default_pkg_lib_dir="${PROJ_DIR}/dist/lib"
 
     echo "Packaging libraries to ${pkg_lib_dir}"
-    rm -rf "${pkg_lib_dir}"
+    if [[ "${pkg_lib_dir}" == "${default_pkg_lib_dir}" ]]; then
+        rm -rf "${pkg_lib_dir}"
+    fi
     mkdir -p "${pkg_lib_dir}"
 
     copy_named_libs_from_dir "${PROJ_DIR}/dist/boostio/lib" "${pkg_lib_dir}" \
@@ -88,6 +101,8 @@ PROMETHEUS_FLAG=OFF
 SANITIZER_FLAG=OFF
 BUILD_KV=ON
 BUILD_PKG=OFF
+PKG_LIB_DIR=""
+CUSTOM_PKG_LIB_DIR=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -133,6 +148,20 @@ while true; do
             shift 2 ;;
         --pkg )
             BUILD_PKG=ON
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
+                PKG_LIB_DIR="$(realpath -m "$2")"
+                CUSTOM_PKG_LIB_DIR=ON
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --pkg=* )
+            BUILD_PKG=ON
+            pkg_dir="${1#--pkg=}"
+            [[ -z "${pkg_dir}" ]] && echo "Invalid pkg dir $1" && usage
+            PKG_LIB_DIR="$(realpath -m "${pkg_dir}")"
+            CUSTOM_PKG_LIB_DIR=ON
             shift
             ;;
         --san=asan | --san=asan-ubsan | --asan | --asan-ubsan )
@@ -150,6 +179,10 @@ while true; do
             break;;
     esac
 done
+
+if [[ "$CUSTOM_PKG_LIB_DIR" == "ON" ]]; then
+    validate_pkg_lib_dir "${PKG_LIB_DIR}"
+fi
 
 if [[ "$BUILD_TYPE" == "clean" ]]; then
     cd $BUILD_DIR
@@ -269,7 +302,8 @@ if [[ "$BUILD_KV" == "ON" ]]; then
 fi
 
 if [[ "$BUILD_PKG" == "ON" ]]; then
-    package_libs
+    [[ -z "${PKG_LIB_DIR}" ]] && PKG_LIB_DIR="${PROJ_DIR}/dist/lib"
+    package_libs "${PKG_LIB_DIR}"
 fi
 
 tar -czvf BoostIO_1.0.0_$(uname -s)-$(arch)_${BUILD_TYPE}.tar.gz boostio

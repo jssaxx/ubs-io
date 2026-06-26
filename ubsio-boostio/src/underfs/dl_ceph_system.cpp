@@ -148,7 +148,7 @@ BResult DlCephSystem::Init()
 
     if (mRadosPoolLookup(mConn, mPool.c_str()) < 0) {
         if (mRadosPoolCreate(mConn, mPool.c_str()) < 0) {
-            LOG_ERROR("Failed to create pool, ret:" << ret);
+            LOG_ERROR("Failed to create pool.");
             mRadosShutdown(mConn);
             return BIO_UFS_IOERR;
         }
