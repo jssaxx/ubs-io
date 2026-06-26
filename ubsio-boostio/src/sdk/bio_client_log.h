@@ -30,6 +30,7 @@
 namespace ock {
 namespace bio {
 using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
+constexpr uint32_t SDK_LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
 
 class BioClientLog {
 public:
@@ -62,7 +63,7 @@ public:
 
             if (options.logType == 1) { // file
                 auto logDir = logFilePath;
-                if (!FileUtil::MakeDirRecursive(logDir, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) {
+                if (!FileUtil::MakeDirRecursive(logDir, SDK_LOG_DIR_MODE)) {
                     std::cout << "Failed to create log dir." << std::endl;
                     return -1;
                 }
