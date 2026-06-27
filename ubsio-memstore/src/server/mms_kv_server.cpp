@@ -832,12 +832,12 @@ BResult MmsKvServer::HandlePutRemote(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
     auto ret = PutLocal(ctx.MessageData(), ctx.MessageDataLen(), true);
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyPeerRequest(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
 
@@ -1088,12 +1088,12 @@ BResult MmsKvServer::HandleUpdateRemote(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
     auto ret = UpdateLocal(ctx.MessageData(), ctx.MessageDataLen());
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyPeerRequest(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
 
@@ -1303,12 +1303,12 @@ BResult MmsKvServer::HandleDeleteRemote(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
     auto ret = DeleteLocal(ctx.MessageData(), ctx.MessageDataLen(), true);
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyPeerRequest(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
 
@@ -1465,12 +1465,12 @@ BResult MmsKvServer::HandleReplaceRemote(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) || UNLIKELY(ctx.MessageDataLen() > mIoCtxBuffLen) ||
         UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
     auto ret = ReplaceLocal(ctx.MessageData(), ctx.MessageDataLen());
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyPeerRequest(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
 
@@ -1688,18 +1688,18 @@ BResult MmsKvServer::HandleRangeDeleteMultiImpl(void *ioBuff, uint32_t ioLen)
 BResult MmsKvServer::HandleRangeDeleteRemote(ServiceContext &ctx)
 {
     if (!mArtQuerySwitch) {
-        mNetEngine->Reply(ctx, MMS_NOT_READY, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_NOT_READY, nullptr, 0);
         return MMS_OK;
     }
 
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(RangeDeleteDataRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
     auto ret = RangeDeleteLocal(ctx.MessageData(), ctx.MessageDataLen());
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyPeerRequest(ctx, ret, nullptr, 0);
     return MMS_OK;
 }
 
@@ -1870,8 +1870,14 @@ BResult MmsKvServer::GetSeqNoList(uint64_t seqList[], uint32_t &seqNum, uint16_t
 
     req.head = { 0, MMS_OP_S_GET_SEQNO_LIST, groupIndex, ptId, ptv };
 
-    auto ret = mNetEngine->SyncCall<GetSeqListRequest, GetSeqListResponse>(nid, groupIndex, MMS_OP_S_GET_SEQNO_LIST,
-                                                                           req, rsp);
+    BResult ret = MMS_OK;
+    if (mMulticast) {
+        ret = mMulticastEngine->MulticastSyncCall<GetSeqListRequest, GetSeqListResponse>(
+            nid, MMS_OP_S_GET_SEQNO_LIST, req, rsp);
+    } else {
+        ret = mNetEngine->SyncCall<GetSeqListRequest, GetSeqListResponse>(nid, groupIndex, MMS_OP_S_GET_SEQNO_LIST,
+                                                                          req, rsp);
+    }
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Get seq list failed, ret: " << ret << ", remote:" << nid << ", ptId:" << ptId << ".");
         return ret;
@@ -2009,8 +2015,14 @@ BResult MmsKvServer::GetSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtIn
     req.seqNo = negoSeqNo;
     char *respData = nullptr;
     uint64_t respLen = 0;
-    auto ret = mNetEngine->SyncCall<GetSeqDataRequest, char>(negoLocId, groupIndex, MMS_OP_S_GET_SEQNO_DATA,
-                                                             req, &respData, respLen);
+    BResult ret = MMS_OK;
+    if (mMulticast) {
+        ret = mMulticastEngine->MulticastSyncCall<GetSeqDataRequest, char>(
+            negoLocId, MMS_OP_S_GET_SEQNO_DATA, req, &respData, respLen);
+    } else {
+        ret = mNetEngine->SyncCall<GetSeqDataRequest, char>(negoLocId, groupIndex, MMS_OP_S_GET_SEQNO_DATA,
+                                                            req, &respData, respLen);
+    }
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Get seq data failed, ret: " << ret << ", ptId:" << ptInfo.ptId << ".");
         return ret;
@@ -2046,20 +2058,38 @@ BResult MmsKvServer::PutSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtIn
     }
 
     BResult resp;
-    auto ret = mNetEngine->SyncCall<BResult>(negoLocId, groupIndex, req->head.opcode, data, len, resp);
-    if (UNLIKELY(ret != MMS_OK || resp != MMS_OK)) {
+    BResult ret = MMS_OK;
+    if (mMulticast) {
+        ret = mMulticastEngine->MulticastSyncCall<BResult>(negoLocId, req->head.opcode, data, len, resp);
+    } else {
+        ret = mNetEngine->SyncCall<BResult>(negoLocId, groupIndex, req->head.opcode, data, len, resp);
+    }
+    if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Put seq data failed, ret: " << ret << ", ptId:" << ptInfo.ptId << ".");
         return ret;
     }
+    if (UNLIKELY(resp != MMS_OK)) {
+        LOG_ERROR("Put seq data failed, ret: " << resp << ", ptId:" << ptInfo.ptId << ".");
+        return resp;
+    }
 
     return MMS_OK;
+}
+
+void MmsKvServer::ReplyPeerRequest(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize)
+{
+    if (mMulticast) {
+        mMulticastEngine->Reply(ctx, retCode, resp, respSize);
+        return;
+    }
+    mNetEngine->Reply(ctx, retCode, resp, respSize);
 }
 
 BResult MmsKvServer::HandleGetSeqNoList(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetSeqListRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
@@ -2069,9 +2099,9 @@ BResult MmsKvServer::HandleGetSeqNoList(ServiceContext &ctx)
     if (ret != MMS_OK) {
         LOG_ERROR("Get seq no list failed, ret:" << ret << ", ptId:" << req->head.ptId << ", groupIndex:" <<
                   req->head.groupIndex << ".");
-        mNetEngine->Reply(ctx, MMS_INNER_ERR, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INNER_ERR, nullptr, 0);
     } else {
-        mNetEngine->Reply(ctx, MMS_OK, &rsp, sizeof(GetSeqListResponse));
+        ReplyPeerRequest(ctx, MMS_OK, &rsp, sizeof(GetSeqListResponse));
     }
     return MMS_OK;
 }
@@ -2080,7 +2110,7 @@ BResult MmsKvServer::HandleGetSeqNoData(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(GetSeqDataRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
 
@@ -2089,16 +2119,16 @@ BResult MmsKvServer::HandleGetSeqNoData(ServiceContext &ctx)
     void *rspData = malloc(rspLen);
     if (UNLIKELY(rspData == nullptr)) {
         LOG_ERROR("Malloc data fail, len:" << rspLen);
-        mNetEngine->Reply(ctx, MMS_ALLOC_FAIL, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_ALLOC_FAIL, nullptr, 0);
         return MMS_OK;
     }
     auto ret = mSequence->GetSeqNoData2Slv(req->head.ptId, req->head.groupIndex, req->seqNo, rspData, rspLen);
     if (ret != MMS_OK) {
         LOG_ERROR("Get seq no data failed, ret:" << ret << ", ptId:" << req->head.ptId << ", groupIndex:" <<
                   req->head.groupIndex << ", seq no:" << req->seqNo << ".");
-        mNetEngine->Reply(ctx, MMS_INNER_ERR, nullptr, 0);
+        ReplyPeerRequest(ctx, MMS_INNER_ERR, nullptr, 0);
     } else {
-        mNetEngine->Reply(ctx, MMS_OK, rspData, rspLen);
+        ReplyPeerRequest(ctx, MMS_OK, rspData, rspLen);
     }
     free(rspData);
     return MMS_OK;

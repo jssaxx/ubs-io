@@ -54,6 +54,14 @@ BResult CrbScheduler::Init()
         LOG_ERROR("Net engine is nullptr");
         return MMS_ALLOC_FAIL;
     }
+    mMulticast = MmsServer::Instance()->GetConfig()->GetBasicConfig().multicastSwitch;
+    if (mMulticast) {
+        mMulticastEngine = MmsServer::Instance()->GetMulticastEngine();
+        if (UNLIKELY(mMulticastEngine == nullptr)) {
+            LOG_ERROR("Multicast engine is nullptr.");
+            return MMS_ALLOC_FAIL;
+        }
+    }
 
     mCache = Cache::Instance();
     if (UNLIKELY(mCache == nullptr)) {
@@ -67,13 +75,16 @@ BResult CrbScheduler::Init()
         return MMS_ALLOC_FAIL;
     }
 
-    mExeService = ExecutorService::Create(NO_8, NO_2048);
+    const auto &crbConfig = MmsServer::Instance()->GetConfig()->GetCrbConfig();
+    uint16_t crbSendThreadNum = static_cast<uint16_t>(crbConfig.sendCpuIds.size());
+    mExeService = ExecutorService::Create(crbSendThreadNum, NO_8);
     if (UNLIKELY(mExeService == nullptr)) {
         LOG_ERROR("Failed to create crb executor.");
         return MMS_ALLOC_FAIL;
     }
 
     mExeService->SetThreadName("CrbExecutor");
+    mExeService->SetCpuIds(crbConfig.sendCpuIds);
     if (UNLIKELY(!(mExeService->Start()))) {
         LOG_ERROR("Failed to start execution service for crb executor.");
         mExeService->Stop();
@@ -87,6 +98,33 @@ BResult CrbScheduler::Init()
 void CrbScheduler::Exit()
 {
     mExeService->Stop();
+}
+
+BResult CrbScheduler::SendStartRecoverRequest(CrbStartRequest &req, uint16_t dstNode, BResult &rsp)
+{
+    if (mMulticast) {
+        return mMulticastEngine->MulticastSyncCall<CrbStartRequest, BResult>(
+            dstNode, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+    }
+    return mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+}
+
+void CrbScheduler::SendCrbDataAsyncRequest(void *buff, uint32_t buffLen, uint16_t dstNode, Callback &callback)
+{
+    if (mMulticast) {
+        mMulticastEngine->MulticastAsyncCallBuff(dstNode, buff, buffLen, callback);
+        return;
+    }
+    mNetEngine->AsyncCallBuff(dstNode, g_groupIndex, MMS_OP_S_CRB_RECEIVE_DATA, buff, buffLen, callback);
+}
+
+void CrbScheduler::ReplyServerRequest(ServiceContext &ctx, int32_t retCode)
+{
+    if (mMulticast) {
+        mMulticastEngine->Reply(ctx, retCode, nullptr, 0);
+        return;
+    }
+    mNetEngine->Reply(ctx, retCode, nullptr, 0);
 }
 
 void CrbScheduler::UpdateLocalCopys()
@@ -171,8 +209,7 @@ BResult CrbScheduler::SendCrbRequests()
     CrbHandle handle = [this](void *reqBuff, uint16_t dstNode) -> BResult {
         CrbStartRequest req = *(static_cast<CrbStartRequest *>(reqBuff));
         BResult rsp = MMS_OK;
-        BResult ret =
-            mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+        BResult ret = SendStartRecoverRequest(req, dstNode, rsp);
         if (UNLIKELY(ret != MMS_OK)) {
             return ret;
         }
@@ -252,20 +289,20 @@ BResult CrbScheduler::HandleCrbReceiveData(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) ||
         UNLIKELY(ctx.MessageDataLen() > CRB_RECOVER_MESSAGE_BUFF_LEN) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyServerRequest(ctx, MMS_INVALID_PARAM);
         return MMS_OK;
     }
 
     if (!mIsRecovering) {
         LOG_WARN("Not recover status.");
-        mNetEngine->Reply(ctx, MMS_NOT_READY, nullptr, 0);
+        ReplyServerRequest(ctx, MMS_NOT_READY);
         return MMS_OK;
     }
 
     BResult ret = mKvServer->PutLocal(ctx.MessageData(), ctx.MessageDataLen());
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Crb put local failed, ret:" << ret << ".");
-        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        ReplyServerRequest(ctx, ret);
         return MMS_OK;
     }
 
@@ -275,7 +312,7 @@ BResult CrbScheduler::HandleCrbReceiveData(ServiceContext &ctx)
         ret = ReportPtRecoverDone(req->head.nodeId, req->head.ptId);
     }
 
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyServerRequest(ctx, ret);
     return MMS_OK;
 }
 
@@ -340,7 +377,7 @@ BResult CrbScheduler::HandleNotifyStartRecover(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(CrbStartRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("[CrbSched]Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyServerRequest(ctx, MMS_INVALID_PARAM);
         return MMS_OK;
     }
 
@@ -348,20 +385,28 @@ BResult CrbScheduler::HandleNotifyStartRecover(ServiceContext &ctx)
     LOG_INFO("Receive a crb request, recover pt:" << req->head.ptId << ", recover node:" << req->head.nodeId << ".");
 
     BResult ret = HandleRecoverData(req);
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyServerRequest(ctx, ret);
     return MMS_OK;
 }
 
 BResult CrbScheduler::CrbBatchSend(char *buff, uint32_t buffLen, uint16_t dstNode)
 {
-    CrbHandle handle = [this, buffLen](void *buff, uint16_t dstNode) -> BResult {
-        BResult result = MMS_OK;
-        BResult ret = mNetEngine->SyncCall(dstNode, g_groupIndex, MMS_OP_S_CRB_RECEIVE_DATA, buff, buffLen, result);
-        if (UNLIKELY(ret != MMS_OK)) {
-            return ret;
+    auto cbFunc = [](void *ctx, void *, uint32_t, int32_t result) {
+        auto *cbCtx = static_cast<KvCbCtx *>(ctx);
+        if (UNLIKELY(result != MMS_OK)) {
+            cbCtx->result.store(result, std::memory_order_relaxed);
         }
+        cbCtx->quota.store(NO_0, std::memory_order_release);
+    };
 
-        return result;
+    CrbHandle handle = [this, buffLen, cbFunc](void *buff, uint16_t dstNode) -> BResult {
+        KvCbCtx cbCtx(NO_1, MMS_OK);
+        Callback callback(cbFunc, static_cast<void *>(&cbCtx));
+        SendCrbDataAsyncRequest(buff, buffLen, dstNode, callback);
+        while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
+            CPU_RELAX();
+        }
+        return cbCtx.result.load(std::memory_order_relaxed);
     };
 
     MMS_TRACE_START(CRB_BATCH_SEND_BUFF);
@@ -431,8 +476,7 @@ BResult CrbScheduler::SendMigrateRequest(uint16_t newRecoverNode, uint16_t ptId)
     CrbHandle handle = [this](void *reqBuff, uint16_t dstNode) -> BResult {
         CrbStartRequest req = *(static_cast<CrbStartRequest *>(reqBuff));
         BResult rsp = MMS_OK;
-        BResult ret =
-            mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+        BResult ret = SendStartRecoverRequest(req, dstNode, rsp);
         if (UNLIKELY(ret != MMS_OK)) {
             return ret;
         }

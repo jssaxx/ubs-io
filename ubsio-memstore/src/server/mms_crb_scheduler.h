@@ -23,6 +23,7 @@
 #include "net_common.h"
 #include "mms_cache.h"
 #include "mms_kv_server.h"
+#include "net_multicast_engine.h"
 
 namespace ock {
 namespace mms {
@@ -109,14 +110,20 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
+    BResult SendStartRecoverRequest(CrbStartRequest &req, uint16_t dstNode, BResult &rsp);
+    void SendCrbDataAsyncRequest(void *buff, uint32_t buffLen, uint16_t dstNode, Callback &callback);
+    void ReplyServerRequest(ServiceContext &ctx, int32_t retCode);
+
     std::atomic<bool> mIsRecovering{false};
     std::atomic<bool> mServiceable{false};
     bool mCrcSwitch = false;
 
     CmPtr mCm = nullptr;
     NetEnginePtr mNetEngine = nullptr;
+    NetMulticastEnginePtr mMulticastEngine = nullptr;
     CachePtr mCache = nullptr;
     MmsKvServerPtr mKvServer = nullptr;
+    bool mMulticast = false;
 
     uint16_t mRecoverIndex = 0;
     ReadWriteLock mRecoverLock;

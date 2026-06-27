@@ -40,6 +40,16 @@ struct WorkerGroupConfig {
     std::vector<std::string> cpuSets;
 };
 
+struct NetEngineInitOptions {
+    int16_t timeoutSec = 0;
+    uint32_t coreThreadNum = 0;
+    uint32_t queueSize = 0;
+    NetLogFunc logFunc = nullptr;
+    NetMemList memList;
+    bool startConnector = true;
+    bool startRequestExecutor = true;
+};
+
 class NetEngine;
 using NetEnginePtr = Ref<NetEngine>;
 class NetEngine {
@@ -47,8 +57,7 @@ public:
     NetEngine() = default;
     ~NetEngine() = default;
 
-    BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
-        NetMemList &memList);
+    BResult Initialize(const NetEngineInitOptions &options);
     BResult Start(const NetOptions &opt);
     void Stop();
 
@@ -752,9 +761,6 @@ private:
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
     }
-
-private:
-    static constexpr uint32_t MAX_NEW_REQ_HANDLER = 256L;
 
 private:
     bool mStarted = false;

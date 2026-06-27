@@ -32,6 +32,7 @@ const auto NOTIFY_SHM_QUEUE_DEPTH = std::make_pair("mms.notify.shm.queue.depth",
 const auto NOTIFY_SHM_WORKER_NUM = std::make_pair("mms.notify.shm.worker.num", 1);
 const auto NOTIFY_SHM_WORKER_CPUSET = std::make_pair("mms.notify.shm.worker.cpuset", "54-54");
 const auto NOTIFY_SHM_BUSY_POLLING = std::make_pair("mms.notify.shm.busy_polling", "true");
+const auto CRB_SEND_CPUSET = std::make_pair("mms.crb.send.cpuset", "54-55");
 const auto ART_QUERY_SWITCH = std::make_pair("mms.art.query.switch", "false");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
 
@@ -147,6 +148,10 @@ public:
         bool busyPolling = true;
     };
 
+    struct CrbConfig {
+        std::vector<uint16_t> sendCpuIds;
+    };
+
 public:
     static const MmsConfigPtr &Instance()
     {
@@ -183,6 +188,11 @@ public:
         return mNotifyShmConfig;
     }
 
+    const CrbConfig &GetCrbConfig() const noexcept
+    {
+        return mCrbConfig;
+    }
+
 private:
     void LoadDefaultNetConf();
 
@@ -216,6 +226,7 @@ private:
 
     BResult AutoConfigBasic(const ConfigurationPtr &conf);
     BResult AutoConfigNotifyShm(const ConfigurationPtr &conf);
+    BResult AutoConfigCrb(const ConfigurationPtr &conf);
 
     BResult CheckNumaInfo(uint16_t numaNum, uint16_t numaId[]);
 
@@ -225,6 +236,7 @@ private:
     CmConfig mCmConfig;
     BasicConfig mBasicConfig;
     NotifyShmConfig mNotifyShmConfig;
+    CrbConfig mCrbConfig;
     bool mInited{ false };
 };
 }

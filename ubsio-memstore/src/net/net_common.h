@@ -57,6 +57,7 @@ enum ConnectMode {
 };
 
 constexpr uint32_t INVALID_NID = 1024;
+constexpr uint32_t MAX_NEW_REQ_HANDLER = 256;
 
 union NetNode {
     struct {

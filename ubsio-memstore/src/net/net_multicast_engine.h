@@ -34,6 +34,11 @@ namespace mms {
 
 constexpr uint8_t MMAP_AREA_IOCTX_INDEX = 0;
 
+struct MulticastSyncResponse {
+    void *data = nullptr;
+    uint64_t len = 0;
+};
+
 class NetMulticastEngine;
 using NetMulticastEnginePtr = Ref<NetMulticastEngine>;
 class NetMulticastEngine {
@@ -144,6 +149,43 @@ public:
     }
 
     void MulticastAsyncCallBuff(void *req, uint32_t reqLen, Callback callback);
+    void MulticastAsyncCallBuff(uint16_t dstNode, void *req, uint32_t reqLen, Callback callback);
+
+    template <typename TReq>
+    void MulticastAsyncCall(uint16_t dstNode, TReq &req, Callback &callback)
+    {
+        MulticastAsyncCallBuff(dstNode, &req, sizeof(TReq), callback);
+    }
+
+    BResult MulticastSyncCallBuff(uint16_t dstNode, uint16_t opCode, void *req, uint32_t reqLen, void *resp,
+                                  uint32_t respLen);
+    BResult MulticastSyncCallBuff(uint16_t dstNode, uint16_t opCode, void *req, uint32_t reqLen,
+                                  MulticastSyncResponse &resp);
+
+    template <typename TReq, typename TResp>
+    BResult MulticastSyncCall(uint16_t dstNode, uint16_t opCode, TReq &req, TResp &resp)
+    {
+        return MulticastSyncCallBuff(dstNode, opCode, &req, sizeof(TReq), &resp, sizeof(TResp));
+    }
+
+    template <typename TResp>
+    BResult MulticastSyncCall(uint16_t dstNode, uint16_t opCode, void *req, uint32_t reqLen, TResp &resp)
+    {
+        return MulticastSyncCallBuff(dstNode, opCode, req, reqLen, &resp, sizeof(TResp));
+    }
+
+    template <typename TReq, typename TResp>
+    BResult MulticastSyncCall(uint16_t dstNode, uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen)
+    {
+        MulticastSyncResponse syncResp;
+        auto ret = MulticastSyncCallBuff(dstNode, opCode, &req, sizeof(TReq), syncResp);
+        if (UNLIKELY(ret != MMS_OK)) {
+            return ret;
+        }
+        *resp = static_cast<TResp *>(syncResp.data);
+        respLen = syncResp.len;
+        return MMS_OK;
+    }
 
     void Reply(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
 

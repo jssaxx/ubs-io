@@ -109,8 +109,7 @@ static BResult AddExtraIpcWorkerGroups(UBSHcomService *service, const WorkerGrou
     return AddWorkerGroups(service, extraIpcConfig, NO_1);
 }
 
-BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
-    NetMemList &memList)
+BResult NetEngine::Initialize(const NetEngineInitOptions &options)
 {
     std::lock_guard<std::mutex> guard(mMutex);
     if (mStarted) {
@@ -118,10 +117,10 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
         return MMS_OK;
     }
 
-    mMemList = memList;
+    mMemList = options.memList;
 
-    NetLog::Instance()->SetLogFuncFunc(func);
-    mTimeout = timeoutSec;
+    NetLog::Instance()->SetLogFuncFunc(options.logFunc);
+    mTimeout = options.timeoutSec;
 
     mChannelMgr = MakeRef<NetChannelMgr>();
     if (mChannelMgr == nullptr) {
@@ -130,18 +129,21 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
     }
     mChannelMgr->Initialize();
 
-    mConnector = MakeRef<NetConnector>(this);
-    if (mConnector == nullptr) {
-        NET_LOG_ERROR("Make net connector failed.");
-        return MMS_ALLOC_FAIL;
-    }
-    BResult ret = mConnector->Start();
-    if (ret != MMS_OK) {
-        NET_LOG_ERROR("Failed to start net connector, ret:" << ret << ".");
-        return ret;
+    BResult ret = MMS_OK;
+    if (options.startConnector) {
+        mConnector = MakeRef<NetConnector>(this);
+        if (mConnector == nullptr) {
+            NET_LOG_ERROR("Make net connector failed.");
+            return MMS_ALLOC_FAIL;
+        }
+        ret = mConnector->Start();
+        if (ret != MMS_OK) {
+            NET_LOG_ERROR("Failed to start net connector, ret:" << ret << ".");
+            return ret;
+        }
     }
 
-    mReqExecutorNum = coreThreadNum;
+    mReqExecutorNum = options.startRequestExecutor ? options.coreThreadNum : 0;
     if (mReqExecutorNum != 0) {
         mRequestExecutor = MakeRef<NetExecutorPool>("NetExecutor");
         if (mRequestExecutor == nullptr) {
@@ -149,7 +151,7 @@ BResult NetEngine::Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32
             return MMS_ALLOC_FAIL;
         }
 
-        ret = mRequestExecutor->Start(mReqExecutorNum, queueSize);
+        ret = mRequestExecutor->Start(mReqExecutorNum, options.queueSize);
         if (ret != MMS_OK) {
             NET_LOG_ERROR("Failed to start request executor, ret:" << ret << ".");
             return ret;

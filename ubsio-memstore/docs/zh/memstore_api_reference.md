@@ -11,6 +11,7 @@ UBS MemStore 主体使用 C/C++ 开发，对外提供 C 语言接口。调用方
 - 批量接口中，每个 item 都有独立的 `result` 字段，用于返回单条 key 的执行结果。
 - 批量接口整体返回值规则：全部成功返回 `RET_MMS_OK`；任意 item 失败时返回最后一个失败 item 的错误码。
 - key 统一使用 `const char *key + uint16_t keyLen` 表示，`keyLen` 不包含字符串结束符 `'\0'`。
+- key 最大有效长度为 31 字节，超过该长度的请求会返回入参错误。
 - `PutItems::isNotify` 和 `DeleteItems::isNotify` 用于控制单条 key 是否触发数据变更通知。全局通知开关关闭或 `isNotify` 为 0 时，不触发通知。
 - 前缀查询、范围查询和范围删除受 `mms.art.query.switch` 控制。开关关闭时，相关接口返回不可用错误。
 - 查询接口返回的资源必须使用 `MmsFreeResources` 释放。

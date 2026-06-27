@@ -453,6 +453,16 @@ void MmsServer::FillIpcNetOptions(NetOptions &netOptions)
     netOptions.workerGroupsCpuSet = netConfig.ipcWorkerGroupsCpuSet;
     netOptions.workerGroupsNum = netConfig.ipcWorkerGroupsNum;
     netOptions.role = NET_SERVER;
+
+    // tls
+    netOptions.tlsEnable = netConfig.tlsEnable;
+    netOptions.certificationPath = netConfig.certificationPath;
+    netOptions.caCerPath = netConfig.caCerPath;
+    netOptions.caCrlPath = netConfig.caCrlPath;
+    netOptions.privateKeyPath = netConfig.privateKeyPath;
+    netOptions.privateKeyPasswordPath = netConfig.privateKeyPasswordPath;
+    netOptions.decrypterLibPath = netConfig.decrypterLibPath;
+    netOptions.opensslLibDir = netConfig.opensslLibDir;
 }
 
 BResult MmsServer::InitUnicastNetEngine()
@@ -462,8 +472,16 @@ BResult MmsServer::InitUnicastNetEngine()
     NetMemList memList;
     auto ret = MmsMemMgr::Instance()->GetAreaMemDesc(memList.address, memList.size, memList.num);
     ChkTrue(ret == MMS_OK, ret, "Mem mgr get k/v mem failed, result:" << ret << ".");
-    ret = mNetEngine->Initialize(timeoutSec, netConfig.handleRequestThreadNum,
-                                 netConfig.handleRequestQueueSize, Log, memList);
+    bool startRpcResources = !mConfig->GetBasicConfig().multicastSwitch;
+    NetEngineInitOptions initOptions;
+    initOptions.timeoutSec = timeoutSec;
+    initOptions.coreThreadNum = netConfig.handleRequestThreadNum;
+    initOptions.queueSize = netConfig.handleRequestQueueSize;
+    initOptions.logFunc = Log;
+    initOptions.memList = memList;
+    initOptions.startConnector = startRpcResources;
+    initOptions.startRequestExecutor = startRpcResources;
+    ret = mNetEngine->Initialize(initOptions);
     ChkTrue(ret == MMS_OK, ret, "Net engine initialize failed, result:" << ret << ".");
 
     mNetEngine->ResetLogLevel(mConfig->GetBasicConfig().logLevel);
@@ -507,20 +525,31 @@ BResult MmsServer::MmsUnicastNet()
     ChkTrue(ret == MMS_OK, ret, "Register server channel broken handler failed, ret:" << ret << ".");
 
     NetOptions netOptions;
-    FillNetOptions(netOptions);
-    ret = mNetEngine->Start(netOptions);
-    ChkTrue(ret == MMS_OK, ret, "Start rpc service failed, result:" << ret << ".");
+    if (!mConfig->GetBasicConfig().multicastSwitch) {
+        FillNetOptions(netOptions);
+        ret = mNetEngine->Start(netOptions);
+        ChkTrue(ret == MMS_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
-    ret = InitNetNumaGroup(netOptions.workerGroupsNum);
-    ChkTrue(ret == MMS_OK, ret, "Init net numa group failed, ret:" << ret << ".");
-    if (!mConfig->GetBasicConfig().isSeparateMode) {
-        LOG_INFO("Converge mode, no needed to init ipc services.");
+        ret = InitNetNumaGroup(netOptions.workerGroupsNum);
+        ChkTrue(ret == MMS_OK, ret, "Init net numa group failed, ret:" << ret << ".");
+        if (!mConfig->GetBasicConfig().isSeparateMode) {
+            LOG_INFO("Converge mode, no needed to init ipc services.");
+            return MMS_OK;
+        }
+    } else if (!mConfig->GetBasicConfig().isSeparateMode) {
+        ret = InitNetNumaGroup(NO_1);
+        ChkTrue(ret == MMS_OK, ret, "Init net numa group failed, ret:" << ret << ".");
+        LOG_INFO("Multicast mode, skip rpc and ipc services in converge mode.");
         return MMS_OK;
     }
 
     FillIpcNetOptions(netOptions);
     ret = mNetEngine->Start(netOptions);
     ChkTrue(ret == MMS_OK, ret, "Startipc service failed, result:" << ret << ".");
+    if (mConfig->GetBasicConfig().multicastSwitch) {
+        ret = InitNetNumaGroup(netOptions.workerGroupsNum);
+        ChkTrue(ret == MMS_OK, ret, "Init net numa group failed, ret:" << ret << ".");
+    }
 
     return MMS_OK;
 }
@@ -717,7 +746,9 @@ BResult MmsServer::HandleNodeEvent(const std::map<uint16_t, CmNodeInfo> &nodeInf
         CreateSubscribers(nodeInfos);
     }
 
-    NetConnect(nodeInfos);
+    if (!mConfig->GetBasicConfig().multicastSwitch) {
+        NetConnect(nodeInfos);
+    }
     mCurNodeTimes++;
     LOG_DEBUG("Handle node event times:" << mCurNodeTimes);
     return MMS_OK;

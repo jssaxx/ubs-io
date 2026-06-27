@@ -277,8 +277,11 @@ BResult MmsClient::ConnectLocalServer()
 BResult MmsClient::ClientNetInit(const MmsOptions &options)
 {
     int16_t timeoutSec = NO_16;
-    NetMemList memList;
-    auto ret = mNetEngine->Initialize(timeoutSec, 0, NO_1024, Log, memList);
+    NetEngineInitOptions initOptions;
+    initOptions.timeoutSec = timeoutSec;
+    initOptions.queueSize = NO_1024;
+    initOptions.logFunc = Log;
+    auto ret = mNetEngine->Initialize(initOptions);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
         return ret;

@@ -65,6 +65,29 @@ static BResult ParseCpuRangeList(const std::string &configName, const std::strin
     return MMS_OK;
 }
 
+static BResult ParseCpuRangeToIds(const std::string &configName, const std::string &configValue, uint32_t maxCpuNo,
+                                  std::vector<uint16_t> &cpuIds)
+{
+    std::pair<uint32_t, uint32_t> cpuRange{};
+    auto ret = ParseCpuRange(configValue, maxCpuNo, cpuRange);
+    if (ret != MMS_OK) {
+        LOG_ERROR("Invalid cpu set, config name:" << configName << ", config value:" << configValue << ".");
+        return ret;
+    }
+
+    uint32_t cpuCount = cpuRange.second - cpuRange.first + NO_1;
+    if (cpuCount > NO_256 || cpuRange.second > static_cast<uint32_t>(NO_MAX_VALUE16)) {
+        LOG_ERROR("Invalid cpu count, config name:" << configName << ", config value:" << configValue << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    cpuIds.clear();
+    for (uint32_t cpuId = cpuRange.first; cpuId <= cpuRange.second; ++cpuId) {
+        cpuIds.emplace_back(static_cast<uint16_t>(cpuId));
+    }
+    return MMS_OK;
+}
+
 void MmsConfig::LoadDefaultConf()
 {
     LoadDefaultNetConf();
@@ -82,6 +105,7 @@ void MmsConfig::LoadDefaultConf()
         VIntRange::Create(NOTIFY_SHM_WORKER_NUM.first, NO_1, NOTIFY_SHM_MAX_WORKERS));
     AddStrConf(NOTIFY_SHM_WORKER_CPUSET, VStrNotNull::Create(NOTIFY_SHM_WORKER_CPUSET.first));
     AddStrConf(NOTIFY_SHM_BUSY_POLLING, VStrBoolRange::Create(NOTIFY_SHM_BUSY_POLLING.first));
+    AddStrConf(CRB_SEND_CPUSET, VStrNotNull::Create(CRB_SEND_CPUSET.first));
     LoadDefaultClusterConf();
 }
 
@@ -158,6 +182,9 @@ BResult MmsConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     ret = AutoConfigNotifyShm(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
+    ret = AutoConfigCrb(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+
     ret = AutoConfigCm(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
@@ -192,6 +219,19 @@ BResult MmsConfig::AutoConfigNotifyShm(const ConfigurationPtr &conf)
         mNotifyShmConfig.workerCpuIds.emplace_back(static_cast<uint16_t>(cpuId));
     }
     mNotifyShmConfig.busyPolling = conf->GetStr(NOTIFY_SHM_BUSY_POLLING.first) == "true";
+    return MMS_OK;
+}
+
+BResult MmsConfig::AutoConfigCrb(const ConfigurationPtr &conf)
+{
+    std::vector<uint16_t> sendCpuIds{};
+    auto ret = ParseCpuRangeToIds(
+        CRB_SEND_CPUSET.first, conf->GetStr(CRB_SEND_CPUSET.first), GetDeviceCpuNum(), sendCpuIds);
+    if (ret != MMS_OK) {
+        return ret;
+    }
+
+    mCrbConfig.sendCpuIds.swap(sendCpuIds);
     return MMS_OK;
 }
 

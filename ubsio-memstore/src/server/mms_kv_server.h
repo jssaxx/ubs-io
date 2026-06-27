@@ -137,6 +137,7 @@ private:
                          void **data, uint32_t &len);
     BResult PutSeqNoData(uint64_t negoSeqNo, uint16_t negoLocId, CmPtInfo &ptInfo, uint16_t groupIndex,
                          void *data, uint32_t len);
+    void ReplyPeerRequest(ServiceContext &ctx, int32_t retCode, void *resp, uint32_t respSize);
     BResult HandleGetSeqNoList(ServiceContext &ctx);
     BResult HandleGetSeqNoData(ServiceContext &ctx);
     BResult HandleUpdatePtVersion(ServiceContext &ctx);
