@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ_DIR="$(realpath "${SCRIPT_DIR}/..")"
 UBS_COMM_DIR="${PROJ_DIR}/3rdparty/ubs-comm/ubs-comm"
 UBS_COMM_OFFLINE_DIR="${UBS_COMM_DIR}/3rdparty/offline"
+THIRD_PARTY_PACKAGE="${PROJ_DIR}/dist/BoostIO_3rdparty_sources.tar.gz"
+GREEN=$'\033[1;32m'
+RESET=$'\033[0m'
 
 fetch_repo() {
     local name=$1
@@ -57,6 +60,22 @@ apply_patch_once() {
     fi
 }
 
+package_3rdparty_sources() {
+    echo "Packaging third-party sources to ${THIRD_PARTY_PACKAGE}"
+    mkdir -p "$(dirname "${THIRD_PARTY_PACKAGE}")"
+    tar --exclude-vcs \
+        --exclude='*/build' --exclude='*/build/*' \
+        --exclude='*/dist' --exclude='*/dist/*' \
+        --exclude='*/obj' --exclude='*/obj/*' \
+        --exclude='*.o' --exclude='*.a' --exclude='*.so' --exclude='*.so.*' \
+        -czf "${THIRD_PARTY_PACKAGE}" \
+        -C "${PROJ_DIR}" \
+        3rdparty/libboundscheck/libboundscheck \
+        3rdparty/libaio/libaio \
+        3rdparty/spdlog/spdlog \
+        3rdparty/ubs-comm/ubs-comm
+}
+
 fetch_repo "libboundscheck" "https://gitcode.com/openeuler/libboundscheck.git" \
     "v1.1.16" "${PROJ_DIR}/3rdparty/libboundscheck/libboundscheck"
 fetch_repo "libaio" "https://github.com/deepin-community/libaio.git" \
@@ -78,3 +97,5 @@ apply_patch_once "ubs-comm offline internal dependencies" \
     "${SCRIPT_DIR}/patches/ubs-comm-offline-internal-deps.patch" "${UBS_COMM_DIR}"
 
 echo "All third-party sources are ready under ${PROJ_DIR}/3rdparty."
+package_3rdparty_sources
+printf '%sThird-party source package is ready: %s%s\n' "${GREEN}" "${THIRD_PARTY_PACKAGE}" "${RESET}"
