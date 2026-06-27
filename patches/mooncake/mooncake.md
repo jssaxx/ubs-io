@@ -14,29 +14,17 @@
 
 `mooncake-kv-backend.patch` — 位于本目录下，包含对 `mooncake-store/` 模块的全部修改。
 
-## 包含的 Commit 列表（共 7 个）
-
-| # | Commit Hash | 说明 |
-|---|------------|------|
-| 1 | `63f3082` | add kv backend |
-| 2 | `86bfaef` | 对接ubsio接口 |
-| 3 | `8300180` | fix bug |
-| 4 | `ebe829f` | add kv_backend test |
-| 5 | `1bdfe0a` | fix: resolve compile problem |
-| 6 | `7a7986e` | fix: resolve the functional problem |
-| 7 | `cd46a2e` | fix: skip OffloadObjects call when there is nothing to offload |
-
 ## 修改文件清单
 
 ```
 mooncake-store/include/dl_ubsio_api.h         (+158 行, 新增)
-mooncake-store/include/storage_backend.h      (+86 行,  修改)
+mooncake-store/include/storage_backend.h      (+85/-1,  修改)
 mooncake-store/src/CMakeLists.txt             (+1 行,   修改)
-mooncake-store/src/client_buffer.cpp          (+2/-1,   修改)
+mooncake-store/src/client_buffer.cpp          (+1/-1,   修改)
 mooncake-store/src/dl_ubsio_api.cpp           (+97 行,  新增)
-mooncake-store/src/file_storage.cpp           (+11/-1,  修改)
-mooncake-store/src/master_service.cpp         (+2/-1,   修改)
-mooncake-store/src/storage_backend.cpp        (+334 行, 修改)
+mooncake-store/src/file_storage.cpp           (+9/-2,   修改)
+mooncake-store/src/master_service.cpp         (+1/-1,   修改)
+mooncake-store/src/storage_backend.cpp        (+326 行, 修改)
 mooncake-store/tests/storage_backend_test.cpp (+560 行, 新增)
 ```
 
