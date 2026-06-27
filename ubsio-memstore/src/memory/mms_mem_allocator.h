@@ -142,6 +142,8 @@ private:
     BResult BuddyAllocFromThreadCacheMiss(uint16_t order, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyAllocDirect(uint16_t order, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyAlloc(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr);
+    BResult BuddyAllocPreferNuma(uint64_t size, uint16_t preferNumaId, uint16_t &numaId, uintptr_t &blockAddr);
+    BResult FixedAllocPreferNuma(uint64_t size, uint16_t preferNumaId, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyFree(uintptr_t blockAddr, BlockHeader *header);
     BResult BuddyFreeToThreadCache(uintptr_t blockAddr, BlockHeader *header);
 
@@ -158,6 +160,7 @@ private:
     uint32_t mBlockNum = 0;
     uint32_t mBlockRate[MAX_BLOCK_NUM] = {0};
     uint32_t mBlockSize[MAX_BLOCK_NUM] = {0};
+    uint64_t mBuddyUnitSize = 0;
     uint64_t mBuddyMaxAllocSize = 0;
 
     MemAllocOptions::AllocMode mAllocMode = MemAllocOptions::ALLOC_MODE_FIXED;
@@ -221,25 +224,27 @@ public:
         return false;
     }
 
-    inline std::vector<BlockNode*> PopBatchBlocks(uint64_t count)
+    inline void PopBatchBlocks(uint64_t count, std::vector<BlockNode *> &blocks)
     {
-        std::vector<BlockNode*> blocks{};
-        blocks.reserve(count);
-        BlockNode* block = nullptr;
+        blocks.clear();
+        std::lock_guard<std::mutex> lock(mLock);
         for (uint64_t i = 0; i < count; ++i) {
-            block = PopOneBlock();
-            if (block == nullptr) {
+            if (mHead == nullptr) {
                 break;
             }
+            BlockNode *block = mHead;
+            mHead = mHead->next;
             blocks.emplace_back(block);
         }
-        return std::move(blocks);
     }
 
-    inline void PushBatchBlocks(const std::vector<BlockNode*>& blocks)
+    inline void PushBatchBlocks(const std::vector<BlockNode *> &blocks)
     {
-        for (auto &block : blocks)
-            PushOneBlock(block);
+        std::lock_guard<std::mutex> lock(mLock);
+        for (BlockNode *block : blocks) {
+            block->next = mHead;
+            mHead = block;
+        }
     }
 
 private:
@@ -264,9 +269,9 @@ public:
         memLists[blockIndex].PushBatchBlocks(blocks);
     }
 
-    inline std::vector<BlockNode *> GetBatchBlocks(uint16_t blockIndex, uint64_t count)
+    inline void GetBatchBlocks(uint16_t blockIndex, uint64_t count, std::vector<BlockNode *> &blocks)
     {
-        return std::move(memLists[blockIndex].PopBatchBlocks(count));
+        memLists[blockIndex].PopBatchBlocks(count, blocks);
     }
 
 private:
@@ -449,6 +454,8 @@ public:
 
     std::vector<uintptr_t> GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId,
                                                              uint64_t count);
+    void GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId, uint64_t count,
+                                           std::vector<uintptr_t> &blockAddrs);
 
     BResult GetOneBuddyBlockFromCache(uint16_t order, uintptr_t &blockAddr);
 
