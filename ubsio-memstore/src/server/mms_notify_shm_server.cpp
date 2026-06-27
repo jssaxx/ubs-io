@@ -138,8 +138,7 @@ void MmsNotifyShmPublisher::AcceptLoop()
 
         ucred credential{};
         socklen_t credentialSize = sizeof(credential);
-        if (getsockopt(clientFd, SOL_SOCKET, SO_PEERCRED, &credential, &credentialSize) != 0 ||
-            credential.pid <= 0 || credential.uid != geteuid()) {
+        if (getsockopt(clientFd, SOL_SOCKET, SO_PEERCRED, &credential, &credentialSize) != 0 || credential.pid <= 0) {
             LOG_ERROR("Get notify shm client credential failed, errno:" << errno << ".");
             close(clientFd);
             continue;
