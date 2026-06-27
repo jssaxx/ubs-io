@@ -19,14 +19,16 @@ find_library(LIBBOUNDCHECK_FINAL_LIBRARY
 if(NOT LIBBOUNDCHECK_FINAL_INCLUDE OR NOT LIBBOUNDCHECK_FINAL_LIBRARY)
     message(STATUS "libboundscheck not found! Attempting to build from source...")
 
-    include(FetchContent)
-    FetchContent_Declare(
-            libboundscheck_src
-            GIT_REPOSITORY https://gitcode.com/openeuler/libboundscheck.git
-            GIT_TAG        v1.1.16
-            SOURCE_DIR     ${SOURCE_DIR}
-    )
-    FetchContent_MakeAvailable(libboundscheck_src)
+    if(NOT EXISTS "${SOURCE_DIR}/Makefile")
+        include(FetchContent)
+        FetchContent_Declare(
+                libboundscheck_src
+                GIT_REPOSITORY https://gitcode.com/openeuler/libboundscheck.git
+                GIT_TAG        v1.1.16
+                SOURCE_DIR     ${SOURCE_DIR}
+        )
+        FetchContent_MakeAvailable(libboundscheck_src)
+    endif()
 
     execute_process(
             COMMAND make CC=gcc -j8

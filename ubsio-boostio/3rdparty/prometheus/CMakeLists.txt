@@ -11,18 +11,22 @@ if(EXISTS ${CHECK_FILE_PROMETHEUS})
     message("-- prometheus: ${CHECK_FILE_PROMETHEUS}")
     message("-- prometheus: has been built, ignored")
 else()
-    include(FetchContent)
+    set(prometheus_SOURCE_DIR ${SOURCE_DIR})
+    if(NOT EXISTS "${SOURCE_DIR}/CMakeLists.txt")
+        include(FetchContent)
 
-    FetchContent_Declare(
-            prometheus
-            GIT_REPOSITORY https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git
-            GIT_TAG v1.2.4
-    )
+        FetchContent_Declare(
+                prometheus
+                GIT_REPOSITORY https://gitcode.com/gh_mirrors/pr/prometheus-cpp.git
+                GIT_TAG v1.2.4
+                SOURCE_DIR ${SOURCE_DIR}
+        )
 
-    # 获取 prometheus 源码路径
-    FetchContent_GetProperties(prometheus)
-    if(NOT prometheus_POPULATED)
-        FetchContent_Populate(prometheus)
+        # 获取 prometheus 源码路径
+        FetchContent_GetProperties(prometheus)
+        if(NOT prometheus_POPULATED)
+            FetchContent_Populate(prometheus)
+        endif()
     endif()
     # create build dir
     exec_program(mkdir ${BUILD_DIR} ARGS -p ${BUILD_DIR})

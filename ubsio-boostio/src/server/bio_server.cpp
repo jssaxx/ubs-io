@@ -258,7 +258,7 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "./bio.conf";
+    const std::string confPath = "./bio_old.conf";
 #else
     std::string confPath = CONFIG_PATH;
     const char *envConfPath = getenv(BIO_CONFIG_ENV);

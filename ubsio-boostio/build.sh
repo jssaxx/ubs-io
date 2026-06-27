@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--pkg [pkg_dir]]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--pkg [pkg_dir]] [--prepare_3rdparty]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
@@ -17,6 +17,7 @@ usage() {
     echo " 5 ./build.sh -t release --build_kv OFF // Skip UBSIO-KV packaging"
     echo " 6 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
     echo " 7 ./build.sh -t release --pkg /tmp/boostio-lib // Copy built libraries to specified directory"
+    echo " 8 ./build.sh --prepare_3rdparty // Download pinned third-party sources for offline builds"
     echo
     exit 1;
 }
@@ -103,6 +104,7 @@ BUILD_KV=ON
 BUILD_PKG=OFF
 PKG_LIB_DIR=""
 CUSTOM_PKG_LIB_DIR=OFF
+PREPARE_3RDPARTY=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
@@ -164,6 +166,10 @@ while true; do
             CUSTOM_PKG_LIB_DIR=ON
             shift
             ;;
+        --prepare_3rdparty )
+            PREPARE_3RDPARTY=ON
+            shift
+            ;;
         --san=asan | --san=asan-ubsan | --asan | --asan-ubsan )
             SANITIZER_FLAG=ON
             shift ;;
@@ -179,6 +185,11 @@ while true; do
             break;;
     esac
 done
+
+if [[ "$PREPARE_3RDPARTY" == "ON" ]]; then
+    bash "${PROJ_DIR}/3rdparty/prepare_sources.sh"
+    exit 0
+fi
 
 if [[ "$CUSTOM_PKG_LIB_DIR" == "ON" ]]; then
     validate_pkg_lib_dir "${PKG_LIB_DIR}"

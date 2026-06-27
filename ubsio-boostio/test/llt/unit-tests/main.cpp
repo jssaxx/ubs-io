@@ -34,7 +34,7 @@ using namespace ock::htracer;
 
 static bool DiskPathInvalid()
 {
-    std::string filename = "./bio.conf";
+    std::string filename = "./bio_old.conf";
     std::string target = "/dev/sdxx:/dev/sdyy";
     std::ifstream file(filename);
     std::string line;
@@ -56,19 +56,19 @@ int main(int argc, char *argv[])
     (void)system("rm -rf ceph");
     (void)system("rm -rf conf");
     (void)system("cp ../configs/* ./");
-    (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' ./bio.conf");
-    (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' ./bio.conf");
+    (void)system("sed -i 's/bio.mem.size_in_gb = .*/bio.mem.size_in_gb = 1/g' ./bio_old.conf");
+    (void)system("sed -i 's/bio.cm.zk_host =.*/bio.cm.zk_host = 127.0.0.1:2181/g' ./bio_old.conf");
     if (DiskPathInvalid()) {
         TestDisk::Stub();
-        (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' ./bio.conf");
+        (void)system("sed -i 's/bio.disk.path = .*/bio.disk.path = test1:test2/g' ./bio_old.conf");
         (void)system("touch test1");
         (void)system("touch test2");
     }
-    (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' ./bio.conf");
+    (void)system("sed -i 's#bio.log.level = info#bio.log.level = debug#g' ./bio_old.conf");
     (void)system("sed -i 's#bio.underfs.ceph.cfg.path = /etc/ceph/ceph.conf"
-        "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./bio.conf");
+        "#bio.underfs.ceph.cfg.path = ./ceph.conf#g' ./bio_old.conf");
     (void)system("sed -i 's#bio.net.tls.enable.switch = true"
-                 "#bio.net.tls.enable.switch = false#g' ./bio.conf");
+                 "#bio.net.tls.enable.switch = false#g' ./bio_old.conf");
     (void)system("touch ceph.conf");
 
     std::cout << "Start boostio tester begin..." << std::endl;
