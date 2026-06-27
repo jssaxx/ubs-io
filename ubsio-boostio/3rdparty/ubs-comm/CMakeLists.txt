@@ -1,4 +1,4 @@
-set(SOURCE_DIR ${PROJECT_3RDPARTY_SRC_DIR}/ubs-comm/ubs-comm/)
+set(SOURCE_DIR ${PROJECT_3RDPARTY_SRC_DIR}/ubs-comm/ubs-comm)
 set(BUILD_DIR ${PROJECT_BUILD_PATH}/build/ubs-comm/)
 set(INSTALL_DIR ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm)
 
