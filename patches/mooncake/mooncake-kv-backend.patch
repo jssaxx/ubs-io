@@ -1,10 +1,10 @@
 diff --git a/mooncake-store/include/dl_ubsio_api.h b/mooncake-store/include/dl_ubsio_api.h
 new file mode 100644
-index 0000000..37caf79
+index 0000000..7f10684
 --- /dev/null
 +++ b/mooncake-store/include/dl_ubsio_api.h
 @@ -0,0 +1,158 @@
-+#pragma once
++﻿#pragma once
 +
 +#include <cstdint>
 +#include <cstddef>
@@ -13,7 +13,7 @@ index 0000000..37caf79
 +
 +namespace mooncake {
 +
-+using ubsio_client_initFunc = int32_t (*)(int32_t);
++using ubsio_client_initFunc = int32_t (*)(int32_t, uint64_t);
 +using ubsio_putFunc = int32_t (*)(const char *, void *, size_t, uint32_t);
 +using ubsio_getFunc = int32_t (*)(const char *, void *, size_t, uint32_t);
 +using ubsio_existFunc = bool (*)(const char *, uint32_t);
@@ -33,12 +33,12 @@ index 0000000..37caf79
 +    static int32_t LoadLibrary();
 +    static void CleanupLibrary();
 +
-+    static inline int32_t UbsioClientInit(int32_t deviceId)
++    static inline int32_t UbsioClientInit(int32_t deviceId, uint64_t ssdSize)
 +    {
 +        if (pUbsioClientInit == nullptr) {
 +            return -1;
 +        }
-+        return pUbsioClientInit(deviceId);
++        return pUbsioClientInit(deviceId, ssdSize);
 +    }
 +
 +    static inline int32_t UbsioPut(const char *key, void *buf, size_t length, uint32_t flags)
@@ -162,6 +162,33 @@ index 0000000..37caf79
 +    static ubsio_batch_free_addressFunc pUbsioBatchFreeAddress;
 +};
 +}
+diff --git a/mooncake-store/include/gpu_staging_utils.h b/mooncake-store/include/gpu_staging_utils.h
+index 07982aa..61805cd 100644
+--- a/mooncake-store/include/gpu_staging_utils.h
++++ b/mooncake-store/include/gpu_staging_utils.h
+@@ -107,6 +107,22 @@ inline void SetDevice(int device_id) {
+ #endif
+ }
+ 
++// Get the device currently bound to the calling thread.
++inline bool GetDevice(int* out_device_id) {
++    if (!out_device_id) return false;
++#if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_MACA) || \
++    defined(USE_HYGON) || defined(USE_COREX)
++    return cudaGetDevice(out_device_id) == cudaSuccess;
++#elif defined(USE_HIP)
++    return hipGetDevice(out_device_id) == hipSuccess;
++#elif defined(USE_ASCEND) || defined(USE_ASCEND_DIRECT) || defined(USE_UBSHMEM)
++    return aclrtGetDevice(out_device_id) == ACL_SUCCESS;
++#else
++    *out_device_id = 0;
++    return false;
++#endif
++}
++
+ // Copy host memory to device. Caller must have called SetDevice first.
+ inline bool CopyHostToDevice(void* dst, const void* src, size_t size) {
+ #if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_MACA) || \
 diff --git a/mooncake-store/include/storage_backend.h b/mooncake-store/include/storage_backend.h
 index a686fd9..20ca358 100644
 --- a/mooncake-store/include/storage_backend.h
@@ -458,28 +485,28 @@ index 64ed257..51068a9 100644
        enable_cxl_(config.enable_cxl) {
      if (enable_snapshot_ || enable_snapshot_restore_) {
 diff --git a/mooncake-store/src/storage_backend.cpp b/mooncake-store/src/storage_backend.cpp
-index c269d47..b1e4cae 100644
+index c269d47..d83cbd5 100644
 --- a/mooncake-store/src/storage_backend.cpp
 +++ b/mooncake-store/src/storage_backend.cpp
-@@ -1,4 +1,6 @@
+@@ -1,10 +1,14 @@
  #include "storage_backend.h"
 +#include "dl_ubsio_api.h"
++#include "gpu_staging_utils.h"
 +#include "thread_pool.h"
  
  #include <fcntl.h>
  #include <unistd.h>
-@@ -3194,6 +3196,334 @@ tl::expected<void, ErrorCode> OffsetAllocatorStorageBackend::ScanMeta(
+ #include <sys/stat.h>
+ #include <sys/uio.h>
+ #include <errno.h>
++#include <cstdlib>
+ #include <cstring>
+ 
+ #include <regex>
+@@ -3194,6 +3198,329 @@ tl::expected<void, ErrorCode> OffsetAllocatorStorageBackend::ScanMeta(
      return {};
  }
  
-+namespace {
-+// 单线程池，专门用于 UbsioBatchFreeAddress 异步释放，避免频繁创建/销毁临时线程
-+mooncake::ThreadPool& GetFreeThreadPool() {
-+    static mooncake::ThreadPool pool(1);
-+    return pool;
-+}
-+}  // namespace
-+
 +ErrorCode UbsKVClient::Init()
 +{
 +    auto ret = DlUbsioApi::LoadLibrary();
@@ -487,9 +514,15 @@ index c269d47..b1e4cae 100644
 +        LOG(ERROR) << "Failed to load ubsio library";
 +        return ErrorCode::INTERNAL_ERROR;
 +    }
-+    ret = DlUbsioApi::UbsioClientInit(-1);
++    int deviceId = 0;
++    if (!gpu_staging::GetDevice(&deviceId)) {
++        LOG(WARNING) << "Failed to get current accelerator device, "
++                     << "defaulting to device ID 0";
++    }
++    LOG(INFO) << "Using device ID: " << deviceId;
++    ret = DlUbsioApi::UbsioClientInit(deviceId, 0);
 +    if (ret != 0) {
-+        LOG(ERROR) << "Failed to init ubsio client";
++        LOG(ERROR) << "Failed to init ubsio client, deviceId=" << deviceId;
 +        return ErrorCode::INTERNAL_ERROR;
 +    }
 +    return ErrorCode::OK;
@@ -533,6 +566,7 @@ index c269d47..b1e4cae 100644
 +            LOG(ERROR) << "Key not found in dest: " << keys[i];
 +            return ErrorCode::INTERNAL_ERROR;
 +        }
++        value_ptrs[i] = it->second.ptr;
 +        value_sizes[i] = it->second.size;
 +    }
 +    auto ret = DlUbsioApi::UbsioBatchGet(key_ptrs.data(), static_cast<uint32_t>(key_ptrs.size()),
@@ -545,22 +579,9 @@ index c269d47..b1e4cae 100644
 +    for (size_t i = 0; i < get_results.size(); ++i) {
 +        if (get_results[i] != 0) {
 +            LOG(ERROR) << "Failed to batch get, key:" << keys[i] << ", result: " << get_results[i];
-+            GetFreeThreadPool().enqueue([value_ptrs = std::move(value_ptrs)]() mutable {
-+                DlUbsioApi::UbsioBatchFreeAddress(value_ptrs.data(),
-+                                                  static_cast<uint32_t>(value_ptrs.size()));
-+            });
 +            return ErrorCode::INTERNAL_ERROR;
 +        }
 +    }
-+    for (size_t i = 0; i < keys.size(); ++i) {
-+        auto it = dest.find(keys[i]);
-+        size_t copy_size = std::min(it->second.size, value_sizes[i]);
-+        std::memcpy(it->second.ptr, value_ptrs[i], copy_size);
-+    }
-+    GetFreeThreadPool().enqueue([value_ptrs = std::move(value_ptrs)]() mutable {
-+        DlUbsioApi::UbsioBatchFreeAddress(value_ptrs.data(),
-+                                          static_cast<uint32_t>(value_ptrs.size()));
-+    });
 +    return ErrorCode::OK;
 +}
 +
@@ -585,7 +606,7 @@ index c269d47..b1e4cae 100644
 +    : StorageBackendInterface(config) {}  
 +  
 +tl::expected<void, ErrorCode> DistributedKVStorageBackend::Init() {  
-+    if (initialized_.load(std::memory_order_acquire)) return {};  
++    if (initialized_.load(std::memory_order_acquire)) return {};
 +    kv_client_ = std::make_unique<UbsKVClient>();
 +    auto err = kv_client_->Init();  
 +    if (err != ErrorCode::OK) {  
@@ -593,7 +614,6 @@ index c269d47..b1e4cae 100644
 +        return tl::make_unexpected(err);  
 +    }  
 +    initialized_.store(true, std::memory_order_release);  
-+    LOG(INFO) << "DistributedKVStorageBackend initialized.";  
 +    return {};  
 +}  
 +  
@@ -615,10 +635,16 @@ index c269d47..b1e4cae 100644
 +        LOG(ERROR) << "DistributedKVStorageBackend not initialized";  
 +        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
 +    }  
-+    if (batch_object.empty()) return 0;  
++    if (batch_object.empty()) {
++        LOG(ERROR) << "batch object is empty";
++        return 0;
++    }
 +  
 +    auto enable_res = IsEnableOffloading();  
-+    if (!enable_res || !enable_res.value()) {  
++    if (!enable_res) {
++        return tl::make_unexpected(enable_res.error());
++    }
++    if (!enable_res.value()) {
 +        return tl::make_unexpected(ErrorCode::KEYS_ULTRA_LIMIT);  
 +    }  
 +  
@@ -692,8 +718,12 @@ index c269d47..b1e4cae 100644
 +    }
 +    auto handler_err = complete_handler(success_keys, success_metadatas);  
 +    if (handler_err != ErrorCode::OK) {  
-+        LOG(ERROR) << "DistributedKVStorageBackend::BatchOffload: "  
-+                      "complete_handler failed: " << handler_err;  
++        LOG(ERROR)
++            << "Complete handler failed: " << handler_err << " - "
++            << success_keys.size()
++            << " keys were successfully written to distributed KV but master "
++               "was not notified. "
++            << "Master will learn about them via ScanMeta on next restart.";
 +        return tl::make_unexpected(handler_err);  
 +    }  
 +  
@@ -734,7 +764,7 @@ index c269d47..b1e4cae 100644
 +    const std::string& key) {  
 +    if (!initialized_.load(std::memory_order_acquire))  
 +        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
-+    return kv_client_->Exists(key);  
++    return kv_client_->Exists(key);
 +}  
 +  
 +tl::expected<bool, ErrorCode> DistributedKVStorageBackend::IsEnableOffloading() {  
@@ -766,7 +796,10 @@ index c269d47..b1e4cae 100644
 +    auto flush = [&]() -> bool {  
 +        if (keys.empty()) return true;  
 +        auto err = handler(keys, metadatas);  
-+        if (err != ErrorCode::OK) { flush_error = err; return false; }  
++        if (err != ErrorCode::OK) {
++            flush_error = err;
++            return false;
++        }
 +        keys.clear();  
 +        metadatas.clear();  
 +        return true;  
@@ -791,19 +824,16 @@ index c269d47..b1e4cae 100644
 +            return ErrorCode::OK;  
 +        });  
 +  
-+    if (err != ErrorCode::OK) return tl::make_unexpected(err);  
++    if (err != ErrorCode::OK) return tl::make_unexpected(err);
 +    if (!flush()) return tl::make_unexpected(flush_error);  
 +  
-+    LOG(INFO) << "DistributedKVStorageBackend::ScanMeta: recovered "  
-+              << total_keys_.load() << " keys, "  
-+              << total_size_.load() << " bytes";  
 +    return {};  
 +}
 +
  //-----------------------------------------------------------------------------
  
  tl::expected<std::shared_ptr<StorageBackendInterface>, ErrorCode>
-@@ -3221,6 +3551,9 @@ CreateStorageBackend(const FileStorageConfig& config) {
+@@ -3221,6 +3548,9 @@ CreateStorageBackend(const FileStorageConfig& config) {
          case StorageBackendType::kOffsetAllocator: {
              return std::make_shared<OffsetAllocatorStorageBackend>(config);
          }
@@ -813,7 +843,7 @@ index c269d47..b1e4cae 100644
          default: {
              LOG(FATAL) << "Unsupported backend type";
              return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
-@@ -3228,4 +3561,5 @@ CreateStorageBackend(const FileStorageConfig& config) {
+@@ -3228,4 +3558,5 @@ CreateStorageBackend(const FileStorageConfig& config) {
      }
  }
  
