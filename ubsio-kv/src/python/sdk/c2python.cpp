@@ -220,7 +220,6 @@ std::vector<int> PyKvcKvBatchGetData(const std::vector<std::string> &keys, std::
     }
     std::vector<void *> data_ptrs;
     std::vector<size_t> lengths;
-    std::vector<void *> getDataPtr(keys.size(), nullptr);
     data_ptrs.reserve(values.size());
     lengths.reserve(values.size());
 
@@ -235,15 +234,11 @@ std::vector<int> PyKvcKvBatchGetData(const std::vector<std::string> &keys, std::
         data_ptrs.emplace_back(static_cast<void *>(data));
         lengths.emplace_back(static_cast<size_t>(length));
     }
-    ret = KvcBatchGetData(keys, getDataPtr.data(), lengths, results, 0);
+    ret = KvcBatchGetData(keys, data_ptrs.data(), lengths, results, 0);
     if (ret != 0) {
         LOG_ERROR("KvcBatchGetData failed");
         return results;
     }
-    for (uint32_t i = 0; i < keys.size(); i++) {
-        std::memcpy(reinterpret_cast<void *>(data_ptrs[i]), static_cast<uint8_t *>(getDataPtr[i]), lengths[i]);
-    }
-    KvcBatchFreeGetAddress(getDataPtr.data(), keys.size());
     return results;
 }
 
