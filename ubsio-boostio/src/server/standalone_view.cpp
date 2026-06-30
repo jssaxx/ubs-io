@@ -27,6 +27,51 @@ CmDiskStatus ToCmDiskStatus(uint16_t diskId)
 {
     return BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL ? CM_DISK_NORMAL : CM_DISK_FAULT;
 }
+
+BResult BuildPtDiskMap(const std::vector<int64_t> &diskCaps, uint32_t diskNum, uint32_t ptNum,
+    bool hasDiskCache, std::vector<uint16_t> &diskByPt)
+{
+    diskByPt.clear();
+    diskByPt.reserve(ptNum);
+    if (!hasDiskCache) {
+        diskByPt.assign(ptNum, 0);
+        return BIO_OK;
+    }
+
+    if (diskCaps.size() < diskNum) {
+        LOG_ERROR("Standalone disk capacity config is incomplete, diskNum:" << diskNum <<
+            ", diskCapNum:" << diskCaps.size() << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    long double totalCap = 0;
+    for (uint32_t diskId = 0; diskId < diskNum; ++diskId) {
+        if (diskCaps[diskId] <= 0) {
+            LOG_ERROR("Invalid standalone disk capacity, diskId:" << diskId << ", cap:" << diskCaps[diskId] << ".");
+            return BIO_INVALID_PARAM;
+        }
+        totalCap += static_cast<long double>(diskCaps[diskId]);
+    }
+
+    uint32_t assignedPtNum = 0;
+    for (uint16_t diskId = 0; diskId < diskNum; ++diskId) {
+        uint32_t ptCount = ptNum - assignedPtNum;
+        if (diskId + 1 < diskNum) {
+            ptCount = static_cast<uint32_t>(static_cast<long double>(diskCaps[diskId]) * ptNum / totalCap);
+            assignedPtNum += ptCount;
+        }
+        for (uint32_t index = 0; index < ptCount; ++index) {
+            diskByPt.emplace_back(diskId);
+        }
+    }
+    if (diskByPt.size() != ptNum) {
+        LOG_ERROR("Standalone pt disk map size mismatch, ptNum:" << ptNum << ", diskMapSize:" << diskByPt.size() <<
+            ".");
+        return BIO_ERR;
+    }
+
+    return BIO_OK;
+}
 }
 
 BResult StandaloneView::Build(const BioConfigPtr &config, CmNodeId &localNid, NodeView &nodeView, PtView &ptView)
@@ -74,9 +119,14 @@ BResult StandaloneView::Build(const BioConfigPtr &config, CmNodeId &localNid, No
         LOG_ERROR("Invalid standalone pt num:" << ptNum << ".");
         return BIO_INVALID_PARAM;
     }
+    std::vector<uint16_t> diskByPt;
+    BResult ret = BuildPtDiskMap(daemonConfig.diskCaps, diskNum, ptNum, hasDiskCache, diskByPt);
+    if (ret != BIO_OK) {
+        return ret;
+    }
     ptView.clear();
     for (uint16_t ptId = 0; ptId < ptNum; ++ptId) {
-        uint16_t diskId = ptId % diskNum;
+        uint16_t diskId = diskByPt[ptId];
         CmDiskStatus diskStatus = disks[diskId].diskStatus;
         CmCopyState copyState = diskStatus == CM_DISK_NORMAL ? CM_COPY_RUNNING : CM_COPY_DOWN;
         CmPtState ptState = diskStatus == CM_DISK_NORMAL ? CM_PT_NORMAL : CM_PT_FAULT;

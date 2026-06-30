@@ -94,7 +94,7 @@ TEST(TestStandaloneView, build_rejects_null_and_empty_disk_config)
     EXPECT_EQ(StandaloneView::Build(emptyDiskConfig, localNid, nodeView, ptView), BIO_INVALID_PARAM);
 }
 
-TEST(TestStandaloneView, build_creates_single_node_view_and_round_robin_pt_view)
+TEST(TestStandaloneView, build_creates_single_node_view_and_ordered_pt_view)
 {
     DiskStatusGuard guard({ 0, 1 });
     BdmSetDiskUsedStatus(0, true);
@@ -118,9 +118,38 @@ TEST(TestStandaloneView, build_creates_single_node_view_and_round_robin_pt_view)
     EXPECT_EQ(nodeIter->second.disks[1].diskStatus, CM_DISK_NORMAL);
 
     ASSERT_EQ(ptView.size(), 5);
-    for (uint16_t ptId = 0; ptId < 5; ptId++) {
-        ExpectPtOnDisk(ptView, ptId, ptId % 2, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 0, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 1, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 2, 1, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 3, 1, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 4, 1, CM_PT_NORMAL, CM_COPY_RUNNING);
+}
+
+TEST(TestStandaloneView, build_assigns_pt_count_by_disk_capacity)
+{
+    DiskStatusGuard guard({ 0, 1 });
+    BdmSetDiskUsedStatus(0, true);
+    BdmSetDiskUsedStatus(1, true);
+
+    CmNodeId localNid;
+    StandaloneView::NodeView nodeView;
+    StandaloneView::PtView ptView;
+    auto config = MakeViewConfig(2, 16);
+    config->mDaemonConfig.diskCaps[1] = TEST_DISK_CAP * 2;
+
+    ASSERT_EQ(StandaloneView::Build(config, localNid, nodeView, ptView), BIO_OK);
+
+    std::vector<uint32_t> ptCountByDisk(2, 0);
+    for (const auto &item : ptView) {
+        ASSERT_LT(item.second.masterDiskId, ptCountByDisk.size());
+        ptCountByDisk[item.second.masterDiskId]++;
     }
+    EXPECT_EQ(ptCountByDisk[0], 5);
+    EXPECT_EQ(ptCountByDisk[1], 11);
+    ExpectPtOnDisk(ptView, 0, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 4, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 5, 1, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 15, 1, CM_PT_NORMAL, CM_COPY_RUNNING);
 }
 
 TEST(TestStandaloneView, build_without_disk_cache_uses_virtual_disk)
@@ -168,7 +197,7 @@ TEST(TestStandaloneView, build_marks_pt_fault_when_target_disk_is_fault)
     EXPECT_EQ(nodeIter->second.disks[1].diskStatus, CM_DISK_FAULT);
 
     ExpectPtOnDisk(ptView, 0, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
-    ExpectPtOnDisk(ptView, 1, 1, CM_PT_FAULT, CM_COPY_DOWN);
-    ExpectPtOnDisk(ptView, 2, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 1, 0, CM_PT_NORMAL, CM_COPY_RUNNING);
+    ExpectPtOnDisk(ptView, 2, 1, CM_PT_FAULT, CM_COPY_DOWN);
     ExpectPtOnDisk(ptView, 3, 1, CM_PT_FAULT, CM_COPY_DOWN);
 }

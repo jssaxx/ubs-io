@@ -158,7 +158,7 @@ BResult Slice::Deserialize(char *data, uint64_t length)
     ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "vsize memory copy failed.");
     pos += sizeof(vsize);
     BIO_TP_END;
-    ChkTrue(vsize <= NO_4, BIO_INVALID_PARAM, "Failed to deserialize data, vsize:" << vsize << ", failed.");
+    ChkTrue(vsize <= NO_16, BIO_INVALID_PARAM, "Failed to deserialize data, vsize:" << vsize << ", failed.");
     for (size_t i = 0; i < vsize; i++) {
         FlowAddr flowAddr;
         ChkTrue(length >= pos + sizeof(FlowAddr), BIO_INVALID_PARAM,
