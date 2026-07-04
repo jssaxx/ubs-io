@@ -25,10 +25,9 @@ extern "C" {
  * @brief Initialize UBS-IO KV Cache
  *
  * @param devId            [in] device id, -1 means no ACL device binding and uses standalone device 0
- * @param ssdSize          [in] reserved, currently ignored
  * @return 0 if successful
  */
-int32_t UbsioKvCacheInit(int32_t devId, uint64_t ssdSize);
+int32_t UbsioKvCacheInit(int32_t devId);
 
 #ifndef UBSIO_META_EVENT_C_DEFINED
 #define UBSIO_META_EVENT_C_DEFINED

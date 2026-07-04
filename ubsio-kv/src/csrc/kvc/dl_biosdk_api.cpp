@@ -117,9 +117,8 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::KvBioInit(int32_t devId, uint64_t ssdSize)
+int32_t DlBioSdkApi::KvBioInit(int32_t devId)
 {
-    (void)ssdSize;
     LOG_INFO("Start boostio begin...");
     if (devId < KVC_NO_DEVICE_ID) {
         LOG_ERROR("Invalid device id:" << devId << ".");

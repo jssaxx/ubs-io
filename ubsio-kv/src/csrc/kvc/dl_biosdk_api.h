@@ -112,7 +112,7 @@ public:
         pBioExit();
     }
 
-    static int32_t KvBioInit(int32_t devId, uint64_t ssdSize);
+    static int32_t KvBioInit(int32_t devId);
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
