@@ -704,6 +704,15 @@ void BioSetStandaloneDevice(uint32_t deviceId)
     agentPtr->SetStandaloneDevice(deviceId);
 }
 
+CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    auto agentPtr = ock::bio::agent::BioClientAgent::Instance();
+    if (agentPtr == nullptr) {
+        return RET_CACHE_ERROR;
+    }
+    return agentPtr->RegisterMetaEventCallback(callback, context) == BIO_OK ? RET_CACHE_OK : RET_CACHE_ERROR;
+}
+
 void BioExit(void)
 {
     BioService::Exit();

@@ -14,6 +14,7 @@
 #include <vector>
 #include "ubsio_kvc_log.h"
 #include <ubsio_kvc_err.h>
+#include "dl_biosdk_api.h"
 #include "ubsio_kvc_operation.h"
 #include "ubsio_kvc_instance.h"
 #include "ubsio_kvc.h"
@@ -35,6 +36,16 @@ UBSIO_API int32_t UbsioKvCacheInit(int32_t devId, uint64_t ssdSize)
         return UBSIO_KVC_ERR;
     }
     return KvcOperationInit(devId, ssdSize);
+}
+
+UBSIO_API int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    int32_t ret = DlBioSdkApi::LoadLibrary();
+    if (ret != UBSIO_KVC_OK) {
+        LOG_ERROR("load bio sdk failed, ret: " << ret);
+        return UBSIO_KVC_ERR;
+    }
+    return DlBioSdkApi::RegisterMetaEventCallback(callback, context) == RET_CACHE_OK ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 
 UBSIO_API void UbsioKvCacheExit(void) 

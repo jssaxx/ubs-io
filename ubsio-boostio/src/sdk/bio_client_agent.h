@@ -80,6 +80,7 @@ public:
     using GetCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
     using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceResponse *);
     using GetTracePointsLocalFuncPtr = int32_t (*)(GetTracePointsResponse *);
+    using RegisterMetaEventCallbackFuncPtr = int32_t (*)(UbsioMetaEventCallbackC, void *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -94,6 +95,8 @@ public:
     void Exit();
 
     void SetStandaloneDevice(uint32_t deviceId);
+
+    BResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
 
     NetEnginePtr GetNetService()
     {
@@ -287,6 +290,11 @@ private:
     GetCacheHitLocalFuncPtr cacheHitOp = nullptr;
     CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
     GetTracePointsLocalFuncPtr getTracePointsOp = nullptr;
+    RegisterMetaEventCallbackFuncPtr registerMetaEventCallbackOp = nullptr;
+    std::mutex mMetaEventCallbackLock;
+    UbsioMetaEventCallbackC mMetaEventCallback = nullptr;
+    void *mMetaEventCallbackContext = nullptr;
+    bool mMetaEventCallbackConfigured{ false };
     std::mutex mStandaloneDeviceLock;
     StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
