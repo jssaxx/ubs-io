@@ -15,7 +15,11 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
 #include <ctime>
+#include <vector>
 #include "bio.h"
 #include "slice.h"
 
@@ -30,6 +34,26 @@ using GetLocDiskStatus = std::function<void(uint16_t ptId, uint16_t diskId, bool
 using CheckServiceState = std::function<bool()>;
 using CheckDegrade = std::function<BResult(uint16_t ptId, bool &isDegrade)>;
 using CheckLocRole = std::function<BResult(uint16_t ptId, bool &isMaster)>;
+
+enum UbsIoMetaEventType : uint8_t {
+    UBSIO_META_RECOVER = 0,
+    UBSIO_META_DELETE = 1,
+};
+
+struct UbsIoMetaEvent {
+    UbsIoMetaEventType type;
+    std::string key;
+};
+
+struct UbsIoMetaEventBatch {
+    std::mutex lock;
+    bool closed{ false };
+    std::vector<UbsIoMetaEvent> events;
+};
+
+using UbsIoMetaEventBatchPtr = std::shared_ptr<UbsIoMetaEventBatch>;
+
+using UbsIoMetaEventCallback = std::function<void(const std::vector<UbsIoMetaEvent> &events)>;
 
 enum CacheType : uint16_t {
     WRITE_CACHE = 0,

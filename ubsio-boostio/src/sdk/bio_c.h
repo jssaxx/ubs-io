@@ -80,6 +80,22 @@ typedef void (*BioLoadCallback)(void *context, int32_t result);
 typedef void (*BioGetCallbackFunc)(void *context, int32_t result, uint32_t realLen);
 typedef void (*BioAsyncPutCallback)(void *context, int32_t result);
 
+#ifndef UBSIO_META_EVENT_C_DEFINED
+#define UBSIO_META_EVENT_C_DEFINED
+typedef enum {
+    UBSIO_META_RECOVER_C = 0,
+    UBSIO_META_DELETE_C = 1,
+} UbsioMetaEventTypeC;
+
+typedef struct {
+    int32_t type;
+    const char *key;
+    uint32_t keyLen;
+} UbsioMetaEventC;
+
+typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *events, uint32_t count);
+#endif
+
 typedef struct {
     char key[MAX_KEY_SIZE];
     uint32_t size;
@@ -178,6 +194,14 @@ CResult BioInitialize(WorkerMode mode, ClientOptionsConfig *optConf);
  * @param[in]: deviceId: local standalone device/process id of the current process
  */
 void BioSetStandaloneDevice(uint32_t deviceId);
+
+/**
+ * @brief Register a same-process UBS IO metadata event callback.
+ *
+ * The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
+ * Passing nullptr unregisters the callback.
+ */
+CResult BioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
 
 /**
  * @brief: Exit boostio service

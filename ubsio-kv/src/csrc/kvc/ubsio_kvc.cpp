@@ -14,6 +14,7 @@
 #include <vector>
 #include "ubsio_kvc_log.h"
 #include <ubsio_kvc_err.h>
+#include "dl_biosdk_api.h"
 #include "ubsio_kvc_operation.h"
 #include "ubsio_kvc_instance.h"
 #include "ubsio_kvc.h"
@@ -27,14 +28,24 @@ constexpr int MAX_KV_LAYER_NUM = 2 * 512; // k layer + v layer
 constexpr int64_t MAX_KV_LAYER_LENGTH = 2 * 1024 * 1024 * 1024LL; // 2G
 }
 
-UBSIO_API int32_t UbsioKvCacheInit(int32_t devId, uint64_t ssdSize)
+UBSIO_API int32_t UbsioKvCacheInit(int32_t devId)
 {
     int32_t ret = KvcInstance::Instance().Initialize(devId);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init kvc instance failed, device id: " << devId << ", ret: " << ret);
         return UBSIO_KVC_ERR;
     }
-    return KvcOperationInit(devId, ssdSize);
+    return KvcOperationInit(devId);
+}
+
+UBSIO_API int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    int32_t ret = DlBioSdkApi::LoadLibrary();
+    if (ret != UBSIO_KVC_OK) {
+        LOG_ERROR("load bio sdk failed, ret: " << ret);
+        return UBSIO_KVC_ERR;
+    }
+    return DlBioSdkApi::RegisterMetaEventCallback(callback, context) == RET_CACHE_OK ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 
 UBSIO_API void UbsioKvCacheExit(void) 

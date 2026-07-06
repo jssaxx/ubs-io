@@ -14,8 +14,10 @@
 #define BOOSTIO_WCACHE_MANAGER_H
 
 #include <atomic>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include "bio_err.h"
 #include "bio_ref.h"
 #include "cache_def.h"
@@ -55,6 +57,7 @@ public:
     BResult GcEvictExecutorInit();
     BResult RetryEvictExecutorInit();
     BResult DelayDestroyExecutorInit();
+    BResult MetaReportExecutorInit();
 
     BResult AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId);
 
@@ -94,6 +97,15 @@ public:
     void RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset);
 
     void RegCheckLocRole(CheckLocRole localRole);
+
+    void RegUbsIoMetaEventCallback(UbsIoMetaEventCallback callback);
+
+    void AppendMetaEvent(UbsIoMetaEventType type, const Key &key,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
+
+    void AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events);
+
+    void FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);
 
@@ -142,6 +154,8 @@ private:
 
     void RetryEvictThread();
     void DestroyEvictThread();
+    void ScheduleFlushMetaEvents();
+    void FlushMetaEvents();
 
 private:
     ReadWriteLock mWCacheManagerLock;
@@ -158,8 +172,14 @@ private:
     ExecutorServicePtr mGcEvictService{ nullptr };
     ExecutorServicePtr mRetryEvictService{ nullptr };
     ExecutorServicePtr mDestroyEvictService{ nullptr };
+    ExecutorServicePtr mMetaReportService{ nullptr };
     ExecutorServicePtr mMemoryEvictTransService{ nullptr };
     ExecutorServicePtr mMemoryEvictConsultService{ nullptr };
+
+    std::mutex mMetaReportLock;
+    std::vector<UbsIoMetaEvent> mPendingMetaEvents;
+    std::atomic<bool> mMetaReportScheduled{ false };
+    UbsIoMetaEventCallback mMetaEventCallback{ nullptr };
 
     GetLocDiskStatus mGetLocDiskStatus{ nullptr };
     GetGlobEvictOffset mEvictOffset{ nullptr };

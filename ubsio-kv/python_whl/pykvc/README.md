@@ -2,7 +2,7 @@
 ```
 import pykvc
 
-ret = pykvc.initialize(device_id=0, ssd_size=0)
+ret = pykvc.initialize(device_id=0)
 assert(ret == 0)
 
 value = bytes(b"hello")

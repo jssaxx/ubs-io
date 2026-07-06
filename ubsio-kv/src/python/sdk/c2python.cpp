@@ -32,9 +32,9 @@ constexpr int MAX_KEY_LENGTH = 255;
 constexpr int MAX_BATCH_OP_COUNT = 16 << 10; // 16k
 NdsManager &g_ndsManager = NdsManager::Instance();
 
-int32_t PyKvcKvClientInit(int32_t dev_id, uint64_t ssdSize)
+int32_t PyKvcKvClientInit(int32_t dev_id)
 {
-    if (KvcOperationInit(dev_id, ssdSize) != 0) {
+    if (KvcOperationInit(dev_id) != 0) {
         return -1;
     }
     return 0;
@@ -306,7 +306,7 @@ int PyKvcNdsBatchRead(const std::vector<std::string> &keys,
 PYBIND11_MODULE(c2python_sdk, m)
 {
     m.doc() = "Python/C API for python sdk";
-    m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id") = -1, py::arg("ssd_size") = 0);
+    m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id") = -1);
     m.def("KvExit", &PyKvcKvExit);
     m.def("KvPut", &PyKvcKvPutData, py::arg("key"), py::arg("value"));
     m.def("KvGet", &PyKvcKvGetData, py::arg("key"), py::arg("value"));

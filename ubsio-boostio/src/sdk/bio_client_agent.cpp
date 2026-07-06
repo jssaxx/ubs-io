@@ -45,6 +45,15 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
             UnloadServerLibrary();
             return BIO_INNER_ERR;
         }
+        {
+            std::lock_guard<std::mutex> lock(mMetaEventCallbackLock);
+            if (mMetaEventCallbackConfigured &&
+                registerMetaEventCallbackOp(mMetaEventCallback, mMetaEventCallbackContext) != BIO_OK) {
+                CLIENT_LOG_ERROR("Failed to register meta event callback.");
+                UnloadServerLibrary();
+                return BIO_INNER_ERR;
+            }
+        }
         if (mMode == STANDALONE) {
             StandaloneDeviceInfo standaloneDeviceInfo;
             {
@@ -85,6 +94,18 @@ void BioClientAgent::SetStandaloneDevice(uint32_t deviceId)
     std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
     mStandaloneDeviceInfo.configured = true;
     mStandaloneDeviceInfo.deviceId = deviceId;
+}
+
+BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    std::lock_guard<std::mutex> lock(mMetaEventCallbackLock);
+    mMetaEventCallback = callback;
+    mMetaEventCallbackContext = context;
+    mMetaEventCallbackConfigured = true;
+    if (registerMetaEventCallbackOp == nullptr) {
+        return BIO_OK;
+    }
+    return static_cast<BResult>(registerMetaEventCallbackOp(callback, context));
 }
 
 void BioClientAgent::Exit()
@@ -143,6 +164,7 @@ void BioClientAgent::ResetLoadedOperations()
     cacheHitOp = nullptr;
     cacheResourceOp = nullptr;
     getTracePointsOp = nullptr;
+    registerMetaEventCallbackOp = nullptr;
 }
 
 void BioClientAgent::ResetStandaloneDeviceInfo()
@@ -272,6 +294,10 @@ BResult BioClientAgent::InitOperation()
     }
     if ((getTracePointsOp = reinterpret_cast<GetTracePointsLocalFuncPtr>
         (LoadFunction("GetTracePointsLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((registerMetaEventCallbackOp = reinterpret_cast<RegisterMetaEventCallbackFuncPtr>
+        (LoadFunction("UbsioRegisterMetaEventCallback"))) == nullptr) {
         return BIO_INNER_ERR;
     }
 

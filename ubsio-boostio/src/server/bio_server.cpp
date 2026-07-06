@@ -13,6 +13,7 @@
 #include <dlfcn.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <mutex>
 #include <utility>
 #include "bdm_core.h"
 #include "bio_config_instance.h"
@@ -22,6 +23,7 @@
 #include "bio_log.h"
 #include "bio_monotonic.h"
 #include "bio_server_c.h"
+#include "cache.h"
 #include "cache_overload_ctrl.h"
 #include "cm_c.h"
 #include "expire_checker.h"
@@ -45,6 +47,38 @@ bool IsAbsoluteRegularFile(const std::string &path)
 
     struct stat pathStat {};
     return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
+}
+
+std::mutex gMetaEventCallbackLock;
+UbsioMetaEventCallbackC gMetaEventCallback = nullptr;
+void *gMetaEventCallbackContext = nullptr;
+bool gMetaEventCallbackConfigured = false;
+bool gMetaEventCallbackApplicable = false;
+
+UbsIoMetaEventCallback BuildMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    if (callback == nullptr) {
+        return nullptr;
+    }
+
+    return [callback, context](const std::vector<UbsIoMetaEvent> &events) {
+        std::vector<UbsioMetaEventC> cEvents;
+        cEvents.reserve(events.size());
+        for (const auto &event : events) {
+            cEvents.push_back({ static_cast<int32_t>(event.type), event.key.c_str(),
+                static_cast<uint32_t>(event.key.size()) });
+        }
+        callback(context, cEvents.data(), static_cast<uint32_t>(cEvents.size()));
+    };
+}
+
+void ApplyMetaEventCallbackLocked()
+{
+    if (!gMetaEventCallbackConfigured || !gMetaEventCallbackApplicable) {
+        return;
+    }
+    Cache::Instance().RegUbsIoMetaEventCallback(
+        BuildMetaEventCallback(gMetaEventCallback, gMetaEventCallbackContext));
 }
 }
 
@@ -677,6 +711,11 @@ BResult BioServer::BioCacheInit()
         LOG_ERROR("Failed to init cache instance, ret:" << ret << ".");
         return ret;
     }
+    {
+        std::lock_guard<std::mutex> lock(gMetaEventCallbackLock);
+        gMetaEventCallbackApplicable = true;
+        ApplyMetaEventCallbackLocked();
+    }
 
     GetLocDiskId getLocDiskId = [this](uint16_t ptId, uint16_t &diskId) -> BResult {
         // CM owns this mapping in cluster mode. Standalone reads it from the
@@ -760,6 +799,10 @@ BResult BioServer::BioCacheInit()
 
 void BioServer::BioCacheExit()
 {
+    {
+        std::lock_guard<std::mutex> lock(gMetaEventCallbackLock);
+        gMetaEventCallbackApplicable = false;
+    }
     Cache::Instance().Exit();
 }
 
@@ -1130,6 +1173,16 @@ const char *GetPrometheusListenAddress(void)
     static std::string listenAddress = BioServer::Instance()->GetPrometheusListenAddress();
     const char *listenAddressCStr = listenAddress.c_str();
     return listenAddressCStr;
+}
+
+extern "C" int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    std::lock_guard<std::mutex> lock(gMetaEventCallbackLock);
+    gMetaEventCallback = callback;
+    gMetaEventCallbackContext = context;
+    gMetaEventCallbackConfigured = true;
+    ApplyMetaEventCallbackLocked();
+    return BIO_OK;
 }
 
 uint32_t GetNegoWorkIoTimeOut()

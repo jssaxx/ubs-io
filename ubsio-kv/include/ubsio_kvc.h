@@ -25,10 +25,33 @@ extern "C" {
  * @brief Initialize UBS-IO KV Cache
  *
  * @param devId            [in] device id, -1 means no ACL device binding and uses standalone device 0
- * @param ssdSize          [in] reserved, currently ignored
  * @return 0 if successful
  */
-int32_t UbsioKvCacheInit(int32_t devId, uint64_t ssdSize);
+int32_t UbsioKvCacheInit(int32_t devId);
+
+#ifndef UBSIO_META_EVENT_C_DEFINED
+#define UBSIO_META_EVENT_C_DEFINED
+typedef enum {
+    UBSIO_META_RECOVER_C = 0,
+    UBSIO_META_DELETE_C = 1,
+} UbsioMetaEventTypeC;
+
+typedef struct {
+    int32_t type;
+    const char *key;
+    uint32_t keyLen;
+} UbsioMetaEventC;
+
+typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *events, uint32_t count);
+#endif
+
+/**
+ * @brief Register metadata events for MemCache Master metadata synchronization.
+ *
+ * The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
+ * Passing nullptr unregisters the callback.
+ */
+int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
 
  /** 
   * @brief Exit UBS-IO KV Cache 

@@ -40,7 +40,8 @@ using BioBatchExistFunc = CResult (*)(uint64_t tenantId, const char *key[], ObjL
 using BioBatchFreeFunc = CResult (*)(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count);
 using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location);
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
-                                               const uint32_t count, KeyAddrInfo *infos);
+                                                const uint32_t count, KeyAddrInfo *infos);
+using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 
 class DlBioSdkApi {
 public:
@@ -111,12 +112,17 @@ public:
         pBioExit();
     }
 
-    static int32_t KvBioInit(int32_t devId, uint64_t ssdSize);
+    static int32_t KvBioInit(int32_t devId);
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
     {
         return static_cast<CResult>(pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos));
+    }
+
+    static CResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+    {
+        return static_cast<CResult>(pBioRegisterMetaEventCallback(callback, context));
     }
 
 private:
@@ -138,6 +144,7 @@ private:
     static BioBatchFreeFunc pBioBatchGetFree;
     static BioDeleteFunc pBioDelete;
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
+    static BioRegisterMetaEventCallbackFunc pBioRegisterMetaEventCallback;
 };
 
 }  // namespace ubsio

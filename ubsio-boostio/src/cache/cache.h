@@ -86,6 +86,8 @@ public:
 
     void RegCheckLocRole(CheckLocRole locRole);
 
+    void RegUbsIoMetaEventCallback(UbsIoMetaEventCallback callback);
+
     BResult HandleProcBroken(uint32_t procId);
 
     BResult GetEvictOffset(uint64_t flowId, uint64_t &flowOffset);

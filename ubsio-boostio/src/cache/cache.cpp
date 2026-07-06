@@ -11,6 +11,7 @@
  */
 
 #include "cache.h"
+#include <utility>
 #include "cache_flow.h"
 #include "ufs_helper.h"
 #include "flow_manager.h"
@@ -615,6 +616,11 @@ void Cache::RegGetGlobEvictOffset(GetGlobEvictOffset evictOffset)
 void Cache::RegCheckLocRole(CheckLocRole locRole)
 {
     mWCacheManager->RegCheckLocRole(locRole);
+}
+
+void Cache::RegUbsIoMetaEventCallback(UbsIoMetaEventCallback callback)
+{
+    mWCacheManager->RegUbsIoMetaEventCallback(std::move(callback));
 }
 
 BResult Cache::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
