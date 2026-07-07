@@ -36,7 +36,7 @@
 namespace ock {
 namespace bio {
 namespace {
-constexpr const char* BIO_CONFIG_ENV = "UBSIO_BIO_CONFIG_PATH";
+constexpr const char* BIO_CONFIG_ENV = "UBSIO_CONFIG_PATH";
 constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
 
 bool IsAbsoluteRegularFile(const std::string &path)
