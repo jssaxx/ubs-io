@@ -402,6 +402,14 @@ char *AllocBdmBatchTempBuffer(uint64_t len)
     return GetBdmBatchTempBufferPool().Alloc(len);
 }
 
+uint64_t NormalizeBdmBatchTempSize(uint64_t len)
+{
+    if (len == 0 || len > UINT64_MAX - BDM_BATCH_TEMP_ALIGN + 1) {
+        return 0;
+    }
+    return ((len + BDM_BATCH_TEMP_ALIGN - 1) / BDM_BATCH_TEMP_ALIGN) * BDM_BATCH_TEMP_ALIGN;
+}
+
 void FreeBdmBatchTempBuffer(char *buffer, uint64_t len)
 {
     GetBdmBatchTempBufferPool().Free(buffer, len);
@@ -422,7 +430,7 @@ bool CacheSliceOperator::CanBatchDiskToMemory(const SlicePtr &from, const SliceP
 
 BdmCopyBatchContext::Entry::~Entry()
 {
-    if (tempBuf != nullptr) {
+    if (tempBuf != nullptr && tempOwned) {
         FreeBdmBatchTempBuffer(tempBuf, tempLen);
         tempBuf = nullptr;
         tempLen = 0;
@@ -439,16 +447,34 @@ struct BdmCopyBatchContext::SubmittedBatch {
         if (batch.semInited) {
             sem_destroy(&batch.sem);
         }
+        if (tempArena != nullptr) {
+            FreeBdmBatchTempBuffer(tempArena, tempArenaLen);
+            tempArena = nullptr;
+            tempArenaLen = 0;
+        }
     }
 
     BdmBatchContext batch;
     std::vector<Entry> entries;
     std::vector<BdmBatchRequest> requests;
     std::vector<uint32_t> requestToEntry;
+    std::vector<uint8_t> entryFailed;
     BResult submitRet = BIO_OK;
+    BResult waitRet = BIO_OK;
+    bool ioCompleted = false;
+    bool resultCopied = false;
+    char *tempArena = nullptr;
+    uint64_t tempArenaLen = 0;
 };
 
-BdmCopyBatchContext::BdmCopyBatchContext() = default;
+BdmCopyBatchContext::BdmCopyBatchContext()
+{
+    try {
+        mEntries.reserve(GetBdmBatchReadWindowKeys());
+    } catch (const std::bad_alloc &) {
+        LOG_WARN("Reserve bdm batch entries failed.");
+    }
+}
 BdmCopyBatchContext::~BdmCopyBatchContext() = default;
 
 BResult BdmCopyBatchContext::EnqueueDiskToMemory(const SlicePtr &from, const SlicePtr &to, BResult *result,
@@ -535,8 +561,11 @@ void BdmCopyBatchContext::SubmitWindow(std::vector<Entry> &window)
         return;
     }
     if (waitBatch != nullptr) {
-        WaitAndRecord(*waitBatch);
-        waitBatch.reset();
+        BResult ret = WaitSubmittedIo(*waitBatch);
+        if (ret != BIO_OK) {
+            int32_t expected = BIO_OK;
+            mResult.compare_exchange_strong(expected, ret);
+        }
     }
 
     auto batch = SubmitEntriesAsync(window);
@@ -544,17 +573,17 @@ void BdmCopyBatchContext::SubmitWindow(std::vector<Entry> &window)
         int32_t expected = BIO_OK;
         mResult.compare_exchange_strong(expected, BIO_ALLOC_FAIL);
         MarkPendingEntriesFailed(window, BIO_ALLOC_FAIL);
+        if (waitBatch != nullptr) {
+            WaitAndRecord(*waitBatch);
+        }
         return;
     }
 
     {
         std::lock_guard<std::mutex> lock(mLock);
         mSubmitted.emplace_back(std::move(batch));
-        if (mSubmitted.size() >= pipelineDepth) {
-            waitBatch = std::move(mSubmitted.front());
-            mSubmitted.erase(mSubmitted.begin());
-        }
     }
+
     if (waitBatch != nullptr) {
         WaitAndRecord(*waitBatch);
     }
@@ -593,8 +622,28 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
     }
 
     try {
+        submitted->entryFailed.assign(submittedEntries.size(), 0);
         requests.reserve(requestCount);
         requestToEntry.reserve(requestCount);
+        uint64_t tempArenaOffset = 0;
+        for (const auto &entry : submittedEntries) {
+            if (!entry.useTemp || !CanBatchDiskToTemp(entry.from, entry.to)) {
+                continue;
+            }
+            uint64_t normalizedLen = NormalizeBdmBatchTempSize(entry.to->GetLength());
+            if (normalizedLen == 0 || tempArenaOffset > UINT64_MAX - normalizedLen) {
+                tempArenaOffset = 0;
+                break;
+            }
+            tempArenaOffset += normalizedLen;
+        }
+        if (tempArenaOffset != 0) {
+            submitted->tempArena = AllocBdmBatchTempBuffer(tempArenaOffset);
+            if (submitted->tempArena != nullptr) {
+                submitted->tempArenaLen = tempArenaOffset;
+            }
+        }
+        tempArenaOffset = 0;
         for (uint32_t i = 0; i < submittedEntries.size(); i++) {
             if (submittedEntries[i].useTemp) {
                 if (!CanBatchDiskToTemp(submittedEntries[i].from, submittedEntries[i].to)) {
@@ -605,7 +654,14 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
                     continue;
                 }
                 submittedEntries[i].tempLen = submittedEntries[i].to->GetLength();
-                submittedEntries[i].tempBuf = AllocBdmBatchTempBuffer(submittedEntries[i].tempLen);
+                if (submitted->tempArena != nullptr) {
+                    uint64_t normalizedLen = NormalizeBdmBatchTempSize(submittedEntries[i].tempLen);
+                    submittedEntries[i].tempBuf = submitted->tempArena + tempArenaOffset;
+                    submittedEntries[i].tempOwned = false;
+                    tempArenaOffset += normalizedLen;
+                } else {
+                    submittedEntries[i].tempBuf = AllocBdmBatchTempBuffer(submittedEntries[i].tempLen);
+                }
                 if (submittedEntries[i].tempBuf == nullptr) {
                     if (submittedEntries[i].result != nullptr) {
                         *submittedEntries[i].result = BIO_ALLOC_FAIL;
@@ -628,6 +684,8 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
         }
     } catch (const std::bad_alloc &) {
         submitted->submitRet = BIO_ALLOC_FAIL;
+        requests.clear();
+        requestToEntry.clear();
         return submitted;
     }
 
@@ -644,8 +702,12 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
     return submitted;
 }
 
-BResult BdmCopyBatchContext::WaitSubmittedBatch(SubmittedBatch &batch)
+BResult BdmCopyBatchContext::WaitSubmittedIo(SubmittedBatch &batch)
 {
+    if (batch.ioCompleted) {
+        return batch.waitRet;
+    }
+
     BResult ret = batch.submitRet;
     if (!batch.requests.empty()) {
         BIO_TRACE_START(BDM_TRACE_READ_BATCH_WAIT);
@@ -658,7 +720,6 @@ BResult BdmCopyBatchContext::WaitSubmittedBatch(SubmittedBatch &batch)
 
     BIO_TRACE_START(BDM_TRACE_READ_BATCH_RESULT_SCAN);
     bool hasRequestFailure = false;
-    std::vector<bool> entryFailed(batch.entries.size(), false);
     for (uint32_t i = 0; i < batch.requests.size(); i++) {
         if (batch.requests[i].result.load(std::memory_order_relaxed) == BDM_CODE_OK) {
             continue;
@@ -666,8 +727,8 @@ BResult BdmCopyBatchContext::WaitSubmittedBatch(SubmittedBatch &batch)
         hasRequestFailure = true;
         ret = BIO_DISK_IOERR;
         uint32_t entryIndex = batch.requestToEntry[i];
-        if (entryIndex < entryFailed.size()) {
-            entryFailed[entryIndex] = true;
+        if (entryIndex < batch.entryFailed.size()) {
+            batch.entryFailed[entryIndex] = 1;
         }
         if (entryIndex < batch.entries.size() && batch.entries[entryIndex].result != nullptr) {
             *batch.entries[entryIndex].result = BIO_DISK_IOERR;
@@ -679,37 +740,57 @@ BResult BdmCopyBatchContext::WaitSubmittedBatch(SubmittedBatch &batch)
                 *entry.result = ret;
             }
         }
-    } else {
-        CacheSliceOperator sliceOperator;
-        for (auto &entry : batch.entries) {
-            if (entry.result == nullptr || *entry.result != BDM_BATCH_PENDING) {
-                continue;
-            }
-            if (entry.tempBuf != nullptr) {
-                uint32_t entryIndex = static_cast<uint32_t>(&entry - batch.entries.data());
-                if (entryIndex < entryFailed.size() && entryFailed[entryIndex]) {
-                    continue;
-                }
-                BResult copyRet = sliceOperator.Copy(entry.tempBuf, entry.to);
-                if (copyRet != BIO_OK) {
-                    *entry.result = copyRet;
-                    ret = copyRet;
-                    continue;
-                }
-            }
-            if (entry.result != nullptr && *entry.result == BDM_BATCH_PENDING) {
-                *entry.result = BIO_OK;
-            }
-        }
     }
 
     BIO_TRACE_END(BDM_TRACE_READ_BATCH_RESULT_SCAN, ret);
+    batch.waitRet = ret;
+    batch.ioCompleted = true;
     return ret;
+}
+
+BResult BdmCopyBatchContext::CopySubmittedResult(SubmittedBatch &batch)
+{
+    if (batch.resultCopied) {
+        return batch.waitRet;
+    }
+
+    BResult ret = WaitSubmittedIo(batch);
+    CacheSliceOperator sliceOperator;
+    for (auto &entry : batch.entries) {
+        if (entry.result == nullptr || *entry.result != BDM_BATCH_PENDING) {
+            continue;
+        }
+        if (entry.tempBuf != nullptr) {
+            uint32_t entryIndex = static_cast<uint32_t>(&entry - batch.entries.data());
+            if (entryIndex < batch.entryFailed.size() && batch.entryFailed[entryIndex] != 0) {
+                continue;
+            }
+            BResult copyRet = sliceOperator.Copy(entry.tempBuf, entry.to);
+            if (copyRet != BIO_OK) {
+                *entry.result = copyRet;
+                ret = copyRet;
+                continue;
+            }
+        }
+        if (entry.result != nullptr && *entry.result == BDM_BATCH_PENDING) {
+            *entry.result = BIO_OK;
+        }
+    }
+    batch.waitRet = ret;
+    batch.resultCopied = true;
+    return ret;
+}
+
+BResult BdmCopyBatchContext::WaitSubmittedBatch(SubmittedBatch &batch)
+{
+    BResult ret = WaitSubmittedIo(batch);
+    BResult copyRet = CopySubmittedResult(batch);
+    return ret == BIO_OK ? copyRet : ret;
 }
 
 void BdmCopyBatchContext::WaitAndRecord(SubmittedBatch &batch)
 {
-    BResult ret = WaitSubmittedBatch(batch);
+    BResult ret = CopySubmittedResult(batch);
     if (ret != BIO_OK) {
         int32_t expected = BIO_OK;
         mResult.compare_exchange_strong(expected, ret);

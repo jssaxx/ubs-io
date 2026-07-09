@@ -53,12 +53,13 @@ private:
         Entry(Entry &&other) noexcept
             : from(std::move(other.from)), to(std::move(other.to)), result(other.result),
               sliceRef(std::move(other.sliceRef)), useTemp(other.useTemp), tempBuf(other.tempBuf),
-              tempLen(other.tempLen)
+              tempLen(other.tempLen), tempOwned(other.tempOwned)
         {
             other.result = nullptr;
             other.useTemp = false;
             other.tempBuf = nullptr;
             other.tempLen = 0;
+            other.tempOwned = true;
         }
         Entry &operator=(Entry &&) = delete;
         ~Entry();
@@ -70,6 +71,7 @@ private:
         bool useTemp = false;
         char *tempBuf = nullptr;
         uint64_t tempLen = 0;
+        bool tempOwned = true;
     };
 
     BResult EnqueueEntry(Entry &&entry, uint64_t entryLen);
@@ -77,6 +79,8 @@ private:
     std::unique_ptr<SubmittedBatch> SubmitEntriesAsync(std::vector<Entry> &entries);
     static void MarkPendingEntriesFailed(std::vector<Entry> &entryList, BResult result);
     void WaitAndRecord(SubmittedBatch &batch);
+    BResult WaitSubmittedIo(SubmittedBatch &batch);
+    BResult CopySubmittedResult(SubmittedBatch &batch);
     BResult WaitSubmittedBatch(SubmittedBatch &batch);
 
     mutable std::mutex mLock;

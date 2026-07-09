@@ -167,7 +167,7 @@ typedef struct {
 
 ```ini
 bio.bdm.batch_read.window_keys = 128
-bio.bdm.batch_read.window_bytes_mb = 1024
+bio.bdm.batch_read.window_bytes_mb = 64
 bio.bdm.batch_read.pipeline_depth = 4
 ```
 
@@ -180,7 +180,7 @@ bio.bdm.batch_read.pipeline_depth = 4
 默认值：
 
 - `window_keys = 128`
-- `window_bytes_mb = 1024`
+- `window_bytes_mb = 64`
 - `pipeline_depth = 4`
 
 配置约束：
@@ -197,7 +197,7 @@ Pipeline 执行流程：
 4. 每个 key 的查询逻辑完成后，BatchGet 统一调用 `bdmBatch.Submit()`。
 5. `Submit()` 按 `window_keys/window_bytes_mb` 切窗口。
 6. 每个窗口通过 `SubmitBdmBatchAsync()` 异步提交给 BDM。
-7. 同时最多保留 `pipeline_depth` 个窗口在途。
+7. 同时最多保留 `pipeline_depth` 个窗口在途；达到上限时，在提交下一个窗口前等待最早窗口完成。
 8. 每个窗口完成后扫描单 IO 结果，把失败结果回填到对应 key 的结果数组。
 
 适用范围：
@@ -478,7 +478,7 @@ bio.bdm.io_engine = io_uring
 
 ```ini
 bio.bdm.batch_read.window_keys = 128
-bio.bdm.batch_read.window_bytes_mb = 1024
+bio.bdm.batch_read.window_bytes_mb = 64
 bio.bdm.batch_read.pipeline_depth = 4
 ```
 
@@ -486,7 +486,7 @@ bio.bdm.batch_read.pipeline_depth = 4
 
 ```ini
 bio.bdm.batch_read.window_keys = 32
-bio.bdm.batch_read.window_bytes_mb = 128
+bio.bdm.batch_read.window_bytes_mb = 32
 bio.bdm.batch_read.pipeline_depth = 1
 ```
 
