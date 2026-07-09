@@ -81,7 +81,7 @@ const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
 const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
 const auto BATCH_GET_THREAD_NUM = std::make_pair("bio.batchget.thread.num", 32);
 const auto BDM_BATCH_READ_WINDOW_KEYS = std::make_pair("bio.bdm.batch_read.window_keys", 128);
-const auto BDM_BATCH_READ_WINDOW_BYTES_MB = std::make_pair("bio.bdm.batch_read.window_bytes_mb", 1024);
+const auto BDM_BATCH_READ_WINDOW_BYTES_MB = std::make_pair("bio.bdm.batch_read.window_bytes_mb", 64);
 const auto BDM_BATCH_READ_PIPELINE_DEPTH = std::make_pair("bio.bdm.batch_read.pipeline_depth", 4);
 const auto BDM_BATCH_READ_TEMP_POOL_MB = std::make_pair("bio.bdm.batch_read.temp_pool_mb", 0);
 const auto BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL =
@@ -171,7 +171,7 @@ public:
         uint32_t workNetTimeOut = 20;
         uint32_t batchGetThreadNum = 32;
         uint32_t bdmBatchReadWindowKeys = 128;
-        uint32_t bdmBatchReadWindowBytesMb = 1024;
+        uint32_t bdmBatchReadWindowBytesMb = 64;
         uint32_t bdmBatchReadPipelineDepth = 4;
         uint32_t bdmBatchReadTempPoolMb = 0;
         bool bdmBatchReadStandaloneUseScratchPool = true;
