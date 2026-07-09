@@ -67,7 +67,6 @@ public:
     static inline int NdsUninit()
     {
         if (pNdsUninit == nullptr) {
-            LOG_ERROR("nds_uninit not available");
             return UBSIO_KVC_ERR;
         }
         return pNdsUninit();

@@ -4,7 +4,7 @@ index 0000000..7f10684
 --- /dev/null
 +++ b/mooncake-store/include/dl_ubsio_api.h
 @@ -0,0 +1,158 @@
-+﻿#pragma once
++#pragma once
 +
 +#include <cstdint>
 +#include <cstddef>
@@ -13,7 +13,7 @@ index 0000000..7f10684
 +
 +namespace mooncake {
 +
-+using ubsio_client_initFunc = int32_t (*)(int32_t, uint64_t);
++using ubsio_client_initFunc = int32_t (*)(int32_t);
 +using ubsio_putFunc = int32_t (*)(const char *, void *, size_t, uint32_t);
 +using ubsio_getFunc = int32_t (*)(const char *, void *, size_t, uint32_t);
 +using ubsio_existFunc = bool (*)(const char *, uint32_t);
@@ -33,12 +33,12 @@ index 0000000..7f10684
 +    static int32_t LoadLibrary();
 +    static void CleanupLibrary();
 +
-+    static inline int32_t UbsioClientInit(int32_t deviceId, uint64_t ssdSize)
++    static inline int32_t UbsioClientInit(int32_t deviceId)
 +    {
 +        if (pUbsioClientInit == nullptr) {
 +            return -1;
 +        }
-+        return pUbsioClientInit(deviceId, ssdSize);
++        return pUbsioClientInit(deviceId);
 +    }
 +
 +    static inline int32_t UbsioPut(const char *key, void *buf, size_t length, uint32_t flags)
@@ -220,74 +220,74 @@ index a686fd9..20ca358 100644
      // Used for deterministic testing of partial success behavior.
      std::function<bool(const std::string& key)> test_failure_predicate_;
  };
-+  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+// IDistributedKVClient — 用户实现的分布式 KV 后端接口  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+class IDistributedKVClient {  
-+   public:  
-+    virtual ~IDistributedKVClient() = default;  
-+  
-+    // 初始化连接  
-+    virtual ErrorCode Init() = 0;  
-+  
-+    // 批量写入：keys[i] 对应 values[i]（已拼接好的字节串）  
++
++// ─────────────────────────────────────────────────────────────────────────────
++// IDistributedKVClient — 用户实现的分布式 KV 后端接口
++// ─────────────────────────────────────────────────────────────────────────────
++class IDistributedKVClient {
++   public:
++    virtual ~IDistributedKVClient() = default;
++
++    // 初始化连接
++    virtual ErrorCode Init() = 0;
++
++    // 批量写入：keys[i] 对应 values[i]（已拼接好的字节串）
 +    virtual tl::expected<std::vector<int>, ErrorCode> BatchPut(const std::vector<std::string>& keys,
-+                               const std::vector<std::string>& values) = 0;  
-+  
-+    // 批量读取：将 key 对应的数据读入 dest_slices[key].ptr  
-+    // dest_slices[key].size 是预分配的缓冲区大小，必须与实际数据大小匹配  
-+    virtual ErrorCode BatchGet(  
-+        const std::vector<std::string>& keys,  
-+        std::unordered_map<std::string, Slice>& dest_slices) = 0;  
-+  
-+    // 检查 key 是否存在  
-+    virtual tl::expected<bool, ErrorCode> Exists(const std::string& key) = 0;  
-+  
-+    // 扫描所有 key，用于进程重启后恢复 master 元数据（ScanMeta）  
-+    virtual ErrorCode ScanKeys(  
-+        const std::function<ErrorCode(const std::string& key,  
-+                                      int64_t value_size)>& handler) = 0;  
++                               const std::vector<std::string>& values) = 0;
++
++    // 批量读取：将 key 对应的数据读入 dest_slices[key].ptr
++    // dest_slices[key].size 是预分配的缓冲区大小，必须与实际数据大小匹配
++    virtual ErrorCode BatchGet(
++        const std::vector<std::string>& keys,
++        std::unordered_map<std::string, Slice>& dest_slices) = 0;
++
++    // 检查 key 是否存在
++    virtual tl::expected<bool, ErrorCode> Exists(const std::string& key) = 0;
++
++    // 扫描所有 key，用于进程重启后恢复 master 元数据（ScanMeta）
++    virtual ErrorCode ScanKeys(
++        const std::function<ErrorCode(const std::string& key,
++                                      int64_t value_size)>& handler) = 0;
 +};
 +
-+// 实现 IDistributedKVClient（封装KVC接口）  
-+class UbsKVClient : public IDistributedKVClient {  
-+public:  
++// 实现 IDistributedKVClient（封装KVC接口）
++class UbsKVClient : public IDistributedKVClient {
++public:
 +    ErrorCode Init() override;
-+    tl::expected<std::vector<int>, ErrorCode> BatchPut(const std::vector<std::string>& keys,  
++    tl::expected<std::vector<int>, ErrorCode> BatchPut(const std::vector<std::string>& keys,
 +                                 const std::vector<std::string>& values) override;
-+    ErrorCode BatchGet(const std::vector<std::string>& keys,  
++    ErrorCode BatchGet(const std::vector<std::string>& keys,
 +                                 std::unordered_map<std::string, Slice>& dest) override;
 +    tl::expected<bool, ErrorCode> Exists(const std::string& key) override;
-+    ErrorCode ScanKeys(  
++    ErrorCode ScanKeys(
 +        const std::function<ErrorCode(const std::string&, int64_t)>& handler) override;
-+};  
-+  
-+  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+// DistributedKVStorageBackend — StorageBackendInterface 的分布式 KV 实现  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+class DistributedKVStorageBackend : public StorageBackendInterface {  
-+   public:  
-+    DistributedKVStorageBackend(const FileStorageConfig& config);  
-+  
-+    tl::expected<void, ErrorCode> Init() override;  
-+  
-+    tl::expected<int64_t, ErrorCode> BatchOffload(  
-+        const std::unordered_map<std::string, std::vector<Slice>>& batch_object,  
-+        std::function<ErrorCode(const std::vector<std::string>& keys,  
-+                                std::vector<StorageObjectMetadata>& metadatas)>  
-+            complete_handler,  
-+        std::function<void(const std::vector<std::string>& evicted_keys)>  
-+            eviction_handler = nullptr) override;  
-+  
-+    tl::expected<void, ErrorCode> BatchLoad(  
-+        std::unordered_map<std::string, Slice>& batched_slices) override;  
-+  
-+    tl::expected<bool, ErrorCode> IsExist(const std::string& key) override;  
-+  
-+    tl::expected<bool, ErrorCode> IsEnableOffloading() override;  
-+  
++};
++
++
++// ─────────────────────────────────────────────────────────────────────────────
++// DistributedKVStorageBackend — StorageBackendInterface 的分布式 KV 实现
++// ─────────────────────────────────────────────────────────────────────────────
++class DistributedKVStorageBackend : public StorageBackendInterface {
++   public:
++    DistributedKVStorageBackend(const FileStorageConfig& config);
++
++    tl::expected<void, ErrorCode> Init() override;
++
++    tl::expected<int64_t, ErrorCode> BatchOffload(
++        const std::unordered_map<std::string, std::vector<Slice>>& batch_object,
++        std::function<ErrorCode(const std::vector<std::string>& keys,
++                                std::vector<StorageObjectMetadata>& metadatas)>
++            complete_handler,
++        std::function<void(const std::vector<std::string>& evicted_keys)>
++            eviction_handler = nullptr) override;
++
++    tl::expected<void, ErrorCode> BatchLoad(
++        std::unordered_map<std::string, Slice>& batched_slices) override;
++
++    tl::expected<bool, ErrorCode> IsExist(const std::string& key) override;
++
++    tl::expected<bool, ErrorCode> IsEnableOffloading() override;
++
 +tl::expected<void, ErrorCode> ScanMeta(
 +        const std::function<ErrorCode(
 +            const std::vector<std::string>& keys,
@@ -297,10 +297,10 @@ index a686fd9..20ca358 100644
 +    friend class StorageBackendTest;
 +
 +   private:
-+    std::shared_ptr<IDistributedKVClient> kv_client_ = nullptr;  
-+    std::atomic<bool> initialized_{false};  
-+    std::atomic<int64_t> total_keys_{0};  
-+    std::atomic<int64_t> total_size_{0};  
++    std::shared_ptr<IDistributedKVClient> kv_client_ = nullptr;
++    std::atomic<bool> initialized_{false};
++    std::atomic<int64_t> total_keys_{0};
++    std::atomic<int64_t> total_size_{0};
 +};
  
  tl::expected<std::shared_ptr<StorageBackendInterface>, ErrorCode>
@@ -442,8 +442,8 @@ index 63e3449..ec97e23 100644
      } else if (storage_backend_descriptor ==
                 "offset_allocator_storage_backend") {
          config.storage_backend_type = StorageBackendType::kOffsetAllocator;
-+    } else if (storage_backend_descriptor == "distributed_kv_storage_backend") {  
-+        config.storage_backend_type = StorageBackendType::kDistributedKV;  
++    } else if (storage_backend_descriptor == "distributed_kv_storage_backend") {
++        config.storage_backend_type = StorageBackendType::kDistributedKV;
      } else {
          LOG(ERROR) << "Unknown storage backend.";
      }
@@ -503,7 +503,7 @@ index c269d47..d83cbd5 100644
  #include <cstring>
  
  #include <regex>
-@@ -3194,6 +3198,329 @@ tl::expected<void, ErrorCode> OffsetAllocatorStorageBackend::ScanMeta(
+@@ -3194,6 +3198,331 @@ tl::expected<void, ErrorCode> OffsetAllocatorStorageBackend::ScanMeta(
      return {};
  }
  
@@ -520,7 +520,7 @@ index c269d47..d83cbd5 100644
 +                     << "defaulting to device ID 0";
 +    }
 +    LOG(INFO) << "Using device ID: " << deviceId;
-+    ret = DlUbsioApi::UbsioClientInit(deviceId, 0);
++    ret = DlUbsioApi::UbsioClientInit(deviceId);
 +    if (ret != 0) {
 +        LOG(ERROR) << "Failed to init ubsio client, deviceId=" << deviceId;
 +        return ErrorCode::INTERNAL_ERROR;
@@ -528,7 +528,7 @@ index c269d47..d83cbd5 100644
 +    return ErrorCode::OK;
 +}
 +
-+tl::expected<std::vector<int>, ErrorCode> UbsKVClient::BatchPut(const std::vector<std::string>& keys,  
++tl::expected<std::vector<int>, ErrorCode> UbsKVClient::BatchPut(const std::vector<std::string>& keys,
 +                                const std::vector<std::string>& values)
 +{
 +    if (keys.size() != values.size()) {
@@ -600,64 +600,66 @@ index c269d47..d83cbd5 100644
 +    LOG(ERROR) << "Ubsio not support scan meta";
 +    return ErrorCode::OK;
 +}
-+  
-+DistributedKVStorageBackend::DistributedKVStorageBackend(  
-+    const FileStorageConfig& config)  
-+    : StorageBackendInterface(config) {}  
-+  
-+tl::expected<void, ErrorCode> DistributedKVStorageBackend::Init() {  
++
++DistributedKVStorageBackend::DistributedKVStorageBackend(
++    const FileStorageConfig& config)
++    : StorageBackendInterface(config) {}
++
++tl::expected<void, ErrorCode> DistributedKVStorageBackend::Init() {
 +    if (initialized_.load(std::memory_order_acquire)) return {};
-+    kv_client_ = std::make_unique<UbsKVClient>();
-+    auto err = kv_client_->Init();  
-+    if (err != ErrorCode::OK) {  
-+        LOG(ERROR) << "DistributedKVStorageBackend::Init failed: " << err;  
-+        return tl::make_unexpected(err);  
-+    }  
-+    initialized_.store(true, std::memory_order_release);  
-+    return {};  
-+}  
-+  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+// BatchOffload: heartbeat 线程调用，将内存数据写入分布式 KV 后端  
-+// batch_object: {key → vector<Slice>}，Slice.ptr 已是 CPU 内存（FileStorage  
-+//               在调用前完成了 GPU→CPU D2H 拷贝）  
-+// complete_handler: 写成功后必须调用，通知 master 添加 LOCAL_DISK 副本  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+  
-+tl::expected<int64_t, ErrorCode> DistributedKVStorageBackend::BatchOffload(  
-+    const std::unordered_map<std::string, std::vector<Slice>>& batch_object,  
-+    std::function<ErrorCode(const std::vector<std::string>& keys,  
-+                            std::vector<StorageObjectMetadata>& metadatas)>  
-+        complete_handler,  
-+    std::function<void(const std::vector<std::string>& /*evicted_keys*/)>  
-+    /*eviction_handler*/) {  
-+    if (!initialized_.load(std::memory_order_acquire)) {  
-+        LOG(ERROR) << "DistributedKVStorageBackend not initialized";  
-+        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
-+    }  
++    if (kv_client_ == nullptr) {
++        kv_client_ = std::make_shared<UbsKVClient>();
++    }
++    auto err = kv_client_->Init();
++    if (err != ErrorCode::OK) {
++        LOG(ERROR) << "DistributedKVStorageBackend::Init failed: " << err;
++        return tl::make_unexpected(err);
++    }
++    initialized_.store(true, std::memory_order_release);
++    return {};
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// BatchOffload: heartbeat 线程调用，将内存数据写入分布式 KV 后端
++// batch_object: {key → vector<Slice>}，Slice.ptr 已是 CPU 内存（FileStorage
++//               在调用前完成了 GPU→CPU D2H 拷贝）
++// complete_handler: 写成功后必须调用，通知 master 添加 LOCAL_DISK 副本
++// ─────────────────────────────────────────────────────────────────────────────
++
++tl::expected<int64_t, ErrorCode> DistributedKVStorageBackend::BatchOffload(
++    const std::unordered_map<std::string, std::vector<Slice>>& batch_object,
++    std::function<ErrorCode(const std::vector<std::string>& keys,
++                            std::vector<StorageObjectMetadata>& metadatas)>
++        complete_handler,
++    std::function<void(const std::vector<std::string>& /*evicted_keys*/)>
++    /*eviction_handler*/) {
++    if (!initialized_.load(std::memory_order_acquire)) {
++        LOG(ERROR) << "DistributedKVStorageBackend not initialized";
++        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
++    }
 +    if (batch_object.empty()) {
 +        LOG(ERROR) << "batch object is empty";
 +        return 0;
 +    }
-+  
-+    auto enable_res = IsEnableOffloading();  
++
++    auto enable_res = IsEnableOffloading();
 +    if (!enable_res) {
 +        return tl::make_unexpected(enable_res.error());
 +    }
 +    if (!enable_res.value()) {
-+        return tl::make_unexpected(ErrorCode::KEYS_ULTRA_LIMIT);  
-+    }  
-+  
-+    std::vector<std::string> put_keys;  
-+    std::vector<std::string> put_values;  
-+    std::vector<StorageObjectMetadata> metadatas;  
-+    put_keys.reserve(batch_object.size());  
-+    put_values.reserve(batch_object.size());  
-+    metadatas.reserve(batch_object.size());  
-+  
-+    for (const auto& [key, slices] : batch_object) {  
-+        if (slices.empty()) continue;  
-+  
++        return tl::make_unexpected(ErrorCode::KEYS_ULTRA_LIMIT);
++    }
++
++    std::vector<std::string> put_keys;
++    std::vector<std::string> put_values;
++    std::vector<StorageObjectMetadata> metadatas;
++    put_keys.reserve(batch_object.size());
++    put_values.reserve(batch_object.size());
++    metadatas.reserve(batch_object.size());
++
++    for (const auto& [key, slices] : batch_object) {
++        if (slices.empty()) continue;
++
 +// 将多个 Slice 拼接为一个连续字节串
 +        int64_t key_size = static_cast<int64_t>(key.size());
 +        int64_t value_size = 0;
@@ -678,21 +680,21 @@ index c269d47..d83cbd5 100644
 +            value_size,                        // data_size: 必须正确填写
 +            ""                                 // transport_endpoint: 框架填充
 +        });
-+    }  
-+  
-+    if (put_keys.empty()) return 0;  
-+  
-+    auto err = kv_client_->BatchPut(put_keys, put_values);  
-+    if (!err) {  
-+        LOG(ERROR) << "DistributedKVStorageBackend::BatchOffload: "  
++    }
++
++    if (put_keys.empty()) return 0;
++
++    auto err = kv_client_->BatchPut(put_keys, put_values);
++    if (!err) {
++        LOG(ERROR) << "DistributedKVStorageBackend::BatchOffload: "
 +                      "BatchPut failed: " << err.error();
-+        return tl::make_unexpected(err.error());  
++        return tl::make_unexpected(err.error());
 +    }
 +    auto& put_results = err.value();
-+    std::vector<std::string> success_keys;  
-+    std::vector<StorageObjectMetadata> success_metadatas;  
-+    success_keys.reserve(put_keys.size());  
-+    success_metadatas.reserve(put_keys.size()); 
++    std::vector<std::string> success_keys;
++    std::vector<StorageObjectMetadata> success_metadatas;
++    success_keys.reserve(put_keys.size());
++    success_metadatas.reserve(put_keys.size());
 +    for (size_t i = 0; i < put_results.size(); ++i) {
 +        if (put_results[i] != 0) {
 +            LOG(ERROR) << "DistributedKVStorageBackend::BatchOffload: "
@@ -704,44 +706,44 @@ index c269d47..d83cbd5 100644
 +        success_keys.emplace_back(std::move(put_keys[i]));
 +        success_metadatas.emplace_back(std::move(metadatas[i]));
 +    }
-+                   
-+  
-+    // 更新容量计数器  
-+    total_keys_.fetch_add(static_cast<int64_t>(success_keys.size()),  
-+                          std::memory_order_relaxed); 
-+  
++
++
++    // 更新容量计数器
++    total_keys_.fetch_add(static_cast<int64_t>(success_keys.size()),
++                          std::memory_order_relaxed);
++
 +    // 通知 master 添加 LOCAL_DISK 副本
 +    // FileStorage 的 complete_handler 会将 transport_endpoint 填为 local_rpc_addr_
 +    if (!complete_handler) {
 +        LOG(ERROR) << "complete_handler is nullptr";
 +        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
 +    }
-+    auto handler_err = complete_handler(success_keys, success_metadatas);  
-+    if (handler_err != ErrorCode::OK) {  
++    auto handler_err = complete_handler(success_keys, success_metadatas);
++    if (handler_err != ErrorCode::OK) {
 +        LOG(ERROR)
 +            << "Complete handler failed: " << handler_err << " - "
 +            << success_keys.size()
 +            << " keys were successfully written to distributed KV but master "
 +               "was not notified. "
 +            << "Master will learn about them via ScanMeta on next restart.";
-+        return tl::make_unexpected(handler_err);  
-+    }  
-+  
-+    return static_cast<int64_t>(success_keys.size());  
-+}  
-+  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+// BatchLoad: 对端 FileStorage::BatchGet 调用，将数据读入 CPU ClientBuffer  
-+// batched_slices: {key → Slice}，Slice.ptr 是 RDMA 注册的 CPU ClientBuffer 地址  
-+//                 后续由 TransferEngine RDMA pull 到请求方 GPU  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+  
-+tl::expected<void, ErrorCode> DistributedKVStorageBackend::BatchLoad(  
-+    std::unordered_map<std::string, Slice>& batched_slices) {  
-+    if (!initialized_.load(std::memory_order_acquire)) {  
-+        LOG(ERROR) << "DistributedKVStorageBackend not initialized";  
-+        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
-+    }  
++        return tl::make_unexpected(handler_err);
++    }
++
++    return static_cast<int64_t>(success_keys.size());
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// BatchLoad: 对端 FileStorage::BatchGet 调用，将数据读入 CPU ClientBuffer
++// batched_slices: {key → Slice}，Slice.ptr 是 RDMA 注册的 CPU ClientBuffer 地址
++//                 后续由 TransferEngine RDMA pull 到请求方 GPU
++// ─────────────────────────────────────────────────────────────────────────────
++
++tl::expected<void, ErrorCode> DistributedKVStorageBackend::BatchLoad(
++    std::unordered_map<std::string, Slice>& batched_slices) {
++    if (!initialized_.load(std::memory_order_acquire)) {
++        LOG(ERROR) << "DistributedKVStorageBackend not initialized";
++        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
++    }
 +    if (batched_slices.empty()) return {};
 +
 +    std::vector<std::string> keys;
@@ -750,100 +752,100 @@ index c269d47..d83cbd5 100644
 +        keys.push_back(key);
 +    }
 +    auto err = kv_client_->BatchGet(keys, batched_slices);
-+    if (err != ErrorCode::OK) {  
-+        LOG(ERROR) << "DistributedKVStorageBackend::BatchLoad: "  
-+                      "BatchGet failed: " << err;  
-+        return tl::make_unexpected(err);  
-+    }  
-+    return {};  
-+}  
-+  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+  
-+tl::expected<bool, ErrorCode> DistributedKVStorageBackend::IsExist(  
-+    const std::string& key) {  
-+    if (!initialized_.load(std::memory_order_acquire))  
-+        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
++    if (err != ErrorCode::OK) {
++        LOG(ERROR) << "DistributedKVStorageBackend::BatchLoad: "
++                      "BatchGet failed: " << err;
++        return tl::make_unexpected(err);
++    }
++    return {};
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++
++tl::expected<bool, ErrorCode> DistributedKVStorageBackend::IsExist(
++    const std::string& key) {
++    if (!initialized_.load(std::memory_order_acquire))
++        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
 +    return kv_client_->Exists(key);
-+}  
-+  
-+tl::expected<bool, ErrorCode> DistributedKVStorageBackend::IsEnableOffloading() {  
-+    if (!initialized_.load(std::memory_order_acquire))  
-+        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
-+    bool within_size = total_size_.load(std::memory_order_relaxed) <  
-+                       file_storage_config_.total_size_limit;  
-+    bool within_keys = total_keys_.load(std::memory_order_relaxed) <  
-+                       file_storage_config_.total_keys_limit;  
-+    return within_size && within_keys;  
-+}  
-+  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+// ScanMeta: FileStorage::Init() 调用，进程重启后扫描 KV 后端已有数据，  
-+//           通过 handler 回调通知 master 恢复 LOCAL_DISK 副本元数据  
-+// ─────────────────────────────────────────────────────────────────────────────  
-+  
-+tl::expected<void, ErrorCode> DistributedKVStorageBackend::ScanMeta(  
-+    const std::function<ErrorCode(const std::vector<std::string>& keys,  
-+                                  std::vector<StorageObjectMetadata>& metadatas)>&  
-+        handler) {  
-+    if (!initialized_.load(std::memory_order_acquire))  
-+        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);  
-+  
-+    std::vector<std::string> keys;  
-+    std::vector<StorageObjectMetadata> metadatas;  
-+    ErrorCode flush_error = ErrorCode::OK;  
-+  
-+    auto flush = [&]() -> bool {  
-+        if (keys.empty()) return true;  
-+        auto err = handler(keys, metadatas);  
++}
++
++tl::expected<bool, ErrorCode> DistributedKVStorageBackend::IsEnableOffloading() {
++    if (!initialized_.load(std::memory_order_acquire))
++        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
++    bool within_size = total_size_.load(std::memory_order_relaxed) <
++                       file_storage_config_.total_size_limit;
++    bool within_keys = total_keys_.load(std::memory_order_relaxed) <
++                       file_storage_config_.total_keys_limit;
++    return within_size && within_keys;
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// ScanMeta: FileStorage::Init() 调用，进程重启后扫描 KV 后端已有数据，
++//           通过 handler 回调通知 master 恢复 LOCAL_DISK 副本元数据
++// ─────────────────────────────────────────────────────────────────────────────
++
++tl::expected<void, ErrorCode> DistributedKVStorageBackend::ScanMeta(
++    const std::function<ErrorCode(const std::vector<std::string>& keys,
++                                  std::vector<StorageObjectMetadata>& metadatas)>&
++        handler) {
++    if (!initialized_.load(std::memory_order_acquire))
++        return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
++
++    std::vector<std::string> keys;
++    std::vector<StorageObjectMetadata> metadatas;
++    ErrorCode flush_error = ErrorCode::OK;
++
++    auto flush = [&]() -> bool {
++        if (keys.empty()) return true;
++        auto err = handler(keys, metadatas);
 +        if (err != ErrorCode::OK) {
 +            flush_error = err;
 +            return false;
 +        }
-+        keys.clear();  
-+        metadatas.clear();  
-+        return true;  
-+    };  
-+  
-+    auto err = kv_client_->ScanKeys(  
-+        [&](const std::string& key, int64_t value_size) -> ErrorCode {  
-+            keys.push_back(key);  
-+            metadatas.push_back(StorageObjectMetadata{  
-+                0, 0,  
-+                static_cast<int64_t>(key.size()),  
-+                value_size,  
-+                ""  // transport_endpoint 由 FileStorage::Init 的 ScanMeta handler 填充  
-+            });  
-+            total_keys_.fetch_add(1, std::memory_order_relaxed);  
-+            total_size_.fetch_add(value_size, std::memory_order_relaxed);  
-+  
-+            if (static_cast<int64_t>(keys.size()) >=  
-+                file_storage_config_.scanmeta_iterator_keys_limit) {  
-+                if (!flush()) return flush_error;  
-+            }  
-+            return ErrorCode::OK;  
-+        });  
-+  
++        keys.clear();
++        metadatas.clear();
++        return true;
++    };
++
++    auto err = kv_client_->ScanKeys(
++        [&](const std::string& key, int64_t value_size) -> ErrorCode {
++            keys.push_back(key);
++            metadatas.push_back(StorageObjectMetadata{
++                0, 0,
++                static_cast<int64_t>(key.size()),
++                value_size,
++                ""  // transport_endpoint 由 FileStorage::Init 的 ScanMeta handler 填充
++            });
++            total_keys_.fetch_add(1, std::memory_order_relaxed);
++            total_size_.fetch_add(value_size, std::memory_order_relaxed);
++
++            if (static_cast<int64_t>(keys.size()) >=
++                file_storage_config_.scanmeta_iterator_keys_limit) {
++                if (!flush()) return flush_error;
++            }
++            return ErrorCode::OK;
++        });
++
 +    if (err != ErrorCode::OK) return tl::make_unexpected(err);
-+    if (!flush()) return tl::make_unexpected(flush_error);  
-+  
-+    return {};  
++    if (!flush()) return tl::make_unexpected(flush_error);
++
++    return {};
 +}
 +
  //-----------------------------------------------------------------------------
  
  tl::expected<std::shared_ptr<StorageBackendInterface>, ErrorCode>
-@@ -3221,6 +3548,9 @@ CreateStorageBackend(const FileStorageConfig& config) {
+@@ -3221,6 +3550,9 @@ CreateStorageBackend(const FileStorageConfig& config) {
          case StorageBackendType::kOffsetAllocator: {
              return std::make_shared<OffsetAllocatorStorageBackend>(config);
          }
-+        case StorageBackendType::kDistributedKV: {  
++        case StorageBackendType::kDistributedKV: {
 +            return std::make_shared<DistributedKVStorageBackend>(config);
 +        }
          default: {
              LOG(FATAL) << "Unsupported backend type";
              return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
-@@ -3228,4 +3558,5 @@ CreateStorageBackend(const FileStorageConfig& config) {
+@@ -3228,4 +3560,5 @@ CreateStorageBackend(const FileStorageConfig& config) {
      }
  }
  

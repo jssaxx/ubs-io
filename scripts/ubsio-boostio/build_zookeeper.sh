@@ -122,7 +122,7 @@ main() {
     echo "========================================================"
     echo "Output: ${OUTPUT_DIR}"
     echo ""
-    echo "Note: Run build_ubsio.sh to create the final distribution package."
+    echo "Note: Use this output as the Zookeeper client dependency for the related UBS IO build flow."
 }
 
 main "$@"
