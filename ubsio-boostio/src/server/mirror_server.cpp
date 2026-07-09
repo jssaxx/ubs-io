@@ -930,7 +930,9 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
         from->IncreaseRef();
 
         if (!BioServer::Instance()->IsStandaloneMode() || from->GetFlowType() != FLOW_DISK) {
+            BIO_TRACE_START(WCACHE_TRACE_GET_COPY_TO_TARGET);
             BResult ret = mSliceOp.Copy(from, to);
+            BIO_TRACE_END(WCACHE_TRACE_GET_COPY_TO_TARGET, ret);
             from->DecreaseRef();
             return ret;
         }

@@ -693,9 +693,9 @@ std::unique_ptr<BdmCopyBatchContext::SubmittedBatch> BdmCopyBatchContext::Submit
         return submitted;
     }
 
-    BIO_TRACE_START(BDM_TRACE_READ_BATCH);
+    BIO_TRACE_START(BDM_TRACE_READ_BATCH_SUBMIT);
     BResult ret = SubmitBdmBatchAsync(requests, true, submitted->batch);
-    BIO_TRACE_END(BDM_TRACE_READ_BATCH, ret);
+    BIO_TRACE_END(BDM_TRACE_READ_BATCH_SUBMIT, ret);
     if (ret != BIO_OK) {
         submitted->submitRet = ret;
     }
@@ -765,7 +765,9 @@ BResult BdmCopyBatchContext::CopySubmittedResult(SubmittedBatch &batch)
             if (entryIndex < batch.entryFailed.size() && batch.entryFailed[entryIndex] != 0) {
                 continue;
             }
+            BIO_TRACE_START(BDM_TRACE_READ_BATCH_SCRATCH_COPY);
             BResult copyRet = sliceOperator.Copy(entry.tempBuf, entry.to);
+            BIO_TRACE_END(BDM_TRACE_READ_BATCH_SCRATCH_COPY, copyRet);
             if (copyRet != BIO_OK) {
                 *entry.result = copyRet;
                 ret = copyRet;
@@ -1119,8 +1121,10 @@ BResult CacheSliceOperator::CopyFromMemoryToMemory(const SlicePtr &from, const S
     while (fromIt != fromAddrs.end() && toIt != toAddrs.end()) {
         len = MinLen(fromIt->chunkLen - fromOffset, toIt->chunkLen - toOffset);
         BIO_TP_START(SLICE_COPY_MEMORY2MEMORY_ERR, &ret, BIO_ERR);
+        BIO_TRACE_START(WCACHE_TRACE_GET_MEMORY_COPY);
         ret = memcpy_s(reinterpret_cast<void *>(toIt->chunkId + toIt->chunkOffset + toOffset), len,
             reinterpret_cast<void *>(fromIt->chunkId + fromIt->chunkOffset + fromOffset), len);
+        BIO_TRACE_END(WCACHE_TRACE_GET_MEMORY_COPY, ret);
         BIO_TP_END;
         ChkTrue(ret == BIO_OK, ret, "Failed to copy data, length:" << len << ".");
         fromOffset += len;
