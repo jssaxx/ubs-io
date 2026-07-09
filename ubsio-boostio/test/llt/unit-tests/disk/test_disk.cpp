@@ -117,6 +117,7 @@ struct AsyncTaskCtx {
 
 struct AsyncCbCtx {
     int32_t ret;
+    uint32_t count;
     AsyncTaskCtx tsk;
 };
 
@@ -124,7 +125,63 @@ static void UtAsyncProcCb(void *ctx, int retCode)
 {
     auto *cbCtx = (AsyncCbCtx *)ctx;
     cbCtx->ret = retCode;
+    cbCtx->count++;
     sem_post(&cbCtx->tsk.sem);
+}
+
+TEST_F(TestDisk, test_bdm_io_engine_config_case_return_ok)
+{
+    LOG_INFO("test_bdm_io_engine_config_case_return_ok");
+
+    EXPECT_EQ(BdmSetIoEngine(nullptr), BDM_CODE_INVALID_PARAM);
+
+    EXPECT_EQ(BdmSetIoEngine("sync"), BDM_CODE_OK);
+    EXPECT_EQ(BdmGetIoEngine(), BDM_IO_ENGINE_SYNC);
+
+    EXPECT_EQ(BdmSetIoEngine("libaio"), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmGetIoEngine(), BDM_IO_ENGINE_SYNC);
+
+    EXPECT_EQ(BdmSetIoEngine("io_uring"), BDM_CODE_OK);
+    EXPECT_EQ(BdmGetIoEngine(), BDM_IO_ENGINE_IO_URING);
+
+    EXPECT_EQ(BdmSetIoEngine("sync"), BDM_CODE_OK);
+    EXPECT_EQ(BdmGetIoEngine(), BDM_IO_ENGINE_SYNC);
+}
+
+TEST_F(TestDisk, test_bdm_batch_async_invalid_param_case_return_ok)
+{
+    LOG_INFO("test_bdm_batch_async_invalid_param_case_return_ok");
+
+    EXPECT_EQ(BdmReadBatchAsync(nullptr, 1), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmWriteBatchAsync(nullptr, 1), BDM_CODE_INVALID_PARAM);
+
+    BdmBatchIo io = {0};
+    EXPECT_EQ(BdmReadBatchAsync(&io, 0), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmWriteBatchAsync(&io, 0), BDM_CODE_INVALID_PARAM);
+
+    AsyncCbCtx cbCtx;
+    cbCtx.ret = BDM_CODE_OK;
+    cbCtx.count = 0;
+    ASSERT_EQ(sem_init(&cbCtx.tsk.sem, 0, 0), 0);
+
+    BdmIoCtx ioCtx = {0};
+    ioCtx.cb = UtAsyncProcCb;
+    ioCtx.ctx = (void *)&cbCtx;
+    io.ioCtx = &ioCtx;
+    io.len = NO_4194304;
+
+    EXPECT_EQ(BdmReadBatchAsync(&io, 1), BDM_CODE_OK);
+    sem_wait(&cbCtx.tsk.sem);
+    EXPECT_EQ(cbCtx.ret, BDM_CODE_ERR);
+    EXPECT_EQ(cbCtx.count, 1);
+
+    cbCtx.ret = BDM_CODE_OK;
+    EXPECT_EQ(BdmWriteBatchAsync(&io, 1), BDM_CODE_OK);
+    sem_wait(&cbCtx.tsk.sem);
+    EXPECT_EQ(cbCtx.ret, BDM_CODE_ERR);
+    EXPECT_EQ(cbCtx.count, 2);
+
+    sem_destroy(&cbCtx.tsk.sem);
 }
 
 TEST_F(TestDisk, test_disk_read_async_case_return_ok)
@@ -137,6 +194,7 @@ TEST_F(TestDisk, test_disk_read_async_case_return_ok)
 
     AsyncCbCtx cbCtx;
     cbCtx.ret = BIO_OK;
+    cbCtx.count = 0;
     sem_init(&cbCtx.tsk.sem, 0, 0);
 
     BdmIoCtx ioCtx;
@@ -171,6 +229,7 @@ TEST_F(TestDisk, test_disk_write_async_case_return_ok)
 
     AsyncCbCtx cbCtx;
     cbCtx.ret = BIO_OK;
+    cbCtx.count = 0;
     sem_init(&cbCtx.tsk.sem, 0, 0);
 
     BdmIoCtx ioCtx;

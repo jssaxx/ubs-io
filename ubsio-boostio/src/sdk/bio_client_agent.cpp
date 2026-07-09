@@ -24,6 +24,13 @@
 using namespace ock::bio;
 using namespace ock::bio::agent;
 
+namespace {
+size_t GetBatchGetWireResponseLen(uint32_t count)
+{
+    return sizeof(BatchGetWireResponse) + static_cast<size_t>(count) * sizeof(BatchGetResultItem);
+}
+}
+
 bool BioClientAgent::IsDirectMode() const
 {
     return mMode == CONVERGENCE || mMode == STANDALONE;
@@ -846,21 +853,28 @@ BResult BioClientAgent::SendBatchGetKeyDiskAddrRequestLocal(BatchParseKeyAddrReq
 BResult BioClientAgent::SendBatchGetRequestLocal(BatchGetRequest *req, int32_t *results,
                                                  uint64_t *realLengths, uint32_t reqLen)
 {
-    BatchGetResponse rsp;
+    BatchGetWireResponse *rsp = nullptr;
+    uint64_t respLen = 0;
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
-    auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchGetRequest, BatchGetResponse>(INVALID_NID,
+    auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchGetWireResponse>(INVALID_NID,
         BIO_OP_SDK_BATCH_GET,
-        reinterpret_cast<void*>(req), reqLen, rsp);
+        reinterpret_cast<void*>(req), reqLen, &rsp, respLen);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync batch get request failed, ret:" << ret << ".");
         return ret;
     }
+    if (UNLIKELY(rsp == nullptr || rsp->count != req->count || respLen < GetBatchGetWireResponseLen(rsp->count))) {
+        CLIENT_LOG_ERROR("Invalid sync batch get response, respLen:" << respLen << ".");
+        free(rsp);
+        return BIO_INVALID_PARAM;
+    }
 
     for (uint32_t i = 0; i < req->count; i++) {
-        results[i] = rsp.results[i];
-        realLengths[i] = rsp.realLengths[i];
+        results[i] = rsp->items[i].result;
+        realLengths[i] = rsp->items[i].realLength;
     }
+    free(rsp);
     return BIO_OK;
 }
 
@@ -921,7 +935,7 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
         return;
     }
     if (mMode == STANDALONE) {
-        BatchGetResponse rsp;
+        BatchGetResponse rsp {};
         BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SYNC);
         auto ret = batchGetOp(req, &rsp);
         BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SYNC, ret);

@@ -11,6 +11,7 @@
  */
 
 #include "htracer.h"
+#include "htracer_c.h"
 #include "htracer_service.h"
 
 namespace ock {
@@ -55,4 +56,32 @@ void HTracerDumpSetEnable(bool isEnable)
 }
 
 }
+}
+
+extern "C" bool HTracerIsEnableC(void)
+{
+    return ock::htracer::HtracerManager::IsEnable();
+}
+
+extern "C" uint64_t HTracerNowNsC(void)
+{
+    return ock::utils::Monotonic::TimeNs();
+}
+
+extern "C" void HTracerDelayBeginC(int32_t tpId, const char *tpName)
+{
+    if (tpName == nullptr) {
+        return;
+    }
+    std::string name(tpName);
+    ock::htracer::HtracerManager::DelayBegin(tpId, name);
+}
+
+extern "C" void HTracerDelayEndC(int32_t tpId, uint64_t startNs, int32_t retCode)
+{
+    if (startNs == 0) {
+        return;
+    }
+    uint64_t endNs = ock::utils::Monotonic::TimeNs();
+    ock::htracer::HtracerManager::DelayEnd(tpId, endNs - startNs, retCode);
 }

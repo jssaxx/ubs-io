@@ -33,6 +33,6 @@ typedef struct {
 using CliRegCmdFuncPtr = int32_t (*)(CliCommand*);
 using CliUnRegCmdFuncPtr = void (*)(char*);
 using CliPrintBufFuncPtr = void (*)(const char*, ...);
+using CliSendBufFuncPtr = void (*)(const char*, uint32_t);
 
 #endif
-
