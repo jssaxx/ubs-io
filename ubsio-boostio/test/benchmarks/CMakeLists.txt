@@ -8,7 +8,7 @@ if (${DEBUG_UT} MATCHES "OFF")
 
     target_link_libraries(bio_console
             -Wl,--start-group
-            pthread dl aio
+            pthread dl uring
             hcom_lib
             bio_sdk bio_conf
             -Wl,--end-group)

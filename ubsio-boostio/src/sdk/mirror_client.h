@@ -142,6 +142,7 @@ public:
     BResult Start();
     BResult RecoverDataMessageMem();
 
+    void Exit();
     void FreeIoStrategy();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}

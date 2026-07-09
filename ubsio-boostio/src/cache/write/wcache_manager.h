@@ -31,6 +31,9 @@
 namespace ock {
 namespace bio {
 constexpr uint64_t WRITE_CACHE_EVICT_PERIOD = 5; // 5秒
+// The writer may move sliceRef to keep the acquired WCache lease until an asynchronous read completes.
+using WCacheBatchSliceWriter =
+    std::function<BResult(const SlicePtr &from, const SlicePtr &to, WCacheSliceRefPtr &sliceRef)>;
 
 class WCacheManager;
 using WCacheManagerPtr = Ref<WCacheManager>;
@@ -83,6 +86,14 @@ public:
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
         uint64_t &realLen);
+
+    BResult GetBatch(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+        const WCacheBatchSliceWriter &sliceWriter, uint64_t &realLen);
+
+    bool IsCrcEnabled() const
+    {
+        return mEnableCrc;
+    }
 
     BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
 

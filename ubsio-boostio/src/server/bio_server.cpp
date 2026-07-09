@@ -388,7 +388,10 @@ BResult BioServer::BioBdmInit()
         return BIO_OK;
     }
 
-    auto ret = BdmInit();
+    auto ret = BdmSetIoEngine(daemonConfig.bdmIoEngine.c_str());
+    ChkTrue(ret == BDM_CODE_OK, BIO_ERR,
+        "Failed to set BDM IO engine, engine:" << daemonConfig.bdmIoEngine << ", result:" << ret << ".");
+    ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
     BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
     DiskDevices diskList = {};
@@ -465,7 +468,10 @@ BResult BioServer::BioDiskReset(uint16_t diskId)
 
 void BioServer::BioBdmExit()
 {
-    return;
+    int32_t ret = BdmExit();
+    if (ret != BDM_CODE_OK) {
+        LOG_WARN("Bdm exit failed, result:" << ret << ".");
+    }
 }
 
 BResult BioServer::StartRpcService(const NetOptions &opt)
@@ -768,7 +774,8 @@ BResult BioServer::BioCacheInit()
     if (!mStandaloneMode) {
         // Channel-broken callbacks only make sense when NetEngine exists. In
         // standalone the client and server share one process lifetime.
-        auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
+        auto mirror = mMirror;
+        auto channelBroken = [this, mirror](uint32_t nodeId, uint32_t pid) -> void {
             if (pid != 0) {
                 Cache::Instance().HandleProcBroken(pid);
             } else {
@@ -777,7 +784,9 @@ BResult BioServer::BioCacheInit()
             nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
             QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
             CacheOverloadCtrl::Instance().RecycleQuota(holder);
-            mMirror->RecycleDataMsgMem(pid);
+            if (mirror.Get() != nullptr) {
+                mirror->RecycleDataMsgMem(pid);
+            }
         };
         ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
         if (ret != BIO_OK) {
@@ -1438,12 +1447,15 @@ int32_t Get(GetRequest *req, GetResponse *rsp)
 {
     StatisticGetIoSize(req->length);
     ServiceContext netCtx;
-    return BioServer::Instance()->GetMirrorServer()->GetConvergence(*req, *rsp);
+    int32_t ret = BioServer::Instance()->GetMirrorServer()->GetConvergence(*req, *rsp);
+    return ret;
 }
 
 int32_t BatchGet(BatchGetRequest *req, BatchGetResponse *rsp)
 {
-    return BioServer::Instance()->GetMirrorServer()->BatchGetConvergence(*req, *rsp);
+    *rsp = {};
+    int32_t ret = BioServer::Instance()->GetMirrorServer()->BatchGetConvergence(*req, *rsp);
+    return ret;
 }
 
 int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp)

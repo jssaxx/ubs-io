@@ -11,6 +11,7 @@
  */
 
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "bdm_common.h"
@@ -32,6 +33,7 @@
 uint32_t g_bdmInit = 0UL;
 uint32_t g_bdmStart = 0UL;
 uint32_t g_bdmDiskCount = 0UL;
+static uint32_t g_bdmDiskMaxId = 0UL;
 static uint32_t g_bdmDiskHeadPad = 0UL;
 
 static uint32_t BdmBuildDiskHeadPad(uint32_t isStandalone, uint32_t deviceId)
@@ -271,6 +273,118 @@ int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len
     return BDM_CODE_OK;
 }
 
+static void BdmCompleteBatchIo(BdmBatchIo *io, int32_t ret)
+{
+    if (io != NULL && io->ioCtx != NULL && io->ioCtx->cb != NULL) {
+        io->ioCtx->cb(io->ioCtx->ctx, ret);
+    }
+}
+
+static bool BdmValidateBatchIo(BdmBatchIo *io, bool isRead)
+{
+    if (UNLIKELY(io == NULL || io->buf == NULL || io->ioCtx == NULL)) {
+        BdmCompleteBatchIo(io, BDM_CODE_ERR);
+        return false;
+    }
+
+    if (UNLIKELY(io->len == 0 || io->len > BDM_MAX_CHUNK_LENGTH || io->offset > BDM_MAX_CHUNK_LENGTH ||
+        io->len + io->offset > BDM_MAX_CHUNK_LENGTH)) {
+        BDM_LOGERROR(0, "batch async %s invalid length(%llu), offset(%llu).", isRead ? "read" : "write",
+            io->len, io->offset);
+        BdmCompleteBatchIo(io, BDM_CODE_INVALID_PARAM);
+        return false;
+    }
+    return true;
+}
+
+static int32_t BdmSubmitBatchAsync(BdmBatchIo *ios, uint32_t ioNum, bool isRead)
+{
+    if (UNLIKELY(ios == NULL || ioNum == 0)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    BdmAsyncOpsReq *reqs = (BdmAsyncOpsReq *)calloc(ioNum, sizeof(BdmAsyncOpsReq));
+    BdmBatchIo **validIos = (BdmBatchIo **)calloc(ioNum, sizeof(BdmBatchIo *));
+    if (UNLIKELY(reqs == NULL || validIos == NULL)) {
+        for (uint32_t i = 0; i < ioNum; i++) {
+            BdmCompleteBatchIo(&ios[i], BDM_CODE_ERR);
+        }
+        free(reqs);
+        free(validIos);
+        return BDM_CODE_OK;
+    }
+
+    BdmObj *batchBdm = NULL;
+    bool canUseBatch = true;
+    uint32_t reqNum = 0;
+    for (uint32_t i = 0; i < ioNum; i++) {
+        if (!BdmValidateBatchIo(&ios[i], isRead)) {
+            continue;
+        }
+
+        uint32_t bdmId = CHUNK_ID_TO_BDMID(ios[i].chunkId);
+        BdmObj *bdm = BdmGetBdmObj(bdmId);
+        if (UNLIKELY(bdm == NULL)) {
+            BDM_LOGERROR(0, "Invalid bdm id(%u), not exist bdm object.", bdmId);
+            BdmCompleteBatchIo(&ios[i], BDM_CODE_NOT_EXIST);
+            continue;
+        }
+
+        if (batchBdm == NULL) {
+            batchBdm = bdm;
+        } else if (batchBdm != bdm) {
+            canUseBatch = false;
+        }
+
+        reqs[reqNum].objPtr = (uintptr_t)bdm;
+        reqs[reqNum].chunkId = DENCODE_CHUNK_ID(ios[i].chunkId);
+        reqs[reqNum].offset = ios[i].offset;
+        reqs[reqNum].buf = ios[i].buf;
+        reqs[reqNum].len = ios[i].len;
+        reqs[reqNum].ioCtx = ios[i].ioCtx;
+        validIos[reqNum] = &ios[i];
+        reqNum++;
+    }
+
+    if (reqNum == 0) {
+        free(reqs);
+        free(validIos);
+        return BDM_CODE_OK;
+    }
+
+    if (canUseBatch && batchBdm != NULL) {
+        int32_t (*batchFunc)(BdmAsyncOpsReq *, uint32_t) =
+            isRead ? batchBdm->ops.readBatchAsync : batchBdm->ops.writeBatchAsync;
+        if (batchFunc != NULL) {
+            int32_t ret = batchFunc(reqs, reqNum);
+            free(reqs);
+            free(validIos);
+            return ret;
+        }
+    }
+
+    for (uint32_t i = 0; i < reqNum; i++) {
+        BdmObj *bdm = (BdmObj *)reqs[i].objPtr;
+        int32_t ret = isRead ? bdm->ops.readAsync(&reqs[i]) : bdm->ops.writeAsync(&reqs[i]);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmCompleteBatchIo(validIos[i], ret);
+        }
+    }
+    free(reqs);
+    free(validIos);
+    return BDM_CODE_OK;
+}
+
+int32_t BdmReadBatchAsync(BdmBatchIo *ios, uint32_t ioNum)
+{
+    return BdmSubmitBatchAsync(ios, ioNum, true);
+}
+
+int32_t BdmWriteBatchAsync(BdmBatchIo *ios, uint32_t ioNum)
+{
+    return BdmSubmitBatchAsync(ios, ioNum, false);
+}
+
 int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCapacity)
 {
     if (UNLIKELY(totalCapacity == NULL || usedCapacity == NULL)) {
@@ -369,12 +483,43 @@ int32_t BdmInit(void)
     ret = BdmDiskInit();
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Bdm disk obj init failed, ret(%d).", ret);
+        (void)BdmDiskExit();
         return ret;
     }
 
     g_bdmInit = 1UL;
     BDM_LOGINFO(0, "Bdm init succeed.");
     return BDM_CODE_OK;
+}
+
+int32_t BdmExit(void)
+{
+    if (UNLIKELY(g_bdmInit == 0UL)) {
+        return BDM_CODE_OK;
+    }
+
+    int32_t result = BDM_CODE_OK;
+    int32_t ret = BdmDiskExit();
+    if (ret != BDM_CODE_OK) {
+        result = ret;
+    }
+
+    uint32_t diskCount = g_bdmDiskMaxId;
+    for (uint32_t diskId = 0; diskId < diskCount; diskId++) {
+        ret = BdmDestroy(diskId);
+        if (ret != BDM_CODE_OK && ret != BDM_CODE_NOT_EXIST) {
+            BDM_LOGERROR(0, "Bdm destroy failed, diskId(%u), ret(%d).", diskId, ret);
+            result = ret;
+        }
+    }
+
+    g_bdmDiskCount = 0UL;
+    g_bdmDiskMaxId = 0UL;
+    g_bdmStart = 0UL;
+    g_bdmInit = 0UL;
+    g_bdmDiskHeadPad = 0UL;
+    BDM_LOGINFO(0, "Bdm exit finished, result(%d).", result);
+    return result;
 }
 
 static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, uint64_t chunkSize)
@@ -470,19 +615,25 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
     }
     g_bdmStart = 1UL;
     g_bdmDiskCount = diskList->num - failCnt;
+    g_bdmDiskMaxId = diskList->num;
     BDM_LOGINFO(0, "Bdm start succeed, create device num is %u.", g_bdmDiskCount);
     return BDM_CODE_OK;
 }
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
 {
-    uint32_t diskId = g_bdmDiskCount;
+    if (UNLIKELY(g_bdmDiskMaxId >= DISK_DEV_NUM)) {
+        BDM_LOGERROR(0, "Bdm update failed, disk num reaches limit(%u).", (uint32_t)DISK_DEV_NUM);
+        return BDM_CODE_INVALID_PARAM;
+    }
+    uint32_t diskId = g_bdmDiskMaxId;
     int32_t ret = BdmDevicesCreate(diskId, diskPath, diskCap, chunkSize);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
         return ret;
     }
     __sync_fetch_and_add(&g_bdmDiskCount, 1);
+    __sync_fetch_and_add(&g_bdmDiskMaxId, 1);
     return BDM_CODE_OK;
 }
 

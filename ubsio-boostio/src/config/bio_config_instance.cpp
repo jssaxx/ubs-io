@@ -148,6 +148,7 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(MEM_CAPACITY_SIZE_GB, VIntRange::Create(MEM_CAPACITY_SIZE_GB.first, NO_U64_0, NO_512));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB, VIntRange::Create(SDK_MEM_CAPACITY_SIZE_MB.first, NO_U64_0, NO_4194304));
     AddStrConf(DISK_CONF_PATH);
+    AddStrConf(BDM_IO_ENGINE, VStrEnum::Create(BDM_IO_ENGINE.first, "sync||io_uring"));
     AddIntConf(STANDALONE_DEVICE_COUNT, VIntRange::Create(STANDALONE_DEVICE_COUNT.first, 0, DEVICE_SIZE));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB);
 
@@ -169,6 +170,15 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(WORK_IO_TIMEOUT, VIntRange::Create(WORK_IO_TIMEOUT.first, NO_60, NO_300));
     AddIntConf(WORK_NET_TIMEOUT, VIntRange::Create(WORK_NET_TIMEOUT.first, NO_16, NO_128));
     AddIntConf(BATCH_GET_THREAD_NUM, VIntRange::Create(BATCH_GET_THREAD_NUM.first, NO_8, NO_512));
+    AddIntConf(BDM_BATCH_READ_WINDOW_KEYS, VIntRange::Create(BDM_BATCH_READ_WINDOW_KEYS.first, NO_1, NO_1024));
+    AddIntConf(BDM_BATCH_READ_WINDOW_BYTES_MB,
+        VIntRange::Create(BDM_BATCH_READ_WINDOW_BYTES_MB.first, NO_1, NO_1024));
+    AddIntConf(BDM_BATCH_READ_PIPELINE_DEPTH,
+        VIntRange::Create(BDM_BATCH_READ_PIPELINE_DEPTH.first, NO_1, NO_64));
+    AddIntConf(BDM_BATCH_READ_TEMP_POOL_MB,
+        VIntRange::Create(BDM_BATCH_READ_TEMP_POOL_MB.first, 0, NO_65535));
+    AddStrConf(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL,
+        VStrBoolRange::Create(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first));
 
     /* load cluster manager config */
     AddIntConf(CM_INITIAL_NODE_NUM, VIntRange::Create(CM_INITIAL_NODE_NUM.first, NO_1, NO_256));
@@ -372,6 +382,13 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.workIoTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_IO_TIMEOUT.first));
     mDaemonConfig.workNetTimeOut = static_cast<uint32_t>(conf->GetInt(WORK_NET_TIMEOUT.first));
     mDaemonConfig.batchGetThreadNum = static_cast<uint32_t>(conf->GetInt(BATCH_GET_THREAD_NUM.first));
+    mDaemonConfig.bdmBatchReadWindowKeys = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_WINDOW_KEYS.first));
+    mDaemonConfig.bdmBatchReadWindowBytesMb =
+        static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_WINDOW_BYTES_MB.first));
+    mDaemonConfig.bdmBatchReadPipelineDepth = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_PIPELINE_DEPTH.first));
+    mDaemonConfig.bdmBatchReadTempPoolMb = static_cast<uint32_t>(conf->GetInt(BDM_BATCH_READ_TEMP_POOL_MB.first));
+    mDaemonConfig.bdmBatchReadStandaloneUseScratchPool =
+        conf->GetStr(BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL.first) == "true";
 
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
@@ -381,6 +398,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
     StrUtil::StrTrim(diskMask);
     mDaemonConfig.hasDiskCache = !diskMask.empty();
+    mDaemonConfig.bdmIoEngine = conf->GetStr(BDM_IO_ENGINE.first);
 
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {

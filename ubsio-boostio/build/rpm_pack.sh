@@ -1,20 +1,44 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ***********************************************************************
 # Copyright: (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-# script for Huawei ubs-io to build pkg
+# script for Huawei ubs-io to build rpm packages
 # version: 1.0.0
 # ***********************************************************************
 
-tar -czvf ubs-io.tar.gz ubs-io
-rm -rf ~/rpmbuild
-rpmdev-setuptree
-cp ubs-io.tar.gz ~/rpmbuild/SOURCES/
+set -euo pipefail
 
-# 带cli工具包, 需要开发人员提供cli so进行调试
-rpmbuild -ba ubs-io.spec
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
+SPEC_FILE="$SCRIPT_DIR/ubs-io.spec"
 
-# 标准发布包, 无测试包
-rpmbuild -ba ubs-io.spec --define "with_cli 0"
+BUILD_TYPE="${1:-release}"
+case "$BUILD_TYPE" in
+    release|debug)
+        ;;
+    -h|--help)
+        echo "Usage: $0 [release|debug]"
+        exit 0
+        ;;
+    *)
+        echo "Invalid build type: $BUILD_TYPE. Expected release or debug." >&2
+        exit 1
+        ;;
+esac
 
-# debug包
-rpmbuild -ba ubs-io.spec --define "build_type debug"
+VERSION=$(awk '/^Version:/ {print $2; exit}' "$SPEC_FILE")
+NAME=$(awk '/^Name:/ {print $2; exit}' "$SPEC_FILE")
+RPM_TOPDIR="${RPM_TOPDIR:-$HOME/rpmbuild}"
+SOURCE_DIR="${NAME}-${VERSION}"
+SOURCE_TAR="${SOURCE_DIR}.tar.gz"
+
+rm -rf "$RPM_TOPDIR"
+mkdir -p "$RPM_TOPDIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+
+git -C "$REPO_DIR" archive --format=tar.gz --prefix="${SOURCE_DIR}/" \
+    -o "$RPM_TOPDIR/SOURCES/$SOURCE_TAR" HEAD
+cp -f "$SPEC_FILE" "$RPM_TOPDIR/SPECS/"
+
+rpmbuild -ba \
+    --define "_topdir $RPM_TOPDIR" \
+    --define "build_type $BUILD_TYPE" \
+    "$RPM_TOPDIR/SPECS/$(basename "$SPEC_FILE")"

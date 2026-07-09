@@ -79,10 +79,6 @@ package_libs() {
 
     copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/libboundscheck/lib" "${pkg_lib_dir}" \
         libboundscheck.so
-    copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/libaio/lib" "${pkg_lib_dir}" \
-        libaio.so \
-        libaio.so.1 \
-        libaio.so.1.0.2
 
     if [[ "$BUILD_TYPE" == "debug" ]]; then
         copy_named_libs_from_dir "${PROJ_DIR}/dist/test_tools/lib" "${pkg_lib_dir}" \

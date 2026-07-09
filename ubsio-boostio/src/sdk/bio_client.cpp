@@ -165,7 +165,10 @@ BResult BioClient::BioClientMirrorInit(WorkerMode mode)
 
 void BioClient::BioClientMirrorExit()
 {
-    mMirror->FreeIoStrategy();
+    if (mMirror != nullptr) {
+        mMirror->Exit();
+        mMirror = nullptr;
+    }
 }
 
 BResult BioClient::BioInterceptorServerInit(WorkerMode mode)

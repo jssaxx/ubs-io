@@ -22,12 +22,13 @@
 #include "bio.h"
 #include "message.h"
 #include "cache.h"
+#include "cache_slice_operator.h"
 #include "message_op.h"
 
 namespace ock {
 namespace bio {
 constexpr uint16_t SERVER_BATCH_GET_THREAD_NUM = 128;
-constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = 8192;
+constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = BATCH_GET_MAX_COUNT;
 
 struct MemFreeHolder {
     uint32_t nodeId;
@@ -53,6 +54,7 @@ struct DataMsgMemItem {
     uint64_t offset;
     uint64_t length;
     uint8_t *address;
+    DataMsgMemItem() : memFd(-1), offset(0), length(0), address(nullptr) {}
     DataMsgMemItem(int32_t fd, uint64_t off, uint64_t len, uint8_t *addr)
         : memFd(fd), offset(off), length(len), address(addr) {}
 };
@@ -104,7 +106,8 @@ public:
     BResult BatchExistConvergence(BatchExistRequest &req, BatchExistResponse &rsp);
     BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
-    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req);
+    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req,
+        BdmCopyBatchContext *bdmBatch = nullptr, BResult *keyResult = nullptr);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);

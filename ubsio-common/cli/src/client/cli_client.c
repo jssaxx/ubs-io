@@ -41,6 +41,24 @@ static void log_write(const char *fmt, ...)
     (void)fflush(g_log_file);
 }
 
+static void client_write_stdout(const char *buf, size_t len)
+{
+    while (len > 0) {
+        ssize_t n = write(STDOUT_FILENO, buf, len);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return;
+        }
+        if (n == 0) {
+            return;
+        }
+        buf += n;
+        len -= (size_t)n;
+    }
+}
+
 static void disable_raw_mode(void)
 {
     if (g_raw_enabled) {
@@ -88,19 +106,20 @@ static void history_add(History *history, const char *line)
 
 static void redraw_line(const char *prompt, const char *buf, size_t len, size_t cursor)
 {
-    (void)write(STDOUT_FILENO, "\r", 1);
+    client_write_stdout("\r", 1);
     if (prompt != NULL) {
-        (void)write(STDOUT_FILENO, prompt, strlen(prompt));
+        client_write_stdout(prompt, strlen(prompt));
     }
     if (len != 0) {
-        (void)write(STDOUT_FILENO, buf, len);
+        client_write_stdout(buf, len);
     }
-    (void)write(STDOUT_FILENO, "\x1b[K", 3);
+    client_write_stdout("\x1b[K", 3);
     if (len > cursor) {
         char seq[32];
         int n = snprintf(seq, sizeof(seq), "\x1b[%zuD", len - cursor);
         if (n > 0) {
-            (void)write(STDOUT_FILENO, seq, (size_t)n);
+            size_t seq_len = (size_t)n < sizeof(seq) ? (size_t)n : sizeof(seq) - 1;
+            client_write_stdout(seq, seq_len);
         }
     }
 }
@@ -135,7 +154,7 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
     char editing_backup[CLI_MAX_LINE] = {0};
 
     if (prompt != NULL) {
-        (void)write(STDOUT_FILENO, prompt, strlen(prompt));
+        client_write_stdout(prompt, strlen(prompt));
     }
 
     for (;;) {
@@ -145,7 +164,7 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
         }
 
         if (ch == '\r' || ch == '\n') {
-            (void)write(STDOUT_FILENO, "\n", 1);
+            client_write_stdout("\n", 1);
             buf[len] = '\0';
             if (out_size != 0) {
                 size_t n = len < out_size - 1 ? len : out_size - 1;
@@ -159,7 +178,7 @@ static int read_line_raw(const char *prompt, char *out, size_t out_size, History
         }
 
         if (ch == 3) {
-            (void)write(STDOUT_FILENO, "^C\n", 3);
+            client_write_stdout("^C\n", 3);
             out[0] = '\0';
             return RETURN_ERROR;
         }
@@ -517,6 +536,7 @@ int main(int argc, char *argv[])
     }
     if (g_log_file != NULL) {
         fclose(g_log_file);
+        g_log_file = NULL;
     }
     for (int i = 0; i < history.count; i++) {
         free(history.items[i]);

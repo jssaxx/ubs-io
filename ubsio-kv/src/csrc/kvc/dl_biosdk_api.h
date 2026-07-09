@@ -109,7 +109,10 @@ public:
 
     static void Exit(void)
     {
-        pBioExit();
+        std::lock_guard<std::mutex> guard(gMutex);
+        if (pBioExit != nullptr) {
+            pBioExit();
+        }
     }
 
     static int32_t KvBioInit(int32_t devId);

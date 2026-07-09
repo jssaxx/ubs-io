@@ -62,6 +62,11 @@ public:
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
         uint64_t &realLen);
 
+    BResult GetWCacheBatch(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+        const WCacheBatchSliceWriter &sliceWriter, uint64_t &realLen);
+
+    bool CanBatchWCacheRead() const;
+
     BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
     BResult Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat);
