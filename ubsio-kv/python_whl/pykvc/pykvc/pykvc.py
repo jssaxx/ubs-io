@@ -175,5 +175,5 @@ def nds_read(key: str, buffers: list[int], sizes: list[int]) -> int:
     return NdsRead(key, buffers, sizes)
 
 
-def nds_batch_read(keys: list[str], buffers: list[list[int]], sizes: list[int]) -> list[int]:
+def nds_batch_read(keys: list[str], buffers: list[list[int]], sizes: list[list[int]]) -> list[int]:
     return NdsBatchRead(keys, buffers, sizes)

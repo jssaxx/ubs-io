@@ -25,7 +25,7 @@ mooncake-store/src/client_buffer.cpp          (+1/-1,   修改)
 mooncake-store/src/dl_ubsio_api.cpp           (+97 行,  新增)
 mooncake-store/src/file_storage.cpp           (+9/-2,   修改)
 mooncake-store/src/master_service.cpp         (+1/-1,   修改)
-mooncake-store/src/storage_backend.cpp        (+331 行, 修改)
+mooncake-store/src/storage_backend.cpp        (+333 行, 修改)
 mooncake-store/tests/storage_backend_test.cpp (+560 行, 新增)
 ```
 
@@ -42,13 +42,13 @@ git checkout 218f2ffdcf2ec10bca28c44af7ce994b18288cca
 ### 2. Apply Patch
 
 ```bash
-git apply /path/to/ubsio-kv/mooncake-kv-backend.patch
+git apply /path/to/ubs-io/patches/mooncake/mooncake-kv-backend.patch
 ```
 
 如果遇到 whitespace 警告，可使用：
 
 ```bash
-git apply --whitespace=fix /path/to/ubsio-kv/mooncake-kv-backend.patch
+git apply --whitespace=fix /path/to/ubs-io/patches/mooncake/mooncake-kv-backend.patch
 ```
 
 ### 3. 验证 Patch 应用成功
