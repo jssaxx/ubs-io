@@ -71,15 +71,15 @@ package_3rdparty_sources() {
         -czf "${THIRD_PARTY_PACKAGE}" \
         -C "${PROJ_DIR}" \
         3rdparty/libboundscheck/libboundscheck \
-        3rdparty/libaio/libaio \
+        3rdparty/liburing/liburing \
         3rdparty/spdlog/spdlog \
         3rdparty/ubs-comm/ubs-comm
 }
 
 fetch_repo "libboundscheck" "https://gitcode.com/openeuler/libboundscheck.git" \
     "v1.1.16" "${PROJ_DIR}/3rdparty/libboundscheck/libboundscheck"
-fetch_repo "libaio" "https://github.com/deepin-community/libaio.git" \
-    "0.3.113-8deepin2" "${PROJ_DIR}/3rdparty/libaio/libaio"
+fetch_repo "liburing" "https://gitcode.com/gh_mirrors/li/liburing.git" \
+    "liburing-2.6" "${PROJ_DIR}/3rdparty/liburing/liburing"
 fetch_repo "spdlog" "https://gitcode.com/GitHub_Trending/sp/spdlog.git" \
     "v1.15.3" "${PROJ_DIR}/3rdparty/spdlog/spdlog"
 # Current inference deployment does not enable prometheus. Keep this disabled

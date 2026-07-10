@@ -45,6 +45,11 @@ int WaitSemaphore(sem_t &sem)
     } while (ret != 0 && errno == EINTR);
     return ret == 0 ? 0 : errno;
 }
+
+size_t GetBatchGetWireResponseLen(uint32_t count)
+{
+    return sizeof(BatchGetWireResponse) + static_cast<size_t>(count) * sizeof(BatchGetResultItem);
+}
 }
 
 bool MirrorServer::CheckMagic(RequestComm &reqComm)
@@ -887,7 +892,8 @@ BResult MirrorServer::Get(GetRequest &req, GetResponse &rsp, ServiceContext &net
     return ret;
 }
 
-BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req)
+BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req,
+    BdmCopyBatchContext *bdmBatch, BResult *keyResult)
 {
     MrInfo mrInfo;
     uint16_t localNid = GetLocalVNodeId();
@@ -920,55 +926,78 @@ BResult MirrorServer::BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, Bat
                                         << " ptVersion:" << BioServer::Instance()->GetPtEntry(keyInfo.ptId).version <<
                                         ", ptId:" << keyInfo.ptId);
 
-    auto writer = [&keyInfo, req, localNid, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
-        if (req->srcNid == localNid) {
-            from->IncreaseRef();
-            if (BioServer::Instance()->IsStandaloneMode() && from->GetFlowType() == FLOW_DISK) {
-                uint64_t totalLen = 0;
-                for (auto addr : to->GetAddrs()) {
-                    MrInfo mr{};
-                    addr.ToMrInfo(mr);
-                    totalLen += mr.size;
-                }
-                char *addr = nullptr;
-                addr = reinterpret_cast<char*>(malloc(sizeof(char) * totalLen));
-                if (UNLIKELY(addr == nullptr)) {
-                    LOG_ERROR("Alloc memory failed, length:" << totalLen << ".");
-                    from->DecreaseRef();
-                    return BIO_ALLOC_FAIL;
-                }
-                auto ret = mSliceOp.Copy(from, addr, totalLen);
-                if (ret != BIO_OK) {
-                    LOG_ERROR("Copy data from server failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
-                    free(addr);
-                    from->DecreaseRef();
-                    return ret;
-                }
-                ret = mSliceOp.Copy(addr, to);
-                if (ret != BIO_OK) {
-                    LOG_ERROR("Copy data to dst failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
-                }
-                free(addr);
-                from->DecreaseRef();
-                return ret;
-            }
-            auto ret = mSliceOp.Copy(from, to);
+    auto writerLocal = [&keyInfo, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        from->IncreaseRef();
+
+        if (!BioServer::Instance()->IsStandaloneMode() || from->GetFlowType() != FLOW_DISK) {
+            BIO_TRACE_START(WCACHE_TRACE_GET_COPY_TO_TARGET);
+            BResult ret = mSliceOp.Copy(from, to);
+            BIO_TRACE_END(WCACHE_TRACE_GET_COPY_TO_TARGET, ret);
             from->DecreaseRef();
             return ret;
-        } else {
-            bool isAlloc = false;
-            std::vector<NetMrInfo> rMrVec;
-            std::vector<NetMrInfo> lMrVec;
-            BResult ret = WriterParseMrInfo(from, to, rMrVec, lMrVec, keyInfo.mrKey, isAlloc);
-            if (ret != BIO_OK) {
-                return ret;
-            }
-            return BatchSingleWriterRemote(isAlloc, lMrVec, rMrVec, req);
         }
+
+        uint64_t totalLen = 0;
+        for (auto addr : to->GetAddrs()) {
+            MrInfo mr{};
+            addr.ToMrInfo(mr);
+            totalLen += mr.size;
+        }
+        char *addr = reinterpret_cast<char *>(malloc(sizeof(char) * totalLen));
+        if (UNLIKELY(addr == nullptr)) {
+            LOG_ERROR("Alloc memory failed, length:" << totalLen << ".");
+            from->DecreaseRef();
+            return BIO_ALLOC_FAIL;
+        }
+        BResult ret = mSliceOp.Copy(from, addr, totalLen);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Copy data from server failed, ret:" << ret << ", length:" << totalLen <<
+                ", key:" << keyInfo.key);
+            free(addr);
+            from->DecreaseRef();
+            return ret;
+        }
+        ret = mSliceOp.Copy(addr, to);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Copy data to dst failed, ret:" << ret << ", length:" << totalLen << ", key:" << keyInfo.key);
+        }
+        free(addr);
+        from->DecreaseRef();
+        return ret;
+    };
+    auto writerRemote = [&keyInfo, req, this](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        bool isAlloc = false;
+        std::vector<NetMrInfo> rMrVec;
+        std::vector<NetMrInfo> lMrVec;
+        BResult ret = WriterParseMrInfo(from, to, rMrVec, lMrVec, keyInfo.mrKey, isAlloc);
+        if (ret != BIO_OK) {
+            return ret;
+        }
+        return BatchSingleWriterRemote(isAlloc, lMrVec, rMrVec, req);
+    };
+    auto writer = [req, localNid, &writerLocal, &writerRemote](const SlicePtr &from, const SlicePtr &to) -> BResult {
+        return req->srcNid == localNid ? writerLocal(from, to) : writerRemote(from, to);
     };
 
     BIO_TRACE_START(MIRROR_TRACE_GET);
-    BResult ret = Cache::Instance().Get(keyInfo.key, keyInfo.offset, sliceP, writer, realLen);
+    BResult ret = BIO_OK;
+    if (req->srcNid == localNid && bdmBatch != nullptr && Cache::Instance().CanBatchWCacheRead()) {
+        WCacheBatchSliceWriter batchWriter =
+            [bdmBatch, keyResult, &writer](const SlicePtr &from, const SlicePtr &to,
+                WCacheSliceRefPtr &sliceRef) -> BResult {
+            if (BioConfig::Instance()->GetDaemonConfig().bdmBatchReadStandaloneUseScratchPool &&
+                from->GetFlowType() == FLOW_DISK) {
+                return bdmBatch->EnqueueDiskToTempThenCopy(from, to, keyResult, sliceRef);
+            }
+            if (CacheSliceOperator::CanBatchDiskToMemory(from, to)) {
+                return bdmBatch->EnqueueDiskToMemory(from, to, keyResult, sliceRef);
+            }
+            return writer(from, to);
+        };
+        ret = Cache::Instance().GetWCacheBatch(keyInfo.key, keyInfo.offset, sliceP, batchWriter, realLen);
+    } else {
+        ret = Cache::Instance().Get(keyInfo.key, keyInfo.offset, sliceP, writer, realLen);
+    }
     BIO_TRACE_END(MIRROR_TRACE_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get key from cache failed, ret:" << ret << ", key:" << keyInfo.key <<
@@ -1783,7 +1812,7 @@ int32_t MirrorServer::MirrorServerGet(ServiceContext &ctx, GetRequest *req)
 
 int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest *req)
 {
-    if (UNLIKELY(req->count == 0 || req->count > KEY_MAX_COUNT)) {
+    if (UNLIKELY(req->count == 0 || req->count > NET_BATCH_GET_MAX_COUNT)) {
         LOG_ERROR("Invalid batch get count:" << req->count << ".");
         BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_INVALID_PARAM, nullptr, 0);
         return BIO_OK;
@@ -1802,56 +1831,80 @@ int32_t MirrorServer::MirrorServerBatchGet(ServiceContext &ctx, BatchGetRequest 
         return BIO_OK;
     }
     std::vector<uint64_t> realLengths(req->count);
-    std::vector<int32_t> results(req->count);
+    std::vector<int32_t> results(req->count, BIO_OK);
+    std::atomic<uint32_t> pending(req->count);
     uint32_t submittedNum = 0;
     BResult ret = BIO_OK;
+    BdmCopyBatchContext bdmBatch;
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_LOOKUP);
     for (uint32_t i = 0; i < req->count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
             BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET);
-            results[index] = BatchSingleGet(req->keysInfo[index], realLengths[index], req);
-            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, results[index]);
-            sem_post(&sem);
+            BResult keyRet =
+                BatchSingleGet(req->keysInfo[index], realLengths[index], req, &bdmBatch, &results[index]);
+            if (keyRet != BIO_OK) {
+                results[index] = keyRet;
+            }
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET, keyRet);
+            if (pending.fetch_sub(1) == 1) {
+                sem_post(&sem);
+            }
         };
 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req->count << " i:" << i);
             ret = BIO_INNER_RETRY;
+            uint32_t unsubmittedNum = req->count - submittedNum;
+            if (pending.fetch_sub(unsubmittedNum) == unsubmittedNum) {
+                sem_post(&sem);
+            }
             break;
         }
         submittedNum++;
     }
-    for (uint32_t i = 0; i < submittedNum; i++) {
-        int waitRet = WaitSemaphore(sem);
-        if (UNLIKELY(waitRet != 0)) {
-            LOG_ERROR("Wait batch get task failed, errno:" << waitRet << ".");
-            ret = BIO_INNER_ERR;
-            break;
-        }
+    int waitRet = WaitSemaphore(sem);
+    if (UNLIKELY(waitRet != 0)) {
+        LOG_ERROR("Wait batch get task failed, errno:" << waitRet << ".");
+        ret = BIO_INNER_ERR;
     }
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_LOOKUP, ret);
     sem_destroy(&sem);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH);
+    BResult batchRet = bdmBatch.Submit();
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH, batchRet);
+    if (batchRet != BIO_OK) {
+        LOG_ERROR("Submit batch get bdm reads failed, ret:" << batchRet << ".");
+    }
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         BioServer::Instance()->GetNetEngine()->Reply(ctx, ret, nullptr, 0);
         return BIO_OK;
     }
 
-    BatchGetResponse rsp;
-    rsp.nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
-    rsp.count = req->count;
-    for (uint32_t i = 0; i < req->count; i++) {
-        rsp.results[i] = results[i];
-        rsp.realLengths[i] = realLengths[i];
+    size_t rspLen = GetBatchGetWireResponseLen(req->count);
+    auto rsp = reinterpret_cast<BatchGetWireResponse *>(calloc(1, rspLen));
+    if (UNLIKELY(rsp == nullptr)) {
+        BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_ALLOC_FAIL, nullptr, 0);
+        return BIO_OK;
     }
-    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(BatchGetResponse));
+    rsp->nodeId = Cm::Instance()->GetCmLocalNodeId().VNodeId();
+    rsp->count = req->count;
+    for (uint32_t i = 0; i < req->count; i++) {
+        rsp->items[i].result = results[i];
+        rsp->items[i].realLength = realLengths[i];
+    }
+    BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(rsp), rspLen);
+    free(rsp);
     return BIO_OK;
 }
 
 BResult MirrorServer::BatchGetConvergence(BatchGetRequest &req, BatchGetResponse &rsp)
 {
-    if (UNLIKELY(req.count == 0 || req.count > KEY_MAX_COUNT)) {
+    rsp = {};
+    if (UNLIKELY(req.count == 0 || req.count > STANDALONE_BATCH_GET_MAX_COUNT)) {
         LOG_ERROR("Invalid convergence batch get count:" << req.count << ".");
         return BIO_INVALID_PARAM;
     }
@@ -1862,36 +1915,53 @@ BResult MirrorServer::BatchGetConvergence(BatchGetRequest &req, BatchGetResponse
         return BIO_INNER_ERR;
     }
     std::vector<uint64_t> realLengths(req.count);
-    std::vector<int32_t> results(req.count);
+    std::vector<int32_t> results(req.count, BIO_OK);
+    std::atomic<uint32_t> pending(req.count);
     uint32_t submittedNum = 0;
     BResult ret = BIO_OK;
+    BdmCopyBatchContext bdmBatch;
 
     BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_CONVERGENCE);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_LOOKUP);
     for (uint32_t i = 0; i < req.count; i++) {
         uint32_t index = i;
         std::function<void()> func = [&, index]() {
             BIO_TRACE_START(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE);
-            results[index] = BatchSingleGet(req.keysInfo[index], realLengths[index], &req);
-            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE, results[index]);
-            sem_post(&sem);
+            BResult keyRet =
+                BatchSingleGet(req.keysInfo[index], realLengths[index], &req, &bdmBatch, &results[index]);
+            if (keyRet != BIO_OK) {
+                results[index] = keyRet;
+            }
+            BIO_TRACE_END(MIRROR_TRACE_BATCH_SINGLE_GET_CONVERGENCE, keyRet);
+            if (pending.fetch_sub(1) == 1) {
+                sem_post(&sem);
+            }
         };
 
         if (!mBatchGetExecutor->Execute(func)) {
             LOG_ERROR("Execute batch get data from shm failed, batch num: " << req.count << " i:" << i);
             ret = BIO_INNER_RETRY;
+            uint32_t unsubmittedNum = req.count - submittedNum;
+            if (pending.fetch_sub(unsubmittedNum) == unsubmittedNum) {
+                sem_post(&sem);
+            }
             break;
         }
         submittedNum++;
     }
-    for (uint32_t i = 0; i < submittedNum; i++) {
-        int waitRet = WaitSemaphore(sem);
-        if (UNLIKELY(waitRet != 0)) {
-            LOG_ERROR("Wait convergence batch get task failed, errno:" << waitRet << ".");
-            ret = BIO_INNER_ERR;
-            break;
-        }
+    int waitRet = WaitSemaphore(sem);
+    if (UNLIKELY(waitRet != 0)) {
+        LOG_ERROR("Wait convergence batch get task failed, errno:" << waitRet << ".");
+        ret = BIO_INNER_ERR;
     }
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_LOOKUP, ret);
     sem_destroy(&sem);
+    BIO_TRACE_START(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH);
+    BResult batchRet = bdmBatch.Submit();
+    BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_FINAL_FLUSH, batchRet);
+    if (batchRet != BIO_OK) {
+        LOG_ERROR("Submit convergence batch get bdm reads failed, ret:" << batchRet << ".");
+    }
     BIO_TRACE_END(MIRROR_TRACE_BATCH_GET_CONVERGENCE, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
@@ -2430,16 +2500,20 @@ bool MirrorServer::CheckGetSliceReq(GetSliceRequest *req)
 
 void MirrorServer::RecycleDataMsgMem(uint32_t pid)
 {
-    std::lock_guard<std::mutex> lock(mDataMsgMemLock);
-    auto iter = mDataMsgMemMgr.find(static_cast<pid_t>(pid));
-    if (iter == mDataMsgMemMgr.end()) {
-        return;
+    DataMsgMemItem item;
+    {
+        std::lock_guard<std::mutex> lock(mDataMsgMemLock);
+        auto iter = mDataMsgMemMgr.find(static_cast<pid_t>(pid));
+        if (iter == mDataMsgMemMgr.end()) {
+            return;
+        }
+        item = iter->second;
+        mDataMsgMemMgr.erase(iter);
     }
-    auto item = iter->second;
+
     if (item.memFd != -1) {
         BioServer::Instance()->GetNetEngine()->DestroyShmFdWithPid(item.memFd, item.address, pid, item.length);
     }
-    mDataMsgMemMgr.erase(iter);
     LOG_INFO("Succeed to recycle data message memory, holder:" << pid << ".");
 }
 

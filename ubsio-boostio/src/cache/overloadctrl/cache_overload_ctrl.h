@@ -82,7 +82,9 @@ public:
     ~CacheOverloadCtrl()
     {
         startWorker = false;
-        mStatisticExecutor->Stop();
+        if (mStatisticExecutor != nullptr) {
+            mStatisticExecutor->Stop();
+        }
     }
 
     static CacheOverloadCtrl &Instance()
@@ -143,6 +145,9 @@ public:
 
     void ReleaseQuota(const char *key, QuotaHolder holder, uint64_t size, uint32_t proc)
     {
+        if (!mEnableQos.load()) {
+            return;
+        }
         WriteLocker<ReadWriteLock> lock(&mLock);
         auto iter = mHolders.find(holder);
         if (UNLIKELY(iter == mHolders.end())) {
@@ -217,6 +222,7 @@ private:
     uint64_t MAX_HOLDER_SIZE = NO_8192 * NO_256;
 
     // overload ctrl
+    std::atomic<bool> mEnableQos{false};
     std::atomic<uint64_t> mAdjustWQuota;
     std::mutex mAdjustLock;
     uint64_t mAdjustCycleTime = 0;

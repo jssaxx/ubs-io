@@ -160,6 +160,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
         const_cast<char *>(value), length, location, 0 };
     BResult ret = gClient->Put(param);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
+    CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Put value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
@@ -167,7 +168,7 @@ CResult Bio::Put(const char *key, const char *value, uint64_t length, const ObjL
         CLIENT_LOG_DEBUG("Put value success, key:" << key << ", length:" << length << ", location0:" <<
             location.location[0] << ", location1:" << location.location[1] << ".");
     }
-    return ToCResult(ret);
+    return cRet;
 }
 
 CResult Bio::AsyncPut(const char *key, const char *value, uint64_t length, const ObjLocation &location,
@@ -218,13 +219,13 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
         ", location1:" << spaceInfo.loc.location[1] << ", addr num:" << spaceInfo.addressNum << ", addr0 size:" <<
         spaceInfo.address[0].size << ", addr1 size:" << spaceInfo.address[1].size << ", length:" << length << ".");
 
-    uint64_t startTime = Monotonic::TimeSec();
     StatisticPutIoSize(length);
     MirrorClient::MirrorPut param = { { mTenantId, mAffinity, mStrategy }, const_cast<char *>(key),
         nullptr, length, spaceInfo.loc, 0 };
     BIO_TRACE_START(SDK_TRACE_PUT);
     BResult ret = gClient->Put(param, spaceInfo);
     BIO_TRACE_END(SDK_TRACE_PUT, ret);
+    CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Put copy free value failed, ret:" << ret << ", key:" << key << ", length:" << length <<
             ", location0:" << spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
@@ -232,7 +233,7 @@ CResult Bio::Put(const char *key, CacheSpaceDesc &spaceInfo)
         CLIENT_LOG_DEBUG("Put copy free value success, key:" << key << ", length:" << length << ", location0:" <<
             spaceInfo.loc.location[0] << ", location1:" << spaceInfo.loc.location[1] << ".");
     }
-    return ToCResult(ret);
+    return cRet;
 }
 
 CResult Bio::BatchGetKeyDiskAddr(const char **keys, ObjLocation *locations, const uint32_t count, KeyAddrInfo *infos)
@@ -271,8 +272,10 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
     StatisticGetIoSize(length);
     BIO_TRACE_START(SDK_TRACE_GET);
     MirrorClient::MirrorGet param{ { mTenantId, mAffinity, mStrategy }, key, value, offset, length, location };
+    realLength = 0;
     BResult ret = gClient->Get(param, realLength);
     BIO_TRACE_END(SDK_TRACE_GET, ret);
+    CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Get value failed, ret:" << ret << ", key:" << key << ", offset:" << offset << ", length:" <<
             length << ", location0:" << location.location[0] << ", location1:" << location.location[1] << ".");
@@ -281,7 +284,7 @@ CResult Bio::Get(const char *key, uint64_t offset, uint64_t length, const ObjLoc
             ", realLen:" << realLength << ", location0:" << location.location[0] << ", location1:" <<
             location.location[1] << ".");
     }
-    return ToCResult(ret);
+    return cRet;
 }
 
 CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets, uint64_t *lengths,
@@ -306,12 +309,13 @@ CResult Bio::BatchGet(const char **keys, const uint32_t count, uint64_t *offsets
     BResult ret = gClient->BatchGet({ mTenantId, mAffinity, mStrategy }, keys, count, offsets, lengths, locations,
                                     valueAddrs, realLengths, results);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET, ret);
+    CResult cRet = ToCResult(ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Batch get value failed, ret:" << ret << ", key count:" << count << ".");
     } else {
         CLIENT_LOG_DEBUG("Batch get value success, key count:" << count << ".");
     }
-    return ToCResult(ret);
+    return cRet;
 }
 
 void Bio::BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)

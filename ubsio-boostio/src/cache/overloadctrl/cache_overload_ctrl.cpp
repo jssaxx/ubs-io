@@ -252,12 +252,13 @@ void CacheOverloadCtrl::InitQuotaManager()
 
 BResult CacheOverloadCtrl::Initialize()
 {
+    mEnableQos.store(BioConfig::Instance()->GetDaemonConfig().enableQos);
     // 1. 初始化过载采集配置信息.
     InitOverloadGlbInfo();
     // 2. 初始化写缓存配额管理.
     InitQuotaManager();
 
-    if (!(BioConfig::Instance()->GetDaemonConfig().enableQos)) {
+    if (!mEnableQos.load()) {
         return BIO_OK;
     }
 

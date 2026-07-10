@@ -21,6 +21,8 @@ extern "C" {
 
 int32_t BdmDiskInit(void);
 
+int32_t BdmDiskExit(void);
+
 uint32_t BdmGetNormalDiskNum(void);
 
 void BdmSetNormalDiskNum(uint32_t diskNum);

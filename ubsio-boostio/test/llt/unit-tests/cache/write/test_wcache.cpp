@@ -17,7 +17,6 @@
 #include <condition_variable>
 #include <cstdint>
 #include <cstring>
-#include <libaio.h>
 #include <mutex>
 #include "bio_server.h"
 #include "bio_server_c.h"
@@ -266,6 +265,70 @@ TEST_F(TestWCache, test_put_case_return_ok)
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_batch_get_releases_unclaimed_slice_ref)
+{
+    uint64_t length = NO_1024;
+    uint64_t flowIndex = 0;
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ASSERT_EQ(gWCacheManager->GetWCacheSlice(sliceKey, wSlice), BIO_OK);
+
+    Key key = "test_batch_get_releases_unclaimed_slice_ref";
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ASSERT_EQ(gWCacheManager->Put(key, wSlice, reader, attr, false), BIO_OK);
+
+    std::vector<char> value(length);
+    MrInfo mrInfo = { reinterpret_cast<uint64_t>(value.data()), static_cast<uint32_t>(value.size()) };
+    std::vector<FlowAddr> addrs = { FlowAddr(mrInfo) };
+    RCacheSlicePtr dest = MakeRef<RCacheSlice>(G_PT_ID, length, addrs);
+    WCacheSliceRefPtr observed = nullptr;
+    WCacheBatchSliceWriter writer =
+        [&observed](const SlicePtr &from, const SlicePtr &to, WCacheSliceRefPtr &sliceRef) -> BResult {
+        observed = sliceRef;
+        CacheSliceOperator sliceOperator;
+        return sliceOperator.Copy(from, to);
+    };
+
+    uint64_t realLen = 0;
+    EXPECT_EQ(gWCacheManager->GetBatch(key, 0, dest, writer, realLen), BIO_OK);
+    ASSERT_NE(observed, nullptr);
+    EXPECT_FALSE(observed->Test());
+    EXPECT_EQ(realLen, length);
+}
+
+TEST_F(TestWCache, test_batch_get_transfers_slice_ref_to_writer)
+{
+    uint64_t length = NO_1024;
+    uint64_t flowIndex = 0;
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ASSERT_EQ(gWCacheManager->GetWCacheSlice(sliceKey, wSlice), BIO_OK);
+
+    Key key = "test_batch_get_transfers_slice_ref_to_writer";
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ASSERT_EQ(gWCacheManager->Put(key, wSlice, reader, attr, false), BIO_OK);
+
+    std::vector<char> value(length);
+    MrInfo mrInfo = { reinterpret_cast<uint64_t>(value.data()), static_cast<uint32_t>(value.size()) };
+    std::vector<FlowAddr> addrs = { FlowAddr(mrInfo) };
+    RCacheSlicePtr dest = MakeRef<RCacheSlice>(G_PT_ID, length, addrs);
+    WCacheSliceRefPtr lease = nullptr;
+    WCacheBatchSliceWriter writer =
+        [&lease](const SlicePtr &, const SlicePtr &, WCacheSliceRefPtr &sliceRef) -> BResult {
+        lease = std::move(sliceRef);
+        return BIO_OK;
+    };
+
+    uint64_t realLen = 0;
+    EXPECT_EQ(gWCacheManager->GetBatch(key, 0, dest, writer, realLen), BIO_OK);
+    ASSERT_NE(lease, nullptr);
+    EXPECT_TRUE(lease->Test());
+    lease->Release();
+    EXPECT_FALSE(lease->Test());
 }
 
 TEST_F(TestWCache, test_put_without_disk_cache_only_supports_write_back)
