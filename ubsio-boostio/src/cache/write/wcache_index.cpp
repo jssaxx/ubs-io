@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "wcache_index.h"
 #include "bio_tracepoint_helper.h"
+#include "wcache_index.h"
 
 namespace ock {
 namespace bio {
@@ -40,6 +40,25 @@ BResult WCacheIndex::Insert(uint16_t ptId, const Key &key, const WCacheSliceRefP
     }
     table->sliceIndex[bucket].emplace(key, sliceRef);
     return BIO_OK;
+}
+
+bool WCacheIndex::Exist(uint16_t ptId, const Key &key)
+{
+    WCacheIndexTable *table = GetIndexTable(ptId);
+    ChkTrue(table != nullptr, BIO_INVALID_PARAM, "Invalid table, ptId:" << ptId << ".");
+    auto bucket = Hash(key);
+    ReadLocker<ReadWriteLock> lock(&table->sliceIndexLock[bucket]);
+    auto sliceMeta = table->sliceIndex[bucket].find(key);
+    if (UNLIKELY(sliceMeta == table->sliceIndex[bucket].end())) {
+        return false;
+    }
+    auto sliceRef = sliceMeta->second;
+    if (LIKELY(sliceRef->Aquire())) {
+        sliceRef->Release();
+        return true;
+    } else {
+        return false;
+    }
 }
 
 WCacheSliceRefPtr WCacheIndex::Aquire(uint16_t ptId, const Key &key)
@@ -77,9 +96,9 @@ BResult WCacheIndex::FuzzyAquire(uint16_t ptId, const char *prefix, std::unorder
                 if (sliceRef->Aquire()) {
                     auto sliceLen = static_cast<uint32_t>(sliceRef->GetSlice()->GetLength());
                     listSliceVec.push_back(sliceRef);
-                    LOG_DEBUG("Wcache list success, key:" << info.first << ", slice length:" << sliceLen
-                                                          << ", time:" << time(nullptr) << ".");
-                    objs.insert({info.first, {sliceLen, time(nullptr)}});
+                    LOG_DEBUG("Wcache list success, key:" << info.first << ", slice length:" << sliceLen << ", time:" <<
+                        time(nullptr) << ".");
+                    objs.insert({ info.first, { sliceLen, time(nullptr) } });
                 }
             }
         }
@@ -164,5 +183,5 @@ WCacheIndexTable *WCacheIndex::GetIndexTable(uint16_t ptId)
         return mTable[ptId];
     }
 }
-} // namespace bio
-} // namespace ock
+}
+}

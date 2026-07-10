@@ -10,26 +10,78 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bio_server.h"
 #include <dlfcn.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <mutex>
 #include <utility>
 #include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
+#include "bio_file_util.h"
 #include "bio_functions.h"
 #include "bio_log.h"
 #include "bio_monotonic.h"
 #include "bio_server_c.h"
+#include "cache.h"
 #include "cache_overload_ctrl.h"
 #include "cm_c.h"
 #include "expire_checker.h"
 #include "flow_manager.h"
 #include "htracer.h"
 #include "interceptor_server.h"
+#include "standalone_view.h"
+#include "bio_server.h"
 
 namespace ock {
 namespace bio {
+namespace {
+constexpr const char* BIO_CONFIG_ENV = "UBSIO_CONFIG_PATH";
+constexpr uint32_t LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
+
+bool IsAbsoluteRegularFile(const std::string &path)
+{
+    if (path.empty() || path.front() != '/') {
+        return false;
+    }
+
+    struct stat pathStat {};
+    return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
+}
+
+std::mutex gMetaEventCallbackLock;
+UbsioMetaEventCallbackC gMetaEventCallback = nullptr;
+void *gMetaEventCallbackContext = nullptr;
+bool gMetaEventCallbackConfigured = false;
+bool gMetaEventCallbackApplicable = false;
+
+UbsIoMetaEventCallback BuildMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    if (callback == nullptr) {
+        return nullptr;
+    }
+
+    return [callback, context](const std::vector<UbsIoMetaEvent> &events) {
+        std::vector<UbsioMetaEventC> cEvents;
+        cEvents.reserve(events.size());
+        for (const auto &event : events) {
+            cEvents.push_back({ static_cast<int32_t>(event.type), event.key.c_str(),
+                static_cast<uint32_t>(event.key.size()) });
+        }
+        callback(context, cEvents.data(), static_cast<uint32_t>(cEvents.size()));
+    };
+}
+
+void ApplyMetaEventCallbackLocked()
+{
+    if (!gMetaEventCallbackConfigured || !gMetaEventCallbackApplicable) {
+        return;
+    }
+    Cache::Instance().RegUbsIoMetaEventCallback(
+        BuildMetaEventCallback(gMetaEventCallback, gMetaEventCallbackContext));
+}
+}
+
 static void Log(int level, const char *msg)
 {
     if (Logger::gInstance != nullptr) {
@@ -40,27 +92,114 @@ static void Log(int level, const char *msg)
     }
 }
 
+std::vector<ModuleDesc> BioServer::BuildClusterModules()
+{
+    std::vector<ModuleDesc> modules;
+#ifdef USE_DEBUG_TP_TOOLS
+    modules.emplace_back("Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr,
+        nullptr);
+#endif
+    modules.emplace_back("Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr);
+    modules.emplace_back("Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioTraceExit, this));
+    modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioUnderFsExit, this));
+    modules.emplace_back("Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioBdmExit, this));
+    modules.emplace_back("Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioNetExit, this));
+    modules.emplace_back("Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioFlowExit, this));
+    modules.emplace_back("Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioCacheExit, this));
+    modules.emplace_back("MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioMirrorServerExit, this));
+    modules.emplace_back("CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioCmExit, this));
+    return modules;
+}
+
+std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
+{
+    std::vector<ModuleDesc> modules;
+#ifdef USE_DEBUG_TP_TOOLS
+    modules.emplace_back("Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr,
+        nullptr);
+#endif
+    modules.emplace_back("Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr);
+    modules.emplace_back("Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioTraceExit, this));
+    modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioUnderFsExit, this));
+    modules.emplace_back("Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioBdmExit, this));
+    modules.emplace_back("StandaloneMem", std::bind(&BioServer::BioStandaloneMemInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioStandaloneMemExit, this));
+    modules.emplace_back("Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioFlowExit, this));
+    modules.emplace_back("StandaloneView", std::bind(&BioServer::BioStandaloneViewInit, this), nullptr, nullptr,
+        nullptr);
+    modules.emplace_back("Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioCacheExit, this));
+    modules.emplace_back("MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
+        std::bind(&BioServer::BioMirrorServerExit, this));
+    return modules;
+}
+
 BioServer::BioServer() noexcept
 {
-    std::vector<ModuleDesc> modules = {
-#ifdef USE_DEBUG_TP_TOOLS
-        {"Tracepoint", std::bind(&BioServer::BioServerTracePointInit, this), nullptr, nullptr, nullptr},
+    mService = nullptr;
+}
+
+BResult BioServer::InitializeRuntime()
+{
+    std::string path = "/var/log/boostio/";
+#ifdef DEBUG_UT
+    path = "./";
 #endif
-        {"Diagnose", std::bind(&BioServer::BioServerDiagnoseInit, this), nullptr, nullptr, nullptr},
-        {"Tracer", std::bind(&BioServer::BioTraceInit, this), nullptr, nullptr,
-         std::bind(&BioServer::BioTraceExit, this)},
-        {"UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
-         std::bind(&BioServer::BioUnderFsExit, this)},
-        {"Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr, std::bind(&BioServer::BioBdmExit, this)},
-        {"Net", std::bind(&BioServer::BioNetInit, this), nullptr, nullptr, std::bind(&BioServer::BioNetExit, this)},
-        {"Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr, std::bind(&BioServer::BioFlowExit, this)},
-        {"Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
-         std::bind(&BioServer::BioCacheExit, this)},
-        {"MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
-         std::bind(&BioServer::BioMirrorServerExit, this)},
-        {"CM", std::bind(&BioServer::BioCmInit, this), nullptr, nullptr, std::bind(&BioServer::BioCmExit, this)},
-    };
-    mService = MakeRef<BioServiceProc>(modules);
+    FileUtil::MakeDirRecursive(path, LOG_DIR_MODE);
+    std::string logPath = path + "bio" + std::to_string(getpid()) + ".log";
+    if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    auto &daemonConfig = mConfig->GetDaemonConfig();
+    BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
+    return BIO_OK;
+}
+
+BResult BioServer::ProcessService(std::vector<ModuleDesc> modules)
+{
+    mService = MakeRef<BioServiceProc>(std::move(modules));
+    ChkTrue(mService != nullptr, BIO_ERR, "Boostio service not created.");
+    auto ret = mService->Process();
+    BIO_TP_START(SERVICE_START_FAIL, &ret, BIO_ERR);
+    BIO_TP_END;
+    if (ret != BIO_OK) {
+        return ret;
+    }
+    return BIO_OK;
+}
+
+void BioServer::WaitStartReady()
+{
+    while (!mStarted || mPtView.empty()) {
+        sleep(5U);
+    }
+}
+
+BResult BioServer::StartExpireChecker()
+{
+    if (!mConfig->GetNetConfig().enableTls) {
+        return BIO_OK;
+    }
+    auto expireChecker = ExpireChecker::Instance();
+    if (expireChecker == nullptr) {
+        LOG_INFO("expire checker alloc fail.");
+        return BIO_ALLOC_FAIL;
+    }
+    return expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
+        mConfig->GetNetConfig().tlsServerCertPath, mConfig->GetNetConfig().opensslLibDir);
 }
 
 BResult BioServer::Start()
@@ -73,47 +212,46 @@ BResult BioServer::Start()
     BIO_TP_END;
 
     // 1. Initialize infrastructure
-    std::string path = "/var/log/boostio/";
-#ifdef DEBUG_UT
-    path = "./";
-#endif
-    std::string logPath = path + "bio.log";
-    if (BioLoggerInit(logPath) != BIO_OK || BioConfigInit() != BIO_OK) {
-        return BIO_INNER_ERR;
-    }
+    auto ret = InitializeRuntime();
+    ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
 
-    UnderFs::InitUnderFsConfig(mConfig->GetUnderFsConfig());
-    auto &daemonConfig = mConfig->GetDaemonConfig();
-    BIO_LOG_RESET_LEVEL(daemonConfig.logLevel);
+    mStandaloneMode = false;
 
     // 2. Initialize boostio service
-    ChkTrue(mService != nullptr, BIO_ERR, "Boostio service not created.");
-    auto ret = mService->Process();
-    BIO_TP_START(SERVICE_START_FAIL, &ret, BIO_ERR);
-    BIO_TP_END;
-    if (ret != BIO_OK) {
-        return ret;
-    }
+    ret = ProcessService(BuildClusterModules());
+    ChkTrue(ret == BIO_OK, ret, "Process cluster service failed, result:" << ret << ".");
 
     // 3. wait start finish
-    while (!mStarted || mPtView.empty()) {
-        sleep(5U);
-    }
+    WaitStartReady();
 
-    if (mConfig->GetNetConfig().enableTls) {
-        auto expireChecker = ExpireChecker::Instance();
-        if (expireChecker == nullptr) {
-            LOG_INFO("expire checker alloc fail.");
-            return BIO_ALLOC_FAIL;
-        }
-        ret = expireChecker->ExpireCheckerInit(mConfig->GetNetConfig().tlsCaCertPath,
-                                               mConfig->GetNetConfig().tlsServerCertPath,
-                                               mConfig->GetNetConfig().opensslLibDir);
-        if (ret != BIO_OK) {
-            return ret;
-        }
-    }
+    ret = StartExpireChecker();
+    ChkTrue(ret == BIO_OK, ret, "Start expire checker failed, result:" << ret << ".");
     LOG_INFO("Boostio server start success.");
+    return BIO_OK;
+}
+
+BResult BioServer::StartStandalone()
+{
+    std::lock_guard<std::mutex> lock(mStartLock);
+    BIO_TP_START(NO_PROCESS_SERVER_START, 0);
+    if (mStarted) {
+        return BIO_OK;
+    }
+    BIO_TP_END;
+
+    auto ret = InitializeRuntime();
+    ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
+
+    mStandaloneMode = true;
+    ret = mConfig->SelectStandaloneDiskByDeviceInfo();
+    ChkTrue(ret == BIO_OK, ret, "Select standalone disk failed, ret:" << ret << ".");
+
+    ret = ProcessService(BuildStandaloneModules());
+    ChkTrue(ret == BIO_OK, ret, "Process standalone service failed, result:" << ret << ".");
+
+    mStarted = true;
+
+    LOG_INFO("Boostio standalone server start success.");
     return BIO_OK;
 }
 
@@ -126,8 +264,14 @@ void BioServer::Exit()
     if (mService != nullptr) {
         mService->Exit();
     }
+
     LOG_INFO("Boostio server exit success.");
     BioLoggerExit();
+
+    if (mServerDiagnoseHandle != nullptr) {
+        dlclose(mServerDiagnoseHandle);
+        mServerDiagnoseHandle = nullptr;
+    }
     mStarted = false;
 }
 
@@ -148,9 +292,17 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "./";
+    const std::string confPath = "./bio_old.conf";
 #else
-    const std::string confPath = "/etc/boostio/";
+    std::string confPath = CONFIG_PATH;
+    const char *envConfPath = getenv(BIO_CONFIG_ENV);
+    if (envConfPath != nullptr && envConfPath[0] != '\0') {
+        confPath = envConfPath;
+        if (!IsAbsoluteRegularFile(confPath)) {
+            LOG_ERROR(BIO_CONFIG_ENV << " must be an absolute regular file path, value: " << confPath);
+            return BIO_ERR;
+        }
+    }
 #endif
     result = mConfig->Initialize(confPath);
     BIO_TP_END;
@@ -197,6 +349,7 @@ BResult BioServer::BioTraceInit()
 #else
     const std::string dumpDir = "/var/log/boostio/trace/";
 #endif
+    FileUtil::MakeDirRecursive(dumpDir, LOG_DIR_MODE);
     auto ret = ock::htracer::HTracerInit(dumpDir);
     ock::htracer::HTracerSetEnable(BioConfig::Instance()->GetDaemonConfig().enableTrace);
     ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");
@@ -210,32 +363,46 @@ void BioServer::BioTraceExit()
 
 BResult BioServer::BioUnderFsInit()
 {
-    UnderFsPtr underFsPtr = UnderFs::Instance();
+    UfsHelperPtr underFsPtr = UfsHelper::Instance();
     if (underFsPtr == nullptr) {
         LOG_ERROR("Create underfs instance fail.");
         return BIO_ERR;
     }
-    return underFsPtr->Init();
+    return underFsPtr->Initialize(mConfig->GetUnderFsConfig());
 }
 
 void BioServer::BioUnderFsExit()
 {
-    UnderFs::Instance()->Stop();
+    UfsHelper::Instance()->Stop();
 }
 
 BResult BioServer::BioBdmInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        DiskAllocator diskAllocator;
+        diskAllocator.alloc = [](uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *) { return BIO_ERR; };
+        diskAllocator.free = [](uint32_t, uint64_t, uint64_t) { return; };
+        FlowManager::RegisterDiskAllocator(diskAllocator);
+        LOG_INFO("Disk cache is disabled, skip BDM initialization.");
+        return BIO_OK;
+    }
+
     auto ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
-    DiskDevices diskList;
-    diskList.num = 0;
+    BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
+    DiskDevices diskList = {};
+    if (daemonConfig.diskList.size() > DISK_DEV_NUM) {
+        LOG_ERROR("BDM disk num limit:" << DISK_DEV_NUM << ", input:" << daemonConfig.diskList.size() << ".");
+        return BIO_ERR;
+    }
     for (auto diskPathStr : daemonConfig.diskList) {
         ret = strcpy_s(diskList.list[diskList.num].path, DISK_PATH_LEN, diskPathStr.c_str());
         if (ret != 0) {
             return BIO_ERR;
         }
-        diskList.diskCaps[diskList.num] = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPathStr));
+        auto diskCap = FileUtil::GetDiskCapacity(diskPathStr);
+        diskList.diskCaps[diskList.num] = static_cast<uint64_t>(diskCap);
         diskList.num++;
     }
 
@@ -264,6 +431,11 @@ BResult BioServer::BioBdmInit()
 BResult BioServer::BioBdmUpdate(std::string diskPath)
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        LOG_ERROR("Add disk is not supported when disk cache is disabled.");
+        return BIO_INVALID_PARAM;
+    }
+
     auto diskCap = static_cast<uint64_t>(FileUtil::GetDiskCapacity(diskPath));
 
     auto ret = BdmUpdate(const_cast<char *>(diskPath.c_str()), daemonConfig.segment, diskCap);
@@ -276,6 +448,11 @@ BResult BioServer::BioBdmUpdate(std::string diskPath)
 
 BResult BioServer::BioDiskReset(uint16_t diskId)
 {
+    if (!mConfig->GetDaemonConfig().hasDiskCache) {
+        LOG_ERROR("Reset disk is not supported when disk cache is disabled, diskId:" << diskId << ".");
+        return BIO_INVALID_PARAM;
+    }
+
     // 防重入
     if (BdmGetDiskStatus(diskId) == BDM_DISK_STATE_NORMAL) {
         LOG_ERROR("Bdm is already in used, diskId: " << diskId << ".");
@@ -298,14 +475,38 @@ BResult BioServer::StartRpcService(const NetOptions &opt)
     ChkTrue(ret == BIO_OK, BIO_ERR, "Start rpc engine failed, result:" << ret << ".");
 
     MemAllocator memAllocator;
-    memAllocator.alloc = [this](uint64_t size, uint64_t *addr) {
-        return this->MemAlloc(size, addr);
-    };
-    memAllocator.free = [this](uint64_t addr) {
-        this->MemFree(addr);
-    };
+    memAllocator.alloc = [this](uint64_t size, uint64_t *addr) { return this->MemAlloc(size, addr); };
+    memAllocator.free = [this](uint64_t addr) { this->MemFree(addr); };
     FlowManager::RegisterMemAllocator(memAllocator);
     return BIO_OK;
+}
+
+BResult BioServer::BioStandaloneMemInit()
+{
+    if (mStandaloneMemPool != nullptr) {
+        return BIO_OK;
+    }
+
+    mStandaloneMemPool = MakeRef<StandaloneMemoryPool>();
+    ChkTrue(mStandaloneMemPool != nullptr, BIO_ALLOC_FAIL, "Make standalone memory pool failed.");
+
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    auto ret = mStandaloneMemPool->Start(daemonConfig.segment, daemonConfig.memCap);
+    ChkTrue(ret == BIO_OK, ret, "Start standalone memory pool failed, result:" << ret << ".");
+
+    MemAllocator memAllocator;
+    memAllocator.alloc = [this](uint64_t size, uint64_t *addr) { return this->MemAlloc(size, addr); };
+    memAllocator.free = [this](uint64_t addr) { this->MemFree(addr); };
+    FlowManager::RegisterMemAllocator(memAllocator);
+    return BIO_OK;
+}
+
+void BioServer::BioStandaloneMemExit()
+{
+    if (mStandaloneMemPool != nullptr) {
+        mStandaloneMemPool->Stop();
+        mStandaloneMemPool = nullptr;
+    }
 }
 
 BResult BioServer::StartIpcService(const NetOptions &opt)
@@ -328,22 +529,23 @@ BResult BioServer::BioNetInit()
     ChkTrue(ret == BIO_OK, ret, "Net engine initialize failed, result:" << ret << ".");
 
     NetOptions netOptions;
+    netOptions.netSegmentSize = netConfig.netSegmentSize;
     netOptions.ipMask = netConfig.dataIpMask;
     netOptions.port = netConfig.dataPort;
     netOptions.isBusyLoop = netConfig.isRpcBusyLoop;
     netOptions.role = Role::NET_SERVER;
     netOptions.protocol = static_cast<ServiceProtocol>(netConfig.protocol);
+    netOptions.isCreateMemPool = true;
     netOptions.memorySize = mConfig->GetDaemonConfig().memCap;
-    netOptions.regShmMem = true;
     netOptions.handlerCount = netConfig.rpcDataWorkersCnt;
     netOptions.connCount = netConfig.rpcDataWorkersCnt;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
-    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;     /* certification path */
-    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                 /* caCert path */
-    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                  /* caCrl path */
-    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;         /* private key path */
-    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath; /* private key password */
-    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;       /* decrypter lib path */
+    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
+    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
+    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                   /* caCrl path */
+    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;          /* private key path */
+    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath;  /* private key password */
+    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
     ret = StartRpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start rpc service failed, result:" << ret << ".");
 
@@ -353,12 +555,12 @@ BResult BioServer::BioNetInit()
     netOptions.handlerCount = netConfig.ipcDataWorkersCnt;
     netOptions.connCount = netConfig.ipcDataWorkersCnt;
     netOptions.enableTls = mConfig->GetNetConfig().enableTls;
-    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;     /* certification path */
-    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                 /* caCert path */
-    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                  /* caCrl path */
-    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;         /* private key path */
-    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath; /* private key password */
-    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;       /* decrypter lib path */
+    netOptions.certificationPath = mConfig->GetNetConfig().tlsServerCertPath;      /* certification path */
+    netOptions.caCerPath = mConfig->GetNetConfig().tlsCaCertPath;                  /* caCert path */
+    netOptions.caCrlPath = mConfig->GetNetConfig().tlsCaCrlPath;                   /* caCrl path */
+    netOptions.privateKeyPath = mConfig->GetNetConfig().tlsServerKeyPath;          /* private key path */
+    netOptions.privateKeyPassword = mConfig->GetNetConfig().tlsServerKeyPassPath;  /* private key password */
+    netOptions.decrypterLibPath = mConfig->GetNetConfig().decrypterLibPath;        /* decrypter lib path */
     ret = StartIpcService(netOptions);
     ChkTrue(ret == BIO_OK, ret, "Start ipc service failed, result:" << ret << ".");
     mNetEngineInited = true;
@@ -397,14 +599,20 @@ BResult BioServer::BioCmInit()
     nodeInfo.ip = mConfig->GetNetConfig().dataIp;
     nodeInfo.port = mConfig->GetNetConfig().dataPort;
     CmDiskInfo diskInfo;
-    for (uint32_t index = 0; index < daemonConfig.diskList.size(); index++) {
-        diskInfo.diskId = index;
-        if (BdmGetDiskStatus(index) == BDM_DISK_STATE_NORMAL) {
-            diskInfo.diskStatus = CM_DISK_NORMAL;
-        } else {
-            diskInfo.diskStatus = CM_DISK_FAULT;
-        }
+    if (!daemonConfig.hasDiskCache) {
+        diskInfo.diskId = 0;
+        diskInfo.diskStatus = CM_DISK_NORMAL;
         nodeInfo.disks.push_back(diskInfo);
+    } else {
+        for (uint32_t index = 0; index < daemonConfig.diskList.size(); index++) {
+            diskInfo.diskId = index;
+            if (BdmGetDiskStatus(index) == BDM_DISK_STATE_NORMAL) {
+                diskInfo.diskStatus = CM_DISK_NORMAL;
+            } else {
+                diskInfo.diskStatus = CM_DISK_FAULT;
+            }
+            nodeInfo.disks.push_back(diskInfo);
+        }
     }
     result = mCm->RegisterNode(nodeInfo);
     ChkTrue(result == BIO_OK, BIO_ERR, "Failed to register node, result: " << result << ".");
@@ -421,6 +629,35 @@ BResult BioServer::BioCmInit()
 void BioServer::BioCmExit()
 {
     mCm->Stop();
+}
+
+BResult BioServer::BioStandaloneViewInit()
+{
+    StandaloneView::NodeView nodeView;
+    StandaloneView::PtView ptView;
+    CmNodeId localNid;
+    BResult ret = StandaloneView::Build(mConfig, localNid, nodeView, ptView);
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Build standalone view failed, ret:" << ret << ".");
+        return ret;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mNodeViewMutex);
+        // Client direct calls query this same NodeView through GetNodeView, so
+        // localNid and view timestamps are updated under the normal locks.
+        mLocalNid = localNid;
+        mNodeView = std::move(nodeView);
+        mCurNodeTimes = Monotonic::TimeUs();
+    }
+    {
+        std::lock_guard<std::mutex> lock(mPtViewMutex);
+        mPtView = std::move(ptView);
+        mCurPtTimes = Monotonic::TimeUs();
+    }
+    LOG_INFO("Standalone view init success, localNid:" << mLocalNid.VNodeId() << ", ptNum:" << mPtView.size() <<
+        ".");
+    return BIO_OK;
 }
 
 BResult BioServer::BioMirrorServerInit()
@@ -440,12 +677,14 @@ BResult BioServer::BioMirrorServerInit()
         return BIO_ERR;
     }
 
-    mMirrorCrb = MirrorServerCrb::Instance();
-    ChkTrue(mMirrorCrb != nullptr, BIO_ERR, "Mirror server crb instance is nullptr.");
-    ret = mMirrorCrb->Init();
-    if (UNLIKELY(ret != BIO_OK)) {
-        LOG_ERROR("Failed to init mirror server crb, ret:" << ret << ".");
-        return BIO_ERR;
+    if (!mStandaloneMode) {
+        mMirrorCrb = MirrorServerCrb::Instance();
+        ChkTrue(mMirrorCrb != nullptr, BIO_ERR, "Mirror server crb instance is nullptr.");
+        ret = mMirrorCrb->Init();
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Failed to init mirror server crb, ret:" << ret << ".");
+            return BIO_ERR;
+        }
     }
     mMirrorInited = true;
 
@@ -472,51 +711,79 @@ BResult BioServer::BioCacheInit()
         LOG_ERROR("Failed to init cache instance, ret:" << ret << ".");
         return ret;
     }
+    {
+        std::lock_guard<std::mutex> lock(gMetaEventCallbackLock);
+        gMetaEventCallbackApplicable = true;
+        ApplyMetaEventCallbackLocked();
+    }
 
-    GetLocDiskId getLocDiskId = [](uint16_t ptId, uint16_t &diskId) -> BResult {
+    GetLocDiskId getLocDiskId = [this](uint16_t ptId, uint16_t &diskId) -> BResult {
+        // CM owns this mapping in cluster mode. Standalone reads it from the
+        // synthetic PtView generated at startup.
+        if (mStandaloneMode) {
+            return GetLocalDiskIdFromView(ptId, diskId);
+        }
         return Cm::Instance()->GetLocalDiskId(ptId, diskId);
     };
     Cache::Instance().RegGetLocDiskId(getLocDiskId);
 
-    GetLocDiskStatus getLocDiskStatus = [](uint16_t ptId, uint16_t diskId, bool &isNormal) -> void {
+    GetLocDiskStatus getLocDiskStatus = [this](uint16_t ptId, uint16_t diskId, bool &isNormal) -> void {
+        if (mStandaloneMode) {
+            GetLocalDiskStatusFromView(ptId, diskId, isNormal);
+            return;
+        }
         Cm::Instance()->GetLocalDiskStatus(ptId, diskId, isNormal);
     };
     Cache::Instance().RegGetLocDiskStatus(getLocDiskStatus);
 
-    CheckServiceState checkService = []() -> bool {
-        return Cm::Instance()->GetServiceState();
+    CheckServiceState checkService = [this]() -> bool {
+        return GetServiceState();
     };
     Cache::Instance().RegCheckServiceState(checkService);
 
-    CheckDegrade checkDegrade = [](uint16_t ptId, bool &isDegrade) -> BResult {
+    CheckDegrade checkDegrade = [this](uint16_t ptId, bool &isDegrade) -> BResult {
+        if (mStandaloneMode) {
+            return CheckPtDegradeFromView(ptId, isDegrade);
+        }
         return Cm::Instance()->CheckPtDegrade(ptId, isDegrade);
     };
     Cache::Instance().RegCheckDegrade(checkDegrade);
 
-    GetGlobEvictOffset evictOffset = [](uint16_t ptId, uint64_t flowId, uint64_t &flowOffset) -> BResult {
+    GetGlobEvictOffset evictOffset = [this](uint16_t ptId, uint64_t flowId, uint64_t &flowOffset) -> BResult {
+        if (mStandaloneMode) {
+            return Cache::Instance().GetEvictOffset(flowId, flowOffset);
+        }
         return MirrorServer::Instance()->GetFlowGlobEvictOffset(ptId, flowId, flowOffset);
     };
     Cache::Instance().RegGetGlobEvictOffset(evictOffset);
 
-    CheckLocRole checkLocRole = [](uint16_t ptId, bool &isMaster) -> BResult {
+    CheckLocRole checkLocRole = [this](uint16_t ptId, bool &isMaster) -> BResult {
+        if (mStandaloneMode) {
+            return CheckLocalRoleFromView(ptId, isMaster);
+        }
         return Cm::Instance()->CheckLocalRole(ptId, isMaster);
     };
     Cache::Instance().RegCheckLocRole(checkLocRole);
 
-    auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
-        if (pid != 0) {
-            Cache::Instance().HandleProcBroken(pid);
-        } else {
-            ReConnect(nodeId);
+    if (!mStandaloneMode) {
+        // Channel-broken callbacks only make sense when NetEngine exists. In
+        // standalone the client and server share one process lifetime.
+        auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
+            if (pid != 0) {
+                Cache::Instance().HandleProcBroken(pid);
+            } else {
+                ReConnect(nodeId);
+            }
+            nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
+            QuotaHolder holder = { nodeId, static_cast<uint64_t>(pid) };
+            CacheOverloadCtrl::Instance().RecycleQuota(holder);
+            mMirror->RecycleDataMsgMem(pid);
+        };
+        ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+        if (ret != BIO_OK) {
+            LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
+            return ret;
         }
-        nodeId = (nodeId == 1024) ? mLocalNid.VNodeId() : nodeId;
-        QuotaHolder holder = {nodeId, static_cast<uint64_t>(pid)};
-        CacheOverloadCtrl::Instance().RecycleQuota(holder);
-    };
-    ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
-    if (ret != BIO_OK) {
-        LOG_ERROR("Net engine regist channel broken handler failed,, ret " << ret);
-        return ret;
     }
     BIO_TP_END;
 
@@ -532,6 +799,10 @@ BResult BioServer::BioCacheInit()
 
 void BioServer::BioCacheExit()
 {
+    {
+        std::lock_guard<std::mutex> lock(gMetaEventCallbackLock);
+        gMetaEventCallbackApplicable = false;
+    }
     Cache::Instance().Exit();
 }
 
@@ -565,22 +836,22 @@ BResult BioServer::BioServerDiagnoseInit()
         return BIO_OK;
     }
 #endif
-    const char *soFileName = "libcli_agent.so";
+    const char* soFileName = "libcli_agent.so";
     void *handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
         return BIO_INNER_ERR;
     }
 
-    auto ptr = LoadFunction("CLI_AgentInit", handler);
+    auto ptr = LoadFunction("cli_agent_init", handler);
     if (ptr == nullptr) {
-        LOG_ERROR("Failed to load function CLI_AgentInit.");
+        LOG_ERROR("Failed to load function cli_agent_init.");
         dlclose(handler);
         return BIO_ERR;
     }
 
     auto cliAgentInitFunc = reinterpret_cast<CLIAgentInitFunc>(ptr);
-    uint32_t procPid = 456U;
+    uint32_t procPid = getpid();
     std::string diagName = "bio_server";
 
     BResult ret = BIO_OK;
@@ -602,19 +873,9 @@ BResult BioServer::BioServerDiagnoseInit()
 using ServerDiagnose = int (*)();
 BResult BioServer::BioServerDiagnoseInitInner()
 {
-#ifdef DEBUG_UT
-    return BIO_OK;
-#endif
-    std::string soFileName = "/usr/lib64/boostio/test_tools/libserver_diagnose.so";
-    char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
-        LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-        return BIO_NOT_EXISTS;
-    }
-
-    auto handler = dlopen(canonicalPath, RTLD_NOW);
-    free(canonicalPath);
-    canonicalPath = nullptr;
+    void *handler = nullptr;
+    const char *soFileName = "libserver_diagnose.so";
+    handler = dlopen(soFileName, RTLD_NOW);
     if (handler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
         return BIO_ERR;
@@ -631,7 +892,10 @@ BResult BioServer::BioServerDiagnoseInitInner()
     if (ret != BIO_OK) {
         LOG_ERROR("Failed to Initialize server diagnose, ret:" << ret << ".");
         dlclose(handler);
+    } else {
+        mServerDiagnoseHandle = handler;
     }
+
     return ret;
 }
 
@@ -659,8 +923,8 @@ void BioServer::Connection()
         if (it->second.status != CM_NODE_NORMAL) {
             continue;
         }
-        LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip
-                                    << ", port:" << it->second.port << ".");
+        LOG_INFO("Connect to node:" << it->second.id.VNodeId() << ", ip:" << it->second.ip << ", port:" <<
+            it->second.port << ".");
         ConnectInfo info(mLocalNid.VNodeId(), 0, it->second.id.VNodeId(), it->second.ip, it->second.port, NO_1);
         auto handler = [this](uintptr_t userCtx, int32_t ret, ConnectInfo &info) -> void {
             if (ret != BIO_OK) {
@@ -700,6 +964,81 @@ void BioServer::ReConnect(uint32_t peerId)
     return;
 }
 
+BResult BioServer::GetLocalDiskIdFromView(uint16_t ptId, uint16_t &diskId)
+{
+    std::lock_guard<std::mutex> lock(mPtViewMutex);
+    auto iter = mPtView.find(ptId);
+    if (iter == mPtView.end()) {
+        return BIO_ERR;
+    }
+
+    for (const auto &copy : iter->second.copys) {
+        if (copy.nodeId == mLocalNid.VNodeId()) {
+            diskId = copy.diskId;
+            return BIO_OK;
+        }
+    }
+    return BIO_ERR;
+}
+
+void BioServer::GetLocalDiskStatusFromView(uint16_t ptId, uint16_t diskId, bool &isNormal)
+{
+    isNormal = false;
+    {
+        std::lock_guard<std::mutex> lock(mNodeViewMutex);
+        auto nodeIter = mNodeView.find(mLocalNid);
+        if (nodeIter == mNodeView.end()) {
+            return;
+        }
+        bool diskNormal = false;
+        for (const auto &disk : nodeIter->second.disks) {
+            if (disk.diskId == diskId) {
+                diskNormal = disk.diskStatus == CM_DISK_NORMAL;
+                break;
+            }
+        }
+        if (!diskNormal) {
+            return;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(mPtViewMutex);
+    auto ptIter = mPtView.find(ptId);
+    if (ptIter == mPtView.end()) {
+        return;
+    }
+    for (const auto &copy : ptIter->second.copys) {
+        if (copy.nodeId == mLocalNid.VNodeId() && copy.diskId == diskId && copy.state == CM_COPY_RUNNING) {
+            isNormal = true;
+            return;
+        }
+    }
+}
+
+BResult BioServer::CheckPtDegradeFromView(uint16_t ptId, bool &isDegrade)
+{
+    isDegrade = false;
+    std::lock_guard<std::mutex> lock(mPtViewMutex);
+    auto iter = mPtView.find(ptId);
+    if (iter == mPtView.end()) {
+        return BIO_ERR;
+    }
+    isDegrade = iter->second.state != CM_PT_NORMAL;
+    return BIO_OK;
+}
+
+BResult BioServer::CheckLocalRoleFromView(uint16_t ptId, bool &isMaster)
+{
+    isMaster = false;
+    std::lock_guard<std::mutex> lock(mPtViewMutex);
+    auto iter = mPtView.find(ptId);
+    if (iter == mPtView.end()) {
+        return BIO_ERR;
+    }
+    isMaster = iter->second.masterNodeId == mLocalNid.VNodeId();
+    return BIO_OK;
+}
+
 BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNodeIdCmp> &nodeInfos)
 {
     uint64_t nodeSize = nodeInfos.size();
@@ -730,8 +1069,8 @@ BResult BioServer::HandleCmNodeEvent(const std::map<CmNodeId, CmNodeInfo, CmNode
 
 bool BioServer::CheckNeedCrb(const std::map<uint16_t, CmPtInfo> &ptInfos)
 {
-    for (const auto &ptInfo : ptInfos) {
-        for (const auto &copy : ptInfo.second.copys) {
+    for (const auto &ptInfo: ptInfos) {
+        for (const auto &copy: ptInfo.second.copys) {
             if (copy.state == CM_COPY_RECOVERY) {
                 return true;
             }
@@ -765,8 +1104,8 @@ BResult BioServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos)
     LOG_INFO("Cur pt times:" << mCurPtTimes);
     return BIO_OK;
 }
-} // namespace bio
-} // namespace ock
+}
+}
 
 using namespace ock::bio;
 
@@ -780,6 +1119,26 @@ int32_t BioServerInit()
     return bioServer->Start();
 }
 
+int32_t BioServerStandaloneInit()
+{
+    auto bioServer = BioServer::Instance();
+    if (UNLIKELY(bioServer == nullptr)) {
+        LOG_ERROR("Make bio server instance failed.");
+        return BIO_ALLOC_FAIL;
+    }
+    return bioServer->StartStandalone();
+}
+
+void SetStandaloneDeviceInfo(uint32_t deviceId)
+{
+    auto config = BioConfig::Instance();
+    if (UNLIKELY(config == nullptr)) {
+        LOG_ERROR("Make bio config instance failed.");
+        return;
+    }
+    config->SetStandaloneDeviceInfo(deviceId);
+}
+
 void BioServerExit(void)
 {
     BioServer::Instance()->Exit();
@@ -788,6 +1147,9 @@ void BioServerExit(void)
 uintptr_t GetBioServerNet()
 {
     NetEnginePtr netEngine = BioServer::Instance()->GetNetEngine();
+    if (netEngine == nullptr) {
+        return 0;
+    }
     return reinterpret_cast<uintptr_t>(netEngine.Get());
 }
 
@@ -813,6 +1175,16 @@ const char *GetPrometheusListenAddress(void)
     return listenAddressCStr;
 }
 
+extern "C" int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    std::lock_guard<std::mutex> lock(gMetaEventCallbackLock);
+    gMetaEventCallback = callback;
+    gMetaEventCallbackContext = context;
+    gMetaEventCallbackConfigured = true;
+    ApplyMetaEventCallbackLocked();
+    return BIO_OK;
+}
+
 uint32_t GetNegoWorkIoTimeOut()
 {
     return BioServer::Instance()->GetNegoWorkIoTimeOut();
@@ -821,6 +1193,31 @@ uint32_t GetNegoWorkIoTimeOut()
 uint32_t GetPrometheusScrapeIntervalSec()
 {
     return BioServer::Instance()->GetPrometheusScrapeIntervalSec();
+}
+
+int32_t GetRuntimeConfig(StandaloneRuntimeConfigResponse *rsp)
+{
+    if (rsp == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    auto config = BioServer::Instance()->GetConfig()->GetDaemonConfig();
+    auto netConfig = BioServer::Instance()->GetConfig()->GetNetConfig();
+    rsp->serverPid = getpid();
+    rsp->netSegmentSize = netConfig.netSegmentSize;
+    rsp->scene = config.workScene;
+    rsp->alignSize = config.workIoAlignSize;
+    rsp->ioTimeOut = config.workIoTimeOut;
+    rsp->netTimeOut = config.workNetTimeOut;
+    rsp->logLevel = config.logLevel;
+    rsp->enableHtrace = config.enableTrace;
+    rsp->enableCrc = config.enableCrc;
+    rsp->enableCli = config.enableCli;
+    rsp->enablePrometheus = config.enablePrometheus;
+    rsp->scrapeIntervalSec = config.scrapeIntervalSec;
+    rsp->sdkPoolSize = config.sdkPoolSize;
+    rsp->dataMsgBlockSize = config.segment;
+    auto ret = strcpy_s(rsp->listenAddress, sizeof(rsp->listenAddress), config.listenAddress.c_str());
+    return ret == 0 ? BIO_OK : BIO_ERR;
 }
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp)
@@ -862,21 +1259,21 @@ int32_t GetPtView(QueryPtViewRequest *req, QueryPtViewResponse *rsp)
 
 int32_t CreateFlowMaster(CreateFlowRequest *req, CreateFlowResponse *rsp)
 {
-    BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(
-        req->comm.pid, req->comm.ptId, req->comm.ptv, rsp->flowId, rsp->isDegrade);
+    BResult ret = BioServer::Instance()->GetMirrorServer()->CreateFlowMaster(req->comm.pid, req->comm.ptId,
+        req->comm.ptv, *rsp);
     return static_cast<int32_t>(ret);
 }
 
 int32_t CreateFlowSlave(CreateFlowRequest *req)
 {
-    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CreateFlowSlave(
-        req->comm.pid, req->comm.ptId, req->comm.ptv, req->flowId, req->isDegrade));
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CreateFlowSlave(req->comm.pid, req->comm.ptId,
+        req->comm.ptv, req->flowId, req->isDegrade));
 }
 
 int32_t DestroyFlow(DestroyFlowRequest *req)
 {
-    return BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId, req->comm.ptv,
-                                                                 req->flowId);
+    return BioServer::Instance()->GetMirrorServer()->DestroyFlow(req->comm.pid, req->comm.ptId,
+                                                                 req->comm.ptv, req->flowId);
 }
 
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
@@ -888,7 +1285,7 @@ int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp)
     }
     WCacheSlicePtr sliceP = nullptr;
     BResult ret = BioServer::Instance()->GetMirrorServer()->GetSlice(req->flowId, req->flowOffset, req->flowIndex,
-                                                                     req->length, sliceP);
+        req->length, sliceP);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Get slice failed:" << ret << ".");
         return static_cast<int32_t>(ret);
@@ -964,8 +1361,8 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
     BResult ret = BIO_OK;
     WCacheSlicePtr sliceP = nullptr;
     if (req->sliceLen == 0) {
-        MrInfo mrInfo = {req->mrAddress, static_cast<uint32_t>(req->mrSize)};
-        std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+        MrInfo mrInfo = { req->mrAddress, static_cast<uint32_t>(req->mrSize) };
+        std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
         BIO_TP_START(PUT_SLICELEN_ZERO_ALLOC_SLICE_FAIL, &sliceP, nullptr);
         sliceP = MakeRef<WCacheSlice>(req->flowId, req->flowOffset, req->flowIndex, req->length, addrVec);
         BIO_TP_END;
@@ -1002,9 +1399,7 @@ int32_t Put(PutRequest *req, PutResponse *rsp)
 
 int32_t AddDisk(AddDiskRequest *req, AddDiskResponse *rsp)
 {
-    BResult ret = BIO_ERR;
-    ret = BioServer::Instance()->GetMirrorServer()->AddDisk(*req);
-    return ret;
+    return BioServer::Instance()->GetMirrorServer()->AddDisk(*req);
 }
 
 inline static void StatisticGetIoSize(uint64_t length)
@@ -1044,6 +1439,16 @@ int32_t Get(GetRequest *req, GetResponse *rsp)
     StatisticGetIoSize(req->length);
     ServiceContext netCtx;
     return BioServer::Instance()->GetMirrorServer()->GetConvergence(*req, *rsp);
+}
+
+int32_t BatchGet(BatchGetRequest *req, BatchGetResponse *rsp)
+{
+    return BioServer::Instance()->GetMirrorServer()->BatchGetConvergence(*req, *rsp);
+}
+
+int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp)
+{
+    return BioServer::Instance()->GetMirrorServer()->BatchExistConvergence(*req, *rsp);
 }
 
 int32_t Delete(DeleteRequest *req)

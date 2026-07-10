@@ -15,11 +15,11 @@
 
 #ifdef USE_DEBUG_TP_TOOLS
 
-#if defined(__aarch64__) || defined(DEBUG_UT)
+#ifdef __aarch64__
 #include "tracepoint.h"
 #endif
 
-#if !defined(__aarch64__) && !defined(DEBUG_UT)
+#ifndef __aarch64__
 #define BIO_TP_START(name, ...)
 #define BIO_TP_NOPARAM_START(...)
 #define BIO_TP_END

@@ -14,11 +14,12 @@
 #define BIO_FUNCTIONS_H
 
 #include <sys/sysinfo.h>
-#include "bio_def.h"
-#include "bio_log.h"
-#include "bio_str_util.h"
-#include "bio_types.h"
+#include <algorithm>
 #include "securec.h"
+#include "bio_log.h"
+#include "bio_def.h"
+#include "bio_types.h"
+#include "bio_str_util.h"
 
 namespace ock {
 namespace bio {
@@ -30,7 +31,8 @@ inline void CopyKey(char *dstKey, const char *srcKey, uint32_t maxLen)
     }
     auto keyLen = strlen(srcKey);
     auto ret = memcpy_s(dstKey, maxLen, srcKey, keyLen);
-    dstKey[keyLen] = '\0';
+    uint32_t minKeyLen = std::min<uint32_t>(maxLen, keyLen);
+    dstKey[minKeyLen] = '\0';
     if (UNLIKELY(ret != 0)) {
         LOG_ERROR("Copy Key failed, ret:" << ret << ".");
     }
@@ -78,6 +80,6 @@ inline uint64_t GetSysFreeMemCap()
     return info.freeram;
 }
 
-} // namespace bio
-} // namespace ock
+}
+}
 #endif

@@ -22,10 +22,15 @@ extern "C" {
 #define BDM_MAX_NUM (1024UL)
 #define BDM_NAME_LEN (128UL)
 #define BDM_SN_LEN (32UL)
+#define BDM_MIN_CHUNK_LENGTH (1048576UL) /* 1M */
 #define BDM_MAX_CHUNK_LENGTH (16777216UL) /* 16M */
 #define BDM_ALIGN_SIZE (2097152UL)
 #define BDM_RESTORE_META_SIZE (2097152UL)
 #define BDM_INVALID_ID (1024UL)
+/* Low 16 bits store standalone mode and device id. High 16 bits are reserved. */
+#define BDM_DISK_HEAD_STANDALONE_MAGIC (0x0000BD00U)
+#define BDM_DISK_HEAD_MODE_MASK (0x0000FF00U)
+#define BDM_DISK_HEAD_DEVICE_ID_MASK (0x000000FFU)
 
 typedef struct {
     char name[BDM_NAME_LEN];
@@ -39,8 +44,7 @@ typedef struct {
     uint64_t maxChunkSize;
 } BdmCreatePara;
 
-typedef enum
-{
+typedef enum {
     BDM_CODE_OK = 0,
     BDM_CODE_ERR = -1,
     BDM_CODE_ERR_IO = 5,
@@ -52,10 +56,10 @@ typedef enum
     BDM_CODE_INVALID_CHUNK_ID = -105,
     BDM_CODE_INVALID_BDM_ID = -104,
     BDM_CODE_SCAN_OFF = -103,
+    BDM_CODE_METADATA_MISMATCH = -102,
 } BdmRetCode;
 
-typedef enum
-{
+typedef enum {
     BDM_DISK_STATE_NORMAL = 0,
     BDM_DISK_STATE_FAULT = 1,
     BDM_DISK_STATE_BUTT
@@ -72,7 +76,7 @@ typedef struct {
 } BdmIoCtx;
 
 #define DISK_PATH_LEN (256UL)
-#define DISK_DEV_NUM (4UL)
+#define DISK_DEV_NUM (16UL)
 
 typedef struct {
     char path[DISK_PATH_LEN];
@@ -92,6 +96,8 @@ int32_t BdmAlloc(uint32_t bdmId, uint64_t bucketId, uint64_t bucketOffset, uint6
 
 int32_t BdmFree(uint32_t bdmId, uint64_t len, uint64_t chunkId);
 
+int32_t BdmParseChunkId(uint64_t chunkId, uint64_t *offset, char *path);
+
 int32_t BdmRead(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len);
 
 int32_t BdmWrite(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len);
@@ -105,9 +111,11 @@ int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCa
 int32_t BdmResetScanPool(uint32_t bdmId);
 
 int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
-                              uint64_t *bucketOffset);
+    uint64_t *bucketOffset);
 
 int32_t BdmInit(void);
+
+void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId);
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
 

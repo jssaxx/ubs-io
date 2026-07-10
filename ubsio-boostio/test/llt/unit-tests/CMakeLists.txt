@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+﻿cmake_minimum_required(VERSION 3.16)
 if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -18,11 +18,6 @@ endif()
 set(GTEST_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/googletest")
 if (NOT EXISTS ${GTEST_INSTALL_DIR})
     message(ERROR "GTEST_INSTALL_DIR(${GTEST_INSTALL_DIR}) is invalid")
-endif()
-if (EXISTS ${GTEST_INSTALL_DIR}/lib64/libgtest.a)
-    set(GTEST_LIB_DIR "${GTEST_INSTALL_DIR}/lib64")
-else()
-    set(GTEST_LIB_DIR "${GTEST_INSTALL_DIR}/lib")
 endif()
 
 set(MOCKCPP_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/mockcpp")
@@ -79,9 +74,8 @@ target_include_directories(bio_test PRIVATE
 
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group
-        tracepoint_static
-        pthread dl rt aio
-        ${GTEST_LIB_DIR}/libgtest.a
+        pthread dl rt aio bio_underfs
+        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64/libgtest.a
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
 

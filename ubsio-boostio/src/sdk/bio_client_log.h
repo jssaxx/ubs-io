@@ -13,25 +13,28 @@
 #ifndef BIO_CLIENT_LOG_H
 #define BIO_CLIENT_LOG_H
 
-#include <sys/time.h>
-#include <cstdint>
 #include <cstdio>
+#include <cstdint>
+#include <iostream>
+#include <sstream>
+#include <sys/time.h>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <thread>
-#include "bio_file_util.h"
+#include <cstdlib>
 #include "bio_log.h"
 #include "bio_tracepoint_helper.h"
+#include "bio_file_util.h"
 
 namespace ock {
 namespace bio {
 using LogFunc = std::function<void(int32_t level, const char *logBuf)>;
+constexpr uint32_t SDK_LOG_DIR_MODE = S_IRWXU | S_IRGRP | S_IXGRP;
 
 class BioClientLog {
 public:
-    enum class Level
-    {
+    enum class Level {
         LOG_LEVEL_TRACE = 0,
         LOG_LEVEL_DEBUG = 1,
         LOG_LEVEL_INFO = 2,
@@ -41,6 +44,7 @@ public:
     };
 
     BioClientLog() = default;
+
     ~BioClientLog()
     {
         func = nullptr;
@@ -50,13 +54,19 @@ public:
     {
         minLogLevel = level;
         mMode = mode;
-        if (mode == 1) {
+        const char *envVal = std::getenv("BIO_SDK_LOG_ENABLE");
+        mUseSpdlog = (envVal != nullptr && std::string(envVal) == "1");
+        if (mode == 1) { // 分离部署场景.
             LoggerOptions options;
             options.logType = (uint8_t)logType;
             options.minLogLevel = level;
 
             if (options.logType == 1) { // file
                 auto logDir = logFilePath;
+                if (!FileUtil::MakeDirRecursive(logDir, SDK_LOG_DIR_MODE)) {
+                    std::cout << "Failed to create log dir." << std::endl;
+                    return -1;
+                }
                 bool result = FileUtil::CanonicalPath(logDir);
                 if (!result) {
                     std::cout << "Failed to check log dir." << std::endl;
@@ -74,17 +84,19 @@ public:
             }
             int32_t ret = -1;
             BIO_TP_START(SDK_BIO_LOG_INIT_FAIL, &ret, -1);
-            ret = mLogger->Init();
+            ret = mUseSpdlog ? mLogger->Init() : mLogger->InitWithoutSpdlog();
             BIO_TP_END;
             if (ret != 0) {
                 std::cout << "Failed to init log, ret:" << ret << "." << std::endl;
                 return -1;
             }
         }
-        auto logFunc = [](int level, const char *message) {
-            Logger::gInstance->Log(level, message);
-        };
-        func = logFunc;
+        if (mUseSpdlog) {
+            auto logFunc = [](int level, const char *message) { Logger::gInstance->Log(level, message); };
+            func = logFunc;
+        } else {
+            func = nullptr;
+        }
         return 0;
     }
 
@@ -105,8 +117,7 @@ public:
         if (func != nullptr) {
             func(level, oss.str().c_str());
         } else {
-            struct timeval tv {
-            };
+            struct timeval tv {};
             char strTime[24];
             gettimeofday(&tv, nullptr);
             strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
@@ -126,7 +137,7 @@ public:
 
     static BioClientLog *Instance()
     {
-        static auto *instance = new BioClientLog();
+        static auto *instance = new (std::nothrow)BioClientLog();
         return instance;
     }
 
@@ -135,6 +146,7 @@ private:
     int32_t minLogLevel = 1;
     int32_t mMode = 0;
     Logger *mLogger = nullptr;
+    bool mUseSpdlog = false;
 };
 
 #ifndef BIO_CLIENT_LOG_FILENAME
@@ -155,6 +167,6 @@ private:
 #define CLIENT_LOG_INFO(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_INFO), args)
 #define CLIENT_LOG_WARN(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_WARN), args)
 #define CLIENT_LOG_ERROR(args) BASE_LOG(static_cast<int>(BioClientLog::Level::LOG_LEVEL_ERROR), args)
-} // namespace bio
-} // namespace ock
+}
+}
 #endif

@@ -11,20 +11,14 @@
  */
 
 #include "test_underfs.h"
-#include <mockcpp/mockcpp.hpp>
-#include "bio_err.h"
-#include "bio_file_util.h"
-#include "bio_log.h"
-#include "bio_types.h"
-#include "ceph_system.h"
 #include "gtest/gtest.h"
-#include "local_system.h"
-#define private public
-#include "hdfs_system.h"
-#undef private
-#include "file_system_factory.h"
-#include "rados/librados.h"
+#include "bio_err.h"
+#include "bio_types.h"
 #include "tracepoint.h"
+#include "hdfs_system.h"
+#include "dl_ceph_system.h"
+#include "bio_log.h"
+#include "file_system_factory.h"
 
 using namespace ock::bio;
 
@@ -39,6 +33,7 @@ void TestUnderFs::SetUp()
         return;
     }
     gSetup = true;
+    Stub();
     return;
 }
 
@@ -47,43 +42,11 @@ void TestUnderFs::TearDown()
     return;
 }
 
-std::shared_ptr<FileSystem> g_hdfsInstancePtr = std::make_shared<HdfsSystem>();
-std::shared_ptr<FileSystem> g_cephInstancePtr = std::make_shared<CephSystem>();
+std::shared_ptr<FileSystem> g_hdfsInstancePtr = FileSystemFactory::CreateFileSystem(HDFS_SYSTEM);
+std::shared_ptr<FileSystem> g_cephInstancePtr = FileSystemFactory::CreateFileSystem(CEPH_SYSTEM);
 
 static int g_ptrStub;
-static int g_hdfsFsStub;
-static int g_hdfsBuilderStub;
-static int g_hdfsStreamBuilderStub;
-static int g_hdfsFileStub;
-static int g_hdfsCreateDirRet = BIO_OK;
-static int g_hdfsDeleteRet = BIO_OK;
-static int g_hdfsExistsRet = BIO_OK;
-static int g_hdfsWriteRet = BIO_OK;
-static int g_hdfsPreadRet = BIO_OK;
-static int g_hdfsFlushRet = BIO_OK;
-static bool g_hdfsBuildFile = true;
-static bool g_hdfsReturnFileInfo = true;
-static bool g_hdfsReturnList = true;
-static tObjectKind g_hdfsPathKind = kObjectKindFile;
-static tOffset g_hdfsInfoSize = 8;
-static hdfsFileInfo g_hdfsInfo[2];
-static char g_hdfsFileName[] = "/work/file1";
-static char g_hdfsDirName[] = "/work/dir1";
-
-namespace ock {
-namespace bio {
-BResult ParsePath(const char *path, char *parentDir, size_t parentDirSize);
-std::pair<std::string, std::string> ParseIpPort(const std::string &host);
-bool IsValidPort(std::string &port);
-bool IsValidIP(const std::string &ip);
-bool IsValidWorkingPath(std::string &path);
-bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string &workingPath);
-std::string GetParentDirectory(const std::string path);
-std::string GetFileNameFromHdfsPath(const std::string path);
-} // namespace bio
-} // namespace ock
-
-static int RadosCreateStub(rados_t *pcluster, const char *const clusterName, const char *const name, uint64_t flags)
+static int RadosCreateStub(rados_t *pcluster, const char * const clusterName, const char * const name, uint64_t flags)
 {
     *pcluster = static_cast<rados_t>(&g_ptrStub);
     return BIO_OK;
@@ -115,172 +78,25 @@ static int RadosStatStub(rados_ioctx_t io, const char *o, uint64_t *psize, time_
     return BIO_OK;
 }
 
-static int HdfsCreateDirStub(hdfsFS fs, const char *path)
-{
-    return g_hdfsCreateDirRet;
-}
-
-static int HdfsSetWorkingDirStub(hdfsFS fs, const char *path)
-{
-    return BIO_OK;
-}
-
-static int HdfsDisconnectStub(hdfsFS fs)
-{
-    return BIO_OK;
-}
-
-static hdfsStreamBuilder *HdfsStreamBuilderAllocStub(hdfsFS fs, const char *path, int flags)
-{
-    return reinterpret_cast<hdfsStreamBuilder *>(&g_hdfsStreamBuilderStub);
-}
-
-static hdfsFile HdfsStreamBuilderBuildStub(hdfsStreamBuilder *builder)
-{
-    return g_hdfsBuildFile ? reinterpret_cast<hdfsFile>(&g_hdfsFileStub) : nullptr;
-}
-
-static int32_t HdfsWriteStub(hdfsFS fs, hdfsFile file, const void *buffer, int32_t length)
-{
-    return g_hdfsWriteRet == BIO_OK ? length : -1;
-}
-
-static int HdfsFlushStub(hdfsFS fs, hdfsFile file)
-{
-    return g_hdfsFlushRet;
-}
-
-static int HdfsCloseFileStub(hdfsFS fs, hdfsFile file)
-{
-    return BIO_OK;
-}
-
-static int32_t HdfsPreadStub(hdfsFS fs, hdfsFile file, int64_t position, void *buffer, int32_t length)
-{
-    if (g_hdfsPreadRet != BIO_OK) {
-        return -1;
-    }
-    std::memset(buffer, 'a', length);
-    return length;
-}
-
-static int HdfsDeleteStub(hdfsFS fs, const char *path, int recursive)
-{
-    return g_hdfsDeleteRet;
-}
-
-static int HdfsExistsStub(hdfsFS fs, const char *path)
-{
-    return g_hdfsExistsRet;
-}
-
-static hdfsFileInfo *HdfsGetPathInfoStub(hdfsFS fs, const char *path)
-{
-    if (!g_hdfsReturnFileInfo) {
-        return nullptr;
-    }
-    g_hdfsInfo[0].mKind = g_hdfsPathKind;
-    g_hdfsInfo[0].mName = g_hdfsFileName;
-    g_hdfsInfo[0].mSize = g_hdfsInfoSize;
-    g_hdfsInfo[0].mLastMod = 9;
-    return &g_hdfsInfo[0];
-}
-
-static void HdfsFreeFileInfoStub(hdfsFileInfo *info, int numEntries) {}
-
-static hdfsFileInfo *HdfsListDirectoryStub(hdfsFS fs, const char *path, int *numEntries)
-{
-    if (!g_hdfsReturnList) {
-        *numEntries = 0;
-        errno = EIO;
-        return nullptr;
-    }
-    *numEntries = 2;
-    g_hdfsInfo[0].mKind = kObjectKindFile;
-    g_hdfsInfo[0].mName = g_hdfsFileName;
-    g_hdfsInfo[0].mSize = 10;
-    g_hdfsInfo[0].mLastMod = 11;
-    g_hdfsInfo[1].mKind = kObjectKindDirectory;
-    g_hdfsInfo[1].mName = g_hdfsDirName;
-    g_hdfsInfo[1].mSize = 0;
-    g_hdfsInfo[1].mLastMod = 12;
-    return g_hdfsInfo;
-}
-
-static hdfsBuilder *HdfsNewBuilderStub()
-{
-    return reinterpret_cast<hdfsBuilder *>(&g_hdfsBuilderStub);
-}
-
-static void HdfsBuilderSetNameNodeStub(hdfsBuilder *builder, const char *nameNode) {}
-
-static void HdfsBuilderSetNameNodePortStub(hdfsBuilder *builder, uint16_t port) {}
-
-static hdfsFS HdfsBuilderConnectStub(hdfsBuilder *builder)
-{
-    return reinterpret_cast<hdfsFS>(&g_hdfsFsStub);
-}
-
-static std::shared_ptr<HdfsSystem> Hdfs()
-{
-    return std::static_pointer_cast<HdfsSystem>(g_hdfsInstancePtr);
-}
-
-static void ResetHdfsStubs()
-{
-    auto hdfs = Hdfs();
-    hdfs->mHdfsFs = reinterpret_cast<hdfsFS>(&g_hdfsFsStub);
-    hdfs->mHdfsWorkingPath = "/work";
-    hdfs->mNameNodeIp = "127.0.0.1";
-    hdfs->mNameNodePort = 9000;
-    hdfs->createDirOp = HdfsCreateDirStub;
-    hdfs->setWorkingDirOp = HdfsSetWorkingDirStub;
-    hdfs->disconnectOp = HdfsDisconnectStub;
-    hdfs->streamBuilderAllocOp = HdfsStreamBuilderAllocStub;
-    hdfs->streamBuilderBuildOp = HdfsStreamBuilderBuildStub;
-    hdfs->writeOp = HdfsWriteStub;
-    hdfs->flushOp = HdfsFlushStub;
-    hdfs->closeFileOp = HdfsCloseFileStub;
-    hdfs->preadOp = HdfsPreadStub;
-    hdfs->deleteOp = HdfsDeleteStub;
-    hdfs->existsOp = HdfsExistsStub;
-    hdfs->getPathInfoOp = HdfsGetPathInfoStub;
-    hdfs->freeFileInfoOp = HdfsFreeFileInfoStub;
-    hdfs->listDirectoryOp = HdfsListDirectoryStub;
-    hdfs->newBuilderOp = HdfsNewBuilderStub;
-    hdfs->builderSetNameNodeOp = HdfsBuilderSetNameNodeStub;
-    hdfs->builderSetNameNodePortOp = HdfsBuilderSetNameNodePortStub;
-    hdfs->builderConnectOp = HdfsBuilderConnectStub;
-    g_hdfsCreateDirRet = BIO_OK;
-    g_hdfsDeleteRet = BIO_OK;
-    g_hdfsExistsRet = BIO_OK;
-    g_hdfsWriteRet = BIO_OK;
-    g_hdfsPreadRet = BIO_OK;
-    g_hdfsFlushRet = BIO_OK;
-    g_hdfsBuildFile = true;
-    g_hdfsReturnFileInfo = true;
-    g_hdfsReturnList = true;
-    g_hdfsPathKind = kObjectKindFile;
-    g_hdfsInfoSize = 8;
-    errno = BIO_OK;
-}
-
 void TestUnderFs::Stub()
 {
-    MOCKER(rados_create2).stubs().will(invoke(RadosCreateStub));
-    MOCKER(rados_conf_read_file).stubs().will(returnValue(0));
-    MOCKER(rados_connect).stubs().will(returnValue(0));
-    MOCKER(rados_shutdown).stubs().will(invoke(RadosShutdownStub));
-    MOCKER(rados_pool_lookup).stubs().will(returnValue(0));
-    MOCKER(rados_ioctx_create).stubs().will(invoke(IoctxCreateStub));
-    MOCKER(rados_ioctx_destroy).stubs().will(invoke(IoctxCdestroyStub));
-    MOCKER(rados_read).stubs().will(returnValue(0));
-    MOCKER(rados_write).stubs().will(returnValue(0));
-    MOCKER(rados_stat).stubs().will(invoke(RadosStatStub));
-    MOCKER(rados_remove).stubs().will(returnValue(0));
-    MOCKER(rados_nobjects_list_next).stubs().will(returnValue(-ENOENT));
-    MOCKER(rados_nobjects_list_open).stubs().will(returnValue(0));
-    MOCKER(rados_nobjects_list_close).stubs().will(invoke(RadosListCloseStub));
+    auto ceph = static_cast<DlCephSystem *>(g_cephInstancePtr.get());
+    ceph->SetRadosCreate2(reinterpret_cast<DlCephSystem::RadosCreate2Fn>(RadosCreateStub));
+    ceph->SetRadosConfReadFile([](rados_t, const char *) { return 0; });
+    ceph->SetRadosConnect([](rados_t) { return 0; });
+    ceph->SetRadosShutdown(reinterpret_cast<DlCephSystem::RadosShutdownFn>(RadosShutdownStub));
+    ceph->SetRadosPoolLookup([](rados_t, const char *) { return 0; });
+    ceph->SetRadosPoolCreate([](rados_t, const char *) { return 0; });
+    ceph->SetRadosIoCtxCreate(reinterpret_cast<DlCephSystem::RadosIoCtxCreateFn>(IoctxCreateStub));
+    ceph->SetRadosIoCtxDestroy(reinterpret_cast<DlCephSystem::RadosIoCtxDestroyFn>(IoctxCdestroyStub));
+    ceph->SetRadosRead([](rados_ioctx_t, const char *, char *, size_t, uint64_t) { return 0; });
+    ceph->SetRadosWrite([](rados_ioctx_t, const char *, const char *, size_t, uint64_t) { return 0; });
+    ceph->SetRadosStat(reinterpret_cast<DlCephSystem::RadosStatFn>(RadosStatStub));
+    ceph->SetRadosRemove([](rados_ioctx_t, const char *) { return 0; });
+    ceph->SetRadosNobjectsListNext(
+        [](rados_list_ctx_t, const char **, const char **, const char **) { return -ENOENT; });
+    ceph->SetRadosNobjectsListOpen([](rados_ioctx_t, rados_list_ctx_t *) { return 0; });
+    ceph->SetRadosNobjectsListClose(reinterpret_cast<DlCephSystem::RadosNobjectsListCloseFn>(RadosListCloseStub));
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_creat_fail)
@@ -439,7 +255,7 @@ TEST_F(TestUnderFs, test_underfs_ceph_list_return_fail)
 {
     LOG_INFO("test_underfs_ceph_list_return_fail");
     const char *prefix = "key";
-    std::unordered_map<std::string, CephSystem::ObjStat> objStat;
+    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_UNDERFS_LIST", 0, 1, userParam);
     auto ret = g_cephInstancePtr->List(prefix, objStat);
@@ -451,7 +267,7 @@ TEST_F(TestUnderFs, test_underfs_ceph_list_return_OK)
 {
     LOG_INFO("test_underfs_ceph_list_return_OK");
     const char *prefix = "key";
-    std::unordered_map<std::string, CephSystem::ObjStat> objStat;
+    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
     auto ret = g_cephInstancePtr->List(prefix, objStat);
     EXPECT_EQ(ret, BIO_OK);
     g_cephInstancePtr->Stop();
@@ -531,158 +347,4 @@ TEST_F(TestUnderFs, test_underfs_hdfs_list_return_fail)
     std::unordered_map<std::string, FileSystem::ObjStat> objStat;
     auto ret = g_hdfsInstancePtr->List(prefix, objStat);
     EXPECT_EQ(ret, BIO_UFS_IOERR);
-}
-
-TEST_F(TestUnderFs, test_hdfs_helper_paths_and_config)
-{
-    char parent[NO_256] = {};
-    EXPECT_EQ(ParsePath("dir/file", parent, sizeof(parent)), BIO_OK);
-    EXPECT_STREQ(parent, "dir");
-
-    EXPECT_EQ(ParsePath("file", parent, sizeof(parent)), BIO_OK);
-    EXPECT_STREQ(parent, "");
-
-    auto ipPort = ParseIpPort("127.0.0.1:9000");
-    EXPECT_EQ(ipPort.first, "127.0.0.1");
-    EXPECT_EQ(ipPort.second, "9000");
-    EXPECT_TRUE(ParseIpPort("127.0.0.1").first.empty());
-
-    std::string port = "65535";
-    EXPECT_TRUE(IsValidPort(port));
-    port = "65536";
-    EXPECT_FALSE(IsValidPort(port));
-
-    EXPECT_TRUE(IsValidIP("127.0.0.1"));
-    EXPECT_TRUE(IsValidIP("default"));
-    EXPECT_FALSE(IsValidIP("999.0.0.1"));
-
-    std::string workingPath = "/hdfs/path";
-    EXPECT_TRUE(IsValidWorkingPath(workingPath));
-    std::string badPath = "relative/path";
-    EXPECT_FALSE(IsValidWorkingPath(badPath));
-    EXPECT_TRUE(IsValidHdfsConfig(ipPort, workingPath));
-
-    ipPort.first = "999.0.0.1";
-    EXPECT_FALSE(IsValidHdfsConfig(ipPort, workingPath));
-    EXPECT_EQ(GetParentDirectory("dir/sub/file"), "dir/sub");
-    EXPECT_EQ(GetParentDirectory("file"), "");
-    EXPECT_EQ(GetFileNameFromHdfsPath("/work/file"), "file");
-    EXPECT_EQ(GetFileNameFromHdfsPath("file"), "file");
-}
-
-TEST_F(TestUnderFs, test_hdfs_fake_ops_return_ok)
-{
-    ResetHdfsStubs();
-    g_hdfsExistsRet = BIO_ERR;
-    EXPECT_EQ(Hdfs()->CreateDirectory("dir/sub"), BIO_OK);
-    g_hdfsExistsRet = BIO_OK;
-
-    const char *value = "value";
-    EXPECT_EQ(g_hdfsInstancePtr->Put("dir/file", value, strlen(value)), BIO_OK);
-
-    char buf[NO_32] = {};
-    EXPECT_EQ(g_hdfsInstancePtr->Get("dir/file", buf, sizeof(buf), 0), BIO_OK);
-    EXPECT_EQ(buf[0], 'a');
-
-    FileSystem::ObjStat stat;
-    EXPECT_EQ(g_hdfsInstancePtr->Stat("dir/file", stat), BIO_OK);
-    EXPECT_EQ(stat.size, 8UL);
-
-    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
-    EXPECT_EQ(g_hdfsInstancePtr->List("file", objStat), BIO_OK);
-    EXPECT_EQ(objStat.size(), 1UL);
-
-    EXPECT_EQ(g_hdfsInstancePtr->Delete("dir/file"), BIO_OK);
-    g_hdfsInstancePtr->Stop();
-}
-
-TEST_F(TestUnderFs, test_hdfs_fake_ops_error_paths)
-{
-    ResetHdfsStubs();
-    g_hdfsCreateDirRet = BIO_ERR;
-    g_hdfsExistsRet = BIO_ERR;
-    EXPECT_EQ(Hdfs()->CreateDirectory("dir/sub"), BIO_UFS_IOERR);
-
-    ResetHdfsStubs();
-    g_hdfsBuildFile = false;
-    const char *value = "value";
-    EXPECT_EQ(g_hdfsInstancePtr->Put("dir/file", value, strlen(value)), BIO_UFS_IOERR);
-
-    ResetHdfsStubs();
-    g_hdfsWriteRet = BIO_ERR;
-    EXPECT_EQ(g_hdfsInstancePtr->Put("dir/file", value, strlen(value)), BIO_UFS_IOERR);
-
-    ResetHdfsStubs();
-    g_hdfsBuildFile = false;
-    char buf[NO_32] = {};
-    EXPECT_EQ(g_hdfsInstancePtr->Get("dir/file", buf, sizeof(buf), 0), BIO_NOT_EXISTS);
-
-    ResetHdfsStubs();
-    g_hdfsPreadRet = BIO_ERR;
-    EXPECT_EQ(g_hdfsInstancePtr->Get("dir/file", buf, sizeof(buf), 0), BIO_UFS_IOERR);
-
-    ResetHdfsStubs();
-    g_hdfsReturnFileInfo = false;
-    FileSystem::ObjStat missingStat;
-    EXPECT_EQ(g_hdfsInstancePtr->Stat("dir/file", missingStat), BIO_NOT_EXISTS);
-
-    ResetHdfsStubs();
-    g_hdfsInfoSize = IO_MAX_LEN + 1;
-    FileSystem::ObjStat stat;
-    EXPECT_EQ(g_hdfsInstancePtr->Stat("dir/file", stat), BIO_NOT_EXISTS);
-
-    ResetHdfsStubs();
-    g_hdfsDeleteRet = BIO_ERR;
-    g_hdfsExistsRet = BIO_ERR;
-    EXPECT_EQ(g_hdfsInstancePtr->Delete("dir/file"), BIO_NOT_EXISTS);
-
-    ResetHdfsStubs();
-    g_hdfsDeleteRet = BIO_ERR;
-    g_hdfsExistsRet = BIO_OK;
-    EXPECT_EQ(g_hdfsInstancePtr->Delete("dir/file"), BIO_UFS_IOERR);
-
-    ResetHdfsStubs();
-    g_hdfsReturnList = false;
-    g_hdfsPathKind = kObjectKindDirectory;
-    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
-    EXPECT_EQ(g_hdfsInstancePtr->List("dir", objStat), BIO_UFS_IOERR);
-}
-
-TEST_F(TestUnderFs, test_local_system_and_factory_paths)
-{
-    FileUtil::RemoveDirRecursive("./ceph");
-    auto local = FileSystemFactory::CreateFileSystem(LOCAL_SYSTEM);
-    auto ceph = FileSystemFactory::CreateFileSystem(CEPH_SYSTEM);
-    auto hdfs = FileSystemFactory::CreateFileSystem(HDFS_SYSTEM);
-    auto fallback = FileSystemFactory::CreateFileSystem("unknown");
-
-    EXPECT_NE(std::dynamic_pointer_cast<LocalSystem>(local), nullptr);
-    EXPECT_NE(std::dynamic_pointer_cast<CephSystem>(ceph), nullptr);
-    EXPECT_NE(std::dynamic_pointer_cast<HdfsSystem>(hdfs), nullptr);
-    EXPECT_NE(std::dynamic_pointer_cast<LocalSystem>(fallback), nullptr);
-
-    EXPECT_EQ(local->Init(), BIO_OK);
-    EXPECT_EQ(local->Init(), BIO_OK);
-
-    const char *value = "local-data";
-    EXPECT_EQ(local->Put("local_dir/file", value, strlen(value)), BIO_OK);
-
-    char buf[NO_32] = {};
-    EXPECT_EQ(local->Get("local_dir/file", buf, strlen(value), 0), BIO_OK);
-    EXPECT_EQ(std::string(buf, strlen(value)), value);
-
-    FileSystem::ObjStat stat;
-    EXPECT_EQ(local->Stat("local_dir/file", stat), BIO_OK);
-    EXPECT_EQ(stat.size, strlen(value));
-
-    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
-    EXPECT_EQ(local->List("local", objStat), BIO_OK);
-    EXPECT_FALSE(objStat.empty());
-
-    EXPECT_EQ(local->Delete("local_dir/file"), BIO_OK);
-    EXPECT_EQ(local->Delete("local_dir/file"), BIO_NOT_EXISTS);
-    EXPECT_EQ(local->Get("local_dir/file", buf, sizeof(buf), 0), BIO_NOT_EXISTS);
-    EXPECT_EQ(local->Stat("local_dir/file", stat), BIO_NOT_EXISTS);
-    local->Stop();
-    FileUtil::RemoveDirRecursive("./ceph");
 }

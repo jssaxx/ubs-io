@@ -34,6 +34,7 @@ public:
     static void HandleGet(const std::vector<std::string> &cmds);
     static void HandleList(const std::vector<std::string> &cmds);
     static void HandleStat(const std::vector<std::string> &cmds);
+    static void HandleExist(const std::vector<std::string> &cmds);
     static void HandleLoad(const std::vector<std::string> &cmds);
     static void HandleDelete(const std::vector<std::string> &cmds);
     static void HandleAddDisk(const std::vector<std::string> &cmds);
@@ -44,8 +45,9 @@ public:
     static void HandleNotifyUpdateFinish(const std::vector<std::string> &cmds);
     static void HandleCheckUpdateReady(const std::vector<std::string> &cmds);
     static void HandleSdkTrace(const std::vector<std::string> &cmds);
-    static void *PerfTestPutImpl(void *param);
-    static void *PerfTestGetImpl(void *param);
+    static void* PerfTestPutImpl(void *param);
+    static void* PerfTestGetImpl(void *param);
+    static void HandleBatchGet(const std::vector<std::string> &cmds);
     static void HandlePerf(const std::vector<std::string> &cmds);
 
 private:
@@ -55,9 +57,9 @@ private:
     static CliUnRegCmdFuncPtr mUnRegOp;
     static CliPrintBufFuncPtr mPrintOp;
 };
-} // namespace diagnose
-} // namespace bio
-} // namespace ock
+}
+}
+}
 
 #ifdef __cplusplus
 extern "C" {

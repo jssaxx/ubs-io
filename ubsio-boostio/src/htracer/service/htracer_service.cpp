@@ -10,25 +10,27 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "htracer_service.h"
-#include <dlfcn.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <fstream>
 #include <functional>
+#include <fstream>
+#include <utility>
+#include <unistd.h>
+#include <fcntl.h>
+#include <dlfcn.h>
 #include <iostream>
 #include <sstream>
-#include <utility>
-#include "bio_tracepoint_helper.h"
 #include "htracer.h"
-#include "htracer_manager.h"
 #include "htracer_monotonic.h"
 #include "htracer_utils.h"
+#include "htracer_manager.h"
+#include "bio_tracepoint_helper.h"
+#include "htracer_service.h"
+
 
 namespace ock {
 namespace htracer {
 constexpr int DUMP_PERIOD = 90;
 constexpr size_t MAX_DUMP_SIZE = 10 * 1024 * 1024;
+bool HTracerService::mDumpEnable = true;
 
 int32_t HTracerService::StartUp(const std::string &dumpDir)
 {
@@ -54,7 +56,9 @@ void HTracerService::ShutDown()
         mIsRunning = false;
         mDumpCond.notify_all();
     }
-    mDumpThread.join();
+    if (mDumpThread.joinable()) {
+        mDumpThread.join();
+    }
 }
 
 void HTracerService::OverrideWrite(std::stringstream &ss)
@@ -106,8 +110,7 @@ void HTracerService::OverrideWrite(std::stringstream &ss)
 void HTracerService::WriteTraceInfo(std::stringstream &ss)
 {
     size_t filesize = 0;
-    struct stat statbuf {
-    };
+    struct stat statbuf {};
     int ret = stat(dumpFilePath.c_str(), &statbuf);
     if (ret != 0) {
         if (errno != ENOENT) {
@@ -183,7 +186,9 @@ void HTracerService::DumpTraceInfoPeriod()
     std::unique_lock<std::mutex> lock(mDumpLock);
     while (mIsRunning) {
         mDumpCond.wait_for(lock, std::chrono::seconds(DUMP_PERIOD));
-        DumpTraceInfos();
+        if (mDumpEnable) {
+            DumpTraceInfos();
+        }
     }
 }
 
@@ -267,5 +272,5 @@ void HTracerService::ClearTraceInfo()
         }
     }
 }
-} // namespace htracer
-} // namespace ock
+}
+}

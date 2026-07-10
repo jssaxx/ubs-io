@@ -10,15 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "rcache_manager.h"
-#include "bio_config_instance.h"
-#include "bio_def.h"
 #include "bio_log.h"
-#include "bio_monotonic.h"
-#include "bio_trace.h"
-#include "bio_tracepoint_helper.h"
 #include "cache_flow.h"
 #include "flow_manager.h"
+#include "bio_def.h"
+#include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
+#include "bio_monotonic.h"
+#include "bio_config_instance.h"
+#include "rcache_manager.h"
 
 using namespace ock::bio;
 
@@ -81,25 +81,30 @@ const RCachePtr RCacheManager::GetRCacheInstanceByPtId(uint16_t ptId)
     return cachePtr;
 }
 
-BResult RCacheManager::CheckEnoughResource(uint16_t ptId, bool &havaResource)
+bool RCacheManager::IsResourceEnough(uint16_t ptId)
 {
-    havaResource = false;
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
-    ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_INNER_RETRY, "Get read cache instance failed, ptId:" << ptId << ".");
-    auto config = BioConfig::Instance()->GetDaemonConfig();
-    if (config.diskCaps.size() < cachePtr->GetDiskId()) {
-        havaResource = false;
-        return BIO_INVALID_PARAM;
+    if (UNLIKELY(cachePtr == nullptr)) {
+        LOG_ERROR("Get read cache instance failed, ptId:" << ptId << ".");
+        return false;
     }
-    auto diskCap = static_cast<uint64_t>(config.diskCaps[cachePtr->GetDiskId()]);
+    auto config = BioConfig::Instance()->GetDaemonConfig();
     uint64_t rcacheMemCap = (static_cast<uint64_t>(config.memReadRatio) * config.memCap) / NO_10;
     uint64_t rcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
+    if (!config.hasDiskCache) {
+        return rcacheMemUsed < rcacheMemCap;
+    }
+
+    if (config.diskCaps.size() <= cachePtr->GetDiskId()) {
+        return false;
+    }
+    auto diskCap = static_cast<uint64_t>(config.diskCaps[cachePtr->GetDiskId()]);
     uint64_t rcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskReadRatio) / NO_10;
     uint64_t rcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_DISK, cachePtr->GetDiskId());
     if (rcacheMemUsed < rcacheMemCap && rcacheDiskUsed < rcacheDiskCap) {
-        havaResource = true;
+        return true;
     }
-    return BIO_OK;
+    return false;
 }
 
 BResult RCacheManager::AllocResources(uint16_t ptId, uint64_t len, WCacheSlicePtr &slice)
@@ -129,7 +134,7 @@ BResult RCacheManager::Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &
 };
 
 BResult RCacheManager::Get(uint16_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
-                           const SliceWriter &sliceWriter, uint64_t &realLen)
+    const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");

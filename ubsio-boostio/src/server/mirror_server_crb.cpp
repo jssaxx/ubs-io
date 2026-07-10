@@ -13,10 +13,10 @@
 #include "mirror_server_crb.h"
 
 #include <utility>
-#include "bio_def.h"
+#include "mirror_server.h"
 #include "bio_monotonic.h"
 #include "bio_trace.h"
-#include "mirror_server.h"
+#include "bio_def.h"
 
 namespace ock {
 namespace bio {
@@ -50,6 +50,7 @@ BResult MirrorServerCrb::Init()
     mJobService = ExecutorService::Create(CRB_JOB_THREAD_NUM, CRB_JOB_QUEUE_SIZE);
     if (UNLIKELY(mJobService == nullptr)) {
         LOG_ERROR("Failed to start executor service for crb job");
+        mTaskService->Stop();
         return BIO_ERR;
     }
 
@@ -109,7 +110,7 @@ void MirrorServerCrb::RunTaskThread(CmPtTaskPtr ptTask)
 void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
 {
     ptTask->jobNum = 0;
-
+    sem_init(&ptTask->jobSem, 0, 0);
     for (auto &elem : ptTask->ptList) {
         LOG_INFO("Job pre: ptId:" << elem.ptId << ", version:" << elem.version);
         auto ret = mJobService->Execute([this, ptTask, elem]() { RunJobThread(ptTask, elem); });
@@ -121,7 +122,6 @@ void MirrorServerCrb::RunTaskThreadImpl(CmPtTaskPtr ptTask)
         }
     }
 
-    sem_init(&ptTask->jobSem, 0, 0);
     if (ptTask->jobNum != ptTask->ptList.size()) {
         sem_wait(&ptTask->jobSem);
     }
@@ -158,6 +158,13 @@ void MirrorServerCrb::RunJobThread(CmPtTaskPtr ptTask, CmPtInfo ptInfo)
     LOG_INFO("Job begin: ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     if (!JobPreCheck(ptInfo)) {
+        ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
+        return;
+    }
+
+    if (ptInfo.copys.size() == NO_1) {
+        JobAddFinishList(ptTask, ptInfo);
+        UpdatePt(ptInfo);
         ptTask->JobFinish(ptInfo.ptId, ptInfo.version);
         return;
     }
@@ -226,8 +233,21 @@ void MirrorServerCrb::JobAddRetryList(CmPtTaskPtr ptTask, CmPtInfo &ptInfo)
 
 bool MirrorServerCrb::JobPreCheck(CmPtInfo &ptInfo)
 {
-    if (ptInfo.state == CM_PT_INIT || ptInfo.state == CM_PT_FAULT || ptInfo.state == CM_PT_BUTT) {
+    if (ptInfo.state == CM_PT_INIT || ptInfo.state == CM_PT_BUTT) {
         return false;
+    }
+
+    if (ptInfo.state == CM_PT_FAULT) {
+        bool hasRecoveryCopy = false;
+        for (const auto &copy : ptInfo.copys) {
+            if (copy.state == CM_COPY_RECOVERY) {
+                hasRecoveryCopy = true;
+                break;
+            }
+        }
+        if (!hasRecoveryCopy) {
+            return false;
+        }
     }
 
     CmPtInfo cache;
@@ -311,13 +331,13 @@ BResult MirrorServerCrb::JobSyncData(CmPtInfo &ptInfo)
         LOG_WARN("Send sync data req fail:" << ret << ", ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
         return ret;
     }
-    LOG_INFO("Sync data succeed, ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+    LOG_INFO("Sync data succeed:" << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     ret = JobExpiredClear(ptInfo);
     if (UNLIKELY(ret != BIO_OK)) {
         return ret;
     }
-    LOG_INFO("Expired clear succeed, ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
+    LOG_INFO("Expired clear succeed:" << "ptId:" << ptInfo.ptId << ", version:" << ptInfo.version);
 
     return BIO_OK;
 }
@@ -336,8 +356,8 @@ BResult MirrorServerCrb::SendSyncDataReq(CmPtInfo &ptInfo)
             ret = BIO_INNER_RETRY;
         }
         if (UNLIKELY(ret != BIO_OK && ret != BIO_INNER_RETRY)) {
-            LOG_ERROR("Send sync sync data failed:" << ret << ", ptId:" << ptInfo.ptId
-                                                    << ", version:" << ptInfo.version);
+            LOG_ERROR("Send sync sync data failed:" << ret << ", ptId:" << ptInfo.ptId << ", version:" <<
+                ptInfo.version);
             return ret;
         }
         if (ret == BIO_INNER_RETRY) {
@@ -352,5 +372,5 @@ BResult MirrorServerCrb::SendSyncDataReq(CmPtInfo &ptInfo)
 
     return ret;
 }
-} // namespace bio
-} // namespace ock
+}
+}

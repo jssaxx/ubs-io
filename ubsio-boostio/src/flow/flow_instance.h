@@ -13,8 +13,8 @@
 #ifndef BOOSTIO_BIO_FLOW_INSTANCE_H
 #define BOOSTIO_BIO_FLOW_INSTANCE_H
 
-#include <atomic>
 #include <memory>
+#include <atomic>
 
 #include "bio_ref.h"
 
@@ -25,12 +25,7 @@ using FlowInstancePtr = Ref<FlowInstance>;
 class FlowInstance {
 public:
     FlowInstance(const uint64_t flowId, uint64_t version = 0, bool isDegrade = false)
-        : mFlowId(flowId),
-          mVersion(version),
-          mIsDegrade(isDegrade),
-          mIsNormal(true)
-    {
-    }
+        : mFlowId(flowId), mVersion(version), mIsDegrade(isDegrade), mIsNormal(true) {}
     FlowInstance() : mIsNormal(false) {}
     ~FlowInstance() = default;
 
@@ -54,12 +49,14 @@ public:
         return mIsNormal.load();
     }
 
-    inline void Update(uint64_t flowId, uint64_t version, bool isDegrade)
+    inline void Update(uint64_t flowId, uint64_t version, bool isDegrade, uint64_t index, uint64_t offset)
     {
         mFlowId = flowId;
         mVersion = version;
         mIsDegrade = isDegrade;
         mIsNormal = true;
+        mIndex = index;
+        mOffset = offset;
     }
 
     inline uint64_t AllocOffset(uint64_t len, uint64_t &offset)
@@ -94,16 +91,16 @@ public:
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    uint64_t mFlowId{0};
-    uint64_t mVersion{0};
-    bool mIsDegrade{false};
+    uint64_t mFlowId{ 0 };
+    uint64_t mVersion{ 0 };
+    bool mIsDegrade{ false };
     std::atomic<bool> mIsNormal;
-    uint64_t mIndex{0};
-    uint64_t mOffset{0};
+    uint64_t mIndex{ 0 };
+    uint64_t mOffset{ 0 };
     SpinLock lock;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-} // namespace bio
-} // namespace ock
+}
+}
 #endif

@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "interceptor_context.h"
 #include "proxy_operations.h"
+#include "interceptor_context.h"
 
 using namespace ock::bio;
 

@@ -13,11 +13,11 @@
 #ifndef HTRACE_SERVICE_H
 #define HTRACE_SERVICE_H
 
-#include <condition_variable>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <thread>
+#include <condition_variable>
+#include <mutex>
 #include "htracer.h"
 
 namespace ock {
@@ -32,40 +32,38 @@ public:
 
     int32_t StartUp(const std::string &dumpDir);
     void ShutDown();
+    static bool mDumpEnable;
 
-public:
     HTracerService(const HTracerService &) = delete;
-    HTracerService &operator=(const HTracerService &) = delete;
+    HTracerService &operator = (const HTracerService &) = delete;
     HTracerService(HTracerService &&) = delete;
-    HTracerService &operator=(HTracerService &&) = delete;
+    HTracerService &operator = (HTracerService &&) = delete;
 
-public:
     std::string GetTraceInfo();
     void ClearTraceInfo();
+    void OverrideWrite(std::stringstream &ss);
 
 private:
     void GenerateTraceStream(std::stringstream &ss, bool needTotal = false);
     void DumpTraceInfos();
     void DumpTraceInfoPeriod();
     void WriteTraceInfo(std::stringstream &ss);
-    void OverrideWrite(std::stringstream &ss);
     int PrepareDumpFile(const std::string &dumpDir);
     void CreateHeadLine();
     void StartDump();
 
-private:
     HTracerService() = default;
     ~HTracerService() = default;
 
 private:
-    off_t writePos{0};
+    off_t writePos{ 0 };
     std::string dumpFilePath;
     std::string headline;
     std::thread mDumpThread;
     std::condition_variable mDumpCond;
     std::mutex mDumpLock;
-    bool mIsRunning{false};
+    bool mIsRunning{ false };
 };
-} // namespace htracer
-} // namespace ock
+}
+}
 #endif // HTRACE_SERVICE_H

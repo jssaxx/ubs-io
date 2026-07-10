@@ -36,7 +36,7 @@ lcov --capture --initial \
 echo "=== 4. Running Tests ==="
 cd ${BUILD_DIR}
 \cp -r ${PROJECT_ROOT}/dist/boostio/lib/* ${BUILD_DIR}/
-export LD_LIBRARY_PATH=${BUILD_DIR}:${PROJECT_ROOT}/dist/3rdparty/libboundscheck/lib:${PROJECT_ROOT}/dist/3rdparty/ubs-comm/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${BUILD_DIR}:$LD_LIBRARY_PATH
 ./bio_test --gtest_output="xml:${REPORT_DIR}/report.xml"
 
 echo "=== 5. Capturing Test Data (Execution State) ==="
@@ -66,13 +66,18 @@ lcov --remove ${TOTAL_INFO} \
      "*/3rdparty/*" \
      "*/googletest/*" \
      "*/Build/*" \
-     "*/interceptor/client/*" \
+     "*/interceptor/*" \
      "*/io_interceptor/*" \
      "*/security/openssl_tools/*" \
      "*/disk/common/ngx_rbtree.c" \
      "*/cluster/*" \
      "*/security/expiration_check/expire_checker.cpp" \
      "*/dist/*" \
+     "*/net/*" \
+     "*/sdk/*" \
+     "*/server/*" \
+     "*/underfs/*" \
+     "*/cache/write/*" \
      "*/cmake-build-*" \
      --output-file ${FINAL_INFO} \
      ${LCOV_RC_OPTS} \

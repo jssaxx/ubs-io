@@ -10,16 +10,22 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "sdk_diagnose.h"
-#include <semaphore.h>
-#include <sys/resource.h>
+#include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
-#include <regex>
+#include <memory>
+#include <sys/resource.h>
+#include <semaphore.h>
+#include <vector>
+#include "htracer.h"
 #include "bio_client.h"
 #include "bio_lock.h"
-#include "htracer.h"
+#include "bio_crc_util.h"
+#include "sdk_diagnose.h"
+#include "securec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,7 +43,22 @@ int SdkDiagnoseInit()
 using namespace ock::bio;
 typedef void *(*perfTestRunner)(void *param);
 uint64_t gTenantId = UINT64_MAX;
-std::regex pattern("[0-9]+");
+
+namespace {
+bool IsUnsignedInteger(const std::string &value)
+{
+    if (value.empty()) {
+        return false;
+    }
+    for (char ch : value) {
+        if (ch < '0' || ch > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+}
+
 struct PerfTestParam {
     bool done;
     uint32_t tid;
@@ -48,25 +69,33 @@ struct PerfTestParam {
 };
 static std::unordered_map<std::string, ObjLocation> gLocation;
 static ReadWriteLock gLocationLock;
+static std::atomic<uint64_t> gBatchGetRunId{ 0 };
+
+static void FillBatchGetValue(char *value, uint32_t length, uint64_t runId, uint32_t index)
+{
+    for (uint32_t offset = 0; offset < length; ++offset) {
+        value[offset] = static_cast<char>((runId + index + offset) & 0xff);
+    }
+}
 
 bool ock::bio::diagnose::BioSdkCommand::mInited = false;
-void *ock::bio::diagnose::BioSdkCommand::mHandler = nullptr;
+void* ock::bio::diagnose::BioSdkCommand::mHandler = nullptr;
 CliRegCmdFuncPtr ock::bio::diagnose::BioSdkCommand::mRegOp = nullptr;
 CliUnRegCmdFuncPtr ock::bio::diagnose::BioSdkCommand::mUnRegOp = nullptr;
 CliPrintBufFuncPtr ock::bio::diagnose::BioSdkCommand::mPrintOp = nullptr;
 
 int32_t diagnose::BioSdkCommand::LoadSymbols()
 {
-    const char *soFileName = "libcli_agent.so";
+    const char* soFileName = "libcli_agent.so";
     mHandler = dlopen(soFileName, RTLD_NOW);
     if (mHandler == nullptr) {
         CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
         return BIO_INNER_ERR;
     }
 
-    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "CLI_RegCmd"));
-    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "CLI_UnRegCmd"));
-    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "CLI_PrintBuf"));
+    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "cli_register_command"));
+    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "cli_unregister_command"));
+    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "cli_print_buffer"));
     if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
         CLIENT_LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
@@ -88,11 +117,11 @@ int diagnose::BioSdkCommand::Initialize() noexcept
         return ret;
     }
 
-    CLI_CMD_S command;
-    strncpy(command.szCommand, "sdk", CLI_MAX_COMMAND_LEN);
-    strncpy(command.szDescription, "sdk commands.", CLI_MAX_CMD_DESC_LEN);
-    command.fnCmdDo = BioSdkDebugProcess;
-    command.fnPrintCmdHelp = BioSdkDebugHelp;
+    CliCommand command;
+    strncpy(command.command, "sdk", CLI_MAX_COMMAND_LEN);
+    strncpy(command.description, "sdk commands.", CLI_MAX_CMD_DESC_LEN);
+    command.handler = BioSdkDebugProcess;
+    command.help_handler = BioSdkDebugHelp;
     auto result = mRegOp(&command);
     if (result == 0) {
         mInited = true;
@@ -132,7 +161,7 @@ void diagnose::BioSdkCommand::HandleListCache()
 void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
 {
     for (int i = 1; i <= 3; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -148,7 +177,8 @@ void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
         mPrintOp("Invalid input.\n");
         return;
     }
-    CacheDescriptor desc = {tenantId, static_cast<AffinityStrategy>(affinity), static_cast<WriteStrategy>(strategy)};
+    CacheDescriptor desc = { tenantId, static_cast<AffinityStrategy>(affinity),
+                             static_cast<WriteStrategy>(strategy)};
     auto ret = BioCreateCache(desc);
     if (ret != RET_CACHE_OK) {
         mPrintOp("Create cache failed, result:%d.\n", ret);
@@ -160,7 +190,7 @@ void diagnose::BioSdkCommand::HandleCreate(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleOpen(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], pattern)) {
+    if (!IsUnsignedInteger(cmds[1])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -183,7 +213,7 @@ void diagnose::BioSdkCommand::HandleOpen(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleDestroy(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], pattern)) {
+    if (!IsUnsignedInteger(cmds[1])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -205,7 +235,7 @@ void diagnose::BioSdkCommand::HandleDestroy(const std::vector<std::string> &cmds
 void diagnose::BioSdkCommand::HandlePut(const std::vector<std::string> &cmds)
 {
     for (int i = 3; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -256,7 +286,7 @@ void diagnose::BioSdkCommand::HandlePut(const std::vector<std::string> &cmds)
 void diagnose::BioSdkCommand::HandleGet(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -282,14 +312,14 @@ void diagnose::BioSdkCommand::HandleGet(const std::vector<std::string> &cmds)
         return;
     }
     char *value = new char[length];
-    ObjLocation locationInfo{location, 0};
+    ObjLocation locationInfo{ location, 0 };
     uint64_t realLen = length;
     auto ret = BioGet(gTenantId, key, offset, length, locationInfo, value, &realLen);
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to get a value, result:%d.\n", ret);
     } else {
-        mPrintOp("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu, location:%llu.\n", key, offset,
-                 length, realLen, locationInfo.location[0]);
+        mPrintOp("Get value success, key:%s, offset:%llu, length:%llu, realLen:%llu, location:%llu.\n",
+            key, offset, length, realLen, locationInfo.location[0]);
         if (fwrite(value, sizeof(char), realLen, fp) != realLen) {
             mPrintOp("fwrite value to file failed, errno:%d.\n", errno);
         }
@@ -310,7 +340,8 @@ void diagnose::BioSdkCommand::HandleList(const std::vector<std::string> &cmds)
     } else {
         mPrintOp("List all success, obj num: %lu.\n", objNum);
         for (uint32_t idx = 0; idx < objNum; idx++) {
-            mPrintOp("Object#%u: key:%s, size:%u, time:%s", idx, objs[idx].key, objs[idx].size, ctime(&objs[idx].time));
+            mPrintOp("Object#%u: key:%s, size:%u, time:%s",
+                         idx, objs[idx].key, objs[idx].size, ctime(&objs[idx].time));
         }
         BioFreeListResources(&objs, objNum);
     }
@@ -319,7 +350,7 @@ void diagnose::BioSdkCommand::HandleList(const std::vector<std::string> &cmds)
 void diagnose::BioSdkCommand::HandleNotifyUpdatePrepare(const std::vector<std::string> &cmds)
 {
     uint32_t tenantId = 0;
-    try {
+        try {
         tenantId = std::stoul(cmds[1]);
     } catch (std::exception e) {
         mPrintOp("Invalid input.\n");
@@ -336,7 +367,7 @@ void diagnose::BioSdkCommand::HandleNotifyUpdatePrepare(const std::vector<std::s
 void diagnose::BioSdkCommand::HandleNotifyUpdateFinish(const std::vector<std::string> &cmds)
 {
     uint32_t tenantId = 0;
-    try {
+        try {
         tenantId = std::stoul(cmds[1]);
     } catch (std::exception e) {
         mPrintOp("Invalid input.\n");
@@ -363,33 +394,60 @@ void diagnose::BioSdkCommand::HandleCheckUpdateReady(const std::vector<std::stri
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to check update, result:%d.\n", ret);
     } else {
-        mPrintOp("Check update ready success, result:%d.\n");
+        mPrintOp("Check update ready success, result:%d.\n", ret);
     }
 }
 
 void diagnose::BioSdkCommand::HandleStat(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[2], pattern)) {
+    if (!IsUnsignedInteger(cmds[NO_2])) {
         mPrintOp("Invalid input.\n");
         return;
     }
     uint64_t location = 0;
     auto key = cmds[1].c_str();
     try {
-        location = std::stoull(cmds[2]);
+        location = std::stoull(cmds[NO_2]);
     } catch (std::exception e) {
         mPrintOp("Invalid input.\n");
         return;
     }
-    ObjLocation locationInfo{location, 0};
+    ObjLocation locationInfo{ location, 0 };
     ObjStat keyStat;
     auto ret = BioStat(gTenantId, key, locationInfo, &keyStat);
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to get key stat, result:%d.\n", ret);
     } else {
         mPrintOp("Get key stat success.\n");
-        mPrintOp("key:%s, location:%lu, size:%u, time:%s\n", key, locationInfo.location[0], keyStat.size,
-                 ctime(&keyStat.time));
+        mPrintOp("key:%s, location:%lu, size:%u, time:%s\n", key, locationInfo.location[0],
+                     keyStat.size, ctime(&keyStat.time));
+    }
+}
+
+void diagnose::BioSdkCommand::HandleExist(const std::vector<std::string> &cmds)
+{
+    if (!IsUnsignedInteger(cmds[NO_2])) {
+        mPrintOp("Invalid input.\n");
+        return;
+    }
+    uint64_t location = 0;
+    auto key = cmds[1].c_str();
+    try {
+        location = std::stoull(cmds[NO_2]);
+    } catch (std::exception e) {
+        mPrintOp("Invalid input.\n");
+        return;
+    }
+    const char *keys[1] = { key };
+    ObjLocation locationInfo{ location, 0 };
+    ObjLocation locations[1] = { locationInfo };
+    bool existFlags[1] = { false };
+    auto ret = BioBatchExist(gTenantId, keys, locations, 1, existFlags);
+    if (ret != RET_CACHE_OK) {
+        mPrintOp("Failed to exist key, result:%d.\n", ret);
+    } else {
+        mPrintOp("Exist key success, key:%s, location:%lu, exist:%s.\n", key, locations[0].location[0],
+            existFlags[0] ? "true" : "false");
     }
 }
 
@@ -400,7 +458,7 @@ typedef struct {
 
 static void TestCallback(void *context, int32_t result)
 {
-    LoadContext *loadCtx = reinterpret_cast<LoadContext *>(context);
+    LoadContext* loadCtx = reinterpret_cast<LoadContext*>(context);
     loadCtx->result = static_cast<CResult>(result);
     sem_post(&(loadCtx->sem));
 }
@@ -408,7 +466,7 @@ static void TestCallback(void *context, int32_t result)
 void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -426,7 +484,7 @@ void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
         return;
     }
 
-    ObjLocation locationInfo{location, 0};
+    ObjLocation locationInfo{ location, 0 };
     LoadContext loadCtx;
     sem_init(&(loadCtx.sem), 0, 0);
     loadCtx.result = RET_CACHE_OK;
@@ -447,7 +505,7 @@ void diagnose::BioSdkCommand::HandleLoad(const std::vector<std::string> &cmds)
 
 void diagnose::BioSdkCommand::HandleDelete(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[2], pattern)) {
+    if (!IsUnsignedInteger(cmds[2])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -459,7 +517,7 @@ void diagnose::BioSdkCommand::HandleDelete(const std::vector<std::string> &cmds)
         mPrintOp("Invalid input.\n");
         return;
     }
-    ObjLocation locationInfo{location, 0};
+    ObjLocation locationInfo{ location, 0 };
     auto ret = BioDelete(gTenantId, key, locationInfo);
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to delete, key%s, result:%d.\n", key, ret);
@@ -475,7 +533,7 @@ void diagnose::BioSdkCommand::HandleAddDisk(const std::vector<std::string> &cmds
     if (ret != RET_CACHE_OK) {
         mPrintOp("Failed to add a disk, result:%d.\n", ret);
     } else {
-        mPrintOp("Add disk success, diskPath:%s, tenantId:%u\n", diskPath);
+        mPrintOp("Add disk success, diskPath:%s, tenantId:%llu\n", diskPath, gTenantId);
     }
 }
 
@@ -548,20 +606,20 @@ void diagnose::BioSdkCommand::HandleShowCacheHit(const std::vector<std::string> 
         return;
     }
 
-    double rCacheHitMemRatio =
-        desc.wCacheTotalCount != 0 ? (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
-    double rCacheHitDiskRatio =
-        desc.wCacheTotalCount != 0 ? (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
-    double rCacheHitRatio = desc.wCacheTotalCount != 0 ? (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount :
-                                                         0;
-    double wCacheHitMemRatio =
-        desc.wCacheHitMemCount != 0 ? (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
-    double wCacheHitDiskRatio =
-        desc.wCacheHitDiskCount != 0 ? (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
-    double wCacheHitRatio = desc.wCacheTotalCount != 0 ? (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount :
-                                                         0;
-    double backendHitRatio = desc.wCacheTotalCount != 0 ? (double)desc.backendHitCount / (double)desc.wCacheTotalCount :
-                                                          0;
+    double rCacheHitMemRatio = desc.wCacheTotalCount != 0 ?
+                               (double)desc.rCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitDiskRatio = desc.wCacheTotalCount != 0 ?
+                               (double)desc.rCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
+    double rCacheHitRatio = desc.wCacheTotalCount != 0 ?
+                            (double)desc.rCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitMemRatio = desc.wCacheHitMemCount != 0 ?
+                               (double)desc.wCacheHitMemCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitDiskRatio = desc.wCacheHitDiskCount != 0 ?
+                               (double)desc.wCacheHitDiskCount / (double)desc.wCacheTotalCount : 0;
+    double wCacheHitRatio = desc.wCacheTotalCount != 0 ?
+                            (double)desc.wCacheHitCount / (double)desc.wCacheTotalCount : 0;
+    double backendHitRatio = desc.wCacheTotalCount != 0 ?
+                          (double)desc.backendHitCount / (double)desc.wCacheTotalCount : 0;
     double totalCacheHitRatio = rCacheHitRatio + wCacheHitRatio;
     mPrintOp("--------------------------------\n");
     mPrintOp("all node totalCacheHitRatio :%.2f%%.\n", totalCacheHitRatio * 100);
@@ -575,27 +633,20 @@ void diagnose::BioSdkCommand::HandleShowCacheHit(const std::vector<std::string> 
     mPrintOp("----------------------------------\n");
     for (int i = 0; i < nodeNum; i++) {
         uint16_t nodeId = nodeDesc[i].nodeId;
-        double nodeRCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitMemCount /
-                                                                               (double)nodeDesc[i].wCacheTotalCount :
-                                                                           0;
-        double nodeRCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].rCacheHitDiskCount /
-                                                                                (double)nodeDesc[i].wCacheTotalCount :
-                                                                            0;
+        double nodeRCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                   (double)nodeDesc[i].rCacheHitMemCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeRCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                       (double)nodeDesc[i].rCacheHitDiskCount / (double)nodeDesc[i].wCacheTotalCount : 0;
         double nodeRCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
-                                        (double)nodeDesc[i].rCacheHitCount / (double)nodeDesc[i].wCacheTotalCount :
-                                        0;
-        double nodeWCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitMemCount /
-                                                                               (double)nodeDesc[i].wCacheTotalCount :
-                                                                           0;
-        double nodeWCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ? (double)nodeDesc[i].wCacheHitDiskCount /
-                                                                                (double)nodeDesc[i].wCacheTotalCount :
-                                                                            0;
+                                    (double)nodeDesc[i].rCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitMemRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                       (double)nodeDesc[i].wCacheHitMemCount / (double)nodeDesc[i].wCacheTotalCount : 0;
+        double nodeWCacheHitDiskRatio = nodeDesc[i].wCacheTotalCount != 0 ?
+                                        (double)nodeDesc[i].wCacheHitDiskCount / (double)nodeDesc[i].wCacheTotalCount : 0;
         double nodeWCacheHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
-                                        (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount :
-                                        0;
+                                    (double)nodeDesc[i].wCacheHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
         double nodeBackendHitRatio = nodeDesc[i].wCacheTotalCount != 0 ?
-                                         (double)nodeDesc[i].backendHitCount / (double)nodeDesc[i].wCacheTotalCount :
-                                         0;
+                                    (double)nodeDesc[i].backendHitCount / (double)nodeDesc[i].wCacheTotalCount : 0;
         double nodeTotalCacheHitRatio = nodeRCacheHitRatio + nodeWCacheHitRatio;
         mPrintOp("node: %d totalHitCacheRatio :%.2f%%.\n", nodeId, nodeTotalCacheHitRatio * 100);
         mPrintOp("node: %d rCacheHitMemRatio :%.2f%%.\n", nodeId, nodeRCacheHitMemRatio * 100);
@@ -623,12 +674,13 @@ void diagnose::BioSdkCommand::HandleShowCacheResource(const std::vector<std::str
     mPrintOp("--------------------------------\n");
     for (int i = 0; i < nodeNum; i++) {
         uint16_t nodeId = nodeDesc[i].nodeId;
-        if (nodeDesc[i].rCacheMemCapacity == 0 || nodeDesc[i].rCacheDiskCapacity == 0 ||
-            nodeDesc[i].wCacheMemCapacity == 0 || nodeDesc[i].wCacheDiskCapacity == 0) {
+        if (nodeDesc[i].rCacheMemCapacity == 0 || nodeDesc[i].rCacheDiskCapacity == 0
+            || nodeDesc[i].wCacheMemCapacity == 0 || nodeDesc[i].wCacheDiskCapacity == 0) {
             mPrintOp("node Capacity is zero, nodeId:%d  rCacheMemCapacity(MB):%llu  rCacheDiskCapacity(MB):%llu \n",
-                     nodeId, nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheDiskCapacity / NO_1048576);
+                         nodeId, nodeDesc[i].rCacheMemCapacity / NO_1048576,
+                         nodeDesc[i].rCacheDiskCapacity / NO_1048576);
             mPrintOp("wCacheMemCapacity(MB):%llu  wCacheDiskCapacity(MB):%llu \n",
-                     nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
+                         nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
             continue;
         }
         mPrintOp("node: %d cache resources information(MB): \n", nodeId);
@@ -636,18 +688,18 @@ void diagnose::BioSdkCommand::HandleShowCacheResource(const std::vector<std::str
         double rCacheMemWaterLever = (double)nodeDesc[i].rCacheMemUsedSize / (double)nodeDesc[i].rCacheMemCapacity;
         double wCacheDiskWaterLever = (double)nodeDesc[i].wCacheDiskUsedSize / (double)nodeDesc[i].wCacheDiskCapacity;
         double rCacheDiskWaterLever = (double)nodeDesc[i].rCacheDiskUsedSize / (double)nodeDesc[i].rCacheDiskCapacity;
-        mPrintOp("wCacheMemCapacity %llu   wCacheDiskCapacity %llu \n", nodeDesc[i].wCacheMemCapacity / NO_1048576,
-                 nodeDesc[i].wCacheDiskCapacity / NO_1048576);
-        mPrintOp("rCacheMemCapacity %llu   rCacheDiskCapacity %llu \n", nodeDesc[i].rCacheMemCapacity / NO_1048576,
-                 nodeDesc[i].rCacheDiskCapacity / NO_1048576);
-        mPrintOp("wCacheMemUsedSize %llu   wCacheDiskUsedSize %llu \n", nodeDesc[i].wCacheMemUsedSize / NO_1048576,
-                 nodeDesc[i].wCacheDiskUsedSize / NO_1048576);
-        mPrintOp("wCacheMemWaterLever %.4f%%   wCacheDiskWaterLever %.4f%% \n", wCacheMemWaterLever * 100,
-                 wCacheDiskWaterLever * 100);
-        mPrintOp("rCacheMemUsedSize %llu   rCacheDiskUsedSize %llu \n", nodeDesc[i].rCacheMemUsedSize / NO_1048576,
-                 nodeDesc[i].rCacheDiskUsedSize / NO_1048576);
-        mPrintOp("rCacheMemWaterLever %.4f%%   rCacheDiskWaterLever %.4f%% \n", rCacheMemWaterLever * 100,
-                 rCacheDiskWaterLever * 100);
+        mPrintOp("wCacheMemCapacity %llu   wCacheDiskCapacity %llu \n",
+                     nodeDesc[i].wCacheMemCapacity / NO_1048576, nodeDesc[i].wCacheDiskCapacity / NO_1048576);
+        mPrintOp("rCacheMemCapacity %llu   rCacheDiskCapacity %llu \n",
+                     nodeDesc[i].rCacheMemCapacity / NO_1048576, nodeDesc[i].rCacheDiskCapacity / NO_1048576);
+        mPrintOp("wCacheMemUsedSize %llu   wCacheDiskUsedSize %llu \n",
+                     nodeDesc[i].wCacheMemUsedSize / NO_1048576, nodeDesc[i].wCacheDiskUsedSize / NO_1048576);
+        mPrintOp("wCacheMemWaterLever %.4f%%   wCacheDiskWaterLever %.4f%% \n",
+                     wCacheMemWaterLever * 100, wCacheDiskWaterLever * 100);
+        mPrintOp("rCacheMemUsedSize %llu   rCacheDiskUsedSize %llu \n",
+                     nodeDesc[i].rCacheMemUsedSize / NO_1048576, nodeDesc[i].rCacheDiskUsedSize / NO_1048576);
+        mPrintOp("rCacheMemWaterLever %.4f%%   rCacheDiskWaterLever %.4f%% \n",
+                     rCacheMemWaterLever * 100, rCacheDiskWaterLever * 100);
         mPrintOp("--------------------------------\n");
     }
     BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
@@ -659,7 +711,7 @@ void diagnose::BioSdkCommand::HandleSdkTrace(const std::vector<std::string> &cmd
     std::string viewType(cType);
     if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
-        mPrintOp(info.c_str());
+        mPrintOp("%s", info.c_str());
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         mPrintOp("clearing statistics sdk records succeeded.\n");
@@ -672,7 +724,7 @@ void diagnose::BioSdkCommand::HandleSdkTrace(const std::vector<std::string> &cmd
     }
 }
 
-void *diagnose::BioSdkCommand::PerfTestPutImpl(void *param)
+void* diagnose::BioSdkCommand::PerfTestPutImpl(void *param)
 {
     auto *getParam = (PerfTestParam *)param;
     static std::atomic<uint32_t> sliceId(0);
@@ -710,7 +762,7 @@ void *diagnose::BioSdkCommand::PerfTestPutImpl(void *param)
     return nullptr;
 }
 
-void *diagnose::BioSdkCommand::PerfTestGetImpl(void *param)
+void* diagnose::BioSdkCommand::PerfTestGetImpl(void *param)
 {
     auto *getParam = (PerfTestParam *)param;
     char *value = new char[getParam->length];
@@ -739,10 +791,109 @@ void *diagnose::BioSdkCommand::PerfTestGetImpl(void *param)
     return nullptr;
 }
 
+void diagnose::BioSdkCommand::HandleBatchGet(const std::vector<std::string> &cmds)
+{
+    uint32_t bs = (std::stoul(cmds[1]) * 1024);
+    uint32_t batchNum = std::stoul(cmds[2]);
+    uint64_t runId = gBatchGetRunId.fetch_add(1, std::memory_order_relaxed);
+    char key[MAX_KEY_SIZE];
+    std::vector<std::string> prepareKeys;
+    std::vector<ObjLocation> prepareLocations;
+    std::vector<std::unique_ptr<char[]>> values;
+    prepareKeys.reserve(batchNum);
+    prepareLocations.reserve(batchNum);
+    values.reserve(batchNum);
+    uint32_t keyIndex = 0;
+    for (uint32_t idx = 0; idx < batchNum; idx++) {
+        int retKey = snprintf_s(key, sizeof(key), sizeof(key) - 1, "file_%u_%llu_%u", getpid(),
+            static_cast<unsigned long long>(runId), keyIndex);
+        if (retKey <= 0 || static_cast<size_t>(retKey) >= sizeof(key)) {
+            mPrintOp("Generate key failed, index:%u.\n", keyIndex);
+            return;
+        }
+
+        ObjLocation location{};
+        auto ret = BioCalcLocation(gTenantId, static_cast<uint64_t>(std::hash<std::string>{}(key)), &location);
+        if (ret != RET_CACHE_OK) {
+            mPrintOp("Calculate location failed, result:%d.\n", ret);
+            return;
+        }
+        std::unique_ptr<char[]> value(new (std::nothrow) char[bs]);
+        if (value == nullptr) {
+            mPrintOp("Malloc fail.");
+            return;
+        }
+        FillBatchGetValue(value.get(), bs, runId, idx);
+        ret = BioPut(gTenantId, key, value.get(), bs, location);
+        if (ret != RET_CACHE_OK) {
+            mPrintOp("Put key(%s) fail, result:%d\n", key, ret);
+            return;
+        }
+        keyIndex++;
+        prepareKeys.emplace_back(key);
+        prepareLocations.emplace_back(location);
+        values.emplace_back(std::move(value));
+    }
+
+    std::vector<const char *> keys(batchNum, nullptr);
+    std::vector<uint64_t> offsets(batchNum, 0);
+    std::vector<uint64_t> lengths(batchNum, bs);
+    std::vector<ObjLocation> locations(batchNum);
+    std::vector<uintptr_t> valueAddrs(batchNum, 0);
+    std::vector<uint64_t> realLengths(batchNum, 0);
+    std::vector<int32_t> results(batchNum, 0);
+    std::unique_ptr<bool[]> existFlags(new (std::nothrow) bool[batchNum]());
+    if (existFlags == nullptr) {
+        mPrintOp("Malloc fail.");
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        keys[i] = prepareKeys[i].c_str();
+        locations[i] = prepareLocations[i];
+    }
+
+    auto result = BioBatchExist(gTenantId, keys.data(), locations.data(), batchNum, existFlags.get());
+    if (result != 0) {
+        mPrintOp("Bio batch exist fail, ret:%d.\n", result);
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        if (!existFlags.get()[i]) {
+            mPrintOp("Bio batch exit, key:%s is not exist.\n", keys[i]);
+            return;
+        }
+    }
+
+    result = BioBatchGet(gTenantId, keys.data(), batchNum, offsets.data(), lengths.data(), locations.data(),
+                         valueAddrs.data(), realLengths.data(), results.data());
+
+    if (result != 0) {
+        mPrintOp("Bio batch get fail, ret:%d.\n", result);
+        return;
+    }
+    for (uint32_t i = 0; i < batchNum; i++) {
+        if (results[i] != 0) {
+            mPrintOp("Bio batch get fail, key:%s, ret:%d.\n", keys[i], results[i]);
+            (void)BioBatchGetFree(gTenantId, valueAddrs.data(), batchNum);
+            return;
+        }
+        if (BioCrcUtil::Crc32(reinterpret_cast<void*>(values[i].get()), bs) !=
+            BioCrcUtil::Crc32(reinterpret_cast<void*>(valueAddrs[i]), bs)) {
+            mPrintOp("Bio batch get fail, key:%s, crc check fail.\n", keys[i]);
+            (void)BioBatchGetFree(gTenantId, valueAddrs.data(), batchNum);
+            return;
+        }
+    }
+    if (BioBatchGetFree(gTenantId, valueAddrs.data(), batchNum) != 0) {
+        mPrintOp("Bio batch get free shm fail.\n");
+    }
+    mPrintOp("Bio batch get success!\n");
+}
+
 void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], pattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("invalid input.\n");
             return;
         }
@@ -828,7 +979,7 @@ void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
     float cost_sec = stopT.tv_sec - startT.tv_sec;
     float cost_usec = stopT.tv_usec - startT.tv_usec;
     float time_use = cost_sec * 1000000U + cost_usec;
-    auto totalCount = static_cast<double>(count * ioDepth);
+    auto totalCount = static_cast<double>(count * ioDepth) ;
     auto totalSize = static_cast<double>(count * bs);
     double dataPerf = static_cast<double>(((totalSize / 1048576U) * 1000000U / time_use) * ioDepth);
     double iops = static_cast<double>(totalCount * 1000000U) / time_use;
@@ -836,8 +987,7 @@ void diagnose::BioSdkCommand::HandlePerf(const std::vector<std::string> &cmds)
 
     time_t rawtime;
     struct tm *timeinfo = nullptr;
-    struct tm timebuf {
-    };
+    struct tm timebuf{};
     rawtime = time(nullptr);
     timeinfo = localtime_r(&rawtime, &timebuf);
     mPrintOp("Perf Test Result: @ %s\n", asctime(timeinfo));
@@ -864,6 +1014,7 @@ void diagnose::BioSdkCommand::BioSdkDebugHelp(char *command, int detail) noexcep
     mPrintOp("\tput value: sdk put [key] [filePath] [length] [sliceId]\n");
     mPrintOp("\tget value: sdk get [key] [offset] [length] [location] [filePath]\n");
     mPrintOp("\tstate object: sdk stat [key] [location]\n");
+    mPrintOp("\texist object: sdk exist [key] [location]\n");
     mPrintOp("\tlist all object: sdk listall [prefix]\n");
     mPrintOp("\tload object: sdk load [key] [offset] [length] [location]\n");
     mPrintOp("\tdelete object: sdk delete [key] [location]\n");
@@ -873,6 +1024,7 @@ void diagnose::BioSdkCommand::BioSdkDebugHelp(char *command, int detail) noexcep
     mPrintOp("\tAdd disk: sdk adddisk [diskPath]\n");
     mPrintOp("\tCache resource: sdk cacheresource\n");
     mPrintOp("\tperf test: sdk perf [rw] [bs(Kb)] [ioDepth] [size(Mb)]\n");
+    mPrintOp("\tperf test: sdk batchget [bs(Kb)] [batchNUM]\n");
     mPrintOp("\tupdate prepare: sdk notifyupdate [tenantId]\n");
     mPrintOp("\tupdate check: sdk checkupdate [tenantId]\n");
     mPrintOp("\tupdate finish: sdk finishupdate [tenantId]\n");
@@ -895,7 +1047,7 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
     std::string cmdType = cmds[0];
     if (cmdType == "list") {
         HandleListCache();
-    } else if (cmdType == "create") {
+    }  else if (cmdType == "create") {
         if (cmds.size() != 4) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
             return;
@@ -943,7 +1095,17 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
             return;
         }
         HandleStat(cmds);
-    } else if (cmdType == "listall") {
+    } else if (cmdType == "exist") {
+        if (gTenantId == UINT64_MAX) {
+            mPrintOp("Create and open a cache first!\n");
+            return;
+        }
+        if (cmds.size() != 3) {
+            mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        HandleExist(cmds);
+    }  else if (cmdType == "listall") {
         if (gTenantId == UINT64_MAX) {
             mPrintOp("Create and open a cache first!\n");
             return;
@@ -997,6 +1159,12 @@ void diagnose::BioSdkCommand::BioSdkDebugProcess(int argc, char *argv[]) noexcep
             return;
         }
         HandlePerf(cmds);
+    } else if (cmdType == "batchget") {
+        if (cmds.size() != 3) {
+            mPrintOp("Input parameters failed!, num:%u\n", cmds.size());
+            return;
+        }
+        HandleBatchGet(cmds);
     } else if (cmdType == "notifyupdate") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u\n", cmds.size());

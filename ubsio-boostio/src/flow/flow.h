@@ -13,20 +13,20 @@
 #ifndef BOOSTIO_BIO_FLOW_H
 #define BOOSTIO_BIO_FLOW_H
 
-#include <semaphore.h>
+#include <memory>
 #include <atomic>
-#include <functional>
+#include <vector>
 #include <list>
 #include <map>
-#include <memory>
-#include <vector>
+#include <functional>
+#include <semaphore.h>
 
-#include "bio_err.h"
-#include "bio_lock.h"
-#include "bio_log.h"
 #include "bio_ref.h"
-#include "flow_type.h"
+#include "bio_err.h"
+#include "bio_log.h"
+#include "bio_lock.h"
 #include "slice.h"
+#include "flow_type.h"
 
 namespace ock {
 namespace bio {
@@ -43,14 +43,8 @@ using FlowPtr = Ref<Flow>;
 class Flow {
 public:
     Flow(FlowRole role, FlowType type, uint64_t flowId, uint32_t mediaId, uint64_t chunkSize, uint64_t preLoadSize)
-        : mRole(role),
-          mType(type),
-          mFlowId(flowId),
-          mMediaId(mediaId),
-          mChunkSize(chunkSize),
-          mPreLoadSize(preLoadSize)
-    {
-    }
+        : mRole(role), mType(type), mFlowId(flowId), mMediaId(mediaId), mChunkSize(chunkSize), mPreLoadSize(preLoadSize)
+    {}
     ~Flow() = default;
 
     BResult GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAddr> &flowAddr);
@@ -121,13 +115,13 @@ private:
 
     std::vector<uint64_t> mChunkList;
 
-    std::atomic<bool> mSealed{false};
+    std::atomic<bool> mSealed { false };
 
-    std::atomic<uint64_t> mTruncateOffset{0};
-    std::atomic<uint64_t> mWritenOffset{0};
-    std::atomic<uint64_t> mPreLoadOffset{0};
+    std::atomic<uint64_t> mTruncateOffset{ 0 };
+    std::atomic<uint64_t> mWritenOffset{ 0 };
+    std::atomic<uint64_t> mPreLoadOffset{ 0 };
 
-    bool mPreLoadFlag{false};
+    bool mPreLoadFlag{ false };
     std::list<IoHoldCtx *> mHoldList;
 
     std::map<uint64_t, uint64_t> mRecoverList;
@@ -135,6 +129,6 @@ private:
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-} // namespace bio
-} // namespace ock
+}
+}
 #endif

@@ -27,4 +27,5 @@ target_include_directories(bio_bdm PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/common>
         $<BUILD_INTERFACE:${PLAT_INCLUDE_DIR}>
         )
+target_link_libraries(bio_bdm PUBLIC aio)
 target_compile_options(bio_bdm PUBLIC -D_GNU_SOURCE)

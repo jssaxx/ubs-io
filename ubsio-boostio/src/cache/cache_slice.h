@@ -15,9 +15,9 @@
 
 #include <utility>
 #include "bio_log.h"
-#include "cache_def.h"
 #include "securec.h"
 #include "slice.h"
+#include "cache_def.h"
 
 namespace ock {
 namespace bio {
@@ -30,13 +30,8 @@ struct SliceKey {
 
 public:
     SliceKey(uint64_t fId, uint64_t off, FlowType type, uint64_t len, uint64_t index)
-        : flowId(fId),
-          flowOffset(off),
-          flowType(type),
-          length(len),
-          indexInFlow(index)
-    {
-    }
+        : flowId(fId), flowOffset(off), flowType(type), length(len), indexInFlow(index)
+    {}
 
     bool Validate() const
     {
@@ -50,10 +45,8 @@ public:
 class RCacheSlice : public Slice {
 public:
     RCacheSlice(uint16_t ptId, uint64_t length, std::vector<FlowAddr> &addrs, FlowType flowType = FLOW_MEMORY)
-        : Slice(length, addrs, flowType),
-          mPtId(ptId)
-    {
-    }
+        : Slice(length, addrs, flowType), mPtId(ptId)
+    {}
 
     ~RCacheSlice() override = default;
 
@@ -97,7 +90,7 @@ public:
         uint64_t pos = 0;
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         ChkTrue(length >= pos + sizeof(mPtId), BIO_INVALID_PARAM,
-                "Failed to deserialize data, length:" << length << "  pos + sizeof(mPtId):" << pos + sizeof(mPtId));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mPtId):" << pos + sizeof(mPtId));
         auto ret = memcpy_s(&mPtId, sizeof(mPtId), data + pos, sizeof(mPtId));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mPtId);
@@ -120,13 +113,9 @@ public:
     WCacheSlice() = default;
 
     WCacheSlice(uint64_t flowId, uint64_t offsetInFlow, uint64_t indexInFlow, uint64_t length,
-                std::vector<FlowAddr> &addrs, FlowType flowType = FLOW_MEMORY)
-        : Slice(length, addrs, flowType),
-          mFlowId(flowId),
-          mOffsetInFlow(offsetInFlow),
-          mIndexInFlow(indexInFlow)
-    {
-    }
+        std::vector<FlowAddr> &addrs, FlowType flowType = FLOW_MEMORY)
+        : Slice(length, addrs, flowType), mFlowId(flowId), mOffsetInFlow(offsetInFlow), mIndexInFlow(indexInFlow)
+    {}
 
     ~WCacheSlice() override = default;
 
@@ -195,19 +184,19 @@ public:
         uint64_t pos = 0;
         ChkTrueNot(data != nullptr, BIO_INVALID_PARAM);
         ChkTrue(length >= pos + sizeof(mFlowId), BIO_INVALID_PARAM,
-                "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowId):" << pos + sizeof(mFlowId));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mFlowId):" << pos + sizeof(mFlowId));
         auto ret = memcpy_s(&mFlowId, sizeof(mFlowId), data + pos, sizeof(mFlowId));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mFlowId);
         ChkTrue(length >= pos + sizeof(mOffsetInFlow), BIO_INVALID_PARAM,
-                "Failed to deserialize data, length:" << length << "  pos + sizeof(mOffsetInFlow):"
-                                                      << pos + sizeof(mOffsetInFlow));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mOffsetInFlow):" <<
+            pos + sizeof(mOffsetInFlow));
         ret = memcpy_s(&mOffsetInFlow, sizeof(mOffsetInFlow), data + pos, sizeof(mOffsetInFlow));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mOffsetInFlow);
         ChkTrue(length >= pos + sizeof(mIndexInFlow), BIO_INVALID_PARAM,
-                "Failed to deserialize data, length:" << length
-                                                      << "  pos + sizeof(mIndexInFlow):" << pos + sizeof(mIndexInFlow));
+            "Failed to deserialize data, length:" << length << "  pos + sizeof(mIndexInFlow):" <<
+            pos + sizeof(mIndexInFlow));
         ret = memcpy_s(&mIndexInFlow, sizeof(mIndexInFlow), data + pos, sizeof(mIndexInFlow));
         ChkTrue(ret == BIO_OK, BIO_INNER_ERR, "Memory copy failed.");
         pos += sizeof(mIndexInFlow);
@@ -219,9 +208,9 @@ public:
     }
 
 private:
-    uint64_t mFlowId{0};
-    uint64_t mOffsetInFlow{0}; /* the offset of a slice in the flow. */
-    uint64_t mIndexInFlow{0};  /* the index of a slice in the flow, which is unique in a flow. */
+    uint64_t mFlowId{ 0 };
+    uint64_t mOffsetInFlow{ 0 }; /* the offset of a slice in the flow. */
+    uint64_t mIndexInFlow{ 0 };  /* the index of a slice in the flow, which is unique in a flow. */
 };
 using WCacheSlicePtr = Ref<WCacheSlice>;
 
@@ -229,7 +218,7 @@ using WCacheSliceRef = SliceRef<WCacheSlicePtr>;
 using WCacheSliceRefPtr = Ref<WCacheSliceRef>;
 class WCacheSliceCmp {
 public:
-    bool operator()(const WCacheSlicePtr &first, const WCacheSlicePtr &second)
+    bool operator () (const WCacheSlicePtr &first, const WCacheSlicePtr &second)
     {
         if (first->GetIndexInFlow() == second->GetIndexInFlow()) {
             return true;
@@ -241,17 +230,12 @@ public:
 class WCacheReplicaSlice {
 public:
     WCacheReplicaSlice() = default;
-    ~WCacheReplicaSlice() = default;
+    ~WCacheReplicaSlice()  = default;
 
     WCacheReplicaSlice(WCacheSliceRefPtr slice, RealIoStrategy strategy, uint64_t offset, uint32_t refCount,
-                       bool state = false)
-        : sliceRefPtr(std::move(slice)),
-          mStrategy(strategy),
-          mNegoOffset(offset),
-          mEvictRef(refCount),
-          mState(state)
-    {
-    }
+        bool state = false)
+        : sliceRefPtr(std::move(slice)), mStrategy(strategy), mNegoOffset(offset), mEvictRef(refCount), mState(state)
+    {}
 
     inline WCacheSliceRefPtr GetSlice()
     {
@@ -296,7 +280,7 @@ private:
 };
 using WCacheReplicaSlicePtr = Ref<WCacheReplicaSlice>;
 
-} // namespace bio
-} // namespace ock
+}
+}
 
 #endif // BOOSTIO_CACHE_SLICE_H

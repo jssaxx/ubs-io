@@ -13,18 +13,18 @@
 #ifndef NET_ENGINE_H
 #define NET_ENGINE_H
 
-#include <arpa/inet.h>
 #include <cstdint>
-#include "bio_monotonic.h"
-#include "bio_tls_util.h"
-#include "bio_trace.h"
-#include "bio_tracepoint_helper.h"
+#include <arpa/inet.h>
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
-#include "net_block_pool.h"
-#include "net_channel_mgr.h"
+#include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
+#include "bio_monotonic.h"
+#include "bio_tls_util.h"
 #include "net_common.h"
+#include "net_channel_mgr.h"
 #include "net_connector.h"
+#include "net_block_pool.h"
 #include "net_executor_pool.h"
 
 #ifdef DEBUG_UT
@@ -149,7 +149,7 @@ public:
         mUsedBlock -= NO_1;
     }
 
-    int QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
+    BResult QueryShmInfo(int32_t &fd, uint64_t &offset, uint64_t &length, uint64_t &mKey)
     {
         fd = mShmFd;
         offset = mShareOffset;
@@ -180,16 +180,9 @@ public:
 
     BResult UpdateChannelTimeOut(const BioNodeId &targetNodeId)
     {
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
 
         auto ret = GetCtrlChanel(targetNodeId, ch);
-        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
-            return BIO_ERR;
-        }
-        ch->SetChannelTimeOut(mTimeout, mTimeout);
-
-        ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_WARN("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
             return BIO_ERR;
@@ -200,8 +193,10 @@ public:
 
     uint8_t *GetShmAddress(uint64_t offset, uint64_t len)
     {
-        if (UNLIKELY(offset < mShareOffset || offset >= mShareOffset + mShmSize || len >= mShareOffset + mShmSize ||
-                     offset > mShareOffset + mShmSize - len)) {
+        if (UNLIKELY(offset < mShareOffset ||
+                    offset >= mShareOffset + mShmSize ||
+                    len >= mShareOffset + mShmSize ||
+                    offset > mShareOffset + mShmSize - len)) {
             NET_LOG_ERROR("Shm info, offset:" << mShareOffset << ", size:" << mShmSize << ".");
             return nullptr;
         }
@@ -265,7 +260,7 @@ public:
 
     BResult ReceiveFds(const BioNodeId &targetNodeId, int32_t fds[], uint32_t count)
     {
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -293,7 +288,7 @@ public:
             return BIO_INVALID_PARAM;
         }
 
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         BResult ret = BIO_INNER_ERR;
         BIO_TP_START(SYNCCALL_CHANNEL_FAIL, &ret, BIO_ERR);
         ret = GetCtrlChanel(targetNodeId, ch);
@@ -319,7 +314,7 @@ public:
             return BIO_INVALID_PARAM;
         }
 
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -342,7 +337,7 @@ public:
             return BIO_INVALID_PARAM;
         }
 
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -355,15 +350,38 @@ public:
         return ret;
     }
 
-    template <typename TReq>
-    BResult AsyncCallWithoutResponse(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
+    template <typename TResp>
+    BResult SyncCallBuff(const BioNodeId &targetNodeId, uint16_t opCode, void *req, uint32_t reqLen, TResp **resp,
+                              uint64_t &respLen)
+    {
+        BIO_TRACE_START(NET_TRACE_SYNC_CALL_BUFF);
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, BIO_INVALID_PARAM);
+            return BIO_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetCtrlChanel(targetNodeId, ch);
+        if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
+            BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, BIO_NET_RETRY);
+            return BIO_NET_RETRY;
+        }
+
+        ret = SyncCallBuffInner(opCode, req, reqLen, resp, respLen, ch);
+        BIO_TRACE_END(NET_TRACE_SYNC_CALL_BUFF, ret);
+        return ret;
+    }
+
+    template <typename TReq> BResult AsyncCallWithoutResponse(const BioNodeId &targetNodeId, uint16_t opCode, TReq &req)
     {
         if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
             NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
             return BIO_INVALID_PARAM;
         }
 
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -382,7 +400,7 @@ public:
             return;
         }
 
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -401,7 +419,7 @@ public:
             return;
         }
 
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetCtrlChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", result " << ret);
@@ -415,7 +433,7 @@ public:
     BResult SyncRead(const BioNodeId &targetNodeId, uint32_t pid, const NetRequest &req)
     {
         using namespace ock::hcom;
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetDataChanel(targetNodeId, pid, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
@@ -434,7 +452,7 @@ public:
     BResult SyncRead(const BioNodeId &targetNodeId, const NetRequest &req)
     {
         using namespace ock::hcom;
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
             NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", result " << ret);
@@ -471,11 +489,11 @@ public:
     BResult SyncWrite(const BioNodeId &targetNodeId, uint32_t pid, const NetRequest &req)
     {
         using namespace ock::hcom;
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetDataChanel(targetNodeId, pid, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", pid:" << pid
-                                                                              << ", result " << ret);
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", pid:" <<
+                pid << ", result " << ret);
             return BIO_NET_RETRY;
         }
         BIO_TP_START(SERVER_NET_RDMA_WRITE_FAIL, &ret, BIO_NET_RETRY);
@@ -491,11 +509,11 @@ public:
     BResult SyncWrite(const BioNodeId &targetNodeId, const NetRequest &req)
     {
         using namespace ock::hcom;
-        ChannelPtr ch{nullptr};
+        ChannelPtr ch{ nullptr };
         auto ret = GetDataChanel(targetNodeId, ch);
         if (UNLIKELY(ret != BIO_OK || ch == nullptr)) {
-            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId << ", pid:0, result "
-                                                                              << ret);
+            NET_LOG_ERROR("Failed to get channel for read by target node id " << targetNodeId <<
+                ", pid:0, result " << ret);
             return BIO_NET_RETRY;
         }
         BIO_TRACE_START(NET_TRACE_SYNC_WRITE_V1);
@@ -539,8 +557,9 @@ public:
 #ifndef DEBUG_UT
         BIO_TRACE_ASYNC_BEGIN(NET_TRACE_REPLY_ASYNC);
         uint64_t ts = Monotonic::TimeNs();
-        NetCallback *callback = UBSHcomNewCallback(
-            [this, ts](UBSHcomServiceContext &context) { ReplyDone(context.Result(), ts); }, std::placeholders::_1);
+        NetCallback *callback = UBSHcomNewCallback([this, ts](UBSHcomServiceContext &context) {
+            ReplyDone(context.Result(), ts);
+            }, std::placeholders::_1);
 
         BIO_TRACE_START(NET_TRACE_REPLY_SYNC);
         UBSHcomReplyContext replyCtx;
@@ -609,16 +628,6 @@ public:
         return mDataChannelMgr;
     }
 
-    ServiceProtocol GetNetProtocol()
-    {
-        return mOptions.protocol;
-    }
-
-    uint16_t GeConnectCount()
-    {
-        return mOptions.connCount;
-    }
-
     inline BResult GetCtrlChanel(const BioNodeId &targetNodeId, ChannelPtr &ch)
     {
         BIO_TRACE_START(NET_TRACE_GET_CTRL_CHANNEL);
@@ -654,9 +663,9 @@ public:
     inline NetRequest InitNetRequest(uintptr_t la, uintptr_t ra, uint64_t lk, uint64_t rk, uint32_t size)
     {
         NetRequest req;
-        ock::hcom::UBSHcomMemoryKey lKey;
+        ock::hcom::UBSHcomMemoryKey lKey{};
         lKey.keys[0] = lk;
-        ock::hcom::UBSHcomMemoryKey rKey;
+        ock::hcom::UBSHcomMemoryKey rKey{};
         rKey.keys[0] = rk;
         req.lKey = lKey;
         req.rKey = rKey;
@@ -668,6 +677,8 @@ public:
 
     void FillConnectOption(ConnectInfo &info, bool isCtrl, std::string &prefix, ock::hcom::UBSHcomConnectOptions &op);
     BResult ConnectToPeer(ConnectMode mode, ConnectInfo &info, bool isCtrlPanel, ChannelPtr &ch);
+    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
+    void DestroyShmFdWithPid(int32_t &shmFd, uint8_t *addr, uint32_t pid, uint64_t size);
 
     BResult InitCommMemAllocator();
     BResult InitShmMemAllocator();
@@ -688,12 +699,8 @@ private:
     BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr);
     BResult StartRpcService(const NetOptions &opt);
     void SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt);
-
     BResult PrepareTlsDecrypter(const NetOptions &config);
-
     void StopInner();
-
-    BResult CreateShmFdWithName(int32_t &shmFd, uint64_t size, std::string &name);
 
     inline void RegisterDecryptHandler(const DecryptFunc &h)
     {
@@ -715,8 +722,7 @@ private:
         }
     }
 
-    template <typename TReq, typename TResp>
-    BResult SyncCall(uint16_t opCode, TReq &req, TResp &resp, ChannelPtr &ch)
+    template <typename TReq, typename TResp> BResult SyncCall(uint16_t opCode, TReq &req, TResp &resp, ChannelPtr &ch)
     {
         using namespace ock::hcom;
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
@@ -763,6 +769,33 @@ private:
         return BIO_OK;
     }
 
+    template <typename TResp>
+    BResult SyncCallBuffInner(uint16_t opCode, void *req, uint32_t reqLen, TResp **resp,
+                              uint64_t &respLen, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        UBSHcomRequest reqMsg(req, reqLen, opCode);
+        UBSHcomResponse respMsg{};
+#ifndef DEBUG_UT
+        auto result = ch->Call(reqMsg, respMsg);
+#else
+        auto result = NetStub::Call(reqMsg, respMsg);
+#endif
+        if (UNLIKELY(result != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+
+        if (NN_UNLIKELY(respMsg.errorCode != BIO_OK)) {
+            NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", error code " << respMsg.errorCode);
+            return respMsg.errorCode;
+        }
+
+        *resp = reinterpret_cast<TResp *>(respMsg.address);
+        respLen = respMsg.size;
+        return BIO_OK;
+    }
+
     template <typename TReq, typename TResp>
     BResult SyncCall(uint16_t opCode, TReq &req, TResp **resp, uint64_t &respLen, ChannelPtr &ch)
     {
@@ -779,14 +812,14 @@ private:
 #endif
         BIO_TP_END;
         if (UNLIKELY(result != BIO_OK)) {
-            NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result "
-                                                                             << UBSHcomNetErrStr(result));
+            NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", result " <<
+                UBSHcomNetErrStr(result));
             return NetResult(result);
         }
 
         if (UNLIKELY(respMsg.errorCode != BIO_OK)) {
-            NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code "
-                                                                             << respMsg.errorCode);
+            NET_LOG_ERROR("Failed to call peer unfixed-length resp with op " << opCode << ", error code " <<
+                respMsg.errorCode);
             return respMsg.errorCode;
         }
 
@@ -795,8 +828,7 @@ private:
         return BIO_OK;
     }
 
-    template <typename TReq>
-    BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
+    template <typename TReq> BResult AsyncCallWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
     {
         using namespace ock::hcom;
         int32_t result = BIO_ERR;
@@ -825,8 +857,7 @@ private:
         BIO_TRACE_ASYNC_END(NET_TRACE_ASYNC_CALL, result, ts);
     }
 
-    template <typename TReq>
-    void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback)
+    template <typename TReq> void AsyncCall(uint16_t opCode, TReq &req, ChannelPtr &ch, Callback callback)
     {
         using namespace ock::hcom;
         int32_t result = BIO_ERR;
@@ -841,13 +872,18 @@ private:
             [this, ts, callback](UBSHcomServiceContext &context) {
                 if (context.Result() != SER_OK) {
                     AsyncCallDone(context.Result(), ts);
-                    callback.cb(callback.cbCtx, nullptr, 0, NetResult(context.Result()));
+                    callback.cb(callback.cbCtx,
+                                nullptr,
+                                0,
+                                NetResult(context.Result()));
                 } else {
                     AsyncCallDone(context.ErrorCode(), ts);
-                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.ErrorCode());
+                    callback.cb(callback.cbCtx,
+                                context.MessageData(),
+                                context.MessageDataLen(),
+                                context.ErrorCode());
                 }
-            },
-            std::placeholders::_1);
+            }, std::placeholders::_1);
         result = ch->Call(reqMsg, respMsg, netCallback);
 #else
         result = NetStub::AsyncCall(reqMsg, respMsg, callback);
@@ -879,13 +915,18 @@ private:
             [this, ts, callback](UBSHcomServiceContext &context) {
                 if (context.Result() != SER_OK) {
                     AsyncCallBuffDone(context.Result(), ts);
-                    callback.cb(callback.cbCtx, nullptr, 0, NetResult(context.Result()));
+                    callback.cb(callback.cbCtx,
+                                nullptr,
+                                0,
+                                NetResult(context.Result()));
                 } else {
                     AsyncCallBuffDone(context.ErrorCode(), ts);
-                    callback.cb(callback.cbCtx, context.MessageData(), context.MessageDataLen(), context.ErrorCode());
+                    callback.cb(callback.cbCtx,
+                                context.MessageData(),
+                                context.MessageDataLen(),
+                                context.ErrorCode());
                 }
-            },
-            std::placeholders::_1);
+        }, std::placeholders::_1);
         result = ch->Call(reqMsg, respMsg, netCallback);
 #else
         result = NetStub::AsyncCall(reqMsg, respMsg, callback);
@@ -908,7 +949,7 @@ private:
     NetChannelMgrPtr mDataChannelMgr = nullptr;
     MemoryRegion mLocalMr;
     NetBlockPoolPtr mMrBlockPool = nullptr;
-    std::atomic<uint64_t> mUsedBlock{0};
+    std::atomic<uint64_t> mUsedBlock {0};
     NewRequestHandler mHandlers[MAX_NEW_REQ_HANDLER]{};
     NetConnectorPtr mConnector = nullptr;
     DEFINE_REF_COUNT_VARIABLE
@@ -928,6 +969,7 @@ private:
 };
 
 using NetEnginePtr = Ref<NetEngine>;
-} // namespace bio
-} // namespace ock
+}
+}
 #endif // NET_ENGINE_H
+

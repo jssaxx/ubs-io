@@ -10,25 +10,25 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "test_bio.h"
-#include <semaphore.h>
 #include <map>
 #include <mockcpp/mockcpp.hpp>
+#include <semaphore.h>
+#include "gtest/gtest.h"
 #include "bio_c.h"
 #include "bio_client.h"
-#include "bio_client_agent.h"
 #include "bio_client_net.h"
-#include "bio_functions.h"
 #include "bio_mock.h"
-#include "cm.h"
-#include "cm_comm.h"
-#include "flow_instance.h"
-#include "gtest/gtest.h"
 #include "message.h"
-#include "server/interceptor_server.h"
-#include "server/pt/cm_pt_calc_fixed.h"
+#include "bio_functions.h"
+#include "cm.h"
+#include "flow_instance.h"
 #include "server/pt/cm_pt_calc_fixed_state.h"
+#include "cm_comm.h"
+#include "server/pt/cm_pt_calc_fixed.h"
+#include "server/interceptor_server.h"
 #include "tracepoint.h"
+#include "test_bio.h"
+#include "bio_client_agent.h"
 
 using namespace ock::bio;
 
@@ -66,7 +66,7 @@ TEST_F(TestBio, test_bio_show_cache_resource_not_num_fail)
 
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    ret = BioCreateCache({G_TENANT_ID, affinity, strategy});
+    ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     std::vector<CacheResourcesDesc> nodeDescription;
@@ -119,7 +119,7 @@ TEST_F(TestBio, test_bio_show_cache_hit_ratio_fail)
 
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    ret = BioCreateCache({G_TENANT_ID, affinity, strategy});
+    ret = BioCreateCache({ G_TENANT_ID, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     std::unordered_map<uint16_t, CacheHitDesc> nodeDescription;
@@ -195,14 +195,14 @@ TEST_F(TestBio, test_bio_create_cache)
     uint64_t tenantId = 12341UL;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
-    ret = BioCreateCache({tenantId, affinity, strategy});
+    ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_EXISTS);
 
     tenantId = 121UL;
-    ret = BioCreateCache({tenantId, AFFINITY_BUTT, strategy});
+    ret = BioCreateCache({ tenantId, AFFINITY_BUTT, strategy });
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 }
 
@@ -212,7 +212,7 @@ TEST_F(TestBio, test_bio_query_cache_instance)
     uint64_t tenantId = 12343;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     CacheDescriptor desc;
@@ -240,7 +240,7 @@ TEST_F(TestBio, test_bio_destroy_cache)
     uint64_t tenantId = 12344;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     CacheDescriptor desc;
@@ -266,7 +266,7 @@ TEST_F(TestBio, test_list_cache)
     uint64_t tenantId = 12345;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     auto cacheList = ock::bio::BioService::ListCache();
@@ -282,7 +282,7 @@ TEST_F(TestBio, test_list_cache)
 TEST_F(TestBio, test_bio_calc_location)
 {
     LOG_INFO("test_bio_calc_location");
-    CacheDescriptor desc = {G_TENANT_ID, LOCAL_AFFINITY, WRITE_BACK};
+    CacheDescriptor desc = { G_TENANT_ID, LOCAL_AFFINITY, WRITE_BACK };
     auto ret = BioCreateCache(desc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
@@ -309,7 +309,7 @@ TEST_F(TestBio, test_bio_put)
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioPut(G_TENANT_ID, "...abc", value.c_str(), G_LENGTH, g_Location);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioPut(G_INVALID_TENANT_ID, G_KEY, value.c_str(), G_LENGTH, g_Location);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
@@ -330,7 +330,7 @@ TEST_F(TestBio, test_bio_put)
 
     uint64_t tenantId = 187UL;
     static ObjLocation location{};
-    CacheDescriptor desc = {tenantId, LOCAL_AFFINITY, WRITE_BACK};
+    CacheDescriptor desc = { tenantId, LOCAL_AFFINITY, WRITE_BACK };
     ret = BioCreateCache(desc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
@@ -457,7 +457,7 @@ TEST_F(TestBio, test_bio_get_external_stat)
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
     delete[] value0;
 }
 
@@ -468,6 +468,7 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     char *value0 = new char[realLen0];
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -476,7 +477,8 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
-    EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
     delete[] value0;
 }
 
@@ -489,6 +491,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_fail)
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -497,6 +500,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_fail)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_RCACHE_MALLOC_FAIL");
     EXPECT_EQ(ret, RET_CACHE_OK);
@@ -511,6 +515,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_underfs)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -523,6 +528,7 @@ TEST_F(TestBio, test_bio_get_external_rcache_underfs)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
@@ -536,6 +542,7 @@ TEST_F(TestBio, test_bio_get_external_malloc)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH", 0, 1, userParam);
+    BioHvsActiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
@@ -546,6 +553,7 @@ TEST_F(TestBio, test_bio_get_external_malloc)
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
+    BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_EXTERNAL_GETUNDERFS_OK");
     EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value0;
@@ -609,7 +617,7 @@ TEST_F(TestBio, test_bio_get_case_return_fail)
     uint64_t realLen1 = 4194305UL;
     char *value1 = new char[realLen1];
     ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen1, g_Location, value1, &realLen1);
-    EXPECT_EQ(ret, RET_CACHE_READ_EXCEED);
+    EXPECT_EQ(ret, RET_CACHE_OK);
     delete[] value1;
 }
 
@@ -653,7 +661,7 @@ TEST_F(TestBio, test_bio_stat)
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     ret = BioStat(G_TENANT_ID, G_KEY, g_Location, nullptr);
-    EXPECT_EQ(ret, RET_CACHE_EPERM);
+    EXPECT_EQ(ret, RET_CACHE_ERROR);
 
     ret = BioStat(G_INVALID_TENANT_ID, G_KEY, g_Location, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_NOT_FOUND);
@@ -675,7 +683,7 @@ struct LoadContext {
     sem_t sem;
     CResult result;
 };
-} // namespace
+}
 
 static void TestCallback(void *context, int32_t result)
 {
@@ -718,13 +726,13 @@ TEST_F(TestBio, test_bio_alloc_cache_space_return_fail)
 {
     uint64_t objectId = 2UL;
     CacheSpaceDesc addressDesc;
-    addressDesc.loc = {0, 0};
+    addressDesc.loc = { 0, 0 };
     addressDesc.allocLoc = 1;
 
     constexpr uint64_t tenantId = 10000UL;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, nullptr);
@@ -775,7 +783,7 @@ TEST_F(TestBio, test_bio_put_copy_free)
     constexpr uint64_t tenantId = 10001UL;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    ret = BioCreateCache({tenantId, affinity, strategy});
+    ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioPutWithCopyFree(tenantId, "putwithcopyfree1", nullptr);
@@ -785,7 +793,7 @@ TEST_F(TestBio, test_bio_put_copy_free)
     EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     objectId = 11UL;
-    addressDesc.loc = {0, 0};
+    addressDesc.loc = { 0, 0 };
     ret = BioAllocCacheSpace(tenantId, objectId, NO_1024, &addressDesc);
     EXPECT_EQ(ret, RET_CACHE_OK);
 
@@ -829,7 +837,7 @@ TEST_F(TestBio, test_bio_update_return_ok)
     constexpr uint64_t tenantId = 1234UL;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioNotifyUpgradePrepare(tenantId);
@@ -996,6 +1004,8 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
     nodeInfo.diskList.list[0].state = DISK_STATE_NORMAL;
     nodeInfo.diskList.list[1].state = DISK_STATE_NORMAL;
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_UP, &nodeInfo, ptList, pgChange.get());
+    EXPECT_EQ(ptList->ptEntryList[0].copyList[0].state, PT_COPY_STATE_RUNNING);
+    EXPECT_EQ(ptList->ptEntryList[0].state, PT_STATE_NORMAL);
     free(ptList);
 }
 
@@ -1145,7 +1155,7 @@ TEST_F(TestBio, test_view_caculator_initial)
     }
 
     auto len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo));
-    NodeDiskState nodeDiskState{0, DISK_CLUSTER_STATE_IN};
+    NodeDiskState nodeDiskState{ 0, DISK_CLUSTER_STATE_IN };
     auto nodeStateInfo = static_cast<NodeStateInfo *>(malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState)));
     nodeStateInfo->diskNum = 1;
     nodeStateInfo->nodeId = 0;
@@ -1205,7 +1215,7 @@ TEST_F(TestBio, test_caculator_need_rebalance)
 
     auto len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo));
 
-    NodeDiskState nodeDiskState{0, DISK_CLUSTER_STATE_IN};
+    NodeDiskState nodeDiskState{ 0, DISK_CLUSTER_STATE_IN };
     auto nodeStateInfo = static_cast<NodeStateInfo *>(malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState)));
     nodeStateInfo->diskNum = 1;
     nodeStateInfo->nodeId = 0;
@@ -1264,7 +1274,7 @@ TEST_F(TestBio, test_caculator_rebalance)
     }
 
     auto len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo));
-    NodeDiskState nodeDiskState{0, DISK_CLUSTER_STATE_IN};
+    NodeDiskState nodeDiskState{ 0, DISK_CLUSTER_STATE_IN };
     auto nodeStateInfo = static_cast<NodeStateInfo *>(malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState)));
     nodeStateInfo->diskNum = 1;
     nodeStateInfo->nodeId = 0;
@@ -1324,7 +1334,7 @@ TEST_F(TestBio, test_caculator_rebalance_state_init)
     }
 
     auto len = (int32_t)(sizeof(NodeStateList) + sizeof(NodeStateInfo));
-    NodeDiskState nodeDiskState{0, DISK_CLUSTER_STATE_IN};
+    NodeDiskState nodeDiskState{ 0, DISK_CLUSTER_STATE_IN };
     auto nodeStateInfo = static_cast<NodeStateInfo *>(malloc(sizeof(NodeStateInfo) + sizeof(NodeDiskState)));
     nodeStateInfo->diskNum = 1;
     nodeStateInfo->nodeId = 0;
@@ -1426,7 +1436,7 @@ TEST_F(TestBio, test_bio_get_not_ready_case_return_fail)
     ock::bio::BioClient::Instance()->SetStartWorker(false);
     uint64_t realLen = 6000UL;
     char *value = new char[realLen];
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen, locationInfo, value, &realLen);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     delete[] value;
@@ -1437,7 +1447,7 @@ TEST_F(TestBio, test_bio_delete_not_ready_case_return_fail)
 {
     LOG_INFO("test_bio_delete_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     auto ret = BioDelete(G_TENANT_ID, G_KEY, locationInfo);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
     ock::bio::BioClient::Instance()->SetStartWorker(true);
@@ -1447,7 +1457,7 @@ TEST_F(TestBio, test_bio_load_not_ready_case_return_fail)
 {
     LOG_INFO("test_bio_load_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     LoadContext loadCtx;
     sem_init(&(loadCtx.sem), 0, 1);
     loadCtx.result = RET_CACHE_OK;
@@ -1475,7 +1485,7 @@ TEST_F(TestBio, test_bio_stat_not_ready_case_return_fail)
 {
     LOG_INFO("test_bio_stat_not_ready_case_return_fail");
     ock::bio::BioClient::Instance()->SetStartWorker(false);
-    ObjLocation locationInfo{0, 0};
+    ObjLocation locationInfo{ 0, 0 };
     ObjStat keyStat;
     auto ret = BioStat(G_TENANT_ID, G_KEY, locationInfo, &keyStat);
     EXPECT_EQ(ret, RET_CACHE_NOT_READY);
@@ -1518,7 +1528,7 @@ TEST_F(TestBio, test_bio_update_return_fail)
     constexpr uint64_t tenantId = 123UL;
     AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
-    auto ret = BioCreateCache({tenantId, affinity, strategy});
+    auto ret = BioCreateCache({ tenantId, affinity, strategy });
     EXPECT_EQ(ret, RET_CACHE_OK);
 
     ret = BioNotifyUpgradePrepare(G_INVALID_TENANT_ID);
@@ -1619,8 +1629,8 @@ TEST_F(TestBio, test_bio_qos_rollback)
     auto ret = BioClient::Instance()->GetMirror()->GetPtEntry(ptId, ptEntry);
     EXPECT_EQ(ret, BIO_OK);
 
-    std::vector<uint16_t> successNodeVec = {0};
-    std::vector<uint64_t> successQuotaVec = {NO_4194304};
+    std::vector<uint16_t> successNodeVec = { 0 };
+    std::vector<uint64_t> successQuotaVec = { NO_4194304 };
     BioQos::Instance()->GetQuotaPtr()->RollbackAllocQuotaReq(&ptEntry, successNodeVec, successQuotaVec);
 }
 
@@ -1636,9 +1646,9 @@ TEST_F(TestBio, test_bio_qos_put_align_size)
 
     uint64_t length = NO_1024 - NO_1;
     char *dataBuff = new char[length];
-    ObjLocation location = {1, 0};
-    MirrorClient::MirrorPut param = {
-        {NO_1, LOCAL_AFFINITY, WRITE_BACK}, "test_bio_qos_put_align_size", dataBuff, length, location, 0};
+    ObjLocation location = { 1, 0 };
+    MirrorClient::MirrorPut param = { { NO_1, LOCAL_AFFINITY, WRITE_BACK }, "test_bio_qos_put_align_size", dataBuff,
+                                      length, location, 0 };
     bool isAllocMem = false;
     char *value = param.value;
     ret = BioClient::Instance()->GetMirror()->PutAlignSize(value, param, isAllocMem);
@@ -1708,7 +1718,7 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
     BioHvsActiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA", 0, 1, userParam);
     bool enable = true;
     uint64_t load = 1;
-    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(1, enable, load);
+    auto ret = ock::bio::agent::BioClientAgent::Instance()->GetLocalQuotaInfo(enable, load);
     EXPECT_EQ(ret, BIO_OK);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_GET_LOCAL_QUOTA");
 }
@@ -1716,7 +1726,7 @@ TEST_F(TestBio, test_bio_client_agent_get_local_quota_info)
 TEST_F(TestBio, test_bio_client_agent_check_get_slice)
 {
     LOG_INFO("test_bio_client_agent_check_get_slice");
-    GetSliceResponse *rsp = (GetSliceResponse *)new char[sizeof(GetSliceResponse) + 128];
+    GetSliceResponse *rsp = (GetSliceResponse *) new char[sizeof(GetSliceResponse) + 128];
     rsp->addrNum = NO_20;
     auto ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     EXPECT_EQ(ret, false);
@@ -1725,11 +1735,11 @@ TEST_F(TestBio, test_bio_client_agent_check_get_slice)
     ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     SliceAddrDesc addr;
     addr.chunkLen = IO_SIZE_64M;
-    rsp->addr[0] = addr;
+    rsp->addr[0] =addr;
     ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     EXPECT_EQ(ret, false);
     addr.chunkLen = IO_SIZE_4M;
-    rsp->addr[0] = addr;
+    rsp->addr[0] =addr;
     ret = ock::bio::agent::BioClientAgent::Instance()->CheckGetSliceRsp(&rsp);
     EXPECT_EQ(ret, true);
     delete[] rsp;

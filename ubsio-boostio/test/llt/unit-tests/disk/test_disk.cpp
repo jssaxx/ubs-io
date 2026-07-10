@@ -10,26 +10,86 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "test_disk.h"
-#include <semaphore.h>
+#include <fcntl.h>
 #include <mockcpp/mockcpp.hpp>
-#include "bdm_allocator.h"
-#include "bdm_core.h"
-#include "bdm_disk.h"
-#include "bdm_threadpool.h"
-#include "bio_err.h"
-#include "bio_file_util.h"
-#include "bio_log.h"
-#include "bio_mock.h"
-#include "bio_types.h"
-#include "ngx_rbtree.h"
+#include <semaphore.h>
+#include <string>
+#include <unistd.h>
 #include "securec.h"
 #include "tracepoint.h"
+#include "bio_mock.h"
+#include "bio_file_util.h"
+#include "bio_types.h"
+#include "bdm_core.h"
+#include "bdm_disk.h"
+#include "bio_err.h"
+#include "bio_log.h"
+#include "bdm_threadpool.h"
+#include "ngx_rbtree.h"
+#include "bdm_allocator.h"
+#include "test_disk.h"
 
 using namespace ock::bio;
 
 bool TestDisk::gSetup = false;
 static uint32_t g_bdmId = 0;
+
+namespace {
+constexpr uint64_t TEST_BDM_META_DISK_LEN = 1073741824UL;
+
+uint32_t BuildStandalonePad(uint32_t deviceId)
+{
+    return BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
+}
+
+std::string MakeBdmMetaPath(uint32_t bdmId)
+{
+    return "./bio_ut_bdm_meta_" + std::to_string(getpid()) + "_" + std::to_string(bdmId);
+}
+
+class TempBdmFile {
+public:
+    explicit TempBdmFile(uint32_t bdmId) : path(MakeBdmMetaPath(bdmId))
+    {
+        static_cast<void>(unlink(path.c_str()));
+    }
+
+    ~TempBdmFile()
+    {
+        static_cast<void>(unlink(path.c_str()));
+    }
+
+    std::string path;
+};
+
+int32_t CreateBdmAndDestroy(const std::string &path, uint32_t bdmId, uint32_t pad)
+{
+    BdmCreatePara para = {0};
+    int32_t ret = strncpy_s(para.name, BDM_NAME_LEN, path.c_str(), path.size());
+    if (ret != BDM_CODE_OK) {
+        return ret;
+    }
+    ret = sprintf_s(para.sn, BDM_SN_LEN, "%s_%u", "meta", bdmId);
+    if (ret < 0) {
+        return BDM_CODE_ERR;
+    }
+    para.offset = 0UL;
+    para.length = TEST_BDM_META_DISK_LEN;
+    para.bdmId = bdmId;
+    para.pad = pad;
+    para.minChunkSize = NO_4194304;
+    para.maxChunkSize = NO_4194304;
+
+    uint32_t createdBdmId = BDM_INVALID_ID;
+    ret = BdmCreate(&para, &createdBdmId);
+    if (ret != BDM_CODE_OK) {
+        return ret;
+    }
+    EXPECT_EQ(createdBdmId, bdmId);
+    EXPECT_EQ(BdmDestroy(createdBdmId), BDM_CODE_OK);
+    return BDM_CODE_OK;
+}
+}
 
 void TestDisk::SetUp()
 {
@@ -304,7 +364,7 @@ TEST_F(TestDisk, test_disk_alloc_case_return_fail)
     uint64_t bucketOffset = 0UL;
     uint64_t len = 0UL;
     uint64_t chunkId = 11UL;
-    auto ret = BdmAlloc(bdmId, bucketId, bucketOffset, BDM_MAX_CHUNK_LENGTH + 1, &chunkId);
+    auto ret = BdmAlloc(bdmId, bucketId, bucketOffset, BDM_MAX_CHUNK_LENGTH+1, &chunkId);
     EXPECT_EQ(ret, BDM_CODE_INVALID_PARAM);
 
     ret = BdmAlloc(bdmId, bucketId, bucketOffset, len, nullptr);
@@ -335,6 +395,37 @@ TEST_F(TestDisk, test_disk_bdm_destroy)
 
     ret = BdmDestroy(g_bdmId);
     EXPECT_EQ(ret, BDM_CODE_NOT_EXIST);
+}
+
+TEST_F(TestDisk, test_bdm_metadata_restores_with_same_standalone_device_id)
+{
+    constexpr uint32_t bdmId = 700;
+    TempBdmFile diskFile(bdmId);
+    uint32_t pad = BuildStandalonePad(3);
+
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, pad), BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, pad), BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_bdm_metadata_rejects_different_standalone_device_id_without_rewrite)
+{
+    constexpr uint32_t bdmId = 701;
+    TempBdmFile diskFile(bdmId);
+    uint32_t originalPad = BuildStandalonePad(1);
+    uint32_t mismatchedPad = BuildStandalonePad(2);
+
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, originalPad), BDM_CODE_OK);
+    EXPECT_NE(CreateBdmAndDestroy(diskFile.path, bdmId, mismatchedPad), BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, originalPad), BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_bdm_metadata_cluster_pad_keeps_restore_behavior)
+{
+    constexpr uint32_t bdmId = 702;
+    TempBdmFile diskFile(bdmId);
+
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, 0), BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, 0), BDM_CODE_OK);
 }
 
 TEST_F(TestDisk, test_disk_get_bdm_status_case_return_fail)
@@ -377,7 +468,7 @@ TEST_F(TestDisk, test_disk_thread_destroy)
     EXPECT_EQ(ret, BDM_CODE_ERR);
 
     int someData = 1;
-    void *ctx = &someData;
+    void* ctx = &someData;
     BDM_BATCH_CTX_S batchCtx;
     batchCtx.batchHandle = nullptr;
     batchCtx.batchCtx = ctx;
