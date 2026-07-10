@@ -18,6 +18,8 @@ namespace ock {
 namespace mms {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
+static constexpr ValidatorTag COMMON_VALIDATOR_TAG = NO_0;
+static constexpr ValidatorTag INTER_NODE_VALIDATOR_TAG = NO_1;
 
 static BResult ParseCpuRange(const std::string &cpuRange, uint32_t maxCpuNo,
                              std::pair<uint32_t, uint32_t> &range)
@@ -105,25 +107,33 @@ void MmsConfig::LoadDefaultConf()
         VIntRange::Create(NOTIFY_SHM_WORKER_NUM.first, NO_1, NOTIFY_SHM_MAX_WORKERS));
     AddStrConf(NOTIFY_SHM_WORKER_CPUSET, VStrNotNull::Create(NOTIFY_SHM_WORKER_CPUSET.first));
     AddStrConf(NOTIFY_SHM_BUSY_POLLING, VStrBoolRange::Create(NOTIFY_SHM_BUSY_POLLING.first));
-    AddStrConf(CRB_SEND_CPUSET, VStrNotNull::Create(CRB_SEND_CPUSET.first));
+    AddStrConf(CRB_SEND_CPUSET, VStrNotNull::Create(CRB_SEND_CPUSET.first), INTER_NODE_VALIDATOR_TAG);
     LoadDefaultClusterConf();
 }
 
 void MmsConfig::LoadDefaultNetConf()
 {
-    AddStrConf(NET_RPC_IP_MASK, VIpv4MaskValidator::Create(NET_RPC_IP_MASK.first, false));
-    AddIntConf(NET_RPC_PORT, VIntRange::Create(NET_RPC_PORT.first, NO_7201, NO_7800));
-    AddIntConf(NET_MULTICAST_PORT, VIntRange::Create(NET_MULTICAST_PORT.first, NO_7201, NO_7800));
+    AddStrConf(NET_RPC_IP_MASK, VIpv4MaskValidator::Create(NET_RPC_IP_MASK.first, false), INTER_NODE_VALIDATOR_TAG);
+    AddIntConf(NET_RPC_PORT, VIntRange::Create(NET_RPC_PORT.first, NO_7201, NO_7800), INTER_NODE_VALIDATOR_TAG);
+    AddIntConf(NET_MULTICAST_PORT, VIntRange::Create(NET_MULTICAST_PORT.first, NO_7201, NO_7800),
+               INTER_NODE_VALIDATOR_TAG);
 
-    AddStrConf(NET_RPC_PROTOCOL, VStrEnum::Create(NET_RPC_PROTOCOL.first, "tcp||rdma"));
-    AddStrConf(NET_MULTICAST_PROTOCOL, VStrEnum::Create(NET_MULTICAST_PROTOCOL.first, "tcp||rdma"));
-    AddIntConf(NET_RPC_CONNECT_COUNT, VIntRange::Create(NET_RPC_CONNECT_COUNT.first, NO_1, NO_16));
-    AddStrConf(NET_RPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_BUSY_POLL_MODE.first));
-    AddStrConf(NET_RPC_WORKER_GROUPS, VStrNotNull::Create(NET_RPC_WORKER_GROUPS.first));
-    AddStrConf(NET_RPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_RPC_WORKER_GROUPS_CPUSET.first));
-    AddStrConf(NET_PUBLISHER_WORKER_CPUSET, VStrNotNull::Create(NET_PUBLISHER_WORKER_CPUSET.first));
-    AddStrConf(NET_SUBSCRIBER_WORKER_CPUSET, VStrNotNull::Create(NET_SUBSCRIBER_WORKER_CPUSET.first));
-    AddIntConf(NET_SUBSCRIBER_CONNECT_COUNT, VIntRange::Create(NET_SUBSCRIBER_CONNECT_COUNT.first, NO_1, NO_16));
+    AddStrConf(NET_RPC_PROTOCOL, VStrEnum::Create(NET_RPC_PROTOCOL.first, "tcp||rdma"), INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_MULTICAST_PROTOCOL, VStrEnum::Create(NET_MULTICAST_PROTOCOL.first, "tcp||rdma"),
+               INTER_NODE_VALIDATOR_TAG);
+    AddIntConf(NET_RPC_CONNECT_COUNT, VIntRange::Create(NET_RPC_CONNECT_COUNT.first, NO_1, NO_16),
+               INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_RPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_RPC_BUSY_POLL_MODE.first),
+               INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_RPC_WORKER_GROUPS, VStrNotNull::Create(NET_RPC_WORKER_GROUPS.first), INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_RPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_RPC_WORKER_GROUPS_CPUSET.first),
+               INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_PUBLISHER_WORKER_CPUSET, VStrNotNull::Create(NET_PUBLISHER_WORKER_CPUSET.first),
+               INTER_NODE_VALIDATOR_TAG);
+    AddStrConf(NET_SUBSCRIBER_WORKER_CPUSET, VStrNotNull::Create(NET_SUBSCRIBER_WORKER_CPUSET.first),
+               INTER_NODE_VALIDATOR_TAG);
+    AddIntConf(NET_SUBSCRIBER_CONNECT_COUNT, VIntRange::Create(NET_SUBSCRIBER_CONNECT_COUNT.first, NO_1, NO_16),
+               INTER_NODE_VALIDATOR_TAG);
     AddIntConf(NET_MESSAGE_MAX_BUFF_SIZE, VIntRange::Create(NET_MESSAGE_MAX_BUFF_SIZE.first, NO_1, NO_4096));
 
     AddStrConf(NET_IPC_BUSY_POLL_MODE, VStrBoolRange::Create(NET_IPC_BUSY_POLL_MODE.first));
@@ -131,9 +141,9 @@ void MmsConfig::LoadDefaultNetConf()
     AddStrConf(NET_IPC_WORKER_GROUPS_CPUSET, VStrNotNull::Create(NET_IPC_WORKER_GROUPS_CPUSET.first));
 
     AddIntConf(NET_RECV_REQUEST_HANDLE_THREAD_NUM,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256));
+        VIntRange::Create(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first, NO_8, NO_256), INTER_NODE_VALIDATOR_TAG);
     AddIntConf(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE,
-        VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535));
+        VIntRange::Create(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first, NO_1024, NO_65535), INTER_NODE_VALIDATOR_TAG);
 }
 
 void MmsConfig::LoadDefaultSecurityConf()
@@ -173,20 +183,22 @@ BResult MmsConfig::AutoConfAfterLoadFromFile(const ConfigurationPtr &conf)
     auto ret = AutoConfigMem(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
-    ret = AutoConfigNet(conf);
+    ret = AutoConfigBasic(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
-    ret = AutoConfigBasic(conf);
+    ret = AutoConfigCm(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+
+    ret = AutoConfigNet(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
     ret = AutoConfigNotifyShm(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
-    ret = AutoConfigCrb(conf);
-    ChkTrueNot(ret == MMS_OK, ret);
-
-    ret = AutoConfigCm(conf);
-    ChkTrueNot(ret == MMS_OK, ret);
+    if (!IsSingleNode()) {
+        ret = AutoConfigCrb(conf);
+        ChkTrueNot(ret == MMS_OK, ret);
+    }
 
     return ret;
 }
@@ -404,35 +416,28 @@ BResult MmsConfig::AutoConfigIpcGroup(const ConfigurationPtr &conf)
 
 BResult MmsConfig::AutoConfigNet(const ConfigurationPtr &conf)
 {
-    auto ret = AutoConfigNetAddress(conf);
+    auto ret = AutoConfigIpcGroup(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
+    mNetConfig.msgMaxBuffSize = static_cast<uint32_t>(conf->GetInt(NET_MESSAGE_MAX_BUFF_SIZE.first)) * KB_UNIT;
+    ret = AutoConfigNetTls(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
+    if (IsSingleNode()) {
+        return MMS_OK;
+    }
+
+    ret = AutoConfigNetAddress(conf);
+    ChkTrueNot(ret == MMS_OK, ret);
     ret = AutoConfigRpcGroup(conf);
     ChkTrueNot(ret == MMS_OK, ret);
 
-    ret = AutoConfigIpcGroup(conf);
-    ChkTrueNot(ret == MMS_OK, ret);
-
     mNetConfig.multicastProtocol = conf->GetStr(NET_MULTICAST_PROTOCOL.first);
-    std::string protocol = conf->GetStr(NET_RPC_PROTOCOL.first);
-    if (protocol == "rdma") {
-        mNetConfig.protocol = 0;
-    } else {
-        mNetConfig.protocol = 1;
-    }
-
-    mNetConfig.msgMaxBuffSize = static_cast<uint32_t>(conf->GetInt(NET_MESSAGE_MAX_BUFF_SIZE.first)) * KB_UNIT;
+    mNetConfig.protocol = conf->GetStr(NET_RPC_PROTOCOL.first) == "rdma" ? NO_0 : NO_1;
     mNetConfig.handleRequestThreadNum = conf->GetInt(NET_RECV_REQUEST_HANDLE_THREAD_NUM.first);
     mNetConfig.handleRequestQueueSize = conf->GetInt(NET_RECV_REQUEST_HANDLE_QUEUE_SIZE.first);
-
-    if (AutoConfigNetMulticast(conf) != MMS_OK) {
+    if (UNLIKELY(AutoConfigNetMulticast(conf) != MMS_OK)) {
         return MMS_INVALID_PARAM;
     }
-
-    if (AutoConfigNetTls(conf) != MMS_OK) {
-        return MMS_INVALID_PARAM;
-    }
-
     return MMS_OK;
 }
 
@@ -527,7 +532,11 @@ BResult MmsConfig::Initialize(const std::string &homePath)
 
     std::ostringstream ossTmp;
     /* validate based on validation */
-    auto errors = conf->Validate();
+    auto errors = conf->Validate(COMMON_VALIDATOR_TAG);
+    if (conf->GetInt(CM_NODE_NUM.first) != NO_1) {
+        auto interNodeErrors = conf->Validate(INTER_NODE_VALIDATOR_TAG);
+        errors.insert(errors.end(), interNodeErrors.begin(), interNodeErrors.end());
+    }
     if (!errors.empty()) {
         for (auto &item : errors) {
             ossTmp << item << "\n";

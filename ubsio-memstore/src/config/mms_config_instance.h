@@ -90,7 +90,7 @@ public:
         bool isRpcBusyPolling = false;
         std::string rpcWorkerGroups;
         std::string rpcWorkerGroupsCpuSet;
-        uint16_t rpcWorkerGroupsNum;
+        uint16_t rpcWorkerGroupsNum = NO_0;
 
         bool isIpcBusyPolling = false;
         std::string ipcWorkerGroups;
@@ -176,6 +176,11 @@ public:
     const CmConfig &GetCmConfig() const noexcept
     {
         return mCmConfig;
+    }
+
+    bool IsSingleNode() const noexcept
+    {
+        return mCmConfig.nodeNum == NO_1;
     }
 
     const BasicConfig &GetBasicConfig() const noexcept

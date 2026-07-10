@@ -472,7 +472,7 @@ BResult MmsServer::InitUnicastNetEngine()
     NetMemList memList;
     auto ret = MmsMemMgr::Instance()->GetAreaMemDesc(memList.address, memList.size, memList.num);
     ChkTrue(ret == MMS_OK, ret, "Mem mgr get k/v mem failed, result:" << ret << ".");
-    bool startRpcResources = !mConfig->GetBasicConfig().multicastSwitch;
+    bool startRpcResources = !mConfig->IsSingleNode() && !mConfig->GetBasicConfig().multicastSwitch;
     NetEngineInitOptions initOptions;
     initOptions.timeoutSec = timeoutSec;
     initOptions.coreThreadNum = netConfig.handleRequestThreadNum;
@@ -525,6 +525,16 @@ BResult MmsServer::MmsUnicastNet()
     ChkTrue(ret == MMS_OK, ret, "Register server channel broken handler failed, ret:" << ret << ".");
 
     NetOptions netOptions;
+    if (mConfig->IsSingleNode()) {
+        FillIpcNetOptions(netOptions);
+        ret = mNetEngine->Start(netOptions);
+        ChkTrue(ret == MMS_OK, ret, "Start ipc service failed, result:" << ret << ".");
+        ret = InitNetNumaGroup(netOptions.workerGroupsNum);
+        ChkTrue(ret == MMS_OK, ret, "Init net numa group failed, ret:" << ret << ".");
+        LOG_INFO("Single-node mode, only ipc service is initialized.");
+        return MMS_OK;
+    }
+
     if (!mConfig->GetBasicConfig().multicastSwitch) {
         FillNetOptions(netOptions);
         ret = mNetEngine->Start(netOptions);
@@ -562,6 +572,10 @@ BResult MmsServer::MmsNetInit()
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Init unicast net failed, ret:" << ret << ".");
         return ret;
+    }
+
+    if (mConfig->IsSingleNode()) {
+        return MMS_OK;
     }
 
     if (!mConfig->GetBasicConfig().multicastSwitch) {
@@ -682,6 +696,11 @@ void MmsServer::MmsKvServerExit()
 
 BResult MmsServer::MmsCrbSchedulerInit()
 {
+    if (mConfig->IsSingleNode()) {
+        LOG_INFO("Single-node mode, skip crb scheduler initialization.");
+        return MMS_OK;
+    }
+
     mCrbSchedulerPtr = CrbScheduler::Instance();
     if (UNLIKELY(mCrbSchedulerPtr == nullptr)) {
         LOG_ERROR("crb scheduler is nullptr.");
@@ -700,7 +719,9 @@ BResult MmsServer::MmsCrbSchedulerInit()
 
 void MmsServer::MmsCrbSchedulerExit()
 {
-    mCrbSchedulerPtr->Exit();
+    if (mCrbSchedulerPtr != nullptr) {
+        mCrbSchedulerPtr->Exit();
+    }
 }
 
 #ifdef USE_CLI_TOOLS
@@ -742,6 +763,12 @@ BResult MmsServer::HandleNodeEvent(const std::map<uint16_t, CmNodeInfo> &nodeInf
         mStarted = true;
     }
 
+    if (mConfig->IsSingleNode()) {
+        mCurNodeTimes++;
+        LOG_DEBUG("Handle node event times:" << mCurNodeTimes << ".");
+        return MMS_OK;
+    }
+
     if (mConfig->GetBasicConfig().multicastSwitch) {
         CreateSubscribers(nodeInfos);
     }
@@ -773,8 +800,10 @@ BResult MmsServer::HandleCmPtEvent(const std::map<uint16_t, CmPtInfo> &ptInfos, 
 
     mCurPtTimes++;
     UpdateLocalPtVersion(mCm->GetLocalPtVersion());
-    mCrbSchedulerPtr->UpdateLocalCopys();
-    mCrbSchedulerPtr->CrbBrokenHandle(mCm->GetNodeView());
+    if (mCrbSchedulerPtr != nullptr) {
+        mCrbSchedulerPtr->UpdateLocalCopys();
+        mCrbSchedulerPtr->CrbBrokenHandle(mCm->GetNodeView());
+    }
     NotifyServiceable(serviceable);
 
     LOG_DEBUG("Handle pt event times:" << mCurPtTimes);
@@ -919,7 +948,7 @@ void MmsServer::NotifyServiceable(bool serviceable)
 
     if (mIsFirst) {
         mIsFirst = false;
-        if (mConfig->GetBasicConfig().multicastSwitch) {
+        if (!mConfig->IsSingleNode() && mConfig->GetBasicConfig().multicastSwitch) {
             mMulticastEngine->WaitForConnectDone(); // 进程启动后等组播建链完了再通知可服务
         }
         mServiceable = serviceable;

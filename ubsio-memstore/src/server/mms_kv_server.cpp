@@ -98,7 +98,10 @@ BResult MmsKvServer::Initialize()
     }
 
     uint32_t lev1Cap = static_cast<uint32_t>(MmsServer::Instance()->GetConfig()->GetCmConfig().nodeNum);
-    uint32_t lev2Cap = static_cast<uint32_t>(MmsServer::Instance()->GetConfig()->GetNetConfig().rpcWorkerGroupsNum);
+    const auto &config = MmsServer::Instance()->GetConfig();
+    uint32_t lev2Cap = config->IsSingleNode()
+        ? static_cast<uint32_t>(NO_1)
+        : static_cast<uint32_t>(config->GetNetConfig().rpcWorkerGroupsNum);
     mSequence = MmsSequence::Instance();
     auto ret = mSequence->Initialize(lev1Cap, lev2Cap);
     if (ret != MMS_OK) {
@@ -130,7 +133,7 @@ BResult MmsKvServer::Initialize()
     };
 
     mIoTimeOut = MmsServer::Instance()->GetConfig()->GetCmConfig().registeredTimeoutSec * IO_RETRY_NUM;
-    mMulticast = MmsServer::Instance()->GetConfig()->GetBasicConfig().multicastSwitch;
+    mMulticast = !config->IsSingleNode() && config->GetBasicConfig().multicastSwitch;
     uint32_t ioCtxBuffLen = MmsServer::Instance()->GetConfig()->GetNetConfig().msgMaxBuffSize;
     mIoCtxBuffLen = ioCtxBuffLen;
     MmsKvServer::mMaxPutItemNum =
