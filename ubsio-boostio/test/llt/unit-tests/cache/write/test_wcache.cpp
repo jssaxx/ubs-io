@@ -10,21 +10,27 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "test_wcache.h"
 #include <gtest/gtest.h>
-#include <libaio.h>
-#include <cstdint>
 #include <mockcpp/mockcpp.hpp>
-#include "bdm_core.h"
-#include "bio_config_instance.h"
-#include "bio_mock.h"
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <cstring>
+#include <libaio.h>
+#include <mutex>
 #include "bio_server.h"
-#include "cache_overload_ctrl.h"
+#include "bio_server_c.h"
+#include "bio_mock.h"
+#include "bio_config_instance.h"
 #include "cache_slice_operator.h"
-#include "flow_manager.h"
-#include "flow_task_pool.h"
-#include "tracepoint.h"
 #include "wcache_manager.h"
+#include "bdm_core.h"
+#include "flow_task_pool.h"
+#include "flow_manager.h"
+#include "tracepoint.h"
+#include "cache_overload_ctrl.h"
+#include "test_wcache.h"
 
 using namespace ock::bio;
 
@@ -51,6 +57,32 @@ static constexpr uint16_t G_PT_V = 1;
 static uint64_t g_flowId = 0;
 static FlowInstance *g_flowInst = nullptr;
 
+namespace {
+class DaemonConfigGuard {
+public:
+    DaemonConfigGuard()
+    {
+        auto &config = const_cast<BioConfig::DaemonConfig &>(BioConfig::Instance()->GetDaemonConfig());
+        mConfig = &config;
+        mOrigin = config;
+    }
+
+    ~DaemonConfigGuard()
+    {
+        *mConfig = mOrigin;
+    }
+
+    BioConfig::DaemonConfig &Get()
+    {
+        return *mConfig;
+    }
+
+private:
+    BioConfig::DaemonConfig *mConfig{ nullptr };
+    BioConfig::DaemonConfig mOrigin;
+};
+}
+
 static auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
@@ -69,6 +101,50 @@ static BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t length)
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, 0);
     return gWCacheManager->GetWCacheSlice(sliceKey, gWcacheSlice);
+}
+
+struct MetaEventCollector {
+    std::mutex lock;
+    std::condition_variable cv;
+    std::vector<UbsIoMetaEvent> events;
+};
+
+static bool WaitMetaEvents(MetaEventCollector &collector, size_t count)
+{
+    std::unique_lock<std::mutex> lock(collector.lock);
+    return collector.cv.wait_for(lock, std::chrono::seconds(5), [&collector, count]() {
+        return collector.events.size() >= count;
+    });
+}
+
+struct CMetaEventCollector {
+    std::mutex lock;
+    std::condition_variable cv;
+    std::vector<UbsioMetaEventC> events;
+    std::vector<std::string> keys;
+};
+
+static void CollectCMetaEvents(void *context, const UbsioMetaEventC *events, uint32_t count)
+{
+    auto *collector = static_cast<CMetaEventCollector *>(context);
+    if (collector == nullptr || events == nullptr) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(collector->lock);
+    for (uint32_t i = 0; i < count; ++i) {
+        collector->events.push_back(events[i]);
+        collector->keys.emplace_back(events[i].key, events[i].keyLen);
+    }
+    collector->cv.notify_one();
+}
+
+static bool WaitCMetaEvents(CMetaEventCollector &collector, size_t count)
+{
+    std::unique_lock<std::mutex> lock(collector.lock);
+    return collector.cv.wait_for(lock, std::chrono::seconds(5), [&collector, count]() {
+        return collector.events.size() >= count;
+    });
 }
 
 TEST_F(TestWCache, test_create_flow_return_ok)
@@ -112,6 +188,69 @@ TEST_F(TestWCache, test_get_slice_param_invalid)
     EXPECT_EQ(wSlice, nullptr);
 }
 
+TEST_F(TestWCache, test_meta_event_batch_flush_and_closed_batch)
+{
+    LOG_INFO("test_meta_event_batch_flush_and_closed_batch");
+    MetaEventCollector collector;
+    gWCacheManager->RegUbsIoMetaEventCallback([&collector](const std::vector<UbsIoMetaEvent> &events) {
+        std::lock_guard<std::mutex> lock(collector.lock);
+        collector.events.insert(collector.events.end(), events.begin(), events.end());
+        collector.cv.notify_one();
+    });
+
+    auto batch = std::make_shared<UbsIoMetaEventBatch>();
+    ASSERT_NE(batch, nullptr);
+    gWCacheManager->AppendMetaEvent(UBSIO_META_RECOVER, "test_meta_event_recover", batch);
+    gWCacheManager->AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_delete", batch);
+    gWCacheManager->FlushMetaEventBatch(batch);
+
+    // Delayed SetSlice callbacks may run after the worker-local batch is closed.
+    // Those events must bypass the closed batch and still be reported through manager pending queue.
+    gWCacheManager->AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_after_close", batch);
+
+    bool gotEvents = WaitMetaEvents(collector, 3);
+    gWCacheManager->RegUbsIoMetaEventCallback(nullptr);
+    ASSERT_TRUE(gotEvents);
+
+    std::lock_guard<std::mutex> lock(collector.lock);
+    auto hasRecover = std::find_if(collector.events.begin(), collector.events.end(),
+        [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_RECOVER && event.key == "test_meta_event_recover";
+        });
+    auto hasDelete = std::find_if(collector.events.begin(), collector.events.end(),
+        [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_DELETE && event.key == "test_meta_event_delete";
+        });
+    auto hasDelayedDelete = std::find_if(collector.events.begin(), collector.events.end(),
+        [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_DELETE && event.key == "test_meta_event_after_close";
+        });
+    EXPECT_NE(hasRecover, collector.events.end());
+    EXPECT_NE(hasDelete, collector.events.end());
+    EXPECT_NE(hasDelayedDelete, collector.events.end());
+}
+
+TEST_F(TestWCache, test_meta_event_c_abi_callback)
+{
+    LOG_INFO("test_meta_event_c_abi_callback");
+    CMetaEventCollector collector;
+    auto ret = UbsioRegisterMetaEventCallback(CollectCMetaEvents, &collector);
+    EXPECT_EQ(ret, BIO_OK);
+
+    gWCacheManager->AppendMetaEvent(UBSIO_META_RECOVER, "test_c_abi_recover");
+    bool gotEvents = WaitCMetaEvents(collector, 1);
+
+    ret = UbsioRegisterMetaEventCallback(nullptr, nullptr);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_TRUE(gotEvents);
+
+    std::lock_guard<std::mutex> lock(collector.lock);
+    ASSERT_GE(collector.events.size(), 1U);
+    EXPECT_EQ(collector.events[0].type, UBSIO_META_RECOVER_C);
+    EXPECT_EQ(collector.events[0].keyLen, strlen("test_c_abi_recover"));
+    EXPECT_EQ(collector.keys[0], "test_c_abi_recover");
+}
+
 TEST_F(TestWCache, test_put_case_return_ok)
 {
     LOG_INFO("test_put_case_return_ok");
@@ -124,70 +263,53 @@ TEST_F(TestWCache, test_put_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 
     Key key = "test_put_case_return_ok";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 }
 
-TEST_F(TestWCache, test_slave_send_negotiate_case_return_ok)
+TEST_F(TestWCache, test_put_without_disk_cache_only_supports_write_back)
 {
-    LOG_INFO("test_master_negotiate_case_return_ok");
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
-    auto ret = gWCacheManager->EvictNegotiateThread();
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
-    EXPECT_EQ(ret, BIO_OK);
-}
+    LOG_INFO("test_put_without_disk_cache_only_supports_write_back");
+    DaemonConfigGuard configGuard;
+    auto &config = configGuard.Get();
+    config.hasDiskCache = false;
+    config.memCap = NO_MAX_VALUE64 / NO_10;
+    config.memReadRatio = NO_5;
+    config.memWriteRatio = NO_5;
+    config.wcacheMemEvictLevel = NO_100;
+    config.diskCaps.clear();
 
-TEST_F(TestWCache, test_slave_send_negotiate_get_masternode_file)
-{
-    LOG_INFO("test_slave_send_negotiate_get_masternode_file");
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
-    auto ret = gWCacheManager->EvictNegotiateThread();
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    BioHvsDeactiveTracePoint(0, "EVICT_NEGOTIATE_GET_MASTERNODE");
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
+    uint64_t flowId = 0;
+    auto ret = gWCacheManager->AllocateFlowId(G_PT_ID, G_PT_V, flowId);
     EXPECT_EQ(ret, BIO_OK);
-}
+    ASSERT_NE(flowId, 0);
+    ret = gWCacheManager->CreateWCache(0, flowId, G_PT_ID, G_PT_V, 0, false);
+    EXPECT_EQ(ret, BIO_OK);
 
-TEST_F(TestWCache, test_slave_send_negotiate_get_vectory_empty)
-{
-    LOG_INFO("test_slave_send_negotiate_get_vectory_empty");
-    BioTracepointParam userParam;
-    BioHvsActiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY", 0, 1, userParam);
-    BioHvsActiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE", 0, 1, userParam);
-    auto ret = gWCacheManager->EvictNegotiateThread();
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_TRUE");
-    BioHvsDeactiveTracePoint(0, "EVICT_NEGOTIATE_VECTOR_EMPTY");
-    BioHvsDeactiveTracePoint(0, "WCACHE_NEGOTIATE_FLAG_CLEAR");
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER");
-    uint64_t slices[NO_3];
-    slices[0] = 0;
-    slices[NO_1] = NO_1;
-    slices[NO_2] = NO_2;
-    std::vector<bool> reslut(NO_3, false);
-    BioHvsActiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT", 0, 1, userParam);
-    gWCacheManager->MasterEvictNegotiate(g_flowId, slices, reslut, NO_3);
-    BioHvsDeactiveTracePoint(0, "NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT");
+    uint64_t flowIndex = 0;
+    SliceKey sliceKey(flowId, 0, FLOW_MEMORY, NO_1024, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
-}
+    ASSERT_NE(wSlice, nullptr);
 
-TEST_F(TestWCache, test_get_evict_negotiate_info_case)
-{
-    LOG_INFO("test_get_evict_negotiate_info_case");
-    auto ret = gWCacheManager->GetEvictNegotiateInfo();
+    Key key = "test_put_without_disk_cache_write_back";
+    CacheAttr writeBackAttr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ret = gWCacheManager->Put(key, wSlice, reader, writeBackAttr, false);
     EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(writeBackAttr.ioStrategy, WRITE_MEM_BACK);
+
+    SliceKey writeThroughSliceKey(flowId, NO_1024, FLOW_MEMORY, NO_1024, 1);
+    WCacheSlicePtr writeThroughSlice = nullptr;
+    ret = gWCacheManager->GetWCacheSlice(writeThroughSliceKey, writeThroughSlice);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(writeThroughSlice, nullptr);
+
+    Key writeThroughKey = "test_put_without_disk_cache_write_through";
+    CacheAttr writeThroughAttr = { 0, LOCAL_AFFINITY, WRITE_THROUGH };
+    ret = gWCacheManager->Put(writeThroughKey, writeThroughSlice, reader, writeThroughAttr, false);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
@@ -196,13 +318,13 @@ TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)
     NetMrInfo bioMrInfo;
     auto ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo = {bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     WCacheSlicePtr wSlice = MakeRef<WCacheSlice>(g_flowId, 0, 1, NO_1024, addrVec);
     EXPECT_NE(wSlice, nullptr);
 
     Key key = "test_put_state_not_normal_case_return_fail";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_STATE_NOT_NORMAL", 0, 1, userParam);
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
@@ -220,12 +342,12 @@ TEST_F(TestWCache, test_put_wcache_put_err_case_return_fail)
     NetMrInfo bioMrInfo;
     auto ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo = {bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     WCacheSlicePtr wSlice = MakeRef<WCacheSlice>(g_flowId, 0, 1, NO_1024, addrVec);
     EXPECT_NE(wSlice, nullptr);
 
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     Key key = "test_put_wcache_put_err_case_return_fail";
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_PUT_FAIL", 0, 1, userParam);
@@ -250,7 +372,7 @@ TEST_F(TestWCache, test_put_repeat_case_return_ok)
     EXPECT_EQ(ret, BIO_OK);
 
     Key key = "test_put_repeat_case_return_ok";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -264,7 +386,7 @@ TEST_F(TestWCache, test_put_repeat_case_return_ok)
 TEST_F(TestWCache, test_put_nullkey_case_return_fail)
 {
     LOG_INFO("test_put_nullkey_case_return_fail");
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     auto ret = gWCacheManager->Put(nullptr, gWcacheSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_INVALID_PARAM);
 
@@ -292,7 +414,7 @@ TEST_F(TestWCache, test_put_degrate_case_return_ok)
 
     gWCacheManager->SetDegradeState(wSlice, true);
     Key key = "test_put_degrate_case_return_ok";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, true);
     EXPECT_EQ(ret, BIO_OK);
     gWCacheManager->SetDegradeState(wSlice, false);
@@ -312,15 +434,15 @@ TEST_F(TestWCache, test_get_case_return_ok)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_get_case_return_ok";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo = {bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, 0, rcacheSlice, wWriter, realLen);
@@ -342,15 +464,15 @@ TEST_F(TestWCache, test_get_offset_over_case_return_err)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_get_offset_over_case_return_err";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo = {bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, NO_MAX_VALUE64, rcacheSlice, wWriter, realLen);
@@ -372,15 +494,15 @@ TEST_F(TestWCache, test_get_offset_err_case_return_err)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_get_offset_err_case_return_err";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo = {bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, NO_100, rcacheSlice, wWriter, realLen);
@@ -402,15 +524,15 @@ TEST_F(TestWCache, test_cache_get_nullkey_case_return_err)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_cache_get_nullkey_case_return_err";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo2;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo2);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo2 = {bioMrInfo2.address, static_cast<uint32_t>(bioMrInfo2.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo2)};
+    MrInfo mrInfo2 = { bioMrInfo2.address, static_cast<uint32_t>(bioMrInfo2.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo2) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, 0, rcacheSlice, wWriter, realLen);
@@ -434,15 +556,15 @@ TEST_F(TestWCache, test_cache_get_nullslice_case_return_err)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_cache_get_nullslice_case_return_err";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo2;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo2);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo2 = {bioMrInfo2.address, static_cast<uint32_t>(bioMrInfo2.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo2)};
+    MrInfo mrInfo2 = { bioMrInfo2.address, static_cast<uint32_t>(bioMrInfo2.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo2) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, 0, rcacheSlice, wWriter, realLen);
@@ -466,15 +588,15 @@ TEST_F(TestWCache, test_rcache_get_rcahceptr_notexist_case_return_fail)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_rcache_get_rcahceptr_notexist_case_return_fail";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo2;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo2);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo2 = {bioMrInfo2.address, static_cast<uint32_t>(bioMrInfo2.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo2)};
+    MrInfo mrInfo2 = { bioMrInfo2.address, static_cast<uint32_t>(bioMrInfo2.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo2) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, 0, rcacheSlice, wWriter, realLen);
@@ -498,14 +620,14 @@ TEST_F(TestWCache, test_rcache_get_flow_offset_err_case_return_fail)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_rcache_get_flow_offset_err_case_return_fail";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     uint64_t realLen = 0;
     std::vector<FlowAddr> addrVec;
     RCacheSlicePtr slicePtr = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
-    sleep(NO_1);
+    sleep(NO_5);
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_FLOW_OFFSET_FAIL", 0, 1, userParam);
     ret = Cache::Instance().Get(key, 0, slicePtr, wWriter, realLen);
@@ -527,15 +649,15 @@ TEST_F(TestWCache, test_cache_get_nullslicewriter_case_return_err)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_cache_get_nullslicewriter_case_return_err";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
     NetMrInfo bioMrInfo;
     ret = BioServer::Instance()->MemAlloc(NO_1024, bioMrInfo);
     EXPECT_EQ(ret, BIO_OK);
-    MrInfo mrInfo = {bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size)};
-    std::vector<FlowAddr> addrVec = {FlowAddr(mrInfo)};
+    MrInfo mrInfo = { bioMrInfo.address, static_cast<uint32_t>(bioMrInfo.size) };
+    std::vector<FlowAddr> addrVec = { FlowAddr(mrInfo) };
     RCacheSlicePtr rcacheSlice = MakeRef<RCacheSlice>(G_PT_ID, NO_1024, addrVec);
     uint64_t realLen = 0;
     ret = gWCacheManager->Get(key, 0, rcacheSlice, nullptr, realLen);
@@ -557,7 +679,7 @@ TEST_F(TestWCache, test_stat_case_return_ok)
     auto ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
     EXPECT_EQ(ret, BIO_OK);
     Key key = "test_stat_case_return_ok";
-    CacheAttr attr = {0, LOCAL_AFFINITY, WRITE_BACK};
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
 
@@ -629,7 +751,7 @@ TEST_F(TestWCache, test_flush_return_err)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "NO_PROCESS_CLEAR_OLD_CACHE", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "NO_PROCESS_FLUSH", 0, 1, userParam);
-    SyncDataRequest req = {{MESSAGE_MAGIC, 1, 1, 1, getpid()}};
+    SyncDataRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() } };
     auto ret = MirrorServer::Instance()->SyncData(req);
     EXPECT_EQ(ret, BIO_INNER_ERR);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_CLEAR_OLD_CACHE");
@@ -672,7 +794,7 @@ TEST_F(TestWCache, test_wcache_destroy_flowid_err_return_ok)
     BioHvsActiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
-    sleep(NO_1);
+    sleep(NO_5);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
     BioHvsDeactiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLOWID_FAIL");
     BioHvsDeactiveTracePoint(0, "HANDLE_CACHE_BROKE_OK");
@@ -690,7 +812,7 @@ TEST_F(TestWCache, test_wcache_destroy_flush_return_ok)
     BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_FLUSH", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
-    sleep(NO_1);
+    sleep(NO_5);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_FLUSH");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
@@ -709,7 +831,7 @@ TEST_F(TestWCache, test_wcache_destroy_expire_return_ok)
     BioHvsActiveTracePoint(0, "WCACHE_HANDLE_BROCK_EXPIRED_CLEAR", 0, 1, userParam);
     auto ret = Cache::Instance().DestroyWCache(0, 0, 0, g_flowId);
     EXPECT_EQ(ret, BIO_OK);
-    sleep(NO_1);
+    sleep(NO_5);
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EMPTY_EVICT");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_WCACHE_MANAGER_EXPIRED_CLEAR");
     BioHvsDeactiveTracePoint(0, "NO_PROCESS_DESTROY_EVICT_THREAD");
@@ -815,7 +937,7 @@ void TestWCache::Stub()
 }
 
 static int32_t BdmGetNextUsedChunkIdStub(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
-                                         uint64_t *bucketOffset)
+    uint64_t *bucketOffset)
 {
     *chunkId = 0;
     *chunkSize = NO_4194304;
@@ -855,11 +977,11 @@ TEST_F(TestWCache, test_get_slice_wcache_flow_offset_err_return_fail)
 TEST_F(TestWCache, test_get_slice_wcache_hold_wait_err_return_fail)
 {
     LOG_INFO("test_get_slice_wcache_hold_wait_err_return_fail");
-    GetSliceRequest req = {{MESSAGE_MAGIC, 1, 1, 1, getpid()}, 1, 0, 1, NO_128};
+    GetSliceRequest req = { { MESSAGE_MAGIC, 1, 1, 1, getpid() }, 1, 0, 1, NO_128 };
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_STATE_NORMAL", 0, 1, userParam);
-    auto ret = GetSlice(g_flowId, 0, NO_MAX_VALUE64 - 1);
+    auto ret = GetSlice(g_flowId, 0, NO_MAX_VALUE64-1);
     BioHvsDeactiveTracePoint(0, "WCACHE_STATE_NORMAL");
     BioHvsDeactiveTracePoint(0, "WCACHE_HOLD_WAIT_FAIL");
     EXPECT_EQ(ret, BIO_ERR);
@@ -871,7 +993,7 @@ TEST_F(TestWCache, test_bio_server_put_write_slice_null_reply_ok)
     MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
     ServiceContext ctx;
     PutRequest req;
-    req.comm = {MESSAGE_MAGIC, 1, 1, 1, getpid()};
+    req.comm = { MESSAGE_MAGIC, 1, 1, 1, getpid() };
     req.tenantId = 1;
     req.affinity = 1;
     req.strategy = 1;
@@ -979,7 +1101,7 @@ TEST_F(TestWCache, test_bio_olc_show)
 TEST_F(TestWCache, test_bio_olc_recycle)
 {
     LOG_INFO("test_bio_olc_recycle");
-    QuotaHolder holder = {NO_1, NO_1024};
+    QuotaHolder holder = { NO_1, NO_1024 };
     auto holdMap = CacheOverloadCtrl::Instance().GetHolders();
     auto iter = holdMap->find(holder);
     if (iter == holdMap->end()) {

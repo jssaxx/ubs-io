@@ -23,8 +23,9 @@ public:
     static void Register() noexcept;
     static void Deregister() noexcept;
 };
-} // namespace tp
-} // namespace bio
-} // namespace ock
+}
+}
+}
+
 
 #endif // BOOSTIO_BIO_CACHE_TP_H

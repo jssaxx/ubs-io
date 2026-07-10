@@ -10,40 +10,56 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "server_diagnose.h"
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
-#include "bdm_core.h"
+#include "htracer.h"
 #include "bio_client.h"
 #include "bio_config_instance.h"
-#include "bio_functions.h"
 #include "bio_log.h"
+#include "bdm_core.h"
 #include "bio_server.h"
+#include "bio_functions.h"
 #include "cache_overload_ctrl.h"
-#include "htracer.h"
+#include "wcache_statistic.h"
+#include "server_diagnose.h"
 
 using namespace ock::bio;
-std::regex serverPattern("[0-9]+");
+
+namespace {
+bool IsUnsignedInteger(const std::string &value)
+{
+    if (value.empty()) {
+        return false;
+    }
+    for (char ch : value) {
+        if (ch < '0' || ch > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+}
 
 bool ock::bio::diagnose::BioServerCommand::mInited = false;
-void *ock::bio::diagnose::BioServerCommand::mHandler = nullptr;
+void* ock::bio::diagnose::BioServerCommand::mHandler = nullptr;
 CliRegCmdFuncPtr ock::bio::diagnose::BioServerCommand::mRegOp = nullptr;
 CliUnRegCmdFuncPtr ock::bio::diagnose::BioServerCommand::mUnRegOp = nullptr;
 CliPrintBufFuncPtr ock::bio::diagnose::BioServerCommand::mPrintOp = nullptr;
 
 int32_t diagnose::BioServerCommand::LoadSymbols()
 {
-    const char *soFileName = "libcli_agent.so";
+    const char* soFileName = "libcli_agent.so";
     mHandler = dlopen(soFileName, RTLD_NOW);
     if (mHandler == nullptr) {
         LOG_ERROR("Failed to open library() " << soFileName << " dlopen, error " << dlerror());
         return BIO_INNER_ERR;
     }
 
-    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "CLI_RegCmd"));
-    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "CLI_UnRegCmd"));
-    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "CLI_PrintBuf"));
+    mRegOp = reinterpret_cast<CliRegCmdFuncPtr>(dlsym(mHandler, "cli_register_command"));
+    mUnRegOp = reinterpret_cast<CliUnRegCmdFuncPtr>(dlsym(mHandler, "cli_unregister_command"));
+    mPrintOp = reinterpret_cast<CliPrintBufFuncPtr>(dlsym(mHandler, "cli_print_buffer"));
     if (mRegOp == nullptr || mUnRegOp == nullptr || mPrintOp == nullptr) {
         LOG_ERROR("Failed to load function.");
         dlclose(mHandler);
@@ -65,11 +81,11 @@ int diagnose::BioServerCommand::Initialize() noexcept
         return ret;
     }
 
-    CLI_CMD_S command;
-    strncpy(command.szCommand, "bioServer", CLI_MAX_COMMAND_LEN);
-    strncpy(command.szDescription, "bioServer commands.", CLI_MAX_CMD_DESC_LEN);
-    command.fnCmdDo = BioServerDebugProcess;
-    command.fnPrintCmdHelp = BioServerDebugHelp;
+    CliCommand command;
+    strncpy(command.command, "bioServer", CLI_MAX_COMMAND_LEN);
+    strncpy(command.description, "bioServer commands.", CLI_MAX_CMD_DESC_LEN);
+    command.handler = BioServerDebugProcess;
+    command.help_handler = BioServerDebugHelp;
     auto result = mRegOp(&command);
     if (result == 0) {
         mInited = true;
@@ -80,7 +96,7 @@ int diagnose::BioServerCommand::Initialize() noexcept
 void diagnose::BioServerCommand::Destroy() noexcept
 {
     if (mInited && mUnRegOp) {
-        mUnRegOp((char *)"sdk");
+        mUnRegOp((char *)"bioServer");
         mInited = false;
     }
 
@@ -132,8 +148,8 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
             uint64_t totalCap = 0;
             uint64_t usedCap = 0;
             BdmGetCapacity(i, &totalCap, &usedCap);
-            mPrintOp("%-10d%-20s%-10s%-20llu%-20llu \n", i, daemonConfig.diskList[i].c_str(), "normal", totalCap,
-                     usedCap);
+            mPrintOp("%-10d%-20s%-10s%-20llu%-20llu \n",
+                i, daemonConfig.diskList[i].c_str(), "normal", totalCap, usedCap);
         }
         return;
     } else if (cmdType == "net") {
@@ -141,16 +157,16 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
             return;
         }
-        std::string protoStr[4U] = {"RDMA", "TCP", "UDS", "SHM"};
-        std::string modeStr[2U] = {"BUSY_POLLING", "EVENT_POLLING"};
+        std::string protoStr[4U] = { "RDMA", "TCP", "UDS", "SHM" };
+        std::string modeStr[2U] = { "BUSY_POLLING", "EVENT_POLLING" };
         uint32_t executorNum = 0;
         NetOptions option;
         BioServer::Instance()->GetNetEngine()->Show(executorNum, option);
         mPrintOp("Boostio rpc info: \n");
         mPrintOp("  ip: %s:%u, protocol:%s, mode:%s, workers_count:%u, request_executor:%u, memory_size:%luGB\n",
-                 option.ipMask.c_str(), option.port, protoStr[option.protocol].c_str(),
-                 (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, executorNum,
-                 (option.memorySize / NO_1024 / NO_1024 / NO_1024));
+            option.ipMask.c_str(), option.port, protoStr[option.protocol].c_str(),
+            (option.isBusyLoop) ? modeStr[0].c_str() : modeStr[1].c_str(), option.handlerCount, executorNum,
+            (option.memorySize / NO_1024 / NO_1024 / NO_1024));
     } else if (cmdType == "resources") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
@@ -159,10 +175,10 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         CacheResDescription desc;
         Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
         mPrintOp("WCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
-                 desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
+            desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
         Cache::Instance().GetCacheResources(desc, READ_CACHE);
         mPrintOp("RCACHE(MB): mem %lu used %lu disk %lu used %lu \n", desc.memCapacity / NO_1048576,
-                 desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
+            desc.memUsedSize / NO_1048576, desc.diskCapacity / NO_1048576, desc.diskUsedSize / NO_1048576);
     } else if (cmdType == "pt") {
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
@@ -203,9 +219,20 @@ void diagnose::BioServerCommand::BioServerHandleShow(const std::vector<std::stri
         for (auto iter = holders.begin(); iter != holders.end(); iter++) {
             mPrintOp("  Holder %u-%lu: %lu \n", iter->first.nodeId, iter->first.clientId, iter->second);
         }
-    } else if (cmdType == "evict") {
-        Cache::Instance().ShowEvictNegotiateQueue();
-        mPrintOp("Show evict negotiate queue success, please see log file.\n");
+    } else if (cmdType == "existHit") {
+        if (cmds.size() != 2) {
+            mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
+            return;
+        }
+        uint64_t existTotol = WCacheStatistic::Instance().GetExistTotalCount();
+        uint64_t existHit = WCacheStatistic::Instance().GetExistHitCount();
+        if (existTotol == 0) {
+            mPrintOp("Did not execute exist.\n");
+            return;
+        }
+        mPrintOp("Exist times:%lu\n", existTotol);
+        mPrintOp("Exist hit times:%lu\n", existHit);
+        mPrintOp("Exist hit ratio:%2f%%\n", static_cast<float>(existHit) * NO_100 / static_cast<float>(existTotol));
     } else {
         mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
     }
@@ -217,7 +244,7 @@ void diagnose::BioServerCommand::HandleServerTrace(const std::vector<std::string
     std::string viewType(cType);
     if (viewType == "show") {
         auto info = ock::htracer::GetTraceInfo();
-        mPrintOp(info.c_str());
+        mPrintOp("%s", info.c_str());
     } else if (viewType == "clear") {
         ock::htracer::ClearTraceInfo();
         mPrintOp("clearing statistics server records succeeded.\n");
@@ -232,14 +259,14 @@ void diagnose::BioServerCommand::HandleServerTrace(const std::vector<std::string
 
 void diagnose::BioServerCommand::BioServerDebugHelp(char *command, int detail) noexcept
 {
-    mPrintOp("\tchange water level: bioserver chgwlv [tier] [water_level]\n");
-    mPrintOp("\tchange memory read write ratio: bioserver chgmr [memory ratio]\n");
-    mPrintOp("\tchange disk read write ratio: bioserver chgdr [disk ratio]\n");
-    mPrintOp("\tshow: bioserver show [disk/net/olc/evict]\n");
-    mPrintOp("\ttrace: bioserver trace [show/clear]\n");
-    mPrintOp("\tRCache put: bioserver RCachePut [key] [filePath] [ptId] [length]\n");
-    mPrintOp("\tRCache get: bioserver RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
-    mPrintOp("\tDelete rCache: bioserver RCacheDelete [ptId] [key]\n");
+    mPrintOp("\tchange water level: bioServer chgwlv [tier] [water_level]\n");
+    mPrintOp("\tchange memory read write ratio: bioServer chgmr [memory ratio]\n");
+    mPrintOp("\tchange disk read write ratio: bioServer chgdr [disk ratio]\n");
+    mPrintOp("\tshow: bioServer show [disk/net/olc/evict/existHit]\n");
+    mPrintOp("\ttrace: bioServer trace [show/clear]\n");
+    mPrintOp("\tRCache put: bioServer RCachePut [key] [filePath] [ptId] [length]\n");
+    mPrintOp("\tRCache get: bioServer RCacheGet [key] [ptId] [offset] [length] [filePath]\n");
+    mPrintOp("\tDelete rCache: bioServer RCacheDelete [ptId] [key]\n");
     mPrintOp("\texit: exit console\n");
 }
 
@@ -261,7 +288,7 @@ bool CanConvertToUint64(const std::string &str, uint64_t &val)
 
 void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[3], serverPattern)) {
+    if (!IsUnsignedInteger(cmds[3])) {
         mPrintOp("Invalid input.\n");
         return;
     }
@@ -281,7 +308,7 @@ void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> 
     uint64_t curPtTimes;
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&curPtTimes);
     if (ptId >= ptView.size()) {
-        mPrintOp("Failed to put value to rCache, PtId exceed%d.\n");
+        mPrintOp("Failed to put value to rCache, PtId exceed%llu.\n", ptId);
         return;
     }
 
@@ -328,7 +355,7 @@ void diagnose::BioServerCommand::HandleRCachePut(const std::vector<std::string> 
 void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> &cmds)
 {
     for (int i = 2; i <= 4; i++) {
-        if (!std::regex_match(cmds[i], serverPattern)) {
+        if (!IsUnsignedInteger(cmds[i])) {
             mPrintOp("Invalid input.\n");
             return;
         }
@@ -338,7 +365,7 @@ void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> 
     uint64_t offset = 0;
     uint64_t length = 0;
     auto const_key = cmds[1].c_str();
-    char *key = const_cast<char *>(const_key);
+    char* key = const_cast<char*>(const_key);
     try {
         ptId = std::stoull(cmds[2]);
         offset = std::stoull(cmds[3]);
@@ -357,6 +384,11 @@ void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> 
 
     MrInfo mrInfo;
     char *ptr = (char *)malloc(length);
+    if (ptr == nullptr) {
+        mPrintOp("Malloc fail.\n");
+        fclose(fp);
+        return;
+    }
     mrInfo.address = reinterpret_cast<uint64_t>(ptr);
     mrInfo.size = length;
     FlowAddr flowAddr(mrInfo);
@@ -374,27 +406,27 @@ void diagnose::BioServerCommand::HandleRCacheGet(const std::vector<std::string> 
     if (ret != RET_CACHE_OK) {
         mPrintOp("Get key from cache failed, ret:%d, key:%s\n", ret, key);
     } else {
-        mPrintOp("Get value success, key:%s, ptId:%llu, offset:%llu, length:%llu, realLen:%llu.\n", key, ptId, offset,
-                 length, realLength);
+        mPrintOp("Get value success, key:%s, ptId:%llu, offset:%llu, length:%llu, realLen:%llu.\n",
+                     key, ptId, offset, length, realLength);
         if (fwrite(ptr, sizeof(char), realLength, fp) != realLength) {
             mPrintOp("fwrite value to file failed, errno:%d.\n", errno);
         }
     }
 
-    delete[] ptr;
+    free(ptr);
     fclose(fp);
 }
 
 void diagnose::BioServerCommand::HandleRCacheDelete(const std::vector<std::string> &cmds)
 {
-    if (!std::regex_match(cmds[1], serverPattern)) {
+    if (!IsUnsignedInteger(cmds[1])) {
         mPrintOp("Invalid input.\n");
         return;
     }
 
     uint64_t ptId = 0;
     auto const_key = cmds[2].c_str();
-    char *key = const_cast<char *>(const_key);
+    char* key = const_cast<char*>(const_key);
     try {
         ptId = std::stoull(cmds[1]);
     } catch (std::exception e) {
@@ -446,7 +478,7 @@ void diagnose::BioServerCommand::BioServerDebugProcess(int argc, char *argv[]) n
 
         if ((tier != 0 && tier != 1) || (value < 0 || value > 100)) {
             mPrintOp("Input parameters failed!, water level tier:%s %s should in range(0-100)\n", cmds[1].c_str(),
-                     cmds[2].c_str());
+                         cmds[2].c_str());
             return;
         }
         HandleModifyEvictWaterLevel(tier, value);
@@ -481,13 +513,13 @@ void diagnose::BioServerCommand::BioServerDebugProcess(int argc, char *argv[]) n
             return;
         }
         HandleServerTrace(cmds);
-    } else if (cmdType == "RCachePut") {
+    } else if (cmdType == "RCachePut"){
         if (cmds.size() != 5) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
             return;
         }
         HandleRCachePut(cmds);
-    } else if (cmdType == "RCacheGet") {
+    } else if (cmdType == "RCacheGet"){
         if (cmds.size() != 6) {
             mPrintOp("Input parameters failed!, num:%u.\n", cmds.size());
             return;

@@ -20,11 +20,11 @@
 #include "cache_def.h"
 #include "cache_slice.h"
 #include "cache_slice_operator.h"
-#include "cm.h"
 #include "flow.h"
-#include "rcache_manager.h"
-#include "underfs.h"
+#include "ufs_helper.h"
 #include "wcache_tier.h"
+#include "rcache_manager.h"
+#include "cm.h"
 
 namespace ock {
 namespace bio {
@@ -33,34 +33,30 @@ using WCachePtr = Ref<WCache>;
 class WCache {
 public:
     WCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
-        : mProcId(procId),
-          mFlowId(flowId),
-          mPtId(ptId),
-          mPtv(ptv),
-          mDiskId(diskId),
-          mIsDegrade(isDegrade)
-    {
-    }
+        : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
+    {}
 
-    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
+    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
+        const UbsIoMetaEventBatchPtr &batch)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
+    using FlushMetaEventCallback = std::function<void(const UbsIoMetaEventBatchPtr &batch)>;
 
-    BResult Init(const ExecutorServicePtr evictNegoService, const ExecutorServicePtr evictService[MAX_WCACHE_TIER],
-                 const RCacheManagerPtr rCacheManager, bool isRecover);
+    BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
+        bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
-               EvictCallback evictCallback, const RetryCallback retryCallback);
+        EvictCallback evictCallback, const RetryCallback retryCallback, FlushMetaEventCallback flushMetaEventCallback);
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 
     BResult GetWCacheSlice(const SliceKey &sliceKey, WCacheSlicePtr &slice);
 
     BResult Put(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-                WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-                    WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult Delete(const Key &key, const WCacheSliceRefPtr &sliceRef);
 
@@ -80,17 +76,20 @@ public:
 
     inline void SetState(bool isNormal)
     {
-        mIsNormal = isNormal;
+        mIsNormal.store(isNormal);
     }
 
     inline bool GetState() const
     {
-        return mIsNormal;
+        return mIsNormal.load();
+    }
+
+    inline bool IsIoFinish() const
+    {
+        return mOnFlyRef == 0;
     }
 
     void StartEvictTask(WCacheTierType type);
-
-    BResult StartEvictNegotiateTask();
 
     void RetryEvictTask(WCacheTierType type);
 
@@ -130,19 +129,24 @@ public:
         mOnFlyRef -= 1;
     }
 
-    std::map<uint64_t, std::array<uint8_t, NO_256>> *GetEvictNegotiateIndexMap()
+    inline uint64_t GetFlyIo()
     {
-        return mCacheTiers[WCACHE_MEMORY]->GetEvictMapPtr();
+        return mOnFlyRef.load();
     }
 
-    inline void NegotiateIndexMapLockRead()
+    inline uint64_t GetIndex()
     {
-        mCacheTiers[WCACHE_MEMORY]->NegotiateIndexMapLockRead();
+        return mIndex;
     }
 
-    inline void NegotiateIndexMapUnLock()
+    inline uint64_t GetOffset()
     {
-        mCacheTiers[WCACHE_MEMORY]->NegotiateIndexMapUnLock();
+        return mOffset;
+    }
+
+    inline void SetProcId(uint64_t procId)
+    {
+        mProcId = procId;
     }
 
     using RecoverCallback = std::function<BResult(uint16_t ptId, const Key &key, const WCacheSliceRefPtr &sliceRef)>;
@@ -152,28 +156,31 @@ public:
     void ExpiredClear(const WCachePtr &self);
     void ProcAndCacheBrokenExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
-    bool IsEmptyNegotiate();
 
-    void MasterEvictNegotiate(uint64_t indexs[], std::vector<bool> &result, uint32_t count);
+    uint64_t GetTruncateIndex();
+    BResult AllocRCacheResource(const WCacheSlicePtr &srcSlice, WCacheSlicePtr &dstSlice, bool &isRCache);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
     BResult EvictAllMemSliceToDisk();
+    BResult EvictAllMemSliceToDiscard();
     BResult EvictAllDiskSliceToUnderFs();
 
-    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false);
-    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false);
+    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
+    BResult EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch = nullptr);
+    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
 
     BResult EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront);
-    BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront);
+    BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
 
     BResult EvictSlice(WCacheSliceRefPtr &sliceRef);
-    BResult EvictToRcache(const WCacheSlicePtr &slice, const Key &key, void *value);
-
-    void EvictNegotiate();
-
-    void AddEvictNegotiateQueue(WCacheSliceRefPtr sliceRef, uint8_t refNum);
+    void FreeRCacheResource(bool &isRCache, WCacheSlicePtr &slice);
+    void EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCacheSlicePtr &slice, bool &isRCache);
+    BResult EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const size_t length);
 
     bool EvictMemSatisfiedCond();
     bool EvictDiskSatisfiedCond();
@@ -187,51 +194,53 @@ private:
     BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearDisk();
 
-    void PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
+    BResult PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
-                      WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
-
-    BResult GetPtMasterNode(uint32_t &masterNid);
+        WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
     BResult StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
 private:
     uint64_t mProcId;
     uint64_t mFlowId;
+    Lock indexOffsetLock;
+    uint64_t mOffset;
+    uint64_t mIndex;
     uint16_t mPtId;
     uint64_t mPtv;
     uint16_t mDiskId;
-    uint16_t mCopyNum{0};
     bool mIsDegrade;
-    bool mIsMaster{true};
-    bool mIsNormal{true};
-    bool mIsForced{false};
-    std::atomic<bool> mIsStartEvictNegotiate{false};
-    std::atomic<bool> mIsMasterStartEvictNegotiate{false};
+    bool mIsMaster{ true };
+    std::atomic<bool> mIsNormal { true };
+    bool mIsForced { false };
+    bool mUfsEnable{ false };
+    bool mHasDiskCache{ true };
+
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
+    FlushMetaEventCallback mFlushMetaEventCallback;
 
     WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
 
     CacheSliceOperator mSliceOperator;
 
     ExecutorServicePtr mEvictService[MAX_WCACHE_TIER];
-    ExecutorServicePtr mEvictNegotiateService;
     std::atomic<bool> mEvictRef[MAX_WCACHE_TIER];
 
-    GetLocDiskStatus mGetLocDiskStatus{nullptr};
-    CheckLocRole mLocRole{nullptr};
-    GetGlobEvictOffset mGlobEvictOffset{nullptr};
+    GetLocDiskStatus mGetLocDiskStatus{ nullptr };
+    CheckLocRole mLocRole{ nullptr };
+    GetGlobEvictOffset mGlobEvictOffset{ nullptr };
 
     RCacheManagerPtr mRCacheManager;
-    UnderFsPtr mUnderFs;
+    UfsHelperPtr mUnderFs;
 
     std::atomic<uint64_t> mOnFlyRef;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
-} // namespace bio
-} // namespace ock
+}
+}
+
 
 #endif // BOOSTIO_WCACHE_H

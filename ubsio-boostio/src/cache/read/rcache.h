@@ -13,21 +13,21 @@
 #ifndef BOOSTIO_RCACHE_H
 #define BOOSTIO_RCACHE_H
 
-#include <cstdint>
-#include <list>
 #include <unordered_map>
-#include "bio_double_list.h"
+#include <list>
+#include <cstdint>
+#include "bio_log.h"
 #include "bio_err.h"
 #include "bio_lock.h"
-#include "bio_log.h"
 #include "bio_ref.h"
-#include "cache_def.h"
-#include "cache_slice.h"
-#include "cache_slice_operator.h"
-#include "flow.h"
+#include "bio_double_list.h"
 #include "flow_id_allocator.h"
+#include "flow.h"
 #include "rcache_chunk.h"
 #include "rcache_flow.h"
+#include "cache_slice_operator.h"
+#include "cache_slice.h"
+#include "cache_def.h"
 #include "rcache_statistic.h"
 
 namespace ock {
@@ -52,7 +52,7 @@ public:
     BResult Put(const Key &key, const WCacheSlicePtr &slice);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-                uint64_t &realLen);
+        uint64_t &realLen);
 
     BResult Load(const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
@@ -88,53 +88,9 @@ public:
         mIsNormal = false;
     }
 
-    inline uint64_t GetCacheData(RCacheTierType tierType)
-    {
-        return cacheData[tierType];
-    }
+    BResult EvictMemData(uint64_t needEvictData, uint64_t &haveEvictData);
 
-    inline void IncCacheData(RCacheTierType tierType, uint64_t len)
-    {
-        if (UINT64_MAX - cacheData[tierType] < len) {
-            return;
-        }
-        cacheData[tierType] += len;
-    }
-
-    inline void DecCacheData(RCacheTierType tierType, uint64_t len)
-    {
-        if (cacheData[tierType] > len) {
-            return;
-        }
-
-        cacheData[tierType] -= len;
-    }
-
-    inline uint64_t GetGCData(RCacheTierType tierType)
-    {
-        return gcData[tierType];
-    }
-
-    inline void IncGCData(RCacheTierType tierType, uint64_t len)
-    {
-        if (UINT64_MAX - gcData[tierType] < len) {
-            return;
-        }
-        gcData[tierType] += len;
-    }
-
-    inline void DecGCData(RCacheTierType tierType, uint64_t len)
-    {
-        if (gcData[tierType] > len) {
-            return;
-        }
-
-        gcData[tierType] -= len;
-    }
-
-    BResult EvictMemData(const uint64_t needEvictData, uint64_t &haveEvictData);
-
-    BResult EvictDiskData(const uint64_t needEvictData, uint64_t &haveEvictData);
+    BResult EvictDiskData(uint64_t needEvictData, uint64_t &haveEvictData);
 
     bool IsEmptyEvict();
 
@@ -149,10 +105,6 @@ private:
 
     BResult DeleteFromIndex(const Key &key, RCacheChunkPtr &chunk);
 
-    void AddToEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk);
-
-    void DelFromEvictList(RCacheTierType tierType, MqType mType, RCacheChunkPtr &chunk);
-
     void AddToTruncateList(RCacheTierType tierType, RCacheChunkPtr &chunk);
 
     void DelFromTruncateList(RCacheTierType tierType, RCacheChunkPtr &chunk);
@@ -164,21 +116,18 @@ private:
     BResult AllocChunk(const Key key, const RCacheValue value, RCacheChunkPtr &chunk);
 
     BResult GetSliceFromChunkIO(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr,
-                                uint64_t offset, uint64_t len, uint64_t &realLen);
+        uint64_t offset, uint64_t len, uint64_t &realLen);
 
     BResult GetSliceFromChunk(RCacheTierType tier, const RCacheChunkPtr &chunk, WCacheSlicePtr &slicePtr);
 
     BResult CreateRCacheFlow(RCacheTierType tier, std::vector<uint64_t> flowIds);
 
 private:
-    std::atomic<bool> mMemEvict{false};
-    std::atomic<bool> mDiskEvict{false};
-
-    std::atomic<uint64_t> cacheData[READ_CACHE_TIER_BUTT];
-    std::atomic<uint64_t> gcData[READ_CACHE_TIER_BUTT];
-
-    bool mIsNormal{true};
-    bool mCrcEnable{true};
+    std::atomic<bool> mMemEvict{ false };
+    std::atomic<bool> mDiskEvict{ false };
+    bool mIsNormal{ true };
+    bool mCrcEnable{ true };
+    bool mHasDiskCache{ true };
     uint64_t mFlowId;
     uint16_t mPtId;
     uint64_t mPtv;
@@ -186,21 +135,15 @@ private:
     uint32_t mWorkIndex;
     SpinLock indexLock[READ_CACHE_META_HASH_BUCKET_NUM];
     std::unordered_map<std::string, RCacheChunkPtr> index[READ_CACHE_META_HASH_BUCKET_NUM]; // read cache index
-
     RCacheFlowPtr flow[READ_CACHE_TIER_BUTT]; // read cache data
-
-    SpinLock evictMqLock[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT];
-    BioDoubleList<RCacheChunkPtr> evictMq[READ_CACHE_TIER_BUTT][MQ_TYPE_BUTT]; // read cache evict list
-
     SpinLock truncateLock[READ_CACHE_TIER_BUTT];
     BioDoubleList<RCacheChunkPtr> truncateQ[READ_CACHE_TIER_BUTT]; // truncate cache list
-
     CacheSliceOperator mSliceOperator;
     DEFINE_REF_COUNT_VARIABLE
 };
 
 using RCachePtr = Ref<RCache>;
-} // namespace bio
-} // namespace ock
+}
+}
 
 #endif // BOOSTIO_RCACHE_H

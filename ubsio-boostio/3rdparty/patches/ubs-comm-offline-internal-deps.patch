@@ -1,0 +1,105 @@
+diff --git a/src/hcom/3rdparty/securec/CMakeLists.txt b/src/hcom/3rdparty/securec/CMakeLists.txt
+index c8e5546..3df6c17 100644
+--- a/src/hcom/3rdparty/securec/CMakeLists.txt
++++ b/src/hcom/3rdparty/securec/CMakeLists.txt
+@@ -42,17 +42,22 @@ if(NOT LIBBOUNDCHECK_INCLUDE_DIR OR NOT LIBBOUNDCHECK_SHARED_LIBRARY)
+         if(NOT LIBBOUNDCHECK_INCLUDE_DIR OR NOT LIBBOUNDCHECK_SHARED_LIBRARY)
+                 message(STATUS "=========install from soucecode=========")
+                 
+-                include(FetchContent)
++                set(UBSCOMM_OFFLINE_LIBBOUNDSCHECK_DIR "${PROJECT_SOURCE_DIR}/3rdparty/offline/libboundscheck")
++                if(EXISTS "${UBSCOMM_OFFLINE_LIBBOUNDSCHECK_DIR}/Makefile")
++                        set(libboundscheck_SOURCE_DIR "${UBSCOMM_OFFLINE_LIBBOUNDSCHECK_DIR}")
++                else()
++                        include(FetchContent)
+ 
+-                # 假设 umdk-urma 仓库包含 urma 的头文件
+-                FetchContent_Declare(
+-                        libboundscheck
+-                        GIT_REPOSITORY https://gitee.com/openeuler/libboundscheck.git
+-                        GIT_TAG        master
+-                )
+-                FetchContent_MakeAvailable(libboundscheck)
+-                # 获取 hcom 源码路径
+-                FetchContent_GetProperties(libboundscheck)
++                        # 假设 umdk-urma 仓库包含 urma 的头文件
++                        FetchContent_Declare(
++                                libboundscheck
++                                GIT_REPOSITORY https://gitee.com/openeuler/libboundscheck.git
++                                GIT_TAG        master
++                        )
++                        FetchContent_MakeAvailable(libboundscheck)
++                        # 获取 hcom 源码路径
++                        FetchContent_GetProperties(libboundscheck)
++                endif()
+                 set(SECUREC_SRC_DIR ${libboundscheck_SOURCE_DIR}/src/hcom)
+                 execute_process(
+                         COMMAND make CC=gcc
+diff --git a/src/hcom/3rdparty/urma/CMakeLists.txt b/src/hcom/3rdparty/urma/CMakeLists.txt
+index 4598b8e..d0fd6cb 100644
+--- a/src/hcom/3rdparty/urma/CMakeLists.txt
++++ b/src/hcom/3rdparty/urma/CMakeLists.txt
+@@ -28,15 +28,20 @@ if(NOT USE_SYSTEM_URMA)
+             NO_DEFAULT_PATH
+     )
+     if(NOT URMA_INCLUDE_DIR)
+-        include(FetchContent)
++        set(UBSCOMM_OFFLINE_UMDK_DIR "${PROJECT_SOURCE_DIR}/3rdparty/offline/umdk")
++        if(EXISTS "${UBSCOMM_OFFLINE_UMDK_DIR}/src/urma/lib/urma/core/include")
++            set(umdk_SOURCE_DIR "${UBSCOMM_OFFLINE_UMDK_DIR}")
++        else()
++            include(FetchContent)
+ 
+-        # 假设 umdk-urma 仓库包含 urma 的头文件
+-        FetchContent_Declare(
+-                umdk
+-                GIT_REPOSITORY https://atomgit.com/openeuler/umdk.git
+-                GIT_TAG        br_openEuler_24.03_LTS_SP3
+-        )
+-        FetchContent_MakeAvailable(umdk)
++            # 假设 umdk-urma 仓库包含 urma 的头文件
++            FetchContent_Declare(
++                    umdk
++                    GIT_REPOSITORY https://atomgit.com/openeuler/umdk.git
++                    GIT_TAG        br_openEuler_24.03_LTS_SP3
++            )
++            FetchContent_MakeAvailable(umdk)
++        endif()
+         file(MAKE_DIRECTORY ${URMA_INSTALL_DIR}/include)
+         execute_process(COMMAND ls -al ${umdk_SOURCE_DIR})
+         foreach(dir ${URMA_INCLUDE_DIR})
+diff --git a/src/ubsocket/3rdparty/boundscheck/CMakeLists.txt b/src/ubsocket/3rdparty/boundscheck/CMakeLists.txt
+index 786ea56..d121abe 100644
+--- a/src/ubsocket/3rdparty/boundscheck/CMakeLists.txt
++++ b/src/ubsocket/3rdparty/boundscheck/CMakeLists.txt
+@@ -36,16 +36,21 @@ add_library(boundscheck_impl STATIC "")
+ add_library(boundscheck ALIAS boundscheck_impl)
+ add_library(openeuler::boundscheck ALIAS boundscheck_impl)
+ 
+-include(FetchContent)
++set(UBSCOMM_OFFLINE_LIBBOUNDSCHECK_DIR "${PROJECT_SOURCE_DIR}/3rdparty/offline/libboundscheck")
++if(EXISTS "${UBSCOMM_OFFLINE_LIBBOUNDSCHECK_DIR}/include/securec.h")
++  set(openeuler_libboundscheck_SOURCE_DIR "${UBSCOMM_OFFLINE_LIBBOUNDSCHECK_DIR}")
++else()
++  include(FetchContent)
+ 
+-FetchContent_Declare(
+-  openeuler_libboundscheck
+-  GIT_REPOSITORY https://atomgit.com/openeuler/libboundscheck.git
+-  GIT_TAG        v1.1.16
+-  GIT_SHALLOW    true
+-  GIT_PROGRESS   true
+-)
+-FetchContent_MakeAvailable(openeuler_libboundscheck)
++  FetchContent_Declare(
++    openeuler_libboundscheck
++    GIT_REPOSITORY https://atomgit.com/openeuler/libboundscheck.git
++    GIT_TAG        v1.1.16
++    GIT_SHALLOW    true
++    GIT_PROGRESS   true
++  )
++  FetchContent_MakeAvailable(openeuler_libboundscheck)
++endif()
+ 
+ target_include_directories(boundscheck_impl
+   PUBLIC

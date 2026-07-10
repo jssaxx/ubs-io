@@ -101,7 +101,8 @@ private:
     uint16_t mNameNodePort = 0;
     std::string mHdfsWorkingPath;
 };
-} // namespace bio
-} // namespace ock
+}
+}
+
 
 #endif // BOOSTIO_HDFSSYSTEM_H

@@ -14,7 +14,7 @@
 
 using namespace ock::bio;
 using namespace ock::bio::tp;
-#if defined(__aarch64__) || defined(DEBUG_UT)
+#ifdef __aarch64__
 static uint32_t MY_PID = 102;
 
 void tp::CacheTp::Register() noexcept
@@ -141,8 +141,7 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(MIRROR_SERVER_HDL_GET_FAIL, "mirror server handle get err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(MIRROR_SERVER_HDL_DELETE_FAIL, "mirror server handle delete err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(MIRROR_SERVER_ADD_DISK_FAIL, "mirror server handle add disk err", tp::CommonTp::IntValueCallback);
-    BIO_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, "no process wcache judge master",
-               CommonTp::NoProcessCallback);
+    BIO_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_JUDGE_MASTER, "no process wcache judge master", CommonTp::NoProcessCallback);
     BIO_TP_REG(NO_PROCESS_SLAVE_NEGOTIATE_NO_SEND, "no process wcache send negotiate", CommonTp::NoProcessCallback);
     BIO_TP_REG(WCACHE_NEGOTIATE_FLAG_CLEAR, "wcache negotiate flag clear", CommonTp::BoolValueCallback);
     BIO_TP_REG(NEGOTIATE_MASTER_FLAG, "wcache negotiate master flag true", CommonTp::BoolValueCallback);
@@ -150,13 +149,14 @@ void tp::CacheTp::Register() noexcept
     BIO_TP_REG(NO_PROCESS_MASTER_NEGOTIATE_NO_EVICT, "no process wcache evict ", CommonTp::NoProcessCallback);
     BIO_TP_REG(QUOTA_HOLDER_SIZE_MAX, "quota max holder size ", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(NO_PROCESS_GET_LOCAL_QUOTA, "no process get local quota ", CommonTp::NoProcessCallback);
-    BIO_TP_REG(LARGE_NODE_LIST, "large node list", tp::CommonTp::IntValueCallback);
+    BIO_TP_REG(LARGE_NODE_LIST, "large node list",  tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_SEAL_ERR, "flow seal err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_SEAL_OK, "flow seal ok", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_DESTROY_OBJECT_ERR, "flow destroy object err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(FLOW_DATA_FLOW_ERR, "wcache tier data flow err", tp::CommonTp::IntValueCallback);
     BIO_TP_REG(GET_UNDERFS_NO_STAT, "underfs stat ok", CommonTp::IntValueCallback);
     BIO_TP_REG(GET_UNDERFS_MODIFY_REALLENGTH, "external get modify real length", CommonTp::IntValueCallback);
+    BIO_TP_REG(GET_UNDERFS_MODIFY_TOTALLENGTH, "external get modify real length", CommonTp::IntValueCallback);
     BIO_TP_REG(GET_UNDERFS_NOT_ENOUGHRESOURCE, "external get not enough resource", CommonTp::BoolValueCallback);
     BIO_TP_REG(GET_UNDERFS_ENABLE_CRC, "external get enable crc", CommonTp::BoolValueCallback);
     BIO_TP_REG(GET_EXTERNAL_GETUNDERFS_OK, "external get underfs ok", CommonTp::BoolValueCallback);
@@ -308,6 +308,7 @@ void tp::CacheTp::Deregister() noexcept
     BIO_TP_UNREG(FLOW_DATA_FLOW_ERR);
     BIO_TP_UNREG(GET_UNDERFS_NO_STAT);
     BIO_TP_UNREG(GET_UNDERFS_MODIFY_REALLENGTH);
+    BIO_TP_UNREG(GET_UNDERFS_MODIFY_TOTALLENGTH);
     BIO_TP_UNREG(GET_UNDERFS_NOT_ENOUGHRESOURCE);
     BIO_TP_UNREG(GET_UNDERFS_ENABLE_CRC);
     BIO_TP_UNREG(GET_EXTERNAL_GETUNDERFS_OK);

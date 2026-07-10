@@ -15,7 +15,7 @@
 using namespace ock::bio;
 using namespace ock::bio::tp;
 
-#if defined(__aarch64__) || defined(DEBUG_UT)
+#ifdef __aarch64__
 static uint32_t MY_PID = 102;
 
 void tp::ServerTp::Register() noexcept
@@ -27,8 +27,7 @@ void tp::ServerTp::Register() noexcept
     BIO_TP_REG(SERVER_UNDERFS_STAT_SIZE, "server underfs stat invalid size", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_UNDERFS_LIST, "server underfs list error", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_NET_FAIL_TO_CREATE_MEMORY_FILE, "failed to create memory file", CommonTp::IntValueCallback);
-    BIO_TP_REG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, "truncate file with size failed",
-               CommonTp::IntValueCallback);
+    BIO_TP_REG(SERVER_NET_FAIL_TO_TRUNCATE_FILE_WITH_SIZE, "truncate file with size failed", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_NET_FAIL_TO_MMAP_SHM_SIZE, "Mmap bio_shm size failed", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_CRB_SEND_FLUSH_FAIL, "connect fail", CommonTp::IntValueCallback);
     BIO_TP_REG(SERVER_NET_CONNECT_FAIL, "connect fail", CommonTp::IntValueCallback);

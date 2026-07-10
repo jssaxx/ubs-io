@@ -93,7 +93,6 @@ int32_t CmConfigHasCfgPoolS(void)
 
 static int32_t CmConfigReset(PoolInfo *pools, uint16_t num)
 {
-    uint16_t index;
     uint16_t poolId;
     for (poolId = 0; poolId < MAX_POOL_NUM; poolId++) {
         int32_t ret = memset_s(&g_cmConfig.poolList[poolId].pool, sizeof(PoolInfo), 0, sizeof(PoolInfo));
@@ -109,7 +108,7 @@ static int32_t CmConfigReset(PoolInfo *pools, uint16_t num)
         g_cmConfig.poolList[poolId].pool.maxPtNum = 0;
     }
 
-    for (index = 0; index < num; index++) {
+    for (uint16_t index = 0; index < num; index++) {
         if (pools[index].poolId >= MAX_POOL_NUM) {
             CM_LOGERROR("Invalid poolId(%u).", pools[index].poolId);
             return CM_ERR;

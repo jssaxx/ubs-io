@@ -13,14 +13,14 @@
 #ifndef BOOSTIO_SLICE_H
 #define BOOSTIO_SLICE_H
 
+#include <vector>
 #include <functional>
 #include <sstream>
-#include <vector>
-#include "bio_err.h"
-#include "bio_lock.h"
-#include "bio_log.h"
-#include "bio_ref.h"
 #include "flow_type.h"
+#include "bio_lock.h"
+#include "bio_ref.h"
+#include "bio_err.h"
+#include "bio_log.h"
 #include "net_common.h"
 #include "securec.h"
 
@@ -47,11 +47,8 @@ public:
     Slice() = default;
 
     Slice(uint64_t length, std::vector<FlowAddr> &addrs, FlowType flowType = FLOW_MEMORY)
-        : mFlowType(flowType),
-          mLength(length),
-          mAddrs(std::move(addrs))
-    {
-    }
+        : mFlowType(flowType), mLength(length), mAddrs(std::move(addrs))
+    {}
 
     ~Slice() override = default;
 
@@ -60,7 +57,7 @@ public:
         return mFlowType;
     }
 
-    inline uint64_t GetLength() const
+    inline uint32_t GetLength() const
     {
         return mLength;
     }
@@ -102,20 +99,18 @@ protected:
     DEFINE_REF_COUNT_VARIABLE;
 
 private:
-    uint32_t mdataCrc{0};
-    FlowType mFlowType{FLOW_MEMORY};
-    uint64_t mLength{0};
+    uint32_t mdataCrc{ 0 };
+    FlowType mFlowType{ FLOW_MEMORY };
+    uint64_t mLength{ 0 };
     std::vector<FlowAddr> mAddrs;
 };
 
-enum SliceState : uint8_t
-{
+enum SliceState : uint8_t {
     SLICE_VALID = 1,
     SLICE_INVALID = 2,
 };
 
-template <typename S>
-class SliceRef {
+template <typename S> class SliceRef {
 public:
     explicit SliceRef(const S &slice) : mSlice(slice), mRef(0) {}
 
@@ -212,15 +207,15 @@ public:
 
 private:
     std::mutex mSliceLock;
-    S mSlice{nullptr};
-    S mNewSlice{nullptr};
-    SetSliceCallback mSetSliceCallback{nullptr};
-    std::atomic<uint64_t> mRef{0};
-    std::atomic<bool> mOpLock{false};
-    std::atomic<SliceState> mState{SLICE_VALID};
+    S mSlice{ nullptr };
+    S mNewSlice{ nullptr };
+    SetSliceCallback mSetSliceCallback{ nullptr };
+    std::atomic<uint64_t> mRef{ 0 };
+    std::atomic<bool> mOpLock{ false };
+    std::atomic<SliceState> mState{ SLICE_VALID };
     DEFINE_REF_COUNT_VARIABLE;
 };
 using SliceRefPtr = Ref<SliceRef<SlicePtr>>;
-} // namespace bio
-} // namespace ock
+}
+}
 #endif // BOOSTIO_SLICE_H

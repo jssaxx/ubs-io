@@ -14,18 +14,17 @@
 #define BIO_CLIENT_H
 
 #include <atomic>
-#include <iostream>
 #include <mutex>
+#include <iostream>
 #include <unordered_map>
 #include <utility>
-#include "bio.h"
-#include "bio_client_net.h"
-#include "bio_lock.h"
-#include "bio_ref.h"
-#include "mirror_client.h"
-#include "net_common.h"
 #include "net_engine.h"
-#include "underfs.h"
+#include "net_common.h"
+#include "bio_ref.h"
+#include "bio.h"
+#include "bio_lock.h"
+#include "mirror_client.h"
+#include "bio_client_net.h"
 
 #ifdef USE_PROMETHEUS
 #include "prometheus_manager.h"
@@ -46,6 +45,7 @@ public:
     }
 
     BResult Start(WorkerMode mode, const ClientOptionsConfig &optConf);
+
     void Exit();
 
     inline bool Ready() const
@@ -77,14 +77,12 @@ public:
 
     inline BResult Put(MirrorClient::MirrorPut &param)
     {
-        BResult ret = mMirror->Put(param);
-        if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_QUOTA_NOT_ENOUGH ||
-                     ret == BIO_QUOTA_TIMEOUT)) {
-            BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
-            ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
-            BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
-        }
-        return ret;
+        return mMirror->Put(param);
+    }
+
+    inline BResult AsyncPut(MirrorClient::MirrorPut &param, BioAsyncPutCallback callback, void* context)
+    {
+        return mMirror->AsyncPut(param, callback, context);
     }
 
     inline BResult Put(MirrorClient::MirrorPut &param, CacheSpaceDesc &spaceInfo)
@@ -97,32 +95,25 @@ public:
         BResult ret = mMirror->Get(param, length);
         BIO_TP_START(SDK_MIRROR_CLIENT_GET_RETRY, &ret, BIO_INNER_RETRY);
         BIO_TP_END;
-        if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_LOAD_ALLOC_FAIL)) {
-            BIO_TRACE_START(SDK_TRACE_GET_TO_UNDERFS);
-            UnderFs::ObjStat stat;
-            auto underFsRet = UnderFs::Instance()->Stat(param.key, stat);
-            BIO_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &underFsRet, BIO_OK);
-            BIO_TP_END;
-            if (UNLIKELY(underFsRet != BIO_OK)) {
-                BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
-                return ret;
-            }
-            BIO_TP_START(SDK_CLIENT_GET_CEPH_STAT_OK, &stat.size, NO_1024);
-            BIO_TP_END;
-            if (UNLIKELY(stat.size <= param.offset)) {
-                BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, BIO_INVALID_PARAM);
-                return BIO_INVALID_PARAM;
-            }
-            if (param.length + param.offset > stat.size) {
-                length = stat.size - param.offset;
-            } else {
-                length = param.length;
-            }
-            underFsRet = UnderFs::Instance()->Get(param.key, param.value, length, param.offset);
-            BIO_TRACE_END(SDK_TRACE_GET_TO_UNDERFS, underFsRet);
-            return underFsRet == BIO_OK ? BIO_OK : ret;
-        }
         return ret;
+    }
+
+    inline BResult BatchGetKeyDiskAddr(MirrorClient::MirrorBatchGetKeyAddr &param)
+    {
+        return mMirror->BatchGetKeyDiskAddr(param);
+    }
+
+    inline BResult BatchGet(CacheAttr attr, const char **keys, const uint32_t count,
+                            uint64_t *offsets, uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
+                            uint64_t *realLengths, int32_t *results)
+    {
+        return mMirror->DispathBatchGet(attr, keys, count, offsets, lengths, locations,
+                                        valueAddrs, realLengths, results);
+    }
+
+    inline void BatchGetFree(uintptr_t *valueAddrs, const uint32_t count)
+    {
+        mMirror->BatchFree(valueAddrs, count);
     }
 
     inline BResult DeleteKey(const char *key, const ObjLocation &location)
@@ -143,6 +134,11 @@ public:
     inline BResult Stat(const char *key, const ObjLocation &location, ObjStat &stat)
     {
         return mMirror->StatObject(key, location, stat);
+    }
+
+    inline BResult BatchExist(const char *key[], ObjLocation location[], uint32_t count, bool *result)
+    {
+        return mMirror->DispathBatchExist(key, location, count, result);
     }
 
     inline BResult AddDisk(const char *diskPath)
@@ -181,10 +177,10 @@ public:
         auto it = mCacheMap.find(tenantId);
         if (LIKELY(it != mCacheMap.end())) {
             mLock.UnLock();
-            return {it->second->mTenantId, it->second->mAffinity, it->second->mStrategy};
+            return { it->second->mTenantId, it->second->mAffinity, it->second->mStrategy };
         }
         mLock.UnLock();
-        return {UINT64_MAX, AFFINITY_BUTT, STRATEGY_BUTT};
+        return { UINT64_MAX, AFFINITY_BUTT, STRATEGY_BUTT };
     }
 
     inline BResult Insert(const std::shared_ptr<Bio> &instance)
@@ -225,7 +221,7 @@ public:
         mLock.LockRead();
         std::vector<CacheDescriptor> vec;
         for (auto &cache : mCacheMap) {
-            vec.push_back({cache.second->mTenantId, cache.second->mAffinity, cache.second->mStrategy});
+            vec.push_back({ cache.second->mTenantId, cache.second->mAffinity, cache.second->mStrategy });
         }
         mLock.UnLock();
         return vec;
@@ -241,7 +237,7 @@ public:
         return mNetEngine;
     }
 
-    inline void *LoadFunction(const char *name, void *handler)
+    inline void* LoadFunction(const char *name, void *handler)
     {
         void *ptr = nullptr;
         ptr = dlsym(handler, name);
@@ -252,18 +248,18 @@ public:
     void BioClientLoggerExit(WorkerMode mode);
     BResult BioClientAgentInit(WorkerMode mode);
     void BioClientAgentExit();
-    BResult BioClientNetPreInit(WorkerMode mode, const NetOptions netConf);
+    BResult BioClientNetPreInit(WorkerMode mode, NetOptions &netConf);
     BResult BioClientNetPostInit(const NetOptions netConf);
     void BioClientNetExit();
     BResult BioClientMirrorInit(WorkerMode mode);
     void BioClientMirrorExit();
-    BResult BioClientUnderfsInit(WorkerMode mode);
     BResult BioInterceptorServerInit(WorkerMode mode);
     BResult BioClientStartWork();
     BResult BioClientStartPrometheus();
     void BioClientExitPrometheus();
     void BioClientUpdateHandle();
     void BioClientUpdateView();
+    BResult AsyncGet(MirrorClient::MirrorGet &param, AsyncOpParam &opParam);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -271,6 +267,11 @@ protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
     BResult BioClientTracePointInit(WorkerMode mode);
+    BResult BioClientCertificateExpiration(const ClientOptionsConfig &optConf);
+
+    BResult FillNetOptions(const ClientOptionsConfig &optConf, NetOptions &netConf);
+    BResult BioClientTraceInit();
+    void BioClientTraceExit();
 
 private:
     WorkerMode mMode;
@@ -282,8 +283,10 @@ private:
     net::BioClientNetPtr mNetEngine = nullptr;
     std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
+    void *mClientDiagnoseHandle = nullptr;
+    void *mCliHandle = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
-} // namespace bio
-} // namespace ock
+}
+}
 #endif

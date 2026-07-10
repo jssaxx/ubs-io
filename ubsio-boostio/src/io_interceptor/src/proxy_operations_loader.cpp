@@ -14,21 +14,21 @@
 
 #include <dlfcn.h>
 #include <climits>
-#include <sstream>
 #include <vector>
+#include <sstream>
 
-#include "ceptor_env.h"
 #include "ceptor_log.h"
+#include "ceptor_env.h"
 #include "native_operations_loader.h"
 
 using namespace ock::interceptor;
 
-using GetProxyOperationsFunc = ProxyOperations *(*)();
-using GetProxyOperationsFuncs = ProxyOperations *(*)(const NativeOperations *);
+using GetProxyOperationsFunc = ProxyOperations* (*)();
+using GetProxyOperationsFuncs = ProxyOperations* (*)(const NativeOperations *);
 using ProxyInitFunc = int (*)();
 using ProxyExitFunc = void (*)();
 
-ProxyOperations *ProxyOperationsLoader::operations = nullptr;
+ProxyOperations* ProxyOperationsLoader::operations = nullptr;
 
 static bool CanonicalPath(std::string &path)
 {
@@ -45,6 +45,7 @@ static bool CanonicalPath(std::string &path)
     return true;
 }
 
+
 bool ProxyOperationsLoader::Initialize()
 {
     static bool initialized = false;
@@ -53,7 +54,10 @@ bool ProxyOperationsLoader::Initialize()
         return true;
     }
 
-    if (!LoadPreLoadPath() || !LoadProxyDLL() || !LoadProxyInitFunc() || !LoadProxyOperations()) {
+    if (!LoadPreLoadPath() ||
+        !LoadProxyDLL() ||
+        !LoadProxyInitFunc() ||
+        !LoadProxyOperations()) {
         initialized = true;
         return false;
     }
@@ -66,7 +70,7 @@ ProxyOperationsLoader::~ProxyOperationsLoader()
     LoadProxyExitFunc();
 }
 
-ProxyOperations *const ProxyOperationsLoader::GetProxy()
+ProxyOperations* const ProxyOperationsLoader::GetProxy()
 {
     return operations;
 }
@@ -110,7 +114,7 @@ bool ProxyOperationsLoader::LoadPreLoadPath()
 
 bool ProxyOperationsLoader::LoadProxyDLL()
 {
-    for (auto &item : components) {
+    for (auto& item : components) {
         std::string proxyName = std::string("/libock_").append(item).append("_proxy.so");
         std::string prefixPath = ldPrePath;
         std::string proxyPath = prefixPath.append(proxyName);
@@ -119,7 +123,8 @@ bool ProxyOperationsLoader::LoadProxyDLL()
         }
         handle = dlopen(proxyPath.c_str(), RTLD_NOW);
         if (handle == nullptr) {
-            INTERCEPTORLOG_DEBUG("failed to dlopen %s, error(%s)", proxyPath.c_str(), dlerror());
+            INTERCEPTORLOG_DEBUG("failed to dlopen %s, error(%s)",
+                proxyPath.c_str(), dlerror());
             continue;
         } else {
             workProxy.swap(proxyName);
@@ -135,14 +140,15 @@ bool ProxyOperationsLoader::LoadProxyOperations()
     GetProxyOperationsFuncs getOperationsFuncs =
         reinterpret_cast<GetProxyOperationsFuncs>(dlsym(handle, operationsFuncsName.c_str()));
     if (getOperationsFuncs == nullptr) {
-        INTERCEPTORLOG_DEBUG("%s does not has symbol %s, error(%s)", workProxy.c_str(), operationsFuncsName.c_str(),
-                             dlerror());
+        INTERCEPTORLOG_DEBUG("%s does not has symbol %s, error(%s)",
+            workProxy.c_str(), operationsFuncsName.c_str(), dlerror());
         dlclose(handle);
         return false;
     }
     operations = getOperationsFuncs(&(NativeOperationsLoader::GetInstance().GetProxy()));
     if (operations == nullptr) {
-        INTERCEPTORLOG_WARN("Getting null operations from  %s", operationsFuncsName.c_str(), workProxy.c_str());
+        INTERCEPTORLOG_WARN("Getting null operations from  %s",
+            operationsFuncsName.c_str(), workProxy.c_str());
         dlclose(handle);
         return false;
     }
@@ -151,15 +157,17 @@ bool ProxyOperationsLoader::LoadProxyOperations()
 
 bool ProxyOperationsLoader::LoadProxyInitFunc()
 {
-    ProxyInitFunc proxyInitFunc = reinterpret_cast<ProxyInitFunc>(dlsym(handle, proxyInitFuncName.c_str()));
+    ProxyInitFunc proxyInitFunc =
+        reinterpret_cast<ProxyInitFunc>(dlsym(handle, proxyInitFuncName.c_str()));
     if (proxyInitFunc == nullptr) {
-        INTERCEPTORLOG_DEBUG("Symbol(%s) of %s is ambiguous, error(%s)", proxyInitFuncName.c_str(), workProxy.c_str(),
-                             dlerror());
+        INTERCEPTORLOG_DEBUG("Symbol(%s) of %s is ambiguous, error(%s)", proxyInitFuncName.c_str(),
+            workProxy.c_str(), dlerror());
         return true;
     }
     int ret = proxyInitFunc();
     if (ret != 0) {
-        INTERCEPTORLOG_WARN("Failed to Init %s, error(%d)", workProxy.c_str(), proxyInitFuncName.c_str(), ret);
+        INTERCEPTORLOG_WARN("Failed to Init %s, error(%d)", workProxy.c_str(),
+            proxyInitFuncName.c_str(), ret);
         dlclose(handle);
         return false;
     }
@@ -171,10 +179,11 @@ void ProxyOperationsLoader::LoadProxyExitFunc()
     if (handle == nullptr) {
         return;
     }
-    ProxyExitFunc proxyExitFunc = reinterpret_cast<ProxyExitFunc>(dlsym(handle, proxyExitFuncName.c_str()));
+    ProxyExitFunc proxyExitFunc =
+        reinterpret_cast<ProxyExitFunc>(dlsym(handle, proxyExitFuncName.c_str()));
     if (proxyExitFunc == nullptr) {
-        INTERCEPTORLOG_DEBUG("Symbol(%s) of %s is ambiguous, error(%s)", proxyExitFuncName.c_str(), workProxy.c_str(),
-                             dlerror());
+        INTERCEPTORLOG_DEBUG("Symbol(%s) of %s is ambiguous, error(%s)", proxyExitFuncName.c_str(),
+            workProxy.c_str(), dlerror());
         operations = nullptr;
         dlclose(handle);
         return;

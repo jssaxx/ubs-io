@@ -48,5 +48,11 @@ void HTracerSetEnable(bool isEnable)
 {
     HtracerManager::mEnable = isEnable;
 }
-} // namespace htracer
-} // namespace ock
+
+void HTracerDumpSetEnable(bool isEnable)
+{
+    HTracerService::mDumpEnable = isEnable;
+}
+
+}
+}
