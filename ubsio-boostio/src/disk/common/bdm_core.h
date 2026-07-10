@@ -65,6 +65,12 @@ typedef enum {
     BDM_DISK_STATE_BUTT
 } BdmDiskState;
 
+typedef enum {
+    BDM_IO_ENGINE_SYNC = 0,
+    BDM_IO_ENGINE_IO_URING = 1,
+    BDM_IO_ENGINE_BUTT
+} BdmIoEngine;
+
 #define BDM_IO_CTX_RES_LEN (256UL)
 
 typedef void (*BdmIoCb)(void *ctx, int32_t ret);
@@ -74,6 +80,14 @@ typedef struct {
     void *ctx;
     char res[BDM_IO_CTX_RES_LEN];
 } BdmIoCtx;
+
+typedef struct {
+    uint64_t chunkId;
+    uint64_t offset;
+    void *buf;
+    uint64_t len;
+    BdmIoCtx *ioCtx;
+} BdmBatchIo;
 
 #define DISK_PATH_LEN (256UL)
 #define DISK_DEV_NUM (16UL)
@@ -106,6 +120,10 @@ int32_t BdmReadAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len,
 
 int32_t BdmWriteAsync(uint64_t chunkId, uint64_t offset, void *buf, uint64_t len, BdmIoCtx *ioCtx);
 
+int32_t BdmReadBatchAsync(BdmBatchIo *ios, uint32_t ioNum);
+
+int32_t BdmWriteBatchAsync(BdmBatchIo *ios, uint32_t ioNum);
+
 int32_t BdmGetCapacity(uint32_t bdmId, uint64_t *totalCapacity, uint64_t *usedCapacity);
 
 int32_t BdmResetScanPool(uint32_t bdmId);
@@ -114,6 +132,12 @@ int32_t BdmGetNextUsedChunkId(uint32_t bdmId, uint64_t *chunkId, uint64_t *chunk
     uint64_t *bucketOffset);
 
 int32_t BdmInit(void);
+
+int32_t BdmExit(void);
+
+int32_t BdmSetIoEngine(const char *engineName);
+
+BdmIoEngine BdmGetIoEngine(void);
 
 void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId);
 

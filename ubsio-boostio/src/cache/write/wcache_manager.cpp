@@ -11,6 +11,7 @@
  */
 
 #include "wcache_manager.h"
+#include <algorithm>
 #include <iterator>
 #include <unordered_set>
 #include <utility>
@@ -544,9 +545,58 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
             slice->SetDataCrc(readCrc);
         }
     }
-    WCacheStatistic::Instance().StatisticalByType(sliceRef->GetSlice()->GetFlowType());
+    FlowType flowType = sliceRef->GetSlice()->GetFlowType();
+    WCacheStatistic::Instance().StatisticalByType(flowType);
     sliceRef->Release();
     return ret;
+}
+
+BResult WCacheManager::GetBatch(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+    const WCacheBatchSliceWriter &sliceWriter, uint64_t &realLen)
+{
+    ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
+    ChkTrue(slice != nullptr, BIO_INVALID_PARAM, "Slice is nullptr.");
+    ChkTrue(sliceWriter != nullptr, BIO_INVALID_PARAM, "Slice writer is nullptr.");
+    ChkTrue(!mEnableCrc, BIO_INNER_RETRY, "Batch WCache read does not support CRC.");
+
+    uint16_t ptId = slice->GetPtId();
+    BIO_TRACE_START(WCACHE_TRACE_GET_QUERY_INDEX);
+    WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
+    BIO_TRACE_END(WCACHE_TRACE_GET_QUERY_INDEX, ((sliceRef == nullptr) ? BIO_NOT_EXISTS : BIO_OK));
+    if (UNLIKELY(sliceRef == nullptr)) {
+        return BIO_NOT_EXISTS;
+    }
+
+    WCacheSlicePtr srcSlice = sliceRef->GetSlice();
+    if (UNLIKELY(srcSlice == nullptr || offset >= srcSlice->GetLength())) {
+        LOG_ERROR("Failed to split batch WCache slice, offset:" << offset << ".");
+        sliceRef->Release();
+        return BIO_READ_EXCEED;
+    }
+
+    realLen = std::min<uint64_t>(srcSlice->GetLength() - offset, slice->GetLength());
+    SlicePtr readSlice = srcSlice->Split(offset, realLen);
+    if (UNLIKELY(readSlice == nullptr)) {
+        LOG_ERROR("Failed to split batch WCache slice, offset:" << offset << ", length:" << realLen << ".");
+        sliceRef->Release();
+        return BIO_READ_EXCEED;
+    }
+
+    BIO_TRACE_START(WCACHE_TRACE_GET_READ_DATA);
+    BResult ret = sliceWriter(readSlice.Get(), slice.Get(), sliceRef);
+    BIO_TRACE_END(WCACHE_TRACE_GET_READ_DATA, ret);
+    if (sliceRef != nullptr) {
+        sliceRef->Release();
+    }
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Batch WCache read failed, key:" << key << ", offset:" << offset << ", length:" << realLen <<
+            ", ret:" << ret << ".");
+        return ret;
+    }
+
+    FlowType flowType = readSlice->GetFlowType();
+    WCacheStatistic::Instance().StatisticalByType(flowType);
+    return BIO_OK;
 }
 
 BResult WCacheManager::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)

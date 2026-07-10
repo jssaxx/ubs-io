@@ -13,7 +13,10 @@
 #ifndef UBSIO_KVC_INSTANCE_H
 #define UBSIO_KVC_INSTANCE_H
 
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
+#include <vector>
 #include "ubsio_kvc_execution.h"
 
 namespace ock {
@@ -23,6 +26,7 @@ class KvcInstance {
 public:
     static KvcInstance &Instance() noexcept;
     KvcError Initialize(int32_t device) noexcept;
+    void UnInitialize() noexcept;
     KvcError Read(const std::vector<std::string> &keyVector,
                   std::vector<std::vector<uintptr_t>> &npuAddrsVector,
                   const std::vector<std::vector<size_t>> &lengthsVector,
@@ -39,14 +43,18 @@ private:
 
     ~KvcInstance()
     {
-        if (m_readExecutor != nullptr) {
-            m_readExecutor = nullptr;
-        }
+        UnInitialize();
     }
+
+    void FreeDramAddrs(std::vector<void *> dramAddrsVector, uint32_t keysCount) noexcept;
 
 private:
     ExecutorServicePtr m_readExecutor{ nullptr };
     int32_t m_deviceId{ -1 };
+    std::mutex m_freeMutex;
+    std::condition_variable m_freeCv;
+    uint64_t m_pendingFreeTasks{ 0 };
+    bool m_stoppingFreeTasks{ false };
 };
 
 } // namespace ubsio

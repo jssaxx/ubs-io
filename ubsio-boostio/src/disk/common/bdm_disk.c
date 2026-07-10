@@ -12,12 +12,14 @@
 
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <libaio.h>
-#include <sys/eventfd.h>
-#include <sys/epoll.h>
+#include <liburing.h>
 #include <linux/version.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include "securec.h"
 #include "dlist.h"
 #include "bio_tracepoint_helper_c.h"
@@ -28,14 +30,25 @@
 #include "bdm_common.h"
 #include "bdm_core.h"
 #include "bdm_disk.h"
+#include "htracer_c.h"
+
+#ifndef O_DIRECT
+#define O_DIRECT 00040000
+#endif
 
 #define BDM_OPEN_FILE_PERMISSION 0640
 
 #define BDM_PAGE_SIZE getpagesize()
 
 #define BDM_DISK_MAGIC (0xFFDDCBAABCDDFF)
-#define BDM_IOCTX_EVENTS_NUM (128UL)
+#define BDM_IOCTX_EVENTS_NUM (1024UL)
+#define BDM_URING_MAX_INFLIGHT (896UL)
 #define BDM_IO_RETRY_NUM (3UL)
+#define BDM_URING_EAGAIN_RETRY_NUM (64UL)
+#define BDM_URING_EAGAIN_BACKOFF_BASE_US (10UL)
+#define BDM_URING_EAGAIN_BACKOFF_MAX_US (1000UL)
+#define BDM_URING_SQE_RETRY_NUM (10000UL)
+#define BDM_URING_SQE_RETRY_INTERVAL_US (10UL)
 
 #define BDM_AYSNC_IO_FD_NUM (8UL)
 
@@ -45,9 +58,11 @@
 
 #define BDM_BIND_CPU_DEFAULT (-1)
 
-#define BDM_BLOCK_SIZE (4096UL)
+#define BDM_DIRECT_IO_ALIGN_SIZE (512UL)
+#define BDM_SYNC_URING_QUEUE_DEPTH (32UL)
+#define BDM_SYNC_URING_MIN_CHUNK_SIZE (4096UL)
 
-static uint32_t g_bdmAioIsDirect = FALSE;
+static BdmIoEngine g_bdmIoEngine = BDM_IO_ENGINE_SYNC;
 
 typedef struct {
     uint64_t magic;
@@ -102,28 +117,54 @@ typedef struct {
 } BdmThreadCtx;
 
 typedef struct {
+    struct io_uring ring;
+    DList node;
+    bool inited;
+    bool registered;
+} BdmSyncUringCtx;
+
+typedef struct {
+    char *ioBuf;
+    uint64_t ioLen;
+    uint64_t ioOffset;
+    uint64_t userOffset;
+    bool needBounce;
+    bool overRead;
+} BdmSyncUringBuffer;
+
+typedef struct {
     int32_t cpus[BDM_WORKER_THREAD_NUM];
     BdmThreadCtx threadCtx[BDM_WORKER_THREAD_NUM];
     pthread_t threadId[BDM_WORKER_THREAD_NUM];
-    int32_t efd[BDM_WORKER_THREAD_NUM];
-    int32_t epfd[BDM_WORKER_THREAD_NUM];
-    io_context_t ioctx[BDM_WORKER_THREAD_NUM];
-    struct epoll_event epevent[BDM_WORKER_THREAD_NUM];
+    struct io_uring ring[BDM_WORKER_THREAD_NUM];
+    bool ringInited[BDM_WORKER_THREAD_NUM];
+    sem_t ringSlots[BDM_WORKER_THREAD_NUM];
+    bool ringSlotsInited[BDM_WORKER_THREAD_NUM];
+    uint32_t ringInflight[BDM_WORKER_THREAD_NUM];
+    bool eventThreadStarted[BDM_WORKER_THREAD_NUM];
+    volatile bool stopping[BDM_WORKER_THREAD_NUM];
+    pthread_mutex_t ringLock[BDM_WORKER_THREAD_NUM];
     BDM_THREAD_POOL_S *pool[BDM_WORKER_THREAD_NUM];
 } BdmThreadPool;
 
 typedef struct {
-    struct iocb iocb;
     void *buf;
+    void *ioBuf;
     uint64_t len;
+    uint64_t userLen;
+    uint64_t userOffset;
     uint64_t chunkId;
     uint64_t offset;
     uint32_t retryNum;
+    uint32_t eagainRetryNum;
     bool isRead;
+    bool needBounce;
+    bool slotAcquired;
+    int32_t traceId;
+    uint64_t traceStartNs;
     BdmIoCb cb;
     void *ctx;
     void *item;
-    uint64_t ts;
 } BdmIoContext;
 
 static BdmDiskMgr g_bdmDisk = { 0 };
@@ -131,8 +172,39 @@ static BdmDiskMgr g_bdmDisk = { 0 };
 static uint64_t g_bdmIndex = 0;
 
 static BdmThreadPool g_bdmThreadPool;
+static pthread_once_t g_bdmSyncUringKeyOnce = PTHREAD_ONCE_INIT;
+static pthread_key_t g_bdmSyncUringKey;
+static int32_t g_bdmSyncUringKeyRet = BDM_CODE_OK;
+static bool g_bdmSyncUringKeyCreated = false;
+static pthread_mutex_t g_bdmSyncUringCtxLock = PTHREAD_MUTEX_INITIALIZER;
+static DList g_bdmSyncUringCtxList = D_LIST_HEAD_INIT(g_bdmSyncUringCtxList);
 
 static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item);
+
+BdmIoEngine BdmGetIoEngine(void)
+{
+    return g_bdmIoEngine;
+}
+
+int32_t BdmSetIoEngine(const char *engineName)
+{
+    if (UNLIKELY(engineName == NULL)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    if (strcmp(engineName, "io_uring") == 0) {
+        g_bdmIoEngine = BDM_IO_ENGINE_IO_URING;
+        return BDM_CODE_OK;
+    }
+
+    if (strcmp(engineName, "sync") == 0) {
+        g_bdmIoEngine = BDM_IO_ENGINE_SYNC;
+        return BDM_CODE_OK;
+    }
+
+    BDM_LOGERROR(0, "Unsupported bdm io engine(%s).", engineName);
+    return BDM_CODE_INVALID_PARAM;
+}
 
 uint32_t BdmGetNormalDiskNum(void)
 {
@@ -187,24 +259,37 @@ int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, ui
     // 上报磁盘故障事件, 标记磁盘状态为false.
     BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
         itemPtr->name, offset, len);
-    int32_t ret = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
-    if (UNLIKELY(ret != BDM_CODE_OK)) {
+    int32_t reportRet = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
+    if (UNLIKELY(reportRet != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
     BdmSetDiskUsedStatus(itemPtr->bdmId, false);
     return BDM_CODE_ERR_IO;
 }
 
+static int32_t BdmDiskPrepareDirectBuffer(char *userBuf, uint64_t len, uint64_t offset, int32_t isRead, char **ioBuf,
+    bool *needBounce);
+static int32_t BdmDiskFinishDirectBuffer(char *userBuf, uint64_t len, int32_t isRead, char *ioBuf, bool needBounce,
+    int32_t ioRet);
+static int32_t BdmDiskFinishUringBuffer(BdmIoContext *bdmIo, int32_t ioRet);
+
 int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
 {
+    char *ioBuf = NULL;
+    bool needBounce = false;
+    int32_t ret = BdmDiskPrepareDirectBuffer(buff, len, offset, isRead, &ioBuf, &needBounce);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
     static uint64_t submitIndex = 0;
     uint64_t fdIdx = ATOMIC_INC(&submitIndex) % BDM_AYSNC_IO_FD_NUM;
     // 磁盘读写失败最大允许重试3次.
     uint32_t retry = 0;
     while (retry <= BDM_IO_RETRY_NUM) {
-        uint64_t rwLen = BdmDiskInnerReadWriteImpl(itemPtr->asyncfd[fdIdx], buff, len, offset, isRead);
+        uint64_t rwLen = BdmDiskInnerReadWriteImpl(itemPtr->asyncfd[fdIdx], ioBuf, len, offset, isRead);
         if (LIKELY(rwLen == len)) {
-            return BDM_CODE_OK;
+            return BdmDiskFinishDirectBuffer(buff, len, isRead, ioBuf, needBounce, BDM_CODE_OK);
         }
         usleep(10000); // 延迟10毫秒重试.
         retry++;
@@ -213,12 +298,591 @@ int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t l
     // 上报磁盘故障事件, 标记磁盘状态为false.
     BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
         itemPtr->name, offset, len);
+    int32_t reportRet = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
+    if (UNLIKELY(reportRet != BDM_CODE_OK)) {
+        BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
+    }
+    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    return BdmDiskFinishDirectBuffer(buff, len, isRead, ioBuf, needBounce, BDM_CODE_ERR_IO);
+}
+
+static bool BdmDiskIsRangeAligned(uint64_t len, uint64_t offset)
+{
+    return ((len % BDM_DIRECT_IO_ALIGN_SIZE) == 0 && (offset % BDM_DIRECT_IO_ALIGN_SIZE) == 0);
+}
+
+static bool BdmDiskCheckDirectRangeAligned(uint64_t len, uint64_t offset)
+{
+    if (LIKELY(BdmDiskIsRangeAligned(len, offset))) {
+        return true;
+    }
+
+    BDM_LOGWARN(0, "direct io range is not aligned, len(%llu), offset(%llu), blockSize(%lu).", len, offset,
+        BDM_DIRECT_IO_ALIGN_SIZE);
+    return false;
+}
+
+static int32_t BdmDiskPrepareDirectBuffer(char *userBuf, uint64_t len, uint64_t offset, int32_t isRead, char **ioBuf,
+    bool *needBounce)
+{
+    if (UNLIKELY(userBuf == NULL || ioBuf == NULL || needBounce == NULL)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    if (UNLIKELY(!BdmDiskCheckDirectRangeAligned(len, offset))) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    if (LIKELY(((uintptr_t)userBuf % BDM_DIRECT_IO_ALIGN_SIZE) == 0)) {
+        *ioBuf = userBuf;
+        *needBounce = false;
+        return BDM_CODE_OK;
+    }
+
+    void *alignedBuf = NULL;
+    int32_t ret = posix_memalign(&alignedBuf, BDM_DIRECT_IO_ALIGN_SIZE, len);
+    if (UNLIKELY(ret != 0 || alignedBuf == NULL)) {
+        BDM_LOGERROR(0, "Alloc aligned io buffer failed, len(%llu), ret(%d).", len, ret);
+        return BDM_CODE_ERR;
+    }
+
+    if (!isRead) {
+        ret = memcpy_s(alignedBuf, len, userBuf, len);
+        if (UNLIKELY(ret != EOK)) {
+            BDM_LOGERROR(0, "Copy to aligned io buffer failed, len(%llu), ret(%d).", len, ret);
+            free(alignedBuf);
+            return BDM_CODE_ERR;
+        }
+    }
+
+    *ioBuf = (char *)alignedBuf;
+    *needBounce = true;
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskFinishDirectBuffer(char *userBuf, uint64_t len, int32_t isRead, char *ioBuf, bool needBounce,
+    int32_t ioRet)
+{
+    if (!needBounce) {
+        return ioRet;
+    }
+
+    int32_t ret = ioRet;
+    if (ioRet == BDM_CODE_OK && isRead) {
+        ret = memcpy_s(userBuf, len, ioBuf, len);
+        if (UNLIKELY(ret != EOK)) {
+            BDM_LOGERROR(0, "Copy from aligned io buffer failed, len(%llu), ret(%d).", len, ret);
+            ret = BDM_CODE_ERR;
+        } else {
+            ret = BDM_CODE_OK;
+        }
+    }
+    free(ioBuf);
+    return ret;
+}
+
+static int32_t BdmDiskFinishUringBuffer(BdmIoContext *bdmIo, int32_t ioRet)
+{
+    if (!bdmIo->needBounce) {
+        return ioRet;
+    }
+
+    int32_t ret = ioRet;
+    if (ioRet == BDM_CODE_OK && bdmIo->isRead) {
+        ret = memcpy_s(bdmIo->buf, bdmIo->userLen, (char *)bdmIo->ioBuf + bdmIo->userOffset, bdmIo->userLen);
+        if (UNLIKELY(ret != EOK)) {
+            BDM_LOGERROR(0, "Copy from io_uring bounce buffer failed, len(%llu), offset(%llu), ret(%d).",
+                bdmIo->userLen, bdmIo->userOffset, ret);
+            ret = BDM_CODE_ERR;
+        } else {
+            ret = BDM_CODE_OK;
+        }
+    }
+    free(bdmIo->ioBuf);
+    return ret;
+}
+
+static int32_t BdmDiskPrepareUringBuffer(BdmIoContext *bdmIo, BdmDiskItem *item, uint64_t rwOffset)
+{
+    bdmIo->userLen = bdmIo->len;
+    bdmIo->userOffset = 0;
+    if (!bdmIo->isRead || BdmDiskIsRangeAligned(bdmIo->len, rwOffset)) {
+        return BdmDiskPrepareDirectBuffer((char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead,
+            (char **)&bdmIo->ioBuf, &bdmIo->needBounce);
+    }
+
+    uint64_t alignedOffset = rwOffset / BDM_DIRECT_IO_ALIGN_SIZE * BDM_DIRECT_IO_ALIGN_SIZE;
+    uint64_t alignedEnd = (rwOffset + bdmIo->len + BDM_DIRECT_IO_ALIGN_SIZE - 1) / BDM_DIRECT_IO_ALIGN_SIZE *
+        BDM_DIRECT_IO_ALIGN_SIZE;
+    uint64_t alignedLen = alignedEnd - alignedOffset;
+    uint64_t userOffset = rwOffset - alignedOffset;
+    if (UNLIKELY(userOffset > bdmIo->offset || bdmIo->offset - userOffset > item->minChunkSize ||
+                 alignedLen > item->minChunkSize - (bdmIo->offset - userOffset))) {
+        BDM_LOGWARN(0, "io_uring over-read cross chunk boundary, chunkId(%lu), offset(%llu), len(%llu).",
+            bdmIo->chunkId, bdmIo->offset, bdmIo->len);
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    void *alignedBuf = NULL;
+    int32_t ret = posix_memalign(&alignedBuf, BDM_DIRECT_IO_ALIGN_SIZE, alignedLen);
+    if (UNLIKELY(ret != 0 || alignedBuf == NULL)) {
+        BDM_LOGERROR(0, "Alloc io_uring over-read buffer failed, len(%llu), ret(%d).", alignedLen, ret);
+        return BDM_CODE_ERR;
+    }
+
+    bdmIo->ioBuf = alignedBuf;
+    bdmIo->needBounce = true;
+    bdmIo->userOffset = userOffset;
+    bdmIo->len = alignedLen;
+    bdmIo->offset -= bdmIo->userOffset;
+    BDM_LOGDEBUG(0, "Prepare io_uring over-read, chunkId(%lu), alignedLen(%llu), userLen(%llu), userOffset(%llu).",
+        bdmIo->chunkId, bdmIo->len, bdmIo->userLen, bdmIo->userOffset);
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskPrepareSyncUringBuffer(BdmDiskItem *itemPtr, char *userBuf, uint64_t len, uint64_t offset,
+    int32_t isRead, BdmSyncUringBuffer *buffer)
+{
+    if (UNLIKELY(itemPtr == NULL || userBuf == NULL || buffer == NULL)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    buffer->ioBuf = NULL;
+    buffer->ioLen = len;
+    buffer->ioOffset = offset;
+    buffer->userOffset = 0;
+    buffer->needBounce = false;
+    buffer->overRead = false;
+
+    if (!isRead || BdmDiskIsRangeAligned(len, offset)) {
+        return BdmDiskPrepareDirectBuffer(userBuf, len, offset, isRead, &buffer->ioBuf, &buffer->needBounce);
+    }
+
+    uint64_t dataStart = itemPtr->offset + itemPtr->dataOffset;
+    if (UNLIKELY(offset < dataStart || itemPtr->minChunkSize == 0)) {
+        BDM_LOGWARN(0, "Invalid io_uring over-read offset, offset(%llu), dataStart(%llu), minChunkSize(%llu).",
+            offset, dataStart, itemPtr->minChunkSize);
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    uint64_t alignedOffset = offset / BDM_DIRECT_IO_ALIGN_SIZE * BDM_DIRECT_IO_ALIGN_SIZE;
+    uint64_t alignedEnd = (offset + len + BDM_DIRECT_IO_ALIGN_SIZE - 1) / BDM_DIRECT_IO_ALIGN_SIZE *
+        BDM_DIRECT_IO_ALIGN_SIZE;
+    uint64_t alignedLen = alignedEnd - alignedOffset;
+    uint64_t userOffset = offset - alignedOffset;
+    uint64_t chunkOffset = (offset - dataStart) % itemPtr->minChunkSize;
+    if (UNLIKELY(userOffset > chunkOffset || alignedLen > itemPtr->minChunkSize - (chunkOffset - userOffset))) {
+        BDM_LOGWARN(0, "io_uring sync over-read cross chunk boundary, offset(%llu), len(%llu), chunkOffset(%llu).",
+            offset, len, chunkOffset);
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    void *alignedBuf = NULL;
+    int32_t ret = posix_memalign(&alignedBuf, BDM_DIRECT_IO_ALIGN_SIZE, alignedLen);
+    if (UNLIKELY(ret != 0 || alignedBuf == NULL)) {
+        BDM_LOGERROR(0, "Alloc sync io_uring over-read buffer failed, len(%llu), ret(%d).", alignedLen, ret);
+        return BDM_CODE_ERR;
+    }
+
+    buffer->ioBuf = (char *)alignedBuf;
+    buffer->ioLen = alignedLen;
+    buffer->ioOffset = alignedOffset;
+    buffer->userOffset = userOffset;
+    buffer->needBounce = true;
+    buffer->overRead = true;
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskFinishSyncUringBuffer(char *userBuf, uint64_t userLen, int32_t isRead,
+    BdmSyncUringBuffer *buffer, int32_t ioRet)
+{
+    if (buffer == NULL) {
+        return ioRet;
+    }
+
+    if (!buffer->needBounce) {
+        return ioRet;
+    }
+
+    int32_t ret = ioRet;
+    if (ioRet == BDM_CODE_OK && isRead) {
+        char *src = buffer->overRead ? buffer->ioBuf + buffer->userOffset : buffer->ioBuf;
+        ret = memcpy_s(userBuf, userLen, src, userLen);
+        if (UNLIKELY(ret != EOK)) {
+            BDM_LOGERROR(0, "Copy from sync io_uring buffer failed, len(%llu), offset(%llu), ret(%d).",
+                userLen, buffer->userOffset, ret);
+            ret = BDM_CODE_ERR;
+        } else {
+            ret = BDM_CODE_OK;
+        }
+    }
+    free(buffer->ioBuf);
+    return ret;
+}
+
+static void BdmDiskReportIoFault(BdmDiskItem *itemPtr, uint64_t offset, uint64_t len)
+{
+    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
+        itemPtr->name, offset, len);
     int32_t ret = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
     BdmSetDiskUsedStatus(itemPtr->bdmId, false);
-    return BDM_CODE_ERR_IO;
+}
+
+static void BdmDiskRegisterSyncUringCtx(BdmSyncUringCtx *uringCtx)
+{
+    pthread_mutex_lock(&g_bdmSyncUringCtxLock);
+    if (!uringCtx->registered) {
+        DListAddTail(&uringCtx->node, &g_bdmSyncUringCtxList);
+        uringCtx->registered = true;
+    }
+    pthread_mutex_unlock(&g_bdmSyncUringCtxLock);
+}
+
+static void BdmDiskUnregisterSyncUringCtx(BdmSyncUringCtx *uringCtx)
+{
+    pthread_mutex_lock(&g_bdmSyncUringCtxLock);
+    if (uringCtx->registered) {
+        DListDel(&uringCtx->node);
+        D_INIT_LIST_HEAD(&uringCtx->node);
+        uringCtx->registered = false;
+    }
+    pthread_mutex_unlock(&g_bdmSyncUringCtxLock);
+}
+
+static void BdmDiskSyncUringDestroy(void *ctx)
+{
+    BdmSyncUringCtx *uringCtx = (BdmSyncUringCtx *)ctx;
+    if (uringCtx == NULL) {
+        return;
+    }
+    BdmDiskUnregisterSyncUringCtx(uringCtx);
+    if (uringCtx->inited) {
+        io_uring_queue_exit(&uringCtx->ring);
+        uringCtx->inited = false;
+    }
+    free(uringCtx);
+}
+
+static int32_t BdmDiskResetSyncUringCtx(BdmSyncUringCtx *uringCtx)
+{
+    if (UNLIKELY(uringCtx == NULL)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+    if (uringCtx->inited) {
+        io_uring_queue_exit(&uringCtx->ring);
+        uringCtx->inited = false;
+    }
+    int32_t ret = io_uring_queue_init(BDM_SYNC_URING_QUEUE_DEPTH, &uringCtx->ring, 0);
+    if (UNLIKELY(ret != 0)) {
+        BDM_LOGWARN(0, "Reset sync io_uring queue failed, ret(%d), errno(%s).", ret, strerror(-ret));
+        return BDM_CODE_ERR_IO;
+    }
+    uringCtx->inited = true;
+    return BDM_CODE_OK;
+}
+
+static void BdmDiskSyncUringCreateKey(void)
+{
+    int32_t ret = pthread_key_create(&g_bdmSyncUringKey, BdmDiskSyncUringDestroy);
+    if (UNLIKELY(ret != 0)) {
+        BDM_LOGWARN(0, "Create sync io_uring pthread key failed, ret(%d).", ret);
+        g_bdmSyncUringKeyRet = BDM_CODE_ERR;
+        return;
+    }
+    g_bdmSyncUringKeyCreated = true;
+}
+
+static void BdmDiskCleanupCurrentSyncUringCtx(void)
+{
+    if (!g_bdmSyncUringKeyCreated || g_bdmSyncUringKeyRet != BDM_CODE_OK) {
+        return;
+    }
+
+    BdmSyncUringCtx *uringCtx = (BdmSyncUringCtx *)pthread_getspecific(g_bdmSyncUringKey);
+    if (uringCtx == NULL) {
+        return;
+    }
+    (void)pthread_setspecific(g_bdmSyncUringKey, NULL);
+    BdmDiskSyncUringDestroy(uringCtx);
+}
+
+static void BdmDiskCleanupAllSyncUringCtxs(void)
+{
+    pthread_mutex_lock(&g_bdmSyncUringCtxLock);
+    DList *pos = NULL;
+    D_LIST_FOR_DEL_EACH(pos, &g_bdmSyncUringCtxList) {
+        BdmSyncUringCtx *uringCtx = D_LIST_ENTRY(pos, BdmSyncUringCtx, node);
+        DListDel(&uringCtx->node);
+        D_INIT_LIST_HEAD(&uringCtx->node);
+        uringCtx->registered = false;
+        if (uringCtx->inited) {
+            io_uring_queue_exit(&uringCtx->ring);
+            uringCtx->inited = false;
+        }
+    }
+    pthread_mutex_unlock(&g_bdmSyncUringCtxLock);
+}
+
+static BdmSyncUringCtx *BdmDiskGetSyncUringCtx(void)
+{
+    pthread_once(&g_bdmSyncUringKeyOnce, BdmDiskSyncUringCreateKey);
+    if (UNLIKELY(g_bdmSyncUringKeyRet != BDM_CODE_OK)) {
+        return NULL;
+    }
+
+    BdmSyncUringCtx *uringCtx = (BdmSyncUringCtx *)pthread_getspecific(g_bdmSyncUringKey);
+    if (LIKELY(uringCtx != NULL)) {
+        if (LIKELY(uringCtx->inited)) {
+            return uringCtx;
+        }
+        (void)pthread_setspecific(g_bdmSyncUringKey, NULL);
+        BdmDiskSyncUringDestroy(uringCtx);
+    }
+
+    uringCtx = (BdmSyncUringCtx *)calloc(1, sizeof(BdmSyncUringCtx));
+    if (UNLIKELY(uringCtx == NULL)) {
+        BDM_LOGWARN(0, "Allocate sync io_uring context failed.");
+        return NULL;
+    }
+    D_INIT_LIST_HEAD(&uringCtx->node);
+
+    int32_t ret = io_uring_queue_init(BDM_SYNC_URING_QUEUE_DEPTH, &uringCtx->ring, 0);
+    if (UNLIKELY(ret != 0)) {
+        BDM_LOGWARN(0, "sync io_uring queue init failed, ret(%d).", ret);
+        free(uringCtx);
+        return NULL;
+    }
+    uringCtx->inited = true;
+
+    ret = pthread_setspecific(g_bdmSyncUringKey, uringCtx);
+    if (UNLIKELY(ret != 0)) {
+        BDM_LOGWARN(0, "Set sync io_uring pthread key failed, ret(%d).", ret);
+        BdmDiskSyncUringDestroy(uringCtx);
+        return NULL;
+    }
+    BdmDiskRegisterSyncUringCtx(uringCtx);
+    return uringCtx;
+}
+
+static uint64_t BdmDiskNextPow2(uint64_t value)
+{
+    if (value <= 1UL) {
+        return 1UL;
+    }
+
+    value--;
+    value |= value >> 1;
+    value |= value >> 2;
+    value |= value >> 4;
+    value |= value >> 8;
+    value |= value >> 16;
+    value |= value >> 32;
+    return value + 1UL;
+}
+
+static uint64_t BdmDiskCalcUringChunk(uint64_t remain)
+{
+    uint64_t chunk = BdmDiskNextPow2((remain + BDM_SYNC_URING_QUEUE_DEPTH - 1UL) / BDM_SYNC_URING_QUEUE_DEPTH);
+    if (chunk < BDM_SYNC_URING_MIN_CHUNK_SIZE) {
+        chunk = BDM_SYNC_URING_MIN_CHUNK_SIZE;
+    }
+    if (chunk > remain) {
+        chunk = remain;
+    }
+    return chunk;
+}
+
+static int32_t BdmDiskSubmitAllUring(struct io_uring *ring, uint32_t submitNum, uint32_t *submittedOut, bool isSqpoll)
+{
+    uint32_t submitted = 0;
+    uint32_t noProgressRetry = 0;
+    while (submitted < submitNum) {
+        int32_t ret = io_uring_submit(ring);
+        if (UNLIKELY(ret < 0)) {
+            if (noProgressRetry == 0 || (noProgressRetry % BDM_URING_SQE_RETRY_NUM) == 0) {
+                BDM_LOGWARN(0, "io_uring_submit failed, ret(%d), submitted(%u), expected(%u), errno(%s).", ret,
+                    submitted, submitNum, strerror(-ret));
+            }
+            noProgressRetry++;
+            if (noProgressRetry >= BDM_URING_SQE_RETRY_NUM) {
+                if (submittedOut != NULL) {
+                    *submittedOut = submitted;
+                }
+                return BDM_CODE_ERR;
+            }
+            usleep(BDM_URING_SQE_RETRY_INTERVAL_US);
+            continue;
+        }
+        if (isSqpoll) {
+            /* SQPOLL may consume SQEs concurrently; non-negative submit means prepared SQEs belong to the ring. */
+            if (submittedOut != NULL) {
+                *submittedOut = submitNum;
+            }
+            return BDM_CODE_OK;
+        }
+        if (UNLIKELY(ret == 0)) {
+            if (noProgressRetry == 0 || (noProgressRetry % BDM_URING_SQE_RETRY_NUM) == 0) {
+                BDM_LOGWARN(0, "io_uring_submit made no progress, submitted(%u), expected(%u).", submitted,
+                    submitNum);
+            }
+            noProgressRetry++;
+            if (noProgressRetry >= BDM_URING_SQE_RETRY_NUM) {
+                if (submittedOut != NULL) {
+                    *submittedOut = submitted;
+                }
+                return BDM_CODE_ERR;
+            }
+            usleep(BDM_URING_SQE_RETRY_INTERVAL_US);
+            continue;
+        }
+        submitted += (uint32_t)ret;
+        noProgressRetry = 0;
+    }
+
+    if (submittedOut != NULL) {
+        *submittedOut = submitted;
+    }
+    return BDM_CODE_OK;
+}
+
+static void BdmDiskDrainSyncUringCqes(struct io_uring *ring, uint32_t drainNum)
+{
+    for (uint32_t i = 0; i < drainNum; i++) {
+        struct io_uring_cqe *cqe = NULL;
+        int32_t ret;
+        do {
+            ret = io_uring_wait_cqe(ring, &cqe);
+        } while (ret == -EINTR);
+        if (UNLIKELY(ret != 0 || cqe == NULL)) {
+            BDM_LOGWARN(0, "Drain sync io_uring cqe failed, ret(%d), remain(%u).", ret, drainNum - i);
+            return;
+        }
+        io_uring_cqe_seen(ring, cqe);
+    }
+}
+
+static int32_t BdmDiskSubmitWaitUring(int32_t fd, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
+{
+    BdmSyncUringCtx *uringCtx = BdmDiskGetSyncUringCtx();
+    if (UNLIKELY(uringCtx == NULL || !uringCtx->inited)) {
+        return BDM_CODE_ERR_IO;
+    }
+    struct io_uring *ring = &uringCtx->ring;
+
+    uint64_t remain = len;
+    while (remain > 0) {
+        uint64_t chunkSize = BdmDiskCalcUringChunk(remain);
+        uint32_t submitNum = 0;
+        uint64_t submitLens[BDM_SYNC_URING_QUEUE_DEPTH] = {0};
+        while (remain > 0 && submitNum < BDM_SYNC_URING_QUEUE_DEPTH) {
+            uint64_t done = len - remain;
+            uint64_t chunk = remain < chunkSize ? remain : chunkSize;
+            struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
+            if (UNLIKELY(sqe == NULL)) {
+                (void)BdmDiskResetSyncUringCtx(uringCtx);
+                return BDM_CODE_ERR_IO;
+            }
+
+            if (isRead) {
+                io_uring_prep_read(sqe, fd, buff + done, chunk, offset + done);
+            } else {
+                io_uring_prep_write(sqe, fd, buff + done, chunk, offset + done);
+            }
+
+            remain -= chunk;
+            submitLens[submitNum] = chunk;
+            submitNum++;
+        }
+
+        uint32_t submitted = 0;
+        int32_t ret = BdmDiskSubmitAllUring(ring, submitNum, &submitted, false);
+        if (UNLIKELY(ret != BDM_CODE_OK && submitted == 0)) {
+            (void)BdmDiskResetSyncUringCtx(uringCtx);
+            return ret;
+        }
+        bool needResetRing = false;
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BDM_LOGWARN(0, "io_uring partial sync submit, submitted(%u), expected(%u).", submitted, submitNum);
+            for (uint32_t i = submitted; i < submitNum; i++) {
+                remain += submitLens[i];
+            }
+            submitNum = submitted;
+            needResetRing = true;
+        }
+
+        uint64_t submitBytes = 0;
+        for (uint32_t i = 0; i < submitNum; i++) {
+            submitBytes += submitLens[i];
+        }
+        uint64_t doneBytes = 0;
+        for (uint32_t i = 0; i < submitNum; i++) {
+            struct io_uring_cqe *cqe = NULL;
+            do {
+                ret = io_uring_wait_cqe(ring, &cqe);
+            } while (ret == -EINTR);
+            if (UNLIKELY(ret != 0 || cqe == NULL || cqe->res <= 0)) {
+                BDM_LOGWARN(0, "io_uring wait cqe failed, ret(%d), res(%d).", ret, cqe == NULL ? 0 : cqe->res);
+                uint32_t completedNum = i;
+                if (cqe != NULL) {
+                    io_uring_cqe_seen(ring, cqe);
+                    completedNum++;
+                }
+                if (completedNum < submitNum) {
+                    BdmDiskDrainSyncUringCqes(ring, submitNum - completedNum);
+                }
+                (void)BdmDiskResetSyncUringCtx(uringCtx);
+                return BDM_CODE_ERR_IO;
+            }
+            doneBytes += (uint64_t)cqe->res;
+            io_uring_cqe_seen(ring, cqe);
+        }
+        if (UNLIKELY(doneBytes != submitBytes)) {
+            BDM_LOGWARN(0, "io_uring partial io, need(%llu), done(%llu).", submitBytes, doneBytes);
+            (void)BdmDiskResetSyncUringCtx(uringCtx);
+            return BDM_CODE_ERR_IO;
+        }
+        if (needResetRing) {
+            int32_t resetRet = BdmDiskResetSyncUringCtx(uringCtx);
+            if (UNLIKELY(resetRet != BDM_CODE_OK)) {
+                return resetRet;
+            }
+            ring = &uringCtx->ring;
+        }
+    }
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskInnerReadWriteUring(BdmDiskItem *itemPtr, char *buff, uint64_t len, uint64_t offset,
+    int32_t isRead)
+{
+    BdmSyncUringBuffer buffer;
+    int32_t ret = BdmDiskPrepareSyncUringBuffer(itemPtr, buff, len, offset, isRead, &buffer);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
+    static uint64_t submitIndex = 0;
+    uint64_t fdIdx = ATOMIC_INC(&submitIndex) % BDM_AYSNC_IO_FD_NUM;
+    int32_t fd = itemPtr->asyncfd[fdIdx];
+
+    uint32_t retry = 0;
+    while (retry <= BDM_IO_RETRY_NUM) {
+        ret = BdmDiskSubmitWaitUring(fd, buffer.ioBuf, buffer.ioLen, buffer.ioOffset, isRead);
+        if (LIKELY(ret == BDM_CODE_OK)) {
+            return BdmDiskFinishSyncUringBuffer(buff, len, isRead, &buffer, BDM_CODE_OK);
+        }
+        usleep(10000); // 延迟10毫秒重试.
+        retry++;
+    }
+
+    if (ret != BDM_CODE_ERR_IO) {
+        return BdmDiskFinishSyncUringBuffer(buff, len, isRead, &buffer, ret);
+    }
+    BdmDiskReportIoFault(itemPtr, buffer.ioOffset, buffer.ioLen);
+    return BdmDiskFinishSyncUringBuffer(buff, len, isRead, &buffer, BDM_CODE_ERR_IO);
 }
 
 int32_t BdmDiskWriteMeta(uintptr_t itemPtr, uint64_t offset, void *buf, uint64_t len)
@@ -334,11 +998,12 @@ int32_t BdmDiskRead(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *b
     }
 
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
-    uint64_t bufStart = (uint64_t)buf;
-    if (bufStart % BDM_BLOCK_SIZE == 0 && len % BDM_BLOCK_SIZE == 0 && rwOffset % BDM_BLOCK_SIZE == 0) {
-        ret = BdmDiskInnerReadWriteDirect(item, (char*)buf, len, rwOffset, TRUE);
+    if (g_bdmIoEngine == BDM_IO_ENGINE_IO_URING) {
+        ret = BdmDiskInnerReadWriteUring(item, (char *)buf, len, rwOffset, TRUE);
+    } else if (BdmDiskIsRangeAligned(len, rwOffset)) {
+        ret = BdmDiskInnerReadWriteDirect(item, (char *)buf, len, rwOffset, TRUE);
     } else {
-        ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, TRUE);
+        ret = BdmDiskInnerReadWrite(item, (char *)buf, len, rwOffset, TRUE);
     }
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Read disk failed, need(%lu) device(%s).", len, item->name);
@@ -363,11 +1028,12 @@ int32_t BdmDiskWrite(uintptr_t objPtr, uint64_t chunkId, uint64_t offset, void *
     }
 
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * chunkId + offset;
-    uint64_t bufStart = (uint64_t)buf;
-    if (bufStart % BDM_BLOCK_SIZE == 0 && len % BDM_BLOCK_SIZE == 0 && rwOffset % BDM_BLOCK_SIZE == 0) {
-        ret = BdmDiskInnerReadWriteDirect(item, (char*)buf, len, rwOffset, FALSE);
+    if (g_bdmIoEngine == BDM_IO_ENGINE_IO_URING && BdmDiskIsRangeAligned(len, rwOffset)) {
+        ret = BdmDiskInnerReadWriteUring(item, (char *)buf, len, rwOffset, FALSE);
+    } else if (BdmDiskIsRangeAligned(len, rwOffset)) {
+        ret = BdmDiskInnerReadWriteDirect(item, (char *)buf, len, rwOffset, FALSE);
     } else {
-        ret = BdmDiskInnerReadWrite(item, (char*)buf, len, rwOffset, FALSE);
+        ret = BdmDiskInnerReadWrite(item, (char *)buf, len, rwOffset, FALSE);
     }
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Write disk failed, need(%lu) device(%s).", len, item->name);
@@ -425,48 +1091,303 @@ int32_t BdmDiskGetCap(uintptr_t objPtr, uint64_t *totalSize, uint64_t *usedSize)
     return ret;
 }
 
-void BdmDiskAIOCallback(io_context_t ctx, struct iocb *iocb, long res, long res2)
+static int32_t BdmDiskAcquireUringSlot(BdmIoContext *bdmIo, BdmThreadPool *bdmPool, uint32_t threadIdx)
 {
-    UNREFERENCE_PARAM(ctx);
-    UNREFERENCE_PARAM(iocb);
-    UNREFERENCE_PARAM(res);
-    UNREFERENCE_PARAM(res2);
-}
-
-int32_t BdmDiskSubmitAIO(void **argList, uint32_t argNum, void *ctx)
-{
-    BdmThreadCtx *threadCtx = (BdmThreadCtx *)ctx;
-    BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
-    struct iocb *iocbPs[BDM_BATCH_HANDLE_NUM];
-    uint32_t threadIdx = threadCtx->index;
-    static uint64_t submitIndex = 0;
-    uint64_t fdIdx = ATOMIC_INC(&submitIndex) % BDM_AYSNC_IO_FD_NUM;
-
-    for (uint32_t i = 0; i < argNum; i++) {
-        BdmIoContext *bdmIo = (BdmIoContext *)argList[i];
-        if (g_bdmAioIsDirect == FALSE) {
-        }
-        iocbPs[i] = &bdmIo->iocb;
-        BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
-        uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
-        if (bdmIo->isRead) {
-            io_prep_pread(&bdmIo->iocb, item->asyncfd[fdIdx], bdmIo->buf, bdmIo->len, rwOffset);
-        } else {
-            io_prep_pwrite(&bdmIo->iocb, item->asyncfd[fdIdx], bdmIo->buf, bdmIo->len, rwOffset);
-        }
-        io_set_eventfd(&bdmIo->iocb, bdmPool->efd[threadIdx]);
-        io_set_callback(&bdmIo->iocb, BdmDiskAIOCallback);
+    if (bdmIo->slotAcquired) {
+        return BDM_CODE_OK;
     }
 
-    int32_t ret = io_submit(bdmPool->ioctx[threadIdx], argNum, &(iocbPs[0]));
-    if (UNLIKELY(ret != (int32_t)argNum)) {
-        BDM_LOGWARN(0, "Failed to io submit, size %d, %d, %s", ret, errno, strerror(errno));
-        return BDM_CODE_ERR;
+    while (sem_wait(&bdmPool->ringSlots[threadIdx]) != 0) {
+        if (errno == EINTR) {
+            continue;
+        }
+        BDM_LOGERROR(0, "Wait io_uring slot failed, threadIdx(%u), errno(%s).", threadIdx, strerror(errno));
+        return BDM_CODE_ERR_IO;
+    }
+    bdmIo->slotAcquired = true;
+    (void)__sync_add_and_fetch(&bdmPool->ringInflight[threadIdx], 1);
+    return BDM_CODE_OK;
+}
+
+static void BdmDiskReleaseUringSlot(BdmIoContext *bdmIo, BdmThreadPool *bdmPool, uint32_t threadIdx)
+{
+    if (!bdmIo->slotAcquired) {
+        return;
+    }
+    bdmIo->slotAcquired = false;
+    (void)__sync_sub_and_fetch(&bdmPool->ringInflight[threadIdx], 1);
+    if (UNLIKELY(sem_post(&bdmPool->ringSlots[threadIdx]) != 0)) {
+        BDM_LOGERROR(0, "Release io_uring slot failed, threadIdx(%u), errno(%s).", threadIdx, strerror(errno));
+    }
+}
+
+static uint32_t BdmDiskGetUringInflight(BdmThreadPool *bdmPool, uint32_t threadIdx)
+{
+    return __sync_add_and_fetch(&bdmPool->ringInflight[threadIdx], 0);
+}
+
+static void BdmDiskCancelPreparedSqe(struct io_uring_sqe *sqe)
+{
+    if (sqe == NULL) {
+        return;
+    }
+    io_uring_prep_nop(sqe);
+    io_uring_sqe_set_data(sqe, NULL);
+}
+
+static int32_t BdmDiskPrepareOneUring(BdmIoContext *bdmIo, BdmThreadCtx *threadCtx, struct io_uring_sqe **sqeOut)
+{
+    BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
+    uint32_t threadIdx = threadCtx->index;
+    struct io_uring *ring = &bdmPool->ring[threadIdx];
+    BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
+    uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+    if (UNLIKELY(!BdmDiskCheckDirectRangeAligned(bdmIo->len, rwOffset))) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    static uint64_t submitIndex = 0;
+    uint64_t fdIdx = ATOMIC_INC(&submitIndex) % BDM_AYSNC_IO_FD_NUM;
+    int32_t fd = item->asyncfd[fdIdx];
+
+    struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
+    if (UNLIKELY(sqe == NULL)) {
+        BDM_LOGERROR(0, "No available io_uring sqe, chunkId(%lu), len(%lu).", bdmIo->chunkId, bdmIo->len);
+        return BDM_CODE_ERR_IO;
+    }
+
+    if (bdmIo->isRead) {
+        io_uring_prep_read(sqe, fd, bdmIo->ioBuf, bdmIo->len, rwOffset);
+    } else {
+        io_uring_prep_write(sqe, fd, bdmIo->ioBuf, bdmIo->len, rwOffset);
+    }
+    io_uring_sqe_set_data(sqe, bdmIo);
+    if (sqeOut != NULL) {
+        *sqeOut = sqe;
     }
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskHandleAIO(BdmAsyncOpsReq *req, bool isRead)
+static int32_t BdmDiskSubmitOneUring(BdmIoContext *bdmIo, BdmThreadCtx *threadCtx)
+{
+    BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
+    uint32_t threadIdx = threadCtx->index;
+    struct io_uring *ring = &bdmPool->ring[threadIdx];
+
+    int32_t ret = BdmDiskAcquireUringSlot(bdmIo, bdmPool, threadIdx);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
+    pthread_mutex_lock(&bdmPool->ringLock[threadIdx]);
+
+    struct io_uring_sqe *sqe = NULL;
+    ret = BdmDiskPrepareOneUring(bdmIo, threadCtx, &sqe);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BdmDiskReleaseUringSlot(bdmIo, bdmPool, threadIdx);
+        pthread_mutex_unlock(&bdmPool->ringLock[threadIdx]);
+        return ret;
+    }
+
+    uint32_t submitted = 0;
+    ret = BdmDiskSubmitAllUring(ring, 1, &submitted, true);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "io_uring_submit one failed, submitted(%u).", submitted);
+        if (submitted == 0) {
+            BdmDiskCancelPreparedSqe(sqe);
+        }
+        BdmDiskReleaseUringSlot(bdmIo, bdmPool, threadIdx);
+        pthread_mutex_unlock(&bdmPool->ringLock[threadIdx]);
+        return BDM_CODE_ERR_IO;
+    }
+    pthread_mutex_unlock(&bdmPool->ringLock[threadIdx]);
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskRetryUring(BdmIoContext *bdmIo, BdmThreadCtx *threadCtx)
+{
+    BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
+    uint32_t threadIdx = threadCtx->index;
+    if (!bdmPool->stopping[threadIdx] && bdmPool->pool[threadIdx] != NULL) {
+        return BdmThreadPoolAdd(bdmPool->pool[threadIdx], NULL, (void *)bdmIo);
+    }
+    return BdmDiskSubmitOneUring(bdmIo, threadCtx);
+}
+
+static uint32_t BdmDiskGetEagainBackoffUs(uint32_t retryNum)
+{
+    uint64_t backoff = BDM_URING_EAGAIN_BACKOFF_BASE_US;
+    uint32_t shift = retryNum > 6 ? 6 : retryNum;
+    backoff <<= shift;
+    if (backoff > BDM_URING_EAGAIN_BACKOFF_MAX_US) {
+        backoff = BDM_URING_EAGAIN_BACKOFF_MAX_US;
+    }
+    return (uint32_t)backoff;
+}
+
+static void BdmDiskCompleteUringContext(BdmIoContext *bdmIo, int32_t ret)
+{
+    ret = BdmDiskFinishUringBuffer(bdmIo, ret);
+    bdmIo->ioBuf = bdmIo->buf;
+    bdmIo->needBounce = false;
+    HTRACER_C_DELAY_END(bdmIo->traceId, bdmIo->traceStartNs, ret);
+    bdmIo->cb(bdmIo->ctx, ret);
+}
+
+static void BdmDiskCleanupPreparedAsyncContext(BdmIoContext *bdmIo, int32_t ret)
+{
+    (void)BdmDiskFinishUringBuffer(bdmIo, ret);
+    bdmIo->ioBuf = bdmIo->buf;
+    bdmIo->needBounce = false;
+    HTRACER_C_DELAY_END(bdmIo->traceId, bdmIo->traceStartNs, ret);
+}
+
+static bool BdmDiskShouldStopEvents(BdmThreadPool *bdmPool, uint32_t threadIdx)
+{
+    return bdmPool->stopping[threadIdx] && BdmDiskGetUringInflight(bdmPool, threadIdx) == 0;
+}
+
+static int32_t BdmDiskSubmitUring(void **argList, uint32_t argNum, void *ctx)
+{
+    BdmThreadCtx *threadCtx = (BdmThreadCtx *)ctx;
+    BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
+    uint32_t threadIdx = threadCtx->index;
+    struct io_uring *ring = &bdmPool->ring[threadIdx];
+    BdmIoContext *submitted[BDM_BATCH_HANDLE_NUM];
+    struct io_uring_sqe *submittedSqes[BDM_BATCH_HANDLE_NUM];
+    BdmIoContext *ready[BDM_BATCH_HANDLE_NUM];
+    uint32_t submittedNum = 0;
+    uint32_t readyNum = 0;
+    int32_t finalRet = BDM_CODE_OK;
+
+    for (uint32_t i = 0; i < argNum; i++) {
+        BdmIoContext *bdmIo = (BdmIoContext *)argList[i];
+        int32_t ret = BdmDiskAcquireUringSlot(bdmIo, bdmPool, threadIdx);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmDiskCompleteUringContext(bdmIo, ret);
+            finalRet = ret;
+            continue;
+        }
+        if (readyNum < BDM_BATCH_HANDLE_NUM) {
+            ready[readyNum++] = bdmIo;
+        }
+    }
+    if (readyNum == 0) {
+        return finalRet;
+    }
+
+    for (uint32_t i = 0; i < readyNum; i++) {
+        BdmIoContext *bdmIo = ready[i];
+        struct io_uring_sqe *sqe = NULL;
+        int32_t ret = BdmDiskPrepareOneUring(bdmIo, threadCtx, &sqe);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BDM_LOGERROR(0, "Submit bdm io_uring failed, chunkId(%lu), len(%lu).", bdmIo->chunkId, bdmIo->len);
+            BdmDiskReleaseUringSlot(bdmIo, bdmPool, threadIdx);
+            BdmDiskCompleteUringContext(bdmIo, ret);
+            finalRet = ret;
+            continue;
+        }
+        if (submittedNum < BDM_BATCH_HANDLE_NUM) {
+            submitted[submittedNum++] = bdmIo;
+            submittedSqes[submittedNum - 1] = sqe;
+        }
+    }
+
+    if (submittedNum == 0) {
+        return finalRet;
+    }
+
+    uint32_t realSubmitted = 0;
+    int32_t ret = BdmDiskSubmitAllUring(ring, submittedNum, &realSubmitted, true);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "io_uring_submit batch failed, submitted(%u), expected(%u), argNum(%u).", realSubmitted,
+            submittedNum, argNum);
+        for (uint32_t i = realSubmitted; i < submittedNum; i++) {
+            BdmDiskCancelPreparedSqe(submittedSqes[i]);
+            BdmDiskReleaseUringSlot(submitted[i], bdmPool, threadIdx);
+            BdmDiskCompleteUringContext(submitted[i], BDM_CODE_ERR_IO);
+        }
+        return BDM_CODE_ERR_IO;
+    }
+    return BDM_CODE_OK;
+}
+
+static bool BdmCompleteUringHandler(const struct io_uring_cqe *cqe, BdmThreadCtx *threadCtx)
+{
+    BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
+    if (bdmPool->stopping[threadCtx->index] && io_uring_cqe_get_data(cqe) == NULL) {
+        return BdmDiskShouldStopEvents(bdmPool, threadCtx->index);
+    }
+
+    BdmIoContext *bdmIo = (BdmIoContext *)io_uring_cqe_get_data(cqe);
+    if (UNLIKELY(bdmIo == NULL)) {
+        return false;
+    }
+
+    if (UNLIKELY(cqe->res != (int32_t)bdmIo->len)) {
+        if (cqe->res == -EAGAIN) {
+            if (bdmIo->eagainRetryNum < BDM_URING_EAGAIN_RETRY_NUM) {
+                uint32_t backoffUs = BdmDiskGetEagainBackoffUs(bdmIo->eagainRetryNum);
+                BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
+                uint32_t threadIdx = threadCtx->index;
+                uint64_t rwOffset = item == NULL ? 0 :
+                    item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+                if (bdmIo->eagainRetryNum == 0 || (bdmIo->eagainRetryNum % 16) == 15) {
+                    BDM_LOGWARN(0,
+                        "retry bdm io_uring after EAGAIN, pid(%d), rw(%s), bdmId(%u), device(%s), threadIdx(%u), "
+                        "chunkId(%lu), offset(%lu), len(%lu), retry(%u), backoffUs(%u).",
+                        getpid(), bdmIo->isRead ? "read" : "write", item == NULL ? UINT32_MAX : item->bdmId,
+                        item == NULL ? "unknown" : item->name, threadIdx, bdmIo->chunkId, rwOffset, bdmIo->len,
+                        bdmIo->eagainRetryNum + 1, backoffUs);
+                }
+                bdmIo->eagainRetryNum++;
+                usleep(backoffUs);
+                int32_t retryRet = BdmDiskRetryUring(bdmIo, threadCtx);
+                if (retryRet == BDM_CODE_OK) {
+                    return false;
+                }
+                BDM_LOGWARN(0,
+                    "resubmit bdm io_uring after EAGAIN failed, ret(%d), pid(%d), rw(%s), bdmId(%u), device(%s), "
+                    "threadIdx(%u), chunkId(%lu), offset(%lu), len(%lu), retry(%u).",
+                    retryRet, getpid(), bdmIo->isRead ? "read" : "write", item == NULL ? UINT32_MAX : item->bdmId,
+                    item == NULL ? "unknown" : item->name, threadIdx, bdmIo->chunkId, rwOffset, bdmIo->len,
+                    bdmIo->eagainRetryNum);
+            }
+
+            BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
+            BDM_LOGERROR(0,
+                "bdm io_uring EAGAIN retry exhausted, bdmId(%u), device(%s), chunkId(%lu), len(%lu), retry(%u).",
+                item->bdmId, item->name, bdmIo->chunkId, bdmIo->len, bdmIo->eagainRetryNum);
+            BdmDiskReleaseUringSlot(bdmIo, bdmPool, threadCtx->index);
+            BdmDiskCompleteUringContext(bdmIo, BDM_CODE_ERR_IO);
+            return BdmDiskShouldStopEvents(bdmPool, threadCtx->index);
+        }
+
+        if (bdmIo->retryNum < BDM_IO_RETRY_NUM) {
+            BDM_LOGWARN(0, "retry bdm io_uring, chunkId(%lu), len(%lu), res(%d).", bdmIo->chunkId, bdmIo->len,
+                cqe->res);
+            bdmIo->retryNum++;
+            if (BdmDiskRetryUring(bdmIo, threadCtx) == BDM_CODE_OK) {
+                return false;
+            }
+        }
+
+        BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
+        uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+        BDM_LOGERROR(0, "bdm io_uring failed, bdmId(%u), device(%s), chunkId(%lu), len(%lu), res(%d).", item->bdmId,
+            item->name, bdmIo->chunkId, bdmIo->len, cqe->res);
+        BdmDiskReportIoFault(item, rwOffset, bdmIo->len);
+        BdmDiskReleaseUringSlot(bdmIo, bdmPool, threadCtx->index);
+        BdmDiskCompleteUringContext(bdmIo, BDM_CODE_ERR_IO);
+        return BdmDiskShouldStopEvents(bdmPool, threadCtx->index);
+    }
+
+    BdmDiskReleaseUringSlot(bdmIo, bdmPool, threadCtx->index);
+    BdmDiskCompleteUringContext(bdmIo, BDM_CODE_OK);
+    return BdmDiskShouldStopEvents(bdmPool, threadCtx->index);
+}
+
+static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, BdmIoContext **ioOut)
 {
     BdmObj *obj = (BdmObj *)req->objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -479,6 +1400,10 @@ int32_t BdmDiskHandleAIO(BdmAsyncOpsReq *req, bool isRead)
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Bdm read check failed, bdmId(%u) chunkId(%lu) ret(%d).", obj->bdmId, req->chunkId, ret);
         return ret;
+    }
+
+    if (UNLIKELY(req->ioCtx == NULL || req->ioCtx->cb == NULL)) {
+        return BDM_CODE_INVALID_PARAM;
     }
 
     static size_t ctxLen = sizeof(BdmIoContext);
@@ -494,32 +1419,142 @@ int32_t BdmDiskHandleAIO(BdmAsyncOpsReq *req, bool isRead)
     }
 
     bdmIo->buf = req->buf;
+    bdmIo->ioBuf = req->buf;
     bdmIo->len = req->len;
+    bdmIo->userLen = req->len;
+    bdmIo->userOffset = 0;
     bdmIo->chunkId = req->chunkId;
     bdmIo->offset = req->offset;
     bdmIo->retryNum = 0;
+    bdmIo->eagainRetryNum = 0;
     bdmIo->isRead = isRead;
+    bdmIo->needBounce = false;
+    bdmIo->slotAcquired = false;
+    bdmIo->traceId = isRead ? BDM_DISK_TRACE_READ_ASYNC_C : BDM_DISK_TRACE_WRITE_ASYNC_C;
+    bdmIo->traceStartNs = 0;
+    if (HTracerIsEnableC()) {
+        bdmIo->traceStartNs = HTracerNowNsC();
+        HTracerDelayBeginC(bdmIo->traceId, isRead ? "BDM_DISK_TRACE_READ_ASYNC" : "BDM_DISK_TRACE_WRITE_ASYNC");
+    }
     bdmIo->cb = req->ioCtx->cb;
     bdmIo->ctx = req->ioCtx->ctx;
     bdmIo->item = (void *)item;
-    void *argList[1UL] = {(void *)bdmIo};
+    if (g_bdmIoEngine == BDM_IO_ENGINE_IO_URING) {
+        uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * req->chunkId + req->offset;
+        ret = BdmDiskPrepareUringBuffer(bdmIo, item, rwOffset);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            HTRACER_C_DELAY_END(bdmIo->traceId, bdmIo->traceStartNs, ret);
+            return ret;
+        }
+    }
+    *ioOut = bdmIo;
+    return BDM_CODE_OK;
+}
+
+int32_t BdmDiskHandleAsync(BdmAsyncOpsReq *req, bool isRead)
+{
+    BdmObj *obj = (BdmObj *)req->objPtr;
+    BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
+    if (UNLIKELY(item == NULL)) {
+        BDM_LOGERROR(0, "Get bdm disk item failed.");
+        return BDM_CODE_ERR;
+    }
+
+    if (g_bdmIoEngine == BDM_IO_ENGINE_IO_URING && !isRead) {
+        if (UNLIKELY(req->ioCtx == NULL || req->ioCtx->cb == NULL)) {
+            return BDM_CODE_INVALID_PARAM;
+        }
+        int32_t ret = BdmAllocatorCheckChunk(item->allocator, req->chunkId, req->offset, req->len);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BDM_LOGWARN(0, "Bdm write check failed, bdmId(%u) chunkId(%lu) ret(%d).", obj->bdmId, req->chunkId, ret);
+            return ret;
+        }
+        uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * req->chunkId + req->offset;
+        if (!BdmDiskIsRangeAligned(req->len, rwOffset)) {
+            HTRACER_C_DELAY_BEGIN(BDM_DISK_TRACE_WRITE_ASYNC_C, "BDM_DISK_TRACE_WRITE_ASYNC", traceStartNs);
+            ret = BdmDiskInnerReadWrite(item, (char *)req->buf, req->len, rwOffset, FALSE);
+            HTRACER_C_DELAY_END(BDM_DISK_TRACE_WRITE_ASYNC_C, traceStartNs, ret);
+            BDM_LOGDEBUG(0, "Fallback io_uring non-aligned write to sync fd, bdmId(%u), chunkId(%lu), offset(%llu), "
+                "len(%llu).", obj->bdmId, req->chunkId, rwOffset, req->len);
+            req->ioCtx->cb(req->ioCtx->ctx, ret);
+            return BDM_CODE_OK;
+        }
+    }
+
+    if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
+        if (UNLIKELY(req->ioCtx == NULL || req->ioCtx->cb == NULL)) {
+            return BDM_CODE_INVALID_PARAM;
+        }
+        int32_t ret = BdmAllocatorCheckChunk(item->allocator, req->chunkId, req->offset, req->len);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BDM_LOGWARN(0, "Bdm read check failed, bdmId(%u) chunkId(%lu) ret(%d).", obj->bdmId, req->chunkId, ret);
+            return ret;
+        }
+        uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * req->chunkId + req->offset;
+        int32_t traceId = isRead ? BDM_DISK_TRACE_READ_SYNC_C : BDM_DISK_TRACE_WRITE_SYNC_C;
+        HTRACER_C_DELAY_BEGIN(traceId, isRead ? "BDM_DISK_TRACE_READ_SYNC" : "BDM_DISK_TRACE_WRITE_SYNC",
+            traceStartNs);
+        ret = BdmDiskIsRangeAligned(req->len, rwOffset) ?
+                  BdmDiskInnerReadWriteDirect(item, (char *)req->buf, req->len, rwOffset, isRead) :
+                  BdmDiskInnerReadWrite(item, (char *)req->buf, req->len, rwOffset, isRead);
+        HTRACER_C_DELAY_END(traceId, traceStartNs, ret);
+        req->ioCtx->cb(req->ioCtx->ctx, ret);
+        return BDM_CODE_OK;
+    }
+
+    BdmIoContext *bdmIo = NULL;
+    int32_t ret = BdmDiskPrepareAsyncContext(req, isRead, &bdmIo);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
     uint64_t index = ATOMIC_INC(&g_bdmIndex) % BDM_WORKER_THREAD_NUM;
-    if (g_bdmAioIsDirect) {
-        ret = BdmDiskSubmitAIO(argList, 1UL, (void *)&g_bdmThreadPool.threadCtx[index]);
-    } else {
-        ret = BdmThreadPoolAdd(g_bdmThreadPool.pool[index], NULL, (void *)bdmIo);
+    ret = BdmThreadPoolAdd(g_bdmThreadPool.pool[index], NULL, (void *)bdmIo);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BdmDiskCleanupPreparedAsyncContext(bdmIo, ret);
     }
     return ret;
 }
 
+static void BdmDiskCompleteReq(BdmAsyncOpsReq *req, int32_t ret)
+{
+    if (req != NULL && req->ioCtx != NULL && req->ioCtx->cb != NULL) {
+        req->ioCtx->cb(req->ioCtx->ctx, ret);
+    }
+}
+
+static int32_t BdmDiskHandleAsyncBatch(BdmAsyncOpsReq *reqs, uint32_t reqNum, bool isRead)
+{
+    if (UNLIKELY(reqs == NULL || reqNum == 0)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    for (uint32_t i = 0; i < reqNum; i++) {
+        int32_t ret = BdmDiskHandleAsync(&reqs[i], isRead);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmDiskCompleteReq(&reqs[i], ret);
+        }
+    }
+    return BDM_CODE_OK;
+}
+
 int32_t BdmDiskReadAsync(BdmAsyncOpsReq *req)
 {
-    return BdmDiskHandleAIO(req, TRUE);
+    return BdmDiskHandleAsync(req, TRUE);
 }
 
 int32_t BdmDiskWriteAsync(BdmAsyncOpsReq *req)
 {
-    return BdmDiskHandleAIO(req, FALSE);
+    return BdmDiskHandleAsync(req, FALSE);
+}
+
+int32_t BdmDiskReadBatchAsync(BdmAsyncOpsReq *reqs, uint32_t reqNum)
+{
+    return BdmDiskHandleAsyncBatch(reqs, reqNum, TRUE);
+}
+
+int32_t BdmDiskWriteBatchAsync(BdmAsyncOpsReq *reqs, uint32_t reqNum)
+{
+    return BdmDiskHandleAsyncBatch(reqs, reqNum, FALSE);
 }
 
 int32_t BdmDiskCreateCheck(BdmCreatePara *para)
@@ -547,88 +1582,44 @@ int32_t BdmDiskCreateCheck(BdmCreatePara *para)
     return BDM_CODE_OK;
 }
 
-int32_t BdmDiskRetryIo(io_context_t ctx, struct iocb **iocbPP)
-{
-    BdmIoContext *bdmIo = (BdmIoContext *)*iocbPP;
-    int32_t j = 0;
-    do {
-        j = io_submit(ctx, 1, iocbPP);
-        if (j == 1) {
-            return 0;
-        } else if (j == (-EAGAIN)) {
-            BDM_LOGWARN(0, "retry: io_submit busy, chunkId %ld", bdmIo->chunkId);
-            sched_yield();
-        } else {
-            BDM_LOGERROR(0, "doWork: io_submit failed, %s, j %d", strerror(errno), j);
-            return -1;
-        }
-    } while (j == (-EAGAIN));
-    return -1;
-}
-
-static void BdmCompleteIOHandler(const struct io_event *ioEvent, BdmThreadPool *bdmPool, uint32_t threadIdx)
-{
-    struct iocb *iocbP = NULL;
-    io_callback_t bdmIOCallback = (io_callback_t)ioEvent->data;
-    BdmIoContext *bdmIo = (BdmIoContext *)ioEvent->obj;
-
-    if (UNLIKELY(bdmIOCallback == (io_callback_t)0)) {
-        BDM_LOGERROR(0, "Unexpected IO request with chunkId %lu", bdmIo->chunkId);
-        return;
-    }
-
-    if (UNLIKELY((long)(ioEvent->res) <= 0 || ioEvent->res2 != 0)) {
-        if (bdmIo->retryNum < BDM_IO_RETRY_NUM) {
-            BDM_LOGERROR(0, "retry: chunkId %ld, res %ld res2 %ld", bdmIo->chunkId, ioEvent->res, ioEvent->res2);
-            bdmIo->retryNum++;
-            iocbP = &bdmIo->iocb;
-            if (BdmDiskRetryIo(bdmPool->ioctx[threadIdx], &iocbP) == 0) {
-                return;
-            }
-            BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
-            BDM_LOGERROR(0, "Try to report disk fault, bdmId %u, device %s, chunkId %ld, res %ld res2 %ld", item->bdmId,
-                item->name, bdmIo->chunkId, ioEvent->res, ioEvent->res2);
-
-            CmReportDiskStatus((uint16_t)item->bdmId, CM_DISK_FAULT);
-        }
-        BDM_LOGERROR(0, "failed chunkId %ld, res %ld res2 %ld", bdmIo->chunkId, ioEvent->res, ioEvent->res2);
-        bdmIo->cb(bdmIo->ctx, BDM_CODE_ERR_IO);
-    } else {
-        bdmIo->cb(bdmIo->ctx, 0);
-    }
-    return;
-}
-
 void *BdmDiskEventsThread(void *argsP)
 {
-    struct io_event events[BDM_IOCTX_EVENTS_NUM];
     BdmThreadCtx *threadCtx = (BdmThreadCtx *)argsP;
     BdmThreadPool *bdmPool = (BdmThreadPool *)threadCtx->ctx;
 
     uint32_t threadIdx = threadCtx->index;
-    struct epoll_event *epeventP = &bdmPool->epevent[threadIdx];
-    int32_t epfd = bdmPool->epfd[threadIdx];
-    int32_t recvs;
-    int32_t fdNum = BDM_WORKER_THREAD_NUM;
+    struct io_uring *ring = &bdmPool->ring[threadIdx];
 
     BDM_LOGINFO(0, "bdm disk events thread start.");
     BdmThreadBindCPUs("bdm_events", bdmPool->cpus[threadIdx]);
     while (true) {
-        if (UNLIKELY(epoll_wait(epfd, epeventP, fdNum, -1) != 1)) {
-            BDM_LOGERROR(0, "disk event epoll_wait, error(%s).", strerror(errno));
-        }
-
-        recvs = io_getevents(bdmPool->ioctx[threadIdx], 1UL, BDM_IOCTX_EVENTS_NUM, events, NULL);
-        if (recvs <= 0) {
+        struct io_uring_cqe *cqe = NULL;
+        int32_t ret = io_uring_wait_cqe(ring, &cqe);
+        if (UNLIKELY(ret != 0 || cqe == NULL)) {
+            if (bdmPool->stopping[threadIdx]) {
+                break;
+            }
+            BDM_LOGERROR(0, "io_uring_wait_cqe failed, ret(%d).", ret);
             continue;
         }
 
-        for (int k = 0; k < recvs; k++) {
-            BdmCompleteIOHandler(&events[k], bdmPool, threadIdx);
-            events[k].obj = NULL;
+        bool needStop = false;
+        uint32_t head = 0;
+        uint32_t completed = 0;
+        io_uring_for_each_cqe(ring, head, cqe) {
+            needStop = BdmCompleteUringHandler(cqe, threadCtx);
+            completed++;
+            if (needStop) {
+                break;
+            }
+        }
+        io_uring_cq_advance(ring, completed);
+        if (needStop) {
+            break;
         }
     }
 
+    BDM_LOGINFO(0, "bdm disk events thread exit.");
     return NULL;
 }
 
@@ -946,6 +1937,8 @@ void BdmDiskFillBdmObj(BdmObj *obj, BdmDiskItem *item)
     obj->ops.write = BdmDiskWrite;
     obj->ops.readAsync = BdmDiskReadAsync;
     obj->ops.writeAsync = BdmDiskWriteAsync;
+    obj->ops.readBatchAsync = BdmDiskReadBatchAsync;
+    obj->ops.writeBatchAsync = BdmDiskWriteBatchAsync;
     obj->ops.allocatorReset = BdmDiskAllocatorReset;
     obj->ops.nextchunk = BdmDiskGetNextChunk;
     obj->ops.getcap = BdmDiskGetCap;
@@ -1086,67 +2079,84 @@ int32_t BdmDiskReset(BdmObj *obj)
 
 static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
 {
-    bdmPool->efd[index] = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    if (UNLIKELY(bdmPool->efd[index] < 0)) {
-        BDM_LOGERROR(0, "Eventfd failed, errno(%s).", strerror(errno));
-        return BDM_CODE_ERR;
-    }
-    int32_t ret = memset_s(&(bdmPool->ioctx[index]), sizeof(io_context_t), 0, sizeof(io_context_t));
+    struct io_uring_params params = {0};
+    params.flags = IORING_SETUP_SQPOLL;
+    params.sq_thread_idle = 2000;
+    int32_t ret = io_uring_queue_init_params(BDM_IOCTX_EVENTS_NUM, &bdmPool->ring[index], &params);
     if (UNLIKELY(ret != 0)) {
-        BDM_LOGERROR(0, "Memset ioctx failed, ret(%d).", ret);
-        close(bdmPool->efd[index]);
+        int32_t err = -ret;
+        BDM_LOGERROR(0,
+            "io_uring SQPOLL queue init failed, worker(%u), entries(%u), flags(0x%x), sq_thread_idle(%u), "
+            "ret(%d), errno(%d:%s).",
+            index, (uint32_t)BDM_IOCTX_EVENTS_NUM, params.flags, params.sq_thread_idle, ret, err, strerror(err));
+        if (err == EPERM || err == EACCES) {
+            BDM_LOGERROR(0,
+                "io_uring SQPOLL permission denied. Check process capabilities, container seccomp policy, and kernel "
+                "io_uring/SQPOLL permission settings.");
+        } else if (err == EINVAL || err == ENOSYS || err == EOPNOTSUPP) {
+            BDM_LOGERROR(0,
+                "io_uring SQPOLL is not supported by current kernel or system policy. Keep bio.bdm.io_engine=sync "
+                "or run in an environment that supports IORING_SETUP_SQPOLL.");
+        }
         return BDM_CODE_ERR;
     }
-    ret = io_setup(BDM_IOCTX_EVENTS_NUM, &(bdmPool->ioctx[index]));
+    bdmPool->ringInited[index] = true;
+    ret = pthread_mutex_init(&bdmPool->ringLock[index], NULL);
     if (UNLIKELY(ret != 0)) {
-        BDM_LOGERROR(0, "Io setup failed, errno(%s).", strerror(errno));
-        close(bdmPool->efd[index]);
+        BDM_LOGERROR(0, "ring lock init failed, ret(%d).", ret);
+        io_uring_queue_exit(&bdmPool->ring[index]);
+        bdmPool->ringInited[index] = false;
         return BDM_CODE_ERR;
     }
-    bdmPool->epfd[index] = epoll_create(1);
-    if (UNLIKELY(bdmPool->epfd[index] < 0)) {
-        BDM_LOGERROR(0, "Epoll create failed, errno(%s).", strerror(errno));
-        io_destroy(bdmPool->ioctx[index]);
-        close(bdmPool->efd[index]);
-        return BDM_CODE_ERR;
-    }
-    bdmPool->epevent[index].events = EPOLLIN | EPOLLET;
-    bdmPool->epevent[index].data.ptr = NULL;
-    ret = epoll_ctl(bdmPool->epfd[index], EPOLL_CTL_ADD, bdmPool->efd[index], &(bdmPool->epevent[index]));
+    ret = sem_init(&bdmPool->ringSlots[index], 0, BDM_URING_MAX_INFLIGHT);
     if (UNLIKELY(ret != 0)) {
-        BDM_LOGERROR(0, "Epoll ctl failed, errno(%s).", strerror(errno));
-        io_destroy(bdmPool->ioctx[index]);
-        close(bdmPool->epfd[index]);
-        close(bdmPool->efd[index]);
+        BDM_LOGERROR(0, "io_uring slot semaphore init failed, ret(%d), errno(%s).", ret, strerror(errno));
+        pthread_mutex_destroy(&bdmPool->ringLock[index]);
+        io_uring_queue_exit(&bdmPool->ring[index]);
+        bdmPool->ringInited[index] = false;
         return BDM_CODE_ERR;
     }
+    bdmPool->ringSlotsInited[index] = true;
+    bdmPool->ringInflight[index] = 0;
     bdmPool->cpus[index] = BDM_BIND_CPU_DEFAULT;
     return ret;
 }
 
+static void BdmDiskThreadPoolCleanup(BdmThreadPool *bdmPool);
+
 int32_t BdmDiskThreadPoolInit(void)
 {
+    if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
+        return BDM_CODE_OK;
+    }
+
     BdmThreadPool *bdmPool = &g_bdmThreadPool;
     for (uint32_t index = 0; index < BDM_WORKER_THREAD_NUM; index++) {
         BdmThreadCtx *threadCtx = &bdmPool->threadCtx[index];
         threadCtx->index = index;
         threadCtx->ctx = (void *)bdmPool;
+        bdmPool->stopping[index] = false;
+        bdmPool->eventThreadStarted[index] = false;
         int32_t ret = BdmPoolInit(bdmPool, index);
         if (UNLIKELY(ret != 0)) {
             BDM_LOGERROR(0, "Bdm pool init failed, ret(%d)", ret);
+            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
 
         ret = pthread_create(&bdmPool->threadId[index], NULL, BdmDiskEventsThread, (void *)threadCtx);
         if (UNLIKELY(ret != 0)) {
             BDM_LOGERROR(0, "Pthread create failed, errno(%s).", strerror(errno));
+            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
+        bdmPool->eventThreadStarted[index] = true;
 
         char threadName[BDM_THREAD_NAME_LEN] = {0};
         ret = sprintf_s(threadName, BDM_THREAD_NAME_LEN, "bdm_events");
         if (UNLIKELY(ret < 0)) {
             BDM_LOGERROR(0, "sprintf_s failed, ret(%d).", ret);
+            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
         pthread_setname_np(bdmPool->threadId[index], threadName);
@@ -1155,14 +2165,77 @@ int32_t BdmDiskThreadPoolInit(void)
         cpus.cpunum = BDM_DEFAULT_THREAD_NUM;
         cpus.cpus[0] = bdmPool->cpus[index];
         BDM_BATCH_CTX_S batchCtx;
-        batchCtx.batchHandle = BdmDiskSubmitAIO;
+        batchCtx.batchHandle = BdmDiskSubmitUring;
         batchCtx.batchCtx = (void *)threadCtx;
         bdmPool->pool[index] = BdmThreadPoolCreate(BDM_DEFAULT_THREAD_NUM, 1024UL, &cpus, "bdm_disk", &batchCtx);
         if (UNLIKELY(bdmPool->pool[index] == NULL)) {
             BDM_LOGERROR(0, "Pthread pool create failed, errno(%s).", strerror(errno));
+            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
     }
+    return BDM_CODE_OK;
+}
+
+static void BdmDiskWakeEventsThread(BdmThreadPool *bdmPool, uint32_t index)
+{
+    if (!bdmPool->ringInited[index]) {
+        return;
+    }
+
+    pthread_mutex_lock(&bdmPool->ringLock[index]);
+    struct io_uring_sqe *sqe = io_uring_get_sqe(&bdmPool->ring[index]);
+    if (sqe == NULL) {
+        (void)io_uring_submit(&bdmPool->ring[index]);
+        sqe = io_uring_get_sqe(&bdmPool->ring[index]);
+    }
+    if (sqe != NULL) {
+        io_uring_prep_nop(sqe);
+        io_uring_sqe_set_data(sqe, NULL);
+        (void)io_uring_submit(&bdmPool->ring[index]);
+    }
+    pthread_mutex_unlock(&bdmPool->ringLock[index]);
+}
+
+static void BdmDiskThreadPoolCleanup(BdmThreadPool *bdmPool)
+{
+    for (uint32_t index = 0; index < BDM_WORKER_THREAD_NUM; index++) {
+        if (bdmPool->pool[index] != NULL) {
+            (void)BdmThreadPoolDestroy(bdmPool->pool[index], 0);
+            bdmPool->pool[index] = NULL;
+        }
+        bdmPool->stopping[index] = true;
+        BdmDiskWakeEventsThread(bdmPool, index);
+    }
+
+    for (uint32_t index = 0; index < BDM_WORKER_THREAD_NUM; index++) {
+        if (bdmPool->eventThreadStarted[index]) {
+            (void)pthread_join(bdmPool->threadId[index], NULL);
+            bdmPool->eventThreadStarted[index] = false;
+        }
+        if (bdmPool->ringInited[index]) {
+            io_uring_queue_exit(&bdmPool->ring[index]);
+            bdmPool->ringInited[index] = false;
+            pthread_mutex_destroy(&bdmPool->ringLock[index]);
+        }
+        if (bdmPool->ringSlotsInited[index]) {
+            sem_destroy(&bdmPool->ringSlots[index]);
+            bdmPool->ringSlotsInited[index] = false;
+        }
+        bdmPool->ringInflight[index] = 0;
+        bdmPool->stopping[index] = false;
+    }
+}
+
+int32_t BdmDiskExit(void)
+{
+    BdmDiskCleanupCurrentSyncUringCtx();
+    BdmDiskCleanupAllSyncUringCtxs();
+    if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
+        return BDM_CODE_OK;
+    }
+
+    BdmDiskThreadPoolCleanup(&g_bdmThreadPool);
     return BDM_CODE_OK;
 }
 

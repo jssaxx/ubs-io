@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <cerrno>
 #include <functional>
 #include <memory>
@@ -89,6 +90,46 @@ int WaitSemaphore(sem_t &sem)
         ret = sem_wait(&sem);
     } while (ret != 0 && errno == EINTR);
     return ret == 0 ? 0 : errno;
+}
+
+size_t GetBatchGetWireResponseLen(uint32_t count)
+{
+    return sizeof(BatchGetWireResponse) + static_cast<size_t>(count) * sizeof(BatchGetResultItem);
+}
+
+bool FillBatchGetResultsFromResponse(void *resp, uint32_t len, uint16_t &nodeId,
+                                     std::vector<BatchGetResultAddr> *resultAddrs)
+{
+    if (UNLIKELY(resp == nullptr || resultAddrs == nullptr)) {
+        return false;
+    }
+
+    if (len >= sizeof(BatchGetResponse)) {
+        auto rsp = static_cast<BatchGetResponse *>(resp);
+        if (UNLIKELY(rsp->count != resultAddrs->size())) {
+            return false;
+        }
+        nodeId = rsp->nodeId;
+        for (uint32_t i = 0; i < rsp->count; i++) {
+            *(*resultAddrs)[i].result = rsp->results[i];
+            *(*resultAddrs)[i].realLength = rsp->realLengths[i];
+        }
+        return true;
+    }
+
+    if (len < sizeof(BatchGetWireResponse)) {
+        return false;
+    }
+    auto rsp = static_cast<BatchGetWireResponse *>(resp);
+    if (UNLIKELY(rsp->count != resultAddrs->size() || len < GetBatchGetWireResponseLen(rsp->count))) {
+        return false;
+    }
+    nodeId = rsp->nodeId;
+    for (uint32_t i = 0; i < rsp->count; i++) {
+        *(*resultAddrs)[i].result = rsp->items[i].result;
+        *(*resultAddrs)[i].realLength = rsp->items[i].realLength;
+    }
+    return true;
 }
 
 }
@@ -605,6 +646,19 @@ void MirrorClient::FreeIoStrategy()
     }
     mIoStrategy.clear();
     return;
+}
+
+void MirrorClient::Exit()
+{
+    if (mBatchGetExecutor != nullptr) {
+        mBatchGetExecutor->Stop();
+        mBatchGetExecutor = nullptr;
+    }
+    if (mBatchExistExecutor != nullptr) {
+        mBatchExistExecutor->Stop();
+        mBatchExistExecutor = nullptr;
+    }
+    FreeIoStrategy();
 }
 
 std::vector<uint16_t> MirrorClient::ListLocalAffinityPt()
@@ -1124,6 +1178,14 @@ BResult MirrorClient::BatchGet(CacheAttr attr, const char **keys, const uint32_t
                                uint64_t *lengths, ObjLocation *locations, uintptr_t *valueAddrs,
                                uint64_t *realLengths, int32_t *results)
 {
+    if (UNLIKELY(count == 0 || count > BATCH_GET_MAX_COUNT)) {
+        CLIENT_LOG_ERROR("Invalid batch get count:" << count << ", max:" << BATCH_GET_MAX_COUNT << ".");
+        return BIO_INVALID_PARAM;
+    }
+    if (mMode != STANDALONE && count > NET_BATCH_GET_MAX_COUNT) {
+        return DispathBatchGet(attr, keys, count, offsets, lengths, locations, valueAddrs, realLengths, results);
+    }
+
     MirrorClient::MirrorBatchGet param{ { attr.mTenantId, attr.affinity, attr.strategy },
                                         keys, count, offsets, lengths, locations,
                                         valueAddrs, realLengths, results };
@@ -1184,16 +1246,14 @@ void MirrorClient::FillBatchGetBufferInfo(GetKeyInfo &keyInfo, uintptr_t address
 inline void MirrorClient::DispathBatchGetRecycleResource(uint32_t parallelNum,
                                                          DispathBatchGetResult *taskResults, uintptr_t *valueAddrs)
 {
+    if (mMode == STANDALONE) {
+        return;
+    }
     for (uint32_t i = 0; i < parallelNum; i++) {
         if (taskResults[i].result == BIO_OK) {
             uint32_t basic = taskResults[i].index;
             for (uint32_t j = 0; j < taskResults[i].count; j++) {
                 if (valueAddrs[basic + j] == 0) {
-                    continue;
-                }
-                // In standalone mode, skip user-provided buffers (not from the data message pool).
-                if (mMode == STANDALONE && !IsDataMsgMemAddr(valueAddrs[basic + j])) {
-                    valueAddrs[basic + j] = 0;
                     continue;
                 }
                 FreeDataMessageBuffer(valueAddrs[basic + j]);
@@ -1212,9 +1272,14 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
         CLIENT_LOG_ERROR("Batch get does not support converged deployment.");
         return BIO_INVALID_PARAM;
     }
-    if (UNLIKELY(count == 0)) {
-        CLIENT_LOG_ERROR("Invalid dispatch batch get count: 0.");
+    if (UNLIKELY(count == 0 || count > BATCH_GET_MAX_COUNT)) {
+        CLIENT_LOG_ERROR("Invalid dispatch batch get count:" << count << ", max:" << BATCH_GET_MAX_COUNT << ".");
         return BIO_INVALID_PARAM;
+    }
+
+    if (mMode == STANDALONE) {
+        return BatchGet({ attr.mTenantId, attr.affinity, attr.strategy }, keys, count, offsets, lengths, locations,
+            valueAddrs, realLengths, results);
     }
 
     uint32_t parallelNum = (count + SDK_DISPATH_BATCH_COUNT_MAX_NUM - 1) / SDK_DISPATH_BATCH_COUNT_MAX_NUM;
@@ -1302,13 +1367,11 @@ BResult MirrorClient::DispathBatchGet(CacheAttr attr, const char **keys, const u
 
 void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 {
+    if (mMode == STANDALONE) {
+        return;
+    }
     for (uint32_t i = 0; i < count; i++) {
         if (valueAddrs[i] == 0) {
-            continue;
-        }
-        // In standalone mode, skip user-provided buffers (not from the data message pool).
-        if (mMode == STANDALONE && !IsDataMsgMemAddr(valueAddrs[i])) {
-            valueAddrs[i] = 0;
             continue;
         }
         FreeDataMessageBuffer(valueAddrs[i]);
@@ -1391,7 +1454,8 @@ BResult MirrorClient::BatchGetKeyDiskAddrImpl(MirrorBatchGetKeyAddr &param)
 BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
 {
     BResult ret = BIO_OK;
-    if (UNLIKELY(param.count == 0 || param.count > KEY_MAX_COUNT)) {
+    uint32_t maxCount = (mMode == STANDALONE) ? STANDALONE_BATCH_GET_MAX_COUNT : NET_BATCH_GET_MAX_COUNT;
+    if (UNLIKELY(param.count == 0 || param.count > maxCount)) {
         CLIENT_LOG_ERROR("Invalid batch get count:" << param.count << ".");
         return BIO_INVALID_PARAM;
     }
@@ -1407,13 +1471,11 @@ BResult MirrorClient::BatchGetImpl(MirrorBatchGet &param)
         }
     };
     auto releaseValues = [this, &param](uint32_t count) {
+        if (mMode == STANDALONE) {
+            return;
+        }
         for (uint32_t i = 0; i < count; i++) {
             if (param.valuesAddr[i] == 0) {
-                continue;
-            }
-            // In standalone mode, skip user-provided buffers (not from the data message pool).
-            if (mMode == STANDALONE && !IsDataMsgMemAddr(param.valuesAddr[i])) {
-                param.valuesAddr[i] = 0;
                 continue;
             }
             FreeDataMessageBuffer(param.valuesAddr[i]);
@@ -2694,16 +2756,17 @@ BResult MirrorClient::SendBatchGetRequest(std::unordered_map<uint16_t, BatchGetP
             if (!cbCtx->closed) {
                 if (UNLIKELY(result != BIO_OK)) {
                     cbCtx->result = result;
-                } else if (resp != nullptr && len >= sizeof(BatchGetResponse)) {
-                    auto rsp = static_cast<BatchGetResponse *>(resp);
-                    auto it = cbCtx->resultAddrs.find(rsp->nodeId);
-                    if (UNLIKELY(it == cbCtx->resultAddrs.end() || rsp->count != it->second.size())) {
+                } else if (resp != nullptr) {
+                    uint16_t nodeId = 0;
+                    if (len >= sizeof(BatchGetResponse)) {
+                        nodeId = static_cast<BatchGetResponse *>(resp)->nodeId;
+                    } else if (len >= sizeof(BatchGetWireResponse)) {
+                        nodeId = static_cast<BatchGetWireResponse *>(resp)->nodeId;
+                    }
+                    auto it = cbCtx->resultAddrs.find(nodeId);
+                    if (UNLIKELY(it == cbCtx->resultAddrs.end() ||
+                                 !FillBatchGetResultsFromResponse(resp, len, nodeId, &it->second))) {
                         cbCtx->result = BIO_INVALID_PARAM;
-                    } else {
-                        for (uint32_t i = 0; i < rsp->count; i++) {
-                            *(it->second[i].result) = rsp->results[i];
-                            *(it->second[i].realLength) = rsp->realLengths[i];
-                        }
                     }
                 } else {
                     cbCtx->result = BIO_INVALID_PARAM;

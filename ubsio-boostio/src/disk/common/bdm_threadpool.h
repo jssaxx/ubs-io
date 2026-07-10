@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-#define BDM_BATCH_HANDLE_NUM (16UL)
+#define BDM_BATCH_HANDLE_NUM (32UL)
 
 typedef int32_t (*BDM_THREAD_BATCH_HANDLE)(void **argList, uint32_t num, void *ctx);
 typedef void *(*BDM_THREAD_HANDLE)(void *arg);

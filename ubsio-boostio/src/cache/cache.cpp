@@ -13,6 +13,7 @@
 #include "cache.h"
 #include <utility>
 #include "cache_flow.h"
+#include "cache_slice_operator.h"
 #include "ufs_helper.h"
 #include "flow_manager.h"
 #include "bio.h"
@@ -26,6 +27,8 @@ namespace bio {
 BResult Cache::Init()
 {
     BResult ret = BIO_OK;
+    PrewarmBdmBatchTempBufferPool();
+
     mEnableRCache = BioConfig::Instance()->GetDaemonConfig().enableRCache;
     if (mEnableRCache) {
         mRCacheManager = RCacheManager::Instance();
@@ -462,6 +465,28 @@ BResult Cache::Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
     }
     DiskStatistic::Instance().IncHitCount();
     return BIO_OK;
+}
+
+BResult Cache::GetWCacheBatch(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+    const WCacheBatchSliceWriter &sliceWriter, uint64_t &realLen)
+{
+    if (!CanBatchWCacheRead()) {
+        return BIO_INNER_RETRY;
+    }
+    BResult ret = mWCacheManager->GetBatch(key, offset, slice, sliceWriter, realLen);
+    if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+        return ret;
+    }
+    WCacheStatistic::Instance().IncTotalCount();
+    if (ret == BIO_OK) {
+        WCacheStatistic::Instance().IncHitCount();
+    }
+    return ret;
+}
+
+bool Cache::CanBatchWCacheRead() const
+{
+    return mWCacheManager != nullptr && !mWCacheManager->IsCrcEnabled();
 }
 
 BResult Cache::Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen)

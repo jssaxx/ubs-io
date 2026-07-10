@@ -46,6 +46,7 @@ void KvOperation::UnInitialize(void)
         LOG_INFO("KvOperation has not been initialized");
         return;
     }
+    ExitKvExecutor();
     mInited = false;
 }
 

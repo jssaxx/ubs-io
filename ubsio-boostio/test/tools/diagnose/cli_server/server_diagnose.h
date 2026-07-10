@@ -24,12 +24,11 @@ public:
     static int Initialize() noexcept;
     static void Destroy() noexcept;
     static int32_t LoadSymbols();
+    static void PrintLongText(const std::string &text);
 
     static void BioServerDebugProcess(int argc, char *argv[]) noexcept;
     static void BioServerDebugHelp(char *command, int detail) noexcept;
     static void HandleModifyEvictWaterLevel(uint8_t tier, uint64_t level);
-    static void HandleModifyEvictMemQuantity(uint64_t quantity);
-    static void HandleModifyEvictDiskQuantity(uint64_t quantity);
     static void HandleModifyMemReadWriteRatio(const std::string &ratios);
     static void HandleModifyDiskReadWriteRatio(const std::string &ratios);
     static void BioServerHandleShow(const std::vector<std::string> &cmds);
@@ -37,6 +36,8 @@ public:
     static void HandleRCachePut(const std::vector<std::string> &cmds);
     static void HandleRCacheGet(const std::vector<std::string> &cmds);
     static void HandleRCacheDelete(const std::vector<std::string> &cmds);
+    static void HandleBdmPerf(const std::vector<std::string> &cmds);
+    static void HandleBdmVerify(const std::vector<std::string> &cmds);
 
 private:
     static bool mInited;
@@ -44,6 +45,7 @@ private:
     static CliRegCmdFuncPtr mRegOp;
     static CliUnRegCmdFuncPtr mUnRegOp;
     static CliPrintBufFuncPtr mPrintOp;
+    static CliSendBufFuncPtr mSendOp;
 };
 }
 }

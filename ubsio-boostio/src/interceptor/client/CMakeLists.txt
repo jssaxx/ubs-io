@@ -6,7 +6,7 @@ install(TARGETS ock_iofwd_proxy DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIO
 
 target_link_libraries(ock_iofwd_proxy
         -Wl,--start-group
-        pthread dl aio
+        pthread dl
         hcom_lib
         bio_common bio_net htracer
         -Wl,--end-group)

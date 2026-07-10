@@ -2,12 +2,16 @@
 # coding: utf-8
 # Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
 
+import atexit
+
 global KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
     KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
     NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead
 from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvBatchPut,
                           KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
+
+_initialized = False
 
 
 def initialize(device_id=-1) -> int:
@@ -17,14 +21,24 @@ def initialize(device_id=-1) -> int:
     :return: 0 for success
             -1 for failed
     """
-    return KvInit(device_id)
+    global _initialized
+    ret = KvInit(device_id)
+    if ret == 0:
+        _initialized = True
+    return ret
 
 
 def exit():
     """
     Exit UBS-IO KV Cache service
     """
-    KvExit()
+    global _initialized
+    if _initialized:
+        KvExit()
+        _initialized = False
+
+
+atexit.register(exit)
 
 
 def put(key, value) -> int:
