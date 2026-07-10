@@ -739,7 +739,9 @@ BResult WCache::EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef, const UbsIoMet
         }
 
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
+        BIO_TRACE_START(WCACHE_TRACE_DISCARD_EVICTSLICE);
         auto ret = memCache->Evict(oldSlice);
+        BIO_TRACE_END(WCACHE_TRACE_DISCARD_EVICTSLICE, ret);
         if (UNLIKELY(ret != BIO_OK)) {
             LOG_ERROR("Failed to discard memory slice, ret:" << ret << ", slice:" << oldSlice->ToString() << ".");
             DecreaseRef();
