@@ -7,7 +7,7 @@ Vendor:         Huawei Technologies Co., Ltd.
 Source0:        %{name}-%{version}.tar.gz
 ExclusiveArch:  aarch64 x86_64
 
-BuildRequires:  gcc gcc-c++ make cmake maven automake autoconf libtool dos2unix
+BuildRequires:  gcc gcc-c++ make cmake
 BuildRequires:  liburing-devel openssl-devel
 BuildRequires:  python3-devel python3-pip python3-pybind11 pybind11-devel python3-setuptools python3-wheel
 BuildRequires:  libboundscheck ubs-comm-devel
@@ -31,7 +31,6 @@ Contains header files and development resources for ubs-io.
 
 %build
 pushd ubsio-boostio
-dos2unix build.sh
 bash -x build.sh -t %{build_type} --cli
 popd
 

@@ -35,6 +35,15 @@ copy_named_libs_from_dir() {
     done
 }
 
+copy_liburing_to_dir() {
+    local dst_dir=$1
+
+    copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/liburing/lib" "${dst_dir}" \
+        liburing.so \
+        liburing.so.2 \
+        liburing.so.2.6
+}
+
 validate_pkg_lib_dir() {
     local pkg_lib_dir="$1"
 
@@ -69,6 +78,8 @@ package_libs() {
         libock_interceptor.so \
         libock_iofwd_proxy.so \
         libtracepoint.so
+
+    copy_liburing_to_dir "${pkg_lib_dir}"
 
     if [[ "$BUILD_KV" == "ON" ]]; then
         copy_named_libs_from_dir "${PROJ_DIR}/../ubsio-kv/dist/lib" "${pkg_lib_dir}" \
