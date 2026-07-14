@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <limits.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
