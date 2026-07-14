@@ -22,12 +22,13 @@
 #include "bio.h"
 #include "message.h"
 #include "cache.h"
+#include "cache_slice_operator.h"
 #include "message_op.h"
 
 namespace ock {
 namespace bio {
 constexpr uint16_t SERVER_BATCH_GET_THREAD_NUM = 128;
-constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = 8192;
+constexpr uint16_t SERVER_BATCH_GET_QUEUE_SIZE = BATCH_GET_MAX_COUNT;
 
 struct MemFreeHolder {
     uint32_t nodeId;
@@ -53,6 +54,7 @@ struct DataMsgMemItem {
     uint64_t offset;
     uint64_t length;
     uint8_t *address;
+    DataMsgMemItem() : memFd(-1), offset(0), length(0), address(nullptr) {}
     DataMsgMemItem(int32_t fd, uint64_t off, uint64_t len, uint8_t *addr)
         : memFd(fd), offset(off), length(len), address(addr) {}
 };
@@ -100,9 +102,12 @@ public:
 
     BResult Put(PutRequest &req, const WCacheSlicePtr &sliceP, ServiceContext &netCtx, uint32_t &ioStrategy);
     BResult GetConvergence(GetRequest &req, GetResponse &rsp);
+    BResult BatchGetConvergence(BatchGetRequest &req, BatchGetResponse &rsp);
+    BResult BatchExistConvergence(BatchExistRequest &req, BatchExistResponse &rsp);
     BResult ParseKeyAddr(const Key &key, uint16_t ptId, BatchKeyAddrInfo *info);
     BResult Get(GetRequest &req, GetResponse &rsp, ServiceContext &netCtx);
-    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req);
+    BResult BatchSingleGet(GetKeyInfo &keyInfo, uint64_t &realLen, BatchGetRequest *req,
+        BdmCopyBatchContext *bdmBatch = nullptr, BResult *keyResult = nullptr);
     BResult Delete(DeleteRequest &req);
     BResult AddDisk(AddDiskRequest &req);
     BResult AddDiskImpl(AddDiskRequest &req);
@@ -212,11 +217,19 @@ public:
     bool CheckFreeMemReq(FreeMemRequest *req);
     bool CheckGetSliceReq(GetSliceRequest *req);
 
-    inline uint64_t TransDataMsgMemAddr(pid_t holder, uint64_t offset)
+    inline uint64_t TransDataMsgMemAddr(pid_t holder, uint64_t offset, uint64_t length)
     {
         std::lock_guard<std::mutex> lock(mDataMsgMemLock);
         auto iter = mDataMsgMemMgr.find(holder);
         if (iter == mDataMsgMemMgr.end()) {
+            LOG_ERROR("Data message memory pool not found, holder:" << holder << ", offset:" << offset <<
+                                                                    ", length:" << length << ".");
+            return 0;
+        }
+        if (UNLIKELY(length == 0 || offset > iter->second.length || length > iter->second.length - offset)) {
+            LOG_ERROR("Data message memory address invalid, holder:" << holder << ", offset:" << offset <<
+                                                                     ", length:" << length << ", pool length:" <<
+                                                                     iter->second.length << ".");
             return 0;
         }
         return reinterpret_cast<uint64_t>(reinterpret_cast<uintptr_t>(iter->second.address + offset));

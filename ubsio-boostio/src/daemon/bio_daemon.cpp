@@ -11,7 +11,6 @@
  */
 
 #include <csignal>
-#include <sys/resource.h>
 
 #include "bio_server.h"
 
@@ -27,14 +26,6 @@ static void HandleSigterm(int signum)
         return;
     }
 
-    struct rlimit coreLimiter = {
-        .rlim_cur = 0,
-        .rlim_max = 0
-    };
-    int result = setrlimit(RLIMIT_CORE, &coreLimiter);
-    if (UNLIKELY(result != 0)) {
-        std::cout << "Failed to disable core dump, errno " << errno << std::endl;
-    }
     gDaemonRunning = false;
 }
 
@@ -60,5 +51,6 @@ int main(int argc, char *argv[])
     while (gDaemonRunning) {
         sleep(5U);
     }
+    bioServer->Exit();
     return 0;
 }

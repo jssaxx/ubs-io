@@ -66,13 +66,18 @@ lcov --remove ${TOTAL_INFO} \
      "*/3rdparty/*" \
      "*/googletest/*" \
      "*/Build/*" \
-     "*/interceptor/client/*" \
+     "*/interceptor/*" \
      "*/io_interceptor/*" \
      "*/security/openssl_tools/*" \
      "*/disk/common/ngx_rbtree.c" \
      "*/cluster/*" \
      "*/security/expiration_check/expire_checker.cpp" \
      "*/dist/*" \
+     "*/net/*" \
+     "*/sdk/*" \
+     "*/server/*" \
+     "*/underfs/*" \
+     "*/cache/write/*" \
      "*/cmake-build-*" \
      --output-file ${FINAL_INFO} \
      ${LCOV_RC_OPTS} \

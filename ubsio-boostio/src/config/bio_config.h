@@ -207,6 +207,10 @@ inline bool Configuration::SetWithTypeAutoConvert(const std::string &key, const 
                 std::cout << "<" << key << ">, it was too long." << std::endl;
                 return false;
             }
+            if (tmp < static_cast<long>(INT32_MIN)) {
+                std::cout << "<" << key << ">, it was too small." << std::endl;
+                return false;
+            }
             mIntItems[key] = static_cast<int32_t>(tmp);
         } else if (valueType == ConfValueType::VFLOAT) {
             if (!StrUtil::StrToFloat(value, mFloatItems[key])) {

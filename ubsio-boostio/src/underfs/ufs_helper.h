@@ -49,22 +49,8 @@ namespace bio {
             if (mConfig.underFsType == "none") {
                 return BIO_OK;
             }
-#ifdef DEBUG_UT
             const char *soFileName = "libbio_underfs.so";
             handler = dlopen(soFileName, RTLD_NOW);
-#else
-            std::string soFileName = "/usr/lib64/libbio_underfs.so";
-
-            char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-            if (canonicalPath == nullptr) {
-                LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-                return BIO_NOT_EXISTS;
-            }
-
-            handler = dlopen(canonicalPath, RTLD_NOW);
-            free(canonicalPath);
-            canonicalPath = nullptr;
-#endif
             if (handler == nullptr) {
                 LOG_ERROR("Failed to open library: " << soFileName << " , dlopen error: " << dlerror() << ".");
                 return BIO_UFS_IOERR;

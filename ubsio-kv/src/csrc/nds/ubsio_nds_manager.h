@@ -18,9 +18,9 @@
 #include <vector>
 #include <unordered_map>
 #include "bio_c.h"
-#include "nds_file.h"
 #include "ubsio_kvc_err.h"
 #include "ubsio_kvc_execution.h"
+#include "ubsio_nds_dl_api.h"
 
 namespace ock {
 namespace ubsio {

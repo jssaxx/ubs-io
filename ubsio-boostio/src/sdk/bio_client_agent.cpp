@@ -24,25 +24,24 @@
 using namespace ock::bio;
 using namespace ock::bio::agent;
 
+namespace {
+size_t GetBatchGetWireResponseLen(uint32_t count)
+{
+    return sizeof(BatchGetWireResponse) + static_cast<size_t>(count) * sizeof(BatchGetResultItem);
+}
+}
+
+bool BioClientAgent::IsDirectMode() const
+{
+    return mMode == CONVERGENCE || mMode == STANDALONE;
+}
+
 BResult BioClientAgent::Initialize(WorkerMode mode)
 {
     mMode = mode;
-    if (mMode == CONVERGENCE) {
-#ifdef DEBUG_UT
+    if (IsDirectMode()) {
         const char *soFileName = "libbio_server.so";
         handler = dlopen(soFileName, RTLD_NOW);
-#else
-        std::string soFileName = "/usr/lib64/libbio_server.so";
-        char *canonicalPath = realpath(soFileName.c_str(), nullptr);
-        if (canonicalPath == nullptr) {
-            CLIENT_LOG_ERROR("Failed to open library, not exist, " << soFileName << ".");
-            return BIO_NOT_EXISTS;
-        }
-
-        handler = dlopen(canonicalPath, RTLD_NOW);
-        free(canonicalPath);
-        canonicalPath = nullptr;
-#endif
         if (handler == nullptr) {
             CLIENT_LOG_ERROR("Failed to open library() " << soFileName << " dlopen , error " << dlerror());
             return BIO_INNER_ERR;
@@ -50,29 +49,135 @@ BResult BioClientAgent::Initialize(WorkerMode mode)
 
         if (InitOperation() != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to init operation.");
-            dlclose(handler);
+            UnloadServerLibrary();
             return BIO_INNER_ERR;
         }
+        {
+            std::lock_guard<std::mutex> lock(mMetaEventCallbackLock);
+            if (mMetaEventCallbackConfigured &&
+                registerMetaEventCallbackOp(mMetaEventCallback, mMetaEventCallbackContext) != BIO_OK) {
+                CLIENT_LOG_ERROR("Failed to register meta event callback.");
+                UnloadServerLibrary();
+                return BIO_INNER_ERR;
+            }
+        }
+        if (mMode == STANDALONE) {
+            StandaloneDeviceInfo standaloneDeviceInfo;
+            {
+                std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
+                standaloneDeviceInfo = mStandaloneDeviceInfo;
+            }
+            if (!standaloneDeviceInfo.configured) {
+                CLIENT_LOG_ERROR("Standalone device info is not set. Call BioSetStandaloneDevice before "
+                    "BioInitialize(STANDALONE).");
+                UnloadServerLibrary();
+                return BIO_INVALID_PARAM;
+            }
+            setStandaloneDeviceInfoOp(standaloneDeviceInfo.deviceId);
+        }
 
-        // Start boostio server for converged deployment mode
+        // Start the server inside the current process. STANDALONE selects a
+        // shorter server module chain; CONVERGENCE keeps the original one.
         int32_t ret = BIO_INNER_ERR;
         BIO_TP_START(SDK_BIO_AGENT_START_OP_FAIL, &ret, BIO_INNER_ERR);
-        ret = startOp();
+        ret = (mMode == STANDALONE) ? standaloneStartOp() : startOp();
         BIO_TP_END;
         if (ret != BIO_OK) {
             CLIENT_LOG_ERROR("Failed to start bio server, ret:" << ret << ".");
-            dlclose(handler);
+            UnloadServerLibrary();
             return BIO_INNER_ERR;
         }
     }
     return BIO_OK;
 }
 
+void BioClientAgent::SetStandaloneDevice(uint32_t deviceId)
+{
+    if (handler != nullptr) {
+        CLIENT_LOG_ERROR("BioSetStandaloneDevice must be called before BioInitialize.");
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
+    mStandaloneDeviceInfo.configured = true;
+    mStandaloneDeviceInfo.deviceId = deviceId;
+}
+
+BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+{
+    std::lock_guard<std::mutex> lock(mMetaEventCallbackLock);
+    mMetaEventCallback = callback;
+    mMetaEventCallbackContext = context;
+    mMetaEventCallbackConfigured = true;
+    if (registerMetaEventCallbackOp == nullptr) {
+        return BIO_OK;
+    }
+    return static_cast<BResult>(registerMetaEventCallbackOp(callback, context));
+}
+
 void BioClientAgent::Exit()
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode() && exitOp != nullptr) {
         exitOp();
     }
+    UnloadServerLibrary();
+    ResetStandaloneDeviceInfo();
+}
+
+void BioClientAgent::UnloadServerLibrary()
+{
+    if (handler != nullptr) {
+        dlclose(handler);
+    }
+    ResetLoadedOperations();
+}
+
+void BioClientAgent::ResetLoadedOperations()
+{
+    handler = nullptr;
+    startOp = nullptr;
+    standaloneStartOp = nullptr;
+    setStandaloneDeviceInfoOp = nullptr;
+    exitOp = nullptr;
+    getRuntimeConfigOp = nullptr;
+    getCrcFlag = nullptr;
+    getCliFlag = nullptr;
+    getPrometheusToggle = nullptr;
+    getListenAddress = nullptr;
+    getTimeOut = nullptr;
+    getScrapeIntervalSec = nullptr;
+    getNetEngineOp = nullptr;
+    getLocalNidOp = nullptr;
+    getQuotaInfoOp = nullptr;
+    allocQuotaOp = nullptr;
+    freeQuotaOp = nullptr;
+    getNodeViewOp = nullptr;
+    getPtViewOp = nullptr;
+    createFlowMasterOp = nullptr;
+    createFlowSlaveOp = nullptr;
+    destroyFlowOp = nullptr;
+    notifyUpdateOp = nullptr;
+    checkUpdateReadyOp = nullptr;
+    getSliceOp = nullptr;
+    putOp = nullptr;
+    getOp = nullptr;
+    batchGetOp = nullptr;
+    batchExistOp = nullptr;
+    deleteOp = nullptr;
+    addDiskOp = nullptr;
+    statOp = nullptr;
+    listOp = nullptr;
+    loadOp = nullptr;
+    cacheHitOp = nullptr;
+    cacheResourceOp = nullptr;
+    getTracePointsOp = nullptr;
+    registerMetaEventCallbackOp = nullptr;
+}
+
+void BioClientAgent::ResetStandaloneDeviceInfo()
+{
+    std::lock_guard<std::mutex> lock(mStandaloneDeviceLock);
+    mStandaloneDeviceInfo = {};
 }
 
 BResult BioClientAgent::InitUpgradeOperation()
@@ -91,7 +196,18 @@ BResult BioClientAgent::InitOperation()
     if ((startOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerInit"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((standaloneStartOp = reinterpret_cast<BioServerStartFuncPtr>(LoadFunction("BioServerStandaloneInit"))) ==
+        nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((setStandaloneDeviceInfoOp = reinterpret_cast<SetStandaloneDeviceInfoFuncPtr>(
+        LoadFunction("SetStandaloneDeviceInfo"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((exitOp = reinterpret_cast<BioServerExitFuncPtr>(LoadFunction("BioServerExit"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((getRuntimeConfigOp = reinterpret_cast<GetRuntimeConfigFuncPtr>(LoadFunction("GetRuntimeConfig"))) == nullptr) {
         return BIO_INNER_ERR;
     }
     if ((getCrcFlag = reinterpret_cast<GetBioServerCrcFlagFuncPtr>(LoadFunction("GetCrcFlag"))) == nullptr) {
@@ -155,6 +271,12 @@ BResult BioClientAgent::InitOperation()
     if ((getOp = reinterpret_cast<GetFuncPtr>(LoadFunction("Get"))) == nullptr) {
         return BIO_INNER_ERR;
     }
+    if ((batchGetOp = reinterpret_cast<BatchGetFuncPtr>(LoadFunction("BatchGet"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((batchExistOp = reinterpret_cast<BatchExistFuncPtr>(LoadFunction("BatchExist"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
     if ((deleteOp = reinterpret_cast<DeleteFuncPtr>(LoadFunction("Delete"))) == nullptr) {
         return BIO_INNER_ERR;
     }
@@ -179,6 +301,10 @@ BResult BioClientAgent::InitOperation()
     }
     if ((getTracePointsOp = reinterpret_cast<GetTracePointsLocalFuncPtr>
         (LoadFunction("GetTracePointsLocal"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((registerMetaEventCallbackOp = reinterpret_cast<RegisterMetaEventCallbackFuncPtr>
+        (LoadFunction("UbsioRegisterMetaEventCallback"))) == nullptr) {
         return BIO_INNER_ERR;
     }
 
@@ -253,10 +379,20 @@ uint32_t BioClientAgent::GetPrometheusScrapeIntervalSec()
     return getScrapeIntervalSec();
 }
 
+BResult BioClientAgent::GetRuntimeConfig(StandaloneRuntimeConfigResponse &rsp)
+{
+    // Runtime config is a direct-call replacement for standalone transport init.
+    // The response is caller-owned and no fd passing or mmap is performed.
+    if (!IsDirectMode() || getRuntimeConfigOp == nullptr) {
+        return BIO_NOT_READY;
+    }
+    return getRuntimeConfigOp(&rsp);
+}
+
 BResult BioClientAgent::GetLocalNodeInfo(uint16_t &protocol, CmNodeId &localNid)
 {
     BResult ret = BIO_OK;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         GetLocalNidResponse getLocalNidRsp{};
         ret = getLocalNidOp(&getLocalNidRsp);
         localNid = { getLocalNidRsp.groupId, getLocalNidRsp.nodeId };
@@ -275,7 +411,7 @@ BResult BioClientAgent::GetLocalQuotaInfo(bool &enable, uint64_t &preloadSize)
     QueryQuotaRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() } };
     QueryQuotaResponse rsp = { false, 0 };
     BIO_TP_START(NO_PROCESS_GET_LOCAL_QUOTA, BIO_OK);
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = getQuotaInfoOp(&req, &rsp);
     } else {
         ret = net::BioClientNet::Instance()->SendSync<QueryQuotaRequest, QueryQuotaResponse>(INVALID_NID,
@@ -297,7 +433,7 @@ BResult BioClientAgent::AllocQuota(AllocQuotaRequest &req, uint64_t &expectPrelo
 {
     BResult ret = BIO_INNER_ERR;
     AllocQuotaResponse rsp = { 0 };
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = allocQuotaOp(&req, &rsp);
     } else {
         ret = net::BioClientNet::Instance()->SendSync<AllocQuotaRequest, AllocQuotaResponse>(INVALID_NID,
@@ -313,7 +449,7 @@ BResult BioClientAgent::AllocQuota(AllocQuotaRequest &req, uint64_t &expectPrelo
 BResult BioClientAgent::FreeQuota(FreeQuotaRequest &req)
 {
     BResult ret = BIO_INNER_ERR;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = freeQuotaOp(&req);
     } else {
         BResult hdlRet = BIO_INNER_ERR;
@@ -338,7 +474,7 @@ BResult BioClientAgent::GetClusterNodeView(uint64_t &curNodeTimes,
     do {
         QueryNodeViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryNodeViewResponse rsp;
-        if (mMode == CONVERGENCE) {
+        if (IsDirectMode()) {
             ret = getNodeViewOp(&req, &rsp);
         } else {
             ret = net::BioClientNet::Instance()->SendSync<QueryNodeViewRequest, QueryNodeViewResponse>(INVALID_NID,
@@ -392,7 +528,7 @@ BResult BioClientAgent::GetPtView(uint64_t &curPtTimes, std::map<uint16_t, CmPtI
     do {
         QueryPtViewRequest req = { { MESSAGE_MAGIC, 0, 0, 0, getpid() }, progressBar };
         QueryPtViewResponse rsp;
-        if (mMode == CONVERGENCE) {
+        if (IsDirectMode()) {
             ret = getPtViewOp(&req, &rsp);
         } else {
             ret = net::BioClientNet::Instance()->SendSync<QueryPtViewRequest, QueryPtViewResponse>(INVALID_NID,
@@ -490,7 +626,7 @@ BResult BioClientAgent::SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t 
 BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
     FlowInfo &flowInfo)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         if (opType == 0) {
             CreateFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), procId },
                                       opType,
@@ -515,7 +651,7 @@ BResult BioClientAgent::CreateFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_
 
 BResult BioClientAgent::DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         DestroyFlowRequest req = { { MESSAGE_MAGIC, ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() }, flowId };
         return destroyFlowOp(&req);
     } else {
@@ -539,7 +675,7 @@ bool BioClientAgent::CheckGetSliceRsp(GetSliceResponse **rsp)
 BResult BioClientAgent::CreateDataMessageMemPool(pid_t procId, uint64_t &memPoolSize, int32_t &memFd, uint64_t &offset,
                                                  uint64_t &blockSize)
 {
-    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() }};
+    CreateDataMsgMemPoolRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), procId }};
     CreateDataMsgMemPoolResponse rsp;
     auto ret = net::BioClientNet::Instance()->SendSync<CreateDataMsgMemPoolRequest, CreateDataMsgMemPoolResponse>(
         INVALID_NID, BIO_OP_SDK_CREATE_DATA_MSG_MEM_POOL, req, rsp);
@@ -587,7 +723,7 @@ BResult BioClientAgent::SendPrepareResourceLocal(CmPtInfo &ptEntry, uint64_t flo
 BResult BioClientAgent::PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index,
     uint64_t length, GetSliceResponse **rsp)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         GetSliceRequest req = { { MESSAGE_MAGIC, ptEntry.ptId, ptEntry.version, mLocalNid.VNodeId(), getpid() },
                                 flowId,
                                 offset,
@@ -607,7 +743,9 @@ void BioClientAgent::SendPutRequestLocal(PutRequest *req, Callback &callback)
 
 void BioClientAgent::PutLocal(PutRequest *req, Callback &callback)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
+        // The callback is invoked before this function returns, so the stack
+        // PutResponse is valid for the callback body.
         PutResponse rsp;
         BIO_TRACE_START(SDK_TRACE_PUT_LOCAL_SYNC);
         auto ret = putOp(req, &rsp);
@@ -715,21 +853,28 @@ BResult BioClientAgent::SendBatchGetKeyDiskAddrRequestLocal(BatchParseKeyAddrReq
 BResult BioClientAgent::SendBatchGetRequestLocal(BatchGetRequest *req, int32_t *results,
                                                  uint64_t *realLengths, uint32_t reqLen)
 {
-    BatchGetResponse rsp;
+    BatchGetWireResponse *rsp = nullptr;
+    uint64_t respLen = 0;
     BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
-    auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchGetRequest, BatchGetResponse>(INVALID_NID,
+    auto ret = net::BioClientNet::Instance()->SendSyncBuff<BatchGetWireResponse>(INVALID_NID,
         BIO_OP_SDK_BATCH_GET,
-        reinterpret_cast<void*>(req), reqLen, rsp);
+        reinterpret_cast<void*>(req), reqLen, &rsp, respLen);
     BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SEND, ret);
     if (UNLIKELY(ret != BIO_OK)) {
         CLIENT_LOG_ERROR("Send sync batch get request failed, ret:" << ret << ".");
         return ret;
     }
+    if (UNLIKELY(rsp == nullptr || rsp->count != req->count || respLen < GetBatchGetWireResponseLen(rsp->count))) {
+        CLIENT_LOG_ERROR("Invalid sync batch get response, respLen:" << respLen << ".");
+        free(rsp);
+        return BIO_INVALID_PARAM;
+    }
 
     for (uint32_t i = 0; i < req->count; i++) {
-        results[i] = rsp.results[i];
-        realLengths[i] = rsp.realLengths[i];
+        results[i] = rsp->items[i].result;
+        realLengths[i] = rsp->items[i].realLength;
     }
+    free(rsp);
     return BIO_OK;
 }
 
@@ -743,8 +888,10 @@ BResult BioClientAgent::SendGetRequestLocal(GetRequest &req, Callback callback)
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen)
 {
     req.size = req.length;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         req.isMr = 0;
+        // Client and server share an address space. Passing the user buffer
+        // address lets server GetConvergence write data back without net MR.
         req.address = reinterpret_cast<uintptr_t>(value);
         GetResponse rsp;
         auto ret = getOp(&req, &rsp);
@@ -773,19 +920,26 @@ BResult BioClientAgent::GetLocal(GetRequest &req, char *value, uint64_t &realLen
 
 BResult BioClientAgent::BatchGetKeyDiskAddrLocal(BatchParseKeyAddrRequest *req, uint32_t reqLen, KeyAddrInfo* infos)
 {
-    if (UNLIKELY(mMode == CONVERGENCE)) {
-        CLIENT_LOG_ERROR("Batch get key disk addr does not support converged deployment.");
+    if (UNLIKELY(IsDirectMode())) {
+        CLIENT_LOG_ERROR("Batch get key disk addr only supports separate deployment.");
         return BIO_INNER_ERR;
-    } else {
-        return SendBatchGetKeyDiskAddrRequestLocal(req, reqLen, infos);
     }
+    return SendBatchGetKeyDiskAddrRequestLocal(req, reqLen, infos);
 }
 
 void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callback callback)
 {
     if (mMode == CONVERGENCE) {
         CLIENT_LOG_ERROR("Batch get does not support converged deployment.");
+        callback.cb(callback.cbCtx, nullptr, 0, BIO_INNER_ERR);
         return;
+    }
+    if (mMode == STANDALONE) {
+        BatchGetResponse rsp {};
+        BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SYNC);
+        auto ret = batchGetOp(req, &rsp);
+        BIO_TRACE_END(SDK_TRACE_BATCH_GET_LOCAL_SYNC, ret);
+        callback.cb(callback.cbCtx, &rsp, sizeof(BatchGetResponse), ret);
     } else {
         BIO_TRACE_START(SDK_TRACE_BATCH_GET_LOCAL_SEND);
         net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_BATCH_GET,
@@ -797,7 +951,7 @@ void BioClientAgent::BatchGetLocal(BatchGetRequest *req,  uint32_t reqLen, Callb
 BResult BioClientAgent::GetLocal(GetRequest &req, char *value, Callback callback)
 {
     req.size = req.length;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         req.isMr = 0;
         req.address = reinterpret_cast<uintptr_t>(value);
         GetResponse rsp;
@@ -833,7 +987,7 @@ void BioClientAgent::SendDeleteRequestLocal(DeleteRequest &req, Callback &callba
 
 void BioClientAgent::DeleteLocal(DeleteRequest &req, Callback &callback)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         auto ret = deleteOp(&req);
         callback.cb(callback.cbCtx, &ret, sizeof(ret), BIO_OK);
     } else {
@@ -844,7 +998,7 @@ void BioClientAgent::DeleteLocal(DeleteRequest &req, Callback &callback)
 BResult BioClientAgent::AddDisk(AddDiskRequest &req, AddDiskResponse &rsp)
 {
     BIO_TP_START(SDK_ADD_DISK_BY_SEPARATES, 0)
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         return addDiskOp(&req, &rsp);
     }
     BIO_TP_END;
@@ -939,7 +1093,7 @@ BResult BioClientAgent::SendStatRequestLocal(StatRequest &req, ObjStat &objInfo)
 
 BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         StatResponse rsp{};
         auto ret = statOp(&req, &rsp);
         CopyKey(objInfo.key, req.key, KEY_MAX_SIZE);
@@ -954,7 +1108,16 @@ BResult BioClientAgent::StatLocal(StatRequest &req, ObjStat &objInfo)
 void BioClientAgent::BatchExistLocal(uint32_t reqLen, BatchExistRequest *req, Callback &callback)
 {
     if (mMode == CONVERGENCE) {
-        CLIENT_LOG_ERROR("Not supported convergence mode.");
+        CLIENT_LOG_ERROR("Batch exist does not support converged deployment.");
+        callback.cb(callback.cbCtx, nullptr, 0, BIO_INNER_ERR);
+        return;
+    }
+    if (mMode == STANDALONE) {
+        BatchExistResponse rsp;
+        BIO_TRACE_START(SDK_TRACE_BATCH_EXIST_LOCAL_SYNC);
+        auto ret = batchExistOp(req, &rsp);
+        BIO_TRACE_END(SDK_TRACE_BATCH_EXIST_LOCAL_SYNC, ret);
+        callback.cb(callback.cbCtx, &rsp, sizeof(BatchExistResponse), ret);
         return;
     } else {
         net::BioClientNet::Instance()->SendAsyncBuff(INVALID_NID, BIO_OP_SDK_BATCH_EXIST,
@@ -970,7 +1133,7 @@ BResult BioClientAgent::SendNotifyUpdateRequestLocal(NotifyUpdateRequest &req)
 BResult BioClientAgent::NotifyUpdate(bool &flag)
 {
     NotifyUpdateRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() }, flag };
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         return notifyUpdateOp(&req);
     } else {
         return SendNotifyUpdateRequestLocal(req);
@@ -988,7 +1151,7 @@ BResult BioClientAgent::CheckUpdateReady()
     BResult ret = BIO_INNER_ERR;
     CheckUpdateReadyRequest req = { { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() } };
     CheckUpdateReadyResponse rsp;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = checkUpdateReadyOp(&req, &rsp);
     } else {
         ret = SendCheckUpdateReadyRequestLocal(req, rsp);
@@ -1002,7 +1165,7 @@ BResult BioClientAgent::CheckUpdateReady()
 
 BResult BioClientAgent::ListLocal(ListRequest &req, std::unordered_map<std::string, ObjStat> &objs)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         return CallServerListIntf(req, objs);
     } else {
         return SendListRequestLocal(req, objs);
@@ -1021,7 +1184,7 @@ BResult BioClientAgent::SendLoadRequestLocal(LoadRequest &req)
 
 BResult BioClientAgent::LoadLocal(LoadRequest &req)
 {
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         return loadOp(&req);
     } else {
         return SendLoadRequestLocal(req);
@@ -1032,7 +1195,7 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
 {
     CacheResourceResponse rsp;
     BResult ret = BIO_OK;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = cacheResourceOp(&rsp);
     } else {
         ret = SendCacheResourceRequestLocal(req, rsp);
@@ -1067,7 +1230,7 @@ BResult BioClientAgent::GetCacheHitLocal(CacheHitRequest &req, std::unordered_ma
 {
     CacheHitResponse rsp;
     BResult ret = BIO_OK;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = cacheHitOp(&rsp);
     } else {
         ret = SendCacheHitRequestLocal(req, rsp);
@@ -1108,7 +1271,7 @@ BResult BioClientAgent::GetTracePointsLocal(GetTracePointsRequest &req,
 {
     GetTracePointsResponse rsp;
     BResult ret = BIO_OK;
-    if (mMode == CONVERGENCE) {
+    if (IsDirectMode()) {
         ret = getTracePointsOp(&rsp);
     } else {
         ret = SendGetLocalTracePointsRequest(req, rsp);

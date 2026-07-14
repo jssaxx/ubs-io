@@ -34,6 +34,19 @@ public:
 
     void Destroy();
 
+    inline void RecycleThreadResources()
+    {
+        for (auto &work : works) {
+            for (auto &th : work) {
+                if (th != nullptr) {
+                    th->join();
+                    delete th;
+                    th = nullptr;
+                }
+            }
+        }
+    };
+
     inline bool GetWorkStatus() noexcept
     {
         return workStatus.load();

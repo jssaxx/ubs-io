@@ -4,5 +4,5 @@ install(TARGETS bio_interceptor_server DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PE
 
 target_link_libraries(bio_interceptor_server
         -Wl,--start-group
-        pthread dl aio
+        pthread dl
         -Wl,--end-group)

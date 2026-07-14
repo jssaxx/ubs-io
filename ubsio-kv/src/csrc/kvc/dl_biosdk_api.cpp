@@ -20,6 +20,16 @@
 #include "ubsio_kvc_def.h"
 #include "dl_biosdk_api.h"
 
+namespace {
+constexpr int32_t KVC_NO_DEVICE_ID = -1;
+constexpr uint32_t DEFAULT_STANDALONE_DEVICE_ID = 0;
+
+uint32_t GetStandaloneDeviceId(int32_t devId)
+{
+    return devId == KVC_NO_DEVICE_ID ? DEFAULT_STANDALONE_DEVICE_ID : static_cast<uint32_t>(devId);
+}
+}
+
 namespace ock {
 namespace ubsio {
 
@@ -30,6 +40,7 @@ const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
 
 BioExitFunc DlBioSdkApi::pBioExit = nullptr;
 BioInitFunc DlBioSdkApi::pBioInitialize = nullptr;
+BioSetStandaloneDeviceFunc DlBioSdkApi::pBioSetStandaloneDevice = nullptr;
 BioCreateCacheFunc DlBioSdkApi::pBioCreateCache = nullptr;
 BioCalLocationFunc DlBioSdkApi::pBioCalcLocation = nullptr;
 BioGetFunc DlBioSdkApi::pBioGet = nullptr;
@@ -40,6 +51,7 @@ BioBatchExistFunc DlBioSdkApi::pBioBatchExist = nullptr;
 BioBatchFreeFunc DlBioSdkApi::pBioBatchGetFree = nullptr;
 BioDeleteFunc DlBioSdkApi::pBioDelete = nullptr;
 BioBatchGetKeyDiskAddrFunc DlBioSdkApi::pBioBatchGetKeyDiskAddr = nullptr;
+BioRegisterMetaEventCallbackFunc DlBioSdkApi::pBioRegisterMetaEventCallback = nullptr;
 
 int32_t DlBioSdkApi::LoadLibrary()
 {
@@ -58,6 +70,7 @@ int32_t DlBioSdkApi::LoadLibrary()
     /* load sym */
     DL_LOAD_SYM(pBioExit, BioExitFunc, bioSdkHandle, "BioExit");
     DL_LOAD_SYM(pBioInitialize, BioInitFunc, bioSdkHandle, "BioInitialize");
+    DL_LOAD_SYM(pBioSetStandaloneDevice, BioSetStandaloneDeviceFunc, bioSdkHandle, "BioSetStandaloneDevice");
     DL_LOAD_SYM(pBioGet, BioGetFunc, bioSdkHandle, "BioGet");
     DL_LOAD_SYM(pBioPut, BioPutFunc, bioSdkHandle, "BioPut");
     DL_LOAD_SYM(pBioStat, BioStatFunc, bioSdkHandle, "BioStat");
@@ -68,6 +81,8 @@ int32_t DlBioSdkApi::LoadLibrary()
     DL_LOAD_SYM(pBioBatchGetFree, BioBatchFreeFunc, bioSdkHandle, "BioBatchGetFree");
     DL_LOAD_SYM(pBioDelete, BioDeleteFunc, bioSdkHandle, "BioDelete");
     DL_LOAD_SYM(pBioBatchGetKeyDiskAddr, BioBatchGetKeyDiskAddrFunc, bioSdkHandle, "BioBatchGetKeyDiskAddr");
+    DL_LOAD_SYM(pBioRegisterMetaEventCallback, BioRegisterMetaEventCallbackFunc, bioSdkHandle,
+        "BioRegisterMetaEventCallback");
 
     gLoaded = true;
     return 0;
@@ -82,6 +97,7 @@ void DlBioSdkApi::CleanupLibrary()
 
     pBioExit = nullptr;
     pBioInitialize = nullptr;
+    pBioSetStandaloneDevice = nullptr;
     pBioGet = nullptr;
     pBioPut = nullptr;
     pBioStat = nullptr;
@@ -92,6 +108,7 @@ void DlBioSdkApi::CleanupLibrary()
     pBioBatchGetFree = nullptr;
     pBioDelete = nullptr;
     pBioBatchGetKeyDiskAddr = nullptr;
+    pBioRegisterMetaEventCallback = nullptr;
 
     if (bioSdkHandle != nullptr) {
         dlclose(bioSdkHandle);
@@ -100,16 +117,27 @@ void DlBioSdkApi::CleanupLibrary()
     gLoaded = false;
 }
 
-int32_t DlBioSdkApi::KvBioInit()
+int32_t DlBioSdkApi::KvBioInit(int32_t devId)
 {
     LOG_INFO("Start boostio begin...");
-    ClientOptionsConfig optConf;
+    if (devId < KVC_NO_DEVICE_ID) {
+        LOG_ERROR("Invalid device id:" << devId << ".");
+        return -1;
+    }
+
+    auto standaloneDeviceId = GetStandaloneDeviceId(devId);
+    if (devId == KVC_NO_DEVICE_ID) {
+        LOG_INFO("Use default standalone device id:" << standaloneDeviceId << " for kv device id:" << devId << ".");
+    }
+    SetStandaloneDevice(standaloneDeviceId);
+
+    ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
     optConf.enable = false;
     std::string logDir = "/var/log/boostio";
     std::snprintf(optConf.logFilePath, sizeof(optConf.logFilePath), "%s", logDir.c_str());
 
-    auto ret = Initialize(WorkerMode::SEPARATES, &optConf);
+    auto ret = Initialize(WorkerMode::STANDALONE, &optConf);
     if (ret != 0) {
         LOG_ERROR("boostio initialize failed, ret: " << ret);
         return -1;
@@ -118,7 +146,7 @@ int32_t DlBioSdkApi::KvBioInit()
 
     LOG_INFO("boostio createcache...");
     uint64_t tenantId = 1;
-    AffinityStrategy affinity = GLOBAL_BALANCE;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
     ret = CreateCache({ tenantId, affinity, strategy });
     if (ret == RET_CACHE_EXISTS) {

@@ -20,10 +20,19 @@
 extern "C" {
 #endif
 
+// Start server with the normal cluster module chain: Net, Cache, MirrorServer, CM.
 int32_t BioServerInit();
+
+// Start server as an embedded single-node runtime.
+// No Net/CM/Zookeeper module is created; NodeView/PtView is built locally.
+int32_t BioServerStandaloneInit();
+
+// Set local standalone device information before BioServerStandaloneInit.
+void SetStandaloneDeviceInfo(uint32_t deviceId);
 
 void BioServerExit(void);
 
+// Returns 0 in STANDALONE mode because no NetEngine exists.
 uintptr_t GetBioServerNet();
 
 bool GetCrcFlag();
@@ -34,9 +43,33 @@ bool GetPrometheusToggle();
 
 const char *GetPrometheusListenAddress(void);
 
+#ifndef UBSIO_META_EVENT_C_DEFINED
+#define UBSIO_META_EVENT_C_DEFINED
+typedef enum {
+    UBSIO_META_RECOVER_C = 0,
+    UBSIO_META_DELETE_C = 1,
+} UbsioMetaEventTypeC;
+
+typedef struct {
+    int32_t type;
+    const char *key;
+    uint32_t keyLen;
+} UbsioMetaEventC;
+
+typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *events, uint32_t count);
+#endif
+
+// Register a same-process metadata event callback for embedded users such as MemCache.
+// The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
+int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
+
 uint32_t GetNegoWorkIoTimeOut();
 
 uint32_t GetPrometheusScrapeIntervalSec();
+
+// Return standalone runtime config without IPC shm negotiation.
+// The response is caller-owned and does not carry IPC shm fields.
+int32_t GetRuntimeConfig(StandaloneRuntimeConfigResponse *rsp);
 
 int32_t GetLocalNid(GetLocalNidResponse *rsp);
 
@@ -56,14 +89,22 @@ int32_t CreateFlowSlave(CreateFlowRequest *req);
 
 int32_t DestroyFlow(DestroyFlowRequest *req);
 
+// Variable-length direct-call response. Server allocates *rsp with new[];
+// caller must release it after copying the slice metadata.
 int32_t GetSlice(GetSliceRequest *req, GetSliceResponse **rsp);
 
 int32_t Put(PutRequest *req, PutResponse *rsp);
 
 int32_t Get(GetRequest *req, GetResponse *rsp);
 
+int32_t BatchGet(BatchGetRequest *req, BatchGetResponse *rsp);
+
+int32_t BatchExist(BatchExistRequest *req, BatchExistResponse *rsp);
+
 int32_t Delete(DeleteRequest *req);
 
+// Variable-length direct-call response. Server allocates *rsp with new[];
+// caller must release it after copying object stats.
 int32_t List(ListRequest *req, ListResponse **rsp);
 
 int32_t Stat(StatRequest *req, StatResponse *rsp);

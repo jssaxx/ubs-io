@@ -12,8 +12,12 @@
 
 #include <gtest/gtest.h>
 #include <mockcpp/mockcpp.hpp>
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
-#include <libaio.h>
+#include <cstring>
+#include <mutex>
 #include "bio_server.h"
 #include "bio_server_c.h"
 #include "bio_mock.h"
@@ -52,6 +56,32 @@ static constexpr uint16_t G_PT_V = 1;
 static uint64_t g_flowId = 0;
 static FlowInstance *g_flowInst = nullptr;
 
+namespace {
+class DaemonConfigGuard {
+public:
+    DaemonConfigGuard()
+    {
+        auto &config = const_cast<BioConfig::DaemonConfig &>(BioConfig::Instance()->GetDaemonConfig());
+        mConfig = &config;
+        mOrigin = config;
+    }
+
+    ~DaemonConfigGuard()
+    {
+        *mConfig = mOrigin;
+    }
+
+    BioConfig::DaemonConfig &Get()
+    {
+        return *mConfig;
+    }
+
+private:
+    BioConfig::DaemonConfig *mConfig{ nullptr };
+    BioConfig::DaemonConfig mOrigin;
+};
+}
+
 static auto reader = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
     auto ret = sliceOperator.Copy(from, to);
@@ -70,6 +100,50 @@ static BResult GetSlice(uint64_t flowId, uint64_t flowOffset, uint64_t length)
 {
     SliceKey sliceKey(flowId, flowOffset, FLOW_MEMORY, length, 0);
     return gWCacheManager->GetWCacheSlice(sliceKey, gWcacheSlice);
+}
+
+struct MetaEventCollector {
+    std::mutex lock;
+    std::condition_variable cv;
+    std::vector<UbsIoMetaEvent> events;
+};
+
+static bool WaitMetaEvents(MetaEventCollector &collector, size_t count)
+{
+    std::unique_lock<std::mutex> lock(collector.lock);
+    return collector.cv.wait_for(lock, std::chrono::seconds(5), [&collector, count]() {
+        return collector.events.size() >= count;
+    });
+}
+
+struct CMetaEventCollector {
+    std::mutex lock;
+    std::condition_variable cv;
+    std::vector<UbsioMetaEventC> events;
+    std::vector<std::string> keys;
+};
+
+static void CollectCMetaEvents(void *context, const UbsioMetaEventC *events, uint32_t count)
+{
+    auto *collector = static_cast<CMetaEventCollector *>(context);
+    if (collector == nullptr || events == nullptr) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(collector->lock);
+    for (uint32_t i = 0; i < count; ++i) {
+        collector->events.push_back(events[i]);
+        collector->keys.emplace_back(events[i].key, events[i].keyLen);
+    }
+    collector->cv.notify_one();
+}
+
+static bool WaitCMetaEvents(CMetaEventCollector &collector, size_t count)
+{
+    std::unique_lock<std::mutex> lock(collector.lock);
+    return collector.cv.wait_for(lock, std::chrono::seconds(5), [&collector, count]() {
+        return collector.events.size() >= count;
+    });
 }
 
 TEST_F(TestWCache, test_create_flow_return_ok)
@@ -113,6 +187,69 @@ TEST_F(TestWCache, test_get_slice_param_invalid)
     EXPECT_EQ(wSlice, nullptr);
 }
 
+TEST_F(TestWCache, test_meta_event_batch_flush_and_closed_batch)
+{
+    LOG_INFO("test_meta_event_batch_flush_and_closed_batch");
+    MetaEventCollector collector;
+    gWCacheManager->RegUbsIoMetaEventCallback([&collector](const std::vector<UbsIoMetaEvent> &events) {
+        std::lock_guard<std::mutex> lock(collector.lock);
+        collector.events.insert(collector.events.end(), events.begin(), events.end());
+        collector.cv.notify_one();
+    });
+
+    auto batch = std::make_shared<UbsIoMetaEventBatch>();
+    ASSERT_NE(batch, nullptr);
+    gWCacheManager->AppendMetaEvent(UBSIO_META_RECOVER, "test_meta_event_recover", batch);
+    gWCacheManager->AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_delete", batch);
+    gWCacheManager->FlushMetaEventBatch(batch);
+
+    // Delayed SetSlice callbacks may run after the worker-local batch is closed.
+    // Those events must bypass the closed batch and still be reported through manager pending queue.
+    gWCacheManager->AppendMetaEvent(UBSIO_META_DELETE, "test_meta_event_after_close", batch);
+
+    bool gotEvents = WaitMetaEvents(collector, 3);
+    gWCacheManager->RegUbsIoMetaEventCallback(nullptr);
+    ASSERT_TRUE(gotEvents);
+
+    std::lock_guard<std::mutex> lock(collector.lock);
+    auto hasRecover = std::find_if(collector.events.begin(), collector.events.end(),
+        [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_RECOVER && event.key == "test_meta_event_recover";
+        });
+    auto hasDelete = std::find_if(collector.events.begin(), collector.events.end(),
+        [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_DELETE && event.key == "test_meta_event_delete";
+        });
+    auto hasDelayedDelete = std::find_if(collector.events.begin(), collector.events.end(),
+        [](const UbsIoMetaEvent &event) {
+            return event.type == UBSIO_META_DELETE && event.key == "test_meta_event_after_close";
+        });
+    EXPECT_NE(hasRecover, collector.events.end());
+    EXPECT_NE(hasDelete, collector.events.end());
+    EXPECT_NE(hasDelayedDelete, collector.events.end());
+}
+
+TEST_F(TestWCache, test_meta_event_c_abi_callback)
+{
+    LOG_INFO("test_meta_event_c_abi_callback");
+    CMetaEventCollector collector;
+    auto ret = UbsioRegisterMetaEventCallback(CollectCMetaEvents, &collector);
+    EXPECT_EQ(ret, BIO_OK);
+
+    gWCacheManager->AppendMetaEvent(UBSIO_META_RECOVER, "test_c_abi_recover");
+    bool gotEvents = WaitCMetaEvents(collector, 1);
+
+    ret = UbsioRegisterMetaEventCallback(nullptr, nullptr);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_TRUE(gotEvents);
+
+    std::lock_guard<std::mutex> lock(collector.lock);
+    ASSERT_GE(collector.events.size(), 1U);
+    EXPECT_EQ(collector.events[0].type, UBSIO_META_RECOVER_C);
+    EXPECT_EQ(collector.events[0].keyLen, strlen("test_c_abi_recover"));
+    EXPECT_EQ(collector.keys[0], "test_c_abi_recover");
+}
+
 TEST_F(TestWCache, test_put_case_return_ok)
 {
     LOG_INFO("test_put_case_return_ok");
@@ -128,6 +265,114 @@ TEST_F(TestWCache, test_put_case_return_ok)
     CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
     ret = gWCacheManager->Put(key, wSlice, reader, attr, false);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestWCache, test_batch_get_releases_unclaimed_slice_ref)
+{
+    uint64_t length = NO_1024;
+    uint64_t flowIndex = 0;
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ASSERT_EQ(gWCacheManager->GetWCacheSlice(sliceKey, wSlice), BIO_OK);
+
+    Key key = "test_batch_get_releases_unclaimed_slice_ref";
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ASSERT_EQ(gWCacheManager->Put(key, wSlice, reader, attr, false), BIO_OK);
+
+    std::vector<char> value(length);
+    MrInfo mrInfo = { reinterpret_cast<uint64_t>(value.data()), static_cast<uint32_t>(value.size()) };
+    std::vector<FlowAddr> addrs = { FlowAddr(mrInfo) };
+    RCacheSlicePtr dest = MakeRef<RCacheSlice>(G_PT_ID, length, addrs);
+    WCacheSliceRefPtr observed = nullptr;
+    WCacheBatchSliceWriter writer =
+        [&observed](const SlicePtr &from, const SlicePtr &to, WCacheSliceRefPtr &sliceRef) -> BResult {
+        observed = sliceRef;
+        CacheSliceOperator sliceOperator;
+        return sliceOperator.Copy(from, to);
+    };
+
+    uint64_t realLen = 0;
+    EXPECT_EQ(gWCacheManager->GetBatch(key, 0, dest, writer, realLen), BIO_OK);
+    ASSERT_NE(observed, nullptr);
+    EXPECT_FALSE(observed->Test());
+    EXPECT_EQ(realLen, length);
+}
+
+TEST_F(TestWCache, test_batch_get_transfers_slice_ref_to_writer)
+{
+    uint64_t length = NO_1024;
+    uint64_t flowIndex = 0;
+    uint64_t flowOffset = g_flowInst->AllocOffset(length, flowIndex);
+    SliceKey sliceKey(g_flowId, flowOffset, FLOW_MEMORY, length, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ASSERT_EQ(gWCacheManager->GetWCacheSlice(sliceKey, wSlice), BIO_OK);
+
+    Key key = "test_batch_get_transfers_slice_ref_to_writer";
+    CacheAttr attr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ASSERT_EQ(gWCacheManager->Put(key, wSlice, reader, attr, false), BIO_OK);
+
+    std::vector<char> value(length);
+    MrInfo mrInfo = { reinterpret_cast<uint64_t>(value.data()), static_cast<uint32_t>(value.size()) };
+    std::vector<FlowAddr> addrs = { FlowAddr(mrInfo) };
+    RCacheSlicePtr dest = MakeRef<RCacheSlice>(G_PT_ID, length, addrs);
+    WCacheSliceRefPtr lease = nullptr;
+    WCacheBatchSliceWriter writer =
+        [&lease](const SlicePtr &, const SlicePtr &, WCacheSliceRefPtr &sliceRef) -> BResult {
+        lease = std::move(sliceRef);
+        return BIO_OK;
+    };
+
+    uint64_t realLen = 0;
+    EXPECT_EQ(gWCacheManager->GetBatch(key, 0, dest, writer, realLen), BIO_OK);
+    ASSERT_NE(lease, nullptr);
+    EXPECT_TRUE(lease->Test());
+    lease->Release();
+    EXPECT_FALSE(lease->Test());
+}
+
+TEST_F(TestWCache, test_put_without_disk_cache_only_supports_write_back)
+{
+    LOG_INFO("test_put_without_disk_cache_only_supports_write_back");
+    DaemonConfigGuard configGuard;
+    auto &config = configGuard.Get();
+    config.hasDiskCache = false;
+    config.memCap = NO_MAX_VALUE64 / NO_10;
+    config.memReadRatio = NO_5;
+    config.memWriteRatio = NO_5;
+    config.wcacheMemEvictLevel = NO_100;
+    config.diskCaps.clear();
+
+    uint64_t flowId = 0;
+    auto ret = gWCacheManager->AllocateFlowId(G_PT_ID, G_PT_V, flowId);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(flowId, 0);
+    ret = gWCacheManager->CreateWCache(0, flowId, G_PT_ID, G_PT_V, 0, false);
+    EXPECT_EQ(ret, BIO_OK);
+
+    uint64_t flowIndex = 0;
+    SliceKey sliceKey(flowId, 0, FLOW_MEMORY, NO_1024, flowIndex);
+    WCacheSlicePtr wSlice = nullptr;
+    ret = gWCacheManager->GetWCacheSlice(sliceKey, wSlice);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(wSlice, nullptr);
+
+    Key key = "test_put_without_disk_cache_write_back";
+    CacheAttr writeBackAttr = { 0, LOCAL_AFFINITY, WRITE_BACK };
+    ret = gWCacheManager->Put(key, wSlice, reader, writeBackAttr, false);
+    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(writeBackAttr.ioStrategy, WRITE_MEM_BACK);
+
+    SliceKey writeThroughSliceKey(flowId, NO_1024, FLOW_MEMORY, NO_1024, 1);
+    WCacheSlicePtr writeThroughSlice = nullptr;
+    ret = gWCacheManager->GetWCacheSlice(writeThroughSliceKey, writeThroughSlice);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(writeThroughSlice, nullptr);
+
+    Key writeThroughKey = "test_put_without_disk_cache_write_through";
+    CacheAttr writeThroughAttr = { 0, LOCAL_AFFINITY, WRITE_THROUGH };
+    ret = gWCacheManager->Put(writeThroughKey, writeThroughSlice, reader, writeThroughAttr, false);
+    EXPECT_EQ(ret, BIO_INVALID_PARAM);
 }
 
 TEST_F(TestWCache, test_put_state_not_normal_case_return_fail)

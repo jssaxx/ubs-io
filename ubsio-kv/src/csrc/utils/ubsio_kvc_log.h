@@ -15,6 +15,7 @@
 
 #include <syscall.h>
 #include <unistd.h>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <cstdlib>

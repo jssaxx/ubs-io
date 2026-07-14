@@ -1,5 +1,4 @@
-# release 默认不编bio_console, 加上--cli, 编
-if ("${OPEN_RELEASE}" STREQUAL "OFF" OR ("${OPEN_RELEASE}" STREQUAL "ON" AND "${OPEN_CLI}" STREQUAL "ON"))
+if ("${OPEN_CLI}" STREQUAL "ON")
     add_subdirectory(benchmarks)
 endif()
 

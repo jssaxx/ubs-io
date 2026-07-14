@@ -27,8 +27,11 @@ extern "C" {
 const uint16_t MESSAGE_MAGIC = 0xABCD;
 const uint32_t KEY_MAX_SIZE = 256;
 const uint32_t KEY_MAX_COUNT = 256;
+const uint32_t BATCH_GET_MAX_COUNT = 16 * 1024;
+const uint32_t NET_BATCH_GET_MAX_COUNT = KEY_MAX_COUNT;
+const uint32_t STANDALONE_BATCH_GET_MAX_COUNT = BATCH_GET_MAX_COUNT;
 const uint32_t IP_MAX_SIZE = 32;
-const uint32_t DISK_MAX_SIZE = 8;
+const uint32_t DISK_MAX_SIZE = 16;
 const uint32_t CLUSTER_NODE_SIZE = 32;
 const uint32_t PT_COPY_MAX_SIZE = 3;
 const uint32_t PT_SIZE = 64;
@@ -69,6 +72,25 @@ typedef struct {
     char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
     uint32_t scrapeIntervalSec;
 } ShmInitResponse;
+
+/* Standalone runtime config */
+typedef struct {
+    int32_t serverPid;
+    uint32_t scene;
+    uint32_t alignSize;
+    uint32_t ioTimeOut;
+    uint32_t netTimeOut;
+    uint32_t netSegmentSize;
+    int32_t logLevel;
+    bool enableCrc;
+    bool enableCli;
+    bool enableHtrace;
+    bool enablePrometheus;
+    char listenAddress[MAX_LISTEN_ADDRESS_LENGTH];
+    uint32_t scrapeIntervalSec;
+    uint64_t sdkPoolSize;
+    uint64_t dataMsgBlockSize;
+} StandaloneRuntimeConfigResponse;
 
 /* Query cache resource quota */
 typedef struct {
@@ -258,6 +280,7 @@ typedef struct {
     uint64_t mrKey;
     bool memFromServer;
     bool isDegrade;
+    bool isAlloc;
     uint32_t ioStrategy;
     uint64_t sliceLen;
     uint64_t quotaNid;
@@ -359,11 +382,24 @@ struct BatchGetPlan {
 };
 
 typedef struct {
-    uint64_t realLengths[KEY_MAX_COUNT];
-    int32_t results[KEY_MAX_COUNT];
+    uint64_t realLengths[STANDALONE_BATCH_GET_MAX_COUNT];
+    int32_t results[STANDALONE_BATCH_GET_MAX_COUNT];
     uint32_t count;
     uint16_t nodeId;
 } BatchGetResponse;
+
+typedef struct {
+    uint64_t realLength;
+    int32_t result;
+    uint32_t reserved;
+} BatchGetResultItem;
+
+typedef struct {
+    uint32_t count;
+    uint16_t nodeId;
+    uint16_t reserved;
+    BatchGetResultItem items[0];
+} BatchGetWireResponse;
 
 /* Stat */
 typedef struct {

@@ -34,13 +34,18 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
     bool isRecover)
 {
     BResult ret = BIO_INNER_ERR;
-    for (int i = 0; i < MAX_WCACHE_TIER; ++i) {
+    mHasDiskCache = BioConfig::Instance()->GetDaemonConfig().hasDiskCache;
+    uint32_t tierCount = mHasDiskCache ? MAX_WCACHE_TIER : WCACHE_DISK;
+    for (uint32_t i = 0; i < tierCount; ++i) {
         auto cacheTier = MakeRef<WCacheTier>();
         ChkTrue(cacheTier != nullptr, BIO_ALLOC_FAIL, "Make wcache tier failed.");
 
         ret = cacheTier->Init(static_cast<WCacheTierType>(i), mFlowId, mDiskId);
         ChkTrue(ret == BIO_OK, ret, "Failed to init cacheTier, WCacheTierType:" << i << " flowId:" << mFlowId);
         mCacheTiers[i] = cacheTier;
+    }
+    if (!mHasDiskCache) {
+        mCacheTiers[WCACHE_DISK] = nullptr;
     }
 
     mEvictService[WCACHE_MEMORY] = evictService[WCACHE_MEMORY];
@@ -72,13 +77,14 @@ BResult WCache::Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], con
 }
 
 void WCache::RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
-    EvictCallback evictCallback, const RetryCallback retryCallback)
+    EvictCallback evictCallback, const RetryCallback retryCallback, FlushMetaEventCallback flushMetaEventCallback)
 {
     mGetLocDiskStatus = getLocDiskStatus;
     mLocRole = locRole;
     mGlobEvictOffset = evictOffset;
     mEvictCallback = evictCallback;
     mRetryCallback = retryCallback;
+    mFlushMetaEventCallback = flushMetaEventCallback;
 }
 
 void WCache::Exit()
@@ -94,6 +100,9 @@ void WCache::GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &dis
     memUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     diskCap = 0;
     diskUsed = 0;
+    if (!config.hasDiskCache) {
+        return;
+    }
     for (uint32_t diskId = 0; diskId < config.diskCaps.size(); diskId++) {
         diskCap += static_cast<uint64_t>(config.diskCaps[diskId]);
         diskUsed += FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, diskId);
@@ -136,6 +145,11 @@ BResult WCache::PutImpl(const Key &key, const WCacheSlicePtr &srcSlice, const Sl
         return ret;
     }
 
+    if (!mHasDiskCache && (attr.strategy != WRITE_BACK || attr.ioStrategy > WRITE_MEM_BACK)) {
+        LOG_ERROR("Write through is not supported when disk cache is disabled, flowId:" << mFlowId << ".");
+        return BIO_INVALID_PARAM;
+    }
+
     // 2. put it to memory tier cache.
     BIO_TP_START(WRITE_SLICE_NULL_FAIL, &ret, BIO_INNER_RETRY);
     ret = mCacheTiers[WCACHE_MEMORY]->Write(key, srcSlice, sliceReader, destSliceRef);
@@ -157,7 +171,10 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
 {
     // 1. 计算IO写入策略.
     RealIoStrategy ioStrategy = WRITE_DEFAULT;
-    PutSetIoStrategy(ioStrategy, attr);
+    auto ret = PutSetIoStrategy(ioStrategy, attr);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
 
     // 2. Add evict queue.
     mCacheTiers[WCACHE_MEMORY]->AddEvictQueue(destSliceRef);
@@ -170,38 +187,52 @@ BResult WCache::StartEvictSlice(const Key &key, WCacheSliceRefPtr &destSliceRef,
     }
 
     // 4. write thought
-    BResult ret = BIO_INNER_ERR;
+    ret = BIO_INNER_ERR;
+    auto metaEventBatch = std::make_shared<UbsIoMetaEventBatch>();
+    ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     if (sliceRef != nullptr) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_DISK_BACK);
-        ret = EvictFromMemToDisk(sliceRef, true);
+        ret = EvictFromMemToDisk(sliceRef, true, metaEventBatch);
         BIO_TRACE_END(WCACHE_TRACE_PUT_DISK_BACK, ret);
         if (UNLIKELY(ret != BIO_OK)) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_DEBUG("Put key, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
                 ", IndexInFlow:" << sliceRef->GetSlice()->GetIndexInFlow());
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
             return ret;
         }
     }
 
     // put it underfs tier.
     if (ioStrategy <= WRITE_DISK_BACK || mUfsEnable == false) {
+        if (mFlushMetaEventCallback != nullptr) {
+            mFlushMetaEventCallback(metaEventBatch);
+        }
         return BIO_OK;
     }
     sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     if (sliceRef != nullptr) {
         BIO_TRACE_START(WCACHE_TRACE_PUT_UNDERFS_BACK);
-        ret = EvictFromDiskToUnderFs(sliceRef, mIsMaster, true);
+        ret = EvictFromDiskToUnderFs(sliceRef, mIsMaster, true, metaEventBatch);
         BIO_TRACE_END(WCACHE_TRACE_PUT_UNDERFS_BACK, ret);
         if (UNLIKELY(ret != BIO_OK)) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
             return ret;
         }
+    }
+    if (mFlushMetaEventCallback != nullptr) {
+        mFlushMetaEventCallback(metaEventBatch);
     }
     return BIO_OK;
 }
 
-void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
+BResult WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
 {
     ioStrategy = attr.ioStrategy;
     if (ioStrategy == WRITE_DEFAULT) {
@@ -213,8 +244,17 @@ void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
     }
 
     auto config = BioConfig::Instance()->GetDaemonConfig();
+    if (!mHasDiskCache) {
+        if (ioStrategy > WRITE_MEM_BACK || attr.strategy != WRITE_BACK) {
+            LOG_ERROR("Write through is not supported when disk cache is disabled, flowId:" << mFlowId << ".");
+            return BIO_INVALID_PARAM;
+        }
+        attr.ioStrategy = WRITE_MEM_BACK;
+        return BIO_OK;
+    }
+
     uint64_t memConfig = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
-    uint64_t memUsed = BioServer::Instance()->GetNetEngine()->GetUsedBlockSize();
+    uint64_t memUsed = BioServer::Instance()->GetMemUsedSize();
     uint64_t memWcache = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
     uint64_t memRcache = FlowManager::GetCacheUsedSize(FLOW_RCACHE, FLOW_MEMORY, 0);
 
@@ -236,18 +276,18 @@ void WCache::PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr)
 
     if (isMemSatisfied && isDiskSatisfied && (attr.strategy == WRITE_BACK)) {
         attr.ioStrategy = WRITE_MEM_BACK;
-        return;
+        return BIO_OK;
     }
 
     if (!isMemSatisfied && isDiskSatisfied) {
         attr.ioStrategy = WRITE_DISK_BACK;
-        return;
+        return BIO_OK;
     }
 
     if (mUfsEnable) {
         attr.ioStrategy = WRITE_UNDERFS_BACK;
     }
-    return;
+    return BIO_OK;
 }
 
 BResult WCache::PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
@@ -330,11 +370,18 @@ BResult WCache::Seal(WCacheTierType type)
 void WCache::Destroy()
 {
     mCacheTiers[WCACHE_MEMORY]->Destroy();
-    mCacheTiers[WCACHE_DISK]->Destroy();
+    if (mCacheTiers[WCACHE_DISK] != nullptr) {
+        mCacheTiers[WCACHE_DISK]->Destroy();
+    }
 }
 
 void WCache::StartEvictTask(WCacheTierType type)
 {
+    if (type == WCACHE_DISK && !mHasDiskCache) {
+        mEvictRef[type].store(false);
+        return;
+    }
+
     bool isNormal = false;
     mGetLocDiskStatus(mPtId, mDiskId, isNormal);
     if (!isNormal) {
@@ -370,6 +417,11 @@ void WCache::StartEvictTask(WCacheTierType type)
 
 void WCache::RetryEvictTask(WCacheTierType type)
 {
+    if (type == WCACHE_DISK && !mHasDiskCache) {
+        mEvictRef[type].store(false);
+        return;
+    }
+
     if (mCacheTiers[type]->IsEmptyEvictSliceQueue()) {
         mEvictRef[type].store(false);
         return;
@@ -405,21 +457,34 @@ void WCache::RetryEvictTask(WCacheTierType type)
 
 uint64_t WCache::GetCapacity(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[type]->GetDataCapacity();
 }
 
 uint64_t WCache::GetVirCapacity(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[type]->GetDataVirCapacity();
 }
 
 uint64_t WCache::GetEvictOffset()
 {
+    if (!mHasDiskCache || mCacheTiers[WCACHE_DISK] == nullptr) {
+        return 0;
+    }
     return mCacheTiers[WCACHE_DISK]->GetDataEvictOffset();
 }
 
 BResult WCache::Recover(RecoverCallback recoverCallback)
 {
+    if (!mHasDiskCache) {
+        return BIO_OK;
+    }
+
     auto &diskCache = mCacheTiers[WCACHE_DISK];
     uint64_t truncateOffset = diskCache->GetMetaEvictOffset();
     uint64_t virCap = diskCache->GetMetaVirCapacity();
@@ -488,7 +553,7 @@ void WCache::Flush(const WCachePtr &self)
         }
     }
 
-    if (mUfsEnable) {
+    if (mHasDiskCache && mUfsEnable) {
         if (mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
             isSucceed = mEvictService[WCACHE_DISK]->Execute([self]() { self->FlushDisk(); });
             if (!isSucceed) {
@@ -515,7 +580,7 @@ void WCache::ExpiredClear(const WCachePtr &self)
         }
     }
 
-    if (mUfsEnable) {
+    if (mHasDiskCache && mUfsEnable) {
         if (mEvictRef[WCACHE_DISK].compare_exchange_weak(expectval, true)) {
             isSucceed = mEvictService[WCACHE_DISK]->Execute([self]() { self->ExpiredClearDisk(); });
             if (!isSucceed) {
@@ -533,7 +598,7 @@ void WCache::ProcAndCacheBrokenExpiredClear()
 
     if (!IsEmptyEvict(WCACHE_MEMORY)) {
         StartEvictTask(WCACHE_MEMORY);
-    } else if (mUfsEnable && !IsEmptyEvict(WCACHE_DISK)) {
+    } else if (mHasDiskCache && mUfsEnable && !IsEmptyEvict(WCACHE_DISK)) {
         StartEvictTask(WCACHE_DISK);
     }
     BIO_TP_END;
@@ -541,6 +606,10 @@ void WCache::ProcAndCacheBrokenExpiredClear()
 
 bool WCache::IsEmptyEvict(WCacheTierType type)
 {
+    if (mCacheTiers[type] == nullptr) {
+        return true;
+    }
+
     if (mOnFlyRef != 0) {
         LOG_DEBUG("OnFly io cnt:" << mOnFlyRef << ", flowId:" << mFlowId);
         return false;
@@ -621,11 +690,9 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
         auto &memCache = mCacheTiers[WCACHE_MEMORY];
         BIO_TRACE_START(WCACHE_TRACE_ED_EVICTSLICE);
         auto ret = memCache->Evict(oldSlice);
-        if (mUfsEnable) {
-            auto &diskCache = mCacheTiers[WCACHE_DISK];
-            diskCache->AddEvictQueue(sliceRef);
-            StartEvictTask(WCACHE_DISK);
-        }
+        auto &diskCache = mCacheTiers[WCACHE_DISK];
+        diskCache->AddEvictQueue(sliceRef);
+        StartEvictTask(WCACHE_DISK);
         BIO_TRACE_END(WCACHE_TRACE_ED_EVICTSLICE, BIO_OK);
         DecreaseRef();
         ChkTrueExNot(ret == BIO_OK);
@@ -636,6 +703,59 @@ BResult WCache::EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront)
     sliceRef->SetSlice(diskMetaDataSlice.dataSlice, callback);
     BIO_TRACE_END(WCACHE_TRACE_ED_SETSLICE, BIO_OK);
     BIO_TRACE_END(WCACHE_TRACE_EVICT2DISK_SUM, BIO_OK);
+    return BIO_OK;
+}
+
+BResult WCache::EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch)
+{
+    auto slice = sliceRef->GetSlice();
+    if (slice == nullptr) {
+        LOG_ERROR("slice is null.");
+        return BIO_INNER_ERR;
+    }
+
+    WCacheSlicePtr metaSlice = nullptr;
+    auto &memCache = mCacheTiers[WCACHE_MEMORY];
+    auto ret = memCache->GetMetaSlice(slice->GetIndexInFlow(), metaSlice);
+    ChkTrue(ret == BIO_OK, ret,
+        "Failed to get memory meta slice, flowId:" << slice->GetFlowId() << ", flowIndex:" <<
+        slice->GetIndexInFlow() << ", flowOffset:" << slice->GetOffsetInFlow());
+
+    std::shared_ptr<WFlowSliceMeta> sliceMeta = nullptr;
+    try {
+        sliceMeta = std::make_shared<WFlowSliceMeta>();
+    } catch (const std::bad_alloc &e) {
+        return BIO_ALLOC_FAIL;
+    }
+    ret = mSliceOperator.Copy(metaSlice.Get(), reinterpret_cast<char *>(sliceMeta.get()), sizeof(WFlowSliceMeta));
+    ChkTrue(ret == BIO_OK, ret, "Slice copy failed, ret:" << ret << ".");
+
+    IncreaseRef();
+    WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta, batch](const WCacheSlicePtr &oldSlice) {
+        if (oldSlice == nullptr) {
+            LOG_ERROR("old slice is null.");
+            DecreaseRef();
+            return;
+        }
+
+        auto &memCache = mCacheTiers[WCACHE_MEMORY];
+        BIO_TRACE_START(WCACHE_TRACE_DISCARD_EVICTSLICE);
+        auto ret = memCache->Evict(oldSlice);
+        BIO_TRACE_END(WCACHE_TRACE_DISCARD_EVICTSLICE, ret);
+        if (UNLIKELY(ret != BIO_OK)) {
+            LOG_ERROR("Failed to discard memory slice, ret:" << ret << ", slice:" << oldSlice->ToString() << ".");
+            DecreaseRef();
+            return;
+        }
+
+        if (sliceRef->GetState() == SLICE_VALID) {
+            mEvictCallback(static_cast<uint16_t>(mPtId), sliceMeta->key, sliceRef, batch);
+            sliceRef->SetState(SLICE_INVALID);
+        }
+        DecreaseRef();
+    };
+
+    sliceRef->SetSlice(nullptr, callback);
     return BIO_OK;
 }
 
@@ -664,7 +784,8 @@ BResult WCache::EvictToUnderFS(const char *key, WCacheSlicePtr &slice, const siz
     return ret;
 }
 
-BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
+BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront,
+    const UbsIoMetaEventBatchPtr &batch)
 {
     // 1. 获取待淘汰对象的data slice和meta slice.
     auto &diskCache = mCacheTiers[WCACHE_DISK];
@@ -694,7 +815,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     ChkTrue(sliceMeta->length == dataSlice->GetLength(), BIO_INNER_ERR, "Check data slice length failed.");
 
     // 3. 根据Slice的状态决定是否执行数据淘汰.
-    if (sliceRef->GetState() == SLICE_VALID) {
+    if (sliceRef->GetState() == SLICE_VALID && mUfsEnable) {
         auto &key = sliceMeta->key;
         bool isFromRCache = true;
         WCacheSlicePtr rcWriteSlice = nullptr;
@@ -714,7 +835,7 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
 
     // 4. 释放WCache的FLOW资源.
     IncreaseRef();
-    WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta](const WCacheSlicePtr &oldSlice) {
+    WCacheSliceRef::SetSliceCallback callback = [this, sliceRef, sliceMeta, batch](const WCacheSlicePtr &oldSlice) {
         auto &diskCache = mCacheTiers[WCACHE_DISK];
         auto ret = diskCache->Evict(oldSlice);
         if (UNLIKELY(ret != BIO_OK)) {
@@ -724,7 +845,8 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
         }
         if (sliceRef->GetState() == SLICE_VALID) {
             uint16_t ptId = CacheFlowIdManager::GetPtId(oldSlice->GetFlowId());
-            mEvictCallback(ptId, sliceMeta->key, sliceRef);
+            mEvictCallback(ptId, sliceMeta->key, sliceRef, batch);
+            sliceRef->SetState(SLICE_INVALID);
         }
         DecreaseRef();
     };
@@ -733,28 +855,30 @@ BResult WCache::EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMa
     ret = mSliceOperator.Copy((char *)sliceMeta.get(), metaSlice.Get());
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Slice copy failed, ret:" << ret << ".");
+        DecreaseRef();
     } else {
         sliceRef->SetSlice(nullptr, callback);
     }
     return ret;
 }
 
-BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront)
+BResult WCache::EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront, const UbsIoMetaEventBatchPtr &batch)
 {
     if (!isFront && !sliceRef->OpLock()) {
         return BIO_INNER_RETRY;
     }
-    BResult ret = EvictFromMemToDiskImpl(sliceRef, isFront);
+    BResult ret = mHasDiskCache ? EvictFromMemToDiskImpl(sliceRef, isFront) : EvictFromMemToDiscard(sliceRef, batch);
     sliceRef->OpUnLock();
     return ret;
 }
 
-BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront)
+BResult WCache::EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront,
+    const UbsIoMetaEventBatchPtr &batch)
 {
     if (!isFront && !sliceRef->OpLock()) {
         return BIO_INNER_RETRY;
     }
-    BResult ret = EvictFromDiskToUnderFsImpl(sliceRef, isMaster, isFront);
+    BResult ret = EvictFromDiskToUnderFsImpl(sliceRef, isMaster, isFront, batch);
     sliceRef->OpUnLock();
     return ret;
 }
@@ -765,7 +889,7 @@ BResult WCache::AllocRCacheResource(const WCacheSlicePtr &srcSlice, WCacheSliceP
     uint16_t ptId = CacheFlowIdManager::GetPtId(srcSlice->GetFlowId());
     void *memAddr = nullptr;
     BIO_TP_START(NO_PROCESS_RESOURCE_ENOUGH, 0);
-    bool enoughResource = mRCacheManager->IsResourceEnough(ptId);
+    bool enoughResource = (mRCacheManager != nullptr) && mRCacheManager->IsResourceEnough(ptId);
     if (enoughResource) {
         mRCacheManager->AllocResources(ptId, srcSlice->GetLength(), dstSlice);
     }
@@ -820,7 +944,7 @@ void WCache::FreeRCacheResource(bool &isRCache, WCacheSlicePtr &slice)
 
 void WCache::EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCacheSlicePtr &slice, bool &isRCache)
 {
-    if (UNLIKELY(!isRCache)) {
+    if (UNLIKELY(!isRCache || mRCacheManager == nullptr)) {
         return;
     }
     uint64_t ptId = CacheFlowIdManager::GetPtId(srcSlice->GetFlowId());
@@ -833,15 +957,19 @@ void WCache::EvictToRCache(const WCacheSlicePtr &srcSlice, const Key &key, WCach
 bool WCache::EvictMemSatisfiedCond()
 {
     auto config = BioConfig::Instance()->GetDaemonConfig();
-    uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
 
     uint64_t wcacheMemCap = (static_cast<uint64_t>(config.memWriteRatio) * config.memCap) / NO_10;
     uint64_t wcacheMemWaterSize = wcacheMemCap * config.wcacheMemEvictLevel / NO_100;
     uint64_t wcacheMemUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_MEMORY, 0);
+    bool memOverWater = wcacheMemUsed > wcacheMemWaterSize;
+    if (!mHasDiskCache) {
+        return memOverWater;
+    }
 
+    uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
     uint64_t wcacheDiskCap = diskCap * static_cast<uint64_t>(config.diskWriteRatio) / NO_10;
     uint64_t wcacheDiskUsed = FlowManager::GetCacheUsedSize(FLOW_WCACHE, FLOW_DISK, mDiskId);
-    if ((wcacheMemUsed > wcacheMemWaterSize) && (wcacheDiskUsed < wcacheDiskCap)) {
+    if (memOverWater && (wcacheDiskUsed < wcacheDiskCap)) {
         return true;
     } else {
         return false;
@@ -850,6 +978,10 @@ bool WCache::EvictMemSatisfiedCond()
 
 bool WCache::EvictDiskSatisfiedCond()
 {
+    if (!mHasDiskCache) {
+        return false;
+    }
+
     auto config = BioConfig::Instance()->GetDaemonConfig();
     uint64_t diskCap = static_cast<uint64_t>(config.diskCaps[mDiskId]);
 
@@ -865,6 +997,10 @@ bool WCache::EvictDiskSatisfiedCond()
 
 BResult WCache::EvictAllMemSliceToDisk()
 {
+    if (!mHasDiskCache) {
+        return EvictAllMemSliceToDiscard();
+    }
+
     bool isSatisfied = EvictMemSatisfiedCond();
     while (isSatisfied || mIsForced) {
         WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
@@ -887,8 +1023,48 @@ BResult WCache::EvictAllMemSliceToDisk()
     return BIO_OK;
 }
 
+BResult WCache::EvictAllMemSliceToDiscard()
+{
+    bool isSatisfied = EvictMemSatisfiedCond();
+    auto metaEventBatch = std::make_shared<UbsIoMetaEventBatch>();
+    ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
+    while (isSatisfied || mIsForced) {
+        WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
+        if (sliceRef == nullptr) {
+            break;
+        }
+        auto slice = sliceRef->GetSlice();
+        if (slice == nullptr) {
+            continue;
+        }
+        auto ret = EvictFromMemToDisk(sliceRef, false, metaEventBatch);
+        if (ret != BIO_OK) {
+            mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
+            LOG_WARN("Discard memory slice failed, need delayed internal retry, flowId:" << slice->GetFlowId() <<
+                ", IndexInFlow:" << slice->GetIndexInFlow());
+            mRetryCallback(mFlowId, WCACHE_MEMORY);
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
+            return ret;
+        }
+        isSatisfied = EvictMemSatisfiedCond();
+    }
+
+    if (mFlushMetaEventCallback != nullptr) {
+        mFlushMetaEventCallback(metaEventBatch);
+    }
+    mEvictRef[WCACHE_MEMORY].store(false);
+    return BIO_OK;
+}
+
 BResult WCache::EvictAllDiskSliceToUnderFs()
 {
+    if (!mHasDiskCache) {
+        mEvictRef[WCACHE_DISK].store(false);
+        return BIO_OK;
+    }
+
     bool isMaster;
     auto ret = mLocRole(static_cast<uint16_t>(mPtId), isMaster);
     ChkTrue(ret == BIO_OK, ret, "Get local role fail:" << ret << ", ptId:" << mPtId);
@@ -901,6 +1077,9 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         mRetryCallback(mFlowId, WCACHE_DISK);
         return BIO_OK;
     }
+
+    auto metaEventBatch = std::make_shared<UbsIoMetaEventBatch>();
+    ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
 
     uint64_t globEvictOffset = NO_MAX_VALUE64;
     if (!isMaster && !mIsForced) {
@@ -927,17 +1106,26 @@ BResult WCache::EvictAllDiskSliceToUnderFs()
         if (globEvictOffset < sliceEvictOffset) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
             mRetryCallback(mFlowId, WCACHE_DISK);
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
             return BIO_OK;
         }
-        auto ret = EvictFromDiskToUnderFs(sliceRef, isMaster);
+        auto ret = EvictFromDiskToUnderFs(sliceRef, isMaster, false, metaEventBatch);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
             mRetryCallback(mFlowId, WCACHE_DISK);
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
             return ret;
         }
         isSatisfied = EvictDiskSatisfiedCond();
     }
 
+    if (mFlushMetaEventCallback != nullptr) {
+        mFlushMetaEventCallback(metaEventBatch);
+    }
     mEvictRef[WCACHE_DISK].store(false);
     return BIO_OK;
 }
@@ -946,39 +1134,60 @@ BResult WCache::FlushMem()
 {
     LOG_TRACE("Flush mem, flowId:" << mFlowId);
     mCacheTiers[WCACHE_MEMORY]->SetIsNormal(false);
+    auto metaEventBatch = std::make_shared<UbsIoMetaEventBatch>();
+    ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     while (sliceRef != nullptr) {
         LOG_DEBUG("Expired clear memory, flowId:" << sliceRef->GetSlice()->GetFlowId() << ", IndexInFlow:" <<
             sliceRef->GetSlice()->GetIndexInFlow());
-        auto ret = EvictFromMemToDisk(sliceRef);
+        auto ret = EvictFromMemToDisk(sliceRef, false, metaEventBatch);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_MEMORY]->RetryEvictQueue(sliceRef);
             LOG_DEBUG("Flush memory fail, flowId:" << sliceRef->GetSlice()->GetFlowId() <<
                 ", IndexInFlow:" << sliceRef->GetSlice()->GetIndexInFlow());
             mEvictRef[WCACHE_MEMORY] = false;
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
             return ret;
         }
         sliceRef = mCacheTiers[WCACHE_MEMORY]->GetEvictSlice();
     }
 
+    if (mFlushMetaEventCallback != nullptr) {
+        mFlushMetaEventCallback(metaEventBatch);
+    }
     mEvictRef[WCACHE_MEMORY].store(false);
     return BIO_OK;
 }
 
 BResult WCache::FlushDisk()
 {
+    if (!mHasDiskCache || mCacheTiers[WCACHE_DISK] == nullptr) {
+        mEvictRef[WCACHE_DISK].store(false);
+        return BIO_OK;
+    }
+
     LOG_TRACE("Flush disk, flowId:" << mFlowId);
+    auto metaEventBatch = std::make_shared<UbsIoMetaEventBatch>();
+    ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
-        auto ret = EvictFromDiskToUnderFs(sliceRef, true);
+        auto ret = EvictFromDiskToUnderFs(sliceRef, true, false, metaEventBatch);
         if (ret != BIO_OK) {
             mCacheTiers[WCACHE_DISK]->RetryEvictQueue(sliceRef);
             mEvictRef[WCACHE_DISK] = false;
+            if (mFlushMetaEventCallback != nullptr) {
+                mFlushMetaEventCallback(metaEventBatch);
+            }
             return ret;
         }
         sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     }
 
+    if (mFlushMetaEventCallback != nullptr) {
+        mFlushMetaEventCallback(metaEventBatch);
+    }
     mEvictRef[WCACHE_DISK].store(false);
     return BIO_OK;
 }
@@ -1030,6 +1239,10 @@ BResult WCache::ExpiredClearMem()
 
 BResult WCache::ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef)
 {
+    if (!mHasDiskCache || mCacheTiers[WCACHE_DISK] == nullptr) {
+        return BIO_OK;
+    }
+
     IncreaseRef();
     WCacheSliceRef::SetSliceCallback callback = [this, sliceRef](const WCacheSlicePtr &oldSlice) {
         if (oldSlice == nullptr) {
@@ -1052,6 +1265,11 @@ BResult WCache::ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef)
 
 BResult WCache::ExpiredClearDisk()
 {
+    if (!mHasDiskCache || mCacheTiers[WCACHE_DISK] == nullptr) {
+        mEvictRef[WCACHE_DISK].store(false);
+        return BIO_OK;
+    }
+
     WCacheSliceRefPtr sliceRef = mCacheTiers[WCACHE_DISK]->GetEvictSlice();
     while (sliceRef != nullptr) {
         auto ret = ExpiredClearDiskImpl(sliceRef);

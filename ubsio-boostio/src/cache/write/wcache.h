@@ -36,15 +36,17 @@ public:
         : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
     {}
 
-    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)>;
+    using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
+        const UbsIoMetaEventBatchPtr &batch)>;
     using RetryCallback = std::function<void(uint64_t flowId, WCacheTierType cacheTier)>;
+    using FlushMetaEventCallback = std::function<void(const UbsIoMetaEventBatchPtr &batch)>;
 
     BResult Init(const ExecutorServicePtr evictService[MAX_WCACHE_TIER], const RCacheManagerPtr rCacheManager,
         bool isRecover);
     void Exit();
 
     void RegOp(GetLocDiskStatus getLocDiskStatus, CheckLocRole locRole, const GetGlobEvictOffset evictOffset,
-        EvictCallback evictCallback, const RetryCallback retryCallback);
+        EvictCallback evictCallback, const RetryCallback retryCallback, FlushMetaEventCallback flushMetaEventCallback);
 
     static void GetCacheResource(uint64_t &memCap, uint64_t &memUsed, uint64_t &diskCap, uint64_t &diskUsed);
 
@@ -162,13 +164,18 @@ public:
 
 private:
     BResult EvictAllMemSliceToDisk();
+    BResult EvictAllMemSliceToDiscard();
     BResult EvictAllDiskSliceToUnderFs();
 
-    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false);
-    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false);
+    BResult EvictFromMemToDisk(WCacheSliceRefPtr sliceRef, bool isFront = false,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
+    BResult EvictFromMemToDiscard(WCacheSliceRefPtr sliceRef, const UbsIoMetaEventBatchPtr &batch = nullptr);
+    BResult EvictFromDiskToUnderFs(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront = false,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
 
     BResult EvictFromMemToDiskImpl(WCacheSliceRefPtr sliceRef, bool isFront);
-    BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront);
+    BResult EvictFromDiskToUnderFsImpl(WCacheSliceRefPtr sliceRef, bool isMaster, bool isFront,
+        const UbsIoMetaEventBatchPtr &batch = nullptr);
 
     BResult EvictSlice(WCacheSliceRefPtr &sliceRef);
     void FreeRCacheResource(bool &isRCache, WCacheSlicePtr &slice);
@@ -187,7 +194,7 @@ private:
     BResult ExpiredClearDiskImpl(WCacheSliceRefPtr sliceRef);
     BResult ExpiredClearDisk();
 
-    void PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
+    BResult PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
@@ -208,9 +215,11 @@ private:
     std::atomic<bool> mIsNormal { true };
     bool mIsForced { false };
     bool mUfsEnable{ false };
+    bool mHasDiskCache{ true };
 
     EvictCallback mEvictCallback;
     RetryCallback mRetryCallback;
+    FlushMetaEventCallback mFlushMetaEventCallback;
 
     WCacheTierPtr mCacheTiers[MAX_WCACHE_TIER];
 

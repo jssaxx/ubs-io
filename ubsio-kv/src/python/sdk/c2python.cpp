@@ -34,7 +34,12 @@ NdsManager &g_ndsManager = NdsManager::Instance();
 
 int32_t PyKvcKvClientInit(int32_t dev_id)
 {
-    if (KvcOperationInit(dev_id) != 0) {
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcOperationInit(dev_id);
+    }
+    if (ret != 0) {
         return -1;
     }
     return 0;
@@ -54,7 +59,12 @@ int32_t PyKvcKvPutData(const std::string &key, py::bytes value)
     py::buffer_info buf = py::buffer(value).request();
     char *data = static_cast<char *>(buf.ptr);
     size_t len = buf.size;
-    if (KvcPutData(key, static_cast<void *>(data), len, 0) != 0) {
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcPutData(key, static_cast<void *>(data), len, 0);
+    }
+    if (ret != 0) {
         return -1;
     }
     return 0;
@@ -75,7 +85,12 @@ int32_t PyKvcKvGetData(const std::string &key, py::bytes value)
     char *data = static_cast<char *>(buf.ptr);
     size_t len = buf.size;
 
-    if (KvcGetData(key, static_cast<void *>(data), len, 0) != 0) {
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcGetData(key, static_cast<void *>(data), len, 0);
+    }
+    if (ret != 0) {
         return -1;
     }
     return 0;
@@ -91,7 +106,12 @@ bool PyKvcKvExist(const std::string &key)
         LOG_ERROR("keys length exceeds limit");
         return false;
     }
-    if (KvcExistKey(key, 0) != true) {
+    bool exists = false;
+    {
+        py::gil_scoped_release release;
+        exists = KvcExistKey(key, 0);
+    }
+    if (!exists) {
         return false;
     }
     return true;
@@ -107,7 +127,12 @@ int32_t PyKvcKvDelete(const std::string &key)
         LOG_ERROR("keys length exceeds limit");
         return -1;
     }
-    if (KvcDeleteKey(key, 0) != 0) {
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcDeleteKey(key, 0);
+    }
+    if (ret != 0) {
         return -1;
     }
     return 0;
@@ -124,7 +149,12 @@ uint32_t PyKvcKvGetLength(const std::string &key)
         return 0;
     }
     uint32_t len = 0;
-    if (KvcGetKeyLength(key, len, 0) != 0) {
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcGetKeyLength(key, len, 0);
+    }
+    if (ret != 0) {
         return 0;
     }
     return len;
@@ -132,6 +162,7 @@ uint32_t PyKvcKvGetLength(const std::string &key)
 
 void PyKvcKvExit(void)
 {
+    py::gil_scoped_release release;
     KvcExit();
 }
 
@@ -162,7 +193,11 @@ std::vector<int> PyKvcKvBatchPutData(const std::vector<std::string> &keys, std::
         data_ptrs.emplace_back(static_cast<void *>(data));
         lengths.emplace_back(static_cast<size_t>(length));
     }
-    int32_t ret = KvcBatchPutData(keys, data_ptrs, lengths, results, 0);
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcBatchPutData(keys, data_ptrs, lengths, results, 0);
+    }
     if (ret != 0) {
         LOG_ERROR("KvcBatchPutData failed");
     }
@@ -180,7 +215,11 @@ std::vector<int> PyKvcKvBatchDelete(const std::vector<std::string> &keys)
         LOG_ERROR("keys length exceeds limit");
         return results;
     }
-    int32_t ret = KvcBatchDeleteKey(keys, results, 0);
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcBatchDeleteKey(keys, results, 0);
+    }
     if (ret != 0) {
         LOG_ERROR("KvcBatchDeleteKey failed");
     }
@@ -199,7 +238,11 @@ std::vector<uint32_t> PyKvcKvBatchGetLength(const std::vector<std::string> &keys
         return lengths;
     }
     std::vector<int> results(keys.size(), -1);
-    int32_t ret = KvcBatchGetLengthKey(keys, lengths, results, 0);
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcBatchGetLengthKey(keys, lengths, results, 0);
+    }
     if (ret != 0) {
         LOG_ERROR("KvcBatchGetLengthKey failed");
     }
@@ -220,7 +263,6 @@ std::vector<int> PyKvcKvBatchGetData(const std::vector<std::string> &keys, std::
     }
     std::vector<void *> data_ptrs;
     std::vector<size_t> lengths;
-    std::vector<void *> getDataPtr(keys.size(), nullptr);
     data_ptrs.reserve(values.size());
     lengths.reserve(values.size());
 
@@ -235,15 +277,14 @@ std::vector<int> PyKvcKvBatchGetData(const std::vector<std::string> &keys, std::
         data_ptrs.emplace_back(static_cast<void *>(data));
         lengths.emplace_back(static_cast<size_t>(length));
     }
-    ret = KvcBatchGetData(keys, getDataPtr.data(), lengths, results, 0);
+    {
+        py::gil_scoped_release release;
+        ret = KvcBatchGetData(keys, data_ptrs.data(), lengths, results, 0);
+    }
     if (ret != 0) {
         LOG_ERROR("KvcBatchGetData failed");
         return results;
     }
-    for (uint32_t i = 0; i < keys.size(); i++) {
-        std::memcpy(reinterpret_cast<void *>(data_ptrs[i]), static_cast<uint8_t *>(getDataPtr[i]), lengths[i]);
-    }
-    KvcBatchFreeGetAddress(getDataPtr.data(), keys.size());
     return results;
 }
 
@@ -264,7 +305,11 @@ std::vector<bool> PyKvcKvBatchExist(const std::vector<std::string> &keys)
         return result;
     }
     std::unique_ptr<bool[]> resultRelease(results);
-    int32_t ret = KvcBatchExistKey(keys, results, 0);
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = KvcBatchExistKey(keys, results, 0);
+    }
     if (ret != 0) {
         LOG_ERROR("KvcBatchExistKey failed");
     }
@@ -276,21 +321,25 @@ std::vector<bool> PyKvcKvBatchExist(const std::vector<std::string> &keys)
 
 int PyKvcNdsInit(int device)
 {
+    py::gil_scoped_release release;
     return g_ndsManager.Initialize(device);
 }
 
 int PyKvcNdsUninit()
 {
+    py::gil_scoped_release release;
     return g_ndsManager.UnInitialize();
 }
 
 int PyKvcNdsRegmem(uintptr_t addr, size_t length)
 {
+    py::gil_scoped_release release;
     return g_ndsManager.RegisterMemory(reinterpret_cast<const void *>(addr), length);
 }
 
 int PyKvcNdsUnregmem(uintptr_t addr, size_t length)
 {
+    py::gil_scoped_release release;
     return g_ndsManager.UnRegisterMemory(reinterpret_cast<const void *>(addr), length);
 }
 
@@ -298,6 +347,7 @@ int PyKvcNdsRead(const std::string &key,
                  const std::vector<uintptr_t> &buffers,
                  const std::vector<size_t> &sizes)
 {
+    py::gil_scoped_release release;
     return g_ndsManager.DirectRead(key, buffers, sizes);
 }
 
@@ -305,13 +355,14 @@ int PyKvcNdsBatchRead(const std::vector<std::string> &keys,
                       const std::vector<std::vector<uintptr_t>> &buffers,
                       const std::vector<std::vector<size_t>> &sizes)
 {
+    py::gil_scoped_release release;
     return g_ndsManager.BatchDirectRead(keys, buffers, sizes);
 }
 
 PYBIND11_MODULE(c2python_sdk, m)
 {
     m.doc() = "Python/C API for python sdk";
-    m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id"));
+    m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id") = -1);
     m.def("KvExit", &PyKvcKvExit);
     m.def("KvPut", &PyKvcKvPutData, py::arg("key"), py::arg("value"));
     m.def("KvGet", &PyKvcKvGetData, py::arg("key"), py::arg("value"));

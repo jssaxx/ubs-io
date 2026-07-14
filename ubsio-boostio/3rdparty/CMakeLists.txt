@@ -1,4 +1,5 @@
 add_subdirectory(libboundscheck)
+add_subdirectory(liburing)
 add_subdirectory(ubs-comm)
 add_subdirectory(spdlog)
 

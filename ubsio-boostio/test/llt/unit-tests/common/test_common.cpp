@@ -16,6 +16,10 @@
 #include "message.h"
 #include "bio_file_util.h"
 #include "bio_log.h"
+#include <cstdlib>
+#include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 
 using namespace ock::bio;
 
@@ -58,4 +62,22 @@ TEST_F(TestCommon, test_copy_key_fail)
 
     auto ret = StrUtil::StartWith("123.5", "1");
     EXPECT_EQ(ret, true);
+}
+
+TEST_F(TestCommon, test_make_dir_recursive_with_trailing_slash_return_ok)
+{
+    char parentTemplate[] = "/tmp/boostio_file_util_XXXXXX";
+    char *parent = mkdtemp(parentTemplate);
+    ASSERT_NE(parent, nullptr);
+
+    std::string logDir = std::string(parent) + "/boostio/";
+    EXPECT_TRUE(FileUtil::MakeDirRecursive(logDir, S_IRWXU | S_IRGRP | S_IXGRP));
+
+    struct stat dirStat {};
+    ASSERT_EQ(stat(logDir.c_str(), &dirStat), 0);
+    EXPECT_TRUE(S_ISDIR(dirStat.st_mode));
+    EXPECT_NE(dirStat.st_mode & S_IXUSR, 0U);
+
+    EXPECT_EQ(rmdir(logDir.c_str()), 0);
+    EXPECT_EQ(rmdir(parent), 0);
 }

@@ -26,5 +26,7 @@ add_library(bio_bdm STATIC ${COMMON_SRCS} ${ARCH_SRCS})
 target_include_directories(bio_bdm PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/common>
         $<BUILD_INTERFACE:${PLAT_INCLUDE_DIR}>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/htracer>
         )
+target_link_libraries(bio_bdm PUBLIC uring)
 target_compile_options(bio_bdm PUBLIC -D_GNU_SOURCE)

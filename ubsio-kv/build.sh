@@ -7,12 +7,13 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--build_boostio <ON|OFF>]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release"
     echo " 2 ./build.sh -t debug"
     echo " 3 ./build.sh -t debug --ut"
+    echo " 4 ./build.sh -t release --build_boostio ON // Build ubsio-boostio before ubsio-kv"
     echo
     exit 1;
 }
@@ -20,8 +21,10 @@ usage() {
 CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BOOSTIO_DIR="$(realpath "${PROJ_DIR}/../ubsio-boostio")"
+BOOSTIO_INCLUDE_DIR="${BOOSTIO_DIR}/src/sdk"
 BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
+BUILD_BOOSTIO=OFF
 BUILD_TYPE=release
 arch=$(uname -m)
 
@@ -47,6 +50,12 @@ while true; do
         --ut )
             BUILD_UT=ON
             shift ;;
+        --build_boostio )
+            boostio_flag="$2"
+            boostio_flag=${boostio_flag^^}
+            [[ "$boostio_flag" != "ON" && "$boostio_flag" != "OFF" ]] && echo "Invalid build_boostio flag $2" && usage
+            BUILD_BOOSTIO=$boostio_flag
+            shift 2 ;;
         -h | -help )
             usage
             exit 0
@@ -72,10 +81,10 @@ if [[ "$BUILD_TYPE" == "clean" ]]; then
     exit 0
 fi
 
-if [[ ! -d "${BOOSTIO_DIR}/dist/boostio/lib" ]]; then
-    echo "ubsio-boostio not found, building ubsio-boostio first..."
+if [[ "$BUILD_BOOSTIO" == "ON" ]]; then
+    echo "building ubsio-boostio first..."
     cd ${BOOSTIO_DIR}
-    bash build.sh -t ${BUILD_TYPE}
+    bash build.sh -t ${BUILD_TYPE} --build_kv OFF
     if [ $? -ne 0 ]; then
         echo "Failed to build ubsio-boostio."
         exit 1
@@ -84,7 +93,13 @@ if [[ ! -d "${BOOSTIO_DIR}/dist/boostio/lib" ]]; then
     cd ${PROJ_DIR}
 fi
 
+if [[ ! -f "${BOOSTIO_INCLUDE_DIR}/bio_c.h" ]]; then
+    echo "bio_c.h not found at ${BOOSTIO_INCLUDE_DIR}."
+    exit 1
+fi
+
 CMAKE_FLAGS=""
+CMAKE_FLAGS+="-DUBSIO_BOOSTIO_INCLUDE_DIR=${BOOSTIO_INCLUDE_DIR} "
 
 if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
@@ -126,7 +141,12 @@ rm -rf *.egg-info/
 python3 setup.py bdist_wheel --py-limited-api=cp37
 
 mkdir -p ${PROJ_DIR}/dist/pkg
-\cp -rf ${PROJ_DIR}/python_whl/pykvc/dist/pykvc-1.0.0-cp37-abi3-linux_aarch64.whl ${PROJ_DIR}/dist/pkg
+wheel_file=$(find ${PROJ_DIR}/python_whl/pykvc/dist -maxdepth 1 -name 'pykvc-1.0.0-cp37-abi3-linux_*.whl' | head -n 1)
+if [[ -z "${wheel_file}" ]]; then
+    echo "Failed to find pykvc wheel package."
+    exit 1
+fi
+\cp -rf ${wheel_file} ${PROJ_DIR}/dist/pkg
 
 echo ""
 echo "Build completed successfully!"
