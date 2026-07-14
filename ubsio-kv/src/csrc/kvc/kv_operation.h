@@ -65,6 +65,9 @@ public:
     int32_t BatchGetLengthKey(const std::vector<std::string> &key, std::vector<uint32_t> &lengths, std::vector<int> &results);    
     inline int32_t InitKvExecutor(void)
     {
+        if (mKvExecutor != nullptr) {
+            return UBSIO_KVC_OK;
+        }
         mKvExecutor = ExecutorService::Create(KV_THREAD_NUM, KV_QUEUE_SIZE);
         if (UNLIKELY(mKvExecutor == nullptr)) {
             LOG_ERROR("Failed to create execution service for get kv, probably out of memory");
@@ -76,6 +79,14 @@ public:
             return UBSIO_KVC_ERR;
         }
         return UBSIO_KVC_OK;
+    }
+
+    inline void ExitKvExecutor(void)
+    {
+        if (mKvExecutor != nullptr) {
+            mKvExecutor->Stop();
+            mKvExecutor = nullptr;
+        }
     }
 
 private:

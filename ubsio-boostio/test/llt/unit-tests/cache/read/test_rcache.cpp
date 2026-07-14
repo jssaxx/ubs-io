@@ -49,6 +49,33 @@ static constexpr uint64_t G_PT_ID = 0;
 static constexpr uint64_t G_PT_V = 1;
 static constexpr Key G_KEY = "123123key";
 static constexpr char *G_VALUE = "test/read/cache/data";
+static constexpr uint16_t G_OPTIONAL_SSD_PT_ID = 13;
+
+namespace {
+class DaemonConfigGuard {
+public:
+    DaemonConfigGuard()
+    {
+        auto &config = const_cast<BioConfig::DaemonConfig &>(BioConfig::Instance()->GetDaemonConfig());
+        mConfig = &config;
+        mOrigin = config;
+    }
+
+    ~DaemonConfigGuard()
+    {
+        *mConfig = mOrigin;
+    }
+
+    BioConfig::DaemonConfig &Get()
+    {
+        return *mConfig;
+    }
+
+private:
+    BioConfig::DaemonConfig *mConfig{ nullptr };
+    BioConfig::DaemonConfig mOrigin;
+};
+}
 
 static auto rWriter = [](const SlicePtr &from, const SlicePtr &to) -> BResult {
     CacheSliceOperator sliceOperator;
@@ -202,6 +229,54 @@ TEST_F(TestRCache, test_rcache_load_ok)
 
     ret = gRCacheManager->Delete(G_PT_ID, key);
     EXPECT_EQ(ret, BIO_OK);
+}
+
+TEST_F(TestRCache, test_rcache_without_disk_cache_evict_memory_to_discard)
+{
+    LOG_INFO("test_rcache_without_disk_cache_evict_memory_to_discard");
+    DaemonConfigGuard configGuard;
+    auto &config = configGuard.Get();
+    config.hasDiskCache = false;
+    config.enableRCache = true;
+    config.memCap = NO_MAX_VALUE64 / NO_10;
+    config.memReadRatio = NO_5;
+    config.memWriteRatio = NO_5;
+    config.diskCaps.clear();
+
+    auto ret = gRCacheManager->CreateRCache(G_OPTIONAL_SSD_PT_ID, G_PT_V, 0);
+    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_TRUE(gRCacheManager->IsResourceEnough(G_OPTIONAL_SSD_PT_ID));
+
+    uint64_t len = strlen(G_VALUE) + 1;
+    WCacheSlicePtr slicePtr = nullptr;
+    ret = gRCacheManager->AllocResources(G_OPTIONAL_SSD_PT_ID, len, slicePtr);
+    EXPECT_EQ(ret, BIO_OK);
+    ASSERT_NE(slicePtr, nullptr);
+    ret = gSlicerOperator.Copy(G_VALUE, slicePtr.Get());
+    EXPECT_EQ(ret, BIO_OK);
+
+    Key key = "test_rcache_without_disk_cache";
+    ret = gRCacheManager->Put(G_OPTIONAL_SSD_PT_ID, key, slicePtr);
+    EXPECT_EQ(ret, BIO_OK);
+
+    uint64_t haveEvictData = 0;
+    auto rcache = gRCacheManager->GetRCacheInstanceByPtId(G_OPTIONAL_SSD_PT_ID);
+    ASSERT_NE(rcache, nullptr);
+    ret = rcache->EvictMemData(len, haveEvictData);
+    EXPECT_EQ(ret, BIO_OK);
+    EXPECT_EQ(haveEvictData, len);
+
+    std::vector<char> buffer(len);
+    FlowAddr flowAddr;
+    flowAddr.chunkId = reinterpret_cast<uint64_t>(buffer.data());
+    flowAddr.chunkOffset = 0;
+    flowAddr.chunkLen = len;
+    std::vector<FlowAddr> addrVec = { flowAddr };
+    RCacheSlicePtr readSlicePtr = MakeRef<RCacheSlice>(G_OPTIONAL_SSD_PT_ID, len, addrVec, FLOW_MEMORY);
+    ASSERT_NE(readSlicePtr, nullptr);
+    uint64_t realLen = 0;
+    ret = gRCacheManager->Get(G_OPTIONAL_SSD_PT_ID, key, 0, readSlicePtr, rWriter, realLen);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
 }
 
 TEST_F(TestRCache, test_rcache_delete_ok)
@@ -489,4 +564,3 @@ TEST_F(TestRCache, test_rcache_recover_return_err2)
     BioHvsDeactiveTracePoint(0, "FLOW_SEAL_OK");
     BioHvsDeactiveTracePoint(0, "FLOW_DESTROY_OBJECT_ERR");
 }
-

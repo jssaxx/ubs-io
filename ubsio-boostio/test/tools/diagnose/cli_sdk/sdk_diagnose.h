@@ -23,6 +23,7 @@ public:
     static int Initialize() noexcept;
     static void Destroy() noexcept;
     static int32_t LoadSymbols();
+    static void PrintLongText(const std::string &text);
 
     static void BioSdkDebugProcess(int argc, char *argv[]) noexcept;
     static void BioSdkDebugHelp(char *command, int detail) noexcept;
@@ -34,6 +35,7 @@ public:
     static void HandleGet(const std::vector<std::string> &cmds);
     static void HandleList(const std::vector<std::string> &cmds);
     static void HandleStat(const std::vector<std::string> &cmds);
+    static void HandleExist(const std::vector<std::string> &cmds);
     static void HandleLoad(const std::vector<std::string> &cmds);
     static void HandleDelete(const std::vector<std::string> &cmds);
     static void HandleAddDisk(const std::vector<std::string> &cmds);
@@ -47,6 +49,8 @@ public:
     static void* PerfTestPutImpl(void *param);
     static void* PerfTestGetImpl(void *param);
     static void HandleBatchGet(const std::vector<std::string> &cmds);
+    static void HandleBatchGetPerf(const std::vector<std::string> &cmds);
+    static void HandleBatchGetMixPerf(const std::vector<std::string> &cmds);
     static void HandlePerf(const std::vector<std::string> &cmds);
 
 private:
@@ -55,6 +59,7 @@ private:
     static CliRegCmdFuncPtr mRegOp;
     static CliUnRegCmdFuncPtr mUnRegOp;
     static CliPrintBufFuncPtr mPrintOp;
+    static CliSendBufFuncPtr mSendOp;
 };
 }
 }

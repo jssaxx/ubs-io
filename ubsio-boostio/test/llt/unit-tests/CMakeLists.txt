@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+﻿cmake_minimum_required(VERSION 3.16)
 if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -74,7 +74,7 @@ target_include_directories(bio_test PRIVATE
 
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group
-        pthread dl rt aio  bio_underfs rados
+        pthread dl rt uring bio_underfs rados
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64/libgtest.a
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)

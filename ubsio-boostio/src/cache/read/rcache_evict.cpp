@@ -109,15 +109,19 @@ void *RCacheEvict::Worker(void *context)
 BResult RCacheEvict::Initialize()
 {
     RCacheEvictWorkerParam *para = nullptr;
+    auto hasDiskCache = BioConfig::Instance()->GetDaemonConfig().hasDiskCache;
 
     workStatus.store(true);
-    for (int32_t tier = 0; tier < READ_CACHE_TIER_BUTT; tier++) {
+    int32_t tierCount = hasDiskCache ? READ_CACHE_TIER_BUTT : READ_CACHE_TIER_MEM + 1;
+    for (int32_t tier = 0; tier < tierCount; tier++) {
         for (uint32_t i = 0; i < READ_CACHE_EVICT_SERVICE_NUM; i++) {
             BIO_TP_START(RCACHE_EVICT_PARAM_FAIL, 0);
             para = new (std::nothrow) RCacheEvictWorkerParam();
             BIO_TP_END;
             if (para == nullptr) {
                 LOG_ERROR("Alloc read cache para memory failed");
+                workStatus.store(false);
+                RecycleThreadResources();
                 return BIO_ALLOC_FAIL;
             }
 
@@ -134,6 +138,8 @@ BResult RCacheEvict::Initialize()
             } else {
                 LOG_ERROR("Create thread for read cache evict failed");
                 delete para;
+                workStatus.store(false);
+                RecycleThreadResources();
                 return BIO_ALLOC_FAIL;
             }
         }

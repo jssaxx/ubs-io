@@ -11,6 +11,7 @@
  */
 
 #include <numeric>
+#include <utility>
 #include "ubsio_kvc_operation.h"
 #include "ubsio_kvc_stream_manager.h"
 #include "dl_acl_api.h"
@@ -31,6 +32,10 @@ KvcInstance &KvcInstance::Instance() noexcept
 
 KvcError KvcInstance::Initialize(int32_t device) noexcept
 {
+    if (m_readExecutor != nullptr) {
+        m_deviceId = device;
+        return UBSIO_KVC_OK;
+    }
     // 创建batch read的executor线程池.
     m_readExecutor = ExecutorService::Create(KVC_INSTANCE_THREAD_NUM);
     if (m_readExecutor == nullptr) {
@@ -44,8 +49,75 @@ KvcError KvcInstance::Initialize(int32_t device) noexcept
         return UBSIO_KVC_ERR;
     }
 
+    {
+        std::lock_guard<std::mutex> lock(m_freeMutex);
+        m_stoppingFreeTasks = false;
+    }
     m_deviceId = device;
     return UBSIO_KVC_OK;
+}
+
+void KvcInstance::UnInitialize() noexcept
+{
+    ExecutorServicePtr executor = nullptr;
+    {
+        std::unique_lock<std::mutex> lock(m_freeMutex);
+        m_stoppingFreeTasks = true;
+        m_freeCv.wait(lock, [this]() { return m_pendingFreeTasks == 0; });
+        executor = m_readExecutor;
+        m_readExecutor = nullptr;
+    }
+    if (executor != nullptr) {
+        executor->Stop();
+    }
+    m_deviceId = -1;
+}
+
+void KvcInstance::FreeDramAddrs(std::vector<void *> dramAddrsVector, uint32_t keysCount) noexcept
+{
+    auto freeTask = [dramAddrsVector = std::move(dramAddrsVector), keysCount]() mutable {
+        auto ret = KvcBatchFreeGetAddress(dramAddrsVector.data(), keysCount);
+        if (UNLIKELY(ret != UBSIO_KVC_OK)) {
+            LOG_ERROR("Kvc batch free dram failed, ret:" << ret);
+        }
+    };
+
+    ExecutorServicePtr executor = nullptr;
+    bool runSync = false;
+    {
+        std::lock_guard<std::mutex> lock(m_freeMutex);
+        if (m_readExecutor == nullptr || m_stoppingFreeTasks) {
+            runSync = true;
+        } else {
+            executor = m_readExecutor;
+            m_pendingFreeTasks++;
+        }
+    }
+    if (runSync) {
+        freeTask();
+        return;
+    }
+
+    bool queued = executor->Execute([this, task = std::move(freeTask)]() mutable {
+        task();
+        {
+            std::lock_guard<std::mutex> lock(m_freeMutex);
+            if (m_pendingFreeTasks > 0) {
+                m_pendingFreeTasks--;
+            }
+        }
+        m_freeCv.notify_all();
+    });
+    if (!queued) {
+        {
+            std::lock_guard<std::mutex> lock(m_freeMutex);
+            if (m_pendingFreeTasks > 0) {
+                m_pendingFreeTasks--;
+            }
+        }
+        m_freeCv.notify_all();
+        freeTask();
+    }
 }
 
 KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
@@ -83,6 +155,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     void* stream = KvcStreamManager::GetAclStream();
     if (UNLIKELY(stream == nullptr)) {
         LOG_ERROR("Kv cache stream is nullptr, can not do memcpy");
+        FreeDramAddrs(std::move(dramAddrsVector), keysCount);
         return UBSIO_KVC_ERR;
     }
     for (uint32_t i = 0; i < keysCount; ++i) {
@@ -112,12 +185,7 @@ KvcError KvcInstance::Read(const std::vector<std::string> &keyVector,
     }
 
     // 3.3 释放dram地址
-    m_readExecutor->Execute([dramAddrsVector, keysCount]()->void {
-        auto ret = KvcBatchFreeGetAddress(const_cast<void **>(dramAddrsVector.data()), keysCount);
-        if (UNLIKELY(ret != UBSIO_KVC_OK)) {
-            LOG_ERROR("Kvc batch free dram failed, ret:" << ret);
-        }
-    });
+    FreeDramAddrs(std::move(dramAddrsVector), keysCount);
     return (aclRet == 0) ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 

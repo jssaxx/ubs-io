@@ -140,7 +140,9 @@ public:
 
     BResult Initialize(UpdateView updateView, uint32_t scene, uint32_t alignSize, uint32_t timeOut, bool enableCrc);
     BResult Start();
+    BResult RecoverDataMessageMem();
 
+    void Exit();
     void FreeIoStrategy();
 
     explicit MirrorClient(WorkerMode mode) : mMode(mode), mCurNodeTimes(0), mCurPtTimes(0), mNetProtocol(0) {}
@@ -336,7 +338,18 @@ private:
 
     BResult CreateDataMessageMemLocal();
     BResult CreateDataMessageMemRemote();
+    BResult CreateDataMessageMemStandalone();
     BResult CreateDataMessageMem();
+    void DestroyDataMessageMem();
+    BResult AllocDataMessageBuffer(uint64_t length, uintptr_t &address);
+    void FreeDataMessageBuffer(uintptr_t &address);
+    void FillBatchGetBufferInfo(GetKeyInfo &keyInfo, uintptr_t address, uint64_t length);
+    inline bool IsDataMsgMemAddr(uintptr_t address) const
+    {
+        return mDataMsgMemAddr != nullptr && mDataMsgMemSize != 0 &&
+               address >= reinterpret_cast<uintptr_t>(mDataMsgMemAddr) &&
+               address < reinterpret_cast<uintptr_t>(mDataMsgMemAddr) + mDataMsgMemSize;
+    }
 
     void InitCallbackCtx(ClientCallbackCtx &cbCtx, uint32_t quota);
     void InitAsyncPutCbCtx(AsyncPutCbCtx &cbCtx, uint32_t quota);
@@ -480,6 +493,8 @@ private:
     bool mEnableCrc { false };
     BioQosPtr mBioQos = nullptr;
     uint8_t *mDataMsgMemAddr = nullptr;
+    uint64_t mDataMsgMemSize = 0;
+    int32_t mDataMsgMemFd = -1;
     uint64_t mDataMsgMemBlockSize = NO_4096 * NO_1024;
     MemoryRegion mDataMsgMemMr;
     NetBlockPoolPtr mDataMsgMemPool = nullptr;

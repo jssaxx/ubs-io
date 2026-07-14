@@ -59,9 +59,13 @@ const auto SEGMENT_SIZE_MB = std::make_pair("bio.segment.size_in_mb", 4);
 const auto MEM_CAPACITY_SIZE_GB = std::make_pair("bio.mem.size_in_gb", 50);
 
 const auto DISK_CONF_PATH = std::make_pair("bio.disk.path", "xxx:xxx:xxx");
+const auto BDM_IO_ENGINE = std::make_pair("bio.bdm.io_engine", "sync");
+const auto STANDALONE_DEVICE_COUNT = std::make_pair("bio.standalone.device_count", 0);
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("bio.sdkmem.size_in_mb", 5120);
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.evict_water_level", 0);
+
+const auto WCACHE_DISK_EVICT_WATER_LEVEL = std::make_pair("bio.wcache.disk_evict_water_level", 100);
 
 const auto RCACHE_EVICT_WATER_LEVEL = std::make_pair("bio.rcache.evict_water_level", 90);
 
@@ -76,6 +80,15 @@ const auto WORK_IO_ALIGNSIZE = std::make_pair("bio.work.io.alignsize", 1);
 const auto WORK_IO_TIMEOUT = std::make_pair("bio.work.io.timeout", 60);
 const auto WORK_NET_TIMEOUT = std::make_pair("bio.work.net.timeout", 20);
 const auto BATCH_GET_THREAD_NUM = std::make_pair("bio.batchget.thread.num", 32);
+const auto BDM_BATCH_READ_WINDOW_KEYS = std::make_pair("bio.bdm.batch_read.window_keys", 128);
+const auto BDM_BATCH_READ_WINDOW_BYTES_MB = std::make_pair("bio.bdm.batch_read.window_bytes_mb", 64);
+const auto BDM_BATCH_READ_PIPELINE_DEPTH = std::make_pair("bio.bdm.batch_read.pipeline_depth", 4);
+const auto BDM_BATCH_READ_TEMP_POOL_MB = std::make_pair("bio.bdm.batch_read.temp_pool_mb", 0);
+const auto BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL =
+    std::make_pair("bio.bdm.batch_read.standalone.use_scratch_pool", "true");
+
+const auto WCACHE_PARTITION_COUNT = std::make_pair("bio.wcache.partition_count", 1);
+const auto WCACHE_COMPACTION_THRESHOLD = std::make_pair("bio.wcache.compaction_threshold", 30);
 
 const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("bio.underfs.file_system_type", "ceph");
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("bio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
@@ -139,7 +152,7 @@ public:
         uint64_t memCap = 53687091200; // 50GB
         uint64_t sdkPoolSize = 1024 * 1024 * 1;
         uint64_t wcacheMemEvictLevel = 0;
-        uint64_t wcacheDiskEvictLevel = 0;
+        uint64_t wcacheDiskEvictLevel = 100;
         uint64_t rcacheMemEvictLevel = 90;
         uint64_t rcacheDiskEvictLevel = 90;
         std::string memReadWriteRatio = "5:5";
@@ -150,18 +163,29 @@ public:
         long diskWriteRatio = 5;
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
+        std::string bdmIoEngine = "sync";
+        uint32_t standaloneDeviceCount = 0;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
         uint32_t workIoTimeOut = 60;
         uint32_t workNetTimeOut = 20;
         uint32_t batchGetThreadNum = 32;
+        uint32_t bdmBatchReadWindowKeys = 128;
+        uint32_t bdmBatchReadWindowBytesMb = 64;
+        uint32_t bdmBatchReadPipelineDepth = 4;
+        uint32_t bdmBatchReadTempPoolMb = 0;
+        bool bdmBatchReadStandaloneUseScratchPool = true;
         bool enableCrc = false;
         bool enableTrace = true;
         bool enableQos = true;
+        bool hasDiskCache = true;
+        bool enableRCache = true;
         bool enablePrometheus = false;
         bool enableCli = false;
         std::string listenAddress = "127.0.0.1:7204";
         uint32_t scrapeIntervalSec = 15;
+        uint32_t wcachePartitionCount = 1;
+        uint32_t wcacheCompactionThreshold = 30;
     };
 
     struct ClientConfig {
@@ -193,9 +217,9 @@ public:
         return instance;
     }
 
-    void BakFileProcess(const std::string &homePath);
+    void BakFileProcess(const std::string &configPath);
 
-    BResult Initialize(const std::string &homePath);
+    BResult Initialize(const std::string &configPath);
 
     void LoadDefaultConf() override;
 
@@ -222,6 +246,15 @@ public:
     const UnderFsConfig &GetUnderFsConfig() const noexcept
     {
         return mUnderFsConfig;
+    }
+
+    void SetStandaloneDeviceInfo(uint32_t deviceId);
+
+    BResult SelectStandaloneDiskByDeviceInfo();
+
+    uint32_t GetStandaloneDeviceId() const noexcept
+    {
+        return mStandaloneDeviceInfo.deviceId;
     }
 
     uint64_t ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level);
@@ -261,13 +294,27 @@ private:
 
     BResult AutoConfigUnderFs(const ConfigurationPtr &conf);
 
+    BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
+
+    BResult SelectStandaloneDisksByDeviceCount(uint16_t diskNum);
+
+    BResult ApplyStandaloneDiskSelection(const std::vector<uint32_t> &diskIndexes, uint16_t configuredDiskNum,
+        const std::string &selectionLog);
+
 private:
+    struct StandaloneDeviceInfo {
+        bool configured{ false };
+        uint32_t deviceId{ 0 };
+    };
+
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     DaemonConfig mDaemonConfig;
     ClientConfig mClientConfig;
     UnderFsConfig mUnderFsConfig;
     bool mInited{ false };
+    uint32_t mStandaloneDiskIndex{ 0 };
+    StandaloneDeviceInfo mStandaloneDeviceInfo;
 };
 }
 }

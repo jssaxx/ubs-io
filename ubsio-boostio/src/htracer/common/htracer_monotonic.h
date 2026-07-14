@@ -13,6 +13,7 @@
 #ifndef HTRACER_MONOTONIC_H
 #define HTRACER_MONOTONIC_H
 
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <string>

@@ -11,14 +11,12 @@
  */
 
 #include "test_underfs.h"
-#include <mockcpp/mockcpp.hpp>
 #include "gtest/gtest.h"
-#include "rados/librados.h"
 #include "bio_err.h"
 #include "bio_types.h"
 #include "tracepoint.h"
 #include "hdfs_system.h"
-#include "ceph_system.h"
+#include "dl_ceph_system.h"
 #include "bio_log.h"
 #include "file_system_factory.h"
 
@@ -35,6 +33,7 @@ void TestUnderFs::SetUp()
         return;
     }
     gSetup = true;
+    Stub();
     return;
 }
 
@@ -81,20 +80,23 @@ static int RadosStatStub(rados_ioctx_t io, const char *o, uint64_t *psize, time_
 
 void TestUnderFs::Stub()
 {
-    MOCKER(rados_create2).stubs().will(invoke(RadosCreateStub));
-    MOCKER(rados_conf_read_file).stubs().will(returnValue(0));
-    MOCKER(rados_connect).stubs().will(returnValue(0));
-    MOCKER(rados_shutdown).stubs().will(invoke(RadosShutdownStub));
-    MOCKER(rados_pool_lookup).stubs().will(returnValue(0));
-    MOCKER(rados_ioctx_create).stubs().will(invoke(IoctxCreateStub));
-    MOCKER(rados_ioctx_destroy).stubs().will(invoke(IoctxCdestroyStub));
-    MOCKER(rados_read).stubs().will(returnValue(0));
-    MOCKER(rados_write).stubs().will(returnValue(0));
-    MOCKER(rados_stat).stubs().will(invoke(RadosStatStub));
-    MOCKER(rados_remove).stubs().will(returnValue(0));
-    MOCKER(rados_nobjects_list_next).stubs().will(returnValue(-ENOENT));
-    MOCKER(rados_nobjects_list_open).stubs().will(returnValue(0));
-    MOCKER(rados_nobjects_list_close).stubs().will(invoke(RadosListCloseStub));
+    auto ceph = static_cast<DlCephSystem *>(g_cephInstancePtr.get());
+    ceph->SetRadosCreate2(reinterpret_cast<DlCephSystem::RadosCreate2Fn>(RadosCreateStub));
+    ceph->SetRadosConfReadFile([](rados_t, const char *) { return 0; });
+    ceph->SetRadosConnect([](rados_t) { return 0; });
+    ceph->SetRadosShutdown(reinterpret_cast<DlCephSystem::RadosShutdownFn>(RadosShutdownStub));
+    ceph->SetRadosPoolLookup([](rados_t, const char *) { return 0; });
+    ceph->SetRadosPoolCreate([](rados_t, const char *) { return 0; });
+    ceph->SetRadosIoCtxCreate(reinterpret_cast<DlCephSystem::RadosIoCtxCreateFn>(IoctxCreateStub));
+    ceph->SetRadosIoCtxDestroy(reinterpret_cast<DlCephSystem::RadosIoCtxDestroyFn>(IoctxCdestroyStub));
+    ceph->SetRadosRead([](rados_ioctx_t, const char *, char *, size_t, uint64_t) { return 0; });
+    ceph->SetRadosWrite([](rados_ioctx_t, const char *, const char *, size_t, uint64_t) { return 0; });
+    ceph->SetRadosStat(reinterpret_cast<DlCephSystem::RadosStatFn>(RadosStatStub));
+    ceph->SetRadosRemove([](rados_ioctx_t, const char *) { return 0; });
+    ceph->SetRadosNobjectsListNext(
+        [](rados_list_ctx_t, const char **, const char **, const char **) { return -ENOENT; });
+    ceph->SetRadosNobjectsListOpen([](rados_ioctx_t, rados_list_ctx_t *) { return 0; });
+    ceph->SetRadosNobjectsListClose(reinterpret_cast<DlCephSystem::RadosNobjectsListCloseFn>(RadosListCloseStub));
 }
 
 TEST_F(TestUnderFs, test_underfs_ceph_init_creat_fail)
@@ -253,7 +255,7 @@ TEST_F(TestUnderFs, test_underfs_ceph_list_return_fail)
 {
     LOG_INFO("test_underfs_ceph_list_return_fail");
     const char *prefix = "key";
-    std::unordered_map<std::string, CephSystem::ObjStat> objStat;
+    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "SERVER_UNDERFS_LIST", 0, 1, userParam);
     auto ret = g_cephInstancePtr->List(prefix, objStat);
@@ -265,7 +267,7 @@ TEST_F(TestUnderFs, test_underfs_ceph_list_return_OK)
 {
     LOG_INFO("test_underfs_ceph_list_return_OK");
     const char *prefix = "key";
-    std::unordered_map<std::string, CephSystem::ObjStat> objStat;
+    std::unordered_map<std::string, FileSystem::ObjStat> objStat;
     auto ret = g_cephInstancePtr->List(prefix, objStat);
     EXPECT_EQ(ret, BIO_OK);
     g_cephInstancePtr->Stop();

@@ -16,6 +16,7 @@
 #include "dl_biosdk_api.h"
 #include "dl_acl_api.h"
 #include "ubsio_kvc_stream_manager.h"
+#include "ubsio_kvc_instance.h"
 #include "kv_operation.h"
 #include "ubsio_kvc_operation.h"
 
@@ -43,7 +44,7 @@ int32_t KvcOperationInit(int32_t devId)
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::KvBioInit();
+    ret = DlBioSdkApi::KvBioInit(devId);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
         return UBSIO_KVC_ERR;
@@ -62,7 +63,13 @@ int32_t KvcOperationInit(int32_t devId)
 
 void KvcExit(void)
 {
+    if (g_kvOperation != nullptr) {
+        g_kvOperation->ExitKvExecutor();
+    }
+    KvcInstance::Instance().UnInitialize();
+    KvcStreamManager::DestroyAclStream();
     DlBioSdkApi::Exit();
+    DlBioSdkApi::CleanupLibrary();
 }
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags)

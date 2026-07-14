@@ -283,6 +283,8 @@ private:
     net::BioClientNetPtr mNetEngine = nullptr;
     std::atomic<bool> mIsUpdating;
     ExecutorServicePtr mHeartService = nullptr;
+    void *mClientDiagnoseHandle = nullptr;
+    void *mCliHandle = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
 }

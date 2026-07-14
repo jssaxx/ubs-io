@@ -6,28 +6,17 @@ file(GLOB_RECURSE KVC_SRC
 
 add_library(ubsio_kvc SHARED ${KVC_SRC})
 
-set(UBSIO_BOOSTIO_DIR ${PROJECT_SOURCE_DIR}/../ubsio-boostio)
-set(UBSIO_NDS_DIR ${PROJECT_SOURCE_DIR}/../ubsio-nds)
-
 target_include_directories(ubsio_kvc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/kvc
     ${CMAKE_CURRENT_SOURCE_DIR}/nds
     ${CMAKE_CURRENT_SOURCE_DIR}/utils
     ${PROJECT_SOURCE_DIR}/include
-    ${UBSIO_BOOSTIO_DIR}/src/sdk
-    ${UBSIO_BOOSTIO_DIR}/src/common
-    ${UBSIO_NDS_DIR}/include
-)
-
-target_link_directories(ubsio_kvc PRIVATE
-    ${UBSIO_BOOSTIO_DIR}/build
-    ${UBSIO_NDS_DIR}/lib
+    ${UBSIO_BOOSTIO_INCLUDE_DIR}
 )
 
 target_link_libraries(ubsio_kvc
     pthread
-    nds_file
     dl
 )
 

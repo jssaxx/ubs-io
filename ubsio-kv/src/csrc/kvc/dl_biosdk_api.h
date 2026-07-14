@@ -27,6 +27,7 @@ namespace ubsio {
 
 using BioExitFunc = void (*)(void);
 using BioInitFunc = CResult (*)(WorkerMode mode, ClientOptionsConfig *optConf);
+using BioSetStandaloneDeviceFunc = void (*)(uint32_t deviceId);
 using BioCreateCacheFunc = CResult (*)(CacheDescriptor desc);
 using BioCalLocationFunc = CResult (*)(uint64_t tenantId, uint64_t objectId, ObjLocation *location);
 using BioGetFunc = CResult (*)(uint64_t tenantId, const char *key, uint64_t offset, uint64_t length, ObjLocation location,
@@ -39,7 +40,8 @@ using BioBatchExistFunc = CResult (*)(uint64_t tenantId, const char *key[], ObjL
 using BioBatchFreeFunc = CResult (*)(uint64_t tenantId, uintptr_t *valueAddrs, const uint32_t count);
 using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocation location);
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
-                                               const uint32_t count, KeyAddrInfo *infos);
+                                                const uint32_t count, KeyAddrInfo *infos);
+using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 
 class DlBioSdkApi {
 public:
@@ -50,6 +52,11 @@ public:
     static CResult Initialize(WorkerMode mode, ClientOptionsConfig *optConf)
     {
         return static_cast<CResult>(pBioInitialize(mode, optConf));
+    }
+
+    static void SetStandaloneDevice(uint32_t deviceId)
+    {
+        pBioSetStandaloneDevice(deviceId);
     }
 
     static CResult CreateCache(CacheDescriptor desc)
@@ -102,15 +109,23 @@ public:
 
     static void Exit(void)
     {
-        pBioExit();
+        std::lock_guard<std::mutex> guard(gMutex);
+        if (pBioExit != nullptr) {
+            pBioExit();
+        }
     }
 
-    static int32_t KvBioInit(void);
+    static int32_t KvBioInit(int32_t devId);
 
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
     {
         return static_cast<CResult>(pBioBatchGetKeyDiskAddr(tenantId, keys, locations, count, infos));
+    }
+
+    static CResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
+    {
+        return static_cast<CResult>(pBioRegisterMetaEventCallback(callback, context));
     }
 
 private:
@@ -121,6 +136,7 @@ private:
 
     static BioExitFunc pBioExit;
     static BioInitFunc pBioInitialize;
+    static BioSetStandaloneDeviceFunc pBioSetStandaloneDevice;
     static BioGetFunc pBioGet;
     static BioPutFunc pBioPut;
     static BioStatFunc pBioStat;
@@ -131,6 +147,7 @@ private:
     static BioBatchFreeFunc pBioBatchGetFree;
     static BioDeleteFunc pBioDelete;
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
+    static BioRegisterMetaEventCallbackFunc pBioRegisterMetaEventCallback;
 };
 
 }  // namespace ubsio

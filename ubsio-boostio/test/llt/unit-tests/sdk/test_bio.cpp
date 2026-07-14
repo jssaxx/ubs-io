@@ -457,7 +457,7 @@ TEST_F(TestBio, test_bio_get_external_stat)
     auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
     delete[] value0;
 }
 
@@ -478,7 +478,7 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_REALLENGTH");
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_MODIFY_TOTALLENGTH");
-    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_EQ(ret, BIO_NOT_EXISTS);
     delete[] value0;
 }
 
@@ -1004,6 +1004,8 @@ TEST_F(TestBio, test_pt_entry_list_update_node_state_up_down)
     nodeInfo.diskList.list[0].state = DISK_STATE_NORMAL;
     nodeInfo.diskList.list[1].state = DISK_STATE_NORMAL;
     ViewPtEntryListUpdateNodeState(0, NODE_STATE_UP, &nodeInfo, ptList, pgChange.get());
+    EXPECT_EQ(ptList->ptEntryList[0].copyList[0].state, PT_COPY_STATE_RUNNING);
+    EXPECT_EQ(ptList->ptEntryList[0].state, PT_STATE_NORMAL);
     free(ptList);
 }
 

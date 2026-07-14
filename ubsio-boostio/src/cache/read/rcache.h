@@ -127,6 +127,7 @@ private:
     std::atomic<bool> mDiskEvict{ false };
     bool mIsNormal{ true };
     bool mCrcEnable{ true };
+    bool mHasDiskCache{ true };
     uint64_t mFlowId;
     uint16_t mPtId;
     uint64_t mPtv;

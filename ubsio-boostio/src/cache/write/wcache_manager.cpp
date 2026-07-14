@@ -11,7 +11,10 @@
  */
 
 #include "wcache_manager.h"
+#include <algorithm>
+#include <iterator>
 #include <unordered_set>
+#include <utility>
 #include "bio_log.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
@@ -36,6 +39,8 @@ constexpr uint16_t NEGOTIATE_EVICT_THREAD_NUM = 4;
 constexpr uint32_t NEGOTIATE_QUEUE_SIZE = 8192;
 constexpr uint16_t DESTROY_EVICT_THREAD_NUM = 1;
 constexpr uint32_t DESTROY_EVICT_QUEUE_SIZE = 8192;
+constexpr uint16_t META_REPORT_THREAD_NUM = 1;
+constexpr uint32_t META_REPORT_QUEUE_SIZE = 8192;
 constexpr uint32_t DESTROY_EVICT_TIMEOUT = 60;
 constexpr uint32_t DESTROY_EVICT_INTERAL = 15;
 constexpr uint32_t FLUSH_RETRY_MAX_TIME = 1000000;
@@ -45,7 +50,9 @@ constexpr uint32_t MAX_NEGOTIATE_DELAY = 1000000;
 
 BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
 {
-    mEnableCrc = BioConfig::Instance()->GetDaemonConfig().enableCrc;
+    auto daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+    mEnableCrc = daemonConfig.enableCrc;
+    mHasDiskCache = daemonConfig.hasDiskCache;
     mCacheIndex = MakeRef<WCacheIndex>();
     ChkTrue(mCacheIndex != nullptr, BIO_ALLOC_FAIL, "Make write cache index instance failed.");
 
@@ -53,7 +60,7 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
         return BIO_INNER_ERR;
     }
 
-    if (DiskEvictExecutorInit() != BIO_OK) {
+    if (mHasDiskCache && DiskEvictExecutorInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
 
@@ -66,6 +73,10 @@ BResult WCacheManager::Init(const RCacheManagerPtr &rCacheManager)
     }
 
     if (DelayDestroyExecutorInit() != BIO_OK) {
+        return BIO_INNER_ERR;
+    }
+
+    if (MetaReportExecutorInit() != BIO_OK) {
         return BIO_INNER_ERR;
     }
 
@@ -143,6 +154,20 @@ BResult WCacheManager::DelayDestroyExecutorInit()
     return BIO_OK;
 }
 
+BResult WCacheManager::MetaReportExecutorInit()
+{
+    mMetaReportService = ExecutorService::Create(META_REPORT_THREAD_NUM, META_REPORT_QUEUE_SIZE);
+    if (UNLIKELY(mMetaReportService == nullptr)) {
+        LOG_ERROR("Failed to start execution service for meta report, probably out of memory");
+        return BIO_ALLOC_FAIL;
+    }
+
+    mMetaReportService->SetThreadName("wcache-meta-report");
+    auto result = mMetaReportService->Start();
+    ChkTrue(result, BIO_INNER_ERR, "Start meta report service failed.");
+    return BIO_OK;
+}
+
 void WCacheManager::Exit()
 {
     mRunning = false;
@@ -156,8 +181,15 @@ void WCacheManager::Exit()
     }
 
     mEvictService[WCACHE_MEMORY]->Stop();
-    mEvictService[WCACHE_DISK]->Stop();
+    if (mEvictService[WCACHE_DISK] != nullptr) {
+        mEvictService[WCACHE_DISK]->Stop();
+    }
     mRetryEvictService->Stop();
+    FlushMetaEvents();
+    if (mMetaReportService != nullptr) {
+        mMetaReportService->Stop();
+    }
+    FlushMetaEvents();
 }
 
 BResult WCacheManager::AllocateFlowId(uint16_t ptId, uint64_t ptv, uint64_t &flowId)
@@ -183,9 +215,15 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
     BIO_TP_END;
     ChkTrue(wcache != nullptr, BIO_ALLOC_FAIL, "Make wcache instance failed.");
 
-    WCache::EvictCallback evictCallback = [this](uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef) -> BResult {
+    WCache::EvictCallback evictCallback = [this](uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
+        const UbsIoMetaEventBatchPtr &batch) -> BResult {
         mCacheIndex->Delete(ptId, key, sliceRef);
+        AppendMetaEvent(UBSIO_META_DELETE, key, batch);
         return BIO_OK;
+    };
+
+    WCache::FlushMetaEventCallback flushMetaEventCallback = [this](const UbsIoMetaEventBatchPtr &batch) -> void {
+        FlushMetaEventBatch(batch);
     };
 
     WCache::RetryCallback retryCallback = [this](uint64_t flowId, WCacheTierType cacheTier) -> void {
@@ -193,7 +231,7 @@ BResult WCacheManager::CreateWCache(uint64_t procId, uint64_t flowId, uint16_t p
         mRetryManager[cacheTier].push_back(flowId);
     };
 
-    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback);
+    wcache->RegOp(mGetLocDiskStatus, mLocRole, mEvictOffset, evictCallback, retryCallback, flushMetaEventCallback);
     auto ret = wcache->Init(mEvictService, mRCacheManager, isRecover);
     ChkTrue(ret == BIO_OK, ret, "Failed to init WCache, flowId:" << flowId);
 
@@ -256,7 +294,9 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
         return BIO_NOT_EXISTS;
     }
 
-    WCache::RecoverCallback recoverCallback = [this](uint16_t ptId, const Key &key,
+    auto metaEventBatch = std::make_shared<UbsIoMetaEventBatch>();
+    ChkTrueNot(metaEventBatch != nullptr, BIO_ALLOC_FAIL);
+    WCache::RecoverCallback recoverCallback = [this, metaEventBatch](uint16_t ptId, const Key &key,
         const WCacheSliceRefPtr &sliceRef) -> BResult {
         BIO_TRACE_START(WCACHE_TRACE_RECOVER);
         LOG_TRACE("Recover key:" << key << ", pt:" << ptId << ", flowId:" << sliceRef->GetSlice()->GetFlowId() <<
@@ -268,6 +308,7 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
             LOG_ERROR("Insert slice to index failed, ret:" << ret << ", key:" << key << ".");
             return ret;
         }
+        AppendMetaEvent(UBSIO_META_RECOVER, key, metaEventBatch);
         return BIO_OK;
     };
 
@@ -276,6 +317,8 @@ BResult WCacheManager::RecoverCache(FlowPtr metaFlow)
         LOG_ERROR("Recover fail:" << ret << ", flowId:" << flowId);
         return ret;
     }
+    FlushMetaEventBatch(metaEventBatch);
+    FlushMetaEvents();
 
     return BIO_OK;
 }
@@ -502,9 +545,58 @@ BResult WCacheManager::Get(const Key &key, uint64_t offset, const RCacheSlicePtr
             slice->SetDataCrc(readCrc);
         }
     }
-    WCacheStatistic::Instance().StatisticalByType(sliceRef->GetSlice()->GetFlowType());
+    FlowType flowType = sliceRef->GetSlice()->GetFlowType();
+    WCacheStatistic::Instance().StatisticalByType(flowType);
     sliceRef->Release();
     return ret;
+}
+
+BResult WCacheManager::GetBatch(const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
+    const WCacheBatchSliceWriter &sliceWriter, uint64_t &realLen)
+{
+    ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");
+    ChkTrue(slice != nullptr, BIO_INVALID_PARAM, "Slice is nullptr.");
+    ChkTrue(sliceWriter != nullptr, BIO_INVALID_PARAM, "Slice writer is nullptr.");
+    ChkTrue(!mEnableCrc, BIO_INNER_RETRY, "Batch WCache read does not support CRC.");
+
+    uint16_t ptId = slice->GetPtId();
+    BIO_TRACE_START(WCACHE_TRACE_GET_QUERY_INDEX);
+    WCacheSliceRefPtr sliceRef = mCacheIndex->Aquire(ptId, key);
+    BIO_TRACE_END(WCACHE_TRACE_GET_QUERY_INDEX, ((sliceRef == nullptr) ? BIO_NOT_EXISTS : BIO_OK));
+    if (UNLIKELY(sliceRef == nullptr)) {
+        return BIO_NOT_EXISTS;
+    }
+
+    WCacheSlicePtr srcSlice = sliceRef->GetSlice();
+    if (UNLIKELY(srcSlice == nullptr || offset >= srcSlice->GetLength())) {
+        LOG_ERROR("Failed to split batch WCache slice, offset:" << offset << ".");
+        sliceRef->Release();
+        return BIO_READ_EXCEED;
+    }
+
+    realLen = std::min<uint64_t>(srcSlice->GetLength() - offset, slice->GetLength());
+    SlicePtr readSlice = srcSlice->Split(offset, realLen);
+    if (UNLIKELY(readSlice == nullptr)) {
+        LOG_ERROR("Failed to split batch WCache slice, offset:" << offset << ", length:" << realLen << ".");
+        sliceRef->Release();
+        return BIO_READ_EXCEED;
+    }
+
+    BIO_TRACE_START(WCACHE_TRACE_GET_READ_DATA);
+    BResult ret = sliceWriter(readSlice.Get(), slice.Get(), sliceRef);
+    BIO_TRACE_END(WCACHE_TRACE_GET_READ_DATA, ret);
+    if (sliceRef != nullptr) {
+        sliceRef->Release();
+    }
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Batch WCache read failed, key:" << key << ", offset:" << offset << ", length:" << realLen <<
+            ", ret:" << ret << ".");
+        return ret;
+    }
+
+    FlowType flowType = readSlice->GetFlowType();
+    WCacheStatistic::Instance().StatisticalByType(flowType);
+    return BIO_OK;
 }
 
 BResult WCacheManager::Stat(uint16_t ptId, const Key &key, CacheObjStat &cacheObjStat)
@@ -596,6 +688,59 @@ void WCacheManager::RegCheckLocRole(CheckLocRole localRole)
 {
     LOG_INFO("Register check loc role func");
     mLocRole = localRole;
+}
+
+void WCacheManager::RegUbsIoMetaEventCallback(UbsIoMetaEventCallback callback)
+{
+    LOG_INFO("Register UBS IO meta event callback");
+    mMetaEventCallback = std::move(callback);
+}
+
+void WCacheManager::AppendMetaEvent(UbsIoMetaEventType type, const Key &key,
+    const UbsIoMetaEventBatchPtr &batch)
+{
+    if (key == nullptr) {
+        return;
+    }
+    if (batch != nullptr) {
+        std::lock_guard<std::mutex> lock(batch->lock);
+        if (!batch->closed) {
+            batch->events.push_back({ type, std::string(key) });
+            return;
+        }
+    }
+    std::vector<UbsIoMetaEvent> events;
+    events.push_back({ type, std::string(key) });
+    AppendMetaEvents(std::move(events));
+}
+
+void WCacheManager::AppendMetaEvents(std::vector<UbsIoMetaEvent> &&events)
+{
+    if (events.empty()) {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mMetaReportLock);
+        mPendingMetaEvents.insert(mPendingMetaEvents.end(), std::make_move_iterator(events.begin()),
+            std::make_move_iterator(events.end()));
+    }
+    ScheduleFlushMetaEvents();
+}
+
+void WCacheManager::FlushMetaEventBatch(const UbsIoMetaEventBatchPtr &batch)
+{
+    if (batch == nullptr) {
+        return;
+    }
+
+    std::vector<UbsIoMetaEvent> events;
+    {
+        std::lock_guard<std::mutex> lock(batch->lock);
+        batch->closed = true;
+        events.swap(batch->events);
+    }
+    AppendMetaEvents(std::move(events));
 }
 
 BResult WCacheManager::GetEvictOffset(uint64_t flowId, uint64_t &flowOffset)
@@ -883,6 +1028,11 @@ BResult WCacheManager::SendProcBrokenSyncRequest(WCachePtr flow, CmPtInfo ptEntr
     }
     ProcBrokenCallbackCtx cbCtx;
     InitCallbackCtx(cbCtx, slaveNode.size());
+    if (slaveNode.empty()) {
+        sem_destroy(&cbCtx.sem);
+        needDestroy = false;
+        return BIO_OK;
+    }
     auto cbFunc = [&slaveResult](void *ctx, void *resp, uint32_t len, int32_t result) {
         auto cbCtx = static_cast<ProcBrokenCallbackCtx *>(ctx);
         if (UNLIKELY(result != BIO_OK)) {
@@ -1202,6 +1352,49 @@ void WCacheManager::DestroyEvictThread()
         }
         sleep(DESTROY_EVICT_INTERAL);
     }
+}
+
+void WCacheManager::ScheduleFlushMetaEvents()
+{
+    bool expected = false;
+    if (!mMetaReportScheduled.compare_exchange_weak(expected, true)) {
+        return;
+    }
+
+    if (mMetaReportService == nullptr) {
+        FlushMetaEvents();
+        return;
+    }
+
+    bool isSucceed = mMetaReportService->Execute([this]() { FlushMetaEvents(); });
+    if (!isSucceed) {
+        mMetaReportScheduled.store(false);
+        LOG_WARN("Schedule UBS IO meta event report failed.");
+    }
+}
+
+void WCacheManager::FlushMetaEvents()
+{
+    std::vector<UbsIoMetaEvent> events;
+    {
+        std::lock_guard<std::mutex> lock(mMetaReportLock);
+        events.swap(mPendingMetaEvents);
+    }
+
+    if (!events.empty() && mMetaEventCallback != nullptr) {
+        mMetaEventCallback(events);
+    } else if (!events.empty()) {
+        LOG_DEBUG("Skip UBS IO meta event report, callback is not registered, event count:" << events.size());
+    }
+
+    mMetaReportScheduled.store(false);
+    {
+        std::lock_guard<std::mutex> lock(mMetaReportLock);
+        if (mPendingMetaEvents.empty()) {
+            return;
+        }
+    }
+    ScheduleFlushMetaEvents();
 }
 
 BResult WCacheManager::GetTruncateIndex(uint64_t flowId, uint64_t &truncateIndex)
