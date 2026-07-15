@@ -1,6 +1,6 @@
-# bio.disk.path 配置指南
+# ubsio.disk.path 配置指南
 
-`bio.disk.path` 是 UBSIO 的磁盘配置项，用于指定三级池化缓存层使用的块设备或分区，多个路径以冒号（`:`）分隔，最多 **64** 条。
+`ubsio.disk.path` 是 UBSIO 的磁盘配置项，用于指定三级池化缓存层使用的块设备或分区，多个路径以冒号（`:`）分隔，最多 **64** 条。
 
 推荐使用 `partition_disks.sh` 一键完成分区并输出配置。
 
@@ -41,7 +41,7 @@ sudo blkid /dev/nvme0n1               # 应无文件系统签名
 
 > <span style="color:red"> ⚠️ 高危操作： 选错磁盘将造成不可逆的数据丢失。请务必在执行前通过 `lsblk` 反复确认目标磁盘路径。</span>
 
-脚本创建 GPT 分区表，均分磁盘并输出 `bio.disk.path`。默认 dry-run，加 `--yes` 才写入。
+脚本创建 GPT 分区表，均分磁盘并输出 `ubsio.disk.path`。默认 dry-run，加 `--yes` 才写入。
 
 ### 2.1 单推理实例
 
@@ -56,13 +56,13 @@ sudo bash /path/to/partition_disks.sh \
     --parts 4 --disk /dev/nvme0n1 --yes -f -w
 
 # 输出：
-# bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4
+# ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4
 ```
 
-**`vim /etc/boostio/bio.conf`，增加或修改下述配置：**
+**`vim /etc/ubsio/ubsio.conf`，增加或修改下述配置：**
 
 ```
-bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4
+ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4
 ```
 
 **示例：1 个推理实例 4 张卡，2 块盘（`--parts = 卡数 × 盘数 = 8`）**
@@ -72,14 +72,14 @@ sudo bash /path/to/partition_disks.sh \
     --parts 8 --disk /dev/nvme0n1 --disk /dev/nvme1n1 -c 4 --yes -f -w
 
 # 输出：
-# bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4:/dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
+# ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4:/dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
 ```
 
-**`vim /etc/boostio/bio.conf`，增加或修改下述配置：**
+**`vim /etc/ubsio/ubsio.conf`，增加或修改下述配置：**
 
 ```
-bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4:/dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
-bio.standalone.device_count = 4
+ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4:/dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
+ubsio.standalone.device_count = 4
 ```
 
 ### 2.2 多推理实例
@@ -96,19 +96,19 @@ sudo bash /path/to/partition_disks.sh \
     --yes -f -w
 
 # 输出全部分区：
-# bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4:/dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
+# ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4:/dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
 ```
 
-**`vim /etc/boostio/bio.conf`（实例 0），增加或修改下述配置：**
+**`vim /etc/ubsio/ubsio.conf`（实例 0），增加或修改下述配置：**
 
 ```
-bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4
+ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme0n1p3:/dev/nvme0n1p4
 ```
 
-**`vim /etc/boostio/bio.conf`（实例 1），增加或修改下述配置：**
+**`vim /etc/ubsio/ubsio.conf`（实例 1），增加或修改下述配置：**
 
 ```
-bio.disk.path = /dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
+ubsio.disk.path = /dev/nvme1n1p1:/dev/nvme1n1p2:/dev/nvme1n1p3:/dev/nvme1n1p4
 ```
 
 ### 参数说明
@@ -141,33 +141,29 @@ LOOP_DEV=$(sudo losetup --find --show --direct-io=on /data/boostio_disk.img)
 echo "${LOOP_DEV}"
 # 示例输出：/dev/loop2
 
-# 验证 direct_io 已开启
-losetup -l "${LOOP_DEV}" | grep -i direct
-# 期望输出包含：Direct I/O: on
-
 # 分区
 sudo bash /path/to/partition_disks.sh \
     --parts 4 --disk "${LOOP_DEV}" -c 4 --yes -f -w
 
 # 输出：
-# bio.disk.path = /dev/loop2p1:/dev/loop2p2:/dev/loop2p3:/dev/loop2p4
+# ubsio.disk.path = /dev/loop2p1:/dev/loop2p2:/dev/loop2p3:/dev/loop2p4
 ```
 
-**`vim /etc/boostio/bio.conf`，将脚本输出的实际分区路径增加或修改到下述配置：**
+**`vim /etc/ubsio/ubsio.conf`，将脚本输出的实际分区路径增加或修改到下述配置：**
 
 ```
-bio.disk.path = /dev/loop2p1:/dev/loop2p2:/dev/loop2p3:/dev/loop2p4
+ubsio.disk.path = /dev/loop2p1:/dev/loop2p2:/dev/loop2p3:/dev/loop2p4
 ```
 
 ---
 
 ## 场景三：无盘部署
 
-当不配置 SSD 缓存层时，`bio.disk.path` 保持为空即可，无需执行分区操作。
+当不配置 SSD 缓存层时，`ubsio.disk.path` 保持为空即可，无需执行分区操作。
 
 ```
-# bio.disk.path 留空，不启用磁盘缓存
-bio.disk.path =
+# ubsio.disk.path 留空，不启用磁盘缓存
+ubsio.disk.path =
 ```
 
 > 不配置磁盘时，UBSIO 仅使用内存作为缓存，重启后缓存数据不持久化。
@@ -197,7 +193,7 @@ sudo rm -f /data/boostio_disk.img
 |------|------|
 | 磁盘独占 | UBSIO / BoostIO 独占配置的磁盘/分区，不可与其他服务共享 |
 | 物理盘隔离 | 同一物理盘的分区不会分配给同一 deviceId（算法自动打散） |
-| 路径上限 | `bio.disk.path` 最多 64 条路径 |
+| 路径上限 | `ubsio.disk.path` 最多 64 条路径 |
 | 动态加盘 | standalone 模式不支持运行时加盘 |
 | 复用磁盘 | 不同 deviceId 会写入 BDM disk head，不匹配将拒绝恢复 |
 | 权限 | 进程需对块设备有读写权限，建议 root 运行 |
