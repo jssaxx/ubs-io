@@ -386,7 +386,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </th>
     </tr>
     </thead>
-    <tbody><tr id="row0205173119208"><td class="cellrowborder" valign="top" width="27.74%" headers="mcps1.2.5.1.1 "><p id="p9205163112014"><a name="p9205163112014"></a><a name="p9205163112014"></a>/var/log/boostio</p>
+    <tbody><tr id="row0205173119208"><td class="cellrowborder" valign="top" width="27.74%" headers="mcps1.2.5.1.1 "><p id="p9205163112014"><a name="p9205163112014"></a><a name="p9205163112014"></a>/var/log/ubsio</p>
     </td>
     <td class="cellrowborder" valign="top" width="18.5%" headers="mcps1.2.5.1.2 "><p id="p89501849103419"><a name="p89501849103419"></a><a name="p89501849103419"></a>Server安装用户：Server安装用户组</p>
     </td>
@@ -395,7 +395,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="38.2%" headers="mcps1.2.5.1.4 "><p id="p957425410353"><a name="p957425410353"></a><a name="p957425410353"></a>UBS IO Server端日志目录。</p>
     </td>
     </tr>
-    <tr id="row209178378340"><td class="cellrowborder" valign="top" width="27.74%" headers="mcps1.2.5.1.1 "><p id="p991803716346"><a name="p991803716346"></a><a name="p991803716346"></a>/var/log/boostio/trace</p>
+    <tr id="row209178378340"><td class="cellrowborder" valign="top" width="27.74%" headers="mcps1.2.5.1.1 "><p id="p991803716346"><a name="p991803716346"></a><a name="p991803716346"></a>/var/log/ubsio/trace</p>
     </td>
     <td class="cellrowborder" valign="top" width="18.5%" headers="mcps1.2.5.1.2 "><p id="p5650254193415"><a name="p5650254193415"></a><a name="p5650254193415"></a>Server安装用户：Server安装用户组</p>
     </td>
@@ -465,7 +465,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="75%" headers="mcps1.2.3.1.2 "><p id="p558831613282"><a name="p558831613282"></a><a name="p558831613282"></a>动态库和静态库文件。</p>
     </td>
     </tr>
-    <tr id="row185886162284"><td class="cellrowborder" valign="top" width="25%" headers="mcps1.2.3.1.1 "><p id="p13116113571016"><a name="p13116113571016"></a><a name="p13116113571016"></a>/etc/boostio</p>
+    <tr id="row185886162284"><td class="cellrowborder" valign="top" width="25%" headers="mcps1.2.3.1.1 "><p id="p13116113571016"><a name="p13116113571016"></a><a name="p13116113571016"></a>/etc/ubsio</p>
     </td>
     <td class="cellrowborder" valign="top" width="75%" headers="mcps1.2.3.1.2 "><p id="p4588316102820"><a name="p4588316102820"></a><a name="p4588316102820"></a>配置文件。</p>
     </td>
@@ -543,7 +543,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
 4.  将zookeeper client需要的so文件"libzookeeper\_mt.so"拷贝到bio用户有权限读取的路径，并将路径添加到LD\_LIBRARY\_PATH中。
 5.  配置安装信息。
 
-    根据业务使用情况和待安装部署的环境设置“/etc/boostio”目录下bio.conf中的相关配置项，具体配置项说明如[表5](#table8874183794213)所示。
+    根据业务使用情况和待安装部署的环境设置“/etc/ubsio”目录下ubsio.conf中的相关配置项，具体配置项说明如[表5](#table8874183794213)所示。
 
     **表 5**  UBS IO配置项
 
@@ -564,7 +564,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </thead>
     <tbody><tr id="row11875193784211"><td class="cellrowborder" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p78755372423"><a name="p78755372423"></a><a name="p78755372423"></a>Log</p>
     </td>
-    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p987553774211"><a name="p987553774211"></a><a name="p987553774211"></a>bio.log.level</p>
+    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p987553774211"><a name="p987553774211"></a><a name="p987553774211"></a>ubsio.log.level</p>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p587513724213"><a name="p587513724213"></a><a name="p587513724213"></a>日志打印级别。</p>
     </td>
@@ -577,7 +577,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </tr>
     <tr id="row2875937154211"><td class="cellrowborder" rowspan="17" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p158751937124214"><a name="p158751937124214"></a><a name="p158751937124214"></a>Net</p>
     </td>
-    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p5875037134216"><a name="p5875037134216"></a><a name="p5875037134216"></a>bio.net.data.ip_mask</p>
+    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p5875037134216"><a name="p5875037134216"></a><a name="p5875037134216"></a>ubsio.net.data.ip_mask</p>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p987573710425"><a name="p987573710425"></a><a name="p987573710425"></a>IP地址段。</p>
     </td>
@@ -588,7 +588,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p108754379428"><a name="p108754379428"></a><a name="p108754379428"></a>使用JuiceFS跑大数据业务时，该字段需要和/etc/hosts中的主机名对应的IP保持一致。</p>
     </td>
     </tr>
-    <tr id="row128759373422"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1587663784212"><a name="p1587663784212"></a><a name="p1587663784212"></a>bio.net.data.listen_port</p>
+    <tr id="row128759373422"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1587663784212"><a name="p1587663784212"></a><a name="p1587663784212"></a>ubsio.net.data.listen_port</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p0876133719421"><a name="p0876133719421"></a><a name="p0876133719421"></a>业务面网络通信端口号。</p>
     </td>
@@ -599,7 +599,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1287617372423"><a name="p1287617372423"></a><a name="p1287617372423"></a>-</p>
     </td>
     </tr>
-    <tr id="row88768375421"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p4876137134213"><a name="p4876137134213"></a><a name="p4876137134213"></a>bio.net.data.protocol</p>
+    <tr id="row88768375421"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p4876137134213"><a name="p4876137134213"></a><a name="p4876137134213"></a>ubsio.net.data.protocol</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p20876133718426"><a name="p20876133718426"></a><a name="p20876133718426"></a>网络协议。</p>
     </td>
@@ -610,7 +610,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1387614376421"><a name="p1387614376421"></a><a name="p1387614376421"></a>-</p>
     </td>
     </tr>
-    <tr id="row2876153713426"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p9876133714424"><a name="p9876133714424"></a><a name="p9876133714424"></a>bio.net.rpc.data.busy_polling_mode</p>
+    <tr id="row2876153713426"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p9876133714424"><a name="p9876133714424"></a><a name="p9876133714424"></a>ubsio.net.rpc.data.busy_polling_mode</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p487673712423"><a name="p487673712423"></a><a name="p487673712423"></a>RPC开启busy-polling标记。</p>
     </td>
@@ -621,7 +621,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p6876113717422"><a name="p6876113717422"></a><a name="p6876113717422"></a>仅RDMA协议生效。</p>
     </td>
     </tr>
-    <tr id="row128772037194219"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p787718374427"><a name="p787718374427"></a><a name="p787718374427"></a>bio.net.rpc.data.workers_count</p>
+    <tr id="row128772037194219"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p787718374427"><a name="p787718374427"></a><a name="p787718374427"></a>ubsio.net.rpc.data.workers_count</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p17877133717421"><a name="p17877133717421"></a><a name="p17877133717421"></a>RPC数据面工作核数。</p>
     </td>
@@ -632,7 +632,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p587714371428"><a name="p587714371428"></a><a name="p587714371428"></a>-</p>
     </td>
     </tr>
-    <tr id="row387711371429"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1887715377424"><a name="p1887715377424"></a><a name="p1887715377424"></a>bio.net.request.executor.thread.num</p>
+    <tr id="row387711371429"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1887715377424"><a name="p1887715377424"></a><a name="p1887715377424"></a>ubsio.net.request.executor.thread.num</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p6877183717423"><a name="p6877183717423"></a><a name="p6877183717423"></a>接收端请求处理线程数。</p>
     </td>
@@ -643,7 +643,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p48771737174219"><a name="p48771737174219"></a><a name="p48771737174219"></a>-</p>
     </td>
     </tr>
-    <tr id="row38771937114216"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p68773379421"><a name="p68773379421"></a><a name="p68773379421"></a>bio.net.request.executor.queue.size</p>
+    <tr id="row38771937114216"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p68773379421"><a name="p68773379421"></a><a name="p68773379421"></a>ubsio.net.request.executor.queue.size</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p16877837204210"><a name="p16877837204210"></a><a name="p16877837204210"></a>接收端请求处理队列深度。</p>
     </td>
@@ -654,7 +654,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p14878113744211"><a name="p14878113744211"></a><a name="p14878113744211"></a>-</p>
     </td>
     </tr>
-    <tr id="row158781737134210"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p168781837104211"><a name="p168781837104211"></a><a name="p168781837104211"></a>bio.net.ipc.data.busy_polling_mode</p>
+    <tr id="row158781737134210"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p168781837104211"><a name="p168781837104211"></a><a name="p168781837104211"></a>ubsio.net.ipc.data.busy_polling_mode</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p188781637134213"><a name="p188781637134213"></a><a name="p188781637134213"></a>IPC开启busy-polling标记。</p>
     </td>
@@ -665,7 +665,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p7878143715424"><a name="p7878143715424"></a><a name="p7878143715424"></a>-</p>
     </td>
     </tr>
-    <tr id="row75621826194117"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p995073311419"><a name="p995073311419"></a><a name="p995073311419"></a>bio.net.ipc.data.workers_count</p>
+    <tr id="row75621826194117"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p995073311419"><a name="p995073311419"></a><a name="p995073311419"></a>ubsio.net.ipc.data.workers_count</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p89501733164112"><a name="p89501733164112"></a><a name="p89501733164112"></a>IPC数据面工作核数。</p>
     </td>
@@ -676,7 +676,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p19562526144111"><a name="p19562526144111"></a><a name="p19562526144111"></a>-</p>
     </td>
     </tr>
-    <tr id="row3565135610414"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p2566125644119"><a name="p2566125644119"></a><a name="p2566125644119"></a>bio.net.tls.enable.switch</p>
+    <tr id="row3565135610414"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p2566125644119"><a name="p2566125644119"></a><a name="p2566125644119"></a>ubsio.net.tls.enable.switch</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1856685610417"><a name="p1856685610417"></a><a name="p1856685610417"></a>网络安全开关。</p>
     </td>
@@ -687,7 +687,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><a name="ul29324246557"></a><a name="ul29324246557"></a><ul id="ul29324246557"><li>关闭后可能会引入信息安全问题、仿冒等风险，请谨慎操作。</li><li>分离部署时调用UBS IO服务初始化接口传入的enableTls参数需要和该配置项保持一致。</li></ul>
     </td>
     </tr>
-    <tr id="row148524511414"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p785218511415"><a name="p785218511415"></a><a name="p785218511415"></a>bio.net.tls.ca.cert.path</p>
+    <tr id="row148524511414"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p785218511415"><a name="p785218511415"></a><a name="p785218511415"></a>ubsio.net.tls.ca.cert.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p16852175124119"><a name="p16852175124119"></a><a name="p16852175124119"></a>CA证书文件路径。</p>
     </td>
@@ -698,7 +698,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p4852151184118"><a name="p4852151184118"></a><a name="p4852151184118"></a>安全开关打开则需要为有效路径，安全开关关闭则不解析该配置项。</p>
     </td>
     </tr>
-    <tr id="row2905144719418"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p89051747144120"><a name="p89051747144120"></a><a name="p89051747144120"></a>bio.net.tls.ca.crl.path</p>
+    <tr id="row2905144719418"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p89051747144120"><a name="p89051747144120"></a><a name="p89051747144120"></a>ubsio.net.tls.ca.crl.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p99051947174119"><a name="p99051947174119"></a><a name="p99051947174119"></a>吊销列表文件路径。</p>
     </td>
@@ -709,7 +709,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p760655414573"><a name="p760655414573"></a><a name="p760655414573"></a>可以为空，不为空时，安全开关打开且需要校验证书是否被吊销时为有效路径，安全开关关闭则不解析该配置项。</p>
     </td>
     </tr>
-    <tr id="row19146204513415"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p14146104554117"><a name="p14146104554117"></a><a name="p14146104554117"></a>bio.net.tls.server.cert.path</p>
+    <tr id="row19146204513415"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p14146104554117"><a name="p14146104554117"></a><a name="p14146104554117"></a>ubsio.net.tls.server.cert.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p11461045154119"><a name="p11461045154119"></a><a name="p11461045154119"></a>服务端证书文件路径。</p>
     </td>
@@ -720,7 +720,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p10221135185818"><a name="p10221135185818"></a><a name="p10221135185818"></a>安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。</p>
     </td>
     </tr>
-    <tr id="row13267352165513"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p13267155212553"><a name="p13267155212553"></a><a name="p13267155212553"></a>bio.net.tls.server.key.path</p>
+    <tr id="row13267352165513"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p13267155212553"><a name="p13267155212553"></a><a name="p13267155212553"></a>ubsio.net.tls.server.key.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p226825225513"><a name="p226825225513"></a><a name="p226825225513"></a>服务端证书私钥文件路径。</p>
     </td>
@@ -731,7 +731,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p192682529552"><a name="p192682529552"></a><a name="p192682529552"></a>安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。</p>
     </td>
     </tr>
-    <tr id="row1168053918551"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p16801339115512"><a name="p16801339115512"></a><a name="p16801339115512"></a>bio.net.tls.server.key.pass.path</p>
+    <tr id="row1168053918551"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p16801339115512"><a name="p16801339115512"></a><a name="p16801339115512"></a>ubsio.net.tls.server.key.pass.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p12680439185516"><a name="p12680439185516"></a><a name="p12680439185516"></a>工作证书私钥口令的密文的文件路径。</p>
     </td>
@@ -745,7 +745,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </li></ol>
     </td>
     </tr>
-    <tr id="row1662264284114"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1020152519198"><a name="p1020152519198"></a><a name="p1020152519198"></a>bio.net.tls.server.decrypter.lib.path</p>
+    <tr id="row1662264284114"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1020152519198"><a name="p1020152519198"></a><a name="p1020152519198"></a>ubsio.net.tls.server.decrypter.lib.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1562216424418"><a name="p1562216424418"></a><a name="p1562216424418"></a>安全解密函数so文件路径。</p>
     </td>
@@ -756,7 +756,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p13831343807"><a name="p13831343807"></a><a name="p13831343807"></a>可以为空，为空时需要提供明文口令。不为空时安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。</p>
     </td>
     </tr>
-    <tr id="row987853764219"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1880363917446"><a name="p1880363917446"></a><a name="p1880363917446"></a>bio.net.tls.server.ssl.lib.dir</p>
+    <tr id="row987853764219"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1880363917446"><a name="p1880363917446"></a><a name="p1880363917446"></a>ubsio.net.tls.server.ssl.lib.dir</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p117271431108"><a name="p117271431108"></a><a name="p117271431108"></a>openssl so文件所在目录路径。</p>
     </td>
@@ -770,7 +770,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </tr>
     <tr id="row10878637114215"><td class="cellrowborder" rowspan="13" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p13878737114219"><a name="p13878737114219"></a><a name="p13878737114219"></a>Cache</p>
     </td>
-    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p18166712721"><a name="p18166712721"></a><a name="p18166712721"></a>bio.cache.qos.enable</p>
+    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p18166712721"><a name="p18166712721"></a><a name="p18166712721"></a>ubsio.cache.qos.enable</p>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p616510120215"><a name="p616510120215"></a><a name="p616510120215"></a>流量控制开关。</p>
     </td>
@@ -781,7 +781,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p111631712823"><a name="p111631712823"></a><a name="p111631712823"></a>流量控制开关打开会影响到极限性能，建议性能用例场景关闭。</p>
     </td>
     </tr>
-    <tr id="row1106474218"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p82181455185711"><a name="p82181455185711"></a><a name="p82181455185711"></a>bio.data.crc.enable</p>
+    <tr id="row1106474218"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p82181455185711"><a name="p82181455185711"></a><a name="p82181455185711"></a>ubsio.data.crc.enable</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p62173551573"><a name="p62173551573"></a><a name="p62173551573"></a>数据完整性校验开关。</p>
     </td>
@@ -792,7 +792,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1719825513576"><a name="p1719825513576"></a><a name="p1719825513576"></a>数据完整性校验开关打开会增加数据读写时延，建议在问题定位场景使用。</p>
     </td>
     </tr>
-    <tr id="row1695420593111"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1588016376425"><a name="p1588016376425"></a><a name="p1588016376425"></a>bio.segment.size_in_mb</p>
+    <tr id="row1695420593111"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1588016376425"><a name="p1588016376425"></a><a name="p1588016376425"></a>ubsio.segment.size_in_mb</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p68801737154215"><a name="p68801737154215"></a><a name="p68801737154215"></a>缓存资源粒度。</p>
     </td>
@@ -803,7 +803,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p551005125812"><a name="p551005125812"></a><a name="p551005125812"></a>单位MB。</p>
     </td>
     </tr>
-    <tr id="row15341113013121"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1688014373423"><a name="p1688014373423"></a><a name="p1688014373423"></a>bio.mem.size_in_gb</p>
+    <tr id="row15341113013121"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1688014373423"><a name="p1688014373423"></a><a name="p1688014373423"></a>ubsio.mem.size_in_gb</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p20880237134210"><a name="p20880237134210"></a><a name="p20880237134210"></a>缓存资源内存容量。</p>
     </td>
@@ -814,7 +814,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><a name="ul11536195191410"></a><a name="ul11536195191410"></a><ul id="ul11536195191410"><li>禁止配置超过系统内存。</li><li>单位GB。</li><li>配置为0表示该节点不具备缓存功能。</li></ul>
     </td>
     </tr>
-    <tr id="row3313232171513"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p2087993724219"><a name="p2087993724219"></a><a name="p2087993724219"></a>bio.disk.path</p>
+    <tr id="row3313232171513"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p2087993724219"><a name="p2087993724219"></a><a name="p2087993724219"></a>ubsio.disk.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p98791137194211"><a name="p98791137194211"></a><a name="p98791137194211"></a>缓存资源磁盘列表。</p>
     </td>
@@ -825,7 +825,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p118801937154213"><a name="p118801937154213"></a><a name="p118801937154213"></a>多个磁盘路径用冒号隔开，当前版本支持最多4块磁盘。</p>
     </td>
     </tr>
-    <tr id="row189470444571"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p108781937184218"><a name="p108781937184218"></a><a name="p108781937184218"></a>bio.rcache.evict_water_level</p>
+    <tr id="row189470444571"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p108781937184218"><a name="p108781937184218"></a><a name="p108781937184218"></a>ubsio.rcache.evict_water_level</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p118782373420"><a name="p118782373420"></a><a name="p118782373420"></a>读缓存淘汰水位。</p>
     </td>
@@ -836,7 +836,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p987983774210"><a name="p987983774210"></a><a name="p987983774210"></a>表示使用读缓存百分比。</p>
     </td>
     </tr>
-    <tr id="row14879193754211"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p16879173704210"><a name="p16879173704210"></a><a name="p16879173704210"></a>bio.cache.mem_read_write_ratio</p>
+    <tr id="row14879193754211"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p16879173704210"><a name="p16879173704210"></a><a name="p16879173704210"></a>ubsio.cache.mem_read_write_ratio</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1287903714428"><a name="p1287903714428"></a><a name="p1287903714428"></a>内存读写资源配比。</p>
     </td>
@@ -847,7 +847,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p14879837104216"><a name="p14879837104216"></a><a name="p14879837104216"></a>-</p>
     </td>
     </tr>
-    <tr id="row587903764213"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1787993764216"><a name="p1787993764216"></a><a name="p1787993764216"></a>bio.cache.disk_read_write_ratio</p>
+    <tr id="row587903764213"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1787993764216"><a name="p1787993764216"></a><a name="p1787993764216"></a>ubsio.cache.disk_read_write_ratio</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p20879437114216"><a name="p20879437114216"></a><a name="p20879437114216"></a>磁盘读写资源配比。</p>
     </td>
@@ -858,7 +858,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p98791637124210"><a name="p98791637124210"></a><a name="p98791637124210"></a>-</p>
     </td>
     </tr>
-    <tr id="row16731524185013"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1180781292113"><a name="p1180781292113"></a><a name="p1180781292113"></a>bio.work.scene</p>
+    <tr id="row16731524185013"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1180781292113"><a name="p1180781292113"></a><a name="p1180781292113"></a>ubsio.work.scene</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p57312412501"><a name="p57312412501"></a><a name="p57312412501"></a>应用场景标记。</p>
     </td>
@@ -870,7 +870,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <a name="ul12187134918155"></a><a name="ul12187134918155"></a><ul id="ul12187134918155"><li>none：不存在使用约束。</li><li>bigdata：大数据场景，其主要区别是IO强制对齐。</li></ul>
     </td>
     </tr>
-    <tr id="row775754812319"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p568111495231"><a name="p568111495231"></a><a name="p568111495231"></a>bio.work.io.alignsize</p>
+    <tr id="row775754812319"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p568111495231"><a name="p568111495231"></a><a name="p568111495231"></a>ubsio.work.io.alignsize</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1757448192310"><a name="p1757448192310"></a><a name="p1757448192310"></a>IO对齐数据大小。</p>
     </td>
@@ -881,7 +881,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1975734832315"><a name="p1975734832315"></a><a name="p1975734832315"></a>可选，单位B。</p>
     </td>
     </tr>
-    <tr id="row96092419197"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p14351149196"><a name="p14351149196"></a><a name="p14351149196"></a>bio.wcache.evict_water_level</p>
+    <tr id="row96092419197"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p14351149196"><a name="p14351149196"></a><a name="p14351149196"></a>ubsio.wcache.evict_water_level</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1043561441916"><a name="p1043561441916"></a><a name="p1043561441916"></a>写缓存淘汰水位。</p>
     </td>
@@ -892,7 +892,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p8435171431911"><a name="p8435171431911"></a><a name="p8435171431911"></a>可选，默认为0，表示使用写缓存资源百分比。</p>
     </td>
     </tr>
-    <tr id="row520024811410"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1890314144"><a name="p1890314144"></a><a name="p1890314144"></a>bio.wcache.negotiate.delay</p>
+    <tr id="row520024811410"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1890314144"><a name="p1890314144"></a><a name="p1890314144"></a>ubsio.wcache.negotiate.delay</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p142001548343"><a name="p142001548343"></a><a name="p142001548343"></a>淘汰协商延迟。</p>
     </td>
@@ -903,7 +903,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1420014814411"><a name="p1420014814411"></a><a name="p1420014814411"></a>可选，默认100，单位ms。前台写性能敏感场景需要将该值调大，淘汰延迟增大；前台写性能不敏感可使用较小值，更快淘汰。</p>
     </td>
     </tr>
-    <tr id="row123546291671"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p143545291971"><a name="p143545291971"></a><a name="p143545291971"></a>bio.trace.enable</p>
+    <tr id="row123546291671"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p143545291971"><a name="p143545291971"></a><a name="p143545291971"></a>ubsio.trace.enable</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p935412295714"><a name="p935412295714"></a><a name="p935412295714"></a>流程统计开关。</p>
     </td>
@@ -916,7 +916,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </tr>
     <tr id="row17881937184219"><td class="cellrowborder" rowspan="7" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p78811237164217"><a name="p78811237164217"></a><a name="p78811237164217"></a>Underfs</p>
     </td>
-    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p1887213198212"><a name="p1887213198212"></a><a name="p1887213198212"></a>bio.underfs.file_system_type</p>
+    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p1887213198212"><a name="p1887213198212"></a><a name="p1887213198212"></a>ubsio.underfs.file_system_type</p>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p14872141914214"><a name="p14872141914214"></a><a name="p14872141914214"></a>后端存储系统类型。</p>
     </td>
@@ -927,7 +927,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p108729191216"><a name="p108729191216"></a><a name="p108729191216"></a>-</p>
     </td>
     </tr>
-    <tr id="row101903922018"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p118811837114217"><a name="p118811837114217"></a><a name="p118811837114217"></a>bio.underfs.ceph.cfg.path</p>
+    <tr id="row101903922018"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p118811837114217"><a name="p118811837114217"></a><a name="p118811837114217"></a>ubsio.underfs.ceph.cfg.path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p11881837194217"><a name="p11881837194217"></a><a name="p11881837194217"></a>Ceph配置文件路径。</p>
     </td>
@@ -938,7 +938,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1988173716428"><a name="p1988173716428"></a><a name="p1988173716428"></a>选择ceph后必填选项，需要是真实存在的路径。</p>
     </td>
     </tr>
-    <tr id="row78813378425"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p188112371420"><a name="p188112371420"></a><a name="p188112371420"></a>bio.underfs.ceph.cluster</p>
+    <tr id="row78813378425"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p188112371420"><a name="p188112371420"></a><a name="p188112371420"></a>ubsio.underfs.ceph.cluster</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p78829373422"><a name="p78829373422"></a><a name="p78829373422"></a>Ceph集群名称。</p>
     </td>
@@ -949,7 +949,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p414512157211"><a name="p414512157211"></a><a name="p414512157211"></a>选择ceph后必填选项。</p>
     </td>
     </tr>
-    <tr id="row5882123713426"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p0882237104217"><a name="p0882237104217"></a><a name="p0882237104217"></a>bio.underfs.ceph.user</p>
+    <tr id="row5882123713426"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p0882237104217"><a name="p0882237104217"></a><a name="p0882237104217"></a>ubsio.underfs.ceph.user</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p158821337114214"><a name="p158821337114214"></a><a name="p158821337114214"></a>Ceph用户。</p>
     </td>
@@ -960,7 +960,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p7326132211216"><a name="p7326132211216"></a><a name="p7326132211216"></a>选择ceph后必填选项。</p>
     </td>
     </tr>
-    <tr id="row488293715424"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p16882153744212"><a name="p16882153744212"></a><a name="p16882153744212"></a>bio.underfs.ceph.pool</p>
+    <tr id="row488293715424"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p16882153744212"><a name="p16882153744212"></a><a name="p16882153744212"></a>ubsio.underfs.ceph.pool</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1788213764211"><a name="p1788213764211"></a><a name="p1788213764211"></a>Ceph数据池。</p>
     </td>
@@ -971,7 +971,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p1388219376427"><a name="p1388219376427"></a><a name="p1388219376427"></a>选择ceph后必填选项，多个参数用英文逗号隔开。</p>
     </td>
     </tr>
-    <tr id="row4732191613016"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p27321016183018"><a name="p27321016183018"></a><a name="p27321016183018"></a>bio.underfs.hdfs.name_node</p>
+    <tr id="row4732191613016"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p27321016183018"><a name="p27321016183018"></a><a name="p27321016183018"></a>ubsio.underfs.hdfs.name_node</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p87322016113013"><a name="p87322016113013"></a><a name="p87322016113013"></a>hadoop的NameNode。</p>
     </td>
@@ -982,7 +982,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p724213822214"><a name="p724213822214"></a><a name="p724213822214"></a>可选，默认为default:0，格式：IP地址:端口号，表示使用hadoop配置文件中的IP地址和端口号。</p>
     </td>
     </tr>
-    <tr id="row119817205303"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p11981820133020"><a name="p11981820133020"></a><a name="p11981820133020"></a>bio.underfs.hdfs.working_path</p>
+    <tr id="row119817205303"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p11981820133020"><a name="p11981820133020"></a><a name="p11981820133020"></a>ubsio.underfs.hdfs.working_path</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1998620153015"><a name="p1998620153015"></a><a name="p1998620153015"></a>文件在hdfs系统的存放路径。</p>
     </td>
@@ -995,7 +995,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </tr>
     <tr id="row1688213377428"><td class="cellrowborder" rowspan="6" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p18882183712423"><a name="p18882183712423"></a><a name="p18882183712423"></a>CM</p>
     </td>
-    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p53521054125614"><a name="p53521054125614"></a><a name="p53521054125614"></a>bio.cm.initial.nodes_count</p>
+    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p53521054125614"><a name="p53521054125614"></a><a name="p53521054125614"></a>ubsio.cm.initial.nodes_count</p>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p13351185411567"><a name="p13351185411567"></a><a name="p13351185411567"></a>集群初始化期望节点数。</p>
     </td>
@@ -1006,7 +1006,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p118831837144219"><a name="p118831837144219"></a><a name="p118831837144219"></a>-</p>
     </td>
     </tr>
-    <tr id="row229923317274"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1299123315273"><a name="p1299123315273"></a><a name="p1299123315273"></a>bio.cm.copy_num</p>
+    <tr id="row229923317274"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1299123315273"><a name="p1299123315273"></a><a name="p1299123315273"></a>ubsio.cm.copy_num</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1409164432717"><a name="p1409164432717"></a><a name="p1409164432717"></a>数据冗余度。</p>
     </td>
@@ -1017,7 +1017,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p19321017172814"><a name="p19321017172814"></a><a name="p19321017172814"></a>当前版本仅支持双副本。</p>
     </td>
     </tr>
-    <tr id="row9841135016568"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p18883203719421"><a name="p18883203719421"></a><a name="p18883203719421"></a>bio.cm.pts_count</p>
+    <tr id="row9841135016568"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p18883203719421"><a name="p18883203719421"></a><a name="p18883203719421"></a>ubsio.cm.pts_count</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p188314370426"><a name="p188314370426"></a><a name="p188314370426"></a>分区视图数量。</p>
     </td>
@@ -1028,7 +1028,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p12841450185612"><a name="p12841450185612"></a><a name="p12841450185612"></a>-</p>
     </td>
     </tr>
-    <tr id="row38831737204213"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p488373715429"><a name="p488373715429"></a><a name="p488373715429"></a>bio.cm.register_timeout_sec</p>
+    <tr id="row38831737204213"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p488373715429"><a name="p488373715429"></a><a name="p488373715429"></a>ubsio.cm.register_timeout_sec</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p6883837104212"><a name="p6883837104212"></a><a name="p6883837104212"></a>ZooKeeper心跳检测超时时间。</p>
     </td>
@@ -1039,7 +1039,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p68839370421"><a name="p68839370421"></a><a name="p68839370421"></a>单位s。</p>
     </td>
     </tr>
-    <tr id="row15883173774218"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p488303719428"><a name="p488303719428"></a><a name="p488303719428"></a>bio.cm.register_perm_timeout_sec</p>
+    <tr id="row15883173774218"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p488303719428"><a name="p488303719428"></a><a name="p488303719428"></a>ubsio.cm.register_perm_timeout_sec</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p14883173794216"><a name="p14883173794216"></a><a name="p14883173794216"></a>永久故障超时时间。</p>
     </td>
@@ -1050,7 +1050,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.5 "><p id="p13884113754213"><a name="p13884113754213"></a><a name="p13884113754213"></a>单位s。</p>
     </td>
     </tr>
-    <tr id="row8884103715422"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p2884113712421"><a name="p2884113712421"></a><a name="p2884113712421"></a>bio.cm.zk_host</p>
+    <tr id="row8884103715422"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p2884113712421"><a name="p2884113712421"></a><a name="p2884113712421"></a>ubsio.cm.zk_host</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p16210109123616"><a name="p16210109123616"></a><a name="p16210109123616"></a>ZooKeeper服务节点信息。</p>
     <p id="p19392141083711"><a name="p19392141083711"></a><a name="p19392141083711"></a>例如3节点ZK集群：127.0.0.1:2181,127.0.0.2:2181,127.0.0.3:2181。</p>
@@ -1064,7 +1064,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </tr>
     <tr id="row04761159183518"><td class="cellrowborder" rowspan="2" valign="top" width="9.99%" headers="mcps1.2.7.1.1 "><p id="p17477105973517"><a name="p17477105973517"></a><a name="p17477105973517"></a>Prometheus</p>
     </td>
-    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p4477115953512"><a name="p4477115953512"></a><a name="p4477115953512"></a>bio.prometheus.exposer</p>
+    <td class="cellrowborder" valign="top" width="20.01%" headers="mcps1.2.7.1.2 "><p id="p4477115953512"><a name="p4477115953512"></a><a name="p4477115953512"></a>ubsio.prometheus.exposer</p>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p184771359143514"><a name="p184771359143514"></a><a name="p184771359143514"></a>Prometheus Server的地址和端口号。</p>
     </td>
@@ -1075,7 +1075,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p2477105913356"><a name="p2477105913356"></a><a name="p2477105913356"></a>可选</p>
     </td>
     </tr>
-    <tr id="row188709354364"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1987023518366"><a name="p1987023518366"></a><a name="p1987023518366"></a>bio.prometheus.scrape_interval_sec</p>
+    <tr id="row188709354364"><td class="cellrowborder" valign="top" headers="mcps1.2.7.1.1 "><p id="p1987023518366"><a name="p1987023518366"></a><a name="p1987023518366"></a>ubsio.prometheus.scrape_interval_sec</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p10870153513617"><a name="p10870153513617"></a><a name="p10870153513617"></a>Prometheus采样频率。</p>
     </td>
@@ -1197,10 +1197,10 @@ UBS IO已经安装成功，需给予Server用户相应的权限读取下面文�
 
 **操作步骤<a name="section680517113144"></a>**
 
-1.  修改bio.conf配置文件，打开安全开关，相关配置文件写入到配置文件中的相应选项。
+1.  修改ubsio.conf配置文件，打开安全开关，相关配置文件写入到配置文件中的相应选项。
 
     >![](image/icon-note.gif) **说明：**  
-    > 1、如果有吊销证书列表文件，也需要将其放到Server目录下，并将其路径写入配置文件中的bio.net.tls.ca.crl.path项。  
+    > 1、如果有吊销证书列表文件，也需要将其放到Server目录下，并将其路径写入配置文件中的ubsio.net.tls.ca.crl.path项。
     > 2、如果无解密函数so，可提供明文口令或者不提供口令提供未加密私钥。  
     > 3、所有节点应使用相同的加密配置方式。
 
@@ -1316,8 +1316,8 @@ UBS IO已经安装成功，需给予Client用户相应的权限读取下面文�
 >-   分离部署和独立部署模式下UBS IO都存在独立运行进程bio\_daemon，明确规定在单个物理节点上有且仅有一个bio\_daemon进程，不允许存在多个bio\_daemon进程，此误操作会导致数据不一致风险。
 >-   在不支持数据缓存功能的计算节点启动bio\_daemon独立运行进程前，需要设置bio配置文件中的缓存资源为零，配置项如下所示。
      >    ```
->    bio.mem.size_in_gb = 0
->    bio.disk.path = /path/to/disk
+>    ubsio.mem.size_in_gb = 0
+>    ubsio.disk.path = /path/to/disk
 >    ```
 
 独立部署模式下UBS IO有独立的运行进程，要求首先启动UBS IO独立进程bio\_daemon，然后再启动JuiceFS进程。在JuiceFS进程启动过程中将自动加载UBS IO SDK链接库。bio\_daemon进程启动方式支持手动后台启动。

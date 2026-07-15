@@ -29,9 +29,9 @@ class Configuration;
 
 using ConfigurationPtr = Ref<Configuration>;
 
-constexpr const char* CONFIG_PATH = "/etc/boostio/bio.conf";
-constexpr const char* CONFIG_PATH_BAK = "/etc/boostio/bio.conf.bak";
-constexpr const char* CONFIG_PATH_BAK_INIT = "/etc/boostio/bio.conf.bak.init";
+constexpr const char* CONFIG_PATH = "/etc/ubsio/ubsio.conf";
+constexpr const char* CONFIG_PATH_BAK = "/etc/ubsio/ubsio.conf.bak";
+constexpr const char* CONFIG_PATH_BAK_INIT = "/etc/ubsio/ubsio.conf.bak.init";
 
 enum class ConfValueType {
     VINT = 0,

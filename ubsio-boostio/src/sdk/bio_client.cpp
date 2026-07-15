@@ -346,7 +346,7 @@ BResult BioClient::BioClientTraceInit()
 {
     auto flag = mNetEngine->GetHtraceFlag();
     if (flag && mMode == SEPARATES) {
-        const std::string dumpDir = "/var/log/boostio/clienttrace/";
+        const std::string dumpDir = "/var/log/ubsio/clienttrace/";
         auto ret = ock::htracer::HTracerInit(dumpDir);
         ock::htracer::HTracerSetEnable(true);
         ChkTrue(ret == BIO_OK, BIO_ERR, "Failed to init tracer, result:" << ret << ", dumpDir:" << dumpDir << ".");

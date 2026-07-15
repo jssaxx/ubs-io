@@ -37,7 +37,7 @@ Options:
                         Device count used by the standalone disk-selection
                         algorithm when calculating the memcache SSD capacity
                         recommendation. Defaults to TOTAL. Use 0 to model
-                        legacy bio.standalone.device_count = 0.
+                        legacy ubsio.standalone.device_count = 0.
       --recommend-reserve-gb GB
                         Metadata capacity to reserve from the smallest
                         selected SSD capacity before printing the memcache
@@ -259,7 +259,7 @@ print_bio_disk_path_config() {
     config_value="$(join_by_colon "${PARTITION_PATHS[@]}")"
 
     info "BoostIO disk config:"
-    echo "bio.disk.path = ${config_value}"
+    echo "ubsio.disk.path = ${config_value}"
 }
 
 print_memcache_ssd_capacity_recommendation() {
@@ -374,7 +374,7 @@ print_memcache_ssd_capacity_recommendation() {
     recommended_gb=$((usable_bytes / 1024 / 1024 / 1024))
 
     info "Memcache local_server SSD capacity recommendation:"
-    echo "bio.standalone.device_count = ${STANDALONE_DEVICE_COUNT}"
+    echo "ubsio.standalone.device_count = ${STANDALONE_DEVICE_COUNT}"
     echo "selection.device.count = ${device_count}"
     echo "metadata.reserve.gb = ${RECOMMEND_RESERVE_GB}"
     echo "recommended.ssd.capacity.gb = ${recommended_gb}"

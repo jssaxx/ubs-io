@@ -2,13 +2,13 @@
 
 ## 背景
 
-当前 UBS IO 默认要求配置 SSD，`bio.disk.path` 会被解析为本地磁盘列表，并驱动 BDM、CM 磁盘注册、WCache disk tier、RCache disk flow 等路径初始化。
+当前 UBS IO 默认要求配置 SSD，`ubsio.disk.path` 会被解析为本地磁盘列表，并驱动 BDM、CM 磁盘注册、WCache disk tier、RCache disk flow 等路径初始化。
 
 在只需要内存缓存能力的场景下，节点不接 SSD，也不接 underFs。此时数据只保留在 WCache memory flow 中，超过内存水位后直接淘汰丢弃。该场景要求与当前 WCache 分层架构保持一致，不新增独立的 memory-only cache 架构。
 
 ## 目标
 
-- 支持 `bio.disk.path` 为空时启动 UBS IO。
+- 支持 `ubsio.disk.path` 为空时启动 UBS IO。
 - 配置 SSD 时保持原有行为：WCache memory 超水位后淘汰到 SSD。
 - 未配置 SSD 时复用原有内存淘汰调度：WCache memory 超水位后直接 discard。
 - RCache 不新增显式开关，由现有内存读写配比控制；无 SSD 时支持 memory-only RCache。
@@ -25,16 +25,16 @@
 
 ### SSD 是否启用
 
-通过 `bio.disk.path` 推导：
+通过 `ubsio.disk.path` 推导：
 
 ```ini
-bio.disk.path = /dev/ssd0:/dev/ssd1
+ubsio.disk.path = /dev/ssd0:/dev/ssd1
 ```
 
 表示存在 SSD，启用 disk tier。
 
 ```ini
-bio.disk.path =
+ubsio.disk.path =
 ```
 
 表示无 SSD，不启用 disk tier。
@@ -46,13 +46,13 @@ bio.disk.path =
 通过现有内存读写配比推导：
 
 ```ini
-bio.cache.mem_read_write_ratio = 5:5
+ubsio.cache.mem_read_write_ratio = 5:5
 ```
 
 表示给 RCache 分配读缓存资源，允许启用 RCache。
 
 ```ini
-bio.cache.mem_read_write_ratio = 0:10
+ubsio.cache.mem_read_write_ratio = 0:10
 ```
 
 表示不给 RCache 分配读缓存资源，不启用 RCache。
@@ -68,19 +68,19 @@ enableRCache = memReadRatio > 0;
 ### 无 SSD 推荐配置
 
 ```ini
-bio.disk.path =
-bio.underfs.file_system_type = none
-bio.cache.mem_read_write_ratio = 0:10
-bio.wcache.evict_water_level = 90
+ubsio.disk.path =
+ubsio.underfs.file_system_type = none
+ubsio.cache.mem_read_write_ratio = 0:10
+ubsio.wcache.evict_water_level = 90
 ```
 
 如果希望无 SSD 场景仍启用 RCache，可将读比例设置为非 0，例如：
 
 ```ini
-bio.cache.mem_read_write_ratio = 2:8
+ubsio.cache.mem_read_write_ratio = 2:8
 ```
 
-如果无 SSD 且 `bio.wcache.evict_water_level = 0`，内部默认将内存淘汰水位调整为 `90`，避免写入后立即全部淘汰。
+如果无 SSD 且 `ubsio.wcache.evict_water_level = 0`，内部默认将内存淘汰水位调整为 `90`，避免写入后立即全部淘汰。
 
 ## 架构设计
 
@@ -138,7 +138,7 @@ ubsio-boostio/src/config/bio_config_instance.cpp
 
 - 增加内部运行态 `DaemonConfig::hasDiskCache`。
 - 保留内部运行态 `DaemonConfig::enableRCache`，但不新增外部配置。
-- `bio.disk.path` 为空时：
+- `ubsio.disk.path` 为空时：
   - `hasDiskCache = false`
   - 清空 `diskList` 和 `diskCaps`
   - 不再将 `memCap` 清零
@@ -254,11 +254,11 @@ rcache.diskUsedSize = 0
 
 ## 验证建议
 
-- `bio.disk.path` 非空时，验证原有 SSD 模式 memory 到 disk 淘汰不变。
-- `bio.disk.path` 为空时，验证服务启动不依赖 BDM。
-- `bio.disk.path` 为空时，验证 CM 注册包含虚拟 `diskId = 0`。
-- `bio.cache.mem_read_write_ratio = 0:10` 时，验证不初始化 RCache。
-- `bio.disk.path` 为空且 `bio.cache.mem_read_write_ratio` 读比例非 0 时，验证 RCache 只创建 memory tier。
+- `ubsio.disk.path` 非空时，验证原有 SSD 模式 memory 到 disk 淘汰不变。
+- `ubsio.disk.path` 为空时，验证服务启动不依赖 BDM。
+- `ubsio.disk.path` 为空时，验证 CM 注册包含虚拟 `diskId = 0`。
+- `ubsio.cache.mem_read_write_ratio = 0:10` 时，验证不初始化 RCache。
+- `ubsio.disk.path` 为空且 `ubsio.cache.mem_read_write_ratio` 读比例非 0 时，验证 RCache 只创建 memory tier。
 - 无 SSD 写入超过水位后，验证 memory slice 被 discard，后续读返回 `BIO_NOT_EXISTS`。
 - 验证无 SSD 下 `WRITE_THROUGH` 返回 `BIO_INVALID_PARAM`。
 - 验证无 SSD 下资源查询 disk 资源为 0。

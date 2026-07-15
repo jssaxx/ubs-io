@@ -8,7 +8,7 @@
 ```
 ### 2.配置文件新修改
 ```bash
-boostio(/etc/boostio/bio.conf)配置文件增加配置项bio_cli_tools_enable = true
+boostio(/etc/ubsio/ubsio.conf)配置文件增加配置项ubsio_cli_tools_enable = true
 ```
 
 ## 2. 启动cli
