@@ -7,13 +7,14 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--build_boostio <ON|OFF>]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--build_boostio <ON|OFF>] [--build_python <ON|OFF>]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release"
     echo " 2 ./build.sh -t debug"
     echo " 3 ./build.sh -t debug --ut"
     echo " 4 ./build.sh -t release --build_boostio ON // Build ubsio-boostio before ubsio-kv"
+    echo " 5 ./build.sh -t release --build_python OFF // Skip Python binding and wheel packaging"
     echo
     exit 1;
 }
@@ -25,6 +26,7 @@ BOOSTIO_INCLUDE_DIR="${BOOSTIO_DIR}/src/sdk"
 BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
 BUILD_BOOSTIO=OFF
+BUILD_PYTHON=ON
 BUILD_TYPE=release
 arch=$(uname -m)
 
@@ -55,6 +57,12 @@ while true; do
             boostio_flag=${boostio_flag^^}
             [[ "$boostio_flag" != "ON" && "$boostio_flag" != "OFF" ]] && echo "Invalid build_boostio flag $2" && usage
             BUILD_BOOSTIO=$boostio_flag
+            shift 2 ;;
+        --build_python )
+            python_flag="$2"
+            python_flag=${python_flag^^}
+            [[ "$python_flag" != "ON" && "$python_flag" != "OFF" ]] && echo "Invalid build_python flag $2" && usage
+            BUILD_PYTHON=$python_flag
             shift 2 ;;
         -h | -help )
             usage
@@ -100,6 +108,7 @@ fi
 
 CMAKE_FLAGS=""
 CMAKE_FLAGS+="-DUBSIO_BOOSTIO_INCLUDE_DIR=${BOOSTIO_INCLUDE_DIR} "
+CMAKE_FLAGS+="-DBUILD_PYTHON=${BUILD_PYTHON} "
 
 if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "
@@ -123,34 +132,37 @@ $BUILD_CMD || {
     exit 1
 }
 
-# PYTHON_HOME后续按照正式编译工程适配 /opt/buildtools/python-3.10
+if [[ "$BUILD_PYTHON" == "ON" ]]; then
+    # PYTHON_HOME后续按照正式编译工程适配 /opt/buildtools/python-3.10
+    if pip3 show wheel; then
+        echo "wheel has been installed"
+    else
+        echo "wheel installing"
+        pip3 install wheel
+    fi
 
-if pip3 show wheel; then
-  echo "wheel has been installed"
-else
-  echo "wheel installing"
-  pip3 install wheel
+    \cp -v ${PROJ_DIR}/Build/src/python/sdk/c2python_sdk.cpython*.so ${PROJ_DIR}/python_whl/pykvc/pykvc/
+
+    cd ${PROJ_DIR}/python_whl/pykvc/
+    rm -rf build/
+    rm -rf dist/
+    rm -rf *.egg-info/
+    python3 setup.py bdist_wheel --py-limited-api=cp37
+
+    mkdir -p ${PROJ_DIR}/dist/pkg
+    wheel_file=$(find ${PROJ_DIR}/python_whl/pykvc/dist -maxdepth 1 -name 'pykvc-1.0.0-cp37-abi3-linux_*.whl' | head -n 1)
+    if [[ -z "${wheel_file}" ]]; then
+        echo "Failed to find pykvc wheel package."
+        exit 1
+    fi
+    \cp -rf ${wheel_file} ${PROJ_DIR}/dist/pkg
 fi
-
-\cp -v ${PROJ_DIR}/Build/src/python/sdk/c2python_sdk.cpython*.so ${PROJ_DIR}/python_whl/pykvc/pykvc/
-
-cd ${PROJ_DIR}/python_whl/pykvc/
-rm -rf build/
-rm -rf dist/
-rm -rf *.egg-info/
-python3 setup.py bdist_wheel --py-limited-api=cp37
-
-mkdir -p ${PROJ_DIR}/dist/pkg
-wheel_file=$(find ${PROJ_DIR}/python_whl/pykvc/dist -maxdepth 1 -name 'pykvc-1.0.0-cp37-abi3-linux_*.whl' | head -n 1)
-if [[ -z "${wheel_file}" ]]; then
-    echo "Failed to find pykvc wheel package."
-    exit 1
-fi
-\cp -rf ${wheel_file} ${PROJ_DIR}/dist/pkg
 
 echo ""
 echo "Build completed successfully!"
 echo "Output files:"
-echo "  Whl pkg: ${PROJ_DIR}/dist/pkg/"
+if [[ "$BUILD_PYTHON" == "ON" ]]; then
+    echo "  Whl pkg: ${PROJ_DIR}/dist/pkg/"
+fi
 echo "  Library: ${PROJ_DIR}/dist/lib/"
 echo "  Header:  ${PROJ_DIR}/dist/include/"

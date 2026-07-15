@@ -310,13 +310,11 @@ if [[ "$BUILD_KV" == "ON" ]]; then
     mkdir -p ${PROJ_DIR}/dist/boostio/kv
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/lib
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/include
-    mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
     cd ${PROJ_DIR}/../ubsio-kv/
-    bash build.sh -t ${BUILD_TYPE}
+    bash build.sh -t ${BUILD_TYPE} --build_python OFF
     cd ${PROJ_DIR}/dist
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.
-    \cp ${PROJ_DIR}/../ubsio-kv/dist/pkg/* ${PROJ_DIR}/dist/boostio/kv/pkg/.
 fi
 
 if [[ "$BUILD_PKG" == "ON" ]]; then

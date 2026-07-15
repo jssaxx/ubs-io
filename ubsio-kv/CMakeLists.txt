@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.16)
 project(ubsio-kv VERSION 1.0.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
+option(BUILD_PYTHON "Build the UBSIO-KV Python binding" ON)
 
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
+message(STATUS "BUILD_PYTHON: ${BUILD_PYTHON}")
 
 set(KV_COMMON_FLAGS "")
 if (CMAKE_BUILD_TYPE STREQUAL "debug")
