@@ -44,31 +44,31 @@ BioInitialize(STANDALONE, optConf);
 
 | 配置项 | 单机模式含义 |
 | --- | --- |
-| `bio.disk.path` | 缓存盘或分区列表，使用 `:` 分隔。单机启动时会先根据 `BioSetStandaloneDevice(deviceId)` 和 `bio.standalone.device_count` 选择当前进程实际使用的子集，再交给 BDM 启动。 |
-| `bio.standalone.device_count` | 新增配置。默认 `0` 表示兼容旧逻辑：`deviceId` 直接对应 `bio.disk.path` 的下标，只选择一个盘。大于 `0` 时表示本机单机实例总数，算法会把 `bio.disk.path` 中的盘均衡分配到 `[0, device_count)` 的各个 `deviceId`。 |
-| `bio.segment.size_in_mb` | cache segment、BDM chunk、standalone server memory pool block 的大小。server 通过 runtime config 将其作为 `dataMsgBlockSize` 传给 SDK。 |
-| `bio.mem.size_in_gb` | 单机 server 内存池总容量。没有 NetEngine 时，FlowManager 的 memory allocator 使用 `StandaloneMemoryPool` 从该容量中分配。 |
-| `bio.sdkmem.size_in_mb` | 单机 SDK data message pool 总容量，用于 BatchGet 返回数据缓冲。SDK 侧通过匿名 `mmap` 建池，不再依赖 shm fd 或 MR key。 |
-| `bio.cm.pts_count` | 单机模式不启动 CM，但仍使用该值生成本地 `PtView`。PT id 范围为 `[0, pts_count)`，至少生成 1 个 PT。 |
-| `bio.cm.copy_num`、`bio.cm.initial.nodes_count`、`bio.cm.zk_host` | 单机模式不依赖这些 CM 注册和 ZooKeeper 配置。保留配置项主要是为了兼容现有配置结构。 |
-| `bio.net.data.*` | 单机模式不启动 NetEngine。`dataIp`、`dataPort`、`protocol` 会进入 synthetic `NodeView` 或 runtime config，主要用于兼容视图和诊断字段。 |
-| `bio.work.scene`、`bio.work.io.alignsize`、`bio.work.io.timeout`、`bio.work.net.timeout` | 通过 `GetRuntimeConfig` 传给 SDK，复用原有工作场景、对齐和超时校验逻辑。 |
-| `bio.batchget.thread.num` | server 侧 BatchGet executor 线程数，单机和非单机都由 MirrorServer 使用。 |
-| `bio.data.crc.enable` | 单机 direct-call 路径仍按配置启用 CRC。 |
-| `bio.trace.enable`、`bio_cli_tools_enable`、`bio.prometheus.*` | 单机模式继续读取这些诊断、trace、Prometheus 配置，但初始化路径由 direct mode 获取配置，不走 IPC 协商。 |
-| `bio.underfs.*` | UnderFs 模块仍会初始化，写穿、加载等后端访问能力继续依赖该配置。 |
+| `ubsio.disk.path` | 缓存盘或分区列表，使用 `:` 分隔。单机启动时会先根据 `BioSetStandaloneDevice(deviceId)` 和 `ubsio.standalone.device_count` 选择当前进程实际使用的子集，再交给 BDM 启动。 |
+| `ubsio.standalone.device_count` | 新增配置。默认 `0` 表示兼容旧逻辑：`deviceId` 直接对应 `ubsio.disk.path` 的下标，只选择一个盘。大于 `0` 时表示本机单机实例总数，算法会把 `ubsio.disk.path` 中的盘均衡分配到 `[0, device_count)` 的各个 `deviceId`。 |
+| `ubsio.segment.size_in_mb` | cache segment、BDM chunk、standalone server memory pool block 的大小。server 通过 runtime config 将其作为 `dataMsgBlockSize` 传给 SDK。 |
+| `ubsio.mem.size_in_gb` | 单机 server 内存池总容量。没有 NetEngine 时，FlowManager 的 memory allocator 使用 `StandaloneMemoryPool` 从该容量中分配。 |
+| `ubsio.sdkmem.size_in_mb` | 单机 SDK data message pool 总容量，用于 BatchGet 返回数据缓冲。SDK 侧通过匿名 `mmap` 建池，不再依赖 shm fd 或 MR key。 |
+| `ubsio.cm.pts_count` | 单机模式不启动 CM，但仍使用该值生成本地 `PtView`。PT id 范围为 `[0, pts_count)`，至少生成 1 个 PT。 |
+| `ubsio.cm.copy_num`、`ubsio.cm.initial.nodes_count`、`ubsio.cm.zk_host` | 单机模式不依赖这些 CM 注册和 ZooKeeper 配置。保留配置项主要是为了兼容现有配置结构。 |
+| `ubsio.net.data.*` | 单机模式不启动 NetEngine。`dataIp`、`dataPort`、`protocol` 会进入 synthetic `NodeView` 或 runtime config，主要用于兼容视图和诊断字段。 |
+| `ubsio.work.scene`、`ubsio.work.io.alignsize`、`ubsio.work.io.timeout`、`ubsio.work.net.timeout` | 通过 `GetRuntimeConfig` 传给 SDK，复用原有工作场景、对齐和超时校验逻辑。 |
+| `ubsio.batchget.thread.num` | server 侧 BatchGet executor 线程数，单机和非单机都由 MirrorServer 使用。 |
+| `ubsio.data.crc.enable` | 单机 direct-call 路径仍按配置启用 CRC。 |
+| `ubsio.trace.enable`、`ubsio_cli_tools_enable`、`ubsio.prometheus.*` | 单机模式继续读取这些诊断、trace、Prometheus 配置，但初始化路径由 direct mode 获取配置，不走 IPC 协商。 |
+| `ubsio.underfs.*` | UnderFs 模块仍会初始化，写穿、加载等后端访问能力继续依赖该配置。 |
 
 典型多实例配置示例：
 
 ```ini
-bio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme1n1p1:/dev/nvme1n1p2
-bio.standalone.device_count = 2
-bio.segment.size_in_mb = 4
-bio.mem.size_in_gb = 50
-bio.sdkmem.size_in_mb = 5120
+ubsio.disk.path = /dev/nvme0n1p1:/dev/nvme0n1p2:/dev/nvme1n1p1:/dev/nvme1n1p2
+ubsio.standalone.device_count = 2
+ubsio.segment.size_in_mb = 4
+ubsio.mem.size_in_gb = 50
+ubsio.sdkmem.size_in_mb = 5120
 ```
 
-在上述配置中，`deviceId = 0` 和 `deviceId = 1` 会分别选择一组磁盘或分区。若 `bio.standalone.device_count = 0`，则 `deviceId = 1` 只选择 `bio.disk.path` 中下标为 1 的路径。
+在上述配置中，`deviceId = 0` 和 `deviceId = 1` 会分别选择一组磁盘或分区。若 `ubsio.standalone.device_count = 0`，则 `deviceId = 1` 只选择 `ubsio.disk.path` 中下标为 1 的路径。
 
 ## 主要修改部分
 
@@ -131,16 +131,16 @@ BatchExist 在单机模式中也走本地 direct-call：
 
 ### 磁盘选择算法添加
 
-`bio.standalone.device_count` 用于支持一个配置文件描述多个单机实例的磁盘资源。
+`ubsio.standalone.device_count` 用于支持一个配置文件描述多个单机实例的磁盘资源。
 
 选择逻辑：
 
 1. `BioConfig::SetStandaloneDeviceInfo(deviceId)` 记录当前进程 id；调用时序由 SDK 层保证在 `BioInitialize(STANDALONE)` 前完成。
 2. `SelectStandaloneDiskByDeviceInfo()` 校验磁盘列表、容量列表和 device id。
-3. 当 `bio.standalone.device_count = 0` 时，使用兼容逻辑：`deviceId` 必须小于 `bio.disk.path` 个数，并直接选择该下标路径。
-4. 当 `bio.standalone.device_count > 0` 时：
+3. 当 `ubsio.standalone.device_count = 0` 时，使用兼容逻辑：`deviceId` 必须小于 `ubsio.disk.path` 个数，并直接选择该下标路径。
+4. 当 `ubsio.standalone.device_count > 0` 时：
    - `deviceId` 必须在 `[0, device_count)` 内。
-   - `bio.disk.path` 数量必须不少于 `device_count`。
+   - `ubsio.disk.path` 数量必须不少于 `device_count`。
    - 按 `FileUtil::GetPhysicalDiskKey()` 将分区归组；获取失败时以路径本身作为分组 key。
    - 在各组内按轮次把磁盘分配到实例，尽量保证每个实例磁盘数量差不超过 1，并尽量把同一物理盘的多个分区打散到不同实例。
 5. 选择完成后，`mDaemonConfig.diskList` 和 `diskCaps` 会被收缩为当前进程实际使用的磁盘子集，后续 BDM 只看到该子集。
@@ -152,7 +152,7 @@ BDM 也增加了 standalone metadata 防串用能力：
 3. 旧的 cluster pad 仍保留兼容恢复行为。
 4. `BdmStart` 增加磁盘数量上限校验。
 
-`scripts/partition_disks.sh` 用于把整盘或 loop 设备等分成多个分区，并输出可直接写入 `bio.disk.path` 的配置。默认 dry-run，只有加 `--yes` 才会实际写分区表；`--wipe-metadata` 会清理旧文件系统签名和 BoostIO BDM 头。
+`scripts/partition_disks.sh` 用于把整盘或 loop 设备等分成多个分区，并输出可直接写入 `ubsio.disk.path` 的配置。默认 dry-run，只有加 `--yes` 才会实际写分区表；`--wipe-metadata` 会清理旧文件系统签名和 BoostIO BDM 头。
 
 ### 内存池添加
 
@@ -160,8 +160,8 @@ BDM 也增加了 standalone metadata 防串用能力：
 
 `StandaloneMemoryPool` 的职责：
 
-1. 使用 `mmap(MAP_PRIVATE | MAP_ANONYMOUS)` 按 `bio.mem.size_in_gb` 创建 server 内存池。
-2. 按 `bio.segment.size_in_mb` 切成固定 block，并复用 `NetBlockPool` 管理空闲 block。
+1. 使用 `mmap(MAP_PRIVATE | MAP_ANONYMOUS)` 按 `ubsio.mem.size_in_gb` 创建 server 内存池。
+2. 按 `ubsio.segment.size_in_mb` 切成固定 block，并复用 `NetBlockPool` 管理空闲 block。
 3. 提供 `Alloc(size, address)` 和 `Free(address)`，校验 size、启动状态和 block 地址合法性。
 4. 维护 `mUsedBlock`，供 `BioServer::GetMemUsedSize()` 和写缓存策略使用。
 5. 在 `BioStandaloneMemInit()` 中注册为 `FlowManager` 的 memory allocator。
@@ -178,7 +178,7 @@ SDK 侧还增加了 standalone data message pool：
 
 1. `localNid` 固定为当前 group 下的 vnode `0`。
 2. `NodeView` 只包含一个本地节点，节点磁盘状态来自 `BdmGetDiskStatus(diskId)`。
-3. `PtView` 生成 `[0, bio.cm.pts_count)` 的 PT，版本固定为 `1`。
+3. `PtView` 生成 `[0, ubsio.cm.pts_count)` 的 PT，版本固定为 `1`。
 4. 每个 PT 只有一个本地 copy，master node 为 `0`，master disk 使用 `ptId % diskNum` 轮询分配。
 5. 如果目标 disk 正常，PT 为 `CM_PT_NORMAL`、copy 为 `CM_COPY_RUNNING`；如果目标 disk 故障，PT 为 `CM_PT_FAULT`、copy 为 `CM_COPY_DOWN`。
 
@@ -225,6 +225,6 @@ bash build.sh -t debug --ut --san=asan
 1. `BioSetStandaloneDevice` 必须先于 `BioInitialize(STANDALONE, ...)` 调用，且初始化后不能再修改 device id。
 2. 单机模式不启动 Net 和 CM，因此不支持依赖跨节点连接、CM CRB、ZooKeeper 发布订阅的能力。
 3. `BioBatchGetKeyDiskAddr` 当前只支持分离部署路径；direct mode 下会返回不支持。
-4. 单机模式不支持运行时动态加盘。需要调整磁盘时，应停进程、修改 `bio.disk.path` 或 `bio.standalone.device_count`，必要时清理 BDM metadata 后重新启动。
+4. 单机模式不支持运行时动态加盘。需要调整磁盘时，应停进程、修改 `ubsio.disk.path` 或 `ubsio.standalone.device_count`，必要时清理 BDM metadata 后重新启动。
 5. 复用已有磁盘或分区时要注意 BDM disk head 中的 standalone device id。device id 不匹配会拒绝恢复，避免不同单机实例误用同一份缓存盘。
-6. `bio.disk.path` 可以在配置阶段写入多于 BDM 单进程上限的路径，但磁盘选择后交给 BDM 的实际路径数仍必须满足 BDM 限制。
+6. `ubsio.disk.path` 可以在配置阶段写入多于 BDM 单进程上限的路径，但磁盘选择后交给 BDM 的实际路径数仍必须满足 BDM 限制。

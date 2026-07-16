@@ -92,7 +92,7 @@ package_libs() {
     copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/libboundscheck/lib" "${pkg_lib_dir}" \
         libboundscheck.so
 
-    if [[ "$BUILD_TYPE" == "debug" ]]; then
+    if [[ "$CLI_FLAG" == "ON" ]]; then
         copy_named_libs_from_dir "${PROJ_DIR}/dist/test_tools/lib" "${pkg_lib_dir}" \
             libcli_agent.so \
             libsdk_diagnose.so \
@@ -308,7 +308,7 @@ if [[ "$CLI_FLAG" == "ON" && "$BUILD_UT" != "ON" ]]; then
     mv ${PROJ_DIR}/../ubsio-common/cli/Build/src/libcli_agent.so test_tools/lib/.
     mv ${PROJ_DIR}/../ubsio-common/cli/Build/src/cli_server test_tools/bin/.
     mv ${PROJ_DIR}/../ubsio-common/cli/Build/src/cli_client test_tools/bin/.
-    \cp ../configs/bio_sdk_test.conf test_tools/conf/.
+    \cp ../configs/ubsio_sdk_test.conf test_tools/conf/.
     tar -czvf BoostIO_$(uname -s)-$(arch)_test_tools.tar.gz test_tools
 fi
 

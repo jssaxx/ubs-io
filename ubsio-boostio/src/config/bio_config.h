@@ -29,9 +29,9 @@ class Configuration;
 
 using ConfigurationPtr = Ref<Configuration>;
 
-constexpr const char* CONFIG_PATH = "/etc/boostio/bio.conf";
-constexpr const char* CONFIG_PATH_BAK = "/etc/boostio/bio.conf.bak";
-constexpr const char* CONFIG_PATH_BAK_INIT = "/etc/boostio/bio.conf.bak.init";
+constexpr const char* CONFIG_PATH = "/etc/ubsio/ubsio.conf";
+constexpr const char* CONFIG_PATH_BAK = "/etc/ubsio/ubsio.conf.bak";
+constexpr const char* CONFIG_PATH_BAK_INIT = "/etc/ubsio/ubsio.conf.bak.init";
 
 enum class ConfValueType {
     VINT = 0,
@@ -90,6 +90,11 @@ public:
             std::string key;
             std::string value;
             kv.GetI(i, key, value);
+            if (key.compare(0, 4, "bio.") == 0) {
+                std::cout << "Configuration key <" << key << "> is deprecated; use <ubsio."
+                          << key.substr(4) << ">." << std::endl;
+                key.replace(0, 4, "ubsio.");
+            }
             if (!conf->SetWithTypeAutoConvert(key, value) && stopIfInvalid) {
                 std::cout << "Failed to set a key/value pair for key<" << key << "> value<" << value << ">" <<
                     std::endl;

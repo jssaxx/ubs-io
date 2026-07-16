@@ -530,7 +530,7 @@ void BioConfig::BakFileProcess(const std::string &configPath)
         return;
     }
 
-    // 3、存在则删除老conf文件（存在，不存在则忽略），并将.bak重命名问bio.conf
+    // 3、存在则删除老conf文件（存在，不存在则忽略），并将.bak重命名问ubsio.conf
     if (FileUtil::Exist(currentConfigPath)) {
         if (std::remove(currentConfigPath.c_str()) != 0) {
             LOG_ERROR("Remove configPath error.");
@@ -629,7 +629,7 @@ BResult BioConfig::SelectStandaloneDiskLegacy(uint16_t diskNum)
 {
     if (mStandaloneDeviceInfo.deviceId >= diskNum) {
         LOG_ERROR("Invalid standalone device info, deviceId:" << mStandaloneDeviceInfo.deviceId <<
-            ", diskPathNum:" << diskNum << ". The device id must match the index in bio.disk.path.");
+            ", diskPathNum:" << diskNum << ". The device id must match the index in ubsio.disk.path.");
         return BIO_INVALID_PARAM;
     }
     auto diskIndexes = std::vector<uint32_t>{ mStandaloneDeviceInfo.deviceId };
@@ -727,7 +727,7 @@ BResult BioConfig::AddDiskPath(const std::string &diskPath, const std::string &c
         return BIO_INNER_ERR;
     }
 
-    std::string configKey = "bio.disk.path";
+    std::string configKey = "ubsio.disk.path";
     std::string newDiskConfig = ":" + diskPath;
     ret = FileUtil::AppendConfigToLine(lines, configKey, newDiskConfig);
     if (UNLIKELY(!ret)) {

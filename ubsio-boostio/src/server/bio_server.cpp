@@ -153,7 +153,7 @@ BioServer::BioServer() noexcept
 
 BResult BioServer::InitializeRuntime()
 {
-    std::string path = "/var/log/boostio/";
+    std::string path = "/var/log/ubsio/";
 #ifdef DEBUG_UT
     path = "./";
 #endif
@@ -292,7 +292,7 @@ BResult BioServer::BioConfigInit()
     BResult result = BIO_INNER_ERR;
     BIO_TP_START(CONFIG_INIT_FAIL, &result, -1);
 #ifdef DEBUG_UT
-    const std::string confPath = "./bio_old.conf";
+    const std::string confPath = "./ubsio_old.conf";
 #else
     std::string confPath = CONFIG_PATH;
     const char *envConfPath = getenv(BIO_CONFIG_ENV);
@@ -347,7 +347,7 @@ BResult BioServer::BioTraceInit()
 #ifdef DEBUG_UT
     const std::string dumpDir = "./";
 #else
-    const std::string dumpDir = "/var/log/boostio/trace/";
+    const std::string dumpDir = "/var/log/ubsio/trace/";
 #endif
     FileUtil::MakeDirRecursive(dumpDir, LOG_DIR_MODE);
     auto ret = ock::htracer::HTracerInit(dumpDir);

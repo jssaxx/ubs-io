@@ -1350,7 +1350,7 @@ void diagnose::BioServerCommand::BioServerDebugProcess(int argc, char *argv[]) n
         if (cmds.size() != 2) {
             mPrintOp("Input parameters failed!, num:%d\n", cmds.size());
         }
-        if (!ValidateRatios("bio.cache.mem_read_write_ratio", cmds[1], errMsg)) {
+        if (!ValidateRatios("ubsio.cache.mem_read_write_ratio", cmds[1], errMsg)) {
             mPrintOp("Input parameters failed!, %s, values %s\n", errMsg.c_str(), cmds[1].c_str());
             return;
         }
@@ -1360,7 +1360,7 @@ void diagnose::BioServerCommand::BioServerDebugProcess(int argc, char *argv[]) n
             mPrintOp("Input parameters failed!, num:%d\n", cmds.size());
             return;
         }
-        if (!ValidateRatios("bio.cache.disk_read_write_ratio", cmds[1], errMsg)) {
+        if (!ValidateRatios("ubsio.cache.disk_read_write_ratio", cmds[1], errMsg)) {
             mPrintOp("Input parameters failed!, %s, values %s\n", errMsg.c_str(), cmds[1].c_str());
             return;
         }
