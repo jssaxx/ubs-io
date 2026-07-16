@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--pkg [pkg_dir]] [--prepare_3rdparty]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--cli=Diagnose] [--tp=tracepoint] [--pms=prometheus] [--san=asan] [--build_kv <ON|OFF>] [--build_kv_python <ON|OFF>] [--pkg [pkg_dir]] [--prepare_3rdparty]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release // 禁止添加tp功能, 对外发布包禁止添加cli功能"
@@ -15,9 +15,10 @@ usage() {
     echo " 3 ./build.sh -t debug [--ut] // 限制仅DT构建脚本使用"
     echo " 4 ./build.sh -t debug --san=asan // Build BoostIO and test tools with ASan+UBSan"
     echo " 5 ./build.sh -t release --build_kv OFF // Skip UBSIO-KV packaging"
-    echo " 6 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
-    echo " 7 ./build.sh -t release --pkg /tmp/boostio-lib // Copy built libraries to specified directory"
-    echo " 8 ./build.sh --prepare_3rdparty // Download pinned third-party sources for offline builds"
+    echo " 6 ./build.sh -t release --build_kv_python ON // Build UBSIO-KV Python binding and wheel"
+    echo " 7 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
+    echo " 8 ./build.sh -t release --pkg /tmp/boostio-lib // Copy built libraries to specified directory"
+    echo " 9 ./build.sh --prepare_3rdparty // Download pinned third-party sources for offline builds"
     echo
     exit 1;
 }
@@ -108,6 +109,7 @@ CLI_FLAG=OFF
 PROMETHEUS_FLAG=OFF
 SANITIZER_FLAG=OFF
 BUILD_KV=ON
+BUILD_KV_PYTHON=OFF
 BUILD_PKG=OFF
 PKG_LIB_DIR=""
 CUSTOM_PKG_LIB_DIR=OFF
@@ -154,6 +156,12 @@ while true; do
             kv_flag=${kv_flag^^}
             [[ "$kv_flag" != "ON" && "$kv_flag" != "OFF" ]] && echo "Invalid build_kv flag $2" && usage
             BUILD_KV=$kv_flag
+            shift 2 ;;
+        --build_kv_python )
+            kv_python_flag="$2"
+            kv_python_flag=${kv_python_flag^^}
+            [[ "$kv_python_flag" != "ON" && "$kv_python_flag" != "OFF" ]] && echo "Invalid build_kv_python flag $2" && usage
+            BUILD_KV_PYTHON=$kv_python_flag
             shift 2 ;;
         --pkg )
             BUILD_PKG=ON
@@ -310,11 +318,17 @@ if [[ "$BUILD_KV" == "ON" ]]; then
     mkdir -p ${PROJ_DIR}/dist/boostio/kv
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/lib
     mkdir -p ${PROJ_DIR}/dist/boostio/kv/include
+    if [[ "$BUILD_KV_PYTHON" == "ON" ]]; then
+        mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
+    fi
     cd ${PROJ_DIR}/../ubsio-kv/
-    bash build.sh -t ${BUILD_TYPE} --build_python OFF
+    bash build.sh -t ${BUILD_TYPE} --build_python ${BUILD_KV_PYTHON}
     cd ${PROJ_DIR}/dist
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.
+    if [[ "$BUILD_KV_PYTHON" == "ON" ]]; then
+        \cp ${PROJ_DIR}/../ubsio-kv/dist/pkg/* ${PROJ_DIR}/dist/boostio/kv/pkg/.
+    fi
 fi
 
 if [[ "$BUILD_PKG" == "ON" ]]; then

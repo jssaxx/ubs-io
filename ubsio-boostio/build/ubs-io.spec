@@ -31,7 +31,7 @@ Contains header files and development resources for ubs-io.
 
 %build
 pushd ubsio-boostio
-bash -x build.sh -t %{build_type} --cli
+bash -x build.sh -t %{build_type} --cli --build_kv_python ON
 popd
 
 %install
