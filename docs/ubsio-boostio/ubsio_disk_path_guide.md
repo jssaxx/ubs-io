@@ -141,6 +141,10 @@ LOOP_DEV=$(sudo losetup --find --show --direct-io=on /data/boostio_disk.img)
 echo "${LOOP_DEV}"
 # 示例输出：/dev/loop2
 
+# 验证 direct_io 已开启
+losetup -l "${LOOP_DEV}" | grep -i direct
+# 期望输出包含：Direct I/O: on
+
 # 分区
 sudo bash /path/to/partition_disks.sh \
     --parts 4 --disk "${LOOP_DEV}" -c 4 --yes -f -w
