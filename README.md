@@ -35,7 +35,7 @@ UBS IO 是面向 LLM 推理场景的 L3 分布式 KV Cache 缓存系统，聚焦
 - **标准 KV Cache 访问**：覆盖初始化、退出、写入、读取、删除、存在性查询、长度查询，以及批量写入、批量读取、批量删除、批量查询等操作。
 - **standalone 本地缓存运行时**：支持推理进程通过 SDK 拉起本地缓存 server，减少独立服务进程和额外网络依赖。
 - **内存与 SSD 缓存空间**：支持本地内存与 NVMe SSD 组成缓存空间，提供 WCache/RCache、Flow 映射、缓存水位、读写比例、日志、Trace、CRC 和 QoS 等基础配置能力。
-- **无盘/有盘部署形态**：支持无盘模式仅使用本地内存缓存，也支持通过 `bio.disk.path` 配置本地 SSD 作为 KV Cache 扩容层。
+- **无盘/有盘部署形态**：支持无盘模式仅使用本地内存缓存，也支持通过 `ubsio.disk.path` 配置本地 SSD 作为 KV Cache 扩容层。
 - **memcache 生态接入**：支持与 memcache 组合接入 vLLM-Ascend KV Cache 复用加载场景。
 - **Mooncake 生态接入**：提供 Mooncake KV Backend patch，用于 Mooncake Store 接入 UBSIO 后端并对接 vLLM-Ascend 场景。
 <p align="center">

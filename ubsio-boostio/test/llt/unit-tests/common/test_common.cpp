@@ -15,13 +15,25 @@
 #include "bio_functions.h"
 #include "message.h"
 #include "bio_file_util.h"
+#include "bio_config.h"
 #include "bio_log.h"
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 
 using namespace ock::bio;
+
+namespace {
+class LegacyConfiguration : public Configuration {
+protected:
+    void LoadDefaultConf() override
+    {
+        AddIntConf({ "ubsio.test.value", 0 });
+    }
+};
+}
 
 bool TestCommon::gSetup = false;
 
@@ -80,4 +92,22 @@ TEST_F(TestCommon, test_make_dir_recursive_with_trailing_slash_return_ok)
 
     EXPECT_EQ(rmdir(logDir.c_str()), 0);
     EXPECT_EQ(rmdir(parent), 0);
+}
+
+TEST_F(TestCommon, test_read_legacy_config_key)
+{
+    char configTemplate[] = "/tmp/ubsio_legacy_config_XXXXXX";
+    int fd = mkstemp(configTemplate);
+    ASSERT_NE(fd, -1);
+    close(fd);
+
+    std::ofstream configFile(configTemplate);
+    configFile << "bio.test.value = 7\n";
+    configFile.close();
+
+    EXPECT_TRUE(Configuration::ReadConf<LegacyConfiguration>(configTemplate));
+    auto config = Configuration::GetInstance<LegacyConfiguration>();
+    ASSERT_NE(config.Get(), nullptr);
+    EXPECT_EQ(config->GetInt("ubsio.test.value"), 7);
+    EXPECT_EQ(unlink(configTemplate), 0);
 }

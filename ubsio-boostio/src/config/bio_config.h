@@ -90,6 +90,11 @@ public:
             std::string key;
             std::string value;
             kv.GetI(i, key, value);
+            if (key.compare(0, 4, "bio.") == 0) {
+                std::cout << "Configuration key <" << key << "> is deprecated; use <ubsio."
+                          << key.substr(4) << ">." << std::endl;
+                key.replace(0, 4, "ubsio.");
+            }
             if (!conf->SetWithTypeAutoConvert(key, value) && stopIfInvalid) {
                 std::cout << "Failed to set a key/value pair for key<" << key << "> value<" << value << ">" <<
                     std::endl;
