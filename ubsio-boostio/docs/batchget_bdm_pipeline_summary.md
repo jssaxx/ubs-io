@@ -19,7 +19,7 @@
 新增配置项：
 
 ```ini
-bio.bdm.io_engine = sync
+ubsio.bdm.io_engine = sync
 ```
 
 可选值：
@@ -33,7 +33,7 @@ bio.bdm.io_engine = sync
 
 - `ubsio-boostio/src/config/bio_config_instance.h`
 - `ubsio-boostio/src/config/bio_config_instance.cpp`
-- `ubsio-boostio/configs/bio.conf`
+- `ubsio-boostio/configs/ubsio.conf`
 - `ubsio-boostio/src/server/bio_server.cpp`
 - `ubsio-boostio/src/disk/common/bdm_core.h`
 - `ubsio-boostio/src/disk/common/bdm_disk.c`
@@ -166,9 +166,9 @@ typedef struct {
 新增配置项：
 
 ```ini
-bio.bdm.batch_read.window_keys = 128
-bio.bdm.batch_read.window_bytes_mb = 64
-bio.bdm.batch_read.pipeline_depth = 4
+ubsio.bdm.batch_read.window_keys = 128
+ubsio.bdm.batch_read.window_bytes_mb = 64
+ubsio.bdm.batch_read.pipeline_depth = 4
 ```
 
 配置含义：
@@ -310,7 +310,7 @@ bioServer->Exit();
 注意：
 
 - 这些是 trace 点，不是已删除的 perfstat 统计体系。
-- trace 是否产生运行时数据仍受 `bio.trace.enable` 控制。
+- trace 是否产生运行时数据仍受 `ubsio.trace.enable` 控制。
 - `BDM_TRACE_PREPARE_DIRECT`、`BDM_TRACE_URING_LOCK`、`BDM_TRACE_URING_SUBMIT`、`BDM_TRACE_URING_COMPLETE` 这类更细的辅助打点已经从纯性能分支删除，只保留 BatchGet lookup/final flush 和 BDM batch window/wait/result scan 这类能定位端到端瓶颈的关键打点。
 
 ### 11. BDMPerf CLI
@@ -346,7 +346,7 @@ bioServer BdmPerf [read/write] [bsKb] [ioDepth] [sizeMb] [rounds] [dropCaches] [
 
 约束：
 
-- `bs <= bio.segment.size_in_mb`
+- `bs <= ubsio.segment.size_in_mb`
 - `segmentSize % bs == 0`
 - `bs` 需要 4KB 对齐
 - `sizeMb` 对应总字节数需要能被 `bs` 整除
@@ -448,7 +448,7 @@ bioServer BdmPerf write 64 32 1024 5 1 1 32 0 1
 在当前性能分支基础上，进一步清理未使用的 libaio 残留和非关键辅助 trace：
 
 - 删除 libaio 三方构建入口、源码准备入口、打包拷贝和 `aio` 链接依赖；构建过程不再探测或构建 libaio。
-- 保留 UT 中的 `libaio` 负向配置测试，确保 `bio.bdm.io_engine=libaio` 不会被误认为可用。
+- 保留 UT 中的 `libaio` 负向配置测试，确保 `ubsio.bdm.io_engine=libaio` 不会被误认为可用。
 - 删除 `BDM_TRACE_PREPARE_DIRECT`、`BDM_TRACE_URING_LOCK`、`BDM_TRACE_URING_SUBMIT`、`BDM_TRACE_URING_COMPLETE` 这类细粒度辅助 trace。
 - 保留 `sync` 和 `io_uring` 两种 BDM IO 引擎，默认仍为 `sync`。
 
@@ -464,30 +464,30 @@ bioServer BdmPerf write 64 32 1024 5 1 1 32 0 1
 - BDM 默认仍是 `sync`。
 - 网络 BatchGet 保持 `KEY_MAX_COUNT = 256`，standalone 直接调用路径支持 `STANDALONE_BATCH_GET_MAX_COUNT = 16k`。
 - BatchGet 命中 WCache disk 时，可以走 BDM 批量读 pipeline。
-- trace 仍保留，是否启用取决于 `bio.trace.enable`。
+- trace 仍保留，是否启用取决于 `ubsio.trace.enable`。
 
 ### 启用 io_uring
 
 配置文件中设置：
 
 ```ini
-bio.bdm.io_engine = io_uring
+ubsio.bdm.io_engine = io_uring
 ```
 
 可配合：
 
 ```ini
-bio.bdm.batch_read.window_keys = 128
-bio.bdm.batch_read.window_bytes_mb = 64
-bio.bdm.batch_read.pipeline_depth = 4
+ubsio.bdm.batch_read.window_keys = 128
+ubsio.bdm.batch_read.window_bytes_mb = 64
+ubsio.bdm.batch_read.pipeline_depth = 4
 ```
 
 如果要降低 loop 或分区设备上的瞬时压力，可以减小：
 
 ```ini
-bio.bdm.batch_read.window_keys = 32
-bio.bdm.batch_read.window_bytes_mb = 32
-bio.bdm.batch_read.pipeline_depth = 1
+ubsio.bdm.batch_read.window_keys = 32
+ubsio.bdm.batch_read.window_bytes_mb = 32
+ubsio.bdm.batch_read.pipeline_depth = 1
 ```
 
 这不会消除底层 EAGAIN，只是减少一次性提交到块层的压力。
@@ -500,7 +500,7 @@ bio.bdm.batch_read.pipeline_depth = 1
 4. BatchGet pipeline 当前只覆盖 WCache disk 到 memory 的读盘路径，不覆盖 rcache 和 underfs。
 5. CRC 开启时 Batch WCache read 不启用，会回到原路径。
 6. EAGAIN 使用有限重试，不做无限重试；重试耗尽会返回 IO 错误。
-7. trace 仍可能对极限性能有影响，纯性能压测时建议关闭 `bio.trace.enable`。
+7. trace 仍可能对极限性能有影响，纯性能压测时建议关闭 `ubsio.trace.enable`。
 
 ## 建议 review 重点
 

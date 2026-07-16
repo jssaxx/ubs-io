@@ -52,7 +52,7 @@ bio_console <mode>
 1. 在 BoostIO 配置文件中开启 CLI 诊断能力：
 
    ```conf
-   bio_cli_tools_enable = true
+   ubsio_cli_tools_enable = true
    ```
 
 2. 启动 CLI server。`bio_console` 的 agent 当前按默认端口 `7002` 连接 CLI server，建议此场景使用默认端口。

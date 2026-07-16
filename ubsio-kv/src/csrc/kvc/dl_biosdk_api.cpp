@@ -134,7 +134,7 @@ int32_t DlBioSdkApi::KvBioInit(int32_t devId)
     ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
     optConf.enable = false;
-    std::string logDir = "/var/log/boostio";
+    std::string logDir = "/var/log/ubsio";
     std::snprintf(optConf.logFilePath, sizeof(optConf.logFilePath), "%s", logDir.c_str());
 
     auto ret = Initialize(WorkerMode::STANDALONE, &optConf);

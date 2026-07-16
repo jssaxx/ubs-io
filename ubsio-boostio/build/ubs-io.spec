@@ -45,13 +45,13 @@ install -d %{buildroot}%{_bindir}
 install -d %{buildroot}%{_includedir}/boostio
 install -d %{buildroot}%{_libdir}
 install -d %{buildroot}/opt
-install -d %{buildroot}%{_sysconfdir}/boostio
+install -d %{buildroot}%{_sysconfdir}/ubsio
 
 cp -a "${src_core}"/lib/*.so* %{buildroot}%{_libdir}/
 cp -a "${src_core}"/lib/libbio_sdk.a %{buildroot}%{_libdir}/
 cp -a "${src_core}"/include/* %{buildroot}%{_includedir}/boostio/
 cp -a "${src_core}"/bin/* %{buildroot}%{_bindir}/
-cp -a "${src_core}"/conf/bio.conf %{buildroot}%{_sysconfdir}/boostio/
+cp -a "${src_core}"/conf/ubsio.conf %{buildroot}%{_sysconfdir}/ubsio/
 
 if [ -d "${src_core}/kv" ]; then
     cp -a "${src_core}"/kv/lib/*.so* %{buildroot}%{_libdir}/
@@ -63,15 +63,36 @@ for lib in "${src_test}"/lib/*; do
     cp -a "${lib}" %{buildroot}%{_libdir}/
 done
 cp -a "${src_test}"/bin/* %{buildroot}%{_bindir}/
-cp -a "${src_test}"/conf/bio_sdk_test.conf %{buildroot}%{_sysconfdir}/boostio/
+cp -a "${src_test}"/conf/ubsio_sdk_test.conf %{buildroot}%{_sysconfdir}/ubsio/
 
-find %{buildroot}%{_sysconfdir}/boostio -type d -exec chmod 750 {} \;
-find %{buildroot}%{_sysconfdir}/boostio -type f -exec chmod 640 {} \;
+find %{buildroot}%{_sysconfdir}/ubsio -type d -exec chmod 750 {} \;
+find %{buildroot}%{_sysconfdir}/ubsio -type f -exec chmod 640 {} \;
 find %{buildroot}%{_includedir}/boostio -type f -exec chmod 644 {} \;
 find %{buildroot}%{_libdir} -type f -name "*.a" -exec chmod 644 {} \;
 find %{buildroot}%{_libdir} -type f -name "*.so*" -exec chmod 755 {} \;
 find %{buildroot}%{_bindir} -type f -exec chmod 755 {} \;
 find %{buildroot}/opt -type f -name "*.whl" -exec chmod 644 {} \;
+
+%pre
+if [ "$1" -gt 1 ] && [ -f %{_sysconfdir}/boostio/bio.conf ] && [ ! -e %{_sysconfdir}/ubsio/ubsio.conf ]; then
+    install -d -m 750 %{_sysconfdir}/ubsio
+    sed -e 's/^\([[:space:]]*\)\[bio\]\([[:space:]]*\)$/\1[ubsio]\2/' \
+        -e 's/^\([[:space:]]*\)bio\./\1ubsio./' \
+        -e 's#/var/log/boostio#/var/log/ubsio#g' \
+        %{_sysconfdir}/boostio/bio.conf > %{_sysconfdir}/ubsio/ubsio.conf || \
+        { rm -f %{_sysconfdir}/ubsio/ubsio.conf; exit 1; }
+    chmod 640 %{_sysconfdir}/ubsio/ubsio.conf
+fi
+
+if [ "$1" -gt 1 ] && [ -f %{_sysconfdir}/boostio/bio_sdk_test.conf ] && \
+    [ ! -e %{_sysconfdir}/ubsio/ubsio_sdk_test.conf ]; then
+    install -d -m 750 %{_sysconfdir}/ubsio
+    sed -e 's/^\([[:space:]]*\)bio\./\1ubsio./' \
+        -e 's#/var/log/boostio#/var/log/ubsio#g' \
+        %{_sysconfdir}/boostio/bio_sdk_test.conf > %{_sysconfdir}/ubsio/ubsio_sdk_test.conf || \
+        { rm -f %{_sysconfdir}/ubsio/ubsio_sdk_test.conf; exit 1; }
+    chmod 640 %{_sysconfdir}/ubsio/ubsio_sdk_test.conf
+fi
 
 %post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
@@ -88,9 +109,9 @@ find %{buildroot}/opt -type f -name "*.whl" -exec chmod 644 {} \;
 %{_bindir}/bio_console
 %{_bindir}/cli_server
 %{_bindir}/cli_client
-%attr(750,root,root) %dir %{_sysconfdir}/boostio
-%config(noreplace) %attr(640,root,root) %{_sysconfdir}/boostio/bio.conf
-%config(noreplace) %attr(640,root,root) %{_sysconfdir}/boostio/bio_sdk_test.conf
+%attr(750,root,root) %dir %{_sysconfdir}/ubsio
+%config(noreplace) %attr(640,root,root) %{_sysconfdir}/ubsio/ubsio.conf
+%config(noreplace) %attr(640,root,root) %{_sysconfdir}/ubsio/ubsio_sdk_test.conf
 /opt/*.whl
 
 %files devel

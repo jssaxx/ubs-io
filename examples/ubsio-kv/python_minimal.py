@@ -6,7 +6,7 @@
 # Prerequisites:
 # - pykvc has been installed in the current Python environment.
 # - BoostIO standalone configuration has been prepared.
-# - UBSIO_CONFIG_PATH points to the runtime bio.conf when a non-default
+# - UBSIO_CONFIG_PATH points to the runtime ubsio.conf when a non-default
 #   configuration file is used.
 
 import pykvc

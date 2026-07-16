@@ -2095,7 +2095,7 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
                 "io_uring/SQPOLL permission settings.");
         } else if (err == EINVAL || err == ENOSYS || err == EOPNOTSUPP) {
             BDM_LOGERROR(0,
-                "io_uring SQPOLL is not supported by current kernel or system policy. Keep bio.bdm.io_engine=sync "
+                "io_uring SQPOLL is not supported by current kernel or system policy. Keep ubsio.bdm.io_engine=sync "
                 "or run in an environment that supports IORING_SETUP_SQPOLL.");
         }
         return BDM_CODE_ERR;

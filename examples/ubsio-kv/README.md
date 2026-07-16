@@ -72,10 +72,10 @@ python3 -m pip install --force-reinstall ubsio-kv/dist/pkg/pykvc-*.whl
 默认情况下，运行进程会读取：
 
 ```text
-/etc/boostio/bio.conf
+/etc/ubsio/ubsio.conf
 ```
 
-如果需要使用自定义配置文件，可以参考 [配置文件](../../docs/ubsio-boostio/推理三级池化场景安装部署指南.md#配置文件) 准备 `/opt/ubsio/conf/bio.conf`。单机三级池化场景的配置项可参考 [UBS IO 单机模式配置参考](../../docs/单机模式配置说明.md)。
+如果需要使用自定义配置文件，可以参考 [配置文件](../../docs/ubsio-boostio/推理三级池化场景安装部署指南.md#配置文件) 准备 `/opt/ubsio/conf/ubsio.conf`。单机三级池化场景的配置项可参考 [UBS IO 单机模式配置参考](../../docs/单机模式配置说明.md)。
 
 ## 5. 设置运行环境变量
 
@@ -88,10 +88,10 @@ export LD_LIBRARY_PATH=/opt/ubsio/lib:${LD_LIBRARY_PATH}
 如果使用自定义配置文件，再指定配置文件路径：
 
 ```bash
-export UBSIO_CONFIG_PATH=/opt/ubsio/conf/bio.conf
+export UBSIO_CONFIG_PATH=/opt/ubsio/conf/ubsio.conf
 ```
 
-如果使用默认配置文件 `/etc/boostio/bio.conf`，可以不设置 `UBSIO_CONFIG_PATH`。
+如果使用默认配置文件 `/etc/ubsio/ubsio.conf`，可以不设置 `UBSIO_CONFIG_PATH`。
 
 ## 6. 执行 Python 样例
 
@@ -113,4 +113,4 @@ get_length(ubsio-python-minimal) = 14
 - `import pykvc` 失败：确认已安装 `ubsio-kv/dist/pkg/pykvc-*.whl`，并且当前执行命令使用的是同一个 Python 环境。
 - 动态库加载失败：确认 `LD_LIBRARY_PATH` 包含部署后的 UBSIO 动态库目录。
 - 初始化失败：确认配置文件存在且运行用户可读；使用自定义配置时，确认 `UBSIO_CONFIG_PATH` 指向绝对路径。
-- 有盘模式启动失败：确认 `bio.disk.path` 指向的设备或分区可访问，并由 UBS IO 独占使用；无盘模式可将 `bio.disk.path` 留空。
+- 有盘模式启动失败：确认 `ubsio.disk.path` 指向的设备或分区可访问，并由 UBS IO 独占使用；无盘模式可将 `ubsio.disk.path` 留空。
