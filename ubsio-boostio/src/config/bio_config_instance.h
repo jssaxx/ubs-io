@@ -60,6 +60,8 @@ const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 
 const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
+const auto BDM_IO_URING_SQPOLL_MODE = std::make_pair("ubsio.bdm.io_uring.sqpoll_mode", "auto");
+const auto BDM_SYNC_WORKER_NUM = std::make_pair("ubsio.bdm.sync.worker_num", 16);
 const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 5120);
 
@@ -164,6 +166,8 @@ public:
         std::vector<std::string> diskList;
         std::vector<int64_t> diskCaps;
         std::string bdmIoEngine = "sync";
+        std::string bdmIoUringSqpollMode = "auto";
+        uint32_t bdmSyncWorkerNum = 16;
         uint32_t standaloneDeviceCount = 0;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;

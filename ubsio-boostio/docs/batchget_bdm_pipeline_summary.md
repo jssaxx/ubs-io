@@ -472,7 +472,10 @@ bioServer BdmPerf write 64 32 1024 5 1 1 32 0 1
 
 ```ini
 ubsio.bdm.io_engine = io_uring
+ubsio.bdm.io_uring.sqpoll_mode = auto
 ```
+
+`sqpoll_mode=auto` 会优先使用 SQPOLL；内核、权限或容器策略不支持时，所有 BDM worker 会统一重建为普通 io_uring，运行期 IO 失败不会回退到 sync。`required` 要求必须使用 SQPOLL，`disabled` 直接使用普通 io_uring。
 
 可配合：
 
@@ -491,6 +494,17 @@ ubsio.bdm.batch_read.pipeline_depth = 1
 ```
 
 这不会消除底层 EAGAIN，只是减少一次性提交到块层的压力。
+
+### sync batch 内部并发
+
+sync 引擎的单 IO 行为保持不变，BDM batch 由内部阻塞 IO 线程池并发执行：
+
+```ini
+ubsio.bdm.io_engine = sync
+ubsio.bdm.sync.worker_num = 16
+```
+
+默认 64 MB window、4 级 pipeline 下，4 MB key 每个 window 最多 16 个，14 MB key 每个 window 最多 4 个；sync worker 数可在 1 到 64 之间调整。
 
 ## 风险和注意事项
 

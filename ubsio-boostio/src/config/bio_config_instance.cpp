@@ -149,6 +149,9 @@ void BioConfig::LoadDefaultConf()
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB, VIntRange::Create(SDK_MEM_CAPACITY_SIZE_MB.first, NO_U64_0, NO_4194304));
     AddStrConf(DISK_CONF_PATH);
     AddStrConf(BDM_IO_ENGINE, VStrEnum::Create(BDM_IO_ENGINE.first, "sync||io_uring"));
+    AddStrConf(BDM_IO_URING_SQPOLL_MODE,
+        VStrEnum::Create(BDM_IO_URING_SQPOLL_MODE.first, "auto||required||disabled"));
+    AddIntConf(BDM_SYNC_WORKER_NUM, VIntRange::Create(BDM_SYNC_WORKER_NUM.first, NO_1, NO_64));
     AddIntConf(STANDALONE_DEVICE_COUNT, VIntRange::Create(STANDALONE_DEVICE_COUNT.first, 0, DEVICE_SIZE));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB);
 
@@ -399,6 +402,8 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     StrUtil::StrTrim(diskMask);
     mDaemonConfig.hasDiskCache = !diskMask.empty();
     mDaemonConfig.bdmIoEngine = conf->GetStr(BDM_IO_ENGINE.first);
+    mDaemonConfig.bdmIoUringSqpollMode = conf->GetStr(BDM_IO_URING_SQPOLL_MODE.first);
+    mDaemonConfig.bdmSyncWorkerNum = static_cast<uint32_t>(conf->GetInt(BDM_SYNC_WORKER_NUM.first));
 
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {

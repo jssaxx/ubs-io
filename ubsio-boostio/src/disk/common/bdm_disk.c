@@ -56,6 +56,10 @@
 
 #define BDM_DEFAULT_THREAD_NUM (1UL)
 
+#define BDM_SYNC_WORKER_DEFAULT_NUM (16UL)
+#define BDM_SYNC_WORKER_MAX_NUM (64UL)
+#define BDM_SYNC_QUEUE_SIZE (1024UL)
+
 #define BDM_BIND_CPU_DEFAULT (-1)
 
 #define BDM_DIRECT_IO_ALIGN_SIZE (512UL)
@@ -63,6 +67,8 @@
 #define BDM_SYNC_URING_MIN_CHUNK_SIZE (4096UL)
 
 static BdmIoEngine g_bdmIoEngine = BDM_IO_ENGINE_SYNC;
+static BdmUringSqpollMode g_bdmUringSqpollMode = BDM_URING_SQPOLL_AUTO;
+static uint32_t g_bdmSyncWorkerNum = BDM_SYNC_WORKER_DEFAULT_NUM;
 
 typedef struct {
     uint64_t magic;
@@ -144,6 +150,7 @@ typedef struct {
     bool eventThreadStarted[BDM_WORKER_THREAD_NUM];
     volatile bool stopping[BDM_WORKER_THREAD_NUM];
     pthread_mutex_t ringLock[BDM_WORKER_THREAD_NUM];
+    bool ringSqpoll[BDM_WORKER_THREAD_NUM];
     BDM_THREAD_POOL_S *pool[BDM_WORKER_THREAD_NUM];
 } BdmThreadPool;
 
@@ -172,6 +179,7 @@ static BdmDiskMgr g_bdmDisk = { 0 };
 static uint64_t g_bdmIndex = 0;
 
 static BdmThreadPool g_bdmThreadPool;
+static BDM_THREAD_POOL_S *g_bdmSyncThreadPool = NULL;
 static pthread_once_t g_bdmSyncUringKeyOnce = PTHREAD_ONCE_INIT;
 static pthread_key_t g_bdmSyncUringKey;
 static int32_t g_bdmSyncUringKeyRet = BDM_CODE_OK;
@@ -180,6 +188,7 @@ static pthread_mutex_t g_bdmSyncUringCtxLock = PTHREAD_MUTEX_INITIALIZER;
 static DList g_bdmSyncUringCtxList = D_LIST_HEAD_INIT(g_bdmSyncUringCtxList);
 
 static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item);
+static void BdmDiskCompleteReq(BdmAsyncOpsReq *req, int32_t ret);
 
 BdmIoEngine BdmGetIoEngine(void)
 {
@@ -204,6 +213,40 @@ int32_t BdmSetIoEngine(const char *engineName)
 
     BDM_LOGERROR(0, "Unsupported bdm io engine(%s).", engineName);
     return BDM_CODE_INVALID_PARAM;
+}
+
+int32_t BdmSetUringSqpollMode(const char *modeName)
+{
+    if (UNLIKELY(modeName == NULL)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    if (strcmp(modeName, "auto") == 0) {
+        g_bdmUringSqpollMode = BDM_URING_SQPOLL_AUTO;
+        return BDM_CODE_OK;
+    }
+    if (strcmp(modeName, "required") == 0) {
+        g_bdmUringSqpollMode = BDM_URING_SQPOLL_REQUIRED;
+        return BDM_CODE_OK;
+    }
+    if (strcmp(modeName, "disabled") == 0) {
+        g_bdmUringSqpollMode = BDM_URING_SQPOLL_DISABLED;
+        return BDM_CODE_OK;
+    }
+
+    BDM_LOGERROR(0, "Unsupported bdm io_uring SQPOLL mode(%s).", modeName);
+    return BDM_CODE_INVALID_PARAM;
+}
+
+int32_t BdmSetSyncWorkerNum(uint32_t workerNum)
+{
+    if (UNLIKELY(workerNum == 0 || workerNum > BDM_SYNC_WORKER_MAX_NUM)) {
+        BDM_LOGERROR(0, "Invalid bdm sync worker number(%u), range[1, %u].", workerNum,
+            (uint32_t)BDM_SYNC_WORKER_MAX_NUM);
+        return BDM_CODE_INVALID_PARAM;
+    }
+    g_bdmSyncWorkerNum = workerNum;
+    return BDM_CODE_OK;
 }
 
 uint32_t BdmGetNormalDiskNum(void)
@@ -1190,7 +1233,7 @@ static int32_t BdmDiskSubmitOneUring(BdmIoContext *bdmIo, BdmThreadCtx *threadCt
     }
 
     uint32_t submitted = 0;
-    ret = BdmDiskSubmitAllUring(ring, 1, &submitted, true);
+    ret = BdmDiskSubmitAllUring(ring, 1, &submitted, bdmPool->ringSqpoll[threadIdx]);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "io_uring_submit one failed, submitted(%u).", submitted);
         if (submitted == 0) {
@@ -1298,7 +1341,8 @@ static int32_t BdmDiskSubmitUring(void **argList, uint32_t argNum, void *ctx)
     }
 
     uint32_t realSubmitted = 0;
-    int32_t ret = BdmDiskSubmitAllUring(ring, submittedNum, &realSubmitted, true);
+    int32_t ret =
+        BdmDiskSubmitAllUring(ring, submittedNum, &realSubmitted, bdmPool->ringSqpoll[threadIdx]);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "io_uring_submit batch failed, submitted(%u), expected(%u), argNum(%u).", realSubmitted,
             submittedNum, argNum);
@@ -1387,7 +1431,7 @@ static bool BdmCompleteUringHandler(const struct io_uring_cqe *cqe, BdmThreadCtx
     return BdmDiskShouldStopEvents(bdmPool, threadCtx->index);
 }
 
-static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, BdmIoContext **ioOut)
+static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, bool useUring, BdmIoContext **ioOut)
 {
     BdmObj *obj = (BdmObj *)req->objPtr;
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
@@ -1430,16 +1474,19 @@ static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, BdmI
     bdmIo->isRead = isRead;
     bdmIo->needBounce = false;
     bdmIo->slotAcquired = false;
-    bdmIo->traceId = isRead ? BDM_DISK_TRACE_READ_ASYNC_C : BDM_DISK_TRACE_WRITE_ASYNC_C;
+    bdmIo->traceId = useUring ? (isRead ? BDM_DISK_TRACE_READ_ASYNC_C : BDM_DISK_TRACE_WRITE_ASYNC_C) :
+                               (isRead ? BDM_DISK_TRACE_READ_SYNC_C : BDM_DISK_TRACE_WRITE_SYNC_C);
     bdmIo->traceStartNs = 0;
     if (HTracerIsEnableC()) {
         bdmIo->traceStartNs = HTracerNowNsC();
-        HTracerDelayBeginC(bdmIo->traceId, isRead ? "BDM_DISK_TRACE_READ_ASYNC" : "BDM_DISK_TRACE_WRITE_ASYNC");
+        const char *traceName = useUring ? (isRead ? "BDM_DISK_TRACE_READ_ASYNC" : "BDM_DISK_TRACE_WRITE_ASYNC") :
+                                           (isRead ? "BDM_DISK_TRACE_READ_SYNC" : "BDM_DISK_TRACE_WRITE_SYNC");
+        HTracerDelayBeginC(bdmIo->traceId, traceName);
     }
     bdmIo->cb = req->ioCtx->cb;
     bdmIo->ctx = req->ioCtx->ctx;
     bdmIo->item = (void *)item;
-    if (g_bdmIoEngine == BDM_IO_ENGINE_IO_URING) {
+    if (useUring) {
         uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * req->chunkId + req->offset;
         ret = BdmDiskPrepareUringBuffer(bdmIo, item, rwOffset);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
@@ -1448,6 +1495,44 @@ static int32_t BdmDiskPrepareAsyncContext(BdmAsyncOpsReq *req, bool isRead, BdmI
         }
     }
     *ioOut = bdmIo;
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskExecuteSyncBatch(void **argList, uint32_t argNum, void *ctx)
+{
+    (void)ctx;
+    for (uint32_t i = 0; i < argNum; i++) {
+        BdmIoContext *bdmIo = (BdmIoContext *)argList[i];
+        if (UNLIKELY(bdmIo == NULL || bdmIo->item == NULL)) {
+            continue;
+        }
+        BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
+        uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+        int32_t ret = BdmDiskIsRangeAligned(bdmIo->len, rwOffset) ?
+                          BdmDiskInnerReadWriteDirect(
+                              item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead) :
+                          BdmDiskInnerReadWrite(item, (char *)bdmIo->buf, bdmIo->len, rwOffset, bdmIo->isRead);
+        HTRACER_C_DELAY_END(bdmIo->traceId, bdmIo->traceStartNs, ret);
+        bdmIo->cb(bdmIo->ctx, ret);
+    }
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDiskHandleSyncBatch(BdmAsyncOpsReq *reqs, uint32_t reqNum, bool isRead)
+{
+    for (uint32_t i = 0; i < reqNum; i++) {
+        BdmIoContext *bdmIo = NULL;
+        int32_t ret = BdmDiskPrepareAsyncContext(&reqs[i], isRead, false, &bdmIo);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmDiskCompleteReq(&reqs[i], ret);
+            continue;
+        }
+        ret = BdmThreadPoolAdd(g_bdmSyncThreadPool, NULL, (void *)bdmIo);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmDiskCleanupPreparedAsyncContext(bdmIo, ret);
+            BdmDiskCompleteReq(&reqs[i], ret);
+        }
+    }
     return BDM_CODE_OK;
 }
 
@@ -1503,7 +1588,7 @@ int32_t BdmDiskHandleAsync(BdmAsyncOpsReq *req, bool isRead)
     }
 
     BdmIoContext *bdmIo = NULL;
-    int32_t ret = BdmDiskPrepareAsyncContext(req, isRead, &bdmIo);
+    int32_t ret = BdmDiskPrepareAsyncContext(req, isRead, true, &bdmIo);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         return ret;
     }
@@ -1526,6 +1611,10 @@ static int32_t BdmDiskHandleAsyncBatch(BdmAsyncOpsReq *reqs, uint32_t reqNum, bo
 {
     if (UNLIKELY(reqs == NULL || reqNum == 0)) {
         return BDM_CODE_INVALID_PARAM;
+    }
+
+    if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
+        return BdmDiskHandleSyncBatch(reqs, reqNum, isRead);
     }
 
     for (uint32_t i = 0; i < reqNum; i++) {
@@ -2077,30 +2166,42 @@ int32_t BdmDiskReset(BdmObj *obj)
     return BDM_CODE_OK;
 }
 
-static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
+static bool BdmDiskCanFallbackSqpoll(int32_t ret)
+{
+    int32_t err = -ret;
+    return err == EPERM || err == EACCES || err == EINVAL || err == ENOSYS || err == EOPNOTSUPP;
+}
+
+static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index, bool useSqpoll, int32_t *queueRet)
 {
     struct io_uring_params params = {0};
-    params.flags = IORING_SETUP_SQPOLL;
-    params.sq_thread_idle = 2000;
+    if (useSqpoll) {
+        params.flags = IORING_SETUP_SQPOLL;
+        params.sq_thread_idle = 2000;
+    }
     int32_t ret = io_uring_queue_init_params(BDM_IOCTX_EVENTS_NUM, &bdmPool->ring[index], &params);
     if (UNLIKELY(ret != 0)) {
+        if (queueRet != NULL) {
+            *queueRet = ret;
+        }
         int32_t err = -ret;
         BDM_LOGERROR(0,
-            "io_uring SQPOLL queue init failed, worker(%u), entries(%u), flags(0x%x), sq_thread_idle(%u), "
+            "io_uring queue init failed, mode(%s), worker(%u), entries(%u), flags(0x%x), sq_thread_idle(%u), "
             "ret(%d), errno(%d:%s).",
-            index, (uint32_t)BDM_IOCTX_EVENTS_NUM, params.flags, params.sq_thread_idle, ret, err, strerror(err));
-        if (err == EPERM || err == EACCES) {
+            useSqpoll ? "sqpoll" : "normal", index, (uint32_t)BDM_IOCTX_EVENTS_NUM, params.flags,
+            params.sq_thread_idle, ret, err, strerror(err));
+        if (useSqpoll && (err == EPERM || err == EACCES)) {
             BDM_LOGERROR(0,
                 "io_uring SQPOLL permission denied. Check process capabilities, container seccomp policy, and kernel "
                 "io_uring/SQPOLL permission settings.");
-        } else if (err == EINVAL || err == ENOSYS || err == EOPNOTSUPP) {
+        } else if (useSqpoll && (err == EINVAL || err == ENOSYS || err == EOPNOTSUPP)) {
             BDM_LOGERROR(0,
-                "io_uring SQPOLL is not supported by current kernel or system policy. Keep ubsio.bdm.io_engine=sync "
-                "or run in an environment that supports IORING_SETUP_SQPOLL.");
+                "io_uring SQPOLL is not supported by current kernel or system policy.");
         }
         return BDM_CODE_ERR;
     }
     bdmPool->ringInited[index] = true;
+    bdmPool->ringSqpoll[index] = useSqpoll;
     ret = pthread_mutex_init(&bdmPool->ringLock[index], NULL);
     if (UNLIKELY(ret != 0)) {
         BDM_LOGERROR(0, "ring lock init failed, ret(%d).", ret);
@@ -2124,30 +2225,48 @@ static int32_t BdmPoolInit(BdmThreadPool *bdmPool, uint32_t index)
 
 static void BdmDiskThreadPoolCleanup(BdmThreadPool *bdmPool);
 
-int32_t BdmDiskThreadPoolInit(void)
+static int32_t BdmDiskSyncThreadPoolInit(void)
 {
-    if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
-        return BDM_CODE_OK;
+    BDM_BIND_CPU_S cpus = {0};
+    cpus.cpunum = 1;
+    cpus.cpus[0] = BDM_BIND_CPU_DEFAULT;
+    BDM_BATCH_CTX_S batchCtx = {0};
+    batchCtx.batchHandle = BdmDiskExecuteSyncBatch;
+    g_bdmSyncThreadPool =
+        BdmThreadPoolCreate(g_bdmSyncWorkerNum, BDM_SYNC_QUEUE_SIZE, &cpus, "bdm_sync", &batchCtx);
+    if (UNLIKELY(g_bdmSyncThreadPool == NULL)) {
+        BDM_LOGERROR(0, "Create bdm sync thread pool failed, workerNum(%u).", g_bdmSyncWorkerNum);
+        return BDM_CODE_ERR;
     }
+    BDM_LOGINFO(0, "Bdm sync thread pool initialized, workerNum(%u), queueSize(%u).", g_bdmSyncWorkerNum,
+        (uint32_t)BDM_SYNC_QUEUE_SIZE);
+    return BDM_CODE_OK;
+}
 
-    BdmThreadPool *bdmPool = &g_bdmThreadPool;
+static int32_t BdmDiskUringResourcesInit(BdmThreadPool *bdmPool, bool useSqpoll, int32_t *queueRet)
+{
     for (uint32_t index = 0; index < BDM_WORKER_THREAD_NUM; index++) {
         BdmThreadCtx *threadCtx = &bdmPool->threadCtx[index];
         threadCtx->index = index;
         threadCtx->ctx = (void *)bdmPool;
         bdmPool->stopping[index] = false;
         bdmPool->eventThreadStarted[index] = false;
-        int32_t ret = BdmPoolInit(bdmPool, index);
+        int32_t ret = BdmPoolInit(bdmPool, index, useSqpoll, queueRet);
         if (UNLIKELY(ret != 0)) {
             BDM_LOGERROR(0, "Bdm pool init failed, ret(%d)", ret);
-            BdmDiskThreadPoolCleanup(bdmPool);
-            return BDM_CODE_ERR;
+            return ret;
         }
+    }
+    return BDM_CODE_OK;
+}
 
-        ret = pthread_create(&bdmPool->threadId[index], NULL, BdmDiskEventsThread, (void *)threadCtx);
+static int32_t BdmDiskUringWorkersStart(BdmThreadPool *bdmPool)
+{
+    for (uint32_t index = 0; index < BDM_WORKER_THREAD_NUM; index++) {
+        BdmThreadCtx *threadCtx = &bdmPool->threadCtx[index];
+        int32_t ret = pthread_create(&bdmPool->threadId[index], NULL, BdmDiskEventsThread, (void *)threadCtx);
         if (UNLIKELY(ret != 0)) {
             BDM_LOGERROR(0, "Pthread create failed, errno(%s).", strerror(errno));
-            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
         bdmPool->eventThreadStarted[index] = true;
@@ -2156,7 +2275,6 @@ int32_t BdmDiskThreadPoolInit(void)
         ret = sprintf_s(threadName, BDM_THREAD_NAME_LEN, "bdm_events");
         if (UNLIKELY(ret < 0)) {
             BDM_LOGERROR(0, "sprintf_s failed, ret(%d).", ret);
-            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
         pthread_setname_np(bdmPool->threadId[index], threadName);
@@ -2170,10 +2288,46 @@ int32_t BdmDiskThreadPoolInit(void)
         bdmPool->pool[index] = BdmThreadPoolCreate(BDM_DEFAULT_THREAD_NUM, 1024UL, &cpus, "bdm_disk", &batchCtx);
         if (UNLIKELY(bdmPool->pool[index] == NULL)) {
             BDM_LOGERROR(0, "Pthread pool create failed, errno(%s).", strerror(errno));
-            BdmDiskThreadPoolCleanup(bdmPool);
             return BDM_CODE_ERR;
         }
     }
+    return BDM_CODE_OK;
+}
+
+int32_t BdmDiskThreadPoolInit(void)
+{
+    if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
+        return BdmDiskSyncThreadPoolInit();
+    }
+
+    BdmThreadPool *bdmPool = &g_bdmThreadPool;
+    bool useSqpoll = g_bdmUringSqpollMode != BDM_URING_SQPOLL_DISABLED;
+    int32_t queueRet = 0;
+    int32_t ret = BdmDiskUringResourcesInit(bdmPool, useSqpoll, &queueRet);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BdmDiskThreadPoolCleanup(bdmPool);
+        if (useSqpoll && g_bdmUringSqpollMode == BDM_URING_SQPOLL_AUTO &&
+            BdmDiskCanFallbackSqpoll(queueRet)) {
+            BDM_LOGWARN(0, "io_uring SQPOLL unavailable, ret(%d), retry all workers with normal io_uring.", queueRet);
+            useSqpoll = false;
+            queueRet = 0;
+            ret = BdmDiskUringResourcesInit(bdmPool, false, &queueRet);
+        }
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BdmDiskThreadPoolCleanup(bdmPool);
+            BDM_LOGERROR(0, "Initialize io_uring resources failed, requestedMode(%d), actualMode(%s), ret(%d).",
+                g_bdmUringSqpollMode, useSqpoll ? "sqpoll" : "normal", queueRet);
+            return BDM_CODE_ERR;
+        }
+    }
+
+    ret = BdmDiskUringWorkersStart(bdmPool);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        BdmDiskThreadPoolCleanup(bdmPool);
+        return ret;
+    }
+    BDM_LOGINFO(0, "Bdm io_uring thread pool initialized, requestedMode(%d), actualMode(%s), workerNum(%u).",
+        g_bdmUringSqpollMode, useSqpoll ? "sqpoll" : "normal", (uint32_t)BDM_WORKER_THREAD_NUM);
     return BDM_CODE_OK;
 }
 
@@ -2223,6 +2377,7 @@ static void BdmDiskThreadPoolCleanup(BdmThreadPool *bdmPool)
             bdmPool->ringSlotsInited[index] = false;
         }
         bdmPool->ringInflight[index] = 0;
+        bdmPool->ringSqpoll[index] = false;
         bdmPool->stopping[index] = false;
     }
 }
@@ -2232,6 +2387,11 @@ int32_t BdmDiskExit(void)
     BdmDiskCleanupCurrentSyncUringCtx();
     BdmDiskCleanupAllSyncUringCtxs();
     if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
+        if (g_bdmSyncThreadPool != NULL) {
+            BDM_THREAD_POOL_S *threadPool = g_bdmSyncThreadPool;
+            g_bdmSyncThreadPool = NULL;
+            (void)BdmThreadPoolDestroy(threadPool, 0);
+        }
         return BDM_CODE_OK;
     }
 
