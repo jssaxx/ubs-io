@@ -91,7 +91,7 @@ package_libs() {
     copy_named_libs_from_dir "${PROJ_DIR}/dist/3rdparty/libboundscheck/lib" "${pkg_lib_dir}" \
         libboundscheck.so
 
-    if [[ "$BUILD_TYPE" == "debug" ]]; then
+    if [[ "$CLI_FLAG" == "ON" ]]; then
         copy_named_libs_from_dir "${PROJ_DIR}/dist/test_tools/lib" "${pkg_lib_dir}" \
             libcli_agent.so \
             libsdk_diagnose.so \
