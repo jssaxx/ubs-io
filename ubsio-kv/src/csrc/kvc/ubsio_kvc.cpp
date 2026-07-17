@@ -38,6 +38,38 @@ UBSIO_API int32_t UbsioKvCacheInit(int32_t devId)
     return KvcOperationInit(devId);
 }
 
+UBSIO_API int32_t UbsioGetResourceInfo(UbsioResourceInfo *info)
+{
+    if (UNLIKELY(info == nullptr)) {
+        LOG_ERROR("Invalid resource info pointer.");
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    *info = {};
+
+    int32_t ret = DlBioSdkApi::LoadLibrary();
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
+        LOG_ERROR("Load bio sdk failed, ret:" << ret << ".");
+        return UBSIO_KVC_ERR;
+    }
+
+    CacheResourcesDesc *nodeDesc = nullptr;
+    uint64_t nodeNum = 0;
+    CResult bioRet = DlBioSdkApi::ShowCacheResource(&nodeDesc, &nodeNum);
+    if (UNLIKELY(bioRet != RET_CACHE_OK)) {
+        LOG_ERROR("Query write cache resource failed, ret:" << bioRet << ".");
+        return UBSIO_KVC_ERR;
+    }
+
+    for (uint64_t index = 0; index < nodeNum; ++index) {
+        info->diskCap += nodeDesc[index].wCacheDiskCapacity;
+        info->diskUsed += nodeDesc[index].wCacheDiskUsedSize;
+        info->memCap += nodeDesc[index].wCacheMemCapacity;
+        info->memUsed += nodeDesc[index].wCacheMemUsedSize;
+    }
+    DlBioSdkApi::FreeCacheResource(&nodeDesc, nodeNum);
+    return UBSIO_KVC_OK;
+}
+
 UBSIO_API int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context)
 {
     int32_t ret = DlBioSdkApi::LoadLibrary();

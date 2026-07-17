@@ -3247,6 +3247,10 @@ BResult MirrorClient::QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &no
 
 BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc)
 {
+    if (mMode == STANDALONE) {
+        return agent::BioClientAgent::Instance()->CalcCacheResourceLocal(req, nodeDesc);
+    }
+
     uint16_t localId = UINT16_MAX;
     std::vector<uint16_t> remoteId;
     mUpdateView(); // 更新视图

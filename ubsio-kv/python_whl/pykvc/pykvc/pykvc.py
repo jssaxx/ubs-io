@@ -4,10 +4,10 @@
 
 import atexit
 
-global KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
+global KvInit, KvExit, KvGetResourceInfo, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
     KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
     NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead
-from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvBatchPut,
+from c2python_sdk import (KvInit, KvExit, KvGetResourceInfo, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvBatchPut,
                           KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
@@ -39,6 +39,15 @@ def exit():
 
 
 atexit.register(exit)
+
+
+def get_resource_info() -> dict:
+    """
+    Get write cache resource capacity and usage in bytes.
+    :return: dictionary containing diskCap, diskUsed, memCap and memUsed;
+             an empty dictionary on failure
+    """
+    return KvGetResourceInfo()
 
 
 def put(key, value) -> int:
