@@ -57,11 +57,6 @@ public:
     BResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
     BResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult BatchDeleteByRange(const char *start, const char *end);
-    void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
-
     void NotifyServiceable(bool serviceable);
     void NotifyPtMigrate(uint16_t ptId);
 
@@ -104,13 +99,6 @@ private:
     void DeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult DeleteLocal(void *ioBuff, uint32_t ioLen);
 
-    BResult HandleRangeDeleteDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteRemote(ServiceContext &ctx);
-    BResult HandleRangeDeleteRemoteMulti(ServiceContext &ctx);
-    void RangeDeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
-    BResult RangeDeleteLocal(void *ioBuff, uint32_t ioLen);
-
     BResult HandleReplace(ServiceContext &ctx);
     BResult HandleReplaceDefImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceMultiImpl(uint64_t userId, void *ioBuff, uint32_t ioLen);
@@ -133,12 +121,6 @@ private:
     BResult HandleGetSeqNoList(ServiceContext &ctx);
     BResult HandleGetSeqNoData(ServiceContext &ctx);
     BResult HandleUpdatePtVersion(ServiceContext &ctx);
-
-    BResult HandlePrefixSearch(ServiceContext &ctx);
-    BResult HandleRangeSearch(ServiceContext &ctx);
-    BResult HandleRangeDelete(ServiceContext &ctx);
-    BResult HandleSearch(ServiceContext &ctx, MmsOpCode opCode);
-    BResult ReplySearchResult(ServiceContext &ctx, ValueInfo *valueInfoItems, uint64_t itemNum);
 
 private:
     bool mStarted = false;

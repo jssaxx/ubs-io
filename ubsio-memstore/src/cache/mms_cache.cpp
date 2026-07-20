@@ -220,7 +220,6 @@ BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t
     indexValue->ptId = ptId;
     indexValue->isDelete = DATA_ALIVE;
     indexValue->blockOffset = INVALID_BLOCK_OFFSET;
-    indexValue->bucketNode = bucketNode;
 
     ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, keyStr.size());
     if (UNLIKELY(ret != 0)) {
@@ -249,8 +248,6 @@ BResult Cache::Put(const char *key, const char *value, uint64_t length, uint32_t
     indexValue->next = bucketNode->head;
     bucketNode->head = {hashCode, FLAG_VALID, numaId, indexNumaOffset, indexValueAddr};
 
-    // insert art tree
-    mLsmArtTree.Insert(std::move(keyStr), indexValue);
     CacheWriteUnLock(&bucketNode->status);
     CACHE_LOG_DEBUG("Put success, key:" << key << ", length:" << length << ", ptId:" << ptId << ", version:" << version
                                         << ".");
@@ -315,7 +312,6 @@ BResult Cache::ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_
         CACHE_LOG_ERROR("Put data into cache failed, ret:" << ret << ", key:" << indexValue->key <<  ".");
         return ret;
     }
-    mLsmArtTree.Insert(indexValue->key, indexValue);
     return MMS_OK;
 }
 
@@ -453,7 +449,6 @@ BResult Cache::InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32
     indexValue->version = version;
     indexValue->isDelete = DATA_DELETED;
     indexValue->blockOffset = INVALID_BLOCK_OFFSET;
-    indexValue->bucketNode = bucketNode;
 
     ret = strncpy_s(indexValue->key, MAX_KEY_SIZE, key, strlen(key));
     if (UNLIKELY(ret != 0)) {
@@ -476,7 +471,6 @@ BResult Cache::Delete(const char *key, uint32_t version)
     uint64_t bucketAddr = GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
 
-    mArtValueLock.LockWrite();
     CacheWriteLock(&bucketNode->status);
     IndexNode *node = &bucketNode->head;
     while (node->valid == FLAG_VALID) {
@@ -490,8 +484,6 @@ BResult Cache::Delete(const char *key, uint32_t version)
             indexValue->isDelete = DATA_DELETED;
             indexValue->version = version;
             CacheWriteUnLock(&bucketNode->status);
-            mLsmArtTree.Delete(std::move(keyStr));
-            mArtValueLock.UnLock();
             return MMS_OK;
         }
 
@@ -501,8 +493,6 @@ BResult Cache::Delete(const char *key, uint32_t version)
 
         CacheWriteUnLock(&bucketNode->status);
         mIndexMemAllocator->MmsFree(indexValueAddr);
-        mLsmArtTree.Delete(std::move(keyStr));
-        mArtValueLock.UnLock();
         CACHE_LOG_DEBUG("delete success, key:" << key << ".");
         return MMS_OK;
     }
@@ -512,14 +502,12 @@ BResult Cache::Delete(const char *key, uint32_t version)
         BResult ret = InsertTombEntry(bucketNode, hashCode, version, key);
         if (UNLIKELY(ret != MMS_OK)) {
             CacheWriteUnLock(&bucketNode->status);
-            mArtValueLock.UnLock();
             CACHE_LOG_ERROR("Insert a tomb entry failed, ret:" << ret << ", key:" << key << ".");
             return ret;
         }
     }
 
     CacheWriteUnLock(&bucketNode->status);
-    mArtValueLock.UnLock();
     CACHE_LOG_DEBUG("Key not found, skipping deletion, key:" << key << ".");
     return MMS_KEY_NOT_EXISTS;
 }
@@ -615,9 +603,7 @@ BResult Cache::Replace(const ReplacePara &para)
     indexValue->isDelete = DATA_ALIVE;
     indexValue->version = para.version;
     bucketNode->head = curNode;
-    indexValue->bucketNode = bucketNode;
 
-    mLsmArtTree.Insert(std::move(keyStr), indexValue);
     CacheWriteUnLock(&bucketNode->status);
     CACHE_LOG_DEBUG("Put success, key:" << para.key << ", length:" << para.length << ", ptId:" << para.ptId
                                         << ", version:" << para.version << ".");
@@ -653,177 +639,6 @@ void Cache::ClearDeletedData()
     }
 
     CACHE_LOG_INFO("Clear deleted data done.");
-}
-
-struct CallBackCtx {
-    std::vector<ValueInfo> *keyValueVec;
-    Cache *self;
-};
-
-static int ArtSearchCallBack(void *data, const unsigned char *key, uint32_t keyLen, void *val)
-{
-    auto callBackCtx = static_cast<CallBackCtx *>(data);
-    auto *keyValues = callBackCtx->keyValueVec;
-    auto insCtx = callBackCtx->self;
-    auto indexValue = reinterpret_cast<IndexValue *>(val);
-
-    auto freeMemFuc = [keyValues]() {
-        for (auto &item : *keyValues) {
-            delete[] item.key;
-            delete[] item.value;
-        }
-    };
-
-    char *keyBuff = new (std::nothrow) char[keyLen + NO_1];
-    if (UNLIKELY(keyBuff == nullptr)) {
-        freeMemFuc();
-        return MMS_ALLOC_FAIL;
-    }
-
-    auto bucketNode = indexValue->bucketNode;
-    CacheReadLock(&bucketNode->status);
-    char *valueBuff = new (std::nothrow) char[indexValue->totalDataLen];
-    if (UNLIKELY(valueBuff == nullptr)) {
-        CacheReadUnLock(&bucketNode->status);
-        delete[] keyBuff;
-        freeMemFuc();
-        return MMS_ALLOC_FAIL;
-    }
-
-    keyValues->push_back({keyBuff, valueBuff, indexValue->totalDataLen});
-    int32_t ret = strncpy_s(keyBuff, keyLen + NO_1, indexValue->key, keyLen);
-    if (UNLIKELY(ret != 0)) {
-        CacheReadUnLock(&bucketNode->status);
-        freeMemFuc();
-        return MMS_INNER_ERR;
-    }
-
-    uint64_t readLen = insCtx->GetDataFromBlock(indexValue, valueBuff, 0, indexValue->totalDataLen);
-    if (UNLIKELY(readLen == 0)) {
-        CacheReadUnLock(&bucketNode->status);
-        freeMemFuc();
-        return MMS_INNER_ERR;
-    }
-
-    CacheReadUnLock(&bucketNode->status);
-    return 0;
-}
-
-BResult Cache::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    std::vector<ValueInfo> keyValueVec;
-    CallBackCtx ctx = {&keyValueVec, this};
-    auto freeKVMemFunc = [&keyValueVec]() {
-        for (auto &item : keyValueVec) {
-            delete[] item.key;
-            delete[] item.value;
-        }
-    };
-
-    mArtValueLock.LockRead();
-    int ret = mLsmArtTree.SearchPrefix(reinterpret_cast<const unsigned char *>(prefix),
-                                       static_cast<int>(strlen(prefix)), ArtSearchCallBack, &ctx);
-    mArtValueLock.UnLock();
-    if (UNLIKELY(ret != 0)) {
-        CACHE_LOG_ERROR("Search prefix in art tree failed, ret:" << ret << ".");
-        return ret;
-    }
-
-    size_t count = keyValueVec.size();
-    *itemNum = count;
-    if (count == 0) {
-        *valueInfoItems = nullptr;
-        CACHE_LOG_DEBUG("No key matches the prefix:" << prefix << ".");
-        return MMS_OK;
-    }
-
-    *valueInfoItems = new (std::nothrow) ValueInfo[count];
-    if (UNLIKELY(*valueInfoItems == nullptr)) {
-        freeKVMemFunc();
-        return MMS_ALLOC_FAIL;
-    }
-
-    uint64_t totalSize = sizeof(ValueInfo) * count;
-    ret = memcpy_s(*valueInfoItems, totalSize, keyValueVec.data(), totalSize);
-    if (UNLIKELY(ret != 0)) {
-        delete[] * valueInfoItems;
-        freeKVMemFunc();
-        return MMS_INNER_ERR;
-    }
-
-    CACHE_LOG_DEBUG("Get values by prefix success, prefix:" << prefix << ", count:" << count << ".");
-    return MMS_OK;
-}
-
-BResult Cache::GetValuesByRange(const char *keyStart, const char *keyEnd, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    std::vector<ValueInfo> keyValueVec;
-    CallBackCtx ctx = {&keyValueVec, this};
-    auto freeKVMemFunc = [&keyValueVec]() {
-        for (auto &item : keyValueVec) {
-            delete[] item.key;
-            delete[] item.value;
-        }
-    };
-
-    art_range_bound startBound = {reinterpret_cast<const unsigned char *>(keyStart),
-                                  static_cast<int>(strlen(keyStart))};
-    art_range_bound endBound = {reinterpret_cast<const unsigned char *>(keyEnd), static_cast<int>(strlen(keyEnd))};
-    mArtValueLock.LockRead();
-    int ret = mLsmArtTree.SearchRange(startBound, endBound, ArtSearchCallBack, &ctx);
-    mArtValueLock.UnLock();
-    if (UNLIKELY(ret != 0)) {
-        CACHE_LOG_ERROR("Search prefix in art tree failed, ret:" << ret << ".");
-        return ret;
-    }
-
-    size_t count = keyValueVec.size();
-    *itemNum = count;
-    if (count == 0) {
-        *valueInfoItems = nullptr;
-        CACHE_LOG_DEBUG("No key matches for the range [" << keyStart << ", " << keyEnd << "]"
-                                                         << ".");
-        return MMS_OK;
-    }
-
-    *valueInfoItems = new (std::nothrow) ValueInfo[count];
-    if (UNLIKELY(*valueInfoItems == nullptr)) {
-        freeKVMemFunc();
-        return MMS_ALLOC_FAIL;
-    }
-
-    uint64_t totalSize = sizeof(ValueInfo) * count;
-    ret = memcpy_s(*valueInfoItems, totalSize, keyValueVec.data(), totalSize);
-    if (UNLIKELY(ret != 0)) {
-        delete[] *valueInfoItems;
-        freeKVMemFunc();
-        return MMS_INNER_ERR;
-    }
-
-    CACHE_LOG_DEBUG("Get values by range success, range:[" << keyStart << ", " << keyEnd << "]"
-                                                           << ", count:" << count << ".");
-    return MMS_OK;
-}
-
-BResult Cache::GetKeysByRange(const char *keyStart, const char *keyEnd, std::vector<std::string> &matchedKeys)
-{
-    auto callback = [](void *data, const unsigned char *key, uint32_t keyLen, void *val) -> int {
-        auto *keys = static_cast<std::vector<std::string> *>(data);
-        keys->emplace_back(reinterpret_cast<const char *>(key), keyLen);
-        return 0;
-    };
-
-    matchedKeys.clear();
-    art_range_bound startBound = {reinterpret_cast<const unsigned char *>(keyStart),
-                                  static_cast<int>(strlen(keyStart))};
-    art_range_bound endBound = {reinterpret_cast<const unsigned char *>(keyEnd), static_cast<int>(strlen(keyEnd))};
-    int searchRet = mLsmArtTree.SearchRange(startBound, endBound, callback, &matchedKeys);
-    if (UNLIKELY(searchRet != 0)) {
-        CACHE_LOG_ERROR("Search range in art tree failed, ret:" << searchRet << ".");
-        return searchRet;
-    }
-
-    return MMS_OK;
 }
 
 }  // namespace mms
