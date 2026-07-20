@@ -88,8 +88,7 @@ constexpr size_t IO_SIZE_2M = 2 * 1024 * 1024;
 constexpr size_t IO_SIZE_4M = 4 * 1024 * 1024;
 constexpr size_t IO_SIZE_64M = 64 * 1024 * 1024;
 constexpr size_t IO_SIZE_128M = 128 * 1024 * 1024;
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_TYPES_H

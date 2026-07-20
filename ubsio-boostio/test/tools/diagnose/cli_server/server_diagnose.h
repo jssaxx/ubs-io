@@ -45,9 +45,9 @@ private:
     static CliUnRegCmdFuncPtr mUnRegOp;
     static CliPrintBufFuncPtr mPrintOp;
 };
-}
-}
-}
+} // namespace diagnose
+} // namespace bio
+} // namespace ock
 
 #ifdef __cplusplus
 extern "C" {

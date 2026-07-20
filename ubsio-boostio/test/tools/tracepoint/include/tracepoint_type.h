@@ -27,8 +27,8 @@ typedef uint32_t TpUint32;
 typedef uint64_t TpUint64;
 #endif
 
-#define PID_OSP_NULL        0
-#define BSP_SOFT_REBOOT     0
+#define PID_OSP_NULL 0
+#define BSP_SOFT_REBOOT 0
 
 void DpaxReboot(unsigned long resetReason, unsigned int pid, char *message);
 

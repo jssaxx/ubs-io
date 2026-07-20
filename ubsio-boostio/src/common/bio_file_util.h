@@ -13,17 +13,16 @@
 #ifndef HDAGGER_DAGGER_FILE_H
 #define HDAGGER_DAGGER_FILE_H
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <cstring>
+#include <bio_log.h>
 #include <dirent.h>
-#include <string>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <string>
 #include <vector>
-#include <bio_log.h>
 
 namespace ock {
 namespace bio {
@@ -76,20 +75,20 @@ public:
 
     static int64_t GetDiskCapacity(std::string &diskPath);
 
-    static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
-                                   const std::string& newConfig);
+    static bool AppendConfigToLine(std::vector<std::string> &lines, const std::string &key,
+                                   const std::string &newConfig);
 
-    static int64_t FindTargetLine(const std::vector<std::string>& lines, const std::string& key);
+    static int64_t FindTargetLine(const std::vector<std::string> &lines, const std::string &key);
 
-    static bool WriteFile(const std::string& filename, const std::vector<std::string>& lines);
+    static bool WriteFile(const std::string &filename, const std::vector<std::string> &lines);
 
-    static bool ReadFile(const std::string& filename, std::vector<std::string>& lines);
+    static bool ReadFile(const std::string &filename, std::vector<std::string> &lines);
 
-    static bool BackUpFile(const std::string& srcPath, const std::string& destPath);
+    static bool BackUpFile(const std::string &srcPath, const std::string &destPath);
 
-    static bool RenameFile(const std::string& oldPath, const std::string& newPath);
+    static bool RenameFile(const std::string &oldPath, const std::string &newPath);
 
-    static bool RemoveFile(const std::string& filePath);
+    static bool RemoveFile(const std::string &filePath);
 };
 
 inline bool FileUtil::Exist(const std::string &path)
@@ -187,7 +186,8 @@ inline bool FileUtil::RemoveDirRecursive(const std::string &path)
             continue;
         }
 
-        struct stat statBuf {};
+        struct stat statBuf {
+        };
         std::string absPath = realPath + "/" + entry->d_name;
         if (!stat(absPath.c_str(), &statBuf) && S_ISDIR(statBuf.st_mode)) {
             RemoveDirRecursive(absPath);
@@ -241,21 +241,21 @@ inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
     return off;
 }
 
-inline bool FileUtil::WriteFile(const std::string& filename, const std::vector<std::string>& lines)
+inline bool FileUtil::WriteFile(const std::string &filename, const std::vector<std::string> &lines)
 {
     std::ofstream file(filename);
     if (!file.is_open()) {
         return false;
     }
 
-    for (const auto& line : lines) {
+    for (const auto &line : lines) {
         file << line << std::endl;
     }
     file.close();
     return true;
 }
 
-inline int64_t FileUtil::FindTargetLine(const std::vector<std::string>& lines, const std::string& key)
+inline int64_t FileUtil::FindTargetLine(const std::vector<std::string> &lines, const std::string &key)
 {
     for (size_t i = 0; i < lines.size(); ++i) {
         if (lines[i].find(key) != std::string::npos) {
@@ -265,8 +265,8 @@ inline int64_t FileUtil::FindTargetLine(const std::vector<std::string>& lines, c
     return -1; // Not found
 }
 
-inline bool FileUtil::AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
-                                         const std::string& newConfig)
+inline bool FileUtil::AppendConfigToLine(std::vector<std::string> &lines, const std::string &key,
+                                         const std::string &newConfig)
 {
     int index = FindTargetLine(lines, key);
     if (index != -1) {
@@ -276,7 +276,7 @@ inline bool FileUtil::AppendConfigToLine(std::vector<std::string>& lines, const 
     return false;
 }
 
-inline bool FileUtil::ReadFile(const std::string& filename, std::vector<std::string>& lines)
+inline bool FileUtil::ReadFile(const std::string &filename, std::vector<std::string> &lines)
 {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -291,7 +291,7 @@ inline bool FileUtil::ReadFile(const std::string& filename, std::vector<std::str
     return true;
 }
 
-inline bool FileUtil::BackUpFile(const std::string& srcPath, const std::string& destPath)
+inline bool FileUtil::BackUpFile(const std::string &srcPath, const std::string &destPath)
 {
     // 打开源文件
     std::ifstream src(srcPath, std::ios::binary);
@@ -317,7 +317,7 @@ inline bool FileUtil::BackUpFile(const std::string& srcPath, const std::string& 
     return true;
 }
 
-inline bool FileUtil::RenameFile(const std::string& oldPath, const std::string& newPath)
+inline bool FileUtil::RenameFile(const std::string &oldPath, const std::string &newPath)
 {
     if (oldPath == newPath) {
         LOG_DEBUG("RenameFile: oldPath and newPath are identical, nothing to do.");
@@ -326,18 +326,18 @@ inline bool FileUtil::RenameFile(const std::string& oldPath, const std::string& 
 
     if (std::rename(oldPath.c_str(), newPath.c_str()) != 0) {
         int err = errno;
-        LOG_ERROR("RenameFile: failed to rename from '" << oldPath << "' to '"
-                  << newPath << "', errno=" << err << " (" << std::strerror(err) << ")");
+        LOG_ERROR("RenameFile: failed to rename from '" << oldPath << "' to '" << newPath << "', errno=" << err << " ("
+                                                        << std::strerror(err) << ")");
         return false;
     }
 
     return true;
 }
 
-inline bool FileUtil::RemoveFile(const std::string& filePath)
+inline bool FileUtil::RemoveFile(const std::string &filePath)
 {
     return std::remove(filePath.c_str()) == 0;
 }
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // HDAGGER_DAGGER_FILE_H

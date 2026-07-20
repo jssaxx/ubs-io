@@ -10,13 +10,13 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "hdfs_system.h"
 #include <cstring>
 #include "bio_config_instance.h"
 #include "bio_err.h"
 #include "bio_log.h"
 #include "bio_tracepoint_helper.h"
 #include "underfs_config.h"
-#include "hdfs_system.h"
 
 namespace ock {
 namespace bio {
@@ -78,8 +78,8 @@ BResult HdfsSystem::Init()
         return BIO_UFS_IOERR;
     }
 
-    LOG_INFO("UnderFS initialize succeed, ip:" << mNameNodeIp << ", port:" << mNameNodePort << ", workingPath:" <<
-        mHdfsWorkingPath << ".");
+    LOG_INFO("UnderFS initialize succeed, ip:" << mNameNodeIp << ", port:" << mNameNodePort
+                                               << ", workingPath:" << mHdfsWorkingPath << ".");
     mInited = true;
     return BIO_OK;
 }
@@ -99,7 +99,7 @@ BResult ParsePath(const char *path, char *parentDir, size_t parentDirSize)
         size_t parentLen = lastSlash - path;
         BResult ret = strncpy_s(parentDir, parentDirSize, path, parentLen);
         if (ret != BIO_OK) {
-            LOG_ERROR("strncpy_s faild, ret:"<< ret << ".");
+            LOG_ERROR("strncpy_s faild, ret:" << ret << ".");
             return BIO_UFS_IOERR;
         }
         parentDir[parentLen] = '\0';
@@ -183,8 +183,7 @@ BResult HdfsSystem::Put(const char *key, const char *value, const size_t len)
     }
 
     if (flushOp(mHdfsFs, file) != BIO_OK) {
-        LOG_WARN("Failed to flush data to hdfs"
-            << ".");
+        LOG_WARN("Failed to flush data to hdfs.");
     }
 
     LOG_INFO("Put data success, key:" << key << ", len:" << len << ".");
@@ -195,8 +194,8 @@ BResult HdfsSystem::Put(const char *key, const char *value, const size_t len)
 BResult HdfsSystem::Get(const char *key, char *value, const size_t len, const uint64_t off)
 {
     if (UNLIKELY(!KeyValid(key) || value == nullptr)) {
-        LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, key:" << key << ", length:" << len <<
-            ", offset:" << off << ".");
+        LOG_ERROR("Invalid get parameter, key or value pointers is nullptr, key:" << key << ", length:" << len
+                                                                                  << ", offset:" << off << ".");
         return BIO_UFS_IOERR;
     }
     if (len == 0) {
@@ -344,7 +343,7 @@ std::string GetFileNameFromHdfsPath(const std::string path)
 }
 
 BResult HdfsSystem::ListDirectoryRecursive(const char *path,
-    std::unordered_map<std::string, HdfsSystem::ObjStat> &objStat)
+                                           std::unordered_map<std::string, HdfsSystem::ObjStat> &objStat)
 {
     if (UNLIKELY(!KeyValid(path))) {
         LOG_ERROR("Invalid path, path:" << path << ".");
@@ -373,7 +372,7 @@ BResult HdfsSystem::ListDirectoryRecursive(const char *path,
     for (int i = 0; i < numEntries; ++i) {
         fileName = curPath + '/' + GetFileNameFromHdfsPath(files[i].mName);
         if (files[i].mKind == FILE) {
-            objStat.insert({ fileName, { static_cast<uint64_t>(files[i].mSize), files[i].mLastMod } });
+            objStat.insert({fileName, {static_cast<uint64_t>(files[i].mSize), files[i].mLastMod}});
         } else {
             ret = ListDirectoryRecursive(fileName.c_str(), objStat);
             if (ret != BIO_OK) {
@@ -388,7 +387,7 @@ BResult HdfsSystem::ListDirectoryRecursive(const char *path,
 }
 
 BResult HdfsSystem::ListFilesInDirectory(const char *prefix,
-    std::unordered_map<std::string, HdfsSystem::ObjStat> &objStat)
+                                         std::unordered_map<std::string, HdfsSystem::ObjStat> &objStat)
 {
     if (UNLIKELY(!KeyValid(prefix))) {
         LOG_ERROR("Invalid path, path:" << prefix << ".");
@@ -415,7 +414,7 @@ BResult HdfsSystem::ListFilesInDirectory(const char *prefix,
             (fileName.compare(startPosition, prefixLength, prefix) != 0)) {
             continue;
         }
-        objStat.insert({ fileName, { static_cast<uint64_t>(files[i].mSize), files[i].mLastMod } });
+        objStat.insert({fileName, {static_cast<uint64_t>(files[i].mSize), files[i].mLastMod}});
     }
 
     freeFileInfoOp(files, numEntries);
@@ -531,7 +530,7 @@ BResult HdfsSystem::LoadHdfsLibrary()
     return BIO_OK;
 #endif
 
-    const char* hadoopHome = getenv("HADOOP_HOME");
+    const char *hadoopHome = getenv("HADOOP_HOME");
     if (hadoopHome == nullptr || hadoopHome[0] == '\0') {
         LOG_ERROR("HADOOP_HOME is not set or empty.");
         return BIO_UFS_IOERR;
@@ -589,9 +588,9 @@ bool IsValidIP(const std::string &ip)
 {
     // check IPv4
     const std::regex pattern(R"(^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)"
-        R"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)"
-        R"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)"
-        R"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$)");
+                             R"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)"
+                             R"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)"
+                             R"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$)");
 
     return ((std::regex_match(ip, pattern)) || (ip == "default")); // default: use ip in core-site.xml
 }
@@ -609,7 +608,7 @@ bool IsValidHdfsConfig(std::pair<std::string, std::string> &ipPort, std::string 
         return false;
     }
     if (!IsValidPort(ipPort.second)) {
-        LOG_ERROR("invalid namenode port:" << ipPort.second << ", " << "it should be between 0~65535.");
+        LOG_ERROR("invalid namenode port:" << ipPort.second << ", it should be between 0~65535.");
         return false;
     }
     if (!IsValidWorkingPath(workingPath)) {
@@ -626,7 +625,7 @@ BResult HdfsSystem::LoadHdfsConfig()
         return BIO_UFS_IOERR;
     }
     BioConfig::UnderFsConfig config = instance->GetUnderFsConfig();
-    BioConfig::HdfsConfig hdfsConfig = { config.hdfsConfig.nameNode, config.hdfsConfig.workingPath };
+    BioConfig::HdfsConfig hdfsConfig = {config.hdfsConfig.nameNode, config.hdfsConfig.workingPath};
     std::pair<std::string, std::string> ipPort = ParseIpPort(hdfsConfig.nameNode);
     if (!IsValidHdfsConfig(ipPort, hdfsConfig.workingPath)) {
         LOG_ERROR("invalid hdfs config.");
@@ -642,5 +641,5 @@ BResult HdfsSystem::LoadHdfsConfig()
     mHdfsWorkingPath = hdfsConfig.workingPath;
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

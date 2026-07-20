@@ -44,8 +44,8 @@ public:
     virtual BResult List(const char *prefix, std::unordered_map<std::string, ObjStat> &objStat) = 0;
 
 protected:
-    bool mInited{ false };
+    bool mInited{false};
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_FILESYSTEM_H

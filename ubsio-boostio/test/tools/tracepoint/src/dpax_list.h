@@ -13,9 +13,9 @@
 #ifndef BIO_DPAX_LIST_H
 #define BIO_DPAX_LIST_H
 
-#include <unistd.h>
 #include <errno.h>
 #include <stddef.h>
+#include <unistd.h>
 
 #ifdef __cplusplus
 #if __cplusplus
@@ -24,16 +24,15 @@ extern "C" {
 #endif /* __cplusplus */
 
 #ifndef LIST_POISON1
-#define LIST_POISON1  ((void *) 0x00100100)
+#define LIST_POISON1 ((void *)0x00100100)
 #endif
 
 #ifndef LIST_POISON2
-#define LIST_POISON2  ((void *) 0x00200200)
+#define LIST_POISON2 ((void *)0x00200200)
 #endif
 
 #ifndef CONTAINER_OF
-#define CONTAINER_OF(ptr, type, member) \
-        ((type *)(void *)((char *)(ptr) - offsetof(type, member)))
+#define CONTAINER_OF(ptr, type, member) ((type *)(void *)((char *)(ptr)-offsetof(type, member)))
 #endif
 
 struct ListHead {
@@ -42,32 +41,38 @@ struct ListHead {
 
 typedef struct ListHead ListHeadT;
 
-#define DPAX_LIST_HEAD_INIT(name) { &(name), &(name) }
+#define DPAX_LIST_HEAD_INIT(name) \
+    {                             \
+        &(name), &(name)          \
+    }
 
-#define DPAX_LIST_HEAD(name) \
-        struct ListHead name = DPAX_LIST_HEAD_INIT(name)
+#define DPAX_LIST_HEAD(name) struct ListHead name = DPAX_LIST_HEAD_INIT(name)
 
-#define LIST_HEAD_INIT(name) { &(name), &(name) }
+#define LIST_HEAD_INIT(name) \
+    {                        \
+        &(name), &(name)     \
+    }
 
-#define LIST_HEAD(name) \
-    struct ListHead name = LIST_HEAD_INIT(name)
+#define LIST_HEAD(name) struct ListHead name = LIST_HEAD_INIT(name)
 
-#define DPAX_INIT_LIST_NODE(ptr)   { (ptr)->next = (struct ListHead *)LIST_POISON1; (ptr)->prev = (struct ListHead *)LIST_POISON2; }
+#define DPAX_INIT_LIST_NODE(ptr)                       \
+    {                                                  \
+        (ptr)->next = (struct ListHead *)LIST_POISON1; \
+        (ptr)->prev = (struct ListHead *)LIST_POISON2; \
+    }
 
-#define IS_LIST_NODE_INIT(ptr)  ((LIST_POISON1 == (void*)((ptr)->next)) && (LIST_POISON2 == (void*)((ptr)->prev)))
+#define IS_LIST_NODE_INIT(ptr) ((LIST_POISON1 == (void *)((ptr)->next)) && (LIST_POISON2 == (void *)((ptr)->prev)))
 
-#define DPAX_LIST_ENTRY(_ptr, _type, _memb)    \
-                CONTAINER_OF(_ptr, _type, _memb)
+#define DPAX_LIST_ENTRY(_ptr, _type, _memb) CONTAINER_OF(_ptr, _type, _memb)
 
-#define DPAX_LIST_FOR_EACH(pos, head) \
-    for (pos = (head)->next; pos != (head); pos = pos->next)
+#define DPAX_LIST_FOR_EACH(pos, head) for (pos = (head)->next; pos != (head); pos = pos->next)
 
-#define DPAX_LIST_FOR_DEL_EACH(pos, head) \
-    for (pos = (head)->next; pos != (head); \
-            pos = (head)->next)
+#define DPAX_LIST_FOR_DEL_EACH(pos, head) for (pos = (head)->next; pos != (head); pos = (head)->next)
 
-#define INIT_LIST_HEAD(ptr) { \
-        (ptr)->next = (ptr); (ptr)->prev = (ptr); \
+#define INIT_LIST_HEAD(ptr)  \
+    {                        \
+        (ptr)->next = (ptr); \
+        (ptr)->prev = (ptr); \
     }
 
 static inline void DpaxInitListHead(struct ListHead *list)
@@ -78,10 +83,10 @@ static inline void DpaxInitListHead(struct ListHead *list)
 
 static inline void ListAdd(struct ListHead *newnode, struct ListHead *prev, struct ListHead *next)
 {
-	next->prev = newnode;
-	newnode->next = next;
-	newnode->prev = prev;
-	prev->next = newnode;
+    next->prev = newnode;
+    newnode->next = next;
+    newnode->prev = prev;
+    prev->next = newnode;
 }
 
 static inline void DpaxListAdd(struct ListHead *newnode, struct ListHead *head)
@@ -94,12 +99,12 @@ static inline void DpaxListAddTail(struct ListHead *newnode, struct ListHead *he
     ListAdd(newnode, head->prev, head);
 }
 
-static inline void DpaxListInsert(struct ListHead *new_node, struct ListHead* prev_node, struct ListHead *next_node)
+static inline void DpaxListInsert(struct ListHead *new_node, struct ListHead *prev_node, struct ListHead *next_node)
 {
     ListAdd(new_node, prev_node, next_node);
 }
 
-static inline void ListDel(struct ListHead * prev, struct ListHead *next)
+static inline void ListDel(struct ListHead *prev, struct ListHead *next)
 {
     next->prev = prev;
     prev->next = next;
@@ -113,30 +118,27 @@ static inline void DpaxListDel(struct ListHead *entry)
 
 static inline int ListEmpty(const struct ListHead *head)
 {
-	return head->next == head;
+    return head->next == head;
 }
 
-static inline ListHeadT* DpaxListGetFirst(ListHeadT *head)
+static inline ListHeadT *DpaxListGetFirst(ListHeadT *head)
 {
     return ListEmpty(head) ? NULL : head->next;
 }
 
-static inline ListHeadT* DpaxListGetTail(ListHeadT *head)
+static inline ListHeadT *DpaxListGetTail(ListHeadT *head)
 {
-    return  (head->prev == head) ? NULL : head->prev;
+    return (head->prev == head) ? NULL : head->prev;
 }
 
-static inline ListHeadT* DpaxListDelFirst(ListHeadT *head)
+static inline ListHeadT *DpaxListDelFirst(ListHeadT *head)
 {
-    ListHeadT* ret = NULL;
+    ListHeadT *ret = NULL;
 
     ret = head->next;
-    if (ret == head)
-    {
+    if (ret == head) {
         return NULL;
-    }
-    else
-    {
+    } else {
         DpaxListDel(ret);
     }
 
@@ -149,31 +151,29 @@ static inline void DpaxListDelInit(struct ListHead *entry)
     DpaxInitListHead(entry);
 }
 
-static inline ListHeadT* DpaxListDelTail(ListHeadT *head)
+static inline ListHeadT *DpaxListDelTail(ListHeadT *head)
 {
-    ListHeadT* ret;
+    ListHeadT *ret;
 
     ret = head->prev;
-    if (ret == head)
-    {
+    if (ret == head) {
         return NULL;
-    }
-    else
-    {
+    } else {
         DpaxListDel(ret);
     }
 
     return ret;
 }
 
-#define DPAX_LIST_FOR_DEL_ALL(pos, type, listHead, name)  \
-do {                                                      \
-    DPAX_LIST_FOR_DEL_EACH(pos, listHead) {               \
-        name = DPAX_LIST_ENTRY(pos, type, listNode);      \
-        DpaxListDel(pos);                                 \
-        free(name);                                       \
-    }                                                     \
-} while(0)
+#define DPAX_LIST_FOR_DEL_ALL(pos, type, listHead, name) \
+    do {                                                 \
+        DPAX_LIST_FOR_DEL_EACH(pos, listHead)            \
+        {                                                \
+            name = DPAX_LIST_ENTRY(pos, type, listNode); \
+            DpaxListDel(pos);                            \
+            free(name);                                  \
+        }                                                \
+    } while (0)
 
 static inline void DpaxListMove(struct ListHead *list, struct ListHead *head)
 {
@@ -194,8 +194,8 @@ static inline int DpaxListEmpty(const struct ListHead *head)
 
 static inline int DpaxListEmptyCareful(const struct ListHead *head)
 {
-	struct ListHead *next = head->next;
-	return (next == head) && (next == head->prev);
+    struct ListHead *next = head->next;
+    return (next == head) && (next == head->prev);
 }
 
 static inline int DpaxListIsLast(const struct ListHead *list, const struct ListHead *head)
@@ -223,10 +223,10 @@ static inline void DpaxListSplice(const struct ListHead *list, struct ListHead *
 
 static inline void DpaxListSpliceInit(struct ListHead *list, struct ListHead *head)
 {
-     if (!DpaxListEmpty(list)) {
-         ListSplice(list, head, head->next);
-         INIT_LIST_HEAD(list);
-     }
+    if (!DpaxListEmpty(list)) {
+        ListSplice(list, head, head->next);
+        INIT_LIST_HEAD(list);
+    }
 }
 
 static inline void DpaxListSpliceTail(struct ListHead *list, struct ListHead *head)
@@ -235,14 +235,16 @@ static inline void DpaxListSpliceTail(struct ListHead *list, struct ListHead *he
         ListSplice(list, head->prev, head);
 }
 
-#define INIT_LIST_NODE(ptr)   { (ptr)->next = (struct ListHead *)LIST_POISON1; (ptr)->prev = (struct ListHead *)LIST_POISON2; }
+#define INIT_LIST_NODE(ptr)                            \
+    {                                                  \
+        (ptr)->next = (struct ListHead *)LIST_POISON1; \
+        (ptr)->prev = (struct ListHead *)LIST_POISON2; \
+    }
 
-#define DPAX_LIST_FOR_EACH_PREV(pos, head) \
-            for (pos = (head)->prev; pos != (head); pos = pos->prev)
+#define DPAX_LIST_FOR_EACH_PREV(pos, head) for (pos = (head)->prev; pos != (head); pos = pos->prev)
 
-#define DPAX_LIST_FOR_EACH_PREV_SAFE(pos, p, head)\
-                        for(pos = (head)->prev, p = pos->prev; pos != (head);\
-                            pos = p, p = pos->prev)
+#define DPAX_LIST_FOR_EACH_PREV_SAFE(pos, p, head) \
+    for (pos = (head)->prev, p = pos->prev; pos != (head); pos = p, p = pos->prev)
 
 static inline void DpaxListForEachPrevSafe(struct ListHead *list, struct ListHead *head)
 {
@@ -263,8 +265,7 @@ static inline void DpaxListReplace(ListHeadT *old_node, ListHeadT *new_node)
 
 static inline int DpaxListCheckInQueue(ListHeadT *node)
 {
-    if ((node->next == node) && (node->prev == node))
-    {
+    if ((node->next == node) && (node->prev == node)) {
         return 0;
     }
 
@@ -273,13 +274,11 @@ static inline int DpaxListCheckInQueue(ListHeadT *node)
 
 static inline void DpaxListMerge(ListHeadT *first_list, ListHeadT *second_list)
 {
-    if (DpaxListEmpty(second_list))
-    {
+    if (DpaxListEmpty(second_list)) {
         return;
     }
 
-    if (DpaxListEmpty(first_list))
-    {
+    if (DpaxListEmpty(first_list)) {
         DpaxListReplace(second_list, first_list);
         return;
     }
@@ -298,8 +297,7 @@ static inline void DpaxListMerge(ListHeadT *first_list, ListHeadT *second_list)
 
 static inline int DpaxListNodeIsTail(ListHeadT *node, ListHeadT *head)
 {
-    if (node == head->prev)
-    {
+    if (node == head->prev) {
         return 1;
     }
 
@@ -308,8 +306,7 @@ static inline int DpaxListNodeIsTail(ListHeadT *node, ListHeadT *head)
 
 static inline int DpaxListNodeIsFirst(ListHeadT *node, ListHeadT *head)
 {
-    if (node == head->next)
-    {
+    if (node == head->next) {
         return 1;
     }
 

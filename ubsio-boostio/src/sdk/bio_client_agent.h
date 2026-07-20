@@ -13,14 +13,14 @@
 #ifndef BIO_CLIENT_AGENT_H
 #define BIO_CLIENT_AGENT_H
 
-#include "cm.h"
-#include "net_engine.h"
-#include "message.h"
-#include "cache_slice.h"
-#include "bio_err.h"
-#include "bio_tracepoint_helper.h"
-#include "bio_ref.h"
 #include "bio.h"
+#include "bio_err.h"
+#include "bio_ref.h"
+#include "bio_tracepoint_helper.h"
+#include "cache_slice.h"
+#include "cm.h"
+#include "message.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace bio {
@@ -118,7 +118,7 @@ public:
     BResult DestroyFlowLocal(pid_t procId, CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 
     BResult PrepareResource(CmPtInfo &ptEntry, uint64_t flowId, uint64_t offset, uint64_t index, uint64_t length,
-        GetSliceResponse **rsp);
+                            GetSliceResponse **rsp);
 
     void PutLocal(PutRequest *req, Callback &callback);
 
@@ -148,8 +148,7 @@ public:
 
     BResult GetTracePointsLocal(GetTracePointsRequest &req, GetTracePointsResponse &rsp);
 
-    BResult GetTracePointsLocal(GetTracePointsRequest &req,
-                                std::map<uint16_t, TraceDatabase> &nodesTracePoints);
+    BResult GetTracePointsLocal(GetTracePointsRequest &req, std::map<uint16_t, TraceDatabase> &nodesTracePoints);
 
     BResult SendGetNodeInfoRequest(uint16_t masterPtId, uint16_t slavePtId, FileLocationQueryRsp &rsp);
 
@@ -165,8 +164,8 @@ private:
 
     BResult SendGetLocalNodeInfoRequest(uint16_t &protocol, CmNodeId &localNid);
 
-    BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType,
-        uint64_t &flowId, bool &isDegrade);
+    BResult SendCreateFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint16_t opType, uint64_t &flowId,
+                                       bool &isDegrade);
 
     BResult SendDestroyFlowRequestLocal(CmPtInfo &ptEntry, uint16_t ptId, uint64_t flowId);
 
@@ -232,7 +231,7 @@ private:
     CalcCacheResourceLocalFuncPtr cacheResourceOp = nullptr;
     GetTracePointsLocalFuncPtr getTracePointsOp = nullptr;
 };
-}
-}
-}
+} // namespace agent
+} // namespace bio
+} // namespace ock
 #endif

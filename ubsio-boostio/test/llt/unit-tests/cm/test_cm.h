@@ -29,6 +29,6 @@ public:
 private:
     static bool gSetup;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_TEST_CM_H

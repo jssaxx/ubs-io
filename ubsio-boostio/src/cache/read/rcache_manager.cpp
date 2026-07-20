@@ -10,15 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bio_log.h"
-#include "cache_flow.h"
-#include "flow_manager.h"
+#include "rcache_manager.h"
+#include "bio_config_instance.h"
 #include "bio_def.h"
+#include "bio_log.h"
+#include "bio_monotonic.h"
 #include "bio_trace.h"
 #include "bio_tracepoint_helper.h"
-#include "bio_monotonic.h"
-#include "bio_config_instance.h"
-#include "rcache_manager.h"
+#include "cache_flow.h"
+#include "flow_manager.h"
 
 using namespace ock::bio;
 
@@ -129,7 +129,7 @@ BResult RCacheManager::Put(uint16_t ptId, const Key &key, const WCacheSlicePtr &
 };
 
 BResult RCacheManager::Get(uint16_t ptId, const Key &key, uint64_t offset, const RCacheSlicePtr &slice,
-    const SliceWriter &sliceWriter, uint64_t &realLen)
+                           const SliceWriter &sliceWriter, uint64_t &realLen)
 {
     RCachePtr cachePtr = GetRCacheInstanceByPtId(ptId);
     ChkTrue(UNLIKELY(cachePtr != nullptr), BIO_NOT_EXISTS, "Get read cache instance failed, ptId:" << ptId << ".");

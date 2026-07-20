@@ -14,14 +14,14 @@
 #define MIRROR_SERVER_H
 
 #include <utility>
-#include "bio_ref.h"
-#include "bio_err.h"
-#include "net_engine.h"
-#include "net_common.h"
 #include "bio.h"
-#include "message.h"
+#include "bio_err.h"
+#include "bio_ref.h"
 #include "cache.h"
+#include "message.h"
 #include "message_op.h"
+#include "net_common.h"
+#include "net_engine.h"
 
 namespace ock {
 namespace bio {
@@ -30,15 +30,15 @@ struct MemFreeHolder {
     uint64_t clientId;
 };
 
-struct  MemFreeHolderHash {
-    size_t operator()(const MemFreeHolder& holder) const
+struct MemFreeHolderHash {
+    size_t operator()(const MemFreeHolder &holder) const
     {
         return std::hash<uint64_t>()(static_cast<uint64_t>(holder.nodeId)) ^ std::hash<uint64_t>()(holder.clientId);
     }
 };
 
 struct MemFreeHolderEqual {
-    bool operator()(const MemFreeHolder& holder1, const MemFreeHolder& holder2) const
+    bool operator()(const MemFreeHolder &holder1, const MemFreeHolder &holder2) const
     {
         return (holder1.nodeId == holder2.nodeId) && (holder1.clientId == holder2.clientId);
     }
@@ -114,10 +114,10 @@ public:
 
     BResult ReaderRemote(const SlicePtr &from, const SlicePtr &to, PutRequest &req, ServiceContext &netCtx);
     BResult WriterParseMrInfo(const SlicePtr &from, const SlicePtr &to, std::vector<NetMrInfo> &rMrVec,
-        std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
+                              std::vector<NetMrInfo> &lMrVec, uint32_t rKey, bool &isAlloc);
     BResult WriterLocalDiffProcess(bool &isAlloc, std::vector<NetMrInfo> &lMrVec, GetResponse &rsp, GetRequest &req);
     BResult WriterRemote(bool isAlloc, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
-        ServiceContext &netCtx, GetRequest &req);
+                         ServiceContext &netCtx, GetRequest &req);
     TraceDatabase GetTraceData();
 
     int32_t MirrorServerShmInit(ServiceContext &ctx, ShmInitRequest *req);
@@ -194,9 +194,9 @@ private:
     BResult GetEvictOffset(GetEvictRequest &req, uint64_t &flowOffset);
     BResult ReaderLocal(const SlicePtr &from, const SlicePtr &to);
     BResult ReaderRemoteEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
-        ServiceContext &netCtx);
+                               ServiceContext &netCtx);
     BResult ReaderRemoteNotEquals(PutRequest &req, std::vector<NetMrInfo> &lMrVec, std::vector<NetMrInfo> &rMrVec,
-        ServiceContext &netCtx);
+                                  ServiceContext &netCtx);
 
     void InitGetResponse(GetResponse &rsp);
     BResult WriterLocalSameProcess(const SlicePtr &from, const SlicePtr &to, uint32_t rKey);
@@ -207,23 +207,24 @@ private:
     bool CheckListReq(ListRequest *req);
     bool CheckLoadReq(LoadRequest *req);
     bool IsValidSliceAddress(WCacheSlicePtr &sliceP);
+
 private:
-    uint64_t mflowNum { 0 };
+    uint64_t mflowNum{0};
     ReadWriteLock flowNumLock;
     bool mStarted = false;
     std::mutex mStartLock;
     std::mutex mDiskViewMutex;
     CacheSliceOperator mSliceOp;
     ReadWriteLock mLock;
-    std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,
-        MemFreeHolderEqual> mHolders;
+    std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual>
+        mHolders;
     ReadWriteLock mLockList;
-    std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash,
-        MemFreeHolderEqual> mHoldersList;
+    std::unordered_map<MemFreeHolder, std::vector<std::vector<NetMrInfo>>, MemFreeHolderHash, MemFreeHolderEqual>
+        mHoldersList;
 
     BioConfigPtr mBioConfig;
     DEFINE_REF_COUNT_VARIABLE
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

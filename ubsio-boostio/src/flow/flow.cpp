@@ -11,10 +11,10 @@
  */
 
 #include "flow.h"
-#include "flow_manager.h"
-#include "bio_types.h"
-#include "bio_tracepoint_helper.h"
 #include "bio_trace.h"
+#include "bio_tracepoint_helper.h"
+#include "bio_types.h"
+#include "flow_manager.h"
 
 namespace ock {
 namespace bio {
@@ -29,7 +29,7 @@ BResult Flow::GetAddrByOffset(uint64_t offset, uint32_t len, std::vector<FlowAdd
 
     ret = BuildFlowAddrs(offset, len, flowAddr);
     if (ret != BIO_OK) {
-        LOG_ERROR("Build flow address failed, ret: " <<ret << ".");
+        LOG_ERROR("Build flow address failed, ret: " << ret << ".");
         return ret;
     }
 
@@ -177,8 +177,8 @@ void Flow::PreLoadHandle()
         BIO_TRACE_START(FLOW_TRACE_PRELOAD_ALLOC);
         auto ret = FlowManager::MediaAlloc(mType, mMediaId, mFlowId, mPreLoadOffset, mChunkSize, &chunkId);
         if (ret != BIO_OK) {
-            LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" << mMediaId <<
-                ", chunkSize:" << mChunkSize);
+            LOG_ERROR("Media alloc failed:" << ret << ", type:" << mType << ", mediaId:" << mMediaId
+                                            << ", chunkSize:" << mChunkSize);
             HoldClean(NO_MAX_VALUE64, BIO_INNER_RETRY, false);
             BIO_TRACE_END(FLOW_TRACE_PRELOAD_ALLOC, ret);
             break;
@@ -305,9 +305,9 @@ BResult Flow::RecoverCheck()
         }
         mPreLoadOffset = elem.first + mChunkSize;
     }
-    LOG_INFO("Recover succeed, flowId:" << mFlowId << ", truncate:" << mTruncateOffset << ", preLoad:" <<
-        mPreLoadOffset);
+    LOG_INFO("Recover succeed, flowId:" << mFlowId << ", truncate:" << mTruncateOffset
+                                        << ", preLoad:" << mPreLoadOffset);
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

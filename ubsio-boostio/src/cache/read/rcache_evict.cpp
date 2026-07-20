@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "rcache_evict.h"
+#include "bio_config_instance.h"
 #include "bio_log.h"
 #include "bio_tracepoint_helper.h"
-#include "bio_config_instance.h"
-#include "rcache_evict.h"
 
 using namespace ock::bio;
 
@@ -95,8 +95,8 @@ void *RCacheEvict::Worker(void *context)
     while (rCacheEvict->GetWorkStatus()) {
         result = rCacheEvict->EvictHandle(para->index, para->tier);
         if (result != BIO_NEED_WAIT && result != BIO_OK) {
-            LOG_ERROR("Gc handle read cache index " << para->index << " tier " << para->tier <<
-                " failed, error code " << result);
+            LOG_ERROR("Gc handle read cache index " << para->index << " tier " << para->tier << " failed, error code "
+                                                    << result);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(READ_CACHE_EVICT_INTERVAL_MS));

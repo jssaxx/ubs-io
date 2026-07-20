@@ -12,13 +12,13 @@
 
 #ifndef INTERCEPTOR_H
 #define INTERCEPTOR_H
-#include <unistd.h>
-#include <cstdlib>
-#include <sys/uio.h>
+#include <dirent.h>
+#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
-#include <stdio.h>
-#include <dirent.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <cstdlib>
 
 extern "C" {
 struct InterceptorProxyOperations {

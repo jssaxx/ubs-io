@@ -11,8 +11,8 @@
  */
 
 #include "cm_pt_store.h"
-#include "cm_zkadapter.h"
 #include "cm_log.h"
+#include "cm_zkadapter.h"
 #include "dlist.h"
 #include "securec.h"
 

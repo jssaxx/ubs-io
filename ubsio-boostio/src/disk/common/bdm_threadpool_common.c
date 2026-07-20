@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bdm_threadpool.h"
 #include "bdm_common.h"
-#include "securec.h"
 #include "bdm_core.h"
+#include "bdm_threadpool.h"
+#include "securec.h"
 
 void BdmThreadBindCPUs(const char *name, int32_t cpuid)
 {
@@ -122,4 +122,3 @@ BDM_THREAD_POOL_S *BdmThreadPoolCreate(uint32_t threadNum, uint32_t queueSize, B
 
     return threadPool;
 }
-

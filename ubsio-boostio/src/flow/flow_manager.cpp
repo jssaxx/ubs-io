@@ -11,11 +11,11 @@
  */
 
 #include "flow_manager.h"
-#include "flow_id_allocator.h"
-#include "bio_types.h"
+#include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "bio_trace.h"
-#include "bdm_core.h"
+#include "bio_types.h"
+#include "flow_id_allocator.h"
 
 namespace ock {
 namespace bio {
@@ -244,5 +244,5 @@ BResult FlowManager::RecoverChunk(uint32_t mediaId, uint64_t chunkId, uint64_t f
 
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

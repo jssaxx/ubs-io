@@ -10,33 +10,33 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "bio_openssl_api_dl.h"
 #include <dlfcn.h>
 #include <unistd.h>
-#include "bio_log.h"
 #include "bio_file_util.h"
-#include "bio_openssl_api_dl.h"
+#include "bio_log.h"
 
-#define DLSYM_RETURN(handle, sym, type, ptr)              \
-    do {                                                  \
-        auto ptr1 = dlsym((handle), (sym));               \
-        if (ptr1 == nullptr) {                            \
-            LOG_ERROR("Failed to load " << (sym));        \
-            return -1;                                    \
-        }                                                 \
-        (ptr) = (type)ptr1;                               \
+#define DLSYM_RETURN(handle, sym, type, ptr)       \
+    do {                                           \
+        auto ptr1 = dlsym((handle), (sym));        \
+        if (ptr1 == nullptr) {                     \
+            LOG_ERROR("Failed to load " << (sym)); \
+            return -1;                             \
+        }                                          \
+        (ptr) = (type)ptr1;                        \
     } while (0)
 
-#define DLSYM_UPDATE(handle, sym1, sym2, type, ptr)        \
-    do {                                                   \
-        auto ptr1 = dlsym((handle), (sym1));               \
-        if (ptr1 == nullptr) {                             \
-            ptr1 = dlsym((handle), (sym2));                \
-            if (ptr1 == nullptr) {                         \
-                LOG_ERROR("Failed to load " << (sym1));    \
-                return -1;                                 \
-            }                                              \
-        }                                                  \
-        (ptr) = (type)ptr1;                                \
+#define DLSYM_UPDATE(handle, sym1, sym2, type, ptr)     \
+    do {                                                \
+        auto ptr1 = dlsym((handle), (sym1));            \
+        if (ptr1 == nullptr) {                          \
+            ptr1 = dlsym((handle), (sym2));             \
+            if (ptr1 == nullptr) {                      \
+                LOG_ERROR("Failed to load " << (sym1)); \
+                return -1;                              \
+            }                                           \
+        }                                               \
+        (ptr) = (type)ptr1;                             \
     } while (0)
 
 namespace ock {
@@ -174,7 +174,7 @@ int DlOpensslApi::LoadSSLMethod(void *handle)
     DLSYM_RETURN(handle, "SSL_CTX_new", MethodSslCtxNew, sslCtxNew);
     DLSYM_RETURN(handle, "SSL_connect", MethodSslOperation, sslConnect);
     DLSYM_UPDATE(handle, "SSL_get_peer_certificate", "SSL_get1_peer_certificate", MethodSslGetPeerCertificate,
-        sslGetPeerCertificate);
+                 sslGetPeerCertificate);
     DLSYM_RETURN(handle, "TLS_client_method", MethodGetMethod, tlsClientMethod);
     DLSYM_RETURN(handle, "OPENSSL_init_ssl", MethodInit, initSsl);
     DLSYM_RETURN(handle, "SSL_set_fd", MethodSslFd, sslSetFd);
@@ -185,7 +185,7 @@ int DlOpensslApi::LoadSSLMethod(void *handle)
     DLSYM_RETURN(handle, "OPENSSL_cleanup", MethodOpensslCleanup, opensslCleanup);
     DLSYM_RETURN(handle, "SSL_CTX_set_ciphersuites", MethodSetCipherSuites, setCipherSuites);
     DLSYM_RETURN(handle, "SSL_CTX_set_default_passwd_cb_userdata", MethodSetDefaultPasswdCbUserdata,
-        setDefaultPasswdCbUserdata);
+                 setDefaultPasswdCbUserdata);
     DLSYM_RETURN(handle, "SSL_CTX_use_PrivateKey_file", MethodUsePrivKeyFile, usePrivKeyFile);
     DLSYM_RETURN(handle, "TLS_server_method", MethodGetMethod, tlsServerMethod);
 

@@ -23,8 +23,8 @@ public:
     static void Register() noexcept;
     static void Deregister() noexcept;
 };
-}
-}
-}
+} // namespace tp
+} // namespace bio
+} // namespace ock
 
 #endif // BIO_SERVER_TP_H

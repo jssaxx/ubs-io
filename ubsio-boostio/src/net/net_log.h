@@ -13,11 +13,9 @@
 #ifndef NET_LOG_H
 #define NET_LOG_H
 
-#include <cstdio>
-#include <cstdint>
-#include <iostream>
-#include <sstream>
 #include <sys/time.h>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -28,7 +26,8 @@ typedef void (*NetLogFunc)(int32_t level, const char *logBuf);
 
 class NetLog {
 public:
-    enum class Level {
+    enum class Level
+    {
         LOG_LEVEL_DEBUG = 0,
         LOG_LEVEL_INFO = 1,
         LOG_LEVEL_WARN = 2,
@@ -67,7 +66,8 @@ public:
         if (func != nullptr) {
             func(level, oss.str().c_str());
         } else {
-            struct timeval tv {};
+            struct timeval tv {
+            };
             char strTime[24];
             gettimeofday(&tv, nullptr);
             strftime(strTime, sizeof strTime, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
@@ -103,6 +103,6 @@ private:
 #define NET_LOG_INFO(args) NET_BASE_LOG(static_cast<int>(NetLog::Level::LOG_LEVEL_INFO), args)
 #define NET_LOG_WARN(args) NET_BASE_LOG(static_cast<int>(NetLog::Level::LOG_LEVEL_WARN), args)
 #define NET_LOG_ERROR(args) NET_BASE_LOG(static_cast<int>(NetLog::Level::LOG_LEVEL_ERROR), args)
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

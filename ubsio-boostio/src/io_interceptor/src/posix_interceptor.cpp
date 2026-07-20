@@ -12,11 +12,11 @@
 
 #include "posix_interceptor.h"
 
-#include <cstring>
-#include <fcntl.h>
 #include <dirent.h>
-#include <memory>
+#include <fcntl.h>
 #include <cstdarg>
+#include <cstring>
+#include <memory>
 
 #include "ceptor_log.h"
 #include "interceptor.h"
@@ -592,5 +592,5 @@ int HookRemove(const char *path)
     }
     return PROXY(remove)(path);
 }
-}
-}
+} // namespace interceptor
+} // namespace ock

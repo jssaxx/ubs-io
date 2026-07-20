@@ -19,10 +19,10 @@
 #include "cm_zkadapter.h"
 
 static MODULE_DEFINE_S g_cmServerModules[] = {
-    { "cm_server_schedule",      CmServerScheduleInit,      CmServerScheduleExit     },
-    { "cm_server_zkadapter",     CmServerZkInit,            NULL                     },
-    { "cm_server_monitor",       CmServerMonitorInit,       CmServerMonitorExit      },
-    { "cm_server_view",          CmServerViewInit,          CmServerViewExit         },
+    {"cm_server_schedule", CmServerScheduleInit, CmServerScheduleExit},
+    {"cm_server_zkadapter", CmServerZkInit, NULL},
+    {"cm_server_monitor", CmServerMonitorInit, CmServerMonitorExit},
+    {"cm_server_view", CmServerViewInit, CmServerViewExit},
 };
 
 int32_t CM_ServerInit(void)

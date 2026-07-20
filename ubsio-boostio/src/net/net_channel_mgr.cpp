@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <mutex>
 #include "net_channel_mgr.h"
+#include <mutex>
 
 namespace ock {
 namespace bio {
@@ -68,8 +68,8 @@ BResult NetChannelMgr::AddChannel(const NetNode &dstNid, ChannelPtr &ch, uint8_t
         return BIO_ALLOC_FAIL;
     }
     mChannelMgr.insert(std::make_pair(dstNid.whole, chInfo));
-    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:"
-        << ch->GetId() << ", plane:" << static_cast<uint32_t>(plane) << ".");
+    NET_LOG_INFO("Add channel success, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->GetId()
+                                                << ", plane:" << static_cast<uint32_t>(plane) << ".");
     return BIO_OK;
 }
 
@@ -92,9 +92,9 @@ BResult NetChannelMgr::RemoveChannel(const NetNode &dstNid, const ChannelPtr &ch
     mChannelMgr.erase(iter);
     delete chInfo;
     chInfo = nullptr;
-    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:"
-        << ch->GetId() << ".");
+    NET_LOG_INFO("Remove channel, dstNid:" << dstNid.nid << ", pid:" << dstNid.pid << ", channel:" << ch->GetId()
+                                           << ".");
     return BIO_OK;
 }
-}
-}
+} // namespace bio
+} // namespace ock

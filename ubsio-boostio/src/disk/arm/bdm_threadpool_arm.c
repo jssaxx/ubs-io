@@ -10,10 +10,10 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bdm_threadpool.h"
 #include "bdm_common.h"
-#include "securec.h"
 #include "bdm_core.h"
+#include "bdm_threadpool.h"
+#include "securec.h"
 
 #define LANE_INDEX_0 (0)
 #define LANE_INDEX_1 (1)
@@ -50,8 +50,8 @@ static void *BdmThreadThread(void *arg)
         uint32_t val = (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) + 1) % tmpLane;
         thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, LANE_INDEX_2);
 
-        thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_2) + 1, thread->state_desc,
-                                            LANE_INDEX_2);
+        thread->state_desc =
+            vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_2) + 1, thread->state_desc, LANE_INDEX_2);
 
         pthread_mutex_unlock(&(thread->queueMutex));
 
@@ -77,19 +77,19 @@ static void *BdmThreadBatchThread(void *arg)
         pthread_mutex_lock(&(thread->queueMutex));
 
         while ((!vgetq_lane_u32(thread->state_desc, LANE_INDEX_0)) &&
-            (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3))) {
+               (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3))) {
             pthread_cond_wait(&(thread->notify), &(thread->queueMutex));
         }
 
         if ((vgetq_lane_u32(thread->state_desc, LANE_INDEX_0) == BDM_THREAD_EXIT_IMMEDIATELY) ||
             ((vgetq_lane_u32(thread->state_desc, LANE_INDEX_0) == BDM_THREAD_EXIT_DELAY) &&
-            (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)))) {
+             (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) == vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)))) {
             break;
         }
 
         argNum = 0;
         while (argNum < BDM_BATCH_HANDLE_NUM &&
-            vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) != vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)) {
+               vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) != vgetq_lane_u32(thread->queue_desc, LANE_INDEX_3)) {
             argList[argNum] = thread->queue[vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2)].ctx;
             argNum++;
             uint32_t tmpLane = vgetq_lane_u32(thread->queue_desc, LANE_INDEX_1);
@@ -99,8 +99,8 @@ static void *BdmThreadBatchThread(void *arg)
             uint32_t val = (vgetq_lane_u32(thread->queue_desc, LANE_INDEX_2) + 1) % tmpLane;
             thread->queue_desc = vsetq_lane_u32(val, thread->queue_desc, LANE_INDEX_2);
 
-            thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_2) + 1,
-                                                thread->state_desc, LANE_INDEX_2);
+            thread->state_desc =
+                vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_2) + 1, thread->state_desc, LANE_INDEX_2);
         }
 
         pthread_mutex_unlock(&(thread->queueMutex));
@@ -139,16 +139,16 @@ static int32_t BdmThreadPoolEnqueue(BDM_THREAD_S *thread, BDM_THREAD_HANDLE hand
 
     pthread_cond_signal(&thread->notify);
 
-    thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_1) + 1, thread->state_desc,
-                                        LANE_INDEX_1);
+    thread->state_desc =
+        vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_1) + 1, thread->state_desc, LANE_INDEX_1);
 
     pthread_mutex_unlock(&thread->queueMutex);
 
     return BDM_CODE_OK;
 }
 
-int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t cpuid,
-    const char *poolName, BDM_BATCH_CTX_S *batchCtx)
+int32_t BdmThreadCreate(BDM_THREAD_S *thread, uint32_t queueSize, int32_t cpuid, const char *poolName,
+                        BDM_BATCH_CTX_S *batchCtx)
 {
     if (thread == NULL) {
         BDM_LOGERROR(0, "Invalid parameters, thread is nullptr.");
@@ -222,8 +222,8 @@ int32_t BdmThreadPoolAdd(BDM_THREAD_POOL_S *threadPool, BDM_THREAD_HANDLE handle
             break;
         }
 
-        thread->state_desc = vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_3) + 1, thread->state_desc,
-                                            LANE_INDEX_3);
+        thread->state_desc =
+            vsetq_lane_u32(vgetq_lane_u32(thread->state_desc, LANE_INDEX_3) + 1, thread->state_desc, LANE_INDEX_3);
         usleep(THREAD_SLEEP_INTERVAL);
     }
 

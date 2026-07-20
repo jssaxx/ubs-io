@@ -35,10 +35,10 @@ typedef struct {
 typedef uintptr_t BdmAllocator;
 
 int32_t BdmAllocatorGetSplitSize(uint64_t head, uint64_t chunkSize, uint64_t totalSize, uint64_t *metaSize,
-    uint64_t *dataSize);
+                                 uint64_t *dataSize);
 
 int32_t BdmAllocatorAllocChunk(BdmAllocator allocator, uint64_t bucketId, uint64_t bucketOffset, uint64_t chunkSize,
-    uint64_t *chunkId);
+                               uint64_t *chunkId);
 
 int32_t BdmAllocatorFreeChunk(BdmAllocator allocator, uint64_t chunkSize, uint64_t chunkId);
 
@@ -47,7 +47,7 @@ int32_t BdmAllocatorCheckChunk(BdmAllocator allocator, uint64_t chunkId, uint64_
 int32_t BdmAllocatorResetChunk(BdmAllocator allocator);
 
 int32_t BdmAllocatorGetNextChunk(BdmAllocator allocator, uint64_t *chunkId, uint64_t *chunkSize, uint64_t *bucketId,
-    uint64_t *bucketOffset);
+                                 uint64_t *bucketOffset);
 
 int32_t BdmAllocatorGetCap(BdmAllocator allocator, uint64_t *totalSize, uint64_t *usedSize);
 

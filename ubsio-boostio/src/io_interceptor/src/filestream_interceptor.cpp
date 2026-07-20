@@ -15,9 +15,11 @@
 #include "native_operations_loader.h"
 #include "proxy_operations_loader.h"
 
+#include <cstdint>
+
 namespace ock {
 namespace interceptor {
-static inline bool CheckPointer(const void* ptr)
+static inline bool CheckPointer(const void *ptr)
 {
     if (ptr == nullptr) {
         errno = EFAULT;
@@ -26,7 +28,7 @@ static inline bool CheckPointer(const void* ptr)
     return true;
 }
 
-static inline bool CheckPath(const char* path)
+static inline bool CheckPath(const char *path)
 {
     if (path == nullptr) {
         errno = EFAULT;
@@ -40,12 +42,9 @@ static inline bool CheckPath(const char* path)
     return true;
 }
 
-FILE* HookFopen(const char* file, const char* mode)
+FILE *HookFopen(const char *file, const char *mode)
 {
-    if (!CheckPath(file) ||
-        !CheckPointer(mode) ||
-        !InitNativeHook() ||
-        CHECKNATIVEFUNC(fopen)) {
+    if (!CheckPath(file) || !CheckPointer(mode) || !InitNativeHook() || CHECKNATIVEFUNC(fopen)) {
         return nullptr;
     }
     if (CHECKPROXYLOADED || CHECKPROXYFUNC(fopen)) {
@@ -54,12 +53,9 @@ FILE* HookFopen(const char* file, const char* mode)
     return PROXY(fopen)(file, mode);
 }
 
-FILE* HookFopen64(const char* file, const char* mode)
+FILE *HookFopen64(const char *file, const char *mode)
 {
-    if (!CheckPath(file) ||
-        !CheckPointer(mode) ||
-        !InitNativeHook() ||
-        CHECKNATIVEFUNC(fopen64)) {
+    if (!CheckPath(file) || !CheckPointer(mode) || !InitNativeHook() || CHECKNATIVEFUNC(fopen64)) {
         return nullptr;
     }
     if (CHECKPROXYLOADED || CHECKPROXYFUNC(fopen64)) {
@@ -68,7 +64,7 @@ FILE* HookFopen64(const char* file, const char* mode)
     return PROXY(fopen64)(file, mode);
 }
 
-int HookFclose(FILE* stream)
+int HookFclose(FILE *stream)
 {
     if (!CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fclose)) {
         return -1;
@@ -79,10 +75,9 @@ int HookFclose(FILE* stream)
     return PROXY(fclose)(stream);
 }
 
-size_t HookFread(void* ptr, size_t size, size_t count, FILE* stream)
+size_t HookFread(void *ptr, size_t size, size_t count, FILE *stream)
 {
-    if (!CheckPointer(ptr) || !CheckPointer(stream) ||
-        !InitNativeHook() || CHECKNATIVEFUNC(fread)) {
+    if (!CheckPointer(ptr) || !CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fread)) {
         return 0;
     }
     // 检查size * count是否会溢出size_t
@@ -95,10 +90,9 @@ size_t HookFread(void* ptr, size_t size, size_t count, FILE* stream)
     return PROXY(fread)(ptr, size, count, stream);
 }
 
-size_t HookFwrite(const void* ptr, size_t size, size_t nitems, FILE* stream)
+size_t HookFwrite(const void *ptr, size_t size, size_t nitems, FILE *stream)
 {
-    if (!CheckPointer(ptr) || !CheckPointer(stream) ||
-        !InitNativeHook() || CHECKNATIVEFUNC(fwrite)) {
+    if (!CheckPointer(ptr) || !CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fwrite)) {
         return 0;
     }
 
@@ -108,7 +102,7 @@ size_t HookFwrite(const void* ptr, size_t size, size_t nitems, FILE* stream)
     return PROXY(fwrite)(ptr, size, nitems, stream);
 }
 
-int HookFgetc(FILE* stream)
+int HookFgetc(FILE *stream)
 {
     if (!CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fgetc)) {
         return -1;
@@ -119,10 +113,9 @@ int HookFgetc(FILE* stream)
     return PROXY(fgetc)(stream);
 }
 
-char* HookFgets(char* s, int n, FILE* stream)
+char *HookFgets(char *s, int n, FILE *stream)
 {
-    if (!CheckPointer(s) || !CheckPointer(stream) ||
-        !InitNativeHook() || CHECKNATIVEFUNC(fgets)) {
+    if (!CheckPointer(s) || !CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fgets)) {
         return nullptr;
     }
     if (CHECKPROXYLOADED || CHECKPROXYFUNC(fgets)) {
@@ -131,7 +124,7 @@ char* HookFgets(char* s, int n, FILE* stream)
     return PROXY(fgets)(s, n, stream);
 }
 
-long int HookFtell(FILE* stream)
+long int HookFtell(FILE *stream)
 {
     if (!CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(ftell)) {
         return -1;
@@ -142,7 +135,7 @@ long int HookFtell(FILE* stream)
     return PROXY(ftell)(stream);
 }
 
-int HookFflush(FILE* stream)
+int HookFflush(FILE *stream)
 {
     if (!CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fflush)) {
         return -1;
@@ -153,7 +146,7 @@ int HookFflush(FILE* stream)
     return PROXY(fflush)(stream);
 }
 
-void HookRewind(FILE* stream)
+void HookRewind(FILE *stream)
 {
     if (!CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(rewind)) {
         return;
@@ -165,7 +158,7 @@ void HookRewind(FILE* stream)
     PROXY(rewind)(stream);
 }
 
-int HookFseek(FILE* stream, long offset, int whence)
+int HookFseek(FILE *stream, long offset, int whence)
 {
     if (!CheckPointer(stream) || !InitNativeHook() || CHECKNATIVEFUNC(fseek)) {
         return -1;
@@ -175,5 +168,5 @@ int HookFseek(FILE* stream, long offset, int whence)
     }
     return PROXY(fseek)(stream, offset, whence);
 }
-}
-}
+} // namespace interceptor
+} // namespace ock
