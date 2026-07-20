@@ -23,7 +23,7 @@ public:
     static void Register() noexcept;
     static void Deregister() noexcept;
 };
-}
-}
-}
+} // namespace tp
+} // namespace bio
+} // namespace ock
 #endif // BIO_SDK_TP_H

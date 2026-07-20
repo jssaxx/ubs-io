@@ -10,18 +10,18 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <sys/resource.h>
+#include <climits>
+#include <csignal>
 #include <iostream>
 #include <memory>
-#include <csignal>
-#include <climits>
-#include <sys/resource.h>
-#include "htracer.h"
 #include "bio_client.h"
 #include "bio_sdk_config_instance.h"
+#include "htracer.h"
 
 using namespace ock::bio;
 
-static std::atomic<bool> gDaemonRunning = { false };
+static std::atomic<bool> gDaemonRunning = {false};
 
 static void ConsoleHandleSigterm(int signum)
 {
@@ -31,10 +31,7 @@ static void ConsoleHandleSigterm(int signum)
         return;
     }
 
-    struct rlimit coreLimiter = {
-        .rlim_cur = 0,
-        .rlim_max = 0
-    };
+    struct rlimit coreLimiter = {.rlim_cur = 0, .rlim_max = 0};
     int result = setrlimit(RLIMIT_CORE, &coreLimiter);
     if (UNLIKELY(result != 0)) {
         std::cout << "Failed to disable core dump, errno " << errno << std::endl;
@@ -46,20 +43,20 @@ static int ConsoleGetSdkConfig(BioSdkConfigPtr sdkConf, ClientOptionsConfig *opt
 {
     optConf->logType = (LogType)sdkConf->GetLogTypeConfig();
     strncpy_s(optConf->logFilePath, PATH_MAX, sdkConf->GetLogFilePathConfig().c_str(),
-        sdkConf->GetLogFilePathConfig().size());                    /* log file path */
-    optConf->enable = sdkConf->GetNetConfig().enableTls;            /* tls switch */
+              sdkConf->GetLogFilePathConfig().size());   /* log file path */
+    optConf->enable = sdkConf->GetNetConfig().enableTls; /* tls switch */
     strncpy_s(optConf->certificationPath, PATH_MAX, sdkConf->GetNetConfig().tlsClientCertPath.c_str(),
-        sdkConf->GetNetConfig().tlsClientCertPath.size());          /* certification path */
+              sdkConf->GetNetConfig().tlsClientCertPath.size()); /* certification path */
     strncpy_s(optConf->caCerPath, PATH_MAX, sdkConf->GetNetConfig().tlsCaCertPath.c_str(),
-        sdkConf->GetNetConfig().tlsCaCertPath.size());              /* caCer path */
+              sdkConf->GetNetConfig().tlsCaCertPath.size()); /* caCer path */
     strncpy_s(optConf->caCrlPath, PATH_MAX, sdkConf->GetNetConfig().tlsCaCrlPath.c_str(),
-        sdkConf->GetNetConfig().tlsCaCrlPath.size());               /* caCrl path */
+              sdkConf->GetNetConfig().tlsCaCrlPath.size()); /* caCrl path */
     strncpy_s(optConf->privateKeyPath, PATH_MAX, sdkConf->GetNetConfig().tlsClientKeyPath.c_str(),
-        sdkConf->GetNetConfig().tlsClientKeyPath.size());           /* private key path */
+              sdkConf->GetNetConfig().tlsClientKeyPath.size()); /* private key path */
     strncpy_s(optConf->privateKeyPassword, PATH_MAX, sdkConf->GetNetConfig().tlsClientKeyPassPath.c_str(),
-        sdkConf->GetNetConfig().tlsClientKeyPassPath.size());       /* private key password */
+              sdkConf->GetNetConfig().tlsClientKeyPassPath.size()); /* private key password */
     strncpy_s(optConf->decrypterLibPath, PATH_MAX, sdkConf->GetNetConfig().decrypterLibPath.c_str(),
-        sdkConf->GetNetConfig().decrypterLibPath.size());           /* decrypter lib path */
+              sdkConf->GetNetConfig().decrypterLibPath.size()); /* decrypter lib path */
 
     return BIO_OK;
 }
@@ -72,7 +69,8 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    struct sigaction termSa {};
+    struct sigaction termSa {
+    };
     termSa.sa_handler = &ConsoleHandleSigterm;
     sigaction(SIGTERM, &termSa, nullptr);
 

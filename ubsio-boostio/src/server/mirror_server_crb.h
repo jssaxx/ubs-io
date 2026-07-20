@@ -16,8 +16,8 @@
 #include <semaphore.h>
 #include "bio_execution.h"
 #include "bio_lock.h"
-#include "bio_ref.h"
 #include "bio_log.h"
+#include "bio_ref.h"
 #include "cm.h"
 
 namespace ock {
@@ -94,12 +94,12 @@ private:
 private:
     ReadWriteLock mLock;
     std::map<uint16_t, CmPtInfo> mPtInfos;
-    ExecutorServicePtr mTaskService{ nullptr };
-    ExecutorServicePtr mJobService{ nullptr };
-    bool mInited{ false };
+    ExecutorServicePtr mTaskService{nullptr};
+    ExecutorServicePtr mJobService{nullptr};
+    bool mInited{false};
 
     DEFINE_REF_COUNT_VARIABLE
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // MIRROR_SERVER_CRB_H

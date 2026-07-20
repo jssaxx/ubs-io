@@ -41,7 +41,7 @@ struct BioInterceptorContext {
         return nativeOperations;
     }
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOST_IO_INTERCEPTOR_CONTEXT_H

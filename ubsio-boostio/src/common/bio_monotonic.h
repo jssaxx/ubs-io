@@ -13,12 +13,14 @@
 #ifndef BOOSTIO_BIO_MONOTONIC_H
 #define BOOSTIO_BIO_MONOTONIC_H
 
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <vector>
 #ifdef __x86_64__
-#include <cmath>
 #include <x86intrin.h>
+#include <cmath>
 #endif
 
 namespace ock {
@@ -30,7 +32,8 @@ public:
     /*
      * @brief init tick for us
      */
-    template <int32_t FAILURE_RET> static int32_t InitTickUs()
+    template <int32_t FAILURE_RET>
+    static int32_t InitTickUs()
     {
         /* get frequ */
         uint64_t tmpFreq = 0;
@@ -81,7 +84,8 @@ public:
     }
 
 #elif __x86_64__
-    template <int32_t FAILURE_RET> static int32_t InitTickUs()
+    template <int32_t FAILURE_RET>
+    static int32_t InitTickUs()
     {
         const std::string path = "/proc/cpuinfo";
         const std::string prefix = "model name";
@@ -161,9 +165,10 @@ public:
 
 #endif /* __x86_64__ || __aarch64__ */
 
-#else /* USE_PROCESS_MONOTONIC */
+#else  /* USE_PROCESS_MONOTONIC */
 public:
-    template <int32_t FAILURE_RET> static int32_t InitTickUs()
+    template <int32_t FAILURE_RET>
+    static int32_t InitTickUs()
     {
         return 0;
     }
@@ -235,7 +240,7 @@ private:
     }
 #endif
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_MONOTONIC_H

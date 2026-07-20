@@ -141,21 +141,21 @@ public:
 
 private:
     std::string name;
-    std::atomic<bool> nameValid{ false };
-    std::atomic_uint_fast64_t begin{ 0 };
-    std::atomic_uint_fast64_t goodEnd{ 0 };
-    std::atomic_uint_fast64_t badEnd{ 0 };
-    std::atomic_uint_fast64_t min{ UINT64_MAX };
-    std::atomic_uint_fast64_t max{ 0 };
-    std::atomic_uint_fast64_t total{ 0 };
+    std::atomic<bool> nameValid{false};
+    std::atomic_uint_fast64_t begin{0};
+    std::atomic_uint_fast64_t goodEnd{0};
+    std::atomic_uint_fast64_t badEnd{0};
+    std::atomic_uint_fast64_t min{UINT64_MAX};
+    std::atomic_uint_fast64_t max{0};
+    std::atomic_uint_fast64_t total{0};
 
-    uint64_t previousBegin{ 0 };
-    uint64_t previousGoodEnd{ 0 };
-    uint64_t previousBadEnd{ 0 };
-    std::atomic_uint_fast64_t previousMin{ UINT64_MAX };
-    std::atomic_uint_fast64_t previousMax{ 0 };
-    uint64_t previousTotal{ 0 };
+    uint64_t previousBegin{0};
+    uint64_t previousGoodEnd{0};
+    uint64_t previousBadEnd{0};
+    std::atomic_uint_fast64_t previousMin{UINT64_MAX};
+    std::atomic_uint_fast64_t previousMax{0};
+    uint64_t previousTotal{0};
 };
-}
-}
+} // namespace htracer
+} // namespace ock
 #endif // HTRACER_INFO_H

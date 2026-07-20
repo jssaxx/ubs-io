@@ -23,7 +23,8 @@ namespace bio {
 /*
  * @brief A ring buffer, guarded by spin lock, allow flex capacity
  */
-template <typename T> class RingBuffer {
+template <typename T>
+class RingBuffer {
 public:
     explicit RingBuffer(uint32_t capacity) : mCapacity(capacity) {}
 
@@ -334,8 +335,8 @@ public:
 
     RingBuffer(const RingBuffer &) = delete;
     RingBuffer(RingBuffer &&) = delete;
-    RingBuffer &operator = (const RingBuffer &) = delete;
-    RingBuffer &operator = (RingBuffer &&) = delete;
+    RingBuffer &operator=(const RingBuffer &) = delete;
+    RingBuffer &operator=(RingBuffer &&) = delete;
 
 private:
     T *mRingBuf = nullptr;
@@ -349,7 +350,8 @@ private:
 /*
  * @brief A blocking queue on top of ring buffer
  */
-template <typename T> class RingBufferBlockingQueue {
+template <typename T>
+class RingBufferBlockingQueue {
 public:
     explicit RingBufferBlockingQueue(uint32_t capacity) : mRingBuffer(capacity) {}
 
@@ -468,7 +470,7 @@ private:
     RingBuffer<T> mRingBuffer; /* ring buffer to data store */
     sem_t mSem{};              /* semaphore to wait and notify */
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_RING_BUFFER_QUEUE_H

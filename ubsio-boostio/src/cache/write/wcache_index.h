@@ -56,8 +56,7 @@ private:
     DEFINE_REF_COUNT_VARIABLE;
 };
 using WCacheIndexPtr = Ref<WCacheIndex>;
-}
-}
-
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_WCACHE_INDEX_H

@@ -37,13 +37,13 @@ bool NativeOperationsLoader::Initialize()
     return true;
 }
 
-NativeOperations& NativeOperationsLoader::GetProxy()
+NativeOperations &NativeOperationsLoader::GetProxy()
 {
     return operations;
 }
 
-template<typename T>
-void NativeOperationsLoader::LoadProxy(const std::string& syscall, T& handle)
+template <typename T>
+void NativeOperationsLoader::LoadProxy(const std::string &syscall, T &handle)
 {
     handle = reinterpret_cast<T>(dlsym(RTLD_NEXT, syscall.c_str()));
     if (handle == nullptr) {
@@ -129,6 +129,5 @@ void NativeOperationsLoader::LoadFileStreamProxy()
 
 bool ock::interceptor::InitNativeHook()
 {
-    return ock::interceptor::NativeOperationsLoader::\
-        GetInstance().Initialize();
+    return ock::interceptor::NativeOperationsLoader::GetInstance().Initialize();
 }

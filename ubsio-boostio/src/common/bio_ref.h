@@ -14,8 +14,8 @@
 #define BOOSTIO_BIO_REF_H
 
 #include <cstdint>
-#include <utility>
 #include <new>
+#include <utility>
 
 namespace ock {
 namespace bio {
@@ -75,7 +75,8 @@ protected:
 };
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ == 8 && __GNUC_PATCHLEVEL__ == 5
-template <class T, class U = T> T exchangeHdagger(T &obj, U &&new_value)
+template <class T, class U = T>
+T exchangeHdagger(T &obj, U &&new_value)
 {
     T old_value = std::move(obj);
     obj = std::forward<U>(new_value);
@@ -83,7 +84,8 @@ template <class T, class U = T> T exchangeHdagger(T &obj, U &&new_value)
 }
 #endif
 
-template <typename T> class Ref {
+template <typename T>
+class Ref {
 public:
     // constructor
     Ref() noexcept = default;
@@ -128,13 +130,13 @@ public:
     }
 
     // operator =
-    inline Ref<T> &operator = (T *newObj)
+    inline Ref<T> &operator=(T *newObj)
     {
         this->Set(newObj);
         return *this;
     }
 
-    inline Ref<T> &operator = (const Ref<T> &other)
+    inline Ref<T> &operator=(const Ref<T> &other)
     {
         if (this != &other) {
             this->Set(other.mObj);
@@ -142,7 +144,7 @@ public:
         return *this;
     }
 
-    Ref<T> &operator = (Ref<T> &&other) noexcept
+    Ref<T> &operator=(Ref<T> &&other) noexcept
     {
         if (this != &other) {
             auto tmp = mObj;
@@ -159,22 +161,22 @@ public:
     }
 
     // equal operator
-    inline bool operator == (const Ref<T> &other) const
+    inline bool operator==(const Ref<T> &other) const
     {
         return mObj == other.mObj;
     }
 
-    inline bool operator == (T *other) const
+    inline bool operator==(T *other) const
     {
         return mObj == other;
     }
 
-    inline bool operator != (const Ref<T> &other) const
+    inline bool operator!=(const Ref<T> &other) const
     {
         return mObj != other.mObj;
     }
 
-    inline bool operator != (T *other) const
+    inline bool operator!=(T *other) const
     {
         return mObj != other;
     }
@@ -218,10 +220,11 @@ private:
  *
  * @return Ref object, if new failed internal, an empty Ref object will be returned
  */
-template <typename C, typename... ARGS> static inline Ref<C> MakeRef(ARGS... args)
+template <typename C, typename... ARGS>
+static inline Ref<C> MakeRef(ARGS... args)
 {
     return new (std::nothrow) C(args...);
 }
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_BIO_REF_H

@@ -10,15 +10,15 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "cm_server_init.h"
 #include "cm_client_init.h"
-#include "cm_module.h"
 #include "cm_config.h"
+#include "cm_module.h"
+#include "cm_server_init.h"
 #include "cm_zkadapter.h"
 
 static MODULE_DEFINE_S g_cmModules[] = {
-    { "cm_server_init",          CM_ServerInit,             CM_ServerExit    },
-    { "cm_client_init",          CM_ClientInit,             CM_ClientExit    },
+    {"cm_server_init", CM_ServerInit, CM_ServerExit},
+    {"cm_client_init", CM_ClientInit, CM_ClientExit},
 };
 
 int32_t CM_Init(ConfigRole role, PoolInfo *pools, uint16_t num, const CmCfgInfo *cfgInfo)

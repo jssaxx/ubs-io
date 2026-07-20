@@ -14,11 +14,11 @@
 #define BIO_FUNCTIONS_H
 
 #include <sys/sysinfo.h>
-#include "securec.h"
-#include "bio_log.h"
 #include "bio_def.h"
-#include "bio_types.h"
+#include "bio_log.h"
 #include "bio_str_util.h"
+#include "bio_types.h"
+#include "securec.h"
 
 namespace ock {
 namespace bio {
@@ -78,6 +78,6 @@ inline uint64_t GetSysFreeMemCap()
     return info.freeram;
 }
 
-}
-}
+} // namespace bio
+} // namespace ock
 #endif

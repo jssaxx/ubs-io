@@ -22,13 +22,10 @@ const auto SDK_LOG_LEVEL = std::make_pair("bio.log.level", "info");
 const auto SDK_LOG_TYPE = std::make_pair("bio.log.type", 0);
 const auto SDK_LOG_FILE_PATH = std::make_pair("bio.sdk.log.path", "");
 const auto SDK_NET_TLS_ENABLE_SWITCH = std::make_pair("bio.net.tls.enable.switch", "true");
-const auto SDK_NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path",
-                                                     "/path/CA/cacert.pem");
+const auto SDK_NET_TLS_CA_CERT_PATH = std::make_pair("bio.net.tls.ca.cert.path", "/path/CA/cacert.pem");
 const auto SDK_NET_TLS_CA_CRL_PATH = std::make_pair("bio.net.tls.ca.crl.path", "");
-const auto SDK_NET_TLS_CLIENT_CERT_PATH = std::make_pair("bio.net.tls.client.cert.path",
-                                                         "/path/client/clientcert.pem");
-const auto SDK_NET_TLS_CLIENT_KEY_PATH = std::make_pair("bio.net.tls.client.key.path",
-                                                        "/path/client/clientkey.pem");
+const auto SDK_NET_TLS_CLIENT_CERT_PATH = std::make_pair("bio.net.tls.client.cert.path", "/path/client/clientcert.pem");
+const auto SDK_NET_TLS_CLIENT_KEY_PATH = std::make_pair("bio.net.tls.client.key.path", "/path/client/clientkey.pem");
 const auto SDK_NET_TLS_CLIENT_KEY_PASS_PATH = std::make_pair("bio.net.tls.client.key.pass.path", "");
 const auto SDK_NET_TLS_CLIENT_DECRYPTER_LIB_PATH = std::make_pair("bio.net.tls.client.decrypter.lib.path", "");
 
@@ -84,8 +81,8 @@ private:
     NetConfig mNetConfig;
     uint8_t mlogType;
     std::string mlogFilePath = "";
-    bool mInited{ false };
+    bool mInited{false};
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BOOSTIO_BIO_SDK_CONFIG_INSTANCE_H

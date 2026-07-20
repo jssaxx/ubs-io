@@ -16,10 +16,10 @@
 #include <climits>
 #include <string>
 
-#include "bio_ref.h"
-#include "bio_types.h"
-#include "bio_str_util.h"
 #include "bio_functions.h"
+#include "bio_ref.h"
+#include "bio_str_util.h"
+#include "bio_types.h"
 
 namespace ock {
 namespace bio {
@@ -77,8 +77,12 @@ public:
     }
 
     VStrRange(const std::string &name, int32_t start, int32_t end, bool emptyAllowed = false)
-        : Validator(name), mStart(start), mEnd(end), mEmptyAllowed(emptyAllowed)
-    {}
+        : Validator(name),
+          mStart(start),
+          mEnd(end),
+          mEmptyAllowed(emptyAllowed)
+    {
+    }
 
     ~VStrRange() override = default;
 
@@ -125,7 +129,7 @@ public:
             return false;
         } else if ((lStart < mStart) || (lEnd > mEnd)) {
             mErrMsg = "Invalid value for <" + mName + ">, it should be between " + std::to_string(mStart) + "~" +
-                std::to_string(mEnd);
+                      std::to_string(mEnd);
             return false;
         }
 
@@ -237,7 +241,7 @@ public:
                 mErrMsg = "Invalid value for <" + mName + ">, it should be >= " + std::to_string(mStart);
             } else {
                 mErrMsg = "Invalid value for <" + mName + ">, it should be between " + std::to_string(mStart) + "~" +
-                    std::to_string(mEnd);
+                          std::to_string(mEnd);
             }
             return false;
         }
@@ -258,7 +262,9 @@ public:
     }
 
     VLongRange(const std::string &name, const long &start, const long &end)
-        : Validator(name), mStart(start), mEnd(end){};
+        : Validator(name),
+          mStart(start),
+          mEnd(end){};
 
     ~VLongRange() override = default;
 
@@ -278,7 +284,7 @@ public:
                 mErrMsg = "Invalid value for <" + mName + ">, it should be >= " + std::to_string(mStart);
             } else {
                 mErrMsg = "Invalid value for <" + mName + ">, it should be between " + std::to_string(mStart) + "~" +
-                    std::to_string(mEnd);
+                          std::to_string(mEnd);
             }
             return false;
         }
@@ -293,14 +299,19 @@ private:
 class VStrArray : public Validator {
 public:
     static ValidatorPtr Create(const std::string &name, int32_t start, int32_t end, uint32_t count,
-        bool emptyAllowed = false)
+                               bool emptyAllowed = false)
     {
         return ValidatorPtr(new (std::nothrow) VStrArray(name, start, end, count, emptyAllowed));
     }
 
     VStrArray(const std::string &name, int32_t start, int32_t end, uint32_t count, bool emptyAllowed = false)
-        : Validator(name), mStart(start), mEnd(end), mCount(count), mEmptyAllowed(emptyAllowed)
-    {}
+        : Validator(name),
+          mStart(start),
+          mEnd(end),
+          mCount(count),
+          mEmptyAllowed(emptyAllowed)
+    {
+    }
 
     ~VStrArray() override = default;
 
@@ -336,7 +347,7 @@ public:
 
             if ((longItem < mStart) || (longItem > mEnd)) {
                 mErrMsg = "Invalid value for <" + mName + ">, it should be between " + std::to_string(mStart) + "~" +
-                    std::to_string(mEnd);
+                          std::to_string(mEnd);
                 return false;
             }
         }
@@ -362,8 +373,10 @@ public:
     }
 
     explicit VIpv4MaskValidator(const std::string &name, bool emptyAllowed = false)
-        : Validator(name), mEmptyAllowed(emptyAllowed)
-    {}
+        : Validator(name),
+          mEmptyAllowed(emptyAllowed)
+    {
+    }
 
     ~VIpv4MaskValidator() override = default;
 
@@ -433,12 +446,14 @@ class VIpv4Validator : public Validator {
 public:
     static ValidatorPtr Create(const std::string &name, bool emptyAllowed = false)
     {
-        return { new (std::nothrow) VIpv4Validator(name, emptyAllowed) };
+        return {new (std::nothrow) VIpv4Validator(name, emptyAllowed)};
     }
 
     explicit VIpv4Validator(const std::string &name, bool emptyAllowed = false)
-        : Validator(name), mEmptyAllowed(emptyAllowed)
-    {}
+        : Validator(name),
+          mEmptyAllowed(emptyAllowed)
+    {
+    }
 
     ~VIpv4Validator() override = default;
 
@@ -490,12 +505,14 @@ class VIpv4PortValidator : public Validator {
 public:
     static ValidatorPtr Create(const std::string &name, bool emptyAllowed = false)
     {
-        return { new (std::nothrow) VIpv4PortValidator(name, emptyAllowed) };
+        return {new (std::nothrow) VIpv4PortValidator(name, emptyAllowed)};
     }
 
     explicit VIpv4PortValidator(const std::string &name, bool emptyAllowed = false)
-        : Validator(name), mEmptyAllowed(emptyAllowed)
-    {}
+        : Validator(name),
+          mEmptyAllowed(emptyAllowed)
+    {
+    }
 
     ~VIpv4PortValidator() override = default;
 
@@ -566,7 +583,7 @@ class VIpv4PortListValidator : public Validator {
 public:
     static ValidatorPtr Create(const std::string &name)
     {
-        return { new (std::nothrow) VIpv4PortListValidator(name) };
+        return {new (std::nothrow) VIpv4PortListValidator(name)};
     }
 
     explicit VIpv4PortListValidator(const std::string &name) : Validator(name){};
@@ -589,7 +606,7 @@ public:
         StrUtil::Split(value, ",", ipList);
         if (ipList.empty()) {
             mErrMsg = "Invalid value for <" + mName +
-                ">, it should be ip port list seperated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
+                      ">, it should be ip port list seperated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
             return false;
         }
 
@@ -597,7 +614,8 @@ public:
         subValidator.Initialize();
         for (auto &item : ipList) {
             if (!subValidator.Validate(item)) {
-                mErrMsg = "Invalid value for <" + mName +
+                mErrMsg =
+                    "Invalid value for <" + mName +
                     ">, it should be ip port list seperated with ',', for example: 127.0.0.1:2909, 127.0.0.1:9987";
                 return false;
             }
@@ -614,11 +632,12 @@ class VFilePermissionValidator : public Validator {
 public:
     static ValidatorPtr Create(const std::string &name, bool ownerBigThanOther = false)
     {
-        return { new (std::nothrow) VFilePermissionValidator(name, ownerBigThanOther) };
+        return {new (std::nothrow) VFilePermissionValidator(name, ownerBigThanOther)};
     }
 
     VFilePermissionValidator(const std::string &name, bool ownerBigThanOther)
-        : Validator(name), mOwnerBigThanOther(ownerBigThanOther){};
+        : Validator(name),
+          mOwnerBigThanOther(ownerBigThanOther){};
 
     ~VFilePermissionValidator() override = default;
 
@@ -790,6 +809,6 @@ public:
         return true;
     }
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif // BIO_VALIDATOR_H

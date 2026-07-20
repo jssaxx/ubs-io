@@ -113,6 +113,6 @@ private:
         return (tpId & 0xFFFF);
     }
 };
-}
-}
+} // namespace htracer
+} // namespace ock
 #endif // HTRACER_MANAGER_H

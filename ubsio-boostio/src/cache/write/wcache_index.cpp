@@ -10,8 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bio_tracepoint_helper.h"
 #include "wcache_index.h"
+#include "bio_tracepoint_helper.h"
 
 namespace ock {
 namespace bio {
@@ -77,9 +77,9 @@ BResult WCacheIndex::FuzzyAquire(uint16_t ptId, const char *prefix, std::unorder
                 if (sliceRef->Aquire()) {
                     auto sliceLen = static_cast<uint32_t>(sliceRef->GetSlice()->GetLength());
                     listSliceVec.push_back(sliceRef);
-                    LOG_DEBUG("Wcache list success, key:" << info.first << ", slice length:" << sliceLen << ", time:" <<
-                        time(nullptr) << ".");
-                    objs.insert({ info.first, { sliceLen, time(nullptr) } });
+                    LOG_DEBUG("Wcache list success, key:" << info.first << ", slice length:" << sliceLen
+                                                          << ", time:" << time(nullptr) << ".");
+                    objs.insert({info.first, {sliceLen, time(nullptr)}});
                 }
             }
         }
@@ -164,5 +164,5 @@ WCacheIndexTable *WCacheIndex::GetIndexTable(uint16_t ptId)
         return mTable[ptId];
     }
 }
-}
-}
+} // namespace bio
+} // namespace ock

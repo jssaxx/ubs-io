@@ -44,8 +44,8 @@ public:
     static void HandleNotifyUpdateFinish(const std::vector<std::string> &cmds);
     static void HandleCheckUpdateReady(const std::vector<std::string> &cmds);
     static void HandleSdkTrace(const std::vector<std::string> &cmds);
-    static void* PerfTestPutImpl(void *param);
-    static void* PerfTestGetImpl(void *param);
+    static void *PerfTestPutImpl(void *param);
+    static void *PerfTestGetImpl(void *param);
     static void HandlePerf(const std::vector<std::string> &cmds);
 
 private:
@@ -55,9 +55,9 @@ private:
     static CliUnRegCmdFuncPtr mUnRegOp;
     static CliPrintBufFuncPtr mPrintOp;
 };
-}
-}
-}
+} // namespace diagnose
+} // namespace bio
+} // namespace ock
 
 #ifdef __cplusplus
 extern "C" {

@@ -25,7 +25,8 @@
 
 #define MONITOR_INTERAL_TIME (5000)
 
-typedef enum {
+typedef enum
+{
     RECORD_STATE_NORMAL = 0,
     RECORD_STATE_FAULT = 1,
 } RecordState;
@@ -247,7 +248,7 @@ void CmServerMonitorPoolExpiredUpdate(PoolRecord *record, uint64_t curTimes)
         if (nodeList->list[nodeId].diskNum == 0) {
             continue;
         }
-        uint16_t list[DISK_LIST_NUM] = { 0 };
+        uint16_t list[DISK_LIST_NUM] = {0};
         uint16_t num = 0;
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
@@ -296,7 +297,7 @@ void *CmServerMonitorPoolExpiredHandle(void *ctx)
         for (index = 0; index < nodeList->list[nodeId].diskNum; index++) {
             if (nodeList->list[nodeId].diskList[index].times + MONITOR_DISK_PERM_FAULT_TIME <= curTimes) {
                 g_faultMonitor.handle.expiredDiskSet(record->pool->poolId, nodeId,
-                    nodeList->list[nodeId].diskList[index].id);
+                                                     nodeList->list[nodeId].diskList[index].id);
                 continue;
             }
         }

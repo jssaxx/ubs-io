@@ -32,7 +32,7 @@ namespace bio {
 #endif
 
 #define KB_UNIT (1024)
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_DEF_H

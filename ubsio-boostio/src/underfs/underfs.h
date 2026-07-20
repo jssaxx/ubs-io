@@ -51,7 +51,7 @@ private:
 #endif
     }
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_UNDERFS_H

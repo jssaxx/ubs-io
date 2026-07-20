@@ -27,7 +27,7 @@ namespace interceptor {
 using ProxyOperations = struct InterceptorProxyOperations;
 class ProxyOperationsLoader {
 public:
-    static ProxyOperationsLoader& GetInstance()
+    static ProxyOperationsLoader &GetInstance()
     {
         static ProxyOperationsLoader loader;
         return loader;
@@ -35,15 +35,15 @@ public:
 
     ProxyOperationsLoader() = default;
 
-    ProxyOperationsLoader(const ProxyOperationsLoader&) = delete;
+    ProxyOperationsLoader(const ProxyOperationsLoader &) = delete;
 
-    ProxyOperationsLoader& operator =(const ProxyOperationsLoader&) = delete;
+    ProxyOperationsLoader &operator=(const ProxyOperationsLoader &) = delete;
 
     ~ProxyOperationsLoader();
 
     bool Initialize();
 
-    static ProxyOperations* const GetProxy();
+    static ProxyOperations *const GetProxy();
 
 private:
     bool LoadPreLoadPath();
@@ -64,9 +64,9 @@ private:
     std::string ldPrePath = "";
     const std::vector<std::string> components = {"iofwd", "adhocfs"};
     std::string workProxy = "";
-    void* handle = nullptr;
-    static ProxyOperations* operations;
+    void *handle = nullptr;
+    static ProxyOperations *operations;
 };
-}
-}
+} // namespace interceptor
+} // namespace ock
 #endif // PROXY_OPERATIONS_LOADER_H

@@ -19,10 +19,10 @@
 #include "cm_zkadapter.h"
 
 static MODULE_DEFINE_S g_cmClientModules[] = {
-    { "cm_client_schedule",      CmClientScheduleInit,      CmClientScheduleExit     },
-    { "cm_client_zkadapter",     CmClientZkInit,            NULL                     },
-    { "cm_client_local",         CmClientLocalInit,         CmClientLocalExit        },
-    { "cm_client_event",         CmClientEventInit,         CmClientEventExit        },
+    {"cm_client_schedule", CmClientScheduleInit, CmClientScheduleExit},
+    {"cm_client_zkadapter", CmClientZkInit, NULL},
+    {"cm_client_local", CmClientLocalInit, CmClientLocalExit},
+    {"cm_client_event", CmClientEventInit, CmClientEventExit},
 };
 
 int32_t CM_ClientInit(void)

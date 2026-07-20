@@ -16,11 +16,11 @@
 #include <atomic>
 #include "bio_err.h"
 #include "cache_def.h"
-#include "wcache_manager.h"
-#include "rcache_manager.h"
-#include "wcache_statistic.h"
-#include "rcache_statistic.h"
 #include "disk_statistic.h"
+#include "rcache_manager.h"
+#include "rcache_statistic.h"
+#include "wcache_manager.h"
+#include "wcache_statistic.h"
 
 namespace ock {
 namespace bio {
@@ -58,7 +58,7 @@ public:
     BResult Put(const Key &key, const WCacheSlicePtr &slice, const SliceReader &sliceReader, CacheAttr &attr);
 
     BResult Get(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-        uint64_t &realLen);
+                uint64_t &realLen);
 
     BResult Load(uint16_t ptId, const Key &key, uint64_t offset, uint64_t len, uint64_t &realLen);
 
@@ -105,24 +105,24 @@ private:
 
     BResult CalculateDataCrc(const SlicePtr &value, SlicePtr slice);
 
-    inline BResult WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr fromSlice, SlicePtr destSlice,
-        bool crcFlag, const Key &key);
+    inline BResult WriteToDesSlice(const SliceWriter &sliceWriter, SlicePtr fromSlice, SlicePtr destSlice, bool crcFlag,
+                                   const Key &key);
 
     BResult GetExternal(const Key &key, uint64_t offset, const RCacheSlicePtr &slice, const SliceWriter &sliceWriter,
-        uint64_t &realLen);
+                        uint64_t &realLen);
 
     BResult GetValueLengthFromUnderFS(const Key &key, uint64_t readLen, uint64_t offset, uint64_t &totalLen,
-        uint64_t &realLen);
+                                      uint64_t &realLen);
 
 private:
-    WCacheManagerPtr mWCacheManager{ nullptr };
-    RCacheManagerPtr mRCacheManager{ nullptr };
-    GetLocDiskId mGetLocDiskId{ nullptr };
-    CheckServiceState mCheckService{ nullptr };
-    CheckDegrade mCheckDegrade{ nullptr };
+    WCacheManagerPtr mWCacheManager{nullptr};
+    RCacheManagerPtr mRCacheManager{nullptr};
+    GetLocDiskId mGetLocDiskId{nullptr};
+    CheckServiceState mCheckService{nullptr};
+    CheckDegrade mCheckDegrade{nullptr};
     CacheSliceOperator mSliceOperator;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 
 #endif // BOOSTIO_BIO_CACHE_H

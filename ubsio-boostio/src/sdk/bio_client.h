@@ -14,17 +14,17 @@
 #define BIO_CLIENT_H
 
 #include <atomic>
-#include <mutex>
 #include <iostream>
+#include <mutex>
 #include <unordered_map>
 #include <utility>
-#include "net_engine.h"
-#include "net_common.h"
-#include "bio_ref.h"
 #include "bio.h"
-#include "bio_lock.h"
-#include "mirror_client.h"
 #include "bio_client_net.h"
+#include "bio_lock.h"
+#include "bio_ref.h"
+#include "mirror_client.h"
+#include "net_common.h"
+#include "net_engine.h"
 #include "underfs.h"
 
 #ifdef USE_PROMETHEUS
@@ -79,7 +79,7 @@ public:
     {
         BResult ret = mMirror->Put(param);
         if (UNLIKELY(ret == BIO_INNER_RETRY || ret == BIO_CHECK_PT_FAIL || ret == BIO_QUOTA_NOT_ENOUGH ||
-            ret == BIO_QUOTA_TIMEOUT)) {
+                     ret == BIO_QUOTA_TIMEOUT)) {
             BIO_TRACE_START(SDK_TRACE_PUT_TO_UNDERFS);
             ret = UnderFs::Instance()->Put(param.key, param.value, param.length);
             BIO_TRACE_END(SDK_TRACE_PUT_TO_UNDERFS, ret);
@@ -181,10 +181,10 @@ public:
         auto it = mCacheMap.find(tenantId);
         if (LIKELY(it != mCacheMap.end())) {
             mLock.UnLock();
-            return { it->second->mTenantId, it->second->mAffinity, it->second->mStrategy };
+            return {it->second->mTenantId, it->second->mAffinity, it->second->mStrategy};
         }
         mLock.UnLock();
-        return { UINT64_MAX, AFFINITY_BUTT, STRATEGY_BUTT };
+        return {UINT64_MAX, AFFINITY_BUTT, STRATEGY_BUTT};
     }
 
     inline BResult Insert(const std::shared_ptr<Bio> &instance)
@@ -225,7 +225,7 @@ public:
         mLock.LockRead();
         std::vector<CacheDescriptor> vec;
         for (auto &cache : mCacheMap) {
-            vec.push_back({ cache.second->mTenantId, cache.second->mAffinity, cache.second->mStrategy });
+            vec.push_back({cache.second->mTenantId, cache.second->mAffinity, cache.second->mStrategy});
         }
         mLock.UnLock();
         return vec;
@@ -241,7 +241,7 @@ public:
         return mNetEngine;
     }
 
-    inline void* LoadFunction(const char *name, void *handler)
+    inline void *LoadFunction(const char *name, void *handler)
     {
         void *ptr = nullptr;
         ptr = dlsym(handler, name);
@@ -266,6 +266,7 @@ public:
     void BioClientUpdateView();
 
     DEFINE_REF_COUNT_FUNCTIONS;
+
 protected:
     BResult BioDiagnoseSdkInit();
     BResult BioClientDiagnoseInit(WorkerMode mode);
@@ -283,6 +284,6 @@ private:
     ExecutorServicePtr mHeartService = nullptr;
     DEFINE_REF_COUNT_VARIABLE;
 };
-}
-}
+} // namespace bio
+} // namespace ock
 #endif
