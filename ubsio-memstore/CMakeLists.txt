@@ -83,7 +83,6 @@ include_directories(
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include
         ${PROJECT_3RDPARTY_BIN_DIR}/ubs-comm/include/hcom
         ${PROJECT_ZOOKEEPER_INCLUDE_DIR}
-        ${PROJECT_3RDPARTY_BIN_DIR}/libart/src
         /usr/include/hcom
 )
 

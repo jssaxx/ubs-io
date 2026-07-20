@@ -329,50 +329,6 @@ static void HandleDelete(std::vector<std::string> cmds)
     }
 }
 
-static void HandlePrefix(std::vector<std::string> cmds)
-{
-    auto prefix = cmds[1].c_str();
-    ValueInfo *items = nullptr;
-    uint64_t count = 0;
-    int ret = MmsGetValuesByPrefix(prefix, &items, &count);
-    if (ret != 0) {
-        cli_print_buffer("get values by prefix failed, prefix:%s", prefix);
-        return;
-    }
-
-    MmsFreeResources(&items, count);
-    cli_print_buffer("success, prefix:%s, count:%d\n", prefix, count);
-}
-
-static void HandleRange(std::vector<std::string> cmds)
-{
-    std::string op = cmds[1];
-    auto start = cmds[2].c_str();
-    auto end = cmds[3].c_str();
-
-    if (op == "delete") {
-        int ret = MmsBatchDeleteByRange(start, end);
-        if (ret == 0) {
-            cli_print_buffer("batch delete by range success, start:%s, end%s\n", start, end);
-        } else {
-            cli_print_buffer("batch delete by range failed, start:%s, end%s\n", start, end);
-        }
-
-        return;
-    }
-
-    ValueInfo *items = nullptr;
-    uint64_t count = 0;
-    int ret = MmsGetValuesByRange(start, end, &items, &count);
-    if (ret != 0) {
-        cli_print_buffer("get values by range failed, start:%s, end%s\n", start, end);
-        return;
-    }
-
-    MmsFreeResources(&items, count);
-    cli_print_buffer("success, start:%s, end:%s, count:%d\n", start, end, count);
-}
-
 static void HandleSet(std::vector<std::string> cmds)
 {
     mUpdateLength = std::stoul(cmds[1]);
@@ -1307,8 +1263,6 @@ static void MmsServerDebugHelp(char *command, int detail) noexcept
     cli_print_buffer("\tupdate value: mms update [userId] [key] [filePath] [offset] [length]\n");
     cli_print_buffer("\treplace value: mms replace [userId] [key] [filePath] [offset] [length]\n");
     cli_print_buffer("\tdelete object: mms delete [userId] [key]\n");
-    cli_print_buffer("\tprefix search: mms prefix [prefix]\n");
-    cli_print_buffer("\trange search: mms range delete/search [start] [end]\n");
     cli_print_buffer("\tcatchup: mms catchup\n");
     cli_print_buffer("\ttrace: mms trace [open/close/show/clear]\n");
     cli_print_buffer("\tperf: mms perf [put/get/update/replace/delete/mixes] [bs(Kb)] [ioDepth] [batchNum] [size(Mb)] "
@@ -1408,18 +1362,6 @@ static void MmsServerDebugProcess(int argc, char *argv[]) noexcept
             return;
         }
         HandlePerfCheck(cmds);
-    } else if (cmdType == "prefix") {
-        if (cmds.size() != 2) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
-            return;
-        }
-        HandlePrefix(cmds);
-    } else if (cmdType == "range") {
-        if (cmds.size() != 4) {
-            cli_print_buffer("Input parameters failed!, num:%u.\n", cmds.size());
-            return;
-        }
-        HandleRange(cmds);
     } else if (cmdType == "set") {
         if (cmds.size() != 2) {
             cli_print_buffer("Input parameters failed!, num:%u\n", cmds.size());

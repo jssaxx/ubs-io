@@ -61,38 +61,6 @@ public:
         return mKvClient->MmsGet(userId, itemList, itemNum);
     }
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return MMS_NOT_READY;
-        }
-        return mKvClient->GetValuesByPrefix(prefix, valueInfoItems, itemNum);
-    }
-
-    BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return MMS_NOT_READY;
-        }
-        return mKvClient->GetValuesByRange(start, end, valueInfoItems, itemNum);
-    }
-
-    BResult BatchDeleteByRange(const char *start, const char *end)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return MMS_NOT_READY;
-        }
-        return mKvClient->BatchDeleteByRange(start, end);
-    }
-
-    void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
-    {
-        mKvClient->FreeResources(valueInfoItems, itemNum);
-    }
-
     BResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {

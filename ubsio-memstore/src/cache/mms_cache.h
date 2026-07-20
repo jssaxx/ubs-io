@@ -26,9 +26,6 @@
 #include "mms_lock.h"
 #include "mms_mem_allocator.h"
 #include "mms_mem_mgr.h"
-#include "art_index/art_range.h"
-#include "art_index/lsm_art_tree.h"
-
 namespace ock {
 namespace mms {
 constexpr uint16_t FLAG_INVALID = 0;
@@ -60,7 +57,6 @@ struct IndexValue {
     uint32_t version;
     uint64_t totalDataLen;
     uint64_t blockOffset;
-    BucketNode *bucketNode;
 };
 
 struct DataHeader {
@@ -136,10 +132,6 @@ public:
     uint64_t GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
     void ClearDeletedData();
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetValuesByRange(const char *keyStart, const char *keyEnd, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetKeysByRange(const char *keyStart, const char *keyEnd, std::vector<std::string> &matchedKeys);
-
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
@@ -169,9 +161,6 @@ private:
 
     uint64_t mBaseAddr = 0;
     std::atomic<bool> mIsRecovering{false};
-
-    LsmArtTree mLsmArtTree;
-    ReadWriteLock mArtValueLock;
 
     DEFINE_REF_COUNT_VARIABLE;
 };
