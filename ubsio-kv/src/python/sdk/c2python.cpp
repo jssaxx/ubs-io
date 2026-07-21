@@ -22,6 +22,7 @@
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_def.h"
 #include "ubsio_kvc_err.h"
+#include "ubsio_kvc.h"
 
 using namespace ock::ubsio;
 using namespace ock::ubsio::nds;
@@ -164,6 +165,27 @@ void PyKvcKvExit(void)
 {
     py::gil_scoped_release release;
     KvcExit();
+}
+
+py::dict PyKvcKvGetResourceInfo()
+{
+    UbsioResourceInfo info{};
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = UbsioGetResourceInfo(&info);
+    }
+    if (ret != 0) {
+        LOG_ERROR("UbsioGetResourceInfo failed, ret:" << ret);
+        return py::dict();
+    }
+
+    py::dict result;
+    result["diskCap"] = info.diskCap;
+    result["diskUsed"] = info.diskUsed;
+    result["memCap"] = info.memCap;
+    result["memUsed"] = info.memUsed;
+    return result;
 }
 
 std::vector<int> PyKvcKvBatchPutData(const std::vector<std::string> &keys, std::vector<py::bytes> &values)
@@ -364,6 +386,7 @@ PYBIND11_MODULE(c2python_sdk, m)
     m.doc() = "Python/C API for python sdk";
     m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id") = -1);
     m.def("KvExit", &PyKvcKvExit);
+    m.def("KvGetResourceInfo", &PyKvcKvGetResourceInfo);
     m.def("KvPut", &PyKvcKvPutData, py::arg("key"), py::arg("value"));
     m.def("KvGet", &PyKvcKvGetData, py::arg("key"), py::arg("value"));
     m.def("KvExist", &PyKvcKvExist, py::arg("key"));
