@@ -75,7 +75,7 @@ const auto MEM_READ_WRITE_RATIO = std::make_pair("ubsio.cache.mem_read_write_rat
 
 const auto DISK_READ_WRITE_RATIO = std::make_pair("ubsio.cache.disk_read_write_ratio", "5:5");
 
-const auto BIO_CLI_TOOLS_ENABLE = std::make_pair("ubsio_cli_tools_enable", "false");
+const auto BIO_CLI_TOOLS_ENABLE = std::make_pair("ubsio.cli_tools.enable", "false");
 
 const auto WORK_SCENE = std::make_pair("ubsio.work.scene", "none");
 const auto WORK_IO_ALIGNSIZE = std::make_pair("ubsio.work.io.alignsize", 1);
