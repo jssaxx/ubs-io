@@ -53,6 +53,11 @@ public:
         return mStarted;
     }
 
+    inline WorkerMode GetMode() const
+    {
+        return mMode;
+    }
+
     inline void SetStartWorker(bool value)
     {
         std::lock_guard<std::mutex> lock(mStartLock);

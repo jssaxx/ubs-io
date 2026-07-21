@@ -270,7 +270,7 @@ BdmBatchTempBufferPool &GetBdmBatchTempBufferPool()
 
 int32_t SubmitBdmBatchGroup(std::vector<BdmBatchRequest> &requests, const std::vector<uint32_t> &indices, bool isRead)
 {
-    if (indices.size() == 1) {
+    if (indices.size() == 1 && BdmGetIoEngine() != BDM_IO_ENGINE_SYNC) {
         auto &request = requests[indices[0]];
         return isRead ? BdmReadAsync(request.chunkId, request.offset, request.buf, request.len, &request.ioCtx) :
                         BdmWriteAsync(request.chunkId, request.offset, request.buf, request.len, &request.ioCtx);

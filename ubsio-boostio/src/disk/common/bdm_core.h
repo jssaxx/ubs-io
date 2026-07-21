@@ -71,6 +71,13 @@ typedef enum {
     BDM_IO_ENGINE_BUTT
 } BdmIoEngine;
 
+typedef enum {
+    BDM_URING_SQPOLL_AUTO = 0,
+    BDM_URING_SQPOLL_REQUIRED = 1,
+    BDM_URING_SQPOLL_DISABLED = 2,
+    BDM_URING_SQPOLL_BUTT
+} BdmUringSqpollMode;
+
 #define BDM_IO_CTX_RES_LEN (256UL)
 
 typedef void (*BdmIoCb)(void *ctx, int32_t ret);
@@ -136,6 +143,10 @@ int32_t BdmInit(void);
 int32_t BdmExit(void);
 
 int32_t BdmSetIoEngine(const char *engineName);
+
+int32_t BdmSetUringSqpollMode(const char *modeName);
+
+int32_t BdmSetSyncWorkerNum(uint32_t workerNum);
 
 BdmIoEngine BdmGetIoEngine(void);
 

@@ -272,6 +272,11 @@ static bool VerifyBatchGetDiskKeys(const std::vector<BatchGetMixKey> &keys, uint
     constexpr uint32_t maxQueryCount = 256;
     verifiedCount = 0;
     verifySkipped = false;
+    if (BioClient::Instance()->GetMode() != SEPARATES) {
+        verifySkipped = true;
+        return true;
+    }
+
     std::vector<const char *> queryKeys;
     std::vector<ObjLocation> locations;
     std::vector<KeyAddrInfo> diskInfos(maxQueryCount);

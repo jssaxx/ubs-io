@@ -146,6 +146,17 @@ TEST_F(TestDisk, test_bdm_io_engine_config_case_return_ok)
 
     EXPECT_EQ(BdmSetIoEngine("sync"), BDM_CODE_OK);
     EXPECT_EQ(BdmGetIoEngine(), BDM_IO_ENGINE_SYNC);
+
+    EXPECT_EQ(BdmSetUringSqpollMode(nullptr), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmSetUringSqpollMode("invalid"), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmSetUringSqpollMode("required"), BDM_CODE_OK);
+    EXPECT_EQ(BdmSetUringSqpollMode("disabled"), BDM_CODE_OK);
+    EXPECT_EQ(BdmSetUringSqpollMode("auto"), BDM_CODE_OK);
+
+    EXPECT_EQ(BdmSetSyncWorkerNum(0), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmSetSyncWorkerNum(65), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmSetSyncWorkerNum(1), BDM_CODE_OK);
+    EXPECT_EQ(BdmSetSyncWorkerNum(16), BDM_CODE_OK);
 }
 
 TEST_F(TestDisk, test_bdm_batch_async_invalid_param_case_return_ok)

@@ -391,6 +391,14 @@ BResult BioServer::BioBdmInit()
     auto ret = BdmSetIoEngine(daemonConfig.bdmIoEngine.c_str());
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR,
         "Failed to set BDM IO engine, engine:" << daemonConfig.bdmIoEngine << ", result:" << ret << ".");
+    ret = BdmSetUringSqpollMode(daemonConfig.bdmIoUringSqpollMode.c_str());
+    ChkTrue(ret == BDM_CODE_OK, BIO_ERR,
+        "Failed to set BDM io_uring SQPOLL mode, mode:" << daemonConfig.bdmIoUringSqpollMode << ", result:" << ret
+                                                        << ".");
+    ret = BdmSetSyncWorkerNum(daemonConfig.bdmSyncWorkerNum);
+    ChkTrue(ret == BDM_CODE_OK, BIO_ERR,
+        "Failed to set BDM sync worker number, workerNum:" << daemonConfig.bdmSyncWorkerNum << ", result:" << ret
+                                                           << ".");
     ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
     BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
