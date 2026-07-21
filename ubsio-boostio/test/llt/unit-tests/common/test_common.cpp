@@ -26,7 +26,7 @@
 using namespace ock::bio;
 
 namespace {
-class LegacyConfiguration : public Configuration {
+class UbsioConfiguration : public Configuration {
 protected:
     void LoadDefaultConf() override
     {
@@ -94,19 +94,21 @@ TEST_F(TestCommon, test_make_dir_recursive_with_trailing_slash_return_ok)
     EXPECT_EQ(rmdir(parent), 0);
 }
 
-TEST_F(TestCommon, test_read_legacy_config_key)
+TEST_F(TestCommon, test_read_only_ubsio_config_key)
 {
-    char configTemplate[] = "/tmp/ubsio_legacy_config_XXXXXX";
+    char configTemplate[] = "/tmp/ubsio_mixed_config_XXXXXX";
     int fd = mkstemp(configTemplate);
     ASSERT_NE(fd, -1);
     close(fd);
 
     std::ofstream configFile(configTemplate);
-    configFile << "bio.test.value = 7\n";
+    configFile << "mmc.test.value = invalid\n";
+    configFile << "bio.test.value = invalid\n";
+    configFile << "ubsio.test.value = 7\n";
     configFile.close();
 
-    EXPECT_TRUE(Configuration::ReadConf<LegacyConfiguration>(configTemplate));
-    auto config = Configuration::GetInstance<LegacyConfiguration>();
+    EXPECT_TRUE(Configuration::ReadConf<UbsioConfiguration>(configTemplate));
+    auto config = Configuration::GetInstance<UbsioConfiguration>();
     ASSERT_NE(config.Get(), nullptr);
     EXPECT_EQ(config->GetInt("ubsio.test.value"), 7);
     EXPECT_EQ(unlink(configTemplate), 0);

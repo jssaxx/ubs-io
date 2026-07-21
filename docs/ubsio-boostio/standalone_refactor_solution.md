@@ -55,7 +55,7 @@ BioInitialize(STANDALONE, optConf);
 | `ubsio.work.scene`、`ubsio.work.io.alignsize`、`ubsio.work.io.timeout`、`ubsio.work.net.timeout` | 通过 `GetRuntimeConfig` 传给 SDK，复用原有工作场景、对齐和超时校验逻辑。 |
 | `ubsio.batchget.thread.num` | server 侧 BatchGet executor 线程数，单机和非单机都由 MirrorServer 使用。 |
 | `ubsio.data.crc.enable` | 单机 direct-call 路径仍按配置启用 CRC。 |
-| `ubsio.trace.enable`、`ubsio_cli_tools_enable`、`ubsio.prometheus.*` | 单机模式继续读取这些诊断、trace、Prometheus 配置，但初始化路径由 direct mode 获取配置，不走 IPC 协商。 |
+| `ubsio.trace.enable`、`ubsio.cli_tools.enable`、`ubsio.prometheus.*` | 单机模式继续读取这些诊断、trace、Prometheus 配置，但初始化路径由 direct mode 获取配置，不走 IPC 协商。 |
 | `ubsio.underfs.*` | UnderFs 模块仍会初始化，写穿、加载等后端访问能力继续依赖该配置。 |
 
 典型多实例配置示例：
