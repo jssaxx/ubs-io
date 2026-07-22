@@ -30,7 +30,7 @@ const auto NET_DATA_PORT = std::make_pair("ubsio.net.data.listen_port", 7201);
 const auto NET_SEGMENT_SIZE = std::make_pair("ubsio.net.data.segment_size", 256);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("ubsio.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("ubsio.net.request.executor.queue.size", 1024);
-const auto NET_TLS_ENABLE_SWITCH = std::make_pair("ubsio.net.tls.enable.switch", "true");
+const auto NET_TLS_ENABLE_SWITCH = std::make_pair("ubsio.net.tls.enable.switch", "false");
 const auto NET_TLS_CA_CERT_PATH = std::make_pair("ubsio.net.tls.ca.cert.path", "/path/CA/cacert.pem");
 const auto NET_TLS_CA_CRL_PATH = std::make_pair("ubsio.net.tls.ca.crl.path", "");
 const auto NET_TLS_SERVER_CERT_PATH = std::make_pair("ubsio.net.tls.server.cert.path", "/path/server/servercert.pem");
@@ -50,7 +50,7 @@ const auto BIO_TRACE_ENABLE = std::make_pair("ubsio.trace.enable", "true");
 
 const auto DATA_CRC_ENABLE = std::make_pair("ubsio.data.crc.enable", "false");
 
-const auto BIO_CACHE_QOS_ENABLE = std::make_pair("ubsio.cache.qos.enable", "true");
+const auto BIO_CACHE_QOS_ENABLE = std::make_pair("ubsio.cache.qos.enable", "false");
 
 const auto BIO_WCACHE_NEGOTIATE_DELAY = std::make_pair("ubsio.wcache.negotiate.delay", 100);
 
@@ -61,19 +61,19 @@ const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
-const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 5120);
+const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 0);
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("ubsio.wcache.evict_water_level", 0);
 
-const auto WCACHE_DISK_EVICT_WATER_LEVEL = std::make_pair("ubsio.wcache.disk_evict_water_level", 100);
+const auto WCACHE_DISK_EVICT_WATER_LEVEL = std::make_pair("ubsio.wcache.disk_evict_water_level", 90);
 
 const auto RCACHE_EVICT_WATER_LEVEL = std::make_pair("ubsio.rcache.evict_water_level", 90);
 
-const auto MEM_READ_WRITE_RATIO = std::make_pair("ubsio.cache.mem_read_write_ratio", "5:5");
+const auto MEM_READ_WRITE_RATIO = std::make_pair("ubsio.cache.mem_read_write_ratio", "0:10");
 
-const auto DISK_READ_WRITE_RATIO = std::make_pair("ubsio.cache.disk_read_write_ratio", "5:5");
+const auto DISK_READ_WRITE_RATIO = std::make_pair("ubsio.cache.disk_read_write_ratio", "0:10");
 
-const auto BIO_CLI_TOOLS_ENABLE = std::make_pair("ubsio_cli_tools_enable", "false");
+const auto BIO_CLI_TOOLS_ENABLE = std::make_pair("ubsio.cli_tools.enable", "false");
 
 const auto WORK_SCENE = std::make_pair("ubsio.work.scene", "none");
 const auto WORK_IO_ALIGNSIZE = std::make_pair("ubsio.work.io.alignsize", 1);
@@ -90,7 +90,7 @@ const auto BDM_BATCH_READ_STANDALONE_USE_SCRATCH_POOL =
 const auto WCACHE_PARTITION_COUNT = std::make_pair("ubsio.wcache.partition_count", 1);
 const auto WCACHE_COMPACTION_THRESHOLD = std::make_pair("ubsio.wcache.compaction_threshold", 30);
 
-const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("ubsio.underfs.file_system_type", "ceph");
+const auto UNDERFS_FILE_SYSTEM_TYPE = std::make_pair("ubsio.underfs.file_system_type", "none");
 const auto UNDERFS_CEPH_CFG_PATH = std::make_pair("ubsio.underfs.ceph.cfg.path", "/etc/ceph/ceph.conf");
 const auto UNDERFS_CEPH_CLUSTER = std::make_pair("ubsio.underfs.ceph.cluster", "ceph");
 const auto UNDERFS_CEPH_USER = std::make_pair("ubsio.underfs.ceph.user", "client.admin");
