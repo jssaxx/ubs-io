@@ -21,7 +21,7 @@ namespace bio {
 const auto SDK_LOG_LEVEL = std::make_pair("ubsio.log.level", "info");
 const auto SDK_LOG_TYPE = std::make_pair("ubsio.log.type", 0);
 const auto SDK_LOG_FILE_PATH = std::make_pair("ubsio.sdk.log.path", "");
-const auto SDK_NET_TLS_ENABLE_SWITCH = std::make_pair("ubsio.net.tls.enable.switch", "true");
+const auto SDK_NET_TLS_ENABLE_SWITCH = std::make_pair("ubsio.net.tls.enable.switch", "false");
 const auto SDK_NET_TLS_CA_CERT_PATH = std::make_pair("ubsio.net.tls.ca.cert.path",
                                                      "/path/CA/cacert.pem");
 const auto SDK_NET_TLS_CA_CRL_PATH = std::make_pair("ubsio.net.tls.ca.crl.path", "");

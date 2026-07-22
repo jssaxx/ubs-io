@@ -680,7 +680,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1856685610417"><a name="p1856685610417"></a><a name="p1856685610417"></a>网络安全开关。</p>
     </td>
-    <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.3 "><p id="p1956675618414"><a name="p1956675618414"></a><a name="p1956675618414"></a>true</p>
+    <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.3 "><p id="p1956675618414"><a name="p1956675618414"></a><a name="p1956675618414"></a>false</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.4 "><a name="ul176512185912"></a><a name="ul176512185912"></a><ul id="ul176512185912"><li>true</li><li>false</li></ul>
     </td>
@@ -774,7 +774,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p616510120215"><a name="p616510120215"></a><a name="p616510120215"></a>流量控制开关。</p>
     </td>
-    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.4 "><p id="p21641812427"><a name="p21641812427"></a><a name="p21641812427"></a>true</p>
+    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.4 "><p id="p21641812427"><a name="p21641812427"></a><a name="p21641812427"></a>false</p>
     </td>
     <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><a name="ul6585194119593"></a><a name="ul6585194119593"></a><ul id="ul6585194119593"><li>false</li><li>true</li></ul>
     </td>
@@ -840,7 +840,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p1287903714428"><a name="p1287903714428"></a><a name="p1287903714428"></a>内存读写资源配比。</p>
     </td>
-    <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.3 "><p id="p7879137164210"><a name="p7879137164210"></a><a name="p7879137164210"></a>5:5</p>
+    <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.3 "><p id="p7879137164210"><a name="p7879137164210"></a><a name="p7879137164210"></a>0:10</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.4 "><p id="p16879163744219"><a name="p16879163744219"></a><a name="p16879163744219"></a>0 ~ 10:10 ~ 0</p>
     </td>
@@ -851,7 +851,7 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.2 "><p id="p20879437114216"><a name="p20879437114216"></a><a name="p20879437114216"></a>磁盘读写资源配比。</p>
     </td>
-    <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.3 "><p id="p1387913711420"><a name="p1387913711420"></a><a name="p1387913711420"></a>5:5</p>
+    <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.3 "><p id="p1387913711420"><a name="p1387913711420"></a><a name="p1387913711420"></a>0:10</p>
     </td>
     <td class="cellrowborder" valign="top" headers="mcps1.2.7.1.4 "><p id="p20879437184211"><a name="p20879437184211"></a><a name="p20879437184211"></a>0 ~ 10:10 ~ 0</p>
     </td>
@@ -920,9 +920,9 @@ UBS IO软件安装前需要将前置依赖的软件安装成功，建议参考�
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.3 "><p id="p14872141914214"><a name="p14872141914214"></a><a name="p14872141914214"></a>后端存储系统类型。</p>
     </td>
-    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.4 "><p id="p387231913214"><a name="p387231913214"></a><a name="p387231913214"></a>ceph</p>
+    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.4 "><p id="p387231913214"><a name="p387231913214"></a><a name="p387231913214"></a>none</p>
     </td>
-    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><a name="ul4723104711017"></a><a name="ul4723104711017"></a><ul id="ul4723104711017"><li>ceph</li><li>hdfs</li></ul>
+    <td class="cellrowborder" valign="top" width="15%" headers="mcps1.2.7.1.5 "><a name="ul4723104711017"></a><a name="ul4723104711017"></a><ul id="ul4723104711017"><li>ceph</li><li>hdfs</li><li>none</li></ul>
     </td>
     <td class="cellrowborder" valign="top" width="20%" headers="mcps1.2.7.1.6 "><p id="p108729191216"><a name="p108729191216"></a><a name="p108729191216"></a>-</p>
     </td>
