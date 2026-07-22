@@ -23,6 +23,7 @@
 #include "bdm_core.h"
 #include "bdm_disk.h"
 #include "mirror_server.h"
+#include "disk_resource_monitor.h"
 
 using namespace ock::bio;
 using namespace ock::hcom;
@@ -2894,6 +2895,10 @@ int32_t MirrorServer::MirrorServerProcBrokenSyncFlow(ServiceContext &ctx, ProcFl
 
 BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
 {
+    if (rsp == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    *rsp = {};
     rsp->nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
     CacheResDescription desc{};
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
@@ -2906,6 +2911,7 @@ BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
     rsp->rCacheDiskCapacity = desc.diskCapacity;
     rsp->rCacheMemUsedSize = desc.memUsedSize;
     rsp->rCacheDiskUsedSize = desc.diskUsedSize;
+    DiskResourceMonitor::Query(rsp->disks, rsp->diskNum);
     return BIO_OK;
 }
 
@@ -3055,7 +3061,8 @@ int32_t MirrorServer::HandleGetCacheHit(ServiceContext &ctx)
 
 int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
 {
-    CacheResourceResponse rsp;
+    CacheResourceResponse rsp{};
+    auto req = static_cast<CacheResourceRequest *>(ctx.MessageData());
     rsp.nodeId = BioServer::Instance()->GetLocalNid().VNodeId();
     CacheResDescription desc{};
     Cache::Instance().GetCacheResources(desc, WRITE_CACHE);
@@ -3068,6 +3075,9 @@ int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
     rsp.rCacheDiskCapacity = desc.diskCapacity;
     rsp.rCacheMemUsedSize = desc.memUsedSize;
     rsp.rCacheDiskUsedSize = desc.diskUsedSize;
+    if (req->includeDiskInfo) {
+        DiskResourceMonitor::Query(rsp.disks, rsp.diskNum);
+    }
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheResourceResponse));
     return BIO_OK;
 }

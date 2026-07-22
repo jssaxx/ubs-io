@@ -13,19 +13,34 @@
 #ifndef UBSIO_KVC_H
 #define UBSIO_KVC_H
 
-#include <cstdint>
-#include <cstdio>
-#include <cstddef>
+#include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define UBSIO_RESOURCE_DISK_PATH_MAX_SIZE (256)
+#define UBSIO_RESOURCE_MAX_DISK_NUM (16)
+
+typedef struct {
+    uint16_t status;
+    char path[UBSIO_RESOURCE_DISK_PATH_MAX_SIZE];
+    uint64_t readBandwidth;
+    uint64_t writeBandwidth;
+    uint64_t totalBandwidth;
+    uint8_t bandwidthValid;
+    uint8_t reserved[7];
+} UbsioDiskInfo;
 
 typedef struct {
     uint64_t diskCap;
     uint64_t diskUsed;
     uint64_t memCap;
     uint64_t memUsed;
+    uint32_t diskNum;
+    uint32_t faultDiskNum;
+    UbsioDiskInfo disks[UBSIO_RESOURCE_MAX_DISK_NUM];
 } UbsioResourceInfo;
 
 #ifndef UBSIO_META_EVENT_C_DEFINED
@@ -53,9 +68,14 @@ typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *ev
 int32_t UbsioKvCacheInit(int32_t devId);
 
 /**
- * @brief Get aggregated write cache resource information.
+ * @brief Get write cache and disk resource information managed by the local process.
  *
- * @param info             [out] Write cache capacity and usage in bytes
+ * Configured block-device bandwidth is sampled for 200 ms from Linux block statistics and is reported in bytes
+ * per second. When a partition is configured, only that partition's bandwidth is reported.
+ * bandwidthValid distinguishes a valid zero value from a collection failure.
+ * Disk status is 0 for normal and 1 for fault.
+ *
+ * @param info             [out] Write cache capacity/usage and per-disk information
  * @return 0 if successful
  */
 int32_t UbsioGetResourceInfo(UbsioResourceInfo *info);

@@ -79,6 +79,8 @@ public:
 
     static int64_t GetDiskCapacity(std::string &diskPath);
 
+    static bool GetBlockDeviceSysPath(const std::string &diskPath, std::string &diskSysPath);
+
     static bool GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey);
 
     static bool CheckNoPartitions(const std::string &sysDevPath, std::string &reason);
@@ -258,7 +260,7 @@ inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
     return off;
 }
 
-inline bool FileUtil::GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey)
+inline bool FileUtil::GetBlockDeviceSysPath(const std::string &diskPath, std::string &diskSysPath)
 {
     std::string realDiskPath = diskPath;
     if (!CanonicalPath(realDiskPath)) {
@@ -271,7 +273,7 @@ inline bool FileUtil::GetPhysicalDiskKey(const std::string &diskPath, std::strin
     }
 
     if (!S_ISBLK(statBuf.st_mode)) {
-        diskKey = realDiskPath;
+        diskSysPath = realDiskPath;
         return true;
     }
 
@@ -279,11 +281,26 @@ inline bool FileUtil::GetPhysicalDiskKey(const std::string &diskPath, std::strin
         std::to_string(minor(statBuf.st_rdev));
     char realSysDevPath[PATH_MAX] = {};
     if (realpath(sysDevPath.c_str(), realSysDevPath) == nullptr) {
-        diskKey = sysDevPath;
+        diskSysPath = sysDevPath;
         return true;
     }
 
-    std::string diskSysPath = realSysDevPath;
+    diskSysPath = realSysDevPath;
+    return true;
+}
+
+inline bool FileUtil::GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey)
+{
+    std::string diskSysPath;
+    if (!GetBlockDeviceSysPath(diskPath, diskSysPath)) {
+        return false;
+    }
+
+    if (diskSysPath.compare(0, 5, "/sys/") != 0) {
+        diskKey = diskSysPath;
+        return true;
+    }
+
     while (Exist(diskSysPath + "/partition")) {
         auto pos = diskSysPath.find_last_of('/');
         if (pos == std::string::npos) {

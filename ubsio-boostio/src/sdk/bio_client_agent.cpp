@@ -1204,7 +1204,7 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
         CLIENT_LOG_ERROR("Send calc resource request failed, ret:" << ret << ".");
         return ret;
     }
-    CacheResourcesDesc tempDesc;
+    CacheResourcesDesc tempDesc{};
     tempDesc.nodeId = rsp.nodeId;
     tempDesc.rCacheMemCapacity = rsp.rCacheMemCapacity;
     tempDesc.rCacheDiskCapacity = rsp.rCacheDiskCapacity;
@@ -1214,6 +1214,10 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
     tempDesc.rCacheMemUsedSize = rsp.rCacheMemUsedSize;
     tempDesc.wCacheMemUsedSize = rsp.wCacheMemUsedSize;
     tempDesc.wCacheDiskUsedSize = rsp.wCacheDiskUsedSize;
+    tempDesc.diskNum = rsp.diskNum > DISK_RESOURCE_MAX_NUM ? DISK_RESOURCE_MAX_NUM : rsp.diskNum;
+    for (uint16_t index = 0; index < tempDesc.diskNum; ++index) {
+        tempDesc.disks[index] = rsp.disks[index];
+    }
     nodeDesc.push_back(tempDesc);
     return ret;
 }
