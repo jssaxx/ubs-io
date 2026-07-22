@@ -166,6 +166,42 @@ void PyKvcKvExit(void)
     KvcExit();
 }
 
+py::dict PyKvcKvGetResourceInfo()
+{
+    UbsioResourceInfo info{};
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = UbsioGetResourceInfo(&info);
+    }
+    if (ret != 0) {
+        LOG_ERROR("UbsioGetResourceInfo failed, ret:" << ret);
+        return py::dict();
+    }
+
+    py::dict result;
+    result["diskCap"] = info.diskCap;
+    result["diskUsed"] = info.diskUsed;
+    result["memCap"] = info.memCap;
+    result["memUsed"] = info.memUsed;
+    result["diskNum"] = info.diskNum;
+    result["faultDiskNum"] = info.faultDiskNum;
+    py::list disks;
+    for (uint32_t index = 0; index < info.diskNum; ++index) {
+        const auto &diskInfo = info.disks[index];
+        py::dict disk;
+        disk["path"] = diskInfo.path;
+        disk["status"] = diskInfo.status;
+        disk["readBandwidth"] = diskInfo.readBandwidth;
+        disk["writeBandwidth"] = diskInfo.writeBandwidth;
+        disk["totalBandwidth"] = diskInfo.totalBandwidth;
+        disk["bandwidthValid"] = diskInfo.bandwidthValid != 0;
+        disks.append(disk);
+    }
+    result["disks"] = disks;
+    return result;
+}
+
 std::vector<int> PyKvcKvBatchPutData(const std::vector<std::string> &keys, std::vector<py::bytes> &values)
 {
     std::vector<int> results(keys.size(), -1);

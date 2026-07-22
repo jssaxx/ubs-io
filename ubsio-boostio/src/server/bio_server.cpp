@@ -1532,9 +1532,9 @@ int32_t GetCacheHitLocal(CacheHitResponse *rsp)
     return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->GetCacheHitLocal(rsp));
 }
 
-int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp)
+int32_t CalcCacheResourceLocal(CacheResourceRequest *req, CacheResourceResponse *rsp)
 {
-    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CalcCacheResourceLocal(rsp));
+    return static_cast<int32_t>(BioServer::Instance()->GetMirrorServer()->CalcCacheResourceLocal(req, rsp));
 }
 
 int32_t GetTracePointsLocal(GetTracePointsResponse *rsp)

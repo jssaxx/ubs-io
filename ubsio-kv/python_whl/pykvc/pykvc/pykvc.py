@@ -41,6 +41,19 @@ def exit():
 atexit.register(exit)
 
 
+def get_resource_info() -> dict:
+    """
+    Get local-process write cache resource usage and per-disk telemetry.
+    Remote nodes are not queried.
+    Disk bandwidth is measured in bytes per second. bandwidthValid
+    distinguishes a valid zero value from a collection failure.
+    :return: dictionary containing diskCap, diskUsed, memCap, memUsed,
+             diskNum, faultDiskNum and disks;
+             an empty dictionary on failure
+    """
+    return KvGetResourceInfo()
+
+
 def put(key, value) -> int:
     """
     Put data of object with key into UBS-IO KV Cache

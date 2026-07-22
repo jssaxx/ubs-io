@@ -5,6 +5,9 @@ import pykvc
 ret = pykvc.initialize(device_id=0)
 assert(ret == 0)
 
+resource_info = pykvc.get_resource_info()
+print(resource_info)
+
 value = bytes(b"hello")
 ret = pykvc.put("key", value)
 assert(ret == 0)
