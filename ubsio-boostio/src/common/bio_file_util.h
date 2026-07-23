@@ -304,17 +304,9 @@ inline bool FileUtil::CheckNoPartitions(const std::string &sysDevPath, std::stri
         return false;
     }
 
-    while (true) {
-        errno = 0;
-        struct dirent *entry = readdir(dir);
-        if (entry == nullptr) {
-            if (errno != 0) {
-                reason = "failed to enumerate device partitions";
-                closedir(dir);
-                return false;
-            }
-            break;
-        }
+    errno = 0;
+    struct dirent *entry = nullptr;
+    while ((entry = readdir(dir)) != nullptr) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
@@ -324,6 +316,12 @@ inline bool FileUtil::CheckNoPartitions(const std::string &sysDevPath, std::stri
             closedir(dir);
             return false;
         }
+        errno = 0;
+    }
+    if (errno != 0) {
+        reason = "failed to enumerate device partitions";
+        closedir(dir);
+        return false;
     }
 
     closedir(dir);
