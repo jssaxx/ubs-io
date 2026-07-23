@@ -15,6 +15,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <cstring>
 #include <dirent.h>
@@ -79,6 +80,13 @@ public:
     static int64_t GetDiskCapacity(std::string &diskPath);
 
     static bool GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey);
+
+    static bool CheckNoPartitions(const std::string &sysDevPath, std::string &reason);
+
+    static bool CheckNotMounted(const std::string &mountInfoPath, const std::string &deviceNumber,
+        std::string &reason);
+
+    static bool ValidateRawDisk(const std::string &diskPath, std::string &reason);
 
     static bool AppendConfigToLine(std::vector<std::string>& lines, const std::string& key,
                                    const std::string& newConfig);
@@ -286,6 +294,101 @@ inline bool FileUtil::GetPhysicalDiskKey(const std::string &diskPath, std::strin
 
     diskKey = diskSysPath;
     return true;
+}
+
+inline bool FileUtil::CheckNoPartitions(const std::string &sysDevPath, std::string &reason)
+{
+    DIR *dir = opendir(sysDevPath.c_str());
+    if (dir == nullptr) {
+        reason = "failed to inspect device partitions";
+        return false;
+    }
+
+    while (true) {
+        errno = 0;
+        struct dirent *entry = readdir(dir);
+        if (entry == nullptr) {
+            if (errno != 0) {
+                reason = "failed to enumerate device partitions";
+                closedir(dir);
+                return false;
+            }
+            break;
+        }
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        std::string childPath = sysDevPath + "/" + entry->d_name;
+        if (Exist(childPath + "/partition")) {
+            reason = "the configured device contains partition " + std::string(entry->d_name);
+            closedir(dir);
+            return false;
+        }
+    }
+
+    closedir(dir);
+    return true;
+}
+
+inline bool FileUtil::CheckNotMounted(const std::string &mountInfoPath, const std::string &deviceNumber,
+    std::string &reason)
+{
+    std::ifstream mountInfo(mountInfoPath);
+    if (!mountInfo.is_open()) {
+        reason = "failed to inspect mounted devices";
+        return false;
+    }
+
+    bool parsed = false;
+    std::string line;
+    while (std::getline(mountInfo, line)) {
+        std::istringstream lineStream(line);
+        std::string mountId;
+        std::string parentId;
+        std::string mountedDevice;
+        if (!(lineStream >> mountId >> parentId >> mountedDevice)) {
+            continue;
+        }
+        parsed = true;
+        if (mountedDevice == deviceNumber) {
+            reason = "the configured device is mounted";
+            return false;
+        }
+    }
+
+    if (!parsed) {
+        reason = "failed to parse mounted devices";
+        return false;
+    }
+    return true;
+}
+
+inline bool FileUtil::ValidateRawDisk(const std::string &diskPath, std::string &reason)
+{
+    reason.clear();
+    struct stat statBuf {};
+    if (stat(diskPath.c_str(), &statBuf) != 0) {
+        reason = "failed to get device status";
+        return false;
+    }
+    if (!S_ISBLK(statBuf.st_mode)) {
+        reason = "the configured path is not a block device";
+        return false;
+    }
+
+    std::string deviceNumber = std::to_string(major(statBuf.st_rdev)) + ":" +
+        std::to_string(minor(statBuf.st_rdev));
+    std::string sysDevPath = "/sys/dev/block/" + deviceNumber;
+    char realSysDevPath[PATH_MAX] = {};
+    if (realpath(sysDevPath.c_str(), realSysDevPath) == nullptr) {
+        reason = "failed to resolve device topology";
+        return false;
+    }
+
+    if (!CheckNoPartitions(realSysDevPath, reason)) {
+        return false;
+    }
+    return CheckNotMounted("/proc/self/mountinfo", deviceNumber, reason);
 }
 
 inline bool FileUtil::WriteFile(const std::string& filename, const std::vector<std::string>& lines)
