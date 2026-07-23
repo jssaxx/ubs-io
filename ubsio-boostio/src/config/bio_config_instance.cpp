@@ -459,6 +459,11 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
             LOG_ERROR("Disk path not exist, value " << diskPath);
             return BIO_ERR;
         }
+        std::string reason;
+        if (!FileUtil::ValidateRawDisk(diskPath, reason)) {
+            LOG_ERROR("Disk path is not available for raw cache, value " << diskPath << ", reason: " << reason);
+            return BIO_ERR;
+        }
         mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
     }
 
