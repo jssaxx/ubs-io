@@ -108,6 +108,9 @@ void TestDisk::TearDown()
 void TestDisk::Stub()
 {
     MOCKER_CPP(&FileUtil::GetDiskCapacity, int64_t(*)(std::string & diskPath)).stubs().will(returnValue(1073741824));
+    MOCKER_CPP(&FileUtil::ValidateRawDisk, bool(*)(const std::string &, std::string &))
+        .stubs()
+        .will(returnValue(true));
 }
 
 struct AsyncTaskCtx {
