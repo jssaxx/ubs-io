@@ -19,7 +19,15 @@ target_include_directories(cli_agent_static PUBLIC ../include)
 target_link_libraries(cli_agent_static PUBLIC pthread)
 
 add_library(cli_agent_shared SHARED ${CLI_COMMON_SRCS} agent/cli_agent.c)
-set_target_properties(cli_agent_shared PROPERTIES OUTPUT_NAME cli_agent)
+set_target_properties(cli_agent_shared PROPERTIES
+    OUTPUT_NAME cli_agent
+)
+if (UBSIO_ENABLE_ORIGIN_RUNPATH)
+    set_target_properties(cli_agent_shared PROPERTIES
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()
 target_include_directories(cli_agent_shared PRIVATE common agent ../include)
 target_include_directories(cli_agent_shared PUBLIC ../include)
 target_link_libraries(cli_agent_shared PUBLIC pthread)

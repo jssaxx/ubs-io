@@ -7,7 +7,7 @@
 
 set -e
 usage() {
-    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--build_boostio <ON|OFF>] [--build_python <ON|OFF>]"
+    echo "Usage: $0 [ -h | -help ] [ -t | -type <build_type> ] [--ut=UT] [--build_boostio <ON|OFF>] [--build_python <ON|OFF>] [--origin_runpath <ON|OFF>]"
     echo "build_type: [debug, release, clean]"
     echo "Examples:"
     echo " 1 ./build.sh -t release"
@@ -27,6 +27,7 @@ BUILD_DIR=${PROJ_DIR}/Build
 BUILD_UT=OFF
 BUILD_BOOSTIO=OFF
 BUILD_PYTHON=ON
+UBSIO_ENABLE_ORIGIN_RUNPATH=OFF
 BUILD_TYPE=release
 arch=$(uname -m)
 
@@ -63,6 +64,11 @@ while true; do
             python_flag=${python_flag^^}
             [[ "$python_flag" != "ON" && "$python_flag" != "OFF" ]] && echo "Invalid build_python flag $2" && usage
             BUILD_PYTHON=$python_flag
+            shift 2 ;;
+        --origin_runpath )
+            origin_runpath_flag="${2^^}"
+            [[ "$origin_runpath_flag" != "ON" && "$origin_runpath_flag" != "OFF" ]] && usage
+            UBSIO_ENABLE_ORIGIN_RUNPATH=$origin_runpath_flag
             shift 2 ;;
         -h | -help )
             usage
@@ -109,6 +115,7 @@ fi
 CMAKE_FLAGS=""
 CMAKE_FLAGS+="-DUBSIO_BOOSTIO_INCLUDE_DIR=${BOOSTIO_INCLUDE_DIR} "
 CMAKE_FLAGS+="-DBUILD_PYTHON=${BUILD_PYTHON} "
+CMAKE_FLAGS+="-DUBSIO_ENABLE_ORIGIN_RUNPATH=${UBSIO_ENABLE_ORIGIN_RUNPATH} "
 
 if [[ "$BUILD_UT" == 'ON' ]]; then
     CMAKE_FLAGS+="-DDEBUG_UT=ON "

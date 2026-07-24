@@ -7,7 +7,7 @@
 set -e
 
 usage() {
-    echo "Usage: $0 [--san=asan]"
+    echo "Usage: $0 [--san=asan] [--origin_runpath <ON|OFF>]"
     echo "  --san=asan: Build CLI tools with ASan+UBSan"
     exit 1
 }
@@ -16,6 +16,7 @@ CURRENT_PATH="$(dirname "${BASH_SOURCE[0]}")"
 PROJ_DIR="$(realpath "${CURRENT_PATH}")"
 BUILD_DIR=${PROJ_DIR}/Build
 SANITIZER_FLAG=OFF
+UBSIO_ENABLE_ORIGIN_RUNPATH=OFF
 
 while true; do
     case "$1" in
@@ -25,6 +26,11 @@ while true; do
         --san )
             [[ "$2" != "asan" && "$2" != "asan-ubsan" ]] && echo "Invalid sanitizer $2" && usage
             SANITIZER_FLAG=ON
+            shift 2 ;;
+        --origin_runpath )
+            origin_runpath_flag="${2^^}"
+            [[ "$origin_runpath_flag" != "ON" && "$origin_runpath_flag" != "OFF" ]] && usage
+            UBSIO_ENABLE_ORIGIN_RUNPATH=$origin_runpath_flag
             shift 2 ;;
         -h | -help | --help )
             usage ;;
@@ -37,5 +43,7 @@ if [ ! -d "${BUILD_DIR}" ]; then
     mkdir -p ${BUILD_DIR}
 fi
 cd $BUILD_DIR
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" cmake -DCLI_ENABLE_ASAN_UBSAN=${SANITIZER_FLAG} ..
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" cmake \
+    -DCLI_ENABLE_ASAN_UBSAN=${SANITIZER_FLAG} \
+    -DUBSIO_ENABLE_ORIGIN_RUNPATH=${UBSIO_ENABLE_ORIGIN_RUNPATH} ..
 make -j

@@ -5,6 +5,7 @@ project(mms_cli C)
 set(CMAKE_C_STANDARD 99)
 
 option(CLI_ENABLE_ASAN_UBSAN "Build CLI tools with ASan and UBSan" OFF)
+option(UBSIO_ENABLE_ORIGIN_RUNPATH "Use $ORIGIN RUNPATH for bundled runtime libraries" OFF)
 if (CLI_ENABLE_ASAN_UBSAN)
     if (NOT CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         message(FATAL_ERROR "CLI_ENABLE_ASAN_UBSAN requires GCC or Clang.")
