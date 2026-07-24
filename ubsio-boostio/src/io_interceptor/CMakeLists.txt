@@ -29,6 +29,14 @@ add_library(ock_interceptor_shared SHARED $<TARGET_OBJECTS:ock_interceptor_objec
 target_link_libraries(ock_interceptor_shared
         pthread dl
         boundscheck_lib)
-set_target_properties(ock_interceptor_shared PROPERTIES OUTPUT_NAME "ock_interceptor")
+set_target_properties(ock_interceptor_shared PROPERTIES
+        OUTPUT_NAME "ock_interceptor"
+)
+if (UBSIO_ENABLE_ORIGIN_RUNPATH)
+        set_target_properties(ock_interceptor_shared PROPERTIES
+                BUILD_RPATH "$ORIGIN"
+                INSTALL_RPATH "$ORIGIN"
+        )
+endif()
 
 install(TARGETS ock_interceptor_shared DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
