@@ -113,6 +113,7 @@ BUILD_KV_PYTHON=OFF
 BUILD_PKG=OFF
 PKG_LIB_DIR=""
 CUSTOM_PKG_LIB_DIR=OFF
+UBSIO_ENABLE_ORIGIN_RUNPATH=OFF
 PREPARE_3RDPARTY=OFF
 BUILD_TYPE=debug
 arch=$(uname -m)
@@ -201,6 +202,10 @@ while true; do
     esac
 done
 
+if [[ "$BUILD_PKG" == "ON" ]]; then
+    UBSIO_ENABLE_ORIGIN_RUNPATH=ON
+fi
+
 if [[ "$PREPARE_3RDPARTY" == "ON" ]]; then
     bash "${PROJ_DIR}/3rdparty/prepare_sources.sh"
     exit 0
@@ -269,6 +274,7 @@ if [[ "$SANITIZER_FLAG" == 'ON' ]]; then
 else
     CMAKE_FLAGS+="-DBOOSTIO_ENABLE_ASAN_UBSAN=OFF "
 fi
+CMAKE_FLAGS+="-DUBSIO_ENABLE_ORIGIN_RUNPATH=${UBSIO_ENABLE_ORIGIN_RUNPATH} "
 
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
@@ -296,7 +302,7 @@ if [[ "$CLI_FLAG" == "ON" && "$BUILD_UT" != "ON" ]]; then
     if [[ "$SANITIZER_FLAG" == "ON" ]]; then
         CLI_BUILD_FLAGS+="--san=asan"
     fi
-    bash build.sh ${CLI_BUILD_FLAGS}
+    bash build.sh ${CLI_BUILD_FLAGS} --origin_runpath ${UBSIO_ENABLE_ORIGIN_RUNPATH}
     cd ${PROJ_DIR}/dist
     mkdir -p test_tools
     mkdir -p test_tools/bin
@@ -322,7 +328,8 @@ if [[ "$BUILD_KV" == "ON" ]]; then
         mkdir -p ${PROJ_DIR}/dist/boostio/kv/pkg
     fi
     cd ${PROJ_DIR}/../ubsio-kv/
-    bash build.sh -t ${BUILD_TYPE} --build_python ${BUILD_KV_PYTHON}
+    bash build.sh -t ${BUILD_TYPE} --build_python ${BUILD_KV_PYTHON} \
+        --origin_runpath ${UBSIO_ENABLE_ORIGIN_RUNPATH}
     cd ${PROJ_DIR}/dist
     \cp ${PROJ_DIR}/../ubsio-kv/dist/lib/* ${PROJ_DIR}/dist/boostio/kv/lib/.
     \cp ${PROJ_DIR}/../ubsio-kv/dist/include/* ${PROJ_DIR}/dist/boostio/kv/include/.

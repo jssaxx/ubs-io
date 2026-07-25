@@ -25,6 +25,12 @@ set_target_properties(ubsio_kvc PROPERTIES
     SOVERSION 1
     OUTPUT_NAME ubsio_kvc
 )
+if (UBSIO_ENABLE_ORIGIN_RUNPATH)
+    set_target_properties(ubsio_kvc PROPERTIES
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()
 
 set(TARGET_INSTALL_DIR ${OUTPUT_PATH})
 set(TARGET_INSTALL_LIB_DIR ${TARGET_INSTALL_DIR}/lib)
