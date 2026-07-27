@@ -152,7 +152,7 @@ int32_t UbsioKvCacheBatchGet(const char **keys,
 
 ## UbsioKvCacheBatchGetDirect
 
-作用：批量读取多段目标 buffer 形式的数据，适用于一个 key 对应多段输出 buffer 的场景。
+作用：预留接口，后续支持批量直通读取到显存 buffer 空间。
 
 ```c
 int32_t UbsioKvCacheBatchGetDirect(const char **keys,
@@ -169,7 +169,7 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
 | --- | --- | --- |
 | `keys` | `const char **`；数组长度为 `keysCount` | key 数组，每个 key 长度 `1-255`。 |
 | `keysCount` | `uint32_t`；`1-16384` | 批量读取的 key 数量。 |
-| `bufs` | `void ***`；二维 buffer 地址数组 | 出参，按 `keysCount x lengthsCols` 组织每个 key 的多段目标 buffer。 |
+| `bufs` | `void ***`；二维 buffer 地址数组 | 出参，按 `keysCount x lengthsCols` 组织每个 key 的多段目标显存 buffer。 |
 | `lengths` | `size_t **`；二维长度数组 | 每段目标 buffer 的长度，单位为字节。 |
 | `lengthsRows` | `uint32_t`；建议等于 `keysCount` | `lengths` 的行数。 |
 | `lengthsCols` | `uint32_t`；`> 0` | 每个 key 对应的 buffer 段数。 |

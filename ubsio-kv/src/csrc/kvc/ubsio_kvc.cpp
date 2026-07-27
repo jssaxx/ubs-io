@@ -303,48 +303,9 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
                                    int *results,
                                    uint32_t flags)
 {
-    if (UNLIKELY(keys == nullptr || bufs == nullptr || lengths == nullptr || results == nullptr)) {
-        LOG_ERROR("Invalid params, keysCount: " << keysCount);
-        return UBSIO_KVC_INVALID_PARAM;
-    }
-    if (UNLIKELY(keysCount > MAX_BATCH_OP_COUNT || keysCount < 1 || lengthsRows != keysCount || lengthsCols > MAX_KV_LAYER_NUM)) {
-        LOG_ERROR("Invalid params, keysCount: " << keysCount);
-        return UBSIO_KVC_INVALID_PARAM;
-    }
-
-    std::vector<std::string> keyVector(keysCount);
-    std::vector<int> batchResult(keysCount, UBSIO_KVC_ERR);
-    std::vector<std::vector<size_t>> lengthsVector(keysCount);
-    std::vector<std::vector<uintptr_t>> npuAddrsVector(keysCount);
-    for (uint32_t i = 0; i < keysCount; ++i) {
-        if (UNLIKELY(keys[i] == nullptr)) {
-            LOG_ERROR("Get invalid key nullptr on idx [" << i << "]");
-            return UBSIO_KVC_INVALID_PARAM;
-        }
-        if (UNLIKELY(strlen(keys[i]) > MAX_KEY_LENGTH || strlen(keys[i]) < 1)) {
-            LOG_ERROR("Get invalid key length[" << i << "]");
-            return UBSIO_KVC_INVALID_PARAM;
-        }
-        std::vector<size_t> layerLengths(lengthsCols);
-        std::vector<uintptr_t> layerAddrs(lengthsCols);
-        for (uint32_t j = 0; j < lengthsCols; ++j) {
-            if (UNLIKELY(lengths[i][j] == 0 || lengths[i][j] > MAX_KV_LAYER_LENGTH)) {
-                LOG_ERROR("Get invalid lengths[" << i << "][" << j << "], length " << lengths[i][j]);
-                return UBSIO_KVC_INVALID_PARAM;
-            }
-            if (UNLIKELY(bufs[i][j] == nullptr)) {
-                LOG_ERROR("Get invalid npuAddrs[" << i << "][" << j << "]");
-                return UBSIO_KVC_INVALID_PARAM;
-            }
-            layerLengths[j] = lengths[i][j];
-            layerAddrs[j] = reinterpret_cast<uintptr_t>(bufs[i][j]);
-        }
-        keyVector[i] = keys[i];
-        lengthsVector[i] = layerLengths;
-        npuAddrsVector[i] = layerAddrs;
-    }
-
-    return KvcInstance::Instance().Read(keyVector, npuAddrsVector, lengthsVector, results);
+    
+    LOG_ERROR("Interface reserved; currently not support direclty get data to hbm, please use UbsioKvCacheBatchGet instead.");
+    return UBSIO_KVC_ERR;
 }
 
 UBSIO_API int32_t UbsioKvCacheBatchExist(const char **keys, uint32_t keysCount, bool *results, uint32_t flags)
