@@ -3075,7 +3075,7 @@ int32_t MirrorServer::MirrorServerQueryCacheResource(ServiceContext &ctx)
     rsp.rCacheDiskCapacity = desc.diskCapacity;
     rsp.rCacheMemUsedSize = desc.memUsedSize;
     rsp.rCacheDiskUsedSize = desc.diskUsedSize;
-    if (req->includeDiskInfo) {
+    if (req != nullptr && req->includeDiskInfo) {
         DiskResourceMonitor::Query(rsp.disks, rsp.diskNum);
     }
     BioServer::Instance()->GetNetEngine()->Reply(ctx, BIO_OK, static_cast<void *>(&rsp), sizeof(CacheResourceResponse));
