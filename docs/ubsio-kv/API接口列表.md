@@ -176,7 +176,7 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
 | `results` | `int *`；数组长度为 `keysCount` | 出参，逐项返回读取结果，`0` 表示对应 key 读取成功。 |
 | `flags` | `uint32_t`；当前建议 `0` | 保留字段。 |
 
-返回值：`0` 表示接口调用成功；单个 key 的结果以 `results` 为准。
+返回值：当前为预留接口，始终返回非 `0`（失败）；后续实现后 `0` 表示接口调用成功，单个 key 的结果以 `results` 为准。
 
 ## UbsioKvCacheExist
 
