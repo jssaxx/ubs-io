@@ -117,7 +117,7 @@ int32_t CheckUpdateReady(CheckUpdateReadyRequest *req, CheckUpdateReadyResponse 
 
 int32_t GetCacheHitLocal(CacheHitResponse *rsp);
 
-int32_t CalcCacheResourceLocal(CacheResourceResponse *rsp);
+int32_t CalcCacheResourceLocal(CacheResourceRequest *req, CacheResourceResponse *rsp);
 
 int32_t GetTracePointsLocal(GetTracePointsResponse *rsp);
 

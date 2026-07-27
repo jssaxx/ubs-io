@@ -2893,9 +2893,9 @@ int32_t MirrorServer::MirrorServerProcBrokenSyncFlow(ServiceContext &ctx, ProcFl
     return BIO_OK;
 }
 
-BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
+BResult MirrorServer::CalcCacheResourceLocal(CacheResourceRequest *req, CacheResourceResponse *rsp)
 {
-    if (rsp == nullptr) {
+    if (req == nullptr || rsp == nullptr) {
         return BIO_INVALID_PARAM;
     }
     *rsp = {};
@@ -2911,7 +2911,9 @@ BResult MirrorServer::CalcCacheResourceLocal(CacheResourceResponse *rsp)
     rsp->rCacheDiskCapacity = desc.diskCapacity;
     rsp->rCacheMemUsedSize = desc.memUsedSize;
     rsp->rCacheDiskUsedSize = desc.diskUsedSize;
-    DiskResourceMonitor::Query(rsp->disks, rsp->diskNum);
+    if (req->includeDiskInfo) {
+        DiskResourceMonitor::Query(rsp->disks, rsp->diskNum);
+    }
     return BIO_OK;
 }
 

@@ -1196,7 +1196,7 @@ BResult BioClientAgent::CalcCacheResourceLocal(CacheResourceRequest &req, std::v
     CacheResourceResponse rsp;
     BResult ret = BIO_OK;
     if (IsDirectMode()) {
-        ret = cacheResourceOp(&rsp);
+        ret = cacheResourceOp(&req, &rsp);
     } else {
         ret = SendCacheResourceRequestLocal(req, rsp);
     }
