@@ -19,6 +19,15 @@ set(GTEST_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/googletest")
 if (NOT EXISTS ${GTEST_INSTALL_DIR})
     message(ERROR "GTEST_INSTALL_DIR(${GTEST_INSTALL_DIR}) is invalid")
 endif()
+find_library(GTEST_LIBRARY
+        NAMES gtest
+        PATHS
+        "${GTEST_INSTALL_DIR}/lib64"
+        "${GTEST_INSTALL_DIR}/lib"
+        NO_DEFAULT_PATH)
+if (NOT GTEST_LIBRARY)
+    message(FATAL_ERROR "libgtest was not found under ${GTEST_INSTALL_DIR}/lib64 or ${GTEST_INSTALL_DIR}/lib")
+endif()
 
 set(MOCKCPP_INSTALL_DIR "${TEST_TOOL_INSTALL_PATH}/mockcpp")
 if (NOT EXISTS ${MOCKCPP_INSTALL_DIR})
@@ -75,7 +84,7 @@ target_include_directories(bio_test PRIVATE
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group
         pthread dl rt uring bio_underfs rados
-        ${PROJECT_OUTPUT_PATH}/boostio_test_tools/googletest/lib64/libgtest.a
+        ${GTEST_LIBRARY}
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
 
