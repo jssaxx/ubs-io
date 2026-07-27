@@ -304,7 +304,7 @@ int32_t UbsioKvCacheBatchGetDirect(const char **keys,
                                    uint32_t flags)
 {
     
-    LOG_ERROR("Interface reserved; currently not support direclty get data to hbm, please use UbsioKvCacheBatchGet instead.");
+    LOG_ERROR("Interface reserved; currently not support directly get data to hbm, please use UbsioKvCacheBatchGet instead.");
     return UBSIO_KVC_ERR;
 }
 
