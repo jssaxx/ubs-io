@@ -83,7 +83,7 @@ target_include_directories(bio_test PRIVATE
 
 target_link_libraries(bio_test bio_sdk bio_server
         -Wl,--start-group
-        pthread dl rt uring bio_underfs rados
+        pthread dl rt uring bio_underfs
         ${GTEST_LIBRARY}
         ${PROJECT_OUTPUT_PATH}/boostio_test_tools/mockcpp/lib/libmockcpp.a
         -Wl,--end-group)
