@@ -177,6 +177,7 @@ private:
     BResult RebuildServices(uint32_t interval);
     BResult ReregisterNotifyCallback(uint32_t interval);
     BResult StartNotifyConsumerLocked();
+    void DestroyStartService();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -214,6 +215,9 @@ private:
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};
+#ifdef USE_CLI_TOOLS
+    void *mClientDiagnoseHandler = nullptr;
+#endif
 
     DEFINE_REF_COUNT_VARIABLE;
 };

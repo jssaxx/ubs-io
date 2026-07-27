@@ -136,6 +136,8 @@ BResult MmsKvServer::Initialize()
     mMulticast = !config->IsSingleNode() && config->GetBasicConfig().multicastSwitch;
     uint32_t ioCtxBuffLen = MmsServer::Instance()->GetConfig()->GetNetConfig().msgMaxBuffSize;
     mIoCtxBuffLen = ioCtxBuffLen;
+    mIoCtxMemSize = static_cast<uint64_t>(MmsServer::Instance()->GetConfig()->GetMemConfig().numaNum) *
+                    META_SHM_IOCTX_SIZE;
     MmsKvServer::mMaxPutItemNum =
         (ioCtxBuffLen - sizeof(IoDataRequest)) / (sizeof(IoLocDesc) + MIN_KEY_SIZE + MIN_VALUE_SIZE);
     MmsKvServer::mMaxUpdateItemNum = MmsKvServer::mMaxPutItemNum;
@@ -337,7 +339,6 @@ BResult MmsKvServer::Put(PutItems *itemList, uint32_t itemNum)
 
 BResult MmsKvServer::Get(GetItems *itemList, uint32_t itemNum)
 {
-    uint16_t index;
     BResult result = MMS_OK;
 
     if (UNLIKELY(!mServiceable.load(std::memory_order_acquire))) {
@@ -345,7 +346,7 @@ BResult MmsKvServer::Get(GetItems *itemList, uint32_t itemNum)
         return MMS_NOT_READY;
     }
 
-    for (index = 0; index < itemNum; index++) {
+    for (uint32_t index = 0; index < itemNum; index++) {
         uint64_t realLength = 0;
         GetPara para = {itemList[index].key, itemList[index].keyLen, itemList[index].offset, itemList[index].length,
                         itemList[index].value, &realLength};
@@ -672,6 +673,14 @@ BResult MmsKvServer::HandleServiceable(ServiceContext &ctx)
     return MMS_OK;
 }
 
+bool MmsKvServer::IsIoCtxRequestValid(const IoCtrlRequest &req, uint64_t minLength) const
+{
+    if (req.ioLength < minLength || req.ioLength > mIoCtxBuffLen || req.ioNumaOffset > mIoCtxMemSize) {
+        return false;
+    }
+    return req.ioLength <= mIoCtxMemSize - req.ioNumaOffset;
+}
+
 void MmsKvServer::AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
     const char *key, uint16_t keyLen, OperateType opType)
 {
@@ -705,8 +714,9 @@ BResult MmsKvServer::HandlePut(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(req->ioLength > mIoCtxBuffLen)) {
-        LOG_ERROR("Invalid io buff length:" << req->ioLength << ", must be less than " <<  mIoCtxBuffLen << ".");
+    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+        LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
+                                               << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
@@ -962,8 +972,9 @@ BResult MmsKvServer::HandleUpdate(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(req->ioLength > mIoCtxBuffLen)) {
-        LOG_ERROR("Invalid io buff length:" << req->ioLength << ", must be less than " <<  mIoCtxBuffLen << ".");
+    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+        LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
+                                               << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
@@ -1175,8 +1186,9 @@ BResult MmsKvServer::HandleDelete(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(req->ioLength > mIoCtxBuffLen)) {
-        LOG_ERROR("Invalid io buff length:" << req->ioLength << ", must be less than " <<  mIoCtxBuffLen << ".");
+    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+        LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
+                                               << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
@@ -1339,8 +1351,9 @@ BResult MmsKvServer::HandleReplace(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(req->ioLength > mIoCtxBuffLen)) {
-        LOG_ERROR("Invalid io buff length:" << req->ioLength << ", must be less than " <<  mIoCtxBuffLen << ".");
+    if (UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(IoDataRequest)))) {
+        LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
+                                               << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
@@ -2258,8 +2271,10 @@ BResult MmsKvServer::HandleRangeDelete(ServiceContext &ctx)
 
     BResult ret = MMS_OK;
     IoCtrlRequest *req = static_cast<IoCtrlRequest *>(ctx.MessageData());
-    if (UNLIKELY(req->ioLength != sizeof(RangeDeleteDataRequest))) {
-        LOG_ERROR("Invalid io buff length:" << req->ioLength << ".");
+    if (UNLIKELY(req->ioLength != sizeof(RangeDeleteDataRequest)) ||
+        UNLIKELY(!IsIoCtxRequestValid(*req, sizeof(RangeDeleteDataRequest)))) {
+        LOG_ERROR("Invalid io context, offset:" << req->ioNumaOffset << ", length:" << req->ioLength
+                                               << ", total size:" << mIoCtxMemSize << ".");
         mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
         return MMS_OK;
     }
