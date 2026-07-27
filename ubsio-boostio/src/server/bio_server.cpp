@@ -16,6 +16,7 @@
 #include <mutex>
 #include <utility>
 #include "bdm_core.h"
+#include "bdm_disk.h"
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
 #include "bio_file_util.h"
@@ -401,7 +402,10 @@ BResult BioServer::BioBdmInit()
                                                            << ".");
     ret = BdmInit();
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
-    BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
+    bool useVirtualRegions = mStandaloneMode && daemonConfig.standaloneDeviceCount != 0;
+    if (!useVirtualRegions) {
+        BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
+    }
     DiskDevices diskList = {};
     if (daemonConfig.diskList.size() > DISK_DEV_NUM) {
         LOG_ERROR("BDM disk num limit:" << DISK_DEV_NUM << ", input:" << daemonConfig.diskList.size() << ".");
@@ -417,8 +421,32 @@ BResult BioServer::BioBdmInit()
         diskList.num++;
     }
 
-    ret = BdmStart(&diskList, daemonConfig.segment);
+    bool forceNewDisk = mStandaloneMode && daemonConfig.standaloneForceNewDisk;
+    BdmDiskSetForceNew(forceNewDisk ? 1U : 0U);
+    if (useVirtualRegions) {
+        ret = BdmStartVirtual(&diskList, daemonConfig.segment, mConfig->GetStandaloneDeviceId(),
+            daemonConfig.standaloneDeviceCount);
+    } else {
+        ret = BdmStart(&diskList, daemonConfig.segment);
+    }
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
+
+    if (useVirtualRegions) {
+        for (uint32_t diskId = 0; diskId < diskList.num; ++diskId) {
+            if (BdmGetDiskStatus(diskId) != BDM_DISK_STATE_NORMAL) {
+                LOG_WARN("Skip unavailable virtual BDM capacity update, diskId:" << diskId << ".");
+                continue;
+            }
+            uint64_t totalCapacity = 0;
+            uint64_t usedCapacity = 0;
+            ret = BdmGetCapacity(diskId, &totalCapacity, &usedCapacity);
+            ChkTrue(ret == BDM_CODE_OK, BIO_ERR,
+                "Failed to get virtual BDM capacity, diskId:" << diskId << ", result:" << ret << ".");
+            ret = mConfig->UpdateStandaloneDiskCapacity(diskId, static_cast<int64_t>(totalCapacity));
+            ChkTrue(ret == BIO_OK, ret,
+                "Failed to update virtual disk capacity, diskId:" << diskId << ", capacity:" << totalCapacity << ".");
+        }
+    }
 
     DiskAllocator diskAllocator;
     diskAllocator.alloc = [](uint32_t bdmId, uint64_t flowId, uint64_t flowOffset, uint64_t len, uint64_t *chunkId) {
