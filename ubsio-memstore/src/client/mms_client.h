@@ -65,50 +65,6 @@ public:
         return mKvClient->MmsGet(itemList, itemNum);
     }
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return MMS_NOT_READY;
-        }
-        if (!mArtQuerySwitch) {
-            return MMS_NOT_READY;
-        }
-        return mKvClient->GetValuesByPrefix(prefix, valueInfoItems, itemNum);
-    }
-
-    BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return MMS_NOT_READY;
-        }
-        if (!mArtQuerySwitch) {
-            return MMS_NOT_READY;
-        }
-        return mKvClient->GetValuesByRange(start, end, valueInfoItems, itemNum);
-    }
-
-    BResult BatchDeleteByRange(const char *start, const char *end)
-    {
-        if (UNLIKELY(!mServiceable)) {
-            CLIENT_LOG_WARN("Service is not available.");
-            return MMS_NOT_READY;
-        }
-        if (!mArtQuerySwitch) {
-            return MMS_NOT_READY;
-        }
-        return mKvClient->BatchDeleteByRange(start, end);
-    }
-
-    void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
-    {
-        if (!mArtQuerySwitch) {
-            return;
-        }
-        mKvClient->FreeResources(valueInfoItems, itemNum);
-    }
-
     BResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
@@ -200,7 +156,6 @@ private:
     uint32_t mIoTimeOut;
     int32_t mLogLevel;
     bool mEnableCrc;
-    bool mArtQuerySwitch = false;
     bool mDataChangeCallbackSwitch = false;
     uint32_t mMaxMsgBuffSize;
     DataBlockInfo mBlockInfo{};

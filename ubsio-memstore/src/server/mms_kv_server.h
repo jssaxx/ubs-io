@@ -63,11 +63,6 @@ public:
     BResult Delete(DeleteItems *itemList, uint32_t itemNum);
     BResult Replace(ReplaceItems *itemList, uint32_t itemNum);
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult BatchDeleteByRange(const char *start, const char *end);
-    void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
-
     void NotifyServiceable(bool serviceable);
     void NotifyPtMigrate(uint16_t ptId);
 
@@ -112,13 +107,6 @@ private:
     void DeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
     BResult DeleteLocal(void *ioBuff, uint32_t ioLen, bool notifyDataChange = false);
 
-    BResult HandleRangeDeleteDefImpl(void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteMultiImpl(void *ioBuff, uint32_t ioLen);
-    BResult HandleRangeDeleteRemote(ServiceContext &ctx);
-    BResult HandleRangeDeleteRemoteMulti(ServiceContext &ctx);
-    void RangeDeleteRemote(uint16_t remoteId[], int32_t remoteNum, void *ioBuff, uint32_t ioLen, Callback &callback);
-    BResult RangeDeleteLocal(void *ioBuff, uint32_t ioLen);
-
     BResult HandleReplace(ServiceContext &ctx);
     BResult HandleReplaceDefImpl(void *ioBuff, uint32_t ioLen);
     BResult HandleReplaceMultiImpl(void *ioBuff, uint32_t ioLen);
@@ -143,11 +131,6 @@ private:
     BResult HandleGetSeqNoData(ServiceContext &ctx);
     BResult HandleUpdatePtVersion(ServiceContext &ctx);
 
-    BResult HandlePrefixSearch(ServiceContext &ctx);
-    BResult HandleRangeSearch(ServiceContext &ctx);
-    BResult HandleRangeDelete(ServiceContext &ctx);
-    BResult HandleSearch(ServiceContext &ctx, MmsOpCode opCode);
-    BResult ReplySearchResult(ServiceContext &ctx, ValueInfo *valueInfoItems, uint64_t itemNum);
     void AppendNotifyItem(std::vector<NotifyShmPublishItem> &items, uint32_t &itemNum,
         const char *key, uint16_t keyLen, OperateType opType);
     void NotifyDataChangeBatch(const NotifyShmPublishItem *items, uint32_t itemNum);
@@ -165,7 +148,6 @@ private:
     CmPtr mCm = nullptr;
     MmsNotifyDispatcher *mNotifyDispatcher = nullptr;
     bool mDataChangeCallbackSwitch = false;
-    bool mArtQuerySwitch = false;
     bool mSeparateMode = false;
     MmsNotifyShmPublisher mNotifyShmPublisher;
     uint32_t mIoTimeOut = NO_60;

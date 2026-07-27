@@ -212,7 +212,6 @@ MMS 软件安装前需要将前置依赖的软件安装成功，建议参考各�
     |Crc|mms.crc.switch| 数据完整性校验开关。                                                  |false| true/false                                                   |
     |Sequence|mms.sequence.switch| 消息序列化收发开关。                                                  |false| true/false                                                   |
     |Multicast|mms.multicast.switch| 组播开关。                                                       |true| true/false                                                   |
-    |Art Query|mms.art.query.switch| ART 前缀查询、范围查询、范围删除开关。关闭后不维护 ART 索引。                         |false| true/false                                                   |
     |Data Change Callback|mms.data.change.callback.switch| 数据变更通知开关。关闭后不建立 notify 链路，也不触发回调通知。                         |false| true/false                                                   |
     |CRB|mms.crb.send.cpu.start| CRB 故障恢复发送线程池绑核起始 CPU，会绑定从这个核开始的4个连续核。配置为 -1 表示不指定绑核起始 CPU。 |68| [-1, 机器最大cpu号 - 3]                                           |
     |Deployment|mms.deployment.mode| 部署方式。                                                       |separate| separate/converge                                            |

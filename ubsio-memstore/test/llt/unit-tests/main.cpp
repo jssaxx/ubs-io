@@ -73,8 +73,6 @@ int main(int argc, char *argv[])
     (void)system("sed -i 's#mms.log.level = info#mms.log.level = debug#g' ../conf/mms.conf");
     // tracer
     (void)system("sed -i 's/mms.trace.switch = false.*/mms.trace.switch = true/g' ../conf/mms.conf");
-    // Art query
-    (void)system("sed -i 's/mms.art.query.switch =.*/mms.art.query.switch = true/g' ../conf/mms.conf");
     // Multicast
     (void)system("sed -i 's/mms.multicast.switch =.*/mms.multicast.switch = false/g' ../conf/mms.conf");
     // Deployment

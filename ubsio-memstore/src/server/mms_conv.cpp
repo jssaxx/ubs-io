@@ -21,7 +21,6 @@ namespace ock {
 namespace mms {
 static MmsKvServerPtr gServer = MmsKvServer::Instance();
 static thread_local bool isSeparateMode = MmsServer::Instance()->GetConfig()->GetBasicConfig().isSeparateMode;
-static thread_local bool artQuerySwitch = MmsServer::Instance()->GetConfig()->GetBasicConfig().artQuerySwitch;
 
 inline static CResult ToCResult(const BResult ret)
 {
@@ -67,16 +66,6 @@ inline static bool GetItemValid(const GetItems &item)
         return false;
     }
     return *item.value == nullptr || item.length != 0;
-}
-
-inline static bool KeyValid(const char *key)
-{
-    return key != nullptr && strlen(key) != 0 && strlen(key) < MAX_KEY_SIZE;
-}
-
-inline static bool RangeValid(const char *start, const char *end)
-{
-    return KeyValid(start) && KeyValid(end) && strcmp(start, end) <= 0;
 }
 
 CResult MmsConv::Initialize(const MmsOptions &options, ServiceCallback service)
@@ -158,77 +147,6 @@ CResult MmsConv::Get(GetItems *itemList, uint32_t itemNum)
     }
     MMS_TRACE_END(SDK_TRACE_GET, ret);
     return ret;
-}
-
-CResult MmsConv::GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    if (isSeparateMode) {
-        return RET_MMS_PROTECTED;
-    }
-
-    if (!artQuerySwitch) {
-        return ToCResult(MMS_NOT_READY);
-    }
-
-    if (UNLIKELY(!KeyValid(prefix) || valueInfoItems == nullptr || itemNum == nullptr)) {
-        return RET_MMS_EPERM;
-    }
-
-    return ToCResult(gServer->GetValuesByPrefix(prefix, valueInfoItems, itemNum));
-}
-
-CResult MmsConv::GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    if (isSeparateMode) {
-        return RET_MMS_PROTECTED;
-    }
-
-    if (!artQuerySwitch) {
-        return ToCResult(MMS_NOT_READY);
-    }
-
-    if (UNLIKELY(!RangeValid(start, end) || valueInfoItems == nullptr || itemNum == nullptr)) {
-        return RET_MMS_EPERM;
-    }
-
-    return ToCResult(gServer->GetValuesByRange(start, end, valueInfoItems, itemNum));
-}
-
-CResult MmsConv::BatchDeleteByRange(const char *start, const char *end)
-{
-    MMS_TRACE_START(SDK_TRACE_DELETE);
-    if (isSeparateMode) {
-        return RET_MMS_PROTECTED;
-    }
-
-    if (!artQuerySwitch) {
-        return ToCResult(MMS_NOT_READY);
-    }
-
-    if (UNLIKELY(!RangeValid(start, end))) {
-        return RET_MMS_EPERM;
-    }
-
-    CResult ret = ToCResult(gServer->BatchDeleteByRange(start, end));
-    MMS_TRACE_END(SDK_TRACE_DELETE, ret);
-    return ret;
-}
-
-void MmsConv::FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
-{
-    if (isSeparateMode) {
-        return;
-    }
-
-    if (!artQuerySwitch) {
-        return;
-    }
-
-    if (valueInfoItems == nullptr || *valueInfoItems == nullptr || itemNum == 0) {
-        return;
-    }
-
-    gServer->FreeResources(valueInfoItems, itemNum);
 }
 
 CResult MmsConv::Update(UpdateItems *itemList, uint32_t itemNum)
@@ -346,21 +264,6 @@ CResult MmsGet(GetItems *itemList, uint32_t itemNum)
     return ock::mms::MmsConv::Get(itemList, itemNum);
 }
 
-CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    return ock::mms::MmsConv::GetValuesByPrefix(prefix, valueInfoItems, itemNum);
-}
-
-CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum)
-{
-    return ock::mms::MmsConv::GetValuesByRange(start, end, valueInfoItems, itemNum);
-}
-
-void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum)
-{
-    return ock::mms::MmsConv::FreeResources(valueInfoItems, itemNum);
-}
-
 CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
 {
     return ock::mms::MmsConv::Update(itemList, itemNum);
@@ -369,11 +272,6 @@ CResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
 CResult MmsDelete(DeleteItems *itemList, uint32_t itemNum)
 {
     return ock::mms::MmsConv::Delete(itemList, itemNum);
-}
-
-CResult MmsBatchDeleteByRange(const char *start, const char *end)
-{
-    return ock::mms::MmsConv::BatchDeleteByRange(start, end);
 }
 
 CResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum)

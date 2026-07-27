@@ -637,7 +637,6 @@ BResult MmsServer::MmsCacheInit()
         return ret;
     }
 
-    mCache->SetArtSwitch(mConfig->GetBasicConfig().artQuerySwitch);
     mCache->ResetLogLevel(mConfig->GetBasicConfig().logLevel);
     return MMS_OK;
 }

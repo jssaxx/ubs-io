@@ -167,7 +167,6 @@ void MmsConfig::LoadDefaultBasicConf()
     AddStrConf(SEQUENCE_SWITCH, VStrBoolRange::Create(SEQUENCE_SWITCH.first));
     AddStrConf(MULTICAST_SWITCH, VStrBoolRange::Create(MULTICAST_SWITCH.first));
     AddStrConf(DATA_CHANGE_CALLBACK_SWITCH, VStrBoolRange::Create(DATA_CHANGE_CALLBACK_SWITCH.first));
-    AddStrConf(ART_QUERY_SWITCH, VStrBoolRange::Create(ART_QUERY_SWITCH.first));
     AddStrConf(DEPLOYMENT_MODE, VStrEnum::Create(DEPLOYMENT_MODE.first, "separate||converge"));
 }
 
@@ -478,7 +477,6 @@ BResult MmsConfig::AutoConfigBasic(const ConfigurationPtr &conf)
     mBasicConfig.sequenceSwitch = conf->GetStr(SEQUENCE_SWITCH.first) == "true";
     mBasicConfig.multicastSwitch = conf->GetStr(MULTICAST_SWITCH.first) == "true";
     mBasicConfig.dataChangeCallbackSwitch = conf->GetStr(DATA_CHANGE_CALLBACK_SWITCH.first) == "true";
-    mBasicConfig.artQuerySwitch = conf->GetStr(ART_QUERY_SWITCH.first) == "true";
 
     auto deployment = conf->GetStr(DEPLOYMENT_MODE.first);
     if (deployment == "separate") {

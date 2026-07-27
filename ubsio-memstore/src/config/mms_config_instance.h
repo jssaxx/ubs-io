@@ -33,7 +33,6 @@ const auto NOTIFY_SHM_WORKER_NUM = std::make_pair("mms.notify.shm.worker.num", 1
 const auto NOTIFY_SHM_WORKER_CPUSET = std::make_pair("mms.notify.shm.worker.cpuset", "54-54");
 const auto NOTIFY_SHM_BUSY_POLLING = std::make_pair("mms.notify.shm.busy_polling", "true");
 const auto CRB_SEND_CPUSET = std::make_pair("mms.crb.send.cpuset", "54-55");
-const auto ART_QUERY_SWITCH = std::make_pair("mms.art.query.switch", "false");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
 
 const auto NET_RPC_IP_MASK = std::make_pair("mms.net.rpc.ip_mask", "127.0.0.1/24");
@@ -137,7 +136,6 @@ public:
         bool sequenceSwitch = false;
         bool multicastSwitch = false;
         bool dataChangeCallbackSwitch = false;
-        bool artQuerySwitch = true;
         bool isSeparateMode = true;
     };
 

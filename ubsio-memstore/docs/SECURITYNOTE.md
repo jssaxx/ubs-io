@@ -47,7 +47,6 @@
 | 依赖三方库      | https://gitcode.com/openeuler/libboundscheck.git | CMakeLists.txt         | https://gitcode.com/openeuler/libboundscheck.git | 安全边界检查库依赖  |
 | 依赖三方库      | https://gitcode.com/openeuler/ubs-comm.git  | CMakeLists.txt         | https://gitcode.com/openeuler/ubs-comm.git  | 通信库依赖      |
 | 依赖三方库      | https://gitcode.com/GitHub_Trending/sp/spdlog.git | CMakeLists.txt         | https://gitcode.com/GitHub_Trending/sp/spdlog.git | 日志框架依赖      |
-| 依赖三方库      | https://gitcode.com/gh_mirrors/li/libart.git | CMakeLists.txt         | https://gitcode.com/gh_mirrors/li/libart.git | ART索引库依赖    |
 | 依赖三方库      | https://gitcode.com/gh_mirrors/zo/zookeeper.git | CMakeLists.txt         | https://gitcode.com/gh_mirrors/zo/zookeeper.git | Zookeeper依赖   |
 | license 地址 | http://license.coscl.org.cn/MulanPSL2       | 多处源码文件头            | http://license.coscl.org.cn/MulanPSL2       | licensefile   |
 | license 地址 | http://www.apache.org/licenses/LICENSE-2.0 | 多处源码文件头            | http://www.apache.org/licenses/LICENSE-2.0  | Apache许可证声明  |

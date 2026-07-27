@@ -55,14 +55,6 @@ public:
 
     BResult MmsGet(GetItems *itemList, uint32_t itemNum);
 
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-
-    BResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
-
-    BResult BatchDeleteByRange(const char *start, const char *end);
-
-    void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
-
     BResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum);
 
     BResult MmsDelete(DeleteItems *itemList, uint32_t itemNum);
@@ -76,12 +68,6 @@ private:
     void FreeBlocks(std::vector<IOCtxItem> &ctxItems);
     void HandleUpdatePtVersion(uint64_t ptVersion);
     BResult UpdateClientPtVersion();
-    BResult SendPrefixSearchReq(const char *prefix, PrefixSearchRsp &rsp);
-    BResult SendRangeSearchReq(const char *start, const char *end, PrefixSearchRsp &rsp);
-    BResult SendRangeDeleteReq(const char *start, const char *end);
-    BResult ReceiveSearchResult(PrefixSearchRsp &rsp, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult FillValueInfoItems(void *dataPtr, PrefixSearchRsp &rsp, ValueInfo **valueInfoItems, uint64_t *itemNum);
-
 private:
     uint32_t mIoTimeOut = NO_60;
     std::atomic<uint64_t> mPtVersion {NO_1};

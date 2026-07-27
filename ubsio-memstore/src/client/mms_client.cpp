@@ -418,7 +418,6 @@ BResult MmsClient::ClientBasicInit(void)
     mIoTimeOut = rsp.ioTimeOut;
     mLogLevel = rsp.logLevel;
     mEnableCrc = rsp.enableCrc;
-    mArtQuerySwitch = rsp.artQuerySwitch;
     mDataChangeCallbackSwitch = rsp.dataChangeCallbackSwitch;
     mServerPid = static_cast<uint32_t>(rsp.serverPid);
     mMaxMsgBuffSize = rsp.maxMsgBuffSize;

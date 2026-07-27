@@ -26,8 +26,6 @@
 #include "mms_lock.h"
 #include "mms_mem_allocator.h"
 #include "mms_mem_mgr.h"
-#include "art_index/art_range.h"
-#include "art_index/lsm_art_tree.h"
 
 namespace ock {
 namespace mms {
@@ -62,7 +60,6 @@ struct IndexValue {
     uint32_t version;
     uint64_t totalDataLen;
     uint64_t blockOffset;
-    BucketNode *bucketNode;
 };
 
 struct DataHeader {
@@ -179,16 +176,11 @@ public:
     BResult Update(const UpdatePara &para);
     BResult Delete(const char *key, uint16_t keyLen, uint32_t version);
     BResult Replace(const ReplacePara &para);
-    void SetArtSwitch(bool artSwitch);
 
     // 返回实际读取到的字节数
     uint64_t GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
     uint64_t GetDataAddrFromBlock(IndexValue *indexValue, char **data, uint64_t offset, uint64_t dataLen);
     void ClearDeletedData();
-
-    BResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetValuesByRange(const char *keyStart, const char *keyEnd, ValueInfo **valueInfoItems, uint64_t *itemNum);
-    BResult GetKeysByRange(const char *keyStart, const char *keyEnd, std::vector<std::string> &matchedKeys);
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -204,8 +196,7 @@ private:
 
     BResult PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen, uint16_t preferNumaId);
 
-    BResult CreatePutIndexValue(const PutPara &para, BucketNode *bucketNode, uint16_t preferNumaId,
-                                IndexValueCtx &ctx);
+    BResult CreatePutIndexValue(const PutPara &para, uint16_t preferNumaId, IndexValueCtx &ctx);
 
     void FreeIndexValue(const IndexValueCtx &ctx);
 
@@ -247,10 +238,6 @@ private:
     uint32_t mTotalBucketCount = 0;
     std::vector<CacheShard> mShards;
     std::atomic<bool> mIsRecovering{false};
-
-    LsmArtTree mLsmArtTree;
-    ReadWriteLock mArtValueLock;
-    bool mArtSwitch = true;
 
     DEFINE_REF_COUNT_VARIABLE;
 };

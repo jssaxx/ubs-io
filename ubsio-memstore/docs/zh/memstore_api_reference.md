@@ -13,8 +13,6 @@ UBS MemStore 主体使用 C/C++ 开发，对外提供 C 语言接口。调用方
 - key 统一使用 `const char *key + uint16_t keyLen` 表示，`keyLen` 不包含字符串结束符 `'\0'`。
 - key 最大有效长度为 31 字节，超过该长度的请求会返回入参错误。
 - `PutItems::isNotify` 和 `DeleteItems::isNotify` 用于控制单条 key 是否触发数据变更通知。全局通知开关关闭或 `isNotify` 为 0 时，不触发通知。
-- 前缀查询、范围查询和范围删除受 `mms.art.query.switch` 控制。开关关闭时，相关接口返回不可用错误。
-- 查询接口返回的资源必须使用 `MmsFreeResources` 释放。
 
 ## 错误码
 
@@ -168,24 +166,6 @@ typedef struct {
 |`keyLen`|输入|key 长度，不包含 `'\0'`。|
 |`isNotify`|输入|是否触发数据变更通知。0 表示不通知；非 0 表示通知。|
 |`result`|输出|单条 item 的执行结果。|
-
-### ValueInfo
-
-前缀查询和范围查询返回的 key/value 描述。
-
-```c
-typedef struct {
-    char *key;
-    char *value;
-    uint64_t length;
-} ValueInfo;
-```
-
-|字段|说明|
-|--|--|
-|`key`|匹配到的 key。|
-|`value`|匹配到的 value。|
-|`length`|value 长度。|
 
 ### 数据变更通知类型
 
@@ -431,130 +411,6 @@ CResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum);
 |--|--|
 |`RET_MMS_OK`|全部 item 替换成功。|
 |其它|至少一个 item 替换失败，返回最后一个失败 item 的错误码。|
-
-## MmsGetValuesByPrefix
-
-### 功能
-
-按 key 前缀查询匹配到的 key/value。
-
-> [!TIP]
-> 前缀查询会一次性返回所有匹配数据。如果匹配数据量过大，可能导致内存压力过高。调用方应确保查询结果规模可控。
-
-### 函数原型
-
-```c
-CResult MmsGetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-```
-
-### 参数
-
-|参数|方向|说明|
-|--|--|--|
-|`prefix`|输入|key 前缀。|
-|`valueInfoItems`|输出|匹配结果数组。|
-|`itemNum`|输出|匹配结果数量。|
-
-### 返回值
-
-|返回值|说明|
-|--|--|
-|`RET_MMS_OK`|查询成功。|
-|其它|查询失败。|
-
-### 注意事项
-
-- 该接口受 `mms.art.query.switch` 控制。
-- 成功返回且 `*valueInfoItems != NULL` 时，调用方必须调用 `MmsFreeResources` 释放资源。
-
-## MmsGetValuesByRange
-
-### 功能
-
-按 key 范围查询匹配到的 key/value，范围包含 `start` 和 `end`。
-
-> [!TIP]
-> 范围查询会一次性返回所有匹配数据。如果匹配数据量过大，可能导致内存压力过高。调用方应确保查询结果规模可控。
-
-### 函数原型
-
-```c
-CResult MmsGetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
-```
-
-### 参数
-
-|参数|方向|说明|
-|--|--|--|
-|`start`|输入|范围起始 key，包含该 key。|
-|`end`|输入|范围结束 key，包含该 key，要求 `start <= end`。|
-|`valueInfoItems`|输出|匹配结果数组。|
-|`itemNum`|输出|匹配结果数量。|
-
-### 返回值
-
-|返回值|说明|
-|--|--|
-|`RET_MMS_OK`|查询成功。|
-|其它|查询失败。|
-
-### 注意事项
-
-- 该接口受 `mms.art.query.switch` 控制。
-- 成功返回且 `*valueInfoItems != NULL` 时，调用方必须调用 `MmsFreeResources` 释放资源。
-
-## MmsBatchDeleteByRange
-
-### 功能
-
-按 key 范围删除匹配到的 key/value，范围包含 `start` 和 `end`。
-
-### 函数原型
-
-```c
-CResult MmsBatchDeleteByRange(const char *start, const char *end);
-```
-
-### 参数
-
-|参数|方向|说明|
-|--|--|--|
-|`start`|输入|范围起始 key，包含该 key。|
-|`end`|输入|范围结束 key，包含该 key，要求 `start <= end`。|
-
-### 返回值
-
-|返回值|说明|
-|--|--|
-|`RET_MMS_OK`|删除成功。|
-|其它|删除失败。|
-
-### 注意事项
-
-该接口受 `mms.art.query.switch` 控制。
-
-## MmsFreeResources
-
-### 功能
-
-释放 `MmsGetValuesByPrefix` 或 `MmsGetValuesByRange` 返回的资源。
-
-### 函数原型
-
-```c
-void MmsFreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
-```
-
-### 参数
-
-|参数|方向|说明|
-|--|--|--|
-|`valueInfoItems`|输入/输出|查询接口返回的结果数组。释放后会置空。|
-|`itemNum`|输入|结果数组元素数量。|
-
-### 返回值
-
-无。
 
 ## MmsStartCatchUpTask
 
