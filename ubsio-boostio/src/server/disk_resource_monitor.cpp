@@ -75,9 +75,9 @@ DiskIoSnapshot ReadDiskIoSnapshot(const std::string &diskPath, const std::string
         writesCompleted >> writesMerged >> result.sectorsWritten;
     result.valid = !statFile.fail();
     if (!result.valid) {
-        int error = errno;
         LOG_WARN("Parse disk statistics failed, diskPath:" << diskPath << ", sysPath:" << sysPath <<
-            ", errno:" << error << ", error:" << std::strerror(error) << ".");
+            ", expectedFields:7, streamState:" << static_cast<uint32_t>(statFile.rdstate()) <<
+            ", eof:" << statFile.eof() << ", fail:" << statFile.fail() << ", bad:" << statFile.bad() << ".");
     }
     return result;
 }
