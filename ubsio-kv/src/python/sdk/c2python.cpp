@@ -185,6 +185,21 @@ py::dict PyKvcKvGetResourceInfo()
     result["diskUsed"] = info.diskUsed;
     result["memCap"] = info.memCap;
     result["memUsed"] = info.memUsed;
+    result["diskNum"] = info.diskNum;
+    result["faultDiskNum"] = info.faultDiskNum;
+    py::list disks;
+    for (uint32_t index = 0; index < info.diskNum; ++index) {
+        const auto &diskInfo = info.disks[index];
+        py::dict disk;
+        disk["path"] = diskInfo.path;
+        disk["status"] = diskInfo.status;
+        disk["readBandwidth"] = diskInfo.readBandwidth;
+        disk["writeBandwidth"] = diskInfo.writeBandwidth;
+        disk["totalBandwidth"] = diskInfo.totalBandwidth;
+        disk["bandwidthValid"] = diskInfo.bandwidthValid != 0;
+        disks.append(disk);
+    }
+    result["disks"] = disks;
     return result;
 }
 

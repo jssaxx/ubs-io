@@ -617,6 +617,18 @@ CResult BioService::BioShowCacheResource(std::vector<CacheResourcesDesc> &nodeDe
     return ToCResult(ret);
 }
 
+CResult BioService::BioShowLocalCacheResource(CacheResourcesDesc &nodeDesc)
+{
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+    BResult ret = gClient->QueryLocalCacheResource(nodeDesc);
+    if (UNLIKELY(ret != BIO_OK)) {
+        CLIENT_LOG_ERROR("Query local cache resource failed ret: " << ret);
+    }
+    return ToCResult(ret);
+}
+
 CResult BioService::BioShowCacheHitRatio(std::unordered_map<uint16_t, CacheHitDesc> &nodeDesc)
 {
     if (UNLIKELY(!gClient->Ready())) {
@@ -735,6 +747,10 @@ static void BioCacheResourceCalc(CacheResourcesDesc **nodeDesc, const std::vecto
         (*nodeDesc)[i].wCacheDiskUsedSize = nodeInfo.wCacheDiskUsedSize;
         (*nodeDesc)[i].rCacheMemUsedSize = nodeInfo.rCacheMemUsedSize;
         (*nodeDesc)[i].rCacheDiskUsedSize = nodeInfo.rCacheDiskUsedSize;
+        (*nodeDesc)[i].diskNum = nodeInfo.diskNum > DISK_RESOURCE_MAX_NUM ? DISK_RESOURCE_MAX_NUM : nodeInfo.diskNum;
+        for (uint16_t diskIndex = 0; diskIndex < (*nodeDesc)[i].diskNum; ++diskIndex) {
+            (*nodeDesc)[i].disks[diskIndex] = nodeInfo.disks[diskIndex];
+        }
         i++;
     }
 }
@@ -781,6 +797,22 @@ CResult BioShowCacheResource(CacheResourcesDesc **nodeDesc, uint64_t *nodeNum)
 
     BioCacheResourceCalc(nodeDesc, nodeDescription);
     return ret;
+}
+
+CResult BioShowLocalCacheResource(CacheResourcesDesc *nodeDesc)
+{
+    if (UNLIKELY(nodeDesc == nullptr)) {
+        return RET_CACHE_EPERM;
+    }
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        if (UNLIKELY(gBioCacheMap.empty())) {
+            return RET_CACHE_NOT_FOUND;
+        }
+    }
+
+    *nodeDesc = {};
+    return BioService::BioShowLocalCacheResource(*nodeDesc);
 }
 
 static void BioCacheHitRadioCalc(CacheHitFinalDesc *desc, CacheHitFinalDesc **nodeDesc,

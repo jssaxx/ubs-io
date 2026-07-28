@@ -24,6 +24,49 @@ int32_t UbsioKvCacheInit(int32_t devId);
 
 返回值：`0` 表示初始化成功，非 `0` 表示失败。
 
+## UbsioGetResourceInfo
+
+作用：查询当前进程管理的写缓存和磁盘资源。集群模式不查询其他节点；standalone 模式只返回本进程选择并管理的盘和缓存资源。
+
+```c
+#define UBSIO_RESOURCE_DISK_PATH_MAX_SIZE (256)
+#define UBSIO_RESOURCE_MAX_DISK_NUM (16)
+
+typedef struct {
+    uint16_t status;
+    char path[UBSIO_RESOURCE_DISK_PATH_MAX_SIZE];
+    uint64_t readBandwidth;
+    uint64_t writeBandwidth;
+    uint64_t totalBandwidth;
+    uint8_t bandwidthValid;
+    uint8_t reserved[7];
+} UbsioDiskInfo;
+
+typedef struct {
+    uint64_t diskCap;
+    uint64_t diskUsed;
+    uint64_t memCap;
+    uint64_t memUsed;
+    uint32_t diskNum;
+    uint32_t faultDiskNum;
+    UbsioDiskInfo disks[UBSIO_RESOURCE_MAX_DISK_NUM];
+} UbsioResourceInfo;
+
+int32_t UbsioGetResourceInfo(UbsioResourceInfo *info);
+```
+
+- `info` 为输出参数，不能为 `NULL`。
+- `diskCap`、`diskUsed`、`memCap` 和 `memUsed` 为当前进程管理的 WCache 资源，单位为字节。
+- `diskNum` 为 `disks` 中的有效磁盘数量，最大为 `UBSIO_RESOURCE_MAX_DISK_NUM`。
+- `faultDiskNum` 为当前进程管理的故障盘总数。
+- `disks` 只包含本进程管理的盘，以 `path` 标识。
+- `status` 为磁盘状态，`0` 表示正常，`1` 表示故障。
+- `readBandwidth`、`writeBandwidth` 和 `totalBandwidth` 通过 Linux 块设备统计进行 200 ms 实时采样，单位为字节/秒。指定整盘时统计整盘 I/O，指定分区时只统计该分区 I/O；统计包含该块设备上的非 BoostIO I/O。查询含磁盘时接口通常至少耗时 200 ms。
+- `bandwidthValid` 表示带宽采样是否成功；为 `0` 时带宽字段中的 `0` 不能解释为磁盘空闲。
+- sysfs 路径解析或统计文件打开/解析失败时会记录 `WARN` 日志。
+
+调用该接口前应先完成 `UbsioKvCacheInit`。返回 `0` 表示查询成功；`info` 为 `NULL` 时返回 `UBSIO_KVC_INVALID_PARAM`；其他失败返回 `UBSIO_KVC_ERR`。
+
 ## UbsioKvCacheRegisterMetaEventCallback
 
 作用：注册 UBS IO 元数据事件回调，供上层同步 SSD recovery 或淘汰删除事件。

@@ -3232,7 +3232,7 @@ BResult MirrorClient::RebuildPtView()
 
 BResult MirrorClient::QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &nodeDesc)
 {
-    CacheResourceRequest req;
+    CacheResourceRequest req{};
     req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
 
     BResult ret = BIO_ERR;
@@ -3243,6 +3243,22 @@ BResult MirrorClient::QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &no
         CLIENT_LOG_ERROR("Send query cache resource request failed, ret:" << ret);
     }
     return ret;
+}
+
+BResult MirrorClient::QueryLocalCacheResourceImpl(CacheResourcesDesc &nodeDesc)
+{
+    CacheResourceRequest req{};
+    req.comm = { MESSAGE_MAGIC, 0, 0, mLocalNid.VNodeId(), getpid() };
+    req.includeDiskInfo = true;
+
+    std::vector<CacheResourcesDesc> localResources;
+    BResult ret = agent::BioClientAgent::Instance()->CalcCacheResourceLocal(req, localResources);
+    if (UNLIKELY(ret != BIO_OK || localResources.empty())) {
+        CLIENT_LOG_ERROR("Query local cache resource failed, ret:" << ret << ".");
+        return ret == BIO_OK ? BIO_ERR : ret;
+    }
+    nodeDesc = localResources.front();
+    return BIO_OK;
 }
 
 BResult MirrorClient::SendCacheResourceRequest(CacheResourceRequest &req, std::vector<CacheResourcesDesc> &nodeDesc)
@@ -3369,7 +3385,7 @@ void MirrorClient::CalcCacheResourceRemote(CacheResourceRequest &req, std::vecto
             CLIENT_LOG_ERROR("Send calc cache resource request failed, ret: " << ret << ". nodeId: " << id);
             continue;
         }
-        CacheResourcesDesc tempDesc;
+        CacheResourcesDesc tempDesc{};
         tempDesc.nodeId = rsp.nodeId;
         tempDesc.rCacheMemCapacity = rsp.rCacheMemCapacity;
         tempDesc.rCacheDiskCapacity = rsp.rCacheDiskCapacity;
@@ -3379,6 +3395,10 @@ void MirrorClient::CalcCacheResourceRemote(CacheResourceRequest &req, std::vecto
         tempDesc.rCacheMemUsedSize = rsp.rCacheMemUsedSize;
         tempDesc.wCacheMemUsedSize = rsp.wCacheMemUsedSize;
         tempDesc.wCacheDiskUsedSize = rsp.wCacheDiskUsedSize;
+        tempDesc.diskNum = rsp.diskNum > DISK_RESOURCE_MAX_NUM ? DISK_RESOURCE_MAX_NUM : rsp.diskNum;
+        for (uint16_t index = 0; index < tempDesc.diskNum; ++index) {
+            tempDesc.disks[index] = rsp.disks[index];
+        }
         nodeDesc.push_back(tempDesc);
     }
 }

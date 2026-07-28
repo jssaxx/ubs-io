@@ -1627,6 +1627,18 @@ TEST_F(TestBioServer, test_start_server_get_cache_resource_local)
     EXPECT_EQ(ret, BIO_OK);
 }
 
+TEST_F(TestBioServer, test_calc_cache_resource_local_without_disk_info)
+{
+    MirrorServerPtr mirror = BioServer::Instance()->GetMirrorServer();
+    CacheResourceRequest req{};
+    CacheResourceResponse rsp{};
+
+    EXPECT_EQ(mirror->CalcCacheResourceLocal(nullptr, &rsp), BIO_INVALID_PARAM);
+    EXPECT_EQ(mirror->CalcCacheResourceLocal(&req, nullptr), BIO_INVALID_PARAM);
+    EXPECT_EQ(mirror->CalcCacheResourceLocal(&req, &rsp), BIO_OK);
+    EXPECT_EQ(rsp.diskNum, 0);
+}
+
 TEST_F(TestBioServer, test_get_trace_data_success)
 {
     LOG_INFO("test_get_trace_data_success");

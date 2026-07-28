@@ -206,6 +206,8 @@ public:
 
     BResult QueryCacheResourceImpl(std::vector<CacheResourcesDesc> &nodeDesc);
 
+    BResult QueryLocalCacheResourceImpl(CacheResourcesDesc &nodeDesc);
+
     DEFINE_REF_COUNT_FUNCTIONS
 
     std::vector<uint16_t> ListLocalAffinityPt();

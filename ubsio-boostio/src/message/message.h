@@ -630,6 +630,8 @@ typedef struct {
 /* Cache Resource */
 typedef struct {
     RequestComm comm;
+    bool includeDiskInfo;
+    uint8_t reserved[7];
 } CacheResourceRequest;
 
 typedef struct {
@@ -642,6 +644,8 @@ typedef struct {
     uint64_t wCacheMemUsedSize;
     uint64_t wCacheDiskUsedSize;
     uint16_t nodeId;
+    uint16_t diskNum;
+    DiskResourcesDesc disks[DISK_RESOURCE_MAX_NUM];
 } CacheResourceResponse;
 
 /* Cache Hit */

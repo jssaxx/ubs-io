@@ -10,7 +10,9 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 #include "ubsio_kvc_log.h"
 #include <ubsio_kvc_err.h>
@@ -52,21 +54,31 @@ UBSIO_API int32_t UbsioGetResourceInfo(UbsioResourceInfo *info)
         return UBSIO_KVC_ERR;
     }
 
-    CacheResourcesDesc *nodeDesc = nullptr;
-    uint64_t nodeNum = 0;
-    CResult bioRet = DlBioSdkApi::ShowCacheResource(&nodeDesc, &nodeNum);
+    CacheResourcesDesc localResource{};
+    CResult bioRet = DlBioSdkApi::ShowLocalCacheResource(&localResource);
     if (UNLIKELY(bioRet != RET_CACHE_OK)) {
-        LOG_ERROR("Query write cache resource failed, ret:" << bioRet << ".");
+        LOG_ERROR("Query local write cache resource failed, ret:" << bioRet << ".");
         return UBSIO_KVC_ERR;
     }
 
-    for (uint64_t index = 0; index < nodeNum; ++index) {
-        info->diskCap += nodeDesc[index].wCacheDiskCapacity;
-        info->diskUsed += nodeDesc[index].wCacheDiskUsedSize;
-        info->memCap += nodeDesc[index].wCacheMemCapacity;
-        info->memUsed += nodeDesc[index].wCacheMemUsedSize;
+    info->diskCap = localResource.wCacheDiskCapacity;
+    info->diskUsed = localResource.wCacheDiskUsedSize;
+    info->memCap = localResource.wCacheMemCapacity;
+    info->memUsed = localResource.wCacheMemUsedSize;
+    info->diskNum = std::min<uint32_t>(localResource.diskNum, UBSIO_RESOURCE_MAX_DISK_NUM);
+    for (uint32_t diskIndex = 0; diskIndex < info->diskNum; ++diskIndex) {
+        const auto &source = localResource.disks[diskIndex];
+        auto &target = info->disks[diskIndex];
+        target.status = source.status;
+        target.readBandwidth = source.readBandwidth;
+        target.writeBandwidth = source.writeBandwidth;
+        target.totalBandwidth = source.totalBandwidth;
+        target.bandwidthValid = source.bandwidthValid;
+        std::snprintf(target.path, sizeof(target.path), "%s", source.path);
+        if (target.status != 0) {
+            ++info->faultDiskNum;
+        }
     }
-    DlBioSdkApi::FreeCacheResource(&nodeDesc, nodeNum);
     return UBSIO_KVC_OK;
 }
 
