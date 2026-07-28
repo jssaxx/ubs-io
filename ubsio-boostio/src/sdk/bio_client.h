@@ -171,6 +171,11 @@ public:
         return mMirror->QueryCacheResourceImpl(nodeDesc);
     }
 
+    inline BResult QueryLocalCacheResource(CacheResourcesDesc &nodeDesc)
+    {
+        return mMirror->QueryLocalCacheResourceImpl(nodeDesc);
+    }
+
     inline CacheDescriptor Query(const uint64_t tenantId)
     {
         mLock.LockRead();

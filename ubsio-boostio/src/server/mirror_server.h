@@ -121,7 +121,7 @@ public:
     BResult CheckUpdateReady(CheckUpdateReadyRequest &req, CheckUpdateReadyResponse &rsp);
     BResult SyncData(SyncDataRequest &req);
     BResult GetCacheHitLocal(CacheHitResponse *rsp);
-    BResult CalcCacheResourceLocal(CacheResourceResponse *rsp);
+    BResult CalcCacheResourceLocal(CacheResourceRequest *req, CacheResourceResponse *rsp);
     BResult GetTracePointsLocal(GetTracePointsResponse *rsp);
 
     BResult GetFlowGlobEvictOffset(uint16_t ptId, uint64_t flowId, uint64_t &flowOffset);

@@ -74,6 +74,8 @@ typedef enum {
 #define MAX_TRACE_NAME_LEN (64)
 #define TRACE_MAX_NUM (256)
 #define DISK_PATH_MAX_SIZE (128)
+#define DISK_RESOURCE_MAX_NUM (16)
+#define DISK_RESOURCE_PATH_MAX_SIZE (256)
 #define CHUNK_ADDR_MAX_SIZE (2)
 
 typedef void (*BioLoadCallback)(void *context, int32_t result);
@@ -134,6 +136,17 @@ typedef struct {
 } CacheSpaceDesc;
 
 typedef struct {
+    uint16_t diskId;
+    uint16_t status;
+    char path[DISK_RESOURCE_PATH_MAX_SIZE];
+    uint64_t readBandwidth;
+    uint64_t writeBandwidth;
+    uint64_t totalBandwidth;
+    uint8_t bandwidthValid;
+    uint8_t reserved[7];
+} DiskResourcesDesc;
+
+typedef struct {
     uint16_t nodeId;
     uint64_t rCacheMemCapacity;
     uint64_t rCacheDiskCapacity;
@@ -143,6 +156,8 @@ typedef struct {
     uint64_t rCacheDiskUsedSize;
     uint64_t wCacheMemUsedSize;
     uint64_t wCacheDiskUsedSize;
+    uint16_t diskNum;
+    DiskResourcesDesc disks[DISK_RESOURCE_MAX_NUM];
 } CacheResourcesDesc;
 
 typedef struct {
@@ -231,6 +246,14 @@ CResult BioBatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioShowCacheResource(CacheResourcesDesc **nodeDesc, uint64_t *nodeNum);
+
+/**
+ * @brief: Show cache and disk resource information managed by the local process
+ *
+ * @param[out]: nodeDesc: local cache and disk resource description
+ * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+ */
+CResult BioShowLocalCacheResource(CacheResourcesDesc *nodeDesc);
 
 /**
  * @brief: Free cache hit resources

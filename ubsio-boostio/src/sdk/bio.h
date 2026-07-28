@@ -277,6 +277,14 @@ public:
     static CResult BioShowCacheResource(std::vector<CacheResourcesDesc> &nodeDesc);
 
     /**
+     * @brief: Show cache and disk resource information for the local process
+     *
+     * @param[out]: nodeDesc: local cache and disk resource description
+     * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
+     */
+    static CResult BioShowLocalCacheResource(CacheResourcesDesc &nodeDesc);
+
+    /**
      * @brief: Show cache hit ratio information
      *
      * @param[out]: nodeDesc: Cache hit count information array

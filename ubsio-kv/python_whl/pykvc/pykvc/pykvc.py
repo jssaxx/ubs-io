@@ -5,10 +5,10 @@
 import atexit
 
 global KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
-    KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
+    KvGetResourceInfo, KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
     NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead
-from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvBatchPut,
-                          KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
+from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvGetResourceInfo,
+                          KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
 _initialized = False
@@ -39,6 +39,19 @@ def exit():
 
 
 atexit.register(exit)
+
+
+def get_resource_info() -> dict:
+    """
+    Get local-process write cache resource usage and per-disk telemetry.
+    Remote nodes are not queried.
+    Disk bandwidth is measured in bytes per second. bandwidthValid
+    distinguishes a valid zero value from a collection failure.
+    :return: dictionary containing diskCap, diskUsed, memCap, memUsed,
+             diskNum, faultDiskNum and disks;
+             an empty dictionary on failure
+    """
+    return KvGetResourceInfo()
 
 
 def put(key, value) -> int:

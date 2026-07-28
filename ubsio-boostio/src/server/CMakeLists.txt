@@ -1,5 +1,6 @@
 file(GLOB_RECURSE BIO_SERVER_SRCS bio_server.cpp mirror_server.cpp mirror_server_crb.cpp standalone_view.cpp
-        standalone_view.h standalone_memory_pool.cpp standalone_memory_pool.h)
+        standalone_view.h standalone_memory_pool.cpp standalone_memory_pool.h
+        disk_resource_monitor.cpp disk_resource_monitor.h)
 add_library(bio_server SHARED ${BIO_SERVER_SRCS})
 if (UBSIO_ENABLE_ORIGIN_RUNPATH)
         set_target_properties(bio_server PROPERTIES

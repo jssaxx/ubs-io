@@ -42,6 +42,7 @@ using BioDeleteFunc = CResult (*)(uint64_t tenantId, const char *key, ObjLocatio
 using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                                 const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
+using BioShowLocalCacheResourceFunc = CResult (*)(CacheResourcesDesc *nodeDesc);
 
 class DlBioSdkApi {
 public:
@@ -128,6 +129,11 @@ public:
         return static_cast<CResult>(pBioRegisterMetaEventCallback(callback, context));
     }
 
+    static CResult ShowLocalCacheResource(CacheResourcesDesc *nodeDesc)
+    {
+        return static_cast<CResult>(pBioShowLocalCacheResource(nodeDesc));
+    }
+
 private:
     static std::mutex gMutex;
     static bool gLoaded;
@@ -148,6 +154,7 @@ private:
     static BioDeleteFunc pBioDelete;
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
     static BioRegisterMetaEventCallbackFunc pBioRegisterMetaEventCallback;
+    static BioShowLocalCacheResourceFunc pBioShowLocalCacheResource;
 };
 
 }  // namespace ubsio

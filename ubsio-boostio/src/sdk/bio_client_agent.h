@@ -78,7 +78,7 @@ public:
     using ListFuncPtr = int32_t (*)(ListRequest *, ListResponse **);
     using LoadFuncPtr = int32_t (*)(LoadRequest *);
     using GetCacheHitLocalFuncPtr = int32_t (*)(CacheHitResponse *);
-    using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceResponse *);
+    using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceRequest *, CacheResourceResponse *);
     using GetTracePointsLocalFuncPtr = int32_t (*)(GetTracePointsResponse *);
     using RegisterMetaEventCallbackFuncPtr = int32_t (*)(UbsioMetaEventCallbackC, void *);
 

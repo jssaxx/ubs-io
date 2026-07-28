@@ -82,6 +82,8 @@ TEST_F(TestBio, test_bio_show_cache_resource_not_cache_fail)
     uint64_t nodeNum;
     auto ret = BioShowCacheResource(&nodeDesc, nullptr);
     EXPECT_EQ(ret, RET_CACHE_EPERM);
+    ret = BioShowLocalCacheResource(nullptr);
+    EXPECT_EQ(ret, RET_CACHE_EPERM);
 
     ock::bio::BioClient::Instance()->SetStartWorker(true);
     std::vector<CacheResourcesDesc> nodeDescription;
@@ -100,6 +102,14 @@ TEST_F(TestBio, test_bio_show_cache_resource_cache_success)
     std::vector<CacheResourcesDesc> nodeDescription;
     auto ret = BioShowCacheResource(&nodeDesc, &nodeNum);
     EXPECT_EQ(ret, RET_CACHE_OK);
+
+    CacheResourcesDesc localDesc{};
+    ret = BioShowLocalCacheResource(&localDesc);
+    EXPECT_EQ(ret, RET_CACHE_OK);
+    EXPECT_LE(localDesc.diskNum, DISK_RESOURCE_MAX_NUM);
+    for (uint16_t index = 0; index < localDesc.diskNum; ++index) {
+        EXPECT_LE(localDesc.disks[index].bandwidthValid, 1);
+    }
 
     BioFreeCacheResourcePtr(&nodeDesc, nodeNum);
     EXPECT_EQ(nodeDesc, nullptr);
