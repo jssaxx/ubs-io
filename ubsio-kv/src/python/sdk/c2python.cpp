@@ -16,6 +16,7 @@
 #include <pybind11/pytypes.h>
 #include <unistd.h>
 #include <utility>
+#include "ubsio_kvc.h"
 #include "ubsio_kvc_operation.h"
 #include "ubsio_kvc_stream_manager.h"
 #include "ubsio_nds_manager.h"
