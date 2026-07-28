@@ -5,10 +5,10 @@
 import atexit
 
 global KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
-    KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
+    KvGetResourceInfo, KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
     NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead
-from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvBatchPut,
-                          KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
+from c2python_sdk import (KvInit, KvExit, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvGetResourceInfo,
+                          KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
 _initialized = False

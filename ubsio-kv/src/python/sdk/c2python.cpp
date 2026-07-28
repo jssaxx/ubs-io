@@ -406,6 +406,7 @@ PYBIND11_MODULE(c2python_sdk, m)
     m.def("KvExist", &PyKvcKvExist, py::arg("key"));
     m.def("KvDelete", &PyKvcKvDelete, py::arg("key"));
     m.def("KvGetLength", &PyKvcKvGetLength, py::arg("key"));
+    m.def("KvGetResourceInfo", &PyKvcKvGetResourceInfo);
     m.def("KvBatchPut", &PyKvcKvBatchPutData, py::arg("keys"), py::arg("values"));
     m.def("KvBatchGet", &PyKvcKvBatchGetData, py::arg("keys"), py::arg("values"));
     m.def("KvBatchExist", &PyKvcKvBatchExist, py::arg("keys"));
