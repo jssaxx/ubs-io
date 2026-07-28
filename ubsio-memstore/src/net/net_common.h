@@ -57,6 +57,7 @@ enum ConnectMode {
 };
 
 constexpr uint32_t INVALID_NID = 1024;
+constexpr uint32_t MAX_NEW_REQ_HANDLER = 256;
 
 union NetNode {
     struct {
@@ -77,6 +78,15 @@ union NetNode {
 };
 
 struct ConnectInfo {
+    struct RpcParam {
+        uint32_t srcId;
+        uint32_t srcPid;
+        uint32_t nid;
+        std::string ip;
+        uint16_t port;
+        uint16_t retryTimes;
+    };
+
     NetNode srcId;
     NetNode peerId;
     std::string ip;
@@ -85,8 +95,13 @@ struct ConnectInfo {
     bool isSelfPoll;
 
     ConnectInfo() = default;
-    ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid, std::string ip, uint16_t port, uint16_t times)
-        : srcId(srcId, srcPid), peerId(nid, 0), ip(std::move(ip)), port(port), retryTimes(times), isSelfPoll(false)
+    explicit ConnectInfo(RpcParam param)
+        : srcId(param.srcId, param.srcPid),
+          peerId(param.nid, 0),
+          ip(std::move(param.ip)),
+          port(param.port),
+          retryTimes(param.retryTimes),
+          isSelfPoll(false)
     {}
     ConnectInfo(uint32_t srcId, uint32_t srcPid, uint32_t nid, bool selfPool = false)
         : srcId(srcId, srcPid), peerId(nid, 0), port(0), retryTimes(NO_3), isSelfPoll(selfPool)
@@ -175,7 +190,7 @@ union NetConnPayload {
         if (UNLIKELY(!StrUtil::StrToLong(splitVec[NO_2], value))) {
             return MMS_INVALID_PARAM;
         }
-        if (value >= MAX_GROUPS_NUM) {
+        if (value < 0 || value >= static_cast<long>(MAX_GROUPS_NUM)) {
             return MMS_INVALID_PARAM;
         }
         groupIndex = static_cast<uint32_t>(value);
@@ -194,18 +209,18 @@ union NetChannelUpCtx {
         uint64_t peerId : 16;    /* peer node id */
         uint64_t procId : 32;    /* peer process id */
         uint64_t isAccepted : 1; /* accepted from other */
-        uint64_t groupIndex : 2; /* group index, 0, 1, 2, 3 */
-        uint64_t reserved : 13;  /* reserved */
+        uint64_t groupIndex : 5; /* group index, 0-31 */
+        uint64_t reserved : 10;  /* reserved */
     };
     uint64_t whole = 0;
 
     NetChannelUpCtx() = default;
     explicit NetChannelUpCtx(uint64_t w) : whole(w) {}
-    NetChannelUpCtx(const NetNode &pId, uint32_t groupIndex, bool accepted)
+    NetChannelUpCtx(const NetNode &pId, uint32_t groupIndex, bool accepted) : whole(0)
     {
         peerId = static_cast<uint16_t>(pId.nid);
         procId = pId.pid;
-        groupIndex = groupIndex;
+        this->groupIndex = groupIndex;
         isAccepted = accepted ? 1 : 0;
     }
 
@@ -246,4 +261,3 @@ using NetEnginePtr = Ref<NetEngine>;
 }
 
 #endif // NET_COMMON_H
-

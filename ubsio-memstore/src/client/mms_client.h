@@ -13,11 +13,15 @@
 #ifndef MMS_CLIENT_H
 #define MMS_CLIENT_H
 
+#include <atomic>
+#include <mutex>
+
 #include "net_engine.h"
 #include "net_common.h"
 #include "mms_execution.h"
 #include "mms_client_log.h"
 #include "mms_kv_client.h"
+#include "mms_notify_shm_client.h"
 #ifdef USE_CLI_TOOLS
 #include "cli.h"
 #include "client_diagnose.h"
@@ -43,52 +47,53 @@ public:
     BResult Initialize(const MmsOptions &options, ServiceCallback service);
     void Exit();
 
-    BResult MmsPut(uint64_t userId, PutItems *itemList, uint32_t itemNum)
+    BResult MmsPut(PutItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsPut(userId, itemList, itemNum);
+        return mKvClient->MmsPut(itemList, itemNum);
     }
 
-    BResult MmsGet(uint64_t userId, GetItems *itemList, uint32_t itemNum)
+    BResult MmsGet(GetItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsGet(userId, itemList, itemNum);
+        return mKvClient->MmsGet(itemList, itemNum);
     }
 
-    BResult MmsUpdate(uint64_t userId, UpdateItems *itemList, uint32_t itemNum)
+    BResult MmsUpdate(UpdateItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsUpdate(userId, itemList, itemNum);
+        return mKvClient->MmsUpdate(itemList, itemNum);
     }
 
-    BResult MmsDelete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum)
+    BResult MmsDelete(DeleteItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsDelete(userId, itemList, itemNum);
+        return mKvClient->MmsDelete(itemList, itemNum);
     }
 
-    BResult MmsReplace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum)
+    BResult MmsReplace(ReplaceItems *itemList, uint32_t itemNum)
     {
         if (UNLIKELY(!mServiceable)) {
             CLIENT_LOG_WARN("Service is not available.");
             return MMS_NOT_READY;
         }
-        return mKvClient->MmsReplace(userId, itemList, itemNum);
+        return mKvClient->MmsReplace(itemList, itemNum);
     }
 
     BResult MmsStartCatchUpTask(void);
+    BResult RegisterNotifyCallback(NotifyCallback callback, void *lpUserData);
 
 private:
     void BackCheckStateTask();
@@ -110,12 +115,25 @@ private:
     BResult ClientDiagnoseInit(void);
     void ClientDiagnoseExit(void);
 #endif
+    BResult InitClientBase(const MmsOptions &options);
+    BResult InitClientDataPath(void);
     BResult BuildThreadTask(void);
     BResult ResetResource();
     BResult BuildServices(void);
 
     BResult CheckServiceState(std::atomic<bool> &serviceable);
-    void DestroyStartService(void);
+    BResult InitExpireChecker(const MmsOptions &options);
+    BResult RegisterClientChannelBrokenHandler();
+    BResult StartClientServiceExecutor();
+    BResult ConnectLocalServer();
+    void HandleClientChannelBroken();
+    void MarkClientOffline();
+    BResult WaitAndResetResource();
+    BResult ReconnectLocalServer(uint32_t interval);
+    BResult RebuildServices(uint32_t interval);
+    BResult ReregisterNotifyCallback(uint32_t interval);
+    BResult StartNotifyConsumerLocked();
+    void DestroyStartService();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
@@ -138,11 +156,17 @@ private:
     uint32_t mIoTimeOut;
     int32_t mLogLevel;
     bool mEnableCrc;
+    bool mDataChangeCallbackSwitch = false;
     uint32_t mMaxMsgBuffSize;
     DataBlockInfo mBlockInfo{};
 
     std::atomic<bool> mServiceable {false};
     ServiceCallback mServiceCallback = nullptr;
+    std::atomic<NotifyCallback> mNotifyCallback {nullptr};
+    std::atomic<void *> mNotifyUserData {nullptr};
+    std::mutex mNotifyMutex;
+    MmsNotifyShmConsumer mNotifyShmConsumer;
+    uint32_t mServerPid = 0;
 
     std::atomic<bool> mServiceCheckStarted{false};
     std::atomic<bool> mServerOnline{false};

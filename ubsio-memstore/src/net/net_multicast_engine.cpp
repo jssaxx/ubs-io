@@ -10,8 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <thread>
+#include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <cstdlib>
+#include <thread>
+#include "securec.h"
 #include "mms_server.h"
 #include "mms_trace.h"
 #include "net_multicast_engine.h"
@@ -21,8 +25,65 @@ namespace mms {
 using namespace ock::hcom;
 
 static constexpr uint8_t HCOM_TLS_HEADER_COST = 128;
+static constexpr uint32_t MULTICAST_IO_CONTEXT_COUNT = 65536;
 constexpr uint16_t MULTICAST_CONNECT_TIME_OUT = 60; // 组播建链超时时间(s)
 constexpr uint16_t CONNECT_DONE_RETRY_INTERAL = 1;
+
+struct MulticastSyncCallCtx {
+    std::mutex mutex;
+    std::condition_variable cond;
+    BResult result = MMS_INNER_ERR;
+    bool done = false;
+    void *resp = nullptr;
+    uint32_t respLen = 0;
+};
+
+static bool SplitPublisherWorkerGroup(const std::pair<uint32_t, uint32_t> &cpuSet, uint16_t groupNum,
+                                      std::vector<std::pair<uint32_t, uint32_t>> &workerGroups)
+{
+    uint32_t cpuCount = cpuSet.second - cpuSet.first + NO_1;
+    if (cpuCount < groupNum) {
+        return false;
+    }
+    uint32_t cpuId = cpuSet.first;
+    uint32_t baseWorkerNum = cpuCount / groupNum;
+    uint32_t remainder = cpuCount % groupNum;
+    for (uint16_t groupIdx = NO_0; groupIdx < groupNum; ++groupIdx) {
+        uint32_t workerNum = baseWorkerNum + static_cast<uint32_t>(groupIdx < remainder);
+        workerGroups.emplace_back(cpuId, cpuId + workerNum - NO_1);
+        cpuId += workerNum;
+    }
+    return true;
+}
+
+static bool BuildPublisherWorkerGroups(const std::vector<std::pair<uint32_t, uint32_t>> &cpuSets,
+                                       uint16_t groupNum,
+                                       std::vector<std::pair<uint32_t, uint32_t>> &workerGroups)
+{
+    if (cpuSets.size() == static_cast<size_t>(groupNum)) {
+        workerGroups = cpuSets;
+        return true;
+    }
+    if (cpuSets.size() != static_cast<size_t>(NO_1) || groupNum == NO_0) {
+        return false;
+    }
+    return SplitPublisherWorkerGroup(cpuSets.front(), groupNum, workerGroups);
+}
+
+static uint16_t GetPublisherGroupIndex(uint16_t localNodeId, uint16_t peerNodeId)
+{
+    return localNodeId < peerNodeId ? localNodeId : static_cast<uint16_t>(localNodeId - NO_1);
+}
+
+static void AddPublisherWorkerGroups(ock::hcom::PublisherService *publisherService,
+                                     const std::vector<std::pair<uint32_t, uint32_t>> &workerGroups)
+{
+    for (uint16_t groupIdx = NO_1; groupIdx < static_cast<uint16_t>(workerGroups.size()); ++groupIdx) {
+        const auto &cpuSet = workerGroups[groupIdx];
+        uint16_t workerNum = static_cast<uint16_t>(cpuSet.second - cpuSet.first + NO_1);
+        publisherService->AddWorkerGroup(groupIdx, workerNum, cpuSet, NO_0);
+    }
+}
 
 bool NetMulticastEngine::NewSubscriptionCallBack(ock::hcom::SubscriptionInfoPtr &info)
 {
@@ -37,7 +98,7 @@ bool NetMulticastEngine::NewSubscriptionCallBack(ock::hcom::SubscriptionInfoPtr 
     }
 
     mSubScribersRemoteLock.LockWrite();
-    mSubScribersRemote.emplace(info->GetIp());
+    mSubScribersRemote[info->GetIp()]++;
     mSubScribersRemoteLock.UnLock();
 
     NET_LOG_INFO("Add a subscriber success, id:" << info->GetId() << ", ip:" << info->GetIp()
@@ -50,10 +111,21 @@ void NetMulticastEngine::PublisherSubscriberEpBroken(const ock::hcom::UBSHcomNet
 {
     NET_LOG_WARN("publisher ep broken id " << ep->Id());
     auto info = mPublisher->GetSubscribeByEpId(ep->Id());
+    if (info.Get() == nullptr) {
+        NET_LOG_WARN("Subscription info is null, ep id:" << ep->Id() << ".");
+        return;
+    }
     mPublisher->DelSubscription(info);
 
     mSubScribersRemoteLock.LockWrite();
-    mSubScribersRemote.erase(info->GetIp());
+    auto it = mSubScribersRemote.find(info->GetIp());
+    if (it != mSubScribersRemote.end()) {
+        if (it->second <= NO_1) {
+            mSubScribersRemote.erase(it);
+        } else {
+            it->second--;
+        }
+    }
     mSubScribersRemoteLock.UnLock();
 }
 
@@ -61,26 +133,42 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
                                                    const std::string &ipMask)
 {
     auto &opt = MmsConfig::Instance()->GetNetConfig();
-    std::pair<long, long> cpuSet = opt.publisherWorkerCpuSet;
-    uint32_t cpuStart = static_cast<uint32_t>(cpuSet.first);
+    const auto &cpuSets = opt.publisherWorkerCpuSets;
+    if (cpuSets.empty()) {
+        NET_LOG_ERROR("Publisher worker cpu set is empty.");
+        return MMS_INVALID_PARAM;
+    }
+
+    uint16_t nodeNum = static_cast<uint16_t>(MmsConfig::Instance()->GetCmConfig().nodeNum);
+    uint16_t requiredGroupNum = static_cast<uint16_t>(nodeNum - NO_1);
+    std::vector<std::pair<uint32_t, uint32_t>> workerGroups;
+    if (UNLIKELY(!BuildPublisherWorkerGroups(cpuSets, requiredGroupNum, workerGroups))) {
+        NET_LOG_ERROR("Invalid publisher worker cpu set, range count:" << cpuSets.size()
+                                                                       << ", required group count:"
+                                                                       << requiredGroupNum << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    const auto &firstGroup = workerGroups.front();
     MulticastServiceOptions options;
     options.maxSendRecvDataSize = opt.msgMaxBuffSize + HCOM_TLS_HEADER_COST;
+    options.multicastIoContextCount = MULTICAST_IO_CONTEXT_COUNT;
     options.enableTls = opt.tlsEnable;
-    options.workerGroupCpuIdsRange = std::make_pair(cpuStart, cpuStart);
-    options.workerGroupThreadCount = NO_1;
+    options.workerGroupCpuIdsRange = firstGroup;
+    options.workerGroupThreadCount = static_cast<uint16_t>(firstGroup.second - firstGroup.first + NO_1);
     options.workerGroupMode = ock::hcom::NET_BUSY_POLLING;
     options.qpRecvQueueSize = NO_4096;
     options.qpSendQueueSize = NO_4096;
     options.qpPrePostSize = NO_2048;
     options.qpBatchRePostSize = NO_64;
-    options.maxSubscriberNum = MAX_NODES_NUM - 1;
+    options.maxSubscriberNum = (MAX_NODES_NUM - 1) * opt.subscriberConnectCount;
     if (opt.multicastProtocol == "rdma") {
         options.protocol = UBSHcomNetDriverProtocol::RDMA;
     } else {
         options.protocol = UBSHcomNetDriverProtocol::TCP;
     }
 
-    mPublisherWorkGroupNum= static_cast<uint16_t>(cpuSet.second - cpuSet.first + NO_1);
+    mPublisherWorkGroupNum = static_cast<uint16_t>(workerGroups.size());
     mPublisherServiceName = "Publisher";
     mPublisherService = ock::hcom::PublisherService::Create(mPublisherServiceName, options);
     if (mPublisherService == nullptr) {
@@ -98,13 +186,11 @@ BResult NetMulticastEngine::CreatePublisherService(const std::string &oobIp, uin
         SetDriverTlsCallback(mPublisherService, opt);
     }
 
-    for (int groupIdx = NO_1; groupIdx < mPublisherWorkGroupNum; ++groupIdx) {
-        // AddWorkerGroup(groupIdx, threadCount, cpuSet, priority)
-        mPublisherService->AddWorkerGroup(groupIdx, NO_1, std::make_pair(cpuStart + groupIdx, cpuStart + groupIdx), 0);
-    }
+    AddPublisherWorkerGroups(mPublisherService, workerGroups);
 
     std::string url = "tcp://" + oobIp + ":" + std::to_string(oobPort);
     mPublisherService->GetConfig().SetDeviceIpMask({ipMask});
+    mPublisherService->GetConfig().SetPeriodicThreadNum(NO_4);
     mPublisherService->Bind(url, std::bind(&NetMulticastEngine::NewSubscriptionCallBack, this, std::placeholders::_1));
     mPublisherService->RegisterBrokenHandler(
         std::bind(&NetMulticastEngine::PublisherSubscriberEpBroken, this, std::placeholders::_1));
@@ -171,7 +257,17 @@ void NetMulticastEngine::SubscriberBrokenCallBack(const ock::hcom::UBSHcomNetEnd
     std::string peerIp = GetIpFromIpPort(ep->PeerIpAndPort());
     {
         WriteLocker<ReadWriteLock> lock(&mSubScribersLock);
-        mSubScribers.erase(peerIp);
+        auto it = mSubScribers.find(peerIp);
+        if (it != mSubScribers.end()) {
+            auto &subscribers = it->second;
+            subscribers.erase(std::remove_if(subscribers.begin(), subscribers.end(),
+                [&ep](const ock::hcom::SubscriberPtr &subscriber) {
+                    return subscriber.Get() == nullptr || subscriber->GetEp()->Id() == ep->Id();
+                }), subscribers.end());
+            if (subscribers.empty()) {
+                mSubScribers.erase(it);
+            }
+        }
     }
 
     if (mHandlerBroken) {
@@ -220,7 +316,7 @@ BResult NetMulticastEngine::CreateSubscriberService(const std::string &ipMask)
     options.qpSendQueueSize = NO_4096;
     options.qpPrePostSize = NO_2048;
     options.qpBatchRePostSize = NO_2;
-    options.publisherWrkGroupNo = Cm::Instance()->GetLocalNid() % mPublisherWorkGroupNum;
+    options.publisherWrkGroupNo = static_cast<uint8_t>(Cm::Instance()->GetLocalNid() % mPublisherWorkGroupNum);
     if (opt.multicastProtocol == "rdma") {
         options.protocol = UBSHcomNetDriverProtocol::RDMA;
     } else {
@@ -306,28 +402,43 @@ BResult NetMulticastEngine::CreateSubscriber(uint16_t peerNodeId, const ::std::s
     }
 
     std::string url = "tcp://" + ip + ":" + std::to_string(port);
-    if (mSubScribers.find(ip) != mSubScribers.end()) {
-        NET_LOG_INFO("Subscriber to " << url << " is exist, skip."
-                                      << ".");
+    auto connectCount = MmsConfig::Instance()->GetNetConfig().subscriberConnectCount;
+    uint16_t localNodeId = Cm::Instance()->GetLocalNid();
+    uint16_t nodeNum = static_cast<uint16_t>(MmsConfig::Instance()->GetCmConfig().nodeNum);
+    if (UNLIKELY(localNodeId >= nodeNum || peerNodeId >= nodeNum || localNodeId == peerNodeId)) {
+        NET_LOG_ERROR("Invalid node for subscriber, local node:" << localNodeId << ", peer node:" << peerNodeId
+                                                                 << ", node count:" << nodeNum << ".");
+        return MMS_INVALID_PARAM;
+    }
+    uint16_t publisherGroupIdx = GetPublisherGroupIndex(localNodeId, peerNodeId);
+    auto it = mSubScribers.find(ip);
+    if (it != mSubScribers.end() && it->second.size() >= connectCount) {
+        NET_LOG_INFO("Subscriber to " << url << " is exist, count:" << it->second.size() << ", skip.");
         return MMS_OK;
-    };
+    }
 
     ock::hcom::NetRef<ock::hcom::Subscriber> subscriber = nullptr;
-    if ((mSubscriberService->CreateSubscriber(url, subscriber) != ock::hcom::SER_OK) || (subscriber == nullptr)) {
+    if ((mSubscriberService->CreateSubscriber(url, publisherGroupIdx, subscriber) != ock::hcom::SER_OK) ||
+        (subscriber == nullptr)) {
         NET_LOG_ERROR("Subscription failed, url:" << url << ".");
         return MMS_NET_RETRY;
     }
 
     subscriber->GetEp()->UpCtx(static_cast<uint64_t>(peerNodeId));  // 记录publisher的nodeId
-    mSubScribers.emplace(ip, subscriber);
-    NET_LOG_INFO("subscribed to node success, url:" << url << ", epId:" << subscriber->GetEp()->Id() << ".");
+    auto &subscribers = mSubScribers[ip];
+    subscribers.emplace_back(subscriber);
+    NET_LOG_INFO("Subscribed to node success, url:" << url << ", epId:" << subscriber->GetEp()->Id()
+                                                    << ", count:" << subscribers.size() << "/" << connectCount
+                                                    << ", publisherGroupIdx:" << publisherGroupIdx << ".");
     return MMS_OK;
 }
 
 bool NetMulticastEngine::IsSubscriberExist(const std::string &ip)
 {
     ReadLocker<ReadWriteLock> lock(&mSubScribersLock);
-    if (mSubScribers.find(ip) != mSubScribers.end()) {
+    auto it = mSubScribers.find(ip);
+    if (it != mSubScribers.end() &&
+        it->second.size() >= MmsConfig::Instance()->GetNetConfig().subscriberConnectCount) {
         return true;
     }
 
@@ -489,9 +600,14 @@ std::string NetMulticastEngine::GetMulticastInfoStr()
     oss << "[The publishers that this node has subscribed:]" << std::endl;
     ReadLocker<ReadWriteLock> lock(&mSubScribersLock);
     for (auto &item : mSubScribers) {
-        oss << "publisher " << count++ << ":"
-            << " ip:" << item.second->GetIp() << ", port:" << item.second->GetPort()
-            << ", epId:" << item.second->GetEp()->Id() << std::endl;
+        for (auto &subscriber : item.second) {
+            if (subscriber.Get() == nullptr) {
+                continue;
+            }
+            oss << "publisher " << count++ << ":"
+                << " ip:" << subscriber->GetIp() << ", port:" << subscriber->GetPort()
+                << ", epId:" << subscriber->GetEp()->Id() << std::endl;
+        }
     }
 
     return oss.str();
@@ -527,6 +643,242 @@ bool NetMulticastEngine::CheckRemoteNodeStatus(const std::string &remoteIp)
     }
 
     return false;
+}
+
+static BResult CopyMulticastSyncResponse(const ock::hcom::MultiResponse &multiResp, void *resp, uint32_t respLen)
+{
+    if (UNLIKELY(multiResp.data == nullptr || multiResp.size < respLen)) {
+        NET_LOG_ERROR("Invalid multicast response, response size:" << multiResp.size << ", expected size:" << respLen
+                                                                   << ".");
+        return MMS_INNER_ERR;
+    }
+
+    int32_t ret = memcpy_s(resp, respLen, multiResp.data, respLen);
+    if (UNLIKELY(ret != EOK)) {
+        NET_LOG_ERROR("Copy multicast response failed, ret:" << ret << ", response size:" << multiResp.size
+                                                             << ", expected size:" << respLen << ".");
+        return MMS_INNER_ERR;
+    }
+    return MMS_OK;
+}
+
+static BResult CopyMulticastDynamicResponse(const ock::hcom::MultiResponse &multiResp, MulticastSyncResponse &resp)
+{
+    if (UNLIKELY(multiResp.data == nullptr || multiResp.size == 0)) {
+        NET_LOG_ERROR("Invalid multicast response, response size:" << multiResp.size << ".");
+        return MMS_INNER_ERR;
+    }
+
+    void *data = malloc(multiResp.size);
+    if (UNLIKELY(data == nullptr)) {
+        NET_LOG_ERROR("Alloc multicast response failed, response size:" << multiResp.size << ".");
+        return MMS_ALLOC_FAIL;
+    }
+
+    int32_t ret = memcpy_s(data, multiResp.size, multiResp.data, multiResp.size);
+    if (UNLIKELY(ret != EOK)) {
+        NET_LOG_ERROR("Copy multicast response failed, ret:" << ret << ", response size:" << multiResp.size << ".");
+        free(data);
+        return MMS_INNER_ERR;
+    }
+
+    resp.data = data;
+    resp.len = multiResp.size;
+    return MMS_OK;
+}
+
+static BResult GetMulticastRemoteIp(uint16_t dstNode, std::string &remoteIp)
+{
+    uint16_t remotePort = 0;
+    if (UNLIKELY(!Cm::Instance()->CheckIsOnlineMulti(dstNode, remoteIp, remotePort))) {
+        NET_LOG_WARN("Remote multicast node is offline, node id:" << dstNode << ".");
+        return MMS_NET_RETRY;
+    }
+    return MMS_OK;
+}
+
+static void FinishMulticastSyncCall(MulticastSyncCallCtx &syncCtx, BResult result)
+{
+    std::lock_guard<std::mutex> lock(syncCtx.mutex);
+    syncCtx.result = result;
+    syncCtx.done = true;
+    syncCtx.cond.notify_one();
+}
+
+static BResult GetSingleMulticastResponse(NetMulticastEngine *engine, const ock::hcom::SubscriberRspInfo &item)
+{
+    if (UNLIKELY(item.GetStatus() != ock::hcom::SubscriberRspStatus::SUCCESS)) {
+        std::string remoteIp = item.GetSubInfos()->GetIp();
+        if (!engine->CheckRemoteNodeStatus(remoteIp)) {
+            NET_LOG_WARN("Remote node not running, remote node:" << remoteIp << ", status:"
+                                                                 << static_cast<int>(item.GetStatus()) << ".");
+        } else {
+            NET_LOG_ERROR("Request failed, remote node:" << remoteIp << ", status:"
+                                                         << static_cast<int>(item.GetStatus()) << ".");
+        }
+        return MMS_NET_RETRY;
+    }
+
+    const auto &multiResp = item.GetMultiResponse();
+    if (UNLIKELY(multiResp.data == nullptr || multiResp.size < sizeof(int32_t))) {
+        NET_LOG_ERROR("Invalid multicast response, response size:" << multiResp.size << ".");
+        return MMS_INNER_ERR;
+    }
+    int32_t opRet = *(static_cast<int32_t *>(multiResp.data));
+    if (UNLIKELY(opRet != MMS_OK)) {
+        NET_LOG_ERROR("Request failed, remote node:" << item.GetSubInfos()->GetIp() << ", ret:" << opRet << ".");
+    }
+    return opRet;
+}
+
+static void HandleMulticastAsyncResponse(NetMulticastEngine *engine, const Callback &callback,
+                                         PublisherContext &context, uint64_t timeStart)
+{
+    const std::vector<ock::hcom::SubscriberRspInfo> &infos = context.GetSubscriberRspInfo();
+    MMS_TRACE_ASYNC_END(NET_HCOM_MULTICAST_SEND, MMS_OK, timeStart);
+    if (UNLIKELY(infos.empty())) {
+        callback.cb(callback.cbCtx, nullptr, 0, MMS_NET_RETRY);
+        return;
+    }
+
+    BResult ret = GetSingleMulticastResponse(engine, infos.front());
+    callback.cb(callback.cbCtx, nullptr, 0, ret);
+}
+
+static void HandleMulticastDynamicResponse(MulticastSyncCallCtx &syncCtx, MulticastSyncResponse &resp,
+                                           PublisherContext &context)
+{
+    const std::vector<ock::hcom::SubscriberRspInfo> &infos = context.GetSubscriberRspInfo();
+    if (UNLIKELY(infos.empty())) {
+        FinishMulticastSyncCall(syncCtx, MMS_NET_RETRY);
+        return;
+    }
+
+    const auto &item = infos.front();
+    if (UNLIKELY(item.GetStatus() != ock::hcom::SubscriberRspStatus::SUCCESS)) {
+        std::string remoteIp = item.GetSubInfos()->GetIp();
+        NET_LOG_ERROR("Request failed, remote node:" << remoteIp << ", status:"
+                                                     << static_cast<int>(item.GetStatus()) << ".");
+        FinishMulticastSyncCall(syncCtx, MMS_NET_RETRY);
+        return;
+    }
+    FinishMulticastSyncCall(syncCtx, CopyMulticastDynamicResponse(item.GetMultiResponse(), resp));
+}
+
+BResult NetMulticastEngine::MulticastSyncCallBuff(uint16_t dstNode, uint16_t opCode, void *req, uint32_t reqLen,
+                                                  void *resp, uint32_t respLen)
+{
+    if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER || req == nullptr || reqLen == 0 || resp == nullptr || respLen == 0)) {
+        NET_LOG_ERROR("Invalid multicast sync call param, opcode:" << opCode << ", req len:" << reqLen
+                                                                   << ", resp len:" << respLen << ".");
+        return MMS_INVALID_PARAM;
+    }
+    if (UNLIKELY(mPublisher == nullptr || mMemList.mr[MMAP_AREA_IOCTX_INDEX] == nullptr)) {
+        NET_LOG_ERROR("Multicast sync call is not ready.");
+        return MMS_NOT_READY;
+    }
+
+    std::string remoteIp;
+    auto result = GetMulticastRemoteIp(dstNode, remoteIp);
+    if (UNLIKELY(result != MMS_OK)) {
+        return result;
+    }
+
+    ock::hcom::UBSHcomNetTransOpInfo opInfo;
+    opInfo.timeout = mTimeout;
+    ock::hcom::MultiRequest multiReq(req, reqLen, mMemList.mr[MMAP_AREA_IOCTX_INDEX]->GetLKey());
+    MulticastSyncCallCtx syncCtx;
+    syncCtx.resp = resp;
+    syncCtx.respLen = respLen;
+
+    auto *netCallback = ock::hcom::NewMultiCastCallback(
+        [this, &syncCtx](PublisherContext &context) {
+            const std::vector<ock::hcom::SubscriberRspInfo> &infos = context.GetSubscriberRspInfo();
+            if (UNLIKELY(infos.empty())) {
+                FinishMulticastSyncCall(syncCtx, MMS_NET_RETRY);
+                return;
+            }
+
+            const auto &item = infos.front();
+            if (UNLIKELY(item.GetStatus() != ock::hcom::SubscriberRspStatus::SUCCESS)) {
+                std::string remoteIp = item.GetSubInfos()->GetIp();
+                if (!CheckRemoteNodeStatus(remoteIp)) {
+                    NET_LOG_WARN("Remote node not running, remote node:" << remoteIp << ", status:"
+                                                                         << static_cast<int>(item.GetStatus()) << ".");
+                } else {
+                    NET_LOG_ERROR("Request failed, remote node:" << remoteIp << ", status:"
+                                                                 << static_cast<int>(item.GetStatus()) << ".");
+                }
+                FinishMulticastSyncCall(syncCtx, MMS_NET_RETRY);
+                return;
+            }
+
+            FinishMulticastSyncCall(syncCtx,
+                                    CopyMulticastSyncResponse(item.GetMultiResponse(), syncCtx.resp, syncCtx.respLen));
+        },
+        std::placeholders::_1);
+    if (UNLIKELY(netCallback == nullptr)) {
+        NET_LOG_ERROR("Create multicast sync callback failed.");
+        return MMS_ALLOC_FAIL;
+    }
+
+    auto ret = mPublisher->Call(opInfo, remoteIp, multiReq, netCallback);
+    if (UNLIKELY(ret != MMS_OK)) {
+        NET_LOG_ERROR("Multicast sync call failed, ret:" << ret << ", error:" << UBSHcomNetErrStr(ret)
+                                                         << ", remote ip:" << remoteIp << ".");
+        return MMS_NET_RETRY;
+    }
+
+    std::unique_lock<std::mutex> lock(syncCtx.mutex);
+    syncCtx.cond.wait(lock, [&syncCtx]() { return syncCtx.done; });
+    return syncCtx.result;
+}
+
+BResult NetMulticastEngine::MulticastSyncCallBuff(uint16_t dstNode, uint16_t opCode, void *req, uint32_t reqLen,
+                                                  MulticastSyncResponse &resp)
+{
+    if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER || req == nullptr || reqLen == 0)) {
+        NET_LOG_ERROR("Invalid multicast sync call param, opcode:" << opCode << ", req len:" << reqLen << ".");
+        return MMS_INVALID_PARAM;
+    }
+    if (UNLIKELY(mPublisher == nullptr || mMemList.mr[MMAP_AREA_IOCTX_INDEX] == nullptr)) {
+        NET_LOG_ERROR("Multicast sync call is not ready.");
+        return MMS_NOT_READY;
+    }
+
+    std::string remoteIp;
+    auto result = GetMulticastRemoteIp(dstNode, remoteIp);
+    if (UNLIKELY(result != MMS_OK)) {
+        return result;
+    }
+
+    ock::hcom::UBSHcomNetTransOpInfo opInfo;
+    opInfo.timeout = mTimeout;
+    ock::hcom::MultiRequest multiReq(req, reqLen, mMemList.mr[MMAP_AREA_IOCTX_INDEX]->GetLKey());
+    MulticastSyncCallCtx syncCtx;
+    resp.data = nullptr;
+    resp.len = 0;
+
+    auto *netCallback = ock::hcom::NewMultiCastCallback(
+        [&syncCtx, &resp](PublisherContext &context) {
+            HandleMulticastDynamicResponse(syncCtx, resp, context);
+        },
+        std::placeholders::_1);
+    if (UNLIKELY(netCallback == nullptr)) {
+        NET_LOG_ERROR("Create multicast sync callback failed.");
+        return MMS_ALLOC_FAIL;
+    }
+
+    auto ret = mPublisher->Call(opInfo, remoteIp, multiReq, netCallback);
+    if (UNLIKELY(ret != MMS_OK)) {
+        NET_LOG_ERROR("Multicast sync call failed, ret:" << ret << ", error:" << UBSHcomNetErrStr(ret)
+                                                         << ", remote ip:" << remoteIp << ".");
+        return MMS_NET_RETRY;
+    }
+
+    std::unique_lock<std::mutex> lock(syncCtx.mutex);
+    syncCtx.cond.wait(lock, [&syncCtx]() { return syncCtx.done; });
+    return syncCtx.result;
 }
 
 void NetMulticastEngine::MulticastAsyncCallBuff(void *req, uint32_t reqLen, Callback callback)
@@ -571,6 +923,50 @@ void NetMulticastEngine::MulticastAsyncCallBuff(void *req, uint32_t reqLen, Call
     auto ret = mPublisher->Call(opInfo, multiReq, netCallback);
     if (ret != MMS_OK) {
         NET_LOG_ERROR("Multicast async call failed, ret:" << ret << ", error:" << UBSHcomNetErrStr(ret) << ".");
+        callback.cb(callback.cbCtx, nullptr, 0, MMS_NET_RETRY);
+    }
+}
+
+void NetMulticastEngine::MulticastAsyncCallBuff(uint16_t dstNode, void *req, uint32_t reqLen, Callback callback)
+{
+    if (UNLIKELY(req == nullptr || reqLen == 0)) {
+        NET_LOG_ERROR("Invalid multicast async call param, node id:" << dstNode << ", req len:" << reqLen << ".");
+        callback.cb(callback.cbCtx, nullptr, 0, MMS_INVALID_PARAM);
+        return;
+    }
+    if (UNLIKELY(mPublisher == nullptr || mMemList.mr[MMAP_AREA_IOCTX_INDEX] == nullptr)) {
+        NET_LOG_ERROR("Multicast async call is not ready.");
+        callback.cb(callback.cbCtx, nullptr, 0, MMS_NOT_READY);
+        return;
+    }
+
+    std::string remoteIp;
+    auto result = GetMulticastRemoteIp(dstNode, remoteIp);
+    if (UNLIKELY(result != MMS_OK)) {
+        callback.cb(callback.cbCtx, nullptr, 0, result);
+        return;
+    }
+
+    ock::hcom::UBSHcomNetTransOpInfo opInfo;
+    opInfo.timeout = mTimeout;
+    ock::hcom::MultiRequest multiReq(req, reqLen, mMemList.mr[MMAP_AREA_IOCTX_INDEX]->GetLKey());
+    uint64_t timeStart = Monotonic::TimeNs();
+    auto *netCallback = ock::hcom::NewMultiCastCallback(
+        [this, callback, timeStart](PublisherContext &context) {
+            HandleMulticastAsyncResponse(this, callback, context, timeStart);
+        },
+        std::placeholders::_1);
+    if (UNLIKELY(netCallback == nullptr)) {
+        NET_LOG_ERROR("Create multicast async callback failed.");
+        callback.cb(callback.cbCtx, nullptr, 0, MMS_ALLOC_FAIL);
+        return;
+    }
+
+    MMS_TRACE_ASYNC_BEGIN(NET_HCOM_MULTICAST_SEND);
+    auto ret = mPublisher->Call(opInfo, remoteIp, multiReq, netCallback);
+    if (ret != MMS_OK) {
+        NET_LOG_ERROR("Multicast async call failed, ret:" << ret << ", error:" << UBSHcomNetErrStr(ret)
+                                                          << ", remote ip:" << remoteIp << ".");
         callback.cb(callback.cbCtx, nullptr, 0, MMS_NET_RETRY);
     }
 }

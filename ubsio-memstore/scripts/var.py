@@ -72,6 +72,7 @@ CONFIG_RULES = {
     "mms.net.ipc.worker.groups.cpuset": r"^.+$",
     "mms.net.publisher.worker.cpuset": r"^.+$",
     "mms.net.subscriber.worker.cpuset": r"^.+$",
+    "mms.net.subscriber.connect.count": r"^(1[0-6]|[1-9])$",
     "mms.net.request.executor.thread.num": r"^(8|9|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5]|256)$",
     "mms.net.request.executor.queue.size": r"^(102[4-9]|10[3-9]\d|1[1-9]\d{2}|[2-9]\d{3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$",
     "mms.net.message.max_buff_size": r"^[1-9]\d*$",

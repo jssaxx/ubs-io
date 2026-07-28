@@ -54,6 +54,14 @@ BResult CrbScheduler::Init()
         LOG_ERROR("Net engine is nullptr");
         return MMS_ALLOC_FAIL;
     }
+    mMulticast = MmsServer::Instance()->GetConfig()->GetBasicConfig().multicastSwitch;
+    if (mMulticast) {
+        mMulticastEngine = MmsServer::Instance()->GetMulticastEngine();
+        if (UNLIKELY(mMulticastEngine == nullptr)) {
+            LOG_ERROR("Multicast engine is nullptr.");
+            return MMS_ALLOC_FAIL;
+        }
+    }
 
     mCache = Cache::Instance();
     if (UNLIKELY(mCache == nullptr)) {
@@ -67,14 +75,16 @@ BResult CrbScheduler::Init()
         return MMS_ALLOC_FAIL;
     }
 
-    mExeService = ExecutorService::Create(NO_4, NO_128);
+    const auto &crbConfig = MmsServer::Instance()->GetConfig()->GetCrbConfig();
+    uint16_t crbSendThreadNum = static_cast<uint16_t>(crbConfig.sendCpuIds.size());
+    mExeService = ExecutorService::Create(crbSendThreadNum, NO_8);
     if (UNLIKELY(mExeService == nullptr)) {
         LOG_ERROR("Failed to create crb executor.");
         return MMS_ALLOC_FAIL;
     }
 
-    mExeService->SetThreadName("mms_crb_scheduler");
-    mExeService->SetCpuSetStartIndex(MmsServer::Instance()->GetConfig()->GetBasicConfig().crbSendCpuStart);
+    mExeService->SetThreadName("CrbExecutor");
+    mExeService->SetCpuIds(crbConfig.sendCpuIds);
     if (UNLIKELY(!(mExeService->Start()))) {
         LOG_ERROR("Failed to start execution service for crb executor.");
         mExeService->Stop();
@@ -88,6 +98,33 @@ BResult CrbScheduler::Init()
 void CrbScheduler::Exit()
 {
     mExeService->Stop();
+}
+
+BResult CrbScheduler::SendStartRecoverRequest(CrbStartRequest &req, uint16_t dstNode, BResult &rsp)
+{
+    if (mMulticast) {
+        return mMulticastEngine->MulticastSyncCall<CrbStartRequest, BResult>(
+            dstNode, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+    }
+    return mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+}
+
+void CrbScheduler::SendCrbDataAsyncRequest(void *buff, uint32_t buffLen, uint16_t dstNode, Callback &callback)
+{
+    if (mMulticast) {
+        mMulticastEngine->MulticastAsyncCallBuff(dstNode, buff, buffLen, callback);
+        return;
+    }
+    mNetEngine->AsyncCallBuff(dstNode, g_groupIndex, MMS_OP_S_CRB_RECEIVE_DATA, buff, buffLen, callback);
+}
+
+void CrbScheduler::ReplyServerRequest(ServiceContext &ctx, int32_t retCode)
+{
+    if (mMulticast) {
+        mMulticastEngine->Reply(ctx, retCode, nullptr, 0);
+        return;
+    }
+    mNetEngine->Reply(ctx, retCode, nullptr, 0);
 }
 
 void CrbScheduler::UpdateLocalCopys()
@@ -172,8 +209,7 @@ BResult CrbScheduler::SendCrbRequests()
     CrbHandle handle = [this](void *reqBuff, uint16_t dstNode) -> BResult {
         CrbStartRequest req = *(static_cast<CrbStartRequest *>(reqBuff));
         BResult rsp = MMS_OK;
-        BResult ret =
-            mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+        BResult ret = SendStartRecoverRequest(req, dstNode, rsp);
         if (UNLIKELY(ret != MMS_OK)) {
             return ret;
         }
@@ -253,20 +289,20 @@ BResult CrbScheduler::HandleCrbReceiveData(ServiceContext &ctx)
     if (UNLIKELY(ctx.MessageDataLen() < sizeof(IoDataRequest)) ||
         UNLIKELY(ctx.MessageDataLen() > CRB_RECOVER_MESSAGE_BUFF_LEN) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyServerRequest(ctx, MMS_INVALID_PARAM);
         return MMS_OK;
     }
 
     if (!mIsRecovering) {
         LOG_WARN("Not recover status.");
-        mNetEngine->Reply(ctx, MMS_NOT_READY, nullptr, 0);
+        ReplyServerRequest(ctx, MMS_NOT_READY);
         return MMS_OK;
     }
 
     BResult ret = mKvServer->PutLocal(ctx.MessageData(), ctx.MessageDataLen());
     if (UNLIKELY(ret != MMS_OK)) {
         LOG_ERROR("Crb put local failed, ret:" << ret << ".");
-        mNetEngine->Reply(ctx, ret, nullptr, 0);
+        ReplyServerRequest(ctx, ret);
         return MMS_OK;
     }
 
@@ -276,7 +312,7 @@ BResult CrbScheduler::HandleCrbReceiveData(ServiceContext &ctx)
         ret = ReportPtRecoverDone(req->head.nodeId, req->head.ptId);
     }
 
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyServerRequest(ctx, ret);
     return MMS_OK;
 }
 
@@ -341,7 +377,7 @@ BResult CrbScheduler::HandleNotifyStartRecover(ServiceContext &ctx)
 {
     if (UNLIKELY(ctx.MessageDataLen() != sizeof(CrbStartRequest)) || UNLIKELY(ctx.MessageData() == nullptr)) {
         LOG_ERROR("[CrbSched]Receive message len:" << ctx.MessageDataLen() << " or message data invalid.");
-        mNetEngine->Reply(ctx, MMS_INVALID_PARAM, nullptr, 0);
+        ReplyServerRequest(ctx, MMS_INVALID_PARAM);
         return MMS_OK;
     }
 
@@ -349,25 +385,24 @@ BResult CrbScheduler::HandleNotifyStartRecover(ServiceContext &ctx)
     LOG_INFO("Receive a crb request, recover pt:" << req->head.ptId << ", recover node:" << req->head.nodeId << ".");
 
     BResult ret = HandleRecoverData(req);
-    mNetEngine->Reply(ctx, ret, nullptr, 0);
+    ReplyServerRequest(ctx, ret);
     return MMS_OK;
 }
 
 BResult CrbScheduler::CrbBatchSend(char *buff, uint32_t buffLen, uint16_t dstNode)
 {
-    auto cbFunc = [](void *ctx, void *resp, uint32_t len, int32_t result) {
-        auto *cbCtx = (KvCbCtx *)ctx;
+    auto cbFunc = [](void *ctx, void *, uint32_t, int32_t result) {
+        auto *cbCtx = static_cast<KvCbCtx *>(ctx);
         if (UNLIKELY(result != MMS_OK)) {
-            int32_t expected = MMS_OK;
-            cbCtx->result.compare_exchange_strong(expected, result, std::memory_order_relaxed);
+            cbCtx->result.store(result, std::memory_order_relaxed);
         }
-        cbCtx->quota.fetch_sub(NO_1, std::memory_order_release);
+        cbCtx->quota.store(NO_0, std::memory_order_release);
     };
 
     CrbHandle handle = [this, buffLen, cbFunc](void *buff, uint16_t dstNode) -> BResult {
         KvCbCtx cbCtx(NO_1, MMS_OK);
         Callback callback(cbFunc, static_cast<void *>(&cbCtx));
-        mNetEngine->AsyncCallBuff(dstNode, g_groupIndex, MMS_OP_S_CRB_RECEIVE_DATA, buff, buffLen, callback);
+        SendCrbDataAsyncRequest(buff, buffLen, dstNode, callback);
         while (cbCtx.quota.load(std::memory_order_acquire) != 0) {
             CPU_RELAX();
         }
@@ -441,8 +476,7 @@ BResult CrbScheduler::SendMigrateRequest(uint16_t newRecoverNode, uint16_t ptId)
     CrbHandle handle = [this](void *reqBuff, uint16_t dstNode) -> BResult {
         CrbStartRequest req = *(static_cast<CrbStartRequest *>(reqBuff));
         BResult rsp = MMS_OK;
-        BResult ret =
-            mNetEngine->SyncCall<CrbStartRequest, BResult>(dstNode, g_groupIndex, MMS_OP_S_CRB_START_RECOVER, req, rsp);
+        BResult ret = SendStartRecoverRequest(req, dstNode, rsp);
         if (UNLIKELY(ret != MMS_OK)) {
             return ret;
         }
@@ -566,63 +600,74 @@ BResult CrbScheduler::EncodeKeyValueToBuff(char *msgBuff, uint32_t &buffOffset, 
     return MMS_OK;
 }
 
+BResult CrbScheduler::ProcessIndexValue(IndexValue *indexValue, uint32_t &curItemNum, uint16_t dstNodeId,
+                                        char *msgBuff, uint32_t &buffOffset)
+{
+    IoDataRequest *req = reinterpret_cast<IoDataRequest *>(msgBuff);
+    uint16_t keyLen = indexValue->keyLen;
+    uint64_t needLen = IO_DESCRIPTION_LEN + keyLen + NO_1 + indexValue->totalDataLen;
+    if (UNLIKELY(needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - IO_DATA_REQUEST_LEN))) {
+        LOG_ERROR("Ioctx buff is too small, need len:" << needLen << ", buff len:" << CRB_RECOVER_MESSAGE_BUFF_LEN
+                                                       << ".");
+        return MMS_INVALID_PARAM;
+    }
+
+    if (needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - buffOffset)) {  // 装满了
+        req->num = curItemNum;
+        req->head.ptv = 0;
+        if (mCrcSwitch) {
+            static uint32_t skip =
+                sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
+            req->crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(msgBuff + skip), buffOffset - skip);
+        }
+
+        BResult ret = CrbBatchSend(msgBuff, buffOffset, dstNodeId);
+        if (UNLIKELY(ret != MMS_OK)) {
+            LOG_ERROR("Crb Batch send failed, ret:" << ret << ".");
+            return ret;
+        }
+
+        curItemNum = 0;
+        buffOffset = IO_DATA_REQUEST_LEN;
+    }
+
+    MMS_TRACE_START(CRB_COPY_VALUE_TO_BUFF);
+    BResult ret = EncodeKeyValueToBuff(msgBuff, buffOffset, keyLen, indexValue);
+    MMS_TRACE_END(CRB_COPY_VALUE_TO_BUFF, ret);
+    if (UNLIKELY(ret != MMS_OK)) {
+        LOG_ERROR("Encode key value to buff failed, ret:" << ret << ", key:" << indexValue->key << ".");
+        return ret;
+    }
+
+    curItemNum++;
+    return MMS_OK;
+}
+
 BResult CrbScheduler::ProcessBucket(uint32_t bucketIndex, uint32_t &curItemNum, uint16_t dstNodeId, char *msgBuff,
                                     uint32_t &buffOffset)
 {
     IoDataRequest *req = reinterpret_cast<IoDataRequest *>(msgBuff);
     uint64_t bucketAddr = mCache->GetBucketAddr(bucketIndex);
     BucketNode *bucketNode = reinterpret_cast<BucketNode *>(bucketAddr);
-    BResult ret = MMS_OK;
 
     CacheReadLock(&bucketNode->status);
-    IndexNode *node = &bucketNode->head;
-    while (node->valid == FLAG_VALID) {
-        IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
-        if (indexValue->ptId != req->head.ptId) {
-            node = &indexValue->next;
-            continue;
-        }
-
-        uint16_t keyLen = strlen(indexValue->key);
-        uint64_t needLen = IO_DESCRIPTION_LEN + keyLen + NO_1 + indexValue->totalDataLen;
-        if (UNLIKELY(needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - IO_DATA_REQUEST_LEN))) {
-            CacheReadUnLock(&bucketNode->status);
-            LOG_ERROR("Ioctx buff is too small, need len:" << needLen << ", buff len:" << CRB_RECOVER_MESSAGE_BUFF_LEN
-                                                           << ".");
-            return MMS_INVALID_PARAM;
-        }
-
-        if (needLen > (CRB_RECOVER_MESSAGE_BUFF_LEN - buffOffset)) {  // 装满了
-            req->num = curItemNum;
-            req->head.ptv = 0;
-            if (mCrcSwitch) {
-                static uint32_t skip =
-                    sizeof(req->head) + sizeof(req->seqNo) + sizeof(req->negoSeqNo) + sizeof(req->crc);
-                req->crc = MmsCrcUtil::Crc32(reinterpret_cast<void *>(msgBuff + skip), buffOffset - skip);
+    for (uint32_t slotIndex = 0; slotIndex < BUCKET_INLINE_SLOT_NUM; slotIndex++) {
+        IndexNode *node = &bucketNode->slots[slotIndex];
+        while (node->valid == FLAG_VALID) {
+            IndexValue *indexValue = reinterpret_cast<IndexValue *>(node->indexValueAddr);
+            if (indexValue->ptId != req->head.ptId) {
+                node = &indexValue->next;
+                continue;
             }
 
-            ret = CrbBatchSend(msgBuff, buffOffset, dstNodeId);
+            BResult ret = ProcessIndexValue(indexValue, curItemNum, dstNodeId, msgBuff, buffOffset);
             if (UNLIKELY(ret != MMS_OK)) {
                 CacheReadUnLock(&bucketNode->status);
-                LOG_ERROR("Crb Batch send failed, ret: " << ret << ".");
                 return ret;
             }
 
-            curItemNum = 0;
-            buffOffset = IO_DATA_REQUEST_LEN;
+            node = &indexValue->next;
         }
-
-        MMS_TRACE_START(CRB_COPY_VALUE_TO_BUFF);
-        ret = EncodeKeyValueToBuff(msgBuff, buffOffset, keyLen, indexValue);
-        MMS_TRACE_END(CRB_COPY_VALUE_TO_BUFF, ret);
-        if (UNLIKELY(ret != MMS_OK)) {
-            CacheReadUnLock(&bucketNode->status);
-            LOG_ERROR("Encode key value to buff failed, ret:" << ret << ", key:" << indexValue->key << ".");
-            return ret;
-        }
-
-        curItemNum++;
-        node = &indexValue->next;
     }
 
     CacheReadUnLock(&bucketNode->status);

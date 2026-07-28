@@ -26,6 +26,7 @@
 #include "mms_lock.h"
 #include "mms_mem_allocator.h"
 #include "mms_mem_mgr.h"
+
 namespace ock {
 namespace mms {
 constexpr uint16_t FLAG_INVALID = 0;
@@ -35,6 +36,7 @@ constexpr uint32_t ROOT_POS_OFFSET = 0;
 constexpr uint32_t INDEX_COUNT_OFFSET = 4;
 constexpr uint32_t BUCKET_COUNT_OFFSET = 8;
 constexpr uint32_t BUCKET_NODE_BASE_OFFSET = 12;
+constexpr uint32_t BUCKET_INLINE_SLOT_NUM = 8;
 
 struct IndexNode {
     uint32_t hashCode;
@@ -46,12 +48,13 @@ struct IndexNode {
 
 struct BucketNode {
     struct RwLockStatus status;
-    IndexNode head;
+    IndexNode slots[BUCKET_INLINE_SLOT_NUM];
 };
 
 struct IndexValue {
     IndexNode next;
     char key[MAX_KEY_SIZE];
+    uint16_t keyLen;
     MmsPtId ptId;
     uint16_t isDelete; // 墓碑标记
     uint32_t version;
@@ -66,11 +69,63 @@ struct DataHeader {
 
 struct ReplacePara {
     const char *key;
+    uint16_t keyLen;
     const char *value;
     uint64_t offset;
     uint64_t length;
     uint32_t version;
     MmsPtId ptId;
+};
+
+struct PutPara {
+    const char *key;
+    uint16_t keyLen;
+    const char *value;
+    uint64_t length;
+    uint32_t version;
+    MmsPtId ptId;
+    char **valueAddr;
+};
+
+struct GetPara {
+    const char *key;
+    uint16_t keyLen;
+    uint64_t offset;
+    uint64_t length;
+    char **value;
+    uint64_t *realLength;
+};
+
+struct UpdatePara {
+    const char *key;
+    uint16_t keyLen;
+    const char *value;
+    uint64_t offset;
+    uint64_t length;
+    uint32_t version;
+};
+
+struct IndexValueCtx {
+    uint64_t addr;
+    uint64_t numaOffset;
+    uint16_t numaId;
+    IndexValue *value;
+};
+
+struct ExistingPutPara {
+    IndexNode *existingNode;
+    const char *key;
+    uint16_t keyLen;
+    const char *value;
+    uint64_t length;
+    char **valueAddr;
+};
+
+struct CacheShard {
+    uint16_t numaId;
+    uint64_t bucketBaseAddr;
+    uint64_t bucketMemSize;
+    uint32_t bucketCount;
 };
 
 constexpr uint32_t INDEX_NODE_SIZE = sizeof(IndexNode);
@@ -103,56 +158,76 @@ public:
         CacheLog::Instance()->SetMinLogLevel(level);
     }
 
-    inline uint32_t GetBucketCount() const
-    {
-        return *reinterpret_cast<uint32_t *>(mBaseAddr + BUCKET_COUNT_OFFSET);
-    }
+    uint32_t GetBucketCount() const;
 
-    inline uint64_t GetBucketAddr(uint32_t bucketIndex)
-    {
-        return mBaseAddr + BUCKET_NODE_BASE_OFFSET + static_cast<uint64_t>(bucketIndex) * BUCKET_NODE_SIZE;
-    }
+    uint64_t GetBucketAddr(uint32_t bucketIndex);
 
     inline void SetRecoverStatus(bool isRecovering)
     {
         mIsRecovering.store(isRecovering, std::memory_order_release);
     }
 
-    BResult HandlePutExistingNode(IndexNode *existingNode, const char *key, const char *value, uint64_t length);
-    BResult HandleReplacePut(IndexNode &curNode, const std::string &key, const char *value, uint64_t length);
-    BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, const char *key);
+    BResult HandlePutExistingNode(const ExistingPutPara &para);
+    BResult InsertTombEntry(BucketNode *bucketNode, uint32_t hashCode, uint32_t version, uint16_t preferNumaId,
+                            const char *key, uint16_t keyLen);
 
-    BResult Put(const char *key, const char *value, uint64_t length, uint32_t version, MmsPtId ptId);
-    BResult Get(const char *key, uint64_t offset, uint64_t length, char *value, uint64_t *realLength);
-    BResult Update(const char *key, const char *value, uint64_t offset, uint64_t length, uint32_t version);
-    BResult Delete(const char *key, uint32_t version);
+    BResult Put(const PutPara &para);
+    BResult Get(const GetPara &para);
+    BResult Update(const UpdatePara &para);
+    BResult Delete(const char *key, uint16_t keyLen, uint32_t version);
     BResult Replace(const ReplacePara &para);
 
     // 返回实际读取到的字节数
     uint64_t GetDataFromBlock(IndexValue *indexValue, char *data, uint64_t offset, uint64_t dataLen);
+    uint64_t GetDataAddrFromBlock(IndexValue *indexValue, char **data, uint64_t offset, uint64_t dataLen);
     void ClearDeletedData();
 
     DEFINE_REF_COUNT_FUNCTIONS;
 
 private:
-    inline void PutBucketCount(uint32_t value)
-    {
-        *reinterpret_cast<uint32_t *>(mBaseAddr + BUCKET_COUNT_OFFSET) = value;
-    }
+    void PutBucketCount(CacheShard &shard, uint32_t value);
 
-    BResult AllocDataBlock(uint64_t remainLen, uint16_t &numaId, uint64_t &curBlockAddr, uint64_t &curBuffSize);
+    CacheShard &SelectShard(uint32_t hashCode);
 
-    BResult PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen);
+    uint64_t GetBucketAddr(const CacheShard &shard, uint32_t bucketIndex) const;
 
-    BResult ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
+    BResult AllocDataBlock(uint64_t remainLen, uint16_t preferNumaId, uint16_t &numaId, uint64_t &curBlockAddr,
+                           uint64_t &curBuffSize);
+
+    BResult PutDataIntoBlock(IndexValue *indexValue, const char *data, uint64_t dataLen, uint16_t preferNumaId);
+
+    BResult CreatePutIndexValue(const PutPara &para, uint16_t preferNumaId, IndexValueCtx &ctx);
+
+    void FreeIndexValue(const IndexValueCtx &ctx);
+
+    void FillPutValueAddr(IndexValue *indexValue, char **valueAddr);
+
+    void InsertPutIndexValue(BucketNode *bucketNode, uint32_t hashCode, const IndexValueCtx &ctx);
+
+    BResult ReviveDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                            uint16_t preferNumaId);
 
     BResult UpdateDataInCurrentBlock(IndexValue *indexValue, DataHeader *header, const char *data, uint64_t offset,
                                      uint64_t dataLen);
 
     BResult ExpandAndUpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
-                                     uint64_t curBlockAddr);
+                                     uint64_t curBlockAddr, uint16_t preferNumaId);
 
-    BResult UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen);
+    BResult UpdateDataBlock(IndexValue *indexValue, const char *data, uint64_t offset, uint64_t dataLen,
+                            uint16_t preferNumaId);
+
+    BResult HandleDeleteExistingNode(BucketNode *bucketNode, IndexNode *node, uint32_t version);
+
+    BResult HandleDeleteMissingNode(BucketNode *bucketNode, uint32_t hashCode, uint16_t preferNumaId, const char *key,
+                                    uint16_t keyLen, uint32_t version);
+
+    BResult ReplaceExistingNode(IndexNode *existingNode, const ReplacePara &para, uint16_t preferNumaId);
+
+    BResult HandleReplacePut(IndexNode &curNode, const char *key, uint16_t keyLen, const char *value, uint64_t length,
+                             uint16_t preferNumaId);
+
+    BResult InsertReplaceNode(BucketNode *bucketNode, uint32_t hashCode, const ReplacePara &para,
+                              uint16_t preferNumaId);
 
 private:
     MmsMemMgrPtr mMemMgr = nullptr;
@@ -160,6 +235,8 @@ private:
     MmsMemAllocatorPtr mValueAllocator = nullptr;
 
     uint64_t mBaseAddr = 0;
+    uint32_t mTotalBucketCount = 0;
+    std::vector<CacheShard> mShards;
     std::atomic<bool> mIsRecovering{false};
 
     DEFINE_REF_COUNT_VARIABLE;

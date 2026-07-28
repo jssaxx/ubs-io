@@ -32,7 +32,7 @@ if(NOT USE_SYSTEM_HCOM)
     FetchContent_Declare(
             ubs_comm
             GIT_REPOSITORY https://gitcode.com/openeuler/ubs-comm.git
-            GIT_TAG tag_BeMing_Huatai_430_Poc_01
+            GIT_TAG master
             SOURCE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/ubs_comm"
     )
     FetchContent_GetProperties(ubs_comm)

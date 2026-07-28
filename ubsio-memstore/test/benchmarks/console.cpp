@@ -14,10 +14,34 @@
 #include <memory>
 #include <csignal>
 #include <climits>
+#include <sstream>
 #include <sys/resource.h>
 #include "mms_client.h"
+#include "mms_client_log.h"
 
 static std::atomic<bool> gDaemonRunning = { false };
+
+std::string OpTypeToString(OperateType opType)
+{
+    switch (opType) {
+        case OperateType::OP_PUT:
+            return "OP_PUT";
+        case OperateType::OP_DELETE:
+            return "OP_DELETE";
+        default:
+            return "OP_UNKNOWN";
+    }
+}
+
+static void NotifyCallbackFun(const char *key, uint32_t keyLen, OperateType opType, void *lpUserData)
+{
+    (void)lpUserData;
+    std::string notifyKey(key, keyLen);
+    std::ostringstream oss;
+    oss << "Data changed, key:" << notifyKey << " opType:" << OpTypeToString(opType) << ".";
+    auto logLevel = static_cast<int>(ock::mms::MmsClientLog::Level::LOG_LEVEL_INFO);
+    ock::mms::MmsClientLog::Instance()->Log(logLevel, oss.str());
+}
 
 static void ConsoleHandleSigterm(int signum)
 {
@@ -38,9 +62,9 @@ static void ConsoleHandleSigterm(int signum)
     gDaemonRunning = false;
 }
 
-static void ServiceStateFunc(bool serviceable)
+static void ServiceStateFunc(uint8_t serviceable)
 {
-    std::string isNormal = serviceable ? "normal" : "fault";
+    std::string isNormal = (serviceable != 0) ? "normal" : "fault";
     std::cout << "mms service state is: " << isNormal.c_str() << "." << std::endl;
 }
 
@@ -57,9 +81,15 @@ int main(int argc, char **argv)
     options.netGroupNum = static_cast<uint16_t>(std::stoul(argv[3]));
     options.tlsEnable = 0;
 
-    auto ret = MmsInitialize(options, ServiceStateFunc);
+    auto ret = MmsInitialize(&options, ServiceStateFunc);
     if (ret != RET_MMS_OK) {
         std::cout << "mms console start failed:" << ret << std::endl;
+        return -1;
+    }
+
+    auto callbackRet = MmsRegisterNotifyCallback(NotifyCallbackFun, nullptr);
+    if (callbackRet != RET_MMS_OK) {
+        std::cout << "mms register notify callback failed:" << callbackRet << "." << std::endl;
         return -1;
     }
 

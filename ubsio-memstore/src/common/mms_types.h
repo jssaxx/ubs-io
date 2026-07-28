@@ -100,7 +100,8 @@ constexpr uint32_t MAX_NODES_NUM = 8;
 constexpr uint32_t MAX_GROUPS_NUM = 32;
 constexpr uint32_t MAX_NUMAS_NUM = 4;
 constexpr uint32_t MAX_HEAD_SIZE = 32;
-constexpr uint32_t MAX_KEY_SIZE = 128;
+constexpr uint32_t MAX_KEY_SIZE = 32;
+constexpr uint16_t NOTIFY_SHM_MAX_WORKERS = 16;
 constexpr uint32_t MIN_KEY_SIZE = NO_1;
 constexpr uint32_t MIN_VALUE_SIZE = NO_1;
 
@@ -112,4 +113,3 @@ constexpr uint32_t SEQ_QUEUE_LEN_T = SEQ_QUEUE_LEN * NO_2;
 
 
 #endif // MMSCORE_MMS_TYPES_H
-

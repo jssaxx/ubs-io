@@ -2,7 +2,7 @@
 
 ## 概述
 
-MemStore（以下简称MMS），面向证券极速交易系统。传统交易系统使用磁盘数据读写架构，订单和数据库跨节点访问，交易场景时延较大，目前极速交易场景主要通过缩短传输距离及低时延交换机减小交易时延，业内同质化严重，缺乏竞争力，MMS提供基于RDMA的极致内存管理方案，提供证券核心交易系统数据极速内存同步服务，来满足客户诉求。
+MemStore（以下简称 MMS）面向证券极速交易系统。传统交易系统使用磁盘数据读写架构，订单和数据库跨节点访问，交易场景时延较大。目前极速交易场景主要通过缩短传输距离及低时延交换机减小交易时延，业内同质化严重，缺乏竞争力。MMS 提供基于 RDMA和UB 通信的极致内存管理方案，提供证券核心交易系统数据极速内存同步服务，满足客户诉求。
 
 ## 安装前准备
 
@@ -10,22 +10,26 @@ MemStore（以下简称MMS），面向证券极速交易系统。传统交易系
 
 **清理环境**
 
-使用rpm -e ubs-io-memstore-\{version\}.oe2403sp3.aarch64.rpm卸载已经安装的memstore。
+使用以下命令卸载已经安装的 MMS。
 
-**安装Zookeeper**
+```cmd
+rpm -e ubs-io-memstore
+```
 
-1. 登录需要安装Zookeeper Server的节点。
-2. 进入目标目录，下载Zookeeper软件包并解压。
+**安装 ZooKeeper**
 
-    以下以目录“/user/local”为例。
+1. 登录需要安装 ZooKeeper Server 的节点。
+2. 进入目标目录，下载 ZooKeeper 软件包并解压。
+
+    以下以目录 `/usr/local` 为例。
 
     ```cmd
     cd /usr/local
-    wget http://archive.apache.org/dist/zookeeper/zookeeper-3.7.0/zookeeper-3.7.0.tar.gz
-    tar -zxvf zookeeper-3.7.0.tar.gz
+    wget http://archive.apache.org/dist/zookeeper/zookeeper-3.9.5/zookeeper-3.9.5.tar.gz
+    tar -zxvf zookeeper-3.9.5.tar.gz
     ```
 
-3. 添加Zookeeper到环境变量。
+3. 添加 ZooKeeper 到环境变量。
     1. 打开文件。
 
         ```cmd
@@ -46,8 +50,8 @@ MemStore（以下简称MMS），面向证券极速交易系统。传统交易系
         source /etc/profile
         ```
 
-4. 修改Zookeeper配置文件。
-    1. 进入Zookeeper所在目录。
+4. 修改 ZooKeeper 配置文件。
+    1. 进入 ZooKeeper 所在目录。
 
         ```cmd
         cd /usr/local/zookeeper/conf
@@ -95,15 +99,15 @@ MemStore（以下简称MMS），面向证券极速交易系统。传统交易系
     ssh user@xxx.xxx.xxx.xxx
     ```
 
-**启动Zookeeper**
+**启动 ZooKeeper**
 
-1. 执行以下命令，启动Zookeeper。
+1. 执行以下命令，启动 ZooKeeper。
 
     ```cmd
     sh /usr/local/zookeeper/bin/zkServer.sh start
     ```
 
-2. 执行以下命令，验证Zookeeper启动成功。
+2. 执行以下命令，验证 ZooKeeper 启动成功。
 
     ```cmd
     sh zkServer.sh status
@@ -118,8 +122,9 @@ MemStore（以下简称MMS），面向证券极速交易系统。传统交易系
 
 ## 环境要求
 
->[!NOTICE] 说明
->安装部署MMS软件前，请提前检查物理环境是否满足要求，依赖软件是否已经安装成功，且安装的软件版本是否满足特性要求。前置环境要求是确保安装部署操作成功和后续应用程序正常执行的先决条件。
+> 注意：
+>
+> 安装部署MMS软件前，请提前检查物理环境是否满足要求，依赖软件是否已经安装成功，且安装的软件版本是否满足特性要求。前置环境要求是确保安装部署操作成功和后续应用程序正常执行的先决条件。
 
 **硬件要求**
 
@@ -135,7 +140,7 @@ MMS软件的安装部署程序均在计算节点上执行，集群中各个计�
 </tr>
 <tr><th class="firstcol" valign="top" width="30%" id="mcps1.2.3.2.1"><p><a></a><a></a>处理器</p>
 </th>
-<td class="cellrowborder" valign="top" width="70%" headers="mcps1.2.3.2.1 "><p><a></a><a></a>鲲鹏920处理器</p>
+<td class="cellrowborder" valign="top" width="70%" headers="mcps1.2.3.2.1 "><p><a></a><a></a>鲲鹏920、950处理器</p>
 </td>
 </tr>
 <tr><th class="firstcol" valign="top" width="30%" id="mcps1.2.3.3.1"><p><a></a><a></a>内存大小</p>
@@ -145,7 +150,7 @@ MMS软件的安装部署程序均在计算节点上执行，集群中各个计�
 </tr>
 <tr><th class="firstcol" valign="top" width="30%" id="mcps1.2.3.4.1"><p><a></a><a></a>内存频率</p>
 </th>
-<td class="cellrowborder" valign="top" width="70%" headers="mcps1.2.3.4.1 "><p><a></a><a></a>2666MHz</p>
+<td class="cellrowborder" valign="top" width="70%" headers="mcps1.2.3.4.1 "><p><a></a><a></a>2666MHz、2600MHz</p>
 </td>
 </tr>
 <tr><th class="firstcol" valign="top" width="30%" id="mcps1.2.3.5.1"><p><a></a><a></a>网卡</p>
@@ -158,15 +163,15 @@ MMS软件的安装部署程序均在计算节点上执行，集群中各个计�
 
 **软件要求**
 
-MMS软件安装前需要将前置依赖的软件安装成功，建议参考各软件安全标准规范安装，集群中各节点的操作系统和软件要求如[表2](#软件版本)所示，以下软件不在交付范围。
+MMS 软件安装前需要将前置依赖的软件安装成功，建议参考各软件安全标准规范安装，集群中各节点的操作系统和软件版本推荐如[表2](#软件版本)所示，以下软件不在交付范围。
 
 **表 2**  软件版本<a id="软件版本"></a>
 
-|软件名称|软件版本|
-|--|--|
-|OS|openEuler 22.03 LTS SP2|
-|ZooKeeper|3.7.0|
-|Java SDK|1.8|
+|软件名称| 软件版本                                             |
+|--|--------------------------------------------------|
+|OS| openEuler 22.03 LTS SP2 、openEuler 24.03 LTS SP3 |
+|ZooKeeper| 3.9.5                                            |
+|Java SDK| 1.8                                              |
 
 **获取软件安装包**
 
@@ -174,12 +179,16 @@ MMS软件安装前需要将前置依赖的软件安装成功，建议参考各�
 
 |名称|包名|发布类型|说明|获取地址|
 |--|--|--|--|--|
-|MMS软件包|ubs-io-memstore-{version}.oe2403sp3.aarch64.rpm|闭源|MMS软件rpm安装包。|联系华为工程师获取。|
+|MMS软件包|ubs-io-memstore-{version}.{os-version}.aarch64.rpm|闭源|MMS软件rpm安装包。|联系华为工程师获取。|
 
 ### 安装MMS
 
-1. 登录所有节点，上传memstore的rpm包。
-2. 在所有节点使用命令rpm -ivh ubs-io-memstore-\{version\}.oe2403sp3.aarch64.rpm安装mms。
+1. 登录所有节点，上传 MMS 的 rpm 包。
+2. 在所有节点使用以下命令安装 MMS。
+
+    ```cmd
+    rpm -ivh ubs-io-memstore-{version}.{os-version}.aarch64.rpm
+    ```
 
     安装后文件对应关系参照下表：
 
@@ -196,48 +205,50 @@ MMS软件安装前需要将前置依赖的软件安装成功，建议参考各�
 
     **表 2**  MMS配置项
 
-    |归属模块|配置项名称|简要描述|默认值|合法值/区间|
-    |--|--|--|--|--|
-    |Log|mms.log.level|日志打印级别。|info|debuginfowarntraceerror|
-    |Trace|mms.trace.switch|统计日志开关。|false|truefalse|
-    |Crc|mms.crc.switch|数据完整性校验开关。|false|truefalse|
-    |Sequence|mms.sequence.switch|消息序列化收发开关。|false|truefalse|
-    |Multicast|mms.multicast.switch|组播开关。|true|truefalse|
-    |Deployment|mms.deployment.mode|部署方式（分离/融合）。|separate|separateconverge|
-    |Memory|mms.mem.numa.id|Numa ID。|0,1|机器上numa的id号|
-    |mms.mem.numa.size|每个numa上分配内存的大小。单位：GB|8,8|机器对每个numa限制的内存范围内。|
-    |mms.mem.min_block_size|存储data的数据块小块内存大小。单位：KB|2|[1,64]|
-    |mms.mem.max_block_size|存储data的数据块大块内存大小。单位：KB|10|[1,64]|
-    |mms.mem.min_max_block_rate|小块和大块的总内存大小分配比例。|8:2|x:y，其中x、y均大于等于0，且x+y = 10|
-    |Network|mms.net.rpc.ip_mask|RPC掩码。|192.168.100.100/24|*.*.*.*/#，其中*为0 ~ 255，#为0 ~ 32|
-    |mms.net.rpc.listen_port|RPC端口。|7500|[7201, 7800]|
-    |mms.net.multicast.listen_port|组播端口|7501|[7201, 7800]|
-    |mms.net.rpc.protocol|RPC协议。|tcp|rdmatcp|
-    |mms.net.multicast.protocol|组播通信协议|rdma|rdmatcp注:UB通信需要用tcp|
-    |mms.net.rpc.connect.count|RPC每个通信channel里的连接数。|1|[1, 16]|
-    |mms.net.rpc.busy_polling_mode|rpc通信的工作方式是否是busy polling。|true|true, false|
-    |mms.net.rpc.worker.groups|rpc work组。|1,1|每组之间数字用','分割，表示每个组有多少个worker|
-    |mms.net.rpc.worker.groups.cpuset|worker CPU集合|0-0,2-2|每组之间数字用','分割，x-y表示绑定本组的worker到从x到y号cpu上，与配置项mms.net.rpc.worker.groups要对应。|
-    |mms.net.ipc.busy_polling_mode|ipc通信的工作方式是否是busy polling。|true|true, false|
-    |mms.net.ipc.worker.groups|ipc work组。|1,1|每组之间数字用','分割，表示每个组有多少个worker|
-    |mms.net.ipc.worker.groups.cpuset|worker CPU集合|1-1,3-3|每组之间数字用','分割，x-y表示绑定本组的worker到从x到y号cpu上，与配置项mms.net.ipc.worker.groups要对应。|
-    |mms.net.request.executor.thread.num|网络请求线程数。|8|[8, 256]|
-    |mms.net.request.executor.queue.size|网络请求队列大小。|1024|[1024 , 65535]|
-    |mms.net.publisher.worker.cpuset|组播中发送者的cpu组。|10-17|x-y，表示绑定工作线程到从x到y号cpu上，建议cpu数量与集群中节点数量一致。|
-    |mms.net.subscriber.worker.cpuset|组播中接收者的cpu组。|18-18|x-y，表示绑定工作线程到从x到y号cpu上，建议只配一个cpu来接收即可。|
-    |mms.net.message.max_buff_size|单次发送消息的最大buff的大小。单位: KB|70|1-4096，建议不要超过256，不然高并发下通信的内存块不够用。|
-    |TLS|mms.net.tls.enable|tls开关|true|truefalse|
-    |mms.net.tls.certification.path|服务端证书文件路径。|-|安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。|
-    |mms.net.tls.ca.cert.path|CA证书文件路径。|-|安全开关打开则需要为有效路径，安全开关关闭则不解析该配置项。|
-    |mms.net.tls.ca.crl.path|吊销列表文件路径。|-|可以为空，不为空时，安全开关打开且需要校验证书是否被吊销时为有效路径，安全开关关闭则不解析该配置项。|
-    |mms.net.tls.private.key.path|服务端证书私钥文件路径。|-|安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。|
-    |mms.net.tls.private.key.password.path|工作证书私钥口令的密文的文件路径。|-|安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。在加密私钥的时候，私钥口令建议满足复杂度要求。同时满足以下要求：口令长度至少8个字符。口令需要包含如下至少两种字符的组合。至少一个小写字母至少一个大写字母至少一个数字至少一个特殊字符：`~!@#$%^&*()-_=+\|[{}];:'"",<.>/?  和空格|
-    |mms.net.tls.decrypter.lib.path|安全解密函数so文件路径。|-|安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。|
-    |mms.net.tls.openssl.lib.path|openssl so文件所在目录路径。|-|为空时，使用系统路径下的so文件。不为空时，安全开关打开时则需要为有效路径，安全开关关闭则不解析该配置项。|
-    |Cluster manager|mms.cm.node.num|集群节点数。|8|[1, 8]|
-    |mms.cm.node.id|集群节点ID编号。|0xFFFFUL|[0, 0xFFFFUL]，该配置项默认不用配置，集群自行生成递增的节点号。|
-    |mms.cm.register_timeout_sec|集群注册超时时间（秒）。|10|[10, 60]|
-    |mms.cm.zk_host|集群Zookeeper地址。|127.0.0.1:2181|*.*.*.*:#，*为0 ~ 255，#为0 ~ 65535|
+    |归属模块|配置项名称| 简要描述                                                        |默认值/示例值| 合法值/区间                                                       |
+    |--|--|-------------------------------------------------------------|--|--------------------------------------------------------------|
+    |Log|mms.log.level| 日志打印级别。                                                     |info| error/warn/info/debug/trace                                  |
+    |Trace|mms.trace.switch| 统计日志开关。                                                     |false| true/false                                                   |
+    |Crc|mms.crc.switch| 数据完整性校验开关。                                                  |false| true/false                                                   |
+    |Sequence|mms.sequence.switch| 消息序列化收发开关。                                                  |false| true/false                                                   |
+    |Multicast|mms.multicast.switch| 组播开关。                                                       |true| true/false                                                   |
+    |Data Change Callback|mms.data.change.callback.switch| 数据变更通知开关。关闭后不建立 notify 链路，也不触发回调通知。                         |false| true/false                                                   |
+    |CRB|mms.crb.send.cpu.start| CRB 故障恢复发送线程池绑核起始 CPU，会绑定从这个核开始的4个连续核。配置为 -1 表示不指定绑核起始 CPU。 |68| [-1, 机器最大cpu号 - 3]                                           |
+    |Deployment|mms.deployment.mode| 部署方式。                                                       |separate| separate/converge                                            |
+    |Memory|mms.mem.numa.id| 分配内存的 NUMA ID 列表。                                           |0,1| 机器上有效的 NUMA ID，多个 ID 用英文逗号分隔。                                |
+    |Memory|mms.mem.numa.size| 每个 NUMA 上分配内存的大小，单位 GB。                                     |8,8| 与 `mms.mem.numa.id` 一一对应，取值不超过对应 NUMA 可用内存。                  |
+    |Memory|mms.mem.value.unit.size| Value 内存分配单元大小，单位 KB。                                       |1| [1, 64]                                                      |
+    |Network|mms.net.rpc.ip_mask| RPC 网卡 IP 掩码。                                               |192.168.100.100/24| IPv4 CIDR 格式，例如 `*.*.*.*/#`，其中 `#` 为 [0, 32]。                |
+    |Network|mms.net.rpc.listen_port| RPC 监听端口。                                                   |7500| [7201, 7800]                                                 |
+    |Network|mms.net.multicast.listen_port| 组播监听端口。                                                     |7501| [7201, 7800]                                                 |
+    |Network|mms.net.rpc.protocol| RPC 通信协议。                                                   |rdma| tcp/rdma                                                     |
+    |Network|mms.net.multicast.protocol| 组播通信协议。                                                     |rdma| tcp/rdma。UB 通信场景需要配置为 tcp。                                   |
+    |Network|mms.net.rpc.connect.count| RPC 每个 channel 中的连接数。                                       |1| [1, 16]                                                      |
+    |Network|mms.net.rpc.busy_polling_mode| RPC worker 是否使用 busy polling。                               |true| true/false                                                   |
+    |Network|mms.net.rpc.worker.groups| RPC worker group 配置。                                        |1,1| 多个 group 用英文逗号分隔，每个数字表示对应 group 的 worker 数。                  |
+    |Network|mms.net.rpc.worker.groups.cpuset| RPC worker 绑核配置。                                            |10-10,50-50| 与 `mms.net.rpc.worker.groups` 一一对应，`x-y` 表示绑定到 CPU x 到 y。    |
+    |Network|mms.net.ipc.busy_polling_mode| IPC worker 是否使用 busy polling。                               |true| true/false                                                   |
+    |Network|mms.net.ipc.worker.groups| IPC worker group 配置。                                        |1,1| 多个 group 用英文逗号分隔，每个数字表示对应 group 的 worker 数。                  |
+    |Network|mms.net.ipc.worker.groups.cpuset| IPC worker 绑核配置。                                            |12-12,52-52| 与 `mms.net.ipc.worker.groups` 一一对应，`x-y` 表示绑定到 CPU x 到 y。    |
+    |Network|mms.net.ipc.notify.groups| 数据变更通知专用 IPC worker group 配置。                               |1| 追加在普通 IPC group 后，仅在数据变更通知开关开启时使用。                           |
+    |Network|mms.net.ipc.notify.groups.cpuset| 数据变更通知专用 IPC worker 绑核配置。                                   |54-54| 与 `mms.net.ipc.notify.groups` 一一对应，避免与主干 IO worker 绑到同一 CPU。 |
+    |Network|mms.net.request.executor.thread.num| 网络请求处理线程数。                                                  |8| [8, 256]                                                     |
+    |Network|mms.net.request.executor.queue.size| 网络请求处理队列大小。                                                 |1024| [1024, 65535]                                                |
+    |Network|mms.net.publisher.worker.cpuset| 组播 publisher worker 绑核配置。                                      |10-17| 建议配置 `节点数-1` 个逗号分段，每段对应一个 group，段内 CPU 对应多个 worker；单段范围会自动均分。 |
+    |Network|mms.net.subscriber.worker.cpuset| 组播接收 worker 绑核配置。                                           |18-18| `x-y` 表示绑定到 CPU x 到 y，通常配置一个 CPU 即可。                         |
+    |Network|mms.net.message.max_buff_size| 单次发送消息的最大 buffer 大小，单位 KB。                                  |70| [1, 4096]，建议不超过 256。                                         |
+    |TLS|mms.net.tls.enable| TLS 开关。                                                     |true| true/false                                                   |
+    |TLS|mms.net.tls.certification.path| 服务端证书文件路径。                                                  |-| TLS 开启时需要配置有效路径。                                             |
+    |TLS|mms.net.tls.ca.cert.path| CA 证书文件路径。                                                  |-| TLS 开启时需要配置有效路径。                                             |
+    |TLS|mms.net.tls.ca.crl.path| 吊销列表文件路径。                                                   |-| 可为空；不为空时需要配置有效路径。                                            |
+    |TLS|mms.net.tls.private.key.path| 服务端证书私钥文件路径。                                                |-| TLS 开启时需要配置有效路径。                                             |
+    |TLS|mms.net.tls.private.key.password.path| 服务端证书私钥口令密文文件路径。                                            |-| TLS 开启时需要配置有效路径。私钥口令建议至少 8 个字符，且包含大小写字母、数字、特殊字符中的至少两类。       |
+    |TLS|mms.net.tls.decrypter.lib.path| 安全解密函数 so 文件路径。                                             |-| TLS 开启时需要配置有效路径。                                             |
+    |TLS|mms.net.tls.openssl.lib.path| OpenSSL so 文件所在目录路径。                                        |-| 为空时使用系统路径；不为空且 TLS 开启时需要配置有效路径。                              |
+    |Cluster manager|mms.cm.node.num| 集群节点数。                                                      |3| [1, 8]                                                       |
+    |Cluster manager|mms.cm.node.id| 集群节点 ID。                                                    |未配置| [0, 65535]。默认不配置，由集群自动生成递增节点号。                               |
+    |Cluster manager|mms.cm.register_timeout_sec| 集群注册超时时间，单位秒。                                               |10| [10, 60]                                                     |
+    |Cluster manager|mms.cm.zk_host| 集群 ZooKeeper 地址。                                            |192.168.100.100:2181| IPv4:端口格式，例如 `*.*.*.*:#`，其中端口为 [0, 65535]。                   |
 
 ### 开启TLS认证
 
@@ -312,25 +323,37 @@ MMS已经安装成功。获取TLS认证需要的文件，如下表所示。
 
 ### 配置RDMA无损
 
+> [!TIP]
+> 如果不需要使用RDMA协议，跳过此步骤。
+
 软件安装环境上如配置有RoCE网卡，且预设MMS网络协议使用RDMA，则首先需要在环境上配置RDMA无损参数，防止数据通信过程中报错，具体配置方法请参考各网卡厂商的官方RDMA使用说明书。
 
 ### 启动MMS
 
 #### 融合部署模式
 
-融合部署模式MMS没有单独的进程，MMS进程与用户进程一起，需要用户链接libmms\_server.so。
+融合部署模式 MMS 没有单独的进程，MMS 进程与用户进程一起，需要用户链接 `libmms_server.so`。
 
-1. 修改mms.conf配置文件，"mms.deployment.mode"配置项改为"converge"。
-2. 链接libmms\_server.so，调用MmsInitialize函数启动服务。
+1. 修改 `mms.conf` 配置文件，将 `mms.deployment.mode` 配置项改为 `converge`。
+2. 链接 `libmms_server.so`，调用 `MmsInitialize` 函数启动服务。
 
 #### 分离部署模式
 
-分离部署模式MMS会有一个独立的server进程，server端的配置从mms.conf里读取，client端在用户进程里，需要用户链接libmms\_client.so。
+分离部署模式 MMS 会有一个独立的 server 进程，server 端的配置从 `mms.conf` 里读取。client 端在用户进程里，需要用户链接 `libmms_client.so`。
 
-1. 修改mms.conf配置文件，"mms.deployment.mode"配置项改为"separate";
-2. 启动server端进程，"mmsd &";
-3. 链接libmms\_client.so，调用MmsInitialize函数启动client端服务。
+1. 修改 `mms.conf` 配置文件，将 `mms.deployment.mode` 配置项改为 `separate`。
+2. 启动 server 端进程。
+
+    ```cmd
+    mmsd &
+    ```
+
+3. 链接 `libmms_client.so`，调用 `MmsInitialize` 函数启动 client 端服务。
 
 ## 卸载软件
 
-使用rpm -e ubs-io-memstore-\{version\}.oe2403sp3.aarch64.rpm卸载。
+使用以下命令卸载。
+
+```cmd
+rpm -e ubs-io-memstore
+```

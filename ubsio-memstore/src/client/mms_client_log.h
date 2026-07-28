@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include "mms_ref.h"
 #include "mms_log.h"
 #include "mms_types.h"
@@ -64,7 +65,7 @@ public:
                 std::cout << "Failed to check log dir." << std::endl;
                 return -1;
             }
-            options.path = logDir + "/mms_client.log";
+            options.path = logDir + "/mms_client_" + std::to_string(static_cast<uint32_t>(getpid())) + ".log";
         }
 
         mLogger = Logger::Instance(options);

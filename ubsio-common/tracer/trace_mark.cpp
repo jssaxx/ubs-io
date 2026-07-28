@@ -12,7 +12,6 @@
 
 #include "trace_mark.h"
 
-#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cmath>
@@ -22,12 +21,13 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iomanip>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <sstream>
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
-#include <vector>
 
 namespace ock {
 namespace tracemark {
@@ -43,6 +43,12 @@ constexpr int NUMBER_PRECISION = 3;
 constexpr int TIME_WIDTH = 2;
 constexpr mode_t DIR_MODE = 0750;
 constexpr mode_t FILE_MODE = S_IRUSR | S_IWUSR | S_IRGRP;
+constexpr uint32_t HISTOGRAM_SUB_BUCKET_BITS = 5;
+constexpr uint32_t HISTOGRAM_SUB_BUCKET_NUM = 1U << HISTOGRAM_SUB_BUCKET_BITS;
+constexpr uint32_t HISTOGRAM_EXPONENT_NUM = 64 - HISTOGRAM_SUB_BUCKET_BITS;
+constexpr uint32_t HISTOGRAM_BUCKET_NUM =
+    HISTOGRAM_SUB_BUCKET_NUM + HISTOGRAM_EXPONENT_NUM * HISTOGRAM_SUB_BUCKET_NUM;
+constexpr double P99_QUANTILE = 0.99;
 
 uint32_t ServiceId(int32_t traceId)
 {
@@ -83,7 +89,7 @@ std::string HeaderString()
        << "\t" << std::left << std::setw(DIGIT_WIDTH) << "MIN(us)"
        << "\t" << std::left << std::setw(DIGIT_WIDTH) << "MAX(us)"
        << "\t" << std::left << std::setw(DIGIT_WIDTH) << "AVG(us)"
-       << "\t" << std::left << std::setw(DIGIT_WIDTH) << "TPX(us)"
+       << "\t" << std::left << std::setw(DIGIT_WIDTH) << "P99(us)"
        << "\t" << std::left << std::setw(DIGIT_WIDTH) << "TOTAL(us)";
     return ss.str();
 }
@@ -159,6 +165,100 @@ bool CreateParentDirs(const std::string &filePath)
     return true;
 }
 
+class LatencyHistogram {
+public:
+    void Initialize()
+    {
+        if (mBuckets != nullptr) {
+            return;
+        }
+        mBuckets.reset(new (std::nothrow) std::atomic<uint64_t>[HISTOGRAM_BUCKET_NUM]);
+        if (mBuckets == nullptr) {
+            return;
+        }
+        Reset();
+    }
+
+    void Record(uint64_t latencyNs)
+    {
+        if (mBuckets == nullptr) {
+            return;
+        }
+        mBuckets[BucketIndex(latencyNs)].fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void Reset()
+    {
+        if (mBuckets == nullptr) {
+            return;
+        }
+        for (uint32_t index = 0; index < HISTOGRAM_BUCKET_NUM; ++index) {
+            mBuckets[index].store(0, std::memory_order_relaxed);
+        }
+    }
+
+    double PercentileUs(bool reset) const
+    {
+        if (mBuckets == nullptr) {
+            return 0.0;
+        }
+
+        uint64_t counts[HISTOGRAM_BUCKET_NUM];
+        uint64_t total = 0;
+        for (uint32_t index = 0; index < HISTOGRAM_BUCKET_NUM; ++index) {
+            counts[index] = reset ? mBuckets[index].exchange(0, std::memory_order_relaxed)
+                                  : mBuckets[index].load(std::memory_order_relaxed);
+            total += counts[index];
+        }
+        if (total == 0) {
+            return 0.0;
+        }
+
+        uint64_t target = static_cast<uint64_t>(std::ceil(P99_QUANTILE * static_cast<double>(total)));
+        uint64_t cumulative = 0;
+        for (uint32_t index = 0; index < HISTOGRAM_BUCKET_NUM; ++index) {
+            cumulative += counts[index];
+            if (cumulative >= target) {
+                return static_cast<double>(BucketUpperBound(index)) / NS_PER_US;
+            }
+        }
+        return static_cast<double>(UINT64_MAX) / NS_PER_US;
+    }
+
+private:
+    static uint32_t BucketIndex(uint64_t latencyNs)
+    {
+        if (latencyNs < HISTOGRAM_SUB_BUCKET_NUM) {
+            return static_cast<uint32_t>(latencyNs);
+        }
+
+        uint32_t exponent = 63U - static_cast<uint32_t>(__builtin_clzll(latencyNs));
+        uint32_t shift = exponent - HISTOGRAM_SUB_BUCKET_BITS;
+        uint32_t subBucket = static_cast<uint32_t>(latencyNs >> shift) - HISTOGRAM_SUB_BUCKET_NUM;
+        return HISTOGRAM_SUB_BUCKET_NUM +
+               (exponent - HISTOGRAM_SUB_BUCKET_BITS) * HISTOGRAM_SUB_BUCKET_NUM + subBucket;
+    }
+
+    static uint64_t BucketUpperBound(uint32_t index)
+    {
+        if (index < HISTOGRAM_SUB_BUCKET_NUM) {
+            return index;
+        }
+
+        uint32_t relativeIndex = index - HISTOGRAM_SUB_BUCKET_NUM;
+        uint32_t exponent = relativeIndex / HISTOGRAM_SUB_BUCKET_NUM + HISTOGRAM_SUB_BUCKET_BITS;
+        uint32_t subBucket = relativeIndex % HISTOGRAM_SUB_BUCKET_NUM;
+        if (exponent == 63U && subBucket == HISTOGRAM_SUB_BUCKET_NUM - 1U) {
+            return UINT64_MAX;
+        }
+        uint32_t shift = exponent - HISTOGRAM_SUB_BUCKET_BITS;
+        return (static_cast<uint64_t>(HISTOGRAM_SUB_BUCKET_NUM + subBucket + 1U) << shift) - 1U;
+    }
+
+private:
+    mutable std::unique_ptr<std::atomic<uint64_t>[]> mBuckets;
+};
+
 struct TracePoint {
     void Begin(const char *traceName)
     {
@@ -183,11 +283,8 @@ struct TracePoint {
         intervalTotalLatency.fetch_add(latencyNs, std::memory_order_relaxed);
         goodEnd.fetch_add(1, std::memory_order_relaxed);
         intervalGoodEnd.fetch_add(1, std::memory_order_relaxed);
-        {
-            std::lock_guard<std::mutex> lock(samplesMutex);
-            samples.emplace_back(latencyNs);
-            intervalSamples.emplace_back(latencyNs);
-        }
+        totalHistogram.Record(latencyNs);
+        intervalHistogram.Record(latencyNs);
     }
 
     void Clear()
@@ -199,9 +296,8 @@ struct TracePoint {
         minLatency.store(UINT64_MAX, std::memory_order_relaxed);
         maxLatency.store(0, std::memory_order_relaxed);
         ResetInterval();
-        std::lock_guard<std::mutex> lock(samplesMutex);
-        samples.clear();
-        intervalSamples.clear();
+        totalHistogram.Reset();
+        intervalHistogram.Reset();
     }
 
     bool IsActive() const
@@ -238,6 +334,8 @@ private:
         std::lock_guard<std::mutex> lock(nameMutex);
         if (!active.load(std::memory_order_relaxed)) {
             name = traceName == nullptr ? "" : traceName;
+            totalHistogram.Initialize();
+            intervalHistogram.Initialize();
             active.store(true, std::memory_order_release);
         }
     }
@@ -260,27 +358,7 @@ private:
 
     double PercentileUs(bool intervalOnly) const
     {
-        std::vector<uint64_t> copied;
-        {
-            std::lock_guard<std::mutex> lock(samplesMutex);
-            copied = intervalOnly ? intervalSamples : samples;
-            if (intervalOnly) {
-                intervalSamples.clear();
-            }
-        }
-        if (copied.empty()) {
-            return 0.0;
-        }
-
-        std::sort(copied.begin(), copied.end());
-        size_t index = static_cast<size_t>(std::ceil(0.99 * copied.size()));
-        if (index == 0) {
-            index = 1;
-        }
-        if (index > copied.size()) {
-            index = copied.size();
-        }
-        return static_cast<double>(copied[index - 1]) / NS_PER_US;
+        return intervalOnly ? intervalHistogram.PercentileUs(true) : totalHistogram.PercentileUs(false);
     }
 
 private:
@@ -299,9 +377,8 @@ private:
     std::atomic<uint64_t> intervalTotalLatency{ 0 };
     std::atomic<uint64_t> intervalMinLatency{ UINT64_MAX };
     std::atomic<uint64_t> intervalMaxLatency{ 0 };
-    mutable std::mutex samplesMutex;
-    mutable std::vector<uint64_t> samples;
-    mutable std::vector<uint64_t> intervalSamples;
+    LatencyHistogram totalHistogram;
+    LatencyHistogram intervalHistogram;
 };
 
 class TraceStore {

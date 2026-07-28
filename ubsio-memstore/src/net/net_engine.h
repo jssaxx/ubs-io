@@ -13,8 +13,11 @@
 #define NET_ENGINE_H
 
 #include <cstdint>
-#include <arpa/inet.h>
+#include <memory>
+#include <new>
 #include <unordered_map>
+#include <vector>
+#include <arpa/inet.h>
 #include "hcom/hcom.h"
 #include "hcom/hcom_service.h"
 #include "mms_monotonic.h"
@@ -32,6 +35,21 @@ constexpr size_t KEYPASS_MAX_LEN = 10000;
 using PrivateKeyCallback =
     std::function<bool(const std::string &, std::string &, void *&, int &, ock::hcom::UBSHcomTLSEraseKeypass &)>;
 
+struct WorkerGroupConfig {
+    std::vector<std::string> groups;
+    std::vector<std::string> cpuSets;
+};
+
+struct NetEngineInitOptions {
+    int16_t timeoutSec = 0;
+    uint32_t coreThreadNum = 0;
+    uint32_t queueSize = 0;
+    NetLogFunc logFunc = nullptr;
+    NetMemList memList;
+    bool startConnector = true;
+    bool startRequestExecutor = true;
+};
+
 class NetEngine;
 using NetEnginePtr = Ref<NetEngine>;
 class NetEngine {
@@ -39,8 +57,7 @@ public:
     NetEngine() = default;
     ~NetEngine() = default;
 
-    BResult Initialize(int16_t timeoutSec, uint32_t coreThreadNum, uint32_t queueSize, NetLogFunc func,
-        NetMemList &memList);
+    BResult Initialize(const NetEngineInitOptions &options);
     BResult Start(const NetOptions &opt);
     void Stop();
 
@@ -157,6 +174,26 @@ public:
     }
 
     template <typename TReq, typename TResp>
+    BResult SyncCall(const MmsNodeId &targetNodeId, uint32_t pid, uint32_t groupIndex, uint16_t opCode, TReq &req,
+                     TResp &resp)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, pid, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", pid:" << pid <<
+                ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return SyncCall(opCode, req, resp, ch);
+    }
+
+    template <typename TReq, typename TResp>
     BResult SyncCall(const MmsNodeId &targetNodeId, uint32_t groupIndex, uint16_t opCode, TReq &req, TResp **resp,
                      uint64_t &respLen)
     {
@@ -212,6 +249,46 @@ public:
         }
 
         return AsyncCallWithoutResponse(opCode, req, ch);
+    }
+
+    template <typename TReq>
+    BResult SendWithoutResponse(const MmsNodeId &targetNodeId, uint32_t pid, uint32_t groupIndex, uint16_t opCode,
+                                TReq &req)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, pid, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", pid:" << pid <<
+                ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return SendWithoutResponse(opCode, req, ch);
+    }
+
+    template <typename TReq>
+    BResult AsyncSendWithoutResponse(const MmsNodeId &targetNodeId, uint32_t pid, uint32_t groupIndex, uint16_t opCode,
+                                     TReq &req)
+    {
+        if (UNLIKELY(opCode >= MAX_NEW_REQ_HANDLER)) {
+            NET_LOG_ERROR("Invalid opCode " << opCode << " which should be less than " << MAX_NEW_REQ_HANDLER);
+            return MMS_INVALID_PARAM;
+        }
+
+        ChannelPtr ch{ nullptr };
+        auto ret = GetChanel(targetNodeId, pid, ch, groupIndex);
+        if (UNLIKELY(ret != MMS_OK || ch == nullptr)) {
+            NET_LOG_ERROR("Failed to get channel by target node id " << targetNodeId << ", pid:" << pid <<
+                ", result " << ret);
+            return MMS_NET_RETRY;
+        }
+
+        return AsyncSendWithoutResponse(opCode, req, ch);
     }
 
     template <typename TReq>
@@ -339,11 +416,11 @@ public:
         if (resp != nullptr) {
             reqMsg.address = resp;
             reqMsg.size = respSize;
-            result = ReplyChannel(ctx, replyCtx, reqMsg, callback);
+            result = ctx.Channel()->Reply(replyCtx, reqMsg, callback);
         } else {
             reqMsg.address = &retCode;
             reqMsg.size = sizeof(retCode);
-            result = ReplyChannel(ctx, replyCtx, reqMsg, callback);
+            result = ctx.Channel()->Reply(replyCtx, reqMsg, callback);
         }
         if (UNLIKELY(result != MMS_OK)) {
             LOG_ERROR("Reply Send failed, ret:" << result << ".");
@@ -466,8 +543,15 @@ public:
 
 private:
     BResult AssignIpcServiceOptions(const NetOptions &opt, bool isOobSvr);
+    BResult CreateIpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &ipcConfig);
+    BResult PrepareIpcTls(const NetOptions &opt);
+    BResult AddIpcWorkerGroups(bool isOobSvr, const WorkerGroupConfig &ipcConfig);
+    BResult StartCreatedIpcService(const NetOptions &opt, bool isOobSvr);
     BResult StartIpcService(const NetOptions &opt);
     BResult AssignRpcServiceOptions(const NetOptions &opt, bool isOobSvr);
+    BResult CreateRpcService(const NetOptions &opt, bool isOobSvr, const WorkerGroupConfig &rpcConfig);
+    BResult AddRpcWorkerGroups(const WorkerGroupConfig &rpcConfig);
+    BResult StartCreatedRpcService(const NetOptions &opt, bool isOobSvr);
     BResult StartRpcService(const NetOptions &opt);
     PrivateKeyCallback CreatePrivateKeyCallback(const NetOptions &options);
     void SetDriverTlsCallback(const NetOptions &options, ock::hcom::UBSHcomTlsOptions &tlsOpt);
@@ -478,35 +562,6 @@ private:
     inline void RegisterDecryptHandler(const DecryptFunc &h)
     {
         mDecryptHandler = h;
-    }
-
-    inline int32_t CallChannel(ChannelPtr &ch, const ock::hcom::UBSHcomRequest &req,
-                               ock::hcom::UBSHcomResponse &resp)
-    {
-        return UseHlcRpc(ch) ? ch->CallWithHlc(req, resp) : ch->Call(req, resp);
-    }
-
-    inline int32_t CallChannel(ChannelPtr &ch, const ock::hcom::UBSHcomRequest &req,
-                               ock::hcom::UBSHcomResponse &resp, const NetCallback *callback)
-    {
-        return UseHlcRpc(ch) ? ch->CallWithHlc(req, resp, callback) : ch->Call(req, resp, callback);
-    }
-
-    inline int32_t ReplyChannel(ServiceContext &ctx, const ock::hcom::UBSHcomReplyContext &replyCtx,
-                                const ock::hcom::UBSHcomRequest &req, const NetCallback *callback)
-    {
-        return UseHlcRpc(ctx.Channel()) ? ctx.Channel()->ReplyWithHlc(replyCtx, req, callback) :
-            ctx.Channel()->Reply(replyCtx, req, callback);
-    }
-
-    inline bool UseHlcRpc(const ChannelPtr &ch) const
-    {
-        if (!mUseHlcRpc) {
-            return false;
-        }
-
-        NetChannelUpCtx ctx(ch->GetUpCtx());
-        return ctx.peerId != INVALID_NID;
     }
 
     static inline BResult NetResult(hcom::SerResult ret)
@@ -529,7 +584,7 @@ private:
         using namespace ock::hcom;
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
         UBSHcomResponse respMsg(static_cast<void *>(&resp), sizeof(TResp));
-        auto result = CallChannel(ch, reqMsg, respMsg);
+        auto result = ch->Call(reqMsg, respMsg);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -549,7 +604,7 @@ private:
         using namespace ock::hcom;
         UBSHcomRequest reqMsg(req, reqLen, opCode);
         UBSHcomResponse respMsg(static_cast<void *>(&resp), sizeof(TResp));
-        auto result = CallChannel(ch, reqMsg, respMsg);
+        auto result = ch->Call(reqMsg, respMsg);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -571,7 +626,7 @@ private:
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
         UBSHcomResponse respMsg{};
 
-        result = CallChannel(ch, reqMsg, respMsg);
+        result = ch->Call(reqMsg, respMsg);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -595,9 +650,52 @@ private:
         UBSHcomResponse respMsg{};
 
         auto *netCallback = UBSHcomNewCallback([](UBSHcomServiceContext &context) { return; }, std::placeholders::_1);
-        result = CallChannel(ch, reqMsg, respMsg, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+        return MMS_OK;
+    }
+
+    template <typename TReq> BResult SendWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
+
+        auto result = ch->Send(reqMsg, nullptr);
+        if (UNLIKELY(result != MMS_OK)) {
+            NET_LOG_ERROR("Failed to send peer msg with op " << opCode << ", result " << UBSHcomNetErrStr(result));
+            return NetResult(result);
+        }
+        return MMS_OK;
+    }
+
+    template <typename TReq> BResult AsyncSendWithoutResponse(uint16_t opCode, TReq &req, ChannelPtr &ch)
+    {
+        using namespace ock::hcom;
+        auto *rawReq = new (std::nothrow) TReq(req);
+        if (UNLIKELY(rawReq == nullptr)) {
+            NET_LOG_ERROR("Alloc async send request failed.");
+            return MMS_ALLOC_FAIL;
+        }
+        std::shared_ptr<TReq> reqCopy(rawReq);
+        UBSHcomRequest reqMsg(static_cast<void *>(reqCopy.get()), sizeof(TReq), opCode);
+
+        auto *netCallback = UBSHcomNewCallback([reqCopy](UBSHcomServiceContext &context) {
+            if (UNLIKELY(context.Result() != SER_OK)) {
+                NET_LOG_ERROR("Async send done failed, result " << UBSHcomNetErrStr(context.Result()) << ".");
+            }
+        }, std::placeholders::_1);
+        if (UNLIKELY(netCallback == nullptr)) {
+            NET_LOG_ERROR("Alloc async send callback failed.");
+            return MMS_ALLOC_FAIL;
+        }
+
+        auto result = ch->Send(reqMsg, netCallback);
+        if (UNLIKELY(result != MMS_OK)) {
+            NET_LOG_ERROR("Failed to async send peer msg with op " << opCode << ", result " <<
+                UBSHcomNetErrStr(result));
             return NetResult(result);
         }
         return MMS_OK;
@@ -627,7 +725,7 @@ private:
                 }
             },
             std::placeholders::_1);
-        result = CallChannel(ch, reqMsg, respMsg, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
@@ -657,15 +755,12 @@ private:
                 }
             },
             std::placeholders::_1);
-        result = CallChannel(ch, reqMsg, respMsg, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
         }
     }
-
-private:
-    static constexpr uint32_t MAX_NEW_REQ_HANDLER = 256L;
 
 private:
     bool mStarted = false;
@@ -679,7 +774,6 @@ private:
     ock::hcom::UBSHcomService *mIpcService = nullptr;
     NetOptions mRpcOptions;
     NetOptions mIpcOptions;
-    bool mUseHlcRpc = false;
     std::mutex mMutex;
     NetExecutorPoolPtr mRequestExecutor = nullptr;
     uint32_t mReqExecutorNum;

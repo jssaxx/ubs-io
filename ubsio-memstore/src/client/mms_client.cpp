@@ -18,12 +18,21 @@
 #include "mms_message.h"
 #include "mms_client.h"
 
+#include <cerrno>
+#include <exception>
+#include <pthread.h>
+#include <string>
+#include <thread>
+
 #ifdef USE_CLI_TOOLS
 #include <dlfcn.h>
 #endif
 
 namespace ock {
 namespace mms {
+
+static thread_local uint16_t g_groupIndex = NumaGroupIndex::Instance()->GetGroupIndex();
+
 static void Log(int level, const char *msg)
 {
     if (MmsClientLog::Instance() != nullptr) {
@@ -36,17 +45,22 @@ static bool IsStartCatchUpRetryable(BResult ret)
     return ret == MMS_ALLOC_FAIL || ret == MMS_INNER_RETRY || ret == MMS_NET_RETRY || ret == MMS_CHECK_PT_FAIL;
 }
 
-BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service)
+BResult MmsClient::InitExpireChecker(const MmsOptions &options)
 {
-    if (mStarted) {
+    if (options.tlsEnable == 0) {
         return MMS_OK;
     }
 
-    if (UNLIKELY(service == nullptr)) {
-        return MMS_INVALID_PARAM;
+    auto expireChecker = ExpireChecker::Instance();
+    if (expireChecker == nullptr) {
+        CLIENT_LOG_ERROR("Expire checker alloc fail.");
+        return MMS_ALLOC_FAIL;
     }
+    return expireChecker->ExpireCheckerInit(options.caCerPath, options.certificationPath, options.opensslLibDir);
+}
 
-    mServiceCallback = service;
+BResult MmsClient::InitClientBase(const MmsOptions &options)
+{
     auto ret = ClientGlobVarInit();
     if (ret != MMS_OK) {
         return ret;
@@ -61,11 +75,12 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
         return ret;
     }
 #endif
-    ret = ClientNetInit(options);
-    if (ret != MMS_OK) {
-        return ret;
-    }
-    ret = ClientBasicInit();
+    return ClientNetInit(options);
+}
+
+BResult MmsClient::InitClientDataPath(void)
+{
+    auto ret = ClientBasicInit();
     if (ret != MMS_OK) {
         return ret;
     }
@@ -77,7 +92,25 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
     if (ret != MMS_OK) {
         return ret;
     }
-    ret = ClientKvInit();
+    return ClientKvInit();
+}
+
+BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service)
+{
+    if (mStarted) {
+        return MMS_OK;
+    }
+
+    if (UNLIKELY(service == nullptr)) {
+        return MMS_INVALID_PARAM;
+    }
+
+    mServiceCallback = service;
+    auto ret = InitClientBase(options);
+    if (ret != MMS_OK) {
+        return ret;
+    }
+    ret = InitClientDataPath();
     if (ret != MMS_OK) {
         return ret;
     }
@@ -85,17 +118,9 @@ BResult MmsClient::Initialize(const MmsOptions &options, ServiceCallback service
     if (ret != MMS_OK) {
         return ret;
     }
-    if (options.tlsEnable) {
-        auto expireChecker = ExpireChecker::Instance();
-        if (expireChecker == nullptr) {
-            CLIENT_LOG_ERROR("expire checker alloc fail.");
-            return MMS_ALLOC_FAIL;
-        }
-        ret = expireChecker->ExpireCheckerInit(options.caCerPath, options.certificationPath,
-                                               options.opensslLibDir);
-        if (ret != MMS_OK) {
-            return ret;
-        }
+    ret = InitExpireChecker(options);
+    if (ret != MMS_OK) {
+        return ret;
     }
     mServiceCallback(mServiceable);
     mStarted = true;
@@ -108,6 +133,10 @@ void MmsClient::Exit(void)
 #ifdef USE_CLI_TOOLS
     ClientDiagnoseExit();
 #endif
+    std::lock_guard<std::mutex> lock(mNotifyMutex);
+    mNotifyShmConsumer.Stop();
+    mNotifyCallback.store(nullptr, std::memory_order_release);
+    mNotifyUserData.store(nullptr, std::memory_order_release);
 }
 
 BResult MmsClient::ClientGlobVarInit(void)
@@ -197,11 +226,78 @@ BResult FillNetOptions(const MmsOptions &options, NetOptions &netOptions)
     return MMS_OK;
 }
 
+void MmsClient::HandleClientChannelBroken()
+{
+    std::thread thread([this]() {
+        bool ret = mStartService->Execute([this]() { BuildThreadTask(); });
+        if (!ret) {
+            CLIENT_LOG_ERROR("Execute build services failed.");
+        }
+    });
+    thread.detach();
+}
+
+BResult MmsClient::RegisterClientChannelBrokenHandler()
+{
+    auto channelBroken = [this](uint32_t, uint32_t) -> void {
+        HandleClientChannelBroken();
+    };
+    auto ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    if (ret != MMS_OK) {
+        CLIENT_LOG_ERROR("Register channel broken handler failed, ret:" << ret << ".");
+    }
+    return ret;
+}
+
+BResult MmsClient::StartClientServiceExecutor()
+{
+    mStartService = ExecutorService::Create(NO_1, NO_1024);
+    if (mStartService == nullptr) {
+        CLIENT_LOG_ERROR("Failed to create executor service.");
+        return MMS_ALLOC_FAIL;
+    }
+
+    mStartService->SetThreadName("client-services");
+    if (!mStartService->Start()) {
+        CLIENT_LOG_ERROR("Failed to start executor service.");
+        DestroyStartService();
+        return MMS_ALLOC_FAIL;
+    }
+    return MMS_OK;
+}
+
+void MmsClient::DestroyStartService()
+{
+    if (mStartService == nullptr) {
+        return;
+    }
+
+    mStartService->Stop();
+    mStartService = nullptr;
+}
+
+BResult MmsClient::ConnectLocalServer()
+{
+    ConnectInfo info(INVALID_NID, static_cast<uint32_t>(getpid()), INVALID_NID, true);
+    auto ret = mNetEngine->SyncConnect(info);
+    if (ret != MMS_OK) {
+        CLIENT_LOG_ERROR("Connect to local failed, ret:" << ret << ".");
+        DestroyStartService();
+        return ret;
+    }
+
+    mServerOnline.store(true);
+    return MMS_OK;
+}
+
 BResult MmsClient::ClientNetInit(const MmsOptions &options)
 {
     int16_t timeoutSec = NO_16;
-    NetMemList memList;
-    auto ret = mNetEngine->Initialize(timeoutSec, 0, NO_1024, Log, memList);
+    NetEngineInitOptions initOptions;
+    initOptions.timeoutSec = timeoutSec;
+    initOptions.queueSize = NO_1024;
+    initOptions.logFunc = Log;
+    auto ret = mNetEngine->Initialize(initOptions);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Net engine initialize failed, result:" << ret << ".");
         return ret;
@@ -226,47 +322,17 @@ BResult MmsClient::ClientNetInit(const MmsOptions &options)
         return ret;
     }
 
-    auto channelBroken = [this](uint32_t nodeId, uint32_t pid) -> void {
-        std::thread t([this, nodeId]() {
-            bool ret = mStartService->Execute([this]() { BuildThreadTask(); });
-            if (!ret) {
-                CLIENT_LOG_ERROR("Execute build services failed.");
-                return;
-            }
-        });
-        t.detach();
-    };
-    ret = mNetEngine->RegisterChannelBrokenHandler(channelBroken);
+    ret = RegisterClientChannelBrokenHandler();
     if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("Register channel broken handler failed, ret:" << ret << ".");
         return ret;
     }
 
-    mStartService = ExecutorService::Create(NO_1, NO_1024);
-    if (mStartService == nullptr) {
-        CLIENT_LOG_ERROR("Failed to create executor service.");
-        return MMS_ALLOC_FAIL;
-    }
-
-    mStartService->SetThreadName("client-services");
-    auto result = mStartService->Start();
-    if (!result) {
-        CLIENT_LOG_ERROR("Failed to start executor service.");
-        DestroyStartService();
-        return MMS_ALLOC_FAIL;
-    }
-
-    ConnectInfo info(INVALID_NID, static_cast<uint32_t>(getpid()), INVALID_NID, true);
-    ret = mNetEngine->SyncConnect(info);
+    ret = StartClientServiceExecutor();
     if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("Connect to local failed, ret:" << ret << ".");
-        DestroyStartService();
         return ret;
     }
 
-    mServerOnline.store(true);
-
-    return MMS_OK;
+    return ConnectLocalServer();
 }
 
 void MmsClient::ClientNetExit(void)
@@ -275,21 +341,48 @@ void MmsClient::ClientNetExit(void)
     mNetEngine->Stop();
 }
 
-void MmsClient::DestroyStartService(void)
+BResult MmsClient::RegisterNotifyCallback(NotifyCallback callback, void *lpUserData)
 {
-    if (mStartService == nullptr) {
-        return;
+    std::lock_guard<std::mutex> lock(mNotifyMutex);
+    if (UNLIKELY(!mStarted || mServerPid == 0)) {
+        CLIENT_LOG_ERROR("Mms client is not started.");
+        return MMS_NOT_READY;
+    }
+    if (callback != nullptr && !mDataChangeCallbackSwitch) {
+        CLIENT_LOG_DEBUG("Data change callback switch is off.");
+        return MMS_OK;
+    }
+    if (callback == nullptr) {
+        mNotifyCallback.store(nullptr, std::memory_order_release);
+        mNotifyUserData.store(nullptr, std::memory_order_release);
+        mNotifyShmConsumer.Stop();
+        return MMS_OK;
     }
 
-    mStartService->Stop();
-    mStartService = nullptr;
+    mNotifyUserData.store(lpUserData, std::memory_order_release);
+    mNotifyCallback.store(callback, std::memory_order_release);
+    return StartNotifyConsumerLocked();
+}
+
+BResult MmsClient::StartNotifyConsumerLocked()
+{
+    if (mNotifyShmConsumer.IsRunning()) {
+        return MMS_OK;
+    }
+
+    auto ret = mNotifyShmConsumer.Start(mServerPid, mNotifyCallback, mNotifyUserData);
+    if (UNLIKELY(ret != MMS_OK)) {
+        CLIENT_LOG_ERROR("Start notify shm consumer failed, ret:" << ret << ".");
+    }
+    return ret;
 }
 
 BResult MmsClient::ClientBasicInit(void)
 {
     BasicRequest req = { { 0, MMS_OP_C_BASIC, 0, 0 } };
     BasicResponse rsp;
-    BResult ret = mNetEngine->SyncCall<BasicRequest, BasicResponse>(INVALID_NID, 0, MMS_OP_C_BASIC, req, rsp);
+    BResult ret = mNetEngine->SyncCall<BasicRequest,
+        BasicResponse>(INVALID_NID, NO_0, MMS_OP_C_BASIC, req, rsp);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Send basic info request failed, ret:" << ret << ".");
         return ret;
@@ -301,10 +394,10 @@ BResult MmsClient::ClientBasicInit(void)
         return ret;
     }
 
-    if (rsp.logLevel > MMSLOG_LEVEL_ERROR || rsp.logLevel < MMSLOG_LEVEL_TRACE || rsp.memNum > MAX_NUMAS_NUM ||
-        rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
-        CLIENT_LOG_ERROR("Invalid response, log level:" << rsp.logLevel << ", numa num:" << rsp.memNum
-                                                        << ", net timeout:" << rsp.netTimeOut << ".");
+    if (rsp.serverPid <= 0 || rsp.logLevel > MMSLOG_LEVEL_ERROR || rsp.logLevel < MMSLOG_LEVEL_TRACE ||
+        rsp.memNum > MAX_NUMAS_NUM || rsp.netTimeOut < NO_10 || rsp.netTimeOut > NO_60) {
+        CLIENT_LOG_ERROR("Invalid response, server pid:" << rsp.serverPid << ", log level:" << rsp.logLevel <<
+            ", numa num:" << rsp.memNum << ", net timeout:" << rsp.netTimeOut << ".");
         return MMS_INVALID_PARAM;
     }
 
@@ -325,6 +418,8 @@ BResult MmsClient::ClientBasicInit(void)
     mIoTimeOut = rsp.ioTimeOut;
     mLogLevel = rsp.logLevel;
     mEnableCrc = rsp.enableCrc;
+    mDataChangeCallbackSwitch = rsp.dataChangeCallbackSwitch;
+    mServerPid = static_cast<uint32_t>(rsp.serverPid);
     mMaxMsgBuffSize = rsp.maxMsgBuffSize;
     mBlockInfo = {rsp.valueBlockSize};
     UpdateCrcSwitch(rsp.enableCrc);
@@ -455,6 +550,11 @@ void MmsClient::ClientKvExit(void)
 
 BResult MmsClient::ResetResource()
 {
+    {
+        std::lock_guard<std::mutex> lock(mNotifyMutex);
+        mNotifyShmConsumer.Stop();
+        mServerPid = 0;
+    }
     for (uint16_t &numaId: mNumaId) {
         numaId = -1;
     }
@@ -484,7 +584,7 @@ BResult MmsClient::ResetResource()
     return MMS_OK;
 }
 
-BResult MmsClient::BuildThreadTask(void)
+void MmsClient::MarkClientOffline()
 {
     mStarted = false;
     if (mServiceable) {
@@ -492,9 +592,11 @@ BResult MmsClient::BuildThreadTask(void)
         mServiceCallback(mServiceable);
     }
     mServerOnline.store(false);
+}
 
+BResult MmsClient::WaitAndResetResource()
+{
     constexpr uint16_t interval = 2;
-
     uint32_t maxCnt = mIoTimeOut / interval;
     uint32_t retryCnt = 0;
     do {
@@ -505,24 +607,33 @@ BResult MmsClient::BuildThreadTask(void)
     BResult ret = MMS_OK;
     ret = ResetResource();
     if (ret != MMS_OK) {
-        CLIENT_LOG_ERROR("reset resource failed!");
+        CLIENT_LOG_ERROR("Reset resource failed, ret:" << ret << ".");
         return MMS_ERR;
     }
+    return MMS_OK;
+}
 
-    retryCnt = 0;
+BResult MmsClient::ReconnectLocalServer(uint32_t interval)
+{
+    uint32_t retryCnt = 0;
+    BResult ret = MMS_OK;
     do {
         ConnectInfo info(INVALID_NID, static_cast<uint32_t>(getpid()), INVALID_NID, true);
         ret = mNetEngine->SyncConnect(info);
         if (ret != MMS_OK) {
             sleep(interval);
             CLIENT_LOG_WARN("Connect to local server failed, retry cnt:" << retryCnt++ << ".");
-            continue;
         }
     } while (ret != MMS_OK);
 
     mServerOnline.store(true);
+    return MMS_OK;
+}
 
-    retryCnt = 0;
+BResult MmsClient::RebuildServices(uint32_t interval)
+{
+    uint32_t retryCnt = 0;
+    BResult ret = MMS_OK;
     do {
         if (mNetEngine->CheckConnect(INVALID_NID) != MMS_OK) {
             CLIENT_LOG_WARN("server disconnected, return build services. retryCnt:" << retryCnt);
@@ -533,13 +644,57 @@ BResult MmsClient::BuildThreadTask(void)
             sleep(interval);
             CLIENT_LOG_WARN("Build services fail, ret:" << ret << ". retryCnt:" << retryCnt);
             retryCnt++;
-            continue;
         }
     } while (ret != MMS_OK);
+    return MMS_OK;
+}
+
+BResult MmsClient::ReregisterNotifyCallback(uint32_t interval)
+{
+    uint32_t retryCount = 0;
+    while (mServerOnline.load(std::memory_order_acquire)) {
+        BResult ret = MMS_OK;
+        {
+            std::lock_guard<std::mutex> lock(mNotifyMutex);
+            if (mNotifyCallback.load(std::memory_order_acquire) == nullptr) {
+                return MMS_OK;
+            }
+            ret = StartNotifyConsumerLocked();
+        }
+        if (ret == MMS_OK) {
+            return MMS_OK;
+        }
+        CLIENT_LOG_WARN("Re-register notify callback failed, ret:" << ret <<
+            ", retry count:" << retryCount++ << ".");
+        sleep(interval);
+    }
+    return MMS_NET_RETRY;
+}
+
+BResult MmsClient::BuildThreadTask(void)
+{
+    MarkClientOffline();
+    auto ret = WaitAndResetResource();
+    if (ret != MMS_OK) {
+        return ret;
+    }
+
+    constexpr uint16_t interval = 2;
+    ret = ReconnectLocalServer(interval);
+    if (ret != MMS_OK) {
+        return ret;
+    }
+    ret = RebuildServices(interval);
+    if (ret != MMS_OK) {
+        return ret;
+    }
 
     mStarted = true;
-
-    return MMS_OK;
+    ret = ReregisterNotifyCallback(interval);
+    if (ret != MMS_OK) {
+        CLIENT_LOG_ERROR("Re-register notify callback failed, ret:" << ret << ".");
+    }
+    return ret;
 }
 
 BResult MmsClient::BuildServices(void)
@@ -569,7 +724,8 @@ BResult MmsClient::CheckServiceState(std::atomic<bool> &serviceable)
 {
     ServiceRequest req = { { 0, MMS_OP_C_SERVICEABLE, 0, 0 } };
     ServiceResponse rsp;
-    BResult ret = mNetEngine->SyncCall<ServiceRequest, ServiceResponse>(INVALID_NID, 0, MMS_OP_C_SERVICEABLE, req, rsp);
+    BResult ret = mNetEngine->SyncCall<ServiceRequest, ServiceResponse>(INVALID_NID, g_groupIndex, MMS_OP_C_SERVICEABLE,
+                                                                        req, rsp);
     if (ret != MMS_OK) {
         CLIENT_LOG_ERROR("Send serviceable request failed, ret:" << ret << ".");
         return ret;
@@ -590,7 +746,8 @@ BResult MmsClient::MmsStartCatchUpTask(void)
     BResult rsp = MMS_OK;
     BResult ret = MMS_OK;
     for (uint16_t i = 0; i < RETRY_COUNT; i++) {
-        ret = mNetEngine->SyncCall<BasicRequest, BResult>(INVALID_NID, 0, MMS_OP_C_CRB_START_CATCH_UP, req, rsp);
+        ret = mNetEngine->SyncCall<BasicRequest, BResult>(INVALID_NID, g_groupIndex, MMS_OP_C_CRB_START_CATCH_UP, req,
+                                                          rsp);
         if (UNLIKELY(ret != MMS_OK)) {
             CLIENT_LOG_ERROR("Send node recover request failed, ret:" << ret << ".");
             if (!IsStartCatchUpRetryable(ret) || i + NO_1 == RETRY_COUNT) {
@@ -629,7 +786,6 @@ void MmsClient::BackCheckStateTask()
         if (ret != MMS_OK || !mServiceable) {
             sleep(interval);
             CLIENT_LOG_WARN("Check services state fail, retry count:" << retryCnt++ << ".");
-            continue;
         }
     } while (!mServiceable);
     mServiceCallback(mServiceable.load());

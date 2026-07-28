@@ -24,74 +24,95 @@ namespace mms {
 class Mms {
 public:
     /**
-     * @brief: Initialize mms service
+     * @brief: Initialize the MMS service.
      *
-     * @param[in]: option: log options
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * @param[in]: options: MMS options.
+     * @param[in]: service: Service status callback.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
     static CResult Initialize(const MmsOptions &options, ServiceCallback service);
 
     /**
-     * @brief: Exit mms service
+     * @brief: Register the data change notification callback.
      *
-     * @return: void
+     * @param[in]: callback: Data change notification callback.
+     * @param[in]: lpUserData: User data passed to the notification callback.
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
+     */
+    static CResult RegisterCallback(NotifyCallback callback, void *lpUserData);
+
+    /**
+     * @brief: Exit the MMS service.
+     *
+     * @return: void.
      */
     static void Exit();
 
     /**
-     * @brief: Put value
+     * @brief: Put key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * For each item, PutItems::valueAddr is used to return the memory address where the data is written, and
+     * PutItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Put(uint64_t userId, PutItems *itemList, uint32_t itemNum);
+    static CResult Put(PutItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Get value
+     * @brief: Get key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in/out]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * If GetItems::value points to a null pointer, the returned data address is managed internally and must not be
+     * freed by the caller. The caller must ensure that the key is not modified while reading data through that address.
+     *
+     * For each item, GetItems::realLength is used to return the real value length, and GetItems::result is used to
+     * return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code. If an item's realLength
+     *          is 0, the key was not found.
      */
-    static CResult Get(uint64_t userId, GetItems *itemList, uint32_t itemNum);
+    static CResult Get(GetItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Get value
+     * @brief: Update key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean success, others, return non-zero value
+     * For each item, UpdateItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Update(uint64_t userId, UpdateItems *itemList, uint32_t itemNum);
+    static CResult Update(UpdateItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Delete object
+     * @brief: Delete key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
+     * For each item, DeleteItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Delete(uint64_t userId, DeleteItems *itemList, uint32_t itemNum);
+    static CResult Delete(DeleteItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: Replace object
+     * @brief: Replace key/value items.
      *
-     * @param[in]: userId: user id
-     * @param[in]: itemList: key/value desc list
-     * @param[in]: num: batch num
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
+     * For each item, ReplaceItems::result is used to return the per-item execution result.
+     *
+     * @param[in/out]: itemList: Key/value descriptor list.
+     * @param[in]: itemNum: Number of items in itemList.
+     * @return: RET_MMS_OK if all items succeed; otherwise, the last failed item's error code.
      */
-    static CResult Replace(uint64_t userId, ReplaceItems *itemList, uint32_t itemNum);
+    static CResult Replace(ReplaceItems *itemList, uint32_t itemNum);
 
     /**
-     * @brief: start catch up task to recover
+     * @brief: Start a catch-up task for recovery.
      *
-     * @return: return RET_MMS_OK mean ok, others, return non-zero value
+     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
     static CResult StartCatchUpTask();
 };

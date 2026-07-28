@@ -37,6 +37,9 @@ constexpr uint64_t BUDDY_CACHE_REFILL_COUNT = 64; // 每次refill 64个
 constexpr uint64_t BUDDY_CACHE_DRAIN_COUNT = 32; // cache满了移出去32个
 constexpr uint16_t BUDDY_THREAD_CACHE_MAX_ORDER = 4; // 缓存order 0到4，只缓存小块
 constexpr uint16_t BUDDY_THREAD_CACHE_ORDER_NUM = BUDDY_THREAD_CACHE_MAX_ORDER + NO_1;
+constexpr uint16_t NUMA_POOL_SWITCH_THRESHOLD = 3;
+constexpr uint16_t NUMA_POOL_REPROBE_INTERVAL = 256;
+constexpr uint16_t INVALID_NUMA_POOL_ID = UINT16_MAX;
 
 // 块的头部，用于存储块的信息
 struct BlockHeader {
@@ -81,10 +84,13 @@ public:
     BResult Reset(void);
 
     BResult MmsAlloc(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr);
+    BResult MmsAllocPreferNuma(uint64_t size, uint16_t preferNumaId, uint16_t &numaId, uintptr_t &blockAddr);
 
     BResult MmsFree(uintptr_t blockAddr);
 
     BResult ReturnBuddyBlockToPool(uintptr_t blockAddr);
+    BResult ReturnBatchBuddyBlocksToPool(const uintptr_t blockAddrs[], uint64_t count);
+    BResult ReturnBatchBlocksToPool(uint64_t blockIndex, const std::vector<uintptr_t> &blockAddrs);
 
     inline bool IsBuddyMode() const
     {
@@ -131,10 +137,13 @@ private:
     BResult InitFixedMemPools();
     BResult GetBuddyAllocOrder(uint64_t size, uint16_t &order) const;
     BResult BuddyAllocFromPool(uint16_t preferNumaId, uint16_t order, uint16_t &allocNumaId, uintptr_t &blockAddr);
-    BResult ReturnBatchBuddyBlocksToPool(const uintptr_t blockAddrs[], uint64_t count);
+    BResult BuddyAllocBatchFromPool(uint16_t preferNumaId, uint16_t order, uintptr_t blockAddrs[],
+                                    uint64_t requestCount, uint64_t &actualCount);
     BResult BuddyAllocFromThreadCacheMiss(uint16_t order, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyAllocDirect(uint16_t order, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyAlloc(uint64_t size, uint16_t &numaId, uintptr_t &blockAddr);
+    BResult BuddyAllocPreferNuma(uint64_t size, uint16_t preferNumaId, uint16_t &numaId, uintptr_t &blockAddr);
+    BResult FixedAllocPreferNuma(uint64_t size, uint16_t preferNumaId, uint16_t &numaId, uintptr_t &blockAddr);
     BResult BuddyFree(uintptr_t blockAddr, BlockHeader *header);
     BResult BuddyFreeToThreadCache(uintptr_t blockAddr, BlockHeader *header);
 
@@ -151,6 +160,7 @@ private:
     uint32_t mBlockNum = 0;
     uint32_t mBlockRate[MAX_BLOCK_NUM] = {0};
     uint32_t mBlockSize[MAX_BLOCK_NUM] = {0};
+    uint64_t mBuddyUnitSize = 0;
     uint64_t mBuddyMaxAllocSize = 0;
 
     MemAllocOptions::AllocMode mAllocMode = MemAllocOptions::ALLOC_MODE_FIXED;
@@ -214,25 +224,27 @@ public:
         return false;
     }
 
-    inline std::vector<BlockNode*> PopBatchBlocks(uint64_t count)
+    inline void PopBatchBlocks(uint64_t count, std::vector<BlockNode *> &blocks)
     {
-        std::vector<BlockNode*> blocks{};
-        blocks.reserve(count);
-        BlockNode* block = nullptr;
+        blocks.clear();
+        std::lock_guard<std::mutex> lock(mLock);
         for (uint64_t i = 0; i < count; ++i) {
-            block = PopOneBlock();
-            if (block == nullptr) {
+            if (mHead == nullptr) {
                 break;
             }
+            BlockNode *block = mHead;
+            mHead = mHead->next;
             blocks.emplace_back(block);
         }
-        return std::move(blocks);
     }
 
-    inline void PushBatchBlocks(const std::vector<BlockNode*>& blocks)
+    inline void PushBatchBlocks(const std::vector<BlockNode *> &blocks)
     {
-        for (auto &block : blocks)
-            PushOneBlock(block);
+        std::lock_guard<std::mutex> lock(mLock);
+        for (BlockNode *block : blocks) {
+            block->next = mHead;
+            mHead = block;
+        }
     }
 
 private:
@@ -257,9 +269,9 @@ public:
         memLists[blockIndex].PushBatchBlocks(blocks);
     }
 
-    inline std::vector<BlockNode *> GetBatchBlocks(uint16_t blockIndex, uint64_t count)
+    inline void GetBatchBlocks(uint16_t blockIndex, uint64_t count, std::vector<BlockNode *> &blocks)
     {
-        return std::move(memLists[blockIndex].PopBatchBlocks(count));
+        memLists[blockIndex].PopBatchBlocks(count, blocks);
     }
 
 private:
@@ -272,7 +284,9 @@ class BuddyNumaMemoryPool {
 public:
     BResult Start(uint16_t numaId, uint64_t address, uint64_t size, uint64_t baseBlockSize);
     BResult Alloc(uint16_t order, uintptr_t &blockAddr);
+    BResult AllocBatch(uint16_t order, uintptr_t blockAddrs[], uint64_t requestCount, uint64_t &actualCount);
     BResult Free(uintptr_t blockAddr);
+    BResult FreeBatch(uint16_t order, const uintptr_t blockAddrs[], uint64_t count);
 
 private:
     inline uint64_t ChunkAddr(uint64_t unitIndex) const
@@ -298,6 +312,11 @@ private:
     void AddFreeChunk(uint64_t chunkAddr, uint16_t order);
     BuddyBlockNode *PopFreeChunk(uint16_t order);
     bool RemoveFreeChunk(uint64_t unitIndex, uint16_t order);
+    void AddFreeChunkUnlocked(uint64_t chunkAddr, uint16_t order);
+    BuddyBlockNode *PopFreeChunkUnlocked(uint16_t order);
+    bool RemoveFreeChunkUnlocked(uint64_t unitIndex, uint16_t order);
+    BResult AllocUnlocked(uint16_t order, uintptr_t &blockAddr);
+    BResult FreeUnlocked(uintptr_t blockAddr);
 
 private:
     uint16_t mNumaId = 0;
@@ -317,7 +336,12 @@ public:
 
     BResult AllocFromPool(uint16_t numaId, uint16_t order, uintptr_t &blockAddr);
     BResult AllocFromOtherPool(uint16_t numaId, uint16_t order, uint16_t &allocNumaId, uintptr_t &blockAddr);
+    BResult AllocBatchFromPool(uint16_t numaId, uint16_t order, uintptr_t blockAddrs[], uint64_t requestCount,
+                               uint64_t &actualCount);
+    BResult AllocBatchFromOtherPool(uint16_t numaId, uint16_t order, uintptr_t blockAddrs[], uint64_t requestCount,
+                                    uint64_t &actualCount);
     BResult FreeToPool(uint16_t numaId, uintptr_t blockAddr);
+    BResult FreeBatchToPool(uint16_t numaId, uint16_t order, const uintptr_t blockAddrs[], uint64_t count);
 
     inline BResult Reset()
     {
@@ -375,25 +399,34 @@ public:
 
     explicit ThreadCache(MmsMemAllocatorPtr allocator)
     {
-        for (auto &memCache : mMemCaches) {
-            memCache.reserve(CACHE_LIMIT_PER_THREAD);
+        for (auto &numaCache : mMemCaches) {
+            for (auto &memCache : numaCache) {
+                memCache.reserve(CACHE_LIMIT_PER_THREAD);
+            }
         }
-        for (auto &buddyCache : mBuddyCaches) {
-            buddyCache.reserve(BUDDY_CACHE_LIMIT_PER_THREAD);
+        for (auto &numaCache : mBuddyCaches) {
+            for (auto &buddyCache : numaCache) {
+                buddyCache.reserve(BUDDY_CACHE_LIMIT_PER_THREAD);
+            }
         }
         mNumaId = GetCurCPUNumaNode();
         mMemAllocator = allocator;
         allocator->UpdateNumaId(mNumaId);
+        mHomeNumaId = mNumaId;
         allocator->PutThreadCacheMap(std::this_thread::get_id(), this);
     }
 
     inline BResult ClearCache()
     {
-        for (auto &mMemCache: mMemCaches) {
-            mMemCache.clear();
+        for (auto &numaCache : mMemCaches) {
+            for (auto &memCache : numaCache) {
+                memCache.clear();
+            }
         }
-        for (auto &buddyCache : mBuddyCaches) {
-            buddyCache.clear();
+        for (auto &numaCache : mBuddyCaches) {
+            for (auto &buddyCache : numaCache) {
+                buddyCache.clear();
+            }
         }
         return MMS_OK;
     }
@@ -405,7 +438,13 @@ public:
         return mNumaId;
     }
 
+    uint16_t GetAllocNumaId();
+
+    void RecordAllocNumaId(uint16_t preferNumaId, uint16_t allocNumaId);
+
     BResult GetOneBlockFromCache(uint64_t blockIndex, uintptr_t &blockAddr);
+
+    BResult GetOneBlockFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId, uintptr_t &blockAddr);
 
     BResult AddOneBlockToCache(uint64_t blockIndex, uintptr_t blockAddr);
 
@@ -413,7 +452,14 @@ public:
 
     std::vector<uintptr_t> GetBatchBlocksFromCache(uint64_t blockIndex, uint64_t count);
 
+    std::vector<uintptr_t> GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId,
+                                                             uint64_t count);
+    void GetBatchBlocksFromCachePreferNuma(uint64_t blockIndex, uint16_t preferNumaId, uint64_t count,
+                                           std::vector<uintptr_t> &blockAddrs);
+
     BResult GetOneBuddyBlockFromCache(uint16_t order, uintptr_t &blockAddr);
+
+    BResult GetOneBuddyBlockFromCachePreferNuma(uint16_t order, uint16_t preferNumaId, uintptr_t &blockAddr);
 
     BResult AddOneBuddyBlockToCache(uint16_t order, uintptr_t blockAddr);
 
@@ -421,12 +467,24 @@ public:
 
     uint64_t GetBatchBuddyBlocksFromCache(uint16_t order, uintptr_t blockAddrs[], uint64_t count);
 
+    uint64_t GetBatchBuddyBlocksFromCachePreferNuma(uint16_t order, uint16_t preferNumaId, uintptr_t blockAddrs[],
+                                                    uint64_t count);
+
     BResult FlushBuddyCaches();
 
 private:
-    std::vector<uintptr_t> mMemCaches[MAX_BLOCK_NUM];
-    std::vector<uintptr_t> mBuddyCaches[BUDDY_THREAD_CACHE_ORDER_NUM];
+    uint16_t GetCacheNumaId(uint16_t numaId) const;
+
+    BResult PopBlock(std::vector<uintptr_t> &blocks, uintptr_t &blockAddr) const;
+
+private:
+    std::vector<uintptr_t> mMemCaches[MAX_NUMAS_NUM][MAX_BLOCK_NUM];
+    std::vector<uintptr_t> mBuddyCaches[MAX_NUMAS_NUM][BUDDY_THREAD_CACHE_ORDER_NUM];
     uint16_t mNumaId;
+    uint16_t mHomeNumaId;
+    uint16_t mNumaFallbackCount = 0;
+    uint16_t mNumaFallbackId = INVALID_NUMA_POOL_ID;
+    uint16_t mNumaReprobeCount = 0;
 
     MmsMemAllocatorPtr mMemAllocator = nullptr;
 };

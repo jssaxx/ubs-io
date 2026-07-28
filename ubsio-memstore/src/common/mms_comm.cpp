@@ -167,7 +167,7 @@ static thread_local ThreadIndex s_threadIndex;
 
 uint16_t NumaGroupIndex::GetGroupIndex() const
 {
-    return s_threadIndex.GetTheadIndex();
+    return __sync_fetch_and_add(&s_index, 1) % Instance()->GetGroupNum();
 }
 }
 }
