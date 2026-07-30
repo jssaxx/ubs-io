@@ -36,6 +36,8 @@ bool TestBio::gSetup = false;
 
 static constexpr uint32_t G_TENANT_ID = 5;
 static constexpr char *G_KEY = "456123keybio";
+static constexpr const char *G_EXTERNAL_STAT_KEY = "external_stat_missing_key";
+static constexpr const char *G_EXTERNAL_RCACHE_KEY = "external_rcache_missing_key";
 static constexpr uint64_t G_LENGTH = 1024;
 static constexpr uint64_t G_INVALID_TENANT_ID = 0;
 static constexpr uint32_t G_PT_TIMES = 512;
@@ -464,7 +466,7 @@ TEST_F(TestBio, test_bio_get_external_stat)
     BioTracepointParam userParam;
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    auto ret = BioGet(G_TENANT_ID, G_EXTERNAL_STAT_KEY, 0, realLen0, g_Location, value0, &realLen0);
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");
     EXPECT_EQ(ret, BIO_NOT_EXISTS);
@@ -482,7 +484,7 @@ TEST_F(TestBio, test_bio_get_external_rcache)
     BioHvsActiveTracePoint(0, "RCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "WCACHE_NOT_EXIST", 0, 1, userParam);
     BioHvsActiveTracePoint(0, "GET_UNDERFS_NO_STAT", 0, 1, userParam);
-    auto ret = BioGet(G_TENANT_ID, G_KEY, 0, realLen0, g_Location, value0, &realLen0);
+    auto ret = BioGet(G_TENANT_ID, G_EXTERNAL_RCACHE_KEY, 0, realLen0, g_Location, value0, &realLen0);
     BioHvsDeactiveTracePoint(0, "GET_UNDERFS_NO_STAT");
     BioHvsDeactiveTracePoint(0, "WCACHE_NOT_EXIST");
     BioHvsDeactiveTracePoint(0, "RCACHE_NOT_EXIST");

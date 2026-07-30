@@ -13,6 +13,7 @@
 #ifndef HDAGGER_DAGGER_FILE_H
 #define HDAGGER_DAGGER_FILE_H
 
+#include <cerrno>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -82,6 +83,9 @@ public:
     static bool GetBlockDeviceSysPath(const std::string &diskPath, std::string &diskSysPath);
 
     static bool GetPhysicalDiskKey(const std::string &diskPath, std::string &diskKey);
+
+    static int64_t GetDiskCapacityWithDiagnostics(std::string &diskPath, std::string &failedOperation,
+        int32_t &errorCode);
 
     static bool CheckNoPartitions(const std::string &sysDevPath, std::string &reason);
 
@@ -240,19 +244,34 @@ inline bool FileUtil::CanonicalPath(std::string &path)
 
 inline int64_t FileUtil::GetDiskCapacity(std::string &diskPath)
 {
-    char *canonicalPath = realpath(diskPath.c_str(), nullptr);
-    if (canonicalPath == nullptr) {
+    std::string failedOperation;
+    int32_t errorCode = 0;
+    return GetDiskCapacityWithDiagnostics(diskPath, failedOperation, errorCode);
+}
+
+inline int64_t FileUtil::GetDiskCapacityWithDiagnostics(std::string &diskPath, std::string &failedOperation,
+    int32_t &errorCode)
+{
+    failedOperation.clear();
+    errorCode = 0;
+    char canonicalPath[PATH_MAX] = {};
+    if (realpath(diskPath.c_str(), canonicalPath) == nullptr) {
+        errorCode = errno;
+        failedOperation = "realpath";
         return 0;
     }
     // get the capacity of this device
     int fd = open(canonicalPath, (O_RDWR | O_SYNC));
-    free(canonicalPath);
-    canonicalPath = nullptr;
+    int32_t openError = errno;
     if (fd < 0) {
+        errorCode = openError;
+        failedOperation = "open(O_RDWR|O_SYNC)";
         return 0;
     }
     off_t off = lseek(fd, 0, SEEK_END);
     if (off < 0) {
+        errorCode = errno;
+        failedOperation = "lseek(SEEK_END)";
         close(fd);
         return 0;
     }

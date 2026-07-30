@@ -35,6 +35,8 @@ uint32_t g_bdmStart = 0UL;
 uint32_t g_bdmDiskCount = 0UL;
 static uint32_t g_bdmDiskMaxId = 0UL;
 static uint32_t g_bdmDiskHeadPad = 0UL;
+static uint32_t g_bdmVirtualDeviceId = 0UL;
+static uint32_t g_bdmVirtualDeviceCount = 0UL;
 
 static uint32_t BdmBuildDiskHeadPad(uint32_t isStandalone, uint32_t deviceId)
 {
@@ -42,6 +44,13 @@ static uint32_t BdmBuildDiskHeadPad(uint32_t isStandalone, uint32_t deviceId)
         return 0;
     }
     return BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
+}
+
+static uint32_t BdmBuildVirtualDiskHeadPad(uint32_t deviceId, uint32_t deviceCount)
+{
+    return (BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION << BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT) |
+        ((deviceCount << BDM_DISK_HEAD_DEVICE_COUNT_SHIFT) & BDM_DISK_HEAD_DEVICE_COUNT_MASK) |
+        BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
 }
 
 void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId)
@@ -518,11 +527,37 @@ int32_t BdmExit(void)
     g_bdmStart = 0UL;
     g_bdmInit = 0UL;
     g_bdmDiskHeadPad = 0UL;
+    g_bdmVirtualDeviceId = 0UL;
+    g_bdmVirtualDeviceCount = 0UL;
     BDM_LOGINFO(0, "Bdm exit finished, result(%d).", result);
     return result;
 }
 
-static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, uint64_t chunkSize)
+int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount,
+    uint64_t *regionOffset, uint64_t *regionLength)
+{
+    if (UNLIKELY(regionOffset == NULL || regionLength == NULL || deviceCount == 0 ||
+        deviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM || deviceId >= deviceCount ||
+        chunkSize < BDM_MIN_CHUNK_LENGTH || chunkSize > BDM_MAX_CHUNK_LENGTH)) {
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    /* Derive regions from one 16-way grid; non-divisor device counts leave tail slots unused. */
+    uint64_t smallestRegionLength =
+        (capacity / BDM_VIRTUAL_LAYOUT_SLOT_NUM) / BDM_ALIGN_SIZE * BDM_ALIGN_SIZE;
+    if (UNLIKELY(smallestRegionLength < BDM_RESTORE_META_SIZE + chunkSize)) {
+        BDM_LOGERROR(0, "Virtual disk region is too small, capacity(%llu), chunkSize(%llu), deviceCount(%u).",
+            capacity, chunkSize, deviceCount);
+        return BDM_CODE_INVALID_PARAM;
+    }
+
+    uint64_t length = smallestRegionLength * (BDM_VIRTUAL_LAYOUT_SLOT_NUM / deviceCount);
+    *regionOffset = length * deviceId;
+    *regionLength = length;
+    return BDM_CODE_OK;
+}
+
+static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t offset, uint64_t length, uint64_t chunkSize)
 {
     if (UNLIKELY(name == NULL)) {
         BDM_LOGERROR(0, "Disk path is null.");
@@ -542,8 +577,8 @@ static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, 
         return BDM_CODE_ERR;
     }
 
-    para.offset = 0;
-    para.length = capacity;
+    para.offset = offset;
+    para.length = length;
     para.bdmId = diskId;
     para.pad = g_bdmDiskHeadPad;
     para.minChunkSize = chunkSize;
@@ -554,7 +589,8 @@ static int32_t BdmDevicesCreate(uint32_t diskId, char *name, uint64_t capacity, 
         return ret;
     }
 
-    BDM_LOGINFO(0, "Create disk success, DiskId(%u) BdmId(%u) chunkSize(%lu) capacity(%lu).", diskId, bdmId, chunkSize, capacity);
+    BDM_LOGINFO(0, "Create disk success, DiskId(%u) BdmId(%u) chunkSize(%lu) offset(%lu) length(%lu).", diskId,
+        bdmId, chunkSize, offset, length);
     return ret;
 }
 
@@ -572,12 +608,8 @@ static bool IsDiskFile(char *path)
     return false;
 }
 
-int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
+static int32_t BdmStartCheck(DiskDevices *diskList, uint64_t chunkSize)
 {
-    if (UNLIKELY(g_bdmStart == 1UL)) {
-        BDM_LOGINFO(0, "Bdm already start succeed.");
-        return RETURN_OK;
-    }
     if (UNLIKELY(diskList == NULL)) {
         return BDM_CODE_ERR;
     }
@@ -590,18 +622,43 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
         BDM_LOGERROR(0, "Disk device param input failed.");
         return BDM_CODE_INVALID_PARAM;
     }
+    return BDM_CODE_OK;
+}
 
-    int32_t ret;
+static int32_t BdmStartInternal(DiskDevices *diskList, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount)
+{
+    if (UNLIKELY(g_bdmStart == 1UL)) {
+        BDM_LOGINFO(0, "Bdm already start succeed.");
+        return RETURN_OK;
+    }
+    int32_t ret = BdmStartCheck(diskList, chunkSize);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
     uint32_t diskId;
     uint32_t failCnt = 0;
-    for (diskId = 0; diskId < diskList->num; diskId++) {
 #ifndef DEBUG_UT
+    for (diskId = 0; diskId < diskList->num; diskId++) {
         if (IsDiskFile(diskList->list[diskId].path) == false) {
             BDM_LOGERROR(0, "Check devices letter failed, diskId(%u).", diskId);
             return BDM_CODE_ERR;
         }
+    }
 #endif
-        ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, diskList->diskCaps[diskId], chunkSize);
+    for (diskId = 0; diskId < diskList->num; diskId++) {
+        uint64_t regionOffset = 0;
+        uint64_t regionLength = diskList->diskCaps[diskId];
+        if (deviceCount != 0) {
+            ret = BdmCalculateVirtualRegion(diskList->diskCaps[diskId], chunkSize, deviceId, deviceCount,
+                &regionOffset, &regionLength);
+            if (UNLIKELY(ret != BDM_CODE_OK)) {
+                BDM_LOGERROR(0, "Calculate virtual disk region failed, diskId(%u), ret(%d).", diskId, ret);
+                failCnt++;
+                continue;
+            }
+        }
+        ret = BdmDevicesCreate(diskId, diskList->list[diskId].path, regionOffset, regionLength, chunkSize);
         if (UNLIKELY(ret != BDM_CODE_OK)) {
             BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
             failCnt++;
@@ -620,6 +677,55 @@ int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
     return BDM_CODE_OK;
 }
 
+int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize)
+{
+    return BdmStartInternal(diskList, chunkSize, 0, 0);
+}
+
+int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount)
+{
+    if (UNLIKELY(g_bdmStart == 1UL)) {
+        BDM_LOGINFO(0, "Bdm already start succeed.");
+        return BDM_CODE_OK;
+    }
+    int32_t ret = BdmStartCheck(diskList, chunkSize);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+    if (UNLIKELY(diskList->num == 0 || deviceCount == 0 || deviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM ||
+        deviceId >= deviceCount)) {
+        BDM_LOGERROR(0, "Virtual device param input failed, diskNum(%u), deviceId(%u), deviceCount(%u).",
+            diskList->num, deviceId, deviceCount);
+        return BDM_CODE_INVALID_PARAM;
+    }
+    for (uint32_t diskId = 0; diskId < diskList->num; diskId++) {
+        uint64_t regionOffset = 0;
+        uint64_t regionLength = 0;
+        ret = BdmCalculateVirtualRegion(diskList->diskCaps[diskId], chunkSize, deviceId, deviceCount,
+            &regionOffset, &regionLength);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            return ret;
+        }
+    }
+    if (BDM_VIRTUAL_LAYOUT_SLOT_NUM % deviceCount != 0) {
+        BDM_LOGWARN(0, "Virtual device count(%u) does not evenly divide layout slot count(%u); "
+            "unassigned tail slots will remain unused.", deviceCount, (uint32_t)BDM_VIRTUAL_LAYOUT_SLOT_NUM);
+    }
+
+    g_bdmVirtualDeviceId = deviceId;
+    g_bdmVirtualDeviceCount = deviceCount;
+    g_bdmDiskHeadPad = BdmBuildVirtualDiskHeadPad(deviceId, deviceCount);
+    BDM_LOGINFO(0, "Start bdm virtual layout, version(%u), deviceId(%u), deviceCount(%u).",
+        BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION, deviceId, deviceCount);
+    ret = BdmStartInternal(diskList, chunkSize, deviceId, deviceCount);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        g_bdmVirtualDeviceId = 0;
+        g_bdmVirtualDeviceCount = 0;
+        g_bdmDiskHeadPad = 0;
+    }
+    return ret;
+}
+
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
 {
     if (UNLIKELY(g_bdmDiskMaxId >= DISK_DEV_NUM)) {
@@ -627,7 +733,17 @@ int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap)
         return BDM_CODE_INVALID_PARAM;
     }
     uint32_t diskId = g_bdmDiskMaxId;
-    int32_t ret = BdmDevicesCreate(diskId, diskPath, diskCap, chunkSize);
+    uint64_t regionOffset = 0;
+    uint64_t regionLength = diskCap;
+    int32_t ret = BDM_CODE_OK;
+    if (g_bdmVirtualDeviceCount != 0) {
+        ret = BdmCalculateVirtualRegion(diskCap, chunkSize, g_bdmVirtualDeviceId, g_bdmVirtualDeviceCount,
+            &regionOffset, &regionLength);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            return ret;
+        }
+    }
+    ret = BdmDevicesCreate(diskId, diskPath, regionOffset, regionLength, chunkSize);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGERROR(0, "Create devices failed, diskId(%u) ret(%d).", diskId, ret);
         return ret;
