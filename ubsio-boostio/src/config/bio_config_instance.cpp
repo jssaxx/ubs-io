@@ -10,10 +10,12 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <algorithm>
+#include <cerrno>
 #include <cstdio>
-#include <map>
+#include <cstring>
+#include <set>
 #include <sstream>
+#include <sys/stat.h>
 #include "bio_log.h"
 #include "bio_ip_util.h"
 #include "bio_file_util.h"
@@ -24,104 +26,6 @@ namespace bio {
 constexpr uint64_t GB_SIZE = 1024 * 1024 * 1024;
 constexpr uint64_t MB_SIZE = 1024 * 1024;
 constexpr uint32_t DISK_PATH_CONFIG_MAX_NUM = DEVICE_SIZE * NO_4;
-
-namespace {
-struct StandaloneDiskInfo {
-    uint32_t index;
-    std::string path;
-    std::string diskKey;
-};
-
-using StandaloneDiskGroup = std::vector<uint32_t>;
-
-std::string GetPhysicalDiskKeyOrPath(const std::string &diskPath)
-{
-    std::string diskKey;
-    return FileUtil::GetPhysicalDiskKey(diskPath, diskKey) ? diskKey : diskPath;
-}
-
-std::vector<StandaloneDiskInfo> BuildStandaloneDiskInfos(const std::vector<std::string> &diskList)
-{
-    std::vector<StandaloneDiskInfo> diskInfos;
-    diskInfos.reserve(diskList.size());
-    for (uint32_t index = 0; index < diskList.size(); ++index) {
-        diskInfos.push_back({ index, diskList[index], GetPhysicalDiskKeyOrPath(diskList[index]) });
-    }
-    return diskInfos;
-}
-
-std::vector<StandaloneDiskGroup> GroupStandaloneDisksByPhysicalDisk(const std::vector<StandaloneDiskInfo> &diskInfos)
-{
-    std::map<std::string, uint32_t> groupIndexByDiskKey;
-    std::vector<StandaloneDiskGroup> groups;
-    for (const auto &diskInfo : diskInfos) {
-        auto iter = groupIndexByDiskKey.find(diskInfo.diskKey);
-        if (iter == groupIndexByDiskKey.end()) {
-            auto groupIndex = static_cast<uint32_t>(groups.size());
-            iter = groupIndexByDiskKey.emplace(diskInfo.diskKey, groupIndex).first;
-            groups.emplace_back();
-        }
-        groups[iter->second].emplace_back(diskInfo.index);
-    }
-    return groups;
-}
-
-std::vector<uint32_t> SelectStandaloneDiskIndexes(const std::vector<StandaloneDiskGroup> &groups, uint32_t deviceId,
-    uint32_t deviceCount)
-{
-    if (deviceCount == 0 || deviceId >= deviceCount) {
-        return {};
-    }
-
-    uint32_t maxGroupSize = 0;
-    for (const auto &group : groups) {
-        maxGroupSize = std::max(maxGroupSize, static_cast<uint32_t>(group.size()));
-    }
-
-    std::vector<std::vector<uint32_t>> assignedDiskIndexes(deviceCount);
-    std::vector<std::vector<bool>> deviceHasGroup(deviceCount, std::vector<bool>(groups.size(), false));
-    for (uint32_t diskIndexInGroup = 0; diskIndexInGroup < maxGroupSize; ++diskIndexInGroup) {
-        for (uint32_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
-            const auto &group = groups[groupIndex];
-            if (diskIndexInGroup >= group.size()) {
-                continue;
-            }
-
-            uint32_t bestDevice = deviceCount;
-            for (uint32_t offset = 0; offset < deviceCount; ++offset) {
-                uint32_t candidate = (groupIndex + diskIndexInGroup + offset) % deviceCount;
-                if (bestDevice == deviceCount ||
-                    assignedDiskIndexes[candidate].size() < assignedDiskIndexes[bestDevice].size() ||
-                    (assignedDiskIndexes[candidate].size() == assignedDiskIndexes[bestDevice].size() &&
-                        deviceHasGroup[bestDevice][groupIndex] && !deviceHasGroup[candidate][groupIndex])) {
-                    bestDevice = candidate;
-                }
-            }
-            assignedDiskIndexes[bestDevice].emplace_back(group[diskIndexInGroup]);
-            deviceHasGroup[bestDevice][groupIndex] = true;
-        }
-    }
-
-    auto diskIndexes = assignedDiskIndexes[deviceId];
-    std::sort(diskIndexes.begin(), diskIndexes.end());
-    return diskIndexes;
-}
-
-std::string FormatStandaloneDiskSelection(const std::vector<StandaloneDiskInfo> &diskInfos,
-    const std::vector<uint32_t> &diskIndexes)
-{
-    std::ostringstream oss;
-    for (uint32_t i = 0; i < diskIndexes.size(); ++i) {
-        const auto &diskInfo = diskInfos[diskIndexes[i]];
-        oss << "{index:" << diskInfo.index << ", path:" << diskInfo.path << ", physicalDisk:" << diskInfo.diskKey <<
-            "}";
-        if (i + 1 < diskIndexes.size()) {
-            oss << ", ";
-        }
-    }
-    return oss.str();
-}
-}
 
 void BioConfig::LoadDefaultConf()
 {
@@ -150,6 +54,7 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(DISK_CONF_PATH);
     AddStrConf(BDM_IO_ENGINE, VStrEnum::Create(BDM_IO_ENGINE.first, "sync||io_uring"));
     AddIntConf(STANDALONE_DEVICE_COUNT, VIntRange::Create(STANDALONE_DEVICE_COUNT.first, 0, DEVICE_SIZE));
+    AddStrConf(STANDALONE_FORCE_NEW_DISK, VStrBoolRange::Create(STANDALONE_FORCE_NEW_DISK.first));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB);
 
     AddIntConf(BIO_WCACHE_NEGOTIATE_DELAY, VIntRange::Create(BIO_WCACHE_NEGOTIATE_DELAY.first, NO_50, NO_1000));
@@ -393,6 +298,7 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.standaloneDeviceCount = static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_COUNT.first));
+    mDaemonConfig.standaloneForceNewDisk = conf->GetStr(STANDALONE_FORCE_NEW_DISK.first) == "true";
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
     std::string diskMask = conf->GetStr(DISK_CONF_PATH.first);
@@ -448,7 +354,14 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
             diskMask);
         return BIO_ERR;
     }
+    bool useStandaloneVirtualDisks = mStandaloneDeviceInfo.configured && mDaemonConfig.standaloneDeviceCount != 0;
+    if (useStandaloneVirtualDisks && mDaemonConfig.diskList.size() > DEVICE_SIZE) {
+        LOG_ERROR("Standalone virtual disk path num limit:" << DEVICE_SIZE << ", input:" <<
+            mDaemonConfig.diskList.size() << ".");
+        return BIO_ERR;
+    }
 
+    std::set<dev_t> virtualDiskIds;
     for (std::string &diskPath : mDaemonConfig.diskList) {
         if (!FileUtil::CanonicalPath(diskPath)) {
             LOG_ERROR("Disk path not exist, value " << diskPath);
@@ -459,7 +372,37 @@ BResult BioConfig::AutoConfigDaemonDisk(const ConfigurationPtr &conf)
             LOG_ERROR("Disk path is not available for raw cache, value " << diskPath << ", reason: " << reason);
             return BIO_ERR;
         }
-        mDaemonConfig.diskCaps.emplace_back(FileUtil::GetDiskCapacity(diskPath));
+        if (useStandaloneVirtualDisks) {
+            struct stat diskStat {};
+            if (stat(diskPath.c_str(), &diskStat) != 0) {
+                int32_t statError = errno;
+                LOG_ERROR("UBSIO initial block-device metadata access failed, path:" << diskPath <<
+                    ", operation:stat, errno:" << statError << ", reason:" << std::strerror(statError) <<
+                    ". Possible causes: the device path disappeared or is not visible in the current mount namespace, "
+                    "path traversal/stat permission is denied, or an LSM policy blocks metadata access.");
+                return BIO_ERR;
+            }
+            if (!virtualDiskIds.insert(diskStat.st_rdev).second) {
+                LOG_ERROR("Duplicate standalone virtual block device, value " << diskPath << ".");
+                return BIO_ERR;
+            }
+        }
+
+        std::string failedOperation;
+        int32_t capacityProbeError = 0;
+        int64_t diskCapacity =
+            FileUtil::GetDiskCapacityWithDiagnostics(diskPath, failedOperation, capacityProbeError);
+        if (useStandaloneVirtualDisks && diskCapacity <= 0) {
+            LOG_ERROR("UBSIO initial raw block-device capacity probe failed, path:" << diskPath <<
+                ", operation:" << (failedOperation.empty() ? "capacity-validation" : failedOperation) <<
+                ", errno:" << capacityProbeError << ", reason:" <<
+                (capacityProbeError == 0 ? "device returned a zero capacity" : std::strerror(capacityProbeError)) <<
+                ". The probe requires open(O_RDWR|O_SYNC) followed by lseek(SEEK_END). Possible causes: missing "
+                "read/write permission, container devices-cgroup or runtime device-policy denial, LSM denial, a "
+                "read-only/not-exposed/removed device, or a device that does not support seek.");
+            return BIO_ERR;
+        }
+        mDaemonConfig.diskCaps.emplace_back(diskCapacity);
     }
 
     if (mDaemonConfig.diskCaps.size() == 0) {
@@ -603,6 +546,16 @@ void BioConfig::SetStandaloneDeviceInfo(uint32_t deviceId)
     LOG_INFO("Set standalone device info, deviceId:" << deviceId << ".");
 }
 
+BResult BioConfig::UpdateStandaloneDiskCapacity(uint32_t diskId, int64_t capacity)
+{
+    if (diskId >= mDaemonConfig.diskCaps.size() || capacity <= 0) {
+        LOG_ERROR("Invalid standalone disk capacity update, diskId:" << diskId << ", capacity:" << capacity << ".");
+        return BIO_INVALID_PARAM;
+    }
+    mDaemonConfig.diskCaps[diskId] = capacity;
+    return BIO_OK;
+}
+
 BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
 {
     if (!mDaemonConfig.hasDiskCache) {
@@ -624,7 +577,7 @@ BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
     }
 
     if (mDaemonConfig.standaloneDeviceCount != 0) {
-        return SelectStandaloneDisksByDeviceCount(diskNum);
+        return SelectStandaloneVirtualDisks(diskNum);
     }
 
     return SelectStandaloneDiskLegacy(diskNum);
@@ -632,66 +585,48 @@ BResult BioConfig::SelectStandaloneDiskByDeviceInfo()
 
 BResult BioConfig::SelectStandaloneDiskLegacy(uint16_t diskNum)
 {
-    if (mStandaloneDeviceInfo.deviceId >= diskNum) {
-        LOG_ERROR("Invalid standalone device info, deviceId:" << mStandaloneDeviceInfo.deviceId <<
+    uint32_t diskIndex = mStandaloneDeviceInfo.deviceId;
+    if (diskIndex >= diskNum) {
+        LOG_ERROR("Invalid standalone device info, deviceId:" << diskIndex <<
             ", diskPathNum:" << diskNum << ". The device id must match the index in ubsio.disk.path.");
         return BIO_INVALID_PARAM;
     }
-    auto diskIndexes = std::vector<uint32_t>{ mStandaloneDeviceInfo.deviceId };
-    auto diskInfos = BuildStandaloneDiskInfos(mDaemonConfig.diskList);
-    auto selectionLog = FormatStandaloneDiskSelection(diskInfos, diskIndexes);
-    return ApplyStandaloneDiskSelection(diskIndexes, diskNum, selectionLog);
+    if (mDaemonConfig.diskCaps[diskIndex] <= 0) {
+        LOG_ERROR("Invalid standalone disk capacity, diskIndex:" << diskIndex << ", cap:" <<
+            mDaemonConfig.diskCaps[diskIndex] << ".");
+        return BIO_INVALID_PARAM;
+    }
+
+    std::string selectedPath = mDaemonConfig.diskList[diskIndex];
+    int64_t selectedCapacity = mDaemonConfig.diskCaps[diskIndex];
+    mDaemonConfig.diskList.assign(1, selectedPath);
+    mDaemonConfig.diskCaps.assign(1, selectedCapacity);
+    mStandaloneDiskIndex = diskIndex;
+    LOG_INFO("Standalone selects cache disk by device info, deviceId:" << diskIndex <<
+        ", configuredDiskNum:" << diskNum << ", selectedPath:" << selectedPath << ".");
+    return BIO_OK;
 }
 
-BResult BioConfig::SelectStandaloneDisksByDeviceCount(uint16_t diskNum)
+BResult BioConfig::SelectStandaloneVirtualDisks(uint16_t diskNum)
 {
     uint32_t deviceCount = mDaemonConfig.standaloneDeviceCount;
-    if (mStandaloneDeviceInfo.deviceId >= deviceCount || diskNum < deviceCount) {
-        LOG_ERROR("Invalid standalone disk selection input, deviceId:" << mStandaloneDeviceInfo.deviceId <<
-            ", deviceCount:" << deviceCount << ", diskPathNum:" << diskNum <<
-            ". The device id must be less than deviceCount and diskPathNum must be no less than deviceCount.");
+    if (deviceCount == 0 || deviceCount > DEVICE_SIZE || mStandaloneDeviceInfo.deviceId >= deviceCount ||
+        diskNum > DEVICE_SIZE) {
+        LOG_ERROR("Invalid standalone virtual disk input, deviceId:" << mStandaloneDeviceInfo.deviceId <<
+            ", deviceCount:" << deviceCount << ", diskPathNum:" << diskNum << ".");
         return BIO_INVALID_PARAM;
     }
 
-    auto diskInfos = BuildStandaloneDiskInfos(mDaemonConfig.diskList);
-    auto diskGroups = GroupStandaloneDisksByPhysicalDisk(diskInfos);
-    auto diskIndexes = SelectStandaloneDiskIndexes(diskGroups, mStandaloneDeviceInfo.deviceId, deviceCount);
-    if (diskIndexes.empty()) {
-        LOG_ERROR("Standalone device has no selected cache disk, deviceId:" << mStandaloneDeviceInfo.deviceId <<
-            ", deviceCount:" << deviceCount << ", configuredDiskNum:" << diskNum << ".");
-        return BIO_INVALID_PARAM;
-    }
-
-    auto selectionLog = FormatStandaloneDiskSelection(diskInfos, diskIndexes);
-    return ApplyStandaloneDiskSelection(diskIndexes, diskNum, selectionLog);
-}
-
-BResult BioConfig::ApplyStandaloneDiskSelection(const std::vector<uint32_t> &diskIndexes, uint16_t configuredDiskNum,
-    const std::string &selectionLog)
-{
-    std::vector<std::string> selectedDiskList;
-    std::vector<int64_t> selectedDiskCaps;
-    selectedDiskList.reserve(diskIndexes.size());
-    selectedDiskCaps.reserve(diskIndexes.size());
-    for (uint32_t diskIndex : diskIndexes) {
-        if (diskIndex >= mDaemonConfig.diskCaps.size() || mDaemonConfig.diskCaps[diskIndex] <= 0) {
-            LOG_ERROR("Invalid standalone disk capacity, diskIndex:" << diskIndex << ", cap:" <<
-                (diskIndex < mDaemonConfig.diskCaps.size() ? mDaemonConfig.diskCaps[diskIndex] : 0) << ".");
+    for (uint32_t diskIndex = 0; diskIndex < mDaemonConfig.diskCaps.size(); ++diskIndex) {
+        if (mDaemonConfig.diskCaps[diskIndex] <= 0) {
+            LOG_ERROR("Invalid standalone virtual disk capacity, diskIndex:" << diskIndex << ", cap:" <<
+                mDaemonConfig.diskCaps[diskIndex] << ".");
             return BIO_INVALID_PARAM;
         }
-        selectedDiskList.emplace_back(mDaemonConfig.diskList[diskIndex]);
-        selectedDiskCaps.emplace_back(mDaemonConfig.diskCaps[diskIndex]);
     }
 
-    mDaemonConfig.diskList.clear();
-    mDaemonConfig.diskCaps.clear();
-    mDaemonConfig.diskList.swap(selectedDiskList);
-    mDaemonConfig.diskCaps.swap(selectedDiskCaps);
-    mStandaloneDiskIndex = diskIndexes.front();
-    LOG_INFO("Standalone selects cache disks by device info, deviceId:" << mStandaloneDeviceInfo.deviceId <<
-        ", deviceCount:" << mDaemonConfig.standaloneDeviceCount << ", configuredDiskNum:" << configuredDiskNum <<
-        ", selectedDiskNum:" << mDaemonConfig.diskList.size() << ", firstSelectedDiskIndex:" << mStandaloneDiskIndex <<
-        ", selectedDisks:" << selectionLog << ".");
+    LOG_INFO("Standalone uses virtual disk regions, deviceId:" << mStandaloneDeviceInfo.deviceId <<
+        ", deviceCount:" << deviceCount << ", blockDeviceNum:" << diskNum << ".");
     return BIO_OK;
 }
 

@@ -42,6 +42,13 @@ uint32_t BuildStandalonePad(uint32_t deviceId)
     return BDM_DISK_HEAD_STANDALONE_MAGIC | (deviceId & BDM_DISK_HEAD_DEVICE_ID_MASK);
 }
 
+uint32_t BuildVirtualPad(uint32_t deviceId, uint32_t deviceCount)
+{
+    return (BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION << BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT) |
+        ((deviceCount << BDM_DISK_HEAD_DEVICE_COUNT_SHIFT) & BDM_DISK_HEAD_DEVICE_COUNT_MASK) |
+        BuildStandalonePad(deviceId);
+}
+
 std::string MakeBdmMetaPath(uint32_t bdmId)
 {
     return "./bio_ut_bdm_meta_" + std::to_string(getpid()) + "_" + std::to_string(bdmId);
@@ -62,8 +69,17 @@ public:
     std::string path;
 };
 
-int32_t CreateBdmAndDestroy(const std::string &path, uint32_t bdmId, uint32_t pad)
+int32_t CreateBdmAndDestroy(const std::string &path, uint32_t bdmId, uint32_t pad, uint64_t offset, uint64_t length)
 {
+    int fd = open(path.c_str(), O_CREAT | O_RDWR, 0600);
+    if (fd < 0 || ftruncate(fd, TEST_BDM_META_DISK_LEN) != 0) {
+        if (fd >= 0) {
+            close(fd);
+        }
+        return BDM_CODE_ERR;
+    }
+    close(fd);
+
     BdmCreatePara para = {0};
     int32_t ret = strncpy_s(para.name, BDM_NAME_LEN, path.c_str(), path.size());
     if (ret != BDM_CODE_OK) {
@@ -73,8 +89,8 @@ int32_t CreateBdmAndDestroy(const std::string &path, uint32_t bdmId, uint32_t pa
     if (ret < 0) {
         return BDM_CODE_ERR;
     }
-    para.offset = 0UL;
-    para.length = TEST_BDM_META_DISK_LEN;
+    para.offset = offset;
+    para.length = length;
     para.bdmId = bdmId;
     para.pad = pad;
     para.minChunkSize = NO_4194304;
@@ -88,6 +104,67 @@ int32_t CreateBdmAndDestroy(const std::string &path, uint32_t bdmId, uint32_t pa
     EXPECT_EQ(createdBdmId, bdmId);
     EXPECT_EQ(BdmDestroy(createdBdmId), BDM_CODE_OK);
     return BDM_CODE_OK;
+}
+
+int32_t CreateBdmAndDestroy(const std::string &path, uint32_t bdmId, uint32_t pad)
+{
+    return CreateBdmAndDestroy(path, bdmId, pad, 0, TEST_BDM_META_DISK_LEN);
+}
+
+bool IsFileRangeZero(const std::string &path, uint64_t offset, uint64_t length)
+{
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) {
+        return false;
+    }
+
+    char buff[4096];
+    uint64_t checkedLength = 0;
+    while (checkedLength < length) {
+        uint64_t remainingLength = length - checkedLength;
+        size_t readLength = remainingLength < sizeof(buff) ? static_cast<size_t>(remainingLength) : sizeof(buff);
+        ssize_t realLength = pread(fd, buff, readLength, static_cast<off_t>(offset + checkedLength));
+        if (realLength != static_cast<ssize_t>(readLength)) {
+            close(fd);
+            return false;
+        }
+        for (size_t i = 0; i < readLength; i++) {
+            if (buff[i] != 0) {
+                close(fd);
+                return false;
+            }
+        }
+        checkedLength += readLength;
+    }
+
+    close(fd);
+    return true;
+}
+
+bool WriteFileMarker(const std::string &path, uint64_t offset)
+{
+    int fd = open(path.c_str(), O_WRONLY);
+    if (fd < 0) {
+        return false;
+    }
+    char marker = 1;
+    bool success = pwrite(fd, &marker, sizeof(marker), static_cast<off_t>(offset)) ==
+        static_cast<ssize_t>(sizeof(marker));
+    close(fd);
+    return success;
+}
+
+bool ClearFileMagic(const std::string &path, uint64_t offset)
+{
+    int fd = open(path.c_str(), O_WRONLY);
+    if (fd < 0) {
+        return false;
+    }
+    uint64_t invalidMagic = 0;
+    bool success = pwrite(fd, &invalidMagic, sizeof(invalidMagic), static_cast<off_t>(offset)) ==
+        static_cast<ssize_t>(sizeof(invalidMagic));
+    close(fd);
+    return success;
 }
 }
 
@@ -488,6 +565,215 @@ TEST_F(TestDisk, test_bdm_metadata_cluster_pad_keeps_restore_behavior)
 
     EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, 0), BDM_CODE_OK);
     EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, 0), BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_force_new_disk_skips_old_allocator_recovery)
+{
+    constexpr uint32_t bdmId = 708;
+    TempBdmFile diskFile(bdmId);
+    int fd = open(diskFile.path.c_str(), O_CREAT | O_RDWR, 0600);
+    ASSERT_GE(fd, 0);
+    ASSERT_EQ(ftruncate(fd, TEST_BDM_META_DISK_LEN), 0);
+    close(fd);
+
+    BdmCreatePara para = {0};
+    ASSERT_EQ(strncpy_s(para.name, BDM_NAME_LEN, diskFile.path.c_str(), diskFile.path.size()), BDM_CODE_OK);
+    ASSERT_GE(sprintf_s(para.sn, BDM_SN_LEN, "%s_%u", "meta", bdmId), 0);
+    para.length = TEST_BDM_META_DISK_LEN;
+    para.bdmId = bdmId;
+    para.pad = BuildVirtualPad(0, 1);
+    para.minChunkSize = NO_4194304;
+    para.maxChunkSize = NO_4194304;
+
+    uint32_t createdBdmId = BDM_INVALID_ID;
+    ASSERT_EQ(BdmCreate(&para, &createdBdmId), BDM_CODE_OK);
+    uint64_t chunkId = 0;
+    ASSERT_EQ(BdmAlloc(bdmId, 1, 2, NO_4194304, &chunkId), BDM_CODE_OK);
+    ASSERT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+
+    ASSERT_EQ(BdmCreate(&para, &createdBdmId), BDM_CODE_OK);
+    uint64_t totalCapacity = 0;
+    uint64_t usedCapacity = 0;
+    ASSERT_EQ(BdmGetCapacity(bdmId, &totalCapacity, &usedCapacity), BDM_CODE_OK);
+    EXPECT_EQ(usedCapacity, NO_4194304);
+    ASSERT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+
+    BdmDiskSetForceNew(1);
+    int32_t ret = BdmCreate(&para, &createdBdmId);
+    BdmDiskSetForceNew(0);
+    ASSERT_EQ(ret, BDM_CODE_OK);
+    ASSERT_EQ(BdmGetCapacity(bdmId, &totalCapacity, &usedCapacity), BDM_CODE_OK);
+    EXPECT_EQ(usedCapacity, 0);
+    ASSERT_EQ(BdmAlloc(bdmId, 3, 4, NO_4194304, &chunkId), BDM_CODE_OK);
+    ASSERT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+
+    ASSERT_EQ(BdmCreate(&para, &createdBdmId), BDM_CODE_OK);
+    ASSERT_EQ(BdmGetCapacity(bdmId, &totalCapacity, &usedCapacity), BDM_CODE_OK);
+    EXPECT_EQ(usedCapacity, NO_4194304);
+    EXPECT_EQ(BdmDestroy(bdmId), BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_bdm_calculate_virtual_region)
+{
+    uint64_t offset = 0;
+    uint64_t length = 0;
+    constexpr uint64_t capacity = TEST_BDM_META_DISK_LEN + BDM_ALIGN_SIZE / 2;
+
+    EXPECT_EQ(BdmCalculateVirtualRegion(capacity, NO_4194304, 3, 8, &offset, &length), BDM_CODE_OK);
+    EXPECT_EQ(length, TEST_BDM_META_DISK_LEN / 8);
+    EXPECT_EQ(offset, length * 3);
+    EXPECT_EQ(BdmCalculateVirtualRegion(capacity, NO_4194304, 8, 8, &offset, &length),
+        BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmCalculateVirtualRegion(capacity, NO_4194304, 0,
+        BDM_VIRTUAL_LAYOUT_SLOT_NUM + 1, &offset, &length), BDM_CODE_INVALID_PARAM);
+    EXPECT_EQ(BdmCalculateVirtualRegion(capacity, NO_4194304, 0, 3, &offset, &length), BDM_CODE_OK);
+    EXPECT_EQ(length, TEST_BDM_META_DISK_LEN / BDM_VIRTUAL_LAYOUT_SLOT_NUM *
+        (BDM_VIRTUAL_LAYOUT_SLOT_NUM / 3));
+    EXPECT_EQ(offset, 0);
+    EXPECT_EQ(BdmCalculateVirtualRegion(BDM_RESTORE_META_SIZE + NO_4194304, NO_4194304, 0, 2, &offset, &length),
+        BDM_CODE_INVALID_PARAM);
+
+    constexpr uint64_t unalignedCapacity = TEST_BDM_META_DISK_LEN + BDM_ALIGN_SIZE * 7;
+    uint64_t smallestRegionOffset = 0;
+    uint64_t smallestRegionLength = 0;
+    ASSERT_EQ(BdmCalculateVirtualRegion(unalignedCapacity, NO_4194304, 0, BDM_VIRTUAL_LAYOUT_SLOT_NUM,
+        &smallestRegionOffset, &smallestRegionLength), BDM_CODE_OK);
+    EXPECT_EQ(smallestRegionOffset, 0);
+    for (uint32_t deviceCount = 1; deviceCount <= BDM_VIRTUAL_LAYOUT_SLOT_NUM; deviceCount++) {
+        for (uint32_t deviceId = 0; deviceId < deviceCount; deviceId++) {
+            ASSERT_EQ(BdmCalculateVirtualRegion(unalignedCapacity, NO_4194304, deviceId, deviceCount, &offset,
+                &length), BDM_CODE_OK);
+            EXPECT_EQ(length, smallestRegionLength * (BDM_VIRTUAL_LAYOUT_SLOT_NUM / deviceCount));
+            EXPECT_EQ(offset, length * deviceId);
+            EXPECT_EQ(offset % smallestRegionLength, 0);
+            EXPECT_LE(offset + length, smallestRegionLength * BDM_VIRTUAL_LAYOUT_SLOT_NUM);
+        }
+    }
+}
+
+TEST_F(TestDisk, test_bdm_virtual_regions_restore_independently)
+{
+    constexpr uint32_t bdmId = 703;
+    constexpr uint32_t deviceCount = 8;
+    TempBdmFile diskFile(bdmId);
+    uint64_t region0Offset = 0;
+    uint64_t region0Length = 0;
+    uint64_t region1Offset = 0;
+    uint64_t region1Length = 0;
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0, deviceCount, &region0Offset,
+        &region0Length), BDM_CODE_OK);
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 1, deviceCount, &region1Offset,
+        &region1Length), BDM_CODE_OK);
+
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, deviceCount), region0Offset, region0Length),
+        BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(1, deviceCount), region1Offset, region1Length),
+        BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, deviceCount), region0Offset, region0Length),
+        BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(1, deviceCount), region1Offset, region1Length),
+        BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_bdm_virtual_pad_mismatch_creates_fresh_allocator)
+{
+    constexpr uint32_t bdmId = 704;
+    TempBdmFile diskFile(bdmId);
+    constexpr uint64_t regionLength = TEST_BDM_META_DISK_LEN / 8;
+
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(2, 8), 2 * regionLength, regionLength),
+        BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(2, 16), 2 * regionLength, regionLength),
+        BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_bdm_non_divisor_device_count_creates_fresh_allocator)
+{
+    constexpr uint32_t bdmId = 707;
+    TempBdmFile diskFile(bdmId);
+    uint64_t regionOffset = 0;
+    uint64_t regionLength = 0;
+
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0, 4, &regionOffset, &regionLength),
+        BDM_CODE_OK);
+    ASSERT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, 4), regionOffset, regionLength),
+        BDM_CODE_OK);
+
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0, 3, &regionOffset, &regionLength),
+        BDM_CODE_OK);
+    EXPECT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, 3), regionOffset, regionLength),
+        BDM_CODE_OK);
+}
+
+TEST_F(TestDisk, test_bdm_device_count_change_clears_old_headers_in_current_region)
+{
+    constexpr uint32_t bdmId = 705;
+    TempBdmFile diskFile(bdmId);
+    uint64_t oldOffsets[3] = {0};
+    uint64_t oldRegionLength = 0;
+    for (uint32_t deviceId = 0; deviceId < 3; deviceId++) {
+        ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, deviceId, 8,
+            &oldOffsets[deviceId], &oldRegionLength), BDM_CODE_OK);
+        ASSERT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(deviceId, 8), oldOffsets[deviceId],
+            oldRegionLength), BDM_CODE_OK);
+    }
+    ASSERT_FALSE(IsFileRangeZero(diskFile.path, oldOffsets[1], BDM_RESTORE_META_SIZE));
+    ASSERT_FALSE(IsFileRangeZero(diskFile.path, oldOffsets[2], BDM_RESTORE_META_SIZE));
+
+    uint64_t smallestRegionOffset = 0;
+    uint64_t smallestRegionLength = 0;
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0,
+        BDM_VIRTUAL_LAYOUT_SLOT_NUM, &smallestRegionOffset, &smallestRegionLength), BDM_CODE_OK);
+    EXPECT_EQ(smallestRegionOffset, 0);
+    ASSERT_TRUE(WriteFileMarker(diskFile.path, smallestRegionLength));
+    ASSERT_TRUE(WriteFileMarker(diskFile.path, smallestRegionLength * 3));
+
+    uint64_t currentRegionOffset = 0;
+    uint64_t currentRegionLength = 0;
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0, 4, &currentRegionOffset,
+        &currentRegionLength), BDM_CODE_OK);
+    ASSERT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, 4), currentRegionOffset,
+        currentRegionLength), BDM_CODE_OK);
+
+    EXPECT_TRUE(IsFileRangeZero(diskFile.path, smallestRegionLength, BDM_RESTORE_META_SIZE));
+    EXPECT_TRUE(IsFileRangeZero(diskFile.path, oldOffsets[1], BDM_RESTORE_META_SIZE));
+    EXPECT_TRUE(IsFileRangeZero(diskFile.path, smallestRegionLength * 3, BDM_RESTORE_META_SIZE));
+    EXPECT_FALSE(IsFileRangeZero(diskFile.path, oldOffsets[2], BDM_RESTORE_META_SIZE));
+}
+
+TEST_F(TestDisk, test_bdm_invalid_virtual_anchor_clears_all_header_slots_in_current_region)
+{
+    constexpr uint32_t bdmId = 706;
+    TempBdmFile diskFile(bdmId);
+    uint64_t oldOffsets[3] = {0};
+    uint64_t oldRegionLength = 0;
+    for (uint32_t deviceId = 0; deviceId < 3; deviceId++) {
+        ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, deviceId, 8,
+            &oldOffsets[deviceId], &oldRegionLength), BDM_CODE_OK);
+        ASSERT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(deviceId, 8), oldOffsets[deviceId],
+            oldRegionLength), BDM_CODE_OK);
+    }
+
+    uint64_t smallestRegionOffset = 0;
+    uint64_t smallestRegionLength = 0;
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0,
+        BDM_VIRTUAL_LAYOUT_SLOT_NUM, &smallestRegionOffset, &smallestRegionLength), BDM_CODE_OK);
+    EXPECT_EQ(smallestRegionOffset, 0);
+    ASSERT_TRUE(WriteFileMarker(diskFile.path, smallestRegionLength));
+    ASSERT_TRUE(WriteFileMarker(diskFile.path, smallestRegionLength * 3));
+    ASSERT_TRUE(ClearFileMagic(diskFile.path, oldOffsets[0]));
+
+    uint64_t currentRegionOffset = 0;
+    uint64_t currentRegionLength = 0;
+    ASSERT_EQ(BdmCalculateVirtualRegion(TEST_BDM_META_DISK_LEN, NO_4194304, 0, 4, &currentRegionOffset,
+        &currentRegionLength), BDM_CODE_OK);
+    ASSERT_EQ(CreateBdmAndDestroy(diskFile.path, bdmId, BuildVirtualPad(0, 4), currentRegionOffset,
+        currentRegionLength), BDM_CODE_OK);
+
+    EXPECT_TRUE(IsFileRangeZero(diskFile.path, smallestRegionLength, BDM_RESTORE_META_SIZE));
+    EXPECT_TRUE(IsFileRangeZero(diskFile.path, oldOffsets[1], BDM_RESTORE_META_SIZE));
+    EXPECT_TRUE(IsFileRangeZero(diskFile.path, smallestRegionLength * 3, BDM_RESTORE_META_SIZE));
+    EXPECT_FALSE(IsFileRangeZero(diskFile.path, oldOffsets[2], BDM_RESTORE_META_SIZE));
 }
 
 TEST_F(TestDisk, test_disk_get_bdm_status_case_return_fail)

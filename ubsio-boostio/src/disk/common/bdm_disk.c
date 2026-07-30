@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <fcntl.h>
 #include <liburing.h>
 #include <linux/version.h>
@@ -63,6 +64,7 @@
 #define BDM_SYNC_URING_MIN_CHUNK_SIZE (4096UL)
 
 static BdmIoEngine g_bdmIoEngine = BDM_IO_ENGINE_SYNC;
+static uint32_t g_bdmForceNew = 0;
 
 typedef struct {
     uint64_t magic;
@@ -243,8 +245,28 @@ uint64_t BdmDiskInnerReadWriteImpl(int32_t fd, char *buff, uint64_t len, uint64_
     return (len - remain);
 }
 
+static int32_t BdmDiskCheckRegionRange(const BdmDiskItem *item, uint64_t offset, uint64_t len)
+{
+    if (UNLIKELY(item == NULL || offset < item->offset)) {
+        return BDM_CODE_CROSS_BOUND;
+    }
+
+    uint64_t relativeOffset = offset - item->offset;
+    if (UNLIKELY(relativeOffset > item->totalSize || len > item->totalSize - relativeOffset)) {
+        BDM_LOGERROR(0, "Disk io crosses region, bdmId(%u), device(%s), regionOffset(%llu), regionLength(%llu), "
+            "ioOffset(%llu), ioLength(%llu).", item->bdmId, item->name, item->offset, item->totalSize, offset, len);
+        return BDM_CODE_CROSS_BOUND;
+    }
+    return BDM_CODE_OK;
+}
+
 int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
 {
+    int32_t ret = BdmDiskCheckRegionRange(itemPtr, offset, len);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
     // 磁盘读写失败最大允许重试3次.
     uint32_t retry = 0;
     while (retry <= BDM_IO_RETRY_NUM) {
@@ -272,12 +294,18 @@ static int32_t BdmDiskPrepareDirectBuffer(char *userBuf, uint64_t len, uint64_t 
 static int32_t BdmDiskFinishDirectBuffer(char *userBuf, uint64_t len, int32_t isRead, char *ioBuf, bool needBounce,
     int32_t ioRet);
 static int32_t BdmDiskFinishUringBuffer(BdmIoContext *bdmIo, int32_t ioRet);
+static int32_t BdmDiskPreCheckFileLen(int32_t fd, uint64_t offset, uint64_t length);
 
 int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t len, uint64_t offset, int32_t isRead)
 {
+    int32_t ret = BdmDiskCheckRegionRange(itemPtr, offset, len);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
+
     char *ioBuf = NULL;
     bool needBounce = false;
-    int32_t ret = BdmDiskPrepareDirectBuffer(buff, len, offset, isRead, &ioBuf, &needBounce);
+    ret = BdmDiskPrepareDirectBuffer(buff, len, offset, isRead, &ioBuf, &needBounce);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         return ret;
     }
@@ -863,6 +891,10 @@ static int32_t BdmDiskInnerReadWriteUring(BdmDiskItem *itemPtr, char *buff, uint
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         return ret;
     }
+    ret = BdmDiskCheckRegionRange(itemPtr, buffer.ioOffset, buffer.ioLen);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return BdmDiskFinishSyncUringBuffer(buff, len, isRead, &buffer, ret);
+    }
 
     static uint64_t submitIndex = 0;
     uint64_t fdIdx = ATOMIC_INC(&submitIndex) % BDM_AYSNC_IO_FD_NUM;
@@ -1142,6 +1174,10 @@ static int32_t BdmDiskPrepareOneUring(BdmIoContext *bdmIo, BdmThreadCtx *threadC
     struct io_uring *ring = &bdmPool->ring[threadIdx];
     BdmDiskItem *item = (BdmDiskItem *)bdmIo->item;
     uint64_t rwOffset = item->offset + item->dataOffset + item->minChunkSize * bdmIo->chunkId + bdmIo->offset;
+    int32_t ret = BdmDiskCheckRegionRange(item, rwOffset, bdmIo->len);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
     if (UNLIKELY(!BdmDiskCheckDirectRangeAligned(bdmIo->len, rwOffset))) {
         return BDM_CODE_INVALID_PARAM;
     }
@@ -1669,6 +1705,20 @@ int32_t BdmDiskOpenDisk(BdmCreatePara *para, BdmDiskItem *item)
         return BDM_CODE_ERR;
     }
 
+    struct stat diskStat = { 0 };
+    if (UNLIKELY(fstat(item->fd, &diskStat) != 0)) {
+        BDM_LOGERROR(0, "Get device(%s) status failed, errno(%s).", item->name, strerror(errno));
+        BdmDiskCloseDisk(item);
+        return BDM_CODE_ERR;
+    }
+    if (S_ISBLK(diskStat.st_mode) &&
+        UNLIKELY(BdmDiskPreCheckFileLen(item->fd, item->offset, item->totalSize) != BDM_CODE_OK)) {
+        BDM_LOGERROR(0, "Disk region exceeds device capacity, device(%s), offset(%llu), length(%llu).", item->name,
+            item->offset, item->totalSize);
+        BdmDiskCloseDisk(item);
+        return BDM_CODE_CROSS_BOUND;
+    }
+
     for (uint32_t index = 0; index < BDM_AYSNC_IO_FD_NUM; index++) {
         item->asyncfd[index] = open(item->name, O_RDWR | __O_DIRECT);
         if (UNLIKELY(item->asyncfd[index] < 0)) {
@@ -1685,6 +1735,17 @@ static bool BdmDiskHeadHasStandaloneInfo(uint32_t pad)
     return (pad & BDM_DISK_HEAD_MODE_MASK) == BDM_DISK_HEAD_STANDALONE_MAGIC;
 }
 
+static uint32_t BdmDiskHeadLayoutVersion(uint32_t pad)
+{
+    return (pad & BDM_DISK_HEAD_LAYOUT_VERSION_MASK) >> BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT;
+}
+
+static bool BdmDiskHeadHasVirtualLayout(uint32_t pad)
+{
+    return BdmDiskHeadHasStandaloneInfo(pad) &&
+        BdmDiskHeadLayoutVersion(pad) == BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION;
+}
+
 static const char *BdmDiskHeadMode(uint32_t pad)
 {
     return BdmDiskHeadHasStandaloneInfo(pad) ? "standalone" : "cluster";
@@ -1693,6 +1754,63 @@ static const char *BdmDiskHeadMode(uint32_t pad)
 static uint32_t BdmDiskHeadDeviceId(uint32_t pad)
 {
     return pad & BDM_DISK_HEAD_DEVICE_ID_MASK;
+}
+
+static uint32_t BdmDiskHeadDeviceCount(uint32_t pad)
+{
+    return (pad & BDM_DISK_HEAD_DEVICE_COUNT_MASK) >> BDM_DISK_HEAD_DEVICE_COUNT_SHIFT;
+}
+
+static int32_t BdmDiskClearVirtualHeaders(BdmDiskItem *item, const BdmDiskHead *observedHead)
+{
+    uint32_t storedDeviceCount = BdmDiskHeadDeviceCount(observedHead->pad);
+    uint32_t currentDeviceCount = BdmDiskHeadDeviceCount(item->pad);
+    if (UNLIKELY(currentDeviceCount == 0 || currentDeviceCount > BDM_VIRTUAL_LAYOUT_SLOT_NUM)) {
+        BDM_LOGERROR(0, "Invalid current virtual disk metadata, device(%s), bdmId(%u), currentDeviceCount(%u).",
+            item->name, item->bdmId, currentDeviceCount);
+        return BDM_CODE_ERR_IO;
+    }
+
+    /* A current Region is a union of 16-way slots; clear the 2 MiB header area of every owned slot. */
+    uint32_t headerSlotCount = BDM_VIRTUAL_LAYOUT_SLOT_NUM / currentDeviceCount;
+    if (UNLIKELY(item->totalSize % headerSlotCount != 0 ||
+        item->totalSize / headerSlotCount < BDM_RESTORE_META_SIZE)) {
+        BDM_LOGERROR(0, "Invalid current virtual disk region, device(%s), bdmId(%u), regionLength(%llu), "
+            "headerSlotCount(%u).", item->name, item->bdmId, item->totalSize, headerSlotCount);
+        return BDM_CODE_ERR_IO;
+    }
+    uint64_t headerStride = item->totalSize / headerSlotCount;
+
+    char *clearBuff = (char *)calloc(1, BDM_RESTORE_META_SIZE);
+    if (UNLIKELY(clearBuff == NULL)) {
+        BDM_LOGERROR(0, "Allocate old virtual disk header clear buffer failed, device(%s), bdmId(%u).",
+            item->name, item->bdmId);
+        return BDM_CODE_ERR_IO;
+    }
+
+    int32_t ret = BDM_CODE_OK;
+    /* Clear the Region anchor last so interrupted cleanup can be detected and retried on the next startup. */
+    for (uint32_t headerIndex = headerSlotCount; headerIndex > 0; headerIndex--) {
+        uint32_t slotIndex = headerIndex - 1;
+        uint64_t headerOffset = item->offset + slotIndex * headerStride;
+        ret = BdmDiskInnerReadWrite(item, clearBuff, BDM_RESTORE_META_SIZE, headerOffset, FALSE);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            BDM_LOGERROR(0, "Clear old virtual disk header failed, device(%s), bdmId(%u), headerOffset(%llu).",
+                item->name, item->bdmId, headerOffset);
+            ret = BDM_CODE_ERR_IO;
+            break;
+        }
+    }
+
+    free(clearBuff);
+    if (ret == BDM_CODE_OK) {
+        BDM_LOGWARN(0, "Cleared old virtual disk headers, device(%s), bdmId(%u), storedDeviceCount(%u), "
+            "currentDeviceCount(%u), currentDeviceId(%u), regionOffset(%llu), regionLength(%llu), "
+            "headerStride(%llu), headerSlotCount(%u).",
+            item->name, item->bdmId, storedDeviceCount, BdmDiskHeadDeviceCount(item->pad),
+            BdmDiskHeadDeviceId(item->pad), item->offset, item->totalSize, headerStride, headerSlotCount);
+    }
+    return ret;
 }
 
 static bool BdmDiskCheckFixedItem(const BdmDiskHead *head, const BdmDiskItem *item)
@@ -1719,35 +1837,52 @@ static int32_t BdmDiskCheckItem(const BdmDiskHead *head, const BdmDiskItem *item
     }
 
     BDM_LOGERROR(0,
-        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedDeviceId(%u), currentMode(%s), "
-        "currentDeviceId(%u).",
-        item->name, item->bdmId, BdmDiskHeadMode(head->pad), BdmDiskHeadDeviceId(head->pad),
-        BdmDiskHeadMode(item->pad), BdmDiskHeadDeviceId(item->pad));
+        "Disk metadata mismatch, device(%s), bdmId(%u), storedMode(%s), storedVersion(%u), storedDeviceCount(%u), "
+        "storedDeviceId(%u), currentMode(%s), currentVersion(%u), currentDeviceCount(%u), currentDeviceId(%u).",
+        item->name, item->bdmId, BdmDiskHeadMode(head->pad), BdmDiskHeadLayoutVersion(head->pad),
+        BdmDiskHeadDeviceCount(head->pad), BdmDiskHeadDeviceId(head->pad),
+        BdmDiskHeadMode(item->pad), BdmDiskHeadLayoutVersion(item->pad), BdmDiskHeadDeviceCount(item->pad),
+        BdmDiskHeadDeviceId(item->pad));
     return BDM_CODE_METADATA_MISMATCH;
 }
 
-int32_t BdmDiskPreCheckFileLen(int32_t fd, uint64_t length)
+static int32_t BdmDiskPreCheckFileLen(int32_t fd, uint64_t offset, uint64_t length)
 {
-    off_t offset = lseek(fd, 0, SEEK_END);
-    if (UNLIKELY(offset < (off_t)length)) {
+    off_t fileLength = lseek(fd, 0, SEEK_END);
+    if (UNLIKELY(fileLength < 0 || offset > (uint64_t)fileLength || length > (uint64_t)fileLength - offset)) {
         return BDM_CODE_ERR;
-    } else {
-        return BDM_CODE_OK;
     }
+    return BDM_CODE_OK;
 }
 
 int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
 {
-    int32_t ret = BdmDiskPreCheckFileLen(item->fd, item->headSize + item->offset);
+    int32_t ret = BdmDiskPreCheckFileLen(item->fd, item->offset, item->totalSize);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         return ret;
     }
 
     BdmDiskHead head;
+    ret = BdmDiskCheckRegionRange(item, item->offset, item->headSize);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        return ret;
+    }
     uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char *)&head, item->headSize, item->offset, TRUE);
     if (UNLIKELY(rwLen != item->headSize)) {
         BDM_LOGWARN(0, "Read disk failed, need(%lu) real(%lu) device(%s).", item->headSize, rwLen, item->name);
         return BDM_CODE_ERR;
+    }
+
+    bool currentVirtualLayout = BdmDiskHeadHasVirtualLayout(item->pad);
+    bool storedVirtualLayout = head.magic == BDM_DISK_MAGIC && BdmDiskHeadHasVirtualLayout(head.pad);
+    if (currentVirtualLayout && (!storedVirtualLayout ||
+        BdmDiskHeadDeviceCount(head.pad) != BdmDiskHeadDeviceCount(item->pad))) {
+        ret = BdmDiskClearVirtualHeaders(item, &head);
+        if (UNLIKELY(ret != BDM_CODE_OK)) {
+            return ret;
+        }
+        // Missing, damaged, or stale virtual metadata was cleared; continue with a fresh allocator.
+        return BDM_CODE_METADATA_MISMATCH;
     }
 
     uint64_t metaSize;
@@ -1763,6 +1898,10 @@ int32_t BdmDiskRestoreCheckOK(BdmDiskItem *item)
     item->dataLength = dataSize;
     ret = BdmDiskCheckItem(&head, item);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
+        if (currentVirtualLayout) {
+            ret = BdmDiskClearVirtualHeaders(item, &head);
+            return ret == BDM_CODE_OK ? BDM_CODE_METADATA_MISMATCH : ret;
+        }
         return ret;
     }
 
@@ -1857,6 +1996,11 @@ int32_t BdmDiskStoreDiskHead(BdmDiskItem *item)
     }
 
     uint64_t rwOffset = item->offset;
+    ret = BdmDiskCheckRegionRange(item, rwOffset, BDM_RESTORE_META_SIZE);
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        free(restoreBuff);
+        return ret;
+    }
     uint64_t rwLen = BdmDiskInnerReadWriteImpl(item->fd, (char *)restoreBuff, BDM_RESTORE_META_SIZE, rwOffset, FALSE);
     if (UNLIKELY(rwLen != BDM_RESTORE_META_SIZE)) {
         BDM_LOGWARN(0, "Write disk failed, need(%lu) real(%lu) device(%s).", BDM_RESTORE_META_SIZE, rwLen, item->name);
@@ -1906,12 +2050,26 @@ int32_t BdmDiskNewAllocator(BdmDiskItem *item)
 
 int32_t BdmDiskCreateAllocator(BdmDiskItem *item)
 {
+    if (g_bdmForceNew != 0) {
+        BDM_LOGINFO(0, "Force new disk enabled, skip recovery and create a fresh allocator, device(%s), bdmId(%u).",
+            item->name, item->bdmId);
+        return BdmDiskNewAllocator(item);
+    }
+
     int32_t ret = BdmDiskRestoreAllocator(item);
     if (ret == BDM_CODE_OK) {
         return ret;
     }
-    if (UNLIKELY(ret == BDM_CODE_METADATA_MISMATCH)) {
+    // Cleanup failed; fail this virtual disk initialization instead of leaving stale headers behind.
+    if (UNLIKELY(ret == BDM_CODE_ERR_IO)) {
         return ret;
+    }
+    if (UNLIKELY(ret == BDM_CODE_METADATA_MISMATCH && !BdmDiskHeadHasVirtualLayout(item->pad))) {
+        return ret;
+    }
+    if (ret == BDM_CODE_METADATA_MISMATCH) {
+        BDM_LOGWARN(0, "Virtual disk metadata does not match current layout, create a fresh allocator, device(%s), "
+            "bdmId(%u).", item->name, item->bdmId);
     }
     return BdmDiskNewAllocator(item);
 }
@@ -2229,6 +2387,7 @@ static void BdmDiskThreadPoolCleanup(BdmThreadPool *bdmPool)
 
 int32_t BdmDiskExit(void)
 {
+    g_bdmForceNew = 0;
     BdmDiskCleanupCurrentSyncUringCtx();
     BdmDiskCleanupAllSyncUringCtxs();
     if (g_bdmIoEngine == BDM_IO_ENGINE_SYNC) {
@@ -2241,6 +2400,7 @@ int32_t BdmDiskExit(void)
 
 int32_t BdmDiskInit(void)
 {
+    g_bdmForceNew = 0;
     BDM_SPIN_INIT(&(g_bdmDisk.lock), 0);
     D_INIT_LIST_HEAD(&(g_bdmDisk.head));
     g_bdmDisk.num = 0UL;
@@ -2252,4 +2412,9 @@ int32_t BdmDiskInit(void)
         BDM_LOGERROR(0, "Bdm disk init thread pool failed, ret(%d).", ret);
     }
     return ret;
+}
+
+void BdmDiskSetForceNew(uint32_t forceNew)
+{
+    g_bdmForceNew = forceNew != 0 ? 1U : 0U;
 }

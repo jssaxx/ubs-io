@@ -23,6 +23,8 @@ int32_t BdmDiskInit(void);
 
 int32_t BdmDiskExit(void);
 
+void BdmDiskSetForceNew(uint32_t forceNew);
+
 uint32_t BdmGetNormalDiskNum(void);
 
 void BdmSetNormalDiskNum(uint32_t diskNum);

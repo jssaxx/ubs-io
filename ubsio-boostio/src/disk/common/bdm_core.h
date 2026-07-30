@@ -27,10 +27,15 @@ extern "C" {
 #define BDM_ALIGN_SIZE (2097152UL)
 #define BDM_RESTORE_META_SIZE (2097152UL)
 #define BDM_INVALID_ID (1024UL)
-/* Low 16 bits store standalone mode and device id. High 16 bits are reserved. */
+/* Low 16 bits store standalone mode and device id. Virtual layout uses the high 16 bits. */
 #define BDM_DISK_HEAD_STANDALONE_MAGIC (0x0000BD00U)
 #define BDM_DISK_HEAD_MODE_MASK (0x0000FF00U)
 #define BDM_DISK_HEAD_DEVICE_ID_MASK (0x000000FFU)
+#define BDM_DISK_HEAD_DEVICE_COUNT_MASK (0x00FF0000U)
+#define BDM_DISK_HEAD_LAYOUT_VERSION_MASK (0xFF000000U)
+#define BDM_DISK_HEAD_DEVICE_COUNT_SHIFT (16U)
+#define BDM_DISK_HEAD_LAYOUT_VERSION_SHIFT (24U)
+#define BDM_DISK_HEAD_VIRTUAL_LAYOUT_VERSION (1U)
 
 typedef struct {
     char name[BDM_NAME_LEN];
@@ -91,6 +96,8 @@ typedef struct {
 
 #define DISK_PATH_LEN (256UL)
 #define DISK_DEV_NUM (16UL)
+/* Maximum number of cards supported by a single machine and the virtual layout slot count. */
+#define BDM_VIRTUAL_LAYOUT_SLOT_NUM (16UL)
 
 typedef struct {
     char path[DISK_PATH_LEN];
@@ -142,6 +149,11 @@ BdmIoEngine BdmGetIoEngine(void);
 void BdmSetDiskStartupInfo(uint32_t isStandalone, uint32_t deviceId);
 
 int32_t BdmStart(DiskDevices *diskList, uint64_t chunkSize);
+
+int32_t BdmStartVirtual(DiskDevices *diskList, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount);
+
+int32_t BdmCalculateVirtualRegion(uint64_t capacity, uint64_t chunkSize, uint32_t deviceId, uint32_t deviceCount,
+    uint64_t *regionOffset, uint64_t *regionLength);
 
 int32_t BdmUpdate(char *diskPath, uint64_t chunkSize, uint64_t diskCap);
 

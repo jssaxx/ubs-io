@@ -61,6 +61,7 @@ const auto MEM_CAPACITY_SIZE_GB = std::make_pair("ubsio.mem.size_in_gb", 50);
 const auto DISK_CONF_PATH = std::make_pair("ubsio.disk.path", "xxx:xxx:xxx");
 const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
+const auto STANDALONE_FORCE_NEW_DISK = std::make_pair("ubsio.standalone.force_new_disk", "false");
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 0);
 
 const auto WCACHE_EVICT_WATER_LEVEL = std::make_pair("ubsio.wcache.evict_water_level", 0);
@@ -165,6 +166,7 @@ public:
         std::vector<int64_t> diskCaps;
         std::string bdmIoEngine = "sync";
         uint32_t standaloneDeviceCount = 0;
+        bool standaloneForceNewDisk = false;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
         uint32_t workIoTimeOut = 60;
@@ -257,6 +259,8 @@ public:
         return mStandaloneDeviceInfo.deviceId;
     }
 
+    BResult UpdateStandaloneDiskCapacity(uint32_t diskId, int64_t capacity);
+
     uint64_t ModifyConfigEvictWaterLevel(uint8_t tier, uint64_t level);
 
     std::string ModifyConfigMemReadWriteRatio(const std::string &ratios);
@@ -296,10 +300,7 @@ private:
 
     BResult SelectStandaloneDiskLegacy(uint16_t diskNum);
 
-    BResult SelectStandaloneDisksByDeviceCount(uint16_t diskNum);
-
-    BResult ApplyStandaloneDiskSelection(const std::vector<uint32_t> &diskIndexes, uint16_t configuredDiskNum,
-        const std::string &selectionLog);
+    BResult SelectStandaloneVirtualDisks(uint16_t diskNum);
 
 private:
     struct StandaloneDeviceInfo {
