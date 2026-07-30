@@ -56,6 +56,7 @@ if (NOT USE_SYSTEM_HCOM)
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                 -DBUILD_TESTS=off
                 -DENABLE_ARM_KP=${ENABLE_KP_OPT}
+                -DBUILD_WITH_RDMA=${UBSIO_HCOM_ENABLE_RDMA}
                 -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
                 ${ubs_comm_SOURCE_DIR}
                 WORKING_DIRECTORY ${BUILD_DIR}

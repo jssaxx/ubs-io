@@ -523,7 +523,8 @@ BResult WCache::Recover(RecoverCallback recoverCallback)
         auto sliceRef = MakeRef<WCacheSliceRef>(dataSlice);
         ChkTrueNot(sliceRef != nullptr, BIO_ERR);
 
-        if (mUfsEnable) {
+        // In standalone mode, KV cache data is evictable, so recovered slices must rejoin the disk eviction queue.
+        if (mUfsEnable || BioServer::Instance()->IsStandaloneMode()) {
             diskCache->AddEvictQueue(sliceRef);
         }
 
