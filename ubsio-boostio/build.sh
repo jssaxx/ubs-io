@@ -19,6 +19,7 @@ usage() {
     echo " 7 ./build.sh -t release --pkg // Copy built libraries to dist/lib"
     echo " 8 ./build.sh -t release --pkg /tmp/boostio-lib // Copy built libraries to specified directory"
     echo " 9 ./build.sh --prepare_3rdparty // Download pinned third-party sources for offline builds"
+    echo "Environment: UBSIO_HCOM_ENABLE_RDMA=<ON|OFF> (default: ON; default with --pkg: OFF)"
     echo
     exit 1;
 }
@@ -116,6 +117,15 @@ CUSTOM_PKG_LIB_DIR=OFF
 UBSIO_ENABLE_ORIGIN_RUNPATH=OFF
 PREPARE_3RDPARTY=OFF
 BUILD_TYPE=debug
+if [[ "${UBSIO_HCOM_ENABLE_RDMA+x}" == "x" ]]; then
+    UBSIO_HCOM_ENABLE_RDMA=${UBSIO_HCOM_ENABLE_RDMA^^}
+    [[ "$UBSIO_HCOM_ENABLE_RDMA" != "ON" && "$UBSIO_HCOM_ENABLE_RDMA" != "OFF" ]] && \
+        echo "Invalid UBSIO_HCOM_ENABLE_RDMA value: $UBSIO_HCOM_ENABLE_RDMA" && usage
+    UBSIO_HCOM_ENABLE_RDMA_USER_SET=ON
+else
+    UBSIO_HCOM_ENABLE_RDMA=ON
+    UBSIO_HCOM_ENABLE_RDMA_USER_SET=OFF
+fi
 arch=$(uname -m)
 if [ ! -d "${BUILD_DIR}" ]; then
     mkdir -p ${BUILD_DIR}
@@ -204,6 +214,9 @@ done
 
 if [[ "$BUILD_PKG" == "ON" ]]; then
     UBSIO_ENABLE_ORIGIN_RUNPATH=ON
+    if [[ "$UBSIO_HCOM_ENABLE_RDMA_USER_SET" == "OFF" ]]; then
+        UBSIO_HCOM_ENABLE_RDMA=OFF
+    fi
 fi
 
 if [[ "$PREPARE_3RDPARTY" == "ON" ]]; then
@@ -275,6 +288,7 @@ else
     CMAKE_FLAGS+="-DBOOSTIO_ENABLE_ASAN_UBSAN=OFF "
 fi
 CMAKE_FLAGS+="-DUBSIO_ENABLE_ORIGIN_RUNPATH=${UBSIO_ENABLE_ORIGIN_RUNPATH} "
+CMAKE_FLAGS+="-DUBSIO_HCOM_ENABLE_RDMA=${UBSIO_HCOM_ENABLE_RDMA} "
 
 CPU_PROCESSOR_NUM=$(($(grep processor /proc/cpuinfo | wc -l) -2)) # CI环境核数会波动, 个人使用时用这个变量
 CMAKE_CMD="cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_FLAGS $PROJ_DIR"
