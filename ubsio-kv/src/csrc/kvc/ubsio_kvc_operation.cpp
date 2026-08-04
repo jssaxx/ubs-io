@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <cstdlib>
 #include <vector>
 #include "ubsio_kvc_err.h"
 #include "ubsio_kvc_log.h"
@@ -33,20 +34,15 @@ int32_t KvcOperationInit(int32_t devId)
         if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
+        const char *visibleDevs = std::getenv("ASCEND_RT_VISIBLE_DEVICES");
         int32_t logicDevId = -1;
-        int32_t phyDevId = -1;
         ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
         if (logicDevId < 0) {
             LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId);
             return UBSIO_KVC_ERR;
         }
-        ACLApi::AclrtGetPhyDevIdByLogicDevId(logicDevId, &phyDevId);
-        if (phyDevId < 0) {
-            LOG_ERROR("get phy dev id by logic dev id failed, userDevId=" << devId
-                      << ", logicDevId=" << logicDevId);
-            return UBSIO_KVC_ERR;
-        }
-        LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId << ", phyDevId=" << phyDevId);
+        LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId
+                 << ", ASCEND_RT_VISIBLE_DEVICES=" << (visibleDevs != nullptr ? visibleDevs : "(not set)"));
         if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
