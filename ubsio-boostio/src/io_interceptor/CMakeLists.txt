@@ -37,6 +37,7 @@ if (UBSIO_ENABLE_ORIGIN_RUNPATH)
                 BUILD_RPATH "$ORIGIN"
                 INSTALL_RPATH "$ORIGIN"
         )
+        target_link_options(ock_interceptor_shared PRIVATE "LINKER:--enable-new-dtags")
 endif()
 
 install(TARGETS ock_interceptor_shared DESTINATION ${TARGET_INSTALL_LIB_DIR}/ PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
