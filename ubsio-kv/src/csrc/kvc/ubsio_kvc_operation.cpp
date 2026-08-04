@@ -10,7 +10,6 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <cstdlib>
 #include <vector>
 #include "ubsio_kvc_err.h"
 #include "ubsio_kvc_log.h"
@@ -29,20 +28,18 @@ static KvOperation *g_kvOperation = KvOperation::Instance();
 
 int32_t KvcOperationInit(int32_t devId)
 {
+    int32_t logicDevId = -1;
     // 1. init acl stream
     if (devId >= 0) {
         if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
-        const char *visibleDevs = std::getenv("ASCEND_RT_VISIBLE_DEVICES");
-        int32_t logicDevId = -1;
         ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
         if (logicDevId < 0) {
             LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId);
             return UBSIO_KVC_ERR;
         }
-        LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId
-                 << ", ASCEND_RT_VISIBLE_DEVICES=" << (visibleDevs != nullptr ? visibleDevs : "(not set)"));
+        LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId);
         if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
@@ -54,7 +51,7 @@ int32_t KvcOperationInit(int32_t devId)
         LOG_ERROR("dlopen boostio library failed, ret:" << ret);
         return UBSIO_KVC_ERR;
     }
-    ret = DlBioSdkApi::KvBioInit(devId);
+    ret = DlBioSdkApi::KvBioInit(logicDevId >= 0 ? logicDevId : devId);
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
         LOG_ERROR("init boostio failed, ret:" << ret);
         return UBSIO_KVC_ERR;
