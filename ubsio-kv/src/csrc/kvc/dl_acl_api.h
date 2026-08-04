@@ -63,7 +63,6 @@ using AclrtMemsetFunc = int32_t (*)(void *, size_t, int32_t, size_t);
 using RtDeviceGetBareTgidFunc = int32_t (*)(uint32_t *);
 using RtGetDeviceInfoFunc = int32_t (*)(uint32_t, int32_t, int32_t, int64_t *val);
 using AclrtGetLogicDevIdByUserDevIdFunc = int32_t (*)(int32_t, int32_t *);
-using AclrtGetPhyDevIdByLogicDevIdFunc = int32_t (*)(int32_t, int32_t *);
 using AclrtMemcpyBatchFunc = int32_t (*)(void **, size_t *, void **, size_t *, size_t,
                                          AclrtMemcpyBatchAttr *, size_t *, size_t, size_t *);
 
@@ -231,14 +230,6 @@ public:
         return pAclrtGetLogicDevIdByUserDevId(userDevId, logicDevId);
     }
 
-    static inline int32_t AclrtGetPhyDevIdByLogicDevId(int32_t logicDevId, int32_t *phyDevId)
-    {
-        if (pAclrtGetPhyDevIdByLogicDevId == nullptr) {
-            return UBSIO_KVC_ERR;
-        }
-        return pAclrtGetPhyDevIdByLogicDevId(logicDevId, phyDevId);
-    }
-
 private:
     static std::mutex gMutex;
     static bool gLoaded;
@@ -261,7 +252,6 @@ private:
     static AclrtMemsetFunc pAclrtMemset;
     static RtGetDeviceInfoFunc pRtGetDeviceInfo;
     static AclrtGetLogicDevIdByUserDevIdFunc pAclrtGetLogicDevIdByUserDevId;
-    static AclrtGetPhyDevIdByLogicDevIdFunc pAclrtGetPhyDevIdByLogicDevId;
 };
 
 }  // namespace ubsio
