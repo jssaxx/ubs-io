@@ -34,9 +34,9 @@ int32_t KvcOperationInit(int32_t devId)
         if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
             return UBSIO_KVC_ERR;
         }
-        ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
-        if (logicDevId < 0) {
-            LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId);
+        int32_t logicIdRet = ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
+        if (logicIdRet != UBSIO_KVC_OK || logicDevId < 0) {
+            LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId << ", ret=" << logicIdRet);
             return UBSIO_KVC_ERR;
         }
         LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId);

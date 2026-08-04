@@ -451,6 +451,7 @@ protected:
     void BioTraceExit();
     BResult BioUnderFsInit();
     void BioUnderFsExit();
+    BResult BioStandaloneDeviceIdGatherInit();
     BResult BioBdmInit();
     void BioBdmExit();
     BResult BioNetInit();
