@@ -36,6 +36,10 @@
 using namespace ock::bio;
 
 namespace {
+constexpr uint64_t STANDALONE_IO_RETRY_TIMEOUT_US = 300UL * 1000UL;
+constexpr uint64_t STANDALONE_IO_RETRY_INTERVAL_US = 10UL * 1000UL;
+constexpr uint64_t MICROSECONDS_PER_SECOND = 1000UL * 1000UL;
+
 bool IsDirectMode(WorkerMode mode)
 {
     return mode == CONVERGENCE || mode == STANDALONE;
@@ -861,7 +865,8 @@ BResult MirrorClient::Put(MirrorPut &param)
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
+    uint64_t qosStartTimeSec = Monotonic::TimeSec();
     do {
         isRetry = false;
         // 1. Get pt view entry.
@@ -875,7 +880,7 @@ BResult MirrorClient::Put(MirrorPut &param)
         }
 
         // 3. Apply for write cache quota.
-        QosApplyParam applyParam{startTime, param.key, param.length};
+        QosApplyParam applyParam{qosStartTimeSec, param.key, param.length};
         ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, applyParam, &ptEntry);
         if (LIKELY(ret == BIO_OK)) {
             // 3. Put value to write cache.
@@ -908,7 +913,8 @@ BResult MirrorClient::AsyncPut(MirrorPut &param, BioAsyncPutCallback callback, v
     uint16_t ptId = ParseLocation(param.location);
     CmPtInfo ptEntry;
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
+    uint64_t qosStartTimeSec = Monotonic::TimeSec();
     do {
         isRetry = false;
         // 1. Get pt view entry.
@@ -918,7 +924,7 @@ BResult MirrorClient::AsyncPut(MirrorPut &param, BioAsyncPutCallback callback, v
         }
 
         // 2. Apply for write cache quota.
-        QosApplyParam applyParam{startTime, param.key, param.length};
+        QosApplyParam applyParam{qosStartTimeSec, param.key, param.length};
         ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, applyParam, &ptEntry);
         if (LIKELY(ret == BIO_OK)) {
             // 3. Put value to write cache.
@@ -1040,12 +1046,14 @@ BResult MirrorClient::PutAlignSize(const char *value, MirrorPut &param, bool &is
     return BIO_OK;
 }
 
-bool MirrorClient::FailHandler(const BResult result, uint64_t startTime, uint64_t timeOut)
+bool MirrorClient::FailHandler(const BResult result, uint64_t startTimeUs, uint64_t timeOutSec)
 {
-    uint64_t costTime = Monotonic::TimeSec() - startTime;
-    BIO_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &costTime, (mTimeOut+1));
+    const bool isStandalone = mMode == STANDALONE;
+    uint64_t costTime = Monotonic::TimeUs() - startTimeUs;
+    uint64_t retryTimeout = isStandalone ? STANDALONE_IO_RETRY_TIMEOUT_US : timeOutSec * MICROSECONDS_PER_SECOND;
+    BIO_TP_START(SDK_MIRROR_CLIENT_SET_RETRY_TIME, &costTime, (retryTimeout + 1));
     BIO_TP_END;
-    if (UNLIKELY(costTime >= timeOut)) { // 超过重试时间则不再进行重试.
+    if (UNLIKELY(costTime >= retryTimeout)) { // 超过重试时间则不再进行重试.
         return false;
     }
 
@@ -1070,14 +1078,25 @@ bool MirrorClient::FailHandler(const BResult result, uint64_t startTime, uint64_
             break;
     }
 
+    if (!isRetry) {
+        return false;
+    }
+    if (isStandalone) {
+        if (costTime >= STANDALONE_IO_RETRY_TIMEOUT_US) {
+            return false;
+        }
+        usleep(STANDALONE_IO_RETRY_INTERVAL_US);
+        return true;
+    }
+
     sleep(sleepTime);
-    return isRetry;
+    return true;
 }
 
 BResult MirrorClient::Put(MirrorPut &param, CacheSpaceDesc &spaceInfo)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1142,11 +1161,12 @@ BResult MirrorClient::AsyncPutImpl(MirrorPut &param, uint16_t ptId, CmPtInfo &pt
 BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
+    uint64_t qosStartTimeSec = Monotonic::TimeSec();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
-        QosApplyParam applyParam{startTime, param.key};
+        QosApplyParam applyParam{qosStartTimeSec, param.key};
         ret = mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, applyParam);
         ret = GetImpl(param, realLen);
         mBioQos->Release(QOS_CONCURRENCY, QUOTA_READ);
@@ -1161,7 +1181,7 @@ BResult MirrorClient::Get(MirrorGet &param, uint64_t &realLen)
 BResult MirrorClient::BatchGetKeyDiskAddr(MirrorBatchGetKeyAddr &param)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1190,7 +1210,7 @@ BResult MirrorClient::BatchGet(CacheAttr attr, const char **keys, const uint32_t
                                         keys, count, offsets, lengths, locations,
                                         valueAddrs, realLengths, results };
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1382,11 +1402,12 @@ void MirrorClient::BatchFree(uintptr_t *valueAddrs, const uint32_t count)
 BResult MirrorClient::AsyncGet(MirrorGet &param, AsyncOpParam &opParam)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
+    uint64_t qosStartTimeSec = Monotonic::TimeSec();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
-        QosApplyParam applyParam{startTime, param.key};
+        QosApplyParam applyParam{qosStartTimeSec, param.key};
         ret = mBioQos->Apply(QOS_CONCURRENCY, QUOTA_READ, applyParam);
         if (LIKELY(ret == BIO_OK)) {
             ret = GetImpl(param, opParam);
@@ -1596,7 +1617,7 @@ BResult MirrorClient::GetImpl(MirrorGet &param, AsyncOpParam &opParam)
 BResult MirrorClient::DeleteKey(const char *key, const ObjLocation &location)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1633,7 +1654,7 @@ BResult MirrorClient::Load(LoadPara &para, const ObjLocation &location, const Bi
                            void *context)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1672,7 +1693,7 @@ BResult MirrorClient::LoadImpl(LoadPara &para, const ObjLocation &location, cons
 BResult MirrorClient::ListAll(const char *prefix, std::unordered_map<std::string, ObjStat> &objs)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1696,7 +1717,7 @@ BResult MirrorClient::ListAllImpl(const char *prefix, std::unordered_map<std::st
 BResult MirrorClient::StatObject(const char *key, const ObjLocation &location, ObjStat &stat)
 {
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -1808,7 +1829,7 @@ BResult MirrorClient::BatchExist(const char *key[], ObjLocation location[], uint
     }
 
     bool isRetry = false;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
     BResult ret = BIO_OK;
     do {
         isRetry = false;
@@ -2125,7 +2146,8 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
     CmPtInfo ptEntry;
     bool isRetry = false;
     BResult ret = BIO_OK;
-    uint64_t startTime = Monotonic::TimeSec();
+    uint64_t startTime = Monotonic::TimeUs();
+    uint64_t qosStartTimeSec = Monotonic::TimeSec();
     do {
         isRetry = false;
         // 1. Get pt view entry.
@@ -2136,7 +2158,7 @@ BResult MirrorClient::AllocSpace(MirrorClient::MirrorPut &param, CacheSpaceDesc 
         // 2. Apply for write cache quota.
         static std::atomic<uint64_t> ref(1);
         std::string innerKey = "BioAllocSpace" + std::to_string(ref++);
-        QosApplyParam applyParam{startTime, innerKey.c_str(), param.length};
+        QosApplyParam applyParam{qosStartTimeSec, innerKey.c_str(), param.length};
         ret = mBioQos->Apply(QOS_CONCURRENCY | QOS_QUOTA, QUOTA_WRITE, applyParam, &ptEntry);
         if (LIKELY(ret == BIO_OK)) {
             // 3. Alloc write cache space.
