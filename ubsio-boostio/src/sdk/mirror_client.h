@@ -284,7 +284,7 @@ public:
     }
 
 private:
-    bool FailHandler(BResult result, uint64_t startTime, uint64_t timeOut);
+    bool FailHandler(BResult result, uint64_t startTimeUs, uint64_t timeOutSec);
 
     uint16_t SelectingPtImpl(uint64_t objectId, AffinityStrategy affinity);
     BResult PreparePutWithSpace(MirrorPut &param, CmPtInfo &ptEntry, CacheSpaceDesc &spaceInfo, PutRequest *&req);
