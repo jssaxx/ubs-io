@@ -9,6 +9,7 @@ if (UBSIO_ENABLE_ORIGIN_RUNPATH)
                 INSTALL_RPATH "$ORIGIN"
                 BUILD_WITH_INSTALL_RPATH TRUE
         )
+        target_link_options(sdk_diagnose_shared PRIVATE "LINKER:--enable-new-dtags")
 else()
         set_target_properties(sdk_diagnose_shared PROPERTIES
                 SKIP_BUILD_RPATH TRUE

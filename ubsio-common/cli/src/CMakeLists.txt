@@ -27,6 +27,7 @@ if (UBSIO_ENABLE_ORIGIN_RUNPATH)
         BUILD_RPATH "$ORIGIN"
         INSTALL_RPATH "$ORIGIN"
     )
+    target_link_options(cli_agent_shared PRIVATE "LINKER:--enable-new-dtags")
 endif()
 target_include_directories(cli_agent_shared PRIVATE common agent ../include)
 target_include_directories(cli_agent_shared PUBLIC ../include)
