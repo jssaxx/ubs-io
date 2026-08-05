@@ -31,6 +31,7 @@
 #include "flow_manager.h"
 #include "htracer.h"
 #include "interceptor_server.h"
+#include "standalone_device_id_gather.h"
 #include "standalone_view.h"
 #include "bio_server.h"
 
@@ -132,6 +133,8 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
         std::bind(&BioServer::BioTraceExit, this));
     modules.emplace_back("UnderFs", std::bind(&BioServer::BioUnderFsInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioUnderFsExit, this));
+    modules.emplace_back("StandaloneDeviceIdGather", std::bind(&BioServer::BioStandaloneDeviceIdGatherInit, this),
+        nullptr, nullptr, nullptr);
     modules.emplace_back("Bdm", std::bind(&BioServer::BioBdmInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioBdmExit, this));
     modules.emplace_back("StandaloneMem", std::bind(&BioServer::BioStandaloneMemInit, this), nullptr, nullptr,
@@ -244,9 +247,6 @@ BResult BioServer::StartStandalone()
     ChkTrue(ret == BIO_OK, ret, "Initialize runtime failed, result:" << ret << ".");
 
     mStandaloneMode = true;
-    ret = mConfig->SelectStandaloneDiskByDeviceInfo();
-    ChkTrue(ret == BIO_OK, ret, "Select standalone disk failed, ret:" << ret << ".");
-
     ret = ProcessService(BuildStandaloneModules());
     ChkTrue(ret == BIO_OK, ret, "Process standalone service failed, result:" << ret << ".");
 
@@ -377,6 +377,28 @@ void BioServer::BioUnderFsExit()
     UfsHelper::Instance()->Stop();
 }
 
+BResult BioServer::BioStandaloneDeviceIdGatherInit()
+{
+    auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache || daemonConfig.standaloneDeviceCount == 0) {
+        return mConfig->SelectStandaloneDiskByDeviceInfo();
+    }
+
+    uint32_t logicDeviceId = mConfig->GetStandaloneDeviceId();
+    uint32_t virtualDeviceIndex = 0;
+    auto ret = StandaloneDeviceIdGather::Gather(logicDeviceId, daemonConfig.standaloneDeviceCount,
+        virtualDeviceIndex);
+    ChkTrue(ret == BIO_OK, ret, "Gather standalone logic device IDs failed, logicDeviceId:" << logicDeviceId <<
+        ", deviceCount:" << daemonConfig.standaloneDeviceCount << ", result:" << ret << ".");
+
+    LOG_INFO("Overwrite standalone device ID with virtual index, logicDeviceId:" << logicDeviceId <<
+        ", virtualDeviceIndex:" << virtualDeviceIndex << ".");
+    mConfig->SetStandaloneDeviceInfo(virtualDeviceIndex);
+    ret = mConfig->SelectStandaloneDiskByDeviceInfo();
+    ChkTrue(ret == BIO_OK, ret, "Select standalone disk failed, ret:" << ret << ".");
+    return BIO_OK;
+}
+
 BResult BioServer::BioBdmInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
@@ -424,6 +446,7 @@ BResult BioServer::BioBdmInit()
     bool forceNewDisk = mStandaloneMode && daemonConfig.standaloneForceNewDisk;
     BdmDiskSetForceNew(forceNewDisk ? 1U : 0U);
     if (useVirtualRegions) {
+        // StandaloneDeviceIdGather has converted deviceId from a logic device ID to its sorted virtual index.
         ret = BdmStartVirtual(&diskList, daemonConfig.segment, mConfig->GetStandaloneDeviceId(),
             daemonConfig.standaloneDeviceCount);
     } else {

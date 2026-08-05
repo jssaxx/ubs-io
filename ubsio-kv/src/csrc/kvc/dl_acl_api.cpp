@@ -45,6 +45,7 @@ AclrtMemcpy2dFunc ACLApi::pAclrtMemcpy2d = nullptr;
 AclrtMemcpy2dAsyncFunc ACLApi::pAclrtMemcpy2dAsync = nullptr;
 AclrtMemsetFunc ACLApi::pAclrtMemset = nullptr;
 RtGetDeviceInfoFunc ACLApi::pRtGetDeviceInfo = nullptr;
+AclrtGetLogicDevIdByUserDevIdFunc ACLApi::pAclrtGetLogicDevIdByUserDevId = nullptr;
 
 
 int32_t ACLApi::LoadLibrary()
@@ -85,6 +86,8 @@ int32_t ACLApi::LoadLibrary()
     DL_LOAD_SYM(pAclrtMemcpy2dAsync, AclrtMemcpy2dAsyncFunc, aclHandle, "aclrtMemcpy2dAsync");
     DL_LOAD_SYM(pAclrtMemset, AclrtMemsetFunc, aclHandle, "aclrtMemset");
     DL_LOAD_SYM(pRtGetDeviceInfo, RtGetDeviceInfoFunc, aclHandle, "rtGetDeviceInfo");
+    DL_LOAD_SYM(pAclrtGetLogicDevIdByUserDevId, AclrtGetLogicDevIdByUserDevIdFunc, aclHandle,
+                "aclrtGetLogicDevIdByUserDevId");
 
     gLoaded = true;
     return 0;
@@ -113,6 +116,7 @@ void ACLApi::CleanupLibrary()
     pAclrtMemcpy2dAsync = nullptr;
     pAclrtMemset = nullptr;
     pRtGetDeviceInfo = nullptr;
+    pAclrtGetLogicDevIdByUserDevId = nullptr;
 
     if (aclHandle != nullptr) {
         dlclose(aclHandle);
