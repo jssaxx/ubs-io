@@ -30,6 +30,7 @@ if (UBSIO_ENABLE_ORIGIN_RUNPATH)
         BUILD_RPATH "$ORIGIN"
         INSTALL_RPATH "$ORIGIN"
     )
+    target_link_options(ubsio_kvc PRIVATE "LINKER:--enable-new-dtags")
 endif()
 
 set(TARGET_INSTALL_DIR ${OUTPUT_PATH})
