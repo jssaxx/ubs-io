@@ -50,7 +50,14 @@ int32_t KvcOperationInit(int32_t devId)
         return UBSIO_KVC_ERR;
     }
 
-    // 3. init kv operation executor
+    // 3. init batch get strategy by deployment mode
+    ret = g_kvOperation->InitBatchGetStrategy();
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
+        LOG_ERROR("init batch get strategy failed, ret:" << ret);
+        return UBSIO_KVC_ERR;
+    }
+
+    // 4. init kv operation executor
     ret = g_kvOperation->InitKvExecutor();
     if (ret != UBSIO_KVC_OK) {
         LOG_ERROR("kv init executor failed");

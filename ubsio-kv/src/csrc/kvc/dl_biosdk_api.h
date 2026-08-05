@@ -117,6 +117,11 @@ public:
 
     static int32_t KvBioInit(int32_t devId);
 
+    static WorkerMode GetWorkerMode()
+    {
+        return gWorkerMode;
+    }
+
     static CResult BatchGetKeyDiskAddr(uint64_t tenantId, const char **keys, ObjLocation *locations,
                                        const uint32_t count, KeyAddrInfo *infos)
     {
@@ -131,6 +136,7 @@ public:
 private:
     static std::mutex gMutex;
     static bool gLoaded;
+    static WorkerMode gWorkerMode;
     static void *bioSdkHandle;
     static const std::string gBioSdkLibName;
 

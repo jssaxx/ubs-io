@@ -24,6 +24,10 @@ extern "C" {
 /**
  * @brief Initialize UBS-IO KV Cache
  *
+ * The deployment mode defaults to standalone. Set environment variable
+ * UBSIO_KV_DEPLOY_MODE=separates before initialization to connect to a
+ * separately deployed UBS-IO service.
+ *
  * @param devId            [in] device id, -1 means no ACL device binding and uses standalone device 0
  * @return 0 if successful
  */
@@ -108,7 +112,8 @@ int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flag
  *
  * @param keys           [in] Array of keys for the data objects
  * @param keysCount      [in] Number of keys in the array
- * @param bufs           [out] Array of data buffers to be get
+ * @param bufs           [in,out] Array of caller-owned data buffers. In separated mode, UBS-IO copies data from
+ *                       SDK-owned registered memory into these buffers and releases the SDK memory before returning.
  * @param length         [in] Size of data buf in data buffers
  * @param results        [out] result of data to be get in data buffers
  * @param flags          [in] Optional flags, reserved

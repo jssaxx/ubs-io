@@ -139,8 +139,9 @@ int32_t KvOperation::BatchKvGetData(const std::vector<std::string> &key, void **
         keys[i] = key[i].c_str();
     }
 
-    return DlBioSdkApi::BatchGet(tenantId, keys.data(), keysCount, offsets.data(), lengths.data(), locationVec.data(),
-        reinterpret_cast<uintptr_t *>(bufs), realLength.data(), results.data());
+    BatchGetContext ctx{tenantId, keys.data(), keysCount, offsets.data(),
+        lengths.data(), locationVec.data(), bufs, realLength.data(), results.data()};
+    return mBatchGetStrategy->Execute(ctx);
 }
 
 int32_t KvOperation::BatchKvExistKey(const std::vector<std::string> &key, bool *results)
