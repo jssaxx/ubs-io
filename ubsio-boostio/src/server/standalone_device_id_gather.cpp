@@ -447,6 +447,8 @@ BResult StandaloneDeviceIdGather::BuildShmName(std::string &shmName)
 BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t deviceCount,
     uint32_t &virtualDeviceIndex, uint64_t timeoutMs)
 {
+    LOG_INFO("Gather enter, logicDeviceId:" << logicDeviceId << ", deviceCount:" << deviceCount <<
+        ", timeoutMs:" << timeoutMs << ".");
     if (deviceCount == 0 || deviceCount > DEVICE_SIZE || timeoutMs == 0 ||
         timeoutMs > std::numeric_limits<uint64_t>::max() / NS_PER_MS) {
         LOG_ERROR("Invalid standalone device ID gather input, logicDeviceId:" << logicDeviceId <<
@@ -481,6 +483,8 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
         if (ret != BIO_OK) {
             return ret;
         }
+        LOG_INFO("Gather SHM opened, openAttempt:" << openAttempt <<
+            ", storageCreated:" << (mapping.StorageCreated() ? 1 : 0) << ".");
         auto *header = mapping.Header();
         uint64_t nowNs = MonotonicTimeNs();
         if (nowNs == 0) {
@@ -523,6 +527,8 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
         if (!RegisterProcess(*header, logicDeviceId, selfPid, selfStartTime)) {
             return header->errorCode == BIO_OK ? BIO_ERR : header->errorCode;
         }
+        LOG_INFO("Gather registered, generation:" << header->generation <<
+            ", participantCount:" << header->participantCount << ", deviceCount:" << header->deviceCount << ".");
         uint64_t myGeneration = header->generation;
 
         std::vector<uint32_t> logicDeviceIds;
@@ -534,6 +540,8 @@ BResult StandaloneDeviceIdGather::Gather(uint32_t logicDeviceId, uint32_t device
             return ret == BIO_OK ? CalculateVirtualDeviceIndex(logicDeviceIds, logicDeviceId, virtualDeviceIndex) : ret;
         }
         mapping.Unlock();
+        LOG_INFO("Gather waiting for peers, generation:" << myGeneration <<
+            ", participantCount:" << header->participantCount << ", deviceCount:" << header->deviceCount << ".");
 
         while (true) {
             (void)usleep(GATHER_POLL_INTERVAL_US);
