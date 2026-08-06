@@ -63,6 +63,8 @@ const auto BDM_IO_ENGINE = std::make_pair("ubsio.bdm.io_engine", "sync");
 const auto BDM_IO_URING_SQPOLL_MODE = std::make_pair("ubsio.bdm.io_uring.sqpoll_mode", "auto");
 const auto BDM_SYNC_WORKER_NUM = std::make_pair("ubsio.bdm.sync.worker_num", 16);
 const auto STANDALONE_DEVICE_COUNT = std::make_pair("ubsio.standalone.device_count", 0);
+const auto STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC =
+    std::make_pair("ubsio.standalone.device_id_gather_timeout_sec", 180);
 const auto STANDALONE_FORCE_NEW_DISK = std::make_pair("ubsio.standalone.force_new_disk", "false");
 const auto SDK_MEM_CAPACITY_SIZE_MB = std::make_pair("ubsio.sdkmem.size_in_mb", 0);
 
@@ -170,6 +172,7 @@ public:
         std::string bdmIoUringSqpollMode = "auto";
         uint32_t bdmSyncWorkerNum = 16;
         uint32_t standaloneDeviceCount = 0;
+        uint32_t standaloneDeviceIdGatherTimeoutSec = 180;
         bool standaloneForceNewDisk = false;
         uint32_t workScene = 0;
         uint32_t workIoAlignSize = 1;
