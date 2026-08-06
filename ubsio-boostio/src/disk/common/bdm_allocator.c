@@ -18,13 +18,14 @@
 #include "dlist.h"
 
 #define BDM_FREE_LIST_NUM (1024UL)
+#define BDM_CHUNK_META_LENGTH_BITS (29U)
+#define BDM_CHUNK_META_MAX_LENGTH ((1ULL << BDM_CHUNK_META_LENGTH_BITS) - 1ULL)
 
 typedef struct {
     uint32_t head : 1;
     uint32_t free : 1;
     uint32_t restore : 1;
-    uint32_t length : 21;
-    uint32_t resv : 8;
+    uint32_t length : BDM_CHUNK_META_LENGTH_BITS;
     uint64_t bucketId;
     uint64_t bucketOffset;
 } BdmChunkMeta;
@@ -565,9 +566,15 @@ static int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
                          realize->maxChunkSize, realize->totalSize);
             return BDM_CODE_ERR;
         }
+        uint64_t chunkLength = chunkMeta->length;
+        if (UNLIKELY(chunkLength == 0 || chunkLength > realize->chunkNum - chunkIndex)) {
+            BDM_LOGERROR(0, "Invalid restored chunk length(%llu), index(%llu), chunk num(%llu).", chunkLength,
+                         chunkIndex, realize->chunkNum);
+            return BDM_CODE_ERR;
+        }
         if (chunkMeta->free == 1UL || chunkMeta->restore == 0UL) {
-            nextChunkMeta = chunkMeta + chunkMeta->length;
-            length = chunkMeta->length;
+            nextChunkMeta = chunkMeta + chunkLength;
+            length = chunkLength;
             BdmChunkIndex *chunk = &realize->chunkList[chunkIndex];
             chunk->index = chunkIndex;
             chunk->length = length;
@@ -580,12 +587,12 @@ static int32_t BdmAllocatorRestoreImpl(BdmAllocatorRealize *realize)
             chunkIndex += length;
             continue;
         } else {
-            nextChunkMeta = chunkMeta + chunkMeta->length;
+            nextChunkMeta = chunkMeta + chunkLength;
             BdmChunkIndex *chunk = &realize->chunkList[chunkIndex];
             chunk->index = chunkIndex;
-            chunk->length = chunkMeta->length;
-            chunkIndex += chunkMeta->length;
-            realize->usedSize += realize->minChunkSize * chunkMeta->length;
+            chunk->length = chunkLength;
+            chunkIndex += chunkLength;
+            realize->usedSize += realize->minChunkSize * chunkLength;
             continue;
         }
     }
@@ -603,6 +610,10 @@ BdmAllocator BdmAllocatorCreate(BdmAllocatorPara *para, uint32_t isRestore)
     }
 
     uint64_t chunkNum = para->totalSize / para->minChunkSize;
+    if (UNLIKELY(chunkNum == 0 || chunkNum > BDM_CHUNK_META_MAX_LENGTH)) {
+        BDM_LOGERROR(0, "Invalid chunk num(%llu), max(%llu).", chunkNum, BDM_CHUNK_META_MAX_LENGTH);
+        return 0L;
+    }
     BdmAllocatorRealize *realize =
             (BdmAllocatorRealize *)malloc(sizeof(BdmAllocatorRealize) + sizeof(BdmChunkIndex) * chunkNum);
     if (realize == NULL) {

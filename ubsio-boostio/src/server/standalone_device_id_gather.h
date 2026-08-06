@@ -23,7 +23,7 @@ namespace bio {
 
 class StandaloneDeviceIdGather {
 public:
-    static constexpr uint64_t DEFAULT_TIMEOUT_MS = 60000;
+    static constexpr uint64_t DEFAULT_TIMEOUT_MS = 180000;
 
     // Gather the logic device IDs of all standalone processes and return this
     // process's position in the ascending, duplicate-free ID list.
