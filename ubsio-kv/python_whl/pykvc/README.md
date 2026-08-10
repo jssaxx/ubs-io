@@ -8,6 +8,11 @@ assert(ret == 0)
 resource_info = pykvc.get_resource_info()
 print(resource_info)
 
+scan_result = pykvc.scan_key_info()
+print("key count:", scan_result["count"])
+for item in scan_result["items"]:
+    print(item["key"], item["valueLen"])
+
 value = bytes(b"hello")
 ret = pykvc.put("key", value)
 assert(ret == 0)

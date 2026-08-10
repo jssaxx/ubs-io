@@ -622,6 +622,11 @@ BResult WCacheManager::List(char *prefix, uint16_t ptId, std::unordered_map<std:
     return mCacheIndex->FuzzyAquire(ptId, prefix, objs);
 }
 
+BResult WCacheManager::ScanDiskKeys(std::unordered_map<std::string, uint64_t> &items)
+{
+    return mCacheIndex->ScanDiskKeys(items);
+}
+
 BResult WCacheManager::Delete(uint16_t ptId, const Key &key)
 {
     ChkTrue(key != nullptr, BIO_INVALID_PARAM, "Key is nullptr.");

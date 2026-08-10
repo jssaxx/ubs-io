@@ -11,6 +11,7 @@
  */
 
 #include <iostream>
+#include <cstdlib>
 #include <cstring>
 #include "securec.h"
 #include "message.h"
@@ -1168,6 +1169,47 @@ CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64
         index++;
     }
     return RET_CACHE_OK;
+}
+
+CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count)
+{
+    if (items == nullptr || count == nullptr) {
+        return RET_CACHE_EPERM;
+    }
+    *items = nullptr;
+    *count = 0;
+
+    {
+        std::unique_lock<std::mutex> locker(g_lock);
+        if (gBioCacheMap.find(tenantId) == gBioCacheMap.end()) {
+            return RET_CACHE_NOT_FOUND;
+        }
+    }
+    if (UNLIKELY(!gClient->Ready())) {
+        return RET_CACHE_NOT_READY;
+    }
+
+    auto agentPtr = ock::bio::agent::BioClientAgent::Instance();
+    if (agentPtr == nullptr) {
+        return RET_CACHE_ERROR;
+    }
+    auto ret = agentPtr->ScanKey(items, count);
+    if (ret == BIO_ALLOC_FAIL) {
+        return RET_CACHE_NO_SPACE;
+    }
+    if (ret == BIO_NOT_READY) {
+        return RET_CACHE_NOT_READY;
+    }
+    return ToCResult(ret);
+}
+
+void BioFreeScanKeyResult(const UbsioKvKeyInfo **items)
+{
+    if (items == nullptr || *items == nullptr) {
+        return;
+    }
+    std::free(const_cast<UbsioKvKeyInfo *>(*items));
+    *items = nullptr;
 }
 
 void BioFreeListResources(ObjStat **objs, uint64_t objNum)

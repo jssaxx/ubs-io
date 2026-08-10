@@ -53,6 +53,8 @@ BioDeleteFunc DlBioSdkApi::pBioDelete = nullptr;
 BioBatchGetKeyDiskAddrFunc DlBioSdkApi::pBioBatchGetKeyDiskAddr = nullptr;
 BioRegisterMetaEventCallbackFunc DlBioSdkApi::pBioRegisterMetaEventCallback = nullptr;
 BioShowLocalCacheResourceFunc DlBioSdkApi::pBioShowLocalCacheResource = nullptr;
+BioScanKeyFunc DlBioSdkApi::pBioScanKey = nullptr;
+BioFreeScanKeyResultFunc DlBioSdkApi::pBioFreeScanKeyResult = nullptr;
 
 int32_t DlBioSdkApi::LoadLibrary()
 {
@@ -86,6 +88,8 @@ int32_t DlBioSdkApi::LoadLibrary()
         "BioRegisterMetaEventCallback");
     DL_LOAD_SYM(pBioShowLocalCacheResource, BioShowLocalCacheResourceFunc, bioSdkHandle,
         "BioShowLocalCacheResource");
+    DL_LOAD_SYM(pBioScanKey, BioScanKeyFunc, bioSdkHandle, "BioScanKey");
+    DL_LOAD_SYM(pBioFreeScanKeyResult, BioFreeScanKeyResultFunc, bioSdkHandle, "BioFreeScanKeyResult");
 
     gLoaded = true;
     return 0;
@@ -113,6 +117,8 @@ void DlBioSdkApi::CleanupLibrary()
     pBioBatchGetKeyDiskAddr = nullptr;
     pBioRegisterMetaEventCallback = nullptr;
     pBioShowLocalCacheResource = nullptr;
+    pBioScanKey = nullptr;
+    pBioFreeScanKeyResult = nullptr;
 
     if (bioSdkHandle != nullptr) {
         dlclose(bioSdkHandle);

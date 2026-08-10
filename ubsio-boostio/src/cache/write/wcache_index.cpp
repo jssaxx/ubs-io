@@ -13,6 +13,8 @@
 #include "bio_tracepoint_helper.h"
 #include "wcache_index.h"
 
+#include <new>
+
 namespace ock {
 namespace bio {
 WCacheIndex::~WCacheIndex()
@@ -108,6 +110,69 @@ BResult WCacheIndex::FuzzyAquire(uint16_t ptId, const char *prefix, std::unorder
         slice->Release();
     }
     return BIO_OK;
+}
+
+BResult WCacheIndex::ScanDiskKeys(std::unordered_map<std::string, uint64_t> &items)
+{
+    items.clear();
+    BResult result = BIO_OK;
+    std::vector<WCacheSliceRefPtr> acquiredRefs;
+    {
+        ReadLocker<ReadWriteLock> tableLock(&mTableLock);
+        for (const auto &tableEntry : mTable) {
+            auto *table = tableEntry.second;
+            if (UNLIKELY(table == nullptr)) {
+                continue;
+            }
+
+            for (uint32_t bucket = 0; bucket < HASH_BUCKET_NUM; ++bucket) {
+                ReadLocker<ReadWriteLock> bucketLock(&table->sliceIndexLock[bucket]);
+                const auto bucketSize = table->sliceIndex[bucket].size();
+                if (bucketSize > acquiredRefs.max_size() - acquiredRefs.size()) {
+                    result = BIO_ALLOC_FAIL;
+                    break;
+                }
+                try {
+                    acquiredRefs.reserve(acquiredRefs.size() + bucketSize);
+                } catch (const std::bad_alloc &) {
+                    result = BIO_ALLOC_FAIL;
+                    break;
+                }
+
+                for (const auto &entry : table->sliceIndex[bucket]) {
+                    auto sliceRef = entry.second;
+                    if (UNLIKELY(sliceRef == nullptr || !sliceRef->Aquire())) {
+                        continue;
+                    }
+                    acquiredRefs.push_back(sliceRef);
+
+                    auto slice = sliceRef->GetSlice();
+                    if (slice != nullptr && slice->GetFlowType() == FLOW_DISK) {
+                        try {
+                            items[entry.first] = slice->GetLength();
+                        } catch (const std::bad_alloc &) {
+                            result = BIO_ALLOC_FAIL;
+                            break;
+                        }
+                    }
+                }
+                if (UNLIKELY(result != BIO_OK)) {
+                    break;
+                }
+            }
+            if (UNLIKELY(result != BIO_OK)) {
+                break;
+            }
+        }
+    }
+
+    for (const auto &sliceRef : acquiredRefs) {
+        sliceRef->Release();
+    }
+    if (UNLIKELY(result != BIO_OK)) {
+        items.clear();
+    }
+    return result;
 }
 
 BResult WCacheIndex::Delete(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef)

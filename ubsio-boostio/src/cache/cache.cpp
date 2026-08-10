@@ -566,6 +566,11 @@ BResult Cache::List(char *prefix, uint16_t ptId, bool force, std::unordered_map<
     return BIO_OK;
 }
 
+BResult Cache::ScanDiskKeys(std::unordered_map<std::string, uint64_t> &items)
+{
+    return mWCacheManager->ScanDiskKeys(items);
+}
+
 BResult Cache::Delete(uint16_t ptId, const Key &key)
 {
     BIO_TRACE_START(WCACHE_TRACE_DEL);

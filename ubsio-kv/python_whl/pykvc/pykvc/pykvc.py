@@ -4,10 +4,11 @@
 
 import atexit
 
-global KvInit, KvExit, KvGetResourceInfo, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
+global KvInit, KvExit, KvGetResourceInfo, KvScanKey, KvPut, KvGet, KvExist, KvDelete, KvGetLength, \
     KvBatchPut, KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength, \
     NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead
-from c2python_sdk import (KvInit, KvExit, KvGetResourceInfo, KvPut, KvGet, KvExist, KvDelete, KvGetLength, KvBatchPut,
+from c2python_sdk import (KvInit, KvExit, KvGetResourceInfo, KvScanKey, KvPut, KvGet, KvExist, KvDelete, KvGetLength,
+                          KvBatchPut,
                           KvBatchGet, KvBatchExist, KvBatchDelete, KvBatchGetLength,
                           NdsInit, NdsUninit, NdsRegmem, NdsUnregmem, NdsRead, NdsBatchRead)
 
@@ -52,6 +53,31 @@ def get_resource_info() -> dict:
              an empty dictionary on failure
     """
     return KvGetResourceInfo()
+
+
+def scan_key() -> list:
+    """
+    Scan all valid objects currently stored in the local write-cache disk tier.
+    The result includes objects recovered from BDM and objects written to disk
+    after startup. Memory-only, deleted, and disk-evicted objects are excluded.
+    :return: list of dictionaries containing key and valueLen;
+             an empty list if no disk object exists or the scan fails
+    """
+    return KvScanKey()
+
+
+def scan_key_info() -> dict:
+    """
+    Scan all valid disk-tier objects and return both the objects and their count.
+    :return: dictionary containing count and items. Each item contains key and
+             valueLen. If no disk object exists or the scan fails, count is 0
+             and items is an empty list.
+    """
+    items = KvScanKey()
+    return {
+        "count": len(items),
+        "items": items,
+    }
 
 
 def put(key, value) -> int:

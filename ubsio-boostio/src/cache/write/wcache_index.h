@@ -39,6 +39,8 @@ public:
 
     BResult FuzzyAquire(uint16_t ptId, const char *prefix, std::unordered_map<std::string, CacheObjStat> &objs);
 
+    BResult ScanDiskKeys(std::unordered_map<std::string, uint64_t> &items);
+
     BResult Delete(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef);
 
     void ExpiredClear(uint16_t ptId);

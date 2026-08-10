@@ -115,6 +115,14 @@ BResult BioClientAgent::RegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     return static_cast<BResult>(registerMetaEventCallbackOp(callback, context));
 }
 
+BResult BioClientAgent::ScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+{
+    if (!IsDirectMode() || scanKeyOp == nullptr) {
+        return BIO_NOT_READY;
+    }
+    return static_cast<BResult>(scanKeyOp(items, count));
+}
+
 void BioClientAgent::Exit()
 {
     if (IsDirectMode() && exitOp != nullptr) {
@@ -172,6 +180,7 @@ void BioClientAgent::ResetLoadedOperations()
     cacheResourceOp = nullptr;
     getTracePointsOp = nullptr;
     registerMetaEventCallbackOp = nullptr;
+    scanKeyOp = nullptr;
 }
 
 void BioClientAgent::ResetStandaloneDeviceInfo()
@@ -305,6 +314,9 @@ BResult BioClientAgent::InitOperation()
     }
     if ((registerMetaEventCallbackOp = reinterpret_cast<RegisterMetaEventCallbackFuncPtr>
         (LoadFunction("UbsioRegisterMetaEventCallback"))) == nullptr) {
+        return BIO_INNER_ERR;
+    }
+    if ((scanKeyOp = reinterpret_cast<ScanKeyFuncPtr>(LoadFunction("UbsioScanKey"))) == nullptr) {
         return BIO_INNER_ERR;
     }
 

@@ -14,6 +14,7 @@
 #define BIO_SERVER_C_H
 
 #include "cstdint"
+#include "bio_c.h"
 #include "message.h"
 
 #ifdef __cplusplus
@@ -62,6 +63,10 @@ typedef void (*UbsioMetaEventCallbackC)(void *context, const UbsioMetaEventC *ev
 // Register a same-process metadata event callback for embedded users such as MemCache.
 // The events buffer and key pointers are only valid during the callback; the callee must copy keys if needed.
 int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
+
+// Return a caller-owned snapshot of all valid objects in the local write-cache disk tier.
+// The caller releases the snapshot with BioFreeScanKeyResult from libbio_sdk.
+int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count);
 
 uint32_t GetNegoWorkIoTimeOut();
 

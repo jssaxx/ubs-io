@@ -43,6 +43,8 @@ using BioBatchGetKeyDiskAddrFunc = CResult (*)(uint64_t tenantId, const char **k
                                                 const uint32_t count, KeyAddrInfo *infos);
 using BioRegisterMetaEventCallbackFunc = CResult (*)(UbsioMetaEventCallbackC callback, void *context);
 using BioShowLocalCacheResourceFunc = CResult (*)(CacheResourcesDesc *nodeDesc);
+using BioScanKeyFunc = CResult (*)(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count);
+using BioFreeScanKeyResultFunc = void (*)(const UbsioKvKeyInfo **items);
 
 class DlBioSdkApi {
 public:
@@ -134,6 +136,16 @@ public:
         return static_cast<CResult>(pBioShowLocalCacheResource(nodeDesc));
     }
 
+    static CResult ScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count)
+    {
+        return static_cast<CResult>(pBioScanKey(tenantId, items, count));
+    }
+
+    static void FreeScanKeyResult(const UbsioKvKeyInfo **items)
+    {
+        pBioFreeScanKeyResult(items);
+    }
+
 private:
     static std::mutex gMutex;
     static bool gLoaded;
@@ -155,6 +167,8 @@ private:
     static BioBatchGetKeyDiskAddrFunc pBioBatchGetKeyDiskAddr;
     static BioRegisterMetaEventCallbackFunc pBioRegisterMetaEventCallback;
     static BioShowLocalCacheResourceFunc pBioShowLocalCacheResource;
+    static BioScanKeyFunc pBioScanKey;
+    static BioFreeScanKeyResultFunc pBioFreeScanKeyResult;
 };
 
 }  // namespace ubsio
