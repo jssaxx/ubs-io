@@ -386,10 +386,13 @@ BResult BioServer::BioStandaloneDeviceIdGatherInit()
 
     uint32_t logicDeviceId = mConfig->GetStandaloneDeviceId();
     uint32_t virtualDeviceIndex = 0;
+    uint64_t gatherTimeoutMs =
+        static_cast<uint64_t>(daemonConfig.standaloneDeviceIdGatherTimeoutSec) * NO_1000;
     auto ret = StandaloneDeviceIdGather::Gather(logicDeviceId, daemonConfig.standaloneDeviceCount,
-        virtualDeviceIndex);
+        virtualDeviceIndex, gatherTimeoutMs);
     ChkTrue(ret == BIO_OK, ret, "Gather standalone logic device IDs failed, logicDeviceId:" << logicDeviceId <<
-        ", deviceCount:" << daemonConfig.standaloneDeviceCount << ", result:" << ret << ".");
+        ", deviceCount:" << daemonConfig.standaloneDeviceCount << ", timeoutSec:" <<
+        daemonConfig.standaloneDeviceIdGatherTimeoutSec << ", result:" << ret << ".");
 
     LOG_INFO("Overwrite standalone device ID with virtual index, logicDeviceId:" << logicDeviceId <<
         ", virtualDeviceIndex:" << virtualDeviceIndex << ".");

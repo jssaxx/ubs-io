@@ -54,6 +54,8 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(DISK_CONF_PATH);
     AddStrConf(BDM_IO_ENGINE, VStrEnum::Create(BDM_IO_ENGINE.first, "sync||io_uring"));
     AddIntConf(STANDALONE_DEVICE_COUNT, VIntRange::Create(STANDALONE_DEVICE_COUNT.first, 0, DEVICE_SIZE));
+    AddIntConf(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC,
+        VIntRange::Create(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC.first, NO_1, INT32_MAX));
     AddStrConf(STANDALONE_FORCE_NEW_DISK, VStrBoolRange::Create(STANDALONE_FORCE_NEW_DISK.first));
     AddIntConf(SDK_MEM_CAPACITY_SIZE_MB);
 
@@ -298,6 +300,8 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     mDaemonConfig.segment = static_cast<uint32_t>(conf->GetInt(SEGMENT_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.sdkPoolSize = static_cast<uint64_t>(conf->GetInt(SDK_MEM_CAPACITY_SIZE_MB.first) * MB_SIZE);
     mDaemonConfig.standaloneDeviceCount = static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_COUNT.first));
+    mDaemonConfig.standaloneDeviceIdGatherTimeoutSec =
+        static_cast<uint32_t>(conf->GetInt(STANDALONE_DEVICE_ID_GATHER_TIMEOUT_SEC.first));
     mDaemonConfig.standaloneForceNewDisk = conf->GetStr(STANDALONE_FORCE_NEW_DISK.first) == "true";
     mDaemonConfig.negotiateDelay = static_cast<uint32_t>(conf->GetInt(BIO_WCACHE_NEGOTIATE_DELAY.first) * NO_1000);
     mDaemonConfig.memCap = static_cast<uint64_t>(conf->GetInt(MEM_CAPACITY_SIZE_GB.first) * GB_SIZE);
