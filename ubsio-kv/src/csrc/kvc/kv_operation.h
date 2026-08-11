@@ -14,9 +14,11 @@
 #define KVC_OPERATION_H
 
 #include <vector>
+#include <memory>
 #include "ubsio_kvc_def.h"
 #include "ubsio_kvc_log.h"
 #include "ubsio_kvc_execution.h"
+#include "batch_get_strategy.h"
 
 namespace ock {
 namespace ubsio {
@@ -81,6 +83,23 @@ public:
         return UBSIO_KVC_OK;
     }
 
+    int32_t InitBatchGetStrategy()
+    {
+        if (mBatchGetStrategy != nullptr) {
+            return UBSIO_KVC_OK;
+        }
+        if (DlBioSdkApi::GetWorkerMode() == WorkerMode::SEPARATES) {
+            mBatchGetStrategy.reset(new (std::nothrow) BatchGetSeparates());
+        } else {
+            mBatchGetStrategy.reset(new (std::nothrow) BatchGetStandalone());
+        }
+        if (UNLIKELY(mBatchGetStrategy == nullptr)) {
+            LOG_ERROR("Failed to create batch get strategy, probably out of memory");
+            return UBSIO_KVC_ERR;
+        }
+        return UBSIO_KVC_OK;
+    }
+
     inline void ExitKvExecutor(void)
     {
         if (mKvExecutor != nullptr) {
@@ -98,6 +117,7 @@ private:
     bool mInited{ false };
     uint64_t tenantId{ 1 };
     ExecutorServicePtr mKvExecutor{ nullptr };
+    std::unique_ptr<BatchGetStrategy> mBatchGetStrategy{ nullptr };
     static std::mutex gLock;
     static KvOperation *gInstance;
 };

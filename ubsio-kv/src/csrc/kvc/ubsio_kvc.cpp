@@ -275,8 +275,8 @@ UBSIO_API int32_t UbsioKvCacheBatchGet(const char **keys,
             LOG_ERROR("Get invalid key length [" << i << "]");
             return UBSIO_KVC_INVALID_PARAM;
         }
-        if (UNLIKELY(lengths[i] == 0)) {
-            LOG_ERROR("Get invalid lengths [" << i << "]");
+        if (UNLIKELY(bufs[i] == nullptr || lengths[i] == 0)) {
+            LOG_ERROR("Get invalid buffer or length [" << i << "]");
             return UBSIO_KVC_INVALID_PARAM;
         }
         keyVector[i] = keys[i];

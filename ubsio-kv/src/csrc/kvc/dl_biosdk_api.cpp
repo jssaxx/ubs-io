@@ -11,7 +11,10 @@
  */
 
 #include <stdint.h>
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <dlfcn.h>
 #include <iostream>
@@ -23,10 +26,35 @@
 namespace {
 constexpr int32_t KVC_NO_DEVICE_ID = -1;
 constexpr uint32_t DEFAULT_STANDALONE_DEVICE_ID = 0;
+constexpr const char *KVC_DEPLOYMENT_MODE_ENV = "UBSIO_KV_DEPLOY_MODE";
+constexpr const char *KVC_MODE_STANDALONE = "standalone";
+constexpr const char *KVC_MODE_SEPARATES = "separates";
 
 uint32_t GetStandaloneDeviceId(int32_t devId)
 {
     return devId == KVC_NO_DEVICE_ID ? DEFAULT_STANDALONE_DEVICE_ID : static_cast<uint32_t>(devId);
+}
+
+bool GetKvcWorkerMode(WorkerMode &mode)
+{
+    const char *envMode = std::getenv(KVC_DEPLOYMENT_MODE_ENV);
+    if (envMode == nullptr || envMode[0] == '\0') {
+        mode = WorkerMode::STANDALONE;
+        return true;
+    }
+
+    std::string configuredMode(envMode);
+    std::transform(configuredMode.begin(), configuredMode.end(), configuredMode.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (configuredMode == KVC_MODE_STANDALONE) {
+        mode = WorkerMode::STANDALONE;
+        return true;
+    }
+    if (configuredMode == KVC_MODE_SEPARATES) {
+        mode = WorkerMode::SEPARATES;
+        return true;
+    }
+    return false;
 }
 }
 
@@ -34,6 +62,7 @@ namespace ock {
 namespace ubsio {
 
 bool DlBioSdkApi::gLoaded = false;
+WorkerMode DlBioSdkApi::gWorkerMode = WorkerMode::STANDALONE;
 std::mutex DlBioSdkApi::gMutex;
 void *DlBioSdkApi::bioSdkHandle = nullptr;
 const std::string DlBioSdkApi::gBioSdkLibName = "libbio_sdk.so";
@@ -109,6 +138,7 @@ void DlBioSdkApi::CleanupLibrary()
     pBioDelete = nullptr;
     pBioBatchGetKeyDiskAddr = nullptr;
     pBioRegisterMetaEventCallback = nullptr;
+    gWorkerMode = WorkerMode::STANDALONE;
 
     if (bioSdkHandle != nullptr) {
         dlclose(bioSdkHandle);
@@ -125,11 +155,19 @@ int32_t DlBioSdkApi::KvBioInit(int32_t devId)
         return -1;
     }
 
-    auto standaloneDeviceId = GetStandaloneDeviceId(devId);
-    if (devId == KVC_NO_DEVICE_ID) {
-        LOG_INFO("Use default standalone device id:" << standaloneDeviceId << " for kv device id:" << devId << ".");
+    WorkerMode workerMode = WorkerMode::STANDALONE;
+    if (!GetKvcWorkerMode(workerMode)) {
+        LOG_ERROR("Invalid " << KVC_DEPLOYMENT_MODE_ENV << ", expected standalone or separates.");
+        return -1;
     }
-    SetStandaloneDevice(standaloneDeviceId);
+
+    if (workerMode == WorkerMode::STANDALONE) {
+        auto standaloneDeviceId = GetStandaloneDeviceId(devId);
+        if (devId == KVC_NO_DEVICE_ID) {
+            LOG_INFO("Use default standalone device id:" << standaloneDeviceId << " for kv device id:" << devId << ".");
+        }
+        SetStandaloneDevice(standaloneDeviceId);
+    }
 
     ClientOptionsConfig optConf{};
     optConf.logType = (LogType)(1);
@@ -137,16 +175,18 @@ int32_t DlBioSdkApi::KvBioInit(int32_t devId)
     std::string logDir = "/var/log/boostio";
     std::snprintf(optConf.logFilePath, sizeof(optConf.logFilePath), "%s", logDir.c_str());
 
-    auto ret = Initialize(WorkerMode::STANDALONE, &optConf);
+    auto ret = Initialize(workerMode, &optConf);
     if (ret != 0) {
         LOG_ERROR("boostio initialize failed, ret: " << ret);
         return -1;
     }
+    gWorkerMode = workerMode;
     LOG_INFO("Start boostio success.");
 
     LOG_INFO("boostio createcache...");
     uint64_t tenantId = 1;
-    AffinityStrategy affinity = LOCAL_AFFINITY;
+    AffinityStrategy affinity =
+        (workerMode == WorkerMode::SEPARATES) ? GLOBAL_BALANCE : LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
     ret = CreateCache({ tenantId, affinity, strategy });
     if (ret == RET_CACHE_EXISTS) {
