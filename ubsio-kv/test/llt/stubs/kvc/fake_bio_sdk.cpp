@@ -311,10 +311,11 @@ extern "C" CResult BioShowLocalCacheResource(CacheResourcesDesc *resource)
     return static_cast<CResult>(result);
 }
 
-extern "C" CResult BioScanKey(uint64_t, const UbsioKvKeyInfo **items, uint64_t *count)
+extern "C" CResult BioScanKey(uint64_t, const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
     auto &state = State();
     std::lock_guard<std::mutex> lock(state.mutex);
+    *hasMore = false;
     auto result = ResultLocked(state, "BioScanKey");
     if (result != RET_CACHE_OK) {
         return static_cast<CResult>(result);

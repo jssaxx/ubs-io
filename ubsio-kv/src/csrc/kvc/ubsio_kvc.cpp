@@ -155,14 +155,15 @@ UBSIO_API int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC 
     return DlBioSdkApi::RegisterMetaEventCallback(callback, context) == RET_CACHE_OK ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 
-UBSIO_API int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+UBSIO_API int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore)
 {
-    if (UNLIKELY(items == nullptr || count == nullptr)) {
+    if (UNLIKELY(items == nullptr || count == nullptr || hasMore == nullptr)) {
         LOG_ERROR("Invalid scan key output parameter.");
         return UBSIO_KVC_INVALID_PARAM;
     }
     *items = nullptr;
     *count = 0;
+    *hasMore = false;
 
     int32_t ret = DlBioSdkApi::LoadLibrary();
     if (UNLIKELY(ret != UBSIO_KVC_OK)) {
@@ -170,7 +171,10 @@ UBSIO_API int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *co
         return UBSIO_KVC_ERR;
     }
 
-    auto bioRet = DlBioSdkApi::ScanKey(1, items, count);
+    auto bioRet = DlBioSdkApi::ScanKey(1, items, count, hasMore);
+    if (UNLIKELY(bioRet != RET_CACHE_OK)) {
+        *hasMore = false;
+    }
     switch (bioRet) {
         case RET_CACHE_OK:
             return UBSIO_KVC_OK;

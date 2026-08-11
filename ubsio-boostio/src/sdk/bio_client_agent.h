@@ -82,7 +82,7 @@ public:
     using CalcCacheResourceLocalFuncPtr = int32_t (*)(CacheResourceRequest *, CacheResourceResponse *);
     using GetTracePointsLocalFuncPtr = int32_t (*)(GetTracePointsResponse *);
     using RegisterMetaEventCallbackFuncPtr = int32_t (*)(UbsioMetaEventCallbackC, void *);
-    using ScanKeyFuncPtr = int32_t (*)(const UbsioKvKeyInfo **, uint64_t *);
+    using ScanKeyFuncPtr = int32_t (*)(const UbsioKvKeyInfo **, uint64_t *, bool *);
 
     BioClientAgent() : mLocalNid(CmNodeId(0, UINT16_MAX)), localPid(static_cast<uint32_t>(getpid())) {}
     ~BioClientAgent() = default;
@@ -98,7 +98,7 @@ public:
 
     BResult RegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
 
-    BResult ScanKey(const UbsioKvKeyInfo **items, uint64_t *count);
+    BResult ScanKey(const UbsioKvKeyInfo **items, uint64_t *count, bool *hasMore);
 
     NetEnginePtr GetNetService()
     {
