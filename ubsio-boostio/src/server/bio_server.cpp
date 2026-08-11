@@ -11,6 +11,7 @@
  */
 
 #include <dlfcn.h>
+#include <cstdlib>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <mutex>
@@ -1253,6 +1254,45 @@ extern "C" int32_t UbsioRegisterMetaEventCallback(UbsioMetaEventCallbackC callba
     gMetaEventCallbackContext = context;
     gMetaEventCallbackConfigured = true;
     ApplyMetaEventCallbackLocked();
+    return BIO_OK;
+}
+
+extern "C" int32_t UbsioScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+{
+    if (items == nullptr || count == nullptr) {
+        return BIO_INVALID_PARAM;
+    }
+    *items = nullptr;
+    *count = 0;
+
+    std::unordered_map<std::string, uint64_t> diskItems;
+    auto ret = Cache::Instance().ScanDiskKeys(diskItems);
+    if (ret != BIO_OK || diskItems.empty()) {
+        return ret;
+    }
+
+    for (const auto &item : diskItems) {
+        if (item.first.size() >= UBSIO_KV_MAX_KEY_SIZE) {
+            LOG_ERROR("Invalid key length when scanning disk cache, key length:" << item.first.size() << ".");
+            return BIO_INNER_ERR;
+        }
+    }
+
+    auto *snapshot = static_cast<UbsioKvKeyInfo *>(std::calloc(diskItems.size(), sizeof(UbsioKvKeyInfo)));
+    if (snapshot == nullptr) {
+        return BIO_ALLOC_FAIL;
+    }
+
+    uint64_t index = 0;
+    for (const auto &item : diskItems) {
+        CopyKey(snapshot[index].key, item.first.c_str(), UBSIO_KV_MAX_KEY_SIZE);
+        snapshot[index].keyLen = static_cast<uint32_t>(item.first.size());
+        snapshot[index].valueLen = item.second;
+        ++index;
+    }
+
+    *items = snapshot;
+    *count = index;
     return BIO_OK;
 }
 

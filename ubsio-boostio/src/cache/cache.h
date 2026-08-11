@@ -75,6 +75,8 @@ public:
 
     BResult List(char *prefix, uint16_t ptId, bool force, std::unordered_map<std::string, CacheObjStat> &objs);
 
+    BResult ScanDiskKeys(std::unordered_map<std::string, uint64_t> &items);
+
     BResult Delete(uint16_t ptId, const Key &key);
 
     FlowCache GetFlowCache(uint64_t flowId);

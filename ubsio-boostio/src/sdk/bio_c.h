@@ -78,6 +78,17 @@ typedef enum {
 #define DISK_RESOURCE_PATH_MAX_SIZE (256)
 #define CHUNK_ADDR_MAX_SIZE (2)
 
+#ifndef UBSIO_KV_KEY_INFO_C_DEFINED
+#define UBSIO_KV_KEY_INFO_C_DEFINED
+#define UBSIO_KV_MAX_KEY_SIZE (256)
+typedef struct {
+    char key[UBSIO_KV_MAX_KEY_SIZE]; /* Null-terminated key; maximum key length is 255 bytes. */
+    uint32_t keyLen;                 /* Key length in bytes, excluding the trailing null byte. */
+    uint32_t reserved;               /* Reserved for ABI extension; callers must ignore it. */
+    uint64_t valueLen;               /* Object value length in bytes. */
+} UbsioKvKeyInfo;
+#endif
+
 typedef void (*BioLoadCallback)(void *context, int32_t result);
 typedef void (*BioGetCallbackFunc)(void *context, int32_t result, uint32_t realLen);
 typedef void (*BioAsyncPutCallback)(void *context, int32_t result);
@@ -438,6 +449,16 @@ CResult BioLoad(uint64_t tenantId, const char *key, uint64_t offset, uint64_t le
  * @return: return RETURN_CACHE_OK mean success, others, return non-zero value
  */
 CResult BioListAll(uint64_t tenantId, const char *prefix, ObjStat **objs, uint64_t *objNum);
+
+/**
+ * @brief Scan all valid objects currently stored in the local write-cache disk tier.
+ *
+ * The returned snapshot includes objects recovered from BDM and objects written to disk after startup.
+ * The caller must release the result with BioFreeScanKeyResult. Result ordering is unspecified.
+ */
+CResult BioScanKey(uint64_t tenantId, const UbsioKvKeyInfo **items, uint64_t *count);
+
+void BioFreeScanKeyResult(const UbsioKvKeyInfo **items);
 
 /**
  * @brief: Free list object resources

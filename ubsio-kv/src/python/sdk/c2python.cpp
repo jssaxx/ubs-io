@@ -203,6 +203,56 @@ py::dict PyKvcKvGetResourceInfo()
     return result;
 }
 
+class ScanKeyResultGuard {
+public:
+    explicit ScanKeyResultGuard(const UbsioKvKeyInfo *items) : mItems(items) {}
+
+    ~ScanKeyResultGuard()
+    {
+        UbsioKvCacheFreeScanKeyResult(&mItems);
+    }
+
+    ScanKeyResultGuard(const ScanKeyResultGuard &) = delete;
+    ScanKeyResultGuard &operator=(const ScanKeyResultGuard &) = delete;
+
+private:
+    const UbsioKvKeyInfo *mItems;
+};
+
+py::list PyKvcKvScanKey()
+{
+    const UbsioKvKeyInfo *items = nullptr;
+    uint64_t count = 0;
+    int32_t ret = 0;
+    {
+        py::gil_scoped_release release;
+        ret = UbsioKvCacheScanKey(&items, &count);
+    }
+    ScanKeyResultGuard resultGuard(items);
+    if (ret != 0) {
+        LOG_ERROR("UbsioKvCacheScanKey failed, ret:" << ret);
+        return py::list();
+    }
+    if ((count == 0 && items != nullptr) || (count != 0 && items == nullptr)) {
+        LOG_ERROR("UbsioKvCacheScanKey returned inconsistent result, count:" << count);
+        return py::list();
+    }
+
+    py::list result;
+    for (uint64_t index = 0; index < count; ++index) {
+        const auto &item = items[index];
+        if (item.keyLen >= UBSIO_KV_MAX_KEY_SIZE) {
+            LOG_ERROR("UbsioKvCacheScanKey returned invalid key length:" << item.keyLen);
+            return py::list();
+        }
+        py::dict keyInfo;
+        keyInfo["key"] = std::string(item.key, item.keyLen);
+        keyInfo["valueLen"] = item.valueLen;
+        result.append(std::move(keyInfo));
+    }
+    return result;
+}
+
 std::vector<int> PyKvcKvBatchPutData(const std::vector<std::string> &keys, std::vector<py::bytes> &values)
 {
     std::vector<int> results(keys.size(), -1);
@@ -402,6 +452,7 @@ PYBIND11_MODULE(c2python_sdk, m)
     m.def("KvInit", &PyKvcKvClientInit, py::arg("dev_id") = -1);
     m.def("KvExit", &PyKvcKvExit);
     m.def("KvGetResourceInfo", &PyKvcKvGetResourceInfo);
+    m.def("KvScanKey", &PyKvcKvScanKey);
     m.def("KvPut", &PyKvcKvPutData, py::arg("key"), py::arg("value"));
     m.def("KvGet", &PyKvcKvGetData, py::arg("key"), py::arg("value"));
     m.def("KvExist", &PyKvcKvExist, py::arg("key"));

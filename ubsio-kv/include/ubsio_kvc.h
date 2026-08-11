@@ -23,6 +23,17 @@ extern "C" {
 #define UBSIO_RESOURCE_DISK_PATH_MAX_SIZE (256)
 #define UBSIO_RESOURCE_MAX_DISK_NUM (16)
 
+#ifndef UBSIO_KV_KEY_INFO_C_DEFINED
+#define UBSIO_KV_KEY_INFO_C_DEFINED
+#define UBSIO_KV_MAX_KEY_SIZE (256)
+typedef struct {
+    char key[UBSIO_KV_MAX_KEY_SIZE]; /* Null-terminated key; maximum key length is 255 bytes. */
+    uint32_t keyLen;                 /* Key length in bytes, excluding the trailing null byte. */
+    uint32_t reserved;               /* Reserved for ABI extension; callers must ignore it. */
+    uint64_t valueLen;               /* Object value length in bytes. */
+} UbsioKvKeyInfo;
+#endif
+
 typedef struct {
     uint16_t status;
     char path[UBSIO_RESOURCE_DISK_PATH_MAX_SIZE];
@@ -87,6 +98,27 @@ int32_t UbsioGetResourceInfo(UbsioResourceInfo *info);
  * Passing nullptr unregisters the callback.
  */
 int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC callback, void *context);
+
+/**
+ * @brief Scan all valid objects currently stored in the UBS-IO write-cache disk tier.
+ *
+ * The snapshot includes objects recovered from BDM and objects written to disk after startup. Objects that only
+ * reside in memory, have been deleted, or have been evicted from the disk tier are not returned. The returned array
+ * is read-only and must be released with UbsioKvCacheFreeScanKeyResult before UbsioKvCacheExit.
+ * Result ordering is unspecified. If no object is found, *items is NULL and *count is 0.
+ *
+ * @param items            [out] Read-only snapshot allocated by UBS-IO
+ * @param count            [out] Number of entries in items
+ * @return 0 if successful
+ */
+int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count);
+
+/**
+ * @brief Release a snapshot returned by UbsioKvCacheScanKey.
+ *
+ * Passing NULL or an already-null result is allowed. On return, *items is set to NULL.
+ */
+void UbsioKvCacheFreeScanKeyResult(const UbsioKvKeyInfo **items);
 
 /**
  * @brief Exit UBS-IO KV Cache

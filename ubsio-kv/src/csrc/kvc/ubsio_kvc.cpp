@@ -92,6 +92,47 @@ UBSIO_API int32_t UbsioKvCacheRegisterMetaEventCallback(UbsioMetaEventCallbackC 
     return DlBioSdkApi::RegisterMetaEventCallback(callback, context) == RET_CACHE_OK ? UBSIO_KVC_OK : UBSIO_KVC_ERR;
 }
 
+UBSIO_API int32_t UbsioKvCacheScanKey(const UbsioKvKeyInfo **items, uint64_t *count)
+{
+    if (UNLIKELY(items == nullptr || count == nullptr)) {
+        LOG_ERROR("Invalid scan key output parameter.");
+        return UBSIO_KVC_INVALID_PARAM;
+    }
+    *items = nullptr;
+    *count = 0;
+
+    int32_t ret = DlBioSdkApi::LoadLibrary();
+    if (UNLIKELY(ret != UBSIO_KVC_OK)) {
+        LOG_ERROR("Load bio sdk failed, ret:" << ret << ".");
+        return UBSIO_KVC_ERR;
+    }
+
+    auto bioRet = DlBioSdkApi::ScanKey(1, items, count);
+    switch (bioRet) {
+        case RET_CACHE_OK:
+            return UBSIO_KVC_OK;
+        case RET_CACHE_EPERM:
+            return UBSIO_KVC_INVALID_PARAM;
+        case RET_CACHE_NOT_READY:
+        case RET_CACHE_BUSY:
+        case RET_CACHE_NEED_RETRY:
+            return UBSIO_KVC_EAGAIN;
+        case RET_CACHE_NO_SPACE:
+            return UBSIO_KVC_ALLOC_FAIL;
+        default:
+            LOG_ERROR("Scan disk keys failed, ret:" << bioRet << ".");
+            return UBSIO_KVC_BIO_ERR;
+    }
+}
+
+UBSIO_API void UbsioKvCacheFreeScanKeyResult(const UbsioKvKeyInfo **items)
+{
+    if (items == nullptr || *items == nullptr) {
+        return;
+    }
+    DlBioSdkApi::FreeScanKeyResult(items);
+}
+
 UBSIO_API void UbsioKvCacheExit(void) 
 { 
     KvcExit();
