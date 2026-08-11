@@ -153,6 +153,9 @@ BdmDiskState BdmGetDiskStatus(uint32_t bdmId);
 
 void BdmSetDiskUsedStatus(uint32_t bdmId, uint32_t status);
 
+typedef void (*BdmSsuUnmountCb)(const char *devicePath);
+void BdmRegSsuUnmountCb(BdmSsuUnmountCb cb);
+
 #ifdef __cplusplus
 }
 #endif

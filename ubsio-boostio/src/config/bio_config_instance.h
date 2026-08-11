@@ -50,6 +50,14 @@ const auto BIO_TRACE_ENABLE = std::make_pair("bio.trace.enable", "true");
 
 const auto DATA_CRC_ENABLE = std::make_pair("bio.data.crc.enable", "false");
 
+const auto BIO_SSU_ENABLE = std::make_pair("bio.ssu.enable", "false");
+const auto BIO_SSU_DISK_SIZE_MB = std::make_pair("bio.ssu.disk.size_mb", 1024);
+const auto BIO_SSU_NS_NUM = std::make_pair("bio.ssu.ns_num", 1);
+const auto BIO_SSU_LBA_FORMAT = std::make_pair("bio.ssu.lba_format", 512);
+const auto BIO_SSU_ALLOC_STRATEGY = std::make_pair("bio.ssu.alloc_strategy", 1);
+const auto BIO_SSU_HOST_NQN = std::make_pair("bio.ssu.host_nqn", "");
+const auto BIO_SSU_SRC_EID = std::make_pair("bio.ssu.src_eid", "");
+
 const auto BIO_CACHE_QOS_ENABLE = std::make_pair("bio.cache.qos.enable", "true");
 
 const auto BIO_WCACHE_NEGOTIATE_DELAY = std::make_pair("bio.wcache.negotiate.delay", 100);
@@ -178,6 +186,13 @@ public:
         bool enableCrc = false;
         bool enableTrace = true;
         bool enableQos = true;
+        bool enableSsu = true;
+        uint64_t ssuDiskSizeMb = 1024;
+        int32_t ssuNsNum = 1;
+        int32_t ssuLbaFormat = 512;
+        int32_t ssuAllocStrategy = 1;
+        std::string ssuHostNqn;
+        std::string ssuSrcEid;
         bool hasDiskCache = true;
         bool enableRCache = true;
         bool enablePrometheus = false;
@@ -251,6 +266,8 @@ public:
     void SetStandaloneDeviceInfo(uint32_t deviceId);
 
     BResult SelectStandaloneDiskByDeviceInfo();
+
+    void UpdateSsuDiskInfo(const std::vector<std::string> &diskPaths, const std::vector<int64_t> &diskCaps);
 
     uint32_t GetStandaloneDeviceId() const noexcept
     {

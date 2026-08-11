@@ -179,6 +179,13 @@ static bool g_bdmSyncUringKeyCreated = false;
 static pthread_mutex_t g_bdmSyncUringCtxLock = PTHREAD_MUTEX_INITIALIZER;
 static DList g_bdmSyncUringCtxList = D_LIST_HEAD_INIT(g_bdmSyncUringCtxList);
 
+static BdmSsuUnmountCb g_bdmSsuUnmountCb = NULL;
+
+void BdmRegSsuUnmountCb(BdmSsuUnmountCb cb)
+{
+    __atomic_store_n(&g_bdmSsuUnmountCb, cb, __ATOMIC_RELEASE);
+}
+
 static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item);
 
 BdmIoEngine BdmGetIoEngine(void)
@@ -1662,7 +1669,8 @@ int32_t BdmDiskOpenDisk(BdmCreatePara *para, BdmDiskItem *item)
         BDM_LOGERROR("Memcpy bdm name failed, name(%s).", para->name);
         return BDM_CODE_ERR;
     }
-
+    BDM_LOGINFO(0, "Open device(%s) for bdmId(%u).", item->name, item->bdmId);
+    
     item->fd = open(item->name, O_RDWR | O_CREAT | O_SYNC, BDM_OPEN_FILE_PERMISSION);
     if (UNLIKELY(item->fd < 0)) {
         BDM_LOGERROR(0, "Open device(%s) failed, errno(%s).", item->name, strerror(errno));
@@ -2014,6 +2022,10 @@ int32_t BdmDiskDestroy(BdmObj *obj)
     BDM_LOGINFO(0, "Bdm disk destroy, bdm id(%u).", obj->bdmId);
 
     BdmDiskItem *item = (BdmDiskItem *)obj->opsInfo;
+    /* 在关闭 fd 前回调 SSU unmount,卸载对应的逻辑设备 */
+    if (__atomic_load_n(&g_bdmSsuUnmountCb, __ATOMIC_ACQUIRE) != NULL && item->name[0] != '\0') {
+        g_bdmSsuUnmountCb(item->name);
+    }
     BdmDiskDestroyAllocator(item);
     BdmDiskCloseDisk(item);
 

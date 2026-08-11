@@ -54,7 +54,8 @@ BResult Cache::Init()
 
 BResult Cache::Recover()
 {
-    if (!BioConfig::Instance()->GetDaemonConfig().hasDiskCache) {
+    auto &daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
         return BIO_OK;
     }
 
