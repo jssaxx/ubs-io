@@ -89,9 +89,9 @@ public:
             return UBSIO_KVC_OK;
         }
         if (DlBioSdkApi::GetWorkerMode() == WorkerMode::SEPARATES) {
-            mBatchGetStrategy = std::make_unique<BatchGetSeparates>();
+            mBatchGetStrategy.reset(new (std::nothrow) BatchGetSeparates());
         } else {
-            mBatchGetStrategy = std::make_unique<BatchGetStandalone>();
+            mBatchGetStrategy.reset(new (std::nothrow) BatchGetStandalone());
         }
         if (UNLIKELY(mBatchGetStrategy == nullptr)) {
             LOG_ERROR("Failed to create batch get strategy, probably out of memory");

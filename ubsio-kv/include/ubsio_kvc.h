@@ -113,7 +113,9 @@ int32_t UbsioKvCachePut(const char *key, void *buf, size_t length, uint32_t flag
  * @param keys           [in] Array of keys for the data objects
  * @param keysCount      [in] Number of keys in the array
  * @param bufs           [in,out] Array of caller-owned data buffers. In separated mode, UBS-IO copies data from
- *                       SDK-owned registered memory into these buffers and releases the SDK memory before returning.
+ *                       SDK-owned registered memory into these buffers and attempts to release the SDK memory before
+ *                       returning. If SDK memory release fails, data is still valid in bufs but SDK memory may leak;
+ *                       the error is logged and the function still returns success.
  * @param length         [in] Size of data buf in data buffers
  * @param results        [out] result of data to be get in data buffers
  * @param flags          [in] Optional flags, reserved

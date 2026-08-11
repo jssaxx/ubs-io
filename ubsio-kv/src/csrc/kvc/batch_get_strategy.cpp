@@ -34,7 +34,7 @@ int32_t BatchGetSeparates::Execute(const BatchGetContext &ctx)
     CResult ret = DlBioSdkApi::BatchGet(ctx.tenantId, ctx.keys, ctx.count, ctx.offsets, ctx.lengths,
         ctx.locations, sdkBuffers.data(), ctx.realLengths, ctx.results);
     if (ret != CResult::RET_CACHE_OK) {
-        return ret;
+        return UBSIO_KVC_ERR;
     }
 
     for (uint32_t i = 0; i < ctx.count; ++i) {
@@ -53,11 +53,11 @@ int32_t BatchGetSeparates::Execute(const BatchGetContext &ctx)
     }
 
     CResult freeRet = DlBioSdkApi::BatchGetFree(ctx.tenantId, sdkBuffers.data(), ctx.count);
-    if (freeRet != CResult::RET_CACHE_OK) {
-        LOG_ERROR("Free batch get sdk buffers failed, ret:" << freeRet);
-        return UBSIO_KVC_ERR;
+    if (UNLIKELY(freeRet != CResult::RET_CACHE_OK)) {
+        LOG_ERROR("Free batch get sdk buffers failed, ret:" << freeRet
+            << ", count:" << ctx.count << ", possible SDK memory leak.");
     }
-    return ret;
+    return UBSIO_KVC_OK;
 }
 
 } // namespace ubsio
