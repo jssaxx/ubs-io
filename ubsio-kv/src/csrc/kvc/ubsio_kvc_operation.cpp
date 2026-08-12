@@ -33,24 +33,15 @@ void KvcAtexitExit(void);
 
 int32_t KvcOperationInit(int32_t devId)
 {
-    /* 当前UBSE暂不支持智算环境，ssu基于ubse服务在鲲鹏服务器验证ubsio基本功能 */
-
-    // int32_t logicDevId = -1;
     // 1. init acl stream
-    // if (devId >= 0) {
-    //     if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
-    //         return UBSIO_KVC_ERR;
-    //     }
-    //     int32_t logicIdRet = ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
-    //     if (logicIdRet != UBSIO_KVC_OK || logicDevId < 0) {
-    //         LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId << ", ret=" << logicIdRet);
-    //         return UBSIO_KVC_ERR;
-    //     }
-    //     LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId);
-    //     if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
-    //         return UBSIO_KVC_ERR;
-    //     }
-    // }
+    if (devId >= 0) {
+        if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
+            return UBSIO_KVC_ERR;
+        }
+        if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
+            return UBSIO_KVC_ERR;
+        }
+    }
     
     // 2. dlopen and init boostio
     int ret = DlBioSdkApi::LoadLibrary();
