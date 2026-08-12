@@ -10,6 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <atomic>
+#include <cstdlib>
 #include <vector>
 #include "ubsio_kvc_err.h"
 #include "ubsio_kvc_log.h"
@@ -25,18 +27,30 @@ namespace ubsio {
 
 static uint64_t tenantId = 1;
 static KvOperation *g_kvOperation = KvOperation::Instance();
+static std::atomic<bool> gKvcExited{false};
+
+void KvcAtexitExit(void);
 
 int32_t KvcOperationInit(int32_t devId)
 {
+    /* 当前UBSE暂不支持智算环境，ssu基于ubse服务在鲲鹏服务器验证ubsio基本功能 */
+
+    // int32_t logicDevId = -1;
     // 1. init acl stream
-    if (devId >= 0) {
-        if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
-            return UBSIO_KVC_ERR;
-        }
-        if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
-            return UBSIO_KVC_ERR;
-        }
-    }
+    // if (devId >= 0) {
+    //     if (ACLApi::LoadLibrary() != UBSIO_KVC_OK) {
+    //         return UBSIO_KVC_ERR;
+    //     }
+    //     int32_t logicIdRet = ACLApi::AclrtGetLogicDevIdByUserDevId(devId, &logicDevId);
+    //     if (logicIdRet != UBSIO_KVC_OK || logicDevId < 0) {
+    //         LOG_ERROR("get logic dev id by user dev id failed, userDevId=" << devId << ", ret=" << logicIdRet);
+    //         return UBSIO_KVC_ERR;
+    //     }
+    //     LOG_INFO("userDevId=" << devId << ", logicDevId=" << logicDevId);
+    //     if (KvcStreamManager::InitAclStream(devId) != UBSIO_KVC_OK) {
+    //         return UBSIO_KVC_ERR;
+    //     }
+    // }
     
     // 2. dlopen and init boostio
     int ret = DlBioSdkApi::LoadLibrary();
@@ -65,11 +79,16 @@ int32_t KvcOperationInit(int32_t devId)
     }
 
     LOG_INFO("Init ubsio kv cache success, deviceId:" << devId);
+    (void)std::atexit(&KvcAtexitExit);
     return UBSIO_KVC_OK;
 }
 
 void KvcExit(void)
 {
+    bool expected = false;
+    if (!gKvcExited.compare_exchange_strong(expected, true)) {
+        return;
+    }
     if (g_kvOperation != nullptr) {
         g_kvOperation->ExitKvExecutor();
     }
@@ -77,6 +96,11 @@ void KvcExit(void)
     KvcStreamManager::DestroyAclStream();
     DlBioSdkApi::Exit();
     DlBioSdkApi::CleanupLibrary();
+}
+
+void KvcAtexitExit(void)
+{
+    KvcExit();
 }
 
 int32_t KvcPutData(const std::string &key, void *value, size_t len, uint32_t flags)

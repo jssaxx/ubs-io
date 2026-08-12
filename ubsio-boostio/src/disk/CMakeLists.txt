@@ -27,6 +27,8 @@ target_include_directories(bio_bdm PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/common>
         $<BUILD_INTERFACE:${PLAT_INCLUDE_DIR}>
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/htracer>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/3rdparty/ubs-engine>
         )
 target_link_libraries(bio_bdm PUBLIC uring)
 target_compile_options(bio_bdm PUBLIC -D_GNU_SOURCE)
+target_link_libraries(bio_bdm PRIVATE dl)

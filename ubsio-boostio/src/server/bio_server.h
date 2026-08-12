@@ -453,6 +453,7 @@ protected:
     void BioUnderFsExit();
     BResult BioBdmInit();
     void BioBdmExit();
+    BResult BioSsuInit(DiskDevices &outDiskList);
     BResult BioNetInit();
     void BioNetExit();
     BResult BioStandaloneMemInit();

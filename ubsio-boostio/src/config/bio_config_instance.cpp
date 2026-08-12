@@ -156,6 +156,13 @@ void BioConfig::LoadDefaultConf()
     AddStrConf(DATA_CRC_ENABLE, VStrBoolRange::Create(DATA_CRC_ENABLE.first));
     AddStrConf(BIO_TRACE_ENABLE, VStrBoolRange::Create(BIO_TRACE_ENABLE.first));
     AddStrConf(BIO_CACHE_QOS_ENABLE, VStrBoolRange::Create(BIO_CACHE_QOS_ENABLE.first));
+    AddStrConf(BIO_SSU_ENABLE, VStrBoolRange::Create(BIO_SSU_ENABLE.first));
+    AddIntConf(BIO_SSU_DISK_SIZE_MB, VIntRange::Create(BIO_SSU_DISK_SIZE_MB.first, NO_1, NO_4194304));
+    AddIntConf(BIO_SSU_NS_NUM, VIntRange::Create(BIO_SSU_NS_NUM.first, 1, 128));
+    AddIntConf(BIO_SSU_LBA_FORMAT, VIntRange::Create(BIO_SSU_LBA_FORMAT.first, 512, 4096));
+    AddIntConf(BIO_SSU_ALLOC_STRATEGY, VIntRange::Create(BIO_SSU_ALLOC_STRATEGY.first, 0, 1));
+    AddStrConf(BIO_SSU_HOST_NQN);
+    AddStrConf(BIO_SSU_SRC_EID);
     AddIntConf(WCACHE_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(WCACHE_DISK_EVICT_WATER_LEVEL, VIntRange::Create(WCACHE_DISK_EVICT_WATER_LEVEL.first, 0, NO_100));
     AddIntConf(RCACHE_EVICT_WATER_LEVEL, VIntRange::Create(RCACHE_EVICT_WATER_LEVEL.first, 0, NO_100));
@@ -357,6 +364,13 @@ BResult BioConfig::AutoConfigDaemonLogAndOther(const ConfigurationPtr &conf)
     mDaemonConfig.enableCrc = conf->GetStr(DATA_CRC_ENABLE.first) == "true";
     mDaemonConfig.enableTrace = conf->GetStr(BIO_TRACE_ENABLE.first) == "true";
     mDaemonConfig.enableQos = conf->GetStr(BIO_CACHE_QOS_ENABLE.first) == "true";
+    mDaemonConfig.enableSsu = conf->GetStr(BIO_SSU_ENABLE.first) == "true";
+    mDaemonConfig.ssuDiskSizeMb = static_cast<uint64_t>(conf->GetInt(BIO_SSU_DISK_SIZE_MB.first));
+    mDaemonConfig.ssuNsNum = static_cast<int32_t>(conf->GetInt(BIO_SSU_NS_NUM.first));
+    mDaemonConfig.ssuLbaFormat = static_cast<int32_t>(conf->GetInt(BIO_SSU_LBA_FORMAT.first));
+    mDaemonConfig.ssuAllocStrategy = static_cast<int32_t>(conf->GetInt(BIO_SSU_ALLOC_STRATEGY.first));
+    mDaemonConfig.ssuHostNqn = conf->GetStr(BIO_SSU_HOST_NQN.first);
+    mDaemonConfig.ssuSrcEid = conf->GetStr(BIO_SSU_SRC_EID.first);
     mDaemonConfig.enableCli = conf->GetStr(BIO_CLI_TOOLS_ENABLE.first) == "true";
     mDaemonConfig.enablePrometheus = conf->GetStr(PROMETHEUS_ENABLE.first) == "true";
     mDaemonConfig.listenAddress = conf->GetStr(PROMETHEUS_LISTEN_ADDRESS.first);
@@ -399,6 +413,14 @@ BResult BioConfig::AutoConfigDaemonCache(const ConfigurationPtr &conf)
     StrUtil::StrTrim(diskMask);
     mDaemonConfig.hasDiskCache = !diskMask.empty();
     mDaemonConfig.bdmIoEngine = conf->GetStr(BDM_IO_ENGINE.first);
+
+    /* SSU 模式与静态磁盘配置互斥:同时开启时忽略静态磁盘路径 */
+    if (mDaemonConfig.enableSsu && mDaemonConfig.hasDiskCache) {
+        LOG_WARN("ubsio.ssu.enable=true conflicts with ubsio.disk.path; "
+            "static disk configuration will be ignored, using SSU dynamic allocation.");
+        mDaemonConfig.hasDiskCache = false;
+        mDaemonConfig.diskList.clear();
+    }
 
     uint64_t sysFreeMemCap = GetSysFreeMemCap();
     if (mDaemonConfig.memCap > sysFreeMemCap) {
@@ -688,6 +710,19 @@ BResult BioConfig::ApplyStandaloneDiskSelection(const std::vector<uint32_t> &dis
         ", selectedDiskNum:" << mDaemonConfig.diskList.size() << ", firstSelectedDiskIndex:" << mStandaloneDiskIndex <<
         ", selectedDisks:" << selectionLog << ".");
     return BIO_OK;
+}
+
+void BioConfig::UpdateSsuDiskInfo(const std::vector<std::string> &diskPaths, const std::vector<int64_t> &diskCaps)
+{
+    if (diskPaths.empty() || diskCaps.empty() || diskPaths.size() != diskCaps.size()) {
+        LOG_ERROR("UpdateSsuDiskInfo invalid param, diskPaths size:" << diskPaths.size() <<
+            ", diskCaps size:" << diskCaps.size() << ".");
+        return;
+    }
+    mDaemonConfig.hasDiskCache = true;
+    mDaemonConfig.diskList = diskPaths;
+    mDaemonConfig.diskCaps = diskCaps;
+    LOG_INFO("SSU disk info updated, disk count:" << diskPaths.size() << ".");
 }
 
 BResult BioConfig::CreateDiskConfBak(const std::string &diskPath)

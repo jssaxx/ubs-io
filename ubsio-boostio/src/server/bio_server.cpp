@@ -14,7 +14,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <mutex>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <cstdio>
 #include "bdm_core.h"
 #include "bio_config_instance.h"
 #include "bio_crc_util.h"
@@ -32,6 +35,8 @@
 #include "interceptor_server.h"
 #include "standalone_view.h"
 #include "bio_server.h"
+#include "ubs_engine_ssu.h"
+#include "ssu_api_dl.h"
 
 namespace ock {
 namespace bio {
@@ -47,6 +52,24 @@ bool IsAbsoluteRegularFile(const std::string &path)
 
     struct stat pathStat {};
     return stat(path.c_str(), &pathStat) == 0 && S_ISREG(pathStat.st_mode);
+}
+
+struct SsuSpaceInfo {
+    std::string name;
+    std::string devName;
+};
+
+std::mutex gSsuDevPathMapLock;
+std::unordered_map<std::string, SsuSpaceInfo> gSsuDevPathToName;
+
+template <size_t N>
+void SsuFillFixedField(char (&dst)[N], const char *src)
+{
+    if (src == nullptr) {
+        dst[0] = '\0';
+        return;
+    }
+    snprintf(dst, N, "%s", src);
 }
 
 std::mutex gMetaEventCallbackLock;
@@ -80,6 +103,63 @@ void ApplyMetaEventCallbackLocked()
     Cache::Instance().RegUbsIoMetaEventCallback(
         BuildMetaEventCallback(gMetaEventCallback, gMetaEventCallbackContext));
 }
+}
+
+extern "C" void BioSsuUnmountCb(const char *devicePath)
+{
+    if (devicePath == nullptr) {
+        return;
+    }
+    if (!ock::bio::DlSsuApi::gStarted) {
+        LOG_WARN("Ssu SDK not started, skip unmount callback for device=" << devicePath);
+        return;
+    }
+    const SsuApiOps *api = __atomic_load_n(&ock::bio::DlSsuApi::apiOps, __ATOMIC_ACQUIRE);
+    if (api == nullptr) {
+        return;
+    }
+
+    SsuSpaceInfo info;
+    {
+        std::lock_guard<std::mutex> mapLk(gSsuDevPathMapLock);
+        auto it = gSsuDevPathToName.find(devicePath);
+        if (it == gSsuDevPathToName.end()) {
+            LOG_WARN("Ssu space info not found for device=" << devicePath << ", skip detach/free.");
+            return;
+        }
+        info = it->second;
+    }
+
+    const auto &daemonConfig = BioConfig::Instance()->GetDaemonConfig();
+    ubs_ssu_linear_space_req_t detachReq = {};
+    SsuFillFixedField(detachReq.name, info.name.c_str());
+    SsuFillFixedField(detachReq.nqn, daemonConfig.ssuHostNqn.c_str());
+    SsuFillFixedField(detachReq.src_eid, daemonConfig.ssuSrcEid.c_str());
+    SsuFillFixedField(detachReq.dev_name, info.devName.c_str());
+
+    bool detachOk = false;
+    int32_t detachRet = api->linear_space_detach(&detachReq);
+    if (detachRet != 0) {
+        LOG_ERROR("Ssu linear_space_detach failed, device=" << devicePath << ", name=" << info.name
+            << ", ret=" << detachRet << ", skip free to avoid inconsistent state.");
+    } else {
+        LOG_INFO("Ssu linear_space_detach succeed, device=" << devicePath << ", name=" << info.name);
+        detachOk = true;
+    }
+    bool fullyFreed = false;
+    if (detachOk) {
+        int32_t freeRet = api->space_free(info.name.c_str());
+        if (freeRet != 0) {
+            LOG_ERROR("Ssu space_free failed, name=" << info.name << ", ret=" << freeRet);
+        } else {
+            LOG_INFO("Ssu space_free succeed, name=" << info.name);
+            fullyFreed = true;
+        }
+    }
+    if (fullyFreed) {
+        std::lock_guard<std::mutex> mapLk(gSsuDevPathMapLock);
+        gSsuDevPathToName.erase(devicePath);
+    }
 }
 
 static void Log(int level, const char *msg)
@@ -376,10 +456,119 @@ void BioServer::BioUnderFsExit()
     UfsHelper::Instance()->Stop();
 }
 
+BResult BioServer::BioSsuInit(DiskDevices &outDiskList)
+{
+    LOG_INFO("Starting to load ssu api");
+    if (DlSsuApi::LoadSsuApiDl() != 0) {
+        LOG_ERROR("Failed to load ssu api.");
+        return BIO_ERR;
+    }
+    const SsuApiOps *api = DlSsuApi::apiOps;
+    if (api == nullptr) {
+        LOG_ERROR("Ssu api ops is null.");
+        return BIO_ERR;
+    }
+    BdmRegSsuUnmountCb(BioSsuUnmountCb);
+
+    auto &daemonConfig = mConfig->GetDaemonConfig();
+    uint64_t sizeBytes = daemonConfig.ssuDiskSizeMb * 1024ULL * 1024ULL;
+    std::string spaceName;
+    std::string dev_name;
+    std::string tenant;
+    if (mStandaloneMode) {
+        spaceName = "ssu_rank_" + std::to_string(mConfig->GetStandaloneDeviceId());
+        tenant = "ssu_tenant" + std::to_string(mConfig->GetStandaloneDeviceId());
+        dev_name = "rank" + std::to_string(mConfig->GetStandaloneDeviceId()); 
+    } else {
+        spaceName = "ssu_ubsio";
+        tenant = "ssu_tenant";
+        dev_name = "ubsio";
+    }
+
+    ubs_ssu_alloc_space_req_t allocReq = {};
+    SsuFillFixedField(allocReq.name, spaceName.c_str());
+    allocReq.ns_size = sizeBytes;
+    allocReq.ns_num = static_cast<uint32_t>(daemonConfig.ssuNsNum);
+    allocReq.lba_format = static_cast<ubs_ssu_lba_format_t>(daemonConfig.ssuLbaFormat);
+    allocReq.strategy = static_cast<ubs_ssu_alloc_strategy_t>(daemonConfig.ssuAllocStrategy);
+    SsuFillFixedField(allocReq.tenant, tenant.c_str());
+
+    LOG_INFO("Ssu space_alloc, name=" << spaceName << ", ns_size=" << sizeBytes
+        << ", ns_num=" << allocReq.ns_num << ", lba_format=" << allocReq.lba_format
+        << ", strategy=" << allocReq.strategy << ", tenant=" << tenant);
+
+    ubs_ssu_alloc_result_t *allocResult = nullptr;
+    int32_t allocRet = api->space_alloc(&allocReq, &allocResult);
+    bool allocatedByUs = false;
+    if (allocRet == UBS_ENGINE_ERR_ALREADY_ALLOCATED) {
+        LOG_INFO("Ssu space already allocated, name=" << spaceName << ", continue.");
+    } else if (allocRet != 0) {
+        LOG_ERROR("Ssu space_alloc failed, ret=" << allocRet << ".");
+        return BIO_ERR;
+    } else {
+        allocatedByUs = true;
+        LOG_INFO("Ssu space_alloc succeed, name=" << spaceName
+            << ", namespace_cnt=" << (allocResult != nullptr ? allocResult->namespace_cnt : 0U));
+    }
+
+    api->alloc_info_free(&allocResult);
+
+    ubs_ssu_linear_space_req_t attachReq = {};
+    SsuFillFixedField(attachReq.name, spaceName.c_str());
+    SsuFillFixedField(attachReq.nqn, daemonConfig.ssuHostNqn.c_str());
+    SsuFillFixedField(attachReq.src_eid, daemonConfig.ssuSrcEid.c_str());
+    SsuFillFixedField(attachReq.dev_name, dev_name.c_str());
+
+    char **ns_dev_paths = nullptr;
+    uint32_t ns_dev_path_cnt = 0;
+    char dev_path[UBS_SSU_MAX_DEV_PATH_LENGTH] = {};
+
+    LOG_INFO("Ssu linear_space_attach req: name=" << attachReq.name << ", nqn=" << attachReq.nqn
+        << ", src_eid=" << attachReq.src_eid << ", dev_name=" << attachReq.dev_name << ".");
+
+    int32_t attachRet = api->linear_space_attach(&attachReq, &ns_dev_paths, &ns_dev_path_cnt, dev_path);
+    if (attachRet == UBS_ENGINE_ERR_ALREADY_ATTACHED) {
+        LOG_INFO("Ssu space already attached, name=" << spaceName << ", continue.");
+    } else if (attachRet != 0) {
+        LOG_ERROR("Ssu linear_space_attach failed, ret=" << attachRet << ".");
+        if (allocatedByUs) {
+            api->space_free(spaceName.c_str());
+        }
+        return BIO_ERR;
+    }
+    if (dev_path[0] == '\0') {
+        LOG_ERROR("Ssu linear_space_attach returned no device path.");
+        api->ns_dev_paths_free(&ns_dev_paths, ns_dev_path_cnt);
+        if (allocatedByUs) {
+            api->space_free(spaceName.c_str());
+        }
+        return BIO_ERR;
+    }
+    LOG_INFO("Ssu linear_space_attach succeed, device=" << dev_path
+        << ", ns_dev_path_cnt=" << ns_dev_path_cnt);
+
+    auto cpyRet = strcpy_s(outDiskList.list[outDiskList.num].path, DISK_PATH_LEN, dev_path);
+    if (cpyRet != 0) {
+        api->ns_dev_paths_free(&ns_dev_paths, ns_dev_path_cnt);
+        api->space_free(spaceName.c_str());
+        return BIO_ERR;
+    }
+    std::string devicePath(dev_path);
+    outDiskList.diskCaps[outDiskList.num] = static_cast<uint64_t>(FileUtil::GetDiskCapacity(devicePath));
+    outDiskList.num++;
+    {
+        std::lock_guard<std::mutex> mapLk(gSsuDevPathMapLock);
+        gSsuDevPathToName[devicePath] = SsuSpaceInfo{spaceName, dev_name};
+    }
+
+    return BIO_OK;
+}
+
 BResult BioServer::BioBdmInit()
 {
     auto &daemonConfig = mConfig->GetDaemonConfig();
-    if (!daemonConfig.hasDiskCache) {
+
+    if (!daemonConfig.hasDiskCache && !daemonConfig.enableSsu) {
         DiskAllocator diskAllocator;
         diskAllocator.alloc = [](uint32_t, uint64_t, uint64_t, uint64_t, uint64_t *) { return BIO_ERR; };
         diskAllocator.free = [](uint32_t, uint64_t, uint64_t) { return; };
@@ -395,22 +584,48 @@ BResult BioServer::BioBdmInit()
     ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to init BDM, result:" << ret << ".");
     BdmSetDiskStartupInfo(mStandaloneMode ? 1U : 0U, mStandaloneMode ? mConfig->GetStandaloneDeviceId() : 0U);
     DiskDevices diskList = {};
-    if (daemonConfig.diskList.size() > DISK_DEV_NUM) {
-        LOG_ERROR("BDM disk num limit:" << DISK_DEV_NUM << ", input:" << daemonConfig.diskList.size() << ".");
-        return BIO_ERR;
-    }
-    for (auto diskPathStr : daemonConfig.diskList) {
-        ret = strcpy_s(diskList.list[diskList.num].path, DISK_PATH_LEN, diskPathStr.c_str());
-        if (ret != 0) {
+
+    if (daemonConfig.enableSsu) {
+        auto ssuRet = BioSsuInit(diskList);
+        ChkTrue(ssuRet == BIO_OK, BIO_ERR, "Failed to init SSU.");
+    } else {
+        if (daemonConfig.diskList.size() > DISK_DEV_NUM) {
+            LOG_ERROR("BDM disk num limit:" << DISK_DEV_NUM << ", input:" << daemonConfig.diskList.size() << ".");
             return BIO_ERR;
         }
-        auto diskCap = FileUtil::GetDiskCapacity(diskPathStr);
-        diskList.diskCaps[diskList.num] = static_cast<uint64_t>(diskCap);
-        diskList.num++;
+        for (auto diskPathStr : daemonConfig.diskList) {
+            ret = strcpy_s(diskList.list[diskList.num].path, DISK_PATH_LEN, diskPathStr.c_str());
+            if (ret != 0) {
+                return BIO_ERR;
+            }
+            auto diskCap = FileUtil::GetDiskCapacity(diskPathStr);
+            diskList.diskCaps[diskList.num] = static_cast<uint64_t>(diskCap);
+            diskList.num++;
+        }
     }
 
     ret = BdmStart(&diskList, daemonConfig.segment);
-    ChkTrue(ret == BDM_CODE_OK, BIO_ERR, "Failed to start BDM, result:" << ret << ".");
+    if (UNLIKELY(ret != BDM_CODE_OK)) {
+        LOG_ERROR("Failed to start BDM, result:" << ret << ".");
+        // BdmStart 失败(如 open 盘文件失败)时,BDM 不会走到 BdmDiskDestroy
+        if (daemonConfig.enableSsu) {
+            BioSsuUnmountCb(diskList.list[0].path);
+            BdmRegSsuUnmountCb(nullptr);
+        }
+        return BIO_ERR;
+    }
+
+    /* SSU 磁盘分配成功,回填 daemonConfig 使上层 Cache 感知磁盘的存在。
+       hasDiskCache 在配置解析阶段因无静态磁盘路径被置为 false,此处修正。 */
+    if (daemonConfig.enableSsu) {
+        std::vector<std::string> diskPaths;
+        std::vector<int64_t> diskCaps;
+        for (uint16_t i = 0; i < diskList.num; i++) {
+            diskPaths.emplace_back(diskList.list[i].path);
+            diskCaps.emplace_back(static_cast<int64_t>(diskList.diskCaps[i]));
+        }
+        mConfig->UpdateSsuDiskInfo(diskPaths, diskCaps);
+    }
 
     DiskAllocator diskAllocator;
     diskAllocator.alloc = [](uint32_t bdmId, uint64_t flowId, uint64_t flowOffset, uint64_t len, uint64_t *chunkId) {
@@ -468,6 +683,10 @@ BResult BioServer::BioDiskReset(uint16_t diskId)
 
 void BioServer::BioBdmExit()
 {
+    if (mConfig->GetDaemonConfig().enableSsu) {
+        BdmRegSsuUnmountCb(nullptr);
+        DlSsuApi::UnloadSsuApiDl();
+    }
     int32_t ret = BdmExit();
     if (ret != BDM_CODE_OK) {
         LOG_WARN("Bdm exit failed, result:" << ret << ".");
