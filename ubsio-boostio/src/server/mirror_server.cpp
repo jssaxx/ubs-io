@@ -329,6 +329,22 @@ BResult MirrorServer::CreateFlowSlave(uint64_t procId, uint16_t ptId, uint64_t p
 
 BResult MirrorServer::DestroyFlow(uint64_t procId, uint16_t ptId, uint64_t ptv, uint64_t flowId)
 {
+    auto bioServer = BioServer::Instance();
+    if (bioServer->IsStandaloneMode()) {
+        auto wcache = WCacheManager::Instance()->GetWCacheForCleanup(flowId);
+        uint64_t currentPtv = bioServer->GetPtEntry(ptId).version;
+        if (wcache != nullptr && wcache->GetPtv() < currentPtv &&
+            bioServer->IsStandaloneDiskFault(wcache->GetDiskId())) {
+            BResult ret = WCacheManager::Instance()->CleanupFaultedDiskFlows(ptId, currentPtv,
+                wcache->GetDiskId());
+            if (UNLIKELY(ret != BIO_OK)) {
+                LOG_ERROR("Standalone fault expired clear failed, ret:" << ret << ", ptId:" << ptId <<
+                    ", requestPtv:" << ptv << ", currentPtv:" << currentPtv << ", flowId:" << flowId << ".");
+            }
+            return ret;
+        }
+    }
+
     auto ret = Cache::Instance().DestroyWCache(procId, ptId, ptv, flowId);
     if (UNLIKELY(ret != BIO_OK)) {
         LOG_ERROR("Destroy write cache failed, ret:" << ret << ", procId:" << procId << ", ptId:" << ptId << ".");
@@ -449,8 +465,14 @@ void MirrorServer::QueryNodeView(QueryNodeViewRequest &req, QueryNodeViewRespons
 void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp)
 {
     std::map<uint16_t, CmPtInfo> ptView = BioServer::Instance()->GetPtView(&rsp.curPtTimes);
+    uint32_t total = static_cast<uint32_t>(ptView.size());
+    uint32_t skip = req.bar;
     uint32_t index = 0;
     for (auto &ptEntry : ptView) {
+        if (skip != 0) {
+            --skip;
+            continue;
+        }
         if (index == PT_SIZE) {
             break;
         }
@@ -468,12 +490,15 @@ void MirrorServer::QueryPtView(QueryPtViewRequest &req, QueryPtViewResponse &rsp
         index++;
     }
     rsp.num = index;
-    rsp.flag = (index == 0) ? 0 : 1;
+    rsp.flag = (req.bar < total && index < total - req.bar) ? 1 : 0;
 }
 
 BResult MirrorServer::ReaderLocal(const SlicePtr &from, const SlicePtr &to, PutRequest &req)
 {
-    if (req.affinity == LOCAL_AFFINITY) {
+    // Data was already copied into the server memory slice by the zero-copy
+    // PrepareFromServer path. Otherwise the copy happens here, under the
+    // WCache admission in-flight reference.
+    if (req.memFromServer && req.affinity == LOCAL_AFFINITY) {
         return BIO_OK;
     }
     return mSliceOp.Copy(from, to);

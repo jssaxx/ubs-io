@@ -133,6 +133,27 @@ BResult FlowManager::DestroyObject(FlowType type, uint64_t flowId)
     return ret;
 }
 
+BResult FlowManager::AbandonObject(uint64_t flowId)
+{
+    std::lock_guard<std::mutex> lock(mMutex);
+    ChkTrueNot(mInited == true, BIO_NOT_READY);
+    auto iter = mDiskObjManager.find(flowId);
+    if (iter == mDiskObjManager.end()) {
+        return BIO_NOT_EXISTS;
+    }
+
+    FlowCache cacheType = mGetCacheType(flowId);
+    uint32_t mediaId = iter->second->GetMediaId();
+    ChkTrue((cacheType != FLOW_CACHE && mediaId < DEVICE_SIZE), BIO_ERR,
+        "Check failed when abandoning Flow, cacheType:" << cacheType << ", mediaId:" << mediaId << ".");
+    uint64_t abandonedLen = iter->second->GetAllocatedLen();
+    auto &usedSize = mUsedSize[cacheType][FLOW_DISK][mediaId];
+    uint64_t current = usedSize.load();
+    while (!usedSize.compare_exchange_weak(current, current > abandonedLen ? current - abandonedLen : 0)) {}
+    mDiskObjManager.erase(iter);
+    return BIO_OK;
+}
+
 BResult FlowManager::GetAllObject(FlowType type, std::map<uint64_t, FlowPtr> &objManager)
 {
     std::lock_guard<std::mutex> lock(mMutex);

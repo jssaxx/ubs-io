@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <algorithm>
 #include <dlfcn.h>
 #include <cstdlib>
 #include <sys/stat.h>
@@ -143,7 +144,7 @@ std::vector<ModuleDesc> BioServer::BuildStandaloneModules()
     modules.emplace_back("Flow", std::bind(&BioServer::BioFlowInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioFlowExit, this));
     modules.emplace_back("StandaloneView", std::bind(&BioServer::BioStandaloneViewInit, this), nullptr, nullptr,
-        nullptr);
+        std::bind(&BioServer::BioStandaloneViewExit, this));
     modules.emplace_back("Cache", std::bind(&BioServer::BioCacheInit, this), nullptr, nullptr,
         std::bind(&BioServer::BioCacheExit, this));
     modules.emplace_back("MirrorServer", std::bind(&BioServer::BioMirrorServerInit, this), nullptr, nullptr,
@@ -726,7 +727,70 @@ BResult BioServer::BioStandaloneViewInit()
     }
     LOG_INFO("Standalone view init success, localNid:" << mLocalNid.VNodeId() << ", ptNum:" << mPtView.size() <<
         ".");
+
+    const auto &daemonConfig = mConfig->GetDaemonConfig();
+    if (!daemonConfig.hasDiskCache) {
+        return BIO_OK;
+    }
+    ret = mStandaloneView.Start(static_cast<uint32_t>(daemonConfig.diskList.size()),
+        std::bind(&BioServer::HandleStandaloneDiskFault, this, std::placeholders::_1));
+    if (UNLIKELY(ret != BIO_OK)) {
+        LOG_ERROR("Start standalone disk fault handler failed, ret:" << ret << ".");
+        return ret;
+    }
     return BIO_OK;
+}
+
+void BioServer::BioStandaloneViewExit()
+{
+    mStandaloneView.Stop();
+}
+
+BResult BioServer::HandleStandaloneDiskFault(uint16_t diskId)
+{
+    std::unique_lock<std::mutex> nodeLock(mNodeViewMutex, std::defer_lock);
+    std::unique_lock<std::mutex> ptLock(mPtViewMutex, std::defer_lock);
+    std::lock(nodeLock, ptLock);
+
+    StandaloneView::NodeView nextNodeView = mNodeView;
+    StandaloneView::PtView nextPtView = mPtView;
+    std::vector<std::pair<uint16_t, uint64_t>> faultPtCleanups;
+    BResult ret = mStandaloneView.FailoverDisk(diskId, mLocalNid, nextNodeView, nextPtView, faultPtCleanups);
+    if (UNLIKELY(ret != BIO_OK)) {
+        return ret;
+    }
+
+    uint64_t viewTime = Monotonic::TimeUs();
+    uint64_t lastViewTime = std::max(mCurNodeTimes, mCurPtTimes);
+    if (viewTime <= lastViewTime) {
+        viewTime = lastViewTime + 1;
+    }
+    mNodeView.swap(nextNodeView);
+    mPtView.swap(nextPtView);
+    mCurNodeTimes = viewTime;
+    mCurPtTimes = viewTime;
+
+    nodeLock.unlock();
+    ptLock.unlock();
+    LOG_INFO("Publish standalone disk fault view, diskId:" << diskId << ", viewTime:" << viewTime <<
+        ", faultPtCount:" << faultPtCleanups.size() << ".");
+
+    if (!mCacheInited) {
+        // StandaloneView starts before Cache, so an early startup disk fault has
+        // no WCache flows or index entries to clean up.
+        return BIO_OK;
+    }
+
+    BResult cleanupRet = BIO_OK;
+    for (const auto &pt : faultPtCleanups) {
+        BResult ret = WCacheManager::Instance()->CleanupFaultedDiskFlows(pt.first, pt.second, diskId);
+        if (UNLIKELY(ret != BIO_OK)) {
+            cleanupRet = ret;
+            LOG_ERROR("Standalone fault pt cleanup failed, ptId:" << pt.first << ", ptv:" << pt.second <<
+                ", diskId:" << diskId << ", ret:" << ret << ".");
+        }
+    }
+    return cleanupRet;
 }
 
 BResult BioServer::BioMirrorServerInit()

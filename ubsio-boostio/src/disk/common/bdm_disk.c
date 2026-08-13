@@ -186,8 +186,34 @@ static pthread_once_t g_bdmSyncUringKeyOnce = PTHREAD_ONCE_INIT;
 static pthread_key_t g_bdmSyncUringKey;
 static int32_t g_bdmSyncUringKeyRet = BDM_CODE_OK;
 static bool g_bdmSyncUringKeyCreated = false;
+static pthread_mutex_t g_bdmDiskFaultHandlerLock = PTHREAD_MUTEX_INITIALIZER;
+static BdmDiskFaultHandler g_bdmDiskFaultHandler = NULL;
+static void *g_bdmDiskFaultHandlerContext = NULL;
 static pthread_mutex_t g_bdmSyncUringCtxLock = PTHREAD_MUTEX_INITIALIZER;
 static DList g_bdmSyncUringCtxList = D_LIST_HEAD_INIT(g_bdmSyncUringCtxList);
+
+void BdmRegisterDiskFaultHandler(BdmDiskFaultHandler handler, void *context)
+{
+    pthread_mutex_lock(&g_bdmDiskFaultHandlerLock);
+    g_bdmDiskFaultHandler = handler;
+    g_bdmDiskFaultHandlerContext = context;
+    pthread_mutex_unlock(&g_bdmDiskFaultHandlerLock);
+}
+
+static int32_t BdmNotifyDiskFault(uint16_t diskId)
+{
+    int32_t ret;
+    pthread_mutex_lock(&g_bdmDiskFaultHandlerLock);
+    if (g_bdmDiskFaultHandler != NULL) {
+        ret = g_bdmDiskFaultHandler(diskId, g_bdmDiskFaultHandlerContext);
+        pthread_mutex_unlock(&g_bdmDiskFaultHandlerLock);
+        return ret;
+    }
+    pthread_mutex_unlock(&g_bdmDiskFaultHandlerLock);
+    return CmReportDiskStatus(diskId, CM_DISK_FAULT);
+}
+
+static void BdmDiskReportIoFault(BdmDiskItem *itemPtr, uint64_t offset, uint64_t len);
 
 static int32_t BdmDiskFillDiskHead(BdmDiskHead *head, BdmDiskItem *item);
 static void BdmDiskCompleteReq(BdmAsyncOpsReq *req, int32_t ret);
@@ -321,14 +347,7 @@ int32_t BdmDiskInnerReadWrite(BdmDiskItem *itemPtr, char *buff, uint64_t len, ui
         retry++;
     }
 
-    // 上报磁盘故障事件, 标记磁盘状态为false.
-    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
-        itemPtr->name, offset, len);
-    int32_t reportRet = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
-    if (UNLIKELY(reportRet != BDM_CODE_OK)) {
-        BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
-    }
-    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    BdmDiskReportIoFault(itemPtr, offset, len);
     return BDM_CODE_ERR_IO;
 }
 
@@ -366,14 +385,7 @@ int32_t BdmDiskInnerReadWriteDirect(BdmDiskItem *itemPtr, char *buff, uint64_t l
         retry++;
     }
 
-    // 上报磁盘故障事件, 标记磁盘状态为false.
-    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
-        itemPtr->name, offset, len);
-    int32_t reportRet = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
-    if (UNLIKELY(reportRet != BDM_CODE_OK)) {
-        BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
-    }
-    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    BdmDiskReportIoFault(itemPtr, offset, len);
     return BdmDiskFinishDirectBuffer(buff, len, isRead, ioBuf, needBounce, BDM_CODE_ERR_IO);
 }
 
@@ -593,13 +605,13 @@ static int32_t BdmDiskFinishSyncUringBuffer(char *userBuf, uint64_t userLen, int
 
 static void BdmDiskReportIoFault(BdmDiskItem *itemPtr, uint64_t offset, uint64_t len)
 {
-    BDM_LOGWARN(0, "Report disk fault to cm, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
+    BDM_LOGWARN(0, "Report disk fault, bdmId(%u), device(%s), offset(%llu), len(%llu).", itemPtr->bdmId,
         itemPtr->name, offset, len);
-    int32_t ret = CmReportDiskStatus((uint16_t)itemPtr->bdmId, CM_DISK_FAULT);
+    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
+    int32_t ret = BdmNotifyDiskFault((uint16_t)itemPtr->bdmId);
     if (UNLIKELY(ret != BDM_CODE_OK)) {
         BDM_LOGWARN(0, "Report disk fault failed, bdmId(%u), device(%s).", itemPtr->bdmId, itemPtr->name);
     }
-    BdmSetDiskUsedStatus(itemPtr->bdmId, false);
 }
 
 static void BdmDiskRegisterSyncUringCtx(BdmSyncUringCtx *uringCtx)

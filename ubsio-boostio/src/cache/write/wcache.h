@@ -35,6 +35,7 @@ public:
     WCache(uint64_t procId, uint64_t flowId, uint16_t ptId, uint64_t ptv, uint16_t diskId, bool isDegrade)
         : mProcId(procId), mFlowId(flowId), mPtId(ptId), mPtv(ptv), mDiskId(diskId), mIsDegrade(isDegrade)
     {}
+    ~WCache();
 
     using EvictCallback = std::function<BResult(uint16_t ptId, const Key &key, WCacheSliceRefPtr sliceRef,
         const UbsIoMetaEventBatchPtr &batch)>;
@@ -119,6 +120,11 @@ public:
         return mPtv;
     }
 
+    inline uint16_t GetDiskId() const
+    {
+        return mDiskId;
+    }
+
     inline void IncFlyIo()
     {
         mOnFlyRef += 1;
@@ -154,6 +160,16 @@ public:
 
     void Flush(const WCachePtr &self);
     void ExpiredClear(const WCachePtr &self);
+    inline void SetStandaloneFault()
+    {
+        mStandaloneFault.store(true);
+    }
+    inline bool IsStandaloneFault() const
+    {
+        return mStandaloneFault.load();
+    }
+    BResult ForceClearMemoryTier();
+    BResult ReleaseFaultedResources();
     void ProcAndCacheBrokenExpiredClear();
     bool IsEmptyEvict(WCacheTierType type);
 
@@ -196,6 +212,10 @@ private:
 
     BResult PutSetIoStrategy(RealIoStrategy &ioStrategy, CacheAttr &attr);
 
+    BResult CreateMemoryTombstone(const WCacheSlicePtr &srcSlice);
+    BResult CreateDiskTombstone(const WCacheSlicePtr &slice);
+    BResult EvictMemoryTombstone(WCacheSliceRefPtr &sliceRef);
+
     BResult PutByPass(const Key &key, const WCacheSlicePtr &srcSlice, const SliceReader &sliceReader,
         WCacheSliceRefPtr &destSliceRef, CacheAttr &attr);
 
@@ -213,6 +233,7 @@ private:
     bool mIsDegrade;
     bool mIsMaster{ true };
     std::atomic<bool> mIsNormal { true };
+    std::atomic<bool> mStandaloneFault { false };
     bool mIsForced { false };
     bool mUfsEnable{ false };
     bool mHasDiskCache{ true };

@@ -11,6 +11,7 @@
  */
 
 #include "wcache_tier.h"
+#include <unistd.h>
 #include "flow_manager.h"
 #include "securec.h"
 #include "cache_flow.h"
@@ -262,6 +263,34 @@ void WCacheTier::Destroy()
         FlowManager::Instance()->DestroyObject(mDataFlow->GetFlowType(), mDataFlow->GetFlowId());
         mDataFlow = nullptr;
     }
+}
+
+BResult WCacheTier::ReleaseFaultedResources()
+{
+    FlowPtr *flows[] = { &mMetaFlow, &mDataFlow };
+    for (const auto *flowPtr : flows) {
+        const FlowPtr &flow = *flowPtr;
+        if (flow == nullptr) {
+            continue;
+        }
+        // The tier and FlowManager own two stable references. Any extra reference is an existing preload task.
+        while (flow->GetRef() > 2) {
+            usleep(1000);
+        }
+        BResult ret = BIO_OK;
+        if (type == WCACHE_MEMORY) {
+            ret = flow->Seal();
+            if (LIKELY(ret == BIO_OK)) {
+                ret = FlowManager::Instance()->DestroyObject(flow->GetFlowType(), flow->GetFlowId());
+            }
+        } else {
+            ret = FlowManager::Instance()->AbandonObject(flow->GetFlowId());
+        }
+        if (UNLIKELY(ret != BIO_OK && ret != BIO_NOT_EXISTS)) {
+            return ret;
+        }
+    }
+    return BIO_OK;
 }
 
 BResult WCacheTier::Evict(const WCacheSlicePtr &slice)
