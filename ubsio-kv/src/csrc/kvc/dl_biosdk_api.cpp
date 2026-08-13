@@ -185,8 +185,7 @@ int32_t DlBioSdkApi::KvBioInit(int32_t devId)
 
     LOG_INFO("boostio createcache...");
     uint64_t tenantId = 1;
-    AffinityStrategy affinity =
-        (workerMode == WorkerMode::SEPARATES) ? GLOBAL_BALANCE : LOCAL_AFFINITY;
+    AffinityStrategy affinity = LOCAL_AFFINITY;
     WriteStrategy strategy = WRITE_BACK;
     ret = CreateCache({ tenantId, affinity, strategy });
     if (ret == RET_CACHE_EXISTS) {
