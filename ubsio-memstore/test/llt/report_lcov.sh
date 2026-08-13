@@ -16,39 +16,63 @@ PROJECT_HOME="$( cd "$( dirname "$0" )"/../..  && pwd  )"
 GENERATE_DIR=${CURRENT_DIR}/cov/gen
 rm -rf ${CURRENT_DIR}/cov/; mkdir -p ${GENERATE_DIR}
 
+for tool in lcov genhtml
+do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+        echo "Required command not found: ${tool}."
+        exit 1
+    fi
+done
+
 make_cov_info()
 {
     SUB_DIR=$1
     SUB_GENERATE_DIR=${CURRENT_DIR}/cov/gen/${SUB_DIR}
+    SUB_BUILD_DIR=${PROJECT_HOME}/build/${SUB_DIR}
     rm -rf ${SUB_GENERATE_DIR}; mkdir -p ${SUB_GENERATE_DIR}
 
-    cd ${PROJECT_HOME}/build
+    if [[ ! -d "${SUB_BUILD_DIR}" ]]; then
+        return 0
+    fi
 
-    find ${PROJECT_HOME}/build/${SUB_DIR} -name "*.gcda" | xargs -r -i cp {} ${SUB_GENERATE_DIR}
-    find ${PROJECT_HOME}/build/${SUB_DIR} -name "*.gcno" | xargs -r -i cp {} ${SUB_GENERATE_DIR}
+    find "${SUB_BUILD_DIR}" -name "*.gcda" | xargs -r -i cp {} "${SUB_GENERATE_DIR}"
+    find "${SUB_BUILD_DIR}" -name "*.gcno" | xargs -r -i cp {} "${SUB_GENERATE_DIR}"
 
-    if ! find ${SUB_GENERATE_DIR} -name "*.gcda" | grep -q .; then
+    if ! find "${SUB_GENERATE_DIR}" -name "*.gcda" | grep -q .; then
         return 0
     fi
 
     # generate all coverage
     tmp_file="coverage.info"
-    lcov --d ${SUB_GENERATE_DIR} --c --output-file ${SUB_GENERATE_DIR}/${tmp_file} --rc lcov_branch_coverage=1
-    if [ 0 != $? ];then
-    echo "Failed to generate all coverage info"
-    exit 1
+    if ! lcov --d "${SUB_GENERATE_DIR}" --c --output-file "${SUB_GENERATE_DIR}/${tmp_file}" \
+        --rc lcov_branch_coverage=1; then
+        echo "Failed to generate coverage info, directory:${SUB_DIR}."
+        return 1
     fi
 }
 
 #分目录并行收集gcda，提升效率
-for i in "src/cache" "src/client" "src/cluster" "src/common" "src/config" "../ubsio-common/tracer" "src/memory" "src/net" "src/server" "test/llt" "test/tools"
+PIDS=()
+for i in "src/cache" "src/client" "src/cluster" "src/common" "src/config" "ubsio-common/tracer" "src/memory" \
+    "src/net" "src/server" "test/llt" "test/tools"
 do
-    { make_cov_info $i
+    { make_cov_info "$i"
     }&
+    PIDS+=("$!")
 done
-wait
 
-INFO_FILES=$(find ${GENERATE_DIR} -name "coverage.info" | sort)
+COVERAGE_RESULT=0
+for pid in "${PIDS[@]}"
+do
+    if ! wait "${pid}"; then
+        COVERAGE_RESULT=1
+    fi
+done
+if [[ "${COVERAGE_RESULT}" -ne 0 ]]; then
+    exit 1
+fi
+
+INFO_FILES=$(find "${GENERATE_DIR}" -name "coverage.info" | sort)
 if [[ -z "${INFO_FILES}" ]]; then
     echo "Failed to find coverage.info"
     exit 1

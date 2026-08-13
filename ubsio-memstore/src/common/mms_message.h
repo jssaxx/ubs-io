@@ -35,10 +35,7 @@ enum MmsOpCode : uint16_t {
     MMS_OP_C_REPLACE,
     MMS_OP_C_UPDATE_PT_VERSION,
     MMS_OP_C_CRB_START_CATCH_UP,
-    MMS_OP_C_GET_BY_PREFIX,
-    MMS_OP_C_GET_BY_RANGE,
-    MMS_OP_C_DELETE_BY_RANGE,
-    MMS_OP_S_CRB_START_RECOVER,
+    MMS_OP_S_CRB_START_RECOVER = 11,
     MMS_OP_S_CRB_RECEIVE_DATA,
     MMS_OP_S_PUT,
     MMS_OP_S_MULTI_PUT,
@@ -50,11 +47,7 @@ enum MmsOpCode : uint16_t {
     MMS_OP_S_MULTI_REPLACE,
     MMS_OP_S_GET_SEQNO_LIST,
     MMS_OP_S_GET_SEQNO_DATA,
-    MMS_OP_S_DELETE_BY_RANGE,
-    MMS_OP_S_MULTI_DELETE_BY_RANGE,
-    MMS_OP_C_NOTIFY_SUBSCRIBE,
-    MMS_OP_NOTIFY_DATA_CHANGE,
-    MMS_OP_BUTT
+    MMS_OP_BUTT = 25
 };
 
 typedef struct {
@@ -78,35 +71,6 @@ typedef struct {
 } BasicRequest;
 
 typedef struct {
-    ReqHead head;
-    bool enable;
-    uint16_t notifyGroupIndex;
-    uint32_t notifyPid;
-} NotifySubscribeReq;
-
-typedef struct {
-    ReqHead head;
-    uint16_t keyLen;
-    uint16_t opType;
-    char key[MAX_KEY_SIZE];
-} NotifyDataChangeReq;
-
-typedef struct {
-    uint16_t keyLen;
-    uint16_t opType;
-    char key[MAX_KEY_SIZE];
-} NotifyDataChangeItem;
-
-static constexpr uint16_t NOTIFY_DATA_CHANGE_BATCH_NUM = 64;
-
-typedef struct {
-    ReqHead head;
-    uint16_t itemNum;
-    uint16_t reserved;
-    NotifyDataChangeItem items[NOTIFY_DATA_CHANGE_BATCH_NUM];
-} NotifyDataChangeBatchReq;
-
-typedef struct {
     uint64_t ptVersion;
 } UpdatePtVRsp;
 
@@ -122,10 +86,7 @@ typedef struct {
     uint32_t valueBlockSize;
     bool traceSwitch;
     bool enableCrc;
-    bool artQuerySwitch;
     bool dataChangeCallbackSwitch;
-    uint16_t notifyGroupIndex;
-    uint16_t reserved;
 } BasicResponse;
 
 typedef struct {
@@ -182,38 +143,6 @@ struct KvCbCtx {
     KvCbCtx() = default;
     KvCbCtx(uint16_t q, int32_t r) : quota(q), result(r) {}
 };
-
-typedef struct {
-    ReqHead head;
-    char prefix[MAX_KEY_SIZE];
-} PrefixSearchReq;
-
-typedef struct {
-    uint64_t keyLen : 16;
-    uint64_t valueLen : 48;
-} ValueDesInfo;
-
-typedef struct {
-    uint64_t itemNum;
-    uint64_t totalSize;
-    ValueDesInfo values[0];
-} PrefixSearchDes;
-
-typedef struct {
-    uint64_t totalSize;
-} PrefixSearchRsp;
-
-typedef struct {
-    ReqHead head;
-    char startKey[MAX_KEY_SIZE];
-    char endKey[MAX_KEY_SIZE];
-} RangeSearchReq;
-
-typedef struct {
-    IoDataRequest dataReq;
-    char startKey[MAX_KEY_SIZE];
-    char endKey[MAX_KEY_SIZE];
-} RangeDeleteDataRequest;
 
 void UpdateCrcSwitch(bool crcSwitch);
 void UpdateLocalPtVersion(uint64_t ptVersion);
@@ -280,9 +209,6 @@ uint32_t FillUpdateItemResults(UpdateItems *itemList, uint32_t itemIndex, const 
 uint32_t FillDeleteItemResults(DeleteItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
 uint32_t FillReplaceItemResults(ReplaceItems *itemList, uint32_t itemIndex, const std::vector<IOCtxItem> &ctxItems);
 
-BResult EncodeRangeDeleteRequest(const char *start, const char *end, std::vector<IOCtxItem> &ctxItems,
-                                 const AllocFunc &allocFunc, uint32_t ioCtxBuffLen);
-BResult DeCodeRangeDeleteRequest(const char *&start, const char *&end, uint64_t buff, uint64_t realLen);
 }
 }
 #endif // MMS_MESSAGE_H

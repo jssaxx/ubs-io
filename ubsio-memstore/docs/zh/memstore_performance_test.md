@@ -79,12 +79,6 @@ replace value: 替换数据，数据已经存在:更新，数据不存在:写入
 delete object: 删除某个key/value
     mms delete [userId] [key]
 
-prefix search: 前缀查询
-    mms prefix [prefix]
-
-range search: 范围查找/删除
-    mms range delete/search [start] [end]
-
 catchup: 开始数据恢复
     mms catchup
 

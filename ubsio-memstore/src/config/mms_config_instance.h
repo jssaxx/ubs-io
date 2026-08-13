@@ -13,6 +13,9 @@
 #ifndef MMS_CONFIG_INSTANCE_H
 #define MMS_CONFIG_INSTANCE_H
 
+#include <utility>
+#include <vector>
+
 #include "mms_config.h"
 #include "mms_err.h"
 #include "mms_types.h"
@@ -25,9 +28,12 @@ const auto CRC_SWITCH = std::make_pair("mms.crc.switch", "false");
 const auto SEQUENCE_SWITCH = std::make_pair("mms.sequence.switch", "false");
 const auto MULTICAST_SWITCH = std::make_pair("mms.multicast.switch", "true");
 const auto DATA_CHANGE_CALLBACK_SWITCH = std::make_pair("mms.data.change.callback.switch", "false");
-const auto ART_QUERY_SWITCH = std::make_pair("mms.art.query.switch", "false");
+const auto NOTIFY_SHM_QUEUE_DEPTH = std::make_pair("mms.notify.shm.queue.depth", 65536);
+const auto NOTIFY_SHM_WORKER_NUM = std::make_pair("mms.notify.shm.worker.num", 1);
+const auto NOTIFY_SHM_WORKER_CPUSET = std::make_pair("mms.notify.shm.worker.cpuset", "54-54");
+const auto NOTIFY_SHM_BUSY_POLLING = std::make_pair("mms.notify.shm.busy_polling", "true");
+const auto CRB_SEND_CPUSET = std::make_pair("mms.crb.send.cpuset", "54-55");
 const auto DEPLOYMENT_MODE = std::make_pair("mms.deployment.mode", "separate");
-const auto CRB_SEND_CPU_START = std::make_pair("mms.crb.send.cpu.start", 68);
 
 const auto NET_RPC_IP_MASK = std::make_pair("mms.net.rpc.ip_mask", "127.0.0.1/24");
 const auto NET_RPC_PORT = std::make_pair("mms.net.rpc.listen_port", 7201);
@@ -41,10 +47,9 @@ const auto NET_RPC_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.rpc.worker.gro
 const auto NET_IPC_BUSY_POLL_MODE = std::make_pair("mms.net.ipc.busy_polling_mode", "false");
 const auto NET_IPC_WORKER_GROUPS = std::make_pair("mms.net.ipc.worker.groups", "4,4");
 const auto NET_IPC_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.worker.groups.cpuset", "2-5,6-9");
-const auto NET_NOTIFY_WORKER_GROUPS = std::make_pair("mms.net.ipc.notify.groups", "1");
-const auto NET_NOTIFY_WORKER_GROUPS_CPUSET = std::make_pair("mms.net.ipc.notify.groups.cpuset", "15-15");
 const auto NET_PUBLISHER_WORKER_CPUSET = std::make_pair("mms.net.publisher.worker.cpuset", "10-17");
 const auto NET_SUBSCRIBER_WORKER_CPUSET = std::make_pair("mms.net.subscriber.worker.cpuset", "18-18");
+const auto NET_SUBSCRIBER_CONNECT_COUNT = std::make_pair("mms.net.subscriber.connect.count", 1);
 const auto NET_RECV_REQUEST_HANDLE_THREAD_NUM = std::make_pair("mms.net.request.executor.thread.num", 8);
 const auto NET_RECV_REQUEST_HANDLE_QUEUE_SIZE = std::make_pair("mms.net.request.executor.queue.size", 1024);
 const auto NET_MESSAGE_MAX_BUFF_SIZE = std::make_pair("mms.net.message.max_buff_size", 70);
@@ -84,19 +89,16 @@ public:
         bool isRpcBusyPolling = false;
         std::string rpcWorkerGroups;
         std::string rpcWorkerGroupsCpuSet;
-        uint16_t rpcWorkerGroupsNum;
+        uint16_t rpcWorkerGroupsNum = NO_0;
 
         bool isIpcBusyPolling = false;
         std::string ipcWorkerGroups;
         std::string ipcWorkerGroupsCpuSet;
         uint16_t ipcWorkerGroupsNum;
-        std::string notifyWorkerGroups;
-        std::string notifyWorkerGroupsCpuSet;
-        uint16_t notifyWorkerGroupsNum;
-        uint16_t notifyGroupIndex = 0;
 
-        std::pair<long, long> publisherWorkerCpuSet;
+        std::vector<std::pair<uint32_t, uint32_t>> publisherWorkerCpuSets;
         std::pair<long, long> subscriberWorkerCpuSet;
+        uint16_t subscriberConnectCount = 1;
 
         uint16_t handleRequestThreadNum = 8;
         uint16_t handleRequestQueueSize = 1024;
@@ -134,9 +136,18 @@ public:
         bool sequenceSwitch = false;
         bool multicastSwitch = false;
         bool dataChangeCallbackSwitch = false;
-        bool artQuerySwitch = true;
         bool isSeparateMode = true;
-        int16_t crbSendCpuStart = 68;
+    };
+
+    struct NotifyShmConfig {
+        uint32_t queueDepth = 65536;
+        uint16_t workerNum = 2;
+        std::vector<uint16_t> workerCpuIds;
+        bool busyPolling = true;
+    };
+
+    struct CrbConfig {
+        std::vector<uint16_t> sendCpuIds;
     };
 
 public:
@@ -165,9 +176,24 @@ public:
         return mCmConfig;
     }
 
+    bool IsSingleNode() const noexcept
+    {
+        return mCmConfig.nodeNum == NO_1;
+    }
+
     const BasicConfig &GetBasicConfig() const noexcept
     {
         return mBasicConfig;
+    }
+
+    const NotifyShmConfig &GetNotifyShmConfig() const noexcept
+    {
+        return mNotifyShmConfig;
+    }
+
+    const CrbConfig &GetCrbConfig() const noexcept
+    {
+        return mCrbConfig;
     }
 
 private:
@@ -197,13 +223,13 @@ private:
 
     BResult AutoConfigIpcGroup(const ConfigurationPtr &conf);
 
-    BResult AutoConfigNotifyGroup(const ConfigurationPtr &conf);
-
     BResult AutoConfigNet(const ConfigurationPtr &conf);
 
     BResult AutoConfigCm(const ConfigurationPtr &conf);
 
     BResult AutoConfigBasic(const ConfigurationPtr &conf);
+    BResult AutoConfigNotifyShm(const ConfigurationPtr &conf);
+    BResult AutoConfigCrb(const ConfigurationPtr &conf);
 
     BResult CheckNumaInfo(uint16_t numaNum, uint16_t numaId[]);
 
@@ -212,6 +238,8 @@ private:
     NetConfig mNetConfig;
     CmConfig mCmConfig;
     BasicConfig mBasicConfig;
+    NotifyShmConfig mNotifyShmConfig;
+    CrbConfig mCrbConfig;
     bool mInited{ false };
 };
 }

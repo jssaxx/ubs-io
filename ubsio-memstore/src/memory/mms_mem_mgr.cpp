@@ -67,6 +67,22 @@ static bool CheckMemEnough(MemMgrOptions &options)
     return availableMem >= sizeRequired;
 }
 
+static void PrefaultWritableMemory(uint64_t address, uint64_t size)
+{
+    uint64_t pageSize = GetDevicePageSize();
+    volatile char *data = reinterpret_cast<volatile char *>(address);
+    MEM_LOG_INFO("Prefault mmap memory begin, size:" << size << ".");
+    for (uint64_t offset = 0; offset < size;) {
+        data[offset] = 0;
+        uint64_t remainSize = size - offset;
+        if (remainSize <= pageSize) {
+            break;
+        }
+        offset += pageSize;
+    }
+    MEM_LOG_INFO("Prefault mmap memory end, size:" << size << ".");
+}
+
 BResult MmsMemMgr::Initialize(MemMgrOptions &options, MemLogFunc func, bool isServer)
 {
     BResult ret;
@@ -77,6 +93,7 @@ BResult MmsMemMgr::Initialize(MemMgrOptions &options, MemLogFunc func, bool isSe
     }
 
     MemLog::Instance()->SetLogFuncFunc(func);
+    mNeedPrefault = isServer;
 
     for (uint16_t index = 0; index < options.numaNum; index++) {
         mNumaId[index] = options.numaId[index];
@@ -228,9 +245,13 @@ BResult MmsMemMgr::CreateShmMmapAddress(int32_t shmFd, uint16_t numaId[], uint64
         return MMS_ERR;
     }
     shareAddr = reinterpret_cast<uint64_t>(address);
+    bool needPrefault = mNeedPrefault && (mode != MMAP_MODE_READ);
 
     if (NumaAvailable() == -1) {
         MEM_LOG_WARN("NUMA is not available on this system, no needed to bind numa.");
+        if (needPrefault) {
+            PrefaultWritableMemory(shareAddr, totalSize);
+        }
         return MMS_OK;
     }
 
@@ -242,6 +263,9 @@ BResult MmsMemMgr::CreateShmMmapAddress(int32_t shmFd, uint16_t numaId[], uint64
             return MMS_ERR;
         }
 
+        if (needPrefault) {
+            PrefaultWritableMemory(shareAddr + offset, size[index]);
+        }
         offset += size[index];
     }
     return MMS_OK;

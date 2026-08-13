@@ -33,10 +33,12 @@ std::string OpTypeToString(OperateType opType)
     }
 }
 
-static void NotifyCallbackFun(const char *key, OperateType opType)
+static void NotifyCallbackFun(const char *key, uint32_t keyLen, OperateType opType, void *lpUserData)
 {
+    (void)lpUserData;
+    std::string notifyKey(key, keyLen);
     std::ostringstream oss;
-    oss << "Data changed, key:" << key << " opType:" << OpTypeToString(opType) << ".";
+    oss << "Data changed, key:" << notifyKey << " opType:" << OpTypeToString(opType) << ".";
     auto logLevel = static_cast<int>(ock::mms::MmsClientLog::Level::LOG_LEVEL_INFO);
     ock::mms::MmsClientLog::Instance()->Log(logLevel, oss.str());
 }
@@ -85,7 +87,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    auto callbackRet = MmsRegisterNotifyCallback(NotifyCallbackFun);
+    auto callbackRet = MmsRegisterNotifyCallback(NotifyCallbackFun, nullptr);
     if (callbackRet != RET_MMS_OK) {
         std::cout << "mms register notify callback failed:" << callbackRet << "." << std::endl;
         return -1;

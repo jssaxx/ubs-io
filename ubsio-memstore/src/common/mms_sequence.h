@@ -94,6 +94,7 @@ public:
 
 private:
     void NegoSeqNoHandle(NegoQueue *queue, uint64_t seqNo, uint64_t negoSeqNo);
+    void FreeNegoData();
 
 private:
     std::vector<std::vector<SlidingQueue *>> mSlidingQueue;
@@ -110,4 +111,3 @@ private:
 }
 }
 #endif
-

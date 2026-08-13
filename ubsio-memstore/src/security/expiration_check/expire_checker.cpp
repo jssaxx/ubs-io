@@ -75,6 +75,11 @@ BResult ExpireChecker::ValidateCertificateTime(X509* x509, const std::string &ty
 {
     ASN1_TIME* notBefore = OpenSslApiWrapper::X509GetNotBefore(x509);
     ASN1_TIME* notAfter = OpenSslApiWrapper::X509GetNotAfter(x509);
+    if (notBefore == nullptr || notAfter == nullptr) {
+        LOG_ERROR(type << " certificate time is nullptr.");
+        return MMS_ERR;
+    }
+
     time_t now;
     time(&now);
     struct tm tm{};

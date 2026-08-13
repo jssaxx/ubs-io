@@ -15,7 +15,7 @@
 #include "bio_types.h"
 #include "cm.h"
 #include "securec.h"
-#include "zookeeper.h"
+#include "zookeeper/zookeeper.h"
 #include "cm_zkadapter.h"
 #include "cm_config.h"
 #include "common/cm_inner.h"

@@ -36,9 +36,10 @@ public:
      * @brief: Register the data change notification callback.
      *
      * @param[in]: callback: Data change notification callback.
+     * @param[in]: lpUserData: User data passed to the notification callback.
      * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
      */
-    static CResult RegisterCallback(NotifyCallback callback);
+    static CResult RegisterCallback(NotifyCallback callback, void *lpUserData);
 
     /**
      * @brief: Exit the MMS service.
@@ -74,45 +75,6 @@ public:
      *          is 0, the key was not found.
      */
     static CResult Get(GetItems *itemList, uint32_t itemNum);
-
-    /**
-     * @brief: Get key/value items by key prefix.
-     *
-     * @param[in]: prefix: Key prefix.
-     * @param[out]: valueInfoItems: Matched value info list.
-     * @param[out]: itemNum: Number of matched items.
-     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
-     */
-    static CResult GetValuesByPrefix(const char *prefix, ValueInfo **valueInfoItems, uint64_t *itemNum);
-
-    /**
-     * @brief: Get key/value items by key range.
-     *
-     * @param[in]: start: Start key of the range query.
-     * @param[in]: end: End key of the range query.
-     * @param[out]: valueInfoItems: Matched value info list.
-     * @param[out]: itemNum: Number of matched items.
-     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
-     */
-    static CResult GetValuesByRange(const char *start, const char *end, ValueInfo **valueInfoItems, uint64_t *itemNum);
-
-    /**
-     * @brief: Delete key/value items by key range.
-     *
-     * @param[in]: start: Start key of the range delete.
-     * @param[in]: end: End key of the range delete.
-     * @return: RET_MMS_OK on success; otherwise, a non-zero error code.
-     */
-    static CResult BatchDeleteByRange(const char *start, const char *end);
-
-    /**
-     * @brief: Release resources returned by prefix queries or range queries.
-     *
-     * @param[in/out]: valueInfoItems: Value info list returned by prefix queries or range queries.
-     * @param[in]: itemNum: Number of value info items.
-     * @return: void.
-     */
-    static void FreeResources(ValueInfo **valueInfoItems, uint64_t itemNum);
 
     /**
      * @brief: Update key/value items.

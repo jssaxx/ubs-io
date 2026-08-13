@@ -37,26 +37,27 @@ MmsNotifyDispatcher::~MmsNotifyDispatcher()
     Stop();
 }
 
-CResult MmsNotifyDispatcher::RegisterCallback(NotifyCallback callback)
+CResult MmsNotifyDispatcher::RegisterCallback(NotifyCallback callback, void *lpUserData)
 {
     std::lock_guard<std::mutex> lifecycleLock(mLifecycleMutex);
     if (callback == nullptr) {
-        mCallback = nullptr;
+        mCallback.store(nullptr, std::memory_order_release);
+        mUserData.store(nullptr, std::memory_order_release);
         StopWorkerIfIdleLocked();
         return RET_MMS_OK;
     }
 
     if (mRunning.load(std::memory_order_acquire)) {
-        if (mCallback == nullptr) {
-            mCallback = callback;
-            return RET_MMS_OK;
-        }
-        return (mCallback == callback) ? RET_MMS_OK : RET_MMS_EPERM;
+        mUserData.store(lpUserData, std::memory_order_release);
+        mCallback.store(callback, std::memory_order_release);
+        return RET_MMS_OK;
     }
 
-    mCallback = callback;
+    mUserData.store(lpUserData, std::memory_order_release);
+    mCallback.store(callback, std::memory_order_release);
     if (!StartWorkerLocked()) {
-        mCallback = nullptr;
+        mCallback.store(nullptr, std::memory_order_release);
+        mUserData.store(nullptr, std::memory_order_release);
         return RET_MMS_ERROR;
     }
     return RET_MMS_OK;
@@ -154,7 +155,7 @@ bool MmsNotifyDispatcher::StartWorkerLocked()
 
 void MmsNotifyDispatcher::StopWorkerIfIdleLocked()
 {
-    if (mCallback != nullptr || mRemoteNotifyHandler != nullptr) {
+    if (mCallback.load(std::memory_order_acquire) != nullptr || mRemoteNotifyHandler != nullptr) {
         return;
     }
     StopWorker();
@@ -228,7 +229,7 @@ bool MmsNotifyDispatcher::PushEvent(const NotifyEvent &event)
             return false;
         }
         uint64_t fullCount = mQueueFullCount.fetch_add(NO_1, std::memory_order_relaxed) + NO_1;
-        LOG_ERROR("Server notify queue full, count:" << fullCount << ", key:" << event.key << ".");
+        LOG_WARN("Server notify queue full, count:" << fullCount << ", key:" << event.key << ".");
         while (sem_wait(&mFreeSlots) != 0) {
             if (errno != EINTR) {
                 LOG_ERROR("Wait notify free sem failed, errno:" << errno << ".");
@@ -275,13 +276,14 @@ bool MmsNotifyDispatcher::PopEvent(NotifyEvent &event)
 
 void MmsNotifyDispatcher::NotifyLocalCallback(const NotifyEvent &event)
 {
-    auto callback = mCallback;
+    void *lpUserData = mUserData.load(std::memory_order_acquire);
+    auto callback = mCallback.load(std::memory_order_acquire);
     if (callback == nullptr) {
         return;
     }
 
     try {
-        callback(event.key, event.opType);
+        callback(event.key, event.keyLen, event.opType, lpUserData);
     } catch (const std::exception &ex) {
         LOG_ERROR("Notify callback failed, error:" << ex.what() << ".");
     } catch (...) {
@@ -305,13 +307,13 @@ void MmsNotifyDispatcher::HandleEventBatch(NotifyEvent *events, uint16_t eventNu
 
 void MmsNotifyDispatcher::WorkerLoop()
 {
-    NotifyEvent events[NOTIFY_DATA_CHANGE_BATCH_NUM];
+    NotifyEvent events[BATCH_EVENT_NUM];
     while (true) {
         if (!WaitEvent(events[0])) {
             break;
         }
         uint16_t eventNum = NO_1;
-        while (eventNum < NOTIFY_DATA_CHANGE_BATCH_NUM && sem_trywait(&mUsedSlots) == 0) {
+        while (eventNum < BATCH_EVENT_NUM && sem_trywait(&mUsedSlots) == 0) {
             if (UNLIKELY(!PopEvent(events[eventNum]))) {
                 auto postUsedRet = sem_post(&mUsedSlots);
                 if (UNLIKELY(postUsedRet != 0)) {

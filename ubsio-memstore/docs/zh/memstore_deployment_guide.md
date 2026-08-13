@@ -212,7 +212,6 @@ MMS 软件安装前需要将前置依赖的软件安装成功，建议参考各�
     |Crc|mms.crc.switch| 数据完整性校验开关。                                                  |false| true/false                                                   |
     |Sequence|mms.sequence.switch| 消息序列化收发开关。                                                  |false| true/false                                                   |
     |Multicast|mms.multicast.switch| 组播开关。                                                       |true| true/false                                                   |
-    |Art Query|mms.art.query.switch| ART 前缀查询、范围查询、范围删除开关。关闭后不维护 ART 索引。                         |false| true/false                                                   |
     |Data Change Callback|mms.data.change.callback.switch| 数据变更通知开关。关闭后不建立 notify 链路，也不触发回调通知。                         |false| true/false                                                   |
     |CRB|mms.crb.send.cpu.start| CRB 故障恢复发送线程池绑核起始 CPU，会绑定从这个核开始的4个连续核。配置为 -1 表示不指定绑核起始 CPU。 |68| [-1, 机器最大cpu号 - 3]                                           |
     |Deployment|mms.deployment.mode| 部署方式。                                                       |separate| separate/converge                                            |
@@ -235,7 +234,7 @@ MMS 软件安装前需要将前置依赖的软件安装成功，建议参考各�
     |Network|mms.net.ipc.notify.groups.cpuset| 数据变更通知专用 IPC worker 绑核配置。                                   |54-54| 与 `mms.net.ipc.notify.groups` 一一对应，避免与主干 IO worker 绑到同一 CPU。 |
     |Network|mms.net.request.executor.thread.num| 网络请求处理线程数。                                                  |8| [8, 256]                                                     |
     |Network|mms.net.request.executor.queue.size| 网络请求处理队列大小。                                                 |1024| [1024, 65535]                                                |
-    |Network|mms.net.publisher.worker.cpuset| 组播发送 worker 绑核配置。                                           |10-17| `x-y` 表示绑定到 CPU x 到 y，建议 CPU 数量与集群节点数量匹配。                    |
+    |Network|mms.net.publisher.worker.cpuset| 组播 publisher worker 绑核配置。                                      |10-17| 建议配置 `节点数-1` 个逗号分段，每段对应一个 group，段内 CPU 对应多个 worker；单段范围会自动均分。 |
     |Network|mms.net.subscriber.worker.cpuset| 组播接收 worker 绑核配置。                                           |18-18| `x-y` 表示绑定到 CPU x 到 y，通常配置一个 CPU 即可。                         |
     |Network|mms.net.message.max_buff_size| 单次发送消息的最大 buffer 大小，单位 KB。                                  |70| [1, 4096]，建议不超过 256。                                         |
     |TLS|mms.net.tls.enable| TLS 开关。                                                     |true| true/false                                                   |

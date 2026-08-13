@@ -1,5 +1,4 @@
-1、spdlog
-2、ubs-comm
-3、libboundscheck
+1、ubs-comm
+2、libboundscheck
 
 
