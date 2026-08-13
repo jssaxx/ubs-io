@@ -29,7 +29,7 @@ std::mutex DlSsuApi::sMutex;
 
 bool DlSsuApi::gStarted = false;
 void *DlSsuApi::gSsuSdk = nullptr;
-const char *DlSsuApi::gSsuLibName = "libubse-client.so";
+const char *DlSsuApi::gSsuLibName = "libubse-ssu-client.so";
 
 int DlSsuApi::LoadSsuApiDl()
 {
