@@ -569,11 +569,11 @@ public:
         if (resp != nullptr) {
             reqMsg.address = resp;
             reqMsg.size = respSize;
-            result = ReplyChannel(ctx, replyCtx, reqMsg, callback);
+            result = ctx.Channel()->Reply(replyCtx, reqMsg, callback);
         } else {
             reqMsg.address = &retCode;
             reqMsg.size = sizeof(retCode);
-            result = ReplyChannel(ctx, replyCtx, reqMsg, callback);
+            result = ctx.Channel()->Reply(replyCtx, reqMsg, callback);
         }
         if (UNLIKELY(result != MMS_OK)) {
             LOG_ERROR("Reply Send failed, ret:" << result << ".");
@@ -731,35 +731,6 @@ private:
         mDecryptHandler = h;
     }
 
-    inline int32_t CallChannel(ChannelPtr &ch, const ock::hcom::UBSHcomRequest &req,
-                               ock::hcom::UBSHcomResponse &resp)
-    {
-        return UseHlcRpc(ch) ? ch->CallWithHlc(req, resp) : ch->Call(req, resp);
-    }
-
-    inline int32_t CallChannel(ChannelPtr &ch, const ock::hcom::UBSHcomRequest &req,
-                               ock::hcom::UBSHcomResponse &resp, const NetCallback *callback)
-    {
-        return UseHlcRpc(ch) ? ch->CallWithHlc(req, resp, callback) : ch->Call(req, resp, callback);
-    }
-
-    inline int32_t ReplyChannel(ServiceContext &ctx, const ock::hcom::UBSHcomReplyContext &replyCtx,
-                                const ock::hcom::UBSHcomRequest &req, const NetCallback *callback)
-    {
-        return UseHlcRpc(ctx.Channel()) ? ctx.Channel()->ReplyWithHlc(replyCtx, req, callback) :
-            ctx.Channel()->Reply(replyCtx, req, callback);
-    }
-
-    inline bool UseHlcRpc(const ChannelPtr &ch) const
-    {
-        if (!mUseHlcRpc) {
-            return false;
-        }
-
-        NetChannelUpCtx ctx(ch->GetUpCtx());
-        return ctx.peerId != INVALID_NID;
-    }
-
     static inline BResult NetResult(hcom::SerResult ret)
     {
         using namespace ock::hcom;
@@ -780,7 +751,7 @@ private:
         using namespace ock::hcom;
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
         UBSHcomResponse respMsg(static_cast<void *>(&resp), sizeof(TResp));
-        auto result = CallChannel(ch, reqMsg, respMsg);
+        auto result = ch->Call(reqMsg, respMsg);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -800,7 +771,7 @@ private:
         using namespace ock::hcom;
         UBSHcomRequest reqMsg(req, reqLen, opCode);
         UBSHcomResponse respMsg(static_cast<void *>(&resp), sizeof(TResp));
-        auto result = CallChannel(ch, reqMsg, respMsg);
+        auto result = ch->Call(reqMsg, respMsg);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -822,7 +793,7 @@ private:
         UBSHcomRequest reqMsg(static_cast<void *>(&req), sizeof(TReq), opCode);
         UBSHcomResponse respMsg{};
 
-        result = CallChannel(ch, reqMsg, respMsg);
+        result = ch->Call(reqMsg, respMsg);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed to call peer resp with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -868,7 +839,7 @@ private:
         UBSHcomResponse respMsg{};
 
         auto *netCallback = UBSHcomNewCallback([](UBSHcomServiceContext &context) { return; }, std::placeholders::_1);
-        result = CallChannel(ch, reqMsg, respMsg, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             return NetResult(result);
@@ -936,7 +907,7 @@ private:
                 }
             },
             std::placeholders::_1);
-        result = CallChannel(ch, reqMsg, respMsg, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
@@ -959,7 +930,7 @@ private:
                 }
             },
             std::placeholders::_1);
-        result = CallChannel(ch, reqMsg, respMsg, netCallback);
+        result = ch->Call(reqMsg, respMsg, netCallback);
         if (UNLIKELY(result != MMS_OK)) {
             NET_LOG_ERROR("Failed async call with op " << opCode << ", result " << UBSHcomNetErrStr(result));
             callback.cb(callback.cbCtx, nullptr, 0, NetResult(result));
@@ -986,7 +957,6 @@ private:
     ock::hcom::UBSHcomService *mIpcService = nullptr;
     NetOptions mRpcOptions;
     NetOptions mIpcOptions;
-    bool mUseHlcRpc = false;
     std::mutex mMutex;
     NetExecutorPoolPtr mRequestExecutor = nullptr;
     uint32_t mReqExecutorNum;

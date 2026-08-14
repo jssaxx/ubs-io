@@ -614,10 +614,6 @@ BResult NetEngine::CreateRpcService(const NetOptions &opt, bool isOobSvr, const 
         return MMS_ERR;
     }
 
-    if (opt.protocol == ServiceProtocol::TCP) {
-        mRpcService->SetTcpEpollMode(true);
-    }
-
     return MMS_OK;
 }
 
@@ -662,7 +658,6 @@ BResult NetEngine::StartRpcService(const NetOptions &opt)
     }
 
     mRpcOptions = opt;
-    mUseHlcRpc = opt.protocol == ServiceProtocol::TCP;
     bool isOobSvr = opt.role != NET_CLIENT;
     WorkerGroupConfig rpcConfig;
     auto ret = SplitWorkerGroupConfig(opt.workerGroups, opt.workerGroupsCpuSet, rpcConfig, "rpc");
@@ -827,11 +822,7 @@ void NetEngine::FillConnectOption(ConnectMode mode, ConnectInfo &info, uint32_t 
     op.serverGroupId = static_cast<uint8_t>(groupIndex);
     prefix = (oneSide ? CONN_ONESIDE_PAYLOAD_PREFIX : CONN_PAYLOAD_PREFIX) + "-" +
         std::to_string(groupIndex) + "-";
-    bool useSelfPoll = info.isSelfPoll || oneSide;
-    if (mode == CONNECT_RPC && mRpcOptions.protocol == ServiceProtocol::TCP) {
-        useSelfPoll = false;
-    }
-    if (useSelfPoll) {
+    if (info.isSelfPoll || oneSide) {
         op.mode = UBSHcomClientPollingMode::SELF_POLL_BUSY;
     }
 
